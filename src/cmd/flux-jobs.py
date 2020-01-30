@@ -168,36 +168,36 @@ def fetch_jobs_flux(args):
                 print("invalid user specified", file=sys.stderr)
                 sys.exit(1)
 
-    flags = 0
+    states = 0
     for state in args.states.split(","):
         # Note
         # pending = depend & sched
         # running = run & cleanup
         if state.lower() == "depend":
-            flags |= flux.constants.FLUX_JOB_DEPEND
+            states |= flux.constants.FLUX_JOB_DEPEND
         elif state.lower() == "sched":
-            flags |= flux.constants.FLUX_JOB_SCHED
+            states |= flux.constants.FLUX_JOB_SCHED
         elif state.lower() == "pending":
-            flags |= flux.constants.FLUX_JOB_PENDING
+            states |= flux.constants.FLUX_JOB_PENDING
         elif state.lower() == "run":
-            flags |= flux.constants.FLUX_JOB_RUN
+            states |= flux.constants.FLUX_JOB_RUN
         elif state.lower() == "cleanup":
-            flags |= flux.constants.FLUX_JOB_CLEANUP
+            states |= flux.constants.FLUX_JOB_CLEANUP
         elif state.lower() == "running":
-            flags |= flux.constants.FLUX_JOB_RUNNING
+            states |= flux.constants.FLUX_JOB_RUNNING
         elif state.lower() == "inactive":
-            flags |= flux.constants.FLUX_JOB_INACTIVE
+            states |= flux.constants.FLUX_JOB_INACTIVE
         elif state.lower() == "active":
-            flags |= flux.constants.FLUX_JOB_ACTIVE
+            states |= flux.constants.FLUX_JOB_ACTIVE
         else:
             print("Invalid state specified", file=sys.stderr)
             sys.exit(1)
 
-    if flags == 0:
-        flags |= flux.constants.FLUX_JOB_PENDING
-        flags |= flux.constants.FLUX_JOB_RUNNING
+    if states == 0:
+        states |= flux.constants.FLUX_JOB_PENDING
+        states |= flux.constants.FLUX_JOB_RUNNING
 
-    rpc_handle = flux.job.job_list(h, args.count, attrs, userid, flags)
+    rpc_handle = flux.job.job_list(h, args.count, attrs, userid, states)
     try:
         jobs = flux.job.job_list_get(rpc_handle)
     except EnvironmentError as e:

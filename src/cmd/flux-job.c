@@ -921,8 +921,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     size_t index;
     json_t *value;
     uint32_t userid;
-    int flags = 0;
-    int state_mask;
+    int states = 0;
 
     if (optindex != argc) {
         optparse_print_usage (p);
@@ -932,14 +931,11 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
 
     if (optparse_hasopt (p, "all-user") || optparse_hasopt (p, "all"))
-        state_mask = FLUX_JOB_ACTIVE | FLUX_JOB_INACTIVE;
+        states = FLUX_JOB_ACTIVE | FLUX_JOB_INACTIVE;
     else if (optparse_hasopt (p, "states"))
-        state_mask = parse_arg_states (p, "states");
+        states = parse_arg_states (p, "states");
     else
-        state_mask = FLUX_JOB_PENDING | FLUX_JOB_RUNNING;
-
-    /* Set request flags based on state mask. */
-    flags = state_mask;
+        states = FLUX_JOB_PENDING | FLUX_JOB_RUNNING;
 
     if (optparse_hasopt (p, "all"))
         userid = FLUX_USERID_UNKNOWN;
@@ -948,7 +944,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     else
         userid = geteuid ();
 
-    if (!(f = flux_job_list (h, max_entries, attrs, userid, flags)))
+    if (!(f = flux_job_list (h, max_entries, attrs, userid, states)))
         log_err_exit ("flux_job_list");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
         log_err_exit ("flux_job_list");

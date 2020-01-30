@@ -96,14 +96,15 @@ int flux_job_wait_get_id (flux_future_t *f, flux_jobid_t *id);
  *   ...
  * ])
  *
- * flags can be set to an OR of any job state or any virtual
- * job states or 0 for all jobs.
+ * states can be set to an OR of any job state or any virtual job
+ * states to retrieve jobs of only those states.  Specify 0 for all
+ * states.
  */
 flux_future_t *flux_job_list (flux_t *h,
                               int max_entries,
                               const char *json_str,
                               uint32_t userid,
-                              int flags);
+                              int states);
 
 /* Raise an exception for job.
  * Severity is 0-7, with severity=0 causing the job to abort.

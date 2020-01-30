@@ -548,7 +548,7 @@ test_expect_success 'list count / max_entries works' '
 
 test_expect_success HAVE_JQ 'list request with empty attrs works' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:[]}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:[]}" \
           | $RPC job-info.list > list_empty_attrs.out &&
         test_must_fail grep "userid" list_empty_attrs.out &&
         test_must_fail grep "priority" list_empty_attrs.out &&
@@ -565,7 +565,7 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
 '
 test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:100000, userid:${id}, flags:0, attrs:[]}" \
+        $jq -j -c -n  "{max_entries:100000, userid:${id}, states:0, attrs:[]}" \
           | $RPC job-info.list
 '
 test_expect_success HAVE_JQ 'list-attrs works' '
@@ -990,17 +990,17 @@ test_expect_success 'list request with empty payload fails with EPROTO(71)' '
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:5}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:5}" \
           | $RPC job-info.list 71
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:[5]}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:[5]}" \
           | $RPC job-info.list 22
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:[\"foo\"]}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:[\"foo\"]}" \
           | $RPC job-info.list 22
 '
 

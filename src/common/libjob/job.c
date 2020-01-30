@@ -187,18 +187,18 @@ flux_future_t *flux_job_list (flux_t *h,
                               int max_entries,
                               const char *json_str,
                               uint32_t userid,
-                              int flags)
+                              int states)
 {
     flux_future_t *f;
     json_t *o = NULL;
-    int valid_flags = (FLUX_JOB_PENDING
-                       | FLUX_JOB_RUNNING
-                       | FLUX_JOB_INACTIVE);
+    int valid_states = (FLUX_JOB_PENDING
+                        | FLUX_JOB_RUNNING
+                        | FLUX_JOB_INACTIVE);
     int saved_errno;
 
     if (!h || max_entries < 0 || !json_str
            || !(o = json_loads (json_str, 0, NULL))
-           || flags & ~valid_flags) {
+           || states & ~valid_states) {
         errno = EINVAL;
         return NULL;
     }
@@ -207,7 +207,7 @@ flux_future_t *flux_job_list (flux_t *h,
                              "max_entries", max_entries,
                              "attrs", o,
                              "userid", userid,
-                             "flags", flags))) {
+                             "states", states))) {
         saved_errno = errno;
         json_decref (o);
         errno = saved_errno;

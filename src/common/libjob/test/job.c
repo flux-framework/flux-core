@@ -136,7 +136,7 @@ void check_corner_case (void)
 
     errno = 0;
     ok (flux_job_list (h, 0, "{}", 0, 0xFF) == NULL && errno == EINVAL,
-        "flux_job_list flags != 0 fails with EINVAL");
+        "flux_job_list states=(illegal states) fails with EINVAL");
 
     /* flux_job_raise */
 
