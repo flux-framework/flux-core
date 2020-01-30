@@ -42,9 +42,9 @@ test_expect_success 'load job-exec,sched-simple modules' '
 
 wait_states() {
         local i=0
-        while ( [ "$(flux jobs -A | grep SCHED | wc -l)" != "6" ] \
-                || [ "$(flux jobs -A --suppress-header | grep RUN | wc -l)" != "8" ] \
-                || [ "$(flux jobs -A | grep INACTIVE | wc -l)" != "4" ]) \
+        while ( [ "$(flux jobs --suppress-header --states=sched | wc -l)" != "6" ] \
+                || [ "$(flux jobs --suppress-header --states=run | wc -l)" != "8" ] \
+                || [ "$(flux jobs --suppress-header --states=inactive | wc -l)" != "4" ]) \
                && [ $i -lt 50 ]
         do
                 sleep 0.1
@@ -108,21 +108,45 @@ test_expect_success 'flux-jobs -a and -A works' '
         test $count -eq 18
 '
 
+# Recall pending = depend & sched, running = run & cleanup,
+#  active = pending & running
 test_expect_success 'flux-jobs --states works' '
+        count=`flux jobs --suppress-header --states=depend | wc -l` &&
+        test $count -eq 0 &&
+        count=`flux jobs --suppress-header --states=sched | wc -l` &&
+        test $count -eq 6 &&
         count=`flux jobs --suppress-header --states=pending | wc -l` &&
         test $count -eq 6 &&
+        count=`flux jobs --suppress-header --states=run | wc -l` &&
+        test $count -eq 8 &&
+        count=`flux jobs --suppress-header --states=cleanup | wc -l` &&
+        test $count -eq 0 &&
         count=`flux jobs --suppress-header --states=running | wc -l` &&
         test $count -eq 8 &&
         count=`flux jobs --suppress-header --states=inactive | wc -l` &&
         test $count -eq 4 &&
         count=`flux jobs --suppress-header --states=pending,running | wc -l` &&
         test $count -eq 14 &&
+        count=`flux jobs --suppress-header --states=sched,run | wc -l` &&
+        test $count -eq 14 &&
+        count=`flux jobs --suppress-header --states=active | wc -l` &&
+        test $count -eq 14 &&
+        count=`flux jobs --suppress-header --states=depend,sched,run,cleanup | wc -l` &&
+        test $count -eq 14 &&
         count=`flux jobs --suppress-header --states=pending,inactive | wc -l` &&
+        test $count -eq 10 &&
+        count=`flux jobs --suppress-header --states=sched,inactive | wc -l` &&
         test $count -eq 10 &&
         count=`flux jobs --suppress-header --states=running,inactive | wc -l` &&
         test $count -eq 12 &&
+        count=`flux jobs --suppress-header --states=run,inactive | wc -l` &&
+        test $count -eq 12 &&
         count=`flux jobs --suppress-header --states=pending,running,inactive | wc -l` &&
-        test $count -eq 18
+        test $count -eq 18 &&
+        count=`flux jobs --suppress-header --states=active,inactive | wc -l` &&
+        test $count -eq 18 &&
+        count=`flux jobs --suppress-header --states=depend,cleanup | wc -l` &&
+        test $count -eq 0
 '
 
 # ensure + prefix works
