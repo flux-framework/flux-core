@@ -171,18 +171,18 @@ def fetch_jobs_flux(args):
     flags = 0
     for state in args.states.split(","):
         if state.lower() == "pending":
-            flags |= flux.constants.FLUX_JOB_LIST_PENDING
+            flags |= flux.constants.FLUX_JOB_PENDING
         elif state.lower() == "running":
-            flags |= flux.constants.FLUX_JOB_LIST_RUNNING
+            flags |= flux.constants.FLUX_JOB_RUNNING
         elif state.lower() == "inactive":
-            flags |= flux.constants.FLUX_JOB_LIST_INACTIVE
+            flags |= flux.constants.FLUX_JOB_INACTIVE
         else:
             print("Invalid state specified", file=sys.stderr)
             sys.exit(1)
 
     if flags == 0:
-        flags |= flux.constants.FLUX_JOB_LIST_PENDING
-        flags |= flux.constants.FLUX_JOB_LIST_RUNNING
+        flags |= flux.constants.FLUX_JOB_PENDING
+        flags |= flux.constants.FLUX_JOB_RUNNING
 
     rpc_handle = flux.job.job_list(h, args.count, attrs, userid, flags)
     try:

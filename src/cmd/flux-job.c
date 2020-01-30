@@ -938,16 +938,8 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     else
         state_mask = FLUX_JOB_PENDING | FLUX_JOB_RUNNING;
 
-    /* Set request flags based on state mask.
-     * The returned list may need to be filtered down since the state_mask
-     * has a finer granularity than the flags.
-     */
-    if ((state_mask & FLUX_JOB_PENDING) != 0)
-        flags |= FLUX_JOB_LIST_PENDING;
-    if ((state_mask & FLUX_JOB_RUNNING) != 0)
-        flags |= FLUX_JOB_LIST_RUNNING;
-    if ((state_mask & FLUX_JOB_INACTIVE) != 0)
-        flags |= FLUX_JOB_LIST_INACTIVE;
+    /* Set request flags based on state mask. */
+    flags = state_mask;
 
     if (optparse_hasopt (p, "all"))
         userid = FLUX_USERID_UNKNOWN;
@@ -965,13 +957,11 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         int state;
         if (json_unpack (value, "{s:i}", "state", &state) < 0)
             log_msg_exit ("error parsing list response (state is missing)");
-        if ((state & state_mask) != 0) {
-            str = json_dumps (value, 0);
-            if (!str)
-                log_msg_exit ("error parsing list response");
-            printf ("%s\n", str);
-            free (str);
-        }
+        str = json_dumps (value, 0);
+        if (!str)
+            log_msg_exit ("error parsing list response");
+        printf ("%s\n", str);
+        free (str);
     }
     flux_future_destroy (f);
     flux_close (h);

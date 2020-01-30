@@ -131,23 +131,26 @@ int get_jobs_from_list (json_t *jobs,
                         zlistx_t *list,
                         int max_entries,
                         json_t *attrs,
-                        uint32_t userid)
+                        uint32_t userid,
+                        int flags)
 {
     struct job *job;
 
     job = zlistx_first (list);
     while (job) {
-        if (userid == FLUX_USERID_UNKNOWN || job->userid == userid) {
-            json_t *o;
-            if (!(o = job_to_json (job, attrs)))
-                return -1;
-            if (json_array_append_new (jobs, o) < 0) {
-                json_decref (o);
-                errno = ENOMEM;
-                return -1;
+        if (job->state & flags) {
+            if (userid == FLUX_USERID_UNKNOWN || job->userid == userid) {
+                json_t *o;
+                if (!(o = job_to_json (job, attrs)))
+                    return -1;
+                if (json_array_append_new (jobs, o) < 0) {
+                    json_decref (o);
+                    errno = ENOMEM;
+                    return -1;
+                }
+                if (json_array_size (jobs) == max_entries)
+                    return 1;
             }
-            if (json_array_size (jobs) == max_entries)
-                return 1;
         }
         job = zlistx_next (list);
     }
@@ -178,33 +181,36 @@ json_t *get_jobs (struct info_ctx *ctx,
     /* We return jobs in the following order, pending, running,
      * inactive */
 
-    if (flags & FLUX_JOB_LIST_PENDING) {
+    if (flags & FLUX_JOB_PENDING) {
         if ((ret = get_jobs_from_list (jobs,
                                        ctx->jsctx->pending,
                                        max_entries,
                                        attrs,
-                                       userid)) < 0)
+                                       userid,
+                                       flags)) < 0)
             goto error;
     }
 
-    if (flags & FLUX_JOB_LIST_RUNNING) {
+    if (flags & FLUX_JOB_RUNNING) {
         if (!ret) {
             if ((ret = get_jobs_from_list (jobs,
                                            ctx->jsctx->running,
                                            max_entries,
                                            attrs,
-                                           userid)) < 0)
+                                           userid,
+                                           flags)) < 0)
                 goto error;
         }
     }
 
-    if (flags & FLUX_JOB_LIST_INACTIVE) {
+    if (flags & FLUX_JOB_INACTIVE) {
         if (!ret) {
             if ((ret = get_jobs_from_list (jobs,
                                            ctx->jsctx->inactive,
                                            max_entries,
                                            attrs,
-                                           userid)) < 0)
+                                           userid,
+                                           flags)) < 0)
                 goto error;
         }
     }
@@ -244,9 +250,9 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* If user sets no flags, assume they want all information */
     if (!flags)
-        flags = (FLUX_JOB_LIST_PENDING
-                 | FLUX_JOB_LIST_RUNNING
-                 | FLUX_JOB_LIST_INACTIVE);
+        flags = (FLUX_JOB_PENDING
+                 | FLUX_JOB_RUNNING
+                 | FLUX_JOB_INACTIVE);
 
     if (!(jobs = get_jobs (ctx, max_entries, attrs, userid, flags)))
         goto error;

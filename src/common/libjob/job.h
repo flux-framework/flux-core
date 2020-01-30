@@ -25,13 +25,6 @@ enum job_submit_flags {
     FLUX_JOB_WAITABLE = 4,      // flux_job_wait() will be used on this job
 };
 
-enum job_list_flags {
-    FLUX_JOB_LIST_ALL = 0,
-    FLUX_JOB_LIST_PENDING = 1,
-    FLUX_JOB_LIST_RUNNING = 2,
-    FLUX_JOB_LIST_INACTIVE = 4,
-};
-
 enum job_priority {
     FLUX_JOB_PRIORITY_MIN = 0,
     FLUX_JOB_PRIORITY_DEFAULT = 16,
@@ -103,9 +96,8 @@ int flux_job_wait_get_id (flux_future_t *f, flux_jobid_t *id);
  *   ...
  * ])
  *
- * flags can be set to an OR of FLUX_JOB_LIST_PENDING,
- * FLUX_JOB_LIST_RUNNING, and FLUX_JOB_LIST_INACTIVE, or to
- * FLUX_JOB_LIST_ALL to list all groups of jobs.
+ * flags can be set to an OR of any job state or any virtual
+ * job states or 0 for all jobs.
  */
 flux_future_t *flux_job_list (flux_t *h,
                               int max_entries,

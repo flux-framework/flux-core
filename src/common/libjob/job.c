@@ -191,9 +191,9 @@ flux_future_t *flux_job_list (flux_t *h,
 {
     flux_future_t *f;
     json_t *o = NULL;
-    int valid_flags = (FLUX_JOB_LIST_PENDING
-                       | FLUX_JOB_LIST_RUNNING
-                       | FLUX_JOB_LIST_INACTIVE);
+    int valid_flags = (FLUX_JOB_PENDING
+                       | FLUX_JOB_RUNNING
+                       | FLUX_JOB_INACTIVE);
     int saved_errno;
 
     if (!h || max_entries < 0 || !json_str
