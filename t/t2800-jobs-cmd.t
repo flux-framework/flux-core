@@ -141,7 +141,10 @@ test_expect_success 'flux-jobs --user=UID works' '
 test_expect_success 'flux-jobs --user=USERNAME works' '
         username=`whoami` &&
         count=`flux jobs --suppress-header --user=${username} | wc -l` &&
-        test $count -eq 14 &&
+        test $count -eq 14
+'
+
+test_expect_success 'flux-jobs --user with invalid username fails' '
         username="foobarfoobaz" &&
         test_must_fail flux jobs --suppress-header --user=${username}
 '
