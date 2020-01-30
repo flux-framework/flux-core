@@ -170,12 +170,25 @@ def fetch_jobs_flux(args):
 
     flags = 0
     for state in args.states.split(","):
-        if state.lower() == "pending":
+        # Note
+        # pending = depend & sched
+        # running = run & cleanup
+        if state.lower() == "depend":
+            flags |= flux.constants.FLUX_JOB_DEPEND
+        elif state.lower() == "sched":
+            flags |= flux.constants.FLUX_JOB_SCHED
+        elif state.lower() == "pending":
             flags |= flux.constants.FLUX_JOB_PENDING
+        elif state.lower() == "run":
+            flags |= flux.constants.FLUX_JOB_RUN
+        elif state.lower() == "cleanup":
+            flags |= flux.constants.FLUX_JOB_CLEANUP
         elif state.lower() == "running":
             flags |= flux.constants.FLUX_JOB_RUNNING
         elif state.lower() == "inactive":
             flags |= flux.constants.FLUX_JOB_INACTIVE
+        elif state.lower() == "active":
+            flags |= flux.constants.FLUX_JOB_ACTIVE
         else:
             print("Invalid state specified", file=sys.stderr)
             sys.exit(1)
@@ -224,7 +237,7 @@ def parse_args():
         type=str,
         metavar="STATES",
         default="pending,running",
-        help="List jobs in specific states(pending,running,inactive)",
+        help="List jobs in specific job states or virtual job states",
     )
     parser.add_argument(
         "--suppress-header",
