@@ -144,7 +144,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
                 job->alloc_queued = 1;
             }
             /* jobs with free request pending (much smaller window for this
-             * to be true) need to be picked up again after 'hello'.
+             * to be true) need to be picked up again after 'ready'.
              */
             job->free_pending = 0;
             job = zhashx_next (ctx->active_jobs);
@@ -384,20 +384,6 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (flux_respond_pack (h, msg, "{s:O}", "alloc", o) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-    /* Restart any free requests that might have been interrupted
-     * when scheduler was last unloaded.
-     */
-    job = zhashx_first (ctx->active_jobs);
-    while (job) {
-        /* N.B. first/next are NOT deletion safe but event_job_action()
-         * won't call zhashx_delete() for jobs in FLUX_JOB_CLEANUP state.
-         */
-        if (job->state == FLUX_JOB_CLEANUP && job->has_resources) {
-            if (event_job_action (ctx->event, job) < 0)
-                flux_log_error (h, "%s: event_job_action", __FUNCTION__);
-        }
-        job = zhashx_next (ctx->active_jobs);
-    }
     json_decref (o);
     return;
 nomem:
@@ -419,6 +405,7 @@ static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
     struct job_manager *ctx = arg;
     const char *mode;
     int count;
+    struct job *job;
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "mode", &mode) < 0)
         goto error;
@@ -435,6 +422,20 @@ static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
     count = zlistx_size (ctx->alloc->queue);
     if (flux_respond_pack (h, msg, "{s:i}", "count", count) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+    /* Restart any free requests that might have been interrupted
+     * when scheduler was last unloaded.
+     */
+    job = zhashx_first (ctx->active_jobs);
+    while (job) {
+        /* N.B. first/next are NOT deletion safe but event_job_action()
+         * won't call zhashx_delete() for jobs in FLUX_JOB_CLEANUP state.
+         */
+        if (job->state == FLUX_JOB_CLEANUP && job->has_resources) {
+            if (event_job_action (ctx->event, job) < 0)
+                flux_log_error (h, "%s: event_job_action", __FUNCTION__);
+        }
+        job = zhashx_next (ctx->active_jobs);
+    }
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
@@ -493,10 +494,11 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
+/* called from event_job_action() FLUX_JOB_CLEANUP */
 int alloc_send_free_request (struct alloc *alloc, struct job *job)
 {
     assert (job->state == FLUX_JOB_CLEANUP);
-    if (!job->free_pending) {
+    if (!job->free_pending && alloc->ready) {
         if (free_request (alloc, job) < 0)
             return -1;
         job->free_pending = 1;
