@@ -8,10 +8,14 @@
 -- SPDX-License-Identifier: LGPL-3.0
 -------------------------------------------------------------
 
-local dirname = require 'flux.posix'.dirname
-
 local f, err = require 'flux'.new ()
 if not f then error (err) end
+
+-- Lua implementation of dirname(3) to avoid pulling in posix module
+local function dirname (d)
+    if not d:match ("/") then return "." end
+    return d:match ("^(.*[^/])/.-$")
+end
 
 local libpmi = f:getattr ('conf.pmi_library_path')
 local ldpath = dirname (libpmi)
