@@ -17,14 +17,21 @@ local function dirname (d)
     return d:match ("^(.*[^/])/.-$")
 end
 
-local libpmi = f:getattr ('conf.pmi_library_path')
-local ldpath = dirname (libpmi)
-local current = shell.getenv ('LD_LIBRARY_PATH')
-
-if current ~= nil then
-  ldpath = ldpath .. ':' .. current
+local function setenv_prepend (var, val)
+    local path = shell.getenv (var)
+    -- If path not already set, then set it to val
+    if not path then
+        shell.setenv (var, val)
+    -- O/w, if val is not already set in path, prepend it
+    elseif path:match ("^[^:]+") ~= val then
+        shell.setenv (var, val .. ':' .. path)
+    end
+    -- O/w, val already first in path. Do nothing
 end
-shell.setenv ("LD_LIBRARY_PATH", ldpath)
+
+local libpmi = f:getattr ('conf.pmi_library_path')
+
+setenv_prepend ("LD_LIBRARY_PATH", dirname (libpmi))
 shell.setenv ("MPIRUN_NTASKS", shell.info.ntasks)
 shell.setenv ("MPIRUN_RSH_LAUNCH", 1)
 
