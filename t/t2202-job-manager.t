@@ -254,8 +254,8 @@ test_expect_success 'job-manager: flux job submit works after queue enable' '
 	flux job submit basic.json
 '
 
-test_expect_success 'job-manager: flux job drain -t 0.01 receives timeout error' '
-	! flux job drain -t 0.01 2>drain.err &&
+test_expect_success 'job-manager: flux queue drain -t 0.01 receives timeout error' '
+	! flux queue drain -t 0.01 2>drain.err &&
 	grep timeout drain.err
 '
 

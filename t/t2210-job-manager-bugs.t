@@ -32,7 +32,7 @@ test_expect_success 'issue2664: submit job 4' '
 # Hangs here (hitting timeout)
 test_expect_success 'issue2664: cancel job 1 and drain (cleanup)' '
 	flux job cancel $(cat job1.out) &&
-	run_timeout 5 flux job drain
+	run_timeout 5 flux queue drain
 '
 
 test_done

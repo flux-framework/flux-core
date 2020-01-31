@@ -27,6 +27,7 @@ int cmd_disable (optparse_t *p, int argc, char **argv);
 int cmd_start (optparse_t *p, int argc, char **argv);
 int cmd_stop (optparse_t *p, int argc, char **argv);
 int cmd_status (optparse_t *p, int argc, char **argv);
+int cmd_drain (optparse_t *p, int argc, char **argv);
 
 int stdin_flags;
 
@@ -51,6 +52,13 @@ static struct optparse_option start_opts[] = {
 static struct optparse_option status_opts[] = {
     { .name = "verbose", .key = 'v',
       .usage = "Display more detail about internal job manager state",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option drain_opts[] =  {
+    { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
+      .usage = "timeout after DURATION",
     },
     OPTPARSE_TABLE_END
 };
@@ -90,6 +98,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_status,
       0,
       status_opts,
+    },
+    { "drain",
+      "[-t seconds]",
+      "Wait for queue to become empty.",
+      cmd_drain,
+      0,
+      drain_opts
     },
     OPTPARSE_SUBCMD_END
 };
@@ -330,6 +345,29 @@ int cmd_status (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     submit_admin (h, 1, 0, NULL);
     alloc_admin (h, optparse_hasopt (p, "verbose"), 1, 0, NULL);
+    flux_close (h);
+    return (0);
+}
+
+int cmd_drain (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    double timeout = optparse_get_duration (p, "timeout", -1.);
+    flux_future_t *f;
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (argc - optindex != 0) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(f = flux_rpc (h, "job-manager.drain", NULL, FLUX_NODEID_ANY, 0)))
+        log_err_exit ("flux_rpc");
+    if (flux_future_wait_for (f, timeout) < 0 || flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("drain: %s", errno == ETIMEDOUT
+                                   ? "timeout" : future_strerror (f, errno));
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }

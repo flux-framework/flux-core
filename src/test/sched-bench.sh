@@ -87,7 +87,7 @@ if test -z "$NOEXEC"; then
     log_timing_msg ran $starttime $runtime
 fi
 
-flux job drain
+flux queue drain
 
 flux job eventlog $last
 

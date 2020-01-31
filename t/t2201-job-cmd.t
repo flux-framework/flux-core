@@ -395,7 +395,7 @@ test_expect_success 'flux job: cancelall --force works' '
 '
 
 test_expect_success 'flux job: the queue is empty' '
-	run_timeout 60 flux job drain
+	run_timeout 60 flux queue drain
 '
 
 test_expect_success 'flux-job: cancelall --user all fails for guest' '
@@ -540,7 +540,7 @@ test_expect_success 'flux-job: cancelall -f returns correct count' '
 '
 
 test_expect_success 'flux job: the queue is empty' '
-	run_timeout 60 flux job drain
+	run_timeout 60 flux queue drain
 '
 test_expect_success 'flux job: retrieve eventlogs' '
 	for id in $(cat jobs); do flux job eventlog ${id} >>eventlogs; done
@@ -571,7 +571,7 @@ test_expect_success 'flux job: killall -f kills one job' '
         id=$(flux mini submit sleep 600) &&
         flux job wait-event $id start &&
         flux job killall -f &&
-	run_timeout 60 flux job drain
+	run_timeout 60 flux queue drain
 '
 
 test_expect_success 'flux job: unload modules' '

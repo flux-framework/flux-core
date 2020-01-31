@@ -106,7 +106,7 @@ test_expect_success 'job-exec: exception while starting terminates job' '
 '
 test_expect_success 'job-exec: unload job-exec & sched-simple modules' '
 	flux job list &&
-	flux job drain &&
+	flux queue drain &&
 	flux module remove job-exec &&
 	flux module remove sched-simple
 '

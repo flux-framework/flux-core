@@ -95,7 +95,7 @@ test_expect_success 'flux-queue: start scheduling' '
 '
 
 test_expect_success 'flux-queue: queue empties out' '
-	run_timeout 60 flux job drain
+	run_timeout 60 flux queue drain
 '
 
 test_expect_success 'flux-queue: start long job that uses all cores' '
@@ -121,7 +121,7 @@ test_expect_success 'flux-queue: start scheduling and cancel long job' '
 
 test_expect_success 'flux-queue: queue empties out' '
 	flux queue start &&
-	flux job drain
+	flux queue drain
 '
 
 test_expect_success 'flux-queue: unload scheduler' '
