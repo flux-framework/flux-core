@@ -22,6 +22,7 @@
 
 #include "drain.h"
 #include "submit.h"
+#include "event.h"
 
 struct drain {
     struct job_manager *ctx;
@@ -29,13 +30,20 @@ struct drain {
     zlist_t *requests;
 };
 
+/* Drain conditions have been met.
+ * To avoid sending drain responses before the events that triggered the
+ * job state transitions to INACTIVE are committed to the KVS, hand off the
+ * drain request to the "event batch" subsystem, so the response can be sent
+ * at the same time as job state change notifications are published,
+ * after the KVS commit completes.
+ */
 void drain_empty_notify (struct drain *drain)
 {
     const flux_msg_t *msg;
 
     while ((msg = zlist_pop (drain->requests))) {
-        if (flux_respond (drain->ctx->h, msg, NULL) < 0)
-            flux_log_error (drain->ctx->h, "%s: flux_respond", __FUNCTION__);
+        if (event_batch_drain_respond (drain->ctx->event, msg) < 0)
+            flux_log_error (drain->ctx->h, "error handing drain request off");
         flux_msg_decref (msg);
     }
 }
@@ -48,14 +56,11 @@ static void drain_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     if (zlist_append (ctx->drain->requests,
-                      (void *)flux_msg_incref (msg)) < 0) {
+                     (void *)flux_msg_incref (msg)) < 0) {
         flux_msg_decref (msg);
         errno = ENOMEM;
         goto error;
     }
-    /* N.B. If queue is empty, call drain_empty_notify() immediately
-     * Otherwise it will be called when last job transitions to inactive.
-     */
     if (zhashx_size (ctx->active_jobs) == 0)
         drain_empty_notify (ctx->drain);
     return;

@@ -14,12 +14,8 @@
 #include <stdint.h>
 #include "job-manager.h"
 
-/* Handle a request to raise an exception on job.
- */
-void kill_handle_request (flux_t *h,
-                          flux_msg_handler_t *mh,
-                          const flux_msg_t *msg,
-                          void *arg);
+struct kill *kill_ctx_create (struct job_manager *ctx);
+void kill_ctx_destroy (struct kill *kill);
 
 
 /* exposed for unit testing only */

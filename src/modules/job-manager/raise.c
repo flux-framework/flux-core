@@ -36,6 +36,11 @@
 #include "raise.h"
 #include "job-manager.h"
 
+struct raise {
+    struct job_manager *ctx;
+    flux_msg_handler_t **handlers;
+};
+
 int raise_check_type (const char *s)
 {
     const char *cp;
@@ -55,6 +60,42 @@ int raise_check_severity (int severity)
     return 0;
 }
 
+/* NB: job object may be destroyed in event_job_post_pack().
+ * Do not reference the object after calling this function.
+ * Do not call this function and continue to iterate on the job hash
+ * with zhash_next().
+ */
+int raise_job (struct job_manager *ctx,
+               const char *type,
+               int severity,
+               uint32_t userid,
+               const char *note,
+               struct job *job)
+{
+    flux_jobid_t id = job->id;
+    flux_future_t *f;
+
+    if (event_job_post_pack (ctx->event,
+                             job,
+                             "exception",
+                             "{ s:s s:i s:i s:s }",
+                             "type", type,
+                             "severity", severity,
+                             "userid", userid,
+                             "note", note ? note : "") < 0)
+        return -1;
+    if (!(f = flux_event_publish_pack (ctx->h,
+                                       "job-exception",
+                                       FLUX_MSGFLAG_PRIVATE,
+                                       "{s:I s:s s:i}",
+                                       "id", id,
+                                       "type", type,
+                                       "severity", severity)))
+        return -1;
+    flux_future_destroy (f);
+    return 0;
+}
+
 void raise_handle_request (flux_t *h,
                            flux_msg_handler_t *mh,
                            const flux_msg_t *msg,
@@ -67,7 +108,6 @@ void raise_handle_request (flux_t *h,
     int severity;
     const char *type;
     const char *note = NULL;
-    flux_future_t *f;
     const char *errstr = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:I s:i s:s s?:s}",
@@ -96,32 +136,180 @@ void raise_handle_request (flux_t *h,
         errstr = "guests can only raise exceptions on their own jobs";
         goto error;
     }
-    if (event_job_post_pack (ctx->event, job,
-                             "exception",
-                             "{ s:s s:i s:i s:s }",
-                             "type", type,
-                             "severity", severity,
-                             "userid", cred.userid,
-                             "note", note ? note : "") < 0)
+    if (raise_job (ctx, type, severity, cred.userid, note, job) < 0)
         goto error;
     /* NB: job object may be destroyed in event_job_post_pack().
      * Do not reference the object after this point:
      */
     job = NULL;
-    if (!(f = flux_event_publish_pack (h, "job-exception",
-                                       FLUX_MSGFLAG_PRIVATE,
-                                       "{s:I s:s s:i}",
-                                       "id", id,
-                                       "type", type,
-                                       "severity", severity)))
-        goto error;
-    flux_future_destroy (f);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+/* Create a list of jobs matching userid, state_mask criteria.
+ * FLUX_USERID_UNKNOWN is a wildcard that matches any user.
+ */
+int find_jobs (struct job_manager *ctx,
+               uint32_t userid,
+               int state_mask,
+               zlistx_t **lp)
+{
+    zlistx_t *l;
+    struct job *job;
+
+    if (!(l = zlistx_new()))
+        goto nomem;
+    zlistx_set_destructor (l, job_destructor);
+    zlistx_set_duplicator (l, job_duplicator);
+
+    job = zhashx_first (ctx->active_jobs);
+    while (job) {
+        if (!(job->state & state_mask))
+            goto next;
+        if (userid != FLUX_USERID_UNKNOWN && userid != job->userid)
+            goto next;
+        if (!zlistx_add_end (l, job))
+            goto nomem;
+next:
+        job = zhashx_next (ctx->active_jobs);
+    }
+    *lp = l;
+    return 0;
+nomem:
+    zlistx_destroy (&l);
+    errno = ENOMEM;
+    return -1;
+}
+
+/* Raise exception on all jobs of 'userid' with state matching 'mask'.
+ * Consider userid == FLUX_USERID_UNKNOWN to be a wildcard matching all users.
+ */
+void raiseall_handle_request (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
+{
+    struct job_manager *ctx = arg;
+    uint32_t userid;
+    struct flux_msg_cred cred;
+    int dry_run;
+    int state_mask;
+    int severity;
+    const char *type;
+    const char *note = NULL;
+    const char *errstr = NULL;
+    zlistx_t *target_jobs = NULL;
+    struct job *job;
+    int error_count = 0;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:b s:i s:i s:i s:s s?:s}",
+                             "dry_run",
+                             &dry_run,
+                             "userid",
+                             &userid,
+                             "states",
+                             &state_mask,
+                             "severity",
+                             &severity,
+                             "type",
+                             &type,
+                             "note",
+                             &note) < 0)
+        goto error;
+    if (flux_msg_get_cred (msg, &cred) < 0)
+        goto error;
+    /* Only the instance owner gets to use the userid wildcard.
+     * Guests must specify 'userid' = themselves.
+     */
+    if (flux_msg_cred_authorize (cred, userid) < 0) {
+        errstr = "guests can only raise exceptions on their own jobs";
+        goto error;
+    }
+    if (raise_check_severity (severity)) {
+        errstr = "invalid exception severity";
+        errno = EPROTO;
+        goto error;
+    }
+    if (raise_check_type (type) < 0) {
+        errstr = "invalid exception type";
+        errno = EPROTO;
+        goto error;
+    }
+    if (find_jobs (ctx, userid, state_mask, &target_jobs) < 0)
+        goto error;
+    if (!dry_run) {
+        job = zlistx_first (target_jobs);
+        while (job) {
+            if (raise_job (ctx, type, severity, cred.userid, note, job) < 0) {
+                flux_log_error (h,
+                                "error raising exception on id=%ju",
+                                (uintmax_t)job->id);
+                error_count++;
+            }
+            job = zlistx_next (target_jobs);
+        }
+    }
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:i}",
+                           "count",
+                           zlistx_size (target_jobs),
+                           "errors",
+                           error_count) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    zlistx_destroy (&target_jobs);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    zlistx_destroy (&target_jobs);
+}
+
+void raise_ctx_destroy (struct raise *raise)
+{
+    if (raise) {
+        int saved_errno = errno;
+        flux_msg_handler_delvec (raise->handlers);
+        free (raise);
+        errno = saved_errno;
+    }
+}
+
+static const struct flux_msg_handler_spec htab[] = {
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.raise",
+        raise_handle_request,
+        FLUX_ROLE_USER
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.raiseall",
+        raiseall_handle_request,
+        FLUX_ROLE_USER,
+    },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+struct raise *raise_ctx_create (struct job_manager *ctx)
+{
+    struct raise *raise;
+
+    if (!(raise = calloc (1, sizeof (*raise))))
+        return NULL;
+    raise->ctx = ctx;
+    if (flux_msg_handler_addvec (ctx->h, htab, ctx, &raise->handlers) < 0)
+        goto error;
+    return raise;
+error:
+    raise_ctx_destroy (raise);
+    return NULL;
 }
 
 /*

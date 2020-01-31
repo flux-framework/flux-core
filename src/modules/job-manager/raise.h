@@ -13,13 +13,10 @@
 
 #include <stdint.h>
 
-/* Handle a request to raise an exception on job.
- */
-void raise_handle_request (flux_t *h,
-                           flux_msg_handler_t *mh,
-                           const flux_msg_t *msg,
-                           void *arg);
+#include "job-manager.h"
 
+struct raise *raise_ctx_create (struct job_manager *ctx);
+void raise_ctx_destroy (struct raise *raise);
 
 /* exposed for unit testing only */
 int raise_check_type (const char *type);
