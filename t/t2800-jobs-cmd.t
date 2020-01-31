@@ -149,6 +149,11 @@ test_expect_success 'flux-jobs --states works' '
         test $count -eq 0
 '
 
+test_expect_success 'flux-jobs --states with invalid state fails' '
+        test_must_fail flux jobs --states=foobar 2> invalidstate.err &&
+        grep "Invalid state specified: foobar" invalidstate.err
+'
+
 # ensure + prefix works
 # increment userid to ensure not current user for test
 test_expect_success 'flux-jobs --user=UID works' '

@@ -184,7 +184,7 @@ def fetch_jobs_flux(args):
         try:
             states |= state_const_dict[state.lower()]
         except KeyError:
-            print("Invalid state specified", file=sys.stderr)
+            print("Invalid state specified: {}".format(state), file=sys.stderr)
             sys.exit(1)
 
     if states == 0:
