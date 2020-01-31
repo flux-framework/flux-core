@@ -112,15 +112,27 @@ class TestJob(unittest.TestCase):
         jobid = job.submit(self.fh, jobspec)
         self.assertGreater(jobid, 0)
 
-    def test_09_duration_timedelta(self):
+    def test_09_valid_duration(self):
+        """Test setting Jobspec duration to various valid values"""
         jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
-        duration = 100.5
-        delta = datetime.timedelta(seconds=duration)
-        for x in [duration, delta, "{}s".format(duration)]:
-            jobspec.duration = delta
-            self.assertEqual(jobspec.duration, duration)
+        for duration in (100, 100.5):
+            delta = datetime.timedelta(seconds=duration)
+            for x in [duration, delta, "{}s".format(duration)]:
+                jobspec.duration = x
+                # duration setter converts value to a float
+                self.assertEqual(jobspec.duration, float(duration))
 
-    def test_10_cwd_pathlib(self):
+    def test_10_invalid_duration(self):
+        """Test setting Jobspec duration to various invalid values and types"""
+        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
+        for duration in (-100, -100.5, datetime.timedelta(seconds=-5), "10h5m"):
+            with self.assertRaises(ValueError):
+                jobspec.duration = duration
+        for duration in ([], {}):
+            with self.assertRaises(TypeError):
+                jobspec.duration = duration
+
+    def test_11_cwd_pathlib(self):
         if six.PY2:
             return
         import pathlib
@@ -131,7 +143,7 @@ class TestJob(unittest.TestCase):
         jobspec.cwd = cwd
         self.assertEqual(jobspec.cwd, os.fspath(cwd))
 
-    def test_11_environment(self):
+    def test_12_environment(self):
         jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
         new_env = {"HOME": "foo", "foo": "bar"}
         jobspec.environment = new_env
