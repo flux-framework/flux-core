@@ -201,4 +201,30 @@ test_expect_success HAVE_JQ 'flux-shell: initrc: load getopt plugin' '
 		> ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log"
 '
+test_expect_success 'flux-shell: initrc: shell log functions available' '
+	name=shell.log &&
+	cat >${name}.lua <<-EOF &&
+	shell.log ("test: shell.log")
+	shell.debug ("test: debug")
+
+	shell.log_error ("test: error")
+	EOF
+	${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 --initrc=${name}.lua 0 \
+		> ${name}.log 2>&1 &&
+	grep "INFO: ${name}.lua:1: test: shell.log" ${name}.log &&
+	grep "DEBUG: ${name}.lua:2: test: debug" ${name}.log &&
+	grep "ERROR: ${name}.lua:4: test: error" ${name}.log
+'
+test_expect_success 'flux-shell: initrc: shell.die function works' '
+	name=shell.die &&
+	cat >${name}.lua <<-EOF &&
+        -- shell.die test
+	shell.die ("test: shell.die")
+	EOF
+	test_expect_code 1 \
+	    ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 --initrc=${name}.lua 0 \
+		> ${name}.log 2>&1 &&
+	grep "FATAL: ${name}.lua:2: test: shell.die" ${name}.log
+'
+
 test_done
