@@ -25,6 +25,17 @@ from flux.core.inner import raw
 
 logger = logging.getLogger("flux-jobs")
 
+state_const_dict = {
+    "depend": flux.constants.FLUX_JOB_DEPEND,
+    "sched": flux.constants.FLUX_JOB_SCHED,
+    "run": flux.constants.FLUX_JOB_RUN,
+    "cleanup": flux.constants.FLUX_JOB_CLEANUP,
+    "inactive": flux.constants.FLUX_JOB_INACTIVE,
+    "pending": flux.constants.FLUX_JOB_PENDING,
+    "running": flux.constants.FLUX_JOB_RUNNING,
+    "active": flux.constants.FLUX_JOB_ACTIVE,
+}
+
 
 def runtime(job, roundup):
     if "t_cleanup" in job and "t_run" in job:
@@ -170,26 +181,9 @@ def fetch_jobs_flux(args):
 
     states = 0
     for state in args.states.split(","):
-        # Note
-        # pending = depend & sched
-        # running = run & cleanup
-        if state.lower() == "depend":
-            states |= flux.constants.FLUX_JOB_DEPEND
-        elif state.lower() == "sched":
-            states |= flux.constants.FLUX_JOB_SCHED
-        elif state.lower() == "pending":
-            states |= flux.constants.FLUX_JOB_PENDING
-        elif state.lower() == "run":
-            states |= flux.constants.FLUX_JOB_RUN
-        elif state.lower() == "cleanup":
-            states |= flux.constants.FLUX_JOB_CLEANUP
-        elif state.lower() == "running":
-            states |= flux.constants.FLUX_JOB_RUNNING
-        elif state.lower() == "inactive":
-            states |= flux.constants.FLUX_JOB_INACTIVE
-        elif state.lower() == "active":
-            states |= flux.constants.FLUX_JOB_ACTIVE
-        else:
+        try:
+            states |= state_const_dict[state.lower()]
+        except KeyError:
             print("Invalid state specified", file=sys.stderr)
             sys.exit(1)
 
