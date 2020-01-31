@@ -508,6 +508,74 @@ static int l_shell_rankinfo (lua_State *L)
     return rc;
 }
 
+static void get_lua_sourceinfo (lua_State *L,
+                                lua_Debug *arp,
+                                const char **filep,
+                                int *linep)
+{
+    /*  Get file/line info using lua Debug interface:
+     */
+
+    /* Prevent memcheck,ASan from complaining about
+     *  uninitialized memory:
+     */
+    memset (arp, 0, sizeof (*arp));
+
+    *linep = -1;
+    *filep = NULL;
+    if (lua_getstack (L, 1, arp) && lua_getinfo (L, "Sl", arp)) {
+        *linep = arp->currentline;
+        *filep = arp->short_src;
+    }
+}
+
+static int call_shell_log (int level, lua_State *L)
+{
+    lua_Debug ar;
+    const char *file;
+    int line = -1;
+    const char *s = lua_tostring (L, 1);
+
+    get_lua_sourceinfo (L, &ar, &file, &line);
+    flux_shell_log (level, file, line, "%s", s);
+    return 0;
+}
+
+/*  shell.log (msg)
+ */
+static int l_shell_log (lua_State *L)
+{
+    return call_shell_log (FLUX_SHELL_NOTICE, L);
+}
+
+/*  shell.debug (msg)
+ */
+static int l_shell_debug (lua_State *L)
+{
+    return call_shell_log (FLUX_SHELL_DEBUG, L);
+}
+
+/*  shell.log_error (msg)
+ */
+static int l_shell_log_error (lua_State *L)
+{
+    return call_shell_log (FLUX_SHELL_ERROR, L);
+}
+
+/*  shell.die (msg)
+ */
+static int l_shell_die (lua_State *L)
+{
+    lua_Debug ar;
+    int line;
+    const char *file;
+    const char *s = lua_tostring (L, 1);
+
+    get_lua_sourceinfo (L, &ar, &file, &line);
+    flux_shell_fatal (file, line, 0, 1, "%s", s);
+    return 0;
+}
+
 static int l_plugin_index (lua_State *L)
 {
     const char *key = lua_tostring (L, 2);
@@ -573,6 +641,22 @@ static int l_shell_index (lua_State *L)
         return l_shell_rankinfo (L);
     else if (strcmp (key, "verbose") == 0) {
         lua_pushboolean (L, rc_shell->verbose);
+        return 1;
+    }
+    else if (strcmp (key, "log") == 0) {
+        lua_pushcfunction (L, l_shell_log);
+        return 1;
+    }
+    else if (strcmp (key, "debug") == 0) {
+        lua_pushcfunction (L, l_shell_debug);
+        return 1;
+    }
+    else if (strcmp (key, "log_error") == 0) {
+        lua_pushcfunction (L, l_shell_log_error);
+        return 1;
+    }
+    else if (strcmp (key, "die") == 0) {
+        lua_pushcfunction (L, l_shell_die);
         return 1;
     }
     else {
