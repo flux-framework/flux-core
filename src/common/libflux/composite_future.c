@@ -18,6 +18,7 @@
 /*  Type-specific data for a composite future:
  */
 struct composite_future {
+    int seq;             /* sequence for anonymous children          */
     unsigned int any:1;  /* true if this future is a "wait any" type */
     zhash_t *children;   /* hash of child futures by name            */
 };
@@ -182,19 +183,29 @@ flux_future_t *flux_future_wait_any_create (void)
 int flux_future_push (flux_future_t *f, const char *name, flux_future_t *child)
 {
     struct composite_future *cf = NULL;
+    char *anon = NULL;
+    int rc = -1;
 
-    if (!f || !name || !child || !(cf = composite_get (f))) {
+    if (!f || !child || !(cf = composite_get (f))) {
         errno = EINVAL;
-        return (-1);
+        return -1;
+    }
+    if (name == NULL) {
+        if (asprintf (&anon, "%d", cf->seq++) < 0)
+            return -1;
+        name = anon;
     }
     if (zhash_insert (cf->children, name, child) < 0)
-        return (-1);
+        goto done;
     zhash_freefn (cf->children, name, (flux_free_f) flux_future_destroy);
     if (flux_future_aux_set (child, "flux::parent", f, NULL) < 0) {
         zhash_delete (cf->children, name);
-        return (-1);
+        goto done;
     }
-    return (0);
+    rc = 0;
+done:
+    free (anon);
+    return rc;
 }
 
 flux_future_t *flux_future_get_child (flux_future_t *f, const char *name)
