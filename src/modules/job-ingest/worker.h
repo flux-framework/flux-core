@@ -20,6 +20,7 @@ flux_future_t *worker_request (struct worker *w, const char *s);
 int worker_queue_depth (struct worker *w);
 bool worker_is_running (struct worker *w);
 
+flux_future_t *worker_kill (struct worker *w, int signo);
 void worker_destroy (struct worker *w);
 struct worker *worker_create (flux_t *h, double inactivity_timeout,
                               const char *worker_name,

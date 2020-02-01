@@ -306,6 +306,19 @@ static void worker_stop (struct worker *w)
     }
 }
 
+flux_future_t *worker_kill (struct worker *w, int signo)
+{
+    flux_future_t *f = NULL;
+    if (w->p) {
+        flux_log (w->h, LOG_DEBUG,
+                  "killing %s (pid=%ld)",
+                  w->name,
+                  (long) flux_subprocess_pid (w->p));
+        f = flux_subprocess_kill (w->p, signo);
+    }
+    return f;
+}
+
 static int worker_start (struct worker *w)
 {
     if (!w->p) {
