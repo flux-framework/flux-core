@@ -166,6 +166,27 @@ test_expect_success 'sched-simple: reload with outstanding allocations' '
 	flux dmesg | grep "hello: alloc rank0/core0" &&
 	test "$($query)" = ""
 '
+test_expect_success 'sched-simple: verify three jobs are active' '
+	count=$(flux job list | wc -l) &&
+	test ${count} -eq 3
+'
+
+test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
+	flux module remove sched-simple &&
+	flux job cancelall -f
+'
+
+test_expect_success 'sched-simple: there are no outstanding sched requests' '
+	flux queue status -v 2>queue_status.out &&
+	grep "0 alloc requests pending to scheduler" queue_status.out &&
+	grep "0 free requests pending to scheduler" queue_status.out
+'
+
+test_expect_success 'sched-simple: load sched-simple and wait for queue drain' '
+	flux module load sched-simple &&
+	run_timeout 30 flux queue drain
+'
+
 test_expect_success 'sched-simple: remove sched-simple' '
 	flux module remove sched-simple
 '

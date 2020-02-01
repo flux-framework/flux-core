@@ -62,6 +62,11 @@ int schedutil_alloc_respond_denied (schedutil_t *util, const flux_msg_t *msg,
     return schedutil_alloc_respond (util->h, msg, 2, note);
 }
 
+int schedutil_alloc_respond_cancel (schedutil_t *util, const flux_msg_t *msg)
+{
+    return schedutil_alloc_respond (util->h, msg, 3, NULL);
+}
+
 struct alloc {
     char *note;
     const flux_msg_t *msg;

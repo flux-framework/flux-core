@@ -57,7 +57,6 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv);
 int cmd_wait_event (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
-int cmd_drain (optparse_t *p, int argc, char **argv);
 int cmd_wait (optparse_t *p, int argc, char **argv);
 
 int stdin_flags;
@@ -237,13 +236,6 @@ static struct optparse_option wait_event_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
-static struct optparse_option drain_opts[] =  {
-    { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
-      .usage = "timeout after DURATION",
-    },
-    OPTPARSE_TABLE_END
-};
-
 static struct optparse_subcommand subcommands[] = {
     { "list",
       "[OPTIONS]",
@@ -350,13 +342,6 @@ static struct optparse_subcommand subcommands[] = {
       cmd_stats,
       0,
       NULL
-    },
-    { "drain",
-      "[-t seconds]",
-      "Wait for queue to become empty.",
-      cmd_drain,
-      0,
-      drain_opts
     },
     { "namespace",
       "[id ...]",
@@ -2289,29 +2274,6 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
 
     /* for time being, just output json object for result */
     printf ("%s\n", s);
-    flux_close (h);
-    return (0);
-}
-
-int cmd_drain (optparse_t *p, int argc, char **argv)
-{
-    flux_t *h;
-    int optindex = optparse_option_index (p);
-    double timeout = optparse_get_duration (p, "timeout", -1.);
-    flux_future_t *f;
-
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
-    if (argc - optindex != 0) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-    if (!(f = flux_rpc (h, "job-manager.drain", NULL, FLUX_NODEID_ANY, 0)))
-        log_err_exit ("flux_rpc");
-    if (flux_future_wait_for (f, timeout) < 0 || flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("drain: %s", errno == ETIMEDOUT
-                                   ? "timeout" : future_strerror (f, errno));
-    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }

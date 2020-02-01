@@ -22,7 +22,7 @@ struct schedutil_ctx {
     flux_msg_handler_t **handlers;
     schedutil_alloc_cb_f *alloc_cb;
     schedutil_free_cb_f *free_cb;
-    schedutil_exception_cb_f *exception_cb;
+    schedutil_cancel_cb_f *cancel_cb;
     void *cb_arg;
     zlistx_t *outstanding_futures;
 };
@@ -38,7 +38,7 @@ int schedutil_add_outstanding_future (schedutil_t *util, flux_future_t *fut);
 int schedutil_remove_outstanding_future (schedutil_t *util,
                                          flux_future_t *fut);
 
-/* (Un-)register callbacks for alloc, free, exception.
+/* (Un-)register callbacks for alloc, free, cancel.
  */
 int schedutil_ops_register (schedutil_t *util);
 void schedutil_ops_unregister (schedutil_t *util);

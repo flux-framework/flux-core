@@ -31,12 +31,12 @@ enum module_debug_flags {
 schedutil_t *schedutil_create (flux_t *h,
                                schedutil_alloc_cb_f *alloc_cb,
                                schedutil_free_cb_f *free_cb,
-                               schedutil_exception_cb_f *exception_cb,
+                               schedutil_cancel_cb_f *cancel_cb,
                                void *cb_arg)
 {
     schedutil_t *util;
 
-    if (!h || !alloc_cb || !free_cb || !exception_cb) {
+    if (!h || !alloc_cb || !free_cb || !cancel_cb) {
         errno = EINVAL;
         return NULL;
     }
@@ -46,13 +46,11 @@ schedutil_t *schedutil_create (flux_t *h,
     util->h = h;
     util->alloc_cb = alloc_cb;
     util->free_cb = free_cb;
-    util->exception_cb = exception_cb;
+    util->cancel_cb = cancel_cb;
     util->cb_arg = cb_arg;
     if ((util->outstanding_futures = zlistx_new ()) == NULL)
         goto error;
     if (schedutil_ops_register (util) < 0)
-        goto error;
-    if (flux_event_subscribe (h, "job-exception") < 0)
         goto error;
 
     return util;
@@ -121,3 +119,7 @@ int schedutil_remove_outstanding_future (schedutil_t *util, flux_future_t *fut)
         return -1;
     return 0;
 }
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */

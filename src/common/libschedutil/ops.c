@@ -94,6 +94,23 @@ error:
         flux_log_error (h, "sched.alloc respond_error");
 }
 
+static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
+                       const flux_msg_t *msg, void *arg)
+{
+    schedutil_t *util = arg;
+    flux_jobid_t id;
+
+    if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0) {
+        flux_log_error (h, "sched.cancel");
+        return;
+    }
+    /* N.B. in case scheduler hasn't transitioned to new cancel_cb,
+     * call as though this were the old exception_cb, with type=cancel,
+     * severity=0.
+     */
+    util->cancel_cb (h, id, "cancel", 0, util->cb_arg);
+}
+
 static void free_continuation (flux_future_t *f, void *arg)
 {
     schedutil_t *util = arg;
@@ -159,28 +176,10 @@ error:
         flux_log_error (h, "sched.free respond_error");
 }
 
-static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
-{
-    schedutil_t *util = arg;
-    flux_jobid_t id;
-    const char *type;
-    int severity;
-
-    if (flux_event_unpack (msg, NULL, "{s:I s:s s:i}",
-                                      "id", &id,
-                                      "type", &type,
-                                      "severity", &severity) < 0) {
-        flux_log_error (h, "job-exception event");
-        return;
-    }
-    util->exception_cb (h, id, type, severity, util->cb_arg);
-}
-
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "sched.alloc", alloc_cb, 0},
+    { FLUX_MSGTYPE_REQUEST,  "sched.cancel", cancel_cb, 0},
     { FLUX_MSGTYPE_REQUEST,  "sched.free", free_cb, 0},
-    { FLUX_MSGTYPE_EVENT,  "job-exception", exception_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -232,8 +231,6 @@ int schedutil_ops_register (schedutil_t *util)
         goto error;
     if (flux_msg_handler_addvec (h, htab, util, &util->handlers) < 0)
         goto error;
-    if (flux_event_subscribe (h, "job-exception") < 0)
-        goto error;
     return 0;
 error:
     schedutil_ops_unregister (util);
@@ -246,7 +243,6 @@ void schedutil_ops_unregister (schedutil_t *util)
         return;
 
     service_unregister (util->h);
-    (void)flux_event_unsubscribe (util->h, "job-exception");
     flux_msg_handler_delvec (util->handlers);
  }
 

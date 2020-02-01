@@ -35,17 +35,17 @@ typedef void (schedutil_free_cb_f)(flux_t *h,
                                    const char *R,
                                    void *arg);
 
-/* An exception occurred for job 'id'.
- * If the severity is zero, and there is an allocation pending for 'id',
- * you must fail it immediately using schedutil_alloc_respond_denied(),
- * setting the note field to something like "alloc aborted due to
- * exception type=%s"
+/* The job manager wants to cancel a pending alloc request.
+ * The scheduler should look up the job in its queue.  If not found, do nothing.
+ * If found, call schedutil_alloc_respond_cancel() and dequeue.
+ * N.B. same calling footprint as former exception callback to facilitate
+ * transition.
  */
-typedef void (schedutil_exception_cb_f)(flux_t *h,
-                                        flux_jobid_t id,
-                                        const char *type,
-                                        int severity,
-                                        void *arg);
+typedef void (schedutil_cancel_cb_f)(flux_t *h,
+                                     flux_jobid_t id,
+                                     const char *unused_arg1,
+                                     int unused_arg2,
+                                     void *arg);
 
 #endif /* !_FLUX_SCHEDUTIL_OPS_H */
 

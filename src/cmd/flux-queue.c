@@ -24,11 +24,42 @@
 
 int cmd_enable (optparse_t *p, int argc, char **argv);
 int cmd_disable (optparse_t *p, int argc, char **argv);
+int cmd_start (optparse_t *p, int argc, char **argv);
+int cmd_stop (optparse_t *p, int argc, char **argv);
 int cmd_status (optparse_t *p, int argc, char **argv);
+int cmd_drain (optparse_t *p, int argc, char **argv);
 
 int stdin_flags;
 
 static struct optparse_option global_opts[] =  {
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option stop_opts[] = {
+    { .name = "verbose", .key = 'v',
+      .usage = "Display more detail about internal job manager state",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option start_opts[] = {
+    { .name = "verbose", .key = 'v',
+      .usage = "Display more detail about internal job manager state",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option status_opts[] = {
+    { .name = "verbose", .key = 'v',
+      .usage = "Display more detail about internal job manager state",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option drain_opts[] =  {
+    { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
+      .usage = "timeout after DURATION",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -47,12 +78,33 @@ static struct optparse_subcommand subcommands[] = {
       0,
       NULL,
     },
+    { "start",
+      "[OPTIONS]",
+      "Start scheduling",
+      cmd_start,
+      0,
+      start_opts,
+    },
+    { "stop",
+      "[OPTIONS] [message ...]",
+      "Stop scheduling",
+      cmd_stop,
+      0,
+      stop_opts,
+    },
     { "status",
       "[OPTIONS]",
       "Get queue status",
       cmd_status,
       0,
-      NULL,
+      status_opts,
+    },
+    { "drain",
+      "[-t seconds]",
+      "Wait for queue to become empty.",
+      cmd_drain,
+      0,
+      drain_opts
     },
     OPTPARSE_SUBCMD_END
 };
@@ -160,10 +212,59 @@ void submit_admin (flux_t *h,
         log_msg_exit ("submit-admin: %s", future_strerror (f, errno));
     log_msg ("Job submission is %s%s%s",
              enable ? "enabled" : "disabled",
-             enable ? "" : ", reason: ",
+             enable ? "" : ": ",
              enable ? "" : reason);
     flux_future_destroy (f);
 }
+
+void alloc_admin (flux_t *h,
+                  bool verbose,
+                  int query_only,
+                  int enable,
+                  const char *reason)
+{
+    flux_future_t *f;
+    int free_pending;
+    int alloc_pending;
+    int queue_length;
+
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.alloc-admin",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:b s:b s:s}",
+                             "query_only",
+                             query_only,
+                             "enable",
+                             enable,
+                             "reason",
+                             reason ? reason : "")))
+        log_err_exit ("error sending alloc-admin request");
+    if (flux_rpc_get_unpack (f,
+                             "{s:b s:s s:i s:i s:i}",
+                             "enable",
+                             &enable,
+                             "reason",
+                             &reason,
+                             "queue_length",
+                             &queue_length,
+                             "alloc_pending",
+                             &alloc_pending,
+                             "free_pending",
+                             &free_pending) < 0)
+        log_msg_exit ("alloc-admin: %s", future_strerror (f, errno));
+    log_msg ("Scheduling is %s%s%s",
+             enable ? "enabled" : "disabled",
+             reason && strlen (reason) > 0 ? ": " : "",
+             reason ? reason : "");
+    if (verbose) {
+        log_msg ("%d alloc requests queued", queue_length);
+        log_msg ("%d alloc requests pending to scheduler", alloc_pending);
+        log_msg ("%d free requests pending to scheduler", free_pending);
+    }
+    flux_future_destroy (f);
+}
+
 
 int cmd_enable (optparse_t *p, int argc, char **argv)
 {
@@ -199,6 +300,38 @@ int cmd_disable (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
+int cmd_start (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+
+    if (argc - optindex > 0) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    alloc_admin (h, optparse_hasopt (p, "verbose"), 0, 1, NULL);
+    flux_close (h);
+    return (0);
+}
+
+int cmd_stop (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    char *reason = NULL;
+
+    if (argc - optindex > 0)
+        reason = parse_arg_message (argv + optindex, "reason");
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    alloc_admin (h, optparse_hasopt (p, "verbose"), 0, 0, reason);
+    flux_close (h);
+    free (reason);
+    return (0);
+}
+
 int cmd_status (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
@@ -211,6 +344,30 @@ int cmd_status (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     submit_admin (h, 1, 0, NULL);
+    alloc_admin (h, optparse_hasopt (p, "verbose"), 1, 0, NULL);
+    flux_close (h);
+    return (0);
+}
+
+int cmd_drain (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    double timeout = optparse_get_duration (p, "timeout", -1.);
+    flux_future_t *f;
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    if (argc - optindex != 0) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(f = flux_rpc (h, "job-manager.drain", NULL, FLUX_NODEID_ANY, 0)))
+        log_err_exit ("flux_rpc");
+    if (flux_future_wait_for (f, timeout) < 0 || flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("drain: %s", errno == ETIMEDOUT
+                                   ? "timeout" : future_strerror (f, errno));
+    flux_future_destroy (f);
     flux_close (h);
     return (0);
 }

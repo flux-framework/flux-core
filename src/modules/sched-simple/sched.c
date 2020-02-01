@@ -135,21 +135,6 @@ out:
     free (s);
 }
 
-void exception_cb (flux_t *h, flux_jobid_t id,
-                   const char *type, int severity, void *arg)
-{
-    char note [80];
-    struct simple_sched *ss = arg;
-    if (ss->job == NULL || ss->job->id != id || severity > 0)
-        return;
-    flux_log (h, LOG_DEBUG, "alloc aborted: id=%ju", (uintmax_t) id);
-    snprintf (note, sizeof (note) - 1, "alloc aborted due to exception");
-    if (schedutil_alloc_respond_denied (ss->util_ctx, ss->job->msg, note) < 0)
-        flux_log_error (h, "alloc_respond_denied");
-    jobreq_destroy (ss->job);
-    ss->job = NULL;
-}
-
 static int try_free (flux_t *h, struct simple_sched *ss, const char *R)
 {
     int rc = -1;
@@ -216,6 +201,28 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
 err:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "alloc: flux_respond_error");
+}
+
+/* Job manager wants to cancel a pending allocation request.
+ * If ss->job (our queue of 1) matches, respond to the alloc request
+ * and "dequeue" it.
+ */
+static void cancel_cb (flux_t *h,
+                       flux_jobid_t id,
+                       const char *unused_arg1,
+                       int unused_arg2,
+                       void *arg)
+{
+    struct simple_sched *ss = arg;
+
+    if (ss->job && ss->job->id == id) {
+        if (schedutil_alloc_respond_cancel (ss->util_ctx, ss->job->msg) < 0) {
+            flux_log_error (h, "alloc_respond_cancel");
+            return;
+        }
+        jobreq_destroy (ss->job);
+        ss->job = NULL;
+    }
 }
 
 static int hello_cb (flux_t *h,
@@ -356,7 +363,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (process_args (h, ss, argc, argv) < 0)
         return -1;
 
-    ss->util_ctx = schedutil_create (h, alloc_cb, free_cb, exception_cb, ss);
+    ss->util_ctx = schedutil_create (h, alloc_cb, free_cb, cancel_cb, ss);
     if (ss->util_ctx == NULL) {
         flux_log_error (h, "schedutil_create");
         goto done;
