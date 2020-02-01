@@ -58,8 +58,6 @@ static void test_composite_basic_any (flux_reactor_t *r, bool with_error)
         "flux_future_push (NULL, NULL, NULL) returns EINVAL");
     ok (flux_future_push (any, NULL, NULL) < 0 && errno == EINVAL,
         "flux_future_push (any, NULL, NULL) returns EINVAL");
-    ok (flux_future_push (any, NULL, f1) < 0 && errno == EINVAL,
-        "flux_future_push (any, NULL, f1) returns EINVAL");
     ok (flux_future_push (f1, "any", any) < 0 && errno == EINVAL,
         "flux_future_push on non-composite future returns EINVAL");
 
@@ -664,6 +662,56 @@ void test_chained_multiple_fulfill ()
     flux_future_destroy (f1);
 }
 
+static void test_composite_anon_child (flux_reactor_t *r, bool with_error)
+{
+    flux_future_t *all = flux_future_wait_all_create ();
+    flux_future_t *f1 = flux_future_create (init_no_fulfill, NULL);
+    flux_future_t *f2 = flux_future_create (init_and_fulfill, &with_error);
+    const char *s = NULL;
+    int rc;
+
+    if (!all || !f1 || !f2)
+        BAIL_OUT ("Error creating test futures");
+
+    reset_static_sentinels ();
+
+    flux_future_set_reactor (all, r);
+
+    // Test "anonymous" child futures -- future with no "name" set
+    rc = flux_future_push (all, NULL, f1);
+    ok (rc == 0,
+        "flux_future_push (all, NULL, f1) == %d", rc);
+    rc = flux_future_push (all, NULL, f2);
+    ok (rc == 0,
+        "flux_future_push (all, NULL, f2) == %d", rc);
+
+    s = flux_future_first_child (all);
+    ok ((s != NULL),
+        "flux_future_first_child() == '%s'", s);
+    s = flux_future_next_child (all);
+    ok ((s != NULL),
+        "flux_future_next_child() == '%s'", s);
+
+    ok (!flux_future_is_ready (all),
+        "flux_future_is_ready (all) == false");
+
+    ok (flux_future_wait_for (all, 0.1) < 0 && errno == ETIMEDOUT,
+        "flux_future_wait_for() returns ETIMEDOUT");
+
+    ok (init_and_fulfill_called && init_no_fulfill_called,
+        "initializers for both futures called synchronously");
+
+    ok (!flux_future_is_ready (all),
+        "wait_all future still not ready");
+
+    flux_future_fulfill (f1, NULL, NULL);
+
+    ok (flux_future_get (all, NULL) == 0,
+        "flux_future_get on wait_all composite returns success");
+
+    flux_future_destroy (all);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *reactor;
@@ -687,6 +735,8 @@ int main (int argc, char *argv[])
     test_chained_async ();
     test_chained_no_continue ();
     test_chained_multiple_fulfill ();
+
+    test_composite_anon_child (reactor, false);
 
     flux_reactor_destroy (reactor);
 
