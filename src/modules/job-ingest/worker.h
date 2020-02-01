@@ -22,6 +22,7 @@ bool worker_is_running (struct worker *w);
 
 void worker_destroy (struct worker *w);
 struct worker *worker_create (flux_t *h, double inactivity_timeout,
+                              const char *worker_name,
                               int argc, char **argv);
 
 

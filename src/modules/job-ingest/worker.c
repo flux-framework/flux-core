@@ -324,6 +324,7 @@ void worker_destroy (struct worker *w)
 }
 
 struct worker *worker_create (flux_t *h, double inactivity_timeout,
+                              const char *name,
                               int argc, char **argv)
 {
     struct worker *w;
@@ -339,7 +340,7 @@ struct worker *worker_create (flux_t *h, double inactivity_timeout,
         goto error;
     if (!(w->trash = zlist_new()))
         goto error;
-    if (!(w->name = strdup (basename (argv[0]))))
+    if (!(w->name = strdup (basename (name))))
         goto error;
     if (!(w->queue = zlist_new ()))
         goto error;

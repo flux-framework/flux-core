@@ -127,6 +127,7 @@ struct validate *validate_create (flux_t *h,
 
     for (i = 0; i < MAX_WORKER_COUNT; i++) {
         if (!(v->worker[i] = worker_create (h, worker_inactivity_timeout,
+                                            validate_path,
                                             argc, argv)))
             goto error;
     }
