@@ -83,8 +83,16 @@ static void worker_completion_cb (flux_subprocess_t *p)
     if ((rc = flux_subprocess_exit_code (p)) >= 0) {
         if (rc == 0)
             flux_log (w->h, LOG_DEBUG, "%s: exited normally", w->name);
-        else
+        else {
             flux_log (w->h, LOG_ERR, "%s: exited with rc=%d", w->name, rc);
+            /* possible unexpected exit, if w->p = p, then move this
+             * worker to trash now, so the cleanup below is successful.
+             */
+            if (w->p == p) {
+                (void)zlist_append (w->trash, p);
+                w->p = NULL;
+            }
+        }
     }
     else if ((rc = flux_subprocess_signaled (p)) >= 0)
         flux_log (w->h, LOG_ERR, "%s: killed by %s", w->name, strsignal (rc));
@@ -182,6 +190,22 @@ error:
     json_decref (o);
 }
 
+static void worker_unexpected_exit (struct worker *w)
+{
+    flux_future_t *f;
+    const char *json_err =
+        "{\"errnum\":71,"
+        "\"errstr\":\"Unrecoverable error: validator unexpectedly exited\"}";
+
+    /*  Respond to any pending requests immediately with error above.
+     *  The remainder of worker cleanup will happen in the exit callback.
+     */
+    while ((f = zlist_pop (w->queue))) {
+        worker_fulfill_future (w, f, json_err);
+        flux_future_decref (f);
+    }
+}
+
 /* Subprocess output available
  * stderr is logged
  * stdout fulfills future at the top of the worker's queue.
@@ -196,8 +220,14 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
         flux_log_error (w->h, "%s: subprocess_read_trimmed_line", w->name);
         return;
     }
-    if (len == 0) // EOF
+    if (len == 0) {
+        /* EOF - If there are still responses queued, fail them all,
+         *  otherwise, just return. Other cleanup handled in exit callback.
+         */
+        if (!strcmp (stream, "stdout") && worker_queue_depth (w) > 0)
+            worker_unexpected_exit (w);
         return;
+    }
     if (!strcmp (stream, "stdout")) {
         flux_future_t *f;
 
