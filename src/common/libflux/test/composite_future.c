@@ -712,6 +712,18 @@ static void test_composite_anon_child (flux_reactor_t *r, bool with_error)
     flux_future_destroy (all);
 }
 
+void test_empty_composite (flux_reactor_t *r)
+{
+    flux_future_t *all = flux_future_wait_all_create ();
+
+    flux_future_set_reactor (all, r);
+    ok (flux_future_wait_for (all, 0.1) == 0,
+        "empty wait_all future is fulfilled immediately");
+    ok (flux_future_get (all, NULL) == 0,
+        "flux_future_get (all) == 0");
+    flux_future_destroy (all);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *reactor;
@@ -737,6 +749,7 @@ int main (int argc, char *argv[])
     test_chained_multiple_fulfill ();
 
     test_composite_anon_child (reactor, false);
+    test_empty_composite (reactor);
 
     flux_reactor_destroy (reactor);
 
