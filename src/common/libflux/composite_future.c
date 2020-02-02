@@ -127,6 +127,7 @@ void composite_future_init (flux_future_t *f, void *arg)
 {
     flux_future_t *child;
     struct composite_future *cf = arg;
+    bool empty = true;
     if (cf == NULL) {
         errno = EINVAL;
         goto error;
@@ -138,11 +139,18 @@ void composite_future_init (flux_future_t *f, void *arg)
      */
     child = zhash_first (cf->children);
     while (child) {
+        if (empty)
+            empty = false;
         future_propagate_context (f, child);
         if (flux_future_then (child, -1., child_cb, (void *) f) < 0)
             goto error;
         child = zhash_next (cf->children);
     }
+    /*  An empty wait_all future is fulfilled immediately since
+     *   logically "all" child futures are fulfilled
+     */
+    if (empty && !cf->any)
+        flux_future_fulfill (f, NULL, NULL);
     return;
 error:
     flux_future_fulfill_error (f, errno, NULL);
