@@ -602,15 +602,15 @@ class JobspecV1(Jobspec):
         if not isinstance(cores_per_task, int) or cores_per_task < 1:
             raise ValueError("cores per task must be an integer >= 1")
         if gpus_per_task is not None:
-            if not isinstance(gpus_per_task, int) or gpus_per_task < 1:
-                raise ValueError("gpus per task must be an integer >= 1")
+            if not isinstance(gpus_per_task, int) or gpus_per_task < 0:
+                raise ValueError("gpus per task must be an integer >= 0")
         if num_nodes is not None:
             if not isinstance(num_nodes, int) or num_nodes < 1:
                 raise ValueError("node count must be an integer >= 1 (if set)")
             if num_nodes > num_tasks:
                 raise ValueError("node count must not be greater than task count")
         children = [cls._create_resource("core", cores_per_task)]
-        if gpus_per_task is not None:
+        if gpus_per_task not in (None, 0):
             children.append(cls._create_resource("gpu", gpus_per_task))
         if num_nodes is not None:
             num_slots = int(math.ceil(num_tasks / float(num_nodes)))
