@@ -312,7 +312,8 @@ def main():
     else:
         fmt = (
             "{id:>18} {username:<8.8} {name:<10.10} {state:<8.8} "
-            "{ntasks:>6} {runtime_fsd_hyphen}"
+            "{ntasks:>6} {nnodes_hyphen:>6} {runtime_fsd_hyphen:>8} "
+            "{ranks_hyphen}"
         )
 
     if not args.suppress_header:
