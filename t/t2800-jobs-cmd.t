@@ -100,6 +100,17 @@ test_expect_success 'flux-jobs --suppress-header works' '
         test $count -eq 14
 '
 
+test_expect_success 'flux-jobs: header included with custom formats' '
+	flux jobs --format={id} &&
+	test "$(flux jobs --format={id} | head -1)" = "JOBID"
+'
+
+test_expect_success 'flux-jobs: custom format with numeric spec works' '
+	flux jobs --format="{t_run:12.2f}" > format-test.out 2>&1 &&
+	test_debug "cat format-test.out" &&
+	grep T_RUN format-test.out
+'
+
 # TODO: need to submit jobs as another user and test -A again
 test_expect_success 'flux-jobs -a and -A works' '
         count=`flux jobs --suppress-header -a | wc -l` &&
