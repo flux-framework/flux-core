@@ -378,7 +378,7 @@ for d in ${ISSUES_DIR}/*; do
 		fmt=""
         fi
 	test_expect_success "${desc}" '
-		flux jobs --from-stdin ${fmt:+--format="$fmt"} < ${d}/input >${issue}.output &&
+		flux jobs -n --from-stdin ${fmt:+--format="$fmt"} < ${d}/input >${issue}.output &&
 		test_cmp ${d}/output ${issue}.output
 	'
 done
