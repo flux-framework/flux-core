@@ -120,12 +120,12 @@ def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
 # - Desired return value is json array, not a single value
 #
 # pylint: disable=dangerous-default-value
-def job_list(flux_handle, max_entries=0, attrs=[], userid=os.geteuid(), flags=0):
+def job_list(flux_handle, max_entries=0, attrs=[], userid=os.geteuid(), states=0):
     payload = {
         "max_entries": max_entries,
         "attrs": attrs,
         "userid": userid,
-        "flags": flags,
+        "states": states,
     }
     return flux_handle.rpc("job-info.list", payload)
 

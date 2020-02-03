@@ -41,13 +41,21 @@ List jobs for a specific username or userid.  Specify 'all' for all users.
 Limit output to N jobs (default 1000)
 
 *-s, --states*'=STATES'::
-List jobs in specific states.  States can be 'pending', 'running', or
-'inactive'.  Multiple states can be listed separated by comma.
-Defaults to 'pending,running'.
+List jobs in specific job states or virtual job states.  Multiple
+states can be listed separated by comma.  See JOB STATES below for
+additional information.  Defaults to 'pending,running'.
 
 *-o, --format*'=FORMAT
 Specify output format using Python's string format syntax.  See OUTPUT
 FORMAT below for field names.
+
+JOB STATES
+----------
+Jobs may be observed to pass through five job states in Flux: DEPEND,
+SCHED, RUN, CLEANUP, and INACTIVE (see Flux RFC 21). For convenience
+and clarity, some options accept the following virtual job states:
+"pending", an alias for DEPEND,SCHED; "running", an alias for
+RUN,CLEANUP; "active", an alias for "pending,running".
 
 OUTPUT FORMAT
 -------------

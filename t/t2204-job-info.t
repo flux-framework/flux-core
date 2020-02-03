@@ -142,20 +142,39 @@ test_expect_success 'submit jobs for job list testing' '
         echo $id2 >> job_ids_pending.out &&
         echo $id3 >> job_ids_pending.out &&
         echo $id4 >> job_ids_pending.out &&
+        cat job_ids_pending.out > active.out &&
+        cat job_ids_running.out >> active.out &&
         wait_states
 '
 
+# Note: "running" = "run" & "cleanup", we also test just "run" state
+# since we happen to know all these jobs are in the "run" state given
+# checks above
+
 test_expect_success HAVE_JQ 'flux job list running jobs in started order' '
-        flux job list -s running | jq .id > list_started.out &&
-        test_cmp list_started.out job_ids_running.out
+        flux job list -s running | jq .id > list_started1.out &&
+        flux job list -s run,cleanup | jq .id > list_started2.out &&
+        flux job list -s run | jq .id > list_started3.out &&
+        test_cmp list_started1.out job_ids_running.out &&
+        test_cmp list_started2.out job_ids_running.out &&
+        test_cmp list_started3.out job_ids_running.out
 '
 
 test_expect_success HAVE_JQ 'flux job list running jobs with correct state' '
         for count in `seq 1 8`; do \
             echo "8" >> list_state_R.exp; \
         done &&
-        flux job list -s running | jq .state > list_state_R.out &&
-        test_cmp list_state_R.out list_state_R.exp
+        flux job list -s running | jq .state > list_state_R1.out &&
+        flux job list -s run,cleanup | jq .state > list_state_R2.out &&
+        flux job list -s run | jq .state > list_state_R3.out &&
+        test_cmp list_state_R1.out list_state_R.exp &&
+        test_cmp list_state_R2.out list_state_R.exp &&
+        test_cmp list_state_R3.out list_state_R.exp
+'
+
+test_expect_success HAVE_JQ 'flux job list no jobs in cleanup state' '
+        count=$(flux job list -s cleanup | wc -l) &&
+        test $count -eq 0
 '
 
 test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
@@ -171,9 +190,17 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
         test_cmp list_state_I.out list_state_I.exp
 '
 
+# Note: "pending" = "depend" & "sched", we also test just "sched"
+# state since we happen to know all these jobs are in the "sched"
+# state given checks above
+
 test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
-        flux job list -s pending | jq .id > list_pending.out &&
-        test_cmp list_pending.out job_ids_pending.out
+        flux job list -s pending | jq .id > list_pending1.out &&
+        flux job list -s depend,sched | jq .id > list_pending2.out &&
+        flux job list -s sched | jq .id > list_pending3.out &&
+        test_cmp list_pending1.out job_ids_pending.out &&
+        test_cmp list_pending2.out job_ids_pending.out &&
+        test_cmp list_pending3.out job_ids_pending.out
 '
 
 test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
@@ -183,16 +210,37 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
 16
 0
 EOT
-        flux job list -s pending | jq .priority > list_priority.out &&
-        test_cmp list_priority.out list_priority.exp
+        flux job list -s pending | jq .priority > list_priority1.out &&
+        flux job list -s depend,sched | jq .priority > list_priority2.out &&
+        flux job list -s sched | jq .priority > list_priority3.out &&
+        test_cmp list_priority1.out list_priority.exp &&
+        test_cmp list_priority2.out list_priority.exp &&
+        test_cmp list_priority3.out list_priority.exp
 '
 
 test_expect_success HAVE_JQ 'flux job list pending jobs with correct state' '
         for count in `seq 1 4`; do \
             echo "4" >> list_state_S.exp; \
         done &&
-        flux job list -s pending | jq .state > list_state_S.out &&
-        test_cmp list_state_S.out list_state_S.exp
+        flux job list -s pending | jq .state > list_state_S1.out &&
+        flux job list -s depend,sched | jq .state > list_state_S2.out &&
+        flux job list -s sched | jq .state > list_state_S3.out &&
+        test_cmp list_state_S3.out list_state_S.exp
+'
+
+test_expect_success HAVE_JQ 'flux job list no jobs in depend state' '
+        count=$(flux job list -s depend | wc -l) &&
+        test $count -eq 0
+'
+
+# Note: "active" = "pending" & "running", i.e. depend, sched, run, cleanup
+test_expect_success HAVE_JQ 'flux job list active jobs in correct order' '
+        flux job list -s active | jq .id > list_active1.out &&
+        flux job list -s depend,sched,run,cleanup | jq .id > list_active2.out &&
+        flux job list -s sched,run | jq .id > list_active3.out &&
+        test_cmp list_active1.out active.out &&
+        test_cmp list_active2.out active.out &&
+        test_cmp list_active3.out active.out
 '
 
 test_expect_success HAVE_JQ 'flux job list jobs with correct userid' '
@@ -500,7 +548,7 @@ test_expect_success 'list count / max_entries works' '
 
 test_expect_success HAVE_JQ 'list request with empty attrs works' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:[]}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:[]}" \
           | $RPC job-info.list > list_empty_attrs.out &&
         test_must_fail grep "userid" list_empty_attrs.out &&
         test_must_fail grep "priority" list_empty_attrs.out &&
@@ -517,7 +565,7 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
 '
 test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:100000, userid:${id}, flags:0, attrs:[]}" \
+        $jq -j -c -n  "{max_entries:100000, userid:${id}, states:0, attrs:[]}" \
           | $RPC job-info.list
 '
 test_expect_success HAVE_JQ 'list-attrs works' '
@@ -942,17 +990,17 @@ test_expect_success 'list request with empty payload fails with EPROTO(71)' '
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:5}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:5}" \
           | $RPC job-info.list 71
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:[5]}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:[5]}" \
           | $RPC job-info.list 22
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, flags:0, attrs:[\"foo\"]}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:[\"foo\"]}" \
           | $RPC job-info.list 22
 '
 

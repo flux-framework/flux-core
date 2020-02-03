@@ -25,6 +25,17 @@ from flux.core.inner import raw
 
 logger = logging.getLogger("flux-jobs")
 
+state_const_dict = {
+    "depend": flux.constants.FLUX_JOB_DEPEND,
+    "sched": flux.constants.FLUX_JOB_SCHED,
+    "run": flux.constants.FLUX_JOB_RUN,
+    "cleanup": flux.constants.FLUX_JOB_CLEANUP,
+    "inactive": flux.constants.FLUX_JOB_INACTIVE,
+    "pending": flux.constants.FLUX_JOB_PENDING,
+    "running": flux.constants.FLUX_JOB_RUNNING,
+    "active": flux.constants.FLUX_JOB_ACTIVE,
+}
+
 
 def runtime(job, roundup):
     if "t_cleanup" in job and "t_run" in job:
@@ -168,23 +179,19 @@ def fetch_jobs_flux(args):
                 print("invalid user specified", file=sys.stderr)
                 sys.exit(1)
 
-    flags = 0
+    states = 0
     for state in args.states.split(","):
-        if state.lower() == "pending":
-            flags |= flux.constants.FLUX_JOB_LIST_PENDING
-        elif state.lower() == "running":
-            flags |= flux.constants.FLUX_JOB_LIST_RUNNING
-        elif state.lower() == "inactive":
-            flags |= flux.constants.FLUX_JOB_LIST_INACTIVE
-        else:
-            print("Invalid state specified", file=sys.stderr)
+        try:
+            states |= state_const_dict[state.lower()]
+        except KeyError:
+            print("Invalid state specified: {}".format(state), file=sys.stderr)
             sys.exit(1)
 
-    if flags == 0:
-        flags |= flux.constants.FLUX_JOB_LIST_PENDING
-        flags |= flux.constants.FLUX_JOB_LIST_RUNNING
+    if states == 0:
+        states |= flux.constants.FLUX_JOB_PENDING
+        states |= flux.constants.FLUX_JOB_RUNNING
 
-    rpc_handle = flux.job.job_list(h, args.count, attrs, userid, flags)
+    rpc_handle = flux.job.job_list(h, args.count, attrs, userid, states)
     try:
         jobs = flux.job.job_list_get(rpc_handle)
     except EnvironmentError as e:
@@ -224,7 +231,7 @@ def parse_args():
         type=str,
         metavar="STATES",
         default="pending,running",
-        help="List jobs in specific states(pending,running,inactive)",
+        help="List jobs in specific job states or virtual job states",
     )
     parser.add_argument(
         "--suppress-header",

@@ -30,7 +30,7 @@
  * EPROTO - malformed attrs array
  * ENOMEM - out of memory
  */
-json_t *list_one_job (struct job *job, json_t *attrs)
+json_t *job_to_json (struct job *job, json_t *attrs)
 {
     size_t index;
     json_t *value;
@@ -127,27 +127,30 @@ json_t *list_one_job (struct job *job, json_t *attrs)
  *
  * ENOMEM - out of memory
  */
-int list_job_append (json_t *jobs,
-                     zlistx_t *list,
-                     int max_entries,
-                     json_t *attrs,
-                     uint32_t userid)
+int get_jobs_from_list (json_t *jobs,
+                        zlistx_t *list,
+                        int max_entries,
+                        json_t *attrs,
+                        uint32_t userid,
+                        int states)
 {
     struct job *job;
 
     job = zlistx_first (list);
     while (job) {
-        if (userid == FLUX_USERID_UNKNOWN || job->userid == userid) {
-            json_t *o;
-            if (!(o = list_one_job (job, attrs)))
-                return -1;
-            if (json_array_append_new (jobs, o) < 0) {
-                json_decref (o);
-                errno = ENOMEM;
-                return -1;
+        if (job->state & states) {
+            if (userid == FLUX_USERID_UNKNOWN || job->userid == userid) {
+                json_t *o;
+                if (!(o = job_to_json (job, attrs)))
+                    return -1;
+                if (json_array_append_new (jobs, o) < 0) {
+                    json_decref (o);
+                    errno = ENOMEM;
+                    return -1;
+                }
+                if (json_array_size (jobs) == max_entries)
+                    return 1;
             }
-            if (json_array_size (jobs) == max_entries)
-                return 1;
         }
         job = zlistx_next (list);
     }
@@ -162,11 +165,11 @@ int list_job_append (json_t *jobs,
  * EPROTO - malformed or empty attrs array, max_entries out of range
  * ENOMEM - out of memory
  */
-json_t *list_jobs (struct info_ctx *ctx,
-                   int max_entries,
-                   json_t *attrs,
-                   uint32_t userid,
-                   int flags)
+json_t *get_jobs (struct info_ctx *ctx,
+                  int max_entries,
+                  json_t *attrs,
+                  uint32_t userid,
+                  int states)
 {
     json_t *jobs = NULL;
     int saved_errno;
@@ -178,34 +181,37 @@ json_t *list_jobs (struct info_ctx *ctx,
     /* We return jobs in the following order, pending, running,
      * inactive */
 
-    if (flags & FLUX_JOB_LIST_PENDING) {
-        if ((ret = list_job_append (jobs,
-                                    ctx->jsctx->pending,
-                                    max_entries,
-                                    attrs,
-                                    userid)) < 0)
+    if (states & FLUX_JOB_PENDING) {
+        if ((ret = get_jobs_from_list (jobs,
+                                       ctx->jsctx->pending,
+                                       max_entries,
+                                       attrs,
+                                       userid,
+                                       states)) < 0)
             goto error;
     }
 
-    if (flags & FLUX_JOB_LIST_RUNNING) {
+    if (states & FLUX_JOB_RUNNING) {
         if (!ret) {
-            if ((ret = list_job_append (jobs,
-                                        ctx->jsctx->running,
-                                        max_entries,
-                                        attrs,
-                                        userid)) < 0)
+            if ((ret = get_jobs_from_list (jobs,
+                                           ctx->jsctx->running,
+                                           max_entries,
+                                           attrs,
+                                           userid,
+                                           states)) < 0)
                 goto error;
         }
     }
 
-    if (flags & FLUX_JOB_LIST_INACTIVE) {
+    if (states & FLUX_JOB_INACTIVE) {
         if (!ret) {
-            if ((ret = list_job_append (jobs,
-                                        ctx->jsctx->inactive,
-                                        max_entries,
-                                        attrs,
-                                        userid)) < 0)
-                 goto error;
+            if ((ret = get_jobs_from_list (jobs,
+                                           ctx->jsctx->inactive,
+                                           max_entries,
+                                           attrs,
+                                           userid,
+                                           states)) < 0)
+                goto error;
         }
     }
 
@@ -228,13 +234,13 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *attrs;
     int max_entries;
     uint32_t userid;
-    int flags;
+    int states;
 
     if (flux_request_unpack (msg, NULL, "{s:i s:o s:i s:i}",
                              "max_entries", &max_entries,
                              "attrs", &attrs,
                              "userid", &userid,
-                             "flags", &flags) < 0)
+                             "states", &states) < 0)
         goto error;
 
     if (max_entries < 0 || !json_is_array (attrs)) {
@@ -242,13 +248,13 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    /* If user sets no flags, assume they want all information */
-    if (!flags)
-        flags = (FLUX_JOB_LIST_PENDING
-                 | FLUX_JOB_LIST_RUNNING
-                 | FLUX_JOB_LIST_INACTIVE);
+    /* If user sets no states, assume they want all information */
+    if (!states)
+        states = (FLUX_JOB_PENDING
+                  | FLUX_JOB_RUNNING
+                  | FLUX_JOB_INACTIVE);
 
-    if (!(jobs = list_jobs (ctx, max_entries, attrs, userid, flags)))
+    if (!(jobs = get_jobs (ctx, max_entries, attrs, userid, states)))
         goto error;
 
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
