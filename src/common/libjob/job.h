@@ -106,6 +106,12 @@ flux_future_t *flux_job_list (flux_t *h,
                               uint32_t userid,
                               int states);
 
+/* Similar to flux_job_list(), but retrieve job info for a single
+ * job id */
+flux_future_t *flux_job_list_id (flux_t *h,
+                                 flux_jobid_t id,
+                                 const char *json_str);
+
 /* Raise an exception for job.
  * Severity is 0-7, with severity=0 causing the job to abort.
  * Note may be NULL or a human readable message.

@@ -134,6 +134,23 @@ void check_corner_case (void)
     ok (flux_job_list (h, 0, "{}", 0, 0xFF) == NULL && errno == EINVAL,
         "flux_job_list states=(illegal states) fails with EINVAL");
 
+    /* flux_job_list_id */
+
+    errno = 0;
+    ok (flux_job_list_id (NULL, 0, "{}") == NULL
+        && errno == EINVAL,
+        "flux_job_list_id h=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_job_list_id (h, 0, NULL) == NULL
+        && errno == EINVAL,
+        "flux_job_list_id json_str=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_job_list_id (h, 0, "wrong") == NULL
+        && errno == EINVAL,
+        "flux_job_list_id json_str=(inval JSON) fails with EINVAL");
+
     /* flux_job_raise */
 
     errno = 0;
