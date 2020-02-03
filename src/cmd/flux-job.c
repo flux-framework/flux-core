@@ -950,9 +950,6 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_job_list");
     json_array_foreach (jobs, index, value) {
         char *str;
-        int state;
-        if (json_unpack (value, "{s:i}", "state", &state) < 0)
-            log_msg_exit ("error parsing list response (state is missing)");
         str = json_dumps (value, 0);
         if (!str)
             log_msg_exit ("error parsing list response");
