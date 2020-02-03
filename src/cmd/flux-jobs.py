@@ -261,29 +261,63 @@ def parse_args():
     return parser.parse_args()
 
 
+def format_header(fmt):
+    # attr name to header name mapping:
+    headings = dict(
+        id="JOBID",
+        userid="UID",
+        username="USER",
+        priority="PRI",
+        state="STATE",
+        state_single="STATE",
+        name="NAME",
+        ntasks="NTASKS",
+        nnodes="NNODES",
+        nnodes_hyphen="NNODES",
+        ranks="RANKS",
+        ranks_hyphen="RANKS",
+        t_submit="T_SUBMIT",
+        t_depend="T_DEPEND",
+        t_sched="T_SCHED",
+        t_run="T_RUN",
+        t_cleanup="T_CLEANUP",
+        t_inactive="T_INACTIVE",
+        runtime="RUNTIME",
+        runtime_fsd="RUNTIME",
+        runtime_fsd_hyphen="RUNTIME",
+        runtime_hms="RUNTIME",
+    )
+
+    def format_denumericalize(fmt):
+        """
+        Make a format string suitable for str types only, i.e. remove
+        all floating-point and number format specifiers, but keep width
+        and justification. Used to modify user-provided format string
+        for use with headings.
+        """
+        import re
+
+        return re.sub(r"\.\d+[bcdoxXeEfFgGn%]}", "}", fmt)
+
+    return format_denumericalize(fmt).format(**headings)
+
+
 @flux.util.CLIMain(logger)
 def main():
     args = parse_args()
     jobs = fetch_jobs(args)
 
     if args.format:
-        output_format(args.format, jobs)
+        fmt = args.format
     else:
         fmt = (
             "{id:>18} {username:<8.8} {name:<10.10} {state:<8.8} "
             "{ntasks:>6} {runtime_fsd_hyphen}"
         )
-        if not args.suppress_header:
-            s = fmt.format(
-                id="JOBID",
-                username="USER",
-                name="NAME",
-                state="STATE",
-                ntasks="NTASKS",
-                runtime_fsd_hyphen="RUNTIME",
-            )
-            print(s)
-        output_format(fmt, jobs)
+
+    if not args.suppress_header:
+        print(format_header(fmt))
+    output_format(fmt, jobs)
 
 
 if __name__ == "__main__":
