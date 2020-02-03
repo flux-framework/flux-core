@@ -234,6 +234,7 @@ def parse_args():
         help="List jobs in specific job states or virtual job states",
     )
     parser.add_argument(
+        "-n",
         "--suppress-header",
         action="store_true",
         help="Suppress printing of header line",
