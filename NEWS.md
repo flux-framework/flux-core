@@ -1,3 +1,47 @@
+flux-core version 0.15.0 - 2020-02-03
+-------------------------------------
+
+## Summary:
+
+This release fixes a critical issue (#2676) with `flux module remove` in
+flux-core-0.14.0 that causes rc3 to fail when flux-core is integrated
+with flux-sched.
+
+### New features
+
+ * flux-job: add raiaseall, cancelall, killall (#2678)
+ * flux-queue: new command to control job queue (#2659, #2687)
+ * flux-jobs: support listing `nnodes` and `ranks` (#2656, #2705)
+
+### Improvements
+
+ * shell: expand lua api to improve error handling in shell rc scripts (#2699)
+ * shell: improve error messages to users on exec failures (#2675)
+ * flux-job: (attach) fetch log messages even when shell init fails (#2691)
+ * flux-job: (attach) add `-v` option (adds file,line log messages) (#2691)
+ * flux-job: (list) make filtering options match `flux jobs` (#2639)
+ * flux-job: (list) make JSON output the default (#2636)
+ * flux-job: (drain,undrain) drop subcommands (see flux queue) (#2659)
+ * job-info: transition state _after_ retrieving data from KVS (#2655)
+ * job-info: add checks in sharness test to avoid racyness (#2666)
+ * job-info: rename attributes to ease parsing (#2643)
+ * flux-jobs: add --from-stdin option and other small fixes (#2648)
+ * python: allow JobspecV1 to accept 0 gpus_per_task (#2701)
+ * optparse: always display `--help` usage first in command help output (#2691)
+ * libflux: add message cred helpers (#2670)
+ * github: check flux-sched@master against submitted flux-core PRs (#2680)
+
+### Fixes
+
+ * shell: fix bad exit from mvapich rc script, avoid flux.posix in rcs (#2699)
+ * shell: fix race between stdin/out readers and eventlog creation (#2688)
+ * shell: install `shell.h`: the public api for shell plugins (#2690)
+ * shell: `chdir()` into current working directory (#2682)
+ * rc: improve rc3 reliability, add `flux module remove -f` option  (#2676)
+ * testsuite: fix unsafe getenv in libpmi tests, /tmp usage in sharness (#2669)
+ * job-manager: fix counting problem that leads to scheduler sadness (#2667)
+
+
 flux-core version 0.14.0 - 2020-01-12
 -------------------------------------
 
