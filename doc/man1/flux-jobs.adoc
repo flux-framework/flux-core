@@ -31,7 +31,7 @@ Equivalent to specifying '--state=pending,running,inactive'.
 List all jobs from all users, including inactive jobs.  Equivalent to
 specifying '--state=pending,running,inactive --user=all'.
 
-*--suppress-header*::
+*-n, --suppress-header*::
 For default output, do not output column headers.
 
 *-u, --user*'=[USERNAME|UID]'::
@@ -45,7 +45,7 @@ List jobs in specific job states or virtual job states.  Multiple
 states can be listed separated by comma.  See JOB STATES below for
 additional information.  Defaults to 'pending,running'.
 
-*-o, --format*'=FORMAT
+*-o, --format*'=FORMAT'::
 Specify output format using Python's string format syntax.  See OUTPUT
 FORMAT below for field names.
 
@@ -64,7 +64,7 @@ The '--format' option can be used to specify an output format to
 flux-jobs(1) using Python's string format syntax.  For example, the
 following is the format used for the default format:
 
-  {id:>18} {username:<8.8} {name:<10.10} {state:<8.8} {ntasks:>6} {runtime_fsd}
+  {id:>18} {username:<8.8} {name:<10.10} {state:<8.8} {ntasks:>6} {nnodes_hyphen:>6} {runtime_fsd_hyphen:>8} {ranks_hyphen}
 
 The field names that can be specified are:
 
