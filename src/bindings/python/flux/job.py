@@ -370,7 +370,7 @@ class Jobspec(object):
     def duration(self, duration):
         """
         Assign a time limit to the job.  The duration may be:
-        - a float in seconds
+        - an int or float in seconds
         - a string in Flux Standard Duration
         - a python datetime.timedelta
         A duration of zero is interpreted as "not set".
@@ -379,10 +379,10 @@ class Jobspec(object):
             time = parse_fsd(duration)
         elif isinstance(duration, datetime.timedelta):
             time = duration.total_seconds()
-        elif isinstance(duration, float):
-            time = duration
+        elif isinstance(duration, (float, int)):
+            time = float(duration)
         else:
-            raise ValueError("duration must be a float, string, or timedelta")
+            raise TypeError("duration must be an int, float, string, or timedelta")
         if time < 0:
             raise ValueError("duration must not be negative")
         if math.isnan(time) or math.isinf(time):
