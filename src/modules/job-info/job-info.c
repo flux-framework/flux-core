@@ -21,6 +21,7 @@
 #include "lookup.h"
 #include "watch.h"
 #include "guest_watch.h"
+#include "idsync.h"
 
 static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
@@ -178,6 +179,8 @@ static void info_ctx_destroy (struct info_ctx *ctx)
         }
         if (ctx->jsctx)
             job_state_destroy (ctx->jsctx);
+        if (ctx->idsync_lookups)
+            idsync_cleanup (ctx);
         free (ctx);
         errno = saved_errno;
     }
@@ -198,6 +201,8 @@ static struct info_ctx *info_ctx_create (flux_t *h)
     if (!(ctx->guest_watchers = zlist_new ()))
         goto error;
     if (!(ctx->jsctx = job_state_create (h)))
+        goto error;
+    if (idsync_setup (ctx) < 0)
         goto error;
     return ctx;
 error:

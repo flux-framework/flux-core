@@ -29,7 +29,9 @@ job_info_la_SOURCES = \
 	guest_watch.h \
 	guest_watch.c \
 	job_util.h \
-	job_util.c
+	job_util.c \
+	idsync.h \
+	idsync.c
 
 job_info_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_info_la_LIBADD = $(fluxmod_libadd) \
