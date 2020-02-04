@@ -238,8 +238,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager *ctx = arg;
     struct alloc *alloc = ctx->alloc;
-    flux_jobid_t id = 0;
-    int type = -1;
+    flux_jobid_t id;
+    int type;
     const char *note = NULL;
     struct job *job;
 
@@ -250,10 +250,6 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                               "type", &type,
                               "note", &note) < 0)
         goto teardown;
-    if (type != 0 && type != 1 && type != 2 && type != 3) {
-        errno = EPROTO;
-        goto teardown;
-    }
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log (h, LOG_ERR, "sched.alloc-response: id=%ju not active",
                   (uintmax_t)id);
@@ -266,22 +262,28 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EINVAL;
         goto teardown;
     }
-
-    /* Handle job annotation update.
-     * This does not terminate the response stream.
-     */
-    if (type == 1) {
-        // FIXME
-        return;
-    }
-
-    alloc->alloc_pending_count--;
-    job->alloc_pending = 0;
-
-    /* Handle alloc error.
-     * Raise alloc exception and transition to CLEANUP state.
-     */
-    if (type == 2) { // error: alloc was rejected
+    switch (type) {
+    case 0: // success
+        alloc->alloc_pending_count--;
+        job->alloc_pending = 0;
+        if (job->has_resources) {
+            flux_log (h,
+                      LOG_ERR,
+                      "sched.alloc-response: id=%ju already allocated",
+                      (uintmax_t)id);
+            errno = EEXIST;
+            goto teardown;
+        }
+        if (event_job_post_pack (ctx->event, job, "alloc",
+                                 "{ s:s }",
+                                 "note", note ? note : "") < 0)
+            goto teardown;
+        break;
+    case 1: // annotation FIXME
+        break;
+    case 2: // error
+        alloc->alloc_pending_count--;
+        job->alloc_pending = 0;
         if (event_job_post_pack (ctx->event, job, "exception",
                                  "{ s:s s:i s:i s:s }",
                                  "type", "alloc",
@@ -289,38 +291,21 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "userid", FLUX_USERID_UNKNOWN,
                                  "note", note ? note : "") < 0)
             goto teardown;
-        return;
-    }
-
-    /* Alloc request was canceled.
-     * Run event_job_action() which will take action depending on job state:
-     * - SCHED: re-enqueue the job in alloc->queue.
-     * - CLEANUP: post the clean event to advance to INACTIVE state
-     */
-    if (type == 3) {
+        break;
+    case 3: // canceled
+        alloc->alloc_pending_count--;
+        job->alloc_pending = 0;
         if (event_job_action (ctx->event, job) < 0) {
             flux_log_error (h,
                             "event_job_action id=%ju on alloc cancel",
                             (uintmax_t)id);
             goto teardown;
         }
-        return;
-    }
-
-    /* Handle alloc success (type == 0)
-     * Log alloc event and transtion to RUN state.
-     */
-    if (job->has_resources) {
-        flux_log (h, LOG_ERR, "sched.alloc-response: id=%ju already allocated",
-                  (uintmax_t)id);
-        errno = EEXIST;
+        break;
+    default:
+        errno = EINVAL;
         goto teardown;
     }
-
-    if (event_job_post_pack (ctx->event, job, "alloc",
-                             "{ s:s }",
-                             "note", note ? note : "") < 0)
-        goto teardown;
     return;
 teardown:
     interface_teardown (alloc, "alloc response error", errno);
