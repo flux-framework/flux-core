@@ -592,9 +592,6 @@ static void cancel_all_pending (struct alloc *alloc)
  * return to alloc->queue).  The job manager continues to send free requests
  * to the scheduler as jobs relinquish resources.
  *
- * The response to this RPC is the current state, the reason (if disabled),
- * and a count of canceled alloc requests (if applicable).
- *
  * If allocation is adminstratively enabled, but the scheduler is not loaded,
  * the current state is reported as disabled with reason "Scheduler is offline".
  */
