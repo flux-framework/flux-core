@@ -1280,6 +1280,27 @@ static int load_module_byname (broker_ctx_t *ctx, const char *name,
     return 0;
 }
 
+/*  Synchronize the finalizing state with a module being removed
+ *   synchronously. Do this by muting the module, then sending
+ *   a FLUX_MODSTATE_FINALIZING keepalive directly to the module.
+ *   The module will have sent the broker a keepalive message as
+ *   well, but it is only necessary for us to recv that when
+ *   during an async module unload.
+ */
+static int sync_finalizing (module_t *p)
+{
+    flux_msg_t *msg = NULL;
+    int rc = -1;
+    module_mute (p);
+    if (!(msg = flux_keepalive_encode (0, FLUX_MODSTATE_FINALIZING))
+        || (rc = module_sendmsg (p, msg)) < 0) {
+        log_err ("failed to send finalizing keepalive to %s",
+                 module_get_name (p));
+    }
+    flux_msg_destroy (msg);
+    return 0;
+}
+
 /* If 'async' is true, service de-registration and module
  * destruction (including join) are deferred until module keepalive
  * status indicates module main() has exited (via module_status_cb).
@@ -1304,6 +1325,11 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
             return -1;
     } else {
         assert (request == NULL);
+        if (sync_finalizing (p) < 0)
+            flux_log_error (ctx->h,
+                           "unload_module(%s): "
+                           "failed to sync finalizing state",
+                           module_get_name (p));
         service_remove_byuuid (ctx->services, module_get_uuid (p));
         module_remove (ctx->modhash, p);
     }
@@ -1841,6 +1867,17 @@ static void module_cb (module_t *p, void *arg)
                                 module_get_name (p));
                 break;
             }
+            if (ka_status == FLUX_MODSTATE_FINALIZING) {
+                /* Module is finalizing and doesn't want any more messages.
+                 * mute the module and respond with the same keepalive
+                 * message for synchronization (module waits to proceed)
+                 */
+                module_mute (p);
+                if (module_sendmsg (p, msg) < 0)
+                    flux_log_error (ctx->h,
+                                    "%s: reply to finalizing: module_sendmsg",
+                                    module_get_name (p));
+            }
             if (ka_status == FLUX_MODSTATE_EXITED)
                 module_set_errnum (p, ka_errnum);
             module_set_status (p, ka_status);
@@ -1855,45 +1892,73 @@ done:
     flux_msg_destroy (msg);
 }
 
+static int module_insmod_respond (flux_t *h, module_t *p)
+{
+    int rc;
+    int errnum = 0;
+    int status = module_get_status (p);
+    flux_msg_t *msg = module_pop_insmod (p);
+
+    if (msg == NULL)
+        return 0;
+
+    /* If the module is EXITED, return error to insmod if mod_main() < 0
+     */
+    if (status == FLUX_MODSTATE_EXITED)
+        errnum = module_get_errnum (p);
+    if (errnum == 0)
+        rc = flux_respond (h, msg, NULL);
+    else
+        rc = flux_respond_error (h, msg, errnum, NULL);
+
+    flux_msg_destroy (msg);
+    return rc;
+}
+
+static int module_rmmod_respond (flux_t *h, module_t *p)
+{
+    flux_msg_t *msg;
+    int rc = 0;
+    while ((msg = module_pop_rmmod (p))) {
+        if (flux_respond (h, msg, NULL) < 0)
+            rc = -1;
+        flux_msg_destroy (msg);
+    }
+    return rc;
+}
+
 static void module_status_cb (module_t *p, int prev_status, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    flux_msg_t *msg;
     int status = module_get_status (p);
     const char *name = module_get_name (p);
 
-    /* Transition from INIT
-     * Respond to insmod request, if any.
-     * If transitioning to EXITED, return error to insmod if mod_main() = -1
+    /* Transition from INIT 
+     * If module started normally, i.e. INIT->SLEEPING/RUNNING, then
+     * respond to insmod requests now. O/w, delay responses until
+     * EXITED, when any errnum is available.
      */
-    if (prev_status == FLUX_MODSTATE_INIT) {
-        if ((msg = module_pop_insmod (p))) {
-            int errnum = 0;
-            int rc;
-            if (status == FLUX_MODSTATE_EXITED)
-                errnum = module_get_errnum (p);
-            if (errnum == 0)
-                rc = flux_respond (ctx->h, msg, NULL);
-            else
-                rc = flux_respond_error (ctx->h, msg, errnum, NULL);
-            if (rc < 0)
-                flux_log_error (ctx->h, "flux_respond to insmod %s", name);
-            flux_msg_destroy (msg);
-        }
+    if (prev_status == FLUX_MODSTATE_INIT &&
+        (status == FLUX_MODSTATE_RUNNING ||
+         status == FLUX_MODSTATE_SLEEPING)) {
+        if (module_insmod_respond (ctx->h, p) < 0)
+            flux_log_error (ctx->h, "flux_respond to insmod %s", name);
     }
 
     /* Transition to EXITED
-     * Remove service routes, respond to rmmod request(s), if any,
+     * Remove service routes, respond to insmod & rmmod request(s), if any,
      * and remove the module (which calls pthread_join).
      */
     if (status == FLUX_MODSTATE_EXITED) {
         flux_log (ctx->h, LOG_DEBUG, "module %s exited", name);
         service_remove_byuuid (ctx->services, module_get_uuid (p));
-        while ((msg = module_pop_rmmod (p))) {
-            if (flux_respond (ctx->h, msg, NULL) < 0)
-                flux_log_error (ctx->h, "flux_respond to rmmod %s", name);
-            flux_msg_destroy (msg);
-        }
+
+        if (module_insmod_respond (ctx->h, p) < 0)
+            flux_log_error (ctx->h, "flux_respond to insmod %s", name);
+
+        if (module_rmmod_respond (ctx->h, p) < 0)
+            flux_log_error (ctx->h, "flux_respond to rmmod %s", name);
+
         module_remove (ctx->modhash, p);
     }
 }

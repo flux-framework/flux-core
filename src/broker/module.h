@@ -103,6 +103,10 @@ int module_start (module_t *p);
  */
 int module_stop (module_t *p);
 
+/*  Mute module. Do not send any more messages.
+ */
+void module_mute (module_t *p);
+
 /* Prepare RFC 5 'mods' array for lsmod response.
  */
 json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw);
