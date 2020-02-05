@@ -1,5 +1,9 @@
 #!/bin/bash -e
 
+flux queue stop
+flux job cancelall -f --states RUN
+flux queue idle
+
 flux module remove job-manager
 flux exec -r all flux module remove job-info
 flux exec -r all flux module remove kvs-watch
