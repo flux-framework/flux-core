@@ -530,8 +530,18 @@ int event_job_post_pack (struct event *event,
         if (event_batch_pub_state (event, job, timestamp) < 0)
             goto error;
     }
+
+    /* Keep track of running job count.
+     * If queue reaches idle state, event_job_action() triggers any waiters.
+     */
+    if ((job->state & FLUX_JOB_RUNNING) && !(old_state & FLUX_JOB_RUNNING))
+        event->ctx->running_jobs++;
+    else if (!(job->state & FLUX_JOB_RUNNING) && (old_state & FLUX_JOB_RUNNING))
+        event->ctx->running_jobs--;
+
     if (event_job_action (event, job) < 0)
         goto error;
+
     json_decref (entry);
     va_end (ap);
     return 0;
