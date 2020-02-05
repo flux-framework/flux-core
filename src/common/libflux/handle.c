@@ -619,7 +619,7 @@ static void update_rx_stats (flux_t *h, const flux_msg_t *msg)
 int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
 {
     h = lookup_clone_ancestor (h);
-    if (!h->ops->send) {
+    if (!h->ops->send || h->destroy_in_progress) {
         errno = ENOSYS;
         goto fatal;
     }
