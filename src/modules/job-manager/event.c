@@ -64,8 +64,8 @@ struct event_batch {
     flux_kvs_txn_t *txn;
     flux_future_t *f;
     json_t *state_trans;
-    zlist_t *drain_requests; // completed drain requests:
-};                           //   defer responding until eventlogs committed
+    zlist_t *responses; // responses deferred until batch complete
+};
 
 struct event_batch *event_batch_create (struct event *event);
 void event_batch_destroy (struct event_batch *batch);
@@ -172,7 +172,7 @@ error:
 
 /* Besides cleaning up, this function has the following side effects:
  * - publish state transition event (if any)
- * - respond to completed drain requests (if any)
+ * - respond to deferred responses (if any)
  */
 void event_batch_destroy (struct event_batch *batch)
 {
@@ -186,15 +186,15 @@ void event_batch_destroy (struct event_batch *batch)
             event_publish_state (batch->event, batch->state_trans);
             json_decref (batch->state_trans);
         }
-        if (batch->drain_requests) {
+        if (batch->responses) {
             flux_msg_t *msg;
             flux_t *h = batch->event->ctx->h;
-            while ((msg = zlist_pop (batch->drain_requests))) {
-                if (flux_respond (h, msg, NULL) < 0)
-                    flux_log_error (h, "error responding to drain request");
+            while ((msg = zlist_pop (batch->responses))) {
+                if (flux_send (h, msg, 0) < 0)
+                    flux_log_error (h, "error sending batch response");
                 flux_msg_decref (msg);
             }
-            zlist_destroy (&batch->drain_requests);
+            zlist_destroy (&batch->responses);
         }
         flux_future_destroy (batch->f);
         free (batch);
@@ -281,15 +281,15 @@ error:
     return -1;
 }
 
-int event_batch_drain_respond (struct event *event, const flux_msg_t *msg)
+int event_batch_respond (struct event *event, const flux_msg_t *msg)
 {
     if (event_batch_start (event) < 0)
         return -1;
-    if (!event->batch->drain_requests) {
-        if (!(event->batch->drain_requests = zlist_new ()))
+    if (!event->batch->responses) {
+        if (!(event->batch->responses = zlist_new ()))
             goto nomem;
     }
-    if (zlist_append (event->batch->drain_requests,
+    if (zlist_append (event->batch->responses,
                       (void *)flux_msg_incref (msg)) < 0) {
         flux_msg_decref (msg);
         goto nomem;

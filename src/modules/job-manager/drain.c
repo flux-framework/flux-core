@@ -42,8 +42,10 @@ void drain_empty_notify (struct drain *drain)
     const flux_msg_t *msg;
 
     while ((msg = zlist_pop (drain->requests))) {
-        if (event_batch_drain_respond (drain->ctx->event, msg) < 0)
+        const flux_msg_t *rsp = flux_response_derive (msg, 0);
+        if (!rsp || event_batch_respond (drain->ctx->event, rsp) < 0)
             flux_log_error (drain->ctx->h, "error handing drain request off");
+        flux_msg_decref (rsp);
         flux_msg_decref (msg);
     }
 }
