@@ -197,10 +197,14 @@ error:
     return NULL;
 }
 
-static flux_msg_t *derive_response (const flux_msg_t *request, int errnum)
+flux_msg_t *flux_response_derive (const flux_msg_t *request, int errnum)
 {
     flux_msg_t *msg;
 
+    if (!request) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!(msg = flux_msg_copy (request, false)))
         return NULL;
     if (flux_msg_set_type (msg, FLUX_MSGTYPE_RESPONSE) < 0)
@@ -223,7 +227,7 @@ int flux_respond (flux_t *h, const flux_msg_t *request, const char *s)
 
     if (!h || !request)
         goto inval;
-    msg = derive_response (request, 0);
+    msg = flux_response_derive (request, 0);
     if (!msg)
         goto error;
     if (s && flux_msg_set_string (msg, s) < 0)
@@ -246,7 +250,7 @@ static int flux_respond_vpack (flux_t *h, const flux_msg_t *request,
 
     if (!h || !request || !fmt)
         goto inval;
-    msg = derive_response (request, 0);
+    msg = flux_response_derive (request, 0);
     if (!msg)
         goto error;
     if (flux_msg_vpack (msg, fmt, ap) < 0)
@@ -285,7 +289,7 @@ int flux_respond_raw (flux_t *h, const flux_msg_t *request,
 
     if (!h || !request)
         goto inval;
-    msg  = derive_response (request, 0);
+    msg  = flux_response_derive (request, 0);
     if (!msg)
         goto error;
     if (data && flux_msg_set_payload (msg, data, len) < 0)
@@ -308,7 +312,7 @@ int flux_respond_error (flux_t *h, const flux_msg_t *request,
 
     if (!h || !request || errnum == 0)
         goto inval;
-    msg = derive_response (request, errnum);
+    msg = flux_response_derive (request, errnum);
     if (!msg)
         goto error;
     if (errstr) {

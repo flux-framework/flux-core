@@ -127,6 +127,11 @@ int main (int argc, char *argv[])
         "flux_response_decode_error includes error message");
     flux_msg_destroy (msg);
 
+    /* response_derive with msg=NULL */
+    errno = 0;
+    ok (flux_response_derive (NULL, 0) == NULL && errno == EINVAL,
+        "flux_response_derive msg=NULL fails with EINVAL");
+
     /* respond with h=NULL */
     msg = flux_request_encode ("foo", NULL);
     if (!msg)

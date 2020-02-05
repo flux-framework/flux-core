@@ -62,6 +62,11 @@ flux_msg_t *flux_response_encode_raw (const char *topic,
 flux_msg_t *flux_response_encode_error (const char *topic, int errnum,
                                         const char *errstr);
 
+/* Derive a response message from a request message, setting 'errnum' to
+ * the specified value (0 = success).
+ */
+flux_msg_t *flux_response_derive (const flux_msg_t *request, int errnum);
+
 /* Create a response to the provided request message with optional
  * string payload.
  */
