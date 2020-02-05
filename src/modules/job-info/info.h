@@ -24,6 +24,7 @@ struct info_ctx {
     zlist_t *guest_watchers;
     struct job_state_ctx *jsctx;
     zlistx_t *idsync_lookups;
+    zhashx_t *idsync_waits;
 };
 
 #endif /* _FLUX_JOB_INFO_INFO_H */

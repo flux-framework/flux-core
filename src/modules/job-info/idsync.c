@@ -18,6 +18,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libjob/job_hash.h"
 
 #include "idsync.h"
 #include "job_state.h"
@@ -70,11 +71,20 @@ struct idsync_data *idsync_data_create (struct info_ctx *ctx,
     return NULL;
 }
 
+void idsync_waits_list_destroy (void **data)
+{
+    if (data)
+        zlistx_destroy ((zlistx_t **) data);
+}
+
 int idsync_setup (struct info_ctx *ctx)
 {
     if (!(ctx->idsync_lookups = zlistx_new ()))
         return -1;
     zlistx_set_destructor (ctx->idsync_lookups, idsync_data_destroy_wrapper);
+    if (!(ctx->idsync_waits = job_hash_create ()))
+        return -1;
+    zhashx_set_destructor (ctx->idsync_waits, idsync_waits_list_destroy);
     return 0;
 }
 
@@ -91,6 +101,7 @@ void idsync_cleanup (struct info_ctx *ctx)
         isd = zlistx_next (ctx->idsync_lookups);
     }
     zlistx_destroy (&ctx->idsync_lookups);
+    zhashx_destroy (&ctx->idsync_waits);
 }
 
 /*

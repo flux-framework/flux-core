@@ -23,6 +23,8 @@
 #include "src/common/libidset/idset.h"
 
 #include "job_state.h"
+#include "idsync.h"
+#include "job_util.h"
 
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
 
@@ -336,6 +338,45 @@ static void update_job_state_and_list (struct info_ctx *ctx,
         job_change_list (jsctx, job, oldlist, newstate);
 }
 
+static void list_id_respond (struct info_ctx *ctx,
+                             struct idsync_data *isd,
+                             struct job *job)
+{
+    json_t *o;
+
+    if (!(o = job_to_json (job, isd->attrs)))
+        goto error;
+
+    if (flux_respond_pack (ctx->h, isd->msg, "{s:O}", "job", o) < 0) {
+        flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
+        goto error;
+    }
+
+    json_decref (o);
+    return;
+
+error:
+    if (flux_respond_error (ctx->h, isd->msg, errno, NULL) < 0)
+        flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+    json_decref (o);
+}
+
+static void check_waiting_id (struct info_ctx *ctx,
+                              struct job *job)
+{
+    zlistx_t *list_isd;
+
+    if ((list_isd = zhashx_lookup (ctx->idsync_waits, &job->id))) {
+        struct idsync_data *isd;
+        isd = zlistx_first (list_isd);
+        while (isd) {
+            list_id_respond (ctx, isd, job);
+            isd = zlistx_next (list_isd);
+        }
+        zhashx_delete (ctx->idsync_waits, &job->id);
+    }
+}
+
 static int eventlog_lookup_parse (struct info_ctx *ctx,
                                   struct job *job,
                                   const char *s)
@@ -628,6 +669,7 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
     st = zlist_head (job->next_states);
     assert (st);
     update_job_state_and_list (ctx, job, st->state, st->timestamp);
+    check_waiting_id (ctx, job);
     zlist_remove (job->next_states, st);
     process_next_state (ctx, job);
 

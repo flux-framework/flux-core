@@ -31,6 +31,8 @@ void idsync_cleanup (struct info_ctx *ctx);
 
 void idsync_data_destroy (void *data);
 
+void idsync_data_destroy_wrapper (void **data);
+
 struct idsync_data *idsync_data_create (struct info_ctx *ctx,
                                         flux_jobid_t id,
                                         const flux_msg_t *msg,
