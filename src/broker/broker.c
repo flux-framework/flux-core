@@ -1280,6 +1280,27 @@ static int load_module_byname (broker_ctx_t *ctx, const char *name,
     return 0;
 }
 
+/*  Synchronize the finalizing state with a module being removed
+ *   synchronously. Do this by muting the module, then sending
+ *   a FLUX_MODSTATE_FINALIZING keepalive directly to the module.
+ *   The module will have sent the broker a keepalive message as
+ *   well, but it is only necessary for us to recv that when
+ *   during an async module unload.
+ */
+static int sync_finalizing (module_t *p)
+{
+    flux_msg_t *msg = NULL;
+    int rc = -1;
+    module_mute (p);
+    if (!(msg = flux_keepalive_encode (0, FLUX_MODSTATE_FINALIZING))
+        || (rc = module_sendmsg (p, msg)) < 0) {
+        log_err ("failed to send finalizing keepalive to %s",
+                 module_get_name (p));
+    }
+    flux_msg_destroy (msg);
+    return 0;
+}
+
 /* If 'async' is true, service de-registration and module
  * destruction (including join) are deferred until module keepalive
  * status indicates module main() has exited (via module_status_cb).
@@ -1304,6 +1325,11 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
             return -1;
     } else {
         assert (request == NULL);
+        if (sync_finalizing (p) < 0)
+            flux_log_error (ctx->h,
+                           "unload_module(%s): "
+                           "failed to sync finalizing state",
+                           module_get_name (p));
         service_remove_byuuid (ctx->services, module_get_uuid (p));
         module_remove (ctx->modhash, p);
     }
@@ -1840,6 +1866,17 @@ static void module_cb (module_t *p, void *arg)
                 flux_log_error (ctx->h, "%s: flux_keepalive_decode",
                                 module_get_name (p));
                 break;
+            }
+            if (ka_status == FLUX_MODSTATE_FINALIZING) {
+                /* Module is finalizing and doesn't want any more messages.
+                 * mute the module and respond with the same keepalive
+                 * message for synchronization (module waits to proceed)
+                 */
+                module_mute (p);
+                if (module_sendmsg (p, msg) < 0)
+                    flux_log_error (ctx->h,
+                                    "%s: reply to finalizing: module_sendmsg",
+                                    module_get_name (p));
             }
             if (ka_status == FLUX_MODSTATE_EXITED)
                 module_set_errnum (p, ka_errnum);

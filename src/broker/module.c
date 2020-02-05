@@ -106,6 +106,41 @@ static int setup_module_profiling (module_t *p)
     return (0);
 }
 
+/*  Synchronize the FINALIZING state with the broker, so the broker
+ *   can stop messages to this module until we're fully shutdown.
+ */
+static int module_finalizing (module_t *p)
+{
+    int rc = -1;
+    flux_msg_t *msg = NULL;
+    struct flux_match match = {
+        .typemask = FLUX_MSGTYPE_KEEPALIVE
+    };
+    /* Notify the broker we're finalizing, which will disable new
+     *  messages
+     */
+    if (!(msg = flux_keepalive_encode (0, FLUX_MODSTATE_FINALIZING))) {
+        flux_log_error (p->h, "module_finalizing: flux_keepalive_encode");
+        return -1;
+    }
+    if (flux_send (p->h, msg, 0) < 0) {
+        flux_log_error (p->h, "module_finalizing: flux_send");
+        goto done;
+    }
+    flux_msg_destroy (msg);
+
+    /* Synchronize with the broker using a blocking recv for keepalive
+     *  message. This should be the only time the broker sends a keepalive
+     *  to a module.
+     */
+    if (!(msg = flux_recv (p->h, match, 0)))
+        flux_log_error (p->h, "module_finalizing: flux_recv");
+    rc = 0;
+done:
+    flux_msg_destroy (msg);
+    return rc;
+}
+
 static void *module_thread (void *arg)
 {
     module_t *p = arg;
@@ -171,6 +206,15 @@ static void *module_thread (void *arg)
             mod_main_errno = ECONNRESET;
         flux_log (p->h, LOG_CRIT, "fatal error: %s", strerror (errno));
     }
+
+    /* Before processing unhandled requests, ensure that this module
+     * is "muted" in the broker. This ensures the broker won't try to
+     * feed a message to this module after we've closed the handle,
+     * which could cause the broker to block.
+     */
+    if (module_finalizing (p) < 0)
+        flux_log_error (p->h, "failed to set module state to finalizing");
+
     /* If any unhandled requests were received during shutdown,
      * respond to them now with ENOSYS.
      */
