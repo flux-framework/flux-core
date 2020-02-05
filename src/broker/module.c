@@ -73,6 +73,7 @@ struct module_struct {
     char *argz;
     int status;
     int errnum;
+    bool muted;             /* module is under directive 42, no new messages */
 
     modpoller_cb_f poller_cb;
     void *poller_arg;
@@ -270,6 +271,19 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
         return 0;
     if (flux_msg_get_type (msg, &type) < 0)
         goto done;
+    if (p->muted && type != FLUX_MSGTYPE_KEEPALIVE) {
+        /* Muted modules only accept keepalive messages */
+        const char *topic;
+        (void) flux_msg_get_topic (msg, &topic);
+        flux_log (p->h,
+                  LOG_DEBUG,
+                  "module_sendmsg: muted %s %s to %s",
+                  topic,
+                  flux_msg_typestr (type),
+                  p->name);
+        errno = ENOSYS;
+        goto done;
+    }
     switch (type) {
         case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
             char uuid[16];
@@ -401,6 +415,11 @@ done:
     free (topic);
     flux_future_destroy (f);
     return rc;
+}
+
+void module_mute (module_t *p)
+{
+    p->muted = true;
 }
 
 static void module_cb (flux_reactor_t *r, flux_watcher_t *w,
