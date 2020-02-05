@@ -75,6 +75,7 @@ struct flux_handle_struct {
     flux_fatal_f    fatal;
     void            *fatal_arg;
     bool            fatality;
+    bool            destroy_in_progress;
 #if HAVE_CALIPER
     struct profiling_context prof;
 #endif
@@ -395,6 +396,9 @@ void flux_handle_destroy (flux_t *h)
 {
     if (h && --h->usecount == 0) {
         int saved_errno = errno;
+        if (h->destroy_in_progress)
+            return;
+        h->destroy_in_progress = true;
         aux_destroy (&h->aux);
         if ((h->flags & FLUX_O_CLONE)) {
             flux_handle_destroy (h->parent); // decr usecount
@@ -615,7 +619,7 @@ static void update_rx_stats (flux_t *h, const flux_msg_t *msg)
 int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
 {
     h = lookup_clone_ancestor (h);
-    if (!h->ops->send) {
+    if (!h->ops->send || h->destroy_in_progress) {
         errno = ENOSYS;
         goto fatal;
     }

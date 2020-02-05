@@ -208,6 +208,7 @@ check_PROGRAMS = \
 	shmem/backtoback.t \
 	loop/logstderr \
 	loop/issue2337 \
+	loop/issue2711 \
 	kvs/torture \
 	kvs/dtree \
 	kvs/blobref \
@@ -298,6 +299,11 @@ loop_logstderr_LDADD = \
 loop_issue2337_SOURCES = loop/issue2337.c
 loop_issue2337_CPPFLAGS = $(test_cppflags)
 loop_issue2337_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+loop_issue2711_SOURCES = loop/issue2711.c
+loop_issue2711_CPPFLAGS = $(test_cppflags)
+loop_issue2711_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 mpi_hello_SOURCES = mpi/hello.c
