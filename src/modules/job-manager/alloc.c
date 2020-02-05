@@ -95,6 +95,7 @@
 #include "job.h"
 #include "alloc.h"
 #include "event.h"
+#include "drain.h"
 
 typedef enum {
     SCHED_SINGLE,       // only allow one outstanding sched.alloc request
@@ -152,6 +153,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
         alloc->ready = false;
         alloc->alloc_pending_count = 0;
         alloc->free_pending_count = 0;
+        drain_check (alloc->ctx->drain);
     }
 }
 
@@ -301,6 +303,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                             (uintmax_t)id);
             goto teardown;
         }
+        drain_check (alloc->ctx->drain);
         break;
     default:
         errno = EINVAL;

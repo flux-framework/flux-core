@@ -22,35 +22,59 @@
 
 #include "drain.h"
 #include "submit.h"
+#include "alloc.h"
 #include "event.h"
 
 struct drain {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
-    zlist_t *requests;
+    zlist_t *drain_requests;
+    zlist_t *idle_requests;
 };
 
-/* Drain conditions MAY have been met.
- * To avoid sending drain responses before the events that triggered the
- * job state transitions to INACTIVE are committed to the KVS, hand off the
- * drain request to the "event batch" subsystem, so the response can be sent
- * at the same time as job state change notifications are published,
- * after the KVS commit completes.
+/* Drain and/or idle conditions MAY have been met.
+ *
+ * Since a use case may be to fetch job data from the KVS after a drain
+ * or idle request completes, hand the response off to the "event batch"
+ * subsystem so that the response is deferred until any batched KVS commits
+ * have completed.  If there are none, e.g. the batch only contains this,
+ * then the response is sent after the batch timer expires.
  */
 void drain_check (struct drain *drain)
 {
     const flux_msg_t *msg;
+    flux_msg_t *rsp;
 
+    /* Drained - no active jobs
+     */
     if (zhashx_size (drain->ctx->active_jobs) == 0) {
-        while ((msg = zlist_pop (drain->requests))) {
-            const flux_msg_t *rsp = flux_response_derive (msg, 0);
-            if (!rsp || event_batch_respond (drain->ctx->event, rsp) < 0)
+        while ((msg = zlist_pop (drain->drain_requests))) {
+            if (!(rsp = flux_response_derive (msg, 0))
+                        || event_batch_respond (drain->ctx->event, rsp) < 0)
                 flux_log_error (drain->ctx->h,
                                 "error handing drain request off");
             flux_msg_decref (rsp);
             flux_msg_decref (msg);
         }
     }
+
+    /* Idle - no jobs in RUN or CLEANUP state, and no pending alloc requests.
+     */
+    if (alloc_pending_count (drain->ctx->alloc) == 0
+                                    && drain->ctx->running_jobs == 0) {
+        int pending = zhashx_size (drain->ctx->active_jobs)
+                                 - drain->ctx->running_jobs;
+        while ((msg = zlist_pop (drain->idle_requests))) {
+            if (!(rsp = flux_response_derive (msg, 0))
+                        || flux_msg_pack (rsp, "{s:i}", "pending", pending) < 0
+                        || event_batch_respond (drain->ctx->event, rsp) < 0)
+                flux_log_error (drain->ctx->h,
+                                "error handing idle request off");
+            flux_msg_decref (rsp);
+            flux_msg_decref (msg);
+        }
+    }
+
 }
 
 static void drain_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -60,7 +84,7 @@ static void drain_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (zlist_append (ctx->drain->requests,
+    if (zlist_append (ctx->drain->drain_requests,
                      (void *)flux_msg_incref (msg)) < 0) {
         flux_msg_decref (msg);
         errno = ENOMEM;
@@ -73,22 +97,50 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+static void idle_cb (flux_t *h, flux_msg_handler_t *mh,
+                     const flux_msg_t *msg, void *arg)
+{
+    struct job_manager *ctx = arg;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (zlist_append (ctx->drain->idle_requests,
+                     (void *)flux_msg_incref (msg)) < 0) {
+        flux_msg_decref (msg);
+        errno = ENOMEM;
+        goto error;
+    }
+    drain_check (ctx->drain);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+static void destroy_requests (flux_t *h, zlist_t *msglist)
+{
+    if (msglist) {
+        const flux_msg_t *msg;
+        while ((msg = zlist_pop (msglist))) {
+            if (flux_respond_error (h,
+                                    msg,
+                                    ENOSYS,
+                                    "job-manager is unloading") < 0)
+                flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+            flux_msg_decref (msg);
+        }
+    }
+}
+
 void drain_ctx_destroy (struct drain *drain)
 {
     if (drain) {
         int saved_errno = errno;
         flux_msg_handler_delvec (drain->handlers);
-        if (drain->requests) {
-            const flux_msg_t *msg;
-            while ((msg = zlist_pop (drain->requests))) {
-                if (flux_respond_error (drain->ctx->h, msg, ENOSYS,
-                                        "job-manager is unloading") < 0)
-                    flux_log_error (drain->ctx->h, "%s: flux_respond_error",
-                                    __FUNCTION__);
-                flux_msg_decref (msg);
-            }
-            zlist_destroy (&drain->requests);
-        }
+        destroy_requests (drain->ctx->h, drain->drain_requests);
+        zlist_destroy (&drain->drain_requests);
+        destroy_requests (drain->ctx->h, drain->idle_requests);
+        zlist_destroy (&drain->idle_requests);
         free (drain);
         errno = saved_errno;
     }
@@ -96,6 +148,7 @@ void drain_ctx_destroy (struct drain *drain)
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "job-manager.drain", drain_cb, 0},
+    { FLUX_MSGTYPE_REQUEST, "job-manager.idle", idle_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -106,7 +159,8 @@ struct drain *drain_ctx_create (struct job_manager *ctx)
     if (!(drain = calloc (1, sizeof (*drain))))
         return NULL;
     drain->ctx = ctx;
-    if (!(drain->requests = zlist_new ())) {
+    if (!(drain->drain_requests = zlist_new ())
+            || !(drain->idle_requests = zlist_new ())) {
         errno = ENOMEM;
         goto error;
     }
