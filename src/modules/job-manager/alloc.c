@@ -548,6 +548,11 @@ void alloc_queue_reorder (struct alloc *alloc, struct job *job)
     zlistx_reorder (alloc->queue, job->handle, fwd);
 }
 
+int alloc_pending_count (struct alloc *alloc)
+{
+    return alloc->alloc_pending_count;
+}
+
 /* Cancel all pending alloc requests in preparation for disabling
  * resource allocation.
  */
