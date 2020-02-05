@@ -634,7 +634,7 @@ static void alloc_admin_cb (flux_t *h,
     }
     if (flux_respond_pack (h,
                            msg,
-                           "{s:b s:s s:i s:i s:i}",
+                           "{s:b s:s s:i s:i s:i s:i}",
                            "enable",
                            enable,
                            "reason",
@@ -644,7 +644,9 @@ static void alloc_admin_cb (flux_t *h,
                            "alloc_pending",
                            alloc->alloc_pending_count,
                            "free_pending",
-                           alloc->free_pending_count) < 0)
+                           alloc->free_pending_count,
+                           "running",
+                           alloc->ctx->running_jobs) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:

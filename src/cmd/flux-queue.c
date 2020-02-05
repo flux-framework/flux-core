@@ -245,6 +245,7 @@ void alloc_admin (flux_t *h,
     int free_pending;
     int alloc_pending;
     int queue_length;
+    int running;
 
     if (!(f = flux_rpc_pack (h,
                              "job-manager.alloc-admin",
@@ -259,7 +260,7 @@ void alloc_admin (flux_t *h,
                              reason ? reason : "")))
         log_err_exit ("error sending alloc-admin request");
     if (flux_rpc_get_unpack (f,
-                             "{s:b s:s s:i s:i s:i}",
+                             "{s:b s:s s:i s:i s:i s:i}",
                              "enable",
                              &enable,
                              "reason",
@@ -269,7 +270,9 @@ void alloc_admin (flux_t *h,
                              "alloc_pending",
                              &alloc_pending,
                              "free_pending",
-                             &free_pending) < 0)
+                             &free_pending,
+                             "running",
+                             &running) < 0)
         log_msg_exit ("alloc-admin: %s", future_strerror (f, errno));
     log_msg ("Scheduling is %s%s%s",
              enable ? "enabled" : "disabled",
@@ -279,6 +282,7 @@ void alloc_admin (flux_t *h,
         log_msg ("%d alloc requests queued", queue_length);
         log_msg ("%d alloc requests pending to scheduler", alloc_pending);
         log_msg ("%d free requests pending to scheduler", free_pending);
+        log_msg ("%d running jobs", running);
     }
     flux_future_destroy (f);
 }
