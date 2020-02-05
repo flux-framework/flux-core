@@ -350,8 +350,7 @@ int event_job_action (struct event *event, struct job *job)
             if ((job->flags & FLUX_JOB_WAITABLE))
                 wait_notify_inactive (ctx->wait, job);
             zhashx_delete (ctx->active_jobs, &job->id);
-            if (zhashx_size (ctx->active_jobs) == 0)
-                drain_empty_notify (ctx->drain);
+            drain_check (ctx->drain);
             break;
     }
     return 0;

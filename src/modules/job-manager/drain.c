@@ -30,23 +30,26 @@ struct drain {
     zlist_t *requests;
 };
 
-/* Drain conditions have been met.
+/* Drain conditions MAY have been met.
  * To avoid sending drain responses before the events that triggered the
  * job state transitions to INACTIVE are committed to the KVS, hand off the
  * drain request to the "event batch" subsystem, so the response can be sent
  * at the same time as job state change notifications are published,
  * after the KVS commit completes.
  */
-void drain_empty_notify (struct drain *drain)
+void drain_check (struct drain *drain)
 {
     const flux_msg_t *msg;
 
-    while ((msg = zlist_pop (drain->requests))) {
-        const flux_msg_t *rsp = flux_response_derive (msg, 0);
-        if (!rsp || event_batch_respond (drain->ctx->event, rsp) < 0)
-            flux_log_error (drain->ctx->h, "error handing drain request off");
-        flux_msg_decref (rsp);
-        flux_msg_decref (msg);
+    if (zhashx_size (drain->ctx->active_jobs) == 0) {
+        while ((msg = zlist_pop (drain->requests))) {
+            const flux_msg_t *rsp = flux_response_derive (msg, 0);
+            if (!rsp || event_batch_respond (drain->ctx->event, rsp) < 0)
+                flux_log_error (drain->ctx->h,
+                                "error handing drain request off");
+            flux_msg_decref (rsp);
+            flux_msg_decref (msg);
+        }
     }
 }
 
@@ -63,8 +66,7 @@ static void drain_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = ENOMEM;
         goto error;
     }
-    if (zhashx_size (ctx->active_jobs) == 0)
-        drain_empty_notify (ctx->drain);
+    drain_check (ctx->drain);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
