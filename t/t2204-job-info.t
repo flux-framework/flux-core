@@ -418,6 +418,75 @@ test_expect_success HAVE_JQ 'flux job list-ids fails with one bad ID out of seve
         test_must_fail flux job list-ids ${id1} ${id2} 1234567890 ${id3}
 '
 
+# In order to test potential racy behavior, use job state pause/unpause to pause
+# the handling of job state transitions from the job-manager.
+#
+# Note that between the background process of `flux job list-ids` and
+# `unpause`, we must ensure the background process has sent the
+# request to the job-info service and is now waiting for the id to be
+# synced.  We call wait_idsync to check stats for this to ensure the
+# racy behavior is covered.
+
+wait_idsync() {
+        local num=$1
+        local i=0
+        while (! flux module stats --parse idsync.waits job-info > /dev/null 2>&1 \
+               || [ "$(flux module stats --parse idsync.waits job-info 2> /dev/null)" != "$num" ]) \
+              && [ $i -lt 50 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ "$i" -eq "50" ]
+        then
+            return 1
+        fi
+        return 0
+}
+
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (one id)' '
+	${RPC} job-info.job-state-pause 0 </dev/null
+        jobid=`flux mini submit hostname`
+        flux job wait-event $jobid clean >/dev/null
+        flux job list-ids ${jobid} > list_id_wait1.out &
+        pid=$!
+        wait_idsync 1 &&
+	${RPC} job-info.job-state-unpause 0 </dev/null &&
+        wait $pid &&
+        cat list_id_wait1.out | jq -e ".id == ${jobid}"
+'
+
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (different ids)' '
+	${RPC} job-info.job-state-pause 0 </dev/null
+        jobid1=`flux mini submit hostname`
+        jobid2=`flux mini submit hostname`
+        flux job wait-event ${jobid1} clean >/dev/null
+        flux job wait-event ${jobid2} clean >/dev/null
+        flux job list-ids ${jobid1} ${jobid2} > list_id_wait2.out &
+        pid=$!
+        wait_idsync 2 &&
+	${RPC} job-info.job-state-unpause 0 </dev/null &&
+        wait $pid &&
+        grep ${jobid1} list_id_wait2.out &&
+        grep ${jobid2} list_id_wait2.out
+'
+
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (same id)' '
+	${RPC} job-info.job-state-pause 0 </dev/null
+        jobid=`flux mini submit hostname`
+        flux job wait-event $jobid clean >/dev/null
+        flux job list-ids ${jobid} > list_id_wait3A.out &
+        pid1=$!
+        flux job list-ids ${jobid} > list_id_wait3B.out &
+        pid2=$!
+        wait_idsync 1 &&
+	${RPC} job-info.job-state-unpause 0 </dev/null &&
+        wait ${pid1} &&
+        wait ${pid2} &&
+        cat list_id_wait3A.out | jq -e ".id == ${jobid}" &&
+        cat list_id_wait3B.out | jq -e ".id == ${jobid}"
+'
+
 #
 # job list timing
 #
@@ -1028,7 +1097,9 @@ test_expect_success 'job-info stats works' '
         flux module stats --parse guest_watchers job-info &&
         flux module stats --parse jobs.pending job-info &&
         flux module stats --parse jobs.running job-info &&
-        flux module stats --parse jobs.inactive job-info
+        flux module stats --parse jobs.inactive job-info &&
+        flux module stats --parse idsync.lookups job-info &&
+        flux module stats --parse idsync.waits job-info
 '
 
 test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '
