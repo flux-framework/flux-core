@@ -50,6 +50,11 @@ struct job_state_ctx {
     int run_count;
     int cleanup_count;
     int inactive_count;
+
+    /* debug/testing - if paused store job transitions on list for
+     * processing later */
+    bool pause;
+    zlistx_t *transitions;
 };
 
 struct job {
@@ -109,6 +114,12 @@ void job_state_destroy (void *data);
 
 void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
                    const flux_msg_t *msg, void *arg);
+
+void job_state_pause_cb (flux_t *h, flux_msg_handler_t *mh,
+                         const flux_msg_t *msg, void *arg);
+
+void job_state_unpause_cb (flux_t *h, flux_msg_handler_t *mh,
+                           const flux_msg_t *msg, void *arg);
 
 int job_state_init_from_kvs (struct info_ctx *ctx);
 

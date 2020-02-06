@@ -139,6 +139,16 @@ static const struct flux_msg_handler_spec htab[] = {
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.job-state-pause",
+      .cb           = job_state_pause_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-info.job-state-unpause",
+      .cb           = job_state_unpause_cb,
+      .rolemask     = FLUX_ROLE_USER
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.job-stats",
       .cb           = job_stats_cb,
       .rolemask     = FLUX_ROLE_USER
