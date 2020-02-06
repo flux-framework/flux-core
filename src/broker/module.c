@@ -319,12 +319,6 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
         /* Muted modules only accept keepalive messages */
         const char *topic;
         (void) flux_msg_get_topic (msg, &topic);
-        flux_log (p->h,
-                  LOG_DEBUG,
-                  "module_sendmsg: muted %s %s to %s",
-                  topic,
-                  flux_msg_typestr (type),
-                  p->name);
         errno = ENOSYS;
         goto done;
     }

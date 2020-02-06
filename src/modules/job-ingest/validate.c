@@ -61,11 +61,37 @@ struct validate {
     struct worker *worker[MAX_WORKER_COUNT];
 };
 
+static void validate_killall (struct validate *v)
+{
+    flux_future_t *cf = flux_future_wait_all_create ();
+    flux_future_t *f;
+    int i;
+    if (!cf) {
+        flux_log_error (v->h, "validate_destroy: flux_future_wait_all_create");
+        return;
+    }
+    flux_future_set_flux (cf, v->h);
+    for (i = 0; i < MAX_WORKER_COUNT; i++) {
+        if ((f = worker_kill (v->worker[i], SIGKILL)))
+            flux_future_push (cf, NULL, f);
+    }
+    /* Wait for up to 5s for response that signals have been delivered
+     *  to all workers before continuing. This should ensure no workers
+     *  are left around after removal of the job-ingest module.
+     *  (report, but otherwise ignore errors)
+     */
+    if (flux_future_wait_for (cf, 5.) < 0
+        || flux_future_get (cf, NULL) < 0)
+        flux_log_error (v->h, "validate_destroy: killing workers");
+    flux_future_destroy (cf);
+}
+
 void validate_destroy (struct validate *v)
 {
     if (v) {
         int saved_errno = errno;
         int i;
+        validate_killall (v);
         for (i = 0; i < MAX_WORKER_COUNT; i++)
             worker_destroy (v->worker[i]);
         free (v);
@@ -127,6 +153,7 @@ struct validate *validate_create (flux_t *h,
 
     for (i = 0; i < MAX_WORKER_COUNT; i++) {
         if (!(v->worker[i] = worker_create (h, worker_inactivity_timeout,
+                                            validate_path,
                                             argc, argv)))
             goto error;
     }
