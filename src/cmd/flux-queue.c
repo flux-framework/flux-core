@@ -40,12 +40,18 @@ static struct optparse_option stop_opts[] = {
     { .name = "verbose", .key = 'v',
       .usage = "Display more detail about internal job manager state",
     },
+    { .name = "quiet", .key = 'q',
+      .usage = "Display only errors",
+    },
     OPTPARSE_TABLE_END
 };
 
 static struct optparse_option start_opts[] = {
     { .name = "verbose", .key = 'v',
       .usage = "Display more detail about internal job manager state",
+    },
+    { .name = "quiet", .key = 'q',
+      .usage = "Display only errors",
     },
     OPTPARSE_TABLE_END
 };
@@ -237,6 +243,7 @@ void submit_admin (flux_t *h,
 
 void alloc_admin (flux_t *h,
                   bool verbose,
+                  bool quiet,
                   int query_only,
                   int enable,
                   const char *reason)
@@ -274,10 +281,12 @@ void alloc_admin (flux_t *h,
                              "running",
                              &running) < 0)
         log_msg_exit ("alloc-admin: %s", future_strerror (f, errno));
-    log_msg ("Scheduling is %s%s%s",
-             enable ? "enabled" : "disabled",
-             reason && strlen (reason) > 0 ? ": " : "",
-             reason ? reason : "");
+    if (!quiet) {
+        log_msg ("Scheduling is %s%s%s",
+                 enable ? "enabled" : "disabled",
+                 reason && strlen (reason) > 0 ? ": " : "",
+                 reason ? reason : "");
+    }
     if (verbose) {
         log_msg ("%d alloc requests queued", queue_length);
         log_msg ("%d alloc requests pending to scheduler", alloc_pending);
@@ -333,7 +342,12 @@ int cmd_start (optparse_t *p, int argc, char **argv)
     }
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    alloc_admin (h, optparse_hasopt (p, "verbose"), 0, 1, NULL);
+    alloc_admin (h,
+                 optparse_hasopt (p, "verbose"),
+                 optparse_hasopt (p, "quiet"),
+                 0,
+                 1,
+                 NULL);
     flux_close (h);
     return (0);
 }
@@ -348,7 +362,12 @@ int cmd_stop (optparse_t *p, int argc, char **argv)
         reason = parse_arg_message (argv + optindex, "reason");
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    alloc_admin (h, optparse_hasopt (p, "verbose"), 0, 0, reason);
+    alloc_admin (h,
+                 optparse_hasopt (p, "verbose"),
+                 optparse_hasopt (p, "quiet"),
+                 0,
+                 0,
+                 reason);
     flux_close (h);
     free (reason);
     return (0);
@@ -366,7 +385,12 @@ int cmd_status (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     submit_admin (h, 1, 0, NULL);
-    alloc_admin (h, optparse_hasopt (p, "verbose"), 1, 0, NULL);
+    alloc_admin (h,
+                 optparse_hasopt (p, "verbose"),
+                 false,
+                 1,
+                 0,
+                 NULL);
     flux_close (h);
     return (0);
 }
