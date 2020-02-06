@@ -24,6 +24,7 @@ SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
 BINDINGS_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-jobspec.py
 JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
 FAKE_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/fake-validate.sh
+BAD_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/bad-validate.sh
 
 DUMMY_EVENTLOG=test.ingest.eventlog
 
@@ -186,6 +187,14 @@ test_expect_success 'job-ingest: valid jobspecs accepted by jsonschema validator
 
 test_expect_success 'job-ingest: invalid jobs rejected by jsonschema validator' '
 	test_invalid ${JOBSPEC}/invalid/*
+'
+
+test_expect_success 'job-ingest: validator unexpected exit is handled' '
+	flux exec -r all flux module remove job-ingest &&
+	flux exec -r all flux module load job-ingest \
+		validator=${BAD_VALIDATOR} &&
+	test_must_fail flux job submit basic.json 2>badvalidator.out &&
+	grep "unexpectedly exited" badvalidator.out
 '
 
 test_expect_success 'job-ingest: remove modules' '

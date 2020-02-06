@@ -202,7 +202,8 @@ dist_check_SCRIPTS = \
 	job-attach/outputsleep.sh \
 	job-exec/dummy.sh \
 	schedutil/req_and_unload.py \
-	ingest/fake-validate.sh
+	ingest/fake-validate.sh \
+	ingest/bad-validate.sh
 
 check_PROGRAMS = \
 	shmem/backtoback.t \
