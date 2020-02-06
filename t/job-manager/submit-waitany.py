@@ -29,13 +29,12 @@ h = flux.Flux()
 # Submit njobs test jobs (half will fail)
 jobspec = JobspecV1.from_command(["/bin/true"])
 jobspec_fail = JobspecV1.from_command(["/bin/false"])
-flags = flux.constants.FLUX_JOB_WAITABLE
 for i in range(njobs):
     if i < njobs / 2:
-        jobid = job.submit(h, jobspec, flags=flags)
+        jobid = job.submit(h, jobspec, waitable=True)
         print("submit: {} /bin/true".format(jobid))
     else:
-        jobid = job.submit(h, jobspec_fail, flags=flags)
+        jobid = job.submit(h, jobspec_fail, waitable=True)
         print("submit: {} /bin/false".format(jobid))
 
 

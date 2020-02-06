@@ -19,6 +19,7 @@ import collections
 import six
 import yaml
 
+from flux import constants
 from flux.wrapper import Wrapper
 from flux.util import check_future_error, parse_fsd
 from flux.future import Future
@@ -63,8 +64,19 @@ def _convert_jobspec_arg_to_string(jobspec):
     return jobspec
 
 
-def submit_async(flux_handle, jobspec, priority=lib.FLUX_JOB_PRIORITY_DEFAULT, flags=0):
+def submit_async(
+    flux_handle,
+    jobspec,
+    priority=lib.FLUX_JOB_PRIORITY_DEFAULT,
+    waitable=False,
+    debug=False,
+):
     jobspec = _convert_jobspec_arg_to_string(jobspec)
+    flags = 0
+    if waitable:
+        flags |= constants.FLUX_JOB_WAITABLE
+    if debug:
+        flags |= constants.FLUX_JOB_DEBUG
     future_handle = RAW.submit(flux_handle, jobspec, priority, flags)
     return Future(future_handle)
 
@@ -79,8 +91,14 @@ def submit_get_id(future):
     return int(jobid[0])
 
 
-def submit(flux_handle, jobspec, priority=lib.FLUX_JOB_PRIORITY_DEFAULT, flags=0):
-    future = submit_async(flux_handle, jobspec, priority, flags)
+def submit(
+    flux_handle,
+    jobspec,
+    priority=lib.FLUX_JOB_PRIORITY_DEFAULT,
+    waitable=False,
+    debug=False,
+):
+    future = submit_async(flux_handle, jobspec, priority, waitable, debug)
     jid = submit_get_id(future)
     return jid
 
