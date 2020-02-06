@@ -97,6 +97,9 @@ static struct optparse_option cancelall_opts[] =  {
     { .name = "force", .key = 'f', .has_arg = 0,
       .usage = "Confirm the command",
     },
+    { .name = "quiet", .key = 'f', .has_arg = 0,
+      .usage = "Suppress output if no jobs match",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -901,7 +904,7 @@ int cmd_cancelall (optparse_t *p, int argc, char **argv)
         log_msg ("Command matched %d jobs (-f to confirm)", count);
     else if (count > 0 && !dry_run)
         log_msg ("Canceled %d jobs (%d errors)", count, errors);
-    else
+    else if (!optparse_hasopt (p, "quiet"))
         log_msg ("Command matched 0 jobs");
     flux_close (h);
     free (note);
