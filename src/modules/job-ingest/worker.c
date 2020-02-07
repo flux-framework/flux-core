@@ -220,10 +220,21 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
         return;
     }
     if (len == 0) {
-        /* EOF - If there are still responses queued, fail them all,
-         *  otherwise, just return. Other cleanup handled in exit callback.
+        /* EOF - If p is the current worker and there are still responses
+         * queued, fail them all, otherwise, just return. Other cleanup
+         * handled in exit callback.
+         *
+         * Note: Requests from other processes are guaranteed *not* to be
+         * queued when w->p == p, since new processes won't be launched
+         * until w->p == NULL. Also, if w->p != p, all requests from
+         * `p` will have been handled since w->p is not set to NULL until
+         * worker_stop() (normal exit, all requests handled) or in
+         * worker_completion_cb(), which is guaranteed not to run until
+         * all output complete.
          */
-        if (!strcmp (stream, "stdout") && worker_queue_depth (w) > 0)
+        if (w->p == p &&
+            !strcmp (stream, "stdout") &&
+            worker_queue_depth (w) > 0)
             worker_unexpected_exit (w);
         return;
     }
