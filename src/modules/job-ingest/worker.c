@@ -85,13 +85,6 @@ static void worker_completion_cb (flux_subprocess_t *p)
             flux_log (w->h, LOG_DEBUG, "%s: exited normally", w->name);
         else {
             flux_log (w->h, LOG_ERR, "%s: exited with rc=%d", w->name, rc);
-            /* possible unexpected exit, if w->p = p, then move this
-             * worker to trash now, so the cleanup below is successful.
-             */
-            if (w->p == p) {
-                (void)zlist_append (w->trash, p);
-                w->p = NULL;
-            }
         }
     }
     else if ((rc = flux_subprocess_signaled (p)) >= 0)
@@ -100,6 +93,12 @@ static void worker_completion_cb (flux_subprocess_t *p)
         flux_log (w->h, LOG_ERR, "%s: completed (not signal or exit)", w->name);
     flux_subprocess_destroy (p);
     zlist_remove (w->trash, p);
+
+    /*  Be sure to nullify w->p if this worker unexpectedly exited
+     *  (i.e., worker_stop() wasn't called on it)
+     */
+    if (w->p == p)
+        w->p = NULL;
 }
 
 /* Subprocess state change.
