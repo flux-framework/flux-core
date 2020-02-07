@@ -36,13 +36,6 @@
  * - Work is sent to the coprocess with flux_subprocess_write() regardless
  *   of the current queue depth, which may challenge subprocess buffer
  *   management.
- *
- * - Worker is stopped by closing stdin, but worker_stop() may return
- *   before it is known to have stopped, leaving the broker to clean up
- *   with no possibility of reporting errors to the caller.
- *
- * - Subprocess state change and completion callbacks just log at this point,
- *   and don't initiate cleanup should the subprocess prematurely exit.
  */
 
 #if HAVE_CONFIG_H
