@@ -316,52 +316,6 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
         flux job stats | jq -e ".job_states.total == 20"
 '
 
-# job list-id
-
-test_expect_success HAVE_JQ 'flux job list-ids works with a single ID' '
-        id=`head -n 1 job_ids_pending.out` &&
-        flux job list-ids $id | jq -e ".id == ${id}" &&
-        id=`head -n 1 job_ids_running.out` &&
-        flux job list-ids $id | jq -e ".id == ${id}" &&
-        id=`head -n 1 job_ids_inactive.out` &&
-        flux job list-ids $id | jq -e ".id == ${id}"
-'
-
-test_expect_success HAVE_JQ 'flux job list-ids multiple IDs works' '
-        ids=`cat job_ids_pending.out | tr "\n" " "` &&
-        flux job list-ids $ids | jq .id > list_idsP.out &&
-        test_cmp list_idsP.out job_ids_pending.out &&
-        ids=`cat job_ids_running.out | tr "\n" " "` &&
-        flux job list-ids $ids | jq .id > list_idsR.out &&
-        test_cmp list_idsR.out job_ids_running.out &&
-        ids=`cat job_ids_inactive.out | tr "\n" " "` &&
-        flux job list-ids $ids | jq .id > list_idsI.out &&
-        test_cmp list_idsI.out job_ids_inactive.out &&
-        ids=`cat job_ids_pending.out job_ids_running.out job_ids_inactive.out | tr "\n" " "` &&
-        flux job list-ids $ids | jq .id > list_idsPRI.out &&
-        cat job_ids_pending.out job_ids_running.out job_ids_inactive.out > list_idsPRI.exp &&
-        test_cmp list_idsPRI.exp list_idsPRI.out
-'
-
-test_expect_success HAVE_JQ 'flux job list-ids fails without ID' '
-        test_must_fail flux job list-ids
-'
-
-test_expect_success HAVE_JQ 'flux job list-ids fails with bad ID' '
-        test_must_fail flux job list-ids 1234567890
-'
-
-test_expect_success HAVE_JQ 'flux job list-ids fails with not an ID' '
-        test_must_fail flux job list-ids foobar
-'
-
-test_expect_success HAVE_JQ 'flux job list-ids fails with one bad ID out of several' '
-        id1=`head -n 1 job_ids_pending.out` &&
-        id2=`head -n 1 job_ids_running.out` &&
-        id3=`head -n 1 job_ids_inactive.out` &&
-        test_must_fail flux job list-ids ${id1} ${id2} 1234567890 ${id3}
-'
-
 test_expect_success 'cleanup job listing jobs ' '
         for jobid in `cat job_ids_pending.out`; do \
             flux job cancel $jobid; \
@@ -416,6 +370,52 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
         flux job stats | jq -e ".job_states.cleanup == 0" &&
         flux job stats | jq -e ".job_states.inactive == 20" &&
         flux job stats | jq -e ".job_states.total == 20"
+'
+
+# job list-id
+
+test_expect_success HAVE_JQ 'flux job list-ids works with a single ID' '
+        id=`head -n 1 job_ids_pending.out` &&
+        flux job list-ids $id | jq -e ".id == ${id}" &&
+        id=`head -n 1 job_ids_running.out` &&
+        flux job list-ids $id | jq -e ".id == ${id}" &&
+        id=`head -n 1 job_ids_inactive.out` &&
+        flux job list-ids $id | jq -e ".id == ${id}"
+'
+
+test_expect_success HAVE_JQ 'flux job list-ids multiple IDs works' '
+        ids=`cat job_ids_pending.out | tr "\n" " "` &&
+        flux job list-ids $ids | jq .id > list_idsP.out &&
+        test_cmp list_idsP.out job_ids_pending.out &&
+        ids=`cat job_ids_running.out | tr "\n" " "` &&
+        flux job list-ids $ids | jq .id > list_idsR.out &&
+        test_cmp list_idsR.out job_ids_running.out &&
+        ids=`cat job_ids_inactive.out | tr "\n" " "` &&
+        flux job list-ids $ids | jq .id > list_idsI.out &&
+        test_cmp list_idsI.out job_ids_inactive.out &&
+        ids=`cat job_ids_pending.out job_ids_running.out job_ids_inactive.out | tr "\n" " "` &&
+        flux job list-ids $ids | jq .id > list_idsPRI.out &&
+        cat job_ids_pending.out job_ids_running.out job_ids_inactive.out > list_idsPRI.exp &&
+        test_cmp list_idsPRI.exp list_idsPRI.out
+'
+
+test_expect_success HAVE_JQ 'flux job list-ids fails without ID' '
+        test_must_fail flux job list-ids
+'
+
+test_expect_success HAVE_JQ 'flux job list-ids fails with bad ID' '
+        test_must_fail flux job list-ids 1234567890
+'
+
+test_expect_success HAVE_JQ 'flux job list-ids fails with not an ID' '
+        test_must_fail flux job list-ids foobar
+'
+
+test_expect_success HAVE_JQ 'flux job list-ids fails with one bad ID out of several' '
+        id1=`head -n 1 job_ids_pending.out` &&
+        id2=`head -n 1 job_ids_running.out` &&
+        id3=`head -n 1 job_ids_inactive.out` &&
+        test_must_fail flux job list-ids ${id1} ${id2} 1234567890 ${id3}
 '
 
 #
