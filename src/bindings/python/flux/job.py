@@ -71,6 +71,29 @@ def submit_async(
     waitable=False,
     debug=False,
 ):
+    """Ask Flux to run a job, without waiting for a response
+
+    Submit a job to Flux.  This method returns immediately with a
+    Flux Future, which can be used obtain the job ID later.
+
+    :param flux_handle: handle for Flux broker from flux.Flux()
+    :type flux_handle: Flux
+    :param jobspec: jobspec defining the job request
+    :type jobspec: Jobspec or its string encoding
+    :param priority: job priority 0 (lowest) through 31 (highest)
+        (default is 16).  Priorities 0 through 15 are restricted to
+        the instance owner.
+    :type priority: int
+    :param waitable: allow result to be fetched with job.wait()
+        (default is False).  Waitable=True is restricted to the
+        instance owner.
+    :type waitable: bool
+    :param debug: enable job manager debugging events to job eventlog
+        (default is False)
+    :type debug: bool
+    :returns: a Flux Future object for obtaining the assigned jobid
+    :rtype: Future
+    """
     jobspec = _convert_jobspec_arg_to_string(jobspec)
     flags = 0
     if waitable:
@@ -83,6 +106,17 @@ def submit_async(
 
 @check_future_error
 def submit_get_id(future):
+    """Get job ID from a Future returned by job.submit_async()
+
+    Process a response to a Flux job submit request.  This method blocks
+    until the response is received, then decodes the result to obtain
+    the assigned job ID.
+
+    :param future: a Flux future object returned by job.submit_async()
+    :type future: Future
+    :returns: job ID
+    :rtype: int
+    """
     if future is None or future == ffi.NULL:
         raise EnvironmentError(errno.EINVAL, "future must not be None/NULL")
     future.wait_for()  # ensure the future is fulfilled
@@ -98,12 +132,48 @@ def submit(
     waitable=False,
     debug=False,
 ):
+    """Submit a job to Flux
+
+    Ask Flux to run a job, blocking until a job ID is assigned.
+
+    :param flux_handle: handle for Flux broker from flux.Flux()
+    :type flux_handle: Flux
+    :param jobspec: jobspec defining the job request
+    :type jobspec: Jobspec or its string encoding
+    :param priority: job priority 0 (lowest) through 31 (highest)
+        (default is 16).  Priorities 0 through 15 are restricted to
+        the instance owner.
+    :type priority: int
+    :param waitable: allow result to be fetched with job.wait()
+        (default is False).  Waitable=true is restricted to the
+        instance owner.
+    :type waitable: bool
+    :param debug: enable job manager debugging events to job eventlog
+        (default is False)
+    :type debug: bool
+    :returns: job ID
+    :rtype: int
+    """
     future = submit_async(flux_handle, jobspec, priority, waitable, debug)
     jid = submit_get_id(future)
     return jid
 
 
 def wait_async(flux_handle, jobid=lib.FLUX_JOBID_ANY):
+    """Wait for a job to complete, asynchronously
+
+    Submit a request to wait for job completion.  This method returns
+    immediately with a Flux Future, which can be used to process
+    the result later.
+
+    Only jobs submitted with waitable=True can be waited for.
+
+    :param flux_handle: handle for Flux broker from flux.Flux()
+    :type flux_handle: Flux
+    :param jobid: the job ID to wait for (default is any waitable job)
+    :returns: a Flux Future object for obtaining the job result
+    :rtype: Future
+    """
     future_handle = RAW.wait(flux_handle, jobid)
     return Future(future_handle)
 
@@ -113,6 +183,18 @@ JobWaitResult = collections.namedtuple("JobWaitResult", "jobid, success, errstr"
 
 @check_future_error
 def wait_get_status(future):
+    """Get job status from a Future returned by job.wait_async()
+
+    Process a response to a Flux job wait request.  This method blocks
+    until the response is received, then decodes the result to obtain
+    the job status.
+
+    :param future: a Flux future object returned by job.wait_async()
+    :type future: Future
+    :returns: job status, a tuple of: Job ID (int), success (bool),
+        and an error (string) if success=False
+    :rtype: tuple
+    """
     if future is None or future == ffi.NULL:
         raise EnvironmentError(errno.EINVAL, "future must not be None/NULL")
     future.wait_for()  # ensure the future is fulfilled
@@ -125,6 +207,20 @@ def wait_get_status(future):
 
 
 def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
+    """Wait for a job to complete
+
+    Submit a request to wait for job completion, blocking until a
+    response is received, then return the job status.
+
+    Only jobs submitted with waitable=True can be waited for.
+
+    :param flux_handle: handle for Flux broker from flux.Flux()
+    :type flux_handle: Flux
+    :param jobid: the job ID to wait for (default is any waitable job)
+    :returns: job status, a tuple of: Job ID (int), success (bool),
+        and an error (string) if success=False
+    :rtype: tuple
+    """
     future = wait_async(flux_handle, jobid)
     status = wait_get_status(future)
     return status
