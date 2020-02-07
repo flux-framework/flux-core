@@ -16,7 +16,7 @@
 
 #include "job-manager.h"
 
-void drain_empty_notify (struct drain *drain);
+void drain_check (struct drain *drain);
 
 struct drain *drain_ctx_create (struct job_manager *ctx);
 void drain_ctx_destroy (struct drain *drain);

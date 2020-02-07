@@ -7,6 +7,8 @@ test_under_flux 1
 
 flux setattr log-stderr-level 1
 
+LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
+
 test_expect_success 'flux-queue: unknown sub-command fails with usage message' '
 	test_must_fail flux queue wrongsubcmd 2>usage.out &&
 	grep Usage: usage.out
@@ -32,6 +34,16 @@ test_expect_success 'flux-queue: status with extra free args fails' '
 	grep Usage: usage5.out
 '
 
+test_expect_success 'flux-queue: drain with extra free args fails' '
+	test_must_fail flux queue drain xyz 2>usage6.out &&
+	grep Usage: usage6.out
+'
+
+test_expect_success 'flux-queue: idle with extra free args fails' '
+	test_must_fail flux queue idle xyz 2>usage7.out &&
+	grep Usage: usage7.out
+'
+
 test_expect_success 'flux-queue: status with bad broker connection fails' '
 	! FLUX_URI=/wrong flux queue status
 '
@@ -42,6 +54,14 @@ test_expect_success 'flux-queue: disable with bad broker connection fails' '
 
 test_expect_success 'flux-queue: enable with bad broker connection fails' '
 	! FLUX_URI=/wrong flux queue enable
+'
+
+test_expect_success 'flux-queue: drain with bad broker connection fails' '
+	! FLUX_URI=/wrong flux queue drain
+'
+
+test_expect_success 'flux-queue: idle with bad broker connection fails' '
+	! FLUX_URI=/wrong flux queue idle
 '
 
 test_expect_success 'flux-queue: disable works' '
@@ -120,7 +140,6 @@ test_expect_success 'flux-queue: start scheduling and cancel long job' '
 '
 
 test_expect_success 'flux-queue: queue empties out' '
-	flux queue start &&
 	flux queue drain
 '
 
@@ -150,6 +169,11 @@ test_expect_success 'flux-queue: queue says scheduling disabled' '
 	test_cmp sched_stat.exp sched_stat.err
 '
 
+test_expect_success 'flux-queue: queue contains 1 active job' '
+	COUNT=$(${LIST_JOBS} | wc -l) &&
+	test ${COUNT} -eq 1
+'
+
 test_expect_success 'flux-queue: load scheduler' '
 	flux module load sched-simple
 '
@@ -162,6 +186,65 @@ test_expect_success 'flux-queue: queue says scheduling is enabled' '
 	EOT
 	test_cmp sched_stat2.exp sched_stat2.err
 '
+
+test_expect_success 'flux-queue: job in queue ran' '
+	run_timeout 30 flux queue drain
+'
+
+test_expect_success 'flux-queue: submit a long job that uses all cores' '
+	flux mini submit -n $(nproc) sleep 600
+'
+
+test_expect_success 'flux-queue: submit 2 more jobs' '
+	flux mini submit /bin/true &&
+	flux mini submit /bin/true
+'
+
+test_expect_success 'flux-queue: there are 3 active jobs' '
+	COUNT=$(${LIST_JOBS} | wc -l) &&
+	test ${COUNT} -eq 3
+'
+
+test_expect_success 'flux-queue: queue status -v shows expected counts' '
+	flux queue status -v 2>stat.err &&
+	cat <<-EOT >stat.exp &&
+	flux-queue: Job submission is enabled
+	flux-queue: Scheduling is enabled
+	flux-queue: 1 alloc requests queued
+	flux-queue: 1 alloc requests pending to scheduler
+	flux-queue: 0 free requests pending to scheduler
+	flux-queue: 1 running jobs
+	EOT
+	test_cmp stat.exp stat.err
+'
+
+test_expect_success 'flux-queue: stop queue and cancel long job' '
+	flux queue stop &&
+	flux job cancelall -f -S RUN
+'
+
+test_expect_success 'flux-queue: queue becomes idle' '
+	run_timeout 30 flux queue idle
+'
+
+test_expect_success 'flux-queue: queue status -v shows expected counts' '
+	flux queue status -v 2>stat2.err &&
+	cat <<-EOT >stat2.exp &&
+	flux-queue: Job submission is enabled
+	flux-queue: Scheduling is disabled
+	flux-queue: 2 alloc requests queued
+	flux-queue: 0 alloc requests pending to scheduler
+	flux-queue: 0 free requests pending to scheduler
+	flux-queue: 0 running jobs
+	EOT
+	test_cmp stat2.exp stat2.err
+'
+
+test_expect_success 'flux-queue: start queue and drain' '
+	flux queue start &&
+	run_timeout 30 flux queue drain
+'
+
 
 runas_guest() {
         local userid=$(($(id -u)+1))
@@ -193,5 +276,22 @@ test_expect_success 'flux-queue: enable denied for guest' '
 	test_must_fail runas_guest flux queue enable 2>guest_ena.err &&
 	test_cmp guest_submit.exp guest_ena.err
 '
+
+test_expect_success 'flux-queue: drain denied for guest' '
+	test_must_fail runas_guest flux queue drain 2>guest_drain.err &&
+	cat <<-EOT >guest_drain.exp &&
+	flux-queue: drain: Request requires owner credentals
+	EOT
+	test_cmp guest_drain.exp guest_drain.err
+'
+
+test_expect_success 'flux-queue: idle denied for guest' '
+	test_must_fail runas_guest flux queue idle 2>guest_idle.err &&
+	cat <<-EOT >guest_idle.exp &&
+	flux-queue: idle: Request requires owner credentals
+	EOT
+	test_cmp guest_idle.exp guest_idle.err
+'
+
 
 test_done

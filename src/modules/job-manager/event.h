@@ -35,9 +35,9 @@ int event_job_update (struct job *job, json_t *event);
 int event_batch_pub_state (struct event *event, struct job *job,
                            double timestamp);
 
-/* Add add a completed drain request to batch.
+/* Add add response to batch, to be sent upon batch completion.
  */
-int event_batch_drain_respond (struct event *event, const flux_msg_t *msg);
+int event_batch_respond (struct event *event, const flux_msg_t *msg);
 
 /* Post event 'name' and optionally 'context' to 'job'.
  * Internally, calls event_job_update(), then event_job_action(), then commits

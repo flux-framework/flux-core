@@ -15,6 +15,7 @@ struct job_manager {
     flux_t *h;
     flux_msg_handler_t **handlers;
     zhashx_t *active_jobs;
+    int running_jobs; // count of jobs in RUN | CLEANUP state
     struct start *start;
     struct alloc *alloc;
     struct event *event;

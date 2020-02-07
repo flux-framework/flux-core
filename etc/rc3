@@ -1,5 +1,9 @@
 #!/bin/bash
 
+flux queue stop --quiet
+flux job cancelall --quiet -f --states RUN
+flux queue idle --quiet
+
 core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
 IFS=:

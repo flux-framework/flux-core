@@ -150,10 +150,19 @@ int restart_from_kvs (struct job_manager *ctx)
     const char *dirname = "job";
     int dirskip = strlen (dirname);
     int count;
+    struct job *job;
 
     count = depthfirst_map (ctx->h, dirname, dirskip, restart_map_cb, ctx);
     if (count < 0)
         return -1;
+    /* Initialize the count of "running" jobs
+     */
+    job = zhashx_first (ctx->active_jobs);
+    while (job) {
+        if ((job->state & FLUX_JOB_RUNNING) != 0)
+            ctx->running_jobs++;
+        job = zhashx_next (ctx->active_jobs);
+    }
     flux_log (ctx->h, LOG_DEBUG, "%s: added %d jobs", __FUNCTION__, count);
     return 0;
 }
