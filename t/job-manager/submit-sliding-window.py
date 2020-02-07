@@ -30,13 +30,12 @@ if len(sys.argv) == 3:
 h = flux.Flux()
 
 jobspec = JobspecV1.from_command(["/bin/true"])
-flags = flux.constants.FLUX_JOB_WAITABLE
 done = 0
 running = 0
 
 while done < njobs:
     if running < fanout and done + running < njobs:
-        jobid = job.submit(h, jobspec, flags=flags)
+        jobid = job.submit(h, jobspec, waitable=True)
         print("submit: {}".format(jobid))
         running += 1
 

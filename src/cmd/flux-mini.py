@@ -199,14 +199,15 @@ class SubmitCmd:
                     val = tmp[1]
                 jobspec.setattr(key, val)
 
-        flags = 0
+        arg_debug = False
+        arg_waitable = False
         if args.flags is not None:
             for tmp in args.flags:
                 for flag in tmp.split(","):
                     if flag == "debug":
-                        flags |= flux.constants.FLUX_JOB_DEBUG
+                        arg_debug = True
                     elif flag == "waitable":
-                        flags |= flux.constants.FLUX_JOB_WAITABLE
+                        arg_waitable = True
                     else:
                         raise ValueError("--flags: Unknown flag " + flag)
 
@@ -215,7 +216,13 @@ class SubmitCmd:
             sys.exit(0)
 
         h = flux.Flux()
-        return job.submit(h, jobspec.dumps(), priority=args.priority, flags=flags)
+        return job.submit(
+            h,
+            jobspec.dumps(),
+            priority=args.priority,
+            waitable=arg_waitable,
+            debug=arg_debug,
+        )
 
     def main(self, args):
         jobid = self.submit(args)
