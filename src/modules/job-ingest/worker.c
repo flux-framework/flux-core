@@ -36,13 +36,6 @@
  * - Work is sent to the coprocess with flux_subprocess_write() regardless
  *   of the current queue depth, which may challenge subprocess buffer
  *   management.
- *
- * - Worker is stopped by closing stdin, but worker_stop() may return
- *   before it is known to have stopped, leaving the broker to clean up
- *   with no possibility of reporting errors to the caller.
- *
- * - Subprocess state change and completion callbacks just log at this point,
- *   and don't initiate cleanup should the subprocess prematurely exit.
  */
 
 #if HAVE_CONFIG_H
@@ -85,13 +78,6 @@ static void worker_completion_cb (flux_subprocess_t *p)
             flux_log (w->h, LOG_DEBUG, "%s: exited normally", w->name);
         else {
             flux_log (w->h, LOG_ERR, "%s: exited with rc=%d", w->name, rc);
-            /* possible unexpected exit, if w->p = p, then move this
-             * worker to trash now, so the cleanup below is successful.
-             */
-            if (w->p == p) {
-                (void)zlist_append (w->trash, p);
-                w->p = NULL;
-            }
         }
     }
     else if ((rc = flux_subprocess_signaled (p)) >= 0)
@@ -100,6 +86,12 @@ static void worker_completion_cb (flux_subprocess_t *p)
         flux_log (w->h, LOG_ERR, "%s: completed (not signal or exit)", w->name);
     flux_subprocess_destroy (p);
     zlist_remove (w->trash, p);
+
+    /*  Be sure to nullify w->p if this worker unexpectedly exited
+     *  (i.e., worker_stop() wasn't called on it)
+     */
+    if (w->p == p)
+        w->p = NULL;
 }
 
 /* Subprocess state change.
@@ -221,10 +213,21 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
         return;
     }
     if (len == 0) {
-        /* EOF - If there are still responses queued, fail them all,
-         *  otherwise, just return. Other cleanup handled in exit callback.
+        /* EOF - If p is the current worker and there are still responses
+         * queued, fail them all, otherwise, just return. Other cleanup
+         * handled in exit callback.
+         *
+         * Note: Requests from other processes are guaranteed *not* to be
+         * queued when w->p == p, since new processes won't be launched
+         * until w->p == NULL. Also, if w->p != p, all requests from
+         * `p` will have been handled since w->p is not set to NULL until
+         * worker_stop() (normal exit, all requests handled) or in
+         * worker_completion_cb(), which is guaranteed not to run until
+         * all output complete.
          */
-        if (!strcmp (stream, "stdout") && worker_queue_depth (w) > 0)
+        if (w->p == p &&
+            !strcmp (stream, "stdout") &&
+            worker_queue_depth (w) > 0)
             worker_unexpected_exit (w);
         return;
     }
