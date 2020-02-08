@@ -52,14 +52,19 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     int pending = zlistx_size (ctx->jsctx->pending);
     int running = zlistx_size (ctx->jsctx->running);
     int inactive = zlistx_size (ctx->jsctx->inactive);
-    if (flux_respond_pack (h, msg, "{s:i s:i s:i s:{s:i s:i s:i}}",
+    int idsync_lookups = zlistx_size (ctx->idsync_lookups);
+    int idsync_waits = zhashx_size (ctx->idsync_waits);
+    if (flux_respond_pack (h, msg, "{s:i s:i s:i s:{s:i s:i s:i} s:{s:i s:i}}",
                            "lookups", lookups,
                            "watchers", watchers,
                            "guest_watchers", guest_watchers,
                            "jobs",
                            "pending", pending,
                            "running", running,
-                           "inactive", inactive) < 0) {
+                           "inactive", inactive,
+                           "idsync",
+                           "lookups", idsync_lookups,
+                           "waits", idsync_waits) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
