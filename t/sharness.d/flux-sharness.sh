@@ -111,6 +111,7 @@ test_under_flux() {
         valgrind="$valgrind,--trace-children=no,--child-silent-after-fork=yes"
         valgrind="$valgrind,--leak-resolution=med,--error-exitcode=1"
         valgrind="$valgrind,--suppressions=${VALGRIND_SUPPRESSIONS}"
+        gracetime="-o,-g,10"
     fi
     # Extend timeouts when running under AddressSanitizer
     if test_have_prereq ASAN; then
