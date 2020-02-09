@@ -175,7 +175,35 @@ test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux module remove sched-simple &&
 	flux job cancelall -f
 '
-
+test_expect_success 'sched-simple: there are no outstanding sched requests' '
+	flux queue status -v 2>queue_status.out &&
+	grep "0 alloc requests pending to scheduler" queue_status.out &&
+	grep "0 free requests pending to scheduler" queue_status.out
+'
+test_expect_success 'sched-simple: reload in unlimited mode' '
+	flux module load sched-simple unlimited &&
+	flux dmesg | grep "scheduler: ready unlimited"
+'
+test_expect_success 'sched-simple: submit 3 more jobs' '
+	flux job submit basic.json >job11.id &&
+	flux job submit basic.json >job12.id &&
+	flux job submit basic.json >job13.id &&
+	flux job wait-event --timeout=5.0 $(cat job13.id) alloc
+'
+test_expect_success 'sched-simple: check allocations for running jobs' '
+	list_R $(cat job11.id job12.id job13.id ) \
+		 > single-allocs.out &&
+	cat <<-EOF >first-fit-allocs.expected &&
+	note="rank0/core0"
+	note="rank0/core1"
+	note="rank1/core0"
+	EOF
+	test_cmp first-fit-allocs.expected first-fit-allocs.out
+'
+test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
+	flux module remove sched-simple &&
+	flux job cancelall -f
+'
 test_expect_success 'sched-simple: there are no outstanding sched requests' '
 	flux queue status -v 2>queue_status.out &&
 	grep "0 alloc requests pending to scheduler" queue_status.out &&
