@@ -53,7 +53,7 @@ DESCRIPTION
 -----------
 
 An idset is a set of numerically sorted, non-negative integers.
-It is internally represented as a Van Embde Boas (or vEB) tree.
+It is internally represented as a van Embde Boas (or vEB) tree.
 Functionally it behaves like a bitmap, and has space efficiency
 comparable to a bitmap, but performs operations (insert, delete,
 lookup, findNext, findPrevious) in O(log(m)) time, where pow (2,m)
