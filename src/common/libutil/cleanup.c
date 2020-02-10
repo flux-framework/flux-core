@@ -13,7 +13,6 @@
 #endif /* HAVE_CONFIG_H */
 
 #include "cleanup.h"
-#include "xzmalloc.h"
 #include "unlink_recursive.h"
 
 #include <stdio.h>
@@ -96,7 +95,9 @@ void cleanup_push (cleaner_fun_f *fun, void *arg)
 
 void cleanup_push_string (cleaner_fun_f *fun, const char *path)
 {
-    cleanup_push (fun, xstrdup (path));
+    char *cpy = strdup (path);
+    if (cpy)
+        cleanup_push (fun, cpy);
 }
 
 /*
