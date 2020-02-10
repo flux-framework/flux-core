@@ -353,18 +353,24 @@ static int content_sqlite_opendb (struct content_sqlite *ctx)
                       "PRAGMA journal_mode=OFF",
                       NULL,
                       NULL,
-                      NULL) != SQLITE_OK
-            || sqlite3_exec (ctx->db,
-                             "PRAGMA synchronous=OFF",
-                             NULL,
-                             NULL,
-                             NULL) != SQLITE_OK
-            || sqlite3_exec (ctx->db,
-                             "PRAGMA locking_mode=EXCLUSIVE",
-                             NULL,
-                             NULL,
-                             NULL) != SQLITE_OK) {
-        log_sqlite_error (ctx, "setting sqlite pragmas");
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "setting sqlite 'journal_mode' pragma");
+        goto error;
+    }
+    if (sqlite3_exec (ctx->db,
+                      "PRAGMA synchronous=OFF",
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "setting sqlite 'synchronous' pragma");
+        goto error;
+    }
+    if (sqlite3_exec (ctx->db,
+                      "PRAGMA locking_mode=EXCLUSIVE",
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "setting sqlite 'locking_mode' pragma");
         goto error;
     }
     if (sqlite3_exec (ctx->db,
