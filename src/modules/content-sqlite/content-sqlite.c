@@ -53,8 +53,6 @@ struct content_sqlite {
 
 static void log_sqlite_error (struct content_sqlite *ctx, const char *fmt, ...)
 {
-    const char *sq_errmsg = sqlite3_errmsg (ctx->db);
-    int sq_errcode = sqlite3_extended_errcode (ctx->db);
     char buf[64];
     va_list ap;
 
@@ -62,10 +60,17 @@ static void log_sqlite_error (struct content_sqlite *ctx, const char *fmt, ...)
     (void)vsnprintf (buf, sizeof (buf), fmt, ap);
     va_end (ap);
 
-    if (!sq_errmsg)
-        sq_errmsg = "unknown error code";
-
-    flux_log (ctx->h, LOG_ERR, "%s: %s(%d)", buf, sq_errmsg, sq_errcode);
+    if (ctx->db) {
+        const char *errmsg = sqlite3_errmsg (ctx->db);
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "%s: %s(%d)",
+                  buf,
+                  errmsg ? errmsg : "unknown error code",
+                  sqlite3_extended_errcode (ctx->db));
+    }
+    else
+        flux_log (ctx->h, LOG_ERR, "%s: unknown error, no sqlite3 handle", buf);
 }
 
 static void set_errno_from_sqlite_error (struct content_sqlite *ctx)
@@ -331,14 +336,22 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
 {
     if (ctx) {
         int saved_errno = errno;
-        if (ctx->store_stmt)
-            sqlite3_finalize (ctx->store_stmt);
-        if (ctx->load_stmt)
-            sqlite3_finalize (ctx->load_stmt);
-        if (ctx->dump_stmt)
-            sqlite3_finalize (ctx->dump_stmt);
-        if (ctx->db)
-            sqlite3_close (ctx->db);
+        if (ctx->store_stmt) {
+            if (sqlite3_finalize (ctx->store_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize store_stmt");
+        }
+        if (ctx->load_stmt) {
+            if (sqlite3_finalize (ctx->load_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize load_stmt");
+        }
+        if (ctx->dump_stmt) {
+            if (sqlite3_finalize (ctx->dump_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize dump_stmt");
+        }
+        if (ctx->db) {
+            if (sqlite3_close (ctx->db) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize dump_stmt");
+        }
         errno = saved_errno;
     }
 }
