@@ -85,11 +85,14 @@ void cleanup_push (cleaner_fun_f *fun, void *arg)
         cleaner_pid = getpid ();
         atexit (cleanup_run);
     }
+    /* Ignore error, no way to return it to caller anyway... */
     struct cleaner *c = calloc (sizeof (struct cleaner), 1);
-    c->fun = fun;
-    c->arg = arg;
-    /* Ignore return code, no way to return it to caller anyway... */
-    (void)zlist_push (cleanup_list, c);
+    if (c) {
+        c->fun = fun;
+        c->arg = arg;
+        if (zlist_push (cleanup_list, c) < 0)
+            free (c);
+    }
     pthread_mutex_unlock (&mutex);
 }
 
