@@ -20,11 +20,14 @@
  * store jobs in three different lists.
  *
  * - pending - these are jobs that have not yet in the RUN state, they
- *   are sorted based on job priority, then job submission time.
+ *   are sorted based on job priority (highest first), then job
+ *   submission time (earlier submission time first).
  * - running - these are jobs that have transitioned to the RUN state.
- *   They are sorted by initial run start time.
+ *   They are sorted by initial run start time (later run start
+ *   times first).
  * - inactive - these are jobs that are in the INACTIVE state, they
- *   are sorted by job completion time.
+ *   are sorted by job completion time (later completion times
+ *   first)
  *
  * There is also an additional list `processing` that stores jobs that
  * cannot yet be stored on one of the lists above.
