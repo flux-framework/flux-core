@@ -327,10 +327,13 @@ static void update_job_state_and_list (struct info_ctx *ctx,
     oldlist = get_list (jsctx, job->state);
     newlist = get_list (jsctx, newstate);
 
+    /* must call before job_change_list(), to ensure timestamps are
+     * set before any sorting based on timestamps are done
+     */
+    update_job_state (ctx, job, newstate, timestamp);
+
     if (oldlist != newlist)
         job_change_list (jsctx, job, oldlist, newstate);
-
-    update_job_state (ctx, job, newstate, timestamp);
 }
 
 static int eventlog_lookup_parse (struct info_ctx *ctx,
