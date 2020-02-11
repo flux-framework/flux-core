@@ -1,5 +1,5 @@
 /************************************************************\
- * Copyright 2014 Lawrence Livermore National Security, LLC
+ * Copyright 2020 Lawrence Livermore National Security, LLC
  * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
  *
  * This file is part of the Flux resource manager framework.
@@ -8,217 +8,215 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* shutdown.c - orderly distributed shutdown
+ *
+ * We must keep the overlay network up long enough to be sure every broker
+ * is informed about the shutdown.  Here is the protocol:
+ *
+ * 1. Rank 0 broker publishes a shutdown event, to which all brokers subscribe
+ * 2. Each broker (including 0) handles the event.
+ * 3. Each broker starts a doomsday timer
+ * 4. If a broker has descendants, it waits for them to disconnect
+ * 5. Once all descendants disconnect, broker stops timer and calls callback.
+ * 6. The callback should disconnect from parent (if any) and exit.
+ * 7. Ultimately the rank 0 brokers exits with exit code of rc1/2/3.
+ *
+ * The rank 0 broker calls shutdown_instance().
+ * All ranks register a shutdown callback which is called on state change, e.g.
+ * - when shutdown begins: !shutdown_is_complete() and !shutdown_is_expired()
+ * - when shutdown completes: shutdown_is_compete() and !shutdown_is_expired()
+ * - when shutdown expires: shutdown_is_expired()
+ */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <errno.h>
+#include <assert.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/log.h"
+#include "src/common/libutil/kary.h"
 
+#include "overlay.h"
 #include "shutdown.h"
 
-#define REASON_MAX 256
 
-struct shutdown_struct {
+struct shutdown {
     flux_t *h;
+    overlay_t *overlay;
+    flux_msg_handler_t **handlers;
     flux_watcher_t *timer;
-    flux_msg_handler_t *shutdown;
-    uint32_t myrank;
-
-    int rc;
-    int rank;
-    char reason[REASON_MAX];
     double grace;
+    bool expired;
+    bool complete;
 
     shutdown_cb_f cb;
     void *arg;
 };
 
-
-shutdown_t *shutdown_create (void)
+static void shutdown_begin (struct shutdown *s)
 {
-    shutdown_t *s = calloc (1, sizeof (*s));
-
-    if (!s) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    return s;
-}
-
-void shutdown_destroy (shutdown_t *s)
-{
-    if (s) {
-        if (s->shutdown)
-            flux_msg_handler_destroy (s->shutdown);
-        shutdown_disarm (s);
-        if (s->h)
-            (void)flux_event_unsubscribe (s->h, "shutdown");
-        free (s);
-    }
-}
-
-/* When the timer expires, call the registered callback.
- */
-static void timer_handler (flux_reactor_t *r, flux_watcher_t *w,
-                           int revents, void *arg)
-{
-    shutdown_t *s = arg;
-    if (s->shutdown)
-        flux_msg_handler_stop (s->shutdown);
+    assert (s->complete == false);
+    assert (s->expired == false);
     if (s->cb)
-        s->cb (s, true, s->arg);
-    else
-        exit (s->rc);
+        s->cb (s, s->arg);
 }
 
-/* On receipt of the shutdown event message, begin the grace timer,
- * and log the "shutdown in..." message on rank 0.
- */
-void shutdown_handler (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+static void shutdown_complete (struct shutdown *s)
 {
-    shutdown_t *s = arg;
+    s->complete = true;
+    flux_watcher_stop (s->timer);
+    overlay_set_monitor_cb (s->overlay, NULL, NULL);
+    if (s->cb)
+        s->cb (s, s->arg);
+}
 
-    if (!s->timer) {
-        if (shutdown_decode (msg, &s->grace, &s->rc, &s->rank,
-                             s->reason, sizeof (s->reason)) < 0) {
-            flux_log_error (h, "shutdown event");
-            return;
-        }
-        if (!(s->timer = flux_timer_watcher_create (flux_get_reactor (s->h),
-                                                    s->grace, 0.,
-                                                    timer_handler, s))) {
-            flux_log_error (h, "shutdown timer creation");
-            return;
-        }
+static void shutdown_timeout (struct shutdown *s)
+{
+    s->expired = true;
+    overlay_set_monitor_cb (s->overlay, NULL, NULL);
+    if (s->cb)
+        s->cb (s, s->arg);
+}
+
+static void grace_timeout_cb (flux_reactor_t *r,
+                              flux_watcher_t *w,
+                              int revents,
+                              void *arg)
+{
+    struct shutdown *s = arg;
+    shutdown_timeout (s);
+}
+
+void monitor_cb (overlay_t *overlay, void *arg)
+{
+    struct shutdown *s = arg;
+    if (overlay_get_child_peer_count (overlay) == 0)
+        shutdown_complete (s);
+}
+
+void shutdown_event_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
+{
+    struct shutdown *s = arg;
+
+    shutdown_begin (s);
+    if (overlay_get_child_peer_count (s->overlay) == 0)
+        shutdown_complete (s);
+    else {
+        overlay_set_monitor_cb (s->overlay, monitor_cb, s);
         flux_watcher_start (s->timer);
-        if (s->myrank == 0)
-            flux_log (s->h, LOG_INFO, "shutdown in %.3fs: %s",
-                      s->grace, s->reason);
     }
 }
 
-/* Cleanup not done in this function, responsibiility of caller to
- * call shutdown_destroy() eventually */
-int shutdown_set_flux (shutdown_t *s, flux_t *h)
+void publish_continuation (flux_future_t *f, void *arg)
 {
-    struct flux_match match = FLUX_MATCH_EVENT;
+    struct shutdown *s = arg;
 
-    s->h = h;
-
-    match.topic_glob = "shutdown";
-    if (!(s->shutdown = flux_msg_handler_create (s->h, match,
-                                                 shutdown_handler, s))) {
-        log_err ("flux_msg_handler_create");
-        return -1;
-    }
-    flux_msg_handler_start (s->shutdown);
-    if (flux_event_subscribe (s->h, "shutdown") < 0){
-        log_err ("flux_event_subscribe");
-        return -1;
-    }
-
-    if (flux_get_rank (s->h, &s->myrank) < 0) {
-        log_err ("flux_get_rank");
-        return -1;
-    }
-    return 0;
+    if (flux_future_get (f, NULL) < 0)
+        flux_log_error (s->h, "publishing shutdown event");
+    flux_future_destroy (f);
 }
 
-int shutdown_set_grace (shutdown_t *s, double grace)
+/* Called from rank 0 only */
+void shutdown_instance (struct shutdown *s)
 {
-    /* Determine estimate if one not provided */
-    if (grace == 0) {
-        uint32_t size;
-        if (flux_get_size (s->h, &size) < 0)
-            return -1;
-        if (size < 16)
-            s->grace = 1;
-        else if (size < 128)
-            s->grace = 2;
-        else if (size < 1024)
-            s->grace = 4;
-        else
-            s->grace = 10;
+    if (overlay_get_child_peer_count (s->overlay) == 0) {
+        shutdown_begin (s);
+        shutdown_complete (s);
     }
-    else
-        s->grace = grace;
-    return 0;
+    else {
+        flux_future_t *f;
+
+        if (!(f = flux_event_publish (s->h, "shutdown", 0, NULL))) {
+            flux_log_error (s->h, "publishing shutdown event");
+            return;
+        }
+        if (flux_future_then (f, -1., publish_continuation, s) < 0) {
+            flux_log_error (s->h, "registering continuation for shutdown");
+            flux_future_destroy (f);
+            return;
+        }
+    }
 }
 
-void shutdown_set_callback (shutdown_t *s, shutdown_cb_f cb, void *arg)
+void shutdown_set_callback (struct shutdown *s, shutdown_cb_f cb, void *arg)
 {
     s->cb = cb;
     s->arg = arg;
 }
 
-int shutdown_get_rc (shutdown_t *s)
+bool shutdown_is_expired (struct shutdown *s)
 {
-    return s->rc;
+    return s->expired;
 }
 
-void shutdown_disarm (shutdown_t *s)
+bool shutdown_is_complete (struct shutdown *s)
 {
-    if (s->timer) {
-        flux_watcher_stop (s->timer);
+    return s->complete;
+}
+
+void shutdown_destroy (struct shutdown *s)
+{
+    if (s) {
+        int saved_errno = errno;
+        flux_msg_handler_delvec (s->handlers);
+        if (s->h)
+            (void)flux_event_unsubscribe (s->h, "shutdown");
         flux_watcher_destroy (s->timer);
-        s->timer = NULL;
+        free (s);
+        errno = saved_errno;
     }
 }
 
-flux_msg_t *shutdown_vencode (double grace, int exitcode, int rank,
-                              const char *fmt, va_list ap)
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_EVENT,  "shutdown", shutdown_event_cb, 0 },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+struct shutdown *shutdown_create (flux_t *h,
+                                  double grace,
+                                  uint32_t size,
+                                  int tbon_k,
+                                  overlay_t *overlay)
 {
-    char reason[REASON_MAX];
+    struct shutdown *s;
 
-    vsnprintf (reason, sizeof (reason), fmt, ap);
+    if (!(s = calloc (1, sizeof (*s))))
+        return NULL;
+    s->h = h;
+    s->overlay = overlay;
 
-    return flux_event_pack ("shutdown", "{ s:s s:f s:i s:i }",
-                            "reason", reason,
-                            "grace", grace,
-                            "rank", rank,
-                            "exitcode", exitcode);
-}
-
-int shutdown_decode (const flux_msg_t *msg, double *grace, int *exitcode,
-                     int *rank, char *reason, int reason_len)
-{
-    const char *s;
-    int rc = -1;
-
-    if (flux_event_unpack (msg, NULL, "{ s:s s:F s:i s:i}",
-                           "reason", &s,
-                           "grace", grace,
-                           "rank", rank,
-                           "exitcode", exitcode) < 0)
-        goto done;
-    snprintf (reason, reason_len, "%s", s);
-    rc = 0;
-done:
-    return rc;
-}
-
-int shutdown_arm (shutdown_t *s, int exitcode, const char *fmt, ...)
-{
-    va_list ap;
-    flux_msg_t *msg = NULL;
-    int rc = -1;
-
-    if (!s->timer) {
-        va_start (ap, fmt);
-        msg = shutdown_vencode (s->grace, exitcode, s->myrank, fmt, ap);
-        va_end (ap);
-        if (!msg || flux_send (s->h, msg, 0) < 0)
-            goto done;
+    /* If grace is zero, select a default based on the maximum number of
+     * TBON levels in the instance since the latency at rank 0 will be based
+     * on the number of hops from the most distant leaf node.
+     * N.B. a size=1 instance has 1 level.
+     */
+    if (grace == 0) {
+        int levels = kary_levelof (tbon_k, size - 1) + 1;
+        s->grace = levels * 2; // e.g. 2s for size=1, 4s for size=3 k=2
     }
-    rc = 0;
-done:
-    flux_msg_destroy (msg);
-    return rc;
+    else
+        s->grace = grace;
+
+    if (flux_msg_handler_addvec (h, htab, s, &s->handlers) < 0)
+        goto error;
+    if (!(s->timer = flux_timer_watcher_create (flux_get_reactor (h),
+                                                s->grace,
+                                                0.,
+                                                grace_timeout_cb,
+                                                s)))
+        goto error;
+    if (flux_event_subscribe (s->h, "shutdown") < 0)
+        goto error;
+    return s;
+error:
+    shutdown_destroy (s);
+    return NULL;
 }
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

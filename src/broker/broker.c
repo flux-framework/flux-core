@@ -109,7 +109,7 @@ typedef struct {
     zlist_t *sigwatchers;
     struct service_switch *services;
     heartbeat_t *heartbeat;
-    shutdown_t *shutdown;
+    struct shutdown *shutdown;
     double shutdown_grace;
     double heartbeat_rate;
     int sec_typemask;
@@ -136,7 +136,7 @@ static void child_cb (overlay_t *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
-static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
+static void shutdown_cb (struct shutdown *s, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
 static int broker_handle_signals (broker_ctx_t *ctx);
@@ -323,8 +323,6 @@ int main (int argc, char *argv[])
     if (!(ctx.hello = hello_create ()))
         oom ();
     if (!(ctx.heartbeat = heartbeat_create ()))
-        oom ();
-    if (!(ctx.shutdown = shutdown_create ()))
         oom ();
     if (!(ctx.attrs = attr_create ()))
         oom ();
@@ -627,12 +625,12 @@ int main (int argc, char *argv[])
         }
     }
 
-    if (shutdown_set_flux (ctx.shutdown, ctx.h) < 0) {
-        log_err ("shutdown_set_flux");
-        goto cleanup;
-    }
-    if (shutdown_set_grace (ctx.shutdown, ctx.shutdown_grace) < 0) {
-        log_err ("shutdown_set_grace");
+    if (!(ctx.shutdown = shutdown_create (ctx.h,
+                                          ctx.shutdown_grace,
+                                          size,
+                                          ctx.tbon_k,
+                                          ctx.overlay))) {
+        log_err ("shutdown_create");
         goto cleanup;
     }
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
@@ -909,16 +907,17 @@ static void hello_update_cb (hello_t *hello, void *arg)
     }
 }
 
-/* Currently 'expired' is always true.
- */
-static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
+static void shutdown_cb (struct shutdown *s, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    if (expired) {
-        if (overlay_get_rank (ctx->overlay) == 0)
-            exit_rc = shutdown_get_rc (s);
-        flux_reactor_stop (flux_get_reactor (ctx->h));
+
+    if (shutdown_is_expired (s)) {
+        log_msg ("shutdown timer expired on rank %"PRIu32,
+                 overlay_get_rank (ctx->overlay));
+        _exit (1);
     }
+    if (shutdown_is_complete (s))
+        flux_reactor_stop (flux_get_reactor (ctx->h));
 }
 
 static void set_proctitle (uint32_t rank)
@@ -954,16 +953,19 @@ static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
     switch (level) {
         case 1: /* init completed */
             if (rc != 0) {
+                exit_rc = rc;
                 new_level = 3;
-                shutdown_arm (ctx->shutdown, rc, "run level 1 %s", exit_string);
             } else
                 new_level = 2;
             break;
         case 2: /* initial program completed */
+            exit_rc = rc;
             new_level = 3;
-            shutdown_arm (ctx->shutdown, rc, "run level 2 %s", exit_string);
             break;
         case 3: /* finalization completed */
+            if (rc != 0 && exit_rc == 0)
+                exit_rc = rc;
+            shutdown_instance (ctx->shutdown); // initiate shutdown from rank 0
             break;
     }
     if (new_level != -1) {
@@ -1967,10 +1969,11 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                          int revents, void *arg)
 {
     broker_ctx_t *ctx = arg;
+    int rank = overlay_get_rank (ctx->overlay);
     int signum = flux_signal_watcher_get_signum (w);
 
-    shutdown_arm (ctx->shutdown, 0,
-                  "signal %d (%s)", signum, strsignal (signum));
+    log_msg ("signal %d (%s) on rank %u", signum, strsignal (signum), rank);
+    _exit (1);
 }
 
 /* TRICKY:  Fix up ROUTER socket used in reverse direction.

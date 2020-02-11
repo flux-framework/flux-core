@@ -11,66 +11,23 @@
 #ifndef _BROKER_SHUTDOWN_H
 #define _BROKER_SHUTDOWN_H
 
-/* Manage the shutdown process for the comms session.
- *
- * Design:
- * The broker registers a shutdown callback.
- *
- * On receipt of a "shutdown" event, the grace timer is armed, and
- * the broker callback is called with 'expired' false.  The broker
- * should initiate its clean shutdown path.  If the clean shutdown path
- * succeedes, the broker calls shutdown_disarm() to disarm the timer.
- *
- * If the grace timer expires before then, the broker callback
- * is called with 'exipred' true.
- */
+struct shutdown;
 
-typedef struct shutdown_struct shutdown_t;
-typedef void (*shutdown_cb_f)(shutdown_t *s, bool expired, void *arg);
+typedef void (*shutdown_cb_f) (struct shutdown *s, void *arg);
 
-/* Create/destroy shutdown_t.
- */
-shutdown_t *shutdown_create (void);
-void shutdown_destroy (shutdown_t *s);
+struct shutdown *shutdown_create (flux_t *h,
+                                  double grace,
+                                  uint32_t size,
+                                  int tbon_k,
+                                  overlay_t *overlay);
+void shutdown_destroy (struct shutdown *s);
 
-/* Set the flux_t *handle to be used to configure the event message
- * handler, grace timer watcher, and log the shutdown message.
- */
-int shutdown_set_flux (shutdown_t *s, flux_t *h);
+void shutdown_set_callback (struct shutdown *s, shutdown_cb_f cb, void *arg);
 
-/* Set shutdown grace.  If grace == 0., overlay size will be used to
- * get estimate */
-int shutdown_set_grace (shutdown_t *s, double grace);
+bool shutdown_is_complete (struct shutdown *s);
+bool shutdown_is_expired (struct shutdown *s);
 
-/* Register a shutdown callback to be called
- * 1) when the grace timeout is armed, and
- * 2) when the grace timeout expires.
- */
-void shutdown_set_callback (shutdown_t *s, shutdown_cb_f cb, void *arg);
-
-/* Shutdown callback may call this to obtain the broker exit code
- * encoded in the shutdown event.
- */
-int shutdown_get_rc (shutdown_t *s);
-
-/* Call shutdown_arm() when shutdown should begin.
- * This sends the "cmb.shutdown" event to all ranks.
- */
-int shutdown_arm (shutdown_t *s, int rc, const char *fmt, ...);
-
-/* Call shutdown_disarm() once the clean shutdown path has succeeded.
- * This disarms the timer on the local rank only.
- */
-void shutdown_disarm (shutdown_t *s);
-
-/* Shutdown event encode/decode
- * (used internally, exposed for testing)
- */
-flux_msg_t *shutdown_vencode (double grace, int rc, int rank,
-                              const char *fmt, va_list ap);
-int shutdown_decode (const flux_msg_t *msg, double *grace, int *rc, int *rank,
-                     char *reason, int reason_len);
-
+void shutdown_instance (struct shutdown *s);
 
 #endif /* !_BROKER_SHUTDOWN_H */
 
