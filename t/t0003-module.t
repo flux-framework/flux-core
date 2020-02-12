@@ -18,6 +18,10 @@ test_expect_success 'module: load test module' '
 	flux module load \
 		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
 '
+test_expect_success 'module: reload test module' '
+	flux module reload \
+		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
+'
 
 test_expect_success 'module: lsmod shows test module' '
 	flux module list | grep parent
@@ -251,6 +255,7 @@ test_expect_success 'flux module -h lists subcommands' '
 	! flux module -h 2>module.help &&
 	grep -q list module.help &&
 	grep -q remove module.help &&
+	grep -q reload module.help &&
 	grep -q load module.help &&
 	grep -q info module.help &&
 	grep -q stats module.help &&

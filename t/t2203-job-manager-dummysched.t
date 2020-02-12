@@ -95,8 +95,7 @@ test_expect_success 'job-manager: canceled job has exception, free events' '
 
 test_expect_success 'job-manager: reload sched-dummy --cores=4' '
 	flux dmesg -C &&
-	flux module remove sched-dummy &&
-	flux module load ${SCHED_DUMMY} --cores=4 &&
+	flux module reload ${SCHED_DUMMY} --cores=4 &&
 	flux dmesg | grep "hello_cb:" >hello.dmesg
 '
 

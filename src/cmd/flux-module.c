@@ -32,6 +32,7 @@ const int max_idle = 99;
 int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_remove (optparse_t *p, int argc, char **argv);
 int cmd_load (optparse_t *p, int argc, char **argv);
+int cmd_reload (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_debug (optparse_t *p, int argc, char **argv);
@@ -101,12 +102,26 @@ static struct optparse_subcommand subcommands[] = {
       0,
       remove_opts,
     },
+    { "unload",
+      "[OPTIONS] module",
+      "Unload module",
+      cmd_remove,
+      OPTPARSE_SUBCMD_HIDDEN,
+      remove_opts,
+    },
     { "load",
       "[OPTIONS] module",
       "Load module",
       cmd_load,
       0,
       legacy_opts,
+    },
+    { "reload",
+      "[OPTIONS] module",
+      "Reload module",
+      cmd_reload,
+      0,
+      remove_opts,
     },
     { "info",
       "[OPTIONS] module",
@@ -140,7 +155,8 @@ int usage (optparse_t *p, struct optparse_option *o, const char *optarg)
     fprintf (stderr, "flux module subcommands:\n");
     s = subcommands;
     while (s->name) {
-        fprintf (stderr, "   %-15s %s\n", s->name, s->doc);
+        if (!(s->flags & OPTPARSE_SUBCMD_HIDDEN))
+            fprintf (stderr, "   %-15s %s\n", s->name, s->doc);
         s++;
     }
     exit (1);
@@ -265,12 +281,11 @@ char *getservice (const char *modname)
     return service;
 }
 
-int cmd_load (optparse_t *p, int argc, char **argv)
+static void module_load (flux_t *h, optparse_t *p, int argc, char **argv)
 {
     char *modname;
     char *modpath;
     int n;
-    flux_t *h;
     flux_future_t *f;
 
     if ((n = optparse_option_index (p)) == argc) {
@@ -291,8 +306,6 @@ int cmd_load (optparse_t *p, int argc, char **argv)
         n++;
     }
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
     if (!(f = flux_rpc_pack (h,
                              topic,
                              optparse_get_int (p, "rank", FLUX_NODEID_ANY),
@@ -314,28 +327,24 @@ int cmd_load (optparse_t *p, int argc, char **argv)
     json_decref (args);
     free (modpath);
     free (modname);
+}
+
+int cmd_load (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+    module_load (h, p, argc, argv);
     flux_close (h);
     return 0;
 }
 
-int cmd_remove (optparse_t *p, int argc, char **argv)
+static void module_remove (flux_t *h, const char *modname, optparse_t *p)
 {
-    char *modname;
-    flux_t *h;
     flux_future_t *f;
-    int n;
-
-    if ((n = optparse_option_index (p)) != argc - 1) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-    modname = argv[n++];
-
     char *service = getservice (modname);
     char *topic = xasprintf ("%s.rmmod", service);
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
     if (!(f = flux_rpc_pack (h,
                              topic,
                              optparse_get_int (p, "rank", FLUX_NODEID_ANY),
@@ -351,7 +360,47 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
     flux_future_destroy (f);
     free (topic);
     free (service);
+}
+
+int cmd_remove (optparse_t *p, int argc, char **argv)
+{
+    char *modname;
+    flux_t *h;
+    int n;
+
+    if ((n = optparse_option_index (p)) != argc - 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    modname = argv[n++];
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    module_remove (h, modname, p);
+
     flux_close (h);
+    return (0);
+}
+
+int cmd_reload (optparse_t *p, int argc, char **argv)
+{
+    char *modname;
+    char *modpath;
+    flux_t *h;
+    int n;
+
+    if ((n = optparse_option_index (p)) == argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    parse_modarg (argv[n], &modname, &modpath);
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    module_remove (h, modname, p);
+    module_load (h, p, argc, argv);
     return (0);
 }
 

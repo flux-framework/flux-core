@@ -160,8 +160,7 @@ test_expect_success 'job-manager: that job is now the first job' '
 '
 
 test_expect_success 'job-manager: reload the job manager' '
-	flux module remove job-manager &&
-	flux module load job-manager
+	flux module reload job-manager
 '
 
 test_expect_success 'job-manager: queue was successfully reconstructed' '
@@ -229,8 +228,7 @@ test_expect_success 'job-manager: no jobs in the queue' '
 '
 
 test_expect_success 'job-manager: reload the job manager' '
-	flux module remove job-manager &&
-	flux module load job-manager
+	flux module reload job-manager
 '
 
 test_expect_success 'job-manager: still no jobs in the queue' '
