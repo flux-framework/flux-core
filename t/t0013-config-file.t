@@ -56,12 +56,9 @@ test_expect_success '[bootstrap] config with hostname not found' "
 		flux broker ${ARGS} -Sboot.method=config /bin/true
 "
 
-# N.B. set short shutdown grace to speed up test, as in t0001-basic
-
 test_expect_success 'start instance with missing hosts' "
 	FLUX_CONF_DIR=${TCONFDIR}/good-nohosts \
 		flux broker ${ARGS} -Sboot.method=config \
-		--shutdown-grace=0.1 \
 		flux lsattr -v >attr.out &&
 	grep 'tbon.endpoint.*-$' attr.out
 "
@@ -69,7 +66,6 @@ test_expect_success 'start instance with missing hosts' "
 test_expect_success 'start instance with empty hosts' "
 	FLUX_CONF_DIR=${TCONFDIR}/good-emptyhosts \
 		flux broker ${ARGS} -Sboot.method=config \
-		--shutdown-grace=0.1 \
 		flux lsattr -v >attr.out &&
 	grep 'tbon.endpoint.*-$' attr.out
 "

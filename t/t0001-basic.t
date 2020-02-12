@@ -40,26 +40,18 @@ test_expect_success 'flux-python command runs a python that finds flux' '
 # None of the individual tests should run over 10s
 ARGS="-o -Sinit.rc2_timeout=10"
 
-#
-# N.B. since we have many back to back flux-starts within this test,
-# and each instance runs out the shutdown grace period per issue #1006,
-# the net effect is a really slow test.
-#
-# Until #1006 is fixed, work around this by forcing an unnaturally
-# short shutdown grace period.  It means we're interrupting the tear
-# down process, but perhaps that's not so much relevant to verifying
-# basic functionality...
-#
-BUG1006="-o,--shutdown-grace=0.1"
-ARGS="$ARGS $BUG1006"
-
 # Minimal is sufficient for these tests, but test_under_flux unavailable
 # clear the RC paths
 ARGS="$ARGS -o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 
-test_expect_success 'broker --shutdown-grace option works' '
-	flux start -o,--shutdown-grace=0.1 -o -Sbroker.rc1_path=/bin/true /bin/true
-'
+test_expect_success 'broker --shutdown-grace option works' "
+	flux start ${ARGS} -s2 -o,--shutdown-grace=5 /bin/true
+"
+test_expect_success 'broker --shutdown-grace (very short) times out' "
+	test_must_fail flux start ${ARGS} -s2 \
+		-o,--shutdown-grace=0.000001 /bin/true 2>graceto.err &&
+	grep 'shutdown timer expired' graceto.err
+"
 test_expect_success 'flux-start in exec mode works' "
 	flux start ${ARGS} 'flux comms info' | grep 'size=1'
 "

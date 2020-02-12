@@ -16,8 +16,7 @@ test_expect_success 'created persist-directory' '
 
 test_expect_success 'run instance with persist-directory set' '
 	rm -f $PERSISTDIR/kvsroot.final &&
-	flux start -o,--shutdown-grace=15 \
-                   -o,--setattr=persist-directory=$PERSISTDIR \
+	flux start -o,--setattr=persist-directory=$PERSISTDIR \
 	           flux kvs put testkey=42
 '
 
@@ -32,8 +31,7 @@ test_expect_success 'kvsroot.final file exists in persist-directory' '
 
 test_expect_success 'recover KVS snapshot from persist-directory in new instance' '
 	run_timeout 10 \
-	    flux start -o,--shutdown-grace=15 \
-                       -o,--setattr=persist-directory=$PERSISTDIR \
+	    flux start -o,--setattr=persist-directory=$PERSISTDIR \
 	        "flux kvs put --treeobj snap=- <$PERSISTDIR/kvsroot.final && \
 		    flux kvs get snap.testkey >testkey.out" &&
 	echo 42 >testkey.exp &&
