@@ -32,6 +32,7 @@ const int max_idle = 99;
 int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_remove (optparse_t *p, int argc, char **argv);
 int cmd_load (optparse_t *p, int argc, char **argv);
+int cmd_reload (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_debug (optparse_t *p, int argc, char **argv);
@@ -114,6 +115,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_load,
       0,
       legacy_opts,
+    },
+    { "reload",
+      "[OPTIONS] module",
+      "Reload module",
+      cmd_reload,
+      0,
+      remove_opts,
     },
     { "info",
       "[OPTIONS] module",
@@ -371,6 +379,27 @@ int cmd_remove (optparse_t *p, int argc, char **argv)
     module_remove (h, modname, p);
 
     flux_close (h);
+    return (0);
+}
+
+int cmd_reload (optparse_t *p, int argc, char **argv)
+{
+    char *modname;
+    char *modpath;
+    flux_t *h;
+    int n;
+
+    if ((n = optparse_option_index (p)) == argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    parse_modarg (argv[n], &modname, &modpath);
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    module_remove (h, modname, p);
+    module_load (h, p, argc, argv);
     return (0);
 }
 
