@@ -106,6 +106,14 @@ flux_future_t *flux_job_list (flux_t *h,
                               uint32_t userid,
                               int states);
 
+/* Similar to flux_job_list(), but retrieve inactive jobs newer
+ * than a timestamp.
+ */
+flux_future_t *flux_job_list_inactive (flux_t *h,
+                                       int max_entries,
+                                       double timestamp,
+                                       const char *json_str);
+
 /* Similar to flux_job_list(), but retrieve job info for a single
  * job id */
 flux_future_t *flux_job_list_id (flux_t *h,
