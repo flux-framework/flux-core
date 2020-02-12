@@ -42,6 +42,7 @@
 #include "src/common/libioencode/ioencode.h"
 
 int cmd_list (optparse_t *p, int argc, char **argv);
+int cmd_list_inactive (optparse_t *p, int argc, char **argv);
 int cmd_status (optparse_t *p, int argc, char **argv);
 int cmd_list_ids (optparse_t *p, int argc, char **argv);
 int cmd_submit (optparse_t *p, int argc, char **argv);
@@ -84,6 +85,16 @@ static struct optparse_option list_opts[] =  {
     },
     { .name = "all", .key = 'A', .has_arg = 0,
       .usage = "List jobs for all users, regardless of state",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option list_inactive_opts[] =  {
+    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "N",
+      .usage = "Limit output to N jobs",
+    },
+    { .name = "timestamp", .key = 't', .has_arg = 1, .arginfo = "T",
+      .usage = "Limit output to jobs newer than timestamp",
     },
     OPTPARSE_TABLE_END
 };
@@ -254,6 +265,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_list,
       0,
       list_opts
+    },
+    { "list-inactive",
+      "[OPTIONS]",
+      "List Inactive jobs",
+      cmd_list_inactive,
+      0,
+      list_inactive_opts
     },
     { "list-ids",
       "[OPTIONS] ID [ID ...]",
@@ -986,6 +1004,45 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     flux_close (h);
 
    return (0);
+}
+
+int cmd_list_inactive (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    int max_entries = optparse_get_int (p, "count", 0);
+    double timestamp = optparse_get_double (p, "timestamp", 0.);
+    char *attrs = "[\"userid\",\"priority\",\"t_submit\",\"state\"," \
+        "\"name\",\"ntasks\",\"nnodes\",\"ranks\",\"t_depend\",\"t_sched\"," \
+        "\"t_run\",\"t_cleanup\",\"t_inactive\"]";
+    flux_t *h;
+    flux_future_t *f;
+    json_t *jobs;
+    size_t index;
+    json_t *value;
+
+    if (optindex != argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if (!(f = flux_job_list_inactive (h, max_entries, timestamp, attrs)))
+        log_err_exit ("flux_job_list_inactive");
+    if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
+        log_err_exit ("flux_job_list_inactive");
+    json_array_foreach (jobs, index, value) {
+        char *str;
+        str = json_dumps (value, 0);
+        if (!str)
+            log_msg_exit ("error parsing list response");
+        printf ("%s\n", str);
+        free (str);
+    }
+    flux_future_destroy (f);
+    flux_close (h);
+
+    return (0);
 }
 
 void list_id_continuation (flux_future_t *f, void *arg)
