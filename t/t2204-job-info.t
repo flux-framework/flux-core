@@ -343,8 +343,7 @@ wait_inactive() {
 }
 
 test_expect_success 'reload the job-info module' '
-        flux exec -r all flux module remove job-info &&
-        flux exec -r all flux module load job-info &&
+        flux exec -r all flux module reload job-info &&
         wait_inactive
 '
 
@@ -435,8 +434,7 @@ test_expect_success 'flux job lists full path for job name if first argument not
 '
 
 test_expect_success 'reload the job-info module' '
-        flux exec -r all flux module remove job-info &&
-        flux exec -r all flux module load job-info
+        flux exec -r all flux module reload job-info
 '
 
 test_expect_success 'verify job names preserved across restart' '
@@ -471,8 +469,7 @@ test_expect_success 'flux job list outputs ntasks correctly (4 tasks)' '
 '
 
 test_expect_success 'reload the job-info module' '
-        flux exec -r all flux module remove job-info &&
-        flux exec -r all flux module load job-info
+        flux exec -r all flux module reload job-info
 '
 
 test_expect_success 'verify task count preserved across restart' '
@@ -525,8 +522,7 @@ test_expect_success 'flux job list outputs nnodes/ranks correctly (5 tasks, / 3 
 '
 
 test_expect_success 'reload the job-info module' '
-        flux exec -r all flux module remove job-info &&
-        flux exec -r all flux module load job-info
+        flux exec -r all flux module reload job-info
 '
 
 test_expect_success 'verify nnodes preserved across restart' '

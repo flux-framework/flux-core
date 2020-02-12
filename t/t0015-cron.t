@@ -274,11 +274,8 @@ test_expect_success 'flux-cron can set stop-on-failure' '
 '
 
 ##  Reload cron module with sync enabled
-test_expect_success 'flux module remove cron' '
-    flux module remove cron
-'
-test_expect_success 'module load with sync' '
-    flux module load cron sync=cron.sync sync_epsilon=0.025
+test_expect_success 'module reload with sync' '
+    flux module reload cron sync=cron.sync sync_epsilon=0.025
 '
 test_expect_success 'sync and sync_epsilon are set as expected' '
     flux cron sync | grep "cron\.sync.*epsilon=0.025"

@@ -27,8 +27,7 @@ list_R() {
 }
 
 test_expect_success 'sched-simple: reload ingest module with lax validator' '
-        flux exec -r all flux module remove job-ingest &&
-	flux exec -r all flux module load job-ingest validator-args="--schema,${SCHEMA}" \
+	flux exec -r all flux module reload job-ingest validator-args="--schema,${SCHEMA}" \
          validator=${JSONSCHEMA_VALIDATOR}
 '
 test_expect_success 'sched-simple: generate jobspec for simple test job' '
@@ -103,8 +102,7 @@ test_expect_success 'sched-simple: cancel all jobs' '
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
 test_expect_success 'sched-simple: reload in best-fit mode' '
-	flux module remove sched-simple &&
-	flux module load sched-simple mode=best-fit
+	flux module reload sched-simple mode=best-fit
 '
 test_expect_success 'sched-simple: submit 5 more jobs' '
 	flux job submit basic.json >job6.id &&
@@ -161,8 +159,7 @@ test_expect_success 'sched-simple: check allocations for running jobs' '
 	test_cmp first-fit-allocs.expected first-fit-allocs.out
 '
 test_expect_success 'sched-simple: reload with outstanding allocations' '
-	flux module remove sched-simple &&
-	flux module load sched-simple &&
+	flux module reload sched-simple &&
 	flux dmesg | grep "hello: alloc rank0/core0" &&
 	test "$($query)" = ""
 '

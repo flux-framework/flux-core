@@ -152,8 +152,7 @@ test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 '
 
 test_expect_success 'job-ingest: test validator with version 1 enforced' '
-	flux exec -r all flux module remove job-ingest &&
-	flux exec -r all flux module load job-ingest \
+	flux exec -r all flux module reload job-ingest \
 		validator=${BINDINGS_VALIDATOR} validator-args="--require-version,1"
 '
 
@@ -162,8 +161,7 @@ test_expect_success 'job-ingest: v1 jobspecs accepted with v1 requirement' '
 '
 
 test_expect_success 'job-ingest: test non-python validator' '
-	flux exec -r all flux module remove job-ingest &&
-	flux exec -r all flux module load job-ingest \
+	flux exec -r all flux module reload job-ingest \
 		validator=${FAKE_VALIDATOR}
 '
 
@@ -172,8 +170,7 @@ test_expect_success 'job-ingest: submit succeeds with non-python validator' '
 '
 
 test_expect_success 'job-ingest: test python jsonschema validator' '
-	flux exec -r all flux module remove job-ingest &&
-	flux exec -r all flux module load job-ingest \
+	flux exec -r all flux module reload job-ingest \
 		validator=${JSONSCHEMA_VALIDATOR} validator-args=--schema,${SCHEMA}
 '
 
@@ -190,8 +187,7 @@ test_expect_success 'job-ingest: invalid jobs rejected by jsonschema validator' 
 '
 
 test_expect_success 'job-ingest: validator unexpected exit is handled' '
-	flux exec -r all flux module remove job-ingest &&
-	flux exec -r all flux module load job-ingest \
+	flux exec -r all flux module reload job-ingest \
 		validator=${BAD_VALIDATOR} &&
 	test_must_fail flux job submit basic.json 2>badvalidator.out &&
 	grep "unexpectedly exited" badvalidator.out
