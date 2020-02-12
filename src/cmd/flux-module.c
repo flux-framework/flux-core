@@ -155,7 +155,8 @@ int usage (optparse_t *p, struct optparse_option *o, const char *optarg)
     fprintf (stderr, "flux module subcommands:\n");
     s = subcommands;
     while (s->name) {
-        fprintf (stderr, "   %-15s %s\n", s->name, s->doc);
+        if (!(s->flags & OPTPARSE_SUBCMD_HIDDEN))
+            fprintf (stderr, "   %-15s %s\n", s->name, s->doc);
         s++;
     }
     exit (1);
