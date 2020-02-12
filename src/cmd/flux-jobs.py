@@ -22,6 +22,7 @@ import flux.job
 import flux.constants
 import flux.util
 from flux.core.inner import raw
+from flux.memoized_property import memoized_property
 
 logger = logging.getLogger("flux-jobs")
 
@@ -37,22 +38,7 @@ state_const_dict = {
 }
 
 
-def runtime(job, roundup):
-    if "t_cleanup" in job and "t_run" in job:
-        t = job["t_cleanup"] - job["t_run"]
-        if roundup:
-            t = round(t + 0.5)
-    elif "t_run" in job:
-        t = time.time() - job["t_run"]
-        if roundup:
-            t = round(t + 0.5)
-    else:
-        t = 0.0
-    return t
-
-
-def runtime_fsd(job, hyphenifzero):
-    t = runtime(job, False)
+def fsd(t, hyphenifzero):
     #  Round <1ms down to 0s for now
     if t < 1.0e-3:
         s = "0s"
@@ -71,20 +57,110 @@ def runtime_fsd(job, hyphenifzero):
     return s
 
 
-def runtime_hms(job):
-    t = runtime(job, True)
-    return str(timedelta(seconds=t))
+def statetostr(stateid, singlechar=False):
+    return raw.flux_job_statetostr(stateid, singlechar).decode("utf-8")
 
 
-def statetostr(job, singlechar):
-    return raw.flux_job_statetostr(job["state"], singlechar).decode("utf-8")
-
-
-def job_username(job):
+def get_username(userid):
     try:
-        return pwd.getpwuid(job["userid"]).pw_name
+        return pwd.getpwuid(userid).pw_name
     except KeyError:
-        return str(job["userid"])
+        return str(userid)
+
+
+class JobInfo:
+    """
+    JobInfo class: encapsulate job-info.list response in an object
+    that implements a getattr interface to job information with
+    memoization. Better for use with output formats since results
+    are only computed as-needed.
+    """
+
+    #  Default values for job properties.
+    defaults = dict(
+        t_depend=0.0,
+        t_sched=0.0,
+        t_run=0.0,
+        t_cleanup=0.0,
+        t_inactive=0.0,
+        nnodes="",
+        ranks="",
+    )
+
+    def __init__(self, info_resp):
+        #  Set defaults, then update with job-info.list response items:
+        d = self.defaults.copy()
+        d.update(info_resp)
+
+        #  Rename "state" to "state_id" until returned state is a string:
+        d["state_id"] = d.pop("state")
+
+        #  Set all keys as self._{key} to be found by getattr and
+        #   memoized_property decorator:
+        for key, value in d.items():
+            setattr(self, "_{0}".format(key), value)
+
+    #  getattr method to return all non-computed values in job-info.list
+    #   response by default. Avoids the need to wrap @property methods
+    #   that just return self._<attr>.
+    #
+    def __getattr__(self, attr):
+        if attr.startswith("_"):
+            raise AttributeError
+        try:
+            return getattr(self, "_{0}".format(attr))
+        except KeyError:
+            raise AttributeError("invalid JobInfo attribute '{}'".format(attr))
+
+    def get_runtime(self, roundup=False):
+        if self.t_cleanup > 0 and self.t_run > 0:
+            t = self.t_cleanup - self.t_run
+            if roundup:
+                t = round(t + 0.5)
+        elif self.t_run > 0:
+            t = time.time() - self.t_run
+            if roundup:
+                t = round(t + 0.5)
+        else:
+            t = 0.0
+        return t
+
+    @memoized_property
+    def state(self):
+        return statetostr(self.state_id)
+
+    @memoized_property
+    def state_single(self):
+        return statetostr(self.state_id, True)
+
+    @memoized_property
+    def username(self):
+        return get_username(self.userid)
+
+    @memoized_property
+    def nnodes_hyphen(self):
+        return self.nnodes or "-"
+
+    @memoized_property
+    def ranks_hyphen(self):
+        return self.ranks or "-"
+
+    @memoized_property
+    def runtime_fsd(self):
+        return fsd(self.runtime, False)
+
+    @memoized_property
+    def runtime_fsd_hyphen(self):
+        return fsd(self.runtime, True)
+
+    @memoized_property
+    def runtime_hms(self):
+        t = self.get_runtime(True)
+        return str(timedelta(seconds=t))
+
+    @memoized_property
+    def runtime(self):
+        return self.get_runtime()
 
 
 def fetch_jobs_stdin(args):
@@ -173,9 +249,15 @@ def fetch_jobs_flux(args):
 
 
 def fetch_jobs(args):
+    """
+    Fetch jobs from flux or optionally stdin.
+    Returns a list of JobInfo objects
+    """
     if args.from_stdin:
-        return fetch_jobs_stdin(args)
-    return fetch_jobs_flux(args)
+        l = fetch_jobs_stdin(args)
+    else:
+        l = fetch_jobs_flux(args)
+    return [JobInfo(job) for job in l]
 
 
 def parse_args():
@@ -226,10 +308,9 @@ def parse_args():
         help="Specify output format using Python's string format syntax",
     )
     # Hidden '--from-stdin' option for testing only.
-    parser.add_argument(
-        "--from-stdin", action="store_true", help=argparse.SUPPRESS,
-    )
+    parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
     return parser.parse_args()
+
 
 class OutputFormat:
     """
@@ -317,34 +398,30 @@ class OutputFormat:
         fmt = "".join(l)
         return fmt.format(**self.headings)
 
+    def get_format(self):
+        """
+        Return the format string with prepended `0.` if necessary.
+        """
+        try:
+            return self.jobfmt
+        except AttributeError:
+            pass
+
+        l = []
+        for (s, field, spec, conv) in self.format_list:
+            # If field doesn't have `0.` then add it
+            if field and not field.startswith("0."):
+                field = "0." + field
+            l.append(self._fmt_tuple(s, field, spec, conv))
+        self.jobfmt = "".join(l)
+        return self.jobfmt
+
     def format(self, job):
         """
-        format job entry job with internal format
+        format JobInfo object with internal format
+        prepend `0.` if necessary to fields to invoke getattr method
         """
-        return self.fmt.format(
-            id=job["id"],
-            userid=job["userid"],
-            username=job_username(job),
-            priority=job["priority"],
-            state=statetostr(job, False),
-            state_single=statetostr(job, True),
-            name=job["name"],
-            ntasks=job["ntasks"],
-            nnodes=job.get("nnodes", ""),
-            nnodes_hyphen=job.get("nnodes", "-"),
-            ranks=job.get("ranks", ""),
-            ranks_hyphen=job.get("ranks", "-"),
-            t_submit=job["t_submit"],
-            t_depend=job["t_depend"],
-            t_sched=job.get("t_sched", 0.0),
-            t_run=job.get("t_run", 0.0),
-            t_cleanup=job.get("t_cleanup", 0.0),
-            t_inactive=job.get("t_inactive", 0.0),
-            runtime=runtime(job, False),
-            runtime_fsd=runtime_fsd(job, False),
-            runtime_fsd_hyphen=runtime_fsd(job, True),
-            runtime_hms=runtime_hms(job),
-        )
+        return self.get_format().format(job)
 
 
 @flux.util.CLIMain(logger)
