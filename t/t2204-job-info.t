@@ -93,7 +93,8 @@ test_expect_success 'load job-exec,sched-simple modules' '
 #   - we desire pending jobs sorted in priority order, so we need to
 #   create the sorted list for comparison later.
 # - job ids are stored in files in the order we expect them to be listed
-#   - pending jobs - by priority (highest first)
+#   - pending jobs - by priority (highest first), submission time
+#                    (earlier first)
 #   - running jobs - by start time (most recent first)
 #   - inactive jobs - by completion time (most recent first)
 #
@@ -108,7 +109,7 @@ test_expect_success 'load job-exec,sched-simple modules' '
 
 wait_states() {
         local i=0
-        while ( [ "$(flux job list --states=sched | wc -l)" != "4" ] \
+        while ( [ "$(flux job list --states=sched | wc -l)" != "8" ] \
                 || [ "$(flux job list --states=run | wc -l)" != "8" ] \
                 || [ "$(flux job list --states=inactive | wc -l)" != "4" ]) \
                && [ $i -lt 50 ]
@@ -134,14 +135,22 @@ test_expect_success 'submit jobs for job list testing' '
             flux job wait-event `tail -n 1 job_ids2.out` start; \
         done &&
         tac job_ids2.out > job_ids_running.out &&
-        id2=$(flux job submit -p20 hostname.json) &&
-        id3=$(flux job submit      hostname.json) &&
-        id1=$(flux job submit -p31 hostname.json) &&
+        id1=$(flux job submit -p20 hostname.json) &&
+        id2=$(flux job submit      hostname.json) &&
+        id3=$(flux job submit -p31 hostname.json) &&
         id4=$(flux job submit -p0  hostname.json) &&
+        id5=$(flux job submit -p20 hostname.json) &&
+        id6=$(flux job submit      hostname.json) &&
+        id7=$(flux job submit -p31 hostname.json) &&
+        id8=$(flux job submit -p0  hostname.json) &&
+        echo $id3 > job_ids_pending.out &&
+        echo $id7 >> job_ids_pending.out &&
         echo $id1 >> job_ids_pending.out &&
+        echo $id5 >> job_ids_pending.out &&
         echo $id2 >> job_ids_pending.out &&
-        echo $id3 >> job_ids_pending.out &&
+        echo $id6 >> job_ids_pending.out &&
         echo $id4 >> job_ids_pending.out &&
+        echo $id8 >> job_ids_pending.out &&
         cat job_ids_pending.out > active.out &&
         cat job_ids_running.out >> active.out &&
         wait_states
@@ -206,8 +215,12 @@ test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
 test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
         cat >list_priority.exp <<-EOT &&
 31
+31
+20
 20
 16
+16
+0
 0
 EOT
         flux job list -s pending | jq .priority > list_priority1.out &&
@@ -219,7 +232,7 @@ EOT
 '
 
 test_expect_success HAVE_JQ 'flux job list pending jobs with correct state' '
-        for count in `seq 1 4`; do \
+        for count in `seq 1 8`; do \
             echo "4" >> list_state_S.exp; \
         done &&
         flux job list -s pending | jq .state > list_state_S1.out &&
@@ -244,7 +257,7 @@ test_expect_success HAVE_JQ 'flux job list active jobs in correct order' '
 '
 
 test_expect_success HAVE_JQ 'flux job list jobs with correct userid' '
-        for count in `seq 1 16`; do \
+        for count in `seq 1 20`; do \
             id -u >> list_userid.exp; \
         done &&
         flux job list -a | jq .userid > list_userid.out &&
@@ -254,10 +267,10 @@ test_expect_success HAVE_JQ 'flux job list jobs with correct userid' '
 test_expect_success HAVE_JQ 'flux job list defaults to listing pending & running jobs' '
         flux job list > list_default.out &&
         count=$(wc -l < list_default.out) &&
-        test "$count" = "12" &&
+        test "$count" = "16" &&
         tail -n 8 list_default.out | jq .id  > list_default_running.out &&
         test_cmp list_default_running.out job_ids_running.out &&
-        head -n 4 list_default.out | jq .id > list_default_pending.out &&
+        head -n 8 list_default.out | jq .id > list_default_pending.out &&
         test_cmp list_default_pending.out job_ids_pending.out
 '
 
@@ -265,20 +278,20 @@ test_expect_success 'flux job list --user=userid works' '
         uid=$(id -u) &&
         flux job list --user=$uid> list_userid.out &&
         count=$(wc -l < list_userid.out) &&
-        test "$count" = "12"
+        test "$count" = "16"
 '
 
 test_expect_success 'flux job list --user=all works' '
         flux job list --user=all > list_all.out &&
         count=$(wc -l < list_all.out) &&
-        test "$count" = "12"
+        test "$count" = "16"
 '
 
 test_expect_success HAVE_JQ 'flux job list --count works' '
-        flux job list -s active,inactive --count=8 > list_count.out &&
+        flux job list -s active,inactive --count=12 > list_count.out &&
         count=$(wc -l < list_count.out) &&
-        test "$count" = "8" &&
-        head -n 4 list_count.out | jq .id > list_count_pending.out &&
+        test "$count" = "12" &&
+        head -n 8 list_count.out | jq .id > list_count_pending.out &&
         test_cmp list_count_pending.out job_ids_pending.out &&
         tail -n 4 list_count.out | jq .id > list_count_running.out &&
         head -n 4 job_ids_running.out > job_ids_running_head4.out &&
@@ -296,11 +309,11 @@ test_expect_success HAVE_JQ 'flux job list all jobs works' '
 
 test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
         flux job stats | jq -e ".job_states.depend == 0" &&
-        flux job stats | jq -e ".job_states.sched == 4" &&
+        flux job stats | jq -e ".job_states.sched == 8" &&
         flux job stats | jq -e ".job_states.run == 8" &&
         flux job stats | jq -e ".job_states.cleanup == 0" &&
         flux job stats | jq -e ".job_states.inactive == 4" &&
-        flux job stats | jq -e ".job_states.total == 16"
+        flux job stats | jq -e ".job_states.total == 20"
 '
 
 test_expect_success 'cleanup job listing jobs ' '
@@ -316,7 +329,7 @@ test_expect_success 'cleanup job listing jobs ' '
 
 wait_inactive() {
         local i=0
-        while [ "$(flux job list --states=inactive | wc -l)" != "16" ] \
+        while [ "$(flux job list --states=inactive | wc -l)" != "20" ] \
                && [ $i -lt 50 ]
         do
                 sleep 0.1
@@ -339,7 +352,7 @@ test_expect_success 'reload the job-info module' '
 # construct order based on order of jobs canceled above
 test_expect_success HAVE_JQ 'job-info: list successfully reconstructed' '
         flux job list -a > list_reload.out &&
-        for count in `seq 1 16`; do \
+        for count in `seq 1 20`; do \
             echo "32" >> list_reload_state.exp; \
         done &&
         cat list_reload.out | jq .state  > list_reload_state.out &&
@@ -356,8 +369,8 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
         flux job stats | jq -e ".job_states.sched == 0" &&
         flux job stats | jq -e ".job_states.run == 0" &&
         flux job stats | jq -e ".job_states.cleanup == 0" &&
-        flux job stats | jq -e ".job_states.inactive == 16" &&
-        flux job stats | jq -e ".job_states.total == 16"
+        flux job stats | jq -e ".job_states.inactive == 20" &&
+        flux job stats | jq -e ".job_states.total == 20"
 '
 
 #

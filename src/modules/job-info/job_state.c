@@ -34,8 +34,9 @@ struct state_transition {
 
 static void process_next_state (struct info_ctx *ctx, struct job *job);
 
-/* Compare items for sorting in list, priority first, t_submit second
- * N.B. zlistx_comparator_fn signature
+/* Compare items for sorting in list, priority first (higher priority
+ * before lower priority), t_submit second (earlier submission time
+ * first) N.B. zlistx_comparator_fn signature
  */
 static int job_priority_cmp (const void *a1, const void *a2)
 {
@@ -49,8 +50,9 @@ static int job_priority_cmp (const void *a1, const void *a2)
 }
 
 /* Compare items for sorting in list by timestamp (note that sorting
- * is in reverse order, most recently running/completed comes first).
- * N.B. zlistx_comparator_fn signature
+ * is in reverse order, most recently (i.e. bigger timestamp)
+ * running/completed comes first).  N.B. zlistx_comparator_fn
+ * signature
  */
 static int job_running_cmp (const void *a1, const void *a2)
 {
@@ -325,10 +327,13 @@ static void update_job_state_and_list (struct info_ctx *ctx,
     oldlist = get_list (jsctx, job->state);
     newlist = get_list (jsctx, newstate);
 
+    /* must call before job_change_list(), to ensure timestamps are
+     * set before any sorting based on timestamps are done
+     */
+    update_job_state (ctx, job, newstate, timestamp);
+
     if (oldlist != newlist)
         job_change_list (jsctx, job, oldlist, newstate);
-
-    update_job_state (ctx, job, newstate, timestamp);
 }
 
 static int eventlog_lookup_parse (struct info_ctx *ctx,
