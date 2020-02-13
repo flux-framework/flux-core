@@ -12,6 +12,10 @@ jq=$(which jq 2>/dev/null)
 test -n "$jq" && test_set_prereq HAVE_JQ
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
+if test "$TEST_LONG" = "t"; then
+    test_set_prereq LONGTEST
+fi
+
 # Usage: submit_job
 # To ensure robustness of tests despite future job manager changes,
 # cancel the job, and wait for clean event.
@@ -1146,6 +1150,30 @@ test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVA
         id=`flux mini submit hostname` &&
         $jq -j -c -n  "{id:${id}, attrs:[\"foo\"]}" \
           | $RPC job-info.list-id 22
+'
+
+#
+# stress test
+#
+
+wait_jobs_finish() {
+        local i=0
+        while ([ "$(flux job list | wc -l)" != "0" ]) \
+              && [ $i -lt 1000 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ "$i" -eq "1000" ]
+        then
+            return 1
+        fi
+        return 0
+}
+
+test_expect_success LONGTEST 'stress job-info.list-id' '
+        flux python ${FLUX_SOURCE_DIR}/t/job-info/list-id.py 500 &&
+        wait_jobs_finish
 '
 
 #
