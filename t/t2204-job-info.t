@@ -72,12 +72,10 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
 
 hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
 
-test_expect_success 'load job-exec,sched-simple modules' '
+test_expect_success 're-configure sched-simple module' '
         #  Add fake by_rank configuration to kvs:
         flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux exec -r all flux module load barrier &&
-        flux module load sched-simple &&
-        flux module load job-exec
+	flux module reload sched-simple
 '
 
 #
@@ -1175,14 +1173,4 @@ test_expect_success LONGTEST 'stress job-info.list-id' '
         flux python ${FLUX_SOURCE_DIR}/t/job-info/list-id.py 500 &&
         wait_jobs_finish
 '
-
-#
-# cleanup
-#
-test_expect_success 'remove sched-simple,job-exec modules' '
-        flux exec -r all flux module remove barrier &&
-        flux module remove sched-simple &&
-        flux module remove job-exec
-'
-
 test_done

@@ -13,12 +13,10 @@ test_under_flux 4 job
 
 hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
 
-test_expect_success 'load job-exec,sched-simple modules' '
+test_expect_success 'reload sched-simple module with fake resources' '
         #  Add fake by_rank configuration to kvs:
         flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux exec -r all flux module load barrier &&
-        flux module load sched-simple &&
-        flux module load job-exec
+        flux module reload sched-simple
 '
 
 # submit a whole bunch of jobs for job list testing
@@ -407,11 +405,4 @@ test_expect_success 'cleanup job listing jobs ' '
             flux job wait-event $jobid clean; \
         done
 '
-
-test_expect_success 'remove sched-simple,job-exec modules' '
-        flux exec -r all flux module remove barrier &&
-        flux module remove sched-simple &&
-        flux module remove job-exec
-'
-
 test_done

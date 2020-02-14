@@ -12,12 +12,10 @@ TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
 
 hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
 
-test_expect_success 'job-shell: load barrier,job-exec,sched-simple modules' '
+test_expect_success 'job-shell: reload sched-simple module with fake resources' '
         #  Add fake by_rank configuration to kvs:
         flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux exec -r all flux module load barrier &&
-        flux module load sched-simple &&
-        flux module load job-exec
+        flux module reload sched-simple
 '
 
 #
@@ -326,11 +324,4 @@ test_expect_success NO_CHAIN_LINT 'job-shell: job attach waits if no kvs output 
         flux job cancel $id &&
         ! wait $pid
 '
-
-test_expect_success 'job-shell: unload job-exec & sched-simple modules' '
-        flux module remove job-exec &&
-        flux module remove sched-simple &&
-        flux exec -r all flux module remove barrier
-'
-
 test_done
