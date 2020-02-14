@@ -393,16 +393,6 @@ for d in ${ISSUES_DIR}/*; do
 done
 
 #
-# cleanup
+# leave job cleanup to rc3
 #
-test_expect_success 'cleanup job listing jobs ' '
-        for jobid in `cat job_ids_pending.out`; do \
-            flux job cancel $jobid; \
-            flux job wait-event $jobid clean; \
-        done &&
-        for jobid in `cat job_ids_running.out`; do \
-            flux job cancel $jobid; \
-            flux job wait-event $jobid clean; \
-        done
-'
 test_done
