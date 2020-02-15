@@ -106,7 +106,7 @@ test_expect_success 'job-exec: exception during cleanup' '
 	jobid=$(flux job submit cleanup-long.json) &&
 	flux job wait-event -vt 2.5 ${jobid} finish &&
 	flux job cancel ${jobid} &&
-	flux job wait-event -t 2.5 ${jobid} clean &&
+	flux job wait-event -t 10 ${jobid} clean &&
 	exec_eventlog $jobid > exec.eventlog.$jobid &&
 	grep "cleanup\.finish" exec.eventlog.$jobid
 '
