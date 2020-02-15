@@ -14,16 +14,9 @@ test_under_flux 4 job
 
 flux setattr log-stderr-level 1
 
-hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
-
 job_kvsdir()    { flux job id --to=kvs $1; }
 exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; }
 
-test_expect_success 'job-exec: reload sched-simple with fake resources' '
-	#  Add fake by_rank configuration to kvs:
-	flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-	flux module reload sched-simple
-'
 test_expect_success 'job-exec: set dummy test job shell' '
 	flux setattr job-exec.job-shell $SHARNESS_TEST_SRCDIR/job-exec/dummy.sh
 '

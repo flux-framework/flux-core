@@ -7,19 +7,12 @@ test_description='Test flux job exec hello protocol with multiple providers'
 test_under_flux 1 job
 
 flux setattr log-stderr-level 1
-hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'
 execservice=${SHARNESS_TEST_SRCDIR}/job-manager/exec-service.lua
 
 lastevent() { flux job eventlog $1 | awk 'END{print $2}'; }
 
 test_expect_success 'exec hello: remove job-exec module' '
 	flux module remove job-exec
-'
-
-test_expect_success 'exec hello: reload sched-simple module with fake resources' '
-	#  Add fake by_rank configuration to kvs:
-	flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-	flux module reload sched-simple
 '
 test_expect_success NO_CHAIN_LINT 'exec hello: start exec server-in-a-script' '
 	${execservice} test-exec > server1.log &

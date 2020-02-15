@@ -67,14 +67,6 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
         flux jobspec --format json srun -N1 sleep 300 > sleeplong.json
 '
 
-hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'
-
-test_expect_success 'load fake scheduler resources' '
-        #  Add fake by_rank configuration to kvs:
-        flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux module reload sched-simple
-'
-
 #
 # job eventlog
 #

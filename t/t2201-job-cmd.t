@@ -18,8 +18,6 @@ MINJOBID_KVS="job.0000.0000.0000.0000"
 MINJOBID_HEX="0000.0000.0000.0000"
 MINJOBID_WORDS="academy-academy-academy--academy-academy-academy"
 
-hwloc_fake_config='{"0":{"Core":2,"cpuset":"0-1"}}'
-
 test_under_flux 1 job
 
 flux setattr log-stderr-level 1
@@ -566,7 +564,6 @@ test_expect_success 'flux-job: fatal cancel exception was raised' '
 '
 
 test_expect_success 'flux-job: load modules for live killall test' '
-	flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
         flux module load sched-simple &&
         flux module load job-exec
 '

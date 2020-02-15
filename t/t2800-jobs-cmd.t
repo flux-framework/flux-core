@@ -11,14 +11,6 @@ test -n "$jq" && test_set_prereq HAVE_JQ
 
 test_under_flux 4 job
 
-hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
-
-test_expect_success 'reload sched-simple module with fake resources' '
-        #  Add fake by_rank configuration to kvs:
-        flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux module reload sched-simple
-'
-
 # submit a whole bunch of jobs for job list testing
 #
 # - the first loop of job submissions are intended to have some jobs run

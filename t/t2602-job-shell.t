@@ -12,13 +12,6 @@ PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
 
-hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
-
-test_expect_success 'job-shell: reload sched-simple with fake resources' '
-        #  Add fake by_rank configuration to kvs:
-        flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux module reload sched-simple
-'
 test_expect_success 'job-shell: execute across all ranks' '
         id=$(flux jobspec srun -N4 bash -c \
             "flux kvs put test1.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID" \

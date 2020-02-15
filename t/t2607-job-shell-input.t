@@ -11,14 +11,6 @@ flux setattr log-stderr-level 1
 TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
 LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
 
-hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
-
-test_expect_success 'job-shell: reload sched-simple module with fake resources' '
-        #  Add fake by_rank configuration to kvs:
-        flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux module reload sched-simple
-'
-
 test_expect_success 'flux-shell: generate input for stdin input tests' '
        echo "foo" > input_stdin_file &&
        echo "doh" >> input_stdin_file &&
