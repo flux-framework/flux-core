@@ -32,14 +32,14 @@ EXAMPLES
 --------
 
 Connect to a job running on the localhost which has a FLUX_URI
-of local:///tmp/flux-123456-abcdef/0 and spawn an interactive
+of local:///tmp/flux-123456-abcdef/0/local and spawn an interactive
 shell:
 
-  $ flux proxy local:///tmp/flux-123456-abcdef/0
+  $ flux proxy local:///tmp/flux-123456-abcdef/0/local
 
 Connect to the same job remotely on host foo.com:
 
-  $ flux proxy ssh://foo.com/tmp/flux-123456-abcdef/0
+  $ flux proxy ssh://foo.com/tmp/flux-123456-abcdef/0/local
 
 
 AUTHOR
