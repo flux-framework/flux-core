@@ -212,7 +212,7 @@ int main (int argc, char *argv[])
         log_msg_exit ("optparse_create");
     if (optparse_set (p, OPTPARSE_USAGE, usage) != OPTPARSE_SUCCESS)
         log_msg_exit ("optparse_set usage");
-    if (optparse_add_doc (p, doc, 0) < 0)
+    if (optparse_add_doc (p, doc, 0) != OPTPARSE_SUCCESS)
         log_msg_exit ("optparse_add_doc");
     if (optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS)
         log_msg_exit ("optparse_set usage");

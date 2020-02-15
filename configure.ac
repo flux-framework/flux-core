@@ -91,12 +91,25 @@ AC_SUBST([LIBFLUX_SCHEDUTIL_VERSION_INFO])
 AC_PROG_CC_C99
 AM_PROG_CC_C_O
 AX_COMPILER_VENDOR
+AX_COMPILER_VERSION
 AS_CASE($ax_cv_c_compiler_vendor,
   [clang | gnu], [
-    WARNING_CFLAGS="-Wall -Werror -Werror=missing-field-initializers -Wno-strict-aliasing -Wno-error=deprecated-declarations"
-    AC_SUBST([WARNING_CFLAGS])
+    WARNING_CFLAGS="-Wall -Werror -Wno-strict-aliasing -Wno-error=deprecated-declarations"
   ]
 )
+
+# Clang < 6.x fails to compile flux with -Werror=missing-field-initializers
+#
+AC_MSG_CHECKING([If -Werror=missing-field-initializers can be used])
+cc_major=`echo $ax_cv_c_compiler_version | $SED 's/\([[^.]][[^.]]*\).*/\1/'`
+AS_IF([test "x$ax_cv_c_compiler_vendor" = "xclang" -a $cc_major -lt 6], [
+  AC_MSG_RESULT([no])
+  ], [
+  AC_MSG_RESULT([yes])
+  WARNING_CFLAGS="$WARNING_CFLAGS -Werror=missing-field-initializers"
+  ]
+)
+AC_SUBST([WARNING_CFLAGS])
 
 X_AC_ENABLE_SANITIZER
 AC_COMPILE_IFELSE([AC_LANG_PROGRAM(,[
