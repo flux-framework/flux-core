@@ -1,15 +1,28 @@
 #!/bin/bash -e
 
+set_fake_hwloc_by_rank() {
+    cores=${1}
+    ranklist="0-$(($(flux getattr size) - 1))"
+    corelist="0-$((${cores} - 1))"
+    by_rank="{\"${ranklist}\":{\"Core\":${cores},\"cpuset\":\"${corelist}\"}}"
+    echo Setting fake by_rank="${by_rank}" >&2
+    flux kvs put resource.hwloc.by_rank="${by_rank}"
+}
+
 flux module load content-sqlite
 flux module load kvs
 flux exec -r all -x 0 flux module load kvs
-flux exec -r all flux module load aggregator
-flux hwloc reload & pids="$pids $!"
+flux exec -r all flux module load kvs-watch
+
 
 flux exec -r all flux module load job-ingest & pids="$pids $!"
-flux exec -r all flux module load kvs-watch & pids="$pids $!"
 flux exec -r all flux module load job-info & pids="$pids $!"
 flux exec -r all flux module load barrier & pids="$pids $!"
+
+# Load a fake resource.hwloc.by_rank key for sched-simple
+# (avoids requirement to run "flux hwloc reload")
+#
+(set_fake_hwloc_by_rank ${TEST_UNDER_FLUX_CORES_PER_RANK:-2}) & pids="$pids $1"
 
 wait $pids
 
