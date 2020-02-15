@@ -14,7 +14,7 @@
 struct pmi_params {
     int rank;
     int size;
-    char kvsname[64];
+    char kvsname[1024];
 };
 
 struct pmi_handle;
