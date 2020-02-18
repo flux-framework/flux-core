@@ -199,7 +199,6 @@ static void rexec_state_change_cb (flux_subprocess_t *p,
                                "pid", flux_subprocess_pid (p),
                                "state", state) < 0) {
             flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
-            goto error;
         }
     } else if (state == FLUX_SUBPROCESS_EXITED) {
         if (flux_respond_pack (rex->s->h, rex->msg, "{s:s s:i s:i s:i}",
@@ -208,7 +207,6 @@ static void rexec_state_change_cb (flux_subprocess_t *p,
                                "state", state,
                                "status", flux_subprocess_status (p)) < 0) {
             flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
-            goto error;
         }
     } else if (state == FLUX_SUBPROCESS_FAILED) {
         if (flux_respond_pack (rex->s->h, rex->msg, "{s:s s:i s:i s:i}",
@@ -217,7 +215,6 @@ static void rexec_state_change_cb (flux_subprocess_t *p,
                                "state", FLUX_SUBPROCESS_FAILED,
                                "errno", p->failed_errno) < 0) {
             flux_log_error (rex->s->h, "%s: flux_respond_pack", __FUNCTION__);
-            goto error;
         }
         subprocess_cleanup (p);
     } else {
