@@ -64,6 +64,11 @@ def _convert_jobspec_arg_to_string(jobspec):
     return jobspec
 
 
+class SubmitFuture(Future):
+    def get_id(self):
+        return submit_get_id(self)
+
+
 def submit_async(
     flux_handle,
     jobspec,
@@ -101,7 +106,7 @@ def submit_async(
     if debug:
         flags |= constants.FLUX_JOB_DEBUG
     future_handle = RAW.submit(flux_handle, jobspec, priority, flags)
-    return Future(future_handle)
+    return SubmitFuture(future_handle)
 
 
 @check_future_error
@@ -155,8 +160,12 @@ def submit(
     :rtype: int
     """
     future = submit_async(flux_handle, jobspec, priority, waitable, debug)
-    jid = submit_get_id(future)
-    return jid
+    return future.get_id()
+
+
+class JobWaitFuture(Future):
+    def get_status(self):
+        return wait_get_status(self)
 
 
 def wait_async(flux_handle, jobid=lib.FLUX_JOBID_ANY):
@@ -175,7 +184,7 @@ def wait_async(flux_handle, jobid=lib.FLUX_JOBID_ANY):
     :rtype: Future
     """
     future_handle = RAW.wait(flux_handle, jobid)
-    return Future(future_handle)
+    return JobWaitFuture(future_handle)
 
 
 JobWaitResult = collections.namedtuple("JobWaitResult", "jobid, success, errstr")
@@ -222,8 +231,7 @@ def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
     :rtype: tuple
     """
     future = wait_async(flux_handle, jobid)
-    status = wait_get_status(future)
-    return status
+    return future.get_status()
 
 
 # Due to subtleties in the python bindings and this call, this binding
