@@ -490,6 +490,7 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
     }
     if (child_monitor_init (ov, ep) < 0)
         return -1;
+    zsock_set_router_mandatory (ep->zs, 1);
     if (zsecurity_ssockinit (ov->sec, ep->zs) < 0) {
         log_msg ("zsecurity_ssockinit: %s", zsecurity_errstr (ov->sec));
         return -1;
