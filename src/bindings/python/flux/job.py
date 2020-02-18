@@ -258,10 +258,6 @@ def job_list(flux_handle, max_entries=0, attrs=[], userid=os.geteuid(), states=0
     return JobListRPC(flux_handle, "job-info.list", payload)
 
 
-def job_list_get(rpc_handle):
-    return rpc_handle.get()["jobs"]
-
-
 def _validate_keys(expected, given, keys_optional=False, allow_additional=False):
     if not isinstance(expected, set):
         expected = set(expected)
