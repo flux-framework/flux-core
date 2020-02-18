@@ -23,6 +23,7 @@ from flux import constants
 from flux.wrapper import Wrapper
 from flux.util import check_future_error, parse_fsd
 from flux.future import Future
+from flux.rpc import RPC
 from _flux._core import ffi, lib
 
 try:
@@ -234,6 +235,11 @@ def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
     return future.get_status()
 
 
+class JobListRPC(RPC):
+    def get_jobs(self):
+        return self.get()["jobs"]
+
+
 # Due to subtleties in the python bindings and this call, this binding
 # is more of a reimplementation of flux_job_list() instead of calling
 # the flux_job_list() C function directly.  Some reasons:
@@ -249,7 +255,7 @@ def job_list(flux_handle, max_entries=0, attrs=[], userid=os.geteuid(), states=0
         "userid": userid,
         "states": states,
     }
-    return flux_handle.rpc("job-info.list", payload)
+    return JobListRPC(flux_handle, "job-info.list", payload)
 
 
 def job_list_get(rpc_handle):
