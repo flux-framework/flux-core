@@ -13,12 +13,20 @@
 
 #include <flux/core.h>
 
+#include "types.h"
+
 struct validate *v;
 
 /* Submit jobspec ('buf, 'len') for validation.
  * Future is fulfilled once validation is complete.
  */
 flux_future_t *validate_jobspec (struct validate *v, const char *buf, int len);
+
+/* Tell validators to stop.
+ * Return a count of running processes.
+ * If nonzero, arrange for callback to be called each time a process exits.
+ */
+int validate_stop_notify (struct validate *v, process_exit_f cb, void *arg);
 
 struct validate *validate_create (flux_t *h,
                                   const char *validate_path,

@@ -13,7 +13,10 @@
 
 #include <flux/core.h>
 
+#include "types.h"
+
 struct worker;
+
 
 flux_future_t *worker_request (struct worker *w, const char *s);
 
@@ -26,6 +29,12 @@ struct worker *worker_create (flux_t *h, double inactivity_timeout,
                               const char *worker_name,
                               int argc, char **argv);
 
+
+/* Tell worker to stop.
+ * Return a count of running processes.
+ * If nonzero, arrange for callback to be called each time a process exits.
+ */
+int worker_stop_notify (struct worker *w, process_exit_f cb, void *arg);
 
 #endif /* !_JOB_INGEST_VALIDATE_H */
 

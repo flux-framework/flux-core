@@ -80,6 +80,9 @@ struct job_ingest_ctx {
 
     struct batch *batch;
     flux_watcher_t *timer;
+
+    bool shutdown;              // no new jobs are accepted in shutdown mode
+    int shutdown_process_count; // number of validators executing at shutdown
 };
 
 struct job {
@@ -482,12 +485,17 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     struct job_ingest_ctx *ctx = arg;
-    struct job *job;
+    struct job *job = NULL;
     const char *errmsg = NULL;
     char errbuf[256];
     int64_t userid_signer;
     const char *mech_type;
     flux_future_t *f = NULL;
+
+    if (ctx->shutdown) {
+        errno = ENOSYS;
+        goto error;
+    }
 
     /* Parse request.
      */
@@ -589,8 +597,36 @@ error:
     flux_future_destroy (f);
 }
 
+static void exit_cb (void *arg)
+{
+    struct job_ingest_ctx *ctx = arg;
+
+    if (--ctx->shutdown_process_count == 0)
+        flux_reactor_stop (flux_get_reactor (ctx->h));
+}
+
+/* Override built-in shutdown handler that calls flux_reactor_stop().
+ * Since libsubprocess client is not able ot run outside of the reactor,
+ * take care of cleaning up validator before exiting reactor.
+ */
+static void shutdown_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
+{
+    struct job_ingest_ctx *ctx = arg;
+
+    ctx->shutdown = true; // fail any new submit requests
+    ctx->shutdown_process_count = validate_stop_notify (ctx->validate,
+                                                        exit_cb,
+                                                        ctx);
+    if (ctx->shutdown_process_count == 0)
+        flux_reactor_stop (flux_get_reactor (h));
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.submit", submit_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST,  "job-ingest.shutdown", shutdown_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
