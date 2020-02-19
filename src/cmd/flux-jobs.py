@@ -193,7 +193,7 @@ def fetch_jobs_flux(args):
 
     rpc_handle = flux.job.job_list(h, args.count, attrs, userid, states)
     try:
-        jobs = flux.job.job_list_get(rpc_handle)
+        jobs = rpc_handle.get_jobs()
     except EnvironmentError as e:
         print("{}: {}".format("rpc", e.strerror), file=sys.stderr)
         sys.exit(1)
