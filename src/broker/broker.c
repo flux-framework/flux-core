@@ -2057,48 +2057,80 @@ error:
     return 0;
 }
 
+/* Broker's use their rank in place of a UUID for message routing purposes.
+ * Try to convert a UUID from a message to a rank.
+ * It must be entirely numerical, and be less than 'size'.
+ * If it works, assign result to 'rank' and return true.
+ * If it doesn't return false.
+ */
+static bool uuid_to_rank (const char *s, uint32_t size, uint32_t *rank)
+{
+    unsigned long num;
+    char *endptr;
+
+    if (!isdigit (*s))
+        return false;
+    errno = 0;
+    num = strtoul (s, &endptr, 10);
+    if (errno != 0)
+        return false;
+    if (*endptr != '\0')
+        return false;
+    if (num >= size)
+        return false;
+    *rank = num;
+    return true;
+}
+
+/* Test whether the TBON parent of this broker is 'rank'.
+ */
+static bool is_my_parent (broker_ctx_t *ctx, uint32_t rank)
+{
+    if (kary_parentof (ctx->tbon_k, overlay_get_rank (ctx->overlay)) == rank)
+        return true;
+    return false;
+}
+
+/* Route a response message, determining next hop from route stack.
+ * If there is no next hop, routing is complete to broker-resident service.
+ * If the next hop is a rank, route up or down the TBON.
+ * If not a rank, look up a comms module by uuid.
+ */
 static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
     int rc = -1;
     char *uuid = NULL;
-    uint32_t parent;
     uint32_t rank;
-    uint32_t size;
-    char puuid[16];
 
     if (flux_msg_get_route_last (msg, &uuid) < 0)
         goto done;
-
-    /* If no next hop, this is for broker-resident service.
-     */
-    if (uuid == NULL) {
-        rc = flux_requeue (ctx->h, msg, FLUX_RQ_TAIL);
-        goto done;
+    if (uuid == NULL) { // broker resident service
+        if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
+            goto done;
     }
-
-    rank = overlay_get_rank (ctx->overlay);
-    size = overlay_get_size (ctx->overlay);
-    parent = kary_parentof (ctx->tbon_k, rank);
-    snprintf (puuid, sizeof (puuid), "%"PRIu32, parent);
-
-    /* See if it should go to the parent (backwards!)
-     * (receiving end will compensate for reverse ROUTER behavior)
-     */
-    if (parent != KARY_NONE && !strcmp (puuid, uuid)) {
-        rc = overlay_sendmsg_parent (ctx->overlay, msg);
-        goto done;
+    else if (uuid_to_rank (uuid, overlay_get_size (ctx->overlay), &rank)) {
+        if (is_my_parent (ctx, rank)) {
+            /* N.B. this message is going from DEALER socket to ROUTER socket.
+             * Instead of popping a route off the stack, ROUTER pushes one
+             * on, so the upstream broker must to detect this case and pop
+             * *two* off to maintain route stack integrity.  See child_cb().
+             */
+            if (overlay_sendmsg_parent (ctx->overlay, msg) < 0)
+                goto done;
+        }
+        else {
+            if (overlay_sendmsg_child (ctx->overlay, msg) < 0) {
+                if (errno == EINVAL)
+                    errno = EHOSTUNREACH;
+                goto done;
+            }
+        }
     }
-
-    /* Try to deliver to a module.
-     * If modhash didn't match next hop, route to child.
-     * If no child, silently drop (module unloaded?)
-     */
-    rc = module_response_sendmsg (ctx->modhash, msg);
-    if (rc < 0 && errno == ENOSYS) {
-        rc = 0;
-        if (kary_childof (ctx->tbon_k, size, rank, 0) != KARY_NONE)
-            rc = overlay_sendmsg_child (ctx->overlay, msg);
+    else {
+        if (module_response_sendmsg (ctx->modhash, msg) < 0)
+            goto done;
     }
+    rc = 0;
 done:
     ERRNO_SAFE_WRAP (free, uuid);
     return rc;
