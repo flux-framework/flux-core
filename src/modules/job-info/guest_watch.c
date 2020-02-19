@@ -39,7 +39,7 @@
  *
  * 2) If the guest namespace is already copied into the main namespace
  *    (event "release" and "final=true"), we watch the eventlog in the
- *    main namespace (main_namespace_lookup()).  This is a This is "easy" case
+ *    main namespace (main_namespace_lookup()).  This is the "easy" case
  *    and is not so different from a typical call to
  *    'job-info.eventlog-watch'.
  *

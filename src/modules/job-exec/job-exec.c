@@ -432,7 +432,7 @@ static void namespace_copy (flux_future_t *f, void *arg)
     struct jobinfo *job = arg;
     flux_t *h = job->ctx->h;
     flux_future_t *fnext = NULL;
-    char dst [265];
+    char dst [256];
 
     if (flux_job_kvs_key (dst, sizeof (dst), job->id, "guest") < 0) {
         flux_log_error (h, "namespace_move: flux_job_kvs_key");

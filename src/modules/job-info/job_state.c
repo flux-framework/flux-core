@@ -23,6 +23,8 @@
 #include "src/common/libidset/idset.h"
 
 #include "job_state.h"
+#include "idsync.h"
+#include "job_util.h"
 
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
 
@@ -89,6 +91,14 @@ static void job_destroy_wrapper (void **data)
     job_destroy (*job);
 }
 
+void flux_msg_destroy_wrapper (void **data)
+{
+    if (data) {
+        flux_msg_t **ptr = (flux_msg_t **)data;
+        flux_msg_destroy (*ptr);
+    }
+}
+
 static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
 {
     struct job *job = NULL;
@@ -146,6 +156,10 @@ struct job_state_ctx *job_state_create (flux_t *h)
     if (!(jsctx->futures = zlistx_new ()))
         goto error;
 
+    if (!(jsctx->transitions = zlistx_new ()))
+        goto error;
+    zlistx_set_destructor (jsctx->transitions, flux_msg_destroy_wrapper);
+
     if (flux_event_subscribe (h, "job-state") < 0) {
         flux_log_error (h, "flux_event_subscribe");
         goto error;
@@ -189,6 +203,8 @@ void job_state_destroy (void *data)
             zlistx_destroy (&jsctx->pending);
         if (jsctx->index)
             zhashx_destroy (&jsctx->index);
+        if (jsctx->transitions)
+            zlistx_destroy (&jsctx->transitions);
         (void)flux_event_unsubscribe (jsctx->h, "job-state");
         free (jsctx);
     }
@@ -334,6 +350,45 @@ static void update_job_state_and_list (struct info_ctx *ctx,
 
     if (oldlist != newlist)
         job_change_list (jsctx, job, oldlist, newstate);
+}
+
+static void list_id_respond (struct info_ctx *ctx,
+                             struct idsync_data *isd,
+                             struct job *job)
+{
+    json_t *o;
+
+    if (!(o = job_to_json (job, isd->attrs)))
+        goto error;
+
+    if (flux_respond_pack (ctx->h, isd->msg, "{s:O}", "job", o) < 0) {
+        flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
+        goto error;
+    }
+
+    json_decref (o);
+    return;
+
+error:
+    if (flux_respond_error (ctx->h, isd->msg, errno, NULL) < 0)
+        flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
+    json_decref (o);
+}
+
+static void check_waiting_id (struct info_ctx *ctx,
+                              struct job *job)
+{
+    zlistx_t *list_isd;
+
+    if ((list_isd = zhashx_lookup (ctx->idsync_waits, &job->id))) {
+        struct idsync_data *isd;
+        isd = zlistx_first (list_isd);
+        while (isd) {
+            list_id_respond (ctx, isd, job);
+            isd = zlistx_next (list_isd);
+        }
+        zhashx_delete (ctx->idsync_waits, &job->id);
+    }
 }
 
 static int eventlog_lookup_parse (struct info_ctx *ctx,
@@ -628,6 +683,7 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
     st = zlist_head (job->next_states);
     assert (st);
     update_job_state_and_list (ctx, job, st->state, st->timestamp);
+    check_waiting_id (ctx, job);
     zlist_remove (job->next_states, st);
     process_next_state (ctx, job);
 
@@ -992,16 +1048,77 @@ void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
     struct info_ctx *ctx = arg;
     json_t *transitions;
 
-    if (flux_event_unpack (msg, NULL, "{s:o}",
-                           "transitions",
-                           &transitions) < 0) {
-        flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
-        return;
+    if (ctx->jsctx->pause) {
+        flux_msg_t *cpy;
+
+        if (!(cpy = flux_msg_copy (msg, true))) {
+            flux_log_error (h, "%s: flux_msg_copy", __FUNCTION__);
+            return;
+        }
+        if (!zlistx_add_end (ctx->jsctx->transitions, cpy)) {
+            flux_log_error (h, "%s: zlistx_add_end", __FUNCTION__);
+            flux_msg_destroy (cpy);
+        }
+    }
+    else {
+        if (flux_event_unpack (msg, NULL, "{s:o}",
+                               "transitions",
+                               &transitions) < 0) {
+            flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
+            return;
+        }
+
+        update_jobs (ctx, transitions);
     }
 
-    update_jobs (ctx, transitions);
+    return;
+}
+
+void job_state_pause_cb (flux_t *h, flux_msg_handler_t *mh,
+                         const flux_msg_t *msg, void *arg)
+{
+    struct info_ctx *ctx = arg;
+
+    ctx->jsctx->pause = true;
+
+    if (flux_respond (h, msg, NULL) < 0) {
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+        goto error;
+    }
 
     return;
+
+ error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+void job_state_unpause_cb (flux_t *h, flux_msg_handler_t *mh,
+                           const flux_msg_t *msg, void *arg)
+{
+    struct info_ctx *ctx = arg;
+    flux_msg_t *tmsg;
+
+    ctx->jsctx->pause = false;
+
+    tmsg = zlistx_first (ctx->jsctx->transitions);
+    while (tmsg) {
+        job_state_cb (h, mh, tmsg, ctx);
+        tmsg = zlistx_next (ctx->jsctx->transitions);
+    }
+
+    if (flux_respond (h, msg, NULL) < 0) {
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+        goto error;
+    }
+
+    zlistx_purge (ctx->jsctx->transitions);
+    return;
+
+ error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    zlistx_purge (ctx->jsctx->transitions);
 }
 
 static struct job *eventlog_restart_parse (struct info_ctx *ctx,

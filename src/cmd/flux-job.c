@@ -42,6 +42,7 @@
 #include "src/common/libioencode/ioencode.h"
 
 int cmd_list (optparse_t *p, int argc, char **argv);
+int cmd_list_ids (optparse_t *p, int argc, char **argv);
 int cmd_submit (optparse_t *p, int argc, char **argv);
 int cmd_attach (optparse_t *p, int argc, char **argv);
 int cmd_id (optparse_t *p, int argc, char **argv);
@@ -246,6 +247,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_list,
       0,
       list_opts
+    },
+    { "list-ids",
+      "[OPTIONS] ID [ID ...]",
+      "List job(s) by id",
+      cmd_list_ids,
+      0,
+      NULL,
     },
     { "priority",
       "[OPTIONS] id priority",
@@ -953,9 +961,6 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_job_list");
     json_array_foreach (jobs, index, value) {
         char *str;
-        int state;
-        if (json_unpack (value, "{s:i}", "state", &state) < 0)
-            log_msg_exit ("error parsing list response (state is missing)");
         str = json_dumps (value, 0);
         if (!str)
             log_msg_exit ("error parsing list response");
@@ -966,6 +971,54 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     flux_close (h);
 
    return (0);
+}
+
+void list_id_continuation (flux_future_t *f, void *arg)
+{
+    json_t *job;
+    char *str;
+    if (flux_rpc_get_unpack (f, "{s:o}", "job", &job) < 0)
+        log_err_exit ("flux_job_list_id");
+    str = json_dumps (job, 0);
+    if (!str)
+        log_msg_exit ("error parsing list-id response");
+    printf ("%s\n", str);
+    free (str);
+    flux_future_destroy (f);
+}
+
+int cmd_list_ids (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    char *attrs = "[\"userid\",\"priority\",\"t_submit\",\"state\"," \
+        "\"name\",\"ntasks\",\"nnodes\",\"ranks\",\"t_depend\",\"t_sched\"," \
+        "\"t_run\",\"t_cleanup\",\"t_inactive\"]";
+    flux_t *h;
+    int i, ids_len;
+
+    if ((argc - optindex) < 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    ids_len = argc - optindex;
+    for (i = 0; i < ids_len; i++) {
+        flux_jobid_t id = parse_arg_unsigned (argv[optindex + i], "id");
+        flux_future_t *f;
+        if (!(f = flux_job_list_id (h, id, attrs)))
+            log_err_exit ("flux_job_list_id");
+        if (flux_future_then (f, -1, list_id_continuation, NULL) < 0)
+            log_err_exit ("flux_future_then");
+    }
+
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
+
+    flux_close (h);
+
+    return (0);
 }
 
 /* Read entire file 'name' ("-" for stdin).  Exit program on error.

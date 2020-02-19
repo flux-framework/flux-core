@@ -216,6 +216,35 @@ flux_future_t *flux_job_list (flux_t *h,
     return f;
 }
 
+flux_future_t *flux_job_list_id (flux_t *h,
+                                 flux_jobid_t id,
+                                 const char *json_str)
+{
+    flux_future_t *f;
+    json_t *o = NULL;
+    int saved_errno;
+
+    if (!h || !json_str
+           || !(o = json_loads (json_str, 0, NULL))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(f = flux_rpc_pack (h, "job-info.list-id", FLUX_NODEID_ANY, 0,
+                             "{s:I s:O}",
+                             "id", id,
+                             "attrs", o)))
+        goto error;
+
+    json_decref (o);
+    return f;
+
+error:
+    saved_errno = errno;
+    json_decref (o);
+    errno = saved_errno;
+    return NULL;
+}
+
 flux_future_t *flux_job_raise (flux_t *h, flux_jobid_t id,
                                const char *type, int severity, const char *note)
 {

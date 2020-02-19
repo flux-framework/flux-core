@@ -8,23 +8,16 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_JOB_INFO_LIST_H
-#define _FLUX_JOB_INFO_LIST_H
+#ifndef _FLUX_JOB_INFO_JOB_UTIL_H
+#define _FLUX_JOB_INFO_JOB_UTIL_H
 
 #include <flux/core.h>
 
-#include "info.h"
+#include "job_state.h"
 
-void list_cb (flux_t *h, flux_msg_handler_t *mh,
-              const flux_msg_t *msg, void *arg);
+json_t *job_to_json (struct job *job, json_t *attrs);
 
-void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
-                 const flux_msg_t *msg, void *arg);
-
-void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
-                    const flux_msg_t *msg, void *arg);
-
-#endif /* ! _FLUX_JOB_INFO_LIST_H */
+#endif /* ! _FLUX_JOB_INFO_JOB_UTIL_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
