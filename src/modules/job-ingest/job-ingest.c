@@ -68,6 +68,12 @@
  */
 const double batch_timeout = 0.01;
 
+/* Timeout (seconds) to wait for validators to terminate when
+ * stopped by closing their stdin.  If the timer pops, stop the reactor
+ * and allow validate_destroy() to signal them.
+ */
+const double shutdown_timeout = 5.;
+
 
 struct job_ingest_ctx {
     flux_t *h;
@@ -83,6 +89,7 @@ struct job_ingest_ctx {
 
     bool shutdown;              // no new jobs are accepted in shutdown mode
     int shutdown_process_count; // number of validators executing at shutdown
+    flux_watcher_t *shutdown_timer;
 };
 
 struct job {
@@ -601,8 +608,24 @@ static void exit_cb (void *arg)
 {
     struct job_ingest_ctx *ctx = arg;
 
-    if (--ctx->shutdown_process_count == 0)
+    if (--ctx->shutdown_process_count == 0) {
+        flux_watcher_stop (ctx->shutdown_timer);
         flux_reactor_stop (flux_get_reactor (ctx->h));
+    }
+}
+
+static void shutdown_timeout_cb (flux_reactor_t *r,
+                                 flux_watcher_t *w,
+                                 int revents,
+                                 void *arg)
+{
+    struct job_ingest_ctx *ctx = arg;
+
+    flux_log (ctx->h,
+              LOG_ERR,
+              "shutdown timed out with %d validators active",
+              ctx->shutdown_process_count);
+    flux_reactor_stop (flux_get_reactor (ctx->h));
 }
 
 /* Override built-in shutdown handler that calls flux_reactor_stop().
@@ -622,6 +645,10 @@ static void shutdown_cb (flux_t *h,
                                                         ctx);
     if (ctx->shutdown_process_count == 0)
         flux_reactor_stop (flux_get_reactor (h));
+    else {
+        flux_timer_watcher_reset (ctx->shutdown_timer, shutdown_timeout, 0.);
+        flux_watcher_start (ctx->shutdown_timer);
+    }
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -704,6 +731,14 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_timer_watcher_create");
         goto done;
     }
+    if (!(ctx.shutdown_timer = flux_timer_watcher_create (r,
+                                                          0.,
+                                                          0.,
+                                                          shutdown_timeout_cb,
+                                                          &ctx))) {
+        flux_log_error (h, "flux_timer_watcher_create");
+        goto done;
+    }
     if (flux_get_rank (h, &rank) < 0) {
         flux_log_error (h, "flux_get_rank");
         goto done;
@@ -725,6 +760,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 done:
     flux_msg_handler_delvec (ctx.handlers);
     flux_watcher_destroy (ctx.timer);
+    flux_watcher_destroy (ctx.shutdown_timer);
 #if HAVE_FLUX_SECURITY
     flux_security_destroy (ctx.sec);
 #endif
