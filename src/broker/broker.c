@@ -76,9 +76,6 @@
 #include "boot_pmi.h"
 #include "publisher.h"
 
-/* Generally accepted max, although some go higher (IE is 2083) */
-#define ENDPOINT_MAX 2048
-
 typedef enum {
     ERROR_MODE_RESPOND,
     ERROR_MODE_RETURN,
