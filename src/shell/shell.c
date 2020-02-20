@@ -1114,7 +1114,17 @@ int main (int argc, char *argv[])
             shell_die (1, "failed to initialize taskid=%d", i);
 
         if (shell_task_start (task, shell.r, task_completion_cb, &shell) < 0) {
-            shell_die (1, "task %d: start failed: %s: %s",
+            int ec = 1;
+            /* bash standard, 126 for permission/access denied, 127
+             * for command not found.  Note that shell only launches
+             * local tasks, therefore no need to check for
+             * EHOSTUNREACH.
+             */
+            if (errno == EPERM || errno == EACCES)
+                ec = 126;
+            else if (errno == ENOENT)
+                ec = 127;
+            shell_die (ec, "task %d: start failed: %s: %s",
                        i, flux_cmd_arg (task->cmd, 0), strerror (errno));
         }
 
