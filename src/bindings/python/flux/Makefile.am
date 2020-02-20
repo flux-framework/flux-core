@@ -7,7 +7,8 @@ fluxpy_PYTHON=\
 	      constants.py\
 	      job.py \
 	      util.py \
-	      future.py
+	      future.py \
+	      memoized_property.py
 
 if HAVE_FLUX_SECURITY
 fluxpy_PYTHON += security.py

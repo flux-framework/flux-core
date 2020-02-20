@@ -248,6 +248,18 @@ test_expect_success 'flux-jobs --format={nnodes},{nnodes_hyphen} works' '
         test_cmp nodecountRI.out nodecountRI.exp
 '
 
+test_expect_success 'flux-jobs emits useful error on invalid format' '
+	test_expect_code 1 flux jobs --format="{runtime" >invalid.out 2>&1 &&
+	test_debug "cat invalid.out" &&
+	grep "Error in user format" invalid.out
+'
+
+test_expect_success 'flux-jobs emits useful error on invalid format field' '
+	test_expect_code 1 flux jobs --format="{footime}" >invalid-field.out 2>&1 &&
+	test_debug "cat invalid-field.out" &&
+	grep "Unknown format field" invalid-field.out
+'
+
 # node ranks assumes sched-simple default of mode='worst-fit'
 test_expect_success 'flux-jobs --format={ranks},{ranks_hyphen} works' '
         flux jobs --suppress-header --state=pending --format="{ranks},{ranks_hyphen}" > ranksP.out &&
