@@ -150,10 +150,10 @@ static int nodelist_append_prefix_list (struct nodelist *nl,
 int nodelist_append (struct nodelist *nl, const char *host)
 {
     int suffix = -1;
-    char name [MAXHOSTNAMELEN+1];
+    char name [4096];
     struct prefix_list *pl = zlist_tail (nl->list);
 
-    if (strlen (host) > MAXHOSTNAMELEN) {
+    if (strlen (host) > sizeof(name) - 1) {
         errno = E2BIG;
         return -1;
     }
@@ -225,9 +225,9 @@ static struct prefix_list *prefix_list_from_json (json_t *o)
     /*  Special case, string is a single host
      */
     if (json_is_string (o)) {
-        char name [MAXHOSTNAMELEN+1];
+        char name [4096];
         int suffix = -1;
-        strcpy (name, json_string_value (o));
+        strncpy (name, json_string_value (o), sizeof (name) - 1);
         hostname_split (name, &suffix);
         return prefix_list_create (name, suffix);
     }
