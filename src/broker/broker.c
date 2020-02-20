@@ -76,11 +76,6 @@
 #include "boot_pmi.h"
 #include "publisher.h"
 
-typedef enum {
-    ERROR_MODE_RESPOND,
-    ERROR_MODE_RETURN,
-} request_error_mode_t;
-
 typedef struct {
     /* Reactor
      */
@@ -125,8 +120,9 @@ typedef struct {
 
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
-static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
-                                   request_error_mode_t errmode);
+static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
+static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
+                                            const flux_msg_t *msg);
 
 static void parent_cb (overlay_t *ov, void *sock, void *arg);
 static void child_cb (overlay_t *ov, void *sock, void *arg);
@@ -1682,7 +1678,7 @@ static void child_cb (overlay_t *ov, void *sock, void *arg)
         case FLUX_MSGTYPE_KEEPALIVE:
             break;
         case FLUX_MSGTYPE_REQUEST:
-            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
+            broker_request_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_RESPONSE:
             /* TRICKY:  Fix up ROUTER socket used in reverse direction.
@@ -1784,7 +1780,7 @@ static void parent_cb (overlay_t *ov, void *sock, void *arg)
                 goto done;
             break;
         case FLUX_MSGTYPE_REQUEST:
-            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
+            broker_request_sendmsg (ctx, msg);
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s: unexpected %s", __FUNCTION__,
@@ -1813,7 +1809,7 @@ static void module_cb (module_t *p, void *arg)
             (void)broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            (void)broker_request_sendmsg (ctx, msg, ERROR_MODE_RESPOND);
+            broker_request_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
             if (broker_event_sendmsg (ctx, msg) < 0) {
@@ -1943,17 +1939,15 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     _exit (1);
 }
 
-/* TRICKY:  Fix up ROUTER socket used in reverse direction.
- * Request/response is designed for requests to travel
- * ROUTER->DEALER (up) and responses DEALER-ROUTER (down).
- * When used conventionally, the route stack is accumulated
- * automatically as a reqest is routed up, and unwound
- * automatically as a response is routed down.  When requests
- * are routed down, ROUTER socket behavior must be subverted on the
- * sending end by pushing the identity of the sender onto the stack,
- * followed by the identity of the peer we want to route the message to.
+/* Send a request message down the TBON.
+ * N.B. this message is going from ROUTER socket to DEALER socket.
+ * Since ROUTER pops a route off the stack and uses it to select the peer,
+ * we must push *two* routes on the stack: the identity of this broker,
+ * then the identity the peer.  The parent_cb() can then accept the request
+ * from DEALER as though it were received on ROUTER.
  */
-static int subvert_sendmsg_child (broker_ctx_t *ctx, const flux_msg_t *msg,
+static int sendmsg_child_request (broker_ctx_t *ctx,
+                                  const flux_msg_t *msg,
                                   uint32_t nodeid)
 {
     flux_msg_t *cpy = flux_msg_copy (msg, true);
@@ -1977,81 +1971,85 @@ done:
     return rc;
 }
 
-/* Select error mode for local errors (routing, bad msg, etc) with 'errmode'.
- *
- * ERROR_MODE_RESPOND:
- *    any local errors such as message decoding or routing failure
- *    trigger a response message, and function returns 0.
- * ERROR_MODE_RETURN:
- *    any local errors do not trigger a response, and function
- *    returns -1 with errno set.
+/* Route request.
+ * On success, return 0.  On failure, return -1 with errno set.
  */
-static int broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg,
-                                   request_error_mode_t errmode)
+static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
+                                            const flux_msg_t *msg)
 {
-    uint32_t nodeid, gw;
-    uint8_t flags;
-    int rc = -1;
     uint32_t rank = overlay_get_rank (ctx->overlay);
     uint32_t size = overlay_get_size (ctx->overlay);
-    const char *topic;
-    char errbuf[64];
-    const char *errstr = NULL;
+    uint32_t nodeid;
+    uint8_t flags;
 
     if (flux_msg_get_nodeid (msg, &nodeid) < 0)
-        goto error;
+        return -1;
     if (flux_msg_get_flags (msg, &flags) < 0)
-        goto error;
-    if (flux_msg_get_topic (msg, &topic) < 0)
-        goto error;
+        return -1;
+    /* Route up TBON if destination if upstream of this broker.
+     */
     if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == rank) {
-        rc = overlay_sendmsg_parent (ctx->overlay, msg);
-        if (rc < 0)
-            goto error;
-    } else if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != rank) {
-        rc = service_send (ctx->services, msg);
-        if (rc < 0 && errno == ENOSYS) {
-            rc = overlay_sendmsg_parent (ctx->overlay, msg);
-            if (rc < 0 && errno == EHOSTUNREACH)
-                goto nosys;
+        if (overlay_sendmsg_parent (ctx->overlay, msg) < 0)
+            return -1;
+    }
+    /* Deliver to local service if destination *could* be this broker.
+     * If there is no such service locally (ENOSYS), route up TBON.
+     */
+    else if (((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid != rank)
+                                              || nodeid == FLUX_NODEID_ANY) {
+        if (service_send (ctx->services, msg) < 0) {
+            if (errno != ENOSYS)
+                return -1;
+            if (overlay_sendmsg_parent (ctx->overlay, msg) < 0) {
+                if (errno == EHOSTUNREACH)
+                    errno = ENOSYS;
+                return -1;
+            }
         }
-        if (rc < 0)
-            goto error;
-    } else if (nodeid == FLUX_NODEID_ANY) {
-        rc = service_send (ctx->services, msg);
-        if (rc < 0 && errno == ENOSYS) {
-            rc = overlay_sendmsg_parent (ctx->overlay, msg);
-            if (rc < 0 && errno == EHOSTUNREACH)
-                goto nosys;
+    }
+    /* Deliver to local service if this broker is the addressed rank.
+     */
+    else if (nodeid == rank) {
+        if (service_send (ctx->services, msg) < 0)
+            return -1;
+    }
+    /* Send the request up or down TBON as addressed.
+     */
+    else {
+        uint32_t down_rank;
+        down_rank = kary_child_route (ctx->tbon_k, size, rank, nodeid);
+        if (down_rank == KARY_NONE) { // up
+            if (overlay_sendmsg_parent (ctx->overlay, msg) < 0)
+                return -1;
         }
-        if (rc < 0)
-            goto error;
-    } else if (nodeid == rank) {
-        rc = service_send (ctx->services, msg);
-        if (rc < 0)
-            goto error;
-    } else if ((gw = kary_child_route (ctx->tbon_k, size, rank, nodeid))
-               != KARY_NONE) {
-        rc = subvert_sendmsg_child (ctx, msg, gw);
-        if (rc < 0)
-            goto error;
-    } else {
-        rc = overlay_sendmsg_parent (ctx->overlay, msg);
-        if (rc < 0)
-            goto error;
+        else { // down
+            if (sendmsg_child_request (ctx, msg, down_rank) < 0)
+                return -1;
+        }
     }
     return 0;
-nosys:
-    errno = ENOSYS;
-    (void)snprintf (errbuf, sizeof (errbuf),
-                    "No service matching %s is registered", topic);
-    errstr = errbuf;
-error:
-    if (errmode == ERROR_MODE_RETURN)
-        return -1;
-    /* ERROR_MODE_RESPOND */
-    (void)flux_respond_error (ctx->h, msg, errno, errstr);
-    return 0;
+}
+
+/* Route request.  If there is an error routing the request,
+ * generate an error response.  Make an extra effort to return a useful
+ * error message if ENOSYS indicates an unmatched service name.
+ */
+static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
+{
+    if (broker_request_sendmsg_internal (ctx, msg) < 0) {
+        const char *topic;
+        char errbuf[64];
+        const char *errstr = NULL;
+
+        if (errno == ENOSYS && flux_msg_get_topic (msg, &topic) == 0) {
+            snprintf (errbuf,
+                      sizeof (errbuf),
+                      "No service matching %s is registered", topic);
+            errstr = errbuf;
+        }
+        if (flux_respond_error (ctx->h, msg, errno, errstr) < 0)
+            flux_log_error (ctx->h, "flux_respond");
+    }
 }
 
 /* Broker's use their rank in place of a UUID for message routing purposes.
@@ -2188,7 +2186,7 @@ static int broker_send (void *impl, const flux_msg_t *msg, int flags)
 
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            rc = broker_request_sendmsg (ctx, cpy, ERROR_MODE_RETURN);
+            rc = broker_request_sendmsg_internal (ctx, cpy);
             break;
         case FLUX_MSGTYPE_RESPONSE:
             rc = broker_response_sendmsg (ctx, cpy);
