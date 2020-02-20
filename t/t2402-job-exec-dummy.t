@@ -14,17 +14,9 @@ test_under_flux 4 job
 
 flux setattr log-stderr-level 1
 
-hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
-
 job_kvsdir()    { flux job id --to=kvs $1; }
 exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; }
 
-test_expect_success 'job-exec: load job-exec,sched-simple modules' '
-	#  Add fake by_rank configuration to kvs:
-	flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-	flux module load sched-simple &&
-	flux module load job-exec
-'
 test_expect_success 'job-exec: set dummy test job shell' '
 	flux setattr job-exec.job-shell $SHARNESS_TEST_SRCDIR/job-exec/dummy.sh
 '
@@ -103,11 +95,5 @@ test_expect_success 'job-exec: exception while starting terminates job' '
 	     | $jq ".attributes.system.exec.bulkexec.mock_exception = \"starting\"" \
 	     | flux job submit) &&
 	flux job wait-event -vt 1 $id clean
-'
-test_expect_success 'job-exec: unload job-exec & sched-simple modules' '
-	flux job list &&
-	flux queue drain &&
-	flux module remove job-exec &&
-	flux module remove sched-simple
 '
 test_done

@@ -11,16 +11,6 @@ flux setattr log-stderr-level 1
 TEST_SUBPROCESS_DIR=${FLUX_BUILD_DIR}/src/common/libsubprocess
 LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
 
-hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
-
-test_expect_success 'job-shell: load barrier,job-exec,sched-simple modules' '
-        #  Add fake by_rank configuration to kvs:
-        flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux exec -r all flux module load barrier &&
-        flux module load sched-simple &&
-        flux module load job-exec
-'
-
 test_expect_success 'flux-shell: generate input for stdin input tests' '
        echo "foo" > input_stdin_file &&
        echo "doh" >> input_stdin_file &&
@@ -256,12 +246,4 @@ test_expect_success 'flux-shell: no fatal exception after stdin sent to exited t
 	echo | flux job attach -XE ${id} &&
 	flux job wait-event -t 5 -v ${id} clean
 '
-
-test_expect_success 'job-shell: unload job-exec & sched-simple modules' '
-        flux module remove job-exec &&
-        flux module remove sched-simple &&
-        flux exec -r all flux module remove barrier
-'
-
-
 test_done

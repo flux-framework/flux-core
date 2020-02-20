@@ -26,6 +26,9 @@ list_R() {
 	done
 }
 
+test_expect_success 'unload job-exec module to prevent job execution' '
+	flux module remove job-exec
+'
 test_expect_success 'sched-simple: reload ingest module with lax validator' '
 	flux exec -r all flux module reload job-ingest validator-args="--schema,${SCHEMA}" \
          validator=${JSONSCHEMA_VALIDATOR}
@@ -37,8 +40,8 @@ test_expect_success 'sched-simple: load default by_rank' '
 	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank)" &&
 	flux kvs get resource.hwloc.by_rank
 '
-test_expect_success 'sched-simple: load sched-simple' '
-	flux module load sched-simple &&
+test_expect_success 'sched-simple: reload sched-simple' '
+	flux module reload sched-simple &&
 	flux dmesg 2>&1 | grep "ready:.*rank\[0-1\]/core\[0-1\]" &&
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
@@ -211,9 +214,4 @@ test_expect_success 'sched-simple: load sched-simple and wait for queue drain' '
 	flux module load sched-simple &&
 	run_timeout 30 flux queue drain
 '
-
-test_expect_success 'sched-simple: remove sched-simple' '
-	flux module remove sched-simple
-'
-
 test_done

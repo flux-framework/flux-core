@@ -12,15 +12,6 @@ PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
 
-hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
-
-test_expect_success 'job-shell: load barrier,job-exec,sched-simple modules' '
-        #  Add fake by_rank configuration to kvs:
-        flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux exec -r all flux module load barrier &&
-        flux module load sched-simple &&
-        flux module load job-exec
-'
 test_expect_success 'job-shell: execute across all ranks' '
         id=$(flux jobspec srun -N4 bash -c \
             "flux kvs put test1.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID" \
@@ -211,10 +202,4 @@ test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
 	grep "signal 199: Invalid argument" kill5.log &&
 	grep status=$((15+128<<8)) kill5.finish.out
 '
-test_expect_success 'job-shell: unload job-exec & sched-simple modules' '
-        flux module remove job-exec &&
-        flux module remove sched-simple &&
-        flux exec -r all flux module remove barrier
-'
-
 test_done

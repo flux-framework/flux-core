@@ -18,11 +18,14 @@ MINJOBID_KVS="job.0000.0000.0000.0000"
 MINJOBID_HEX="0000.0000.0000.0000"
 MINJOBID_WORDS="academy-academy-academy--academy-academy-academy"
 
-hwloc_fake_config='{"0":{"Core":2,"cpuset":"0-1"}}'
-
 test_under_flux 1 job
 
 flux setattr log-stderr-level 1
+
+test_expect_success 'unload job-exec,sched-simple modules' '
+	flux module remove job-exec &&
+	flux module remove sched-simple
+'
 
 test_expect_success 'flux-job: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
@@ -561,8 +564,6 @@ test_expect_success 'flux-job: fatal cancel exception was raised' '
 '
 
 test_expect_success 'flux-job: load modules for live killall test' '
-	flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux exec -r all flux module load barrier &&
         flux module load sched-simple &&
         flux module load job-exec
 '
@@ -572,12 +573,6 @@ test_expect_success 'flux job: killall -f kills one job' '
         flux job wait-event $id start &&
         flux job killall -f &&
 	run_timeout 60 flux queue drain
-'
-
-test_expect_success 'flux job: unload modules' '
-        flux module remove job-exec &&
-        flux module remove sched-simple &&
-        flux exec -r all flux module remove barrier
 '
 
 test_done

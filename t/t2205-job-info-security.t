@@ -67,15 +67,6 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
         flux jobspec --format json srun -N1 sleep 300 > sleeplong.json
 '
 
-hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'
-
-test_expect_success 'load job-exec,sched-simple modules' '
-        #  Add fake by_rank configuration to kvs:
-        flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux module load sched-simple &&
-        flux module load job-exec
-'
-
 #
 # job eventlog
 #
@@ -286,14 +277,6 @@ test_expect_success 'flux job info foobar fails (wrong user)' '
         set_userid 9999 &&
         ! flux job info $jobid foobar &&
         unset_userid
-'
-#
-# cleanup
-#
-
-test_expect_success 'remove sched-simple,job-exec modules' '
-        flux module remove sched-simple &&
-        flux module remove job-exec
 '
 
 test_done

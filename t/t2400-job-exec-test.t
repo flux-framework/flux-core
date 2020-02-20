@@ -18,8 +18,6 @@ fi
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
-hwloc_fake_config='{"0-1":{"Core":2,"cpuset":"0-1"}}'
-
 job_kvsdir()    { flux job id --to=kvs $1; }
 exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; }
 exec_test()     { ${jq} '.attributes.system.exec.test = {}'; }
@@ -30,12 +28,6 @@ exec_testattr() {
 
 test_expect_success 'job-exec: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname | exec_test > basic.json
-'
-test_expect_success 'job-exec: load job-exec,sched-simple modules' '
-	#  Add fake by_rank configuration to kvs:
-	flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-	flux module load sched-simple &&
-	flux module load job-exec
 '
 test_expect_success 'job-exec: basic job runs in simulated mode' '
 	jobid=$(flux job submit basic.json) &&
@@ -114,16 +106,11 @@ test_expect_success 'job-exec: exception during cleanup' '
 	jobid=$(flux job submit cleanup-long.json) &&
 	flux job wait-event -vt 2.5 ${jobid} finish &&
 	flux job cancel ${jobid} &&
-	flux job wait-event -t 2.5 ${jobid} clean &&
+	flux job wait-event -t 10 ${jobid} clean &&
 	exec_eventlog $jobid > exec.eventlog.$jobid &&
 	grep "cleanup\.finish" exec.eventlog.$jobid
 '
 test_expect_success 'start request with empty payload fails with EPROTO(71)' '
 	${RPC} job-exec.start 71 </dev/null
 '
-test_expect_success 'job-exec: remove sched-simple,job-exec modules' '
-	flux module remove sched-simple &&
-	flux module remove job-exec
-'
-
 test_done

@@ -4,7 +4,10 @@ flux queue stop
 flux job cancelall -f --states RUN
 flux queue idle
 
+flux module remove -f job-exec
+flux module remove -f sched-simple
 flux module remove job-manager
+flux exec -r all flux module remove barrier
 flux exec -r all flux module remove job-info
 flux exec -r all flux module remove kvs-watch
 flux exec -r all flux module remove job-ingest

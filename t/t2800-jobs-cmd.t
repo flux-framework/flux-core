@@ -11,16 +11,6 @@ test -n "$jq" && test_set_prereq HAVE_JQ
 
 test_under_flux 4 job
 
-hwloc_fake_config='{"0-3":{"Core":2,"cpuset":"0-1"}}'
-
-test_expect_success 'load job-exec,sched-simple modules' '
-        #  Add fake by_rank configuration to kvs:
-        flux kvs put resource.hwloc.by_rank="$hwloc_fake_config" &&
-        flux exec -r all flux module load barrier &&
-        flux module load sched-simple &&
-        flux module load job-exec
-'
-
 # submit a whole bunch of jobs for job list testing
 #
 # - the first loop of job submissions are intended to have some jobs run
@@ -395,23 +385,6 @@ for d in ${ISSUES_DIR}/*; do
 done
 
 #
-# cleanup
+# leave job cleanup to rc3
 #
-test_expect_success 'cleanup job listing jobs ' '
-        for jobid in `cat job_ids_pending.out`; do \
-            flux job cancel $jobid; \
-            flux job wait-event $jobid clean; \
-        done &&
-        for jobid in `cat job_ids_running.out`; do \
-            flux job cancel $jobid; \
-            flux job wait-event $jobid clean; \
-        done
-'
-
-test_expect_success 'remove sched-simple,job-exec modules' '
-        flux exec -r all flux module remove barrier &&
-        flux module remove sched-simple &&
-        flux module remove job-exec
-'
-
 test_done
