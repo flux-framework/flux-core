@@ -47,11 +47,6 @@ ARGS="$ARGS -o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 test_expect_success 'broker --shutdown-grace option works' "
 	flux start ${ARGS} -s2 -o,--shutdown-grace=5 /bin/true
 "
-test_expect_success 'broker --shutdown-grace (very short) times out' "
-	test_must_fail flux start ${ARGS} -s2 \
-		-o,--shutdown-grace=0.000001 /bin/true 2>graceto.err &&
-	grep 'shutdown timer expired' graceto.err
-"
 test_expect_success 'flux-start in exec mode works' "
 	flux start ${ARGS} 'flux comms info' | grep 'size=1'
 "
