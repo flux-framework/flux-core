@@ -238,7 +238,7 @@ def fetch_jobs_flux(args):
         states |= flux.constants.FLUX_JOB_PENDING
         states |= flux.constants.FLUX_JOB_RUNNING
 
-    rpc_handle = flux.job.job_list(h, args.count, attrs, userid, states)
+    rpc_handle = flux.job.list(h, args.count, attrs, userid, states)
     try:
         jobs = rpc_handle.get_jobs()
     except EnvironmentError as e:
