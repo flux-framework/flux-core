@@ -102,7 +102,7 @@ export FLUX_TEST_SIZE_MAX=5
 if test -f /usr/share/Modules/init/bash; then
     . /usr/share/Modules/init/bash && module load mpi
 fi
-export TEST_MPI=t
+export FLUX_TEST_MPI=t
 
 # Generate logfiles from sharness tests for extra information:
 export FLUX_TESTS_LOGFILE=t
