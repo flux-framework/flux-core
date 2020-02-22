@@ -13,6 +13,7 @@
 #endif
 #include <stdarg.h>
 #include <czmq.h>
+#include <zmq.h>
 #include <flux/core.h>
 #include <inttypes.h>
 #include <jansson.h>
@@ -58,6 +59,12 @@ struct overlay_struct {
     overlay_cb_f child_cb;
     void *child_arg;
 
+    zsock_t *child_monitor_sock;
+    flux_watcher_t *child_monitor_w;
+    int child_peer_count;
+    overlay_monitor_cb_f child_monitor_cb;
+    void *child_monitor_arg;
+
     overlay_init_cb_f init_cb;
     void *init_arg;
 
@@ -101,6 +108,10 @@ void overlay_destroy (overlay_t *ov)
             flux_msg_handler_destroy (ov->heartbeat);
         if (ov->h)
             (void)flux_event_unsubscribe (ov->h, "hb");
+
+        flux_watcher_destroy (ov->child_monitor_w);
+        zsock_destroy (&ov->child_monitor_sock);
+
         endpoint_destroy (ov->parent);
         endpoint_destroy (ov->child);
         zhash_destroy (&ov->children);
@@ -157,6 +168,11 @@ uint32_t overlay_get_rank (overlay_t *ov)
 uint32_t overlay_get_size (overlay_t *ov)
 {
     return ov->size;
+}
+
+int overlay_get_child_peer_count (overlay_t *ov)
+{
+    return ov->child_peer_count;
 }
 
 /* Cleanup not done in this function, responsibiility of caller to
@@ -391,6 +407,70 @@ done:
     return rc;
 }
 
+/* Handle notification of peer connect/disconnect on child monitor socket.
+ * Maintain ov->child_peer_count, accessed via overlay_get_child_peer_count().
+ * Call a callback, if any, when the count changes.
+ * N.B. Assumes monitor protocol in libzmq >= 4.0 (assured by build system)
+ */
+static void child_monitor_cb (flux_reactor_t *r,
+                              flux_watcher_t *w,
+                              int revents,
+                              void *arg)
+{
+    overlay_t *ov = arg;
+    zframe_t *zf;
+    uint16_t event;
+
+    if (!(zf = zframe_recv (ov->child_monitor_sock)))
+        return; // spurious wakeup?
+    event = *(uint16_t *)zframe_data (zf);
+    zframe_destroy (&zf);
+
+    if (!(zf = zframe_recv (ov->child_monitor_sock))) {
+        log_msg ("zmq_socket_monitor: expected frame 2!");
+        return;
+    }
+    zframe_destroy (&zf);
+    if (event & ZMQ_EVENT_ACCEPTED)
+        ov->child_peer_count++;
+    if (event & ZMQ_EVENT_DISCONNECTED)
+        ov->child_peer_count--;
+    if (ov->child_monitor_cb)
+        ov->child_monitor_cb (ov, ov->child_monitor_arg);
+}
+
+/* Monitor child socket.
+ * This creates a new socket that receives control messages when downstream
+ * peers connect/disconnect.  Set up a watcher to capture these messages and
+ * maintain a connected peer count.
+ */
+static int child_monitor_init (overlay_t *ov, struct endpoint *ep)
+{
+    const char *uri = "inproc://monitor-child";
+    flux_reactor_t *r = flux_get_reactor (ov->h);
+
+    if (zmq_socket_monitor (zsock_resolve (ep->zs),
+                            uri,
+                            ZMQ_EVENT_ACCEPTED | ZMQ_EVENT_DISCONNECTED) < 0) {
+        log_err ("zmq_socket_monitor");
+        return -1;
+    }
+    if (!(ov->child_monitor_sock = zsock_new_pair (uri))) {
+        log_err ("zsock_new_pair");
+        return -1;
+    }
+    if (!(ov->child_monitor_w = flux_zmq_watcher_create (r,
+                                                         ov->child_monitor_sock,
+                                                         FLUX_POLLIN,
+                                                         child_monitor_cb,
+                                                         ov))) {
+        log_err ("flux_zmq_watcher_create");
+        return -1;
+    }
+    flux_watcher_start (ov->child_monitor_w);
+    return 0;
+}
+
 static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
                       int revents, void *arg)
 {
@@ -408,6 +488,8 @@ static int bind_child (overlay_t *ov, struct endpoint *ep)
         log_err ("zsock_new_router");
         return -1;
     }
+    if (child_monitor_init (ov, ep) < 0)
+        return -1;
     if (zsecurity_ssockinit (ov->sec, ep->zs) < 0) {
         log_msg ("zsecurity_ssockinit: %s", zsecurity_errstr (ov->sec));
         return -1;
@@ -573,6 +655,12 @@ int overlay_register_attrs (overlay_t *overlay, attr_t *attrs)
         return -1;
 
     return 0;
+}
+
+void overlay_set_monitor_cb (overlay_t *ov, overlay_monitor_cb_f cb, void *arg)
+{
+    ov->child_monitor_cb = cb;
+    ov->child_monitor_arg = arg;
 }
 
 /*

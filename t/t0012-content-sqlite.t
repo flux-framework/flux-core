@@ -104,99 +104,12 @@ test_expect_success 'load and verify 1m blob on all ranks' '
         test_cmp 1m.0.all.expect 1m.0.all.output
 '
 
-# Flush any pending stores and drop cache
-# Unload persistence module
-# Verify content is not lost
-
-test_expect_success 'flush rank 0 cache' '
-        run_timeout 10 flux content flush &&
-	NDIRTY=`flux module stats --type int --parse dirty content` &&
-	test $NDIRTY -eq 0
-'
-
-test_expect_success 'drop rank 0 cache' '
-        flux content dropcache &&
-	ECOUNT=`flux module stats --type int --parse count content` &&
-	test $ECOUNT -eq 0
-'
-
-test_expect_success 'unload content-sqlite module' '
-	flux module remove content-sqlite
-'
-
-test_expect_success 'check that content returned dirty' '
-	NDIRTY=`flux module stats --type int --parse dirty content` &&
-	ECOUNT=`flux module stats --type int --parse count content` &&
-	test $NDIRTY -eq $ECOUNT
-'
-
-test_expect_success 'load 64b blob from cache' '
-        HASHSTR=`cat 64.0.hash` &&
-        flux content load ${HASHSTR} >64.0.load2 &&
-        test_cmp 64.0.store 64.0.load2
-'
-
-test_expect_success 'load 4k blob from cache' '
-        HASHSTR=`cat 4k.0.hash` &&
-        flux content load ${HASHSTR} >4k.0.load2 &&
-        test_cmp 4k.0.store 4k.0.load2
-'
-
-test_expect_success 'load 1m blob' '
-        HASHSTR=`cat 1m.0.hash` &&
-        flux content load ${HASHSTR} >1m.0.load2 &&
-        test_cmp 1m.0.store 1m.0.load2
-'
-
-# Re-load persistence module
-# Verify content is transferred to store
-
-test_expect_success 'load content-sqlite module on rank 0' '
-	flux module load content-sqlite
-'
-
-test_expect_success 'flush rank 0 cache' '
-        run_timeout 10 flux content flush &&
-	NDIRTY=`flux module stats --type int --parse dirty content` &&
-	test $NDIRTY -eq 0
-'
-
-test_expect_success 'load 64b blob bypassing cache' '
-        HASHSTR=`cat 64.0.hash` &&
-        flux content load --bypass-cache ${HASHSTR} >64.0.load3 &&
-        test_cmp 64.0.store 64.0.load3
-'
-
-test_expect_success 'load 4k blob bypassing cache' '
-        HASHSTR=`cat 4k.0.hash` &&
-        flux content load --bypass-cache ${HASHSTR} >4k.0.load3 &&
-        test_cmp 4k.0.store 4k.0.load3
-'
-
-test_expect_success 'load 1m blob bypassing cache' '
-        HASHSTR=`cat 1m.0.hash` &&
-        flux content load --bypass-cache ${HASHSTR} >1m.0.load3 &&
-        test_cmp 1m.0.store 1m.0.load3
-'
-
 test_expect_success 'exercise batching of synchronous flush to backing store' '
 	flux setattr content.flush-batch-limit 5 &&
         store_junk loadunload 200 &&
     	flux content flush &&
 	NDIRTY=`flux module stats --type int --parse dirty content` &&
 	test ${NDIRTY} -eq 0
-'
-
-test_expect_success 'exercise batching of asynchronous flush to backing store' '
-        OLD_COUNT=`flux module stats --type int --parse count content` &&
-	flux module remove content-sqlite &&
-	flux module load content-sqlite &&
-	flux module remove content-sqlite &&
-	flux module load content-sqlite &&
-	flux module remove content-sqlite &&
-	flux module load content-sqlite &&
-        NEW_COUNT=`flux module stats --type int --parse count content` &&
-	test $OLD_COUNT -le $NEW_COUNT
 '
 
 test_expect_success 'remove content-sqlite module on rank 0' '

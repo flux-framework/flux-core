@@ -109,7 +109,7 @@ typedef struct {
     zlist_t *sigwatchers;
     struct service_switch *services;
     heartbeat_t *heartbeat;
-    shutdown_t *shutdown;
+    struct shutdown *shutdown;
     double shutdown_grace;
     double heartbeat_rate;
     int sec_typemask;
@@ -136,7 +136,7 @@ static void child_cb (overlay_t *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
-static void shutdown_cb (shutdown_t *s, bool expired, void *arg);
+static void shutdown_cb (struct shutdown *s, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
 static int broker_handle_signals (broker_ctx_t *ctx);
@@ -148,7 +148,7 @@ static int load_module_byname (broker_ctx_t *ctx, const char *name,
                                const char *argz, size_t argz_len,
                                const flux_msg_t *request);
 static int unload_module_byname (broker_ctx_t *ctx, const char *name,
-                                 const flux_msg_t *request, bool async);
+                                 const flux_msg_t *request);
 
 static void set_proctitle (uint32_t rank);
 static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
@@ -323,8 +323,6 @@ int main (int argc, char *argv[])
     if (!(ctx.hello = hello_create ()))
         oom ();
     if (!(ctx.heartbeat = heartbeat_create ()))
-        oom ();
-    if (!(ctx.shutdown = shutdown_create ()))
         oom ();
     if (!(ctx.attrs = attr_create ()))
         oom ();
@@ -627,12 +625,12 @@ int main (int argc, char *argv[])
         }
     }
 
-    if (shutdown_set_flux (ctx.shutdown, ctx.h) < 0) {
-        log_err ("shutdown_set_flux");
-        goto cleanup;
-    }
-    if (shutdown_set_grace (ctx.shutdown, ctx.shutdown_grace) < 0) {
-        log_err ("shutdown_set_grace");
+    if (!(ctx.shutdown = shutdown_create (ctx.h,
+                                          ctx.shutdown_grace,
+                                          size,
+                                          ctx.tbon_k,
+                                          ctx.overlay))) {
+        log_err ("shutdown_create");
         goto cleanup;
     }
     shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
@@ -672,16 +670,6 @@ int main (int argc, char *argv[])
     modhash_set_rank (ctx.modhash, rank);
     modhash_set_flux (ctx.modhash, ctx.h);
     modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
-    /* Load the local connector module.
-     * Other modules will be loaded in rc1 using flux module,
-     * which uses the local connector.
-     */
-    if (ctx.verbose)
-        log_msg ("loading connector-local");
-    if (load_module_byname (&ctx, "connector-local", NULL, 0, NULL) < 0) {
-        log_err ("load_module connector-local");
-        goto cleanup;
-    }
 
     /* install heartbeat (including timer on rank 0)
      */
@@ -714,6 +702,17 @@ int main (int argc, char *argv[])
     }
     if (hello_start (ctx.hello) < 0) {
         log_err ("hello_start");
+        goto cleanup;
+    }
+    /* Load the local connector module.
+     * Other modules will be loaded in rc1 using flux module,
+     * which uses the local connector.
+     * The shutdown protocol unloads it.
+     */
+    if (ctx.verbose)
+        log_msg ("loading connector-local");
+    if (load_module_byname (&ctx, "connector-local", NULL, 0, NULL) < 0) {
+        log_err ("load_module connector-local");
         goto cleanup;
     }
 
@@ -751,23 +750,12 @@ cleanup:
      */
     heartbeat_stop (ctx.heartbeat);
 
-    /* Unload modules.
-     */
-    if (ctx.verbose)
-        log_msg ("unloading connector-local");
-    if (unload_module_byname (&ctx, "connector-local", NULL, false) < 0) {
-        if (errno != ENOENT)
-            log_err ("unload connector-local");
-    }
-    if (ctx.verbose)
-        log_msg ("finalizing modules");
-    modhash_destroy (ctx.modhash);
-
     /* Unregister builtin services
      */
     attr_destroy (ctx.attrs);
     content_cache_destroy (ctx.cache);
 
+    modhash_destroy (ctx.modhash);
     zlist_destroy (&ctx.sigwatchers);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
@@ -909,15 +897,28 @@ static void hello_update_cb (hello_t *hello, void *arg)
     }
 }
 
-/* Currently 'expired' is always true.
+/* If shutdown timeout has occured, exit immediately.
+ * If shutdown is beginning, start unload of connector-local module.
+ * If shutdown is ending, then IFF connector-local has finished
+ * unloading, stop the reactor.  Otherwise module_status_cb() will do it.
  */
-static void shutdown_cb (shutdown_t *s, bool expired, void *arg)
+static void shutdown_cb (struct shutdown *s, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    if (expired) {
-        if (overlay_get_rank (ctx->overlay) == 0)
-            exit_rc = shutdown_get_rc (s);
-        flux_reactor_stop (flux_get_reactor (ctx->h));
+
+    if (shutdown_is_expired (s)) {
+        log_msg ("shutdown timer expired on rank %"PRIu32,
+                 overlay_get_rank (ctx->overlay));
+        _exit (1);
+    }
+    if (!shutdown_is_complete (s)) {
+        module_t *p;
+        if ((p = module_lookup_byname (ctx->modhash, "connector-local")))
+            module_stop (p);
+    }
+    else {
+        if (!module_lookup_byname (ctx->modhash, "connector-local"))
+            flux_reactor_stop (flux_get_reactor (ctx->h));
     }
 }
 
@@ -954,16 +955,19 @@ static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
     switch (level) {
         case 1: /* init completed */
             if (rc != 0) {
+                exit_rc = rc;
                 new_level = 3;
-                shutdown_arm (ctx->shutdown, rc, "run level 1 %s", exit_string);
             } else
                 new_level = 2;
             break;
         case 2: /* initial program completed */
+            exit_rc = rc;
             new_level = 3;
-            shutdown_arm (ctx->shutdown, rc, "run level 2 %s", exit_string);
             break;
         case 3: /* finalization completed */
+            if (rc != 0 && exit_rc == 0)
+                exit_rc = rc;
+            shutdown_instance (ctx->shutdown); // initiate shutdown from rank 0
             break;
     }
     if (new_level != -1) {
@@ -1280,37 +1284,8 @@ static int load_module_byname (broker_ctx_t *ctx, const char *name,
     return 0;
 }
 
-/*  Synchronize the finalizing state with a module being removed
- *   synchronously. Do this by muting the module, then sending
- *   a FLUX_MODSTATE_FINALIZING keepalive directly to the module.
- *   The module will have sent the broker a keepalive message as
- *   well, but it is only necessary for us to recv that when
- *   during an async module unload.
- */
-static int sync_finalizing (module_t *p)
-{
-    flux_msg_t *msg = NULL;
-    int rc = -1;
-    module_mute (p);
-    if (!(msg = flux_keepalive_encode (0, FLUX_MODSTATE_FINALIZING))
-        || (rc = module_sendmsg (p, msg)) < 0) {
-        log_err ("failed to send finalizing keepalive to %s",
-                 module_get_name (p));
-    }
-    flux_msg_destroy (msg);
-    return 0;
-}
-
-/* If 'async' is true, service de-registration and module
- * destruction (including join) are deferred until module keepalive
- * status indicates module main() has exited (via module_status_cb).
- * This allows modules with distributed shutdown to talk to each
- * other while they shut down, and also does not block the reactor
- * from handling other events.  If 'async' is false, do all that
- * teardown synchronously here.
- */
 static int unload_module_byname (broker_ctx_t *ctx, const char *name,
-                                 const flux_msg_t *request, bool async)
+                                 const flux_msg_t *request)
 {
     module_t *p;
 
@@ -1320,19 +1295,8 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
     }
     if (module_stop (p) < 0)
         return -1;
-    if (async) {
-        if (request && module_push_rmmod (p, request) < 0)
-            return -1;
-    } else {
-        assert (request == NULL);
-        if (sync_finalizing (p) < 0)
-            flux_log_error (ctx->h,
-                           "unload_module(%s): "
-                           "failed to sync finalizing state",
-                           module_get_name (p));
-        service_remove_byuuid (ctx->services, module_get_uuid (p));
-        module_remove (ctx->modhash, p);
-    }
+    if (module_push_rmmod (p, request) < 0)
+        return -1;
     flux_log (ctx->h, LOG_DEBUG, "rmmod %s", name);
     return 0;
 }
@@ -1383,7 +1347,7 @@ static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
-    if (unload_module_byname (ctx, name, msg, true) < 0)
+    if (unload_module_byname (ctx, name, msg) < 0)
         goto error;
     return;
 error:
@@ -1959,6 +1923,14 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
         if (module_rmmod_respond (ctx->h, p) < 0)
             flux_log_error (ctx->h, "flux_respond to rmmod %s", name);
 
+        /* Special case for connector-local removal:
+         * If shutdown is complete, stop the reactor.
+         */
+        if (!strcmp (name, "connector-local")) {
+            if (shutdown_is_complete (ctx->shutdown))
+                flux_reactor_stop (flux_get_reactor (ctx->h));
+        }
+
         module_remove (ctx->modhash, p);
     }
 }
@@ -1967,10 +1939,11 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                          int revents, void *arg)
 {
     broker_ctx_t *ctx = arg;
+    int rank = overlay_get_rank (ctx->overlay);
     int signum = flux_signal_watcher_get_signum (w);
 
-    shutdown_arm (ctx->shutdown, 0,
-                  "signal %d (%s)", signum, strsignal (signum));
+    log_msg ("signal %d (%s) on rank %u", signum, strsignal (signum), rank);
+    _exit (1);
 }
 
 /* TRICKY:  Fix up ROUTER socket used in reverse direction.

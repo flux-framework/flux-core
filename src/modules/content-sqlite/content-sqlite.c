@@ -44,7 +44,6 @@ typedef struct {
     sqlite3_stmt *store_stmt;
     sqlite3_stmt *dump_stmt;
     flux_t *h;
-    bool broker_shutdown;
     const char *hashfun;
     uint32_t blob_size_limit;
     size_t lzo_bufsize;
@@ -414,105 +413,9 @@ int register_content_backing_service (flux_t *h)
     return rc;
 }
 
-/* Intercept broker shutdown event.  If broker is shutting down,
- * avoid transferring data back to the content cache at unload time.
- */
-void broker_shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
-{
-    sqlite_ctx_t *ctx = arg;
-    ctx->broker_shutdown = true;
-    flux_log (h, LOG_DEBUG, "broker shutdown in progress");
-}
-
-/* Manage shutdown of this module.
- * Tell content cache to disable backing store,
- * then write everything back to it before exiting.
- */
-void shutdown_cb (flux_t *h, flux_msg_handler_t *mh,
-                  const flux_msg_t *msg, void *arg)
-{
-    sqlite_ctx_t *ctx = arg;
-    flux_future_t *f;
-    int count = 0;
-    int old_state;
-
-    flux_log (h, LOG_DEBUG, "shutdown: begin");
-    if (register_backing_store (h, false, "content-sqlite") < 0) {
-        flux_log_error (h, "shutdown: unregistering backing store");
-        goto done;
-    }
-    if (ctx->broker_shutdown) {
-        flux_log (h, LOG_DEBUG, "shutdown: instance is terminating, don't reload to cache");
-        goto done;
-    }
-    //delay cancellation to ensure lock-correctness in sqlite
-    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_state);
-    while (sqlite3_step (ctx->dump_stmt) == SQLITE_ROW) {
-        const char *blobref;
-        int blobref_size;
-        const void *data = NULL;
-        int uncompressed_size;
-        int size = sqlite3_column_bytes (ctx->dump_stmt, 0);
-        if (sqlite3_column_type (ctx->dump_stmt, 0) != SQLITE_BLOB
-                                                            && size > 0) {
-            flux_log (h, LOG_ERR, "shutdown: encountered non-blob value");
-            continue;
-        }
-        data = sqlite3_column_blob (ctx->dump_stmt, 0);
-        if (sqlite3_column_type (ctx->dump_stmt, 1) != SQLITE_INTEGER) {
-            flux_log (h, LOG_ERR, "shutdown: selected value is not an integer");
-            errno = EINVAL;
-            goto done;
-        }
-        uncompressed_size = sqlite3_column_int (ctx->dump_stmt, 1);
-        if (uncompressed_size != -1) {
-            if (ctx->lzo_bufsize < uncompressed_size
-                            && grow_lzo_buf (ctx, uncompressed_size) < 0)
-                goto done;
-            int r = LZ4_decompress_safe (data, ctx->lzo_buf, size, uncompressed_size);
-            if (r < 0) {
-                errno = EINVAL;
-                goto done;
-            }
-            if (r != uncompressed_size) {
-                flux_log (h, LOG_ERR, "shutdown: blob size mismatch");
-                errno = EINVAL;
-                goto done;
-            }
-            data = ctx->lzo_buf;
-            size = uncompressed_size;
-        }
-        if (!(f = flux_rpc_raw (h, "content.store", data, size,
-                                                        FLUX_NODEID_ANY, 0))) {
-            flux_log_error (h, "shutdown: store");
-            continue;
-        }
-        if (flux_rpc_get_raw (f, (const void **)&blobref, &blobref_size) < 0) {
-            flux_log_error (h, "shutdown: store");
-            flux_future_destroy (f);
-            continue;
-        }
-        if (!blobref || blobref[blobref_size - 1] != '\0') {
-            flux_log (h, LOG_ERR, "shutdown: store returned malformed blobref");
-            flux_future_destroy (f);
-            continue;
-        }
-        flux_future_destroy (f);
-        count++;
-    }
-    (void )sqlite3_reset (ctx->dump_stmt);
-    flux_log (h, LOG_DEBUG, "shutdown: %d entries returned to cache", count);
-done:
-    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old_state);
-    flux_reactor_stop (flux_get_reactor (h));
-}
-
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "content-backing.load",    load_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content-sqlite.shutdown", shutdown_cb, 0, },
-    { FLUX_MSGTYPE_EVENT,   "shutdown",                broker_shutdown_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -522,10 +425,6 @@ int mod_main (flux_t *h, int argc, char **argv)
     sqlite_ctx_t *ctx = getctx (h);
     if (!ctx)
         goto done;
-    if (flux_event_subscribe (h, "shutdown") < 0) {
-        flux_log_error (h, "flux_event_subscribe");
-        goto done;
-    }
     if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
         goto done;

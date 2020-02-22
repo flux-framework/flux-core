@@ -17,6 +17,7 @@
 typedef struct overlay_struct overlay_t;
 typedef void (*overlay_cb_f)(overlay_t *ov, void *sock, void *arg);
 typedef int (*overlay_init_cb_f)(overlay_t *ov, void *arg);
+typedef void (*overlay_monitor_cb_f)(overlay_t *ov, void *arg);
 
 overlay_t *overlay_create (void);
 void overlay_destroy (overlay_t *ov);
@@ -37,6 +38,7 @@ void overlay_set_idle_warning (overlay_t *ov, int heartbeats);
  */
 uint32_t overlay_get_rank (overlay_t *ov);
 uint32_t overlay_get_size (overlay_t *ov);
+int overlay_get_child_peer_count (overlay_t *ov);
 
 /* All ranks but rank 0 connect to a parent to form the main TBON.
  */
@@ -60,6 +62,11 @@ int overlay_mcast_child (overlay_t *ov, const flux_msg_t *msg);
 /* Call when message is received from child 'uuid'.
  */
 void overlay_checkin_child (overlay_t *ov, const char *uuid);
+
+/* Register callback that will be called each time a child connects/disconnects.
+ * Use overlay_get_child_peer_count() to access the actual count.
+ */
+void overlay_set_monitor_cb (overlay_t *ov, overlay_monitor_cb_f cb, void *arg);
 
 /* Encode cmb.lspeer response payload.
  */
@@ -91,7 +98,6 @@ int overlay_reparent (overlay_t *ov, const char *uri, bool *recycled);
  * Returns 0 on success, -1 on error.
  */
 int overlay_register_attrs (overlay_t *overlay, attr_t *attrs);
-
 
 #endif /* !_BROKER_OVERLAY_H */
 

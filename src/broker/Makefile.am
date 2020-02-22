@@ -71,8 +71,7 @@ flux_broker_LDADD = \
 
 flux_broker_LDFLAGS =
 
-TESTS = test_shutdown.t \
-	test_heartbeat.t \
+TESTS = test_heartbeat.t \
 	test_hello.t \
 	test_attr.t \
 	test_service.t \
@@ -98,10 +97,6 @@ check_PROGRAMS = $(TESTS)
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
-
-test_shutdown_t_SOURCES = test/shutdown.c
-test_shutdown_t_CPPFLAGS = $(test_cppflags)
-test_shutdown_t_LDADD = $(test_ldadd)
 
 test_heartbeat_t_SOURCES = test/heartbeat.c
 test_heartbeat_t_CPPFLAGS = $(test_cppflags)

@@ -76,8 +76,8 @@ test_expect_success 'rc1 bad path handled same as failure' '
 	grep -q "Run level 3 Exited" bad1.log
 '
 
-test_expect_success 'rc3 failure does not cause instance failure' '
-	flux start \
+test_expect_success 'rc3 failure causes instance failure' '
+	! flux start \
 		-o,-Sbroker.rc3_path=/bin/false \
 		-o,-Slog-stderr-level=6,-Sinit.mode=normal \
 		/bin/true 2>false3.log &&
