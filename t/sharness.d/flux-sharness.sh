@@ -120,6 +120,10 @@ test_under_flux() {
         # Set log_path for ASan o/w errors from broker may be lost
         ASAN_OPTIONS=${ASAN_OPTIONS}:log_path=${TEST_NAME}.asan
     fi
+    # Extend timeouts if job personality, job cleanup can take awhile
+    if test -z "${gracetime}" -a "$personality" = "job"; then
+        gracetime="-o,-g,10"
+    fi
     logopts="-o -Slog-filename=${log_file},-Slog-forward-level=7"
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
