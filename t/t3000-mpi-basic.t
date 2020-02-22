@@ -5,6 +5,11 @@ test_description='Test that Flux can launch MPI'
 
 . `dirname $0`/sharness.sh
 
+if test -z "$FLUX_TEST_MPI"; then
+    skip_all='skipping MPI tests, FLUX_TEST_MPI not set'
+    test_done
+fi
+
 if ! test -x ${FLUX_BUILD_DIR}/t/mpi/hello; then
     skip_all='skipping MPI tests, MPI not available/configured'
     test_done
