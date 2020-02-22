@@ -178,5 +178,10 @@ else
     test_set_prereq NO_ASAN
 fi
 
+# Sanitize PMI_* environment for all tests. This allows commands like
+#  `flux broker` in tests to boot as singleton even when run under a
+#  job of an existing RM.
+for var in $(env | grep ^PMI); do unset ${var//=*}; done
+for var in $(env | grep ^SLURM); do unset ${var//=*}; done
 
 # vi: ts=4 sw=4 expandtab
