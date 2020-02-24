@@ -34,10 +34,7 @@ VALGRIND_SUPPRESSIONS=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind.supp
 VALGRIND_WORKLOAD=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind-workload.sh
 BROKER=${FLUX_BUILD_DIR}/src/broker/flux-broker
 
-# broker run under valgrind may need extra retries in flux_open():
-export FLUX_LOCAL_CONNECTOR_RETRY_COUNT=10
 VALGRIND_NBROKERS=${VALGRIND_NBROKERS:-2}
-VALGRIND_SHUTDOWN_GRACE=${VALGRIND_SHUTDOWN_GRACE:-16}
 
 test_expect_success \
   "valgrind reports no new errors on $VALGRIND_NBROKERS broker run" '
@@ -54,7 +51,6 @@ test_expect_success \
 		--wrap=--leak-resolution=med \
 		--wrap=--error-exitcode=1 \
 		--wrap=--suppressions=$VALGRIND_SUPPRESSIONS \
-		-o,--shutdown-grace=${VALGRIND_SHUTDOWN_GRACE} \
 		 ${VALGRIND_WORKLOAD}
 '
 test_done
