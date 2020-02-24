@@ -2,6 +2,9 @@
 
 pids=""
 
+# Allow connector-local more time to start listening on socket in rc1 only
+export FLUX_LOCAL_CONNECTOR_RETRY_COUNT=10
+
 flux exec -r all flux module load barrier
 
 flux module load content-sqlite
