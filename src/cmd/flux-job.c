@@ -262,6 +262,9 @@ static struct optparse_option wait_opts[] =  {
     { .name = "all", .key = 'a', .has_arg = 0,
       .usage = "Wait for all (waitable) jobs",
     },
+    { .name = "verbose", .key = 'v', .has_arg = 0,
+      .usage = "Emit a line of output for all jobs, not just failing ones",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -2543,12 +2546,18 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
                 log_msg_exit ("flux_job_wait_get_status: %s",
                               future_strerror (f, errno));
             }
+            if (flux_job_wait_get_id (f, &id) < 0)
+                log_msg_exit ("flux_job_wait_get_id: %s",
+                              future_strerror (f, errno));
             if (!success) {
-                if (flux_job_wait_get_id (f, &id) < 0)
-                    log_msg_exit ("flux_job_wait_get_id: %s",
-                                  future_strerror (f, errno));
                 fprintf (stderr, "%ju: %s\n", (uintmax_t)id, errstr);
                 rc = 1;
+            }
+            else {
+                if (optparse_hasopt (p, "verbose"))
+                    fprintf (stderr,
+                             "%ju: job completed successfully\n",
+                             (uintmax_t)id);
             }
             flux_future_destroy (f);
         }
