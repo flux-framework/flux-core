@@ -14,6 +14,10 @@ SUBMIT_INTER="flux python ${FLUX_SOURCE_DIR}/t/job-manager/wait-interrupted.py"
 
 flux setattr log-stderr-level 1
 
+test_job_count() {
+    test $(${list_jobs} | wc -l) -eq $1
+}
+
 test_expect_success "wait works on waitable job run with flux-mini" '
 	JOBID=$(flux mini submit --flags waitable /bin/true) &&
 	flux job wait ${JOBID}
@@ -111,6 +115,46 @@ test_expect_success "wait works when job tasks exit 1" '
 	JOBID=$(flux mini submit --flags waitable /bin/false) &&
 	! flux job wait ${JOBID} 2>false.out &&
 	grep exit false.out
+'
+
+test_expect_success "wait --all fails with jobid" '
+	test_must_fail flux job wait --all 42
+'
+
+test_expect_success "wait --all works with no waitable jobs" '
+	test_job_count 0 &&
+	flux job wait --all
+'
+
+test_expect_success "wait --all works with one job" '
+	flux mini submit --flags waitable /bin/true &&
+	test_job_count 1 &&
+	flux job wait --all &&
+	test_job_count 0
+'
+
+test_expect_success "wait --all works with two jobs" '
+	flux mini submit --flags waitable /bin/true &&
+	flux mini submit --flags waitable /bin/true &&
+	test_job_count 2 &&
+	flux job wait --all &&
+	test_job_count 0
+'
+
+test_expect_success "wait --all fails when first job fails" '
+	flux mini submit --flags waitable /bin/false &&
+	flux mini submit --flags waitable /bin/true &&
+	test_job_count 2 &&
+	test_must_fail flux job wait --all &&
+	test_job_count 0
+'
+
+test_expect_success "wait --all fails when second job fails" '
+	flux mini submit --flags waitable /bin/true &&
+	flux mini submit --flags waitable /bin/false &&
+	test_job_count 2 &&
+	test_must_fail flux job wait --all &&
+	test_job_count 0
 '
 
 test_expect_success "wait fails on bad jobid, " '
