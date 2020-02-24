@@ -42,6 +42,7 @@
 #include "src/common/libioencode/ioencode.h"
 
 int cmd_list (optparse_t *p, int argc, char **argv);
+int cmd_status (optparse_t *p, int argc, char **argv);
 int cmd_list_ids (optparse_t *p, int argc, char **argv);
 int cmd_submit (optparse_t *p, int argc, char **argv);
 int cmd_attach (optparse_t *p, int argc, char **argv);
@@ -188,6 +189,12 @@ static struct optparse_option attach_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option status_opts[] = {
+    { .name = "verbose", .key = 'v', .has_arg = 0,
+      .usage = "Increase verbosity" },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option id_opts[] =  {
     { .name = "from", .key = 'f', .has_arg = 1,
       .arginfo = "dec|kvs|hex|words",
@@ -310,6 +317,14 @@ static struct optparse_subcommand subcommands[] = {
       cmd_attach,
       0,
       attach_opts,
+    },
+    { "status",
+      "id [id...]",
+      "Wait for all job.finish events "
+      "and return the highest job completion status",
+      cmd_status,
+      0,
+      status_opts,
     },
     { "submit",
       "[OPTIONS] [jobspec]",
@@ -1770,6 +1785,116 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     flux_watcher_destroy (ctx.stdin_w);
     flux_close (ctx.h);
     return ctx.exit_code;
+}
+
+struct job_status {
+    flux_jobid_t id;
+    int status;
+    int exit_code;
+};
+
+static void status_eventlog_cb (flux_future_t *f, void *arg)
+{
+    struct job_status *stat = arg;
+    const char *entry = NULL;
+    const char *name = NULL;
+    json_t *context = NULL;
+    json_t *o = NULL;
+
+    if (flux_job_event_watch_get (f, &entry) < 0) {
+        if (errno == ENODATA)
+            goto done;
+        if (errno == ENOENT)
+            log_msg_exit ("%ju: No such job",
+                          (uintmax_t) stat->id);
+        log_msg_exit ("%ju: flux_job_event_watch_get: %s",
+                      (uintmax_t) stat->id,
+                      future_strerror (f, errno));
+    }
+    if (!(o = eventlog_entry_decode (entry)))
+        log_err_exit ("eventlog_entry_decode");
+    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
+        log_err_exit ("eventlog_entry_parse");
+
+    if (!strcmp (name, "finish")) {
+        if (json_unpack (context, "{s:i}", "status", &stat->status) < 0)
+            log_err_exit ("error decoding finish context");
+        if (flux_job_event_watch_cancel (f) < 0)
+            log_err_exit ("flux_job_event_watch_cancel");
+        if (WIFSIGNALED (stat->status))
+            stat->exit_code = WTERMSIG (stat->status) + 128;
+        else
+            stat->exit_code = WEXITSTATUS (stat->status);
+    }
+    json_decref (o);
+    flux_future_reset (f);
+    return;
+done:
+    flux_future_destroy (f);
+}
+
+int cmd_status (optparse_t *p, int argc, char **argv)
+{
+    struct job_status *stats;
+    flux_t *h = NULL;
+    flux_future_t *f = NULL;
+    int exit_code;
+    int i;
+    int njobs;
+    int verbose = optparse_getopt (p, "verbose", NULL);
+    int optindex = optparse_option_index (p);
+
+    if ((njobs = (argc - optindex)) < 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if (!(stats = calloc (njobs, sizeof (*stats))))
+        log_err_exit ("Failed to initialize stats array");
+
+    for (i = 0; i < njobs; i++) {
+        struct job_status *stat = &stats[i];
+        stat->id = parse_arg_unsigned (argv[optindex+i], "jobid");
+
+        if (!(f = flux_job_event_watch (h, stat->id, "eventlog", 0)))
+            log_err_exit ("flux_job_event_watch");
+        if (flux_future_then (f, -1, status_eventlog_cb, stat) < 0)
+            log_err_exit ("flux_future_then");
+    }
+
+    if (verbose && njobs > 1)
+        log_msg ("fetching status for %d jobs", njobs);
+
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err ("flux_reactor_run");
+
+    if (verbose && njobs > 1)
+        log_msg ("all done.");
+
+    exit_code = 0;
+    for (i = 0; i < njobs; i++) {
+        struct job_status *stat = &stats[i];
+        if (stat->exit_code > exit_code)
+            exit_code = stat->exit_code;
+        if (optparse_hasopt (p, "verbose")) {
+            if (WIFSIGNALED (stat->status)) {
+                log_msg ("%ju: job shell died by signal %d",
+                         (uintmax_t) stat->id,
+                         WTERMSIG (stat->status));
+            }
+            else if (verbose > 1 || stat->exit_code != 0) {
+                log_msg ("%ju: exited with exit code %d",
+                         (uintmax_t) stat->id,
+                         stat->exit_code);
+            }
+        }
+    }
+    flux_close (h);
+    free (stats);
+    return exit_code;
 }
 
 void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
