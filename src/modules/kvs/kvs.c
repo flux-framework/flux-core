@@ -195,37 +195,51 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
             goto cleanup;
         }
 
+        /* On rank 0, we need to listen for all of these namespace
+         * events, all of the time.  So subscribe to them just once on
+         * rank 0. */
+        if (ctx->rank == 0) {
+            if (flux_event_subscribe (ctx->h, "kvs.setroot") < 0
+                || flux_event_subscribe (ctx->h, "kvs.error") < 0
+                || flux_event_subscribe (ctx->h, "kvs.namespace-remove") < 0) {
+                flux_log_error (ctx->h, "flux_event_subscribe");
+                goto cleanup;
+            }
+        }
+
         ctx->events_init = true;
     }
 
-    if (asprintf (&setroot_topic, "kvs.setroot-%s", ns) < 0) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
+    if (ctx->rank != 0) {
+        if (asprintf (&setroot_topic, "kvs.setroot-%s", ns) < 0) {
+            errno = ENOMEM;
+            goto cleanup;
+        }
 
-    if (flux_event_subscribe (ctx->h, setroot_topic) < 0) {
-        flux_log_error (ctx->h, "flux_event_subscribe");
-        goto cleanup;
-    }
+        if (flux_event_subscribe (ctx->h, setroot_topic) < 0) {
+            flux_log_error (ctx->h, "flux_event_subscribe");
+            goto cleanup;
+        }
 
-    if (asprintf (&error_topic, "kvs.error-%s", ns) < 0) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
+        if (asprintf (&error_topic, "kvs.error-%s", ns) < 0) {
+            errno = ENOMEM;
+            goto cleanup;
+        }
 
-    if (flux_event_subscribe (ctx->h, error_topic) < 0) {
-        flux_log_error (ctx->h, "flux_event_subscribe");
-        goto cleanup;
-    }
+        if (flux_event_subscribe (ctx->h, error_topic) < 0) {
+            flux_log_error (ctx->h, "flux_event_subscribe");
+            goto cleanup;
+        }
 
-    if (asprintf (&removed_topic, "kvs.namespace-removed-%s", ns) < 0) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
+        if (asprintf (&removed_topic, "kvs.namespace-removed-%s", ns) < 0) {
+            errno = ENOMEM;
+            goto cleanup;
+        }
 
-    if (flux_event_subscribe (ctx->h, removed_topic) < 0) {
-        flux_log_error (ctx->h, "flux_event_subscribe");
-        goto cleanup;
+        if (flux_event_subscribe (ctx->h, removed_topic) < 0) {
+            flux_log_error (ctx->h, "flux_event_subscribe");
+            goto cleanup;
+        }
     }
 
     rc = 0;
@@ -243,34 +257,36 @@ static int event_unsubscribe (kvs_ctx_t *ctx, const char *ns)
     char *removed_topic = NULL;
     int rc = -1;
 
-    if (asprintf (&setroot_topic, "kvs.setroot-%s", ns) < 0) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
+    if (ctx->rank != 0) {
+        if (asprintf (&setroot_topic, "kvs.setroot-%s", ns) < 0) {
+            errno = ENOMEM;
+            goto cleanup;
+        }
 
-    if (flux_event_unsubscribe (ctx->h, setroot_topic) < 0) {
-        flux_log_error (ctx->h, "flux_event_subscribe");
-        goto cleanup;
-    }
+        if (flux_event_unsubscribe (ctx->h, setroot_topic) < 0) {
+            flux_log_error (ctx->h, "flux_event_subscribe");
+            goto cleanup;
+        }
 
-    if (asprintf (&error_topic, "kvs.error-%s", ns) < 0) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
+        if (asprintf (&error_topic, "kvs.error-%s", ns) < 0) {
+            errno = ENOMEM;
+            goto cleanup;
+        }
 
-    if (flux_event_unsubscribe (ctx->h, error_topic) < 0) {
-        flux_log_error (ctx->h, "flux_event_subscribe");
-        goto cleanup;
-    }
+        if (flux_event_unsubscribe (ctx->h, error_topic) < 0) {
+            flux_log_error (ctx->h, "flux_event_subscribe");
+            goto cleanup;
+        }
 
-    if (asprintf (&removed_topic, "kvs.namespace-removed-%s", ns) < 0) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
+        if (asprintf (&removed_topic, "kvs.namespace-removed-%s", ns) < 0) {
+            errno = ENOMEM;
+            goto cleanup;
+        }
 
-    if (flux_event_subscribe (ctx->h, removed_topic) < 0) {
-        flux_log_error (ctx->h, "flux_event_subscribe");
-        goto cleanup;
+        if (flux_event_subscribe (ctx->h, removed_topic) < 0) {
+            flux_log_error (ctx->h, "flux_event_subscribe");
+            goto cleanup;
+        }
     }
 
     rc = 0;
