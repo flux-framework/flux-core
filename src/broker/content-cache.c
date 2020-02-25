@@ -596,15 +596,6 @@ error:
  * informs the content service of its availability, and entries are
  * asynchronously duplicated on the backing store and made eligible for
  * dropping from the rank 0 cache.
- *
- * At module unload time, Backing store is disabled and content.backing
- * synchronously transfers content back to the cache.  This allows the
- * module providing the backing store to be replaced early at runtime,
- * before the amount of content exceeds the cache's ability to hold it.
- *
- * If the broker is being shutdown, this transfer is skipped by
- * to avoid unnecessary and possibly OOM-triggering data movement into
- * the cache.
  */
 
 static int cache_flush (content_cache_t *cache)
