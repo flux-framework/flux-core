@@ -157,6 +157,15 @@ test_expect_success "wait --all fails when second job fails" '
 	test_job_count 0
 '
 
+
+test_expect_success "wait --all --verbose emits one line per succesful job" '
+	flux mini submit --flags waitable /bin/true &&
+	flux mini submit --flags waitable /bin/true &&
+	flux mini submit --flags waitable /bin/false &&
+	test_must_fail flux job wait --all --verbose 2>verbose.err &&
+	test $(wc -l <verbose.err) -eq 3
+'
+
 test_expect_success "wait fails on bad jobid, " '
 	test_must_fail flux job wait 1
 '
