@@ -86,6 +86,17 @@ static void validate_killall (struct validate *v)
     flux_future_destroy (cf);
 }
 
+int validate_stop_notify (struct validate *v, process_exit_f cb, void *arg)
+{
+    int i;
+    int count;
+
+    count = 0;
+    for (i = 0; i < MAX_WORKER_COUNT; i++)
+        count += worker_stop_notify (v->worker[i], cb, arg);
+    return count;
+}
+
 void validate_destroy (struct validate *v)
 {
     if (v) {

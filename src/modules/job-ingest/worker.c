@@ -58,6 +58,8 @@ struct worker {
     flux_watcher_t *timer;
     double inactivity_timeout;
     zlist_t *trash;
+    process_exit_f exit_cb;
+    void *exit_arg;
 };
 
 static int worker_start (struct worker *w);
@@ -92,6 +94,11 @@ static void worker_completion_cb (flux_subprocess_t *p)
      */
     if (w->p == p)
         w->p = NULL;
+
+    /*  Call worker_stop_notify() callback, if any
+     */
+    if (w->exit_cb)
+        w->exit_cb (w->exit_arg);
 }
 
 /* Subprocess state change.
@@ -307,6 +314,21 @@ static void worker_stop (struct worker *w)
         w->p = NULL;
         errno = saved_errno;
     }
+}
+
+/* Stop current worker.
+ * Return count of processes still running for this worker.
+ * If greater than zero, arrange for callback on each process completion.
+ */
+int worker_stop_notify (struct worker *w, process_exit_f cb, void *arg)
+{
+    int count;
+
+    worker_stop (w);
+    count = zlist_size (w->trash);
+    w->exit_cb = cb;
+    w->exit_arg = arg;
+    return count;
 }
 
 flux_future_t *worker_kill (struct worker *w, int signo)

@@ -19,7 +19,8 @@ job_ingest_la_SOURCES = \
 	validate.c \
 	validate.h \
 	worker.c \
-	worker.h
+	worker.h \
+	types.h
 
 job_ingest_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_ingest_la_LIBADD = $(fluxmod_libadd) \
