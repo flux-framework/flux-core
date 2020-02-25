@@ -258,6 +258,16 @@ static struct optparse_option wait_event_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option wait_opts[] =  {
+    { .name = "all", .key = 'a', .has_arg = 0,
+      .usage = "Wait for all (waitable) jobs",
+    },
+    { .name = "verbose", .key = 'v', .has_arg = 0,
+      .usage = "Emit a line of output for all jobs, not just failing ones",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_subcommand subcommands[] = {
     { "list",
       "[OPTIONS]",
@@ -395,11 +405,11 @@ static struct optparse_subcommand subcommands[] = {
       NULL
     },
     { "wait",
-      "[id]",
-      "Wait for job to complete.",
+      "[--all] [id]",
+      "Wait for job(s) to complete.",
       cmd_wait,
       0,
-      NULL
+      wait_opts,
     },
     OPTPARSE_SUBCMD_END
 };
@@ -2510,29 +2520,64 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     flux_jobid_t id = FLUX_JOBID_ANY;
     bool success;
     const char *errstr;
+    int rc = 0;
 
     if ((argc - optindex) > 1) {
         optparse_print_usage (p);
         exit (1);
     }
+    if (optindex < argc) {
+        id = parse_arg_unsigned (argv[optindex++], "jobid");
+        if (optparse_hasopt (p, "all"))
+            log_err_exit ("jobid not supported with --all");
+    }
+
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
-    if (optindex < argc)
-        id = parse_arg_unsigned (argv[optindex++], "jobid");
-    if (!(f = flux_job_wait (h, id)))
-        log_err_exit ("flux_job_wait");
-    if (flux_job_wait_get_status (f, &success, &errstr) < 0)
-        log_msg_exit ("%s", flux_future_error_string (f));
-    if (id == FLUX_JOBID_ANY) {
-        if (flux_job_wait_get_id (f, &id) < 0)
-            log_err_exit ("flux_job_wait_get_id");
-        printf ("%ju\n", (uintmax_t)id);
+    if (optparse_hasopt (p, "all")) {
+        for (;;) {
+            if (!(f = flux_job_wait (h, FLUX_JOBID_ANY)))
+                log_err_exit ("flux_job_wait");
+            if (flux_job_wait_get_status (f, &success, &errstr) < 0) {
+                if (errno == ECHILD) { // no more waitable jobs
+                    flux_future_destroy (f);
+                    break;
+                }
+                log_msg_exit ("flux_job_wait_get_status: %s",
+                              future_strerror (f, errno));
+            }
+            if (flux_job_wait_get_id (f, &id) < 0)
+                log_msg_exit ("flux_job_wait_get_id: %s",
+                              future_strerror (f, errno));
+            if (!success) {
+                fprintf (stderr, "%ju: %s\n", (uintmax_t)id, errstr);
+                rc = 1;
+            }
+            else {
+                if (optparse_hasopt (p, "verbose"))
+                    fprintf (stderr,
+                             "%ju: job completed successfully\n",
+                             (uintmax_t)id);
+            }
+            flux_future_destroy (f);
+        }
     }
-    if (!success)
-        log_msg_exit ("%s", errstr);
-    flux_future_destroy (f);
+    else {
+        if (!(f = flux_job_wait (h, id)))
+            log_err_exit ("flux_job_wait");
+        if (flux_job_wait_get_status (f, &success, &errstr) < 0)
+            log_msg_exit ("%s", flux_future_error_string (f));
+        if (id == FLUX_JOBID_ANY) {
+            if (flux_job_wait_get_id (f, &id) < 0)
+                log_err_exit ("flux_job_wait_get_id");
+            printf ("%ju\n", (uintmax_t)id);
+        }
+        if (!success)
+            log_msg_exit ("%s", errstr);
+        flux_future_destroy (f);
+    }
     flux_close (h);
-    return (0);
+    return (rc);
 }
 
 /*
