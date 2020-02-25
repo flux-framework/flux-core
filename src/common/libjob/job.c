@@ -216,6 +216,33 @@ flux_future_t *flux_job_list (flux_t *h,
     return f;
 }
 
+flux_future_t *flux_job_list_inactive (flux_t *h,
+                                       int max_entries,
+                                       double timestamp,
+                                       const char *json_str)
+{
+    flux_future_t *f;
+    json_t *o = NULL;
+    int saved_errno;
+
+    if (!h || max_entries < 0 || timestamp < 0. || !json_str
+           || !(o = json_loads (json_str, 0, NULL))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(f = flux_rpc_pack (h, "job-info.list-inactive", FLUX_NODEID_ANY, 0,
+                             "{s:i s:f s:o}",
+                             "max_entries", max_entries,
+                             "timestamp", timestamp,
+                             "attrs", o))) {
+        saved_errno = errno;
+        json_decref (o);
+        errno = saved_errno;
+        return NULL;
+    }
+    return f;
+}
+
 flux_future_t *flux_job_list_id (flux_t *h,
                                  flux_jobid_t id,
                                  const char *json_str)

@@ -180,6 +180,90 @@ error:
     json_decref (jobs);
 }
 
+/* Create a JSON array of 'job' objects.  'timestamp' limits entries
+ * returned, only returning entries with 't_inactive' newer than the
+ * timestamp.  Returns JSON object which the caller must free.  On
+ * error, return NULL with errno set:
+ *
+ * EPROTO - malformed or empty attrs array
+ * ENOMEM - out of memory
+ */
+json_t *get_inactive_jobs (struct info_ctx *ctx,
+                           int max_entries,
+                           double timestamp,
+                           json_t *attrs)
+{
+    json_t *jobs = NULL;
+    struct job *job;
+    int saved_errno;
+
+    if (!(jobs = json_array ()))
+        goto error_nomem;
+
+    job = zlistx_first (ctx->jsctx->inactive);
+    while (job && (job->t_inactive > timestamp)) {
+        json_t *o;
+        if (!(o = job_to_json (job, attrs)))
+            goto error;
+        if (json_array_append_new (jobs, o) < 0) {
+            json_decref (o);
+            errno = ENOMEM;
+            goto error;
+        }
+        if (json_array_size (jobs) == max_entries)
+            goto out;
+        job = zlistx_next (ctx->jsctx->inactive);
+    }
+
+out:
+    return jobs;
+
+error_nomem:
+    errno = ENOMEM;
+error:
+    saved_errno = errno;
+    json_decref (jobs);
+    errno = saved_errno;
+    return NULL;
+}
+
+void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
+                       const flux_msg_t *msg, void *arg)
+{
+    struct info_ctx *ctx = arg;
+    json_t *jobs = NULL;
+    int max_entries;
+    double timestamp;
+    json_t *attrs;
+
+    if (flux_request_unpack (msg, NULL, "{s:i s:F s:o}",
+                             "max_entries", &max_entries,
+                             "timestamp", &timestamp,
+                             "attrs", &attrs) < 0)
+        goto error;
+
+    if (max_entries < 0 || !json_is_array (attrs)) {
+        errno = EPROTO;
+        goto error;
+    }
+
+    if (!(jobs = get_inactive_jobs (ctx, max_entries, timestamp, attrs)))
+        goto error;
+
+    if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        goto error;
+    }
+
+    json_decref (jobs);
+    return;
+
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    json_decref (jobs);
+}
+
 int wait_id_valid (struct info_ctx *ctx, struct idsync_data *isd)
 {
     zlistx_t *list_isd;
