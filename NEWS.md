@@ -1,3 +1,40 @@
+flux-core version 0.16.0 - 2020-02-24
+-------------------------------------
+
+## New features
+
+ * job-info: fix ordering of pending jobs (#2732)
+ * job-info: add list-id service for race-free listing of 1 jobid (#2720)
+ * sched-simple: add unlimited alloc mode (#2726)
+ * flux-module: add `flux module reload` subcommand (#2736)
+ * flux-queue: add `flux queue idle` subcommand (#2712)
+
+## Improvements
+
+ * broker: rework shutdown: rc3 no longer under grace-time timeout (#2733)
+ * broker: log dropped responses sent down overlay (#2761)
+ * libflux: fulfill empty "wait_all" futures immediately (#2714)
+ * libflux: allow anonymous futures in `flux_future_push(3)` (#2714)
+ * shell: report meaningful exit codes for ENOENT, EPERM & EACESS (#2756)
+ * flux-jobs: refactor using new JobInfo and OutputFormat classes (#2734)
+ * python: accept integer job duration (#2702)
+ * python: switch from flags to boolean args in job.submit(), submit_async()
+   (#2719)
+ * python: return derived JobListRPC and JobWaitFuture objects from
+   job.job_list and job.wait,wait_async for a better interface (#2753)
+
+## Fixes
+
+ * broker: fix bootstrap under openpmix PMI-1 compat library (#2748)
+ * broker: mute modules during unload to avoid deadlock (#2710)
+ * libflux: block `flux_send()` during handle destruction (#2713)
+ * job-ingest: fixes for validation worker management (#2721, #2716)
+ * build: fix compilation errors on clang < 6.0 (#2742)
+ * testsuite: fix tests when run under Slurm and Flux jobs (#2766)
+ * testsuite: fix for hangs in tests using rc3-job (#2744)
+ * doc: fix URI format in flux-proxy(1) manpage (#2747)
+
+
 flux-core version 0.15.0 - 2020-02-03
 -------------------------------------
 
