@@ -675,6 +675,8 @@ static void content_unregister_backing_request (flux_t *h,
     flux_log (h, LOG_DEBUG, "content backing store: disabled");
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "flux_respond");
+    if (cache->acct_dirty > 0)
+        flux_log (h, LOG_ERR, "%d unflushables", cache->acct_dirty);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
