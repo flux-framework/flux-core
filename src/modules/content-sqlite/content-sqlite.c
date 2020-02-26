@@ -296,7 +296,6 @@ done:
 int register_backing_store (flux_t *h, bool value, const char *name)
 {
     flux_future_t *f;
-    int saved_errno = 0;
     int rc = -1;
 
     if (!(f = flux_rpc_pack (h,
@@ -313,22 +312,18 @@ int register_backing_store (flux_t *h, bool value, const char *name)
         goto done;
     rc = 0;
 done:
-    saved_errno = errno;
     flux_future_destroy (f);
-    errno = saved_errno;
     return rc;
 }
 
 int register_content_backing_service (flux_t *h)
 {
-    int rc, saved_errno;
+    int rc;
     flux_future_t *f;
     if (!(f = flux_service_register (h, "content-backing")))
         return -1;
     rc = flux_future_get (f, NULL);
-    saved_errno = errno;
     flux_future_destroy (f);
-    errno = saved_errno;
     return rc;
 }
 
