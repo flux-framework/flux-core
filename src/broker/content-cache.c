@@ -849,15 +849,48 @@ static void heartbeat_event (flux_t *h, flux_msg_handler_t *mh,
  */
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "content.load",      content_load_request,
-      FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "content.store",     content_store_request,
-      FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "content.backing",   content_backing_request, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content.dropcache", content_dropcache_request, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content.stats.get", content_stats_request, 0 },
-    { FLUX_MSGTYPE_REQUEST, "content.flush",     content_flush_request, 0 },
-    { FLUX_MSGTYPE_EVENT,   "hb",                heartbeat_event, 0 },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content.load",
+        content_load_request,
+        FLUX_ROLE_USER
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content.store",
+        content_store_request,
+        FLUX_ROLE_USER
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content.backing",
+        content_backing_request,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content.dropcache",
+        content_dropcache_request,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content.stats.get",
+        content_stats_request,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content.flush",
+        content_flush_request,
+        0
+    },
+    {
+        FLUX_MSGTYPE_EVENT,
+        "hb",
+        heartbeat_event,
+        0
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
