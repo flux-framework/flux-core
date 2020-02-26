@@ -327,25 +327,32 @@ error:
         flux_log_error (h, "store: flux_respond_error");
 }
 
-int register_backing_store (flux_t *h, bool value, const char *name)
+int register_backing_store (flux_t *h, const char *name)
 {
     flux_future_t *f;
-    int rc = -1;
+    int rc;
 
     if (!(f = flux_rpc_pack (h,
-                             "content.backing",
-                             FLUX_NODEID_ANY,
+                             "content.register-backing",
                              0,
-                             "{ s:b s:s }",
-                             "backing",
-                             value,
+                             0,
+                             "{s:s}",
                              "name",
                              name)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
+        return -1;
+    rc = flux_future_get (f, NULL);
+    flux_future_destroy (f);
+    return rc;
+}
+
+int unregister_backing_store (flux_t *h)
+{
+    flux_future_t *f;
+    int rc;
+
+    if (!(f = flux_rpc (h, "content.unregister-backing", NULL, 0, 0)))
+        return -1;
+    rc = flux_future_get (f, NULL);
     flux_future_destroy (f);
     return rc;
 }
@@ -530,7 +537,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         return -1;
     if (content_sqlite_opendb(ctx) < 0)
         goto done;
-    if (register_backing_store (h, true, "content-sqlite") < 0) {
+    if (register_backing_store (h, "content-sqlite") < 0) {
         flux_log_error (h, "registering backing store");
         goto done;
     }
@@ -542,7 +549,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_reactor_run");
         goto done;
     }
-    if (register_backing_store (h, false, "content-sqlite") < 0) {
+    if (unregister_backing_store (h) < 0) {
         flux_log_error (h, "unregistering backing store");
         goto done;
     }

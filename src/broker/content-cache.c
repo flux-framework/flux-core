@@ -629,42 +629,57 @@ static int cache_flush (content_cache_t *cache)
     return rc;
 }
 
-static void content_backing_request (flux_t *h, flux_msg_handler_t *mh,
-                                     const flux_msg_t *msg, void *arg)
+static void content_register_backing_request (flux_t *h,
+                                              flux_msg_handler_t *mh,
+                                              const flux_msg_t *msg,
+                                              void *arg)
 {
     content_cache_t *cache = arg;
     const char *name;
-    int backing;
 
-    if (flux_request_unpack (msg, NULL, "{ s:b s:s }",
-                             "backing", &backing,
-                             "name", &name) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
-    if (cache->rank != 0) {
+    if (cache->rank != 0 || cache->backing) {
         errno = EINVAL;
         goto error;
     }
-    if (!cache->backing && backing) {
-        if (!(cache->backing_name = strdup (name)))
-            goto error;
-        cache->backing = 1;
-        flux_log (h, LOG_DEBUG,
-                "content backing store: enabled %s", name);
-        (void)cache_flush (cache);
-    } else if (cache->backing && !backing) {
-        cache->backing = 0;
-        if (cache->backing_name)
-            free (cache->backing_name);
-        cache->backing_name = NULL;
-        flux_log (h, LOG_DEBUG, "content backing store: disabled %s", name);
-    }
+    if (!(cache->backing_name = strdup (name)))
+        goto error;
+    cache->backing = 1;
+    flux_log (h, LOG_DEBUG, "content backing store: enabled %s", name);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "content backing");
+    (void)cache_flush (cache);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "content backing");
 };
+
+static void content_unregister_backing_request (flux_t *h,
+                                                flux_msg_handler_t *mh,
+                                                const flux_msg_t *msg,
+                                                void *arg)
+{
+    content_cache_t *cache = arg;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!cache->backing) {
+        errno = EINVAL;
+        goto error;
+    }
+    cache->backing = 0;
+    free (cache->backing_name);
+    cache->backing_name = NULL;
+    flux_log (h, LOG_DEBUG, "content backing store: disabled");
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "flux_respond");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "flux_respond_error");
+}
 
 /* Forcibly drop all entries from the cache that can be dropped
  * without data loss.
@@ -863,8 +878,14 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "content.backing",
-        content_backing_request,
+        "content.unregister-backing",
+        content_unregister_backing_request,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "content.register-backing",
+        content_register_backing_request,
         0
     },
     {

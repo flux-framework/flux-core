@@ -158,8 +158,8 @@ test_expect_success 'store 1K blobs from all ranks using async RPC' '
 test_expect_success 'load request with empty payload fails with EPROTO(71)' '
 	${RPC} content.load 71 </dev/null
 '
-test_expect_success 'backing request with empty payload fails with EPROTO(71)' '
-	${RPC} content.backing 71 </dev/null
+test_expect_success 'register-backing request with empty payload fails with EPROTO(71)' '
+	${RPC} content.register-backing 71 </dev/null
 '
 
 test_done
