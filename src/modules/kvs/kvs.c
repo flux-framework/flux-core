@@ -188,17 +188,9 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
         /* These belong to all namespaces, subscribe once the first
          * time we init a namespace */
 
-        if (flux_event_subscribe (ctx->h, "hb") < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
-        if (flux_event_subscribe (ctx->h, "kvs.stats.clear") < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
-        if (flux_event_subscribe (ctx->h, "kvs.dropcache") < 0) {
+        if (flux_event_subscribe (ctx->h, "hb") < 0
+            || flux_event_subscribe (ctx->h, "kvs.stats.clear") < 0
+            || flux_event_subscribe (ctx->h, "kvs.dropcache") < 0) {
             flux_log_error (ctx->h, "flux_event_subscribe");
             goto cleanup;
         }
