@@ -38,7 +38,6 @@ const char *sql_store = "INSERT INTO objects (hash,size,object) "
 
 struct content_sqlite {
     flux_msg_handler_t **handlers;
-    char *dbdir;
     char *dbfile;
     sqlite3 *db;
     sqlite3_stmt *load_stmt;
@@ -386,11 +385,15 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
     }
 }
 
+/* Open the database file ctx->dbfile and set up the database.
+ */
 static int content_sqlite_opendb (struct content_sqlite *ctx)
 {
-    if (sqlite3_open (ctx->dbfile, &ctx->db) != SQLITE_OK) {
-        flux_log_error (ctx->h, "sqlite3_open %s", ctx->dbfile);
-        return -1;
+    int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
+
+    if (sqlite3_open_v2 (ctx->dbfile, &ctx->db, flags, NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "opening %s", ctx->dbfile);
+        goto error;
     }
     if (sqlite3_exec (ctx->db,
                       "PRAGMA journal_mode=OFF",
@@ -452,7 +455,6 @@ static void content_sqlite_destroy (struct content_sqlite *ctx)
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
         free (ctx->dbfile);
-        free (ctx->dbdir);
         free (ctx->lzo_buf);
         free (ctx);
         errno = saved_errno;
@@ -468,9 +470,8 @@ static const struct flux_msg_handler_spec htab[] = {
 static struct content_sqlite *content_sqlite_create (flux_t *h)
 {
     struct content_sqlite *ctx;
-    const char *dir;
+    const char *backing_path;
     const char *tmp;
-    bool cleanup = false;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
@@ -478,6 +479,12 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
         goto error;
     ctx->lzo_bufsize = lzo_buf_chunksize;
     ctx->h = h;
+
+    /* Some tunables:
+     * - the hash function, e.g. sha1, sha256
+     * - the maximum blob size
+     * - path to sqlite file
+     */
     if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))) {
         flux_log_error (h, "content.hash");
         goto error;
@@ -488,27 +495,34 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
     }
     ctx->blob_size_limit = strtoul (tmp, NULL, 10);
 
-    if (!(dir = flux_attr_get (h, "persist-directory"))) {
-        if (!(dir = flux_attr_get (h, "broker.rundir"))) {
-            flux_log_error (h, "broker.rundir");
+    /* If 'content.backing-path' attribute is already set, then:
+     * - value is the sqlite backing file
+     * - if it exists, preserve existing content; else create empty
+     * - ensure that file perists when the instance exits
+     * Otherwise:
+     * - ${rundir}/content.sqlite is the backing file
+     * - ensure that file is cleaned up when the instance exits
+     * - set 'content.backing-path' to this name
+     */
+    backing_path = flux_attr_get (h, "content.backing-path");
+    if (backing_path) {
+        if (!(ctx->dbfile = strdup (backing_path)))
+            goto error;
+    }
+    else {
+        const char *rundir = flux_attr_get (h, "rundir");
+        if (!rundir) {
+            flux_log_error (h, "rundir");
             goto error;
         }
-        cleanup = true;
+        if (asprintf (&ctx->dbfile, "%s/content.sqlite", rundir) < 0)
+            goto error;
+        if (flux_attr_set (h, "content.backing-path", ctx->dbfile) < 0)
+            goto error;
+        cleanup_push_string (cleanup_file, ctx->dbfile);
     }
-    if (asprintf (&ctx->dbdir, "%s/content", dir) < 0)
+    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;
-    if (mkdir (ctx->dbdir, 0755) < 0 && errno != EEXIST) {
-        flux_log_error (h, "mkdir %s", ctx->dbdir);
-        goto error;
-    }
-    if (cleanup)
-        cleanup_push_string (cleanup_directory_recursive, ctx->dbdir);
-    if (asprintf (&ctx->dbfile, "%s/sqlite", ctx->dbdir) < 0)
-        goto error;
-    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0) {
-        flux_log_error (h, "flux_msg_handler_addvec");
-        goto error;
-    }
     return ctx;
 error:
     content_sqlite_destroy (ctx);
@@ -519,8 +533,10 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     struct content_sqlite *ctx;
 
-    if (!(ctx = content_sqlite_create (h)))
+    if (!(ctx = content_sqlite_create (h))) {
+        flux_log_error (h, "content_sqlite_create failed");
         return -1;
+    }
     if (content_sqlite_opendb(ctx) < 0)
         goto done;
     if (register_backing_store (h, "content-sqlite") < 0) {
