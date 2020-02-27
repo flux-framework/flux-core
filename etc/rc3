@@ -21,10 +21,6 @@ flux module remove -f job-exec
 flux module remove -f job-manager
 flux exec -r all flux module remove -f job-ingest
 
-if PERSISTDIR=$(flux getattr persist-directory 2>/dev/null); then
-    /bin/true; # XXX: nothing to persist?
-fi
-
 flux module remove -f userdb
 
 flux module remove -f cron
@@ -34,10 +30,6 @@ flux exec -r all flux module remove -f barrier
 flux exec -r all flux module remove -f job-info
 flux exec -r all flux module remove -f kvs-watch
 flux exec -r all -x 0 flux module remove -f kvs
-if test -n "$PERSISTDIR"; then
-    flux kvs getroot >${PERSISTDIR}/kvsroot.final
-    flux content flush
-fi
+
 flux module remove -f kvs
 flux module remove -f content-sqlite
-
