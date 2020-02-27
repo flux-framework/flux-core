@@ -36,12 +36,23 @@ const char *sql_load = "SELECT object,size FROM objects"
 const char *sql_store = "INSERT INTO objects (hash,size,object) "
                         "  values (?1, ?2, ?3)";
 
+const char *sql_create_table_checkpt = "CREATE TABLE if not exists checkpt("
+                                       "  key TEXT UNIQUE,"
+                                       "  value TEXT"
+                                       ");";
+const char *sql_checkpt_get = "SELECT value FROM checkpt"
+                              "  WHERE key = ?1";
+const char *sql_checkpt_put = "REPLACE INTO checkpt (key,value) "
+                              "  values (?1, ?2)";
+
 struct content_sqlite {
     flux_msg_handler_t **handlers;
     char *dbfile;
     sqlite3 *db;
     sqlite3_stmt *load_stmt;
     sqlite3_stmt *store_stmt;
+    sqlite3_stmt *checkpt_get_stmt;
+    sqlite3_stmt *checkpt_put_stmt;
     flux_t *h;
     const char *hashfun;
     uint32_t blob_size_limit;
@@ -324,6 +335,99 @@ error:
         flux_log_error (h, "store: flux_respond_error");
 }
 
+void checkpoint_get_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    const char *key;
+
+    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
+        goto error;
+    if (sqlite3_bind_text (ctx->checkpt_get_stmt,
+                           1,
+                           (char *)key,
+                           strlen (key),
+                           SQLITE_STATIC) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_get: binding key");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    if (sqlite3_step (ctx->checkpt_get_stmt) != SQLITE_ROW) {
+        errno = ENOENT;
+        goto error;
+    }
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:s}",
+                           "value",
+                           sqlite3_column_text (ctx->checkpt_get_stmt, 0)) < 0)
+        flux_log_error (h, "flux_respond_pack");
+    (void )sqlite3_reset (ctx->checkpt_get_stmt);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "flux_respond_error");
+    (void )sqlite3_reset (ctx->checkpt_get_stmt);
+}
+
+void checkpoint_put_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    const char *key;
+    const char *value;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:s}",
+                             "key",
+                             &key,
+                             "value",
+                             &value) < 0)
+        goto error;
+    if (strlen (key) == 0) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (sqlite3_bind_text (ctx->checkpt_put_stmt,
+                           1,
+                           (char *)key,
+                           strlen (key),
+                           SQLITE_STATIC) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_put: binding key");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    if (sqlite3_bind_text (ctx->checkpt_put_stmt,
+                           2,
+                           (char *)value,
+                           strlen (value),
+                           SQLITE_STATIC) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_put: binding value");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    if (sqlite3_step (ctx->checkpt_put_stmt) != SQLITE_DONE
+                    && sqlite3_errcode (ctx->db) != SQLITE_CONSTRAINT) {
+        log_sqlite_error (ctx, "checkpt_put: executing stmt");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "flux_respond");
+    (void )sqlite3_reset (ctx->checkpt_put_stmt);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "flux_respond_error");
+    (void )sqlite3_reset (ctx->checkpt_put_stmt);
+}
+
+
 int register_backing_store (flux_t *h, const char *name)
 {
     flux_future_t *f;
@@ -354,11 +458,11 @@ int unregister_backing_store (flux_t *h)
     return rc;
 }
 
-int register_content_backing_service (flux_t *h)
+static int register_service (flux_t *h, const char *name)
 {
     int rc;
     flux_future_t *f;
-    if (!(f = flux_service_register (h, "content-backing")))
+    if (!(f = flux_service_register (h, name)))
         return -1;
     rc = flux_future_get (f, NULL);
     flux_future_destroy (f);
@@ -376,6 +480,14 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
         if (ctx->load_stmt) {
             if (sqlite3_finalize (ctx->load_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize load_stmt");
+        }
+        if (ctx->checkpt_get_stmt) {
+            if (sqlite3_finalize (ctx->checkpt_get_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize checkpt_get_stmt");
+        }
+        if (ctx->checkpt_put_stmt) {
+            if (sqlite3_finalize (ctx->checkpt_put_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize checkpt_put_stmt");
         }
         if (ctx->db) {
             if (sqlite3_close (ctx->db) != SQLITE_OK)
@@ -424,7 +536,15 @@ static int content_sqlite_opendb (struct content_sqlite *ctx)
                       NULL,
                       NULL,
                       NULL) != SQLITE_OK) {
-        log_sqlite_error (ctx, "creating table");
+        log_sqlite_error (ctx, "creating object table");
+        goto error;
+    }
+    if (sqlite3_exec (ctx->db,
+                      sql_create_table_checkpt,
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "creating checkpt table");
         goto error;
     }
     if (sqlite3_prepare_v2 (ctx->db,
@@ -441,6 +561,22 @@ static int content_sqlite_opendb (struct content_sqlite *ctx)
                             &ctx->store_stmt,
                             NULL) != SQLITE_OK) {
         log_sqlite_error (ctx, "preparing store stmt");
+        goto error;
+    }
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_checkpt_get,
+                            -1,
+                            &ctx->checkpt_get_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing checkpt_get stmt");
+        goto error;
+    }
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_checkpt_put,
+                            -1,
+                            &ctx->checkpt_put_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing checkpt_put stmt");
         goto error;
     }
     return 0;
@@ -464,6 +600,8 @@ static void content_sqlite_destroy (struct content_sqlite *ctx)
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "content-backing.load",    load_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.get", checkpoint_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.put", checkpoint_put_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -543,8 +681,12 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "registering backing store");
         goto done;
     }
-    if (register_content_backing_service (h) < 0) {
+    if (register_service (h, "content-backing") < 0) {
         flux_log_error (h, "service.add: content-backing");
+        goto done;
+    }
+    if (register_service (h, "kvs-checkpoint") < 0) {
+        flux_log_error (h, "service.add: kvs-checkpiont");
         goto done;
     }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
