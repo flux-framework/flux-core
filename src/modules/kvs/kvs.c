@@ -2831,6 +2831,62 @@ static void process_args (kvs_ctx_t *ctx, int ac, char **av)
     }
 }
 
+/* Synchronously get string value by key from checkpoint service.
+ * Copy value to buf with '\0' termination.
+ * Return 0 on success, -1 on failure,
+ */
+static int checkpoint_get (flux_t *h, const char *key, char *buf, size_t len)
+{
+    flux_future_t *f;
+    const char *value;
+
+    if (!(f = flux_rpc_pack (h,
+                             "kvs-checkpoint.get",
+                             0,
+                             0,
+                             "{s:s}",
+                             "key",
+                             key)))
+        return -1;
+    if (flux_rpc_get_unpack (f, "{s:s}", "value", &value) < 0)
+        goto error;
+    if (strlen (value) >= len) {
+        errno = EINVAL;
+        goto error;
+    }
+    strcpy (buf, value);
+    flux_future_destroy (f);
+    return 0;
+error:
+    flux_future_destroy (f);
+    return -1;
+}
+
+/* Synchronously store key-value pair to checkpoint service.
+ * Returns 0 on success, -1 on failure.
+ */
+static int checkpoint_put (flux_t *h, const char *key, const char *value)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_rpc_pack (h,
+                             "kvs-checkpoint.put",
+                             0,
+                             0,
+                             "{s:s s:s}",
+                             "key",
+                             key,
+                             "value",
+                             value)))
+        return -1;
+    if (flux_rpc_get (f, NULL) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
 /* Store initial root in local cache, and flush to content cache
  * synchronously.  The corresponding blobref is written into 'ref'.
  */
@@ -2919,9 +2975,16 @@ int mod_main (flux_t *h, int argc, char **argv)
         char rootref[BLOBREF_MAX_STRING_SIZE];
         uint32_t owner = geteuid ();
 
-        if (store_initial_rootdir (ctx, rootref, sizeof (rootref)) < 0) {
-            flux_log_error (h, "storing initial root object");
-            goto done;
+        /* Look for a checkpoint and use it if found.
+         * Otherwise start the primary root namespace with an empty directory.
+         */
+        if (checkpoint_get (h, "kvs-primary", rootref, sizeof (rootref)) == 0)
+            flux_log (h, LOG_INFO, "restored kvs-primary from checkpoint");
+        else {
+            if (store_initial_rootdir (ctx, rootref, sizeof (rootref)) < 0) {
+                flux_log_error (h, "storing initial root object");
+                goto done;
+            }
         }
 
         /* primary namespace must always be there and not marked
@@ -2955,6 +3018,24 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;
+    }
+    /* Checkpoint the KVS root to the content backing store.
+     * If backing store is not loaded, silently proceed without checkpoint.
+     */
+    if (ctx->rank == 0) {
+        struct kvsroot *root;
+
+        if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm,
+                                                   KVS_PRIMARY_NAMESPACE))) {
+            flux_log_error (h, "error looking up primary root");
+            goto done;
+        }
+        if (checkpoint_put (ctx->h, "kvs-primary", root->ref) < 0) {
+            if (errno != ENOSYS) { // service not loaded is not an error
+                flux_log_error (h, "error saving primary KVS checkpoint");
+                goto done;
+            }
+        }
     }
     rc = 0;
 done:
