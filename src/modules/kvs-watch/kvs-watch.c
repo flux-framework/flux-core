@@ -187,7 +187,7 @@ static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
         goto error;
     if (!(nsm->ns_name = strdup (ns)))
         goto error;
-    if (asprintf (&nsm->setroot_topic, "kvs.setroot-%s", ns) < 0)
+    if (asprintf (&nsm->setroot_topic, "kvs.namespace-%s-setroot", ns) < 0)
         goto error;
     if (asprintf (&nsm->created_topic, "kvs.namespace-created-%s", ns) < 0)
         goto error;
@@ -1099,7 +1099,7 @@ static const struct flux_msg_handler_spec htab[] = {
       .rolemask     = 0
     },
     { .typemask     = FLUX_MSGTYPE_EVENT,
-      .topic_glob   = "kvs.setroot-*",
+      .topic_glob   = "kvs.namespace-*-setroot",
       .cb           = setroot_cb,
       .rolemask     = 0
     },

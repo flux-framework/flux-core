@@ -51,7 +51,7 @@ const int max_lastuse_age = 5;
  */
 const int max_namespace_age = 1000;
 
-/* Include root directory in kvs.setroot event.
+/* Include root directory in kvs.namespace-<NS>-setroot event.
  */
 const bool event_includes_rootdir = true;
 
@@ -199,7 +199,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
          * events, all of the time.  So subscribe to them just once on
          * rank 0. */
         if (ctx->rank == 0) {
-            if (flux_event_subscribe (ctx->h, "kvs.setroot") < 0
+            if (flux_event_subscribe (ctx->h, "kvs.namespace") < 0
                 || flux_event_subscribe (ctx->h, "kvs.error") < 0
                 || flux_event_subscribe (ctx->h, "kvs.namespace-remove") < 0) {
                 flux_log_error (ctx->h, "flux_event_subscribe");
@@ -211,7 +211,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
     }
 
     if (ctx->rank != 0) {
-        if (asprintf (&setroot_topic, "kvs.setroot-%s", ns) < 0)
+        if (asprintf (&setroot_topic, "kvs.namespace-%s-setroot", ns) < 0)
             goto cleanup;
 
         if (flux_event_subscribe (ctx->h, setroot_topic) < 0) {
@@ -252,7 +252,7 @@ static int event_unsubscribe (kvs_ctx_t *ctx, const char *ns)
     int rc = -1;
 
     if (ctx->rank != 0) {
-        if (asprintf (&setroot_topic, "kvs.setroot-%s", ns) < 0)
+        if (asprintf (&setroot_topic, "kvs.namespace-%s-setroot", ns) < 0)
             goto cleanup;
 
         if (flux_event_unsubscribe (ctx->h, setroot_topic) < 0) {
@@ -837,7 +837,7 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
         root_dir = nullobj;
     }
 
-    if (asprintf (&setroot_topic, "kvs.setroot-%s", root->ns_name) < 0) {
+    if (asprintf (&setroot_topic, "kvs.namespace-%s-setroot", root->ns_name) < 0) {
         saved_errno = ENOMEM;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
@@ -2045,7 +2045,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
 }
 
 /* Optimization: the current rootdir object is optionally included
- * in the kvs.setroot event.  Prime the local cache with it.
+ * in the kvs.namespace-<NS>-setroot event.  Prime the local cache with it.
  * If there are complications, just skip it.  Not critical.
  */
 static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
@@ -2803,7 +2803,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",stats_clear_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.setroot-*",  setroot_event_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-*-setroot",  setroot_event_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.error-*",    error_event_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.getroot",
                             getroot_request_cb, FLUX_ROLE_USER },
