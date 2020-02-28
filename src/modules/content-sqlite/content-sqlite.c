@@ -121,9 +121,6 @@ void load_cb (flux_t *h, flux_msg_handler_t *mh,
     int size = 0;
     int uncompressed_size;
     int rc = -1;
-    int old_state;
-    //delay cancellation to ensure lock-correctness in sqlite
-    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_state);
 
     if (flux_request_decode_raw (msg, NULL, (const void **)&blobref,
                                  &blobref_size) < 0) {
@@ -192,7 +189,6 @@ done:
             flux_log_error (h, "load: flux_respond_raw");
     }
     (void )sqlite3_reset (ctx->load_stmt);
-    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old_state);
 }
 
 void store_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -205,9 +201,6 @@ void store_cb (flux_t *h, flux_msg_handler_t *mh,
     char blobref[BLOBREF_MAX_STRING_SIZE] = "-";
     int uncompressed_size = -1;
     int rc = -1;
-    int old_state;
-    //delay cancellation to ensure lock-correctness in sqlite
-    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_state);
 
     if (flux_request_decode_raw (msg, NULL, &data, &size) < 0) {
         flux_log_error (h, "store: request decode failed");
@@ -270,7 +263,6 @@ done:
             flux_log_error (h, "store: flux_respond_raw");
     }
     (void) sqlite3_reset (ctx->store_stmt);
-    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old_state);
 }
 
 int register_backing_store (flux_t *h, bool value, const char *name)
