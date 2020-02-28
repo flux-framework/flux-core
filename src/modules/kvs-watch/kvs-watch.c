@@ -67,8 +67,8 @@ struct ns_monitor {
     bool setroot_subscribed;    // setroot subscription active
     char *created_topic;        // topic string for kvs.namespace-created
     bool created_subscribed;    // kvs.namespace-created subscription active
-    char *removed_topic;        // topic string for kvs.namespace-removed
-    bool removed_subscribed;    // kvs.namespace-removed subscription active
+    char *removed_topic;        // topic string for kvs.namespace-<NS>-removed
+    bool removed_subscribed;    // kvs.namespace-<NS>-removed subscription active
     flux_future_t *getrootf;    // initial getroot future
 };
 
@@ -191,7 +191,7 @@ static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
         goto error;
     if (asprintf (&nsm->created_topic, "kvs.namespace-created-%s", ns) < 0)
         goto error;
-    if (asprintf (&nsm->removed_topic, "kvs.namespace-removed-%s", ns) < 0)
+    if (asprintf (&nsm->removed_topic, "kvs.namespace-%s-removed", ns) < 0)
         goto error;
     nsm->owner = FLUX_USERID_UNKNOWN;
     nsm->ctx = ctx;
@@ -428,12 +428,12 @@ static void handle_lookup_response (flux_future_t *f,
              * We cannot reach this function / point in the code if
              * the namespace has not been created.  So an ENOTSUP here
              * must mean that the namespace has been removed, but we
-             * did not yet receive the kvs.namespace-removed event.
+             * did not yet receive the kvs.namespace-<NS>-removed event.
              * We can safely return ENOTSUP to the user.
              *
              * Note that kvs-watch does not handle monitoring of
              * namespaces being removed and re-created.  On a
-             * kvs.namespace-removed event, monitoring in a namespace
+             * kvs.namespace-<NS>removed event, monitoring in a namespace
              * is torn down.  See fatal_errnum var.
              */
             goto error;
@@ -1089,7 +1089,7 @@ nomem:
 
 static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_EVENT,
-      .topic_glob   = "kvs.namespace-removed-*",
+      .topic_glob   = "kvs.namespace-*-removed",
       .cb           = removed_cb,
       .rolemask     = 0
     },

@@ -199,8 +199,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
          * events, all of the time.  So subscribe to them just once on
          * rank 0. */
         if (ctx->rank == 0) {
-            if (flux_event_subscribe (ctx->h, "kvs.namespace") < 0
-                || flux_event_subscribe (ctx->h, "kvs.namespace-remove") < 0) {
+            if (flux_event_subscribe (ctx->h, "kvs.namespace") < 0) {
                 flux_log_error (ctx->h, "flux_event_subscribe");
                 goto cleanup;
             }
@@ -226,7 +225,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
             goto cleanup;
         }
 
-        if (asprintf (&removed_topic, "kvs.namespace-removed-%s", ns) < 0)
+        if (asprintf (&removed_topic, "kvs.namespace-%s-removed", ns) < 0)
             goto cleanup;
 
         if (flux_event_subscribe (ctx->h, removed_topic) < 0) {
@@ -267,7 +266,7 @@ static int event_unsubscribe (kvs_ctx_t *ctx, const char *ns)
             goto cleanup;
         }
 
-        if (asprintf (&removed_topic, "kvs.namespace-removed-%s", ns) < 0)
+        if (asprintf (&removed_topic, "kvs.namespace-%s-removed", ns) < 0)
             goto cleanup;
 
         if (flux_event_subscribe (ctx->h, removed_topic) < 0) {
@@ -2547,7 +2546,7 @@ static int namespace_remove (kvs_ctx_t *ctx, const char *ns)
         goto done;
     }
 
-    if (asprintf (&topic, "kvs.namespace-removed-%s", ns) < 0) {
+    if (asprintf (&topic, "kvs.namespace-%s-removed", ns) < 0) {
         saved_errno = ENOMEM;
         goto cleanup;
     }
@@ -2826,7 +2825,7 @@ static const struct flux_msg_handler_spec htab[] = {
                             namespace_create_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace-remove",
                             namespace_remove_request_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-removed-*",
+    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-*-removed",
                             namespace_removed_event_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace-list",
                             namespace_list_request_cb, 0 },
