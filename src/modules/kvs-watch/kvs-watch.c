@@ -63,12 +63,8 @@ struct ns_monitor {
     int errnum;                 // if non-zero, error pending for all watchers
     struct watch_ctx *ctx;      // back-pointer to watch_ctx
     zlist_t *watchers;          // list of watchers of this namespace
-    char *setroot_topic;        // topic string for setroot subscription
-    bool setroot_subscribed;    // setroot subscription active
-    char *created_topic;        // topic string for kvs.namespace-<NS>created
-    bool created_subscribed;    // kvs.namespace-<NS>created subscription active
-    char *removed_topic;        // topic string for kvs.namespace-<NS>-removed
-    bool removed_subscribed;    // kvs.namespace-<NS>-removed subscription active
+    char *topic;                // topic string for subscription
+    bool subscribed;            // subscription active
     flux_future_t *getrootf;    // initial getroot future
 };
 
@@ -161,15 +157,9 @@ static void namespace_destroy (struct ns_monitor *nsm)
                 watcher_destroy (w);
             zlist_destroy (&nsm->watchers);
         }
-        if (nsm->setroot_subscribed)
-            (void)flux_event_unsubscribe (nsm->ctx->h, nsm->setroot_topic);
-        if (nsm->created_subscribed)
-            (void)flux_event_unsubscribe (nsm->ctx->h, nsm->created_topic);
-        if (nsm->removed_subscribed)
-            (void)flux_event_unsubscribe (nsm->ctx->h, nsm->removed_topic);
-        free (nsm->setroot_topic);
-        free (nsm->created_topic);
-        free (nsm->removed_topic);
+        if (nsm->subscribed)
+            (void)flux_event_unsubscribe (nsm->ctx->h, nsm->topic);
+        free (nsm->topic);
         free (nsm->ns_name);
         flux_future_destroy (nsm->getrootf);
         free (nsm);
@@ -187,23 +177,31 @@ static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
         goto error;
     if (!(nsm->ns_name = strdup (ns)))
         goto error;
-    if (asprintf (&nsm->setroot_topic, "kvs.namespace-%s-setroot", ns) < 0)
-        goto error;
-    if (asprintf (&nsm->created_topic, "kvs.namespace-%s-created", ns) < 0)
-        goto error;
-    if (asprintf (&nsm->removed_topic, "kvs.namespace-%s-removed", ns) < 0)
+    /* We are subscribing to the kvs.namespace-<NS> substring.
+     *
+     * This substring encompasses four events at the moment.
+     *
+     * kvs.namespace-<NS>-setroot
+     * kvs.namespace-<NS>-error
+     * kvs.namespace-<NS>-removed
+     * kvs.namespace-<NS>-created
+     *
+     * This module only has callbacks for the "setroot", "removed", and
+     * "created" events. "error" events are dropped.
+     *
+     * While dropped events are "bad" performance wise, "error" events
+     * are presumably rare and it is a net win on performance to limit
+     * the number of calls to the flux_event_subscribe() function.
+     *
+     * See issue #2779 for more information.
+     */
+    if (asprintf (&nsm->topic, "kvs.namespace-%s", ns) < 0)
         goto error;
     nsm->owner = FLUX_USERID_UNKNOWN;
     nsm->ctx = ctx;
-    if (flux_event_subscribe (ctx->h, nsm->setroot_topic) < 0)
+    if (flux_event_subscribe (ctx->h, nsm->topic) < 0)
         goto error;
-    nsm->setroot_subscribed = true;
-    if (flux_event_subscribe (ctx->h, nsm->created_topic) < 0)
-        goto error;
-    nsm->created_subscribed = true;
-    if (flux_event_subscribe (ctx->h, nsm->removed_topic) < 0)
-        goto error;
-    nsm->removed_subscribed = true;
+    nsm->subscribed = true;
     return nsm;
 error:
     namespace_destroy (nsm);
@@ -1087,6 +1085,8 @@ nomem:
     json_decref (stats);
 }
 
+/* see comments above in namespace_create() regarding event
+ * subscriptions to kvs.namespace */
 static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_EVENT,
       .topic_glob   = "kvs.namespace-*-removed",

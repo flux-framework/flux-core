@@ -174,10 +174,29 @@ error:
 
 static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
 {
-    char *setroot_topic = NULL;
-    char *error_topic = NULL;
-    char *removed_topic = NULL;
+    char *topic = NULL;
     int rc = -1;
+
+    /* Below we subscribe to the kvs.namespace or kvs.namespace-<NS>
+     * substring depending if we are on rank 0 or rank != 0.
+     *
+     * This substring encompasses four events at the moment.
+     *
+     * kvs.namespace-<NS>-setroot
+     * kvs.namespace-<NS>-error
+     * kvs.namespace-<NS>-removed
+     * kvs.namespace-<NS>-created
+     *
+     * This module publishes all the above events, but only has
+     * callbacks for the "setroot", "error", and "removed"
+     * events. "created" events are dropped.
+     *
+     * While dropped events are "bad" performance wise, it is a net
+     * win on performance to limit the number of calls to the
+     * flux_event_subscribe() function.
+     *
+     * See issue #2779 for more information.
+     */
 
     /* do not want to subscribe to events that are not within our
      * namespace, so we subscribe to only specific ones.
@@ -209,26 +228,10 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
     }
 
     if (ctx->rank != 0) {
-        if (asprintf (&setroot_topic, "kvs.namespace-%s-setroot", ns) < 0)
+        if (asprintf (&topic, "kvs.namespace-%s", ns) < 0)
             goto cleanup;
 
-        if (flux_event_subscribe (ctx->h, setroot_topic) < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
-        if (asprintf (&error_topic, "kvs.namespace-%s-error", ns) < 0)
-            goto cleanup;
-
-        if (flux_event_subscribe (ctx->h, error_topic) < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
-        if (asprintf (&removed_topic, "kvs.namespace-%s-removed", ns) < 0)
-            goto cleanup;
-
-        if (flux_event_subscribe (ctx->h, removed_topic) < 0) {
+        if (flux_event_subscribe (ctx->h, topic) < 0) {
             flux_log_error (ctx->h, "flux_event_subscribe");
             goto cleanup;
         }
@@ -236,40 +239,20 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
 
     rc = 0;
 cleanup:
-    free (setroot_topic);
-    free (error_topic);
-    free (removed_topic);
+    free (topic);
     return rc;
 }
 
 static int event_unsubscribe (kvs_ctx_t *ctx, const char *ns)
 {
-    char *setroot_topic = NULL;
-    char *error_topic = NULL;
-    char *removed_topic = NULL;
+    char *topic = NULL;
     int rc = -1;
 
     if (ctx->rank != 0) {
-        if (asprintf (&setroot_topic, "kvs.namespace-%s-setroot", ns) < 0)
+        if (asprintf (&topic, "kvs.namespace-%s", ns) < 0)
             goto cleanup;
 
-        if (flux_event_unsubscribe (ctx->h, setroot_topic) < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
-        if (asprintf (&error_topic, "kvs.namespace-%s-error", ns) < 0)
-            goto cleanup;
-
-        if (flux_event_unsubscribe (ctx->h, error_topic) < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
-        if (asprintf (&removed_topic, "kvs.namespace-%s-removed", ns) < 0)
-            goto cleanup;
-
-        if (flux_event_subscribe (ctx->h, removed_topic) < 0) {
+        if (flux_event_unsubscribe (ctx->h, topic) < 0) {
             flux_log_error (ctx->h, "flux_event_subscribe");
             goto cleanup;
         }
@@ -277,9 +260,7 @@ static int event_unsubscribe (kvs_ctx_t *ctx, const char *ns)
 
     rc = 0;
 cleanup:
-    free (setroot_topic);
-    free (error_topic);
-    free (removed_topic);
+    free (topic);
     return rc;
 }
 
@@ -2797,6 +2778,8 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+/* see comments above in event_subscribe() regarding event
+ * subscriptions to kvs.namespace */
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0 },
