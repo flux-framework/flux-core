@@ -68,10 +68,9 @@ cache of its availability, which triggers the cache to begin
 offloading entries.  Once entries are offloaded, they are eligible
 for expiration from the rank 0 cache.
 
-If the module is unloaded, its contents are transferred back
-to the cache.  This operation may fail if more content has
-been stored than can fit in memory, and so is only advisable early
-in the life of an instance.
+To avoid data loss, once a content backing module is loaded,
+do not unload it unless the content cache on rank 0 has been flushed
+and the system is shutting down.
 
 
 CACHE EXPIRATION
