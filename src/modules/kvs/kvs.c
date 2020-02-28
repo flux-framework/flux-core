@@ -2409,7 +2409,7 @@ static int namespace_create (kvs_ctx_t *ctx, const char *ns,
         goto cleanup;
     }
 
-    if (asprintf (&topic, "kvs.namespace-created-%s", ns) < 0)
+    if (asprintf (&topic, "kvs.namespace-%s-created", ns) < 0)
         goto cleanup;
 
     if (!(msg = flux_event_pack (topic,

@@ -49,7 +49,7 @@ struct commit {
     int rootseq;                // current root sequence number
     json_t *keys;               // keys changed by commit
                                 //  empty if data originates from getroot RPC
-                                //  or kvs.namespace-created event
+                                //  or kvs.namespace-<NS>-created event
 };
 
 
@@ -65,8 +65,8 @@ struct ns_monitor {
     zlist_t *watchers;          // list of watchers of this namespace
     char *setroot_topic;        // topic string for setroot subscription
     bool setroot_subscribed;    // setroot subscription active
-    char *created_topic;        // topic string for kvs.namespace-created
-    bool created_subscribed;    // kvs.namespace-created subscription active
+    char *created_topic;        // topic string for kvs.namespace-<NS>created
+    bool created_subscribed;    // kvs.namespace-<NS>created subscription active
     char *removed_topic;        // topic string for kvs.namespace-<NS>-removed
     bool removed_subscribed;    // kvs.namespace-<NS>-removed subscription active
     flux_future_t *getrootf;    // initial getroot future
@@ -189,7 +189,7 @@ static struct ns_monitor *namespace_create (struct watch_ctx *ctx,
         goto error;
     if (asprintf (&nsm->setroot_topic, "kvs.namespace-%s-setroot", ns) < 0)
         goto error;
-    if (asprintf (&nsm->created_topic, "kvs.namespace-created-%s", ns) < 0)
+    if (asprintf (&nsm->created_topic, "kvs.namespace-%s-created", ns) < 0)
         goto error;
     if (asprintf (&nsm->removed_topic, "kvs.namespace-%s-removed", ns) < 0)
         goto error;
@@ -1094,7 +1094,7 @@ static const struct flux_msg_handler_spec htab[] = {
       .rolemask     = 0
     },
     { .typemask     = FLUX_MSGTYPE_EVENT,
-      .topic_glob   = "kvs.namespace-created-*",
+      .topic_glob   = "kvs.namespace-*-created",
       .cb           = namespace_created_cb,
       .rolemask     = 0
     },
