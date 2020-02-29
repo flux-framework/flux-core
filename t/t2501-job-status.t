@@ -10,7 +10,15 @@ test_expect_success 'status: submit a series of jobs' '
 	zero=$(flux mini submit /bin/true) &&
 	one=$(flux mini submit /bin/false) &&
 	sigint=$(flux mini submit sh -c "kill -INT \$$") &&
-	shell_sigquit=$(flux mini submit sh -c "kill -QUIT \$PPID")
+	shell_sigquit=$(flux mini submit sh -c "kill -QUIT \$PPID") &&
+	unsatisfiable=$(flux mini submit -n 1024 hostname) &&
+	killed=$(flux mini submit sleep 600) &&
+	flux job wait-event ${killed} start &&
+	flux job cancel ${killed} &&
+	flux queue stop &&
+	canceled=$(flux mini submit -n 1024 hostname) &&
+	flux job cancel ${canceled} &&
+	flux queue start
 '
 test_expect_success 'status: exits with error with no jobs specified' '
 	test_expect_code 1 flux job status
@@ -29,6 +37,19 @@ test_expect_success 'status: returns status 130 for SIGINT job' '
 '
 test_expect_success 'status: returns status 131 when job-shell gets SIGQUIT' '
 	test_expect_code 131 flux job status -v ${shell_sigquit}
+'
+test_expect_success 'status: returns 1 for unsatisfiable job' '
+	test_expect_code 1 flux job status -v ${unsatisfiable}
+'
+test_expect_success 'status: returns 1 for canceled pending job' '
+	test_expect_code 1 flux job status -v ${canceled}
+'
+test_expect_success 'status: --exception-exit-code works' '
+	test_expect_code 42 flux job status -v --exception-exit-code=42 ${canceled} &&
+	test_expect_code 255 flux job status -v --exception-exit-code=255 ${unsatisfiable}
+'
+test_expect_success 'status: returns 143 (SIGTERM) for canceled running job' '
+	test_expect_code 143 flux job status -v ${killed}
 '
 test_expect_success 'status: returns highest status for multiple jobs' '
 	test_expect_code 130 flux job status -vv ${zero} ${one} ${sigint}

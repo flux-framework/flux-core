@@ -202,7 +202,15 @@ static struct optparse_option attach_opts[] =  {
 
 static struct optparse_option status_opts[] = {
     { .name = "verbose", .key = 'v', .has_arg = 0,
-      .usage = "Increase verbosity" },
+      .usage = "Increase verbosity"
+    },
+    { .name = "exception-exit-code", .key = 'e', .has_arg = 1,
+      .group = 1,
+      .arginfo = "N",
+      .usage = "Set the default exit code for any jobs that terminate"
+               " solely due to an exception (e.g. canceled jobs or"
+               " jobs rejected by the scheduler) to N [default=1]"
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -348,8 +356,7 @@ static struct optparse_subcommand subcommands[] = {
     },
     { "status",
       "id [id...]",
-      "Wait for all job.finish events "
-      "and return the highest job completion status",
+      "Wait for job(s) to complete and exit with largest exit code",
       cmd_status,
       0,
       status_opts,
@@ -1854,11 +1861,41 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     return ctx.exit_code;
 }
 
+#define EXCEPTION_TYPE_LENGTH 64
 struct job_status {
     flux_jobid_t id;
     int status;
     int exit_code;
+    int exception_exit_code;
+    bool exception;
+    char ex_type[EXCEPTION_TYPE_LENGTH];
 };
+
+static void job_status_handle_exception (struct job_status *stat,
+                                         json_t *context)
+{
+    const char *type;
+    int severity;
+    const char *note = NULL;
+
+    if (json_unpack (context,
+                     "{s:s s:i s?:s}",
+                     "type", &type,
+                     "severity", &severity,
+                     "note", &note) < 0)
+        log_err_exit ("error decoding exception context");
+    if (severity == 0) {
+        /* Note: the exit_code and status will be overridden
+         *  by the finish event if this job is still running.
+         *  O/w, for a non-running job with a fatal exception
+         *  the default exit code is stat->exception_exit_code.
+         */
+        stat->exit_code = stat->exception_exit_code;
+        stat->status = stat->exit_code << 8;
+        stat->exception = true;
+        strncpy (stat->ex_type, type, sizeof(stat->ex_type) - 1);
+    }
+}
 
 static void status_eventlog_cb (flux_future_t *f, void *arg)
 {
@@ -1893,6 +1930,9 @@ static void status_eventlog_cb (flux_future_t *f, void *arg)
         else
             stat->exit_code = WEXITSTATUS (stat->status);
     }
+    else if (!strcmp (name, "exception"))
+        job_status_handle_exception (stat, context);
+
     json_decref (o);
     flux_future_reset (f);
     return;
@@ -1910,6 +1950,7 @@ int cmd_status (optparse_t *p, int argc, char **argv)
     int njobs;
     int verbose = optparse_getopt (p, "verbose", NULL);
     int optindex = optparse_option_index (p);
+    int exception_exit_code = optparse_get_int (p, "exception-exit-code", 1);
 
     if ((njobs = (argc - optindex)) < 1) {
         optparse_print_usage (p);
@@ -1925,6 +1966,7 @@ int cmd_status (optparse_t *p, int argc, char **argv)
     for (i = 0; i < njobs; i++) {
         struct job_status *stat = &stats[i];
         stat->id = parse_arg_unsigned (argv[optindex+i], "jobid");
+        stat->exception_exit_code = exception_exit_code;
 
         if (!(f = flux_job_event_watch (h, stat->id, "eventlog", 0)))
             log_err_exit ("flux_job_event_watch");
@@ -1953,9 +1995,14 @@ int cmd_status (optparse_t *p, int argc, char **argv)
                          WTERMSIG (stat->status));
             }
             else if (verbose > 1 || stat->exit_code != 0) {
-                log_msg ("%ju: exited with exit code %d",
-                         (uintmax_t) stat->id,
-                         stat->exit_code);
+                if (!stat->exception)
+                    log_msg ("%ju: exited with exit code %d",
+                            (uintmax_t) stat->id,
+                            stat->exit_code);
+                else
+                    log_msg ("%ju: exception type=%s",
+                            (uintmax_t) stat->id,
+                            stat->ex_type);
             }
         }
     }
