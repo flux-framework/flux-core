@@ -21,7 +21,6 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libutil/fsd.h"
 
 #include "runlevel.h"
 
@@ -29,8 +28,6 @@ struct level {
     flux_subprocess_t *p;
     flux_cmd_t *cmd;
     struct timespec start;
-    double timeout;
-    flux_watcher_t *timer;
 };
 
 struct runlevel {
@@ -65,7 +62,6 @@ void runlevel_destroy (runlevel_t *r)
                 flux_subprocess_destroy (r->rc[i].p);
             if (r->rc[i].cmd)
                 flux_cmd_destroy (r->rc[i].cmd);
-            flux_watcher_destroy (r->rc[i].timer);
         }
         free (r);
     }
@@ -98,11 +94,6 @@ static int runlevel_attr_get (const char *name, const char **val, void *arg)
         snprintf (s, sizeof (s), "%d", runlevel_get_level (r));
         if (val)
             *val = s;
-    } else if (!strcmp (name, "init.rc2_timeout")) {
-        static char s[16];
-        snprintf (s, sizeof (s), "%.1f", r->rc[2].timeout);
-        if (val)
-            *val = s;
     } else if (!strcmp (name, "init.mode")) {
         *val = r->mode;
     } else {
@@ -121,11 +112,6 @@ static int runlevel_attr_set (const char *name, const char *val, void *arg)
     if (!strcmp (name, "init.mode")) {
         if (runlevel_set_mode (r, val) < 0)
             goto error;
-    } else if (!strcmp (name, "init.rc2_timeout")) {
-        if (fsd_parse_duration (val, &r->rc[2].timeout) < 0) {
-            errno = EINVAL;
-            goto error;
-        }
     } else {
         errno = EINVAL;
         goto error;
@@ -153,16 +139,6 @@ int runlevel_register_attrs (runlevel_t *r, attr_t *attrs)
     if (attr_add_active (attrs, "init.mode", 0,
                          runlevel_attr_get, runlevel_attr_set, r) < 0)
         return -1;
-
-    if (attr_get (attrs, "init.rc2_timeout", &val, NULL) == 0) {
-        if ((fsd_parse_duration (val, &r->rc[2].timeout) < 0)
-                || attr_delete (attrs, "init.rc2_timeout", true) < 0)
-            return -1;
-    }
-    if (attr_add_active (attrs, "init.rc2_timeout", 0,
-                         runlevel_attr_get, runlevel_attr_set, r) < 0)
-        return -1;
-
     return 0;
 }
 
@@ -190,18 +166,6 @@ void runlevel_set_io_callback (runlevel_t *r, runlevel_io_cb_f cb, void *arg)
     r->io_cb_arg = arg;
 }
 
-static void runlevel_timeout (flux_reactor_t *reactor, flux_watcher_t *w,
-                              int revents, void *arg)
-{
-    runlevel_t *r = arg;
-    flux_future_t *f;
-    flux_log (r->h, LOG_ERR, "runlevel %d timeout, sending SIGTERM", r->level);
-    if (!(f = flux_subprocess_kill (r->rc[r->level].p, SIGTERM)))
-        flux_log_error (r->h, "flux_subprocess_kill");
-    /* don't care about response */
-    flux_future_destroy (f);
-}
-
 /* See POSIX 2008 Volume 3 Shell and Utilities, Issue 7
  * Section 2.8.2 Exit status for shell commands (page 2315)
  */
@@ -227,8 +191,6 @@ static void completion_cb (flux_subprocess_t *p)
 
     assert (r->rc[r->level].p == p);
     r->rc[r->level].p = NULL;
-
-    flux_watcher_stop (r->rc[r->level].timer);
 
     if (r->cb) {
         double elapsed = monotime_since (r->rc[r->level].start) / 1000;
@@ -271,7 +233,6 @@ static int runlevel_start_subprocess (runlevel_t *r, int level)
             .on_stdout = NULL,
             .on_stderr = NULL,
         };
-        flux_reactor_t *reactor = flux_get_reactor (r->h);
         int flags = 0;
 
         /* set alternate io callback for levels 1 and 3 */
@@ -293,17 +254,6 @@ static int runlevel_start_subprocess (runlevel_t *r, int level)
             goto error;
 
         monotime (&r->rc[level].start);
-        if (r->rc[level].timeout > 0.) {
-            flux_watcher_t *w;
-            if (!(w = flux_timer_watcher_create (reactor,
-                                                 r->rc[level].timeout, 0.,
-                                                 runlevel_timeout, r)))
-                goto error;
-            flux_watcher_start (w);
-            r->rc[level].timer = w;
-            flux_log (r->h, LOG_INFO, "runlevel %d (%.1fs) timer started",
-                      level, r->rc[level].timeout);
-        }
 
         r->rc[level].p = p;
     } else {
