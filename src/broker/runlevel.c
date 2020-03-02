@@ -38,7 +38,6 @@ struct runlevel {
     void *cb_arg;
     runlevel_io_cb_f io_cb;
     void *io_cb_arg;
-    const char *mode;
 };
 
 runlevel_t *runlevel_create (void)
@@ -48,7 +47,6 @@ runlevel_t *runlevel_create (void)
         errno = ENOMEM;
         return NULL;
     }
-    r->mode = "normal";
     return r;
 }
 
@@ -71,19 +69,6 @@ void runlevel_set_flux (runlevel_t *r, flux_t *h)
     r->h = h;
 }
 
-static int runlevel_set_mode (runlevel_t *r, const char *val)
-{
-    if (!strcmp (val, "normal"))
-        r->mode = "normal";
-    else if (!strcmp (val, "none"))
-        r->mode = "none";
-    else {
-        errno = EINVAL;
-        return -1;
-    }
-    return 0;
-}
-
 static int runlevel_attr_get (const char *name, const char **val, void *arg)
 {
     runlevel_t *r = arg;
@@ -93,24 +78,6 @@ static int runlevel_attr_get (const char *name, const char **val, void *arg)
         snprintf (s, sizeof (s), "%d", runlevel_get_level (r));
         if (val)
             *val = s;
-    } else if (!strcmp (name, "init.mode")) {
-        *val = r->mode;
-    } else {
-        errno = EINVAL;
-        goto error;
-    }
-    return 0;
-error:
-    return -1;
-}
-
-static int runlevel_attr_set (const char *name, const char *val, void *arg)
-{
-    runlevel_t *r = arg;
-
-    if (!strcmp (name, "init.mode")) {
-        if (runlevel_set_mode (r, val) < 0)
-            goto error;
     } else {
         errno = EINVAL;
         goto error;
@@ -122,21 +89,9 @@ error:
 
 int runlevel_register_attrs (runlevel_t *r, attr_t *attrs)
 {
-    const char *val;
-
     if (attr_add_active (attrs, "init.run-level",
                          FLUX_ATTRFLAG_READONLY,
                          runlevel_attr_get, NULL, r) < 0)
-        return -1;
-
-    if (attr_get (attrs, "init.mode", &val, NULL) == 0) {
-
-        if (runlevel_set_mode (r, val) < 0
-                || attr_delete (attrs, "init.mode", true) < 0)
-            return -1;
-    }
-    if (attr_add_active (attrs, "init.mode", 0,
-                         runlevel_attr_get, runlevel_attr_set, r) < 0)
         return -1;
     return 0;
 }
@@ -260,20 +215,9 @@ int runlevel_set_level (runlevel_t *r, int level)
         errno = EINVAL;
         return -1;
     }
-    if (!strcmp (r->mode, "normal")) {
-        r->level = level;
-        if (runlevel_start_subprocess (r, level) < 0)
-            return -1;
-    } else if (!strcmp (r->mode, "none")) {
-        r->level = level;
-        if (level == 2) {
-            if (runlevel_start_subprocess (r, level) < 0)
-                return -1;
-        } else  {
-            if (r->cb)
-                r->cb (r, r->level, 0, 0., "Skipped mode=none", r->cb_arg);
-        }
-    }
+    r->level = level;
+    if (runlevel_start_subprocess (r, level) < 0)
+        return -1;
     return 0;
 }
 
