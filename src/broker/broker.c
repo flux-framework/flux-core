@@ -559,7 +559,6 @@ int main (int argc, char *argv[])
             goto cleanup;
         }
 
-        runlevel_set_size (ctx.runlevel, size);
         runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
         runlevel_set_flux (ctx.runlevel, ctx.h);

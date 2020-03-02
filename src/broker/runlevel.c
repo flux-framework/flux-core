@@ -38,7 +38,6 @@ struct runlevel {
     void *cb_arg;
     runlevel_io_cb_f io_cb;
     void *io_cb_arg;
-    char nodeset[64];
     const char *mode;
 };
 
@@ -140,18 +139,6 @@ int runlevel_register_attrs (runlevel_t *r, attr_t *attrs)
                          runlevel_attr_get, runlevel_attr_set, r) < 0)
         return -1;
     return 0;
-}
-
-void runlevel_set_size (runlevel_t *r, uint32_t size)
-{
-    int n;
-
-    if (size > 1)
-        n = snprintf (r->nodeset, sizeof (r->nodeset),
-                      "[0-%" PRIu32 "]", size - 1);
-    else
-        n = snprintf (r->nodeset, sizeof (r->nodeset), "[0]");
-    assert (n < sizeof (r->nodeset));
 }
 
 void runlevel_set_callback (runlevel_t *r, runlevel_cb_f cb, void *arg)
@@ -335,11 +322,6 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *cmd_argz,
     if (local_uri && flux_cmd_setenvf (cmd, 1, "FLUX_URI",
                                        "%s", local_uri) < 0)
         goto error;
-    if (level == 1 || level == 3) {
-        if (flux_cmd_setenvf (cmd, 1, "FLUX_NODESET_MASK",
-                              "%s", r->nodeset) < 0)
-            goto error;
-    }
     r->rc[level].cmd = cmd;
     return 0;
 error:
