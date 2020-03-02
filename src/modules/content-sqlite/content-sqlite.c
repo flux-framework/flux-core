@@ -21,6 +21,7 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/errno_safe.h"
 
 const size_t lzo_buf_chunksize = 1024*1024;
 const size_t compression_threshold = 256; /* compress blobs >= this size */
@@ -36,7 +37,8 @@ const char *sql_store = "INSERT INTO objects (hash,size,object) "
                         "  values (?1, ?2, ?3)";
 const char *sql_dump = "SELECT object,size FROM objects";
 
-typedef struct {
+struct content_sqlite {
+    flux_msg_handler_t **handlers;
     char *dbdir;
     char *dbfile;
     sqlite3 *db;
@@ -48,12 +50,10 @@ typedef struct {
     uint32_t blob_size_limit;
     size_t lzo_bufsize;
     void *lzo_buf;
-} sqlite_ctx_t;
+};
 
-static void log_sqlite_error (sqlite_ctx_t *ctx, const char *fmt, ...)
+static void log_sqlite_error (struct content_sqlite *ctx, const char *fmt, ...)
 {
-    const char *sq_errmsg = sqlite3_errmsg (ctx->db);
-    int sq_errcode = sqlite3_extended_errcode (ctx->db);
     char buf[64];
     va_list ap;
 
@@ -61,13 +61,20 @@ static void log_sqlite_error (sqlite_ctx_t *ctx, const char *fmt, ...)
     (void)vsnprintf (buf, sizeof (buf), fmt, ap);
     va_end (ap);
 
-    if (!sq_errmsg)
-        sq_errmsg = "unknown error code";
-
-    flux_log (ctx->h, LOG_ERR, "%s: %s(%d)", buf, sq_errmsg, sq_errcode);
+    if (ctx->db) {
+        const char *errmsg = sqlite3_errmsg (ctx->db);
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "%s: %s(%d)",
+                  buf,
+                  errmsg ? errmsg : "unknown error code",
+                  sqlite3_extended_errcode (ctx->db));
+    }
+    else
+        flux_log (ctx->h, LOG_ERR, "%s: unknown error, no sqlite3 handle", buf);
 }
 
-static void set_errno_from_sqlite_error (sqlite_ctx_t *ctx)
+static void set_errno_from_sqlite_error (struct content_sqlite *ctx)
 {
     switch (sqlite3_errcode (ctx->db)) {
         case SQLITE_IOERR:      /* os io error */
@@ -93,114 +100,7 @@ static void set_errno_from_sqlite_error (sqlite_ctx_t *ctx)
     }
 }
 
-static void freectx (void *arg)
-{
-    sqlite_ctx_t *ctx = arg;
-    if (ctx) {
-        int saved_errno = errno;
-        if (ctx->store_stmt)
-            sqlite3_finalize (ctx->store_stmt);
-        if (ctx->load_stmt)
-            sqlite3_finalize (ctx->load_stmt);
-        if (ctx->dump_stmt)
-            sqlite3_finalize (ctx->dump_stmt);
-        if (ctx->db)
-            sqlite3_close (ctx->db);
-        free (ctx->dbfile);
-        free (ctx->dbdir);
-        free (ctx->lzo_buf);
-        free (ctx);
-        errno = saved_errno;
-    }
-}
-
-static sqlite_ctx_t *getctx (flux_t *h)
-{
-    sqlite_ctx_t *ctx = (sqlite_ctx_t *)flux_aux_get (h, "flux::content-sqlite");
-    const char *dir;
-    const char *tmp;
-    bool cleanup = false;
-
-    if (!ctx) {
-        if (!(ctx = calloc (1, sizeof (*ctx))))
-            goto error;
-        if (!(ctx->lzo_buf = calloc (1, lzo_buf_chunksize)))
-            goto error;
-        ctx->lzo_bufsize = lzo_buf_chunksize;
-        ctx->h = h;
-        if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))) {
-            flux_log_error (h, "content.hash");
-            goto error;
-        }
-        if (!(tmp = flux_attr_get (h, "content.blob-size-limit"))) {
-            flux_log_error (h, "content.blob-size-limit");
-            goto error;
-        }
-        ctx->blob_size_limit = strtoul (tmp, NULL, 10);
-
-        if (!(dir = flux_attr_get (h, "persist-directory"))) {
-            if (!(dir = flux_attr_get (h, "broker.rundir"))) {
-                flux_log_error (h, "broker.rundir");
-                goto error;
-            }
-            cleanup = true;
-        }
-        if (asprintf (&ctx->dbdir, "%s/content", dir) < 0)
-            goto error;
-        if (mkdir (ctx->dbdir, 0755) < 0 && errno != EEXIST) {
-            flux_log_error (h, "mkdir %s", ctx->dbdir);
-            goto error;
-        }
-        if (cleanup)
-            cleanup_push_string (cleanup_directory_recursive, ctx->dbdir);
-        if (asprintf (&ctx->dbfile, "%s/sqlite", ctx->dbdir) < 0)
-            goto error;
-
-        if (sqlite3_open (ctx->dbfile, &ctx->db) != SQLITE_OK) {
-            flux_log_error (h, "sqlite3_open %s", ctx->dbfile);
-            goto error;
-        }
-        if (sqlite3_exec (ctx->db, "PRAGMA journal_mode=OFF",
-                                            NULL, NULL, NULL) != SQLITE_OK
-                || sqlite3_exec (ctx->db, "PRAGMA synchronous=OFF",
-                                            NULL, NULL, NULL) != SQLITE_OK
-                || sqlite3_exec (ctx->db, "PRAGMA locking_mode=EXCLUSIVE",
-                                            NULL, NULL, NULL) != SQLITE_OK) {
-            log_sqlite_error (ctx, "setting sqlite pragmas");
-            goto error_sqlite;
-        }
-        if (sqlite3_exec (ctx->db, sql_create_table,
-                                            NULL, NULL, NULL) != SQLITE_OK) {
-            log_sqlite_error (ctx, "creating table");
-            goto error_sqlite;
-        }
-        if (sqlite3_prepare_v2 (ctx->db, sql_load, -1, &ctx->load_stmt,
-                                            NULL) != SQLITE_OK) {
-            log_sqlite_error (ctx, "preparing load stmt");
-            goto error_sqlite;
-        }
-        if (sqlite3_prepare_v2 (ctx->db, sql_store, -1, &ctx->store_stmt,
-                                            NULL) != SQLITE_OK) {
-            log_sqlite_error (ctx, "preparing store stmt");
-            goto error_sqlite;
-        }
-        if (sqlite3_prepare_v2 (ctx->db, sql_dump, -1, &ctx->dump_stmt,
-                                            NULL) != SQLITE_OK) {
-            log_sqlite_error (ctx, "preparing dump stmt");
-            goto error_sqlite;
-        }
-        if (flux_aux_set (h, "flux::content-sqlite", ctx, freectx) < 0)
-            goto error;
-    }
-    return ctx;
-error_sqlite:
-    set_errno_from_sqlite_error (ctx);
-error:
-    freectx (ctx);
-    return NULL;
-}
-
-int grow_lzo_buf (sqlite_ctx_t *ctx, size_t size)
+static int grow_lzo_buf (struct content_sqlite *ctx, size_t size)
 {
     size_t newsize = ctx->lzo_bufsize;
     void *newbuf;
@@ -215,202 +115,362 @@ int grow_lzo_buf (sqlite_ctx_t *ctx, size_t size)
     return 0;
 }
 
-void load_cb (flux_t *h, flux_msg_handler_t *mh,
-              const flux_msg_t *msg, void *arg)
+/* Load blob from objects table, uncompressing if necessary.
+ * Returns 0 on success, -1 on error with errno set.
+ * On successful return, must call sqlite3_reset (ctx->load_stmt),
+ * which invalidates returned data.
+ */
+static int content_sqlite_load (struct content_sqlite *ctx,
+                                const char *blobref,
+                                const void **datap,
+                                int *sizep)
 {
-    sqlite_ctx_t *ctx = arg;
-    const char *blobref = "-";
-    int blobref_size;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
     int hash_len;
     const void *data = NULL;
     int size = 0;
     int uncompressed_size;
-    int rc = -1;
-    int old_state;
-    //delay cancellation to ensure lock-correctness in sqlite
-    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_state);
 
-    if (flux_request_decode_raw (msg, NULL, (const void **)&blobref,
-                                 &blobref_size) < 0) {
-        flux_log_error (h, "load: request decode failed");
-        goto done;
-    }
-    if (!blobref || blobref[blobref_size - 1] != '\0') {
-        errno = EPROTO;
-        flux_log_error (h, "load: malformed blobref");
-        goto done;
-    }
     if ((hash_len = blobref_strtohash (blobref, hash, sizeof (hash))) < 0) {
         errno = ENOENT;
-        flux_log_error (h, "load: unexpected foreign blobref");
-        goto done;
+        flux_log_error (ctx->h, "load: unexpected foreign blobref");
+        return -1;
     }
-    if (sqlite3_bind_text (ctx->load_stmt, 1, (char *)hash, hash_len,
-                                              SQLITE_STATIC) != SQLITE_OK) {
+    if (sqlite3_bind_text (ctx->load_stmt,
+                           1,
+                           (char *)hash,
+                           hash_len,
+                           SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "load: binding key");
         set_errno_from_sqlite_error (ctx);
-        goto done;
+        goto error;
     }
     if (sqlite3_step (ctx->load_stmt) != SQLITE_ROW) {
         //log_sqlite_error (ctx, "load: executing stmt");
         errno = ENOENT;
-        goto done;
+        goto error;
     }
     size = sqlite3_column_bytes (ctx->load_stmt, 0);
     if (sqlite3_column_type (ctx->load_stmt, 0) != SQLITE_BLOB && size > 0) {
-        flux_log (h, LOG_ERR, "load: selected value is not a blob");
+        flux_log (ctx->h, LOG_ERR, "load: selected value is not a blob");
         errno = EINVAL;
-        goto done;
+        goto error;
     }
     data = sqlite3_column_blob (ctx->load_stmt, 0);
     if (sqlite3_column_type (ctx->load_stmt, 1) != SQLITE_INTEGER) {
-        flux_log (h, LOG_ERR, "load: selected value is not an integer");
+        flux_log (ctx->h, LOG_ERR, "load: selected value is not an integer");
         errno = EINVAL;
-        goto done;
+        goto error;
     }
     uncompressed_size = sqlite3_column_int (ctx->load_stmt, 1);
     if (uncompressed_size != -1) {
         if (ctx->lzo_bufsize < uncompressed_size
                                 && grow_lzo_buf (ctx, uncompressed_size) < 0)
-            goto done;
-        int r = LZ4_decompress_safe (data, ctx->lzo_buf, size, uncompressed_size);
+            goto error;
+        int r = LZ4_decompress_safe (data,
+                                     ctx->lzo_buf,
+                                     size,
+                                     uncompressed_size);
         if (r < 0) {
             errno = EINVAL;
-            goto done;
+            goto error;
         }
         if (r != uncompressed_size) {
-            flux_log (h, LOG_ERR, "load: blob size mismatch");
+            flux_log (ctx->h, LOG_ERR, "load: blob size mismatch");
             errno = EINVAL;
-            goto done;
+            goto error;
         }
         data = ctx->lzo_buf;
         size = uncompressed_size;
     }
-    rc = 0;
-done:
-    if (rc < 0) {
-        if (flux_respond_error (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "load: flux_respond_error");
-    }
-    else {
-        if (flux_respond_raw (h, msg, data, size) < 0)
-            flux_log_error (h, "load: flux_respond_raw");
-    }
-    (void )sqlite3_reset (ctx->load_stmt);
-    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old_state);
+    *datap = data;
+    *sizep = size;
+    return 0;
+error:
+    ERRNO_SAFE_WRAP (sqlite3_reset, ctx->load_stmt);
+    return -1;
 }
 
-void store_cb (flux_t *h, flux_msg_handler_t *mh,
-               const flux_msg_t *msg, void *arg)
+/* Store blob to objects table, compressing if necessary.
+ * Blobref resulting from hash over 'data' is stored to 'blobref'.
+ * Returns 0 on success, -1 on error with errno set.
+ */
+static int content_sqlite_store (struct content_sqlite *ctx,
+                                 const void *data,
+                                 int size,
+                                 char *blobref,
+                                 int blobrefsz)
 {
-    sqlite_ctx_t *ctx = arg;
-    const void *data;
-    int size, hash_len;
     uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
-    char blobref[BLOBREF_MAX_STRING_SIZE] = "-";
+    int hash_len;
     int uncompressed_size = -1;
-    int rc = -1;
-    int old_state;
-    //delay cancellation to ensure lock-correctness in sqlite
-    pthread_setcancelstate(PTHREAD_CANCEL_DISABLE, &old_state);
 
-    if (flux_request_decode_raw (msg, NULL, &data, &size) < 0) {
-        flux_log_error (h, "store: request decode failed");
-        goto done;
-    }
     if (size > ctx->blob_size_limit) {
         errno = EFBIG;
-        goto done;
+        return -1;
     }
-    if (blobref_hash (ctx->hashfun, (uint8_t *)data, size, blobref,
-                      sizeof (blobref)) < 0)
-        goto done;
+    if (blobref_hash (ctx->hashfun,
+                      (uint8_t *)data,
+                      size,
+                      blobref,
+                      blobrefsz) < 0)
+        return -1;
     if ((hash_len = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
-        goto done;
+        return -1;
     if (size >= compression_threshold) {
         int r;
         int out_len = LZ4_compressBound(size);
         if (ctx->lzo_bufsize < out_len && grow_lzo_buf (ctx, out_len) < 0)
-            goto done;
+            return -1;
         r = LZ4_compress_default (data, ctx->lzo_buf, size, out_len);
         if (r == 0) {
             errno = EINVAL;
-            goto done;
+            return -1;
         }
         uncompressed_size = size;
         size = r;
         data = ctx->lzo_buf;
     }
-    if (sqlite3_bind_text (ctx->store_stmt, 1, (char *)hash, hash_len,
+    if (sqlite3_bind_text (ctx->store_stmt,
+                           1,
+                           (char *)hash,
+                           hash_len,
                            SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding key");
         set_errno_from_sqlite_error (ctx);
-        goto done;
+        goto error;
     }
-    if (sqlite3_bind_int (ctx->store_stmt, 2, uncompressed_size) != SQLITE_OK) {
+    if (sqlite3_bind_int (ctx->store_stmt,
+                          2,
+                          uncompressed_size) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding size");
         set_errno_from_sqlite_error (ctx);
-        goto done;
+        goto error;
     }
-    if (sqlite3_bind_blob (ctx->store_stmt, 3,
-                           data, size, SQLITE_STATIC) != SQLITE_OK) {
+    if (sqlite3_bind_blob (ctx->store_stmt,
+                           3,
+                           data,
+                           size,
+                           SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding data");
         set_errno_from_sqlite_error (ctx);
-        goto done;
+        goto error;
     }
     if (sqlite3_step (ctx->store_stmt) != SQLITE_DONE
                     && sqlite3_errcode (ctx->db) != SQLITE_CONSTRAINT) {
         log_sqlite_error (ctx, "store: executing stmt");
         set_errno_from_sqlite_error (ctx);
-        goto done;
+        goto error;
     }
-    rc = 0;
-done:
-    if (rc < 0) {
-        if (flux_respond_error (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "store: flux_respond_error");
-    }
-    else {
-        if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
-            flux_log_error (h, "store: flux_respond_raw");
-    }
-    (void) sqlite3_reset (ctx->store_stmt);
-    pthread_setcancelstate(PTHREAD_CANCEL_ENABLE, &old_state);
+    sqlite3_reset (ctx->store_stmt);
+    return 0;
+error:
+    ERRNO_SAFE_WRAP (sqlite3_reset, ctx->store_stmt);
+    return -1;
 }
 
-int register_backing_store (flux_t *h, bool value, const char *name)
+static void load_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    const char *blobref;
+    int blobref_size;
+    const void *data;
+    int size;
+
+    if (flux_request_decode_raw (msg,
+                                 NULL,
+                                 (const void **)&blobref,
+                                 &blobref_size) < 0) {
+        flux_log_error (h, "load: request decode failed");
+        goto error;
+    }
+    if (!blobref || blobref[blobref_size - 1] != '\0') {
+        errno = EPROTO;
+        flux_log_error (h, "load: malformed blobref");
+        goto error;
+    }
+    if (content_sqlite_load (ctx, blobref, &data, &size) < 0)
+        goto error;
+    if (flux_respond_raw (h, msg, data, size) < 0)
+        flux_log_error (h, "load: flux_respond_raw");
+    (void )sqlite3_reset (ctx->load_stmt);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "load: flux_respond_error");
+}
+
+void store_cb (flux_t *h,
+               flux_msg_handler_t *mh,
+               const flux_msg_t *msg,
+               void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    const void *data;
+    int size;
+    char blobref[BLOBREF_MAX_STRING_SIZE];
+
+    if (flux_request_decode_raw (msg, NULL, &data, &size) < 0) {
+        flux_log_error (h, "store: request decode failed");
+        goto error;
+    }
+    if (content_sqlite_store (ctx, data, size, blobref, sizeof (blobref)) < 0)
+        goto error;
+    if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
+        flux_log_error (h, "store: flux_respond_raw");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "store: flux_respond_error");
+}
+
+int register_backing_store (flux_t *h, const char *name)
 {
     flux_future_t *f;
-    int saved_errno = 0;
-    int rc = -1;
+    int rc;
 
-    if (!(f = flux_rpc_pack (h, "content.backing", FLUX_NODEID_ANY, 0,
-                             "{ s:b s:s }",
-                             "backing", value,
-                             "name", name)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    saved_errno = errno;
+    if (!(f = flux_rpc_pack (h,
+                             "content.register-backing",
+                             0,
+                             0,
+                             "{s:s}",
+                             "name",
+                             name)))
+        return -1;
+    rc = flux_future_get (f, NULL);
     flux_future_destroy (f);
-    errno = saved_errno;
+    return rc;
+}
+
+int unregister_backing_store (flux_t *h)
+{
+    flux_future_t *f;
+    int rc;
+
+    if (!(f = flux_rpc (h, "content.unregister-backing", NULL, 0, 0)))
+        return -1;
+    rc = flux_future_get (f, NULL);
+    flux_future_destroy (f);
     return rc;
 }
 
 int register_content_backing_service (flux_t *h)
 {
-    int rc, saved_errno;
+    int rc;
     flux_future_t *f;
     if (!(f = flux_service_register (h, "content-backing")))
         return -1;
     rc = flux_future_get (f, NULL);
-    saved_errno = errno;
     flux_future_destroy (f);
-    errno = saved_errno;
     return rc;
+}
+
+static void content_sqlite_closedb (struct content_sqlite *ctx)
+{
+    if (ctx) {
+        int saved_errno = errno;
+        if (ctx->store_stmt) {
+            if (sqlite3_finalize (ctx->store_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize store_stmt");
+        }
+        if (ctx->load_stmt) {
+            if (sqlite3_finalize (ctx->load_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize load_stmt");
+        }
+        if (ctx->dump_stmt) {
+            if (sqlite3_finalize (ctx->dump_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize dump_stmt");
+        }
+        if (ctx->db) {
+            if (sqlite3_close (ctx->db) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize dump_stmt");
+        }
+        errno = saved_errno;
+    }
+}
+
+static int content_sqlite_opendb (struct content_sqlite *ctx)
+{
+    if (sqlite3_open (ctx->dbfile, &ctx->db) != SQLITE_OK) {
+        flux_log_error (ctx->h, "sqlite3_open %s", ctx->dbfile);
+        return -1;
+    }
+    if (sqlite3_exec (ctx->db,
+                      "PRAGMA journal_mode=OFF",
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "setting sqlite 'journal_mode' pragma");
+        goto error;
+    }
+    if (sqlite3_exec (ctx->db,
+                      "PRAGMA synchronous=OFF",
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "setting sqlite 'synchronous' pragma");
+        goto error;
+    }
+    if (sqlite3_exec (ctx->db,
+                      "PRAGMA locking_mode=EXCLUSIVE",
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "setting sqlite 'locking_mode' pragma");
+        goto error;
+    }
+    if (sqlite3_exec (ctx->db,
+                      sql_create_table,
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "creating table");
+        goto error;
+    }
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_load,
+                            -1,
+                            &ctx->load_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing load stmt");
+        goto error;
+    }
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_store,
+                            -1,
+                            &ctx->store_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing store stmt");
+        goto error;
+    }
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_dump,
+                            -1,
+                            &ctx->dump_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing dump stmt");
+        goto error;
+    }
+    return 0;
+error:
+    set_errno_from_sqlite_error (ctx);
+    return -1;
+}
+
+static void content_sqlite_destroy (struct content_sqlite *ctx)
+{
+    if (ctx) {
+        int saved_errno = errno;
+        flux_msg_handler_delvec (ctx->handlers);
+        free (ctx->dbfile);
+        free (ctx->dbdir);
+        free (ctx->lzo_buf);
+        free (ctx);
+        errno = saved_errno;
+    }
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -419,17 +479,65 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
+static struct content_sqlite *content_sqlite_create (flux_t *h)
+{
+    struct content_sqlite *ctx;
+    const char *dir;
+    const char *tmp;
+    bool cleanup = false;
+
+    if (!(ctx = calloc (1, sizeof (*ctx))))
+        return NULL;
+    if (!(ctx->lzo_buf = calloc (1, lzo_buf_chunksize)))
+        goto error;
+    ctx->lzo_bufsize = lzo_buf_chunksize;
+    ctx->h = h;
+    if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))) {
+        flux_log_error (h, "content.hash");
+        goto error;
+    }
+    if (!(tmp = flux_attr_get (h, "content.blob-size-limit"))) {
+        flux_log_error (h, "content.blob-size-limit");
+        goto error;
+    }
+    ctx->blob_size_limit = strtoul (tmp, NULL, 10);
+
+    if (!(dir = flux_attr_get (h, "persist-directory"))) {
+        if (!(dir = flux_attr_get (h, "broker.rundir"))) {
+            flux_log_error (h, "broker.rundir");
+            goto error;
+        }
+        cleanup = true;
+    }
+    if (asprintf (&ctx->dbdir, "%s/content", dir) < 0)
+        goto error;
+    if (mkdir (ctx->dbdir, 0755) < 0 && errno != EEXIST) {
+        flux_log_error (h, "mkdir %s", ctx->dbdir);
+        goto error;
+    }
+    if (cleanup)
+        cleanup_push_string (cleanup_directory_recursive, ctx->dbdir);
+    if (asprintf (&ctx->dbfile, "%s/sqlite", ctx->dbdir) < 0)
+        goto error;
+    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0) {
+        flux_log_error (h, "flux_msg_handler_addvec");
+        goto error;
+    }
+    return ctx;
+error:
+    content_sqlite_destroy (ctx);
+    return NULL;
+}
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
-    flux_msg_handler_t **handlers = NULL;
-    sqlite_ctx_t *ctx = getctx (h);
-    if (!ctx)
+    struct content_sqlite *ctx;
+
+    if (!(ctx = content_sqlite_create (h)))
+        return -1;
+    if (content_sqlite_opendb(ctx) < 0)
         goto done;
-    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
-        flux_log_error (h, "flux_msg_handler_addvec");
-        goto done;
-    }
-    if (register_backing_store (h, true, "content-sqlite") < 0) {
+    if (register_backing_store (h, "content-sqlite") < 0) {
         flux_log_error (h, "registering backing store");
         goto done;
     }
@@ -441,8 +549,13 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_reactor_run");
         goto done;
     }
+    if (unregister_backing_store (h) < 0) {
+        flux_log_error (h, "unregistering backing store");
+        goto done;
+    }
 done:
-    flux_msg_handler_delvec (handlers);
+    content_sqlite_closedb (ctx);
+    content_sqlite_destroy (ctx);
     return 0;
 }
 
