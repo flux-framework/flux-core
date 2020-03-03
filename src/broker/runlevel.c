@@ -229,7 +229,6 @@ int runlevel_get_level (struct runlevel *r)
 int runlevel_set_rc (struct runlevel *r, int level, const char *cmd_argz,
                      size_t cmd_argz_len, const char *local_uri)
 {
-    flux_subprocess_t *p = NULL;
     flux_cmd_t *cmd = NULL;
     const char *shell = getenv ("SHELL");
     if (!shell)
@@ -239,20 +238,26 @@ int runlevel_set_rc (struct runlevel *r, int level, const char *cmd_argz,
         errno = EINVAL;
         goto error;
     }
-
-    // Only wrap in a shell if there is only one argument
-    bool shell_wrap = argz_count (cmd_argz, cmd_argz_len) < 2;
     if (!(cmd = flux_cmd_create (0, NULL, environ)))
         goto error;
-    if (shell_wrap || !cmd_argz) {
+
+    // Run interactive shell if there are no arguments
+    if (argz_count (cmd_argz, cmd_argz_len) == 0) {
         if (flux_cmd_argv_append (cmd, shell) < 0)
             goto error;
     }
-    if (shell_wrap) {
-        if (cmd_argz && flux_cmd_argv_append (cmd, "-c") < 0)
+    // Wrap in shell -c if there is only one argument
+    else if (argz_count (cmd_argz, cmd_argz_len) == 1) {
+        char *arg = argz_next (cmd_argz, cmd_argz_len, NULL);
+
+        if (flux_cmd_argv_append (cmd, shell) < 0)
+            goto error;
+        if (flux_cmd_argv_append (cmd, "-c") < 0)
+            goto error;
+        if (flux_cmd_argv_append (cmd, arg) < 0)
             goto error;
     }
-    if (cmd_argz) {
+    else {
         char *arg = argz_next (cmd_argz, cmd_argz_len, NULL);
         while (arg) {
             if (flux_cmd_argv_append (cmd, arg) < 0)
@@ -269,8 +274,6 @@ int runlevel_set_rc (struct runlevel *r, int level, const char *cmd_argz,
     r->rc[level].cmd = cmd;
     return 0;
 error:
-    if (p)
-        flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
     return -1;
 }
