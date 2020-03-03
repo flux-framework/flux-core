@@ -75,6 +75,12 @@ test_expect_success 'rc3 failure causes instance failure' '
 	grep -q "Run level 3 Exited with non-zero status" false3.log
 '
 
+test_expect_success 'instance with no rc2 terminated cleanly by timeout' '
+	run_timeout 0.5 flux start \
+		-o,-Slog-stderr-level=6 \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Sbroker.rc2_none
+'
+
 test_expect_success 'rc1 environment is as expected' '
 	flux start \
 		-o,-Sbroker.rc1_path=${FLUX_SOURCE_DIR}/t/rc/rc1-testenv \
