@@ -64,6 +64,13 @@ int runlevel_set_level (struct runlevel *r, int level);
  */
 int runlevel_get_level (struct runlevel *r);
 
+/* Terminate current runlevel.
+ * Asynchronously results in runlevel callback, so broker can advance state.
+ * If runlevel has no subprocess, callback is immediate with rc=0.
+ * Return 0 on success, -1 on failure.
+ */
+int runlevel_abort (struct runlevel *r);
+
 #endif /* !_BROKER_RUNLEVEL_H */
 
 /*

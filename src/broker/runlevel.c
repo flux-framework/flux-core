@@ -28,6 +28,7 @@ struct level {
     flux_subprocess_t *p;
     flux_cmd_t *cmd;
     struct timespec start;
+    bool aborting;
 };
 
 struct runlevel {
@@ -276,6 +277,40 @@ int runlevel_set_rc (struct runlevel *r, int level, const char *cmd_argz,
 error:
     flux_cmd_destroy (cmd);
     return -1;
+}
+
+/* Abort current runlevel.
+ * If there is a subprocess, send it a SIGTERM and let subproc completion
+ * callback call r->cb().  Otherwise, call r->cb() now.
+ * N.B. the broker will use the exit code runlevel gives r->cb().
+ * In the subprocess case the exit code is expected to be be 128 + 15 = 143.
+ * Otherwise the exit code will be zero.
+ */
+int runlevel_abort (struct runlevel *r)
+{
+
+    if (!r || r->rc[r->level].aborting)
+        return -1;
+    r->rc[r->level].aborting = true;
+    if (r->rc[r->level].p) {
+        flux_future_t *f;
+        if (!(f = flux_subprocess_kill (r->rc[r->level].p, SIGTERM))) {
+            flux_log_error (r->h, "flux_subprocess_kill");
+            return -1;
+        }
+        flux_future_destroy (f); // ignore response
+    }
+    else {
+        if (r->cb) {
+            r->cb (r,
+                   r->level,
+                   0,
+                   monotime_since (r->rc[r->level].start) / 1000,
+                   "Not configured",
+                   r->cb_arg);
+        }
+    }
+    return 0;
 }
 
 /*

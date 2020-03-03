@@ -1860,8 +1860,10 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     int rank = overlay_get_rank (ctx->overlay);
     int signum = flux_signal_watcher_get_signum (w);
 
-    log_msg ("signal %d (%s) on rank %u", signum, strsignal (signum), rank);
-    _exit (1);
+    if (rank > 0 || runlevel_abort (ctx->runlevel) < 0) {
+        log_msg ("signal %d (%s) on rank %u", signum, strsignal (signum), rank);
+        _exit (1);
+    }
 }
 
 /* Send a request message down the TBON.
