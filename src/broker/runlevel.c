@@ -40,19 +40,32 @@ struct runlevel {
     void *io_cb_arg;
 };
 
-struct runlevel *runlevel_create (void)
+static int runlevel_attr_get (const char *name, const char **val, void *arg);
+
+struct runlevel *runlevel_create (flux_t *h, attr_t *attrs)
 {
-    struct runlevel *r = calloc (1, sizeof (*r));
-    if (!r) {
-        errno = ENOMEM;
+    struct runlevel *r;
+
+    if (!(r = calloc (1, sizeof (*r))))
         return NULL;
-    }
+    r->h = h;
+    if (attr_add_active (attrs,
+                         "init.run-level",
+                         FLUX_ATTRFLAG_READONLY,
+                         runlevel_attr_get,
+                         NULL,
+                         r) < 0)
+        goto error;
     return r;
+error:
+    runlevel_destroy (r);
+    return NULL;
 }
 
 void runlevel_destroy (struct runlevel *r)
 {
     if (r) {
+        int saved_errno = errno;
         int i;
         for (i = 0; i < 4; i++) {
             if (r->rc[i].p)
@@ -61,12 +74,8 @@ void runlevel_destroy (struct runlevel *r)
                 flux_cmd_destroy (r->rc[i].cmd);
         }
         free (r);
+        errno = saved_errno;
     }
-}
-
-void runlevel_set_flux (struct runlevel *r, flux_t *h)
-{
-    r->h = h;
 }
 
 static int runlevel_attr_get (const char *name, const char **val, void *arg)
@@ -85,15 +94,6 @@ static int runlevel_attr_get (const char *name, const char **val, void *arg)
     return 0;
 error:
     return -1;
-}
-
-int runlevel_register_attrs (struct runlevel *r, attr_t *attrs)
-{
-    if (attr_add_active (attrs, "init.run-level",
-                         FLUX_ATTRFLAG_READONLY,
-                         runlevel_attr_get, NULL, r) < 0)
-        return -1;
-    return 0;
 }
 
 void runlevel_set_callback (struct runlevel *r, runlevel_cb_f cb, void *arg)

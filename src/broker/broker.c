@@ -328,8 +328,6 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.cache = content_cache_create ()))
         oom ();
-    if (!(ctx.runlevel = runlevel_create ()))
-        oom ();
     if (!(ctx.publisher = publisher_create ()))
         oom ();
 
@@ -543,11 +541,6 @@ int main (int argc, char *argv[])
         const char *rc2 = ctx.init_shell_cmd;
         size_t rc2_len = ctx.init_shell_cmd_len;
 
-        if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0) {
-            log_err ("configuring runlevel attributes");
-            goto cleanup;
-        }
-
         if (attr_get (ctx.attrs, "local-uri", &uri, NULL) < 0) {
             log_err ("local-uri is not set");
             goto cleanup;
@@ -565,9 +558,13 @@ int main (int argc, char *argv[])
             goto cleanup;
         }
 
+        if (!(ctx.runlevel = runlevel_create (ctx.h, ctx.attrs))) {
+            log_err ("creating runlevel handler");
+            goto cleanup;
+        }
+
         runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
-        runlevel_set_flux (ctx.runlevel, ctx.h);
 
         if (runlevel_set_rc (ctx.runlevel,
                              1,

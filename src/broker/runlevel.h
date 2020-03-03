@@ -30,11 +30,9 @@ typedef void (*runlevel_io_cb_f)(struct runlevel *r,
                                  const char *msg,
                                  void *arg);
 
-/* Initialize, finalize runlevel calss.
+/* Initialize, finalize runlevel class.
  */
-struct runlevel *runlevel_create (void);
-int runlevel_register_attrs (struct runlevel *r, attr_t *attr);
-void runlevel_set_flux (struct runlevel *r, flux_t *h);
+struct runlevel *runlevel_create (flux_t *h, attr_t *attr);
 void runlevel_destroy (struct runlevel *r);
 
 /* Handle run level subprocess completion.
@@ -47,8 +45,8 @@ void runlevel_set_io_callback (struct runlevel *r,
                                runlevel_io_cb_f cb,
                                void *arg);
 
-/* Associate 'command' with 'level'.  'local_uri' and 'library_path' are
- * used to set FLUX_URI and LD_LIBRARY_PATH in the subprocess environment.
+/* Associate 'command' with 'level'.
+ * 'local_uri' is used to set FLUX_URI in the subprocess environment.
  */
 int runlevel_set_rc (struct runlevel *r,
                      int level,
