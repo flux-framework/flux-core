@@ -566,13 +566,15 @@ int main (int argc, char *argv[])
         runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
 
-        if (runlevel_set_rc (ctx.runlevel,
-                             1,
-                             rc1,
-                             rc1 ? strlen (rc1) + 1 : 0,
-                             uri) < 0) {
-            log_err ("runlevel_set_rc 1");
-            goto cleanup;
+        if (rc1 && strlen (rc1) > 0) {
+            if (runlevel_set_rc (ctx.runlevel,
+                                 1,
+                                 rc1,
+                                 strlen (rc1) + 1,
+                                 uri) < 0) {
+                log_err ("runlevel_set_rc 1");
+                goto cleanup;
+            }
         }
 
         if (runlevel_set_rc (ctx.runlevel,
@@ -584,13 +586,15 @@ int main (int argc, char *argv[])
             goto cleanup;
         }
 
-        if (runlevel_set_rc (ctx.runlevel,
-                             3,
-                             rc3,
-                             rc3 ? strlen (rc3) + 1 : 0,
-                             uri) < 0) {
-            log_err ("runlevel_set_rc 3");
-            goto cleanup;
+        if (rc3 && strlen (rc3) > 0) {
+            if (runlevel_set_rc (ctx.runlevel,
+                                 3,
+                                 rc3,
+                                 strlen (rc3) + 1,
+                                 uri) < 0) {
+                log_err ("runlevel_set_rc 3");
+                goto cleanup;
+            }
         }
     }
 

@@ -15,9 +15,9 @@ test_expect_success 'sharness minimal init.run-level=2' '
 test_expect_success 'sharness minimal has transitioned normally thus far' '
 	flux dmesg >default.log &&
 	grep -q "Run level 1 starting" default.log &&
-	grep -q "Run level 1 Exited" default.log &&
+	grep -q "Run level 1 Not configured" default.log &&
 	grep -q "Run level 2 starting" default.log &&
-	! grep -q "Run level 2 Exited" default.log &&
+	! grep -q "Run level 2 Not configured" default.log &&
 	! grep -q "Run level 3" default.log
 '
 
@@ -26,11 +26,11 @@ test_expect_success 'new instance transitions appropriately' '
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
 		/bin/true 2>normal.log &&
 	grep -q "Run level 1 starting" normal.log &&
-	grep -q "Run level 1 Exited" normal.log &&
+	grep -q "Run level 1 Not configured" normal.log &&
 	grep -q "Run level 2 starting" normal.log &&
 	grep -q "Run level 2 Exited" normal.log &&
 	grep -q "Run level 3 starting" normal.log &&
-	grep -q "Run level 3 Exited" normal.log
+	grep -q "Run level 3 Not configured" normal.log
 '
 
 test_expect_success 'rc1 failure transitions to rc3, fails instance' '
@@ -43,7 +43,7 @@ test_expect_success 'rc1 failure transitions to rc3, fails instance' '
 	! grep -q "Run level 2 starting" false.log &&
 	! grep -q "Run level 2 Exited" false.log &&
 	grep -q "Run level 3 starting" false.log &&
-	grep -q "Run level 3 Exited" false.log
+	grep -q "Run level 3 Not configured" false.log
 '
 
 test_expect_success 'rc1 bad path handled same as failure' '
@@ -59,7 +59,7 @@ test_expect_success 'rc1 bad path handled same as failure' '
 	! grep -q "Run level 2 starting" bad1.log &&
 	! grep -q "Run level 2 Exited" bad1.log &&
 	grep -q "Run level 3 starting" bad1.log &&
-	grep -q "Run level 3 Exited" bad1.log
+	grep -q "Run level 3 Not configured" bad1.log
 '
 
 test_expect_success 'rc3 failure causes instance failure' '
@@ -78,6 +78,7 @@ test_expect_success 'rc3 failure causes instance failure' '
 test_expect_success 'rc1 environment is as expected' '
 	flux start \
 		-o,-Sbroker.rc1_path=${FLUX_SOURCE_DIR}/t/rc/rc1-testenv \
+		-o,-Sbroker.rc3_path= \
 		-o,-Slog-stderr-level=6 \
 		/bin/true 2>&1 | tee rc1-test.log &&
 	grep "stderr-" rc1-test.log | egrep -q broker.*err &&
