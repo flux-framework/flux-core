@@ -546,11 +546,11 @@ int main (int argc, char *argv[])
             goto cleanup;
         }
         if (attr_get (ctx.attrs, "broker.rc1_path", &rc1, NULL) < 0) {
-            log_err ("conf.rc1_path is not set");
+            log_err ("broker.rc1_path is not set");
             goto cleanup;
         }
         if (attr_get (ctx.attrs, "broker.rc3_path", &rc3, NULL) < 0) {
-            log_err ("conf.rc3_path is not set");
+            log_err ("broker.rc3_path is not set");
             goto cleanup;
         }
         if (attr_get (ctx.attrs, "conf.pmi_library_path", &pmi, NULL) < 0) {
