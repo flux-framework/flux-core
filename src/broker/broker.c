@@ -112,7 +112,7 @@ typedef struct {
     /* Bootstrap
      */
     hello_t *hello;
-    runlevel_t *runlevel;
+    struct runlevel *runlevel;
 
     char *init_shell_cmd;
     size_t init_shell_cmd_len;
@@ -144,10 +144,16 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
                                  const flux_msg_t *request);
 
 static void set_proctitle (uint32_t rank);
-static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
-                         const char *state, void *arg);
-static void runlevel_io_cb (runlevel_t *r, const char *name,
-                            const char *msg, void *arg);
+static void runlevel_cb (struct runlevel *r,
+                         int level,
+                         int rc,
+                         double elapsed,
+                         const char *state,
+                         void *arg);
+static void runlevel_io_cb (struct runlevel *r,
+                            const char *name,
+                            const char *msg,
+                            void *arg);
 
 static int create_rundir (attr_t *attrs);
 static int create_broker_rundir (overlay_t *ov, void *arg);
@@ -916,8 +922,10 @@ static void set_proctitle (uint32_t rank)
 
 /* Handle line by line output on stdout, stderr of runlevel subprocess.
  */
-static void runlevel_io_cb (runlevel_t *r, const char *name,
-                            const char *msg, void *arg)
+static void runlevel_io_cb (struct runlevel *r,
+                            const char *name,
+                            const char *msg,
+                            void *arg)
 {
     broker_ctx_t *ctx = arg;
     int loglevel = !strcmp (name, "stderr") ? LOG_ERR : LOG_INFO;
@@ -928,8 +936,12 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
 
 /* Handle completion of runlevel subprocess.
  */
-static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
-                         const char *exit_string, void *arg)
+static void runlevel_cb (struct runlevel *r,
+                         int level,
+                         int rc,
+                         double elapsed,
+                         const char *exit_string,
+                         void *arg)
 {
     broker_ctx_t *ctx = arg;
     int new_level = -1;

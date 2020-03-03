@@ -40,9 +40,9 @@ struct runlevel {
     void *io_cb_arg;
 };
 
-runlevel_t *runlevel_create (void)
+struct runlevel *runlevel_create (void)
 {
-    runlevel_t *r = calloc (1, sizeof (*r));
+    struct runlevel *r = calloc (1, sizeof (*r));
     if (!r) {
         errno = ENOMEM;
         return NULL;
@@ -50,7 +50,7 @@ runlevel_t *runlevel_create (void)
     return r;
 }
 
-void runlevel_destroy (runlevel_t *r)
+void runlevel_destroy (struct runlevel *r)
 {
     if (r) {
         int i;
@@ -64,14 +64,14 @@ void runlevel_destroy (runlevel_t *r)
     }
 }
 
-void runlevel_set_flux (runlevel_t *r, flux_t *h)
+void runlevel_set_flux (struct runlevel *r, flux_t *h)
 {
     r->h = h;
 }
 
 static int runlevel_attr_get (const char *name, const char **val, void *arg)
 {
-    runlevel_t *r = arg;
+    struct runlevel *r = arg;
 
     if (!strcmp (name, "init.run-level")) {
         static char s[16];
@@ -87,7 +87,7 @@ error:
     return -1;
 }
 
-int runlevel_register_attrs (runlevel_t *r, attr_t *attrs)
+int runlevel_register_attrs (struct runlevel *r, attr_t *attrs)
 {
     if (attr_add_active (attrs, "init.run-level",
                          FLUX_ATTRFLAG_READONLY,
@@ -96,13 +96,13 @@ int runlevel_register_attrs (runlevel_t *r, attr_t *attrs)
     return 0;
 }
 
-void runlevel_set_callback (runlevel_t *r, runlevel_cb_f cb, void *arg)
+void runlevel_set_callback (struct runlevel *r, runlevel_cb_f cb, void *arg)
 {
     r->cb = cb;
     r->cb_arg = arg;
 }
 
-void runlevel_set_io_callback (runlevel_t *r, runlevel_io_cb_f cb, void *arg)
+void runlevel_set_io_callback (struct runlevel *r, runlevel_io_cb_f cb, void *arg)
 {
     r->io_cb = cb;
     r->io_cb_arg = arg;
@@ -113,7 +113,7 @@ void runlevel_set_io_callback (runlevel_t *r, runlevel_io_cb_f cb, void *arg)
  */
 static void completion_cb (flux_subprocess_t *p)
 {
-    runlevel_t *r = flux_subprocess_aux_get (p, "runlevel");
+    struct runlevel *r = flux_subprocess_aux_get (p, "runlevel");
     const char *exit_string = NULL;
     int rc;
 
@@ -143,7 +143,7 @@ static void completion_cb (flux_subprocess_t *p)
 
 static void io_cb (flux_subprocess_t *p, const char *stream)
 {
-    runlevel_t *r;
+    struct runlevel *r;
     const char *ptr;
     int lenp;
 
@@ -161,7 +161,7 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
         r->io_cb (r, stream, ptr, r->io_cb_arg);
 }
 
-static int runlevel_start_subprocess (runlevel_t *r, int level)
+static int runlevel_start_subprocess (struct runlevel *r, int level)
 {
     flux_subprocess_t *p = NULL;
 
@@ -209,7 +209,7 @@ error:
     return -1;
 }
 
-int runlevel_set_level (runlevel_t *r, int level)
+int runlevel_set_level (struct runlevel *r, int level)
 {
     if (level < 1 || level > 3 || level <= r->level) {
         errno = EINVAL;
@@ -221,12 +221,12 @@ int runlevel_set_level (runlevel_t *r, int level)
     return 0;
 }
 
-int runlevel_get_level (runlevel_t *r)
+int runlevel_get_level (struct runlevel *r)
 {
     return r->level;
 }
 
-int runlevel_set_rc (runlevel_t *r, int level, const char *cmd_argz,
+int runlevel_set_rc (struct runlevel *r, int level, const char *cmd_argz,
                      size_t cmd_argz_len, const char *local_uri)
 {
     flux_subprocess_t *p = NULL;
