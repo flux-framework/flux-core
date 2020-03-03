@@ -196,13 +196,13 @@ static int runlevel_start_subprocess (struct runlevel *r, int level)
         if (flux_subprocess_aux_set (p, "runlevel", r, NULL) < 0)
             goto error;
 
-        monotime (&r->rc[level].start);
-
         r->rc[level].p = p;
-    } else {
+    }
+    else if (level == 1 || level == 3) {
         if (r->cb)
             r->cb (r, r->level, 0, 0., "Not configured", r->cb_arg);
     }
+    monotime (&r->rc[level].start);
     return 0;
 
 error:

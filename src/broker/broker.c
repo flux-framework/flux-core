@@ -538,8 +538,7 @@ int main (int argc, char *argv[])
 
     if (rank == 0) {
         const char *rc1, *rc3, *pmi, *uri;
-        const char *rc2 = ctx.init_shell_cmd;
-        size_t rc2_len = ctx.init_shell_cmd_len;
+        bool rc2_none = false;
 
         if (attr_get (ctx.attrs, "local-uri", &uri, NULL) < 0) {
             log_err ("local-uri is not set");
@@ -553,6 +552,9 @@ int main (int argc, char *argv[])
             log_err ("broker.rc3_path is not set");
             goto cleanup;
         }
+        if (attr_get (ctx.attrs, "broker.rc2_none", NULL, NULL) == 0)
+            rc2_none = true;
+
         if (attr_get (ctx.attrs, "conf.pmi_library_path", &pmi, NULL) < 0) {
             log_err ("conf.pmi_library_path is not set");
             goto cleanup;
@@ -566,6 +568,11 @@ int main (int argc, char *argv[])
         runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
 
+        /* N.B. if runlevel_set_rc() is not called for run levels 1 or 3,
+         * then that level will immediately transition to the next one.
+         * One may set -Sbroker.rc1_path= -Sbroker.rc2_path= on the broker
+         * command line to set an empty rc1/rc3 and skip calling set_rc().
+         */
         if (rc1 && strlen (rc1) > 0) {
             if (runlevel_set_rc (ctx.runlevel,
                                  1,
@@ -577,13 +584,23 @@ int main (int argc, char *argv[])
             }
         }
 
-        if (runlevel_set_rc (ctx.runlevel,
-                             2,
-                             rc2,
-                             rc2_len,
-                             uri) < 0) {
-            log_err ("runlevel_set_rc 2");
-            goto cleanup;
+        /* N.B. initial program has the following cases:
+         * 1) if command line, ctx.init_shell_cmd will be non-NULL
+         * 2) if broker.rc2_none is set, skip calling runlevel_set_rc().
+         *    Broker must call runlevel_abort() to transition out of level.
+         * 3) if neither command line nor broker.rc2_none are set,
+         *    call runlevel_set_rc() with empty string and let it configure
+         *    its default command (interactive shell).
+         */
+        if (!rc2_none) {
+            if (runlevel_set_rc (ctx.runlevel,
+                                 2,
+                                 ctx.init_shell_cmd,
+                                 ctx.init_shell_cmd_len,
+                                 uri) < 0) {
+                log_err ("runlevel_set_rc 2");
+                goto cleanup;
+            }
         }
 
         if (rc3 && strlen (rc3) > 0) {
