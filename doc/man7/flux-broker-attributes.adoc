@@ -40,6 +40,13 @@ the session. By default broker.rundir is set to "${rundir}/${rank}",
 which guarantees a unique directory per rank.  It is not advisable
 to override this attribute on the command line. Use rundir instead.
 
+content.backing-path::
+The path to the content backing store file(s).  If this is set on the
+broker command line, the backing store uses this path instead of
+a temporary one, and content is preserved on instance exit.
+If file exists, its content is imported into the instance.
+If it doesn't exist, it is created.
+
 TOPOLOGY ATTRIBUTES
 -------------------
 tbon.arity::
