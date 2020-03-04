@@ -35,7 +35,6 @@ const char *sql_load = "SELECT object,size FROM objects"
                        "  WHERE hash = ?1 LIMIT 1";
 const char *sql_store = "INSERT INTO objects (hash,size,object) "
                         "  values (?1, ?2, ?3)";
-const char *sql_dump = "SELECT object,size FROM objects";
 
 struct content_sqlite {
     flux_msg_handler_t **handlers;
@@ -44,7 +43,6 @@ struct content_sqlite {
     sqlite3 *db;
     sqlite3_stmt *load_stmt;
     sqlite3_stmt *store_stmt;
-    sqlite3_stmt *dump_stmt;
     flux_t *h;
     const char *hashfun;
     uint32_t blob_size_limit;
@@ -380,13 +378,9 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
             if (sqlite3_finalize (ctx->load_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize load_stmt");
         }
-        if (ctx->dump_stmt) {
-            if (sqlite3_finalize (ctx->dump_stmt) != SQLITE_OK)
-                log_sqlite_error (ctx, "sqlite_finalize dump_stmt");
-        }
         if (ctx->db) {
             if (sqlite3_close (ctx->db) != SQLITE_OK)
-                log_sqlite_error (ctx, "sqlite_finalize dump_stmt");
+                log_sqlite_error (ctx, "sqlite3_close");
         }
         errno = saved_errno;
     }
@@ -444,14 +438,6 @@ static int content_sqlite_opendb (struct content_sqlite *ctx)
                             &ctx->store_stmt,
                             NULL) != SQLITE_OK) {
         log_sqlite_error (ctx, "preparing store stmt");
-        goto error;
-    }
-    if (sqlite3_prepare_v2 (ctx->db,
-                            sql_dump,
-                            -1,
-                            &ctx->dump_stmt,
-                            NULL) != SQLITE_OK) {
-        log_sqlite_error (ctx, "preparing dump stmt");
         goto error;
     }
     return 0;
