@@ -180,7 +180,7 @@ error:
     json_decref (jobs);
 }
 
-/* Create a JSON array of 'job' objects.  'timestamp' limits entries
+/* Create a JSON array of 'job' objects.  'since' limits entries
  * returned, only returning entries with 't_inactive' newer than the
  * timestamp.  Returns JSON object which the caller must free.  On
  * error, return NULL with errno set:
@@ -190,7 +190,7 @@ error:
  */
 json_t *get_inactive_jobs (struct info_ctx *ctx,
                            int max_entries,
-                           double timestamp,
+                           double since,
                            json_t *attrs)
 {
     json_t *jobs = NULL;
@@ -201,7 +201,7 @@ json_t *get_inactive_jobs (struct info_ctx *ctx,
         goto error_nomem;
 
     job = zlistx_first (ctx->jsctx->inactive);
-    while (job && (job->t_inactive > timestamp)) {
+    while (job && (job->t_inactive > since)) {
         json_t *o;
         if (!(o = job_to_json (job, attrs)))
             goto error;
@@ -233,12 +233,12 @@ void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
     struct info_ctx *ctx = arg;
     json_t *jobs = NULL;
     int max_entries;
-    double timestamp;
+    double since;
     json_t *attrs;
 
     if (flux_request_unpack (msg, NULL, "{s:i s:F s:o}",
                              "max_entries", &max_entries,
-                             "timestamp", &timestamp,
+                             "since", &since,
                              "attrs", &attrs) < 0)
         goto error;
 
@@ -247,7 +247,7 @@ void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(jobs = get_inactive_jobs (ctx, max_entries, timestamp, attrs)))
+    if (!(jobs = get_inactive_jobs (ctx, max_entries, since, attrs)))
         goto error;
 
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0) {

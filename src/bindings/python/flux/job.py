@@ -248,7 +248,7 @@ class JobListRPC(RPC):
 # - Desired return value is json array, not a single value
 #
 # pylint: disable=dangerous-default-value
-def job_list(flux_handle, max_entries=0, attrs=[], userid=os.geteuid(), states=0):
+def job_list(flux_handle, max_entries=1000, attrs=[], userid=os.geteuid(), states=0):
     payload = {
         "max_entries": max_entries,
         "attrs": attrs,
@@ -256,6 +256,11 @@ def job_list(flux_handle, max_entries=0, attrs=[], userid=os.geteuid(), states=0
         "states": states,
     }
     return JobListRPC(flux_handle, "job-info.list", payload)
+
+
+def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[]):
+    payload = {"since": since, "max_entries": max_entries, "attrs": attrs}
+    return JobListRPC(flux_handle, "job-info.list-inactive", payload)
 
 
 def _validate_keys(expected, given, keys_optional=False, allow_additional=False):

@@ -374,8 +374,8 @@ test_expect_success HAVE_JQ 'flux job list-inactive lists all inactive jobs' '
         test $count -eq 20
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ timestamp 0 lists all inactive jobs' '
-        count=`flux job list-inactive --timestamp=0 | wc -l` &&
+test_expect_success HAVE_JQ 'flux job list-inactive w/ since 0 lists all inactive jobs' '
+        count=`flux job list-inactive --since=0 | wc -l` &&
         test $count -eq 20
 '
 
@@ -384,41 +384,41 @@ test_expect_success HAVE_JQ 'flux job list-inactive w/ count limits output of in
         test $count -eq 14
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ timestamp -1 leads to error' '
-        test_must_fail flux job list-inactive --timestamp=-1
+test_expect_success HAVE_JQ 'flux job list-inactive w/ since -1 leads to error' '
+        test_must_fail flux job list-inactive --since=-1
 '
 
 test_expect_success HAVE_JQ 'flux job list-inactive w/ count -1 leads to error' '
         test_must_fail flux job list-inactive --count=-1
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ timestamp (most recent timestamp)' '
+test_expect_success HAVE_JQ 'flux job list-inactive w/ since (most recent timestamp)' '
         timestamp=`cat list-inactive.out | head -n 1 | jq .t_inactive` &&
-        count=`flux job list-inactive --timestamp=${timestamp} | wc -l` &&
+        count=`flux job list-inactive --since=${timestamp} | wc -l` &&
         test $count -eq 0
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ timestamp (second to most recent timestamp)' '
+test_expect_success HAVE_JQ 'flux job list-inactive w/ since (second to most recent timestamp)' '
         timestamp=`cat list-inactive.out | head -n 2 | tail -n 1 | jq .t_inactive` &&
-        count=`flux job list-inactive --timestamp=${timestamp} | wc -l` &&
+        count=`flux job list-inactive --since=${timestamp} | wc -l` &&
         test $count -eq 1
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ timestamp (oldest timestamp)' '
+test_expect_success HAVE_JQ 'flux job list-inactive w/ since (oldest timestamp)' '
         timestamp=`cat list-inactive.out | tail -n 1 | jq .t_inactive` &&
-        count=`flux job list-inactive --timestamp=${timestamp} | wc -l` &&
+        count=`flux job list-inactive --since=${timestamp} | wc -l` &&
         test $count -eq 19
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ timestamp (middle timestamp #1)' '
+test_expect_success HAVE_JQ 'flux job list-inactive w/ since (middle timestamp #1)' '
         timestamp=`cat list-inactive.out | head -n 8 | tail -n 1 | jq .t_inactive` &&
-        count=`flux job list-inactive --timestamp=${timestamp} | wc -l` &&
+        count=`flux job list-inactive --since=${timestamp} | wc -l` &&
         test $count -eq 7
 '
 
-test_expect_success HAVE_JQ 'flux job list-inactive w/ timestamp (middle timestamp #2)' '
+test_expect_success HAVE_JQ 'flux job list-inactive w/ since (middle timestamp #2)' '
         timestamp=`cat list-inactive.out | head -n 13 | tail -n 1 | jq .t_inactive` &&
-        count=`flux job list-inactive --timestamp=${timestamp} | wc -l` &&
+        count=`flux job list-inactive --since=${timestamp} | wc -l` &&
         test $count -eq 12
 '
 
@@ -1202,15 +1202,15 @@ test_expect_success 'list-inactive request with empty payload fails with EPROTO(
 	${RPC} job-info.list-inactive 71 </dev/null
 '
 test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with EPROTO(71) (attrs not an array)' '
-        $jq -j -c -n  "{max_entries:5, timestamp:0.0, attrs:5}" \
+        $jq -j -c -n  "{max_entries:5, since:0.0, attrs:5}" \
           | $RPC job-info.list-inactive 71
 '
 test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with EINVAL(22) (attrs non-string)' '
-        $jq -j -c -n  "{max_entries:5, timestamp:0.0, attrs:[5]}" \
+        $jq -j -c -n  "{max_entries:5, since:0.0, attrs:[5]}" \
           | $RPC job-info.list-inactive 22
 '
 test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with EINVAL(22) (attrs illegal field)' '
-        $jq -j -c -n  "{max_entries:5, timestamp:0.0, attrs:[\"foo\"]}" \
+        $jq -j -c -n  "{max_entries:5, since:0.0, attrs:[\"foo\"]}" \
           | $RPC job-info.list-inactive 22
 '
 

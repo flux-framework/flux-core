@@ -111,7 +111,7 @@ flux_future_t *flux_job_list (flux_t *h,
  */
 flux_future_t *flux_job_list_inactive (flux_t *h,
                                        int max_entries,
-                                       double timestamp,
+                                       double since,
                                        const char *json_str);
 
 /* Similar to flux_job_list(), but retrieve job info for a single

@@ -93,8 +93,9 @@ static struct optparse_option list_inactive_opts[] =  {
     { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "N",
       .usage = "Limit output to N jobs",
     },
-    { .name = "timestamp", .key = 't', .has_arg = 1, .arginfo = "T",
-      .usage = "Limit output to jobs newer than timestamp",
+    { .name = "since", .key = 's', .has_arg = 1, .arginfo = "T",
+      .usage = "Limit output to jobs that entered the inactive state since"
+               " timestamp T",
     },
     OPTPARSE_TABLE_END
 };
@@ -1027,7 +1028,7 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
     int max_entries = optparse_get_int (p, "count", 0);
-    double timestamp = optparse_get_double (p, "timestamp", 0.);
+    double since = optparse_get_double (p, "since", 0.);
     char *attrs = "[\"userid\",\"priority\",\"t_submit\",\"state\"," \
         "\"name\",\"ntasks\",\"nnodes\",\"ranks\",\"t_depend\",\"t_sched\"," \
         "\"t_run\",\"t_cleanup\",\"t_inactive\"]";
@@ -1044,7 +1045,7 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!(f = flux_job_list_inactive (h, max_entries, timestamp, attrs)))
+    if (!(f = flux_job_list_inactive (h, max_entries, since, attrs)))
         log_err_exit ("flux_job_list_inactive");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
         log_err_exit ("flux_job_list_inactive");
