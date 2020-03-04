@@ -119,7 +119,7 @@ class TestJob(unittest.TestCase):
 
         self.assertEqual(len(jobs), 10)
 
-    # flux job list-inactive with timestamp = 0.0 should return all inactive jobs
+    # flux job list-inactive with since = 0.0 should return all inactive jobs
     def test_03_list_all_inactive(self):
         rpc_handle = flux.job.job_list_inactive(self.fh, 0.0, 20, self.attrs)
 
