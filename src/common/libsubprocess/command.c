@@ -428,6 +428,8 @@ flux_cmd_t *flux_cmd_create (int argc, char *argv[], char **env)
 {
     flux_cmd_t *cmd = calloc (1, sizeof (*cmd));
 
+    if (!cmd)
+        return NULL;
     if (argv && init_argz_count (&cmd->argz, &cmd->argz_len, argc, argv) < 0)
         goto fail;
     if (env && init_argz (&cmd->envz, &cmd->envz_len, env) < 0)
