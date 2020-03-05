@@ -93,7 +93,8 @@ class JobInfo:
         d.update(info_resp)
 
         #  Rename "state" to "state_id" until returned state is a string:
-        d["state_id"] = d.pop("state")
+        if "state" in d:
+            d["state_id"] = d.pop("state")
 
         #  Set all keys as self._{key} to be found by getattr and
         #   memoized_property decorator:
@@ -186,26 +187,38 @@ def fetch_jobs_stdin(args):
     return jobs
 
 
-def fetch_jobs_flux(args):
+def fetch_jobs_flux(args, fields):
     h = flux.Flux()
 
-    # Future optimization, reduce attrs based on what is in output
-    # format, to reduce potentially large return RPC.
-    attrs = [
-        "userid",
-        "priority",
-        "state",
-        "name",
-        "ntasks",
-        "nnodes",
-        "ranks",
-        "t_submit",
-        "t_depend",
-        "t_sched",
-        "t_run",
-        "t_cleanup",
-        "t_inactive",
-    ]
+    # Note there is no attr for "id", its always returned
+    fields2attrs = dict(
+        id=(),
+        userid=("userid",),
+        username=("userid",),
+        priority=("priority",),
+        state=("state",),
+        state_single=("state",),
+        name=("name",),
+        ntasks=("ntasks",),
+        nnodes=("nnodes",),
+        nnodes_hyphen=("nnodes",),
+        ranks=("ranks",),
+        ranks_hyphen=("ranks",),
+        t_submit=("t_submit",),
+        t_depend=("t_depend",),
+        t_sched=("t_sched",),
+        t_run=("t_run",),
+        t_cleanup=("t_cleanup",),
+        t_inactive=("t_inactive",),
+        runtime=("t_run", "t_cleanup"),
+        runtime_fsd=("t_run", "t_cleanup"),
+        runtime_fsd_hyphen=("t_run", "t_cleanup"),
+        runtime_hms=("t_run", "t_cleanup"),
+    )
+
+    attrs = set()
+    for field in fields:
+        attrs.update(fields2attrs[field])
 
     if args.a:
         args.user = str(os.geteuid())
@@ -238,7 +251,7 @@ def fetch_jobs_flux(args):
         states |= flux.constants.FLUX_JOB_PENDING
         states |= flux.constants.FLUX_JOB_RUNNING
 
-    rpc_handle = flux.job.job_list(h, args.count, attrs, userid, states)
+    rpc_handle = flux.job.job_list(h, args.count, list(attrs), userid, states)
     try:
         jobs = rpc_handle.get_jobs()
     except EnvironmentError as e:
@@ -248,7 +261,7 @@ def fetch_jobs_flux(args):
     return jobs
 
 
-def fetch_jobs(args):
+def fetch_jobs(args, fields):
     """
     Fetch jobs from flux or optionally stdin.
     Returns a list of JobInfo objects
@@ -256,7 +269,7 @@ def fetch_jobs(args):
     if args.from_stdin:
         l = fetch_jobs_stdin(args)
     else:
-        l = fetch_jobs_flux(args)
+        l = fetch_jobs_flux(args, fields)
     return [JobInfo(job) for job in l]
 
 
@@ -441,7 +454,7 @@ def main():
     except ValueError as e:
         raise ValueError("Error in user format: " + str(e))
 
-    jobs = fetch_jobs(args)
+    jobs = fetch_jobs(args, of.fields)
 
     if not args.suppress_header:
         print(of.header())
