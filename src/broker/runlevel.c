@@ -69,10 +69,8 @@ void runlevel_destroy (struct runlevel *r)
         int saved_errno = errno;
         int i;
         for (i = 0; i < 4; i++) {
-            if (r->rc[i].p)
-                flux_subprocess_destroy (r->rc[i].p);
-            if (r->rc[i].cmd)
-                flux_cmd_destroy (r->rc[i].cmd);
+            flux_subprocess_destroy (r->rc[i].p);
+            flux_cmd_destroy (r->rc[i].cmd);
         }
         free (r);
         errno = saved_errno;
