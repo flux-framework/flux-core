@@ -107,6 +107,8 @@ static char **expand_argz (char *argz, size_t argz_len)
 
     len = argz_count (argz, argz_len) + 1;
     argv = calloc (len + 1, sizeof (char *));
+    if (!argv)
+        return NULL;
 
     argz_extract (argz, argz_len, argv);
 
