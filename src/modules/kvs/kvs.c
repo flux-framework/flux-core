@@ -51,7 +51,7 @@ const int max_lastuse_age = 5;
  */
 const int max_namespace_age = 1000;
 
-/* Include root directory in kvs.setroot event.
+/* Include root directory in kvs.namespace-<NS>-setroot event.
  */
 const bool event_includes_rootdir = true;
 
@@ -174,10 +174,29 @@ error:
 
 static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
 {
-    char *setroot_topic = NULL;
-    char *error_topic = NULL;
-    char *removed_topic = NULL;
+    char *topic = NULL;
     int rc = -1;
+
+    /* Below we subscribe to the kvs.namespace or kvs.namespace-<NS>
+     * substring depending if we are on rank 0 or rank != 0.
+     *
+     * This substring encompasses four events at the moment.
+     *
+     * kvs.namespace-<NS>-setroot
+     * kvs.namespace-<NS>-error
+     * kvs.namespace-<NS>-removed
+     * kvs.namespace-<NS>-created
+     *
+     * This module publishes all the above events, but only has
+     * callbacks for the "setroot", "error", and "removed"
+     * events. "created" events are dropped.
+     *
+     * While dropped events are "bad" performance wise, it is a net
+     * win on performance to limit the number of calls to the
+     * flux_event_subscribe() function.
+     *
+     * See issue #2779 for more information.
+     */
 
     /* do not want to subscribe to events that are not within our
      * namespace, so we subscribe to only specific ones.
@@ -199,9 +218,7 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
          * events, all of the time.  So subscribe to them just once on
          * rank 0. */
         if (ctx->rank == 0) {
-            if (flux_event_subscribe (ctx->h, "kvs.setroot") < 0
-                || flux_event_subscribe (ctx->h, "kvs.error") < 0
-                || flux_event_subscribe (ctx->h, "kvs.namespace-remove") < 0) {
+            if (flux_event_subscribe (ctx->h, "kvs.namespace") < 0) {
                 flux_log_error (ctx->h, "flux_event_subscribe");
                 goto cleanup;
             }
@@ -211,26 +228,10 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
     }
 
     if (ctx->rank != 0) {
-        if (asprintf (&setroot_topic, "kvs.setroot-%s", ns) < 0)
+        if (asprintf (&topic, "kvs.namespace-%s", ns) < 0)
             goto cleanup;
 
-        if (flux_event_subscribe (ctx->h, setroot_topic) < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
-        if (asprintf (&error_topic, "kvs.error-%s", ns) < 0)
-            goto cleanup;
-
-        if (flux_event_subscribe (ctx->h, error_topic) < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
-        if (asprintf (&removed_topic, "kvs.namespace-removed-%s", ns) < 0)
-            goto cleanup;
-
-        if (flux_event_subscribe (ctx->h, removed_topic) < 0) {
+        if (flux_event_subscribe (ctx->h, topic) < 0) {
             flux_log_error (ctx->h, "flux_event_subscribe");
             goto cleanup;
         }
@@ -238,40 +239,20 @@ static int event_subscribe (kvs_ctx_t *ctx, const char *ns)
 
     rc = 0;
 cleanup:
-    free (setroot_topic);
-    free (error_topic);
-    free (removed_topic);
+    free (topic);
     return rc;
 }
 
 static int event_unsubscribe (kvs_ctx_t *ctx, const char *ns)
 {
-    char *setroot_topic = NULL;
-    char *error_topic = NULL;
-    char *removed_topic = NULL;
+    char *topic = NULL;
     int rc = -1;
 
     if (ctx->rank != 0) {
-        if (asprintf (&setroot_topic, "kvs.setroot-%s", ns) < 0)
+        if (asprintf (&topic, "kvs.namespace-%s", ns) < 0)
             goto cleanup;
 
-        if (flux_event_unsubscribe (ctx->h, setroot_topic) < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
-        if (asprintf (&error_topic, "kvs.error-%s", ns) < 0)
-            goto cleanup;
-
-        if (flux_event_unsubscribe (ctx->h, error_topic) < 0) {
-            flux_log_error (ctx->h, "flux_event_subscribe");
-            goto cleanup;
-        }
-
-        if (asprintf (&removed_topic, "kvs.namespace-removed-%s", ns) < 0)
-            goto cleanup;
-
-        if (flux_event_subscribe (ctx->h, removed_topic) < 0) {
+        if (flux_event_unsubscribe (ctx->h, topic) < 0) {
             flux_log_error (ctx->h, "flux_event_subscribe");
             goto cleanup;
         }
@@ -279,9 +260,7 @@ static int event_unsubscribe (kvs_ctx_t *ctx, const char *ns)
 
     rc = 0;
 cleanup:
-    free (setroot_topic);
-    free (error_topic);
-    free (removed_topic);
+    free (topic);
     return rc;
 }
 
@@ -837,7 +816,7 @@ static int setroot_event_send (kvs_ctx_t *ctx, struct kvsroot *root,
         root_dir = nullobj;
     }
 
-    if (asprintf (&setroot_topic, "kvs.setroot-%s", root->ns_name) < 0) {
+    if (asprintf (&setroot_topic, "kvs.namespace-%s-setroot", root->ns_name) < 0) {
         saved_errno = ENOMEM;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
@@ -881,7 +860,7 @@ static int error_event_send (kvs_ctx_t *ctx, const char *ns,
     char *error_topic = NULL;
     int saved_errno, rc = -1;
 
-    if (asprintf (&error_topic, "kvs.error-%s", ns) < 0) {
+    if (asprintf (&error_topic, "kvs.namespace-%s-error", ns) < 0) {
         saved_errno = ENOMEM;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
@@ -2045,7 +2024,7 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
 }
 
 /* Optimization: the current rootdir object is optionally included
- * in the kvs.setroot event.  Prime the local cache with it.
+ * in the kvs.namespace-<NS>-setroot event.  Prime the local cache with it.
  * If there are complications, just skip it.  Not critical.
  */
 static void prime_cache_with_rootdir (kvs_ctx_t *ctx, json_t *rootdir)
@@ -2411,7 +2390,7 @@ static int namespace_create (kvs_ctx_t *ctx, const char *ns,
         goto cleanup;
     }
 
-    if (asprintf (&topic, "kvs.namespace-created-%s", ns) < 0)
+    if (asprintf (&topic, "kvs.namespace-%s-created", ns) < 0)
         goto cleanup;
 
     if (!(msg = flux_event_pack (topic,
@@ -2548,7 +2527,7 @@ static int namespace_remove (kvs_ctx_t *ctx, const char *ns)
         goto done;
     }
 
-    if (asprintf (&topic, "kvs.namespace-removed-%s", ns) < 0) {
+    if (asprintf (&topic, "kvs.namespace-%s-removed", ns) < 0) {
         saved_errno = ENOMEM;
         goto cleanup;
     }
@@ -2799,12 +2778,14 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+/* see comments above in event_subscribe() regarding event
+ * subscriptions to kvs.namespace */
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.get",  stats_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.stats.clear",stats_clear_request_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.stats.clear",stats_clear_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.setroot-*",  setroot_event_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.error-*",    error_event_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-*-setroot",  setroot_event_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-*-error",    error_event_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.getroot",
                             getroot_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",  dropcache_request_cb, 0 },
@@ -2827,7 +2808,7 @@ static const struct flux_msg_handler_spec htab[] = {
                             namespace_create_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace-remove",
                             namespace_remove_request_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-removed-*",
+    { FLUX_MSGTYPE_EVENT,   "kvs.namespace-*-removed",
                             namespace_removed_event_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.namespace-list",
                             namespace_list_request_cb, 0 },
