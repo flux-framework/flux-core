@@ -24,29 +24,29 @@ test_expect_success 'have aggregator module' '
     flux exec -r all flux module list | grep aggregator
 '
 
-test_expect_success 'flux-aggreagate: works' '
+test_expect_success 'flux-aggregate: works' '
     run_timeout 5 flux exec -n -r 0-7 flux aggregate -v test 1 &&
     kvs_json_check test ".count == 8 and .min == 1 and .max == 1"
 '
 
-test_expect_success 'flux-aggreagate: works for floating-point numbers' '
+test_expect_success 'flux-aggregate: works for floating-point numbers' '
     run_timeout 5 flux exec -n -r 0-7 flux aggregate test 1.825 &&
     kvs_json_check test ".count == 8 and .min == 1.825 and .max == 1.825"
 '
-test_expect_success 'flux-aggreagate: works for strings' '
+test_expect_success 'flux-aggregate: works for strings' '
     run_timeout 5 flux exec -n -r 0-7 flux aggregate test \"foo\" &&
     flux kvs get test &&
     kvs_json_check test ".count == 8" &&
     kvs_json_check test ".entries.\"[0-7]\" == \"foo\""
 '
-test_expect_success 'flux-aggreagate: works for arrays' '
+test_expect_success 'flux-aggregate: works for arrays' '
     run_timeout 5 flux exec -n -r 0-7 flux aggregate test "[7,8,9]" &&
     flux kvs get test &&
     kvs_json_check test ".count == 8" &&
     kvs_json_check test "(.entries | length) == 1" &&
     kvs_json_check test ".entries.\"[0-7]\" == [7,8,9]"
 '
-test_expect_success 'flux-aggreagate: works for objects' '
+test_expect_success 'flux-aggregate: works for objects' '
     run_timeout 5 flux exec -n -r 0-7 flux aggregate test \
                   "{\"foo\":42, \"bar\": {\"baz\": 2}}" &&
     flux kvs get test &&
