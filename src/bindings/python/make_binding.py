@@ -209,9 +209,12 @@ void * unpack_long(ptrdiff_t num){{
 {includes}
 
 ffi.cdef("""
+typedef int... ptrdiff_t;
+typedef int... pid_t;
+typedef ... va_list;
 void * unpack_long(ptrdiff_t num);
 void free(void *ptr);
-typedef int... pid_t;
+
 
         {cdefs}
 

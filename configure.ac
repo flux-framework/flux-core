@@ -427,6 +427,10 @@ adl_RECURSIVE_EVAL([$luadir], fluxluadir)
 AS_VAR_SET(fluxluadir, $fluxluadir)
 AC_SUBST(fluxluadir)
 
+AS_VAR_SET(fluxbindingincludedir, $includedir/flux/_binding)
+AC_SUBST(fluxbindingincludedir)
+
+
 ##
 # Macros to avoid repetition in Makefiles.am's
 ##
