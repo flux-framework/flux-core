@@ -17,7 +17,7 @@ if test -z "$jq"; then
 fi
 
 kvs_json_check() {
-    flux kvs get --json $1 | $jq -e "$2"
+    flux kvs get $1 | $jq -e "$2"
 }
 
 test_expect_success 'have aggregator module' '

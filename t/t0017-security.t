@@ -293,7 +293,7 @@ test_expect_success 'connector delivers kvs.namespace-primary-setroot event to o
 	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
 		kvs kvs.test.end \
                 "flux event pub kvs.test.a; \
-                 flux kvs put --json ev9=42; \
+                 flux kvs put ev9=42; \
                  flux event pub kvs.test.end" >ev9.out &&
 	grep -q kvs.namespace-primary-setroot ev9.out
 '
@@ -303,7 +303,7 @@ test_expect_success 'dispatcher delivers kvs.namespace-primary-setroot event to 
 	    $SHARNESS_TEST_SRCDIR/scripts/event-trace.lua \
 		kvs kvs.test.end \
                 "flux event pub kvs.test.a; \
-                 flux kvs put --json ev10=42; \
+                 flux kvs put ev10=42; \
                  flux event pub kvs.test.end" >ev10.out &&
 	grep -q kvs.namespace-primary-setroot ev10.out
 '
@@ -314,7 +314,7 @@ test_expect_success 'connector suppresses kvs.namespace-primary-setroot event to
 	    $SHARNESS_TEST_SRCDIR/scripts/event-trace-bypass.lua \
 		kvs kvs.test.end \
                 "flux event pub kvs.test.a; \
-                 flux kvs put --json ev11=42; \
+                 flux kvs put ev11=42; \
                  flux event pub kvs.test.end" >ev11.out &&
 	! grep -q kvs.namespace-primary-setroot ev11.out
 '

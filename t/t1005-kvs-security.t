@@ -54,18 +54,18 @@ test_expect_success 'kvs: namespace create works (owner)' '
 
 test_expect_success 'kvs: put fails (user)' '
         set_userid 9999 &&
-      	! flux kvs put --namespace=$NAMESPACETMP-OWNER --json $DIR.test=1 &&
+      	! flux kvs put --namespace=$NAMESPACETMP-OWNER $DIR.test=1 &&
         unset_userid
 '
 
 test_expect_success 'kvs: put works (owner)' '
-        flux kvs put --namespace=$NAMESPACETMP-OWNER --json $DIR.test=1 &&
+        flux kvs put --namespace=$NAMESPACETMP-OWNER $DIR.test=1 &&
         test_kvs_key_namespace $NAMESPACETMP-OWNER $DIR.test 1
 '
 
 test_expect_success 'kvs: get fails (user)' '
         set_userid 9999 &&
-	! flux kvs get --namespace=$NAMESPACETMP-OWNER --json $DIR.test &&
+	! flux kvs get --namespace=$NAMESPACETMP-OWNER $DIR.test &&
         unset_userid
 '
 
@@ -117,10 +117,10 @@ test_expect_success 'kvs: namespace remove fails (user)' '
 '
 
 test_expect_success 'kvs: namespace remove works (owner)' '
-        flux kvs put --namespace=$NAMESPACETMP-OWNER --json $DIR.tmp=1 &&
+        flux kvs put --namespace=$NAMESPACETMP-OWNER $DIR.tmp=1 &&
         test_kvs_key_namespace $NAMESPACETMP-OWNER $DIR.tmp 1 &&
         flux kvs namespace remove $NAMESPACETMP-OWNER &&
-        ! flux kvs get --namespace=$NAMESPACETMP-OWNER --json $DIR.tmp
+        ! flux kvs get --namespace=$NAMESPACETMP-OWNER $DIR.tmp
 '
 
 #
@@ -137,19 +137,19 @@ test_expect_success 'kvs: namespace listed with correct owner' '
 
 test_expect_success 'kvs: namespace put/get works (user)' '
         set_userid 9999 &&
-        flux kvs put --namespace=$NAMESPACETMP-USER --json $DIR.test=1 &&
+        flux kvs put --namespace=$NAMESPACETMP-USER $DIR.test=1 &&
         test_kvs_key_namespace $NAMESPACETMP-USER $DIR.test 1 &&
         unset_userid
 '
 
 test_expect_success 'kvs: put/get works (owner)' '
-        flux kvs put --namespace=$NAMESPACETMP-USER --json $DIR.test=2 &&
+        flux kvs put --namespace=$NAMESPACETMP-USER $DIR.test=2 &&
         test_kvs_key_namespace $NAMESPACETMP-USER $DIR.test 2
 '
 
 test_expect_success 'kvs: put fails (wrong user)' '
         set_userid 9000 &&
-      	! flux kvs put --namespace=$NAMESPACETMP-USER --json $DIR.test=1 &&
+      	! flux kvs put --namespace=$NAMESPACETMP-USER $DIR.test=1 &&
         unset_userid
 '
 
@@ -165,7 +165,7 @@ test_expect_success 'kvs: get works on other ranks (owner)' '
 
 test_expect_success 'kvs: get fails (wrong user)' '
         set_userid 9000 &&
-        ! flux kvs get --namespace=$NAMESPACETMP-USER --json $DIR.test &&
+        ! flux kvs get --namespace=$NAMESPACETMP-USER $DIR.test &&
         unset_userid
 '
 
@@ -180,7 +180,7 @@ test_expect_success 'kvs: get works (wrong user, but with at reference)' '
         ref=`flux kvs get --namespace=$NAMESPACETMP-USER --treeobj .` &&
         unset_userid &&
         set_userid 9000 &&
-        flux kvs get --namespace=$NAMESPACETMP-USER --at ${ref} --json $DIR.test &&
+        flux kvs get --namespace=$NAMESPACETMP-USER --at ${ref} $DIR.test &&
         unset_userid
 '
 
@@ -190,7 +190,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: version & wait works (user)' '
         VERS=$((VERS + 1))
         flux kvs wait --namespace=$NAMESPACETMP-USER $VERS &
         kvswaitpid=$!
-        flux kvs put --namespace=$NAMESPACETMP-USER --json $DIR.xxx=99
+        flux kvs put --namespace=$NAMESPACETMP-USER $DIR.xxx=99
         unset_userid
         test_expect_code 0 wait $kvswaitpid
 '
@@ -249,10 +249,10 @@ test_expect_success 'kvs: namespace remove still fails (user)' '
 '
 
 test_expect_success 'kvs: namespace remove still works (owner)' '
-        flux kvs put --namespace=$NAMESPACETMP-USER --json $DIR.tmp=1 &&
+        flux kvs put --namespace=$NAMESPACETMP-USER $DIR.tmp=1 &&
         test_kvs_key_namespace $NAMESPACETMP-USER $DIR.tmp 1 &&
         flux kvs namespace remove $NAMESPACETMP-USER &&
-        ! flux kvs get --namespace=$NAMESPACETMP-USER --json $DIR.tmp
+        ! flux kvs get --namespace=$NAMESPACETMP-USER $DIR.tmp
 '
 
 #
