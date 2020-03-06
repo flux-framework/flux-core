@@ -634,40 +634,6 @@ static void kv_printf (const char *key, int maxcol, const char *fmt, ...)
     free (kv);
 }
 
-static void output_key_json_object (const char *key, json_t *o, int maxcol)
-{
-    char *s;
-
-    switch (json_typeof (o)) {
-    case JSON_NULL:
-        kv_printf (key, maxcol, "nil");
-        break;
-    case JSON_TRUE:
-        kv_printf (key, maxcol, "true");
-        break;
-    case JSON_FALSE:
-        kv_printf (key, maxcol, "false");
-        break;
-    case JSON_REAL:
-        kv_printf (key, maxcol, "%f", json_real_value (o));
-        break;
-    case JSON_INTEGER:
-        kv_printf (key, maxcol, "%lld", (long long)json_integer_value (o));
-        break;
-    case JSON_STRING:
-        kv_printf (key, maxcol, "%s", json_string_value (o));
-        break;
-    case JSON_ARRAY:
-    case JSON_OBJECT:
-    default:
-        if (!(s = json_dumps (o, JSON_SORT_KEYS)))
-            log_msg_exit ("json_dumps failed");
-        kv_printf (key, maxcol, "%s", s);
-        free (s);
-        break;
-    }
-}
-
 struct lookup_ctx {
     optparse_t *p;
     int maxcount;
@@ -1174,18 +1140,10 @@ static char *process_key (const char *key)
 
 static void dump_kvs_val (const char *key, int maxcol, const char *value)
 {
-    json_t *o;
-
-    if (!value) {
+    if (!value)
         kv_printf (key, maxcol, "");
-    }
-    else if ((o = json_loads (value, JSON_DECODE_ANY, NULL))) {
-        output_key_json_object (key, o, maxcol);
-        json_decref (o);
-    }
-    else {
+    else
         kv_printf (key, maxcol, value);
-    }
 }
 
 static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,

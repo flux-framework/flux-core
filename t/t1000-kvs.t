@@ -162,11 +162,11 @@ test_expect_success 'kvs: dir -R DIR' '
 	flux kvs dir -R $DIR | sort >output &&
 	cat >expected <<EOF &&
 $DIR.a = 42
-$DIR.b = 3.140000
+$DIR.b = 3.14
 $DIR.c = foo
 $DIR.d = true
-$DIR.e = [1, 3, 5]
-$DIR.f = {"a": 42}
+$DIR.e = [1,3,5]
+$DIR.f = {"a":42}
 EOF
 	test_cmp expected output
 '
@@ -187,11 +187,11 @@ test_expect_success 'kvs: kvs dir -R DIR with period end' '
 	flux kvs dir -R $DIR. | sort >output &&
         cat >expected <<EOF &&
 $DIR.a = 42
-$DIR.b = 3.140000
+$DIR.b = 3.14
 $DIR.c = foo
 $DIR.d = true
-$DIR.e = [1, 3, 5]
-$DIR.f = {"a": 42}
+$DIR.e = [1,3,5]
+$DIR.f = {"a":42}
 EOF
         test_cmp expected output
 '
@@ -213,11 +213,11 @@ test_expect_success 'kvs: kvs dir -R on root "."' '
 	flux kvs dir -R "." | sort >output &&
         cat >expected <<EOF &&
 $DIR.a = 42
-$DIR.b = 3.140000
+$DIR.b = 3.14
 $DIR.c = foo
 $DIR.d = true
-$DIR.e = [1, 3, 5]
-$DIR.f = {"a": 42}
+$DIR.e = [1,3,5]
+$DIR.f = {"a":42}
 EOF
         test_cmp expected output
 '
@@ -270,13 +270,13 @@ test_expect_success 'kvs: create a dir with keys and subdir' '
 	flux kvs put $DIR.a=69 &&
         flux kvs put $DIR.b=70 &&
         flux kvs put $DIR.c.d.e.f.g=3.14 &&
-        flux kvs put $DIR.d=\"snerg\" &&
+        flux kvs put $DIR.d=snerg &&
         flux kvs put $DIR.e=true &&
 	flux kvs dir -R $DIR | sort >output &&
 	cat >expected <<EOF &&
 $DIR.a = 69
 $DIR.b = 70
-$DIR.c.d.e.f.g = 3.140000
+$DIR.c.d.e.f.g = 3.14
 $DIR.d = snerg
 $DIR.e = true
 EOF
@@ -288,13 +288,13 @@ test_expect_success 'kvs: directory with multiple subdirs' '
 	flux kvs put $DIR.a=69 &&
         flux kvs put $DIR.b.c.d.e.f.g=70 &&
         flux kvs put $DIR.c.a.b=3.14 &&
-        flux kvs put $DIR.d=\"snerg\" &&
+        flux kvs put $DIR.d=snerg &&
         flux kvs put $DIR.e=true &&
 	flux kvs dir -R $DIR | sort >output &&
 	cat >expected <<EOF &&
 $DIR.a = 69
 $DIR.b.c.d.e.f.g = 70
-$DIR.c.a.b = 3.140000
+$DIR.c.a.b = 3.14
 $DIR.d = snerg
 $DIR.e = true
 EOF
@@ -576,13 +576,13 @@ test_expect_success 'kvs: put using --no-merge flag' '
 	flux kvs put --no-merge $DIR.a=69 &&
         flux kvs put --no-merge $DIR.b.c.d.e.f.g=70 &&
         flux kvs put --no-merge $DIR.c.a.b=3.14 &&
-        flux kvs put --no-merge $DIR.d=\"snerg\" &&
+        flux kvs put --no-merge $DIR.d=snerg &&
         flux kvs put --no-merge $DIR.e=true &&
 	flux kvs dir -R $DIR | sort >output &&
 	cat >expected <<EOF &&
 $DIR.a = 69
 $DIR.b.c.d.e.f.g = 70
-$DIR.c.a.b = 3.140000
+$DIR.c.a.b = 3.14
 $DIR.d = snerg
 $DIR.e = true
 EOF
@@ -1084,7 +1084,7 @@ test_expect_success 'kvs: directory with multiple subdirs using dir --at' '
 	flux kvs put $DIR.a=69 &&
         flux kvs put $DIR.b.c.d.e.f.g=70 &&
         flux kvs put $DIR.c.a.b=3.14 &&
-        flux kvs put $DIR.d=\"snerg\" &&
+        flux kvs put $DIR.d=snerg &&
         flux kvs put $DIR.e=true &&
         flux kvs link $DIR.a $DIR.f &&
         DIRREF=$(flux kvs get --treeobj $DIR) &&
@@ -1092,7 +1092,7 @@ test_expect_success 'kvs: directory with multiple subdirs using dir --at' '
 	cat >expected <<EOF &&
 a = 69
 b.c.d.e.f.g = 70
-c.a.b = 3.140000
+c.a.b = 3.14
 d = snerg
 e = true
 f -> $DIR.a
