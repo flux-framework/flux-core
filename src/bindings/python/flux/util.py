@@ -164,3 +164,115 @@ def parse_fsd(fsd_string):
     if seconds < 0 or math.isnan(seconds) or math.isinf(seconds):
         raise ValueError("invalid Flux standard duration")
     return seconds
+
+
+class OutputFormat:
+    """
+    Store a parsed version of the program's output format,
+    allowing the fields to iterated without modifiers, building
+    a new format suitable for headers display, etc...
+    """
+
+    #  List of legal format fields and their header names
+    headings = dict(
+        id="JOBID",
+        userid="UID",
+        username="USER",
+        priority="PRI",
+        state="STATE",
+        state_single="STATE",
+        name="NAME",
+        ntasks="NTASKS",
+        nnodes="NNODES",
+        nnodes_hyphen="NNODES",
+        ranks="RANKS",
+        ranks_hyphen="RANKS",
+        t_submit="T_SUBMIT",
+        t_depend="T_DEPEND",
+        t_sched="T_SCHED",
+        t_run="T_RUN",
+        t_cleanup="T_CLEANUP",
+        t_inactive="T_INACTIVE",
+        runtime="RUNTIME",
+        runtime_fsd="RUNTIME",
+        runtime_fsd_hyphen="RUNTIME",
+        runtime_hms="RUNTIME",
+    )
+
+    def __init__(self, fmt):
+        """
+        Parse the input format fmt with string.Formatter.
+        Save off the fields and list of format tokens for later use,
+        (converting None to "" in the process)
+
+        Throws an exception if any format fields do not match the allowed
+        list of headings above.
+        """
+        from string import Formatter
+
+        self.fmt = fmt
+        #  Parse format into list of (string, field, spec, conv) tuples,
+        #   replacing any None values with empty string "" (this makes
+        #   substitution back into a format string in self.header() and
+        #   self.get_format() much simpler below)
+        l = Formatter().parse(fmt)
+        self.format_list = [[s or "" for s in t] for t in l]
+
+        #  Store list of requested fields in self.fields
+        self.fields = [field for (s, field, spec, conv) in self.format_list]
+
+        #  Throw an exception if any requested fields are invalid:
+        for field in self.fields:
+            if field and not field in self.headings:
+                raise ValueError("Unknown format field: " + field)
+
+    def _fmt_tuple(self, s, field, spec, conv):
+        #  If field is empty string or None, then the result of the
+        #   format (besides 's') doesn't make sense, just return 's'
+        if not field:
+            return s
+        #  The prefix of spec and conv are stripped by formatter.parse()
+        #   replace them here if the values are not empty:
+        spec = ":" + spec if spec else ""
+        conv = "!" + conv if conv else ""
+        return "{0}{{{1}{2}{3}}}".format(s, field, conv, spec)
+
+    def header(self):
+        """
+        Return the header row formatted by the user-provided format spec,
+        which will be made "safe" for use with string headings.
+        """
+        import re
+
+        l = []
+        for (s, field, spec, conv) in self.format_list:
+            #  Remove floating point formatting on any spec:
+            spec = re.sub(r"\.\d+[bcdoxXeEfFgGn%]$", "", spec)
+            l.append(self._fmt_tuple(s, field, spec, conv))
+        fmt = "".join(l)
+        return fmt.format(**self.headings)
+
+    def get_format(self):
+        """
+        Return the format string with prepended `0.` if necessary.
+        """
+        try:
+            return self.jobfmt
+        except AttributeError:
+            pass
+
+        l = []
+        for (s, field, spec, conv) in self.format_list:
+            # If field doesn't have `0.` then add it
+            if field and not field.startswith("0."):
+                field = "0." + field
+            l.append(self._fmt_tuple(s, field, spec, conv))
+        self.jobfmt = "".join(l)
+        return self.jobfmt
+
+    def format(self, job):
+        """
+        format JobInfo object with internal format
+        prepend `0.` if necessary to fields to invoke getattr method
+        """
+        return self.get_format().format(job)
