@@ -31,7 +31,7 @@ def __flux_size():
 
 
 def yaml_to_json(s):
-    obj = yaml.load(s)
+    obj = yaml.safe_load(s)
     return json.dumps(obj, separators=(",", ":"))
 
 
