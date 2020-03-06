@@ -170,3 +170,6 @@ class Flux(Wrapper):
         rank = ffi.new("uint32_t [1]")
         self.flux_get_rank(rank)
         return rank[0]
+
+    def attr_get(self, attr_name):
+        return self.flux_attr_get(attr_name).decode("utf-8")
