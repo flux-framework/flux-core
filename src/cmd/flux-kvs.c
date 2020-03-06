@@ -68,9 +68,6 @@ static struct optparse_option get_opts[] =  {
     { .name = "namespace", .key = 'N', .has_arg = 1,
       .usage = "Specify KVS namespace to use.",
     },
-    { .name = "json", .key = 'j', .has_arg = 0,
-      .usage = "Interpret value(s) as encoded JSON",
-    },
     { .name = "raw", .key = 'r', .has_arg = 0,
       .usage = "Interpret value(s) as raw data",
     },
@@ -113,9 +110,6 @@ static struct optparse_option put_opts[] =  {
     },
     { .name = "sequence", .key = 's', .has_arg = 0,
       .usage = "Output root sequence of root containing puts",
-    },
-    { .name = "json", .key = 'j', .has_arg = 0,
-      .usage = "Store value(s) as encoded JSON",
     },
     { .name = "raw", .key = 'r', .has_arg = 0,
       .usage = "Store value(s) as-is without adding NULL termination",
@@ -267,7 +261,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL,
     },
     { "get",
-      "[-N ns] [-j|-r|-t] [-a treeobj] [-l] [-W] [-w] [-u] [-A] [-f] "
+      "[-N ns] [-r|-t] [-a treeobj] [-l] [-W] [-w] [-u] [-A] [-f] "
         "[-c COUNT] key [key...]",
       "Get value stored under key",
       cmd_get,
@@ -275,7 +269,7 @@ static struct optparse_subcommand subcommands[] = {
       get_opts
     },
     { "put",
-      "[-N ns] [-O|-s] [-j|-r|-t] [-n] [-A] key=value [key=value...]",
+      "[-N ns] [-O|-s] [-r|-t] [-n] [-A] key=value [key=value...]",
       "Store value under key",
       cmd_put,
       0,
@@ -674,22 +668,6 @@ static void output_key_json_object (const char *key, json_t *o, int maxcol)
     }
 }
 
-static void output_key_json_str (const char *key,
-                                 const char *json_str,
-                                 const char *arg)
-{
-    json_t *o;
-    json_error_t error;
-
-    if (!json_str)
-        json_str = "null";
-    if (!(o = json_loads (json_str, JSON_DECODE_ANY, &error)))
-        log_msg_exit ("%s: %s (line %d column %d)",
-                      arg, error.text, error.line, error.column);
-    output_key_json_object (key, o, 0);
-    json_decref (o);
-}
-
 struct lookup_ctx {
     optparse_t *p;
     int maxcount;
@@ -716,16 +694,6 @@ void lookup_continuation (flux_future_t *f, void *arg)
         if (optparse_hasopt (ctx->p, "label"))
             printf ("%s=", key);
         printf ("%s\n", treeobj);
-    }
-    else if (optparse_hasopt (ctx->p, "json")) {
-        const char *json_str;
-        if (flux_kvs_lookup_get (f, &json_str) < 0)
-            log_err_exit ("%s", key);
-        if (!json_str)
-            log_msg_exit ("%s: zero-length value", key);
-        if (optparse_hasopt (ctx->p, "label"))
-            printf ("%s=", key);
-        output_key_json_str (NULL, json_str, key);
     }
     else if (optparse_hasopt (ctx->p, "raw")) {
         const void *data;
@@ -884,18 +852,6 @@ int cmd_put (optparse_t *p, int argc, char **argv)
             if (flux_kvs_txn_put_treeobj (txn, 0, key, val) < 0)
                 log_err_exit ("%s", key);
             free (buf);
-        }
-        else if (optparse_hasopt (p, "json")) {
-            json_t *obj;
-            if ((obj = json_loads (val, JSON_DECODE_ANY, NULL))) {
-                if (flux_kvs_txn_put (txn, 0, key, val) < 0)
-                    log_err_exit ("%s", key);
-                json_decref (obj);
-            }
-            else { // encode as JSON string if not already valid encoded JSON
-                if (flux_kvs_txn_pack (txn, 0, key, "s", val) < 0)
-                    log_err_exit ("%s", key);
-            }
         }
         else if (optparse_hasopt (p, "raw")) {
             int len;
