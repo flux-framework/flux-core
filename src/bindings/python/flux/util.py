@@ -190,12 +190,11 @@ class OutputFormat:
         #   replacing any None values with empty string "" (this makes
         #   substitution back into a format string in self.header() and
         #   self.get_format() much simpler below)
-        l = Formatter().parse(fmt)
-        self.format_list = [[s or "" for s in t] for t in l]
+        format_list = Formatter().parse(fmt)
+        self.format_list = [[s or "" for s in t] for t in format_list]
 
         #  Store list of requested fields in self.fields
-
-        self._fields = [field for (s, field, spec, conv) in self.format_list]
+        self._fields = [field for (_, field, _, _) in self.format_list]
 
         #  Throw an exception if any requested fields are invalid:
         for field in self._fields:
@@ -206,28 +205,31 @@ class OutputFormat:
     def fields(self):
         return self._fields
 
-    def _fmt_tuple(self, s, field, spec, conv):
+    # This should be a method, not a function since it is overridden by
+    # inheriting classes
+    # pylint: no-self-use
+    def _fmt_tuple(self, text, field, spec, conv):
         #  If field is empty string or None, then the result of the
-        #   format (besides 's') doesn't make sense, just return 's'
+        #   format (besides 'text') doesn't make sense, just return 'text'
         if not field:
-            return s
+            return text
         #  The prefix of spec and conv are stripped by formatter.parse()
         #   replace them here if the values are not empty:
         spec = ":" + spec if spec else ""
         conv = "!" + conv if conv else ""
-        return "{0}{{{1}{2}{3}}}".format(s, field, conv, spec)
+        return "{0}{{{1}{2}{3}}}".format(text, field, conv, spec)
 
     def header(self):
         """
         Return the header row formatted by the user-provided format spec,
         which will be made "safe" for use with string headings.
         """
-        l = []
-        for (s, field, spec, conv) in self.format_list:
+        format_list = []
+        for (text, field, spec, conv) in self.format_list:
             #  Remove number formatting on any spec:
             spec = re.sub(r"(0?\.)?(\d+)?[bcdoxXeEfFgGn%]$", r"\2", spec)
-            l.append(self._fmt_tuple(s, field, spec, conv))
-        fmt = "".join(l)
+            format_list.append(self._fmt_tuple(text, field, spec, conv))
+        fmt = "".join(format_list)
         return fmt.format(**self.headings)
 
     def get_format(self):
