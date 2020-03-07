@@ -9,6 +9,7 @@ ExecStart=@X_BINDIR@/flux broker \
   -Slocal-uri=local://@X_RUNSTATEDIR@/flux/local \
   -Sboot.method=config \
   -Slog-stderr-level=6 \
+  -Scontent.backing-path=@X_LOCALSTATEDIR@/lib/flux/content.sqlite \
   -Sbroker.rc2_none
 User=flux
 Group=flux
