@@ -7,7 +7,7 @@ ExecStart=@X_BINDIR@/flux broker \
   -Srundir=@X_RUNSTATEDIR@/flux \
   -Slocal-uri=local://@X_RUNSTATEDIR@/flux/local \
   -Sboot.method=config \
-  sleep inf
+  -Sbroker.rc2_none
 User=flux
 Group=flux
 RuntimeDirectory=flux
