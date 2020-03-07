@@ -1,6 +1,6 @@
 // flux-help-description: manipulate broker log ring buffer
-FLUX-GETATTR(1)
-===============
+FLUX-DMESG(1)
+=============
 :doctype: manpage
 
 
