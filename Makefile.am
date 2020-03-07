@@ -6,7 +6,8 @@ EXTRA_DIST = \
 	config/tap-driver.sh \
 	config/tap-driver.py \
 	NOTICE.LLNS \
-	README.md
+	README.md \
+	scripts/.pylintrc
 
 ACLOCAL_AMFLAGS = -I config
 
@@ -41,3 +42,6 @@ CODE_COVERAGE_LCOV_OPTIONS =
 # file's SUBDIRS, ensures that "all" is built before any of the
 # recursive checks.
 check-local: all
+if ENABLE_PYLINT
+	$(top_srcdir)/scripts/pylint
+endif
