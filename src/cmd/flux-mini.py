@@ -10,6 +10,7 @@
 
 from __future__ import print_function
 
+# pylint: disable=duplicate-code
 import os
 import sys
 import logging
@@ -20,7 +21,6 @@ import flux
 from flux import job
 from flux.job import JobspecV1
 from flux import util
-from flux import constants
 
 
 class SubmitCmd:
@@ -33,6 +33,7 @@ class SubmitCmd:
     def __init__(self):
         self.parser = self.create_parser()
 
+    # pylint: disable=no-self-use
     def create_parser(self):
         """
         Create parser with args for submit subcommand
@@ -138,6 +139,7 @@ class SubmitCmd:
         )
         return parser
 
+    # pylint: disable=too-many-branches,too-many-statements
     def submit(self, args):
         """
         Submit job, constructing jobspec from args.
@@ -178,24 +180,24 @@ class SubmitCmd:
                 jobspec.setattr_shell_option("output.stderr.label", True)
 
         if args.setopt is not None:
-            for kv in args.setopt:
+            for keyval in args.setopt:
                 # Split into key, val with a default for 1 if no val given:
-                key, val = (kv.split("=", 1) + [1])[:2]
+                key, val = (keyval.split("=", 1) + [1])[:2]
                 try:
                     val = json.loads(val)
-                except:
+                except (json.JSONDecodeError, TypeError):
                     pass
                 jobspec.setattr_shell_option(key, val)
 
         if args.setattr is not None:
-            for kv in args.setattr:
-                tmp = kv.split("=", 1)
+            for keyval in args.setattr:
+                tmp = keyval.split("=", 1)
                 if len(tmp) != 2:
-                    raise ValueError("--setattr: Missing value for attr " + kv)
+                    raise ValueError("--setattr: Missing value for attr " + keyval)
                 key = tmp[0]
                 try:
                     val = json.loads(tmp[1])
-                except:
+                except (json.JSONDecodeError, TypeError):
                     val = tmp[1]
                 jobspec.setattr(key, val)
 
@@ -215,9 +217,9 @@ class SubmitCmd:
             print(jobspec.dumps(), file=sys.stdout)
             sys.exit(0)
 
-        h = flux.Flux()
+        flux_handle = flux.Flux()
         return job.submit(
-            h,
+            flux_handle,
             jobspec.dumps(),
             priority=args.priority,
             waitable=arg_waitable,
@@ -242,7 +244,7 @@ class RunCmd(SubmitCmd):
     """
 
     def __init__(self):
-        self.parser = self.create_parser()
+        super().__init__()
         self.parser.add_argument(
             "-v",
             "--verbose",
@@ -276,10 +278,10 @@ class RunCmd(SubmitCmd):
         os.execvp("flux-job", attach_args)
 
 
-logger = logging.getLogger("flux-mini")
+LOGGER = logging.getLogger("flux-mini")
 
 
-@util.CLIMain(logger)
+@util.CLIMain(LOGGER)
 def main():
     parser = argparse.ArgumentParser(prog="flux-mini")
     subparsers = parser.add_subparsers(
