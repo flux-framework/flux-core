@@ -35,16 +35,24 @@ const char *sql_load = "SELECT object,size FROM objects"
                        "  WHERE hash = ?1 LIMIT 1";
 const char *sql_store = "INSERT INTO objects (hash,size,object) "
                         "  values (?1, ?2, ?3)";
-const char *sql_dump = "SELECT object,size FROM objects";
+
+const char *sql_create_table_checkpt = "CREATE TABLE if not exists checkpt("
+                                       "  key TEXT UNIQUE,"
+                                       "  value TEXT"
+                                       ");";
+const char *sql_checkpt_get = "SELECT value FROM checkpt"
+                              "  WHERE key = ?1";
+const char *sql_checkpt_put = "REPLACE INTO checkpt (key,value) "
+                              "  values (?1, ?2)";
 
 struct content_sqlite {
     flux_msg_handler_t **handlers;
-    char *dbdir;
     char *dbfile;
     sqlite3 *db;
     sqlite3_stmt *load_stmt;
     sqlite3_stmt *store_stmt;
-    sqlite3_stmt *dump_stmt;
+    sqlite3_stmt *checkpt_get_stmt;
+    sqlite3_stmt *checkpt_put_stmt;
     flux_t *h;
     const char *hashfun;
     uint32_t blob_size_limit;
@@ -327,6 +335,99 @@ error:
         flux_log_error (h, "store: flux_respond_error");
 }
 
+void checkpoint_get_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    const char *key;
+
+    if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
+        goto error;
+    if (sqlite3_bind_text (ctx->checkpt_get_stmt,
+                           1,
+                           (char *)key,
+                           strlen (key),
+                           SQLITE_STATIC) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_get: binding key");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    if (sqlite3_step (ctx->checkpt_get_stmt) != SQLITE_ROW) {
+        errno = ENOENT;
+        goto error;
+    }
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:s}",
+                           "value",
+                           sqlite3_column_text (ctx->checkpt_get_stmt, 0)) < 0)
+        flux_log_error (h, "flux_respond_pack");
+    (void )sqlite3_reset (ctx->checkpt_get_stmt);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "flux_respond_error");
+    (void )sqlite3_reset (ctx->checkpt_get_stmt);
+}
+
+void checkpoint_put_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    const char *key;
+    const char *value;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:s}",
+                             "key",
+                             &key,
+                             "value",
+                             &value) < 0)
+        goto error;
+    if (strlen (key) == 0) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (sqlite3_bind_text (ctx->checkpt_put_stmt,
+                           1,
+                           (char *)key,
+                           strlen (key),
+                           SQLITE_STATIC) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_put: binding key");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    if (sqlite3_bind_text (ctx->checkpt_put_stmt,
+                           2,
+                           (char *)value,
+                           strlen (value),
+                           SQLITE_STATIC) != SQLITE_OK) {
+        log_sqlite_error (ctx, "checkpt_put: binding value");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    if (sqlite3_step (ctx->checkpt_put_stmt) != SQLITE_DONE
+                    && sqlite3_errcode (ctx->db) != SQLITE_CONSTRAINT) {
+        log_sqlite_error (ctx, "checkpt_put: executing stmt");
+        set_errno_from_sqlite_error (ctx);
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "flux_respond");
+    (void )sqlite3_reset (ctx->checkpt_put_stmt);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "flux_respond_error");
+    (void )sqlite3_reset (ctx->checkpt_put_stmt);
+}
+
+
 int register_backing_store (flux_t *h, const char *name)
 {
     flux_future_t *f;
@@ -357,11 +458,11 @@ int unregister_backing_store (flux_t *h)
     return rc;
 }
 
-int register_content_backing_service (flux_t *h)
+static int register_service (flux_t *h, const char *name)
 {
     int rc;
     flux_future_t *f;
-    if (!(f = flux_service_register (h, "content-backing")))
+    if (!(f = flux_service_register (h, name)))
         return -1;
     rc = flux_future_get (f, NULL);
     flux_future_destroy (f);
@@ -380,23 +481,31 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
             if (sqlite3_finalize (ctx->load_stmt) != SQLITE_OK)
                 log_sqlite_error (ctx, "sqlite_finalize load_stmt");
         }
-        if (ctx->dump_stmt) {
-            if (sqlite3_finalize (ctx->dump_stmt) != SQLITE_OK)
-                log_sqlite_error (ctx, "sqlite_finalize dump_stmt");
+        if (ctx->checkpt_get_stmt) {
+            if (sqlite3_finalize (ctx->checkpt_get_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize checkpt_get_stmt");
+        }
+        if (ctx->checkpt_put_stmt) {
+            if (sqlite3_finalize (ctx->checkpt_put_stmt) != SQLITE_OK)
+                log_sqlite_error (ctx, "sqlite_finalize checkpt_put_stmt");
         }
         if (ctx->db) {
             if (sqlite3_close (ctx->db) != SQLITE_OK)
-                log_sqlite_error (ctx, "sqlite_finalize dump_stmt");
+                log_sqlite_error (ctx, "sqlite3_close");
         }
         errno = saved_errno;
     }
 }
 
+/* Open the database file ctx->dbfile and set up the database.
+ */
 static int content_sqlite_opendb (struct content_sqlite *ctx)
 {
-    if (sqlite3_open (ctx->dbfile, &ctx->db) != SQLITE_OK) {
-        flux_log_error (ctx->h, "sqlite3_open %s", ctx->dbfile);
-        return -1;
+    int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
+
+    if (sqlite3_open_v2 (ctx->dbfile, &ctx->db, flags, NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "opening %s", ctx->dbfile);
+        goto error;
     }
     if (sqlite3_exec (ctx->db,
                       "PRAGMA journal_mode=OFF",
@@ -427,7 +536,15 @@ static int content_sqlite_opendb (struct content_sqlite *ctx)
                       NULL,
                       NULL,
                       NULL) != SQLITE_OK) {
-        log_sqlite_error (ctx, "creating table");
+        log_sqlite_error (ctx, "creating object table");
+        goto error;
+    }
+    if (sqlite3_exec (ctx->db,
+                      sql_create_table_checkpt,
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "creating checkpt table");
         goto error;
     }
     if (sqlite3_prepare_v2 (ctx->db,
@@ -447,11 +564,19 @@ static int content_sqlite_opendb (struct content_sqlite *ctx)
         goto error;
     }
     if (sqlite3_prepare_v2 (ctx->db,
-                            sql_dump,
+                            sql_checkpt_get,
                             -1,
-                            &ctx->dump_stmt,
+                            &ctx->checkpt_get_stmt,
                             NULL) != SQLITE_OK) {
-        log_sqlite_error (ctx, "preparing dump stmt");
+        log_sqlite_error (ctx, "preparing checkpt_get stmt");
+        goto error;
+    }
+    if (sqlite3_prepare_v2 (ctx->db,
+                            sql_checkpt_put,
+                            -1,
+                            &ctx->checkpt_put_stmt,
+                            NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "preparing checkpt_put stmt");
         goto error;
     }
     return 0;
@@ -466,7 +591,6 @@ static void content_sqlite_destroy (struct content_sqlite *ctx)
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
         free (ctx->dbfile);
-        free (ctx->dbdir);
         free (ctx->lzo_buf);
         free (ctx);
         errno = saved_errno;
@@ -476,15 +600,16 @@ static void content_sqlite_destroy (struct content_sqlite *ctx)
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "content-backing.load",    load_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.get", checkpoint_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.put", checkpoint_put_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
 static struct content_sqlite *content_sqlite_create (flux_t *h)
 {
     struct content_sqlite *ctx;
-    const char *dir;
+    const char *backing_path;
     const char *tmp;
-    bool cleanup = false;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
@@ -492,6 +617,12 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
         goto error;
     ctx->lzo_bufsize = lzo_buf_chunksize;
     ctx->h = h;
+
+    /* Some tunables:
+     * - the hash function, e.g. sha1, sha256
+     * - the maximum blob size
+     * - path to sqlite file
+     */
     if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))) {
         flux_log_error (h, "content.hash");
         goto error;
@@ -502,27 +633,34 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
     }
     ctx->blob_size_limit = strtoul (tmp, NULL, 10);
 
-    if (!(dir = flux_attr_get (h, "persist-directory"))) {
-        if (!(dir = flux_attr_get (h, "broker.rundir"))) {
-            flux_log_error (h, "broker.rundir");
+    /* If 'content.backing-path' attribute is already set, then:
+     * - value is the sqlite backing file
+     * - if it exists, preserve existing content; else create empty
+     * - ensure that file perists when the instance exits
+     * Otherwise:
+     * - ${rundir}/content.sqlite is the backing file
+     * - ensure that file is cleaned up when the instance exits
+     * - set 'content.backing-path' to this name
+     */
+    backing_path = flux_attr_get (h, "content.backing-path");
+    if (backing_path) {
+        if (!(ctx->dbfile = strdup (backing_path)))
+            goto error;
+    }
+    else {
+        const char *rundir = flux_attr_get (h, "rundir");
+        if (!rundir) {
+            flux_log_error (h, "rundir");
             goto error;
         }
-        cleanup = true;
+        if (asprintf (&ctx->dbfile, "%s/content.sqlite", rundir) < 0)
+            goto error;
+        if (flux_attr_set (h, "content.backing-path", ctx->dbfile) < 0)
+            goto error;
+        cleanup_push_string (cleanup_file, ctx->dbfile);
     }
-    if (asprintf (&ctx->dbdir, "%s/content", dir) < 0)
+    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;
-    if (mkdir (ctx->dbdir, 0755) < 0 && errno != EEXIST) {
-        flux_log_error (h, "mkdir %s", ctx->dbdir);
-        goto error;
-    }
-    if (cleanup)
-        cleanup_push_string (cleanup_directory_recursive, ctx->dbdir);
-    if (asprintf (&ctx->dbfile, "%s/sqlite", ctx->dbdir) < 0)
-        goto error;
-    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0) {
-        flux_log_error (h, "flux_msg_handler_addvec");
-        goto error;
-    }
     return ctx;
 error:
     content_sqlite_destroy (ctx);
@@ -533,16 +671,22 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     struct content_sqlite *ctx;
 
-    if (!(ctx = content_sqlite_create (h)))
+    if (!(ctx = content_sqlite_create (h))) {
+        flux_log_error (h, "content_sqlite_create failed");
         return -1;
+    }
     if (content_sqlite_opendb(ctx) < 0)
         goto done;
     if (register_backing_store (h, "content-sqlite") < 0) {
         flux_log_error (h, "registering backing store");
         goto done;
     }
-    if (register_content_backing_service (h) < 0) {
+    if (register_service (h, "content-backing") < 0) {
         flux_log_error (h, "service.add: content-backing");
+        goto done;
+    }
+    if (register_service (h, "kvs-checkpoint") < 0) {
+        flux_log_error (h, "service.add: kvs-checkpiont");
         goto done;
     }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {

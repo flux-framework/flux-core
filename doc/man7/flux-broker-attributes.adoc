@@ -40,16 +40,12 @@ the session. By default broker.rundir is set to "${rundir}/${rank}",
 which guarantees a unique directory per rank.  It is not advisable
 to override this attribute on the command line. Use rundir instead.
 
-persist-directory::
-A persistent directory available for storage on rank 0 only.
-If persist-directory is not defined, persistence is unavailable
-and users should fall back to broker.rundir, with cleanup.
-
-persist-filesystem::
-If defined, and persist-directory is not defined, the rank
-0 broker chooses a unique name for persist-directory within
-persist-filesystem and creates it automatically.
-
+content.backing-path::
+The path to the content backing store file(s).  If this is set on the
+broker command line, the backing store uses this path instead of
+a temporary one, and content is preserved on instance exit.
+If file exists, its content is imported into the instance.
+If it doesn't exist, it is created.
 
 TOPOLOGY ATTRIBUTES
 -------------------
@@ -115,8 +111,7 @@ to stderr on the logging rank, for capture by the enclosing instance.
 
 log-filename::
 (rank zero only) If set, session log entries, as filtered by log-forward-level,
-are directed to this file.  If unset, but persist-directory is set, log
-entries are directed to persist-directory/log.
+are directed to this file.
 
 log-stderr-level::
 (rank zero only) Session log entries at syslog(3) level at or below this

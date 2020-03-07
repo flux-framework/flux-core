@@ -149,7 +149,6 @@ static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
 static void runlevel_io_cb (runlevel_t *r, const char *name,
                             const char *msg, void *arg);
 
-static int create_persistdir (attr_t *attrs, uint32_t rank);
 static int create_rundir (attr_t *attrs);
 static int create_broker_rundir (overlay_t *ov, void *arg);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
@@ -498,14 +497,6 @@ int main (int argc, char *argv[])
 
     // Setup profiling
     setup_profiling (argv[0], rank);
-
-    /* If persist-filesystem or persist-directory are set, initialize those,
-     * but only on rank 0.
-     */
-    if (create_persistdir (ctx.attrs, rank) < 0) {
-        log_err ("create_persistdir");
-        goto cleanup;
-    }
 
     /* Initialize logging.
      * OK to call flux_log*() after this.
@@ -1105,82 +1096,6 @@ cleanup:
     free (uri);
     free (broker_rundir);
     return rv;
-}
-
-/* If 'persist-directory' set, validate it, make it immutable, done.
- * If 'persist-filesystem' set, validate it, make it immutable, then:
- * Avoid name collisions with other flux tmpdirs used in testing
- * e.g. "flux-<pid>-XXXXXX"
- */
-static int create_persistdir (attr_t *attrs, uint32_t rank)
-{
-    struct stat sb;
-    const char *attr = "persist-directory";
-    const char *persist_dir, *persist_fs;
-    char *dir, *tmpl = NULL;
-    int rc = -1;
-
-    if (rank > 0) {
-        (void) attr_delete (attrs, "persist-filesystem", true);
-        (void) attr_delete (attrs, "persist-directory", true);
-        goto done_success;
-    }
-    if (attr_get (attrs, attr, &persist_dir, NULL) == 0) {
-        if (stat (persist_dir, &sb) < 0)
-            goto done;
-        if (!S_ISDIR (sb.st_mode)) {
-            errno = ENOTDIR;
-            goto done;
-        }
-        if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
-            errno = EPERM;
-            goto done;
-        }
-        if (attr_set_flags (attrs, attr, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto done;
-    } else {
-        if (attr_get (attrs, "persist-filesystem", &persist_fs, NULL)< 0) {
-            goto done_success;
-        }
-        if (stat (persist_fs, &sb) < 0)
-            goto done;
-        if (!S_ISDIR (sb.st_mode)) {
-            errno = ENOTDIR;
-            goto done;
-        }
-        if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
-            errno = EPERM;
-            goto done;
-        }
-        if (attr_set_flags (attrs, "persist-filesystem",
-                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto done;
-        if (asprintf (&tmpl,
-                      "%s/fluxP-%d-XXXXXX",
-                      persist_fs,
-                      (int)getpid()) < 0)
-            goto done;
-        if (!(dir = mkdtemp (tmpl)))
-            goto done;
-        if (attr_add (attrs, attr, dir, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto done;
-    }
-done_success:
-    if (attr_get (attrs, "persist-filesystem", NULL, NULL) < 0) {
-        if (attr_add (attrs, "persist-filesystem", NULL,
-                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto done;
-    }
-    if (attr_get (attrs, "persist-directory", NULL, NULL) < 0) {
-        if (attr_add (attrs, "persist-directory", NULL,
-                                                FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto done;
-    }
-    rc = 0;
-done:
-    if (tmpl)
-        free (tmpl);
-    return rc;
 }
 
 static bool nodeset_member (const char *s, uint32_t rank)

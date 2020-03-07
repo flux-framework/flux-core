@@ -411,26 +411,12 @@ done:
 
 static int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
 {
-    char s[PATH_MAX];
-    const char *val;
     int rc = -1;
 
     /* log-filename
      * Only allowed to be set on rank 0 (ignore initial value on rank > 0).
-     * If unset, and persist-directory is set, make it ${persist-directory}/log
      */
     if (logbuf->rank == 0) {
-        if (attr_get (attrs, "log-filename", NULL, NULL) < 0
-          && attr_get (attrs, "persist-directory", &val, NULL) == 0 && val) {
-            if (snprintf (s, sizeof (s), "%s/log", val) >= sizeof (s)) {
-                log_err ("log-filename truncated");
-                goto done;
-            }
-            if (attr_add (attrs, "log-filename", s, 0) < 0) {
-                log_err ("could not initialize log-filename");
-                goto done;
-            }
-        }
         if (attr_add_active (attrs, "log-filename", 0,
                              attr_get_log, attr_set_log, logbuf) < 0)
             goto done;

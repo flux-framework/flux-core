@@ -207,32 +207,6 @@ test_expect_success 'rundir override creates nonexistent dirs' '
 	flux start ${ARGS} -o,--setattr=rundir=$RUNDIR sh -c "test -d $RUNDIR" &&
 	test_expect_code 1 test -d $RUNDIR
 '
-test_expect_success 'broker persist-directory works' '
-	PERSISTDIR=`mktemp -d` &&
-	flux start ${ARGS} -o,--setattr=persist-directory=$PERSISTDIR /bin/true &&
-	test -d $PERSISTDIR &&
-	test `ls -1 $PERSISTDIR|wc -l` -gt 0 &&
-	rm -rf $PERSISTDIR
-'
-test_expect_success 'broker persist-filesystem works' '
-	PERSISTFS=`mktemp -d` &&
-	PERSISTDIR=`flux start ${ARGS} -o,--setattr=persist-filesystem=$PERSISTFS flux getattr persist-directory` &&
-	test -d $PERSISTDIR &&
-	test `ls -1 $PERSISTDIR|wc -l` -gt 0 &&
-	rm -rf $PERSISTDIR &&
-	test -d $PERSISTFS &&
-	rmdir $PERSISTFS
-'
-test_expect_success 'broker persist-filesystem is ignored if persist-directory set' '
-	PERSISTFS=`mktemp -d` &&
-	PERSISTDIR=`mktemp -d` &&
-	DIR=`flux start ${ARGS} -o,--setattr=persist-filesystem=$PERSISTFS,--setattr=persist-directory=$PERSISTDIR \
-		flux getattr persist-directory` &&
-	test "$DIR" = "$PERSISTDIR" &&
-	test `ls -1 $PERSISTDIR|wc -l` -gt 0 &&
-	rmdir $PERSISTFS &&
-	rm -rf $PERSISTDIR
-'
 # Use -eq hack to test that BROKERPID is a number
 test_expect_success 'broker broker.pid attribute is readable' '
 	BROKERPID=`flux start ${ARGS} flux getattr broker.pid` &&
