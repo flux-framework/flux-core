@@ -107,6 +107,8 @@ static char **expand_argz (char *argz, size_t argz_len)
 
     len = argz_count (argz, argz_len) + 1;
     argv = calloc (len + 1, sizeof (char *));
+    if (!argv)
+        return NULL;
 
     argz_extract (argz, argz_len, argv);
 
@@ -406,14 +408,14 @@ static zhash_t * z_hash_dup (zhash_t *src)
 static void flux_cmd_free (flux_cmd_t *cmd)
 {
     if (cmd) {
+        int saved_errno = errno;
         free (cmd->cwd);
         free (cmd->argz);
         free (cmd->envz);
-        if (cmd->opts)
-            zhash_destroy (&cmd->opts);
-        if (cmd->channels)
-            zlist_destroy (&cmd->channels);
+        zhash_destroy (&cmd->opts);
+        zlist_destroy (&cmd->channels);
         free (cmd);
+        errno = saved_errno;
     }
 }
 
@@ -424,21 +426,18 @@ void flux_cmd_destroy (flux_cmd_t *cmd)
 
 flux_cmd_t *flux_cmd_create (int argc, char *argv[], char **env)
 {
-    int err;
     flux_cmd_t *cmd = calloc (1, sizeof (*cmd));
 
-    if (argv && init_argz_count (&cmd->argz, &cmd->argz_len, argc, argv) < 0) {
-        err = errno;
+    if (!cmd)
+        return NULL;
+    if (argv && init_argz_count (&cmd->argz, &cmd->argz_len, argc, argv) < 0)
         goto fail;
-    }
-    if (env && init_argz (&cmd->envz, &cmd->envz_len, env) < 0) {
-        err = errno;
+    if (env && init_argz (&cmd->envz, &cmd->envz_len, env) < 0)
         goto fail;
-    }
 
     if (!(cmd->opts = zhash_new ())
        || !(cmd->channels = zlist_new ())) {
-        err = ENOMEM;
+        errno = ENOMEM;
         goto fail;
     }
 
@@ -455,7 +454,6 @@ flux_cmd_t *flux_cmd_create (int argc, char *argv[], char **env)
     return (cmd);
 fail:
     flux_cmd_free (cmd);
-    errno = err;
     return NULL;
 }
 

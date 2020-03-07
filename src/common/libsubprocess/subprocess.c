@@ -119,6 +119,7 @@ error:
 static void subprocess_free (flux_subprocess_t *p)
 {
     if (p && p->magic == SUBPROCESS_MAGIC) {
+        int saved_errno = errno;
         flux_cmd_destroy (p->cmd);
 
         aux_destroy (&p->aux);
@@ -142,6 +143,7 @@ static void subprocess_free (flux_subprocess_t *p)
 
         p->magic = ~SUBPROCESS_MAGIC;
         free (p);
+        errno = saved_errno;
     }
 }
 
@@ -155,7 +157,6 @@ static flux_subprocess_t * subprocess_create (flux_t *h,
                                               bool local)
 {
     flux_subprocess_t *p = calloc (1, sizeof (*p));
-    int save_errno;
 
     if (!p)
         return NULL;
@@ -198,9 +199,7 @@ static flux_subprocess_t * subprocess_create (flux_t *h,
     return (p);
 
 error:
-    save_errno = errno;
     subprocess_free (p);
-    errno = save_errno;
     return NULL;
 }
 
@@ -602,7 +601,6 @@ static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int fla
     flux_subprocess_t *p = NULL;
     int valid_flags = (FLUX_SUBPROCESS_FLAGS_STDIO_FALLTHROUGH
                        | FLUX_SUBPROCESS_FLAGS_SETPGRP);
-    int save_errno;
 
     if (!r || !cmd) {
         errno = EINVAL;
@@ -631,9 +629,7 @@ static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int fla
     return p;
 
 error:
-    save_errno = errno;
     flux_subprocess_unref (p);
-    errno = save_errno;
     return NULL;
 }
 
@@ -677,7 +673,6 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
 {
     flux_subprocess_t *p = NULL;
     flux_reactor_t *r;
-    int save_errno;
 
     if (!h
         || (rank < 0
@@ -733,9 +728,7 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
     return p;
 
 error:
-    save_errno = errno;
     flux_subprocess_unref (p);
-    errno = save_errno;
     return NULL;
 }
 
