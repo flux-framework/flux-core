@@ -263,7 +263,9 @@ int modservice_register (flux_t *h, module_t *p)
     if (register_request (ctx, "debug", debug_cb, FLUX_ROLE_OWNER) < 0)
         return -1;
 
-    if (ping_initialize (h, module_get_name (ctx->p)) < 0) {
+    if (ping_initialize (h,
+                         module_get_name (ctx->p),
+                         module_get_uuid (ctx->p)) < 0) {
         log_err ("ping_initialize");
         return -1;
     }

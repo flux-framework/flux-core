@@ -483,6 +483,8 @@ int main (int argc, char *argv[])
     }
     uint32_t rank = overlay_get_rank (ctx.overlay);
     uint32_t size = overlay_get_size (ctx.overlay);
+    char rank_str[16];
+    snprintf (rank_str, sizeof (rank_str), "%"PRIu32, rank);
 
     assert (size > 0);
 
@@ -633,7 +635,7 @@ int main (int argc, char *argv[])
         log_err ("exec_initialize");
         goto cleanup;
     }
-    if (ping_initialize (ctx.h, "cmb") < 0) {
+    if (ping_initialize (ctx.h, "cmb", rank_str) < 0) {
         log_err ("ping_initialize");
         goto cleanup;
     }
