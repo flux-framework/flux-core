@@ -13,6 +13,9 @@
 #endif
 #include <jansson.h>
 #include <flux/core.h>
+
+#include "src/common/libutil/errno_safe.h"
+
 #include "ping.h"
 
 struct ping_context {
@@ -46,8 +49,8 @@ static char *make_json_response_payload (const char *request_payload,
         goto done;
     }
 done:
-    json_decref (o);
-    json_decref (add);
+    ERRNO_SAFE_WRAP (json_decref, o);
+    ERRNO_SAFE_WRAP (json_decref, add);
     return result;
 }
 
@@ -94,24 +97,24 @@ error:
 static void ping_finalize (void *arg)
 {
     struct ping_context *p = arg;
-    flux_msg_handler_stop (p->mh);
-    flux_msg_handler_destroy (p->mh);
-    free (p);
+    if (p) {
+        int saved_errno = errno;
+        flux_msg_handler_stop (p->mh);
+        flux_msg_handler_destroy (p->mh);
+        free (p);
+        errno = saved_errno;
+    }
 }
 
 int ping_initialize (flux_t *h, const char *service)
 {
     struct flux_match match = FLUX_MATCH_ANY;
     struct ping_context *p = calloc (1, sizeof (*p));
-    if (!p) {
-        errno = ENOMEM;
+    if (!p)
         goto error;
-    }
     match.typemask = FLUX_MSGTYPE_REQUEST;
-    if (flux_match_asprintf (&match, "%s.ping", service) < 0) {
-        errno = ENOMEM;
+    if (flux_match_asprintf (&match, "%s.ping", service) < 0)
         goto error;
-    }
     if (!(p->mh = flux_msg_handler_create (h, match, ping_request_cb, p)))
         goto error;
     flux_msg_handler_allow_rolemask (p->mh, FLUX_ROLE_ALL);
@@ -121,8 +124,7 @@ int ping_initialize (flux_t *h, const char *service)
     return 0;
 error:
     flux_match_free (match);
-    if (p)
-        ping_finalize (p);
+    ping_finalize (p);
     return -1;
 }
 
