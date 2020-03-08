@@ -1551,7 +1551,7 @@ struct flux_match flux_match_init (int typemask,
 
 void flux_match_free (struct flux_match m)
 {
-    free ((char *)m.topic_glob);
+    ERRNO_SAFE_WRAP (free, (char *)m.topic_glob);
 }
 
 int flux_match_asprintf (struct flux_match *m, const char *topic_glob_fmt, ...)
