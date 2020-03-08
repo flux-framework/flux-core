@@ -1536,16 +1536,66 @@ error:
 
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "cmb.rmmod",      cmb_rmmod_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.insmod",     cmb_insmod_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.lsmod",      cmb_lsmod_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.lspeer",     cmb_lspeer_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.panic",      cmb_panic_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.disconnect", cmb_disconnect_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.sub",        cmb_sub_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "cmb.unsub",      cmb_unsub_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "service.add",    service_add_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "service.remove", service_remove_cb, 0 },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "cmb.rmmod",
+        cmb_rmmod_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "cmb.insmod",
+        cmb_insmod_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "cmb.lsmod",
+        cmb_lsmod_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "cmb.lspeer",
+        cmb_lspeer_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "cmb.panic",
+        cmb_panic_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "cmb.disconnect",
+        cmb_disconnect_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "cmb.sub",
+        cmb_sub_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "cmb.unsub",
+        cmb_unsub_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "service.add",
+        service_add_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "service.remove",
+        service_remove_cb,
+        0
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
