@@ -13,7 +13,7 @@
 
 #include <flux/core.h>
 
-int ping_initialize (flux_t *h, const char *service);
+int ping_initialize (flux_t *h, const char *service, const char *uuid);
 
 #endif /* BROKER_PING_H */
 

@@ -13,10 +13,14 @@
 #endif
 #include <jansson.h>
 #include <flux/core.h>
+
+#include "src/common/libutil/errno_safe.h"
+
 #include "ping.h"
 
 struct ping_context {
     flux_msg_handler_t *mh;
+    char *uuid;
 };
 
 static char *make_json_response_payload (const char *request_payload,
@@ -46,72 +50,88 @@ static char *make_json_response_payload (const char *request_payload,
         goto done;
     }
 done:
-    json_decref (o);
-    json_decref (add);
+    ERRNO_SAFE_WRAP (json_decref, o);
+    ERRNO_SAFE_WRAP (json_decref, add);
     return result;
 }
 
 static void ping_request_cb (flux_t *h, flux_msg_handler_t *mh,
                              const flux_msg_t *msg, void *arg)
 {
+    struct ping_context *p = arg;
     const char *json_str;
     char *route_str = NULL;
-    char *full_route_str = NULL;
+    char *new_str;
+    size_t new_size;
     char *resp_str = NULL;
-    uint32_t rank;
     struct flux_msg_cred cred;
 
     if (flux_request_decode (msg, NULL, &json_str) < 0)
         goto error;
     if (flux_msg_get_cred (msg, &cred) < 0)
         goto error;
+
+    /* The route string as obtained from the message includes all
+     * hops but the last one, e.g. the identity of the destination.
+     * That identity is passed in to ping_initialize() as the uuid.
+     * Tack it onto the route string.
+     */
     if (!(route_str = flux_msg_get_route_string (msg)))
         goto error;
-    if (flux_get_rank (h, &rank) < 0)
+    new_size = strlen (route_str) + strlen (p->uuid) + 2;
+    if (!(new_str = realloc (route_str, new_size)))
         goto error;
-    if (asprintf (&full_route_str, "%s!%u", route_str, rank) < 0) {
-        errno = ENOMEM;
+    route_str = new_str;
+    strcat (route_str, "!");
+    strcat (route_str, p->uuid);
+
+    if (!(resp_str = make_json_response_payload (json_str, route_str, cred)))
         goto error;
-    }
-    if (!(resp_str = make_json_response_payload (json_str, full_route_str,
-                                                 cred))) {
-        goto error;
-    }
     if (flux_respond (h, msg, resp_str) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     free (route_str);
-    free (full_route_str);
     free (resp_str);
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     free (route_str);
-    free (full_route_str);
     free (resp_str);
 }
 
 static void ping_finalize (void *arg)
 {
     struct ping_context *p = arg;
-    flux_msg_handler_stop (p->mh);
-    flux_msg_handler_destroy (p->mh);
-    free (p);
+    if (p) {
+        int saved_errno = errno;
+        flux_msg_handler_stop (p->mh);
+        flux_msg_handler_destroy (p->mh);
+        free (p->uuid);
+        free (p);
+        errno = saved_errno;
+    }
 }
 
-int ping_initialize (flux_t *h, const char *service)
+int ping_initialize (flux_t *h, const char *service, const char *uuid)
 {
     struct flux_match match = FLUX_MATCH_ANY;
     struct ping_context *p = calloc (1, sizeof (*p));
-    if (!p) {
-        errno = ENOMEM;
+    if (!p)
         goto error;
-    }
+    /* The uuid is tacked onto the route string constructed for
+     * ping responses.  If it contains a hyphen, truncate it there
+     * to match policy of flux_msg_get_route_str().  If it doesn't
+     * contain a hyphen, it's probably a broker rank - never truncate that.
+     */
+    if (!(p->uuid = strdup (uuid)))
+        goto error;
+    char *cp = strchr (p->uuid, '-');
+    if (cp)
+        *cp = '\0';
+
     match.typemask = FLUX_MSGTYPE_REQUEST;
-    if (flux_match_asprintf (&match, "%s.ping", service) < 0) {
-        errno = ENOMEM;
+    if (flux_match_asprintf (&match, "%s.ping", service) < 0)
         goto error;
-    }
     if (!(p->mh = flux_msg_handler_create (h, match, ping_request_cb, p)))
         goto error;
     flux_msg_handler_allow_rolemask (p->mh, FLUX_ROLE_ALL);
@@ -121,8 +141,7 @@ int ping_initialize (flux_t *h, const char *service)
     return 0;
 error:
     flux_match_free (match);
-    if (p)
-        ping_finalize (p);
+    ping_finalize (p);
     return -1;
 }
 
