@@ -37,6 +37,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/aux.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "message.h"
 
@@ -1016,15 +1017,13 @@ char *flux_msg_get_route_string (const flux_msg_t *msg)
                     || (len = flux_msg_get_route_size (msg)) < 0) {
         return NULL;
     }
-    if (!(cp = buf = malloc (len + hops + 1))) {
-        errno = ENOMEM;
+    if (!(cp = buf = malloc (len + hops + 1)))
         return NULL;
-    }
     for (n = hops - 1; n >= 0; n--) {
         if (cp > buf)
             *cp++ = '!';
         if (!(zf = flux_msg_get_route_nth (msg, n))) {
-            free (buf);
+            ERRNO_SAFE_WRAP (free, buf);
             return NULL;
         }
         int cpylen = zframe_size (zf);
