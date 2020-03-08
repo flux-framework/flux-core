@@ -1027,8 +1027,8 @@ char *flux_msg_get_route_string (const flux_msg_t *msg)
             return NULL;
         }
         int cpylen = zframe_size (zf);
-        if (cpylen == 32) /* abbreviate long UUID */
-            cpylen = 5;
+        if (cpylen == 36) /* abbreviate long UUID */
+            cpylen = 8;
         assert (cp - buf + cpylen < len + hops);
         memcpy (cp, zframe_data (zf), cpylen);
         cp += cpylen;
