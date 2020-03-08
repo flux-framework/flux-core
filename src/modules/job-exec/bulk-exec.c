@@ -73,6 +73,29 @@ int bulk_exec_total (struct bulk_exec *exec)
     return exec->total;
 }
 
+int bulk_exec_write (struct bulk_exec *exec, const char *stream,
+                     const char *buf, size_t len)
+{
+    flux_subprocess_t *p = zlist_first (exec->processes);
+    while (p) {
+        if (flux_subprocess_write (p, stream, buf, len) < len)
+            return -1;
+        p = zlist_next (exec->processes);
+    }
+    return 0;
+}
+
+int bulk_exec_close (struct bulk_exec *exec, const char *stream)
+{
+    flux_subprocess_t *p = zlist_first (exec->processes);
+    while (p) {
+        if (flux_subprocess_close (p, stream) < 0)
+            return -1;
+        p = zlist_next (exec->processes);
+    }
+    return 0;
+}
+
 static int exec_exit_notify (struct bulk_exec *exec)
 {
     if (exec->handlers->on_exit)
@@ -298,6 +321,7 @@ static int exec_start_cmds (struct bulk_exec *exec, int max)
     }
     return 0;
 }
+
 
 static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)

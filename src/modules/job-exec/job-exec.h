@@ -66,7 +66,9 @@ struct jobinfo {
 
     struct resource_set * R;         /* Fetched and parsed resource set R */
     json_t *              jobspec;   /* Fetched jobspec */
+    char *                J;         /* Signed jobspec */
 
+    uint8_t               multiuser:1;
     uint8_t               has_namespace:1;
     uint8_t               exception_in_progress:1;
 

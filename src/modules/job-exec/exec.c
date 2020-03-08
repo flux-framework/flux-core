@@ -39,6 +39,7 @@
 extern char **environ;
 static const char *default_cwd = "/tmp";
 static const char *default_job_shell = NULL;
+static const char *flux_imp_path = NULL;
 
 /* Configuration for "bulk" execution implementation. Used only for testing
  *  for now.
@@ -109,6 +110,23 @@ static void start_cb (struct bulk_exec *exec, void *arg)
 {
     struct jobinfo *job = arg;
     jobinfo_started (job, NULL);
+    /*  This is going to be really slow. However, it should at least
+     *   work for now. We wait for all imp's to start, then send input
+     */
+    if (job->multiuser) {
+        char *input = NULL;
+        json_t *o = json_pack ("{s:s}", "J", job->J);
+        if (!o || !(input = json_dumps (o, JSON_COMPACT))) {
+            jobinfo_fatal_error (job, errno, "Failed to get input to IMP");
+            goto out;
+        }
+        bulk_exec_write (exec, "stdin", input, strlen (input));
+        bulk_exec_close (exec, "stdin");
+out:
+        json_decref (o);
+        free (input);
+    }
+
 }
 
 static void complete_cb (struct bulk_exec *exec, void *arg)
@@ -156,6 +174,13 @@ static int exec_init (struct jobinfo *job)
     struct bulk_exec *exec = NULL;
     const struct idset *ranks = NULL;
 
+    if (job->multiuser && !flux_imp_path) {
+        flux_log (job->h,
+                  LOG_ERR,
+                  "unable run multiuser job with no IMP configured!");
+        goto err;
+    }
+
     if (!(ranks = resource_set_ranks (job->R))) {
         flux_log_error (job->h, "exec_init: resource_set_ranks");
         goto err;
@@ -180,6 +205,14 @@ static int exec_init (struct jobinfo *job)
     if (flux_cmd_setenvf (cmd, 1, "FLUX_KVS_NAMESPACE", "%s", job->ns) < 0) {
         flux_log_error (job->h, "exec_init: flux_cmd_setenvf");
         goto err;
+    }
+    if (job->multiuser) {
+        flux_cmd_setopt (cmd, "stdin_BUFSIZE", "8192");
+        if (flux_cmd_argv_append (cmd, flux_imp_path) < 0
+            || flux_cmd_argv_append (cmd, "exec") < 0) {
+            flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
+            goto err;
+        }
     }
     if (flux_cmd_argv_append (cmd, job_shell_path (job)) < 0
         || flux_cmd_argv_appendf (cmd, "%ju", (uintmax_t) job->id) < 0) {
@@ -323,12 +356,28 @@ static int exec_config (flux_t *h, int argc, char **argv)
         return -1;
     }
 
-    /* Finally, override on cmdline if job-shell=%s appears */
+    /*  Check configuration for exec.imp */
+    if (flux_conf_unpack (flux_get_conf (h, NULL),
+                          &err,
+                          "{s?:{s?s}}",
+                          "exec",
+                            "imp", &flux_imp_path) < 0) {
+        flux_log (h, LOG_ERR,
+                  "error reading config value exec.imp: %s",
+                  err.errbuf);
+        return -1;
+    }
+
+    /* Finally, override values on cmdline */
     for (int i = 0; i < argc; i++) {
         if (strncmp (argv[i], "job-shell=", 10) == 0)
             default_job_shell = argv[i]+10;
+        else if (strncmp (argv[i], "imp=", 4) == 0)
+            flux_imp_path = argv[i]+4;
     }
     flux_log (h, LOG_DEBUG, "using default shell path %s", default_job_shell);
+    if (flux_imp_path)
+        flux_log (h, LOG_DEBUG, "using imp path %s", flux_imp_path);
     return 0;
 }
 
