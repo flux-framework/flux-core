@@ -60,6 +60,21 @@ struct servhash {
     void *respond_arg;
 };
 
+/* Create a copy of request 'msg' with the route stack cleared.
+ */
+static flux_msg_t *request_copy_clear_routes (const flux_msg_t *msg)
+{
+    flux_msg_t *cpy;
+    if (!(cpy = flux_msg_copy (msg, true)))
+        return NULL;
+    if (flux_msg_clear_route (cpy) < 0 || flux_msg_enable_route (cpy) < 0) {
+        flux_msg_destroy (cpy);
+        return NULL;
+    }
+    return cpy;
+}
+
+
 static bool needs_unregister (struct servhash_entry *entry)
 {
     if (!entry->live && entry->f_add && !flux_future_is_ready (entry->f_add))
@@ -69,18 +84,34 @@ static bool needs_unregister (struct servhash_entry *entry)
     return false;
 }
 
+/* Send open loop service.remove request to ensure any registered services
+ * are cleaned up on the broker.  Derive from original service.add request
+ * to ensure identical message credentials.
+ */
+static void service_remove_best_effort (struct servhash_entry *entry)
+{
+    flux_future_t *f;
+    flux_msg_t *msg;
+
+    if (!needs_unregister (entry))
+        return;
+    if (!(msg = request_copy_clear_routes (entry->add_request)))
+        return;
+    if (flux_msg_set_topic (msg, "service.remove") < 0)
+        goto done;
+    if (!(f = flux_rpc_message (entry->sh->h, msg, FLUX_NODEID_ANY, 0)))
+        goto done;
+    flux_future_destroy (f);
+done:
+    flux_msg_destroy (msg);
+}
+
 /* Destructor for a service.
- * Be sure that any registered services are cleaned up on the broker
- * by sending an "open loop" unregister request if needed.
  */
 static void servhash_entry_destroy (struct servhash_entry *entry)
 {
     if (entry) {
-        if (needs_unregister (entry)) {
-            flux_future_t *f;
-            f = flux_service_unregister (entry->sh->h, entry->name);
-            flux_future_destroy (f);
-        }
+        ERRNO_SAFE_WRAP (service_remove_best_effort, entry);
         flux_future_destroy (entry->f_add);
         flux_future_destroy (entry->f_remove);
         flux_msg_decref (entry->add_request);
@@ -147,6 +178,7 @@ int servhash_add (struct servhash *sh,
                   flux_msg_t *msg)
 {
     struct servhash_entry *entry;
+    flux_msg_t *cpy;
 
     if (!sh || !name || !uuid || !msg) {
         errno = EINVAL;
@@ -160,14 +192,18 @@ int servhash_add (struct servhash *sh,
         return -1;
     entry->sh = sh;
     entry->add_request = flux_msg_incref (msg);
-    if (!(entry->f_add = flux_service_register (sh->h, name)))
+    if (!(cpy = request_copy_clear_routes (msg)))
+        goto error;
+    if (!(entry->f_add = flux_rpc_message (sh->h, cpy, FLUX_NODEID_ANY, 0)))
         goto error;
     if (flux_future_then (entry->f_add, -1, add_continuation, entry) < 0)
         goto error;
     zhashx_update (sh->services, name, entry);
+    flux_msg_destroy (cpy);
     return 0;
 error:
     servhash_entry_destroy (entry);
+    flux_msg_destroy (cpy);
     return -1;
 }
 
@@ -197,6 +233,7 @@ int servhash_remove (struct servhash *sh,
                      flux_msg_t *msg)
 {
     struct servhash_entry *entry;
+    flux_msg_t *cpy;
 
     if (!sh || !name || !uuid || !msg) {
         errno = EINVAL;
@@ -209,13 +246,17 @@ int servhash_remove (struct servhash *sh,
         return -1;
     }
     entry->remove_request = flux_msg_incref (msg);
-    if (!(entry->f_remove = flux_service_unregister (sh->h, name)))
-        return -1;
+    if (!(cpy = request_copy_clear_routes (msg)))
+        goto error;
+    if (!(entry->f_remove = flux_rpc_message (sh->h, cpy, FLUX_NODEID_ANY, 0)))
+        goto error;
     if (flux_future_then (entry->f_remove, -1, remove_continuation, entry) < 0)
         goto error;
+    flux_msg_destroy (cpy);
     return 0;
 error:
     ERRNO_SAFE_WRAP (zhashx_delete, sh->services, name);
+    flux_msg_destroy (cpy);
     return -1;
 }
 
