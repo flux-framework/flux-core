@@ -21,7 +21,6 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libutil/fsd.h"
 
 #include "runlevel.h"
 
@@ -29,8 +28,7 @@ struct level {
     flux_subprocess_t *p;
     flux_cmd_t *cmd;
     struct timespec start;
-    double timeout;
-    flux_watcher_t *timer;
+    bool aborting;
 };
 
 struct runlevel {
@@ -41,70 +39,53 @@ struct runlevel {
     void *cb_arg;
     runlevel_io_cb_f io_cb;
     void *io_cb_arg;
-    char nodeset[64];
-    const char *mode;
 };
 
-runlevel_t *runlevel_create (void)
+static int runlevel_attr_get (const char *name, const char **val, void *arg);
+
+struct runlevel *runlevel_create (flux_t *h, attr_t *attrs)
 {
-    runlevel_t *r = calloc (1, sizeof (*r));
-    if (!r) {
-        errno = ENOMEM;
+    struct runlevel *r;
+
+    if (!(r = calloc (1, sizeof (*r))))
         return NULL;
-    }
-    r->mode = "normal";
+    r->h = h;
+    if (attr_add_active (attrs,
+                         "init.run-level",
+                         FLUX_ATTRFLAG_READONLY,
+                         runlevel_attr_get,
+                         NULL,
+                         r) < 0)
+        goto error;
     return r;
+error:
+    runlevel_destroy (r);
+    return NULL;
 }
 
-void runlevel_destroy (runlevel_t *r)
+void runlevel_destroy (struct runlevel *r)
 {
     if (r) {
+        int saved_errno = errno;
         int i;
         for (i = 0; i < 4; i++) {
-            if (r->rc[i].p)
-                flux_subprocess_destroy (r->rc[i].p);
-            if (r->rc[i].cmd)
-                flux_cmd_destroy (r->rc[i].cmd);
-            flux_watcher_destroy (r->rc[i].timer);
+            flux_subprocess_destroy (r->rc[i].p);
+            flux_cmd_destroy (r->rc[i].cmd);
         }
         free (r);
+        errno = saved_errno;
     }
-}
-
-void runlevel_set_flux (runlevel_t *r, flux_t *h)
-{
-    r->h = h;
-}
-
-static int runlevel_set_mode (runlevel_t *r, const char *val)
-{
-    if (!strcmp (val, "normal"))
-        r->mode = "normal";
-    else if (!strcmp (val, "none"))
-        r->mode = "none";
-    else {
-        errno = EINVAL;
-        return -1;
-    }
-    return 0;
 }
 
 static int runlevel_attr_get (const char *name, const char **val, void *arg)
 {
-    runlevel_t *r = arg;
+    struct runlevel *r = arg;
 
     if (!strcmp (name, "init.run-level")) {
         static char s[16];
         snprintf (s, sizeof (s), "%d", runlevel_get_level (r));
         if (val)
             *val = s;
-    } else if (!strcmp (name, "init.rc2_timeout")) {
-        static char s[16];
-        snprintf (s, sizeof (s), "%.1f", r->rc[2].timeout);
-        if (val)
-            *val = s;
-    } else if (!strcmp (name, "init.mode")) {
-        *val = r->mode;
     } else {
         errno = EINVAL;
         goto error;
@@ -114,92 +95,16 @@ error:
     return -1;
 }
 
-static int runlevel_attr_set (const char *name, const char *val, void *arg)
-{
-    runlevel_t *r = arg;
-
-    if (!strcmp (name, "init.mode")) {
-        if (runlevel_set_mode (r, val) < 0)
-            goto error;
-    } else if (!strcmp (name, "init.rc2_timeout")) {
-        if (fsd_parse_duration (val, &r->rc[2].timeout) < 0) {
-            errno = EINVAL;
-            goto error;
-        }
-    } else {
-        errno = EINVAL;
-        goto error;
-    }
-    return 0;
-error:
-    return -1;
-}
-
-int runlevel_register_attrs (runlevel_t *r, attr_t *attrs)
-{
-    const char *val;
-
-    if (attr_add_active (attrs, "init.run-level",
-                         FLUX_ATTRFLAG_READONLY,
-                         runlevel_attr_get, NULL, r) < 0)
-        return -1;
-
-    if (attr_get (attrs, "init.mode", &val, NULL) == 0) {
-
-        if (runlevel_set_mode (r, val) < 0
-                || attr_delete (attrs, "init.mode", true) < 0)
-            return -1;
-    }
-    if (attr_add_active (attrs, "init.mode", 0,
-                         runlevel_attr_get, runlevel_attr_set, r) < 0)
-        return -1;
-
-    if (attr_get (attrs, "init.rc2_timeout", &val, NULL) == 0) {
-        if ((fsd_parse_duration (val, &r->rc[2].timeout) < 0)
-                || attr_delete (attrs, "init.rc2_timeout", true) < 0)
-            return -1;
-    }
-    if (attr_add_active (attrs, "init.rc2_timeout", 0,
-                         runlevel_attr_get, runlevel_attr_set, r) < 0)
-        return -1;
-
-    return 0;
-}
-
-void runlevel_set_size (runlevel_t *r, uint32_t size)
-{
-    int n;
-
-    if (size > 1)
-        n = snprintf (r->nodeset, sizeof (r->nodeset),
-                      "[0-%" PRIu32 "]", size - 1);
-    else
-        n = snprintf (r->nodeset, sizeof (r->nodeset), "[0]");
-    assert (n < sizeof (r->nodeset));
-}
-
-void runlevel_set_callback (runlevel_t *r, runlevel_cb_f cb, void *arg)
+void runlevel_set_callback (struct runlevel *r, runlevel_cb_f cb, void *arg)
 {
     r->cb = cb;
     r->cb_arg = arg;
 }
 
-void runlevel_set_io_callback (runlevel_t *r, runlevel_io_cb_f cb, void *arg)
+void runlevel_set_io_callback (struct runlevel *r, runlevel_io_cb_f cb, void *arg)
 {
     r->io_cb = cb;
     r->io_cb_arg = arg;
-}
-
-static void runlevel_timeout (flux_reactor_t *reactor, flux_watcher_t *w,
-                              int revents, void *arg)
-{
-    runlevel_t *r = arg;
-    flux_future_t *f;
-    flux_log (r->h, LOG_ERR, "runlevel %d timeout, sending SIGTERM", r->level);
-    if (!(f = flux_subprocess_kill (r->rc[r->level].p, SIGTERM)))
-        flux_log_error (r->h, "flux_subprocess_kill");
-    /* don't care about response */
-    flux_future_destroy (f);
 }
 
 /* See POSIX 2008 Volume 3 Shell and Utilities, Issue 7
@@ -207,7 +112,7 @@ static void runlevel_timeout (flux_reactor_t *reactor, flux_watcher_t *w,
  */
 static void completion_cb (flux_subprocess_t *p)
 {
-    runlevel_t *r = flux_subprocess_aux_get (p, "runlevel");
+    struct runlevel *r = flux_subprocess_aux_get (p, "runlevel");
     const char *exit_string = NULL;
     int rc;
 
@@ -228,8 +133,6 @@ static void completion_cb (flux_subprocess_t *p)
     assert (r->rc[r->level].p == p);
     r->rc[r->level].p = NULL;
 
-    flux_watcher_stop (r->rc[r->level].timer);
-
     if (r->cb) {
         double elapsed = monotime_since (r->rc[r->level].start) / 1000;
         r->cb (r, r->level, rc, elapsed, exit_string, r->cb_arg);
@@ -239,7 +142,7 @@ static void completion_cb (flux_subprocess_t *p)
 
 static void io_cb (flux_subprocess_t *p, const char *stream)
 {
-    runlevel_t *r;
+    struct runlevel *r;
     const char *ptr;
     int lenp;
 
@@ -257,7 +160,7 @@ static void io_cb (flux_subprocess_t *p, const char *stream)
         r->io_cb (r, stream, ptr, r->io_cb_arg);
 }
 
-static int runlevel_start_subprocess (runlevel_t *r, int level)
+static int runlevel_start_subprocess (struct runlevel *r, int level)
 {
     flux_subprocess_t *p = NULL;
 
@@ -271,7 +174,6 @@ static int runlevel_start_subprocess (runlevel_t *r, int level)
             .on_stdout = NULL,
             .on_stderr = NULL,
         };
-        flux_reactor_t *reactor = flux_get_reactor (r->h);
         int flags = 0;
 
         /* set alternate io callback for levels 1 and 3 */
@@ -292,24 +194,13 @@ static int runlevel_start_subprocess (runlevel_t *r, int level)
         if (flux_subprocess_aux_set (p, "runlevel", r, NULL) < 0)
             goto error;
 
-        monotime (&r->rc[level].start);
-        if (r->rc[level].timeout > 0.) {
-            flux_watcher_t *w;
-            if (!(w = flux_timer_watcher_create (reactor,
-                                                 r->rc[level].timeout, 0.,
-                                                 runlevel_timeout, r)))
-                goto error;
-            flux_watcher_start (w);
-            r->rc[level].timer = w;
-            flux_log (r->h, LOG_INFO, "runlevel %d (%.1fs) timer started",
-                      level, r->rc[level].timeout);
-        }
-
         r->rc[level].p = p;
-    } else {
+    }
+    else if (level == 1 || level == 3) {
         if (r->cb)
             r->cb (r, r->level, 0, 0., "Not configured", r->cb_arg);
     }
+    monotime (&r->rc[level].start);
     return 0;
 
 error:
@@ -317,38 +208,26 @@ error:
     return -1;
 }
 
-int runlevel_set_level (runlevel_t *r, int level)
+int runlevel_set_level (struct runlevel *r, int level)
 {
     if (level < 1 || level > 3 || level <= r->level) {
         errno = EINVAL;
         return -1;
     }
-    if (!strcmp (r->mode, "normal")) {
-        r->level = level;
-        if (runlevel_start_subprocess (r, level) < 0)
-            return -1;
-    } else if (!strcmp (r->mode, "none")) {
-        r->level = level;
-        if (level == 2) {
-            if (runlevel_start_subprocess (r, level) < 0)
-                return -1;
-        } else  {
-            if (r->cb)
-                r->cb (r, r->level, 0, 0., "Skipped mode=none", r->cb_arg);
-        }
-    }
+    r->level = level;
+    if (runlevel_start_subprocess (r, level) < 0)
+        return -1;
     return 0;
 }
 
-int runlevel_get_level (runlevel_t *r)
+int runlevel_get_level (struct runlevel *r)
 {
     return r->level;
 }
 
-int runlevel_set_rc (runlevel_t *r, int level, const char *cmd_argz,
+int runlevel_set_rc (struct runlevel *r, int level, const char *cmd_argz,
                      size_t cmd_argz_len, const char *local_uri)
 {
-    flux_subprocess_t *p = NULL;
     flux_cmd_t *cmd = NULL;
     const char *shell = getenv ("SHELL");
     if (!shell)
@@ -358,20 +237,26 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *cmd_argz,
         errno = EINVAL;
         goto error;
     }
-
-    // Only wrap in a shell if there is only one argument
-    bool shell_wrap = argz_count (cmd_argz, cmd_argz_len) < 2;
     if (!(cmd = flux_cmd_create (0, NULL, environ)))
         goto error;
-    if (shell_wrap || !cmd_argz) {
+
+    // Run interactive shell if there are no arguments
+    if (argz_count (cmd_argz, cmd_argz_len) == 0) {
         if (flux_cmd_argv_append (cmd, shell) < 0)
             goto error;
     }
-    if (shell_wrap) {
-        if (cmd_argz && flux_cmd_argv_append (cmd, "-c") < 0)
+    // Wrap in shell -c if there is only one argument
+    else if (argz_count (cmd_argz, cmd_argz_len) == 1) {
+        char *arg = argz_next (cmd_argz, cmd_argz_len, NULL);
+
+        if (flux_cmd_argv_append (cmd, shell) < 0)
+            goto error;
+        if (flux_cmd_argv_append (cmd, "-c") < 0)
+            goto error;
+        if (flux_cmd_argv_append (cmd, arg) < 0)
             goto error;
     }
-    if (cmd_argz) {
+    else {
         char *arg = argz_next (cmd_argz, cmd_argz_len, NULL);
         while (arg) {
             if (flux_cmd_argv_append (cmd, arg) < 0)
@@ -385,18 +270,45 @@ int runlevel_set_rc (runlevel_t *r, int level, const char *cmd_argz,
     if (local_uri && flux_cmd_setenvf (cmd, 1, "FLUX_URI",
                                        "%s", local_uri) < 0)
         goto error;
-    if (level == 1 || level == 3) {
-        if (flux_cmd_setenvf (cmd, 1, "FLUX_NODESET_MASK",
-                              "%s", r->nodeset) < 0)
-            goto error;
-    }
     r->rc[level].cmd = cmd;
     return 0;
 error:
-    if (p)
-        flux_subprocess_destroy (p);
     flux_cmd_destroy (cmd);
     return -1;
+}
+
+/* Abort current runlevel.
+ * If there is a subprocess, send it a SIGTERM and let subproc completion
+ * callback call r->cb().  Otherwise, call r->cb() now.
+ * N.B. the broker will use the exit code runlevel gives r->cb().
+ * In the subprocess case the exit code is expected to be be 128 + 15 = 143.
+ * Otherwise the exit code will be zero.
+ */
+int runlevel_abort (struct runlevel *r)
+{
+
+    if (!r || r->rc[r->level].aborting)
+        return -1;
+    r->rc[r->level].aborting = true;
+    if (r->rc[r->level].p) {
+        flux_future_t *f;
+        if (!(f = flux_subprocess_kill (r->rc[r->level].p, SIGTERM))) {
+            flux_log_error (r->h, "flux_subprocess_kill");
+            return -1;
+        }
+        flux_future_destroy (f); // ignore response
+    }
+    else {
+        if (r->cb) {
+            r->cb (r,
+                   r->level,
+                   0,
+                   monotime_since (r->rc[r->level].start) / 1000,
+                   "Not configured",
+                   r->cb_arg);
+        }
+    }
+    return 0;
 }
 
 /*

@@ -112,7 +112,7 @@ typedef struct {
     /* Bootstrap
      */
     hello_t *hello;
-    runlevel_t *runlevel;
+    struct runlevel *runlevel;
 
     char *init_shell_cmd;
     size_t init_shell_cmd_len;
@@ -144,10 +144,16 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
                                  const flux_msg_t *request);
 
 static void set_proctitle (uint32_t rank);
-static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
-                         const char *state, void *arg);
-static void runlevel_io_cb (runlevel_t *r, const char *name,
-                            const char *msg, void *arg);
+static void runlevel_cb (struct runlevel *r,
+                         int level,
+                         int rc,
+                         double elapsed,
+                         const char *state,
+                         void *arg);
+static void runlevel_io_cb (struct runlevel *r,
+                            const char *name,
+                            const char *msg,
+                            void *arg);
 
 static int create_rundir (attr_t *attrs);
 static int create_broker_rundir (overlay_t *ov, void *arg);
@@ -321,8 +327,6 @@ int main (int argc, char *argv[])
     if (!(ctx.subscriptions = zlist_new ()))
         oom ();
     if (!(ctx.cache = content_cache_create ()))
-        oom ();
-    if (!(ctx.runlevel = runlevel_create ()))
         oom ();
     if (!(ctx.publisher = publisher_create ()))
         oom ();
@@ -534,61 +538,80 @@ int main (int argc, char *argv[])
 
     if (rank == 0) {
         const char *rc1, *rc3, *pmi, *uri;
-        const char *rc2 = ctx.init_shell_cmd;
-        size_t rc2_len = ctx.init_shell_cmd_len;
-
-        if (runlevel_register_attrs (ctx.runlevel, ctx.attrs) < 0) {
-            log_err ("configuring runlevel attributes");
-            goto cleanup;
-        }
+        bool rc2_none = false;
 
         if (attr_get (ctx.attrs, "local-uri", &uri, NULL) < 0) {
             log_err ("local-uri is not set");
             goto cleanup;
         }
         if (attr_get (ctx.attrs, "broker.rc1_path", &rc1, NULL) < 0) {
-            log_err ("conf.rc1_path is not set");
+            log_err ("broker.rc1_path is not set");
             goto cleanup;
         }
         if (attr_get (ctx.attrs, "broker.rc3_path", &rc3, NULL) < 0) {
-            log_err ("conf.rc3_path is not set");
+            log_err ("broker.rc3_path is not set");
             goto cleanup;
         }
+        if (attr_get (ctx.attrs, "broker.rc2_none", NULL, NULL) == 0)
+            rc2_none = true;
+
         if (attr_get (ctx.attrs, "conf.pmi_library_path", &pmi, NULL) < 0) {
             log_err ("conf.pmi_library_path is not set");
             goto cleanup;
         }
 
-        runlevel_set_size (ctx.runlevel, size);
+        if (!(ctx.runlevel = runlevel_create (ctx.h, ctx.attrs))) {
+            log_err ("creating runlevel handler");
+            goto cleanup;
+        }
+
         runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
         runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
-        runlevel_set_flux (ctx.runlevel, ctx.h);
 
-        if (runlevel_set_rc (ctx.runlevel,
-                             1,
-                             rc1,
-                             rc1 ? strlen (rc1) + 1 : 0,
-                             uri) < 0) {
-            log_err ("runlevel_set_rc 1");
-            goto cleanup;
+        /* N.B. if runlevel_set_rc() is not called for run levels 1 or 3,
+         * then that level will immediately transition to the next one.
+         * One may set -Sbroker.rc1_path= -Sbroker.rc2_path= on the broker
+         * command line to set an empty rc1/rc3 and skip calling set_rc().
+         */
+        if (rc1 && strlen (rc1) > 0) {
+            if (runlevel_set_rc (ctx.runlevel,
+                                 1,
+                                 rc1,
+                                 strlen (rc1) + 1,
+                                 uri) < 0) {
+                log_err ("runlevel_set_rc 1");
+                goto cleanup;
+            }
         }
 
-        if (runlevel_set_rc (ctx.runlevel,
-                             2,
-                             rc2,
-                             rc2_len,
-                             uri) < 0) {
-            log_err ("runlevel_set_rc 2");
-            goto cleanup;
+        /* N.B. initial program has the following cases:
+         * 1) if command line, ctx.init_shell_cmd will be non-NULL
+         * 2) if broker.rc2_none is set, skip calling runlevel_set_rc().
+         *    Broker must call runlevel_abort() to transition out of level.
+         * 3) if neither command line nor broker.rc2_none are set,
+         *    call runlevel_set_rc() with empty string and let it configure
+         *    its default command (interactive shell).
+         */
+        if (!rc2_none) {
+            if (runlevel_set_rc (ctx.runlevel,
+                                 2,
+                                 ctx.init_shell_cmd,
+                                 ctx.init_shell_cmd_len,
+                                 uri) < 0) {
+                log_err ("runlevel_set_rc 2");
+                goto cleanup;
+            }
         }
 
-        if (runlevel_set_rc (ctx.runlevel,
-                             3,
-                             rc3,
-                             rc3 ? strlen (rc3) + 1 : 0,
-                             uri) < 0) {
-            log_err ("runlevel_set_rc 3");
-            goto cleanup;
+        if (rc3 && strlen (rc3) > 0) {
+            if (runlevel_set_rc (ctx.runlevel,
+                                 3,
+                                 rc3,
+                                 strlen (rc3) + 1,
+                                 uri) < 0) {
+                log_err ("runlevel_set_rc 3");
+                goto cleanup;
+            }
         }
     }
 
@@ -917,8 +940,10 @@ static void set_proctitle (uint32_t rank)
 
 /* Handle line by line output on stdout, stderr of runlevel subprocess.
  */
-static void runlevel_io_cb (runlevel_t *r, const char *name,
-                            const char *msg, void *arg)
+static void runlevel_io_cb (struct runlevel *r,
+                            const char *name,
+                            const char *msg,
+                            void *arg)
 {
     broker_ctx_t *ctx = arg;
     int loglevel = !strcmp (name, "stderr") ? LOG_ERR : LOG_INFO;
@@ -929,8 +954,12 @@ static void runlevel_io_cb (runlevel_t *r, const char *name,
 
 /* Handle completion of runlevel subprocess.
  */
-static void runlevel_cb (runlevel_t *r, int level, int rc, double elapsed,
-                         const char *exit_string, void *arg)
+static void runlevel_cb (struct runlevel *r,
+                         int level,
+                         int rc,
+                         double elapsed,
+                         const char *exit_string,
+                         void *arg)
 {
     broker_ctx_t *ctx = arg;
     int new_level = -1;
@@ -1852,8 +1881,10 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     int rank = overlay_get_rank (ctx->overlay);
     int signum = flux_signal_watcher_get_signum (w);
 
-    log_msg ("signal %d (%s) on rank %u", signum, strsignal (signum), rank);
-    _exit (1);
+    if (rank > 0 || runlevel_abort (ctx->runlevel) < 0) {
+        log_msg ("signal %d (%s) on rank %u", signum, strsignal (signum), rank);
+        _exit (1);
+    }
 }
 
 /* Send a request message down the TBON.

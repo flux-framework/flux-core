@@ -33,19 +33,3 @@ if test $runlevel -ne 1; then
 else
     echo "run level is 1"
 fi
-
-# This is used to limit which nodes can be targets of flux-module
-# and eventually other commands like flux-exec.
-# We expect it to be the full size of the session for now
-size=$(flux getattr size)
-if test $size -eq 1; then
-    expected_mask="[0]";
-else
-    expected_mask="[0-$(($size-1))]"
-fi
-if test "$FLUX_NODESET_MASK" != "$expected_mask"; then
-    echo "FLUX_NODESET_MASK=$FLUX_NODESET_MASK" >&2
-    echo "         expected=$expected_mask" >&2
-else
-    echo FLUX_NODESET_MASK=$FLUX_NODESET_MASK
-fi

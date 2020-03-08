@@ -37,12 +37,9 @@ test_expect_success 'flux-python command runs a python that finds flux' '
 	flux python -c "import flux"
 '
 
-# None of the individual tests should run over 10s
-ARGS="-o -Sinit.rc2_timeout=10"
-
 # Minimal is sufficient for these tests, but test_under_flux unavailable
 # clear the RC paths
-ARGS="$ARGS -o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
+ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 
 test_expect_success 'broker --shutdown-grace option works' "
 	flux start ${ARGS} -s2 -o,--shutdown-grace=5 /bin/true
@@ -92,9 +89,6 @@ test_expect_success 'flux-start in subprocess/pmi mode works as initial program'
 	flux start --size=2 flux start ${ARGS} --size=1 flux comms info | grep size=1
 "
 
-test_expect_success 'flux-start init.rc2_timeout attribute works' "
-	test_expect_code 143 flux start ${ARGS} -o,-Sinit.rc2_timeout=0.1 sleep 5
-"
 test_expect_success 'flux-start --wrap option works' '
 	broker_path=$(flux start -vX 2>&1 | sed "s/^flux-start: *//g") &&
 	echo broker_path=${broker_path} &&
