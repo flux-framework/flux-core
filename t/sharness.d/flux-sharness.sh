@@ -158,7 +158,7 @@ TEST_NAME=$SHARNESS_TEST_NAME
 export TEST_NAME
 
 #  Test requirements for testsuite
-if ! run_timeout 1.0 lua -e 'require "posix"'; then
+if ! run_timeout 10.0 lua -e 'require "posix"'; then
     error "failed to find lua posix module in path"
 fi
 

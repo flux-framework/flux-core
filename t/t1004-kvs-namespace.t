@@ -101,29 +101,29 @@ test_expect_success 'kvs: remove primary namespace fails' '
 '
 
 test_expect_success 'kvs: get with primary namespace works' '
-        flux kvs put --json $DIR.test=1 &&
+        flux kvs put $DIR.test=1 &&
         test_kvs_key_namespace $PRIMARYNAMESPACE $DIR.test 1
 '
 
 test_expect_success 'kvs: put with primary namespace works' '
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.test=2 &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.test=2 &&
         test_kvs_key $DIR.test 2
 '
 
 test_expect_success 'kvs: put/get with primary namespace works' '
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.test=3 &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.test=3 &&
         test_kvs_key_namespace $PRIMARYNAMESPACE $DIR.test 3
 '
 
 test_expect_success 'kvs: unlink with primary namespace works' '
         flux kvs unlink --namespace=$PRIMARYNAMESPACE $DIR.test &&
-        test_must_fail flux kvs get --json $DIR.test
+        test_must_fail flux kvs get $DIR.test
 '
 
 test_expect_success 'kvs: dir with primary namespace works' '
-        flux kvs put --json $DIR.a=1 &&
-        flux kvs put --json $DIR.b=2 &&
-        flux kvs put --json $DIR.c=3 &&
+        flux kvs put $DIR.a=1 &&
+        flux kvs put $DIR.b=2 &&
+        flux kvs put $DIR.c=3 &&
         flux kvs dir --namespace=$PRIMARYNAMESPACE $DIR | sort > output &&
         cat >expected <<EOF &&
 $DIR.a = 1
@@ -143,7 +143,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait on primary namespace works' '
         VERS=$((VERS + 1))
         flux kvs wait --namespace=$PRIMARYNAMESPACE $VERS &
         kvswaitpid=$!
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.xxx=99
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.xxx=99
         test_expect_code 0 wait $kvswaitpid
 '
 
@@ -168,19 +168,19 @@ test_expect_success 'kvs: new namespace exists/is listed' '
 '
 
 test_expect_success 'kvs: put/get value in new namespace works' '
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.test=1 &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.test=1 &&
         test_kvs_key_namespace $NAMESPACETEST $DIR.test 1
 '
 
 test_expect_success 'kvs: unlink in new namespace works' '
         flux kvs unlink --namespace=$NAMESPACETEST $DIR.test &&
-        ! flux kvs get --namespace=$NAMESPACETEST --json $DIR.test
+        ! flux kvs get --namespace=$NAMESPACETEST $DIR.test
 '
 
 test_expect_success 'kvs: dir in new namespace works' '
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.a=4 &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.b=5 &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.c=6 &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.a=4 &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.b=5 &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.c=6 &&
         flux kvs dir --namespace=$NAMESPACETEST $DIR | sort > output &&
         cat >expected <<EOF &&
 $DIR.a = 4
@@ -200,7 +200,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait in new namespace works' '
         VERS=$((VERS + 1))
         flux kvs wait --namespace=$NAMESPACETEST $VERS &
         kvswaitpid=$!
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.xxx=99
+        flux kvs put --namespace=$NAMESPACETEST $DIR.xxx=99
         test_expect_code 0 wait $kvswaitpid
 '
 
@@ -210,10 +210,10 @@ test_expect_success 'kvs: namespace remove non existing namespace silently passe
 
 test_expect_success 'kvs: namespace remove works' '
 	flux kvs namespace create $NAMESPACETMP-BASIC &&
-        flux kvs put --namespace=$NAMESPACETMP-BASIC --json $DIR.tmp=1 &&
+        flux kvs put --namespace=$NAMESPACETMP-BASIC $DIR.tmp=1 &&
         test_kvs_key_namespace $NAMESPACETMP-BASIC $DIR.tmp 1 &&
 	flux kvs namespace remove $NAMESPACETMP-BASIC &&
-        ! flux kvs get --namespace=$NAMESPACETMP-BASIC --json $DIR.tmp
+        ! flux kvs get --namespace=$NAMESPACETMP-BASIC $DIR.tmp
 '
 
 # A namespace create races against the namespace remove above, as we
@@ -222,10 +222,10 @@ test_expect_success 'kvs: namespace remove works' '
 # namespace create many times until it succeeds.
 test_expect_success 'kvs: namespace can be re-created after remove' '
         namespace_create_loop $NAMESPACETMP-BASIC &&
-        flux kvs put --namespace=$NAMESPACETMP-BASIC --json $DIR.recreate=1 &&
+        flux kvs put --namespace=$NAMESPACETMP-BASIC $DIR.recreate=1 &&
         test_kvs_key_namespace $NAMESPACETMP-BASIC $DIR.recreate 1 &&
 	flux kvs namespace remove $NAMESPACETMP-BASIC &&
-        ! flux kvs get --namespace=$NAMESPACETMP-BASIC --json $DIR.recreate
+        ! flux kvs get --namespace=$NAMESPACETMP-BASIC $DIR.recreate
 '
 
 test_expect_success 'kvs: removed namespace not listed' '
@@ -238,7 +238,7 @@ test_expect_success 'kvs: removed namespace not listed' '
 
 test_expect_success 'kvs: put value in new namespace, available on other ranks' '
         flux kvs unlink --namespace=$NAMESPACETEST -Rf $DIR &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.all=1 &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.all=1 &&
         VERS=`flux kvs version --namespace=$NAMESPACETEST` &&
         flux exec -n sh -c "flux kvs wait --namespace=$NAMESPACETEST ${VERS} && \
                          flux kvs get --namespace=$NAMESPACETEST $DIR.all"
@@ -255,7 +255,7 @@ test_expect_success 'kvs: unlink value in new namespace, does not exist all rank
 # get_kvs_namespace_fails_all_ranks_loop()
 test_expect_success 'kvs: namespace remove works, recognized on other ranks' '
 	flux kvs namespace create $NAMESPACETMP-ALL &&
-        flux kvs put --namespace=$NAMESPACETMP-ALL --json $DIR.all=1 &&
+        flux kvs put --namespace=$NAMESPACETMP-ALL $DIR.all=1 &&
         VERS=`flux kvs version --namespace=$NAMESPACETMP-ALL` &&
         flux exec -n sh -c "flux kvs wait --namespace=$NAMESPACETMP-ALL ${VERS} && \
                          flux kvs get --namespace=$NAMESPACETMP-ALL $DIR.all" &&
@@ -274,7 +274,7 @@ test_expect_success 'kvs: namespace remove works, recognized on other ranks' '
 # kvs wait, b/c the version may work against an old namespace.
 test_expect_success 'kvs: namespace can be re-created after remove, recognized on other ranks' '
         namespace_create_loop $NAMESPACETMP-ALL &&
-        flux kvs put --namespace=$NAMESPACETMP-ALL --json $DIR.recreate=1 &&
+        flux kvs put --namespace=$NAMESPACETMP-ALL $DIR.recreate=1 &&
         get_kvs_namespace_all_ranks_loop $NAMESPACETMP-ALL $DIR.recreate &&
 	flux kvs namespace remove $NAMESPACETMP-ALL
 '
@@ -354,7 +354,7 @@ test_expect_success 'kvs: namespace create on existing namespace fails on rank 1
 '
 
 test_expect_success 'kvs: get fails on invalid namespace' '
-        ! flux kvs get --namespace=$NAMESPACEBAD --json $DIR.test
+        ! flux kvs get --namespace=$NAMESPACEBAD $DIR.test
 '
 
 test_expect_success 'kvs: get fails on invalid namespace on rank 1' '
@@ -362,7 +362,7 @@ test_expect_success 'kvs: get fails on invalid namespace on rank 1' '
 '
 
 test_expect_success 'kvs: put fails on invalid namespace' '
-	! flux kvs put --namespace=$NAMESPACEBAD --json $DIR.test=1
+	! flux kvs put --namespace=$NAMESPACEBAD $DIR.test=1
 '
 
 test_expect_success 'kvs: put fails on invalid namespace on rank 1' '
@@ -433,34 +433,34 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait recognizes removed namespace' '
 #
 
 test_expect_success 'kvs: put/get in different namespaces works' '
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.test=1 &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.test=2 &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.test=1 &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.test=2 &&
         test_kvs_key_namespace $PRIMARYNAMESPACE $DIR.test 1 &&
         test_kvs_key_namespace $NAMESPACETEST $DIR.test 2
 '
 
 test_expect_success 'kvs: unlink in different namespaces works' '
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.testA=1 &&
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.testB=1 &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.testA=2 &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.testB=2 &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.testA=1 &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.testB=1 &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.testA=2 &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.testB=2 &&
         flux kvs unlink --namespace=$PRIMARYNAMESPACE $DIR.testA &&
         flux kvs unlink --namespace=$NAMESPACETEST $DIR.testB &&
         test_kvs_key_namespace $PRIMARYNAMESPACE $DIR.testB 1 &&
         test_kvs_key_namespace $NAMESPACETEST $DIR.testA 2 &&
-        ! flux kvs get --namespace=$PRIMARYNAMESPACE --json $DIR.testA &&
-        ! flux kvs get --namespace=$NAMESPACETEST --json $DIR.testB
+        ! flux kvs get --namespace=$PRIMARYNAMESPACE $DIR.testA &&
+        ! flux kvs get --namespace=$NAMESPACETEST $DIR.testB
 '
 
 test_expect_success 'kvs: dir in different namespace works' '
         flux kvs unlink --namespace=$PRIMARYNAMESPACE -Rf $DIR &&
         flux kvs unlink --namespace=$NAMESPACETEST -Rf $DIR &&
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.a=10 &&
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.b=11 &&
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.c=12 &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.a=13 &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.b=14 &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.c=15 &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.a=10 &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.b=11 &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.c=12 &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.a=13 &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.b=14 &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.c=15 &&
         flux kvs dir --namespace=$PRIMARYNAMESPACE $DIR | sort > primaryoutput &&
         flux kvs dir --namespace=$NAMESPACETEST $DIR | sort > testoutput &&
         cat >primaryexpected <<EOF &&
@@ -478,14 +478,14 @@ EOF
 '
 
 test_expect_success 'kvs: unlink dir in different namespaces works' '
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.subdirA.A=A &&
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.subdirA.B=B &&
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.subdirB.A=A &&
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.subdirB.A=B &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.subdirA.A=A &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.subdirA.B=B &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.subdirB.A=A &&
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.subdirB.A=B &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.subdirA.A=A &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.subdirA.B=B &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.subdirB.A=A &&
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.subdirB.A=B &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.subdirA.A=A &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.subdirA.B=B &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.subdirB.A=A &&
+        flux kvs put --namespace=$NAMESPACETEST $DIR.subdirB.A=B &&
         flux kvs unlink --namespace=$PRIMARYNAMESPACE -Rf $DIR.subdirA &&
         flux kvs unlink --namespace=$NAMESPACETEST -Rf $DIR.subdirB &&
         ! flux kvs dir --namespace=$PRIMARYNAMESPACE $DIR.subdirA &&
@@ -505,8 +505,8 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait in different namespaces works' '
         flux kvs wait --namespace=$NAMESPACETEST $TESTVERS &
         testkvswaitpid=$!
 
-        flux kvs put --namespace=$PRIMARYNAMESPACE --json $DIR.xxx=X
-        flux kvs put --namespace=$NAMESPACETEST --json $DIR.xxx=X
+        flux kvs put --namespace=$PRIMARYNAMESPACE $DIR.xxx=X
+        flux kvs put --namespace=$NAMESPACETEST $DIR.xxx=X
 
         test_expect_code 0 wait $primarykvswaitpid
         test_expect_code 0 wait $testkvswaitpid

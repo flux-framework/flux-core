@@ -69,7 +69,7 @@ log "broker.pid=$(flux getattr broker.pid)\n"
 
 #  Reload scheduler so we can insert a fake resource set:
 flux module remove sched-simple
-flux kvs put --json \
+flux kvs put \
     resource.hwloc.by_rank="{\"[0-$(($NNODES-1))]\":{\"Core\":$CPN}}"
 flux mini run --dry-run --setattr=system.exec.test.run_duration=.001s hostname \
     > job.json

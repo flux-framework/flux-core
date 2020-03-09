@@ -19,7 +19,7 @@ echo "# $0: flux session size will be ${SIZE}"
 DIR=test.a.b
 
 test_kvs_key() {
-	flux kvs get --json "$1" >output
+	flux kvs get "$1" >output
 	echo "$2" >expected
 	test_cmp expected output
 }
@@ -40,32 +40,32 @@ test_expect_success 'kvs: kvs get/put large raw values works' '
 #
 test_expect_success 'kvs: put with leading path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json ......$DIR.a.b.c=42 &&
+	flux kvs put ......$DIR.a.b.c=42 &&
 	test_kvs_key $DIR.a.b.c 42
 '
 test_expect_success 'kvs: put with trailing path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.a.b.c........=43 &&
+	flux kvs put $DIR.a.b.c........=43 &&
 	test_kvs_key $DIR.a.b.c 43
 '
 test_expect_success 'kvs: put with extra embedded path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.....a....b...c=44 &&
+	flux kvs put $DIR.....a....b...c=44 &&
 	test_kvs_key $DIR.a.b.c 44
 '
 test_expect_success 'kvs: get with leading path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.a.b.c=42 &&
+	flux kvs put $DIR.a.b.c=42 &&
 	test_kvs_key ......$DIR.a.b.c 42
 '
 test_expect_success 'kvs: get with trailing path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.a.b.c=43 &&
+	flux kvs put $DIR.a.b.c=43 &&
 	test_kvs_key $DIR.a.b.c........ 43
 '
 test_expect_success 'kvs: get with extra embedded path separators works' '
 	flux kvs unlink -Rf $DIR &&
-	flux kvs put --json $DIR.a.b.c=44 &&
+	flux kvs put $DIR.a.b.c=44 &&
 	test_kvs_key $DIR.....a....b...c 44
 '
 
@@ -88,11 +88,6 @@ test_expect_success 'kvs: zero-length value handled by get --treeobj' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs put --raw $DIR.a= &&
 	flux kvs get --treeobj $DIR.a
-'
-test_expect_success 'kvs: zero-length value NOT handled by get --json' '
-	flux kvs unlink -Rf $DIR &&
-	flux kvs put --raw $DIR.a= &&
-	test_must_fail flux kvs get --json $DIR.a
 '
 test_expect_success 'kvs: zero-length value is made by put with no options' '
 	flux kvs unlink -Rf $DIR &&
@@ -139,7 +134,7 @@ test_expect_success 'kvs: append a zero length value to zero length value works'
 #
 test_expect_success 'kvs: link: error on link depth' '
 	flux kvs unlink -Rf $DIR &&
-        flux kvs put --json $DIR.a=1 &&
+        flux kvs put $DIR.a=1 &&
 	flux kvs link $DIR.a $DIR.b &&
 	flux kvs link $DIR.b $DIR.c &&
 	flux kvs link $DIR.c $DIR.d &&
@@ -151,13 +146,13 @@ test_expect_success 'kvs: link: error on link depth' '
 	flux kvs link $DIR.i $DIR.j &&
 	flux kvs link $DIR.j $DIR.k &&
 	flux kvs link $DIR.k $DIR.l &&
-        test_must_fail flux kvs get --json $DIR.l
+        test_must_fail flux kvs get $DIR.l
 '
 test_expect_success 'kvs: link: error on link depth, loop' '
 	flux kvs unlink -Rf $DIR &&
 	flux kvs link $DIR.link1 $DIR.link2 &&
 	flux kvs link $DIR.link2 $DIR.link1 &&
-        test_must_fail flux kvs get --json $DIR.link1
+        test_must_fail flux kvs get $DIR.link1
 '
 
 #
@@ -165,11 +160,11 @@ test_expect_success 'kvs: link: error on link depth, loop' '
 #
 
 largeval="abcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyzabcdefghijklmnopqrstuvwxyz"
-largevalhash="sha1-0b22e9fecf9c832032fe976e67058df0322dcc5c"
+largevalhash="sha1-d8cc4fd0a57d0e0e96cdb3e74164f734c593ed65"
 
 test_expect_success 'kvs: large put stores raw data into content store' '
 	flux kvs unlink -Rf $DIR &&
- 	flux kvs put --json $DIR.largeval=$largeval &&
+ 	flux kvs put $DIR.largeval=$largeval &&
 	flux kvs get --treeobj $DIR.largeval | grep -q \"valref\" &&
 	flux kvs get --treeobj $DIR.largeval | grep -q ${largevalhash} &&
 	flux content load ${largevalhash} | grep $largeval
@@ -179,7 +174,7 @@ test_expect_success 'kvs: valref that points to content store data can be read' 
         flux kvs unlink -Rf $DIR &&
 	echo "$largeval" | flux content store &&
 	flux kvs put --treeobj $DIR.largeval2="{\"data\":[\"${largevalhash}\"],\"type\":\"valref\",\"ver\":1}" &&
-        flux kvs get --json $DIR.largeval2 | grep $largeval
+        flux kvs get $DIR.largeval2 | grep $largeval
 '
 
 test_expect_success 'kvs: valref that points to zero size content store data can be read' '
@@ -315,15 +310,15 @@ test_expect_success LONGTEST "kvs: failure to store blob that exceeds max size d
 #
 
 test_expect_success 'kvs: put on rank 0, exists on all ranks' '
-	flux kvs put --json $DIR.xxx=99 &&
+	flux kvs put $DIR.xxx=99 &&
 	VERS=$(flux kvs version) &&
-	flux exec -n sh -c "flux kvs wait ${VERS} && flux kvs get --json $DIR.xxx"
+	flux exec -n sh -c "flux kvs wait ${VERS} && flux kvs get $DIR.xxx"
 '
 
 test_expect_success 'kvs: unlink on rank 0, does not exist all ranks' '
 	flux kvs unlink -Rf $DIR.xxx &&
 	VERS=$(flux kvs version) &&
-	flux exec -n sh -c "flux kvs wait ${VERS} && ! flux kvs get --json $DIR.xxx"
+	flux exec -n sh -c "flux kvs wait ${VERS} && ! flux kvs get $DIR.xxx"
 '
 
 #
@@ -472,8 +467,8 @@ test_expect_success 'kvs: clear stats locally' '
         flux kvs unlink -Rf $DIR &&
         flux module stats -c kvs &&
         flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
-        flux kvs put --json $DIR.largeval1=$largeval &&
-        flux kvs put --json $DIR.largeval2=$largeval &&
+        flux kvs put $DIR.largeval1=$largeval &&
+        flux kvs put $DIR.largeval2=$largeval &&
         ! flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0 &&
         flux module stats -c kvs &&
         flux module stats --parse "namespace.primary.#no-op stores" kvs | grep -q 0
@@ -484,7 +479,7 @@ test_expect_success 'kvs: clear stats globally' '
         flux module stats -C kvs &&
         flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
         for i in `seq 0 $((${SIZE} - 1))`; do
-            flux exec -n -r $i sh -c "flux kvs put --json $DIR.$i.largeval1=$largeval $DIR.$i.largeval2=$largeval"
+            flux exec -n -r $i sh -c "flux kvs put $DIR.$i.largeval1=$largeval $DIR.$i.largeval2=$largeval"
         done &&
         ! flux exec -n sh -c "flux module stats --parse \"namespace.primary.#no-op stores\" kvs | grep -q 0" &&
         flux module stats -C kvs &&
