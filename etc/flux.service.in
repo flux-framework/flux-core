@@ -16,6 +16,10 @@ User=flux
 Group=flux
 RuntimeDirectory=flux
 RuntimeDirectoryMode=0755
+PermissionsStartOnly=true
+ExecStartPre=-/bin/mkdir -p @X_LOCALSTATEDIR@/lib/flux
+ExecStartPre=/bin/chown flux:flux @X_LOCALSTATEDIR@/lib/flux
+ExecStartPre=/bin/chmod 0700 @X_LOCALSTATEDIR@/lib/flux
 #
 # Delegate cgroup control to user flux, so that systemd doesn't reset
 #  cgroups for flux initiated processes, and to allow (some) cgroup
