@@ -28,7 +28,6 @@ struct level {
     flux_subprocess_t *p;
     flux_cmd_t *cmd;
     struct timespec start;
-    bool aborting;
 };
 
 struct runlevel {
@@ -287,9 +286,8 @@ error:
 int runlevel_abort (struct runlevel *r)
 {
 
-    if (!r || r->rc[r->level].aborting)
+    if (!r)
         return -1;
-    r->rc[r->level].aborting = true;
     if (r->rc[r->level].p) {
         flux_future_t *f;
         if (!(f = flux_subprocess_kill (r->rc[r->level].p, SIGTERM))) {
