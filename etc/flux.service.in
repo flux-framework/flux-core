@@ -4,6 +4,7 @@ Description=Flux message broker
 [Service]
 Environment=FLUX_USERDB_OPTIONS=--default-rolemask=user
 TimeoutStopSec=90
+KillMode=mixed
 ExecStart=@X_BINDIR@/flux broker \
   -Srundir=@X_RUNSTATEDIR@/flux \
   -Slocal-uri=local://@X_RUNSTATEDIR@/flux/local \
