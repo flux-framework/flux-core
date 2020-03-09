@@ -1471,6 +1471,22 @@ static int route_to_handle (const flux_msg_t *msg, void *arg)
     return 0;
 }
 
+/* Check whether requestor 'cred' is authorized to add/remove service 'name'.
+ * Allow a guest control over a service IFF it is prefixed with "<userid>-".
+ * Return 0 on success, -1 with errno set on failure.
+ */
+static int service_allow (struct flux_msg_cred cred, const char *name)
+{
+    char prefix[16];
+    if ((cred.rolemask & FLUX_ROLE_OWNER))
+        return 0;
+    snprintf (prefix, sizeof (prefix), "%" PRIu32 "-", cred.userid);
+    if (!strncmp (prefix, name, strlen (prefix)))
+        return 0;
+    errno = EPERM;
+    return -1;
+}
+
 /* Dynamic service registration.
  * These handlers need to appear in broker.c so that they have
  *  access to broker internals like modhash
@@ -1482,8 +1498,12 @@ static void service_add_cb (flux_t *h, flux_msg_handler_t *w,
     const char *name = NULL;
     char *sender = NULL;
     module_t *p;
+    struct flux_msg_cred cred;
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0
+            || flux_msg_get_cred (msg, &cred) < 0)
+        goto error;
+    if (service_allow (cred, name) < 0)
         goto error;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         goto error;
@@ -1510,8 +1530,12 @@ static void service_remove_cb (flux_t *h, flux_msg_handler_t *w,
     const char *name;
     const char *uuid;
     char *sender = NULL;
+    struct flux_msg_cred cred;
 
-    if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0)
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "service", &name) < 0
+            || flux_msg_get_cred (msg, &cred) < 0)
+        goto error;
+    if (service_allow (cred, name) < 0)
         goto error;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         goto error;
@@ -1588,13 +1612,13 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "service.add",
         service_add_cb,
-        0
+        FLUX_ROLE_USER,
     },
     {
         FLUX_MSGTYPE_REQUEST,
         "service.remove",
         service_remove_cb,
-        0
+        FLUX_ROLE_USER,
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
