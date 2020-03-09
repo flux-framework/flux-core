@@ -23,17 +23,6 @@ struct proctable *proctable = NULL;
 MPIR_PROCDESC *MPIR_proctable = NULL;
 int MPIR_proctable_size = 0;
 
-static flux_jobid_t parse_jobid (const char *s)
-{
-    unsigned long long i;
-    char *endptr;
-    errno = 0;
-    i = strtoull (s, &endptr, 10);
-    if (errno != 0 || *endptr != '\0')
-        log_msg_exit ("error parsing jobid '%s'\n", s);
-    return (flux_jobid_t) i;
-}
-
 static void set_mpir_proctable (const char *s)
 {
     if (!(proctable = proctable_from_json_string (s)))
@@ -46,24 +35,24 @@ static void set_mpir_proctable (const char *s)
 
 int main (int ac, char **av)
 {
-    flux_jobid_t id;
     int rank;
     char topic [1024];
     flux_t *h = NULL;
     flux_future_t *f = NULL;
     const char *s = NULL;
+    const char *service;
 
     log_init ("mpir-test");
 
     if (ac != 3)
-        log_msg_exit ("Usage: %s JOBID LEADER-RANK\n", av [0]);
-    id = parse_jobid (av[1]);
-    rank = atoi (av[2]);
+        log_msg_exit ("Usage: %s LEADER-RANK SERVICE\n", av [0]);
+    rank = atoi (av[1]);
+    service = av[2];
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    snprintf (topic, sizeof (topic), "shell-%ju.proctable", id);
+    snprintf (topic, sizeof (topic), "%s.proctable", service);
     if (!(f = flux_rpc_pack (h, topic, rank, 0, "{}")))
         log_err_exit ("flux_rpc_pack");
     if (flux_rpc_get (f, &s) < 0)
