@@ -191,7 +191,8 @@ error:
 json_t *get_inactive_jobs (struct info_ctx *ctx,
                            int max_entries,
                            double since,
-                           json_t *attrs)
+                           json_t *attrs,
+                           const char *name)
 {
     json_t *jobs = NULL;
     struct job *job;
@@ -203,15 +204,17 @@ json_t *get_inactive_jobs (struct info_ctx *ctx,
     job = zlistx_first (ctx->jsctx->inactive);
     while (job && (job->t_inactive > since)) {
         json_t *o;
-        if (!(o = job_to_json (job, attrs)))
-            goto error;
-        if (json_array_append_new (jobs, o) < 0) {
-            json_decref (o);
-            errno = ENOMEM;
-            goto error;
+        if (!name || strcmp (job->name, name) == 0) {
+            if (!(o = job_to_json (job, attrs)))
+                goto error;
+            if (json_array_append_new (jobs, o) < 0) {
+                json_decref (o);
+                errno = ENOMEM;
+                goto error;
+            }
+            if (json_array_size (jobs) == max_entries)
+                goto out;
         }
-        if (json_array_size (jobs) == max_entries)
-            goto out;
         job = zlistx_next (ctx->jsctx->inactive);
     }
 
@@ -235,11 +238,13 @@ void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
     int max_entries;
     double since;
     json_t *attrs;
+    const char *name = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:i s:F s:o}",
+    if (flux_request_unpack (msg, NULL, "{s:i s:F s:o s?:s}",
                              "max_entries", &max_entries,
                              "since", &since,
-                             "attrs", &attrs) < 0)
+                             "attrs", &attrs,
+                             "name", &name) < 0)
         goto error;
 
     if (max_entries < 0 || !json_is_array (attrs)) {
@@ -247,7 +252,7 @@ void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(jobs = get_inactive_jobs (ctx, max_entries, since, attrs)))
+    if (!(jobs = get_inactive_jobs (ctx, max_entries, since, attrs, name)))
         goto error;
 
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0) {
