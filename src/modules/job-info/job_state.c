@@ -883,6 +883,113 @@ static flux_future_t *state_run_lookup (struct job_state_ctx *jsctx,
     return NULL;
 }
 
+static int eventlog_inactive_parse (struct info_ctx *ctx,
+                                    struct job *job,
+                                    const char *s)
+{
+    json_t *a = NULL;
+    size_t index;
+    json_t *value;
+    int rc = -1;
+
+    if (!(a = eventlog_decode (s))) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %llu eventlog_decode: %s",
+                  __FUNCTION__, (unsigned long long)job->id, strerror (errno));
+        goto error;
+    }
+
+    json_array_foreach (a, index, value) {
+        const char *name = NULL;
+        json_t *context = NULL;
+
+        if (eventlog_entry_parse (value, NULL, &name, &context) < 0) {
+            flux_log (ctx->h, LOG_ERR,
+                      "%s: job %llu eventlog_entry_parse: %s",
+                      __FUNCTION__, (unsigned long long)job->id,
+                      strerror (errno));
+            goto error;
+        }
+
+        /* There is no need to check for "exception" events for the
+         * "success" attribute.  "success" is always false unless the
+         * job completes ("finish") without error.
+         */
+        if (!strcmp (name, "finish")) {
+            int status;
+            if (json_unpack (context, "{s:i}", "status", &status) < 0) {
+                flux_log (ctx->h, LOG_ERR,
+                          "%s: job %llu parse finish status",
+                          __FUNCTION__, (unsigned long long)job->id);
+                goto error;
+            }
+            if (!status)
+                job->success = true;
+        }
+    }
+
+    rc = 0;
+error:
+    json_decref (a);
+    return rc;
+}
+
+static void state_inactive_lookup_continuation (flux_future_t *f, void *arg)
+{
+    struct job *job = arg;
+    struct info_ctx *ctx = job->ctx;
+    struct state_transition *st;
+    const char *s;
+    void *handle;
+
+    if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0) {
+        flux_log_error (ctx->h, "%s: error eventlog for %llu",
+                        __FUNCTION__, (unsigned long long)job->id);
+        goto out;
+    }
+
+    if (eventlog_inactive_parse (ctx, job, s) < 0)
+        goto out;
+
+    st = zlist_head (job->next_states);
+    assert (st);
+    update_job_state_and_list (ctx, job, st->state, st->timestamp);
+    zlist_remove (job->next_states, st);
+    process_next_state (ctx, job);
+
+out:
+    handle = zlistx_find (ctx->jsctx->futures, f);
+    if (handle)
+        zlistx_detach (ctx->jsctx->futures, handle);
+    flux_future_destroy (f);
+}
+
+static flux_future_t *state_inactive_lookup (struct job_state_ctx *jsctx,
+                                           struct job *job)
+{
+    flux_future_t *f = NULL;
+
+    if (!(f = flux_rpc_pack (jsctx->h, "job-info.lookup", FLUX_NODEID_ANY, 0,
+                             "{s:I s:[s] s:i}",
+                             "id", job->id,
+                             "keys", "eventlog",
+                             "flags", 0))) {
+        flux_log_error (jsctx->h, "%s: flux_rpc_pack", __FUNCTION__);
+        goto error;
+    }
+
+    if (flux_future_then (f, -1, state_inactive_lookup_continuation, job) < 0) {
+        flux_log_error (jsctx->h, "%s: flux_future_then", __FUNCTION__);
+        goto error;
+    }
+
+    return f;
+
+ error:
+    flux_future_destroy (f);
+    return NULL;
+}
+
 static void state_transition_destroy (void *data)
 {
     struct state_transition *st = data;
@@ -926,7 +1033,8 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
     while ((st = zlist_head (job->next_states))
            && !st->processed) {
         if (st->state == FLUX_JOB_DEPEND
-            || st->state == FLUX_JOB_RUN) {
+            || st->state == FLUX_JOB_RUN
+            || st->state == FLUX_JOB_INACTIVE) {
             flux_future_t *f = NULL;
 
             if (st->state == FLUX_JOB_DEPEND) {
@@ -937,10 +1045,18 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
                     return;
                 }
             }
-            else { /* st->state == FLUX_JOB_RUN */
+            else if (st->state == FLUX_JOB_RUN) {
                 /* get R to get node count, etc. */
                 if (!(f = state_run_lookup (jsctx, job))) {
                     flux_log_error (jsctx->h, "%s: state_run_lookup", __FUNCTION__);
+                    return;
+                }
+            }
+            else { /* st->state == FLUX_JOB_INACTIVE */
+                /* get eventlog to success=true|false */
+                if (!(f = state_inactive_lookup (jsctx, job))) {
+                    flux_log_error (jsctx->h, "%s: state_inactive_lookup",
+                                    __FUNCTION__);
                     return;
                 }
             }
@@ -957,7 +1073,6 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
         else {
             /* FLUX_JOB_SCHED */
             /* FLUX_JOB_CLEANUP */
-            /* FLUX_JOB_INACTIVE */
             update_job_state_and_list (ctx, job, st->state, st->timestamp);
             zlist_remove (job->next_states, st);
         }
