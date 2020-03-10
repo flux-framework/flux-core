@@ -258,8 +258,10 @@ def job_list(flux_handle, max_entries=1000, attrs=[], userid=os.geteuid(), state
     return JobListRPC(flux_handle, "job-info.list", payload)
 
 
-def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[]):
+def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=None):
     payload = {"since": since, "max_entries": max_entries, "attrs": attrs}
+    if name:
+        payload["name"] = name
     return JobListRPC(flux_handle, "job-info.list-inactive", payload)
 
 
