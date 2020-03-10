@@ -1228,6 +1228,7 @@ struct attach_ctx {
     optparse_t *p;
     bool output_header_parsed;
     int leader_rank;
+    char *service;
     double timestamp_zero;
     int eventlog_watch_count;
 };
@@ -1525,7 +1526,7 @@ static int attach_send_shell (struct attach_ctx *ctx,
     int saved_errno;
     int rc = -1;
 
-    snprintf (topic, sizeof (topic), "shell-%ju.stdin", (uintmax_t)ctx->id);
+    snprintf (topic, sizeof (topic), "%s.stdin", ctx->service);
     if (!(context = ioencode ("stdin", "all", buf, len, eof)))
         goto error;
     if (!(f = flux_rpc_pack (ctx->h, topic, ctx->leader_rank, 0, "O", context)))
@@ -1616,6 +1617,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     double timestamp;
     const char *name;
     json_t *context;
+    const char *service;
 
     if (flux_job_event_watch_get (f, &entry) < 0) {
         if (errno == ENODATA)
@@ -1631,9 +1633,15 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     if (!strcmp (name, "shell.init")) {
         flux_watcher_t *w;
 
-        if (json_unpack (context, "{s:i}",
-                         "leader-rank", &ctx->leader_rank) < 0)
+        if (json_unpack (context,
+                         "{s:i s:s}",
+                         "leader-rank",
+                         &ctx->leader_rank,
+                         "service",
+                         &service) < 0)
             log_err_exit ("error decoding shell.init context");
+        if (!(ctx->service = strdup (service)))
+            log_err_exit ("strdup service from shell.init");
 
         /* flux_buffer_read_watcher_create() requires O_NONBLOCK on
          * stdin */
@@ -1859,6 +1867,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     flux_watcher_destroy (ctx.sigtstp_w);
     flux_watcher_destroy (ctx.stdin_w);
     flux_close (ctx.h);
+    free (ctx.service);
     return ctx.exit_code;
 }
 

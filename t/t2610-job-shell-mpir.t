@@ -16,6 +16,10 @@ shell_leader_rank() {
     flux job wait-event -f json -p guest.exec.eventlog $1 shell.init | \
         jq '.context["leader-rank"]'
 }
+shell_service() {
+    flux job wait-event -f json -p guest.exec.eventlog $1 shell.init | \
+        jq -r '.context["service"]'
+}
 
 for test in 1:1 2:2 2:4 4:4 4:8 4:7; do
     TASKS=${test#*:}
@@ -25,7 +29,7 @@ for test in 1:1 2:2 2:4 4:4 4:8 4:7; do
              -n${TASKS} -N${NODES} /bin/true)  &&
         flux job wait-event -vt 5 -p guest.exec.eventlog \
                 -m sync=true ${id} shell.start &&
-        ${mpir} $id $(shell_leader_rank $id) &&
+        ${mpir} $(shell_leader_rank $id) $(shell_service $id) &&
         flux job kill -s CONT ${id} &&
         flux job attach ${id}
     '

@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* Register a service named "shell-<jobid>" on each shell and provide
+/* Register a service named "<userid>-shell-<jobid>" on each shell and provide
  * helpers for registering request handlers for different "methods".
  *
  * Notes:
@@ -64,7 +64,8 @@ static int build_topic (struct shell_svc *svc,
 {
     if (snprintf (buf,
                   len,
-                  "shell-%ju%s%s",
+                  "%d-shell-%ju%s%s",
+                  svc->uid,
                   (uintmax_t)svc->shell->info->jobid,
                   method ? "." : "",
                   method ? method : "") >= len) {
@@ -191,6 +192,13 @@ struct shell_svc *shell_svc_create (flux_shell_t *shell)
             goto error;
         }
         flux_future_destroy (f);
+        if (flux_shell_add_event_context (shell,
+                                          "shell.init",
+                                          0,
+                                          "{s:s}",
+                                          "service",
+                                          svc->name) < 0)
+            goto error;
         svc->registered = 1;
     }
     return svc;

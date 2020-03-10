@@ -6,6 +6,9 @@ test_description='Test broker security'
 
 test_under_flux 4 minimal
 
+jq=$(which jq 2>/dev/null)
+test -z "$jq" || test_set_prereq HAVE_JQ
+
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 test_expect_success 'simulated local connector auth failure returns EPERM' '
@@ -280,6 +283,31 @@ test_expect_success 'dispatcher suppresses guest event to same guest connection'
                  FLUX_HANDLE_ROLEMASK=0x2 flux event pub test.a; \
                  FLUX_HANDLE_ROLEMASK=0x1 flux event pub test.end" >ev8.out &&
 	! grep -q test.a ev8.out
+'
+
+test_expect_success HAVE_JQ 'guests may add userid-prefixed services' '
+	USERID=$(id -u) &&
+	${jq} -n "{service: \"${USERID}-sectest\"}" >user_service.json &&
+	FLUX_HANDLE_ROLEMASK=0x2 ${RPC} service.add <user_service.json
+'
+
+test_expect_success HAVE_JQ 'guests may not add other-userid-prefixed services' '
+	USERID=$(($(id -u)+1)) &&
+	${jq} -n "{service: \"${USERID}-sectest\"}" >user2_service.json &&
+	(export FLUX_HANDLE_ROLEMASK=0x2 &&
+		test_expect_code 1 ${RPC} service.add \
+			<user2_service.json 2>uservice_add.err
+        ) &&
+	grep "Operation not permitted" uservice_add.err
+'
+
+test_expect_success HAVE_JQ 'guests may not add non-userid-prefixed services' '
+	${jq} -n "{service: \"sectest\"}" >service.json &&
+	(export FLUX_HANDLE_ROLEMASK=0x2 &&
+		test_expect_code 1 ${RPC} service.add \
+			<service.json 2>service_add.err
+	) &&
+	grep "Operation not permitted" service_add.err
 '
 
 # kvs.namespace-<NS>-setroot is a "private" event
