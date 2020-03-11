@@ -746,7 +746,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     /* fluid_init() will fail on rank > 16K.
      * Just skip loading the job module on those ranks.
      */
-    if (fluid_init (&ctx.gen, rank) < 0) {
+    if (fluid_init (&ctx.gen, rank, 0) < 0) {
         flux_log (h, LOG_ERR, "fluid_init failed");
         errno = EINVAL;
     }

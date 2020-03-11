@@ -26,17 +26,19 @@ typedef enum {
 
 struct fluid_generator {
     uint16_t id;
-    uint64_t epoch;
     uint16_t seq;
-    uint64_t last_ds;
+    uint64_t clock_zero;        // local clock value at fluid_init()
+    uint64_t clock_offset;      // clock offset due to starting timestamp
+    uint64_t timestamp;
 };
 
 typedef uint64_t fluid_t;
 
-/* Returns 0 on success, -1 on failure.
+/* Initialize generator 'id' with starting 'timestamp'.
+ * Returns 0 on success, -1 on failure.
  * Failures include id out of range, clock_gettime() error.
  */
-int fluid_init (struct fluid_generator *gen, uint32_t id);
+int fluid_init (struct fluid_generator *gen, uint32_t id, uint64_t timestamp);
 
 /* Returns 0 on success, -1 on failure.
  * Failures include timestamp out of range, clock_gettime() error.
@@ -44,6 +46,15 @@ int fluid_init (struct fluid_generator *gen, uint32_t id);
  * demand on each generator to at most 1024 FLUID's per ms.
  */
 int fluid_generate (struct fluid_generator *gen, fluid_t *fluid);
+
+/* Update and retrieve the internal timestamp.
+ * Returns 0 on success, -1 on failure.
+ */
+int fluid_save_timestamp (struct fluid_generator *gen, uint64_t *timestamp);
+
+/* Extract timestamp from a fluid.
+ */
+uint64_t fluid_get_timestamp (fluid_t fluid);
 
 /* Convert 'fluid' to NULL-terminated string 'buf' of specified type.
  * Return 0 on success, -1 on failure.
