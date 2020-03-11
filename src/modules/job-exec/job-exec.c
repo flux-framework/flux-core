@@ -102,7 +102,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "job-exec.h"
 
-#define DEFAULT_KILL_TIMEOUT 5.0
+static double kill_timeout=5.0;
 
 extern struct exec_implementation testexec;
 extern struct exec_implementation bulkexec;
@@ -146,7 +146,6 @@ static struct jobinfo * jobinfo_new (void)
 {
     struct jobinfo *job = calloc (1, sizeof (*job));
     job->refcount = 1;
-    job->kill_timeout = DEFAULT_KILL_TIMEOUT;
     return job;
 }
 
@@ -850,7 +849,7 @@ err:
 
 static double job_get_kill_timeout (flux_t *h)
 {
-    double t = DEFAULT_KILL_TIMEOUT;
+    double t = kill_timeout;
     const char *kto = flux_attr_get (h, "job-exec.kill_timeout");
     if (kto && fsd_parse_duration (kto, &t) < 0)
         flux_log_error (h, "job-exec.kill_timeout=%s", kto);
@@ -992,6 +991,53 @@ static int exec_hello (flux_t *h, const char *service)
     return rc;
 }
 
+/*  Initialize job-exec module from defaults, config, cmdline,
+ *   in that order. Currently only the kill-timeout is
+ *   set here.
+ */
+static int job_exec_initialize (flux_t *h, int argc, char **argv)
+{
+    const flux_conf_t *conf;
+    flux_conf_error_t err;
+    const char *kto = NULL;
+
+    if (!(conf = flux_get_conf (h, &err))) {
+        flux_log (h, LOG_ERR,
+                  "config file error: %s:%d: %s",
+                   err.filename,
+                   err.lineno,
+                   err.errbuf);
+        return -1;
+    }
+
+    if (flux_conf_unpack (conf,
+                          &err,
+                          "{s?{s?s}}",
+                          "exec",
+                            "kill-timeout", &kto) < 0) {
+        flux_log (h, LOG_ERR,
+                  "error reading config value exec.kill-timeout: %s",
+                  err.errbuf);
+        return -1;
+    }
+    /* Override via commandline */
+    for (int i = 0; i < argc; i++) {
+        if (strncmp (argv[i], "kill-timeout=", 13) == 0)
+            kto = argv[i] + 13;
+    }
+
+    if (kto) {
+        if (fsd_parse_duration (kto, &kill_timeout) < 0) {
+            flux_log_error (h, "invalid kill-timeout: %s", kto);
+            errno = EINVAL;
+            return -1;
+        }
+        flux_log (h, LOG_INFO, "using kill-timeout of %.4gs", kill_timeout);
+    }
+
+    return 0;
+}
+
 static const struct flux_msg_handler_spec htab[]  = {
     { FLUX_MSGTYPE_REQUEST, "job-exec.start", start_cb,     0 },
     { FLUX_MSGTYPE_EVENT,   "job-exception",  exception_cb, 0 },
@@ -1002,6 +1048,11 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
     struct job_exec_ctx *ctx = job_exec_ctx_create (h);
+
+    if (job_exec_initialize (h, argc, argv) < 0) {
+        flux_log_error (h, "job-exec: module initialization failed");
+        goto out;
+    }
 
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
