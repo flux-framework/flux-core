@@ -30,6 +30,27 @@
 
 #include "job-manager.h"
 
+void getinfo_handle_request (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
+{
+    struct job_manager *ctx = arg;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:I}",
+                           "max_jobid",
+                           ctx->max_jobid) < 0)
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -41,6 +62,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "job-manager.priority",
         priority_handle_request,
+        FLUX_ROLE_USER
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.getinfo",
+        getinfo_handle_request,
         FLUX_ROLE_USER
     },
     FLUX_MSGHANDLER_TABLE_END,
@@ -103,6 +130,10 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (flux_reactor_run (r, 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
+        goto done;
+    }
+    if (checkpoint_to_kvs (&ctx) < 0) {
+        flux_log_error (h, "checkpoint_to_kvs");
         goto done;
     }
     rc = 0;
