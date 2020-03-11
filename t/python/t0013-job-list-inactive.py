@@ -37,9 +37,11 @@ class TestJob(unittest.TestCase):
         self.fh = flux.Flux()
 
     @classmethod
-    def submitJob(self):
+    def submitJob(self, command=None):
+        if not command:
+            command = ["sleep", "0"]
         compute_jobreq = JobspecV1.from_command(
-            command=["sleep", "0"], num_tasks=2, num_nodes=1, cores_per_task=1
+            command=command, num_tasks=2, num_nodes=1, cores_per_task=1
         )
         compute_jobreq.cwd = os.getcwd()
         compute_jobreq.environment = dict(os.environ)
@@ -213,6 +215,29 @@ class TestJob(unittest.TestCase):
         jobs_inactive = self.getJobs(rpc_handle)
 
         self.assertEqual(len(jobs_inactive), 7)
+
+    # flux job list-inactive with name filter
+    def test_10_name_filter(self):
+        # submit a bundle of hostname jobs
+        for i in range(5):
+            jobid = self.submitJob(["hostname"])
+
+        # 16 = 5 + 11 in previous tests
+        self.waitForConsistency(16)
+
+        rpc_handle = flux.job.job_list_inactive(self.fh, 0.0, 20, self.attrs, "sleep")
+
+        jobs_inactive = self.getJobs(rpc_handle)
+
+        self.assertEqual(len(jobs_inactive), 11)
+
+        rpc_handle = flux.job.job_list_inactive(
+            self.fh, 0.0, 20, self.attrs, "hostname"
+        )
+
+        jobs_inactive = self.getJobs(rpc_handle)
+
+        self.assertEqual(len(jobs_inactive), 5)
 
 
 if __name__ == "__main__":
