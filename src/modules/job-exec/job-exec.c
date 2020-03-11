@@ -1034,7 +1034,18 @@ static int job_exec_initialize (flux_t *h, int argc, char **argv)
         }
         flux_log (h, LOG_INFO, "using kill-timeout of %.4gs", kill_timeout);
     }
+    return 0;
+}
 
+static int configure_implementations (flux_t *h, int argc, char **argv)
+{
+    struct exec_implementation *impl;
+    int i = 0;
+    while ((impl = implementations[i]) && impl->name) {
+        if (impl->config && (*impl->config) (h, argc, argv) < 0)
+            return -1;
+        i++;
+    }
     return 0;
 }
 
@@ -1049,7 +1060,8 @@ int mod_main (flux_t *h, int argc, char **argv)
     int rc = -1;
     struct job_exec_ctx *ctx = job_exec_ctx_create (h);
 
-    if (job_exec_initialize (h, argc, argv) < 0) {
+    if (job_exec_initialize (h, argc, argv) < 0
+        || configure_implementations (h, argc, argv) < 0) {
         flux_log_error (h, "job-exec: module initialization failed");
         goto out;
     }

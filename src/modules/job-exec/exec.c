@@ -82,19 +82,11 @@ static const char *jobspec_get_job_shell (json_t *jobspec)
     return path;
 }
 
-static const char *default_job_shell_path (void)
-{
-    if (!default_job_shell)
-        default_job_shell = flux_conf_builtin_get ("shell_path",
-                                                   FLUX_CONF_AUTO);
-    return default_job_shell;
-}
-
 static const char *job_shell_path (struct jobinfo *job)
 {
     const char *path = jobspec_get_job_shell (job->jobspec);
     if (!path && !(path = flux_attr_get (job->h, "job-exec.job-shell")))
-        path = default_job_shell_path ();
+        path = default_job_shell;
     return path;
 }
 
@@ -308,8 +300,43 @@ static void exec_exit (struct jobinfo *job)
     job->data = NULL;
 }
 
+/*  Configure the exec module.
+ *  Read the default job shell path from config. Allow override on cmdline
+ */
+static int exec_config (flux_t *h, int argc, char **argv)
+{
+    flux_conf_error_t err;
+
+    /*  Set default job shell path from builtin configuration,
+     *   allow override via configuration, then cmdline.
+     */
+    default_job_shell = flux_conf_builtin_get ("shell_path", FLUX_CONF_AUTO);
+
+
+    /*  Check configuration for exec.job-shell */
+    if (flux_conf_unpack (flux_get_conf (h, NULL),
+                          &err,
+                          "{s?:{s?s}}",
+                          "exec",
+                            "job-shell", &default_job_shell) < 0) {
+        flux_log (h, LOG_ERR,
+                  "error reading config value exec.job-shell: %s",
+                  err.errbuf);
+        return -1;
+    }
+
+    /* Finally, override on cmdline if job-shell=%s appears */
+    for (int i = 0; i < argc; i++) {
+        if (strncmp (argv[i], "job-shell=", 10) == 0)
+            default_job_shell = argv[i]+10;
+    }
+    flux_log (h, LOG_DEBUG, "using default shell path %s", default_job_shell);
+    return 0;
+}
+
 struct exec_implementation bulkexec = {
     .name =     "bulk-exec",
+    .config =   exec_config,
     .init =     exec_init,
     .exit =     exec_exit,
     .start =    exec_start,
