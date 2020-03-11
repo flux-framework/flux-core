@@ -3,11 +3,23 @@ Description=Flux message broker
 
 [Service]
 Environment=FLUX_USERDB_OPTIONS=--default-rolemask=user
-ExecStart=@X_BINDIR@/flux broker -Srundir=@X_RUNSTATEDIR@/flux -Slocal-uri=local://@X_RUNSTATEDIR@/flux/local -Sboot.method=config sleep inf
+TimeoutStopSec=90
+KillMode=mixed
+ExecStart=@X_BINDIR@/flux broker \
+  -Srundir=@X_RUNSTATEDIR@/flux \
+  -Slocal-uri=local://@X_RUNSTATEDIR@/flux/local \
+  -Sboot.method=config \
+  -Slog-stderr-level=6 \
+  -Scontent.backing-path=@X_LOCALSTATEDIR@/lib/flux/content.sqlite \
+  -Sbroker.rc2_none
 User=flux
 Group=flux
 RuntimeDirectory=flux
 RuntimeDirectoryMode=0755
+PermissionsStartOnly=true
+ExecStartPre=-/bin/mkdir -p @X_LOCALSTATEDIR@/lib/flux
+ExecStartPre=/bin/chown flux:flux @X_LOCALSTATEDIR@/lib/flux
+ExecStartPre=/bin/chmod 0700 @X_LOCALSTATEDIR@/lib/flux
 #
 # Delegate cgroup control to user flux, so that systemd doesn't reset
 #  cgroups for flux initiated processes, and to allow (some) cgroup

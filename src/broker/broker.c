@@ -1954,11 +1954,18 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     broker_ctx_t *ctx = arg;
     int rank = overlay_get_rank (ctx->overlay);
     int signum = flux_signal_watcher_get_signum (w);
+    int level;
 
-    if (rank > 0 || runlevel_abort (ctx->runlevel) < 0) {
-        log_msg ("signal %d (%s) on rank %u", signum, strsignal (signum), rank);
-        _exit (1);
+    if (rank > 0) {
+        flux_log (ctx->h, LOG_INFO, "signal %d ignored on rank > 0", signum);
+        return;
     }
+    if ((level = runlevel_get_level (ctx->runlevel)) == 3) {
+        flux_log (ctx->h, LOG_INFO, "signal %d ignored in run level 3", signum);
+        return;
+    }
+    flux_log (ctx->h, LOG_INFO, "signal %d aborting runlevel %d", signum, level);
+    runlevel_abort (ctx->runlevel);
 }
 
 /* Send a request message down the TBON.

@@ -1,7 +1,7 @@
 #!/bin/bash
 
 flux queue stop --quiet
-flux job cancelall --quiet -f --states RUN
+flux job cancelall --user=all --quiet -f --states RUN
 flux queue idle --quiet
 
 core_dir=$(cd ${0%/*} && pwd -P)
