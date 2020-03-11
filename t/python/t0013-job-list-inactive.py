@@ -106,6 +106,7 @@ class TestJob(unittest.TestCase):
         for i in range(10):
             jobid = self.submitJob()
 
+        # 11 = 10 + 1 in previous tests
         self.waitForConsistency(11)
 
         rpc_handle = flux.job.job_list_inactive(
@@ -134,9 +135,6 @@ class TestJob(unittest.TestCase):
 
     # flux job list-inactive with the most recent timestamp should return len(0)
     def test_05_most_recent_inactive(self):
-        for i in range(5):
-            jobid = self.submitJob()
-
         rpc_handle = flux.job.job_list(
             self.fh, 1, ["t_inactive"], states=flux.constants.FLUX_JOB_INACTIVE
         )
@@ -153,9 +151,6 @@ class TestJob(unittest.TestCase):
 
     # flux job list-inactive with second to most recent timestamp
     def test_06_second_most_recent_timestamp(self):
-        for i in range(5):
-            jobid = self.submitJob()
-
         rpc_handle = flux.job.job_list(
             self.fh, 2, ["t_inactive"], states=flux.constants.FLUX_JOB_INACTIVE
         )
@@ -173,9 +168,6 @@ class TestJob(unittest.TestCase):
 
     # flux job list-inactive with oldest timestamp
     def test_07_oldest_timestamp(self):
-        for i in range(5):
-            jobid = self.submitJob()
-
         rpc_handle = flux.job.job_list(
             self.fh, 5, ["t_inactive"], states=flux.constants.FLUX_JOB_INACTIVE
         )
@@ -192,9 +184,6 @@ class TestJob(unittest.TestCase):
 
     # flux job list-inactive with middle timestamp #1
     def test_08_middle_timestamp_1(self):
-        for i in range(11):
-            self.submitJob()
-
         rpc_handle = flux.job.job_list(
             self.fh, 20, ["t_inactive"], states=flux.constants.FLUX_JOB_INACTIVE
         )
@@ -211,9 +200,6 @@ class TestJob(unittest.TestCase):
 
     # flux job list-inactive with middle timestamp #2
     def test_09_middle_timestamp_2(self):
-        for i in range(11):
-            self.submitJob()
-
         rpc_handle = flux.job.job_list(
             self.fh, 20, ["t_inactive"], states=flux.constants.FLUX_JOB_INACTIVE
         )
