@@ -85,9 +85,7 @@ static const char *jobspec_get_job_shell (json_t *jobspec)
 static const char *job_shell_path (struct jobinfo *job)
 {
     const char *path = jobspec_get_job_shell (job->jobspec);
-    if (!path && !(path = flux_attr_get (job->h, "job-exec.job-shell")))
-        path = default_job_shell;
-    return path;
+    return path ? path : default_job_shell;
 }
 
 static const char *jobspec_get_cwd (json_t *jobspec)

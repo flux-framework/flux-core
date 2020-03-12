@@ -847,15 +847,6 @@ err:
     return NULL;
 }
 
-static double job_get_kill_timeout (flux_t *h)
-{
-    double t = kill_timeout;
-    const char *kto = flux_attr_get (h, "job-exec.kill_timeout");
-    if (kto && fsd_parse_duration (kto, &t) < 0)
-        flux_log_error (h, "job-exec.kill_timeout=%s", kto);
-    return t;
-}
-
 static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
 {
     flux_future_t *f = NULL;
@@ -869,7 +860,7 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
      *  approach for now)
      */
     job->h = ctx->h;
-    job->kill_timeout = job_get_kill_timeout (job->h);
+    job->kill_timeout = kill_timeout;
 
     job->req = flux_msg_incref (msg);
 
