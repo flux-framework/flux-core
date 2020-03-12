@@ -10,6 +10,15 @@ if test -z "$jq" ; then
 	test_done
 fi
 
+#  Configure dummy job shell:
+if ! test -f dummy.toml; then
+	cat <<-EOF >dummy.toml
+	[exec]
+	job-shell = "$SHARNESS_TEST_SRCDIR/job-exec/dummy.sh"
+	EOF
+fi
+
+export FLUX_CONF_DIR=$(pwd)
 test_under_flux 4 job
 
 flux setattr log-stderr-level 1
@@ -17,9 +26,7 @@ flux setattr log-stderr-level 1
 job_kvsdir()    { flux job id --to=kvs $1; }
 exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; }
 
-test_expect_success 'job-exec: set dummy test job shell' '
-	flux setattr job-exec.job-shell $SHARNESS_TEST_SRCDIR/job-exec/dummy.sh
-'
+
 test_expect_success 'job-exec: execute dummy job shell across all ranks' '
 	id=$(flux jobspec srun -N4 \
 	    "flux kvs put test1.\$BROKER_RANK=\$JOB_SHELL_RANK" \
@@ -54,7 +61,7 @@ test_expect_success 'job-exec: job exception kills job shells' '
 	flux job eventlog $id | grep status=15
 '
 test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
-	flux setattr job-exec.kill_timeout 0.2 &&
+	flux module reload job-exec kill-timeout=0.2 &&
 	cat <<-EOF >trap-sigterm.sh &&
 	#!/bin/sh
 	trap "echo trap-sigterm got SIGTERM" 15
@@ -76,7 +83,7 @@ test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
 	flux dmesg | grep $id &&
 	flux job wait-event -vt 5 $id clean &&
 	flux dmesg | grep "trap-sigterm got SIGTERM" &&
-	flux setattr --expunge job-exec.kill_timeout
+	flux module reload job-exec
 '
 test_expect_success 'job-exec: invalid job shell generates exception' '
 	id=$(flux jobspec srun -N1 /bin/true \

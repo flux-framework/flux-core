@@ -153,7 +153,7 @@ test_expect_success 'flux-shell: bad cwd emits message, but completes' '
 '
 
 test_expect_success 'job-exec: set kill-timeout to low value for testing' '
-	flux setattr job-exec.kill_timeout 0.25
+	flux module reload job-exec kill-timeout=0.25
 '
 
 #  Fatal error tests below must exit with failure, but exit due to

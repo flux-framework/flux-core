@@ -104,7 +104,7 @@ test_expect_success 'job-shell: PMI KVS works' '
 	grep "t phase" kvstest.out
 '
 test_expect_success 'job-exec: decrease kill timeout for tests' '
-	flux setattr job-exec.kill_timeout 0.1
+	flux module reload job-exec kill-timeout=0.1
 '
 #  Use `!` here instead of test_must_fail because flux-job attach
 #   may exit with 143, killed by signal
