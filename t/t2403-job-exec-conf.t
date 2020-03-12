@@ -70,6 +70,37 @@ test_expect_success 'job-exec: bad job-shell config causes module failure' '
 	) &&
 	grep "error reading config value exec.job-shell" ${name}.log
 '
+test_expect_success 'job-exec: can specify imp path on cmdline' '
+	flux dmesg -C &&
+	flux module reload -f job-exec imp=/path/to/imp &&
+	flux dmesg &&
+	flux dmesg | grep "using imp path /path/to/imp"
+'
+test_expect_success 'job-exec: imp path can be set in exec conf' '
+	name=impconf &&
+	mkdir ${name}.d &&
+	cat <<-EOF > ${name}.d/exec.toml &&
+	[exec]
+	imp = "my-flux-imp"
+	EOF
+	( export FLUX_CONF_DIR=${name}.d &&
+	  flux start -s1 flux dmesg > ${name}.log 2>&1
+	) &&
+	grep "using imp path my-flux-imp" ${name}.log
+'
+test_expect_success 'job-exec: bad imp config causes module failure' '
+	name=bad-impconf &&
+	mkdir ${name}.d &&
+	cat <<-EOF > ${name}.d/exec.toml &&
+	[exec]
+	imp = 42
+	EOF
+	( export FLUX_CONF_DIR=${name}.d &&
+	  test_must_fail flux start -s1 flux dmesg > ${name}.log 2>&1
+	) &&
+	grep "error reading config value exec.imp" ${name}.log
+'
+
 test_expect_success 'job-exec: bad TOML config causes module failure' '
 	#  Need to first start an instance with good config files, then
         #   replace with bad config files, and finally reload module
