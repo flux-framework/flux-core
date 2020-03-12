@@ -28,12 +28,12 @@ jobs:
     - name: "Ubuntu: no configure flags"
       stage: test
       compiler: gcc
-    - name: "Ubuntu: py3.6 distcheck"
+    - name: "Ubuntu: py3.8 distcheck"
       stage: test
       compiler: gcc
       env:
        - DISTCHECK=t
-       - PYTHON_VERSION=3.6
+       - PYTHON_VERSION=3.8
        - GITHUB_RELEASES_DEPLOY=t
     - name: "Ubuntu: gcc-8 address-sanitizer --with-flux-security"
       stage: test
@@ -53,7 +53,7 @@ jobs:
        - CXX=g++-8
        - ARGS="--with-flux-security --enable-caliper"
        - DISTCHECK=t
-    - name: "Ubuntu: clang-6.0 chain-lint --with-flux-security"
+    - name: "Ubuntu: py3.7, clang-6.0 chain-lint --with-flux-security"
       stage: test
       compiler: clang-6.0
       env:
@@ -61,6 +61,7 @@ jobs:
        - CXX=clang++-6.0
        - chain_lint=t
        - ARGS="--with-flux-security"
+       - PYTHON_VERSION=3.7
     - name: "Ubuntu: COVERAGE=t, --with-flux-security --enable-caliper"
       stage: test
       compiler: gcc
@@ -81,7 +82,7 @@ jobs:
        - ARGS="--with-flux-security --enable-caliper --prefix=/usr"
        - IMG=centos7
        - DOCKER_TAG=t
-    - name: "Centos 8: py3.6,security,caliper,docker-deploy"
+    - name: "Centos 8: security,caliper,docker-deploy"
       stage: test
       compiler: gcc
       env:
