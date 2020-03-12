@@ -1,7 +1,7 @@
 
 SUBDIRS=_flux flux
 
-EXTRA_DIST = make_binding.py .pylintrc
+EXTRA_DIST = .pylintrc
 
 clean-local:
 	-rm -f .coverage*
