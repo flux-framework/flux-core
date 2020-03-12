@@ -60,7 +60,7 @@ class TestJob(unittest.TestCase):
     @classmethod
     def waitForConsistency(self, jobs_list_length):
         jobs = []
-        waiting=0 #number of seconds we have been waiting
+        waiting = 0  # number of seconds we have been waiting
         while True:
             rpc_handle = flux.job.job_list(
                 self.fh, 0, self.attrs, states=flux.constants.FLUX_JOB_INACTIVE
@@ -73,15 +73,7 @@ class TestJob(unittest.TestCase):
             if waiting > 60:
                 raise TimeoutError()
 
-    attrs = [
-        "userid",
-        "state",
-        "name",
-        "ntasks",
-        "t_submit",
-        "t_run",
-        "t_inactive",
-    ]
+    attrs = ["userid", "state", "name", "ntasks", "t_submit", "t_run", "t_inactive"]
 
     # should return an empty list if there are no inactive jobs
     def test_00_list_inactive_expect_empty_list(self):
