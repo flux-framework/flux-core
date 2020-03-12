@@ -33,9 +33,10 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
 '
 
 test_expect_success 'job-manager: load job-ingest, job-manager' '
-	flux exec -r all flux module load job-ingest &&
-	flux exec -r all flux module load job-info &&
-	flux module load job-manager
+	flux module load job-manager &&
+	flux module load job-ingest &&
+	flux exec -r all -x 0 flux module load job-ingest &&
+	flux exec -r all flux module load job-info
 '
 
 test_expect_success 'job-manager: submit 5 jobs' '

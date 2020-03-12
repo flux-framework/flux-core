@@ -46,6 +46,14 @@ test_invalid ()
     return ${rc}
 }
 
+# load|reload ingest modules (in proper order) with specified arguments
+ingest_module ()
+{
+    cmd=$1; shift
+    flux module ${cmd} job-ingest $* &&
+    flux exec -r all -x 0 flux module ${cmd} job-ingest $*
+}
+
 test_expect_success 'job-ingest: convert basic.yaml to json' '
 	${Y2J} <${JOBSPEC}/valid/basic.yaml >basic.json
 '
@@ -58,6 +66,11 @@ test_expect_success 'job-ingest: submit fails without job-ingest' '
 	test_must_fail flux job submit basic.json 2>nosys.out
 '
 
+test_expect_success 'job-ingest: load job-manager-dummy module' '
+	flux module load \
+		${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager-dummy.so
+'
+
 test_expect_success 'job-ingest: job-ingest fails with bad option' '
 	test_must_fail flux module load job-ingest badopt=xyz
 '
@@ -67,18 +80,9 @@ test_expect_success 'job-ingest: job-ingest fails with bad validator path' '
 '
 
 test_expect_success 'job-ingest: load job-ingest && job-info' '
-	flux exec -r all flux module load job-ingest \
+	ingest_module load \
 		validator=${BINDINGS_VALIDATOR} &&
 	flux exec -r all flux module load job-info
-'
-
-test_expect_success 'job-ingest: submit fails without job-manager' '
-	test_must_fail flux job submit basic.json 2>nosys.out
-'
-
-test_expect_success 'job-ingest: load job-manager-dummy module' '
-	flux module load \
-		${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager-dummy.so
 '
 
 test_expect_success 'job-ingest: YAML jobspec is rejected' '
@@ -152,7 +156,7 @@ test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 '
 
 test_expect_success 'job-ingest: test validator with version 1 enforced' '
-	flux exec -r all flux module reload job-ingest \
+	ingest_module reload \
 		validator=${BINDINGS_VALIDATOR} validator-args="--require-version,1"
 '
 
@@ -161,7 +165,7 @@ test_expect_success 'job-ingest: v1 jobspecs accepted with v1 requirement' '
 '
 
 test_expect_success 'job-ingest: test non-python validator' '
-	flux exec -r all flux module reload job-ingest \
+	ingest_module reload \
 		validator=${FAKE_VALIDATOR}
 '
 
@@ -170,7 +174,7 @@ test_expect_success 'job-ingest: submit succeeds with non-python validator' '
 '
 
 test_expect_success 'job-ingest: test python jsonschema validator' '
-	flux exec -r all flux module reload job-ingest \
+	ingest_module reload \
 		validator=${JSONSCHEMA_VALIDATOR} validator-args=--schema,${SCHEMA}
 '
 
@@ -187,7 +191,7 @@ test_expect_success 'job-ingest: invalid jobs rejected by jsonschema validator' 
 '
 
 test_expect_success 'job-ingest: validator unexpected exit is handled' '
-	flux exec -r all flux module reload job-ingest \
+	ingest_module reload \
 		validator=${BAD_VALIDATOR} &&
 	test_must_fail flux job submit basic.json 2>badvalidator.out &&
 	grep "unexpectedly exited" badvalidator.out
