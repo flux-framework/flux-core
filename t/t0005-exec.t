@@ -108,7 +108,7 @@ EOF
 '
 
 test_expect_success 'flux exec exits with code 127 for file not found' '
-	test_expect_code 127 run_timeout 2 flux exec -n ./nosuchprocess
+	test_expect_code 127 run_timeout 10 flux exec -n ./nosuchprocess
 '
 
 test_expect_success 'flux exec outputs appropriate error message for file not found' '
@@ -121,7 +121,7 @@ test_expect_success 'flux exec exits with code 126 for non executable' '
 '
 
 test_expect_success 'flux exec exits with code 68 (EX_NOHOST) for rank not found' '
-	test_expect_code 68 run_timeout 2 flux exec -n -r 1000 ./nosuchprocess
+	test_expect_code 68 run_timeout 10 flux exec -n -r 1000 ./nosuchprocess
 '
 test_expect_success NO_ASAN 'flux exec passes non-zero exit status' '
 	test_expect_code 2 flux exec -n sh -c "exit 2" &&
@@ -184,8 +184,8 @@ test_expect_success 'signal forwarding works' '
 	exit \$?
 	EOF
 	chmod +x test_signal.sh &&
-	test_expect_code 130 run_timeout 5 ./test_signal.sh INT &&
-	test_expect_code 143 run_timeout 5 ./test_signal.sh TERM
+	test_expect_code 130 run_timeout 10 ./test_signal.sh INT &&
+	test_expect_code 143 run_timeout 10 ./test_signal.sh TERM
 '
 
 test_expect_success 'flux-exec: stdin bcast to all ranks (default)' '
@@ -214,16 +214,16 @@ test_expect_success 'flux-exec: stdin bcast to not all ranks' '
 '
 
 test_expect_success 'stdin redirect from /dev/null works without -n' '
-	test_expect_code 0 run_timeout 1 flux exec -r0-3 cat
+	test_expect_code 0 run_timeout 10 flux exec -r0-3 cat
 '
 
 test_expect_success 'stdin redirect from /dev/null works with -n' '
-       test_expect_code 0 run_timeout 1 flux exec -n -r0-3 cat
+       test_expect_code 0 run_timeout 10 flux exec -n -r0-3 cat
 '
 
 test_expect_success 'stdin broadcast -- multiple lines' '
 	dd if=/dev/urandom bs=1024 count=4 | base64 >expected &&
-	cat expected | run_timeout 3 flux exec -l -r0-3 cat >output &&
+	cat expected | run_timeout 10 flux exec -l -r0-3 cat >output &&
 	for i in $(seq 0 3); do
 		sed -n "s/^$i: //p" output > output.$i &&
 		test_cmp expected output.$i
@@ -233,7 +233,7 @@ test_expect_success 'stdin broadcast -- multiple lines' '
 test_expect_success 'stdin broadcast -- long lines' '
 	dd if=/dev/urandom bs=1024 count=4 | base64 --wrap=0 >expected &&
         echo >>expected &&
-	cat expected | run_timeout 3 flux exec -l -r0-3 cat >output &&
+	cat expected | run_timeout 10 flux exec -l -r0-3 cat >output &&
 	for i in $(seq 0 3); do
 		sed -n "s/^$i: //p" output > output.$i
 		test_cmp expected output.$i
