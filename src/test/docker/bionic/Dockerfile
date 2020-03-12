@@ -5,7 +5,7 @@ LABEL maintainer="Tom Scogland <scogland1@llnl.gov>"
 # Update pkg caches, install latest pkg utils:
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
-	apt-utils \
+        apt-utils \
  && rm -rf /var/lib/apt/lists/*
 
 # Utilities
@@ -25,7 +25,7 @@ RUN apt-get update \
         lua5.2 \
         mpich \
         valgrind \
-	jq \
+        jq \
  && rm -rf /var/lib/apt/lists/*
 
 # Compilers, autotools
@@ -36,7 +36,7 @@ RUN apt-get update \
         autotools-dev \
         libtool \
         autoconf \
-	automake \
+        automake \
         make \
         cmake \
         clang-6.0 \
