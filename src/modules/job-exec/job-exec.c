@@ -1048,6 +1048,7 @@ static const struct flux_msg_handler_spec htab[]  = {
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
+    int saved_errno = 0;
     int rc = -1;
     struct job_exec_ctx *ctx = job_exec_ctx_create (h);
 
@@ -1070,9 +1071,11 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     rc = flux_reactor_run (flux_get_reactor (h), 0);
 out:
+    saved_errno = errno;
     if (flux_event_unsubscribe (h, "job-exception") < 0)
         flux_log_error (h, "flux_event_unsubscribe ('job-exception')");
     job_exec_ctx_destroy (ctx);
+    errno = saved_errno;
     return rc;
 }
 
