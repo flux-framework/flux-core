@@ -843,6 +843,7 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
     return f;
 err:
     flux_log_error (job->ctx->h, "jobinfo_kvs_lookup/namespace_create");
+    flux_future_destroy (f_kvs);
     flux_future_destroy (f);
     return NULL;
 }
