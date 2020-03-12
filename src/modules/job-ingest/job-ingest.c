@@ -651,7 +651,31 @@ static void shutdown_cb (flux_t *h,
     }
 }
 
+static void getinfo_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
+{
+    struct job_ingest_ctx *ctx = arg;
+    uint64_t timestamp;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (fluid_save_timestamp (&ctx->gen, &timestamp) < 0) {
+        errno = EOVERFLOW; // punt: which is more likely, clock_gettime()
+                           //       failure or flux running for 35 years?
+        goto error;
+    }
+    if (flux_respond_pack (h, msg, "{s:I}", "timestamp", timestamp) < 0)
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,  "job-ingest.getinfo", getinfo_cb, 0},
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.submit", submit_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.shutdown", shutdown_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
@@ -743,13 +767,58 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_get_rank");
         goto done;
     }
-    /* fluid_init() will fail on rank > 16K.
-     * Just skip loading the job module on those ranks.
+    /* Initialize FLUID generator.
+     * On rank 0, derive the starting timestamp from the job manager's
+     * 'max_jobid' plus one.  On other ranks, ask upstream job-ingest.
      */
-    if (fluid_init (&ctx.gen, rank, 0) < 0) {
-        flux_log (h, LOG_ERR, "fluid_init failed");
-        errno = EINVAL;
+    if (rank == 0) {
+        flux_future_t *f;
+        flux_jobid_t max_jobid;
+
+        if (!(f = flux_rpc (h, "job-manager.getinfo", NULL, 0, 0))) {
+            flux_log_error (h, "flux_rpc");
+            goto done;
+        }
+        if (flux_rpc_get_unpack (f, "{s:I}", "max_jobid", &max_jobid) < 0) {
+            if (errno == ENOSYS)
+                flux_log_error (h, "job-manager must be loaded first");
+            else
+                flux_log_error (h, "job-manager.getinfo");
+            flux_future_destroy (f);
+            goto done;
+        }
+        flux_future_destroy (f);
+        if (fluid_init (&ctx.gen, 0, fluid_get_timestamp (max_jobid) + 1) < 0) {
+            flux_log (h, LOG_ERR, "fluid_init failed");
+            errno = EINVAL;
+        }
     }
+    else {
+        flux_future_t *f;
+        uint64_t timestamp;
+
+        if (!(f = flux_rpc (h, "job-ingest.getinfo", NULL, 0, 0))) {
+            flux_log_error (h, "flux_rpc");
+            goto done;
+        }
+        if (flux_rpc_get_unpack (f, "{s:I}", "timestamp", &timestamp) < 0) {
+            if (errno == ENOSYS)
+                flux_log_error (h, "job-ingest must be loaded on rank 0 first");
+            else
+                flux_log_error (h, "job-ingest.getinfo");
+            flux_future_destroy (f);
+            goto done;
+        }
+        flux_future_destroy (f);
+        /* fluid_init() will fail on rank > 16K.
+         * Just skip loading the job module on those ranks.
+         */
+        if (fluid_init (&ctx.gen, rank, timestamp) < 0) {
+            flux_log (h, LOG_ERR, "fluid_init failed");
+            errno = EINVAL;
+        }
+    }
+    flux_log (h, LOG_DEBUG, "fluid ts=%jums", (uint64_t)ctx.gen.timestamp);
     if (validate_initialize (h, argc, argv, &ctx.validate) < 0)
         goto done;
     if (flux_reactor_run (r, 0) < 0) {
