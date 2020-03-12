@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 ###############################################################
 # Copyright 2014 Lawrence Livermore National Security, LLC
@@ -60,13 +60,18 @@ class TestJob(unittest.TestCase):
     @classmethod
     def waitForConsistency(self, jobs_list_length):
         jobs = []
+        waiting=0 #number of seconds we have been waiting
         while True:
             rpc_handle = flux.job.job_list(
                 self.fh, 0, self.attrs, states=flux.constants.FLUX_JOB_INACTIVE
             )
             jobs = self.getJobs(rpc_handle)
-            if len(jobs) == jobs_list_length:
+            if len(jobs) >= jobs_list_length:
                 break
+            time.sleep(1)
+            waiting += 1
+            if waiting > 60:
+                raise TimeoutError()
 
     attrs = [
         "userid",
@@ -109,7 +114,7 @@ class TestJob(unittest.TestCase):
         for i in range(10):
             jobid = self.submitJob()
 
-        self.waitForConsistency(10)
+        self.waitForConsistency(11)
 
         rpc_handle = flux.job.job_list_inactive(
             self.fh, time.time() - 3600, 20, self.attrs
@@ -117,7 +122,7 @@ class TestJob(unittest.TestCase):
 
         jobs = self.getJobs(rpc_handle)
 
-        self.assertEqual(len(jobs), 10)
+        self.assertEqual(len(jobs), 11)
 
     # flux job list-inactive with since = 0.0 should return all inactive jobs
     def test_03_list_all_inactive(self):
@@ -125,7 +130,7 @@ class TestJob(unittest.TestCase):
 
         jobs = self.getJobs(rpc_handle)
 
-        self.assertEqual(len(jobs), 10)
+        self.assertEqual(len(jobs), 11)
 
     # flux job list-inactive with max_entries = 5 should only return a subset
     def test_04_list_subset_of_inactive(self):
