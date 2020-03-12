@@ -106,6 +106,7 @@ TESTSCRIPTS = \
 	t2400-job-exec-test.t \
 	t2401-job-exec-hello.t \
 	t2402-job-exec-dummy.t \
+	t2403-job-exec-conf.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
 	t2600-job-shell-rcalc.t \
