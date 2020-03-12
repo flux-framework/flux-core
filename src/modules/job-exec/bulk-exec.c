@@ -328,14 +328,16 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 void bulk_exec_destroy (struct bulk_exec *exec)
 {
-    zlist_destroy (&exec->processes);
-    zlist_destroy (&exec->commands);
-    idset_destroy (exec->exit_batch);
-    flux_watcher_destroy (exec->prep);
-    flux_watcher_destroy (exec->check);
-    flux_watcher_destroy (exec->idle);
-    aux_destroy (&exec->aux);
-    free (exec);
+    if (exec) {
+        zlist_destroy (&exec->processes);
+        zlist_destroy (&exec->commands);
+        idset_destroy (exec->exit_batch);
+        flux_watcher_destroy (exec->prep);
+        flux_watcher_destroy (exec->check);
+        flux_watcher_destroy (exec->idle);
+        aux_destroy (&exec->aux);
+        free (exec);
+    }
 }
 
 struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops, void *arg)
