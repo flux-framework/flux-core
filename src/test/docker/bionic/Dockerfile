@@ -5,10 +5,12 @@ LABEL maintainer="Tom Scogland <scogland1@llnl.gov>"
 # Update pkg caches, install latest pkg utils:
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
-	apt-utils
+	apt-utils \
+ && rm -rf /var/lib/apt/lists/*
 
 # Utilities
-RUN apt-get -qq install -y --no-install-recommends \
+RUN apt-get update \
+ && apt-get -qq install -y --no-install-recommends \
         ca-certificates \
         wget \
         man \
@@ -23,10 +25,12 @@ RUN apt-get -qq install -y --no-install-recommends \
         lua5.2 \
         mpich \
         valgrind \
-	jq
+	jq \
+ && rm -rf /var/lib/apt/lists/*
 
 # Compilers, autotools
-RUN apt-get -qq install -y --no-install-recommends \
+RUN apt-get update \
+ && apt-get -qq install -y --no-install-recommends \
         build-essential \
         pkg-config \
         autotools-dev \
@@ -38,23 +42,36 @@ RUN apt-get -qq install -y --no-install-recommends \
         clang-6.0 \
         clang-tidy \
         gcc-8 \
-        g++-8
+        g++-8 \
+ && rm -rf /var/lib/apt/lists/*
 
 # Python
-RUN apt-get -qq install -y --no-install-recommends \
+# NOTE: sudo pip install is necessary to get differentiated installations of
+# python binary components for multiple python3 variants, --ignore-installed
+# makes it ignore local versions of the packages if your home directory is
+# mapped into the container and contains the same libraries
+RUN apt-get update \
+ && apt-get -qq install -y --no-install-recommends \
         python-dev \
-        python-cffi \
-        python-six \
-	python-yaml \
-	python-jsonschema \
         python3-dev \
-        python3-cffi \
-        python3-six \
-	python3-yaml \
-	python3-jsonschema
+        python3.7-dev \
+        python3.8-dev \
+        python-pip \
+        python-setuptools \
+        python-wheel \
+        python3-pip \
+        python3-setuptools \
+        python3-wheel \
+ && rm -rf /var/lib/apt/lists/* \
+ && for PY in python2 python3.6 python3.7 python3.8 ; do \
+        sudo $PY -m pip install --upgrade --ignore-installed cffi six pyyaml jsonschema ; \
+    done ; \
+    apt-get -qq purge -y python-pip python3-pip \
+ && apt-get -qq autoremove -y
 
 # Other deps
-RUN apt-get -qq install -y --no-install-recommends \
+RUN apt-get update \
+ && apt-get -qq install -y --no-install-recommends \
         libsodium-dev \
         libzmq3-dev \
         libczmq-dev \
@@ -65,18 +82,19 @@ RUN apt-get -qq install -y --no-install-recommends \
         libsqlite3-dev \
         uuid-dev \
         libhwloc-dev \
-        libmpich-dev
+        libmpich-dev \
+ && rm -rf /var/lib/apt/lists/*
 
 # Testing utils and libs
-RUN apt-get -qq install -y --no-install-recommends \
+RUN apt-get update \
+ && apt-get -qq install -y --no-install-recommends \
         faketime \
         libfaketime \
         pylint \
         cppcheck \
         aspell \
-        aspell-en
-
-RUN rm -rf /var/lib/apt/lists/*
+        aspell-en \
+ && rm -rf /var/lib/apt/lists/*
 
 # NOTE: luaposix installed by rocks due to Ubuntu bug: #1752082 https://bugs.launchpad.net/ubuntu/+source/lua-posix/+bug/1752082
 RUN luarocks install luaposix
