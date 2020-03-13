@@ -25,6 +25,16 @@ jobs:
       deploy: skip
       after_success: skip
       after_failure: skip
+    - stage: 'style checks'
+      name: 'mypy'
+      language: 'python'
+      python: '3.6'
+      install: python3 -m pip install 'mypy' --force-reinstall
+      script: mypy --config-file=src/bindings/python/.mypy.ini
+      before_deploy: skip
+      deploy: skip
+      after_success: skip
+      after_failure: skip
     - name: "Ubuntu: no configure flags"
       stage: test
       compiler: gcc

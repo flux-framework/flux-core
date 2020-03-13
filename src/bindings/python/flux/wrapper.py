@@ -213,10 +213,11 @@ class FunctionWrapper(object):
         # Convert errno errors into python exceptions
 
         if self.is_error(result):
-            err = calling_object.ffi.errno
-            if err != 0:
+            errnum = calling_object.ffi.errno
+            if errnum != 0:
                 raise EnvironmentError(
-                    err, "{}: {}".format(errno.errorcode[err], os.strerror(err))
+                    errnum,
+                    "{}: {}".format(errno.errorcode[errnum], os.strerror(errnum)),
                 )
 
         return result
