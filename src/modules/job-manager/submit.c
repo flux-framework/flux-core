@@ -175,6 +175,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* Submitting user is being responded to with jobid's.
      * Now walk the list of new jobs and advance their state.
+     * Side effect: update ctx->max_jobid.
      */
     while ((job = zlist_pop (newjobs))) {
         if (submit_post_event (ctx->event, job) < 0)
@@ -183,6 +184,9 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
 
         if ((job->flags & FLUX_JOB_WAITABLE))
             wait_notify_active (ctx->wait, job);
+        if (ctx->max_jobid < job->id)
+            ctx->max_jobid = job->id;
+
         job_decref (job);
     }
     zlist_destroy (&newjobs);

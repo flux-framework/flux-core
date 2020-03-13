@@ -30,6 +30,8 @@
  */
 typedef int (*restart_map_f)(struct job *job, void *arg);
 
+const char *checkpoint_key = "checkpoint.job-manager";
+
 int restart_count_char (const char *s, char c)
 {
     int count = 0;
@@ -143,8 +145,49 @@ static int restart_map_cb (struct job *job, void *arg)
     return 0;
 }
 
-/* Load any active jobs present in the KVS at startup.
- */
+static int checkpoint_save (struct job_manager *ctx)
+{
+    flux_future_t *f = NULL;
+    flux_kvs_txn_t *txn;
+    int rc = -1;
+
+    if (!(txn = flux_kvs_txn_create ()))
+        return -1;
+    if (flux_kvs_txn_pack (txn,
+                           0,
+                           checkpoint_key,
+                           "{s:I}",
+                           "max_jobid",
+                           ctx->max_jobid) < 0)
+        goto done;
+    if (!(f = flux_kvs_commit (ctx->h, NULL, 0, txn)))
+        goto done;
+    if (flux_future_get (f, NULL) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
+    return rc;
+}
+
+static int checkpoint_restore (struct job_manager *ctx)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_kvs_lookup (ctx->h, NULL, 0, checkpoint_key)))
+        return -1;
+    if (flux_kvs_lookup_get_unpack (f,
+                                    "{s:I}",
+                                    "max_jobid",
+                                    &ctx->max_jobid) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
 int restart_from_kvs (struct job_manager *ctx)
 {
     const char *dirname = "job";
@@ -152,9 +195,12 @@ int restart_from_kvs (struct job_manager *ctx)
     int count;
     struct job *job;
 
+    /* Load any active jobs present in the KVS at startup.
+     */
     count = depthfirst_map (ctx->h, dirname, dirskip, restart_map_cb, ctx);
     if (count < 0)
         return -1;
+    flux_log (ctx->h, LOG_INFO, "restart: %d jobs", count);
     /* Initialize the count of "running" jobs
      */
     job = zhashx_first (ctx->active_jobs);
@@ -163,7 +209,30 @@ int restart_from_kvs (struct job_manager *ctx)
             ctx->running_jobs++;
         job = zhashx_next (ctx->active_jobs);
     }
-    flux_log (ctx->h, LOG_DEBUG, "%s: added %d jobs", __FUNCTION__, count);
+    flux_log (ctx->h, LOG_INFO, "restart: %d running jobs", ctx->running_jobs);
+
+    /* Restore misc state.
+     */
+    if (checkpoint_restore (ctx) < 0) {
+        if (errno != ENOENT) {
+            flux_log_error (ctx->h, "restart: %s", checkpoint_key);
+            return -1;
+        }
+        flux_log (ctx->h, LOG_INFO, "restart: no checkpoint object");
+    }
+    flux_log (ctx->h,
+              LOG_DEBUG,
+              "restart: max_jobid=%ju",
+              (uintmax_t)ctx->max_jobid);
+    return 0;
+}
+
+int checkpoint_to_kvs (struct job_manager *ctx)
+{
+    if (checkpoint_save (ctx) < 0) {
+        flux_log_error (ctx->h, "checkpoint");
+        return -1;
+    }
     return 0;
 }
 

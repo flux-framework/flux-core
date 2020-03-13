@@ -26,7 +26,6 @@ unset pids
 declare -a pids
 flux hwloc reload & pids+=($!)
 flux exec -r all flux module load job-info & pids+=($!)
-flux exec -r all flux module load job-ingest & pids+=($!)
 flux module load cron sync=hb & pids+=($!)
 flux module load userdb ${FLUX_USERDB_OPTIONS} & pids+=($!)
 flux module load job-manager & pids+=($!)
@@ -34,6 +33,8 @@ wait_check ${pids[@]}
 unset pids
 
 declare -a pids
+flux module load job-ingest
+flux exec -r all -x 0 flux module load job-ingest & pids+=($!)
 flux module load job-exec &  pids+=($!)
 flux module load sched-simple & pids+=($!)
 wait_check ${pids[@]}

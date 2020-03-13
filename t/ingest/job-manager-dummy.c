@@ -135,8 +135,30 @@ error:
     flux_kvs_txn_destroy (txn);
 }
 
+void getinfo_cb (flux_t *h,
+                 flux_msg_handler_t *mh,
+                 const flux_msg_t *msg,
+                 void *arg)
+{
+    flux_jobid_t id = (1000UL * 1000) << 24; // fluid with 1000s timestamp
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:I}",
+                           "max_jobid",
+                           id) < 0)
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "job-manager.submit", submit_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "job-manager.getinfo", getinfo_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

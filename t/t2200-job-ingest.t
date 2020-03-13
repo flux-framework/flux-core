@@ -12,6 +12,9 @@ if ${FLUX_BUILD_DIR}/t/ingest/submitbench --help 2>&1 | grep -q sign-type; then
     SUBMITBENCH_OPT_R="--reuse-signature"
 fi
 
+jq=$(which jq 2>/dev/null)
+test -n "$jq" && test_set_prereq HAVE_JQ
+
 test_under_flux 4 kvs
 
 flux setattr log-stderr-level 1
@@ -27,6 +30,9 @@ FAKE_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/fake-validate.sh
 BAD_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/bad-validate.sh
 
 DUMMY_EVENTLOG=test.ingest.eventlog
+
+DUMMY_MAX_JOBID=16777216000000
+DUMMY_FLUID_TS=1000000
 
 test_valid ()
 {
@@ -46,6 +52,14 @@ test_invalid ()
     return ${rc}
 }
 
+# load|reload ingest modules (in proper order) with specified arguments
+ingest_module ()
+{
+    cmd=$1; shift
+    flux module ${cmd} job-ingest $* &&
+    flux exec -r all -x 0 flux module ${cmd} job-ingest $*
+}
+
 test_expect_success 'job-ingest: convert basic.yaml to json' '
 	${Y2J} <${JOBSPEC}/valid/basic.yaml >basic.json
 '
@@ -58,6 +72,11 @@ test_expect_success 'job-ingest: submit fails without job-ingest' '
 	test_must_fail flux job submit basic.json 2>nosys.out
 '
 
+test_expect_success 'job-ingest: load job-manager-dummy module' '
+	flux module load \
+		${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager-dummy.so
+'
+
 test_expect_success 'job-ingest: job-ingest fails with bad option' '
 	test_must_fail flux module load job-ingest badopt=xyz
 '
@@ -67,18 +86,24 @@ test_expect_success 'job-ingest: job-ingest fails with bad validator path' '
 '
 
 test_expect_success 'job-ingest: load job-ingest && job-info' '
-	flux exec -r all flux module load job-ingest \
+	ingest_module load \
 		validator=${BINDINGS_VALIDATOR} &&
 	flux exec -r all flux module load job-info
 '
 
-test_expect_success 'job-ingest: submit fails without job-manager' '
-	test_must_fail flux job submit basic.json 2>nosys.out
+test_expect_success HAVE_JQ 'job-ingest: dummy job-manager has expected max_jobid' '
+	max_jobid=$(${RPC} job-manager.getinfo | jq .max_jobid) &&
+	test ${max_jobid} -eq ${DUMMY_MAX_JOBID}
 '
 
-test_expect_success 'job-ingest: load job-manager-dummy module' '
-	flux module load \
-		${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager-dummy.so
+test_expect_success HAVE_JQ 'job-ingest: max_jobid <= rank 0 FLUID timestamp' '
+	ts0=$(${RPC} job-ingest.getinfo | jq .timestamp) &&
+	test ${DUMMY_FLUID_TS} -le ${ts0}
+'
+
+test_expect_success HAVE_JQ 'job-ingest: rank 0 FLUID timestamp <= rank 1' '
+	ts1=$(flux exec -r1 ${RPC} job-ingest.getinfo | jq .timestamp) &&
+	test ${ts0} -le ${ts1}
 '
 
 test_expect_success 'job-ingest: YAML jobspec is rejected' '
@@ -152,7 +177,7 @@ test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 '
 
 test_expect_success 'job-ingest: test validator with version 1 enforced' '
-	flux exec -r all flux module reload job-ingest \
+	ingest_module reload \
 		validator=${BINDINGS_VALIDATOR} validator-args="--require-version,1"
 '
 
@@ -161,7 +186,7 @@ test_expect_success 'job-ingest: v1 jobspecs accepted with v1 requirement' '
 '
 
 test_expect_success 'job-ingest: test non-python validator' '
-	flux exec -r all flux module reload job-ingest \
+	ingest_module reload \
 		validator=${FAKE_VALIDATOR}
 '
 
@@ -170,7 +195,7 @@ test_expect_success 'job-ingest: submit succeeds with non-python validator' '
 '
 
 test_expect_success 'job-ingest: test python jsonschema validator' '
-	flux exec -r all flux module reload job-ingest \
+	ingest_module reload \
 		validator=${JSONSCHEMA_VALIDATOR} validator-args=--schema,${SCHEMA}
 '
 
@@ -187,7 +212,7 @@ test_expect_success 'job-ingest: invalid jobs rejected by jsonschema validator' 
 '
 
 test_expect_success 'job-ingest: validator unexpected exit is handled' '
-	flux exec -r all flux module reload job-ingest \
+	ingest_module reload \
 		validator=${BAD_VALIDATOR} &&
 	test_must_fail flux job submit basic.json 2>badvalidator.out &&
 	grep "unexpectedly exited" badvalidator.out

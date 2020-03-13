@@ -37,38 +37,63 @@ static int current_ds (uint64_t *ds)
     return 0;
 }
 
-int fluid_init (struct fluid_generator *gen, uint32_t id)
+int fluid_init (struct fluid_generator *gen, uint32_t id, uint64_t timestamp)
 {
-    if (current_ds (&gen->epoch) < 0)
+    if (current_ds (&gen->clock_zero) < 0)
         return -1;
     if (id >= (1ULL<<bits_per_id))
         return -1;
     gen->id = id;
     gen->seq = 0;
-    gen->last_ds = 0;
+    gen->clock_offset = timestamp;
+    gen->timestamp = timestamp;
     return 0;
 }
 
+static int update_timestamp (struct fluid_generator *gen)
+{
+    uint64_t clock;
+    uint64_t timestamp;
+
+    if (current_ds (&clock) < 0)
+        return -1;
+    timestamp = clock - gen->clock_zero + gen->clock_offset;
+    if (timestamp >= (1ULL<<bits_per_ts))
+        return -1; // (unlikely) lifetime of FLUID sequence is over
+    if (timestamp > gen->timestamp) {
+        gen->seq = 0;
+        gen->timestamp = timestamp;
+    }
+    return 0;
+}
+
+int fluid_save_timestamp (struct fluid_generator *gen, uint64_t *timestamp)
+{
+    if (update_timestamp (gen) < 0)
+        return -1;
+    *timestamp = gen->timestamp;
+    return 0;
+}
+
+uint64_t fluid_get_timestamp (fluid_t fluid)
+{
+    return fluid >> (bits_per_seq + bits_per_id);
+}
+
+/* If sequence bits were exhausted (already 1024 allocated in this timestamp),
+ * busy-wait, calling update_timestamp() until seq is cleared.
+ * The busy-wait time is bounded by the timestamp quanta (1 msec).
+ */
 int fluid_generate (struct fluid_generator *gen, fluid_t *fluid)
 {
-    uint64_t s;
-
-    if (current_ds (&s) < 0)
-        return -1;
-    if (s == gen->last_ds)
-        gen->seq++;
-    else {
-        gen->seq = 0;
-        gen->last_ds = s;
-    }
-    if ((s - gen->epoch) >= (1ULL<<bits_per_ts))
-        return -1;
-    if (gen->seq >= (1ULL<<bits_per_seq)) {
-        usleep (200);
-        return fluid_generate (gen, fluid);
-    }
-    *fluid = ((s - gen->epoch) << (bits_per_seq + bits_per_id)
-                    | (gen->id << bits_per_seq) | gen->seq);
+    do {
+        if (update_timestamp (gen) < 0)
+            return -1;
+    } while (gen->seq + 1 >= (1ULL<<bits_per_seq));
+    *fluid = (gen->timestamp << (bits_per_seq + bits_per_id)
+                    | (gen->id << bits_per_seq)
+                    | gen->seq);
+    gen->seq++;
     return 0;
 }
 

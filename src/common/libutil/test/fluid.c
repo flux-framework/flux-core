@@ -23,8 +23,8 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
-    ok (fluid_init (&gen, 0) == 0,
-        "fluid_init id=0 works");
+    ok (fluid_init (&gen, 0, 0) == 0,
+        "fluid_init id=0 timestamp=0 works");
 
     /* Probably all zeroes, or (unlikely) with slightly advanced timestamp.
      */
@@ -44,8 +44,10 @@ int main (int argc, char *argv[])
 
     /* With artificially tweaked generator state
      */
+    const uint64_t time_34y = 1000ULL*60*60*24*365*34;
+    ok (fluid_init (&gen, 0, time_34y) == 0,
+        "fluid_init id=0 timestamp=34y works");
     gen.id = 16383;
-    gen.epoch -= 1000ULL*60*60*24*365*34; // 34 years
     gen.seq = 1023;
     ok (fluid_generate (&gen, &id) == 0,
         "fluid_generate works 34 years in the future");
@@ -62,7 +64,7 @@ int main (int argc, char *argv[])
     diag ("%s", buf);
 
     /* Generate 64K id's as rapidly as possible.
-     * Probably will induce usleep and take around 64 milliseconds.
+     * Probably will cover running out of seq bits.
      */
     generate_errors = 0;
     encode_errors = 0;
@@ -82,8 +84,7 @@ int main (int argc, char *argv[])
     ok (decode_errors == 0,
         "fluid_decode type=DOTHEX worked 64K times");
 
-    /* Continue for another 4K with NMEMONIC encoding, which is slower
-     * and probably won't induce usleep.
+    /* Continue for another 4K with NMEMONIC encoding (slower).
      */
     generate_errors = 0;
     encode_errors = 0;
@@ -102,6 +103,30 @@ int main (int argc, char *argv[])
         "fluid_encode type=MNEMONIC worked 4K times");
     ok (decode_errors == 0,
         "fluid_decode type=MNEMONIC worked 4K times");
+
+    /* Generate 64K FLUIDs, restarting generator each time from timestamp
+     * extracted from generated FLUID + 1.  Verify number always increases.
+     */
+    fluid_t lastid = 0;
+    uint64_t ts;
+    int errors = 0;
+    for (i = 0; i < 65536; i++) {
+        if (fluid_generate (&gen, &id) < 0)
+            BAIL_OUT ("fluid_generate unexpectedly failed");
+        if (lastid >= id)
+            errors++;
+        lastid = id;
+        ts = fluid_get_timestamp (id);
+        if (fluid_init (&gen, 0, ts + 1) < 0)
+            BAIL_OUT ("fluid_init unexpectedly failed");
+    }
+    ok (errors == 0,
+        "restarted generator 64K times without going backwards");
+
+    /* Get timestsamp with fluid_save()
+     */
+    ok (fluid_save_timestamp (&gen, &ts) == 0 && ts == gen.timestamp,
+        "fluid_save_timestamp worked");
 
     /* Decode bad input must fail
      */

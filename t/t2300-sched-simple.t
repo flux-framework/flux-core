@@ -30,8 +30,12 @@ test_expect_success 'unload job-exec module to prevent job execution' '
 	flux module remove job-exec
 '
 test_expect_success 'sched-simple: reload ingest module with lax validator' '
-	flux exec -r all flux module reload job-ingest validator-args="--schema,${SCHEMA}" \
-         validator=${JSONSCHEMA_VALIDATOR}
+	flux module reload job-ingest \
+		validator-args="--schema,${SCHEMA}" \
+		validator=${JSONSCHEMA_VALIDATOR} &&
+	flux exec -r all -x 0 flux module reload job-ingest \
+		validator-args="--schema,${SCHEMA}" \
+		validator=${JSONSCHEMA_VALIDATOR}
 '
 test_expect_success 'sched-simple: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
