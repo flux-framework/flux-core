@@ -325,7 +325,27 @@ test_pause() {
 	fi
 }
 
+die_on_alarm() {
+	kill -9 $! > /dev/null 2>&1 # kill currently executing command
+	echo "Top-level test timed out"
+}
+
 test_eval_() {
+	( # start a subshell in the background to provide a timeout
+	  set -e
+	  parent_pid=$$
+	  i=0
+	  while kill -0 $parent_pid ; do
+		  sleep 1
+		  if test "$i" -gt ${FLUX_TEST_TIMEOUT:-120} ; then
+			  break
+		  fi
+		  i=$(($i+1))
+	  done
+	  kill -ALRM $$ # send ALRM to parent
+	) &
+	ALRM=$!
+	trap die_on_alarm ALRM
 	# This is a separate function because some tests use
 	# "return" to end a test_expect_success block early.
 	case ",$test_prereq," in
@@ -336,6 +356,10 @@ test_eval_() {
 		eval </dev/null >&3 2>&4 "$*"
 		;;
 	esac
+	ret=$?
+	trap - ALRM
+	kill $ALRM >/dev/null 2>&1
+	return $ret
 }
 
 test_run_() {
