@@ -98,6 +98,7 @@ def submit_async(
     priority=lib.FLUX_JOB_PRIORITY_DEFAULT,
     waitable=False,
     debug=False,
+    pre_signed=False,
 ):
     """Ask Flux to run a job, without waiting for a response
 
@@ -119,6 +120,9 @@ def submit_async(
     :param debug: enable job manager debugging events to job eventlog
         (default is False)
     :type debug: bool
+    :param pre_signed: jobspec argument is already signed
+        (default is False)
+    :type pre_signed: bool
     :returns: a Flux Future object for obtaining the assigned jobid
     :rtype: Future
     """
@@ -128,6 +132,8 @@ def submit_async(
         flags |= constants.FLUX_JOB_WAITABLE
     if debug:
         flags |= constants.FLUX_JOB_DEBUG
+    if pre_signed:
+        flags |= constants.FLUX_JOB_PRE_SIGNED
     future_handle = RAW.submit(flux_handle, jobspec, priority, flags)
     return SubmitFuture(future_handle)
 
@@ -159,6 +165,7 @@ def submit(
     priority=lib.FLUX_JOB_PRIORITY_DEFAULT,
     waitable=False,
     debug=False,
+    pre_signed=False,
 ):
     """Submit a job to Flux
 
@@ -179,10 +186,13 @@ def submit(
     :param debug: enable job manager debugging events to job eventlog
         (default is False)
     :type debug: bool
+    :param pre_signed: jobspec argument is already signed
+        (default is False)
+    :type pre_signed: bool
     :returns: job ID
     :rtype: int
     """
-    future = submit_async(flux_handle, jobspec, priority, waitable, debug)
+    future = submit_async(flux_handle, jobspec, priority, waitable, debug, pre_signed)
     return future.get_id()
 
 
