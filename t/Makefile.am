@@ -46,7 +46,8 @@ clean-local:
 #   in a reduced makespan overall.
 LONGTESTSCRIPTS = \
 	t5000-valgrind.t \
-	t3100-flux-in-flux.t
+	t3100-flux-in-flux.t \
+	t3200-instance-restart.t
 
 # This list is included in both TESTS and dist_check_SCRIPTS.
 TESTSCRIPTS = \
