@@ -126,7 +126,9 @@ fi
 travis_fold "configure"  "/usr/src/configure ${ARGS}..." /usr/src/configure ${ARGS}
 travis_fold "make_clean" "make clean..." make clean
 
-echo running: ${MAKECMDS}
-travis_fold "build" "${MAKECMDS}" eval ${MAKECMDS}
+if test "$DISTCHECK" != "t"; then
+  echo running: ${MAKECMDS}
+  travis_fold "build" "${MAKECMDS}" eval ${MAKECMDS}
+fi
 echo running: ${CHECKCMDS}
 travis_fold "check" "${CHECKCMDS}" eval ${CHECKCMDS}

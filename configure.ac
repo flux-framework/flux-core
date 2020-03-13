@@ -238,7 +238,13 @@ AC_CHECK_LIB(m, floor)
 saved_PATH=$PATH
 export PATH=$(echo $PATH | sed "s|$(pwd)/src/cmd:*||")
 
-AX_PYTHON_DEVEL([>='2.7'])
+if test "X$PYTHON_VERSION" = "X" ; then
+  if test "X$PYTHON" = "X" ; then
+    # if the user hasn't specified, try for python 3
+    PYTHON_VERSION=3
+  fi
+fi
+AX_PYTHON_DEVEL([>='3.6'])
 
 AM_PATH_PYTHON([$ac_python_version])
 if test "X$PYTHON" = "X"; then
@@ -281,7 +287,7 @@ AM_CHECK_PYMOD(jsonschema,
 # search can lead to linking problems.
 #
 # Logic below assumes only newer Python versions, protected by
-# above check for atleast Python 2.7.
+# above check for atleast Python 3.6.
 if test "$ac_python_ldflags_set_by_user" != "true"; then
   AC_CHECK_LIB([$ac_python_library], [PyArg_ParseTuple],
                [ac_python_in_ld_path=true])
@@ -426,6 +432,10 @@ AC_SUBST(fluxbindir)
 adl_RECURSIVE_EVAL([$luadir], fluxluadir)
 AS_VAR_SET(fluxluadir, $fluxluadir)
 AC_SUBST(fluxluadir)
+
+AS_VAR_SET(fluxbindingincludedir, $includedir/flux/_binding)
+AC_SUBST(fluxbindingincludedir)
+
 
 ##
 # Macros to avoid repetition in Makefiles.am's

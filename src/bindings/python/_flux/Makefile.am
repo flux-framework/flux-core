@@ -11,52 +11,57 @@ AM_LDFLAGS = \
 	-Wl,-rpath,$(PYTHON_PREFIX)/lib \
 	$(CODE_COVERAGE_LIBS)
 
-MAKE_BINDING=$(top_srcdir)/src/bindings/python/make_binding.py
-SUFFIXES = _build.py
-
 common_libs = $(top_builddir)/src/common/libflux-core.la \
 	      $(top_builddir)/src/common/libflux-internal.la \
 	      $(ZMQ_LIBS) $(LIBUUID_LIBS) \
 	      $(PYTHON_LDFLAGS)
 
-_build.py.c:
-	$(PYTHON) $*_build.py
+PREPROC_FLAGS=-E  '-D__attribute__(...)='
+_core.c: $(srcdir)/_core_build.py _core_preproc.h
+	$(PYTHON) $^
 
+_core_clean.h: Makefile
+	$(PYTHON) $(srcdir)/make_clean_header.py \
+	  --path $(top_srcdir) \
+	  --search $(top_builddir)/src/common/libflux \
+	  --additional_headers src/bindings/python/_flux/callbacks.h \
+	  --output _core_clean.h \
+	  src/include/flux/core.h
+_core_preproc.h: _core_clean.h
+	$(CC) $(PREPROC_FLAGS) _core_clean.h\
+	  | sed -e '/^# [0-9]*.*/d' > $@
 
-_core_build.py: $(MAKE_BINDING)
-	$(PYTHON) $(MAKE_BINDING) --path $(top_srcdir) \
-		--search $(top_builddir)/src/common/libflux \
-		--package _flux \
-		--modname _core \
-		--add_sub '.*va_list.*|||' \
-		--additional_headers src/bindings/python/_flux/callbacks.h \
-		--ignore_header 'macros' \
-		src/include/flux/core.h
-
-BUILT_SOURCES= _core.c
+BUILT_SOURCES= _core.c _core_preproc.h
 fluxpyso_LTLIBRARIES = _core.la
 fluxpyso_PYTHON = __init__.py
+
+nodist_fluxbindinginclude_HEADERS = _core_preproc.h
 
 dist__core_la_SOURCES = callbacks.h
 nodist__core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
-_core_la_DEPENDENCIES = _core_build.py
+
+EXTRA_DIST=_core_build.py make_clean_header.py
 
 if HAVE_FLUX_SECURITY
-BUILT_SOURCES += _security.c
+BUILT_SOURCES += _security.c _security_preproc.h
 fluxpyso_LTLIBRARIES += _security.la
-_security_build.py: $(MAKE_BINDING)
-	$(PYTHON) $(MAKE_BINDING) --path $(FLUX_SECURITY_INCDIR)/flux/security \
-		--package _flux \
-		--modname _security \
-		--include_header flux/security/sign.h \
-		--add_sub '.*va_list.*|||' \
-		sign.h
+_security.c: $(srcdir)/_security_build.py _security_preproc.h
+	$(PYTHON) $^
+_security_clean.h: Makefile
+	$(PYTHON) $(srcdir)/make_clean_header.py \
+	  --path $(FLUX_SECURITY_INCDIR)/flux/security \
+	  --output _security_clean.h \
+	  sign.h
+_security_preproc.h: _security_clean.h
+	$(CC) $(PREPROC_FLAGS) _security_clean.h \
+	  | sed -e '/^# [0-9]*.*/d' > $@
 
+EXTRA_DIST+=_security_build.py
+nodist_fluxbindinginclude_HEADERS += _security_preproc.h
 nodist__security_la_SOURCES = _security.c
 _security_la_CPPFLAGS = $(AM_CPPFLAGS) $(FLUX_SECURITY_CFLAGS)
 _security_la_LIBADD = $(common_libs) $(FLUX_SECURITY_LIBS)
-_security_la_DEPENDENCIES = _security_build.py
 endif
 
 .PHONY: lib-copy
@@ -76,7 +81,7 @@ clean-local-vpath:
 	[ "$(top_srcdir)" != "$(top_builddir)" ] && rm -f $(top_builddir)/src/bindings/python/_flux/*.py || true
 
 clean-local: clean-local-vpath
-	-rm -f *.c *_build.py *.so *.pyc *.pyo
+	-rm -f *.c *.so *.pyc *.pyo *_clean.h *_preproc.h
 	-rm -rf __pycache__
 
 install-data-hook:
