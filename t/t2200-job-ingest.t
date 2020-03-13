@@ -12,6 +12,9 @@ if ${FLUX_BUILD_DIR}/t/ingest/submitbench --help 2>&1 | grep -q sign-type; then
     SUBMITBENCH_OPT_R="--reuse-signature"
 fi
 
+jq=$(which jq 2>/dev/null)
+test -n "$jq" && test_set_prereq HAVE_JQ
+
 test_under_flux 4 kvs
 
 flux setattr log-stderr-level 1
@@ -27,6 +30,9 @@ FAKE_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/fake-validate.sh
 BAD_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/bad-validate.sh
 
 DUMMY_EVENTLOG=test.ingest.eventlog
+
+DUMMY_MAX_JOBID=16777216000000
+DUMMY_FLUID_TS=1000000
 
 test_valid ()
 {
@@ -83,6 +89,21 @@ test_expect_success 'job-ingest: load job-ingest && job-info' '
 	ingest_module load \
 		validator=${BINDINGS_VALIDATOR} &&
 	flux exec -r all flux module load job-info
+'
+
+test_expect_success HAVE_JQ 'job-ingest: dummy job-manager has expected max_jobid' '
+	max_jobid=$(${RPC} job-manager.getinfo | jq .max_jobid) &&
+	test ${max_jobid} -eq ${DUMMY_MAX_JOBID}
+'
+
+test_expect_success HAVE_JQ 'job-ingest: max_jobid <= rank 0 FLUID timestamp' '
+	ts0=$(${RPC} job-ingest.getinfo | jq .timestamp) &&
+	test ${DUMMY_FLUID_TS} -le ${ts0}
+'
+
+test_expect_success HAVE_JQ 'job-ingest: rank 0 FLUID timestamp <= rank 1' '
+	ts1=$(flux exec -r1 ${RPC} job-ingest.getinfo | jq .timestamp) &&
+	test ${ts0} -le ${ts1}
 '
 
 test_expect_success 'job-ingest: YAML jobspec is rejected' '
