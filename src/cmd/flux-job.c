@@ -168,7 +168,7 @@ static struct optparse_option submit_opts[] =  {
     { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
       .usage = "Set job priority (0-31, default=16)",
     },
-    { .name = "flags", .key = 'f', .has_arg = 3,
+    { .name = "flags", .key = 'f', .has_arg = 1,
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Set submit comma-separated flags (e.g. debug, waitable)",
     },
