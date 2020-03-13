@@ -1164,6 +1164,8 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
                 flags |= FLUX_JOB_DEBUG;
             else if (!strcmp (name, "waitable"))
                 flags |= FLUX_JOB_WAITABLE;
+            else if (!strcmp (name, "signed"))
+                flags |= FLUX_JOB_PRE_SIGNED;
             else
                 log_msg_exit ("unknown flag: %s", name);
         }
