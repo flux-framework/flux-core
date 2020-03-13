@@ -126,7 +126,7 @@ test_expect_success NO_ASAN 'test_under_flux works' '
 	grep "size=2" test-under-flux/out
 '
 
-test_expect_success 'test_under_flux fails if loaded modules are not unloaded' '
+test_expect_success NO_ASAN 'test_under_flux fails if loaded modules are not unloaded' '
         mkdir -p test-under-flux && (
         cd test-under-flux &&
 	SHARNESS_TEST_DIRECTORY=`pwd` &&
