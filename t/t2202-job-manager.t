@@ -6,6 +6,9 @@ test_description='Test flux job manager service'
 
 test_under_flux 4 kvs
 
+jq=$(which jq 2>/dev/null)
+test -n "$jq" && test_set_prereq HAVE_JQ
+
 flux setattr log-stderr-level 1
 
 DRAIN_CANCEL="flux python ${FLUX_SOURCE_DIR}/t/job-manager/drain-cancel.py"
@@ -23,8 +26,17 @@ test_expect_success 'job-manager: load job-ingest, job-info, job-manager' '
 	flux exec -r all flux module load job-info
 '
 
+test_expect_success HAVE_JQ 'job-manager: max_jobid=0 before jobs run' '
+	test $(${RPC} job-manager.getinfo | jq .max_jobid) -eq 0
+'
+
 test_expect_success 'job-manager: submit one job' '
 	flux job submit basic.json >submit1.out
+'
+
+test_expect_success HAVE_JQ 'job-manager: max_jobid=last' '
+	${RPC} job-manager.getinfo | jq .max_jobid >max1.out &&
+	test_cmp submit1.out max1.out
 '
 
 test_expect_success 'job-manager: queue contains 1 job' '
@@ -160,6 +172,10 @@ test_expect_success 'job-manager: that job is now the first job' '
 	test "${lastid}" -eq "${firstid}"
 '
 
+test_expect_success HAVE_JQ 'job-manager: save max_jobid' '
+	${RPC} job-manager.getinfo | jq .max_jobid >max2.exp
+'
+
 test_expect_success 'job-manager: reload the job manager' '
 	flux module reload job-manager
 '
@@ -167,6 +183,11 @@ test_expect_success 'job-manager: reload the job manager' '
 test_expect_success 'job-manager: queue was successfully reconstructed' '
 	${LIST_JOBS} >list_reload.out &&
 	test_cmp list10_reordered.out list_reload.out
+'
+
+test_expect_success HAVE_JQ 'job-manager: max_jobid has not changed' '
+	${RPC} job-manager.getinfo | jq .max_jobid >max2.out &&
+	test_cmp max2.exp max2.out
 '
 
 test_expect_success 'job-manager: cancel jobs' '
