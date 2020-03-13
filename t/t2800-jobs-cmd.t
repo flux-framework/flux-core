@@ -377,6 +377,16 @@ test_expect_success 'flux-jobs --format={runtime},{runtime_fsd},{runtime_fsd:h},
         test $count -eq 13
 '
 
+test_expect_success 'flux-jobs --format={success},{success:h} works' '
+        flux jobs --suppress-header --state=pending,running --format="{success},{success:h}" > successPR.out &&
+        for i in `seq 1 14`; do echo ",-" >> successPR.exp; done &&
+        test_cmp successPR.out successPR.exp &&
+        flux jobs --suppress-header --state=inactive --format="{success},{success:h}" > successI.out &&
+        echo "False,False" >> successI.exp &&
+        for i in `seq 1 4`; do echo "True,True" >> successI.exp; done &&
+        test_cmp successI.out successI.exp
+'
+
 #
 # corner cases
 #
