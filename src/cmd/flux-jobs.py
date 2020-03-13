@@ -86,6 +86,7 @@ class JobInfo:
         t_inactive=0.0,
         nnodes="",
         ranks="",
+        success="",
     )
 
     def __init__(self, info_resp):
@@ -189,6 +190,7 @@ def fetch_jobs_flux(args, fields):
         ntasks=("ntasks",),
         nnodes=("nnodes",),
         ranks=("ranks",),
+        success=("success",),
         t_submit=("t_submit",),
         t_depend=("t_depend",),
         t_sched=("t_sched",),
@@ -337,6 +339,7 @@ class JobsOutputFormat(flux.util.OutputFormat):
         ntasks="NTASKS",
         nnodes="NNODES",
         ranks="RANKS",
+        success="SUCCESS",
         t_submit="T_SUBMIT",
         t_depend="T_DEPEND",
         t_sched="T_SCHED",
