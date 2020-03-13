@@ -82,8 +82,7 @@ struct optparse_option {
 				If !isalnum(key), then this option is
                                 assumed to be a long option only.           */
 
-    int           has_arg; /*  0: no arg, 1: req'd arg, 2: optional arg
-                               3: list-arg (split on comma separate values) */
+    int           has_arg; /*  0: no arg, 1: req'd arg, 2: optional arg     */
     int           group;   /*  Grouping in --help output                    */
     int           flags;   /*  Extra flags. See Option FLAGS below          */
     const char *  arginfo; /*  arg info displayed after = in help output    */
