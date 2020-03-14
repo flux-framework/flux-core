@@ -80,19 +80,24 @@ start_broker() {
 
 test_expect_success 'start size=2 instance with ipc://' "
 	start_broker ${TCONFDIR}/good-ipc2 fake0 flux getattr size >ipc.out &&
+        F0=\$! &&
 	start_broker ${TCONFDIR}/good-ipc2 fake1 &&
-	wait &&
-	wait &&
+        F1=\$! &&
+	wait \$F0 \$F1 &&
 	echo 2 >ipc.exp &&
 	test_cmp ipc.exp ipc.out
 "
 
 test_expect_success 'start size=4 instance with tcp://' "
 	start_broker ${TCONFDIR}/good-tcp4 fake0 flux getattr size >tcp.out &&
+        F0=\$! &&
 	start_broker ${TCONFDIR}/good-tcp4 fake1 &&
+        F1=\$! &&
 	start_broker ${TCONFDIR}/good-tcp4 fake2 &&
+        F2=\$! &&
 	start_broker ${TCONFDIR}/good-tcp4 fake3 &&
-	wait && wait && wait && wait &&
+        F3=\$! &&
+	wait \$F0 \$F1 \$F2 \$F3 &&
 	echo 4 >tcp.exp &&
 	test_cmp tcp.exp tcp.out
 "
