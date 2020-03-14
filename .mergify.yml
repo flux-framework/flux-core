@@ -2,7 +2,7 @@ pull_request_rules:
   - name: rebase and merge when passing all checks
     conditions:
       - base=master
-      - status-success=continuous-integration/travis-ci/pr
+      - status-success=Travis CI - Pull Request
       - status-success="validate commits"
       - status-success="flux-sched check"
       - label="merge-when-passing"
