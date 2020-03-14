@@ -4,7 +4,7 @@ test_description='Test flux-shell MPIR and ptrace support'
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 4
+test_under_flux 4 job
 
 FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
