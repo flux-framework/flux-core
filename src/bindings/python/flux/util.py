@@ -207,7 +207,7 @@ class OutputFormat:
 
     # This should be a method, not a function since it is overridden by
     # inheriting classes
-    # pylint: no-self-use
+    # pylint: disable=no-self-use
     def _fmt_tuple(self, text, field, spec, conv):
         #  If field is empty string or None, then the result of the
         #   format (besides 'text') doesn't make sense, just return 'text'
