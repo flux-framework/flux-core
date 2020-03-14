@@ -316,9 +316,9 @@ AS_IF([test "x$enable_pylint" = "xyes"], [
   AC_CHECK_PROG(PYLINT,[pylint],[pylint])
   AS_IF([test "x$PYLINT" != "xpylint"], [AC_MSG_ERROR([No pylint found in PATH])])
   AM_CHECK_PYMOD(pylint,
-                   [StrictVersion(pylint.__version__) >= StrictVersion('1.4.5')],
+                   [StrictVersion(pylint.__version__) >= StrictVersion('1.8.4')],
                    ,
-                   [AC_MSG_ERROR([could not find python module pylint, version 1.4.5+ required])]
+                   [AC_MSG_ERROR([could not find python module pylint, version 1.8.4+ required])]
                  )
 ])
 AM_CONDITIONAL([ENABLE_PYLINT], [test "x$PYLINT" = "xpylint"])
