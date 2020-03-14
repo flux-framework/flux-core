@@ -119,6 +119,9 @@ else
   init_colors=''
 fi
 
+run_timeout() {
+    perl -e 'use Time::HiRes qw( ualarm ) ; ualarm ((shift @ARGV) * 1000000) ; exec @ARGV or die "$!"' "$@"
+}
 # :; is there to work around a bug in bash 3.2 (and earlier) which
 # does not always set '$?' properly on redirection failure.
 # See the Autoconf manual for more details.
@@ -144,7 +147,7 @@ fi
     else
       exec 2>&3
     fi
-    "$@"
+    run_timeout ${FLUX_TEST_TIMEOUT:-300} "$@"
     echo $?
   ) | LC_ALL=C ${AM_TAP_AWK-awk} \
         -v me="$me" \
