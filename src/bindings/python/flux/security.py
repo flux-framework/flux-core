@@ -48,7 +48,7 @@ class SecurityContext(WrapperPimpl):
                 fun, name, fun_type, self.ffi, add_handle=add_handle
             )
 
-    def __init__(self, config_pattern, flags=0):
+    def __init__(self, config_pattern=None, flags=0):
         super().__init__()
         self.pimpl = self.InnerWrapper(flags)
         self.pimpl.configure(config_pattern)
