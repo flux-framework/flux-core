@@ -147,7 +147,11 @@ run_timeout() {
     else
       exec 2>&3
     fi
-    run_timeout ${FLUX_TEST_TIMEOUT:-300} "$@"
+    if test -n "$FLUX_TEST_TIMEOUT" ; then
+        run_timeout ${FLUX_TEST_TIMEOUT} "$@"
+    else
+       "$@"
+    fi
     echo $?
   ) | LC_ALL=C ${AM_TAP_AWK-awk} \
         -v me="$me" \
