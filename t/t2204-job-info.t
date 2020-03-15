@@ -592,7 +592,7 @@ test_expect_success 'flux job lists basename of first argument for job name' '
         flux job list -s inactive | grep $jobid | grep -v foo
 '
 
-test_expect_success 'flux job lists full path for job name if first argument not ok' '
+test_expect_success 'flux job lists full path for job name if basename fails on first arg' '
         jobid=`flux mini submit /foo/bar/ arg1 arg2` &&
         echo $jobid > jobname4.id &&
         flux job wait-event $jobid clean >/dev/null &&
