@@ -147,8 +147,8 @@ run_timeout() {
     else
       exec 2>&3
     fi
-    if test -n "$FLUX_TEST_TIMEOUT" ; then
-        run_timeout ${FLUX_TEST_TIMEOUT} "$@"
+    if test -n "${FLUX_TEST_TIMEOUT:-}" ; then
+        run_timeout "${FLUX_TEST_TIMEOUT}" "$@"
     else
        "$@"
     fi
