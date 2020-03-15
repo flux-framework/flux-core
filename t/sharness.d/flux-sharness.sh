@@ -75,6 +75,7 @@ test_under_flux() {
     fi
     if test "$debug" = "t" -o -n "$FLUX_TESTS_DEBUG" ; then
         flags="${flags} --debug"
+        export FLUX_PYCLI_LOGLEVEL=10
     fi
     if test "$chain_lint" = "t"; then
         flags="${flags} --chain-lint"

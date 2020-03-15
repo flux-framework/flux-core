@@ -164,3 +164,82 @@ def parse_fsd(fsd_string):
     if seconds < 0 or math.isnan(seconds) or math.isinf(seconds):
         raise ValueError("invalid Flux standard duration")
     return seconds
+
+
+class OutputFormat:
+    """
+    Store a parsed version of the program's output format,
+    allowing the fields to iterated without modifiers, building
+    a new format suitable for headers display, etc...
+    """
+
+    def __init__(self, valid_headings, fmt):
+        """
+        Parse the input format fmt with string.Formatter.
+        Save off the fields and list of format tokens for later use,
+        (converting None to "" in the process)
+
+        Throws an exception if any format fields do not match the allowed
+        list of headings.
+        """
+        from string import Formatter
+
+        self.headings = valid_headings
+        self.fmt = fmt
+        #  Parse format into list of (string, field, spec, conv) tuples,
+        #   replacing any None values with empty string "" (this makes
+        #   substitution back into a format string in self.header() and
+        #   self.get_format() much simpler below)
+        format_list = Formatter().parse(fmt)
+        self.format_list = [[s or "" for s in t] for t in format_list]
+
+        #  Store list of requested fields in self.fields
+        self._fields = [field for (_, field, _, _) in self.format_list]
+
+        #  Throw an exception if any requested fields are invalid:
+        for field in self._fields:
+            if field and not field in self.headings:
+                raise ValueError("Unknown format field: " + field)
+
+    @property
+    def fields(self):
+        return self._fields
+
+    # This should be a method, not a function since it is overridden by
+    # inheriting classes
+    # pylint: disable=no-self-use
+    def _fmt_tuple(self, text, field, spec, conv):
+        #  If field is empty string or None, then the result of the
+        #   format (besides 'text') doesn't make sense, just return 'text'
+        if not field:
+            return text
+        #  The prefix of spec and conv are stripped by formatter.parse()
+        #   replace them here if the values are not empty:
+        spec = ":" + spec if spec else ""
+        conv = "!" + conv if conv else ""
+        return "{0}{{{1}{2}{3}}}".format(text, field, conv, spec)
+
+    def header(self):
+        """
+        Return the header row formatted by the user-provided format spec,
+        which will be made "safe" for use with string headings.
+        """
+        format_list = []
+        for (text, field, spec, conv) in self.format_list:
+            #  Remove number formatting on any spec:
+            spec = re.sub(r"(0?\.)?(\d+)?[bcdoxXeEfFgGn%]$", r"\2", spec)
+            format_list.append(self._fmt_tuple(text, field, spec, conv))
+        fmt = "".join(format_list)
+        return fmt.format(**self.headings)
+
+    def get_format(self):
+        """
+        Return the format string
+        """
+        return self.fmt
+
+    def format(self, obj):
+        """
+        format object with internal format
+        """
+        return self.get_format().format(obj)

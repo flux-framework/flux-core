@@ -82,6 +82,15 @@ class TestHandle(unittest.TestCase):
         rank = self.f.get_rank()
         self.assertEqual(rank, 0)
 
+    def test_attr_get(self):
+        local_uri = self.f.attr_get("local-uri")
+        self.assertTrue(isinstance(local_uri, six.text_type))
+        self.assertEqual(local_uri[:6], "local:")
+
+        attr_rank = int(self.f.attr_get("rank"))
+        rank = self.f.get_rank()
+        self.assertEqual(attr_rank, rank)
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):

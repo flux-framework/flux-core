@@ -15,14 +15,9 @@ from flux.wrapper import Wrapper, WrapperPimpl, FunctionWrapper
 
 
 class SecurityFunctionWrapper(FunctionWrapper):
-    def __init__(self, *args, **kwargs):
-        super(SecurityFunctionWrapper, self).__init__(*args, **kwargs)
-
     def __call__(self, calling_object, *args_in):
         try:
-            return super(SecurityFunctionWrapper, self).__call__(
-                calling_object, *args_in
-            )
+            return super().__call__(calling_object, *args_in)
         except EnvironmentError:
             errstr = calling_object.last_error()
             errnum = calling_object.last_errnum()
@@ -35,7 +30,7 @@ class SecurityContext(WrapperPimpl):
     class InnerWrapper(Wrapper):
         # pylint: disable=no-value-for-parameter
         def __init__(self, flags=0):
-            super(SecurityContext.InnerWrapper, self).__init__(
+            super().__init__(
                 ffi,
                 lib,
                 match=ffi.typeof("flux_security_t *"),
@@ -54,7 +49,7 @@ class SecurityContext(WrapperPimpl):
             )
 
     def __init__(self, config_pattern, flags=0):
-        super(SecurityContext, self).__init__()
+        super().__init__()
         self.pimpl = self.InnerWrapper(flags)
         self.pimpl.configure(config_pattern)
 

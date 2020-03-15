@@ -9,25 +9,32 @@ import argparse
 import json
 import collections
 
-try:
-    collectionsAbc = collections.abc
-except AttributeError:
-    collectionsAbc = collections
-
-from flux import util
 import yaml
 
+from flux import util
 
-def create_resource(res_type, count, with_child=[]):
-    assert isinstance(
-        with_child, collectionsAbc.Sequence
-    ), "child resource must be a sequence"
-    assert not isinstance(with_child, str), "child resource must not be a string"
+try:
+    # pylint: disable=invalid-name
+    collectionsAbc = collections.abc
+except AttributeError:
+    # pylint: disable=invalid-name
+    collectionsAbc = collections
+
+
+def create_resource(res_type, count, with_child=None):
+    if with_child is None:
+        with_child = []
+    else:
+        assert isinstance(
+            with_child, collectionsAbc.Sequence
+        ), "child resource must be a sequence"
+        assert not isinstance(with_child, str), "child resource must not be a string"
+
     assert count > 0, "resource count must be > 0"
 
     res = {"type": res_type, "count": count}
 
-    if len(with_child) > 0:
+    if with_child:  # if not empty
         res["with"] = with_child
     return res
 
@@ -38,55 +45,58 @@ def create_slot(label, count, with_child):
     return slot
 
 
-def get_environment(l=[{}]):
+def get_environment(export_list=None):
     """
-    Return current environment as specified by argument `l`, a list of
-    dicts possibly provided by the --export command line option.
-    If "ALL" is set always export all environment variables, else if
-    "NONE" is set, export an empty environment.
+    Return current environment as specified by argument `export_list`, a list of
+    dicts possibly provided by the --export command line option.  If "ALL" is
+    set always export all environment variables, else if "NONE" is set, export
+    an empty environment.
     """
+    if export_list is None:
+        export_list = [{}]
+
     environ = {}
 
     # Argument from --export is a list of dicts. Combine this list into
     #  a single "exports" dict:
-    exports = {k: v for e in l for (k, v) in e.items()}
+    exports = {k: v for e in export_list for (k, v) in e.items()}
 
     # If --export option not used then return current environment:
     if not exports:
         return dict(os.environ)
+
     # If --export=NONE then return empty environment:
-    elif "NONE" in exports:
+    if "NONE" in exports:
         return {}
+
     # If --export=ALL,... then start with current environment, possibly
     # modified by export --export arguments:
-    elif "ALL" in exports:
+    if "ALL" in exports:
         del exports["ALL"]
         environ = dict(os.environ)
 
     # Set each env var to provided value, e.g. --export=FOO=bar,
     #  or current value if not provided, e.g. --export=FOO :
-    for k, v in exports.items():
+    for key, value in exports.items():
         try:
-            environ[k] = v or os.environ[k]
+            environ[key] = value or os.environ[key]
         except KeyError:
-            logger.error("Variable {} not found in current env".format(k))
+            LOGGER.error("Variable %s not found in current env", str(key))
             sys.exit(1)
     return environ
 
 
 def create_slurm_style_jobspec(
-    command,
-    num_tasks,
-    cores_per_task,
-    num_nodes=0,
-    walltime=None,
-    environ=get_environment(),
+    command, num_tasks, cores_per_task, num_nodes=0, walltime=None, environ=None
 ):
+    if environ is None:
+        environ = get_environment()
+
     core = create_resource("core", cores_per_task)
     if num_nodes > 0:
         num_slots = int(math.ceil(num_tasks / float(num_nodes)))
         if num_tasks % num_nodes != 0:
-            logging.warn(
+            logging.warning(
                 "Number of tasks is not an integer multiple of the number of nodes. "
                 "More resources than required will be requested to satisfy your job."
             )
@@ -127,37 +137,37 @@ def validate_slurm_args(args):
         )
 
     # TODO: is there any validation of the stdout redirection path that we can do?
-    # IDEA: print a warning if the file already exists or if the parent dir doesn't exist
+    # IDEA: print a warning if the file already exists or the parent dir doesn't exist
 
 
 #  Convert slurm walltime string to floating point seconds
-def slurm_walltime_to_duration(time):
-    if not time:
+def slurm_walltime_to_duration(time_str):
+    if not time_str:
         return None
-    p1 = re.compile(
+    dhms_regex = re.compile(
         r"^((?P<days>\d+)-)?"
         r"(?P<hours>\d+):"
         r"(?P<minutes>\d+):"
         r"(?P<seconds>\d+)$"
     )
-    p2 = re.compile(r"^(?P<minutes>\d+)(:(?P<seconds>\d+))?$")
+    ms_regex = re.compile(r"^(?P<minutes>\d+)(:(?P<seconds>\d+))?$")
 
-    t = 0.0
-    m = p2.search(time) or p1.search(time)
-    if m is None:
+    time = 0.0
+    match = ms_regex.search(time_str) or dhms_regex.search(time_str)
+    if match is None:
         return None
-    vals = {k: float(v) for k, v in m.groupdict().items() if v is not None}
+    vals = {k: float(v) for k, v in match.groupdict().items() if v is not None}
     if "days" in vals:
-        t = t + vals["days"] * 60 * 60 * 24
+        time = time + vals["days"] * 60 * 60 * 24
     if "hours" in vals:
-        t = t + vals["hours"] * 60 * 60
+        time = time + vals["hours"] * 60 * 60
     if "minutes" in vals:
-        t = t + vals["minutes"] * 60
+        time = time + vals["minutes"] * 60
     if "seconds" in vals:
-        t = t + vals["seconds"]
-    if t == 0.0:
+        time = time + vals["seconds"]
+    if time == 0.0:
         return None
-    return t
+    return time
 
 
 def slurm_jobspec(args):
@@ -166,22 +176,22 @@ def slurm_jobspec(args):
 
     try:
         validate_slurm_args(args)
-    except ValueError as e:
-        logger.error(str(e))
+    except ValueError as err:
+        LOGGER.error(str(err))
         sys.exit(1)
-    t = slurm_walltime_to_duration(args.time)
+    time = slurm_walltime_to_duration(args.time)
     environ = get_environment(args.export)
     return create_slurm_style_jobspec(
-        args.command, args.ntasks, args.cpus_per_task, args.nodes, t, environ
+        args.command, args.ntasks, args.cpus_per_task, args.nodes, time, environ
     )
 
 
-def kv_list_split(s):
+def kv_list_split(string):
     """
     Split a key/value list with optional values, e.g. 'FOO,BAR=baz,...'
     and return a dict.
     """
-    return dict((a, b) for a, _, b in [x.partition("=") for x in s.split(",")])
+    return dict((a, b) for a, _, b in [x.partition("=") for x in string.split(",")])
 
 
 def get_slurm_common_parser():
@@ -229,10 +239,10 @@ def get_slurm_common_parser():
     return slurm_parser
 
 
-logger = logging.getLogger("flux-jobspec")
+LOGGER = logging.getLogger("flux-jobspec")
 
 
-@util.CLIMain(logger)
+@util.CLIMain(LOGGER)
 def main():
     parser = argparse.ArgumentParser(prog="flux-jobspec")
     parser.add_argument("--format", choices=["json", "yaml"], default="json")
@@ -249,7 +259,7 @@ def main():
 
     args = parser.parse_args()
 
-    if len(args.command) == 0:
+    if not args.command:  # list is empty
         parser.error("command is required")
         sys.exit(1)
 

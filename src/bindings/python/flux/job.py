@@ -19,6 +19,7 @@ import collections
 import six
 import yaml
 
+import flux.kvs
 from flux import constants
 from flux.wrapper import Wrapper
 from flux.util import check_future_error, parse_fsd
@@ -63,6 +64,32 @@ def _convert_jobspec_arg_to_string(jobspec):
             "jobpsec must be a Jobspec or string (either binary or unicode)"
         )
     return jobspec
+
+
+def job_kvs(flux_handle, jobid):
+    """
+    :returns: The KVS directory of the given job
+    :rtype: KVSDir
+    """
+
+    path_len = 1024
+    buf = ffi.new("char[]", path_len)
+    RAW.kvs_key(buf, path_len, jobid, "")
+    kvs_key = ffi.string(buf, path_len)
+    return flux.kvs.get_dir(flux_handle, kvs_key)
+
+
+def job_kvs_guest(flux_handle, jobid):
+    """
+    :returns: The KVS guest directory of the given job
+    :rtype: KVSDir
+    """
+
+    path_len = 1024
+    buf = ffi.new("char[]", path_len)
+    RAW.kvs_guest_key(buf, path_len, jobid, "")
+    kvs_key = ffi.string(buf, path_len)
+    return flux.kvs.get_dir(flux_handle, kvs_key)
 
 
 class SubmitFuture(Future):

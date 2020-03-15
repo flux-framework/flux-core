@@ -248,6 +248,26 @@ test_expect_success 'flux-jobs --format={nnodes},{nnodes_hyphen} works' '
         test_cmp nodecountRI.out nodecountRI.exp
 '
 
+test_expect_success 'flux-jobs --format={runtime:0.3f} works' '
+        flux jobs --suppress-header --state=pending --format="{runtime:0.3f}" > runtime-dotP.out &&
+        for i in `seq 1 6`; do echo "0.000" >> runtime-dotP.exp; done &&
+        test_cmp runtime-dotP.out runtime-dotP.exp &&
+        flux jobs --suppress-header --state=running,inactive --format="{runtime:0.3f}" > runtime-dotRI.out &&
+        [ "$(grep -E "\.[0-9]{3}" runtime-dotRI.out | wc -l)" = "12" ]
+'
+
+test_expect_success 'flux-jobs --format={runtime:0.3f} works with header' '
+        flux jobs --state=pending --format="{runtime:0.3f}" > runtime-header.out &&
+        echo "RUNTIME" >> runtime-header.exp &&
+        for i in `seq 1 6`; do echo "0.000" >> runtime-header.exp; done &&
+        test_cmp runtime-header.out runtime-header.exp
+'
+
+test_expect_success 'flux-jobs --format={id:d} works with header' '
+        flux jobs --state=pending --format="{id:d}" > id-decimal.out &&
+        [ "$(grep -E "^[0-9]+$" id-decimal.out | wc -l)" = "6" ]
+'
+
 test_expect_success 'flux-jobs emits useful error on invalid format' '
 	test_expect_code 1 flux jobs --format="{runtime" >invalid.out 2>&1 &&
 	test_debug "cat invalid.out" &&
@@ -259,6 +279,13 @@ test_expect_success 'flux-jobs emits useful error on invalid format field' '
 	test_debug "cat invalid-field.out" &&
 	grep "Unknown format field" invalid-field.out
 '
+
+test_expect_success 'flux-jobs emits useful error on invalid format specifier' '
+	test_expect_code 1 flux jobs --format="{runtime:garbage}" >invalid-spec.out 2>&1 &&
+	test_debug "cat invalid-spec.out" &&
+	grep "Invalid format specifier" invalid-spec.out
+'
+
 
 # node ranks assumes sched-simple default of mode='worst-fit'
 test_expect_success 'flux-jobs --format={ranks},{ranks_hyphen} works' '

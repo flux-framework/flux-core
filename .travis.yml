@@ -20,7 +20,7 @@ jobs:
       language: 'python'
       python: '3.6'
       install: pip install 'pylint==2.2.2' --force-reinstall
-      script: pylint --rcfile=src/bindings/python/.pylintrc src/bindings/python/flux
+      script: ./scripts/pylint
       before_deploy: skip
       deploy: skip
       after_success: skip

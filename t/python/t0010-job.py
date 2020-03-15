@@ -22,6 +22,7 @@ import yaml
 import six
 
 import flux
+import flux.kvs
 from flux import job
 from flux.job import Jobspec, JobspecV1, ffi
 
@@ -31,7 +32,7 @@ def __flux_size():
 
 
 def yaml_to_json(s):
-    obj = yaml.load(s)
+    obj = yaml.safe_load(s)
     return json.dumps(obj, separators=(",", ":"))
 
 
@@ -148,6 +149,17 @@ class TestJob(unittest.TestCase):
         new_env = {"HOME": "foo", "foo": "bar"}
         jobspec.environment = new_env
         self.assertEqual(jobspec.environment, new_env)
+
+    def test_13_job_kvs(self):
+        jobid = job.submit(self.fh, self.basic_jobspec, waitable=True)
+        job.wait(self.fh, jobid=jobid)
+        for job_kvs_dir in [
+            job.job_kvs(self.fh, jobid),
+            job.job_kvs_guest(self.fh, jobid),
+        ]:
+            self.assertTrue(isinstance(job_kvs_dir, flux.kvs.KVSDir))
+            self.assertTrue(flux.kvs.exists(self.fh, job_kvs_dir.path))
+            self.assertTrue(flux.kvs.isdir(self.fh, job_kvs_dir.path))
 
 
 if __name__ == "__main__":

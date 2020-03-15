@@ -24,9 +24,9 @@ import flux.util
 from flux.core.inner import raw
 from flux.memoized_property import memoized_property
 
-logger = logging.getLogger("flux-jobs")
+LOGGER = logging.getLogger("flux-jobs")
 
-state_const_dict = {
+STATE_CONST_DICT = {
     "depend": flux.constants.FLUX_JOB_DEPEND,
     "sched": flux.constants.FLUX_JOB_SCHED,
     "run": flux.constants.FLUX_JOB_RUN,
@@ -38,23 +38,23 @@ state_const_dict = {
 }
 
 
-def fsd(t, hyphenifzero):
+def fsd(secs, hyphenifzero):
     #  Round <1ms down to 0s for now
-    if t < 1.0e-3:
-        s = "0s"
-    elif t < 10.0:
-        s = "%.03fs" % t
-    elif t < 60.0:
-        s = "%.4gs" % t
-    elif t < (60.0 * 60.0):
-        s = "%.4gm" % (t / 60.0)
-    elif t < (60.0 * 60.0 * 24.0):
-        s = "%.4gh" % (t / (60.0 * 60.0))
+    if secs < 1.0e-3:
+        string = "0s"
+    elif secs < 10.0:
+        string = "%.03fs" % secs
+    elif secs < 60.0:
+        string = "%.4gs" % secs
+    elif secs < (60.0 * 60.0):
+        string = "%.4gm" % (secs / 60.0)
+    elif secs < (60.0 * 60.0 * 24.0):
+        string = "%.4gh" % (secs / (60.0 * 60.0))
     else:
-        s = "%.4gd" % (t / (60.0 * 60.0 * 24.0))
-    if hyphenifzero and s == "0s":
+        string = "%.4gd" % (secs / (60.0 * 60.0 * 24.0))
+    if hyphenifzero and string == "0s":
         return "-"
-    return s
+    return string
 
 
 def statetostr(stateid, singlechar=False):
@@ -89,16 +89,16 @@ class JobInfo:
 
     def __init__(self, info_resp):
         #  Set defaults, then update with job-info.list response items:
-        d = self.defaults.copy()
-        d.update(info_resp)
+        combined_dict = self.defaults.copy()
+        combined_dict.update(info_resp)
 
         #  Rename "state" to "state_id" until returned state is a string:
-        if "state" in d:
-            d["state_id"] = d.pop("state")
+        if "state" in combined_dict:
+            combined_dict["state_id"] = combined_dict.pop("state")
 
         #  Set all keys as self._{key} to be found by getattr and
         #   memoized_property decorator:
-        for key, value in d.items():
+        for key, value in combined_dict.items():
             setattr(self, "_{0}".format(key), value)
 
     #  getattr method to return all non-computed values in job-info.list
@@ -115,16 +115,16 @@ class JobInfo:
 
     def get_runtime(self, roundup=False):
         if self.t_cleanup > 0 and self.t_run > 0:
-            t = self.t_cleanup - self.t_run
+            runtime = self.t_cleanup - self.t_run
             if roundup:
-                t = round(t + 0.5)
+                runtime = round(runtime + 0.5)
         elif self.t_run > 0:
-            t = time.time() - self.t_run
+            runtime = time.time() - self.t_run
             if roundup:
-                t = round(t + 0.5)
+                runtime = round(runtime + 0.5)
         else:
-            t = 0.0
-        return t
+            runtime = 0.0
+        return runtime
 
     @memoized_property
     def state(self):
@@ -156,15 +156,15 @@ class JobInfo:
 
     @memoized_property
     def runtime_hms(self):
-        t = self.get_runtime(True)
-        return str(timedelta(seconds=t))
+        runtime = self.get_runtime(True)
+        return str(timedelta(seconds=runtime))
 
     @memoized_property
     def runtime(self):
         return self.get_runtime()
 
 
-def fetch_jobs_stdin(args):
+def fetch_jobs_stdin():
     """
     Return a list of jobs gathered from a series of JSON objects, one per
     line, presented on stdin. This function is used for testing of the
@@ -179,16 +179,14 @@ def fetch_jobs_stdin(args):
         try:
             job = json.loads(line)
         except ValueError as err:
-            logger.error(
-                "JSON input error: line {}: {}".format(fileinput.lineno(), err)
-            )
+            LOGGER.error("JSON input error: line %d: %s", fileinput.lineno(), str(err))
             sys.exit(1)
         jobs.append(job)
     return jobs
 
 
 def fetch_jobs_flux(args, fields):
-    h = flux.Flux()
+    flux_handle = flux.Flux()
 
     # Note there is no attr for "id", its always returned
     fields2attrs = dict(
@@ -242,7 +240,7 @@ def fetch_jobs_flux(args, fields):
     states = 0
     for state in args.states.split(","):
         try:
-            states |= state_const_dict[state.lower()]
+            states |= STATE_CONST_DICT[state.lower()]
         except KeyError:
             print("Invalid state specified: {}".format(state), file=sys.stderr)
             sys.exit(1)
@@ -251,11 +249,11 @@ def fetch_jobs_flux(args, fields):
         states |= flux.constants.FLUX_JOB_PENDING
         states |= flux.constants.FLUX_JOB_RUNNING
 
-    rpc_handle = flux.job.job_list(h, args.count, list(attrs), userid, states)
+    rpc_handle = flux.job.job_list(flux_handle, args.count, list(attrs), userid, states)
     try:
         jobs = rpc_handle.get_jobs()
-    except EnvironmentError as e:
-        print("{}: {}".format("rpc", e.strerror), file=sys.stderr)
+    except EnvironmentError as err:
+        print("{}: {}".format("rpc", err.strerror), file=sys.stderr)
         sys.exit(1)
 
     return jobs
@@ -267,10 +265,10 @@ def fetch_jobs(args, fields):
     Returns a list of JobInfo objects
     """
     if args.from_stdin:
-        l = fetch_jobs_stdin(args)
+        lst = fetch_jobs_stdin()
     else:
-        l = fetch_jobs_flux(args, fields)
-    return [JobInfo(job) for job in l]
+        lst = fetch_jobs_flux(args, fields)
+    return [JobInfo(job) for job in lst]
 
 
 def parse_args():
@@ -311,7 +309,8 @@ def parse_args():
         type=str,
         metavar="[USERNAME|UID]",
         default=str(os.geteuid()),
-        help='Limit output to specific username or userid (Specify "all" for all users)',
+        help="Limit output to specific username or userid "
+        '(Specify "all" for all users)',
     )
     parser.add_argument(
         "-o",
@@ -325,7 +324,7 @@ def parse_args():
     return parser.parse_args()
 
 
-class OutputFormat:
+class JobsOutputFormat(flux.util.OutputFormat):
     """
     Store a parsed version of the program's output format,
     allowing the fields to iterated without modifiers, building
@@ -367,77 +366,30 @@ class OutputFormat:
         Throws an exception if any format fields do not match the allowed
         list of headings above.
         """
-        from string import Formatter
-
-        self.fmt = fmt
-        #  Parse format into list of (string, field, spec, conv) tuples,
-        #   replacing any None values with empty string "" (this makes
-        #   substitution back into a format string in self.header() and
-        #   self.get_format() much simpler below)
-        l = Formatter().parse(fmt)
-        self.format_list = [[s or "" for s in t] for t in l]
-
-        #  Store list of requested fields in self.fields
-        self.fields = [field for (s, field, spec, conv) in self.format_list]
-
-        #  Throw an exception if any requested fields are invalid:
-        for field in self.fields:
-            if field and not field in self.headings:
-                raise ValueError("Unknown format field: " + field)
-
-    def _fmt_tuple(self, s, field, spec, conv):
-        #  If field is empty string or None, then the result of the
-        #   format (besides 's') doesn't make sense, just return 's'
-        if not field:
-            return s
-        #  The prefix of spec and conv are stripped by formatter.parse()
-        #   replace them here if the values are not empty:
-        spec = ":" + spec if spec else ""
-        conv = "!" + conv if conv else ""
-        return "{0}{{{1}{2}{3}}}".format(s, field, conv, spec)
-
-    def header(self):
-        """
-        Return the header row formatted by the user-provided format spec,
-        which will be made "safe" for use with string headings.
-        """
-        import re
-
-        l = []
-        for (s, field, spec, conv) in self.format_list:
-            #  Remove floating point formatting on any spec:
-            spec = re.sub(r"\.\d+[bcdoxXeEfFgGn%]$", "", spec)
-            l.append(self._fmt_tuple(s, field, spec, conv))
-        fmt = "".join(l)
-        return fmt.format(**self.headings)
+        super().__init__(JobsOutputFormat.headings, fmt)
 
     def get_format(self):
         """
         Return the format string with prepended `0.` if necessary.
         """
         try:
-            return self.jobfmt
+            # pylint: disable=access-member-before-definition
+            return self._jobfmt
         except AttributeError:
             pass
 
-        l = []
-        for (s, field, spec, conv) in self.format_list:
+        lst = []
+        for (text, field, spec, conv) in self.format_list:
             # If field doesn't have `0.` then add it
             if field and not field.startswith("0."):
                 field = "0." + field
-            l.append(self._fmt_tuple(s, field, spec, conv))
-        self.jobfmt = "".join(l)
-        return self.jobfmt
-
-    def format(self, job):
-        """
-        format JobInfo object with internal format
-        prepend `0.` if necessary to fields to invoke getattr method
-        """
-        return self.get_format().format(job)
+            lst.append(self._fmt_tuple(text, field, spec, conv))
+        # pylint: disable=attribute-defined-outside-init
+        self._jobfmt = "".join(lst)
+        return self._jobfmt
 
 
-@flux.util.CLIMain(logger)
+@flux.util.CLIMain(LOGGER)
 def main():
     args = parse_args()
 
@@ -450,17 +402,17 @@ def main():
             "{ranks_hyphen}"
         )
     try:
-        of = OutputFormat(fmt)
-    except ValueError as e:
-        raise ValueError("Error in user format: " + str(e))
+        formatter = JobsOutputFormat(fmt)
+    except ValueError as err:
+        raise ValueError("Error in user format: " + str(err))
 
-    jobs = fetch_jobs(args, of.fields)
+    jobs = fetch_jobs(args, formatter.fields)
 
     if not args.suppress_header:
-        print(of.header())
+        print(formatter.header())
 
     for job in jobs:
-        print(of.format(job))
+        print(formatter.format(job))
 
 
 if __name__ == "__main__":
