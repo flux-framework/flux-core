@@ -4,8 +4,6 @@ test_description='Test flux-shell initrc.lua implementation'
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 2
-
 jq=$(which jq 2>/dev/null)
 test -z "$jq" || test_set_prereq HAVE_JQ
 

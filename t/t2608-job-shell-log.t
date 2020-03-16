@@ -4,7 +4,7 @@ test_description='Test flux-shell logging implementation'
 
 . `dirname $0`/sharness.sh
 
-test_under_flux 2
+test_under_flux 2 job
 
 FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
