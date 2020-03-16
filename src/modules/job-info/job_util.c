@@ -107,6 +107,29 @@ json_t *job_to_json (struct job *job, json_t *attrs)
                 continue;
             val = json_boolean (job->success);
         }
+        else if (!strcmp (attr, "exception_occurred")) {
+            if (!(job->states_mask & FLUX_JOB_INACTIVE))
+                continue;
+            val = json_boolean (job->exception_occurred);
+        }
+        else if (!strcmp (attr, "exception_severity")) {
+            if (!(job->states_mask & FLUX_JOB_INACTIVE)
+                || !job->exception_occurred)
+                continue;
+            val = json_integer (job->exception_severity);
+        }
+        else if (!strcmp (attr, "exception_type")) {
+            if (!(job->states_mask & FLUX_JOB_INACTIVE)
+                || !job->exception_occurred)
+                continue;
+            val = json_string (job->exception_type);
+        }
+        else if (!strcmp (attr, "exception_note")) {
+            if (!(job->states_mask & FLUX_JOB_INACTIVE)
+                || !job->exception_occurred)
+                continue;
+            val = json_string (job->exception_note);
+        }
         else {
             errno = EINVAL;
             goto error;
