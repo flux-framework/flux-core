@@ -195,6 +195,7 @@ dist_check_SCRIPTS = \
 	scripts/waitfile.lua \
 	scripts/t0004-event-helper.sh \
 	scripts/tssh \
+	scripts/sign-as.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
 	kvs/kvs-helper.sh \
