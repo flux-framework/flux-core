@@ -135,7 +135,7 @@ class TAPTestResult(unittest.TestResult):
         self.print_raw("1..%d\n" % self.testsRun)
 
 
-class TAPTestRunner(object):
+class TAPTestRunner(TestRunner):
     def __init__(
         self,
         message_log=LogMode.LogToYAML,

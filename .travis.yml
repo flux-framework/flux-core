@@ -30,7 +30,7 @@ jobs:
       language: 'python'
       python: '3.6'
       install: python3 -m pip install 'mypy' --force-reinstall
-      script: mypy --config-file=src/bindings/python/.mypy.ini
+      script: mypy
       before_deploy: skip
       deploy: skip
       after_success: skip

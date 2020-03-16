@@ -7,27 +7,18 @@ import math
 import logging
 import argparse
 import json
-import collections
+import collections.abc as abc
 
 import yaml
 
 from flux import util
-
-try:
-    # pylint: disable=invalid-name
-    collectionsAbc = collections.abc
-except AttributeError:
-    # pylint: disable=invalid-name
-    collectionsAbc = collections
 
 
 def create_resource(res_type, count, with_child=None):
     if with_child is None:
         with_child = []
     else:
-        assert isinstance(
-            with_child, collectionsAbc.Sequence
-        ), "child resource must be a sequence"
+        assert isinstance(with_child, abc.Sequence), "child resource must be a sequence"
         assert not isinstance(with_child, str), "child resource must not be a string"
 
     assert count > 0, "resource count must be > 0"
