@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.org/flux-framework/flux-core.svg?branch=master)](https://travis-ci.org/flux-framework/flux-core)
+[![Build Status](https://travis-ci.com/flux-framework/flux-core.svg?branch=master)](https://travis-ci.com/flux-framework/flux-core)
 [![Coverage Status](https://coveralls.io/repos/flux-framework/flux-core/badge.svg?branch=master&service=github)](https://coveralls.io/github/flux-framework/flux-core?branch=master)
 
 _NOTE: The interfaces of flux-core are being actively developed
