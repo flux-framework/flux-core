@@ -581,7 +581,8 @@ int cmd_namespace (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-static void kv_printf (const char *key, int maxcol, const char *fmt, ...)
+static void __attribute__ ((format (printf, 3, 4)))
+kv_printf (const char *key, int maxcol, const char *fmt, ...)
 {
     va_list ap;
     int rc;
@@ -1141,9 +1142,9 @@ static char *process_key (const char *key)
 static void dump_kvs_val (const char *key, int maxcol, const char *value)
 {
     if (!value)
-        kv_printf (key, maxcol, "");
+        kv_printf (key, maxcol, "%s", "");
     else
-        kv_printf (key, maxcol, value);
+        kv_printf (key, maxcol, "%s", value);
 }
 
 static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
@@ -1215,7 +1216,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
                 if (flux_kvs_lookup_get (f, &value) == 0) // null terminated
                     dump_kvs_val (key, maxcol, value);
                 else if (flux_kvs_lookup_get_raw  (f, &buf, &len) == 0)
-                    kv_printf (key, maxcol, "%.*s", len, buf);
+                    kv_printf (key, maxcol, "%.*s", len, (char *)buf);
                 else
                     log_err_exit ("%s", key);
                 flux_future_destroy (f);
