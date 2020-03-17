@@ -491,7 +491,7 @@ error:
 void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
-    if (flux_respond_pack (h, msg, "{s:[s,s,s,s,s,s,s,s,s,s,s,s]}",
+    if (flux_respond_pack (h, msg, "{s:[s,s,s,s,s,s,s,s,s,s,s,s,s]}",
                            "attrs",
                            "userid",
                            "priority",
