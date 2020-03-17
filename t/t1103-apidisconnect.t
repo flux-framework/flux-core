@@ -24,7 +24,7 @@ check_kvs_watchers() {
 test_expect_success 'kvs watcher gets disconnected on client exit' '
 	before_watchers=`flux module stats --parse "watchers" kvs-watch` &&
 	echo "waiters before test: $before_watchers" &&
-	test_expect_code 142 run_timeout 1 flux kvs get --watch --waitcreate noexist &&
+	test_expect_code 142 run_timeout -s ALRM 1 flux kvs get --watch --waitcreate noexist &&
 	check_kvs_watchers $before_watchers 3
 '
 

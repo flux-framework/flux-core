@@ -29,7 +29,7 @@ test_expect_success 'barrier: returns when complete (all ranks)' '
 '
 
 test_expect_success 'barrier: blocks while incomplete' '
-	test_expect_code 142 run_timeout 1 \
+	test_expect_code 142 run_timeout -s ALRM 1 \
 	  ${tbarrier} --nprocs 2 xyz
 '
 

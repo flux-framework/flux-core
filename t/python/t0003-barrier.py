@@ -40,13 +40,16 @@ class TestBarrier(unittest.TestCase):
         self.f.barrier(u"testbarrier1", 1)
 
     def test_eight(self):
+        p = mp.Pool(8)
         for topic in [b"testbarrier2", u"\xa3", u"\u32db \u263a \u32e1"]:
             for i in range(1, 9):
-                p = mp.Pool(i)
                 reslist = []
                 for j in range(0, i):
                     res = p.apply_async(barr_count, (j, topic, i))
                     reslist.append(res)
+                reslist[0].wait(10)  # timeout in 10 seconds if no success
+                for r in reslist[1:]:  # wait for rest with short timeouts
+                    r.get(0.5)
 
 
 if __name__ == "__main__":

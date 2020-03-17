@@ -16,14 +16,18 @@ if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi
 
+fj_wait_event() {
+  flux job wait-event --timeout=20 "$@"
+}
+
 # Usage: submit_job
 # To ensure robustness of tests despite future job manager changes,
 # cancel the job, and wait for clean event.
 submit_job() {
         local jobid=$(flux job submit sleeplong.json) &&
-        flux job wait-event $jobid start >/dev/null &&
+        fj_wait_event $jobid start >/dev/null &&
         flux job cancel $jobid &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         echo $jobid
 }
 
@@ -31,14 +35,14 @@ submit_job() {
 submit_job_live() {
         local jobspec=$1
         local jobid=$(flux job submit $jobspec) &&
-        flux job wait-event $jobid start >/dev/null &&
+        fj_wait_event $jobid start >/dev/null &&
         echo $jobid
 }
 
 # Test will cancel the job, is assumed won't run immediately
 submit_job_wait() {
         local jobid=$(flux job submit sleeplong.json) &&
-        flux job wait-event $jobid depend >/dev/null &&
+        fj_wait_event $jobid depend >/dev/null &&
         echo $jobid
 }
 
@@ -121,12 +125,12 @@ wait_states() {
 test_expect_success 'submit jobs for job list testing' '
         for i in `seq 1 4`; do \
             flux job submit hostname.json >> job_ids1.out; \
-            flux job wait-event `tail -n 1 job_ids1.out` clean ; \
+            fj_wait_event `tail -n 1 job_ids1.out` clean ; \
         done &&
         tac job_ids1.out > job_ids_inactive.out &&
         for i in `seq 1 8`; do \
             flux job submit sleeplong.json >> job_ids2.out; \
-            flux job wait-event `tail -n 1 job_ids2.out` start; \
+            fj_wait_event `tail -n 1 job_ids2.out` start; \
         done &&
         tac job_ids2.out > job_ids_running.out &&
         id1=$(flux job submit -p20 hostname.json) &&
@@ -313,11 +317,11 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
 test_expect_success 'cleanup job listing jobs ' '
         for jobid in `cat job_ids_pending.out`; do \
             flux job cancel $jobid; \
-            flux job wait-event $jobid clean; \
+            fj_wait_event $jobid clean; \
         done &&
         for jobid in `cat job_ids_running.out`; do \
             flux job cancel $jobid; \
-            flux job wait-event $jobid clean; \
+            fj_wait_event $jobid clean; \
         done
 '
 
@@ -498,7 +502,7 @@ wait_idsync() {
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (one id)' '
 	${RPC} job-info.job-state-pause 0 </dev/null
         jobid=`flux mini submit hostname`
-        flux job wait-event $jobid clean >/dev/null
+        fj_wait_event $jobid clean >/dev/null
         flux job list-ids ${jobid} > list_id_wait1.out &
         pid=$!
         wait_idsync 1 &&
@@ -511,8 +515,8 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (
 	${RPC} job-info.job-state-pause 0 </dev/null
         jobid1=`flux mini submit hostname`
         jobid2=`flux mini submit hostname`
-        flux job wait-event ${jobid1} clean >/dev/null
-        flux job wait-event ${jobid2} clean >/dev/null
+        fj_wait_event ${jobid1} clean >/dev/null
+        fj_wait_event ${jobid2} clean >/dev/null
         flux job list-ids ${jobid1} ${jobid2} > list_id_wait2.out &
         pid=$!
         wait_idsync 2 &&
@@ -525,7 +529,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (same id)' '
 	${RPC} job-info.job-state-pause 0 </dev/null
         jobid=`flux mini submit hostname`
-        flux job wait-event $jobid clean >/dev/null
+        fj_wait_event $jobid clean >/dev/null
         flux job list-ids ${jobid} > list_id_wait3A.out &
         pid1=$!
         flux job list-ids ${jobid} > list_id_wait3B.out &
@@ -545,7 +549,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (
 # simply test that value in timestamp increases through job states
 test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job inactive)' '
         jobid=$(flux mini submit hostname) &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".t_depend < .t_sched" &&
         echo $obj | jq -e ".t_sched < .t_run" &&
@@ -556,14 +560,14 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job i
 # since job is running, make sure latter states don't exist
 test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job running)' '
         jobid=$(flux mini submit sleep 60) &&
-        flux job wait-event $jobid start >/dev/null &&
+        fj_wait_event $jobid start >/dev/null &&
         obj=$(flux job list -s running | grep $jobid) &&
         echo $obj | jq -e ".t_depend < .t_sched" &&
         echo $obj | jq -e ".t_sched < .t_run" &&
         echo $obj | jq -e ".t_cleanup == null" &&
         echo $obj | jq -e ".t_inactive == null" &&
         flux job cancel $jobid &&
-        flux job wait-event $jobid clean >/dev/null
+        fj_wait_event $jobid clean >/dev/null
 '
 
 #
@@ -573,21 +577,21 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job r
 test_expect_success 'flux job list outputs user job name' '
         jobid=`flux mini submit --setattr system.job.name=foobar A B C` &&
         echo $jobid > jobname1.id &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         flux job list -s inactive | grep $jobid | grep foobar
 '
 
 test_expect_success 'flux job lists first argument for job name' '
         jobid=`flux mini submit mycmd arg1 arg2` &&
         echo $jobid > jobname2.id &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         flux job list -s inactive | grep $jobid | grep mycmd
 '
 
 test_expect_success 'flux job lists basename of first argument for job name' '
         jobid=`flux mini submit /foo/bar arg1 arg2` &&
         echo $jobid > jobname3.id &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         flux job list -s inactive | grep $jobid | grep bar &&
         flux job list -s inactive | grep $jobid | grep -v foo
 '
@@ -595,7 +599,7 @@ test_expect_success 'flux job lists basename of first argument for job name' '
 test_expect_success 'flux job lists full path for job name if basename fails on first arg' '
         jobid=`flux mini submit /foo/bar/ arg1 arg2` &&
         echo $jobid > jobname4.id &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         flux job list -s inactive | grep $jobid | grep "\/foo\/bar\/"
 '
 
@@ -621,7 +625,7 @@ test_expect_success 'verify job names preserved across restart' '
 test_expect_success 'flux job list outputs ntasks correctly (1 task)' '
         jobid=`flux mini submit hostname` &&
         echo $jobid > taskcount1.id &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".ntasks == 1"
 '
@@ -629,7 +633,7 @@ test_expect_success 'flux job list outputs ntasks correctly (1 task)' '
 test_expect_success 'flux job list outputs ntasks correctly (4 tasks)' '
         jobid=`flux mini submit -n4 hostname` &&
         echo $jobid > taskcount2.id &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".ntasks == 4"
 '
@@ -654,7 +658,7 @@ test_expect_success 'verify task count preserved across restart' '
 test_expect_success 'flux job list outputs nnodes/ranks correctly (1 task / 1 node)' '
         jobid=`flux mini submit -n1 hostname` &&
         echo $jobid > nodecount1.id &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".nnodes == 1" &&
         echo $obj | jq -e ".ranks == \"0\""
@@ -663,7 +667,7 @@ test_expect_success 'flux job list outputs nnodes/ranks correctly (1 task / 1 no
 test_expect_success 'flux job list outputs nnodes/ranks correctly (2 tasks, / 1 node)' '
         jobid=`flux mini submit -n2 hostname` &&
         echo $jobid > nodecount2.id &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".nnodes == 1" &&
         echo $obj | jq -e ".ranks == \"0\""
@@ -672,7 +676,7 @@ test_expect_success 'flux job list outputs nnodes/ranks correctly (2 tasks, / 1 
 test_expect_success 'flux job list outputs nnodes/ranks correctly (3 tasks, / 2 nodes)' '
         jobid=`flux mini submit -n3 hostname` &&
         echo $jobid > nodecount3.id &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".nnodes == 2" &&
         echo $obj | jq -e ".ranks == \"[0-1]\""
@@ -681,7 +685,7 @@ test_expect_success 'flux job list outputs nnodes/ranks correctly (3 tasks, / 2 
 test_expect_success 'flux job list outputs nnodes/ranks correctly (5 tasks, / 3 nodes)' '
         jobid=`flux mini submit -n5 hostname` &&
         echo $jobid > nodecount4.id &&
-        flux job wait-event $jobid clean >/dev/null &&
+        fj_wait_event $jobid clean >/dev/null &&
         obj=$(flux job list -s inactive | grep $jobid) &&
         echo $obj | jq -e ".nnodes == 3" &&
         echo $obj | jq -e ".ranks == \"[0-2]\""
@@ -848,13 +852,13 @@ test_expect_success 'flux job eventlog -p fails on invalid path' '
 
 test_expect_success 'flux job wait-event works' '
         jobid=$(submit_job) &&
-        flux job wait-event $jobid submit > wait_event1.out &&
+        fj_wait_event $jobid submit > wait_event1.out &&
         grep submit wait_event1.out
 '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event errors on non-event' '
         jobid=$(submit_job) &&
-        test_must_fail flux job wait-event $jobid foobar 2> wait_event2.err &&
+        test_must_fail fj_wait_event $jobid foobar 2> wait_event2.err &&
         grep "never received" wait_event2.err
 '
 
@@ -862,23 +866,23 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event does not see event after 
         jobid=$(submit_job) &&
         kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
-        test_must_fail flux job wait-event -v $jobid foobar 2> wait_event3.err &&
+        test_must_fail fj_wait_event -v $jobid foobar 2> wait_event3.err &&
         grep "never received" wait_event3.err
 '
 
 test_expect_success 'flux job wait-event fails on bad id' '
-	test_must_fail flux job wait-event 12345 foobar
+	test_must_fail fj_wait_event 12345 foobar
 '
 
 test_expect_success 'flux job wait-event --quiet works' '
         jobid=$(submit_job) &&
-        flux job wait-event --quiet $jobid submit > wait_event4.out &&
+        fj_wait_event --quiet $jobid submit > wait_event4.out &&
         ! test -s wait_event4.out
 '
 
 test_expect_success 'flux job wait-event --verbose works' '
         jobid=$(submit_job) &&
-        flux job wait-event --verbose $jobid clean > wait_event5.out &&
+        fj_wait_event --verbose $jobid clean > wait_event5.out &&
         grep submit wait_event5.out &&
         grep start wait_event5.out &&
         grep clean wait_event5.out
@@ -886,7 +890,7 @@ test_expect_success 'flux job wait-event --verbose works' '
 
 test_expect_success 'flux job wait-event --verbose doesnt show events after wait event' '
         jobid=$(submit_job) &&
-        flux job wait-event --verbose $jobid submit > wait_event6.out &&
+        fj_wait_event --verbose $jobid submit > wait_event6.out &&
         grep submit wait_event6.out &&
         ! grep start wait_event6.out &&
         ! grep clean wait_event6.out
@@ -901,93 +905,93 @@ test_expect_success 'flux job wait-event --timeout works' '
 
 test_expect_success 'flux job wait-event --format=json works' '
         jobid=$(submit_job) &&
-	flux job wait-event --format=json $jobid submit > wait_event_format1.out &&
+	fj_wait_event --format=json $jobid submit > wait_event_format1.out &&
         grep -q "\"name\":\"submit\"" wait_event_format1.out &&
         grep -q "\"userid\":$(id -u)" wait_event_format1.out
 '
 
 test_expect_success 'flux job wait-event --format=text works' '
         jobid=$(submit_job) &&
-	flux job wait-event --format=text $jobid submit > wait_event_format2.out &&
+	fj_wait_event --format=text $jobid submit > wait_event_format2.out &&
         grep -q "submit" wait_event_format2.out &&
         grep -q "userid=$(id -u)" wait_event_format2.out
 '
 
 test_expect_success 'flux job wait-event --format=invalid fails' '
         jobid=$(submit_job) &&
-	test_must_fail flux job wait-event --format=invalid $jobid submit
+	test_must_fail fj_wait_event --format=invalid $jobid submit
 '
 
 test_expect_success 'flux job wait-event --time-format=raw works' '
         jobid=$(submit_job) &&
-	flux job wait-event --time-format=raw $jobid submit > wait_event_time_format1.out &&
+	fj_wait_event --time-format=raw $jobid submit > wait_event_time_format1.out &&
         get_timestamp_field submit wait_event_time_format1.out | grep "\."
 '
 
 test_expect_success 'flux job wait-event --time-format=iso works' '
         jobid=$(submit_job) &&
-	flux job wait-event --time-format=iso $jobid submit > wait_event_time_format2.out &&
+	fj_wait_event --time-format=iso $jobid submit > wait_event_time_format2.out &&
         get_timestamp_field submit wait_event_time_format2.out | grep T | grep Z
 '
 
 test_expect_success 'flux job wait-event --time-format=offset works' '
         jobid=$(submit_job) &&
-	flux job wait-event --time-format=offset $jobid submit > wait_event_time_format3A.out &&
+	fj_wait_event --time-format=offset $jobid submit > wait_event_time_format3A.out &&
         get_timestamp_field submit wait_event_time_format3A.out | grep "0.000000" &&
-	flux job wait-event --time-format=offset $jobid exception > wait_event_time_format3B.out &&
+	fj_wait_event --time-format=offset $jobid exception > wait_event_time_format3B.out &&
         get_timestamp_field exception wait_event_time_format3B.out | grep -v "0.000000"
 '
 
 test_expect_success 'flux job wait-event --time-format=invalid fails works' '
         jobid=$(submit_job) &&
-	test_must_fail flux job wait-event --time-format=invalid $jobid submit
+	test_must_fail fj_wait_event --time-format=invalid $jobid submit
 '
 
 test_expect_success 'flux job wait-event w/ match-context works (string w/ quotes)' '
         jobid=$(submit_job) &&
-	flux job wait-event --match-context="type=\"cancel\"" $jobid exception > wait_event_context1.out &&
+	fj_wait_event --match-context="type=\"cancel\"" $jobid exception > wait_event_context1.out &&
         grep -q "exception" wait_event_context1.out &&
         grep -q "type=\"cancel\"" wait_event_context1.out
 '
 
 test_expect_success 'flux job wait-event w/ match-context works (string w/o quotes)' '
         jobid=$(submit_job) &&
-	flux job wait-event --match-context=type=cancel $jobid exception > wait_event_context2.out &&
+	fj_wait_event --match-context=type=cancel $jobid exception > wait_event_context2.out &&
         grep -q "exception" wait_event_context2.out &&
         grep -q "type=\"cancel\"" wait_event_context2.out
 '
 
 test_expect_success 'flux job wait-event w/ match-context works (int)' '
         jobid=$(submit_job) &&
-	flux job wait-event --match-context=flags=0 $jobid submit > wait_event_context3.out &&
+	fj_wait_event --match-context=flags=0 $jobid submit > wait_event_context3.out &&
         grep -q "submit" wait_event_context3.out &&
         grep -q "flags=0" wait_event_context3.out
 '
 
 test_expect_success 'flux job wait-event w/ bad match-context fails (invalid key)' '
         jobid=$(submit_job) &&
-        test_must_fail flux job wait-event --match-context=foo=bar $jobid exception
+        test_must_fail fj_wait_event --match-context=foo=bar $jobid exception
 '
 
 test_expect_success 'flux job wait-event w/ bad match-context fails (invalid value)' '
         jobid=$(submit_job) &&
-        test_must_fail flux job wait-event --match-context=type=foo $jobid exception
+        test_must_fail fj_wait_event --match-context=type=foo $jobid exception
 '
 
 test_expect_success 'flux job wait-event w/ bad match-context fails (invalid input)' '
         jobid=$(submit_job) &&
-        test_must_fail flux job wait-event --match-context=foo $jobid exception
+        test_must_fail fj_wait_event --match-context=foo $jobid exception
 '
 
 test_expect_success 'flux job wait-event -p works (eventlog)' '
         jobid=$(submit_job) &&
-        flux job wait-event -p "eventlog" $jobid submit > wait_event_path1.out &&
+        fj_wait_event -p "eventlog" $jobid submit > wait_event_path1.out &&
         grep submit wait_event_path1.out
 '
 
 test_expect_success 'flux job wait-event -p works (guest.exec.eventlog)' '
         jobid=$(submit_job) &&
-        flux job wait-event -p "guest.exec.eventlog" $jobid done > wait_event_path2.out &&
+        fj_wait_event -p "guest.exec.eventlog" $jobid done > wait_event_path2.out &&
         grep done wait_event_path2.out
 '
 
@@ -995,30 +999,30 @@ test_expect_success 'flux job wait-event -p works (non-guest eventlog)' '
         jobid=$(submit_job) &&
         kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.foobar.eventlog foobar &&
-        flux job wait-event -p "foobar.eventlog" $jobid foobar > wait_event_path3.out &&
+        fj_wait_event -p "foobar.eventlog" $jobid foobar > wait_event_path3.out &&
         grep foobar wait_event_path3.out
 '
 
 test_expect_success 'flux job wait-event -p fails on invalid path' '
         jobid=$(submit_job) &&
-        test_must_fail flux job wait-event -p "foobar" $jobid submit
+        test_must_fail fj_wait_event -p "foobar" $jobid submit
 '
 
 test_expect_success 'flux job wait-event -p fails on path "guest."' '
         jobid=$(submit_job) &&
-        test_must_fail flux job wait-event -p "guest." $jobid submit
+        test_must_fail fj_wait_event -p "guest." $jobid submit
 '
 
 test_expect_success 'flux job wait-event -p hangs on non-guest eventlog' '
         jobid=$(submit_job) &&
         kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.foobar.eventlog foo &&
-        test_expect_code 142 run_timeout 0.2 flux job wait-event -p "foobar.eventlog" $jobid bar
+        test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "foobar.eventlog" $jobid bar
 '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (live job)' '
         jobid=$(submit_job_live sleeplong.json)
-        flux job wait-event -p "guest.exec.eventlog" $jobid done > wait_event_path4.out &
+        fj_wait_event -p "guest.exec.eventlog" $jobid done > wait_event_path4.out &
         waitpid=$! &&
         wait_watchers_nonzero "watchers" &&
         wait_watchers_nonzero "guest_watchers" &&
@@ -1031,7 +1035,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 
 test_expect_success 'flux job wait-event -p times out on no event (live job)' '
         jobid=$(submit_job_live sleeplong.json) &&
-        test_expect_code 142 run_timeout 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
+        test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
         flux job cancel $jobid
 '
 
@@ -1047,12 +1051,12 @@ test_expect_success 'job-info: generate jobspec to consume all resources' '
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (wait job)' '
         jobidall=$(submit_job_live sleeplong-all-rsrc.json)
         jobid=$(submit_job_wait)
-        flux job wait-event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path5.out &
+        fj_wait_event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path5.out &
         waitpid=$! &&
         wait_watchers_nonzero "watchers" &&
         wait_watchers_nonzero "guest_watchers" &&
         flux job cancel ${jobidall} &&
-        flux job wait-event ${jobid} start &&
+        fj_wait_event ${jobid} start &&
         guestns=$(flux job namespace ${jobid}) &&
         wait_watcherscount_nonzero $guestns &&
         flux job cancel ${jobid} &&
@@ -1063,7 +1067,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 test_expect_success 'flux job wait-event -p times out on no event (wait job)' '
         jobidall=$(submit_job_live sleeplong-all-rsrc.json) &&
         jobid=$(submit_job_wait) &&
-        test_expect_code 142 run_timeout 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
+        test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
         flux job cancel $jobidall &&
         flux job cancel $jobid
 '
@@ -1076,7 +1080,7 @@ test_expect_success 'flux job wait-event -p times out on no event (wait job)' '
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (never start job)' '
         jobidall=$(submit_job_live sleeplong-all-rsrc.json)
         jobid=$(submit_job_wait)
-        flux job wait-event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path6.out &
+        fj_wait_event -v -p "guest.exec.eventlog" ${jobid} done > wait_event_path6.out &
         waitpid=$! &&
         wait_watchers_nonzero "watchers" &&
         wait_watchers_nonzero "guest_watchers" &&

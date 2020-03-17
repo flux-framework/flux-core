@@ -7,7 +7,15 @@
 #  Extra functions for Flux testsuite
 #
 run_timeout() {
-    perl -e 'use Time::HiRes qw( ualarm ) ; ualarm ((shift @ARGV) * 1000000) ; exec @ARGV or die "$!"' "$@"
+    if test -z "$LD_PRELOAD" ; then
+        "${PYTHON:-python3}" -S "${SHARNESS_TEST_SRCDIR}/scripts/run_timeout.py" "$@"
+    else
+        (
+            TIMEOUT_PRELOAD="$LD_PRELOAD"
+            unset -v LD_PRELOAD
+            exec "${PYTHON:-python3}" -S "${SHARNESS_TEST_SRCDIR}/scripts/run_timeout.py" -e LD_PRELOAD="$TIMEOUT_PRELOAD" "$@"
+        )
+    fi
 }
 
 #

@@ -8,6 +8,11 @@ if ! test_have_prereq NO_ASAN; then
     test_done
 fi
 
+# allow libfaketime to be found on ubuntu
+if test -d /usr/lib/x86_64-linux-gnu/faketime ; then
+  export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/faketime"
+fi
+
 #  Check for libfaketimeMT using known epoch with /bin/date:
 t=$(LD_PRELOAD=libfaketimeMT.so.1 FAKETIME="1973-11-29 21:33:09 UTC" date +%s)
 if test "$t" != "123456789" ; then

@@ -16,7 +16,7 @@ test_expect_success 'TEST_NAME is set' '
 	test -n "$TEST_NAME"
 '
 test_expect_success 'run_timeout works' '
-	test_expect_code 142 run_timeout 0.001 sleep 2
+	test_expect_code 142 run_timeout -s ALRM 0.001 sleep 2
 '
 test_expect_success 'test run_timeout with success' '
 	run_timeout 1 /bin/true
