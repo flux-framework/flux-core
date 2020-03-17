@@ -118,7 +118,7 @@ class SideFlux(object):
                         raise EnvironmentError(self.sub.poll())
         self.p.start()
 
-    def get_uri():
+    def get_uri(self):
         return self.flux_uri
 
     def apply_environment(self):

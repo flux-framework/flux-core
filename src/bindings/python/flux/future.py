@@ -13,6 +13,7 @@ import errno
 from flux.util import check_future_error
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
+from typing import Dict
 
 
 # Reference count dictionary to keep futures with a pending `then` callback
@@ -22,13 +23,13 @@ from flux.core.inner import ffi, lib, raw
 # future's callback is run, decrement the count in the dictionary for that
 # future, and whenever reset is called on a future, increment the counter. If
 # the counter hits 0, delete the reference to the future from the dictionary.
-_THEN_HANDLES = {}
+_THEN_HANDLES: Dict["Future", int] = {}
 
 
 @ffi.def_extern()
 def continuation_callback(c_future, opaque_handle):
     try:
-        py_future = ffi.from_handle(opaque_handle)
+        py_future: "Future" = ffi.from_handle(opaque_handle)
         assert c_future == py_future.pimpl.handle
         py_future.then_cb(py_future, py_future.then_arg)
     finally:

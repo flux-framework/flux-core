@@ -27,12 +27,7 @@ from flux.future import Future
 from flux.rpc import RPC
 from _flux._core import ffi, lib
 
-try:
-    # pylint: disable=invalid-name
-    collectionsAbc = collections.abc
-except AttributeError:
-    # pylint: disable=invalid-name
-    collectionsAbc = collections
+import collections.abc as abc
 
 
 class JobWrapper(Wrapper):
@@ -367,15 +362,13 @@ class Jobspec(object):
         version = kwargs["version"]
         attributes = kwargs.get("attributes", None)
 
-        if not isinstance(resources, collectionsAbc.Sequence):
+        if not isinstance(resources, abc.Sequence):
             raise TypeError("resources must be a sequence")
-        if not isinstance(tasks, collectionsAbc.Sequence):
+        if not isinstance(tasks, abc.Sequence):
             raise TypeError("tasks must be a sequence")
         if not isinstance(version, int):
             raise TypeError("version must be an integer")
-        if attributes is not None and not isinstance(
-            attributes, collectionsAbc.Mapping
-        ):
+        if attributes is not None and not isinstance(attributes, abc.Mapping):
             raise TypeError("attributes must be a mapping")
         elif version < 1:
             raise ValueError("version must be >= 1")
@@ -429,7 +422,7 @@ class Jobspec(object):
 
     @classmethod
     def _validate_resource(cls, res):
-        if not isinstance(res, collectionsAbc.Mapping):
+        if not isinstance(res, abc.Mapping):
             raise TypeError("resource must be a mapping")
 
         # validate the 'type' key
@@ -442,7 +435,7 @@ class Jobspec(object):
         if "count" not in res:
             raise ValueError("count is a required key for resources")
         count = res["count"]
-        if isinstance(count, collectionsAbc.Mapping):
+        if isinstance(count, abc.Mapping):
             cls._validate_complex_range(count)
         elif not isinstance(count, six.integer_types):
             raise TypeError("count must be an int or mapping")
@@ -465,26 +458,24 @@ class Jobspec(object):
 
     @staticmethod
     def _validate_task(task):
-        if not isinstance(task, collectionsAbc.Mapping):
+        if not isinstance(task, abc.Mapping):
             raise TypeError("task must be a mapping")
 
         _validate_keys(["command", "slot", "count"], task.keys(), allow_additional=True)
 
-        if not isinstance(task["count"], collectionsAbc.Mapping):
+        if not isinstance(task["count"], abc.Mapping):
             raise TypeError("count must be a mapping")
 
         if not isinstance(task["slot"], six.string_types):
             raise TypeError("slot must be a string")
 
-        if "attributes" in task and not isinstance(
-            task["attributes"], collectionsAbc.Mapping
-        ):
+        if "attributes" in task and not isinstance(task["attributes"], abc.Mapping):
             raise TypeError("count must be a mapping")
 
         command = task["command"]
         if not (
             (  # sequence of strings - N.B. also true for just a plain string
-                isinstance(command, collectionsAbc.Sequence)
+                isinstance(command, abc.Sequence)
                 and all(isinstance(x, six.string_types) for x in command)
             )
         ) or isinstance(command, six.string_types):
@@ -496,9 +487,7 @@ class Jobspec(object):
 
     @staticmethod
     def _create_resource(res_type, count, with_child=None):
-        if with_child is not None and not isinstance(
-            with_child, collectionsAbc.Sequence
-        ):
+        if with_child is not None and not isinstance(with_child, abc.Sequence):
             raise TypeError("child resource must None or a sequence")
         elif with_child is not None and isinstance(with_child, six.string_types):
             raise TypeError("child resource must not be a string")
@@ -588,7 +577,7 @@ class Jobspec(object):
         Does a direct assignment (i.e., no deep copy), so future modifications
         to the `environ` will be reflected in the jobspec.
         """
-        if not isinstance(environ, collectionsAbc.Mapping):
+        if not isinstance(environ, abc.Mapping):
             raise ValueError("environment must be a mapping")
         self.setattr("system.environment", environ)
 

@@ -63,10 +63,6 @@ class Message(WrapperPimpl):
         super(Message, self).__init__()
         self.pimpl = self.InnerWrapper(type_id, handle, destruct)
 
-    @property
-    def handle(self):
-        return self.pimpl.handle
-
     @classmethod
     def from_event_encode(cls, topic, payload=None):
         payload = encode_payload(payload)
