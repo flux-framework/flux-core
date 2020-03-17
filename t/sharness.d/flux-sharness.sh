@@ -7,7 +7,7 @@
 #  Extra functions for Flux testsuite
 #
 run_timeout() {
-    "${PYTHON:-python3}" "${SHARNESS_TEST_SRCDIR}/scripts/run_timeout.py" "$@"
+    (unset -v LD_PRELOAD; exec "${PYTHON:-python3}" "${SHARNESS_TEST_SRCDIR}/scripts/run_timeout.py" env LD_PRELOAD="$LD_PRELOAD" "$@")
 }
 
 #
