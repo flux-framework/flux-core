@@ -21,5 +21,9 @@ try:
     sys.exit(P.wait(timeout=TIMEOUT))
 except s.TimeoutExpired:
     P.send_signal(SIG)
-    r = P.wait()
+    try:
+        r = P.wait(timeout=0.5)
+    except s.TimeoutExpired:
+        P.kill()
+        r = P.wait()
     sys.exit(r)
