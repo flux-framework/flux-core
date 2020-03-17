@@ -119,9 +119,6 @@ else
   init_colors=''
 fi
 
-run_timeout() {
-    perl -e 'use Time::HiRes qw( ualarm ) ; ualarm ((shift @ARGV) * 1000000) ; exec @ARGV or die "$!"' "$@"
-}
 # :; is there to work around a bug in bash 3.2 (and earlier) which
 # does not always set '$?' properly on redirection failure.
 # See the Autoconf manual for more details.
@@ -148,7 +145,16 @@ run_timeout() {
       exec 2>&3
     fi
     if test -n "${FLUX_TEST_TIMEOUT:-}" ; then
-        run_timeout "${FLUX_TEST_TIMEOUT}" "$@"
+      if test -z "${FLUX_SOURCE_DIR:-}"; then
+        if test -n "${top_srcdir:-}" ; then
+          FLUX_SOURCE_DIR="$top_srcdir"
+        else
+          SCRIPT=$(readlink -f "$0")
+          SPATH=$(dirname "$SCRIPT")
+          FLUX_SOURCE_DIR="$SPATH"/..
+        fi
+      fi
+      "${PYTHON:-python3}" -S "${FLUX_SOURCE_DIR}/t/scripts/run_timeout.py" "$FLUX_TEST_TIMEOUT" "$@"
     else
        "$@"
     fi
