@@ -1017,7 +1017,7 @@ test_expect_success 'flux job wait-event -p hangs on non-guest eventlog' '
         jobid=$(submit_job) &&
         kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.foobar.eventlog foo &&
-        test_expect_code 142 run_timeout 0.2 flux job wait-event -p "foobar.eventlog" $jobid bar
+        test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "foobar.eventlog" $jobid bar
 '
 
 test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog works (live job)' '
@@ -1035,7 +1035,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 
 test_expect_success 'flux job wait-event -p times out on no event (live job)' '
         jobid=$(submit_job_live sleeplong.json) &&
-        test_expect_code 142 run_timeout 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
+        test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
         flux job cancel $jobid
 '
 
@@ -1067,7 +1067,7 @@ test_expect_success NO_CHAIN_LINT 'flux job wait-event -p guest.exec.eventlog wo
 test_expect_success 'flux job wait-event -p times out on no event (wait job)' '
         jobidall=$(submit_job_live sleeplong-all-rsrc.json) &&
         jobid=$(submit_job_wait) &&
-        test_expect_code 142 run_timeout 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
+        test_expect_code 142 run_timeout -s ALRM 0.2 flux job wait-event -p "guest.exec.eventlog" $jobid foobar &&
         flux job cancel $jobidall &&
         flux job cancel $jobid
 '

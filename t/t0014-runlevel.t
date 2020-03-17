@@ -76,7 +76,7 @@ test_expect_success 'rc3 failure causes instance failure' '
 '
 
 test_expect_success 'instance with no rc2 terminated cleanly by timeout' '
-	run_timeout -a 0.5 flux start \
+	run_timeout -s ALRM 0.5 flux start \
 		-o,-Slog-stderr-level=6 \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Sbroker.rc2_none
 '
