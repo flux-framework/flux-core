@@ -8,7 +8,7 @@
 #
 run_timeout() {
     if test -z "$LD_PRELOAD" ; then
-        "${PYTHON:-python3}" "${SHARNESS_TEST_SRCDIR}/scripts/run_timeout.py" "$@"
+        "${PYTHON:-python3}" -S "${SHARNESS_TEST_SRCDIR}/scripts/run_timeout.py" "$@"
     else
         (
             TIMEOUT_PRELOAD="$LD_PRELOAD"
