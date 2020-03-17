@@ -290,7 +290,12 @@ static void exec_kill_cb (flux_future_t *f, void *arg)
 static int exec_kill (struct jobinfo *job, int signum)
 {
     struct  bulk_exec *exec = job->data;
-    flux_future_t *f = bulk_exec_kill (exec, signum);
+    flux_future_t *f;
+
+    if (job->multiuser)
+        f = bulk_exec_imp_kill (exec, flux_imp_path, signum);
+    else
+        f = bulk_exec_kill (exec, signum);
     if (!f) {
         if (errno != ENOENT)
             flux_log_error (job->h, "%ju: bulk_exec_kill", job->id);
