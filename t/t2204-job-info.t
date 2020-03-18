@@ -598,7 +598,7 @@ test_expect_success 'flux job list outputs user job name' '
         echo $jobid > jobname1.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
-        flux job list -s inactive | grep $jobid | grep foobar
+        flux job list -s inactive | grep $jobid | jq -e ".name == \"foobar\""
 '
 
 test_expect_success 'flux job lists first argument for job name' '
@@ -606,7 +606,7 @@ test_expect_success 'flux job lists first argument for job name' '
         echo $jobid > jobname2.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
-        flux job list -s inactive | grep $jobid | grep mycmd
+        flux job list -s inactive | grep $jobid | jq -e ".name == \"mycmd\""
 '
 
 test_expect_success 'flux job lists basename of first argument for job name' '
@@ -614,8 +614,7 @@ test_expect_success 'flux job lists basename of first argument for job name' '
         echo $jobid > jobname3.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
-        flux job list -s inactive | grep $jobid | grep bar &&
-        flux job list -s inactive | grep $jobid | grep -v foo
+        flux job list -s inactive | grep $jobid | jq -e ".name == \"bar\""
 '
 
 test_expect_success 'flux job lists full path for job name if basename fails on first arg' '
@@ -623,7 +622,7 @@ test_expect_success 'flux job lists full path for job name if basename fails on 
         echo $jobid > jobname4.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
-        flux job list -s inactive | grep $jobid | grep "\/foo\/bar\/"
+        flux job list -s inactive | grep $jobid | jq -e ".name == \"\/foo\/bar\/\""
 '
 
 test_expect_success 'reload the job-info module' '
@@ -635,10 +634,10 @@ test_expect_success 'verify job names preserved across restart' '
         jobid2=`cat jobname2.id` &&
         jobid3=`cat jobname3.id` &&
         jobid4=`cat jobname4.id` &&
-        flux job list -s inactive | grep ${jobid1} | grep foobar &&
-        flux job list -s inactive | grep ${jobid2} | grep mycmd &&
-        flux job list -s inactive | grep ${jobid3} | grep bar &&
-        flux job list -s inactive | grep ${jobid4} | grep "\/foo\/bar\/"
+        flux job list -s inactive | grep ${jobid1} | jq -e ".name == \"foobar\"" &&
+        flux job list -s inactive | grep ${jobid2} | jq -e ".name == \"mycmd\"" &&
+        flux job list -s inactive | grep ${jobid3} | jq -e ".name == \"bar\"" &&
+        flux job list -s inactive | grep ${jobid4} | jq -e ".name == \"\/foo\/bar\/\""
 '
 
 #
