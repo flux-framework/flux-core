@@ -739,6 +739,30 @@ test_expect_success 'flux job list outputs success correctly (false)' '
         echo $obj | jq -e ".success == false"
 '
 
+# job exceptions
+
+test_expect_success 'flux job list outputs exceptions correctly (no exception)' '
+        jobid=`flux mini submit hostname` &&
+        fj_wait_event $jobid clean >/dev/null &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".exception_occurred == false" &&
+        echo $obj | jq -e ".exception_severity == null" &&
+        echo $obj | jq -e ".exception_type == null" &&
+        echo $obj | jq -e ".exception_note == null"
+'
+
+test_expect_success 'flux job list outputs exceptions correctly (exception)' '
+        jobid=`flux mini submit nosuchcommand` &&
+        fj_wait_event $jobid clean >/dev/null &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".exception_occurred == true" &&
+        echo $obj | jq -e ".exception_severity == 0" &&
+        echo $obj | jq -e ".exception_type == \"exec\"" &&
+        echo $obj | jq .exception_note | grep "No such file or directory"
+'
+
 test_expect_success 'reload the job-info module' '
         flux exec -r all flux module reload job-info
 '
