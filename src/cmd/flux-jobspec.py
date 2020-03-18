@@ -15,13 +15,13 @@ import yaml
 from flux import util
 
 
-def create_resource(res_type, count, with_child=[]):
-    assert isinstance(
-        with_child, abc.Sequence
-    ), "child resource must be a sequence"
-    assert not isinstance(
-        with_child, str
-    ), "child resource must not be a string"
+def create_resource(res_type, count, with_child=None):
+    if with_child is None:
+        with_child = []
+    else:
+        assert isinstance(with_child, abc.Sequence), "child resource must be a sequence"
+        assert not isinstance(with_child, str), "child resource must not be a string"
+
     assert count > 0, "resource count must be > 0"
 
     res = {"type": res_type, "count": count}
@@ -105,9 +105,7 @@ def create_slurm_style_jobspec(
     jobspec = {
         "version": 1,
         "resources": [resource_section],
-        "tasks": [
-            {"command": command, "slot": "task", "count": task_count_dict}
-        ],
+        "tasks": [{"command": command, "slot": "task", "count": task_count_dict}],
         "attributes": {"system": {"cwd": os.getcwd(), "environment": environ}},
     }
     if walltime:
@@ -188,19 +186,19 @@ def positive_nonzero_int(string):
     return value
 
 
-def parse_fsd(s):
-    m = re.match(r".*([smhd])$", s)
-    n = float(s[:-1] if m else s)
-    unit = m.group(1) if m else "s"
+def parse_fsd(string):
+    ma = re.match(r".*([smhd])$", string)
+    num = float(string[:-1] if ma else string)
+    unit = ma.group(1) if ma else "s"
 
     if unit == "m":
-        seconds = timedelta(minutes=n).total_seconds()
+        seconds = timedelta(minutes=num).total_seconds()
     elif unit == "h":
-        seconds = timedelta(hours=n).total_seconds()
+        seconds = timedelta(hours=num).total_seconds()
     elif unit == "d":
-        seconds = timedelta(days=n).total_seconds()
+        seconds = timedelta(days=num).total_seconds()
     else:
-        seconds = n
+        seconds = num
     return seconds
 
 
@@ -268,11 +266,7 @@ def flux_jobspec(args):
     if 1 < sum(
         [
             a is not None
-            for a in (
-                args.total_tasks,
-                args.tasks_per_slot,
-                args.tasks_per_resource,
-            )
+            for a in (args.total_tasks, args.tasks_per_slot, args.tasks_per_resource)
         ]
     ):
         logger.error(
@@ -346,9 +340,7 @@ def flux_jobspec(args):
                 "attributes": {},
             }
         ],
-        "attributes": {
-            "system": {"cwd": args.dir, "environment": environ}
-        },
+        "attributes": {"system": {"cwd": args.dir, "environment": environ}},
     }
     jobspec["attributes"]["system"]["duration"] = args.time
     return jobspec
@@ -394,9 +386,7 @@ def get_slurm_common_parser():
         help="time limit. Acceptable formats include minutes[:seconds], "
         "[days-]hours:minutes:seconds",
     )
-    slurm_parser.add_argument(
-        "-o", "--output", help="location of stdout redirection"
-    )
+    slurm_parser.add_argument("-o", "--output", help="location of stdout redirection")
     slurm_parser.add_argument(
         "--export",
         metavar="[ALL|NONE|VARS]",
@@ -423,6 +413,7 @@ class EnvVar(object):
         else:
             self.key = p[0]
             self.value = "=".join(p[1:])
+
 
 def parse_env_var(s):
     return EnvVar(s)
@@ -453,8 +444,10 @@ def get_flux_common_parser():
         "--time", help="time limit as a flux duration, N[smhd]", type=parse_fsd
     )
     env = flux_parser.add_argument_group("environment")
-    env.add_argument("--env-all", help="propagate full environment", action='store_true')
-    env.add_argument("--env-none", help="propagate no environment", action='store_true')
+    env.add_argument(
+        "--env-all", help="propagate full environment", action="store_true"
+    )
+    env.add_argument("--env-none", help="propagate no environment", action="store_true")
     env.add_argument(
         "-e",
         "--env",
@@ -488,9 +481,7 @@ def main():
 
     flux_parser = get_flux_common_parser()
     run_parser = subparsers.add_parser(
-        "run",
-        parents=[flux_parser],
-        help="subcommand for jobspec-style CLI arguments",
+        "run", parents=[flux_parser], help="subcommand for jobspec-style CLI arguments"
     )
     run_parser.set_defaults(func=flux_jobspec)
 
