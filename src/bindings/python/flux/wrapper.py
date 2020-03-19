@@ -194,12 +194,9 @@ class FunctionWrapper(object):
         try:
             result = self.fun(*args)
         except TypeError as err:
-            six.raise_from(
-                InvalidArguments(
-                    self.name, self.ffi.getctype(self.function_type), args_in
-                ),
-                err,
-            )
+            raise InvalidArguments(
+                self.name, self.ffi.getctype(self.function_type), args_in
+            ) from err
 
         if result == calling_object.ffi.NULL:
             result = None

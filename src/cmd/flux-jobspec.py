@@ -217,7 +217,6 @@ def resource_type_walker(res):
 
 
 def parse_shape(shape, nslots):
-    # type: (str) -> Dict[str, Any]
     partlist = shape.split("/")
     if len(partlist) <= 1:
         partlist = shape.split(">")
@@ -269,12 +268,12 @@ def flux_jobspec(args):
             for a in (args.total_tasks, args.tasks_per_slot, args.tasks_per_resource)
         ]
     ):
-        logger.error(
+        LOGGER.error(
             "--total-tasks, --tasks-per-slot and --tasks-per-resource are mutually exclusive"
         )
         sys.exit(1)
     if args.slot_shape is not None and args.shape_file is not None:
-        logger.error("--shape and --shape-file are mutually exclusive")
+        LOGGER.error("--shape and --shape-file are mutually exclusive")
         sys.exit(1)
 
     if args.nslots is None:
@@ -318,7 +317,7 @@ def flux_jobspec(args):
         args.time = parse_fsd("1h")
 
     if args.env_all and args.env_none:
-        logger.error("--env-all and --env-none cannot be combined")
+        LOGGER.error("--env-all and --env-none cannot be combined")
         sys.exit(1)
 
     environ = {}

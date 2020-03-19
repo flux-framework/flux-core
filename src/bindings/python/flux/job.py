@@ -21,11 +21,13 @@ import yaml
 
 import flux.kvs
 from flux import constants
+from .core.handle import Flux
 from flux.wrapper import Wrapper
 from flux.util import check_future_error, parse_fsd
 from flux.future import Future
 from flux.rpc import RPC
 from _flux._core import ffi, lib
+from typing import Union
 
 import collections.abc as abc
 
@@ -34,8 +36,11 @@ class JobWrapper(Wrapper):
     def __init__(self):
         super(JobWrapper, self).__init__(ffi, lib, prefixes=["flux_job_"])
 
+    def __getattr__(self, name):
+        return super().__getattr__(name)
 
-RAW = JobWrapper()
+
+RAW: JobWrapper = JobWrapper()
 
 
 def _convert_jobspec_arg_to_string(jobspec):
@@ -61,7 +66,7 @@ def _convert_jobspec_arg_to_string(jobspec):
     return jobspec
 
 
-def job_kvs(flux_handle, jobid):
+def job_kvs(flux_handle: Flux, jobid: int):
     """
     :returns: The KVS directory of the given job
     :rtype: KVSDir
@@ -133,7 +138,7 @@ def submit_async(
 
 
 @check_future_error
-def submit_get_id(future):
+def submit_get_id(future: Future):
     """Get job ID from a Future returned by job.submit_async()
 
     Process a response to a Flux job submit request.  This method blocks
@@ -154,11 +159,11 @@ def submit_get_id(future):
 
 
 def submit(
-    flux_handle,
-    jobspec,
-    priority=lib.FLUX_JOB_PRIORITY_DEFAULT,
-    waitable=False,
-    debug=False,
+    flux_handle: Flux,
+    jobspec: Union["Jobspec", str],
+    priority: int = lib.FLUX_JOB_PRIORITY_DEFAULT,
+    waitable: bool = False,
+    debug: bool = False,
 ):
     """Submit a job to Flux
 
