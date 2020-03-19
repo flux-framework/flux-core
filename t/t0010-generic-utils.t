@@ -79,18 +79,4 @@ test_expect_success 'heaptrace.dump request with empty payload fails with EPROTO
 	${RPC} heaptrace.dump 71 </dev/null
 '
 
-emit_toml_config() {
-	cat <<-EOT
-	flux_uri = "$1"
-	EOT
-}
-
-# Check that config file can affect default URI
-test_expect_success 'utils calling flux_open() can get URI from config file' '
-	echo ${SIZE} >size.exp &&
-	emit_toml_config $FLUX_URI >flux.toml &&
-	(unset FLUX_URI && FLUX_CONF_DIR=$(pwd) flux getattr size >size.out) &&
-	test_cmp size.exp size.out
-'
-
 test_done
