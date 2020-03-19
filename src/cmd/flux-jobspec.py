@@ -1,5 +1,3 @@
-from __future__ import print_function
-
 import re
 import os
 import sys
@@ -187,9 +185,9 @@ def positive_nonzero_int(string):
 
 
 def parse_fsd(string):
-    ma = re.match(r".*([smhd])$", string)
-    num = float(string[:-1] if ma else string)
-    unit = ma.group(1) if ma else "s"
+    match = re.match(r".*([smhd])$", string)
+    num = float(string[:-1] if match else string)
+    unit = match.group(1) if match else "s"
 
     if unit == "m":
         seconds = timedelta(minutes=num).total_seconds()
@@ -203,17 +201,17 @@ def parse_fsd(string):
 
 
 def resource_walker(res):
-    while res is not None and len(res) > 0:
-        if type(res) is dict:
+    while res is not None and res:
+        if isinstance(res, dict):
             yield res
             res = res.get("with", None)
-        elif type(res) is list:
+        elif isinstance(res, list):
             res = res[0]
 
 
 def resource_type_walker(res):
-    for r in resource_walker(res):
-        yield r["type"]
+    for resource in resource_walker(res):
+        yield resource["type"]
 
 
 def parse_shape(shape, nslots):
@@ -230,46 +228,67 @@ def parse_shape(shape, nslots):
     # if I can stomach it (cffi already depends on it), can't handle unit
     # parsing for counts without doing some more work here
     res = []
-    for r in reversed(partlist):
-        m = count_re.match(r)
-        if len(m.group("res")) < 1:
-            raise ValueError("invalid shape, no resource name in {}".format(r))
-        if m.group("min") is None:
+    for part in reversed(partlist):
+        match = count_re.match(part)
+        if not match.group("res"):
+            raise ValueError("invalid shape, no resource name in {}".format(part))
+        if match.group("min") is None:
             count = 1
         else:
-            count = int(m.group("min"))
-        if m.group("max") is not None:
+            count = int(match.group("min"))
+        if match.group("max") is not None:
             count = {
                 "min": count,
-                "max": int(m.group("max")),
+                "max": int(match.group("max")),
                 "operator": "+",
                 "operand": 1,
             }
-            if m.group("stride") is not None:
-                count["operand"] = int(m.group("stride"))
-        if m.group("res") == "slot":
-            if m.group("min") is not None:
+            if match.group("stride") is not None:
+                count["operand"] = int(match.group("stride"))
+        if match.group("res") == "slot":
+            if match.group("min") is not None:
                 raise ValueError("slot cannot take count from shape at present")
             slot_added = True
             res = [create_slot("task", nslots, res)]
         else:
-            res = [create_resource(m.group("res"), count, res)]
+            res = [create_resource(match.group("res"), count, res)]
     if slot_added:
         return res
-    else:
-        return [create_slot("task", nslots, res)]
+    return [create_slot("task", nslots, res)]
+
+
+def check_env_args(args):
+    if args.env_all and args.env_none:
+        LOGGER.error("--env-all and --env-none cannot be combined")
+        sys.exit(1)
+
+    environ = {}
+    if (not args.env_none) and (args.env_all or args.env is None or not args.env):
+        environ = dict(os.environ)
+
+    if args.env is not None:
+        for env_val in args.env:
+            environ[env_val.key] = env_val.value
+    return environ
 
 
 def flux_jobspec(args):
     # set up defaullts for options where presence matters and check invariants
-    if 1 < sum(
-        [
-            a is not None
-            for a in (args.total_tasks, args.tasks_per_slot, args.tasks_per_resource)
-        ]
+    if (
+        sum(
+            [
+                a is not None
+                for a in (
+                    args.total_tasks,
+                    args.tasks_per_slot,
+                    args.tasks_per_resource,
+                )
+            ]
+        )
+        > 1
     ):
         LOGGER.error(
-            "--total-tasks, --tasks-per-slot and --tasks-per-resource are mutually exclusive"
+            "--total-tasks, --tasks-per-slot and --tasks-per-resource are exclusive"
         )
         sys.exit(1)
     if args.slot_shape is not None and args.shape_file is not None:
@@ -304,7 +323,7 @@ def flux_jobspec(args):
         # ensure the type exists in the shape
         if args.tasks_per_resource[0] not in resource_type_walker(args.slot_shape):
             raise ValueError(
-                "the resource type named by --tasks-per-resource must be in the requested shape"
+                "the resource type in --tasks-per-resource must be in the shape"
             )
 
     else:
@@ -316,17 +335,7 @@ def flux_jobspec(args):
     if args.time is None:
         args.time = parse_fsd("1h")
 
-    if args.env_all and args.env_none:
-        LOGGER.error("--env-all and --env-none cannot be combined")
-        sys.exit(1)
-
-    environ = {}
-    if (not args.env_none) and (args.env_all or args.env is None or len(args.env) == 0):
-        environ = dict(os.environ)
-
-    if args.env is not None:
-        for e in args.env:
-            environ[e.key] = e.value
+    environ = check_env_args(args)
 
     jobspec = {
         "version": 1,
@@ -398,24 +407,24 @@ def get_slurm_common_parser():
     return slurm_parser
 
 
-def res_tuple(s):
-    l = s.split(":")
-    return (l[0], int(l[1]) if len(l) > 1 else 1)
+def res_tuple(string):
+    parts = string.split(":")
+    return (parts[0], int(parts[1]) if len(parts) > 1 else 1)
 
 
 class EnvVar(object):
     def __init__(self, s):
-        p = s.split("=")
-        if len(p) == 1:
+        parts = s.split("=")
+        if len(parts) == 1:
             self.key = s
             self.value = os.environ[s]
         else:
-            self.key = p[0]
-            self.value = "=".join(p[1:])
+            self.key = parts[0]
+            self.value = "=".join(parts[1:])
 
 
-def parse_env_var(s):
-    return EnvVar(s)
+def parse_env_var(string):
+    return EnvVar(string)
 
 
 def get_flux_common_parser():
