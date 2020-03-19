@@ -11,8 +11,8 @@
 #ifndef _FLUX_CORE_CONF_H
 #define _FLUX_CORE_CONF_H
 
+#include <flux/core.h>
 #include <stdarg.h>
-#include "handle.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -42,20 +42,22 @@ typedef struct {
     char errbuf[160];
 } flux_conf_error_t;
 
-/* Parse Flux's config files (*.toml in cf_path).
- *
- * The builtin value for cf_path (intree|installed selected automatically) is
- * used unless overridden with the FLUX_CONF_DIR environment variable.
- * FLUX_CONF_DIR may be set to a directory path or may be set to the
- * special value "installed" to force use of the installed cf_path.
- *
- * On success, return the object, saving the result for reuse on future calls.
- * On failure, return NULL, set errno, and (if non-NULL) fill 'error' with
- * details about the failure.
- *
- * The config object is destroyed when the handle is destroyed.
+/* Create/copy/incref/decref config object
  */
-const flux_conf_t *flux_get_conf (flux_t *h, flux_conf_error_t *error);
+flux_conf_t *flux_conf_create (void);
+flux_conf_t *flux_conf_copy (const flux_conf_t *conf);
+const flux_conf_t *flux_conf_incref (const flux_conf_t *conf);
+void flux_conf_decref (const flux_conf_t *conf);
+
+/* Parse *.toml in 'path' directory.
+ */
+flux_conf_t *flux_conf_parse (const char *path, flux_conf_error_t *error);
+
+/* Get/set config object cached in flux_t handle, with destructor.
+ * Re-setting the object decrefs the old one.
+ */
+const flux_conf_t *flux_get_conf (flux_t *h);
+int flux_set_conf (flux_t *h, const flux_conf_t *conf);
 
 /* Access config object.
  * If error is non-NULL, it is filled with error details on failure.
