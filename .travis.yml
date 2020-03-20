@@ -82,21 +82,21 @@ jobs:
       stage: test
       compiler: gcc
       env:
-       - ARGS="--with-flux-security --enable-caliper"
+       - ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --with-flux-security --enable-caliper"
        - TEST_INSTALL=t
        - DOCKER_TAG=t
     - name: "Centos 7: security,caliper,docker-deploy"
       stage: test
       compiler: gcc
       env:
-       - ARGS="--with-flux-security --enable-caliper --prefix=/usr"
+       - ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --with-flux-security --enable-caliper"
        - IMG=centos7
        - DOCKER_TAG=t
     - name: "Centos 8: security,caliper,docker-deploy"
       stage: test
       compiler: gcc
       env:
-       - ARGS="--with-flux-security --enable-caliper --prefix=/usr"
+       - ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --with-flux-security --enable-caliper"
        - IMG=centos8
        - DOCKER_TAG=t
        - PYTHON_VERSION=3.6
