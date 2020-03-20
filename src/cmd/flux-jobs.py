@@ -16,6 +16,7 @@ import logging
 import argparse
 import time
 import pwd
+import string
 from datetime import timedelta
 
 import flux.job
@@ -331,6 +332,13 @@ class JobsOutputFormat(flux.util.OutputFormat):
     a new format suitable for headers display, etc...
     """
 
+    class JobFormatter(string.Formatter):
+        def format_field(self, value, spec):
+            if spec.endswith("h"):
+                value = "-" if value in ("", "0s") else str(value)
+                spec = spec[:-1] + "s"
+            return super().format_field(value, spec)
+
     #  List of legal format fields and their header names
     headings = dict(
         id="JOBID",
@@ -387,6 +395,18 @@ class JobsOutputFormat(flux.util.OutputFormat):
         # pylint: disable=attribute-defined-outside-init
         self._jobfmt = "".join(lst)
         return self._jobfmt
+
+    def format(self, obj):
+        """
+        format object with our JobFormatter
+        """
+        return self.JobFormatter().format(self.get_format(), obj)
+
+    def header(self):
+        """
+        format header with our JobFormatter
+        """
+        return self.JobFormatter().format(self.header_format(), **self.headings)
 
 
 @flux.util.CLIMain(LOGGER)
