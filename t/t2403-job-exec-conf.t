@@ -101,17 +101,4 @@ test_expect_success 'job-exec: bad imp config causes module failure' '
 	grep "error reading config value exec.imp" ${name}.log
 '
 
-test_expect_success 'job-exec: bad TOML config causes module failure' '
-	#  Need to first start an instance with good config files, then
-        #   replace with bad config files, and finally reload module
-	name=badtoml &&
-	mkdir ${name}.d &&
-	touch ${name}.d/exec.toml &&
-	( export FLUX_CONF_DIR=${name}.d &&
-	  test_must_fail flux start -s1 sh -c "\
-	    echo \[exec >${name}.d/exec.toml && flux module reload job-exec" \
-	    >${name}.log 2>&1
-	) &&
-	grep "config file error: ${name}.d/exec.toml" ${name}.log
-'
 test_done
