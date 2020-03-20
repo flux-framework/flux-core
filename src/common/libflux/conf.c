@@ -52,7 +52,6 @@ static struct builtin builtin_tab[] = {
     { "module_path",    INSTALLED_MODULE_PATH,      INTREE_MODULE_PATH },
     { "rc1_path",       INSTALLED_RC1_PATH,         INTREE_RC1_PATH },
     { "rc3_path",       INSTALLED_RC3_PATH,         INTREE_RC3_PATH },
-    { "cf_path",        INSTALLED_CF_PATH,          INTREE_CF_PATH },
     { "cmdhelp_pattern",INSTALLED_CMDHELP_PATTERN,  INTREE_CMDHELP_PATTERN },
     { "pmi_library_path",
                         INSTALLED_PMI_LIBRARY_PATH, INTREE_PMI_LIBRARY_PATH },

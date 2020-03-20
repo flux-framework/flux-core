@@ -391,9 +391,6 @@ AC_SUBST(fluxrc1dir)
 AS_VAR_SET(fluxrc3dir, $sysconfdir/flux/rc3.d)
 AC_SUBST(fluxrc3dir)
 
-AS_VAR_SET(fluxcfdir, $sysconfdir/flux/conf.d)
-AC_SUBST(fluxcfdir)
-
 AS_VAR_SET(fluxlibexecdir, $libexecdir/flux)
 AC_SUBST(fluxlibexecdir)
 
