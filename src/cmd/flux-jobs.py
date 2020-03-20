@@ -140,20 +140,8 @@ class JobInfo:
         return get_username(self.userid)
 
     @memoized_property
-    def nnodes_hyphen(self):
-        return self.nnodes or "-"
-
-    @memoized_property
-    def ranks_hyphen(self):
-        return self.ranks or "-"
-
-    @memoized_property
     def runtime_fsd(self):
         return fsd(self.runtime, False)
-
-    @memoized_property
-    def runtime_fsd_hyphen(self):
-        return fsd(self.runtime, True)
 
     @memoized_property
     def runtime_hms(self):
@@ -200,9 +188,7 @@ def fetch_jobs_flux(args, fields):
         name=("name",),
         ntasks=("ntasks",),
         nnodes=("nnodes",),
-        nnodes_hyphen=("nnodes",),
         ranks=("ranks",),
-        ranks_hyphen=("ranks",),
         t_submit=("t_submit",),
         t_depend=("t_depend",),
         t_sched=("t_sched",),
@@ -211,7 +197,6 @@ def fetch_jobs_flux(args, fields):
         t_inactive=("t_inactive",),
         runtime=("t_run", "t_cleanup"),
         runtime_fsd=("t_run", "t_cleanup"),
-        runtime_fsd_hyphen=("t_run", "t_cleanup"),
         runtime_hms=("t_run", "t_cleanup"),
     )
 
@@ -350,9 +335,7 @@ class JobsOutputFormat(flux.util.OutputFormat):
         name="NAME",
         ntasks="NTASKS",
         nnodes="NNODES",
-        nnodes_hyphen="NNODES",
         ranks="RANKS",
-        ranks_hyphen="RANKS",
         t_submit="T_SUBMIT",
         t_depend="T_DEPEND",
         t_sched="T_SCHED",
@@ -361,7 +344,6 @@ class JobsOutputFormat(flux.util.OutputFormat):
         t_inactive="T_INACTIVE",
         runtime="RUNTIME",
         runtime_fsd="RUNTIME",
-        runtime_fsd_hyphen="RUNTIME",
         runtime_hms="RUNTIME",
     )
 
@@ -418,8 +400,8 @@ def main():
     else:
         fmt = (
             "{id:>18} {username:<8.8} {name:<10.10} {state:<8.8} "
-            "{ntasks:>6} {nnodes_hyphen:>6} {runtime_fsd_hyphen:>8} "
-            "{ranks_hyphen}"
+            "{ntasks:>6} {nnodes:>6h} {runtime_fsd:>8h} "
+            "{ranks:h}"
         )
     try:
         formatter = JobsOutputFormat(fmt)

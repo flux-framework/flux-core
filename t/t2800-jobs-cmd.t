@@ -239,11 +239,11 @@ test_expect_success 'flux-jobs --format={ntasks} works' '
         test_cmp taskcount.out taskcount.exp
 '
 
-test_expect_success 'flux-jobs --format={nnodes},{nnodes_hyphen} works' '
-        flux jobs --suppress-header --state=pending --format="{nnodes},{nnodes_hyphen}" > nodecountP.out &&
+test_expect_success 'flux-jobs --format={nnodes},{nnodes:h} works' '
+        flux jobs --suppress-header --state=pending --format="{nnodes},{nnodes:h}" > nodecountP.out &&
         for i in `seq 1 6`; do echo ",-" >> nodecountP.exp; done &&
         test_cmp nodecountP.out nodecountP.exp &&
-        flux jobs --suppress-header --state=running,inactive --format="{nnodes},{nnodes_hyphen}" > nodecountRI.out &&
+        flux jobs --suppress-header --state=running,inactive --format="{nnodes},{nnodes:h}" > nodecountRI.out &&
         for i in `seq 1 12`; do echo "1,1" >> nodecountRI.exp; done &&
         test_cmp nodecountRI.out nodecountRI.exp
 '
@@ -288,11 +288,11 @@ test_expect_success 'flux-jobs emits useful error on invalid format specifier' '
 
 
 # node ranks assumes sched-simple default of mode='worst-fit'
-test_expect_success 'flux-jobs --format={ranks},{ranks_hyphen} works' '
-        flux jobs --suppress-header --state=pending --format="{ranks},{ranks_hyphen}" > ranksP.out &&
+test_expect_success 'flux-jobs --format={ranks},{ranks:h} works' '
+        flux jobs --suppress-header --state=pending --format="{ranks},{ranks:h}" > ranksP.out &&
         for i in `seq 1 6`; do echo ",-" >> ranksP.exp; done &&
         test_cmp ranksP.out ranksP.exp &&
-        flux jobs --suppress-header --state=running --format="{ranks},{ranks_hyphen}" > ranksR.out &&
+        flux jobs --suppress-header --state=running --format="{ranks},{ranks:h}" > ranksR.out &&
         for i in `seq 1 2`; \
         do \
             echo "3,3" >> ranksR.exp; \
@@ -301,7 +301,7 @@ test_expect_success 'flux-jobs --format={ranks},{ranks_hyphen} works' '
             echo "0,0" >> ranksR.exp; \
         done &&
         test_cmp ranksR.out ranksR.exp &&
-        flux jobs --suppress-header --state=inactive --format="{ranks},{ranks_hyphen}" > ranksI.out &&
+        flux jobs --suppress-header --state=inactive --format="{ranks},{ranks:h}" > ranksI.out &&
         for i in `seq 1 4`; do echo "0,0" >> ranksI.exp; done &&
         test_cmp ranksI.out ranksI.exp
 '
@@ -337,8 +337,8 @@ test_expect_success 'flux-jobs --format={t_XXX} works' '
         test $count -eq 4
 '
 
-test_expect_success 'flux-jobs --format={runtime},{runtime_fsd},{runtime_fsd_hyphen},{runtime_hms} works' '
-        flux jobs --suppress-header --state=pending --format="{runtime},{runtime_fsd},{runtime_fsd_hyphen},{runtime_hms}" > runtimeP.out &&
+test_expect_success 'flux-jobs --format={runtime},{runtime_fsd},{runtime_fsd:h},{runtime_hms} works' '
+        flux jobs --suppress-header --state=pending --format="{runtime},{runtime_fsd},{runtime_fsd:h},{runtime_hms}" > runtimeP.out &&
         for i in `seq 1 6`; do echo "0.0,0s,-,0:00:00" >> runtimeP.exp; done &&
         test_cmp runtimeP.out runtimeP.exp &&
         flux jobs --suppress-header --state=running,inactive --format="{runtime}" > runtimeRI_1.out &&
@@ -347,7 +347,7 @@ test_expect_success 'flux-jobs --format={runtime},{runtime_fsd},{runtime_fsd_hyp
         flux jobs --suppress-header --state=running,inactive --format="{runtime_fsd}" > runtimeRI_2.out &&
         count=`cat runtimeRI_2.out | grep -v "^0s" | wc -l` &&
         test $count -eq 12 &&
-        flux jobs --suppress-header --state=running,inactive --format="{runtime_fsd_hyphen}" > runtimeRI_3.out &&
+        flux jobs --suppress-header --state=running,inactive --format="{runtime_fsd:h}" > runtimeRI_3.out &&
         count=`cat runtimeRI_3.out | grep -v "^-$" | wc -l` &&
         test $count -eq 12 &&
         flux jobs --suppress-header --state=running,inactive --format="{runtime_hms}" > runtimeRI_4.out &&

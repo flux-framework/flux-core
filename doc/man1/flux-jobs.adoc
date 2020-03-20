@@ -64,7 +64,7 @@ The '--format' option can be used to specify an output format to
 flux-jobs(1) using Python's string format syntax.  For example, the
 following is the format used for the default format:
 
-  {id:>18} {username:<8.8} {name:<10.10} {state:<8.8} {ntasks:>6} {nnodes_hyphen:>6} {runtime_fsd_hyphen:>8} {ranks_hyphen}
+  {id:>18} {username:<8.8} {name:<10.10} {state:<8.8} {ntasks:>6} {nnodes:>6h} {runtime_fsd:>8h} {ranks:h}
 
 The conversion type 'h' can be used to convert an empty string or the
 string "0s" to a hyphen.  For example, normally "{ranks}" would output
@@ -83,9 +83,7 @@ state_single:: job state as a single character
 name:: job name
 ntasks:: job task count
 nnodes:: job node count (if job ran / is running), empty string otherwise
-nnodes_hyphen:: same as nnodes, but '-' if job has not run yet / never ran
 ranks:: job ranks (if job ran / is running), empty string otherwise
-ranks_hyphen:: same as ranks, but '-' if job has not run yet / never ran
 t_submit:: time job was submitted
 t_depend:: time job entered depend state
 t_sched:: time job entered sched state
@@ -94,7 +92,6 @@ t_cleanup:: time job entered cleanup state
 t_inactive:: time job entered inactive state
 runtime:: job runtime
 runtime_fsd:: job runtime in Flux standard duration format
-runtime_fsd_hyphen:: same as runtime_fsd, but '-' if runtime is 0s
 runtime_hms:: job runtime in H:M:S format
 
 AUTHOR
