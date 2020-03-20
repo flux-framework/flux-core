@@ -59,6 +59,7 @@
 #include "src/common/libutil/errno_safe.h"
 
 #include "heartbeat.h"
+#include "brokercfg.h"
 #include "module.h"
 #include "overlay.h"
 #include "service.h"
@@ -101,6 +102,8 @@ typedef struct {
     zlist_t *sigwatchers;
     struct service_switch *services;
     heartbeat_t *heartbeat;
+    struct brokercfg *config;
+    const char *config_path;
     struct shutdown *shutdown;
     double shutdown_grace;
     double heartbeat_rate;
@@ -165,11 +168,9 @@ static void init_attrs (attr_t *attrs, pid_t pid);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-static int parse_config_files (flux_t *h);
-
 static int exit_rc = 1;
 
-#define OPTIONS "+vs:X:k:H:g:S:"
+#define OPTIONS "+vs:X:k:H:g:S:c:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"security",        required_argument,  0, 's'},
@@ -178,6 +179,7 @@ static const struct option longopts[] = {
     {"heartrate",       required_argument,  0, 'H'},
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"setattr",         required_argument,  0, 'S'},
+    {"config-path",     required_argument,  0, 'c'},
     {0, 0, 0, 0},
 };
 
@@ -192,6 +194,7 @@ static void usage (void)
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
 " -S,--setattr ATTR=VAL        Set broker attribute\n"
+" -c,--config-path PATH        Set broker config directory (default: none)\n"
 );
     exit (1);
 }
@@ -252,6 +255,9 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
             free (attr);
             break;
         }
+        case 'c': /* --config-path PATH */
+            ctx->config_path = optarg;
+            break;
         default:
             usage ();
         }
@@ -387,12 +393,12 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (increase_rlimits () < 0)
+    /* Parse config.
+     */
+    if (!(ctx.config = brokercfg_create (ctx.h, ctx.config_path, ctx.attrs)))
         goto cleanup;
 
-    /* Parse config file(s).  The result is cached in ctx.h.
-     */
-    if (parse_config_files (ctx.h) < 0)
+    if (increase_rlimits () < 0)
         goto cleanup;
 
     /* Prepare signal handling
@@ -773,6 +779,7 @@ cleanup:
     shutdown_destroy (ctx.shutdown);
     broker_remove_services (handlers);
     publisher_destroy (ctx.publisher);
+    brokercfg_destroy (ctx.config);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     zlist_destroy (&ctx.subscriptions);
@@ -861,29 +868,6 @@ static void init_attrs (attr_t *attrs, pid_t pid)
     if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_add version");
-}
-
-/* Parse TOML config, emitting any parse error here.
- * This will fail if no configuration exists.
- */
-static int parse_config_files (flux_t *h)
-{
-    flux_conf_error_t error;
-
-    if (flux_get_conf (h, &error) == NULL) {
-        if (error.lineno == -1)
-            log_err ("Config file error: %s%s%s",
-                     error.filename,
-                     *error.filename ? ": " : "",
-                     error.errbuf);
-        else
-            log_err ("Config file error: %s:%d: %s",
-                     error.filename,
-                     error.lineno,
-                     error.errbuf);
-        return -1;
-    }
-    return 0;
 }
 
 static void hello_update_cb (hello_t *hello, void *arg)

@@ -153,6 +153,7 @@ static void *module_thread (void *arg)
     int ac;
     int mod_main_errno = 0;
     flux_msg_t *msg;
+    flux_conf_t *conf;
 
     setup_module_profiling (p);
 
@@ -175,7 +176,15 @@ static void *module_thread (void *arg)
         goto done;
     }
     flux_log_set_appname (p->h, p->name);
-
+    /* Copy the broker's config object so that modules
+     * can call flux_get_conf() and expect it to always succeed.
+     */
+    if (!(conf = flux_conf_copy (flux_get_conf (p->broker_h)))
+            || flux_set_conf (p->h, conf) < 0) {
+        flux_conf_decref (conf);
+        log_err ("%s: error duplicating config object", p->name);
+        goto done;
+    }
     if (modservice_register (p->h, p) < 0) {
         log_err ("%s: modservice_register", p->name);
         goto done;
