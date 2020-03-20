@@ -42,20 +42,20 @@ STATE_CONST_DICT = {
 def fsd(secs, hyphenifzero):
     #  Round <1ms down to 0s for now
     if secs < 1.0e-3:
-        string = "0s"
+        strtmp = "0s"
     elif secs < 10.0:
-        string = "%.03fs" % secs
+        strtmp = "%.03fs" % secs
     elif secs < 60.0:
-        string = "%.4gs" % secs
+        strtmp = "%.4gs" % secs
     elif secs < (60.0 * 60.0):
-        string = "%.4gm" % (secs / 60.0)
+        strtmp = "%.4gm" % (secs / 60.0)
     elif secs < (60.0 * 60.0 * 24.0):
-        string = "%.4gh" % (secs / (60.0 * 60.0))
+        strtmp = "%.4gh" % (secs / (60.0 * 60.0))
     else:
-        string = "%.4gd" % (secs / (60.0 * 60.0 * 24.0))
-    if hyphenifzero and string == "0s":
+        strtmp = "%.4gd" % (secs / (60.0 * 60.0 * 24.0))
+    if hyphenifzero and strtmp == "0s":
         return "-"
-    return string
+    return strtmp
 
 
 def statetostr(stateid, singlechar=False):
