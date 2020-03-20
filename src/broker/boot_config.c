@@ -162,12 +162,13 @@ error:
 }
 
 /* Parse the [bootstrap] configuration.
- * Capture the portion that is owned by the flux_t handle in 'conf'.
  * Post-process conf->hosts to expand any embedded idsets and return
  * a new hosts JSON array on success.  On failure, log a human readable
  * message and return NULL.
  */
-int boot_config_parse (flux_t *h, struct boot_conf *conf, json_t **hostsp)
+int boot_config_parse (const flux_conf_t *cf,
+                       struct boot_conf *conf,
+                       json_t **hostsp)
 {
     flux_conf_error_t error;
     const char *default_bind = NULL;
@@ -175,7 +176,7 @@ int boot_config_parse (flux_t *h, struct boot_conf *conf, json_t **hostsp)
     json_t *hosts = NULL;
 
     memset (conf, 0, sizeof (*conf));
-    if (flux_conf_unpack (flux_get_conf (h, NULL),
+    if (flux_conf_unpack (cf,
                           &error,
                           "{s:{s?:i s?:s s?:s s?:o}}",
                           "bootstrap",
@@ -373,7 +374,7 @@ int boot_config (flux_t *h, overlay_t *overlay, attr_t *attrs, int tbon_k)
 
     /* Ingest the [bootstrap] stanza.
      */
-    if (boot_config_parse (h, &conf, &hosts) < 0)
+    if (boot_config_parse (flux_get_conf (h), &conf, &hosts) < 0)
         return -1;
 
     /* If hosts array was specified, match hostname to determine rank,

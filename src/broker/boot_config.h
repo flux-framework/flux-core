@@ -46,7 +46,9 @@ int boot_config_getbindbyrank (json_t *hosts,
 int boot_config_getrankbyname (json_t *hosts,
                                const char *name,
                                uint32_t *rank);
-int boot_config_parse (flux_t *h, struct boot_conf *conf, json_t **hosts);
+int boot_config_parse (const flux_conf_t *cf,
+                       struct boot_conf *conf,
+                       json_t **hosts);
 int boot_config_format_uri (char *buf,
                             int bufsz,
                             const char *fmt,
