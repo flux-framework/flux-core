@@ -5,102 +5,149 @@ test_description='Test config file overlay bootstrap'
 
 . `dirname $0`/sharness.sh
 
-TCONFDIR=${FLUX_SOURCE_DIR}/t/conf.d
-
 # Avoid loading unnecessary modules in back to back broker tests
 ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path="
 
 #
-# check boot.method
-#
-
-test_expect_success 'flux broker with explicit PMI boot method works' '
-	flux broker ${ARGS} -Sboot.method=pmi /bin/true
-'
-
-test_expect_success 'flux broker with unknown boot method fails' '
-	test_must_fail flux broker ${ARGS} -Sboot.method=badmethod /bin/true
-'
-
-#
 # check config file parsing
 #
+test_expect_success 'flux broker works with no config' '
+	flux broker ${ARGS} flux lsattr -v | grep config.path >noconfig.out &&
+	egrep "^config.path.*-$" noconfig.out
+'
 
-test_expect_success 'broker startup with missing config fails' "
-	! FLUX_CONF_DIR=/noexist \
-		flux broker ${ARGS} /bin/true
+test_expect_success 'flux broker works with empty config directory' '
+	mkdir empty &&
+	cat <<-EOT >empty.exp &&
+	empty
+	EOT
+	flux broker ${ARGS} -c empty flux getattr config.path >empty.out &&
+	test_cmp empty.exp empty.out
+'
+
+test_expect_success 'FLUX_CONF_DIR also works to specify config dir' '
+	FLUX_CONF_DIR=empty flux broker ${ARGS} \
+		      flux getattr config.path >empty2.out &&
+	test_cmp empty.exp empty2.out
+'
+
+test_expect_success 'flux broker fails with specfied config directory missing' "
+	test_must_fail flux broker ${ARGS} -c noexist /bin/true
 "
 
-test_expect_success 'broker startup with invalid TOML fails' "
-	! FLUX_CONF_DIR=${TCONFDIR}/bad-toml \
-		flux broker ${ARGS} /bin/true
-"
+test_expect_success 'broker fails with invalid TOML' '
+	mkdir conf1 &&
+	cat <<-EOT >conf1/bootstrap.toml &&
+	[bootstrap]
+	bad-toml
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf1 /bin/true
+'
 
-test_expect_success '[bootstrap] config with missing bootstrap table fails' "
-	! FLUX_CONF_DIR=${TCONFDIR}/bad-nobootstrap \
-		flux broker ${ARGS} -Sboot.method=config /bin/true
-"
+#
+# [bootstrap] tests
+#
 
-test_expect_success '[bootstrap] config with bad hosts array' "
-	! FLUX_CONF_DIR=${TCONFDIR}/bad-hosts2 \
-		flux broker ${ARGS} -Sboot.method=config /bin/true
-"
+test_expect_success '[bootstrap] config with bad hosts array' '
+	mkdir conf3 &&
+	cat <<-EOT >conf3/bootstrap.toml &&
+	[bootstrap]
+	hosts = 42
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf3 /bin/true
+'
 
-test_expect_success '[bootstrap] config with bad hosts array element' "
-	! FLUX_CONF_DIR=${TCONFDIR}/bad-hosts \
-		flux broker ${ARGS} -Sboot.method=config /bin/true
-"
+test_expect_success '[bootstrap] config with bad hosts array element' '
+	mkdir conf4 &&
+	cat <<-EOT >conf4/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    42
+	]
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf4 /bin/true
+'
 
-test_expect_success '[bootstrap] config with hostname not found' "
-	! FLUX_CONF_DIR=${TCONFDIR}/bad-nomatch \
-		flux broker ${ARGS} -Sboot.method=config /bin/true
-"
+test_expect_success '[bootstrap] config with hostname not found' '
+	mkdir conf5 &&
+	cat <<-EOT >conf5/bootstrap.toml &&
+	[bootstrap]
+	default_bind = "ipc://@flux-testipc-1-0"
+	default_connect = "ipc://@flux-testipc-1-0"
+	hosts = [
+	    { host = "matchnobody" },
+	]
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf5 /bin/true
+'
 
-test_expect_success 'start instance with missing hosts' "
-	FLUX_CONF_DIR=${TCONFDIR}/good-nohosts \
-		flux broker ${ARGS} -Sboot.method=config \
-		flux lsattr -v >attr.out &&
-	grep 'tbon.endpoint.*-$' attr.out
-"
+test_expect_success '[bootstrap] hosts array can be missing' '
+	mkdir conf6 &&
+	cat <<-EOT >conf6/bootstrap.toml &&
+	[bootstrap]
+	EOT
+	flux broker ${ARGS} -c conf6 flux lsattr -v >missing_attr.out &&
+	grep "tbon.endpoint.*-$" missing_attr.out
+'
 
-test_expect_success 'start instance with empty hosts' "
-	FLUX_CONF_DIR=${TCONFDIR}/good-emptyhosts \
-		flux broker ${ARGS} -Sboot.method=config \
-		flux lsattr -v >attr.out &&
-	grep 'tbon.endpoint.*-$' attr.out
-"
+test_expect_success '[bootstrap] hosts array can be empty' '
+	mkdir conf7 &&
+	cat <<-EOT >conf7/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	]
+	EOT
+	flux broker ${ARGS} -c conf7 flux lsattr -v >empty_attr.out &&
+	grep "tbon.endpoint.*-$" empty_attr.out
+'
 
 # Usage: start_broker config hostname cmd ...
 start_broker() {
 	local dir=$1; shift
 	local host=$1; shift
-	FLUX_CONF_DIR=$dir FLUX_FAKE_HOSTNAME=$host \
-		flux broker ${ARGS} -Sboot.method=config "$@" &
+	FLUX_FAKE_HOSTNAME=$host flux broker ${ARGS} -c $dir "$@" &
 }
 
-test_expect_success 'start size=2 instance with ipc://' "
-	start_broker ${TCONFDIR}/good-ipc2 fake0 flux getattr size >ipc.out &&
-        F0=\$! &&
-	start_broker ${TCONFDIR}/good-ipc2 fake1 &&
-        F1=\$! &&
-	wait \$F0 \$F1 &&
+test_expect_success 'start size=2 instance with ipc://' '
+	mkdir conf8 &&
+	cat <<-EOT >conf8/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { host="fake0", bind="ipc:///tmp/test-ipc2-0", connect="ipc:///tmp/test-ipc2-0" },
+	    { host="fake1" }
+	]
+	EOT
+	start_broker conf8 fake0 flux getattr size >ipc.out &&
+        F0=$! &&
+	start_broker conf8 fake1 &&
+        F1=$! &&
+	wait $F0 $F1 &&
 	echo 2 >ipc.exp &&
 	test_cmp ipc.exp ipc.out
-"
+'
 
-test_expect_success 'start size=4 instance with tcp://' "
-	start_broker ${TCONFDIR}/good-tcp4 fake0 flux getattr size >tcp.out &&
-        F0=\$! &&
-	start_broker ${TCONFDIR}/good-tcp4 fake1 &&
-        F1=\$! &&
-	start_broker ${TCONFDIR}/good-tcp4 fake2 &&
-        F2=\$! &&
-	start_broker ${TCONFDIR}/good-tcp4 fake3 &&
-        F3=\$! &&
-	wait \$F0 \$F1 \$F2 \$F3 &&
+test_expect_success 'start size=4 instance with tcp://' '
+	mkdir conf9 &&
+	cat <<-EOT >conf9/bootstrap.toml &&
+	[bootstrap]
+	hosts = [
+	    { host="fake0", bind="tcp://127.0.0.1:5080", connect="tcp://127.0.0.1:5080" },
+	    { host="fake1", bind="tcp://127.0.0.1:5081", connect="tcp://127.0.0.1:5081" },
+	    { host="fake[2-3]" }
+	]
+	EOT
+	start_broker conf9 fake0 flux getattr size >tcp.out &&
+        F0=$! &&
+	start_broker conf9 fake1 &&
+        F1=$! &&
+	start_broker conf9 fake2 &&
+        F2=$! &&
+	start_broker conf9 fake3 &&
+        F3=$! &&
+	wait $F0 $F1 $F2 $F3 &&
 	echo 4 >tcp.exp &&
 	test_cmp tcp.exp tcp.out
-"
+'
 
 
 test_done

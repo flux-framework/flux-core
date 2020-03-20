@@ -1,7 +1,0 @@
-[bootstrap]
-
-hosts = [
-    { host="fake0", bind="tcp://127.0.0.1:5080", connect="tcp://127.0.0.1:5080" },
-    { host="fake1", bind="tcp://127.0.0.1:5081", connect="tcp://127.0.0.1:5081" },
-    { host="fake[2-3]" }
-]

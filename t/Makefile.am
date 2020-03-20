@@ -279,16 +279,7 @@ dist_check_DATA = \
 	hwloc-data/1N/shared/02-brokers/1.xml \
 	hwloc-data/1N/nonoverlapping/02-brokers/0.xml \
 	hwloc-data/1N/nonoverlapping/02-brokers/1.xml \
-	valgrind/valgrind.supp \
-	conf.d/bad-hosts/boot.toml \
-	conf.d/bad-hosts2/boot.toml \
-	conf.d/bad-nobootstrap/boot.toml \
-	conf.d/bad-nomatch/boot.toml \
-	conf.d/bad-toml/boot.toml \
-	conf.d/good-nohosts/boot.toml \
-	conf.d/good-emptyhosts/boot.toml \
-	conf.d/good-ipc2/boot.toml \
-	conf.d/good-tcp4/boot.toml
+	valgrind/valgrind.supp
 
 test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \

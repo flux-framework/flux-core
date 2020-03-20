@@ -1,6 +1,0 @@
-[bootstrap]
-
-hosts = [
-    { host="fake0", bind="ipc:///tmp/test-ipc2-0", connect="ipc:///tmp/test-ipc2-0" },
-    { host="fake1" }
-]
