@@ -311,7 +311,7 @@ int main (int argc, char *argv[])
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
     flux_msg_handler_t **handlers = NULL;
-    const char *boot_method;
+    const flux_conf_t *conf;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -397,6 +397,7 @@ int main (int argc, char *argv[])
      */
     if (!(ctx.config = brokercfg_create (ctx.h, ctx.config_path, ctx.attrs)))
         goto cleanup;
+    conf = flux_get_conf (ctx.h);
 
     if (increase_rlimits () < 0)
         goto cleanup;
@@ -453,29 +454,17 @@ int main (int argc, char *argv[])
      */
     overlay_set_init_callback (ctx.overlay, create_broker_rundir, ctx.attrs);
 
-    /* Execute boot method selected by 'boot.method' attr.
-     * Default is pmi.
+    /* Execute broker network bootstrap.
+     * Default method is pmi.
+     * If [bootstrap] is defined in configuration, use static configuration.
      */
-    if (attr_get (ctx.attrs, "boot.method", &boot_method, NULL) < 0) {
-        boot_method = "pmi";
-        if (attr_add (ctx.attrs, "boot.method", boot_method, 0)) {
-            log_err ("setattr boot.method");
-            goto cleanup;
-        }
-    }
-    if (attr_set_flags (ctx.attrs,
-                        "boot.method",
-                        FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("attr_set_flags boot.method");
-        goto cleanup;
-    }
-    if (!strcmp (boot_method, "config")) {
+    if (flux_conf_unpack (conf, NULL, "{s:{}}", "bootstrap") == 0) {
         if (boot_config (ctx.h, ctx.overlay, ctx.attrs, ctx.tbon_k) < 0) {
             log_msg ("bootstrap failed");
             goto cleanup;
         }
     }
-    else if (!strcmp (boot_method, "pmi")) {
+    else { // PMI
         double elapsed_sec;
         struct timespec start_time;
         monotime (&start_time);
@@ -486,10 +475,6 @@ int main (int argc, char *argv[])
         elapsed_sec = monotime_since (start_time) / 1000;
         flux_log (ctx.h, LOG_INFO, "pmi: bootstrap time %.1fs", elapsed_sec);
 
-    }
-    else {
-        log_err ("unknown boot method: %s", boot_method);
-        goto cleanup;
     }
     uint32_t rank = overlay_get_rank (ctx.overlay);
     uint32_t size = overlay_get_size (ctx.overlay);

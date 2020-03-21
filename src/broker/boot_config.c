@@ -368,7 +368,7 @@ int boot_config (flux_t *h, overlay_t *overlay, attr_t *attrs, int tbon_k)
      * config boot method as it would be overwritten below.
      */
     if (attr_get (attrs, "tbon.endpoint", NULL, NULL) == 0) {
-        log_msg ("attr tbon.endpoint may not be set with boot_method=config");
+        log_msg ("attr tbon.endpoint may not be set with [bootstrap] config");
         return -1;
     }
 
