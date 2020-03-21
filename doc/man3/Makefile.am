@@ -1,6 +1,23 @@
 MAN3_FILES = $(MAN3_FILES_PRIMARY) $(MAN3_FILES_SECONDARY)
 
 MAN3_FILES_PRIMARY = \
+        flux_shell_task_channel_subscribe.3 \
+	flux_shell_add_completion_ref.3 \
+	flux_shell_add_event_context.3 \
+	flux_shell_add_event_handler.3 \
+	flux_shell_aux_set.3 \
+	flux_shell_current_task.3 \
+	flux_shell_get_flux.3 \
+	flux_shell_get_info.3 \
+	flux_shell_getenv.3 \
+	flux_shell_getopt.3 \
+	flux_shell_killall.3 \
+	flux_shell_log.3 \
+	flux_shell_plugstack_call.3 \
+	flux_shell_rpc_pack.3 \
+	flux_shell_service_register.3 \
+	flux_shell_task_get_info.3 \
+	flux_shell_task_subprocess.3 \
 	flux_open.3 \
 	flux_send.3 \
 	flux_recv.3 \
@@ -54,6 +71,24 @@ MAN3_FILES_PRIMARY = \
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
 MAN3_FILES_SECONDARY = \
+	flux_shell_remove_completion_ref.3 \
+	flux_shell_aux_get.3 \
+	flux_shell_task_first.3 \
+	flux_shell_task_next.3 \
+	flux_shell_info_unpack.3 \
+	flux_shell_get_rank_info.3 \
+	flux_shell_rank_info_unpack.3 \
+	flux_shell_get_environ.3 \
+	flux_shell_setenvf.3 \
+	flux_shell_unsetenv.3 \
+	flux_shell_getopt_unpack.3 \
+	flux_shell_setopt.3 \
+	flux_shell_setopt_pack.3 \
+	flux_shell_err.3 \
+	flux_shell_fatal.3 \
+	flux_shell_log_setlevel.3 \
+	flux_shell_task_info_unpack.3 \
+	flux_shell_task_cmd.3 \
 	flux_clone.3 \
 	flux_close.3 \
 	flux_requeue_nocopy.3 \
@@ -198,7 +233,24 @@ stderr_devnull_0 = 2>/dev/null
 	    --attribute manmanual="Flux Programming Reference" \
 	    --destination-dir $(builddir) \
 	    --doctype manpage $(ADOC_FORMAT_OPT) manpage $< $(STDERR_DEVNULL)
-
+flux_shell_remove_completion_ref.3: flux_shell_add_completion_ref.3 
+flux_shell_aux_get.3: flux_shell_aux_set.3
+flux_shell_task_first.3: flux_shell_current_task.3
+flux_shell_task_next.3: flux_shell_current_task.3
+flux_shell_info_unpack.3: flux_shell_get_info.3
+flux_shell_get_rank_info.3: flux_shell_get_info.3
+flux_shell_rank_info_unpack.3: flux_shell_get_info.3
+flux_shell_get_environ.3: flux_shell_getenv.3
+flux_shell_setenvf.3: flux_shell_getenv.3
+flux_shell_unsetenv.3: flux_shell_getenv.3
+flux_shell_getopt_unpack.3: flux_shell_getopt.3
+flux_shell_setopt.3: flux_shell_getopt.3
+flux_shell_setopt_pack.3: flux_shell_getopt.3
+flux_shell_err.3: flux_shell_log.3
+flux_shell_fatal.3: flux_shell_log.3
+flux_shell_log_setlevel.3: flux_shell_log.3
+flux_shell_task_info_unpack.3: flux_shell_task_get_info.3
+flux_shell_task_cmd.3: flux_shell_task_subprocess.3
 flux_clone.3: flux_open.3
 flux_close.3: flux_open.3
 flux_requeue_nocopy.3: flux_requeue.3

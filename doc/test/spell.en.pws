@@ -1,4 +1,19 @@
 personal_ws-1.1 en 0
+proc
+localid
+exitcode
+getline
+plugstack
+setlevel
+errn
+dest
+killall
+sig
+unsets
+setenvf
+environ
+substring
+asprintf
 KVS
 kvs
 api
