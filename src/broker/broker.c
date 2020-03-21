@@ -169,7 +169,7 @@ static int parse_config_files (flux_t *h);
 
 static int exit_rc = 1;
 
-#define OPTIONS "+vM:X:k:s:g:EIS:"
+#define OPTIONS "+vs:X:k:H:g:S:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"security",        required_argument,  0, 's'},
