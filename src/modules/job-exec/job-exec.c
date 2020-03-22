@@ -135,6 +135,7 @@ void jobinfo_decref (struct jobinfo *job)
         job->ctx = NULL;
         flux_msg_decref (job->req);
         job->req = NULL;
+        free (job->J);
         resource_set_destroy (job->R);
         json_decref (job->jobspec);
         free (job);
@@ -729,6 +730,13 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         jobinfo_fatal_error (job, errno, "reading R: %s", error.text);
         goto done;
     }
+    if (job->multiuser) {
+        const char *J = jobinfo_kvs_lookup_get (f, "J");
+        if (!J || !(job->J = strdup (J))) {
+            jobinfo_fatal_error (job, errno, "reading J: %s", error.text);
+            goto done;
+        }
+    }
     if (!(job->jobspec = json_loads (jobspec, 0, &error))) {
         jobinfo_fatal_error (job, errno, "reading jobspec: %s", error.text);
         goto done;
@@ -836,6 +844,11 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
     if (!(f_kvs = flux_jobid_kvs_lookup (h, job->id, 0, "jobspec"))
         || flux_future_push (f, "jobspec", f_kvs) < 0)
         goto err;
+    if (job->multiuser
+        && (!(f_kvs = flux_jobid_kvs_lookup (h, job->id, 0, "J"))
+        || flux_future_push (f, "J", f_kvs) < 0)) {
+        goto err;
+    }
     if (!(f_kvs = ns_create_and_link (h, job, 0))
         || flux_future_push (f, "ns", f_kvs))
         goto err;
@@ -843,6 +856,7 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
     return f;
 err:
     flux_log_error (job->ctx->h, "jobinfo_kvs_lookup/namespace_create");
+    flux_future_destroy (f_kvs);
     flux_future_destroy (f);
     return NULL;
 }
@@ -873,6 +887,10 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
         jobinfo_decref (job);
         return -1;
     }
+
+    if (job->userid != getuid ())
+        job->multiuser = 1;
+
     /*  Take a reference until initialization complete in case an
      *   exception is generated during this phase
      */

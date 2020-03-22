@@ -8,7 +8,7 @@
 #
 # option Defaults:
 IMAGE=bionic
-FLUX_SECURITY_VERSION=0.2.0
+FLUX_SECURITY_VERSION=0.4.0
 JOBS=2
 MOUNT_HOME_ARGS="--volume=$HOME:/home/$USER -e HOME"
 

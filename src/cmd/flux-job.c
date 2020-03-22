@@ -168,7 +168,7 @@ static struct optparse_option submit_opts[] =  {
     { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
       .usage = "Set job priority (0-31, default=16)",
     },
-    { .name = "flags", .key = 'f', .has_arg = 3,
+    { .name = "flags", .key = 'f', .has_arg = 1,
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Set submit comma-separated flags (e.g. debug, waitable)",
     },
@@ -1164,6 +1164,8 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
                 flags |= FLUX_JOB_DEBUG;
             else if (!strcmp (name, "waitable"))
                 flags |= FLUX_JOB_WAITABLE;
+            else if (!strcmp (name, "signed"))
+                flags |= FLUX_JOB_PRE_SIGNED;
             else
                 log_msg_exit ("unknown flag: %s", name);
         }

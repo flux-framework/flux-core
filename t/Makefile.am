@@ -109,6 +109,7 @@ TESTSCRIPTS = \
 	t2401-job-exec-hello.t \
 	t2402-job-exec-dummy.t \
 	t2403-job-exec-conf.t \
+	t2404-job-exec-multiuser.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
 	t2600-job-shell-rcalc.t \
@@ -195,6 +196,7 @@ dist_check_SCRIPTS = \
 	scripts/waitfile.lua \
 	scripts/t0004-event-helper.sh \
 	scripts/tssh \
+	scripts/sign-as.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
 	kvs/kvs-helper.sh \
@@ -207,6 +209,7 @@ dist_check_SCRIPTS = \
 	job-manager/wait-interrupted.py \
 	job-attach/outputsleep.sh \
 	job-exec/dummy.sh \
+	job-exec/imp.sh \
 	job-info/list-id.py \
 	schedutil/req_and_unload.py \
 	ingest/fake-validate.sh \

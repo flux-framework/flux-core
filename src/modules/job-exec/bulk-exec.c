@@ -73,6 +73,29 @@ int bulk_exec_total (struct bulk_exec *exec)
     return exec->total;
 }
 
+int bulk_exec_write (struct bulk_exec *exec, const char *stream,
+                     const char *buf, size_t len)
+{
+    flux_subprocess_t *p = zlist_first (exec->processes);
+    while (p) {
+        if (flux_subprocess_write (p, stream, buf, len) < len)
+            return -1;
+        p = zlist_next (exec->processes);
+    }
+    return 0;
+}
+
+int bulk_exec_close (struct bulk_exec *exec, const char *stream)
+{
+    flux_subprocess_t *p = zlist_first (exec->processes);
+    while (p) {
+        if (flux_subprocess_close (p, stream) < 0)
+            return -1;
+        p = zlist_next (exec->processes);
+    }
+    return 0;
+}
+
 static int exec_exit_notify (struct bulk_exec *exec)
 {
     if (exec->handlers->on_exit)
@@ -210,10 +233,14 @@ static struct exec_cmd *exec_cmd_create (const struct idset *ranks,
     struct exec_cmd *c = calloc (1, sizeof (*c));
     if (!c)
         return NULL;
-    if (!(c->ranks = idset_copy (ranks)))
+    if (!(c->ranks = idset_copy (ranks))) {
+        fprintf (stderr, "exec_cmd_create: idset_copy failed");
         goto err;
-    if (!(c->cmd = flux_cmd_copy (cmd)))
+    }
+    if (!(c->cmd = flux_cmd_copy (cmd))) {
+        fprintf (stderr, "exec_cmd_create: flux_cmd_copy failed");
         goto err;
+    }
     c->flags = flags;
     return (c);
 err:
@@ -299,6 +326,7 @@ static int exec_start_cmds (struct bulk_exec *exec, int max)
     return 0;
 }
 
+
 static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
 {
@@ -328,14 +356,16 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 void bulk_exec_destroy (struct bulk_exec *exec)
 {
-    zlist_destroy (&exec->processes);
-    zlist_destroy (&exec->commands);
-    idset_destroy (exec->exit_batch);
-    flux_watcher_destroy (exec->prep);
-    flux_watcher_destroy (exec->check);
-    flux_watcher_destroy (exec->idle);
-    aux_destroy (&exec->aux);
-    free (exec);
+    if (exec) {
+        zlist_destroy (&exec->processes);
+        zlist_destroy (&exec->commands);
+        idset_destroy (exec->exit_batch);
+        flux_watcher_destroy (exec->prep);
+        flux_watcher_destroy (exec->check);
+        flux_watcher_destroy (exec->idle);
+        aux_destroy (&exec->aux);
+        free (exec);
+    }
 }
 
 struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops, void *arg)
@@ -478,6 +508,138 @@ flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)
     }
 
     return cf;
+}
+
+static void imp_kill_output (struct bulk_exec *kill,
+                             flux_subprocess_t *p,
+                             const char *stream,
+                             const char *data,
+                             int len,
+                             void *arg)
+{
+    int rank = flux_subprocess_rank (p);
+    flux_log (kill->h, LOG_INFO,
+              "rank%d: flux-imp kill: %s: %s",
+              rank,
+              stream,
+              data);
+}
+
+static void imp_kill_complete (struct bulk_exec *kill, void *arg)
+{
+    flux_future_t *f = arg;
+    if (bulk_exec_rc (kill) < 0)
+        flux_future_fulfill_error (f, 0, NULL);
+    else
+        flux_future_fulfill (f, NULL, NULL);
+}
+
+static void imp_kill_error (struct bulk_exec *kill,
+                            flux_subprocess_t *p,
+                            void *arg)
+{
+    flux_log_error (kill->h,
+                    "imp kill: rank=%d: failed",
+                    flux_subprocess_rank (p));
+}
+
+
+struct bulk_exec_ops imp_kill_ops = {
+    .on_output = imp_kill_output,
+    .on_error = imp_kill_error,
+    .on_complete = imp_kill_complete,
+};
+
+static int bulk_exec_push_one (struct bulk_exec *exec,
+                               int rank,
+                               flux_cmd_t *cmd,
+                               int flags)
+{
+    int rc = -1;
+    struct idset *ids = idset_create (0, IDSET_FLAG_AUTOGROW);
+    if (!ids || idset_set (ids, rank) < 0)
+        return -1;
+    rc = bulk_exec_push_cmd (exec, ids, cmd, flags);
+    idset_destroy (ids);
+    return rc;
+}
+
+/*  Kill all currently executing processes in bulk-exec object `exec`
+ *   using "flux-imp kill" helper for processes potentially running
+ *   under a different userid.
+ *
+ *  Spawns "flux-imp kill <signal> <pid>" on each rank.
+ */
+flux_future_t *bulk_exec_imp_kill (struct bulk_exec *exec,
+                                   const char *imp_path,
+                                   int signum)
+{
+    struct bulk_exec *killcmd = NULL;
+    flux_subprocess_t *p = NULL;
+    flux_future_t *f = NULL;
+    int count = 0;
+
+    /* Empty future for return value
+     */
+    if (!(f = flux_future_create (NULL, NULL))) {
+        flux_log_error (exec->h, "bulk_exec_imp_kill: future_create");
+        goto err;
+    }
+    flux_future_set_flux (f, exec->h);
+
+    if (!(killcmd = bulk_exec_create (&imp_kill_ops, f)))
+        return NULL;
+
+    /*  Tie bulk exec object destruction to future */
+    flux_future_aux_set (f, NULL, killcmd, (flux_free_f) bulk_exec_destroy);
+
+    p = zlist_first (exec->processes);
+    while (p) {
+        if ((flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING
+            || flux_subprocess_state (p) == FLUX_SUBPROCESS_INIT)) {
+
+            pid_t pid = flux_subprocess_pid (p);
+            int rank = flux_subprocess_rank (p);
+            flux_cmd_t *cmd = flux_cmd_create (0, NULL, environ);
+
+            if (!cmd
+                || flux_cmd_setcwd (cmd, "/tmp") < 0
+                || flux_cmd_argv_append (cmd, imp_path) < 0
+                || flux_cmd_argv_append (cmd, "kill") < 0
+                || flux_cmd_argv_appendf (cmd, "%d", signum) < 0
+                || flux_cmd_argv_appendf (cmd, "%ld", (long) pid)) {
+                flux_log_error (exec->h,
+                                "bulk_exec_imp_kill: flux_cmd_argv_append");
+                goto err;
+            }
+
+            if (bulk_exec_push_one (killcmd, rank, cmd, 0) < 0) {
+                flux_log_error (exec->h, "bulk_exec_imp_kill: push_cmd");
+                goto err;
+            }
+
+            count++;
+            flux_cmd_destroy (cmd);
+        }
+        p = zlist_next (exec->processes);
+    }
+
+    if (count == 0) {
+        errno = ENOENT;
+        goto err;
+    }
+
+    bulk_exec_aux_set (killcmd, "future", f, NULL);
+
+    if (bulk_exec_start (exec->h, killcmd) < 0) {
+        flux_log_error (exec->h, "bulk_exec_start");
+        goto err;
+    }
+
+    return f;
+err:
+    flux_future_destroy (f);
+    return NULL;
 }
 
 int bulk_exec_aux_set (struct bulk_exec *exec, const char *key,

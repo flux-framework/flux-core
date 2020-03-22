@@ -66,6 +66,10 @@ int bulk_exec_start (flux_t *h, struct bulk_exec *exec);
 
 flux_future_t * bulk_exec_kill (struct bulk_exec *exec, int signal);
 
+flux_future_t *bulk_exec_imp_kill (struct bulk_exec *exec,
+                                   const char *imp_path,
+                                   int signal);
+
 int bulk_exec_cancel (struct bulk_exec *exec);
 
 /* Returns max wait status returned from all exited processes */
@@ -73,6 +77,11 @@ int bulk_exec_rc (struct bulk_exec *exec);
 
 /* Returns current number of processes starting/running */
 int bulk_exec_current (struct bulk_exec *exec);
+
+int bulk_exec_write (struct bulk_exec *exec, const char *stream,
+                     const char *buf, size_t len);
+
+int bulk_exec_close (struct bulk_exec *exec, const char *stream);
 
 /* Returns total number of processes expected to run */
 int bulk_exec_total (struct bulk_exec *exec);

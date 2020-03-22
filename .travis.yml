@@ -45,16 +45,6 @@ jobs:
        - DISTCHECK=t
        - PYTHON_VERSION=3.8
        - GITHUB_RELEASES_DEPLOY=t
-    - name: "Ubuntu: gcc-8 address-sanitizer --with-flux-security"
-      stage: test
-      compiler: gcc-8
-      env:
-       - CC=gcc-8
-       - CXX=g++-8
-       - ARGS="--with-flux-security --enable-sanitizer=address"
-       - PRELOAD=/usr/lib/gcc/x86_64-linux-gnu/8/libasan.so
-       - ASAN_OPTIONS=detect_leaks=0,start_deactivated=true # TODO: fix/suppress tests so we can turn this on
-       - PYTHON_VERSION=3.6
     - name: "Ubuntu: gcc-8 --with-flux-security/caliper, distcheck"
       stage: test
       compiler: gcc-8
@@ -82,21 +72,21 @@ jobs:
       stage: test
       compiler: gcc
       env:
-       - ARGS="--with-flux-security --enable-caliper"
+       - ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --with-flux-security --enable-caliper"
        - TEST_INSTALL=t
        - DOCKER_TAG=t
     - name: "Centos 7: security,caliper,docker-deploy"
       stage: test
       compiler: gcc
       env:
-       - ARGS="--with-flux-security --enable-caliper --prefix=/usr"
+       - ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --with-flux-security --enable-caliper"
        - IMG=centos7
        - DOCKER_TAG=t
     - name: "Centos 8: security,caliper,docker-deploy"
       stage: test
       compiler: gcc
       env:
-       - ARGS="--with-flux-security --enable-caliper --prefix=/usr"
+       - ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --with-flux-security --enable-caliper"
        - IMG=centos8
        - DOCKER_TAG=t
        - PYTHON_VERSION=3.6

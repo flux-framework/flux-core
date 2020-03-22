@@ -20,7 +20,7 @@ RUN CCACHE_DISABLE=1 \
  && wget ${URL}/v${V}/${PKG}.tar.gz \
  && tar xvfz ${PKG}.tar.gz \
  && cd ${PKG} \
- && ./configure --prefix=/usr || cat config.log \
+ && ./configure --prefix=/usr --sysconfdir=/etc || cat config.log \
  && make -j 4 \
  && make install \
  && cd .. \
