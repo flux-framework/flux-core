@@ -5,6 +5,7 @@ pull_request_rules:
       - status-success=Travis CI - Pull Request
       - status-success="validate commits"
       - status-success="flux-sched check"
+      - status-success="address-sanitizer check"
       - label="merge-when-passing"
       - label!="work-in-progress"
       - "approved-reviews-by=@flux-framework/core"
