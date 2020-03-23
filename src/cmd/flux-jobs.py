@@ -320,7 +320,8 @@ class JobsOutputFormat(flux.util.OutputFormat):
     class JobFormatter(string.Formatter):
         def format_field(self, value, spec):
             if spec.endswith("h"):
-                value = "-" if value in ("", "0s") else str(value)
+                basecases = ("", "0s", "0.0", "0:00:00")
+                value = "-" if str(value) in basecases else str(value)
                 spec = spec[:-1] + "s"
             return super().format_field(value, spec)
 

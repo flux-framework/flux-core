@@ -66,10 +66,10 @@ following is the format used for the default format:
 
   {id:>18} {username:<8.8} {name:<10.10} {state:<8.8} {ntasks:>6} {nnodes:>6h} {runtime_fsd:>8h} {ranks:h}
 
-The conversion type 'h' can be used to convert an empty string or the
-string "0s" to a hyphen.  For example, normally "{ranks}" would output
-an empty string if the job has not yet run.  By specifying,
-"{ranks:h}", a hyphen would be output instead.
+The conversion type 'h' can be used to convert an empty string, "0s",
+"0.0", or "0:00:00" to a hyphen.  For example, normally "{ranks}"
+would output an empty string if the job has not yet run.  By
+specifying, "{ranks:h}", a hyphen would be output instead.
 
 The field names that can be specified are:
 
