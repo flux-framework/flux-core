@@ -16,6 +16,7 @@ import logging
 import argparse
 import time
 import pwd
+import string
 from datetime import timedelta
 
 import flux.job
@@ -41,20 +42,20 @@ STATE_CONST_DICT = {
 def fsd(secs, hyphenifzero):
     #  Round <1ms down to 0s for now
     if secs < 1.0e-3:
-        string = "0s"
+        strtmp = "0s"
     elif secs < 10.0:
-        string = "%.03fs" % secs
+        strtmp = "%.03fs" % secs
     elif secs < 60.0:
-        string = "%.4gs" % secs
+        strtmp = "%.4gs" % secs
     elif secs < (60.0 * 60.0):
-        string = "%.4gm" % (secs / 60.0)
+        strtmp = "%.4gm" % (secs / 60.0)
     elif secs < (60.0 * 60.0 * 24.0):
-        string = "%.4gh" % (secs / (60.0 * 60.0))
+        strtmp = "%.4gh" % (secs / (60.0 * 60.0))
     else:
-        string = "%.4gd" % (secs / (60.0 * 60.0 * 24.0))
-    if hyphenifzero and string == "0s":
+        strtmp = "%.4gd" % (secs / (60.0 * 60.0 * 24.0))
+    if hyphenifzero and strtmp == "0s":
         return "-"
-    return string
+    return strtmp
 
 
 def statetostr(stateid, singlechar=False):
@@ -139,20 +140,8 @@ class JobInfo:
         return get_username(self.userid)
 
     @memoized_property
-    def nnodes_hyphen(self):
-        return self.nnodes or "-"
-
-    @memoized_property
-    def ranks_hyphen(self):
-        return self.ranks or "-"
-
-    @memoized_property
     def runtime_fsd(self):
         return fsd(self.runtime, False)
-
-    @memoized_property
-    def runtime_fsd_hyphen(self):
-        return fsd(self.runtime, True)
 
     @memoized_property
     def runtime_hms(self):
@@ -199,9 +188,7 @@ def fetch_jobs_flux(args, fields):
         name=("name",),
         ntasks=("ntasks",),
         nnodes=("nnodes",),
-        nnodes_hyphen=("nnodes",),
         ranks=("ranks",),
-        ranks_hyphen=("ranks",),
         t_submit=("t_submit",),
         t_depend=("t_depend",),
         t_sched=("t_sched",),
@@ -210,7 +197,6 @@ def fetch_jobs_flux(args, fields):
         t_inactive=("t_inactive",),
         runtime=("t_run", "t_cleanup"),
         runtime_fsd=("t_run", "t_cleanup"),
-        runtime_fsd_hyphen=("t_run", "t_cleanup"),
         runtime_hms=("t_run", "t_cleanup"),
     )
 
@@ -331,6 +317,14 @@ class JobsOutputFormat(flux.util.OutputFormat):
     a new format suitable for headers display, etc...
     """
 
+    class JobFormatter(string.Formatter):
+        def format_field(self, value, spec):
+            if spec.endswith("h"):
+                basecases = ("", "0s", "0.0", "0:00:00")
+                value = "-" if str(value) in basecases else str(value)
+                spec = spec[:-1] + "s"
+            return super().format_field(value, spec)
+
     #  List of legal format fields and their header names
     headings = dict(
         id="JOBID",
@@ -342,9 +336,7 @@ class JobsOutputFormat(flux.util.OutputFormat):
         name="NAME",
         ntasks="NTASKS",
         nnodes="NNODES",
-        nnodes_hyphen="NNODES",
         ranks="RANKS",
-        ranks_hyphen="RANKS",
         t_submit="T_SUBMIT",
         t_depend="T_DEPEND",
         t_sched="T_SCHED",
@@ -353,7 +345,6 @@ class JobsOutputFormat(flux.util.OutputFormat):
         t_inactive="T_INACTIVE",
         runtime="RUNTIME",
         runtime_fsd="RUNTIME",
-        runtime_fsd_hyphen="RUNTIME",
         runtime_hms="RUNTIME",
     )
 
@@ -388,6 +379,18 @@ class JobsOutputFormat(flux.util.OutputFormat):
         self._jobfmt = "".join(lst)
         return self._jobfmt
 
+    def format(self, obj):
+        """
+        format object with our JobFormatter
+        """
+        return self.JobFormatter().format(self.get_format(), obj)
+
+    def header(self):
+        """
+        format header with our JobFormatter
+        """
+        return self.JobFormatter().format(self.header_format(), **self.headings)
+
 
 @flux.util.CLIMain(LOGGER)
 def main():
@@ -398,8 +401,8 @@ def main():
     else:
         fmt = (
             "{id:>18} {username:<8.8} {name:<10.10} {state:<8.8} "
-            "{ntasks:>6} {nnodes_hyphen:>6} {runtime_fsd_hyphen:>8} "
-            "{ranks_hyphen}"
+            "{ntasks:>6} {nnodes:>6h} {runtime_fsd:>8h} "
+            "{ranks:h}"
         )
     try:
         formatter = JobsOutputFormat(fmt)

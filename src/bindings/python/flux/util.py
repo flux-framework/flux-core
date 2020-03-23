@@ -219,7 +219,7 @@ class OutputFormat:
         conv = "!" + conv if conv else ""
         return "{0}{{{1}{2}{3}}}".format(text, field, conv, spec)
 
-    def header(self):
+    def header_format(self):
         """
         Return the header row formatted by the user-provided format spec,
         which will be made "safe" for use with string headings.
@@ -230,7 +230,10 @@ class OutputFormat:
             spec = re.sub(r"(0?\.)?(\d+)?[bcdoxXeEfFgGn%]$", r"\2", spec)
             format_list.append(self._fmt_tuple(text, field, spec, conv))
         fmt = "".join(format_list)
-        return fmt.format(**self.headings)
+        return fmt
+
+    def header(self):
+        return self.header_format().format(**self.headings)
 
     def get_format(self):
         """
