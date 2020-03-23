@@ -2444,7 +2444,7 @@ static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (owner == FLUX_USERID_UNKNOWN)
-        owner = geteuid ();
+        owner = getuid ();
 
     if (namespace_create (ctx, ns, owner, flags) < 0)
         goto error;
@@ -2973,7 +2973,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (ctx->rank == 0) {
         struct kvsroot *root;
         char rootref[BLOBREF_MAX_STRING_SIZE];
-        uint32_t owner = geteuid ();
+        uint32_t owner = getuid ();
 
         /* Look for a checkpoint and use it if found.
          * Otherwise start the primary root namespace with an empty directory.

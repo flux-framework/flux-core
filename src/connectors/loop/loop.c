@@ -126,7 +126,7 @@ flux_t *connector_init (const char *path, int flags)
                 || flux_attr_set_cacheonly (c->h, "size", "1") < 0
                 || flux_attr_set_cacheonly (c->h, "tbon-arity", "2") < 0)
         goto error;
-    c->cred.userid = geteuid ();
+    c->cred.userid = getuid ();
     c->cred.rolemask = FLUX_ROLE_OWNER;
     return c->h;
 error:

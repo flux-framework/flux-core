@@ -199,7 +199,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = h;
-    ctx.instance_owner = geteuid ();
+    ctx.instance_owner = getuid ();
 
     /* Create router
      */

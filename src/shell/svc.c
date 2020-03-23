@@ -43,7 +43,7 @@ struct shell_svc {
     flux_shell_t *shell;
     char name[TOPIC_STRING_SIZE];
     int registered;
-    uid_t uid;      // effective uid of shell
+    uid_t uid;      // uid of shell
     int *rank_table;// map shell rank to broker rank
 };
 
@@ -173,7 +173,7 @@ struct shell_svc *shell_svc_create (flux_shell_t *shell)
     if (!(svc = calloc (1, sizeof (*svc))))
         return NULL;
     svc->shell = shell;
-    svc->uid = geteuid ();
+    svc->uid = getuid ();
     if (!(svc->rank_table = calloc (shell_size, sizeof (*svc->rank_table))))
         goto error;
     for (i = 0; i < shell_size; i++) {

@@ -244,7 +244,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     if (!(ctx.h = flux_open (uri, 0)))
         log_err_exit ("%s", uri);
     flux_log_set_appname (ctx.h, "proxy");
-    ctx.proxy_user = geteuid ();
+    ctx.proxy_user = getuid ();
     if (!(r = flux_reactor_create (SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (flux_set_reactor (ctx.h, r) < 0)

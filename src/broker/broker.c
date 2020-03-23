@@ -339,7 +339,7 @@ int main (int argc, char *argv[])
 
     ctx.tbon_k = 2; /* binary TBON is default */
     /* Record the instance owner: the effective uid of the broker. */
-    ctx.cred.userid = geteuid ();
+    ctx.cred.userid = getuid ();
     /* Set default rolemask for messages sent with flux_send()
      * on the broker's internal handle. */
     ctx.cred.rolemask = FLUX_ROLE_OWNER;

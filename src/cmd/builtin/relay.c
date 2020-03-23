@@ -109,10 +109,10 @@ static void relay (int infd, int outfd, flux_t *h)
     usock_conn_set_error_cb (uconn, uconn_error, r);
     usock_conn_set_recv_cb (uconn, uconn_recv, entry);
 
-    /* Use effective uid of the relay process as the userid for the
+    /* Use uid of the relay process as the userid for the
      * single "client" on stdin.
      */
-    cred.userid = geteuid ();
+    cred.userid = getuid ();
     cred.rolemask = FLUX_ROLE_NONE; // delegate to "upstream"
     usock_conn_accept (uconn, &cred);
 

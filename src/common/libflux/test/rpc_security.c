@@ -55,9 +55,9 @@ static void check_rpc_oneway (flux_t *h)
     ok (msg != NULL,
         "received looped back request");
     ok (flux_msg_get_cred (msg, &cr) == 0
-        && cr.userid == geteuid ()
+        && cr.userid == getuid ()
         && cr.rolemask == FLUX_ROLE_OWNER,
-        "request contains userid=EUID, rolemask=OWNER");
+        "request contains userid=UID, rolemask=OWNER");
     flux_msg_destroy (msg);
 }
 
@@ -68,7 +68,7 @@ static void check_rpc_oneway_faked (flux_t *h)
     struct flux_msg_cred saved, new, cr;
 
     ok (cred_get (h, &saved) == 0
-        && saved.userid == geteuid() && saved.rolemask == FLUX_ROLE_OWNER,
+        && saved.userid == getuid() && saved.rolemask == FLUX_ROLE_OWNER,
         "saved connector creds, with expected values");
 
     new.userid = 9999;
@@ -155,7 +155,7 @@ static void check_rpc_default_policy (flux_t *h)
     /* Attempt with non-owner creds
      */
     ok (cred_get (h, &saved) == 0
-        && saved.userid == geteuid() && saved.rolemask == FLUX_ROLE_OWNER,
+        && saved.userid == getuid() && saved.rolemask == FLUX_ROLE_OWNER,
         "saved connector creds, with expected values");
     new.userid = 9999;
     new.rolemask = 0x80000000;
@@ -211,7 +211,7 @@ static void check_rpc_open_policy (flux_t *h)
     /* Attempt with non-owner creds
      */
     ok (cred_get (h, &saved) == 0
-        && saved.userid == geteuid() && saved.rolemask == FLUX_ROLE_OWNER,
+        && saved.userid == getuid() && saved.rolemask == FLUX_ROLE_OWNER,
         "saved connector creds, with expected values");
     new.userid = 9999;
     new.rolemask = 0x80000000;
@@ -251,7 +251,7 @@ static void check_rpc_targetted_policy (flux_t *h)
     flux_msg_handler_allow_rolemask (mh, allow);
 
     ok (cred_get (h, &saved) == 0
-        && saved.userid == geteuid() && saved.rolemask == FLUX_ROLE_OWNER,
+        && saved.userid == getuid() && saved.rolemask == FLUX_ROLE_OWNER,
         "saved connector creds, with expected values");
 
     /* Attempt with default creds.

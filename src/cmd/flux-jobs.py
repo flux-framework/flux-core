@@ -205,7 +205,7 @@ def fetch_jobs_flux(args, fields):
         attrs.update(fields2attrs[field])
 
     if args.a:
-        args.user = str(os.geteuid())
+        args.user = str(os.getuid())
     if args.A:
         args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
     if args.a or args.A:
@@ -294,7 +294,7 @@ def parse_args():
         "--user",
         type=str,
         metavar="[USERNAME|UID]",
-        default=str(os.geteuid()),
+        default=str(os.getuid()),
         help="Limit output to specific username or userid "
         '(Specify "all" for all users)',
     )
