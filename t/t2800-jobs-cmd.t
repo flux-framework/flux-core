@@ -318,40 +318,58 @@ test_expect_success 'flux-jobs --format={t_XXX} works' '
         count=`cat t_sched.out | grep -v "^0.0$" | wc -l` &&
         test $count -eq 18 &&
         flux jobs --suppress-header --state=pending --format="{t_run}" > t_runP.out &&
+        flux jobs --suppress-header --state=pending --format="{t_run:h}" > t_runP_h.out &&
         flux jobs --suppress-header --state=running,inactive --format="{t_run}" > t_runRI.out &&
         count=`cat t_runP.out | grep "^0.0$" | wc -l` &&
+        test $count -eq 6 &&
+        count=`cat t_runP_h.out | grep "^-$" | wc -l` &&
         test $count -eq 6 &&
         count=`cat t_runRI.out | grep -v "^0.0$" | wc -l` &&
         test $count -eq 12 &&
         flux jobs --suppress-header --state=pending,running --format="{t_cleanup}" > t_cleanupPR.out &&
+        flux jobs --suppress-header --state=pending,running --format="{t_cleanup:h}" > t_cleanupPR_h.out &&
         flux jobs --suppress-header --state=inactive --format="{t_cleanup}" > t_cleanupI.out &&
         count=`cat t_cleanupPR.out | grep "^0.0$" | wc -l` &&
+        test $count -eq 14 &&
+        count=`cat t_cleanupPR_h.out | grep "^-$" | wc -l` &&
         test $count -eq 14 &&
         count=`cat t_cleanupI.out | grep -v "^0.0$" | wc -l` &&
         test $count -eq 4 &&
         flux jobs --suppress-header --state=pending,running --format="{t_inactive}" > t_inactivePR.out &&
+        flux jobs --suppress-header --state=pending,running --format="{t_inactive:h}" > t_inactivePR_h.out &&
         flux jobs --suppress-header --state=inactive --format="{t_inactive}" > t_inactiveI.out &&
         count=`cat t_inactivePR.out | grep "^0.0$" | wc -l` &&
+        test $count -eq 14 &&
+        count=`cat t_inactivePR_h.out | grep "^-$" | wc -l` &&
         test $count -eq 14 &&
         count=`cat t_inactiveI.out | grep -v "^0.0$" | wc -l` &&
         test $count -eq 4
 '
 
-test_expect_success 'flux-jobs --format={runtime},{runtime_fsd},{runtime_fsd:h},{runtime_hms} works' '
-        flux jobs --suppress-header --state=pending --format="{runtime},{runtime_fsd},{runtime_fsd:h},{runtime_hms}" > runtimeP.out &&
-        for i in `seq 1 6`; do echo "0.0,0s,-,0:00:00" >> runtimeP.exp; done &&
+test_expect_success 'flux-jobs --format={runtime},{runtime_fsd},{runtime_fsd:h},{runtime_hms},{runtime_hms:h} works' '
+        flux jobs --suppress-header --state=pending --format="{runtime},{runtime_fsd},{runtime_hms}" > runtimeP.out &&
+        for i in `seq 1 6`; do echo "0.0,0s,0:00:00" >> runtimeP.exp; done &&
         test_cmp runtimeP.out runtimeP.exp &&
+        flux jobs --suppress-header --state=pending --format="{runtime_fsd:h},{runtime_hms:h}" > runtimeP_h.out &&
+        for i in `seq 1 6`; do echo "-,-" >> runtimeP_h.exp; done &&
+        test_cmp runtimeP_h.out runtimeP_h.exp &&
         flux jobs --suppress-header --state=running,inactive --format="{runtime}" > runtimeRI_1.out &&
         count=`cat runtimeRI_1.out | grep -v "^0.0$" | wc -l` &&
+        test $count -eq 12 &&
+        flux jobs --suppress-header --state=running,inactive --format="{runtime:h}" > runtimeRI_1_h.out &&
+        count=`cat runtimeRI_1_h.out | grep -v "^-$" | wc -l` &&
         test $count -eq 12 &&
         flux jobs --suppress-header --state=running,inactive --format="{runtime_fsd}" > runtimeRI_2.out &&
         count=`cat runtimeRI_2.out | grep -v "^0s" | wc -l` &&
         test $count -eq 12 &&
-        flux jobs --suppress-header --state=running,inactive --format="{runtime_fsd:h}" > runtimeRI_3.out &&
-        count=`cat runtimeRI_3.out | grep -v "^-$" | wc -l` &&
+        flux jobs --suppress-header --state=running,inactive --format="{runtime_fsd:h}" > runtimeRI_2_h.out &&
+        count=`cat runtimeRI_2_h.out | grep -v "^-$" | wc -l` &&
         test $count -eq 12 &&
-        flux jobs --suppress-header --state=running,inactive --format="{runtime_hms}" > runtimeRI_4.out &&
-        count=`cat runtimeRI_4.out | grep -v "^0:00:00" | wc -l` &&
+        flux jobs --suppress-header --state=running,inactive --format="{runtime_hms}" > runtimeRI_3.out &&
+        count=`cat runtimeRI_3.out | grep -v "^0:00:00$" | wc -l` &&
+        test $count -eq 12 &&
+        flux jobs --suppress-header --state=running,inactive --format="{runtime_hms:h}" > runtimeRI_3_h.out &&
+        count=`cat runtimeRI_3_h.out | grep -v "^-$" | wc -l` &&
         test $count -eq 12
 '
 
