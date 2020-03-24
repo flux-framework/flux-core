@@ -18,7 +18,6 @@ MAN1_FILES_PRIMARY = \
 	flux-hwloc.1 \
 	flux-proxy.1 \
 	flux-cron.1 \
-	flux-user.1 \
 	flux-event.1 \
 	flux-mini.1 \
 	flux-version.1 \

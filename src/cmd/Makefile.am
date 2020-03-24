@@ -53,8 +53,7 @@ flux_SOURCES = \
 	builtin/heaptrace.c \
 	builtin/proxy.c \
 	builtin/relay.c \
-	builtin/python.c \
-	builtin/user.c
+	builtin/python.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
 
