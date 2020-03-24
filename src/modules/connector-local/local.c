@@ -44,6 +44,7 @@ struct connector_local {
     flux_t *h;
     uid_t instance_owner;
     int allow_guest_user;
+    int allow_root_owner;
 };
 
 /* A 'struct route_entry' is attached to the 'struct usock_conn' aux hash
@@ -72,6 +73,8 @@ static int client_authenticate (struct connector_local *ctx,
     /* Assign roles based on connecting uid and configured policy.
      */
     if (cuid == ctx->instance_owner)
+        rolemask = FLUX_ROLE_OWNER;
+    else if (ctx->allow_root_owner && cuid == 0)
         rolemask = FLUX_ROLE_OWNER;
     else if (ctx->allow_guest_user)
         rolemask = FLUX_ROLE_USER;
@@ -191,19 +194,25 @@ error:
  *
  * allow-guest-user = true
  *   Allow users other than instance owner to connect with FLUX_ROLE_USER
+ *
+ * allow-root-owner = true
+ *   Allow root user to have instance owner role
  */
 int parse_config (struct connector_local *ctx, const flux_conf_t *conf)
 {
     flux_conf_error_t error;
 
     ctx->allow_guest_user = 0;
+    ctx->allow_root_owner = 0;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?:{s?:b}}",
+                          "{s?:{s?:b s?:b}}",
                           "access",
                             "allow-guest-user",
-                            &ctx->allow_guest_user) < 0) {
+                            &ctx->allow_guest_user,
+                            "allow-root-owner",
+                            &ctx->allow_root_owner) < 0) {
         flux_log (ctx->h,
                   LOG_ERR,
                   "error parsing [access] configuration: %s",
