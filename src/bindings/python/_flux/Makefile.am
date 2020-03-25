@@ -13,6 +13,7 @@ AM_LDFLAGS = \
 
 common_libs = $(top_builddir)/src/common/libflux-core.la \
 	      $(top_builddir)/src/common/libflux-internal.la \
+	      $(top_builddir)/src/common/libdebugged/libdebugged.la \
 	      $(ZMQ_LIBS) $(LIBUUID_LIBS) \
 	      $(PYTHON_LDFLAGS)
 
@@ -24,7 +25,9 @@ _core_clean.h: Makefile
 	$(PYTHON) $(srcdir)/make_clean_header.py \
 	  --path $(top_srcdir) \
 	  --search $(top_builddir)/src/common/libflux \
-	  --additional_headers src/bindings/python/_flux/callbacks.h \
+	  --additional_headers \
+	      src/bindings/python/_flux/callbacks.h \
+	      src/common/libdebugged/debugged.h \
 	  --output _core_clean.h \
 	  src/include/flux/core.h
 _core_preproc.h: _core_clean.h

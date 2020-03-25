@@ -7,6 +7,7 @@ ffi.set_source(
     "_flux._core",
     """
 #include <src/include/flux/core.h>
+#include <src/common/libdebugged/debugged.h>
 
 
 void * unpack_long(ptrdiff_t num){
