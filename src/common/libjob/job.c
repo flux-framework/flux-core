@@ -88,7 +88,7 @@ flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int priority,
         if (!(J = flux_sign_wrap (sec, jobspec, strlen (jobspec), NULL, 0)))
             return get_security_error (sec);
 #else
-        if (!(s = sign_none_wrap (jobspec, strlen (jobspec), geteuid ())))
+        if (!(s = sign_none_wrap (jobspec, strlen (jobspec), getuid ())))
             goto error;
         J = s;
 #endif

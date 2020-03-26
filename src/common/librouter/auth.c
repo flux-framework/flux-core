@@ -14,35 +14,6 @@
 #include <flux/core.h>
 #include "auth.h"
 
-flux_future_t *auth_lookup_rolemask (flux_t *h, uint32_t userid)
-{
-    flux_future_t *f;
-
-    if (!h) {
-        errno = EINVAL;
-        return NULL;
-    }
-    if (!(f = flux_rpc_pack (h,
-                             "userdb.lookup",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:i}",
-                             "userid", userid)))
-        return NULL;
-    return f;
-}
-
-int auth_lookup_rolemask_get (flux_future_t *f, uint32_t *rolemask)
-{
-    if (!f || !rolemask) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (flux_rpc_get_unpack (f, "{s:i}", "rolemask", rolemask) < 0)
-        return -1;
-    return 0;
-}
-
 int auth_init_message (flux_msg_t *msg, const struct flux_msg_cred *conn)
 {
     if (!msg || !conn) {

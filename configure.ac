@@ -494,7 +494,6 @@ AC_CONFIG_FILES( \
   src/modules/cron/Makefile \
   src/modules/aggregator/Makefile \
   src/modules/pymod/Makefile \
-  src/modules/userdb/Makefile \
   src/modules/job-ingest/Makefile \
   src/modules/job-manager/Makefile \
   src/modules/job-info/Makefile \

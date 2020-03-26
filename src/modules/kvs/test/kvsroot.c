@@ -172,7 +172,7 @@ void basic_iter_tests (void)
                                          cache,
                                          "sha1",
                                          "foo",
-                                         geteuid (),
+                                         getuid (),
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
@@ -180,7 +180,7 @@ void basic_iter_tests (void)
                                          cache,
                                          "sha1",
                                          "bar",
-                                         geteuid (),
+                                         getuid (),
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
@@ -232,7 +232,7 @@ void basic_kvstxn_mgr_tests (void)
                                          cache,
                                          "sha1",
                                          KVS_PRIMARY_NAMESPACE,
-                                         geteuid (),
+                                         getuid (),
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 

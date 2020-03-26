@@ -16,29 +16,6 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/librouter/auth.h"
 
-void lookup (void)
-{
-    uint32_t rolemask;
-    flux_future_t *f;
-
-    errno = 0;
-    ok (auth_lookup_rolemask (NULL, 0) == NULL && errno == EINVAL,
-        "auth_lookup_rolemask h=NULL fails with EINVAL");
-
-    errno = 0;
-    ok (auth_lookup_rolemask_get (NULL, &rolemask) < 0 && errno == EINVAL,
-        "auth_lookup_rolemask_get f=NULL fails with EINVAL");
-
-    if (!(f = flux_future_create (NULL, NULL)))
-        BAIL_OUT ("flux_future_create failed");
-
-    errno = 0;
-    ok (auth_lookup_rolemask_get (NULL, &rolemask) < 0 && errno == EINVAL,
-        "auth_lookup_rolemask_get f=NULL fails with EINVAL");
-
-    flux_future_destroy (f);
-}
-
 int checkcred (const flux_msg_t *msg, struct flux_msg_cred *cred)
 {
     struct flux_msg_cred msgcred;
@@ -166,7 +143,6 @@ int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
-    lookup ();
     init_message ();
     event_privacy ();
 

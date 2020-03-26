@@ -663,7 +663,7 @@ module_t *module_add (modhash_t *mh, const char *path)
      * Since this is a point to point connection between broker threads,
      * credentials are always those of the instance owner.
      */
-    p->cred.userid = geteuid ();
+    p->cred.userid = getuid ();
     p->cred.rolemask = FLUX_ROLE_OWNER;
 
     /* Update the modhash.

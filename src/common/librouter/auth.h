@@ -13,11 +13,6 @@
 
 #include <flux/core.h>
 
-/* Look up user in the 'userdb' to determine assigned roles.
- */
-flux_future_t *auth_lookup_rolemask (flux_t *h, uint32_t userid);
-int auth_lookup_rolemask_get (flux_future_t *f, uint32_t *rolemask);
-
 /* Initialize received message creds based on the connected user's credentials.
  */
 int auth_init_message (flux_msg_t *msg, const struct flux_msg_cred *conn);

@@ -21,8 +21,6 @@ flux module remove -f job-exec
 flux module remove -f job-manager
 flux exec -r all flux module remove -f job-ingest
 
-flux module remove -f userdb
-
 flux module remove -f cron
 flux exec -r all flux module remove -f aggregator
 flux exec -r all flux module remove -f barrier

@@ -17,7 +17,7 @@
  *
  * Caveats:
  * 1) subscribe/unsubscribe requests are not supported
- * 2) all messages are sent with credentials userid=geteuid(), rolemask=OWNER
+ * 2) all messages are sent with credentials userid=getuid(), rolemask=OWNER
  * 3) broker attributes (such as rank and size) are unavailable
  * 4) message nodeid is ignored
  *

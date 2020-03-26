@@ -727,7 +727,7 @@ int cmd_raiseall (optparse_t *p, int argc, char **argv)
     if (optparse_hasopt (p, "user"))
         userid = parse_arg_userid (p, "user");
     else
-        userid = geteuid ();
+        userid = getuid ();
     if (optparse_hasopt (p, "force"))
         dry_run = 0;
     if (!(h = flux_open (NULL, 0)))
@@ -884,7 +884,7 @@ int cmd_killall (optparse_t *p, int argc, char **argv)
     if (optparse_hasopt (p, "user"))
         userid = parse_arg_userid (p, "user");
     else
-        userid = geteuid ();
+        userid = getuid ();
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -973,7 +973,7 @@ int cmd_cancelall (optparse_t *p, int argc, char **argv)
     if (optparse_hasopt (p, "user"))
         userid = parse_arg_userid (p, "user");
     else
-        userid = geteuid ();
+        userid = getuid ();
     if (optparse_hasopt (p, "force"))
         dry_run = 0;
     if (!(h = flux_open (NULL, 0)))
@@ -1031,7 +1031,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     else if (optparse_hasopt (p, "user"))
         userid = parse_arg_userid (p, "user");
     else
-        userid = geteuid ();
+        userid = getuid ();
 
     if (!(f = flux_job_list (h, max_entries, attrs, userid, states)))
         log_err_exit ("flux_job_list");

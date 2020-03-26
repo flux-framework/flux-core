@@ -35,7 +35,6 @@
 
 enum {
     DEBUG_AUTHFAIL_ONESHOT = 1, /* force auth to fail one time */
-    DEBUG_USERDB_ONESHOT = 2,   /* force userdb lookup of instance owner */
     DEBUG_OWNERDROP_ONESHOT = 4,/* drop OWNER role to USER on next connection */
 };
 
@@ -44,6 +43,8 @@ struct connector_local {
     struct router *router;
     flux_t *h;
     uid_t instance_owner;
+    int allow_guest_user;
+    int allow_root_owner;
 };
 
 /* A 'struct route_entry' is attached to the 'struct usock_conn' aux hash
@@ -53,51 +54,51 @@ struct connector_local {
 static const char *route_auxkey = "flux::route";
 
 
-static int client_authenticate (flux_t *h,
-                                uint32_t instance_owner,
+static int client_authenticate (struct connector_local *ctx,
                                 uid_t cuid,
                                 struct flux_msg_cred *cred)
 {
-    uint32_t rolemask;
-    flux_future_t *f;
+    uint32_t rolemask = FLUX_ROLE_NONE;
 
-    if (flux_module_debug_test (h, DEBUG_AUTHFAIL_ONESHOT, true)) {
-        flux_log (h, LOG_ERR, "connect by uid=%d denied by debug flag",
+    /* Test hook: when set, deny one connection.
+     */
+    if (flux_module_debug_test (ctx->h, DEBUG_AUTHFAIL_ONESHOT, true)) {
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "connect by uid=%d denied by debug flag",
                   cuid);
         errno = EPERM;
         goto error;
     }
-    if (!flux_module_debug_test (h, DEBUG_USERDB_ONESHOT, true)) {
-        if (cuid == instance_owner) {
-            rolemask = FLUX_ROLE_OWNER;
-            goto success_nolog;
+    /* Assign roles based on connecting uid and configured policy.
+     */
+    if (cuid == ctx->instance_owner)
+        rolemask = FLUX_ROLE_OWNER;
+    else if (ctx->allow_root_owner && cuid == 0)
+        rolemask = FLUX_ROLE_OWNER;
+    else if (ctx->allow_guest_user)
+        rolemask = FLUX_ROLE_USER;
+
+    if (rolemask == FLUX_ROLE_NONE) {
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "%s: uid=%d no assigned roles",
+                  __FUNCTION__,
+                  cuid);
+        errno = EPERM;
+        goto error;
+    }
+    /* Test hook: drop owner cred for one connection.
+     */
+    if (flux_module_debug_test (ctx->h, DEBUG_OWNERDROP_ONESHOT, true)) {
+        if ((rolemask & FLUX_ROLE_OWNER)) {
+            rolemask = FLUX_ROLE_USER;
+            cuid = FLUX_USERID_UNKNOWN;
         }
     }
-    if (!(f = auth_lookup_rolemask (h, cuid)))
-        goto error;
-    if (auth_lookup_rolemask_get (f, &rolemask) < 0) {
-        flux_future_destroy (f);
-        errno = EPERM;
-        goto error;
-    }
-    flux_future_destroy (f);
-    if (rolemask == FLUX_ROLE_NONE) {
-        flux_log (h, LOG_ERR, "%s: uid=%d no assigned roles",
-                  __FUNCTION__, cuid);
-        errno = EPERM;
-        goto error;
-    }
-    flux_log (h, LOG_INFO, "%s: uid=%d allowed rolemask=0x%x",
-              __FUNCTION__, cuid, rolemask);
-success_nolog:
-    if (flux_module_debug_test (h, DEBUG_OWNERDROP_ONESHOT, true)
-                            && (rolemask & FLUX_ROLE_OWNER)) {
-        cred->rolemask = FLUX_ROLE_USER;
-        cred->userid = FLUX_USERID_UNKNOWN;
-    } else {
-        cred->userid = cuid;
-        cred->rolemask = rolemask;
-    }
+
+    cred->userid = cuid;
+    cred->rolemask = rolemask;
     return 0;
 error:
     return -1;
@@ -163,8 +164,7 @@ static void acceptor_cb (struct usock_conn *uconn, void *arg)
     struct router_entry *entry;
 
     initial_cred = usock_conn_get_cred (uconn);
-    if (client_authenticate (ctx->h,
-                             ctx->instance_owner,
+    if (client_authenticate (ctx,
                              initial_cred->userid,
                              &cred) < 0)
         goto error;
@@ -189,6 +189,39 @@ error:
     usock_conn_destroy (uconn);
 }
 
+/* Parse [access] table.
+ * Access policy is instance owner only, unless configured otherwise:
+ *
+ * allow-guest-user = true
+ *   Allow users other than instance owner to connect with FLUX_ROLE_USER
+ *
+ * allow-root-owner = true
+ *   Allow root user to have instance owner role
+ */
+int parse_config (struct connector_local *ctx, const flux_conf_t *conf)
+{
+    flux_conf_error_t error;
+
+    ctx->allow_guest_user = 0;
+    ctx->allow_root_owner = 0;
+
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s?:{s?:b s?:b}}",
+                          "access",
+                            "allow-guest-user",
+                            &ctx->allow_guest_user,
+                            "allow-root-owner",
+                            &ctx->allow_root_owner) < 0) {
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "error parsing [access] configuration: %s",
+                  error.errbuf);
+        return -1;
+    }
+    return 0;
+}
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     struct connector_local ctx;
@@ -199,7 +232,12 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = h;
-    ctx.instance_owner = geteuid ();
+    ctx.instance_owner = getuid ();
+
+    /* Parse configuration
+     */
+    if (parse_config (&ctx, flux_get_conf (h)) < 0)
+        goto done;
 
     /* Create router
      */

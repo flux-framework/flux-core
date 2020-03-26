@@ -308,9 +308,9 @@ void test_service (flux_t *h)
         "response has first matchtag", matchtag);
     rc = flux_msg_get_cred (msg, &cred);
     ok (rc == 0
-        && cred.userid == geteuid ()
+        && cred.userid == getuid ()
         && (cred.rolemask & FLUX_ROLE_OWNER),
-        "response has cred.userid=EUID, cred.rolemask including OWNER");
+        "response has cred.userid=UID, cred.rolemask including OWNER");
     errno = 0;
     rc = flux_msg_get_route_count (msg);
     ok ((rc == -1 && errno == EINVAL) || (rc == 0),

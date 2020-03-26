@@ -6,7 +6,6 @@ SUBDIRS = \
  content-sqlite \
  cron \
  aggregator \
- userdb \
  pymod \
  job-ingest \
  job-manager \

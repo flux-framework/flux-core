@@ -283,7 +283,7 @@ static flux_t *test_connector_create (const char *shmem_name,
 
     if (!(tcon = calloc (1, sizeof (*tcon))))
         BAIL_OUT ("calloc");
-    tcon->cred.userid = geteuid ();
+    tcon->cred.userid = getuid ();
     tcon->cred.rolemask = FLUX_ROLE_OWNER;
     if (!(tcon->sock = zsock_new_pair (NULL)))
         BAIL_OUT ("zsock_new_pair");
@@ -451,7 +451,7 @@ flux_t *loopback_create (int flags)
 
     if (!(lcon = calloc (1, sizeof (*lcon))))
         BAIL_OUT ("calloc");
-    lcon->cred.userid = geteuid ();
+    lcon->cred.userid = getuid ();
     lcon->cred.rolemask = FLUX_ROLE_OWNER;
     if (!(lcon->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
         BAIL_OUT ("msglist_create");
