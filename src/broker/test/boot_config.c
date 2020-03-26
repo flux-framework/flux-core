@@ -51,13 +51,12 @@ create_test_dir (char *dir, int dirlen)
         BAIL_OUT ("snprintf overflow");
     if (!mkdtemp (dir))
         BAIL_OUT ("mkdtemp %s: %s", dir, strerror (errno));
-    setenv ("FLUX_CONF_DIR", dir, 1);
 }
 
 void test_parse (const char *dir)
 {
     char path[PATH_MAX + 1];
-    flux_t *h;
+    flux_conf_t *cf;
     json_t *hosts = NULL;
     struct boot_conf conf;
     uint32_t rank;
@@ -74,11 +73,10 @@ void test_parse (const char *dir)
 "  { host = \"foo63\" },\n" \
 "]\n";
 
-    if (!(h = flux_open ("loop://", 0)))
-        BAIL_OUT ("can't continue without loop handle");
-
     create_test_file (dir, "boot", path, sizeof (path), input);
-    rc = boot_config_parse (h, &conf, &hosts);
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
+    rc = boot_config_parse (cf, &conf, &hosts);
     ok (rc == 0,
         "boot_conf_parse worked");
     ok (hosts != NULL && json_array_size (hosts) == 64,
@@ -133,20 +131,16 @@ void test_parse (const char *dir)
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
-
-    flux_close (h);
+    flux_conf_decref (cf);
 }
 
 void test_overflow_bind (const char *dir)
 {
     char path[PATH_MAX + 1];
-    flux_t *h;
+    flux_conf_t *cf;
     struct boot_conf conf;
     char t[MAX_URI*2];
     json_t *hosts;
-
-    if (!(h = flux_open ("loop://", 0)))
-        BAIL_OUT ("can't continue without loop handle");
 
     if (snprintf (t,
                   sizeof (t),
@@ -154,26 +148,24 @@ void test_overflow_bind (const char *dir)
                   MAX_URI+2, "foo") >= sizeof (t))
         BAIL_OUT ("snprintf overflow");
     create_test_file (dir, "boot", path, sizeof (path), t);
-
-    ok (boot_config_parse (h, &conf, &hosts) == -1,
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
+    ok (boot_config_parse (cf, &conf, &hosts) == -1,
         "boot_conf_parse caught default_bind overflow");
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
 
-    flux_close (h);
+    flux_conf_decref (cf);
 }
 
 void test_overflow_connect (const char *dir)
 {
     char path[PATH_MAX + 1];
-    flux_t *h;
+    flux_conf_t *cf;
     struct boot_conf conf;
     char t[MAX_URI*2];
     json_t *hosts;
-
-    if (!(h = flux_open ("loop://", 0)))
-        BAIL_OUT ("can't continue without loop handle");
 
     if (snprintf (t,
                   sizeof (t),
@@ -182,19 +174,21 @@ void test_overflow_connect (const char *dir)
         BAIL_OUT ("snprintf overflow");
     create_test_file (dir, "boot", path, sizeof (path), t);
 
-    ok (boot_config_parse (h, &conf, &hosts) == -1,
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
+    ok (boot_config_parse (cf, &conf, &hosts) == -1,
         "boot_conf_parse caught default_connect overflow");
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
 
-    flux_close (h);
+    flux_conf_decref (cf);
 }
 
 void test_bad_hosts_entry (const char *dir)
 {
     char path[PATH_MAX + 1];
-    flux_t *h;
+    flux_conf_t *cf;
     struct boot_conf conf;
     json_t *hosts;
     const char *input = \
@@ -203,24 +197,23 @@ void test_bad_hosts_entry (const char *dir)
 "  42,\n" \
 "]\n";
 
-    if (!(h = flux_open ("loop://", 0)))
-        BAIL_OUT ("can't continue without loop handle");
-
     create_test_file (dir, "boot", path, sizeof (path), input);
 
-    ok (boot_config_parse (h, &conf, &hosts) == -1,
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
+    ok (boot_config_parse (cf, &conf, &hosts) == -1,
         "boot_config_parse failed bad hosts entry");
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
 
-    flux_close (h);
+    flux_conf_decref (cf);
 }
 
 void test_missing_info (const char *dir)
 {
     char path[PATH_MAX + 1];
-    flux_t *h;
+    flux_conf_t *cf;
     json_t *hosts;
     struct boot_conf conf;
     char uri[MAX_URI + 1];
@@ -231,12 +224,11 @@ void test_missing_info (const char *dir)
 "  { host = \"foo\" },\n" \
 "]\n";
 
-    if (!(h = flux_open ("loop://", 0)))
-        BAIL_OUT ("can't continue without loop handle");
-
     create_test_file (dir, "boot", path, sizeof (path), input);
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
 
-    if (boot_config_parse (h, &conf, &hosts) < 0)
+    if (boot_config_parse (cf, &conf, &hosts) < 0)
         BAIL_OUT ("boot_config_parse unexpectedly failed");
     if (!hosts)
         BAIL_OUT ("cannot continue without hosts array");
@@ -253,13 +245,13 @@ void test_missing_info (const char *dir)
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
 
-    flux_close (h);
+    flux_conf_decref (cf);
 }
 
 void test_bad_host_idset (const char *dir)
 {
     char path[PATH_MAX + 1];
-    flux_t *h;
+    flux_conf_t *cf;
     struct boot_conf conf;
     json_t *hosts;
     const char *input = \
@@ -268,24 +260,23 @@ void test_bad_host_idset (const char *dir)
 "  { host=\"foo[1-]\" },\n" \
 "]\n";
 
-    if (!(h = flux_open ("loop://", 0)))
-        BAIL_OUT ("can't continue without loop handle");
-
     create_test_file (dir, "boot", path, sizeof (path), input);
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
 
-    ok (boot_config_parse (h, &conf, &hosts) == -1,
+    ok (boot_config_parse (cf, &conf, &hosts) == -1,
         "boot_config_parse failed on host entry containing bad idset");
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
 
-    flux_close (h);
+    flux_conf_decref (cf);
 }
 
 void test_bad_host_bind (const char *dir)
 {
     char path[PATH_MAX + 1];
-    flux_t *h;
+    flux_conf_t *cf;
     struct boot_conf conf;
     json_t *hosts;
     char uri[MAX_URI + 1];
@@ -295,13 +286,12 @@ void test_bad_host_bind (const char *dir)
 "  { host=\"foo\", bind=42 },\n" \
 "]\n";
 
-    if (!(h = flux_open ("loop://", 0)))
-        BAIL_OUT ("can't continue without loop handle");
-
     create_test_file (dir, "boot", path, sizeof (path), input);
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
 
     /* hosts will initially parse OK then fail in getbindbyrank */
-    if (boot_config_parse (h, &conf, &hosts) < 0)
+    if (boot_config_parse (cf, &conf, &hosts) < 0)
         BAIL_OUT ("boot_config_parse unexpectedly failed");
     ok (boot_config_getbindbyrank (hosts, &conf, 0, uri, sizeof (uri)) < 0,
         "boot_config_getbindbyrank failed on hoste entry wtih wrong bind type");
@@ -311,7 +301,7 @@ void test_bad_host_bind (const char *dir)
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
 
-    flux_close (h);
+    flux_conf_decref (cf);
 }
 
 
@@ -321,8 +311,7 @@ void test_bad_host_bind (const char *dir)
 void test_toml_mixed_array (const char *dir)
 {
     char path[PATH_MAX + 1];
-    flux_t *h;
-    const flux_conf_t *conf;
+    flux_conf_t *cf;
     flux_conf_error_t error;
     const char *input = \
 "[bootstrap]\n" \
@@ -331,13 +320,10 @@ void test_toml_mixed_array (const char *dir)
 "  { host = \"foo\" },\n" \
 "]\n";
 
-    if (!(h = flux_open ("loop://", 0)))
-        BAIL_OUT ("can't continue without loop handle");
-
     create_test_file (dir, "boot", path, sizeof (path), input);
 
-    conf = flux_get_conf (h, &error);
-    ok (conf == NULL && (strstr (error.errbuf, "array type mismatch")
+    cf = flux_conf_parse (dir, &error);
+    ok (cf == NULL && (strstr (error.errbuf, "array type mismatch")
         || strstr (error.errbuf, "string array can only contain strings")),
         "Mixed type hosts array fails with reasonable error");
     diag ("%s: line %d: %s", error.filename, error.lineno, error.errbuf);
@@ -345,38 +331,37 @@ void test_toml_mixed_array (const char *dir)
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
 
-    flux_close (h);
+    flux_conf_decref (cf);
 }
 
 void test_no_hosts (const char *dir)
 {
     char path[PATH_MAX + 1];
-    flux_t *h;
     json_t *hosts;
+    flux_conf_t *cf;
     struct boot_conf conf;
     const char *input = \
 "[bootstrap]\n";
 
-    if (!(h = flux_open ("loop://", 0)))
-        BAIL_OUT ("can't continue without loop handle");
-
     create_test_file (dir, "boot", path, sizeof (path), input);
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
 
     hosts = (json_t *)(uintptr_t)1;
-    ok (boot_config_parse (h, &conf, &hosts) == 0 && hosts == NULL,
+    ok (boot_config_parse (cf, &conf, &hosts) == 0 && hosts == NULL,
         "boot_config_parse works with missing hosts array");
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
 
-    flux_close (h);
+    flux_conf_decref (cf);
 }
 
 void test_empty_hosts (const char *dir)
 {
     char path[PATH_MAX + 1];
-    flux_t *h;
     json_t *hosts;
+    flux_conf_t *cf;
     struct boot_conf conf;
     const char *input = \
 "[bootstrap]\n" \
@@ -384,19 +369,18 @@ void test_empty_hosts (const char *dir)
 "]\n";
 ;
 
-    if (!(h = flux_open ("loop://", 0)))
-        BAIL_OUT ("can't continue without loop handle");
-
     create_test_file (dir, "boot", path, sizeof (path), input);
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
 
     hosts = (json_t *)(uintptr_t)1;
-    ok (boot_config_parse (h, &conf, &hosts) == 0 && hosts == NULL,
+    ok (boot_config_parse (cf, &conf, &hosts) == 0 && hosts == NULL,
         "boot_config_parse works with empty hosts array");
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
 
-    flux_close (h);
+    flux_conf_decref (cf);
 }
 
 void test_format (void)

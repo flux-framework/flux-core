@@ -2,9 +2,6 @@
 systemdsystemunit_DATA = flux.service
 #endif
 
-dist_fluxcf_DATA = \
-	conf.d/bootstrap.toml
-
 noinst_DATA = \
 	flux/curve
 

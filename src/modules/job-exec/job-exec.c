@@ -1006,20 +1006,10 @@ static int exec_hello (flux_t *h, const char *service)
  */
 static int job_exec_initialize (flux_t *h, int argc, char **argv)
 {
-    const flux_conf_t *conf;
     flux_conf_error_t err;
     const char *kto = NULL;
 
-    if (!(conf = flux_get_conf (h, &err))) {
-        flux_log (h, LOG_ERR,
-                  "config file error: %s:%d: %s",
-                   err.filename,
-                   err.lineno,
-                   err.errbuf);
-        return -1;
-    }
-
-    if (flux_conf_unpack (conf,
+    if (flux_conf_unpack (flux_get_conf (h),
                           &err,
                           "{s?{s?s}}",
                           "exec",

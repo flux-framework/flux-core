@@ -59,6 +59,7 @@ create_test_file (const char *dir, char *prefix, char *path, size_t pathlen,
         BAIL_OUT ("write %s: %s", path, strerror (errno));
     if (close (fd) < 0)
         BAIL_OUT ("close %s: %s", path, strerror (errno));
+    diag ("created %s", path);
 }
 
 void test_builtin (void)
@@ -91,14 +92,12 @@ void test_builtin (void)
 void test_basic (void)
 {
     int rc;
-    int len;
     const char *tmpdir = getenv ("TMPDIR");
     char dir[PATH_MAX + 1];
     char path1[PATH_MAX + 1];
     char path2[PATH_MAX + 1];
     char path3[PATH_MAX + 1];
     char invalid[PATH_MAX + 1];
-    char p[PATH_MAX + 1];
     flux_conf_error_t error;
     flux_conf_t *conf;
     int i, j, k;
@@ -112,19 +111,24 @@ void test_basic (void)
     if (!mkdtemp (dir))
         BAIL_OUT ("mkdtemp %s: %s", dir, strerror (errno));
 
+    /* Empty directory is allowed
+     */
+    conf = flux_conf_parse (dir, &error);
+    ok (conf != NULL,
+        "flux_conf_parse successfully parsed empty directory");
+    flux_conf_decref (conf);
+
+    /* Add files
+     */
     create_test_file (dir, "01", path1, sizeof (path1), t1);
     create_test_file (dir, "02", path2, sizeof (path2), tab2);
     create_test_file (dir, "03", path3, sizeof (path3), tab3);
 
-    len = snprintf (p, sizeof (p), "%s/*.toml", dir);
-    if ((len < 0) || (len >= sizeof (p)))
-        BAIL_OUT ("snprintf failed in creating toml file path");
-
     /* Parse it
      */
-    conf = conf_parse (p, &error);
+    conf = flux_conf_parse (dir, &error);
     ok (conf != NULL,
-        "conf_parse successfully parsed 3 files");
+        "flux_conf_parse successfully parsed 3 files");
     if (!conf)
         BAIL_OUT ("cannot continue without config object");
 
@@ -227,16 +231,16 @@ void test_basic (void)
         && errno == EINVAL,
         "flux_conf_unpack conf=NULL fails with EINVAL");
 
-    conf_destroy (conf);
+    flux_conf_decref (conf);
 
     /* Now make an invalid file and ensure cf_update_glob() aborts
      * all updates after any one failure
      */
     create_test_file (dir, "99", invalid, sizeof (invalid), "key = \n");
 
-    conf = conf_parse (p, &error);
+    conf = flux_conf_parse (dir, &error);
     ok (conf == NULL,
-        "conf_parse choked on glob referencing some good and one bad file");
+        "flux_conf_parse choked on glob referencing some good and one bad file");
 
     diag ("%s: %d: %s", error.filename, error.lineno, error.errbuf);
     like (error.filename, "99.*\\.toml",
@@ -245,26 +249,16 @@ void test_basic (void)
     /* Invalid pattern arg
      */
     errno = 0;
-    ok (conf_parse (NULL, &error) == NULL && errno == EINVAL,
-        "conf_parse pattern=NULL fails with EINVAL");
+    ok (flux_conf_parse (NULL, &error) == NULL && errno == EINVAL,
+        "flux_conf_parse path=NULL fails with EINVAL");
     diag ("%s: %d: %s", error.filename, error.lineno, error.errbuf);
 
-    /* Directory not found causes a GLOB_ABORTED error (returned as EINVAL).
+    /* Directory not found triggers ENOENT error
      */
     errno = 0;
-    ok (conf_parse ("/noexist/*.toml", &error) == NULL && errno == EINVAL,
-        "conf_parse pattern=/noexist/*.toml fails with EINVAL");
+    ok (flux_conf_parse ("/noexist", &error) == NULL && errno == ENOENT,
+        "flux_conf_parse pattern=/noexist fails with ENOENT");
     diag ("%s: %d: %s", error.filename, error.lineno, error.errbuf);
-
-    /* No glob match causes GLOB_NOMATCH error (returned as ENOENT)
-     */
-    if (snprintf (p, sizeof (p), "%s/*.noexist", dir) >= sizeof (p))
-        BAIL_OUT ("snprintf failed in creating toml file pattern");
-    errno = 0;
-    ok (conf_parse (p, &error) == NULL && errno == ENOENT,
-        "conf_parse pattern=*.noexist fails with ENOENT");
-    diag ("%s: %d: %s", error.filename, error.lineno, error.errbuf);
-
 
     if (   (unlink (path1) < 0)
         || (unlink (path2) < 0)
@@ -276,57 +270,12 @@ void test_basic (void)
 
 }
 
-void test_default_pattern (void)
-{
-    char toosmall[1];
-    char buf[PATH_MAX+1];
-    char exp[PATH_MAX+1];
-    const char *cf_path;
-
-    /* default
-     */
-    cf_path = flux_conf_builtin_get ("cf_path", FLUX_CONF_AUTO);
-    (void)snprintf (exp, sizeof (exp), "%s/*.toml", cf_path);
-    ok (conf_get_default_pattern (buf, sizeof (buf)) == 0
-        && !strcmp (buf, exp),
-        "conf_get_default_pattern works");
-
-    /* FLUX_CONF_DIR="/a/b"
-     */
-    setenv ("FLUX_CONF_DIR", "/a/b", 1);
-    (void)snprintf (exp, sizeof (exp), "/a/b/*.toml");
-    ok (conf_get_default_pattern (buf, sizeof (buf)) == 0
-        && !strcmp (buf, exp),
-        "conf_get_default_pattern FLUX_CONF_DIR=/a/b works");
-    unsetenv ("FLUX_CONF_DIR");
-
-    /* FLUX_CONF_DIR="installed"
-     */
-    setenv ("FLUX_CONF_DIR", "installed", 1);
-    cf_path = flux_conf_builtin_get ("cf_path", FLUX_CONF_INSTALLED);
-    (void)snprintf (exp, sizeof (exp), "%s/*.toml", cf_path);
-    ok (conf_get_default_pattern (buf, sizeof (buf)) == 0
-        && !strcmp (buf, exp),
-        "conf_get_default_pattern FLUX_CONF_DIR=installed works");
-    unsetenv ("FLUX_CONF_DIR");
-
-    /* Tiny buffer fails
-     */
-    errno = 0;
-    ok (conf_get_default_pattern (toosmall, sizeof (toosmall)) < 0
-        && errno == EOVERFLOW,
-        "conf_get_default_pattern bufsz=1 failed with EOVERFLOW");
-
-}
-
 void test_in_handle (void)
 {
     const char *tmpdir = getenv ("TMPDIR");
     char dir[PATH_MAX + 1];
     char path[PATH_MAX + 1];
-    char invalid[PATH_MAX + 1];
-    const flux_conf_t *conf;
-    flux_conf_error_t error;
+    flux_conf_t *conf;
     flux_t *h;
     int i;
 
@@ -341,11 +290,11 @@ void test_in_handle (void)
     if (!mkdtemp (dir))
         BAIL_OUT ("mkdtemp %s: %s", dir, strerror (errno));
     create_test_file (dir, "foo", path, sizeof (path), t1);
-
-    setenv ("FLUX_CONF_DIR", dir, 1);
-    conf = flux_get_conf (h, NULL);
-    unsetenv ("FLUX_CONF_DIR");
-    ok (conf != NULL,
+    if (!(conf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failure: %s", strerror (errno));
+    ok (flux_set_conf (h, conf) == 0,
+        "flux_set_conf works");
+    ok (flux_get_conf (h) == conf,
         "flux_get_conf works");
 
     /* quick spot check content
@@ -354,19 +303,12 @@ void test_in_handle (void)
     ok (flux_conf_unpack (conf, NULL, "{s:i}", "i", &i) == 0 && i == 1,
         "and config content is as expected");
 
-    /* add invalid toml, reset handle config, and get again (should fail)
-     */
-    create_test_file (dir, "99", invalid, sizeof (invalid), "key = \n");
-    ok (handle_set_conf (h, NULL) == 0,
-        "clearing flux_t handle conf cache works");
-    setenv ("FLUX_CONF_DIR", dir, 1);
-    conf = flux_get_conf (h, &error);
-    unsetenv ("FLUX_CONF_DIR");
-    ok (conf == NULL,
-        "flux_get_conf fails on bad TOML");
-    diag ("%s: %d: %s", error.filename, error.lineno, error.errbuf);
+    ok (flux_set_conf (h, NULL) == 0,
+        "flux_set_conf conf=NULL works");
+    ok (flux_get_conf (h) == NULL,
+        "flux_get_conf now returns NULL");
 
-    if (unlink (path) < 0 || unlink (invalid) < 0)
+    if (unlink (path) < 0)
         BAIL_OUT ("unlink: %s", strerror (errno));
     if (rmdir (dir) < 0)
         BAIL_OUT ("rmdir: %s: %s", dir, strerror (errno));
@@ -422,8 +364,7 @@ int main (int argc, char *argv[])
     unsetenv ("FLUX_CONF_DIR");
 
     test_builtin ();
-    test_basic (); // conf_parse(), conf_destroy(), flux_conf_unpack()
-    test_default_pattern ();
+    test_basic (); // flux_conf_parse(), flux_conf_decref(), flux_conf_unpack()
     test_in_handle ();
     test_globerr ();
 

@@ -59,6 +59,7 @@
 #include "src/common/libutil/errno_safe.h"
 
 #include "heartbeat.h"
+#include "brokercfg.h"
 #include "module.h"
 #include "overlay.h"
 #include "service.h"
@@ -101,6 +102,8 @@ typedef struct {
     zlist_t *sigwatchers;
     struct service_switch *services;
     heartbeat_t *heartbeat;
+    struct brokercfg *config;
+    const char *config_path;
     struct shutdown *shutdown;
     double shutdown_grace;
     double heartbeat_rate;
@@ -165,11 +168,9 @@ static void init_attrs (attr_t *attrs, pid_t pid);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-static int parse_config_files (flux_t *h);
-
 static int exit_rc = 1;
 
-#define OPTIONS "+vM:X:k:s:g:EIS:"
+#define OPTIONS "+vs:X:k:H:g:S:c:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"security",        required_argument,  0, 's'},
@@ -178,6 +179,7 @@ static const struct option longopts[] = {
     {"heartrate",       required_argument,  0, 'H'},
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"setattr",         required_argument,  0, 'S'},
+    {"config-path",     required_argument,  0, 'c'},
     {0, 0, 0, 0},
 };
 
@@ -192,6 +194,7 @@ static void usage (void)
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
 " -S,--setattr ATTR=VAL        Set broker attribute\n"
+" -c,--config-path PATH        Set broker config directory (default: none)\n"
 );
     exit (1);
 }
@@ -252,6 +255,9 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
             free (attr);
             break;
         }
+        case 'c': /* --config-path PATH */
+            ctx->config_path = optarg;
+            break;
         default:
             usage ();
         }
@@ -305,7 +311,7 @@ int main (int argc, char *argv[])
     struct sigaction old_sigact_int;
     struct sigaction old_sigact_term;
     flux_msg_handler_t **handlers = NULL;
-    const char *boot_method;
+    const flux_conf_t *conf;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -387,12 +393,13 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (increase_rlimits () < 0)
-        goto cleanup;
-
-    /* Parse config file(s).  The result is cached in ctx.h.
+    /* Parse config.
      */
-    if (parse_config_files (ctx.h) < 0)
+    if (!(ctx.config = brokercfg_create (ctx.h, ctx.config_path, ctx.attrs)))
+        goto cleanup;
+    conf = flux_get_conf (ctx.h);
+
+    if (increase_rlimits () < 0)
         goto cleanup;
 
     /* Prepare signal handling
@@ -447,29 +454,17 @@ int main (int argc, char *argv[])
      */
     overlay_set_init_callback (ctx.overlay, create_broker_rundir, ctx.attrs);
 
-    /* Execute boot method selected by 'boot.method' attr.
-     * Default is pmi.
+    /* Execute broker network bootstrap.
+     * Default method is pmi.
+     * If [bootstrap] is defined in configuration, use static configuration.
      */
-    if (attr_get (ctx.attrs, "boot.method", &boot_method, NULL) < 0) {
-        boot_method = "pmi";
-        if (attr_add (ctx.attrs, "boot.method", boot_method, 0)) {
-            log_err ("setattr boot.method");
-            goto cleanup;
-        }
-    }
-    if (attr_set_flags (ctx.attrs,
-                        "boot.method",
-                        FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("attr_set_flags boot.method");
-        goto cleanup;
-    }
-    if (!strcmp (boot_method, "config")) {
+    if (flux_conf_unpack (conf, NULL, "{s:{}}", "bootstrap") == 0) {
         if (boot_config (ctx.h, ctx.overlay, ctx.attrs, ctx.tbon_k) < 0) {
             log_msg ("bootstrap failed");
             goto cleanup;
         }
     }
-    else if (!strcmp (boot_method, "pmi")) {
+    else { // PMI
         double elapsed_sec;
         struct timespec start_time;
         monotime (&start_time);
@@ -480,10 +475,6 @@ int main (int argc, char *argv[])
         elapsed_sec = monotime_since (start_time) / 1000;
         flux_log (ctx.h, LOG_INFO, "pmi: bootstrap time %.1fs", elapsed_sec);
 
-    }
-    else {
-        log_err ("unknown boot method: %s", boot_method);
-        goto cleanup;
     }
     uint32_t rank = overlay_get_rank (ctx.overlay);
     uint32_t size = overlay_get_size (ctx.overlay);
@@ -773,6 +764,7 @@ cleanup:
     shutdown_destroy (ctx.shutdown);
     broker_remove_services (handlers);
     publisher_destroy (ctx.publisher);
+    brokercfg_destroy (ctx.config);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     zlist_destroy (&ctx.subscriptions);
@@ -861,29 +853,6 @@ static void init_attrs (attr_t *attrs, pid_t pid)
     if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_add version");
-}
-
-/* Parse TOML config, emitting any parse error here.
- * This will fail if no configuration exists.
- */
-static int parse_config_files (flux_t *h)
-{
-    flux_conf_error_t error;
-
-    if (flux_get_conf (h, &error) == NULL) {
-        if (error.lineno == -1)
-            log_err ("Config file error: %s%s%s",
-                     error.filename,
-                     *error.filename ? ": " : "",
-                     error.errbuf);
-        else
-            log_err ("Config file error: %s:%d: %s",
-                     error.filename,
-                     error.lineno,
-                     error.errbuf);
-        return -1;
-    }
-    return 0;
 }
 
 static void hello_update_cb (hello_t *hello, void *arg)

@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
 #include <stdio.h>
 #include <stdarg.h>
 #include <string.h>
@@ -18,6 +19,7 @@
 #include <stdbool.h>
 #include <glob.h>
 #include <jansson.h>
+#include <flux/core.h>
 
 #include "src/common/libutil/intree.h"
 #include "src/common/libutil/errno_safe.h"
@@ -35,6 +37,7 @@ struct builtin {
 
 struct flux_conf {
     json_t *obj;
+    int refcount;
 };
 
 static const char *conf_auxkey = "flux::conf_object";
@@ -49,7 +52,6 @@ static struct builtin builtin_tab[] = {
     { "module_path",    INSTALLED_MODULE_PATH,      INTREE_MODULE_PATH },
     { "rc1_path",       INSTALLED_RC1_PATH,         INTREE_RC1_PATH },
     { "rc3_path",       INSTALLED_RC3_PATH,         INTREE_RC3_PATH },
-    { "cf_path",        INSTALLED_CF_PATH,          INTREE_CF_PATH },
     { "cmdhelp_pattern",INSTALLED_CMDHELP_PATTERN,  INTREE_CMDHELP_PATTERN },
     { "pmi_library_path",
                         INSTALLED_PMI_LIBRARY_PATH, INTREE_PMI_LIBRARY_PATH },
@@ -125,26 +127,51 @@ errprintf (flux_conf_error_t *error,
     errno = saved_errno;
 }
 
-void conf_destroy (flux_conf_t *conf)
+void flux_conf_decref (const flux_conf_t *conf_const)
 {
-    if (conf) {
+    flux_conf_t *conf = (flux_conf_t *)conf_const;
+    if (conf && --conf->refcount == 0) {
         ERRNO_SAFE_WRAP (json_decref, conf->obj);
         ERRNO_SAFE_WRAP (free, conf);
     }
 }
 
-static flux_conf_t *conf_create (void)
+const flux_conf_t *flux_conf_incref (const flux_conf_t *conf_const)
+{
+    flux_conf_t *conf = (flux_conf_t *)conf_const;
+
+    if (conf)
+        conf->refcount++;
+    return conf;
+}
+
+flux_conf_t *flux_conf_create (void)
 {
     flux_conf_t *conf;
 
     if (!(conf = calloc (1, sizeof (*conf))))
         return NULL;
+    conf->refcount = 1;
     if (!(conf->obj = json_object ())) {
-        conf_destroy (conf);
+        flux_conf_decref (conf);
         errno = ENOMEM;
         return NULL;
     }
     return conf;
+}
+
+flux_conf_t *flux_conf_copy (const flux_conf_t *conf)
+{
+    flux_conf_t *cpy;
+
+    if (!(cpy = flux_conf_create ()))
+        return NULL;
+    json_decref (cpy->obj);
+    if (!(cpy->obj = json_deep_copy (conf->obj))) {
+        flux_conf_decref (cpy);
+        return NULL;
+    }
+    return cpy;
 }
 
 static int conf_update (flux_conf_t *conf,
@@ -212,81 +239,65 @@ void conf_globerr (flux_conf_error_t *error, const char *pattern, int rc)
     errno = entry->errnum;
 }
 
-flux_conf_t *conf_parse (const char *pattern, flux_conf_error_t *error)
+flux_conf_t *flux_conf_parse (const char *path, flux_conf_error_t *error)
 {
     flux_conf_t *conf;
     glob_t gl;
     int rc;
     size_t i;
+    char pattern[4096];
 
-    if (!pattern) {
+    if (!path) {
         errno = EINVAL;
-        errprintf (error, pattern, -1, "%s", strerror (errno));
+        errprintf (error, path, -1, "%s", strerror (errno));
         return NULL;
     }
-    if (!(conf = conf_create ())) {
-        errprintf (error, pattern, -1, "%s", strerror (errno));
+    if (access (path, R_OK | X_OK) < 0) {
+        errprintf (error, path, -1, "%s", strerror (errno));
         return NULL;
     }
-    if ((rc = glob (pattern, GLOB_ERR, NULL, &gl)) != 0) {
+    rc = snprintf (pattern, sizeof (pattern), "%s/*.toml", path);
+    if (rc >= sizeof (pattern)) {
+        errno = EOVERFLOW;
+        errprintf (error, path, -1, "%s", strerror (errno));
+        return NULL;
+    }
+    if (!(conf = flux_conf_create ())) {
+        errprintf (error, path, -1, "%s", strerror (errno));
+        return NULL;
+    }
+    rc = glob (pattern, GLOB_ERR, NULL, &gl);
+    if (rc == 0) {
+        for (i = 0; i < gl.gl_pathc; i++) {
+            if (conf_update (conf, gl.gl_pathv[i], error) < 0)
+                goto error_glob;
+        }
+        globfree (&gl);
+    }
+    else if (rc != GLOB_NOMATCH) {
         conf_globerr (error, pattern, rc);
         goto error;
     }
-    for (i = 0; i < gl.gl_pathc; i++) {
-        if (conf_update (conf, gl.gl_pathv[i], error) < 0)
-            goto error_glob;
-    }
-    globfree (&gl);
     return conf;
 
 error_glob:
     ERRNO_SAFE_WRAP (globfree, &gl);
 error:
-    conf_destroy (conf);
+    flux_conf_decref (conf);
     return NULL;
 }
 
-int conf_get_default_pattern (char *buf, int bufsz)
-{
-    const char *cf_path = getenv ("FLUX_CONF_DIR");
-
-    if (cf_path && !strcmp (cf_path, "installed"))
-        cf_path = flux_conf_builtin_get ("cf_path", FLUX_CONF_INSTALLED);
-    else if (!cf_path)
-        cf_path = flux_conf_builtin_get ("cf_path", FLUX_CONF_AUTO);
-    if (snprintf (buf, bufsz, "%s/*.toml", cf_path) >= bufsz) {
-        errno = EOVERFLOW;
-        return -1;
-    }
-    return 0;
-}
-
-int handle_set_conf (flux_t *h, flux_conf_t *conf)
+int flux_set_conf (flux_t *h, const flux_conf_t *conf)
 {
     return flux_aux_set (h,
                          conf_auxkey,
-                         conf,
-                         conf ? (flux_free_f)conf_destroy : NULL);
+                         (flux_conf_t *)conf,
+                         conf ? (flux_free_f)flux_conf_decref : NULL);
 }
 
-const flux_conf_t *flux_get_conf (flux_t *h, flux_conf_error_t *error)
+const flux_conf_t *flux_get_conf (flux_t *h)
 {
-    flux_conf_t *conf;
-
-    if (!(conf = flux_aux_get (h, conf_auxkey))) {
-        char pattern[PATH_MAX + 1];
-        if (conf_get_default_pattern (pattern, sizeof (pattern)) < 0) {
-            errprintf (error, NULL, -1, "%s", strerror (errno));
-            return NULL;
-        }
-        if (!(conf = conf_parse (pattern, error)))
-            return NULL;
-        if (handle_set_conf (h, conf) < 0) {
-            conf_destroy (conf);
-            return NULL;
-        }
-    }
-    return conf;
+    return flux_aux_get (h, conf_auxkey);
 }
 
 int flux_conf_vunpack (const flux_conf_t *conf,

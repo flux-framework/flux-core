@@ -350,7 +350,7 @@ static int exec_config (flux_t *h, int argc, char **argv)
 
 
     /*  Check configuration for exec.job-shell */
-    if (flux_conf_unpack (flux_get_conf (h, NULL),
+    if (flux_conf_unpack (flux_get_conf (h),
                           &err,
                           "{s?:{s?s}}",
                           "exec",
@@ -362,7 +362,7 @@ static int exec_config (flux_t *h, int argc, char **argv)
     }
 
     /*  Check configuration for exec.imp */
-    if (flux_conf_unpack (flux_get_conf (h, NULL),
+    if (flux_conf_unpack (flux_get_conf (h),
                           &err,
                           "{s?:{s?s}}",
                           "exec",

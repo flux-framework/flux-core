@@ -20,6 +20,8 @@ flux_broker_SOURCES = \
 	broker.c
 
 libbroker_la_SOURCES = \
+	brokercfg.c \
+	brokercfg.h \
 	module.c \
 	module.h \
 	modservice.c \

@@ -17,21 +17,17 @@ service, such as when being launched by Flux or another resource manager,
 or statically using the `bootstrap` section of the Flux configuration,
 such as when being launched by systemd.
 
-The default bootstrap mode is PMI.  The Flux systemd unit file forces the
-broker to use the config method by specifying `--setattr=boot.method=config`
-on the broker command line.
+The default bootstrap mode is PMI.  To select config file bootstrap,
+specify the config directory with the `--config-path=PATH` broker command
+line option or set `FLUX_CONF_DIR` in the broker's environment.  Ensure that
+this directory contains a file that defines the `bootstrap` section.
 
 CONFIG FILES
 ------------
 
-Flux uses the TOML configuration file format.  The broker normally
-parses `/etc/flux/conf.d/*.toml`.  The actual path is dependent on
-`configure` command line options used to build flux, and can be
-overridden with the FLUX_CONF_DIR environment variable.
-
-The `bootstrap` section is a TOML table containing the following
-keys.  Each node in a cluster is expected to bootstrap from an
-identical config file.
+Flux uses the TOML configuration file format.  The `bootstrap` section is
+a TOML table containing the following keys.  Each node in a cluster is
+expected to bootstrap from an identical config file.
 
 KEYWORDS
 --------
