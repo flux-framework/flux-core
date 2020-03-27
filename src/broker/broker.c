@@ -1600,7 +1600,6 @@ struct internal_service {
 static struct internal_service services[] = {
     { "cmb",                NULL }, // kind of a catch-all, slowly deprecating
     { "log",                NULL },
-    { "seq",                "[0]" },
     { "content",            NULL },
     { "hello",              NULL },
     { "attr",               NULL },
