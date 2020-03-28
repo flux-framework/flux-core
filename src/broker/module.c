@@ -891,6 +891,16 @@ done:
     return rc;
 }
 
+module_t *module_first (modhash_t *mh)
+{
+    return zhash_first (mh->zh_byuuid);
+}
+
+module_t *module_next (modhash_t *mh)
+{
+    return zhash_next (mh->zh_byuuid);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
