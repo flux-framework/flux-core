@@ -167,8 +167,6 @@ static void shell_input_stdin_cb (flux_t *h,
     bool eof = false;
     json_t *o;
 
-    if (shell_svc_allowed (in->shell->svc, msg) < 0)
-        goto error;
     if (flux_request_unpack (msg, NULL, "o", &o) < 0)
         goto error;
     if (iodecode (o, NULL, NULL, NULL, NULL, &eof) < 0)

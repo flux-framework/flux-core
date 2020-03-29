@@ -403,8 +403,6 @@ static void shell_output_write_cb (flux_t *h,
     json_t *o;
     json_t *entry;
 
-    if (shell_svc_allowed (out->shell->svc, msg) < 0)
-        goto error;
     if (flux_request_unpack (msg, NULL, "o", &o) < 0)
         goto error;
     if (iodecode (o, NULL, NULL, NULL, NULL, &eof) < 0)
