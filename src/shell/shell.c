@@ -516,16 +516,66 @@ int flux_shell_add_event_handler (flux_shell_t *shell,
     return 0;
 }
 
+struct service_wrap_arg
+{
+    flux_shell_t *shell;
+    flux_msg_handler_f cb;
+    void *arg;
+};
+
+static void shell_service_wrap (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    struct service_wrap_arg *sarg = arg;
+
+    if (shell_svc_allowed (sarg->shell->svc, msg) < 0)
+        goto error;
+    (*sarg->cb) (h, mh, msg, sarg->arg);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        shell_log_errno ("flux_respond");
+}
+
+static struct service_wrap_arg *
+service_wrap_arg_create (flux_shell_t *shell,
+                        flux_msg_handler_f cb,
+                        void *arg)
+{
+    struct service_wrap_arg *sarg = calloc (1, sizeof (*sarg));
+    if (!sarg)
+        return NULL;
+    sarg->shell = shell;
+    sarg->cb = cb;
+    sarg->arg = arg;
+    return sarg;
+}
+
 int flux_shell_service_register (flux_shell_t *shell,
                                  const char *method,
                                  flux_msg_handler_f cb,
                                  void *arg)
 {
+    struct service_wrap_arg *sarg = NULL;
+
     if (!shell || !method || !cb) {
         errno = EINVAL;
         return -1;
     }
-    return shell_svc_register (shell->svc, method, cb, arg);
+    if (!(sarg = service_wrap_arg_create (shell, cb, arg)))
+        return -1;
+
+    if (flux_shell_aux_set (shell, NULL, sarg, free) < 0) {
+        free (sarg);
+        return -1;
+    }
+
+    return shell_svc_register (shell->svc,
+                               method,
+                               shell_service_wrap,
+                               sarg);
 }
 
 flux_future_t *flux_shell_rpc_pack (flux_shell_t *shell,
