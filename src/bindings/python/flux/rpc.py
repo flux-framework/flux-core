@@ -20,6 +20,9 @@ from flux.util import encode_payload, encode_topic
 class RPC(Future):
     """An RPC state object"""
 
+    class RPCInnerWrapper(Future.InnerWrapper):
+        pass
+
     def __init__(
         self,
         flux_handle,
@@ -37,7 +40,11 @@ class RPC(Future):
         payload = encode_payload(payload)
 
         future_handle = raw.flux_rpc(flux_handle, topic, payload, nodeid, flags)
-        super(RPC, self).__init__(future_handle, prefixes=["flux_rpc_", "flux_future_"])
+        super(RPC, self).__init__(
+            future_handle,
+            prefixes=["flux_rpc_", "flux_future_"],
+            pimpl_t=self.RPCInnerWrapper,
+        )
 
     def get_str(self):
         payload_str = ffi.new("char *[1]")

@@ -68,9 +68,11 @@ class Future(WrapperPimpl):
             func = super(Future.InnerWrapper, self).check_wrap(fun, name)
             return check_future_error(func)
 
-    def __init__(self, future_handle, prefixes=None):
+    def __init__(self, future_handle, prefixes=None, pimpl_t=None):
         super(Future, self).__init__()
-        self.pimpl = self.InnerWrapper(handle=future_handle, prefixes=prefixes)
+        if pimpl_t is None:
+            pimpl_t = self.InnerWrapper
+        self.pimpl = pimpl_t(handle=future_handle, prefixes=prefixes)
         self.then_cb = None
         self.then_arg = None
         self.cb_handle = None
