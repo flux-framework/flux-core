@@ -18,6 +18,7 @@ import os
 import errno
 import inspect
 from types import MethodType
+from typing import Dict, Any
 
 import six
 
@@ -223,6 +224,9 @@ class FunctionWrapper(object):
         return result
 
 
+SIGS_: Dict[Any, Any] = {}
+
+
 class Wrapper(WrapperBase):
     """
     Forms a wrapper around an interface that dynamically searches for undefined
@@ -255,14 +259,14 @@ class Wrapper(WrapperBase):
         # per derived class of wrapper
         signature = (match, filter_match, prefixes)
         mytype = type(self)
-        if getattr(mytype, "signature", None) is None:
-            setattr(mytype, "signature", signature)
+        if SIGS_.get(mytype, None) is None:
+            SIGS_[mytype] = signature
         else:
-            assert signature == getattr(
-                mytype, "signature"
+            assert (
+                signature == SIGS_[mytype]
             ), f"""
 signatures do not match, create a new subclass to change matching parameters:
-{mytype}: mysig: {getattr(mytype, "signature")} sig:{signature}
+{mytype}: mysig: {SIGS_[mytype]} sig:{signature}
             """
 
     def check_handle(self, name, fun_type):
@@ -338,6 +342,7 @@ signatures do not match, create a new subclass to change matching parameters:
         new_fun = self.check_wrap(fun, name)
         new_meth = MethodType(new_fun, self)
 
+        # wrap the class in a function so it's correctly treated as a method
         def wrap_class(self_renamed, *args, **kwargs):
             return new_fun(self_renamed, *args, **kwargs)
 

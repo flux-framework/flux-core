@@ -10,9 +10,10 @@
 
 import json
 
+from flux.util import check_future_error
 from flux.wrapper import Wrapper
 from flux.future import Future
-from flux.core.inner import ffi, raw
+from flux.core.inner import ffi, lib, raw
 import flux.constants
 from flux.util import encode_payload, encode_topic
 
@@ -20,8 +21,27 @@ from flux.util import encode_payload, encode_topic
 class RPC(Future):
     """An RPC state object"""
 
-    class RPCInnerWrapper(Future.InnerWrapper):
-        pass
+    class RPCInnerWrapper(Wrapper):
+        def __init__(
+            self,
+            handle=None,
+            match=ffi.typeof("flux_future_t *"),
+            filter_match=True,
+            prefixes=None,
+            destructor=raw.flux_future_destroy,
+        ):
+            # avoid using a static list as a default argument
+            # pylint error 'dangerous-default-value'
+            if prefixes is None:
+                prefixes = ["flux_rpc_", "flux_future_"]
+
+            super().__init__(
+                ffi, lib, handle, match, filter_match, prefixes, destructor
+            )
+
+        def check_wrap(self, fun, name):
+            func = super().check_wrap(fun, name)
+            return check_future_error(func)
 
     def __init__(
         self,
