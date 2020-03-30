@@ -11,6 +11,7 @@ ExecStart=@X_BINDIR@/flux broker \
   -Slog-stderr-level=6 \
   -Scontent.backing-path=@X_LOCALSTATEDIR@/lib/flux/content.sqlite \
   -Sbroker.rc2_none
+ExecReload=@X_BINDIR@/flux config reload
 User=flux
 Group=flux
 RuntimeDirectory=flux
