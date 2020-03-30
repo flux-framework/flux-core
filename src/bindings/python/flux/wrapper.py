@@ -17,7 +17,8 @@ import re
 import os
 import errno
 import inspect
-import weakref
+from types import MethodType
+from typing import Dict, Any
 
 import six
 
@@ -223,6 +224,9 @@ class FunctionWrapper(object):
         return result
 
 
+SIGS_: Dict[Any, Any] = {}
+
+
 class Wrapper(WrapperBase):
     """
     Forms a wrapper around an interface that dynamically searches for undefined
@@ -250,6 +254,20 @@ class Wrapper(WrapperBase):
         self.filter_match = filter_match
         self.prefixes = prefixes
         self.destructor = destructor
+        # this is an error-checking dance to ensure that the class-based caching of
+        # callables is safe by only allowing one set of prefixes, filter-matches, etc.
+        # per derived class of wrapper
+        signature = (match, filter_match, prefixes)
+        mytype = type(self)
+        if SIGS_.get(mytype, None) is None:
+            SIGS_[mytype] = signature
+        else:
+            assert (
+                signature == SIGS_[mytype]
+            ), f"""
+signatures do not match, create a new subclass to change matching parameters:
+{mytype}: mysig: {SIGS_[mytype]} sig:{signature}
+            """
 
     def check_handle(self, name, fun_type):
         if self.match is not None and self._handle is not None:
@@ -322,12 +340,16 @@ class Wrapper(WrapperBase):
             return fun
 
         new_fun = self.check_wrap(fun, name)
-        new_method = six.create_bound_method(new_fun, weakref.proxy(self))
+        new_meth = MethodType(new_fun, self)
 
-        # Store the wrapper function into the instance
+        # wrap the class in a function so it's correctly treated as a method
+        def wrap_class(self_renamed, *args, **kwargs):
+            return new_fun(self_renamed, *args, **kwargs)
+
+        # Store the wrapper function into the class
         # to prevent a second lookup
-        setattr(self, name, new_method)
-        return new_method
+        setattr(type(self), name, wrap_class)
+        return new_meth
 
     def _clear(self):
         # avoid recursion
