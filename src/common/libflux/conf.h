@@ -49,6 +49,11 @@ flux_conf_t *flux_conf_copy (const flux_conf_t *conf);
 const flux_conf_t *flux_conf_incref (const flux_conf_t *conf);
 void flux_conf_decref (const flux_conf_t *conf);
 
+/* Decode config-reload request, setting 'conf' to a config object
+ * owned by 'msg'.
+ */
+int flux_conf_reload_decode (const flux_msg_t *msg, const flux_conf_t **conf);
+
 /* Parse *.toml in 'path' directory.
  */
 flux_conf_t *flux_conf_parse (const char *path, flux_conf_error_t *error);
