@@ -4,12 +4,90 @@ test_description='Test broker security'
 
 . `dirname $0`/sharness.sh
 
+# Start out with empty "config object"
+export FLUX_CONF_DIR=$(pwd)
 test_under_flux 4 minimal
 
 jq=$(which jq 2>/dev/null)
 test -z "$jq" || test_set_prereq HAVE_JQ
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
+test_expect_success 'connector-local starts with private access policy' '
+	flux dmesg | grep connector-local >dmesg.out &&
+	grep allow-root-owner=false dmesg.out &&
+	grep allow-guest-user=false dmesg.out
+'
+
+test_expect_success 'connector-local adds allow-root-owner on reconfig' '
+	flux dmesg --clear &&
+	cat >access.toml <<-EOT &&
+	[access]
+	allow-root-owner = true
+	EOT
+	flux config reload &&
+	flux dmesg | grep connector-local >dmesg2.out &&
+	grep allow-root-owner=true dmesg2.out
+'
+
+test_expect_success 'connector-local drops allow-root-owner on reconfig' '
+	flux dmesg --clear &&
+	cat >access.toml <<-EOT &&
+	[access]
+	EOT
+	flux config reload &&
+	flux dmesg | grep connector-local >dmesg3.out &&
+	grep allow-root-owner=false dmesg3.out
+'
+
+test_expect_success 'connector-local adds allow-guest-user on reconfig' '
+	flux dmesg --clear &&
+	cat >access.toml <<-EOT &&
+	[access]
+	allow-guest-user = true
+	EOT
+	flux config reload &&
+	flux dmesg | grep connector-local >dmesg4.out &&
+	grep allow-guest-user=true dmesg4.out
+'
+
+test_expect_success 'connector-local drops allow-guest-user on reconfig' '
+	flux dmesg --clear &&
+	cat >access.toml <<-EOT &&
+	[access]
+	EOT
+	flux config reload &&
+	flux dmesg | grep connector-local >dmesg5.out &&
+	grep allow-guest-user=false dmesg5.out
+'
+
+test_expect_success 'connector-local reconfig fails on unknown access key' '
+	cat >access.toml <<-EOT &&
+	[access]
+	foo = 42
+	EOT
+	test_must_fail flux config reload 2>reload.err &&
+	grep foo reload.err
+'
+
+test_expect_success 'reconfig with bad TOML fails' '
+	cat >access.toml <<-EOT &&
+	[access]
+	foo
+	EOT
+	test_must_fail flux config reload
+'
+
+test_expect_success 'connector-local restored private access policy' '
+	flux dmesg --clear &&
+	cat >access.toml <<-EOT &&
+	[access]
+	EOT
+	flux config reload &&
+	flux dmesg | grep connector-local >dmesg6.out &&
+	grep allow-root-owner=false dmesg6.out &&
+	grep allow-guest-user=false dmesg6.out
+'
 
 test_expect_success 'simulated local connector auth failure returns EPERM' '
 	flux comms info &&
