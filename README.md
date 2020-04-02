@@ -56,10 +56,6 @@ python36-yaml     | python3-yaml      | >= 3.10.0         |
 python36-jsonschema | python3-jsonschema | >= 2.3.0       |
 asciidoc          | asciidoc          |                   | *2*
 asciidoctor       | asciidoctor       | >= 1.5.7          | *2*
-aspell            | aspell            |                   | *3*
-valgrind          | valgrind          |                   | *3*
-mpich             | mpich             |                   | *3*
-jq                | jq                |                   | *3*
 
 *Note 1 - Due to a packaging issue, Ubuntu lua-posix may need the
 following symlink (true for version 33.4.0-2):*
@@ -70,7 +66,14 @@ $ sudo ln -s posix_c.so /usr/lib/x86_64-linux-gnu/lua/5.1/posix.so
 *Note 2 - only needed if optional man pages are to be created.  Only one
 of asciidoc or asciidoctor is needed.  Asciidoc is used if both are installed.*
 
-*Note 3 - optional, for enabling additional tests*.
+The following optional dependencies enable additional testing:
+
+**redhat**        | **ubuntu**        | **version**
+----------        | ----------        | -----------
+aspell            | aspell            |
+valgrind-devel    | valgrind          |
+mpich-devel       | libmpich-dev      |
+jq                | jq                |
 
 ##### Installing RedHat/CentOS Packages
 ```
