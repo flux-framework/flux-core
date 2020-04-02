@@ -77,12 +77,12 @@ jq                | jq                |
 
 ##### Installing RedHat/CentOS Packages
 ```
-yum install autoconf automake libtool libsodium-devel zeromq4-devel czmq-devel libuuid-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python36-devel python36-cffi python36-six python36-yaml python36-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
+yum install autoconf automake libtool libsodium-devel zeromq4-devel czmq-devel libuuid-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python36-devel python36-cffi python36-six python36-yaml python36-jsonschema asciidoc asciidoctor aspell valgrind-devel mpich-devel jq
 ```
 
 ##### Installing Ubuntu Packages
 ```
-apt install autoconf automake libtool libsodium-dev libzmq3-dev libczmq-dev uuid-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python3-dev python3-cffi python3-six python3-yaml python3-jsonschema asciidoc asciidoctor aspell valgrind mpich jq
+apt install autoconf automake libtool libsodium-dev libzmq3-dev libczmq-dev uuid-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python3-dev python3-cffi python3-six python3-yaml python3-jsonschema asciidoc asciidoctor aspell valgrind libmpich-dev jq
 ```
 
 ##### Building from Source
