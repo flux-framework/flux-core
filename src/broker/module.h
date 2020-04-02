@@ -111,6 +111,11 @@ void module_mute (module_t *p);
  */
 json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw);
 
+/* Iterator
+ */
+module_t *module_first (modhash_t *mh);
+module_t *module_next (modhash_t *mh);
+
 #endif /* !_BROKER_MODULE_H */
 
 /*

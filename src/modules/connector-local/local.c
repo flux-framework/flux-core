@@ -45,6 +45,7 @@ struct connector_local {
     uid_t instance_owner;
     int allow_guest_user;
     int allow_root_owner;
+    flux_msg_handler_t **handlers;
 };
 
 /* A 'struct route_entry' is attached to the 'struct usock_conn' aux hash
@@ -197,30 +198,78 @@ error:
  *
  * allow-root-owner = true
  *   Allow root user to have instance owner role
+ *
+ * Missing [access] keys are interpreted as false.
+ * [access] keys other than the above are not allowed.
  */
-int parse_config (struct connector_local *ctx, const flux_conf_t *conf)
+int parse_config (struct connector_local *ctx,
+                  const flux_conf_t *conf,
+                  char *errbuf,
+                  int errbufsize)
 {
     flux_conf_error_t error;
-
-    ctx->allow_guest_user = 0;
-    ctx->allow_root_owner = 0;
+    int allow_guest_user = 0;
+    int allow_root_owner = 0;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?:{s?:b s?:b}}",
+                          "{s?:{s?:b s?:b !}}",
                           "access",
                             "allow-guest-user",
-                            &ctx->allow_guest_user,
+                            &allow_guest_user,
                             "allow-root-owner",
-                            &ctx->allow_root_owner) < 0) {
-        flux_log (ctx->h,
-                  LOG_ERR,
-                  "error parsing [access] configuration: %s",
-                  error.errbuf);
+                            &allow_root_owner) < 0) {
+        (void)snprintf (errbuf,
+                        errbufsize,
+                        "error parsing [access] configuration: %s",
+                        error.errbuf);
         return -1;
     }
+    ctx->allow_guest_user = allow_guest_user;
+    ctx->allow_root_owner = allow_root_owner;
+    flux_log (ctx->h,
+              LOG_DEBUG,
+              "allow-guest-user=%s",
+              ctx->allow_guest_user ? "true" : "false");
+    flux_log (ctx->h,
+              LOG_DEBUG,
+              "allow-root-owner=%s",
+              ctx->allow_root_owner ? "true" : "false");
     return 0;
 }
+
+static void reload_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
+{
+    struct connector_local *ctx = arg;
+    const flux_conf_t *conf;
+    char errbuf[256];
+    const char *errstr = NULL;
+
+    if (flux_conf_reload_decode (msg, &conf) < 0)
+        goto error;
+    if (parse_config (ctx, conf, errbuf, sizeof (errbuf)) < 0) {
+        errstr = errbuf;
+        goto error;
+    }
+    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
+        errstr = "error updating cached configuration";
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+}
+
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,  "connector-local.config-reload", reload_cb, 0 },
+    FLUX_MSGHANDLER_TABLE_END,
+};
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
@@ -228,6 +277,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     const char *local_uri = NULL;
     char *tmpdir;
     const char *sockpath;
+    char errbuf[256];
     int rc = -1;
 
     memset (&ctx, 0, sizeof (ctx));
@@ -236,8 +286,10 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     /* Parse configuration
      */
-    if (parse_config (&ctx, flux_get_conf (h)) < 0)
+    if (parse_config (&ctx, flux_get_conf (h), errbuf, sizeof (errbuf)) < 0) {
+        flux_log (h, LOG_ERR, "%s", errbuf);
         goto done;
+    }
 
     /* Create router
      */
@@ -267,6 +319,9 @@ int mod_main (flux_t *h, int argc, char **argv)
     cleanup_push_string (cleanup_file, sockpath);
     usock_server_set_acceptor (ctx.server, acceptor_cb, &ctx);
 
+    if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0)
+        goto done;
+
     /* Start reactor
      */
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
@@ -277,6 +332,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     router_mute (ctx.router); // issue #1025 - disable unsub during shutdown
     rc = 0;
 done:
+    flux_msg_handler_delvec (ctx.handlers);
     usock_server_destroy (ctx.server); // destroy before router
     router_destroy (ctx.router);
     return rc;

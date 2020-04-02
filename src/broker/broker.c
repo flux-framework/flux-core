@@ -59,8 +59,8 @@
 #include "src/common/libutil/errno_safe.h"
 
 #include "heartbeat.h"
-#include "brokercfg.h"
 #include "module.h"
+#include "brokercfg.h"
 #include "overlay.h"
 #include "service.h"
 #include "hello.h"
@@ -395,7 +395,10 @@ int main (int argc, char *argv[])
 
     /* Parse config.
      */
-    if (!(ctx.config = brokercfg_create (ctx.h, ctx.config_path, ctx.attrs)))
+    if (!(ctx.config = brokercfg_create (ctx.h,
+                                         ctx.config_path,
+                                         ctx.attrs,
+                                         ctx.modhash)))
         goto cleanup;
     conf = flux_get_conf (ctx.h);
 
@@ -1600,13 +1603,13 @@ struct internal_service {
 static struct internal_service services[] = {
     { "cmb",                NULL }, // kind of a catch-all, slowly deprecating
     { "log",                NULL },
-    { "seq",                "[0]" },
     { "content",            NULL },
     { "hello",              NULL },
     { "attr",               NULL },
     { "heaptrace",          NULL },
     { "event",              "[0]" },
     { "service",            NULL },
+    { "config",             NULL },
     { NULL, NULL, },
 };
 

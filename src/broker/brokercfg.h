@@ -13,7 +13,10 @@
 
 struct brokercfg;
 
-struct brokercfg *brokercfg_create (flux_t *h, const char *path, attr_t *attr);
+struct brokercfg *brokercfg_create (flux_t *h,
+                                    const char *path,
+                                    attr_t *attr,
+                                    modhash_t *modhash);
 void brokercfg_destroy (struct brokercfg *cfg);
 
 #endif /* !_BROKER_BROKERCFG_H */
