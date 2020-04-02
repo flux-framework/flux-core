@@ -85,18 +85,10 @@ apt install autoconf automake libtool libsodium-dev libzmq3-dev libczmq-dev uuid
 ##### Building from Source
 ```
 ./autogen.sh   # skip if building from a release tarball
-PYTHON_VERSION=3.6 ./configure
+./configure
 make
 make check
 ```
-Note: the `PYTHON_VERSION` environment variable adds a suffix to the
-python interpreter executable.  Configure would look for `python3.6` in
-the example above.  If unset, `python` is used, which is often Python 2.
-
-If you want Flux to use Python 2 and generate (only) Python 2 bindings,
-alter the prerequisite package names above, and set (or don't set)
-`PYTHON_VERSION` accordingly.  Python 2 support should be considered
-deprecated, although it continues to work for now.
 
 #### Bootstrapping a Flux instance
 
