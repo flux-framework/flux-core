@@ -142,7 +142,7 @@ void submitbench_continuation (flux_future_t *f, void *arg)
         else
             log_msg_exit ("submit: %s", future_strerror (f, errno));
     }
-    printf ("%llu\n", (unsigned long long)id);
+    printf ("%ju\n", (uintmax_t)id);
     flux_future_destroy (f);
 
     ctx->rxcount++;
