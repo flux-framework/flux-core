@@ -241,8 +241,8 @@ static int *state_counter (struct info_ctx *ctx,
     else if (state == FLUX_JOB_INACTIVE)
         return &ctx->jsctx->inactive_count;
 
-    flux_log_error (ctx->h, "illegal state transition for job %llu: %d",
-                    (unsigned long long)job->id, state);
+    flux_log_error (ctx->h, "illegal state transition for job %ju: %d",
+                    (uintmax_t)job->id, state);
     return NULL;
 }
 
@@ -401,8 +401,8 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
     int rc = -1;
 
     if (!(a = eventlog_decode (s))) {
-        flux_log_error (ctx->h, "%s: error parsing eventlog for %llu",
-                        __FUNCTION__, (unsigned long long)job->id);
+        flux_log_error (ctx->h, "%s: error parsing eventlog for %ju",
+                        __FUNCTION__, (uintmax_t)job->id);
         goto out;
     }
 
@@ -412,15 +412,15 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
         json_t *context = NULL;
 
         if (eventlog_entry_parse (value, &timestamp, &name, &context) < 0) {
-            flux_log_error (ctx->h, "%s: error parsing entry for %llu",
-                            __FUNCTION__, (unsigned long long)job->id);
+            flux_log_error (ctx->h, "%s: error parsing entry for %ju",
+                            __FUNCTION__, (uintmax_t)job->id);
             goto out;
         }
 
         if (!strcmp (name, "submit")) {
             if (!context) {
-                flux_log_error (ctx->h, "%s: no submit context for %llu",
-                                __FUNCTION__, (unsigned long long)job->id);
+                flux_log_error (ctx->h, "%s: no submit context for %ju",
+                                __FUNCTION__, (uintmax_t)job->id);
                 goto out;
             }
 
@@ -428,8 +428,8 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
                              "priority", &job->priority,
                              "userid", &job->userid,
                              "flags", &job->flags) < 0) {
-                flux_log_error (ctx->h, "%s: submit context for %llu invalid",
-                                __FUNCTION__, (unsigned long long)job->id);
+                flux_log_error (ctx->h, "%s: submit context for %ju invalid",
+                                __FUNCTION__, (uintmax_t)job->id);
                 goto out;
             }
             break;
@@ -465,8 +465,8 @@ static int parse_res_level (struct info_ctx *ctx,
                         "count", &res.count,
                         "with", &res.with) < 0) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu invalid jobspec: %s",
-                  __FUNCTION__, (unsigned long long)job->id, error.text);
+                  "%s: job %ju invalid jobspec: %s",
+                  __FUNCTION__, (uintmax_t)job->id, error.text);
         return -1;
     }
     *resp = res;
@@ -501,8 +501,8 @@ static int jobspec_parse (struct info_ctx *ctx,
 
     if (!(jobspec = json_loads (s, 0, &error))) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu invalid jobspec: %s",
-                  __FUNCTION__, (unsigned long long)job->id, error.text);
+                  "%s: job %ju invalid jobspec: %s",
+                  __FUNCTION__, (uintmax_t)job->id, error.text);
         goto error;
     }
 
@@ -513,16 +513,16 @@ static int jobspec_parse (struct info_ctx *ctx,
                         "job",
                         &jobspec_job) < 0) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu invalid jobspec: %s",
-                  __FUNCTION__, (unsigned long long)job->id, error.text);
+                  "%s: job %ju invalid jobspec: %s",
+                  __FUNCTION__, (uintmax_t)job->id, error.text);
         goto error;
     }
 
     if (jobspec_job) {
         if (!json_is_object (jobspec_job)) {
             flux_log (ctx->h, LOG_ERR,
-                      "%s: job %llu invalid jobspec",
-                      __FUNCTION__, (unsigned long long)job->id);
+                      "%s: job %ju invalid jobspec",
+                      __FUNCTION__, (uintmax_t)job->id);
             goto error;
         }
         job->jobspec_job = json_incref (jobspec_job);
@@ -532,23 +532,23 @@ static int jobspec_parse (struct info_ctx *ctx,
                         "{s:o}",
                         "tasks", &tasks) < 0) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu invalid jobspec: %s",
-                  __FUNCTION__, (unsigned long long)job->id, error.text);
+                  "%s: job %ju invalid jobspec: %s",
+                  __FUNCTION__, (uintmax_t)job->id, error.text);
         goto error;
     }
     if (json_unpack_ex (tasks, &error, 0,
                         "[{s:o}]",
                         "command", &command) < 0) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu invalid jobspec: %s",
-                  __FUNCTION__, (unsigned long long)job->id, error.text);
+                  "%s: job %ju invalid jobspec: %s",
+                  __FUNCTION__, (uintmax_t)job->id, error.text);
         goto error;
     }
 
     if (!json_is_array (command)) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu invalid jobspec",
-                  __FUNCTION__, (unsigned long long)job->id);
+                  "%s: job %ju invalid jobspec",
+                  __FUNCTION__, (uintmax_t)job->id);
         goto error;
     }
 
@@ -559,8 +559,8 @@ static int jobspec_parse (struct info_ctx *ctx,
                             "{s?:s}",
                             "name", &job->name) < 0) {
             flux_log (ctx->h, LOG_ERR,
-                      "%s: job %llu invalid job dictionary: %s",
-                      __FUNCTION__, (unsigned long long)job->id, error.text);
+                      "%s: job %ju invalid job dictionary: %s",
+                      __FUNCTION__, (uintmax_t)job->id, error.text);
             goto error;
         }
     }
@@ -571,8 +571,8 @@ static int jobspec_parse (struct info_ctx *ctx,
         json_t *arg0 = json_array_get (job->jobspec_cmd, 0);
         if (!arg0 || !json_is_string (arg0)) {
             flux_log (ctx->h, LOG_ERR,
-                      "%s: job %llu invalid job command",
-                      __FUNCTION__, (unsigned long long)job->id);
+                      "%s: job %ju invalid job command",
+                      __FUNCTION__, (uintmax_t)job->id);
             goto error;
         }
         job->name = parse_job_name (json_string_value (arg0));
@@ -583,8 +583,8 @@ static int jobspec_parse (struct info_ctx *ctx,
                         "{s:o}",
                         "resources", &resources) < 0) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu invalid jobspec: %s",
-                  __FUNCTION__, (unsigned long long)job->id, error.text);
+                  "%s: job %ju invalid jobspec: %s",
+                  __FUNCTION__, (uintmax_t)job->id, error.text);
         goto error;
     }
 
@@ -600,14 +600,14 @@ static int jobspec_parse (struct info_ctx *ctx,
                             "[{s:{s:i}}]",
                             "count", "per_slot", &per_slot) < 0) {
             flux_log (ctx->h, LOG_ERR,
-                      "%s: job %llu invalid jobspec: %s",
-                      __FUNCTION__, (unsigned long long)job->id, error.text);
+                      "%s: job %ju invalid jobspec: %s",
+                      __FUNCTION__, (uintmax_t)job->id, error.text);
             goto error;
         }
         if (per_slot != 1) {
             flux_log (ctx->h, LOG_ERR,
-                      "%s: job %llu: per_slot count: expected 1 got %d: %s",
-                      __FUNCTION__, (unsigned long long)job->id, per_slot,
+                      "%s: job %ju: per_slot count: expected 1 got %d: %s",
+                      __FUNCTION__, (uintmax_t)job->id, per_slot,
                       error.text);
             goto error;
         }
@@ -636,9 +636,9 @@ static int jobspec_parse (struct info_ctx *ctx,
         }
         else {
             flux_log (ctx->h, LOG_ERR,
-                      "%s: job %llu: Unexpected resources: %s->%s->%s%s",
+                      "%s: job %ju: Unexpected resources: %s->%s->%s%s",
                       __FUNCTION__,
-                      (unsigned long long)job->id,
+                      (uintmax_t)job->id,
                       res[0].type ? res[0].type : "NULL",
                       res[1].type ? res[1].type : "NULL",
                       res[2].type ? res[2].type : "NULL",
@@ -663,8 +663,8 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
     void *handle;
 
     if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0) {
-        flux_log_error (ctx->h, "%s: error eventlog for %llu",
-                        __FUNCTION__, (unsigned long long)job->id);
+        flux_log_error (ctx->h, "%s: error eventlog for %ju",
+                        __FUNCTION__, (uintmax_t)job->id);
         goto out;
     }
 
@@ -672,8 +672,8 @@ static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
         goto out;
 
     if (flux_rpc_get_unpack (f, "{s:s}", "jobspec", &s) < 0) {
-        flux_log_error (ctx->h, "%s: error jobspec for %llu",
-                        __FUNCTION__, (unsigned long long)job->id);
+        flux_log_error (ctx->h, "%s: error jobspec for %ju",
+                        __FUNCTION__, (uintmax_t)job->id);
         goto out;
     }
 
@@ -791,8 +791,8 @@ static int R_lookup_parse (struct info_ctx *ctx,
 
     if (!(job->R = json_loads (s, 0, &error))) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu invalid R: %s",
-                  __FUNCTION__, (unsigned long long)job->id, error.text);
+                  "%s: job %ju invalid R: %s",
+                  __FUNCTION__, (uintmax_t)job->id, error.text);
         goto error;
     }
 
@@ -802,20 +802,20 @@ static int R_lookup_parse (struct info_ctx *ctx,
                         "execution",
                         "R_lite", &R_lite) < 0) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu invalid R: %s",
-                  __FUNCTION__, (unsigned long long)job->id, error.text);
+                  "%s: job %ju invalid R: %s",
+                  __FUNCTION__, (uintmax_t)job->id, error.text);
         goto error;
     }
     if (version != 1) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu invalid R version: %d",
-                  __FUNCTION__, (unsigned long long)job->id, version);
+                  "%s: job %ju invalid R version: %d",
+                  __FUNCTION__, (uintmax_t)job->id, version);
         goto error;
     }
     if (parse_rlite (ctx, job, R_lite) < 0) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu parse_rlite: %s",
-                  __FUNCTION__, (unsigned long long)job->id, strerror (errno));
+                  "%s: job %ju parse_rlite: %s",
+                  __FUNCTION__, (uintmax_t)job->id, strerror (errno));
         goto error;
     }
 
@@ -833,8 +833,8 @@ static void state_run_lookup_continuation (flux_future_t *f, void *arg)
     void *handle;
 
     if (flux_rpc_get_unpack (f, "{s:s}", "R", &s) < 0) {
-        flux_log_error (ctx->h, "%s: error eventlog for %llu",
-                        __FUNCTION__, (unsigned long long)job->id);
+        flux_log_error (ctx->h, "%s: error eventlog for %ju",
+                        __FUNCTION__, (uintmax_t)job->id);
         goto out;
     }
 
@@ -894,8 +894,8 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
 
     if (!(a = eventlog_decode (s))) {
         flux_log (ctx->h, LOG_ERR,
-                  "%s: job %llu eventlog_decode: %s",
-                  __FUNCTION__, (unsigned long long)job->id, strerror (errno));
+                  "%s: job %ju eventlog_decode: %s",
+                  __FUNCTION__, (uintmax_t)job->id, strerror (errno));
         goto error;
     }
 
@@ -905,8 +905,8 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
 
         if (eventlog_entry_parse (value, NULL, &name, &context) < 0) {
             flux_log (ctx->h, LOG_ERR,
-                      "%s: job %llu eventlog_entry_parse: %s",
-                      __FUNCTION__, (unsigned long long)job->id,
+                      "%s: job %ju eventlog_entry_parse: %s",
+                      __FUNCTION__, (uintmax_t)job->id,
                       strerror (errno));
             goto error;
         }
@@ -919,8 +919,8 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
             int status;
             if (json_unpack (context, "{s:i}", "status", &status) < 0) {
                 flux_log (ctx->h, LOG_ERR,
-                          "%s: job %llu parse finish status",
-                          __FUNCTION__, (unsigned long long)job->id);
+                          "%s: job %ju parse finish status",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
             if (!status)
@@ -943,8 +943,8 @@ static void state_inactive_lookup_continuation (flux_future_t *f, void *arg)
     void *handle;
 
     if (flux_rpc_get_unpack (f, "{s:s}", "eventlog", &s) < 0) {
-        flux_log_error (ctx->h, "%s: error eventlog for %llu",
-                        __FUNCTION__, (unsigned long long)job->id);
+        flux_log_error (ctx->h, "%s: error eventlog for %ju",
+                        __FUNCTION__, (uintmax_t)job->id);
         goto out;
     }
 
@@ -1249,8 +1249,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
         goto error;
 
     if (!(a = eventlog_decode (eventlog))) {
-        flux_log_error (ctx->h, "%s: error parsing eventlog for %llu",
-                        __FUNCTION__, (unsigned long long)job->id);
+        flux_log_error (ctx->h, "%s: error parsing eventlog for %ju",
+                        __FUNCTION__, (uintmax_t)job->id);
         goto error;
     }
 
@@ -1260,15 +1260,15 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
         json_t *context = NULL;
 
         if (eventlog_entry_parse (value, &timestamp, &name, &context) < 0) {
-            flux_log_error (ctx->h, "%s: error parsing entry for %llu",
-                            __FUNCTION__, (unsigned long long)job->id);
+            flux_log_error (ctx->h, "%s: error parsing entry for %ju",
+                            __FUNCTION__, (uintmax_t)job->id);
             goto error;
         }
 
         if (!strcmp (name, "submit")) {
             if (!context) {
-                flux_log_error (ctx->h, "%s: no submit context for %llu",
-                                __FUNCTION__, (unsigned long long)job->id);
+                flux_log_error (ctx->h, "%s: no submit context for %ju",
+                                __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
 
@@ -1276,8 +1276,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                              "priority", &job->priority,
                              "userid", &job->userid,
                              "flags", &job->flags) < 0) {
-                flux_log_error (ctx->h, "%s: submit context for %llu invalid",
-                                __FUNCTION__, (unsigned long long)job->id);
+                flux_log_error (ctx->h, "%s: submit context for %ju invalid",
+                                __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
             update_job_state (ctx, job, FLUX_JOB_DEPEND, timestamp);
@@ -1288,16 +1288,16 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
         else if (!strcmp (name, "priority")) {
             if (json_unpack (context, "{ s:i }",
                                       "priority", &job->priority) < 0) {
-                flux_log_error (ctx->h, "%s: priority context for %llu invalid",
-                                __FUNCTION__, (unsigned long long)job->id);
+                flux_log_error (ctx->h, "%s: priority context for %ju invalid",
+                                __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
         }
         else if (!strcmp (name, "exception")) {
             int severity;
             if (json_unpack (context, "{ s:i }", "severity", &severity) < 0) {
-                flux_log_error (ctx->h, "%s: exception context for %llu invalid",
-                                __FUNCTION__, (unsigned long long)job->id);
+                flux_log_error (ctx->h, "%s: exception context for %ju invalid",
+                                __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
             if (severity == 0)

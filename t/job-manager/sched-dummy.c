@@ -137,8 +137,8 @@ void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
 
     if (schedutil_free_request_decode (msg, &id) < 0)
         goto error;
-    flux_log (h, LOG_DEBUG, "free: id=%llu R=%s",
-              (unsigned long long)id, R);
+    flux_log (h, LOG_DEBUG, "free: id=%ju R=%s",
+              (uintmax_t)id, R);
     sc->cores_free++;
     if (schedutil_free_respond (sc->schedutil_ctx, msg) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
@@ -164,8 +164,8 @@ void alloc_cb (flux_t *h, const flux_msg_t *msg,
         goto error;
     }
     sc->job = job;
-    flux_log (h, LOG_DEBUG, "alloc: id=%llu jobspec=%s",
-              (unsigned long long)job->id, job->jobspec);
+    flux_log (h, LOG_DEBUG, "alloc: id=%ju jobspec=%s",
+              (uintmax_t)job->id, job->jobspec);
     try_alloc (sc);
     return;
 error:

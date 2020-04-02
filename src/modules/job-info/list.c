@@ -488,25 +488,42 @@ error:
     json_decref (job);
 }
 
+int list_attrs_append (json_t *a, const char *attr)
+{
+    json_t *o = json_string (attr);
+    if (!o) {
+        errno = ENOMEM;
+        return -1;
+    }
+    if (json_array_append_new (a, o) < 0) {
+        json_decref (o);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
 void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
-    if (flux_respond_pack (h, msg, "{s:[s,s,s,s,s,s,s,s,s,s,s,s,s,s]}",
-                           "attrs",
-                           "userid",
-                           "priority",
-                           "t_submit",
-                           "t_depend",
-                           "t_sched",
-                           "t_run",
-                           "t_cleanup",
-                           "t_inactive",
-                           "state",
-                           "name",
-                           "ntasks",
-                           "nnodes",
-                           "ranks",
-                           "success") < 0) {
+    const char *attrs[] = { "userid", "priority", "t_submit", "t_depend",
+                            "t_sched", "t_run", "t_cleanup", "t_inactive",
+                            "state", "name", "ntasks", "nnodes", "ranks",
+                            "success", NULL };
+    json_t *a = NULL;
+    int i;
+
+    if (!(a = json_array ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+
+    for (i = 0; attrs[i] != NULL; i++) {
+        if (list_attrs_append (a, attrs[i]) < 0)
+            goto error;
+    }
+
+    if (flux_respond_pack (h, msg, "{s:o}", "attrs", a) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -516,6 +533,7 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    json_decref (a);
 }
 
 /*

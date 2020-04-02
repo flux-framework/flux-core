@@ -48,8 +48,8 @@ static int schedutil_hello_job (flux_t *h,
     flux_future_destroy (f);
     return 0;
 error:
-    flux_log_error (h, "hello: error loading R for id=%llu",
-                    (unsigned long long)id);
+    flux_log_error (h, "hello: error loading R for id=%ju",
+                    (uintmax_t)id);
     flux_future_destroy (f);
     return -1;
 }

@@ -81,8 +81,8 @@ void check_one_jobkey (struct jobkey_input *try)
             valid = true;
     }
     ok (valid == true,
-        "util_jobkey id=%llu key=%s %s",
-        (unsigned long long)try->id,
+        "util_jobkey id=%ju key=%s %s",
+        (uintmax_t)try->id,
         try->key ? try->key : "NULL",
         try->expected ? "works" : "fails");
 

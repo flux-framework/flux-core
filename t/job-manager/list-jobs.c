@@ -104,8 +104,8 @@ int main (int argc, char *argv[])
             log_msg_exit ("error parsing job data");
         if (iso_timestr (t_submit, timestr, sizeof (timestr)) < 0)
             log_err_exit ("time conversion error");
-        printf ("%llu\t%s\t%lu\t%d\t%s\n",
-                (unsigned long long)id,
+        printf ("%ju\t%s\t%lu\t%d\t%s\n",
+                (uintmax_t)id,
                 flux_job_statetostr (state, true),
                 (unsigned long)userid,
                 priority,

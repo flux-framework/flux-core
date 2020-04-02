@@ -598,8 +598,8 @@ static char *shell_output_get_path (struct shell_output *out, const char *path)
         int len, buflen, total_len;
 
         len = strlen (path);
-        buflen = snprintf (buf, sizeof (buf), "%llu",
-                           (unsigned long long)out->shell->info->jobid);
+        buflen = snprintf (buf, sizeof (buf), "%ju",
+                           (uintmax_t)out->shell->info->jobid);
         /* -6 for {{id}}, +1 for NUL */
         total_len = len - 6 + buflen + 1;
         if (total_len > (PATH_MAX + 1)) {

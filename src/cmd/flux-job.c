@@ -614,8 +614,7 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_set_priority (h, id, priority)))
         log_err_exit ("flux_job_set_priority");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("%llu: %s", (unsigned long long)id,
-                      future_strerror (f, errno));
+        log_msg_exit ("%ju: %s", (uintmax_t) id, future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     return 0;
@@ -645,8 +644,7 @@ int cmd_raise (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_raise (h, id, type, severity, note)))
         log_err_exit ("flux_job_raise");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("%llu: %s", (unsigned long long)id,
-                      future_strerror (f, errno));
+        log_msg_exit ("%ju: %s", (uintmax_t) id, future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     free (note);
@@ -942,8 +940,7 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_cancel (h, id, note)))
         log_err_exit ("flux_job_cancel");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("%llu: %s", (unsigned long long)id,
-                      future_strerror (f, errno));
+        log_msg_exit ("%ju: %s", (uintmax_t) id, future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     free (note);
@@ -1231,7 +1228,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     if (flux_job_submit_get_id (f, &id) < 0) {
         log_msg_exit ("%s", future_strerror (f, errno));
     }
-    printf ("%llu\n", (unsigned long long)id);
+    printf ("%ju\n", (uintmax_t) id);
     flux_future_destroy (f);
 #if HAVE_FLUX_SECURITY
     flux_security_destroy (sec); // invalidates J
@@ -2190,7 +2187,7 @@ void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
     /* id to dst
      */
     if (!strcmp (to, "dec")) {
-        snprintf (dst, dstsz, "%llu", (unsigned long long)id);
+        snprintf (dst, dstsz, "%ju", (uintmax_t) id);
     }
     else if (!strcmp (to, "kvs")) {
         if (flux_job_kvs_key (dst, dstsz, id, NULL) < 0)
