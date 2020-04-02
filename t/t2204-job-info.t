@@ -720,6 +720,26 @@ test_expect_success 'flux job list outputs nnodes/ranks correctly (5 tasks, / 3 
         echo $obj | jq -e ".ranks == \"[0-2]\""
 '
 
+#
+# job success
+#
+
+test_expect_success 'flux job list outputs success correctly (true)' '
+        jobid=`flux mini submit hostname` &&
+        fj_wait_event $jobid clean >/dev/null &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".success == true"
+'
+
+test_expect_success 'flux job list outputs success correctly (false)' '
+        jobid=`flux mini submit nosuchcommand` &&
+        fj_wait_event $jobid clean >/dev/null &&
+        wait_jobid_state $jobid inactive &&
+        obj=$(flux job list -s inactive | grep $jobid) &&
+        echo $obj | jq -e ".success == false"
+'
+
 test_expect_success 'reload the job-info module' '
         flux exec -r all flux module reload job-info
 '
@@ -753,7 +773,6 @@ test_expect_success 'list count / max_entries works' '
         count=`flux job list -s inactive -c 5 | wc -l` &&
         test $count -eq 5
 '
-
 test_expect_success HAVE_JQ 'list request with empty attrs works' '
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:[]}" \
@@ -761,15 +780,17 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
         test_must_fail grep "userid" list_empty_attrs.out &&
         test_must_fail grep "priority" list_empty_attrs.out &&
         test_must_fail grep "t_submit" list_empty_attrs.out &&
-        test_must_fail grep "state" list_empty_attrs.out &&
-        test_must_fail grep "name" list_empty_attrs.out &&
-        test_must_fail grep "ntasks" list_empty_attrs.out &&
-        test_must_fail grep "nnodes" list_empty_attrs.out &&
         test_must_fail grep "t_depend" list_empty_attrs.out &&
         test_must_fail grep "t_sched" list_empty_attrs.out &&
         test_must_fail grep "t_run" list_empty_attrs.out &&
         test_must_fail grep "t_cleanup" list_empty_attrs.out &&
-        test_must_fail grep "t_inactive" list_empty_attrs.out
+        test_must_fail grep "t_inactive" list_empty_attrs.out &&
+        test_must_fail grep "state" list_empty_attrs.out &&
+        test_must_fail grep "name" list_empty_attrs.out &&
+        test_must_fail grep "ntasks" list_empty_attrs.out &&
+        test_must_fail grep "nnodes" list_empty_attrs.out &&
+        test_must_fail grep "ranks" list_empty_attrs.out &&
+        test_must_fail grep "success" list_empty_attrs.out
 '
 test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
         id=$(id -u) &&
@@ -781,15 +802,17 @@ test_expect_success HAVE_JQ 'list-attrs works' '
         grep userid list_attrs.out &&
         grep priority list_attrs.out &&
         grep t_submit list_attrs.out &&
-        grep state list_attrs.out &&
-        grep name list_attrs.out &&
-        grep ntasks list_attrs.out &&
-        grep nnodes list_attrs.out &&
         grep t_depend list_attrs.out &&
         grep t_sched list_attrs.out &&
         grep t_run list_attrs.out &&
         grep t_cleanup list_attrs.out &&
-        grep t_inactive list_attrs.out
+        grep t_inactive list_attrs.out &&
+        grep state list_attrs.out &&
+        grep name list_attrs.out &&
+        grep ntasks list_attrs.out &&
+        grep nnodes list_attrs.out &&
+        grep ranks list_attrs.out &&
+        grep success list_attrs.out
 '
 
 #

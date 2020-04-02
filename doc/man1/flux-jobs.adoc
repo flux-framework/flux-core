@@ -84,6 +84,7 @@ name:: job name
 ntasks:: job task count
 nnodes:: job node count (if job ran / is running), empty string otherwise
 ranks:: job ranks (if job ran / is running), empty string otherwise
+success:: True of False if job completed successfully, empty string otherwise
 t_submit:: time job was submitted
 t_depend:: time job entered depend state
 t_sched:: time job entered sched state

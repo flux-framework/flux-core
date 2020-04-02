@@ -70,6 +70,7 @@ struct job {
     int ntasks;
     int nnodes;
     char *ranks;
+    bool success;
 
     /* cache of job information */
     json_t *jobspec_job;
