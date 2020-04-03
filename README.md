@@ -31,6 +31,10 @@ Protocols and API's used in Flux will be documented as Flux RFC's.
 
 #### Build Requirements
 
+<!-- A collapsible section with markdown -->
+<details>
+  <summary>Click to expand and see our full dependency table</summary>
+
 flux-core requires the following packages to build:
 
 **redhat**        | **ubuntu**        | **version**       | **note**
@@ -76,6 +80,7 @@ aspell-en         | aspell-en         |
 valgrind-devel    | valgrind          |
 mpich-devel       | libmpich-dev      |
 jq                | jq                |
+</details>
 
 ##### Installing RedHat/CentOS Packages
 ```
