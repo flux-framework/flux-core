@@ -39,6 +39,7 @@ extern struct shell_builtin builtin_affinity;
 extern struct shell_builtin builtin_gpubind;
 extern struct shell_builtin builtin_mpir;
 extern struct shell_builtin builtin_ptrace;
+extern struct shell_builtin builtin_pty;
 
 static struct shell_builtin * builtins [] = {
     &builtin_log_eventlog,
@@ -51,6 +52,7 @@ static struct shell_builtin * builtins [] = {
     &builtin_gpubind,
     &builtin_mpir,
     &builtin_ptrace,
+    &builtin_pty,
     &builtin_list_end,
 };
 
