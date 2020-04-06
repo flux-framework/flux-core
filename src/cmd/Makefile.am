@@ -92,6 +92,7 @@ flux_job_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(top_builddir)/src/shell/libmpir.la \
 	$(top_builddir)/src/common/libdebugged/libdebugged.la \
+	$(top_builddir)/src/common/libterminus/libterminus.la \
 	$(LIBUTIL)
 
 flux_terminus_LDADD = \
