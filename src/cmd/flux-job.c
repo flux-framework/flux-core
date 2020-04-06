@@ -1728,6 +1728,35 @@ static void finish_mpir_interface ()
     MPIR_Breakpoint ();
 }
 
+static void attach_setup_stdin (struct attach_ctx *ctx)
+{
+    flux_watcher_t *w;
+    /* flux_buffer_read_watcher_create() requires O_NONBLOCK on
+     * stdin */
+
+    if ((stdin_flags = fcntl (STDIN_FILENO, F_GETFL)) < 0)
+        log_err_exit ("fcntl F_GETFL stdin");
+    if (atexit (restore_stdin_flags) != 0)
+        log_err_exit ("atexit");
+    if (fcntl (STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK) < 0)
+        log_err_exit ("fcntl F_SETFL stdin");
+
+    w = flux_buffer_read_watcher_create (flux_get_reactor (ctx->h),
+                                         STDIN_FILENO,
+                                         1 << 20,
+                                         attach_stdin_cb,
+                                         FLUX_WATCHER_LINE_BUFFER,
+                                         ctx);
+    if (!w)
+        log_err_exit ("flux_buffer_read_watcher_create");
+
+    if (!(ctx->stdin_rpcs = zlist_new ()))
+        log_err_exit ("zlist_new");
+
+    ctx->stdin_w = w;
+    flux_watcher_start (ctx->stdin_w);
+}
+
 /* Handle an event in the guest.exec eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
@@ -1757,8 +1786,6 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
         log_err_exit ("eventlog_entry_parse");
 
     if (!strcmp (name, "shell.init")) {
-        flux_watcher_t *w;
-
         if (json_unpack (context,
                          "{s:i s:s}",
                          "leader-rank",
@@ -1769,31 +1796,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
         if (!(ctx->service = strdup (service)))
             log_err_exit ("strdup service from shell.init");
 
-        /* flux_buffer_read_watcher_create() requires O_NONBLOCK on
-         * stdin */
-
-        if ((stdin_flags = fcntl (STDIN_FILENO, F_GETFL)) < 0)
-            log_err_exit ("fcntl F_GETFL stdin");
-        if (atexit (restore_stdin_flags) != 0)
-            log_err_exit ("atexit");
-        if (fcntl (STDIN_FILENO, F_SETFL, stdin_flags | O_NONBLOCK) < 0)
-            log_err_exit ("fcntl F_SETFL stdin");
-
-        w = flux_buffer_read_watcher_create (flux_get_reactor (ctx->h),
-                                             STDIN_FILENO,
-                                             1 << 20,
-                                             attach_stdin_cb,
-                                             FLUX_WATCHER_LINE_BUFFER,
-                                             ctx);
-        if (!w)
-            log_err_exit ("flux_buffer_read_watcher_create");
-
-        if (!(ctx->stdin_rpcs = zlist_new ()))
-            log_err_exit ("zlist_new");
-
-        ctx->stdin_w = w;
-        flux_watcher_start (ctx->stdin_w);
-
+        attach_setup_stdin (ctx);
         attach_output_start (ctx);
     } else if (!strcmp (name, "shell.start")) {
         if (MPIR_being_debugged)
