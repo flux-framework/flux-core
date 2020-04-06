@@ -91,7 +91,8 @@ libutil_la_SOURCES = \
 	zsecurity.h \
 	errno_safe.h \
 	intree.c \
-	intree.h
+	intree.h \
+	llog.h
 
 EXTRA_DIST = veb_mach.c
 
