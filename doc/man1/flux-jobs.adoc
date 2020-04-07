@@ -85,6 +85,10 @@ ntasks:: job task count
 nnodes:: job node count (if job ran / is running), empty string otherwise
 ranks:: job ranks (if job ran / is running), empty string otherwise
 success:: True of False if job completed successfully, empty string otherwise
+exception.occurred:: True of False if job had an exception, empty string otherwise
+exception.severity:: If exception.occurred True, the highest severity, empty string otherwise
+exception.type:: If exception.occurred True, the highest severity exception type, empty string otherwise
+exception.note:: If exception.occurred True, the highest severity exception note, empty string otherwise
 t_submit:: time job was submitted
 t_depend:: time job entered depend state
 t_sched:: time job entered sched state

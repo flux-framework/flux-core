@@ -76,6 +76,7 @@ static void job_destroy (void *data)
 {
     struct job *job = data;
     if (job) {
+        json_decref (job->exception_context);
         json_decref (job->jobspec_job);
         json_decref (job->jobspec_cmd);
         json_decref (job->R);
@@ -925,6 +926,31 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
             }
             if (!status)
                 job->success = true;
+        }
+        else if (!strcmp (name, "exception")) {
+            const char *type;
+            int severity;
+            const char *note = NULL;
+
+            if (json_unpack (context,
+                             "{s:s s:i s?:s}",
+                             "type", &type,
+                             "severity", &severity,
+                             "note", &note) < 0) {
+                flux_log (ctx->h, LOG_ERR,
+                          "%s: job %ju parse exception",
+                          __FUNCTION__, (uintmax_t)job->id);
+                goto error;
+            }
+            if (!job->exception_occurred
+                || severity < job->exception_severity) {
+                job->exception_occurred = true;
+                job->exception_severity = severity;
+                job->exception_type = type;
+                job->exception_note = note;
+                json_decref (job->exception_context);
+                job->exception_context = json_incref (context);
+            }
         }
     }
 

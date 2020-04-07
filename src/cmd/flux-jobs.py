@@ -69,6 +69,14 @@ def get_username(userid):
         return str(userid)
 
 
+class ExceptionInfo:
+    def __init__(self, occurred, severity, _type, note):
+        self.occurred = occurred
+        self.severity = severity
+        self.type = _type
+        self.note = note
+
+
 class JobInfo:
     """
     JobInfo class: encapsulate job-info.list response in an object
@@ -78,16 +86,16 @@ class JobInfo:
     """
 
     #  Default values for job properties.
-    defaults = dict(
-        t_depend=0.0,
-        t_sched=0.0,
-        t_run=0.0,
-        t_cleanup=0.0,
-        t_inactive=0.0,
-        nnodes="",
-        ranks="",
-        success="",
-    )
+    defaults = {
+        "t_depend": 0.0,
+        "t_sched": 0.0,
+        "t_run": 0.0,
+        "t_cleanup": 0.0,
+        "t_inactive": 0.0,
+        "nnodes": "",
+        "ranks": "",
+        "success": "",
+    }
 
     def __init__(self, info_resp):
         #  Set defaults, then update with job-info.list response items:
@@ -97,6 +105,13 @@ class JobInfo:
         #  Rename "state" to "state_id" until returned state is a string:
         if "state" in combined_dict:
             combined_dict["state_id"] = combined_dict.pop("state")
+
+        # Overwrite "exception" with our exception object
+        exc1 = combined_dict.get("exception_occurred", "")
+        exc2 = combined_dict.get("exception_severity", "")
+        exc3 = combined_dict.get("exception_type", "")
+        exc4 = combined_dict.get("exception_note", "")
+        combined_dict["exception"] = ExceptionInfo(exc1, exc2, exc3, exc4)
 
         #  Set all keys as self._{key} to be found by getattr and
         #   memoized_property decorator:
@@ -179,28 +194,32 @@ def fetch_jobs_flux(args, fields):
     flux_handle = flux.Flux()
 
     # Note there is no attr for "id", its always returned
-    fields2attrs = dict(
-        id=(),
-        userid=("userid",),
-        username=("userid",),
-        priority=("priority",),
-        state=("state",),
-        state_single=("state",),
-        name=("name",),
-        ntasks=("ntasks",),
-        nnodes=("nnodes",),
-        ranks=("ranks",),
-        success=("success",),
-        t_submit=("t_submit",),
-        t_depend=("t_depend",),
-        t_sched=("t_sched",),
-        t_run=("t_run",),
-        t_cleanup=("t_cleanup",),
-        t_inactive=("t_inactive",),
-        runtime=("t_run", "t_cleanup"),
-        runtime_fsd=("t_run", "t_cleanup"),
-        runtime_hms=("t_run", "t_cleanup"),
-    )
+    fields2attrs = {
+        "id": (),
+        "userid": ("userid",),
+        "username": ("userid",),
+        "priority": ("priority",),
+        "state": ("state",),
+        "state_single": ("state",),
+        "name": ("name",),
+        "ntasks": ("ntasks",),
+        "nnodes": ("nnodes",),
+        "ranks": ("ranks",),
+        "success": ("success",),
+        "exception.occurred": ("exception_occurred",),
+        "exception.severity": ("exception_severity",),
+        "exception.type": ("exception_type",),
+        "exception.note": ("exception_note",),
+        "t_submit": ("t_submit",),
+        "t_depend": ("t_depend",),
+        "t_sched": ("t_sched",),
+        "t_run": ("t_run",),
+        "t_cleanup": ("t_cleanup",),
+        "t_inactive": ("t_inactive",),
+        "runtime": ("t_run", "t_cleanup"),
+        "runtime_fsd": ("t_run", "t_cleanup"),
+        "runtime_hms": ("t_run", "t_cleanup"),
+    }
 
     attrs = set()
     for field in fields:
@@ -328,27 +347,36 @@ class JobsOutputFormat(flux.util.OutputFormat):
             return super().format_field(value, spec)
 
     #  List of legal format fields and their header names
-    headings = dict(
-        id="JOBID",
-        userid="UID",
-        username="USER",
-        priority="PRI",
-        state="STATE",
-        state_single="STATE",
-        name="NAME",
-        ntasks="NTASKS",
-        nnodes="NNODES",
-        ranks="RANKS",
-        success="SUCCESS",
-        t_submit="T_SUBMIT",
-        t_depend="T_DEPEND",
-        t_sched="T_SCHED",
-        t_run="T_RUN",
-        t_cleanup="T_CLEANUP",
-        t_inactive="T_INACTIVE",
-        runtime="RUNTIME",
-        runtime_fsd="RUNTIME",
-        runtime_hms="RUNTIME",
+    #  - Note special cases added in constructor below
+    headings = {
+        "id": "JOBID",
+        "userid": "UID",
+        "username": "USER",
+        "priority": "PRI",
+        "state": "STATE",
+        "state_single": "STATE",
+        "name": "NAME",
+        "ntasks": "NTASKS",
+        "nnodes": "NNODES",
+        "ranks": "RANKS",
+        "success": "SUCCESS",
+        "exception.occurred": "",
+        "exception.severity": "",
+        "exception.type": "",
+        "exception.note": "",
+        "t_submit": "T_SUBMIT",
+        "t_depend": "T_DEPEND",
+        "t_sched": "T_SCHED",
+        "t_run": "T_RUN",
+        "t_cleanup": "T_CLEANUP",
+        "t_inactive": "T_INACTIVE",
+        "runtime": "RUNTIME",
+        "runtime_fsd": "RUNTIME",
+        "runtime_hms": "RUNTIME",
+    }
+
+    exception_headings = ExceptionInfo(
+        "EXCEPTION-OCCURRED", "EXCEPTION-SEVERITY", "EXCEPTION-TYPE", "EXCEPTION-NOTE"
     )
 
     def __init__(self, fmt):
@@ -360,7 +388,13 @@ class JobsOutputFormat(flux.util.OutputFormat):
         Throws an exception if any format fields do not match the allowed
         list of headings above.
         """
-        super().__init__(JobsOutputFormat.headings, fmt)
+        # Add some special format fields just for the validity checks,
+        # values are held in other objects
+        self.headings["exception.occurred"] = None
+        self.headings["exception.severity"] = None
+        self.headings["exception.type"] = None
+        self.headings["exception.note"] = None
+        super().__init__(self.headings, fmt)
 
     def get_format(self):
         """
@@ -392,7 +426,9 @@ class JobsOutputFormat(flux.util.OutputFormat):
         """
         format header with our JobFormatter
         """
-        return self.JobFormatter().format(self.header_format(), **self.headings)
+        return self.JobFormatter().format(
+            self.header_format(), **self.headings, exception=self.exception_headings
+        )
 
 
 @flux.util.CLIMain(LOGGER)

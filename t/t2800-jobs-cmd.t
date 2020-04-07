@@ -387,6 +387,77 @@ test_expect_success 'flux-jobs --format={success},{success:h} works' '
         test_cmp successI.out successI.exp
 '
 
+test_expect_success 'flux-jobs --format={exception.occurred},{exception.occurred:h} works' '
+        flux jobs --suppress-header --state=pending,running --format="{exception.occurred},{exception.occurred:h}" > exception_occurredPR.out &&
+        for i in `seq 1 14`; do echo ",-" >> exception_occurredPR.exp; done &&
+        test_cmp exception_occurredPR.out exception_occurredPR.exp &&
+        flux jobs --suppress-header --state=inactive --format="{exception.occurred},{exception.occurred:h}" > exception_occurredI.out &&
+        echo "True,True" >> exception_occurredI.exp &&
+        for i in `seq 1 4`; do echo "False,False" >> exception_occurredI.exp; done &&
+        test_cmp exception_occurredI.out exception_occurredI.exp
+'
+
+test_expect_success 'flux-jobs --format={exception.severity},{exception.severity:h} works' '
+        flux jobs --suppress-header --state=pending,running --format="{exception.severity},{exception.severity:h}" > exception_severityPR.out &&
+        for i in `seq 1 14`; do echo ",-" >> exception_severityPR.exp; done &&
+        test_cmp exception_severityPR.out exception_severityPR.exp &&
+        flux jobs --suppress-header --state=inactive --format="{exception.severity},{exception.severity:h}" > exception_severityI.out &&
+        echo "0,0" >> exception_severityI.exp &&
+        for i in `seq 1 4`; do echo ",-" >> exception_severityI.exp; done &&
+        test_cmp exception_severityI.out exception_severityI.exp
+'
+
+test_expect_success 'flux-jobs --format={exception.type},{exception.type:h} works' '
+        flux jobs --suppress-header --state=pending,running --format="{exception.type},{exception.type:h}" > exception_typePR.out &&
+        for i in `seq 1 14`; do echo ",-" >> exception_typePR.exp; done &&
+        test_cmp exception_typePR.out exception_typePR.exp &&
+        flux jobs --suppress-header --state=inactive --format="{exception.type},{exception.type:h}" > exception_typeI.out &&
+        echo "exec,exec" >> exception_typeI.exp &&
+        for i in `seq 1 4`; do echo ",-" >> exception_typeI.exp; done &&
+        test_cmp exception_typeI.out exception_typeI.exp
+'
+
+test_expect_success 'flux-jobs --format={exception.note},{exception.note:h} works' '
+        flux jobs --suppress-header --state=pending,running --format="{exception.note},{exception.note:h}" > exception_notePR.out &&
+        for i in `seq 1 14`; do echo ",-" >> exception_notePR.exp; done &&
+        test_cmp exception_notePR.out exception_notePR.exp &&
+        flux jobs --suppress-header --state=inactive --format="{exception.note},{exception.note:h}" > exception_noteI.out &&
+        head -n 1 exception_noteI.out | grep "No such file or directory" &&
+        tail -n 4 exception_noteI.out > exception_noteI_tail.out &&
+        for i in `seq 1 4`; do echo ",-" >> exception_noteI.exp; done &&
+        test_cmp exception_noteI_tail.out exception_noteI.exp
+'
+
+#
+# format header tests
+#
+test_expect_success 'flux-jobs: header included with all custom formats' '
+	flux jobs --format={id} | head -1 | grep "JOBID" &&
+        flux jobs --format={userid} | head -1 | grep "UID" &&
+        flux jobs --format={username} | head -1 | grep "USER" &&
+        flux jobs --format={priority} | head -1 | grep "PRI" &&
+        flux jobs --format={state} | head -1 | grep "STATE" &&
+        flux jobs --format={state_single} | head -1 | grep "STATE" &&
+        flux jobs --format={name} | head -1 | grep "NAME" &&
+        flux jobs --format={ntasks} | head -1 | grep "NTASKS" &&
+        flux jobs --format={nnodes} | head -1 | grep "NNODES" &&
+        flux jobs --format={ranks} | head -1 | grep "RANKS" &&
+        flux jobs --format={success} | head -1 | grep "SUCCESS" &&
+        flux jobs --format={exception.occurred} | head -1 | grep "EXCEPTION-OCCURRED" &&
+        flux jobs --format={exception.severity} | head -1 | grep "EXCEPTION-SEVERITY" &&
+        flux jobs --format={exception.type} | head -1 | grep "EXCEPTION-TYPE" &&
+        flux jobs --format={exception.note} | head -1 | grep "EXCEPTION-NOTE" &&
+        flux jobs --format={t_submit} | head -1 | grep "T_SUBMIT" &&
+        flux jobs --format={t_depend} | head -1 | grep "T_DEPEND" &&
+        flux jobs --format={t_sched} | head -1 | grep "T_SCHED" &&
+        flux jobs --format={t_run} | head -1 | grep "T_RUN" &&
+        flux jobs --format={t_cleanup} | head -1 | grep "T_CLEANUP" &&
+        flux jobs --format={t_inactive} | head -1 | grep "T_INACTIVE" &&
+        flux jobs --format={runtime} | head -1 | grep "RUNTIME" &&
+        flux jobs --format={runtime_fsd} | head -1 | grep "RUNTIME" &&
+        flux jobs --format={runtime_hms} | head -1 | grep "RUNTIME"
+'
+
 #
 # corner cases
 #

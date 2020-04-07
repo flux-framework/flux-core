@@ -71,6 +71,11 @@ struct job {
     int nnodes;
     char *ranks;
     bool success;
+    bool exception_occurred;
+    json_t *exception_context;
+    int exception_severity;
+    const char *exception_type;
+    const char *exception_note;
 
     /* cache of job information */
     json_t *jobspec_job;
