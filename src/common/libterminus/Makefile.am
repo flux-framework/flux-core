@@ -25,7 +25,8 @@ libterminus_la_SOURCES = \
 	terminus.c
 
 TESTS = \
-	test_pty.t
+	test_pty.t \
+	test_terminus.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -49,3 +50,7 @@ test_cppflags = \
 test_pty_t_SOURCES = test/pty.c
 test_pty_t_CPPFLAGS = $(test_cppflags)
 test_pty_t_LDADD = $(test_ldadd)
+
+test_terminus_t_SOURCES = test/terminus.c
+test_terminus_t_CPPFLAGS = $(test_cppflags)
+test_terminus_t_LDADD = $(test_ldadd)
