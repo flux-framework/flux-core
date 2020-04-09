@@ -322,8 +322,6 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.services = service_switch_create ()))
         oom ();
-    if (!(ctx.overlay = overlay_create ()))
-        oom ();
     if (!(ctx.hello = hello_create ()))
         oom ();
     if (!(ctx.heartbeat = heartbeat_create ()))
@@ -422,15 +420,10 @@ int main (int argc, char *argv[])
         log_err ("getattr security.keydir");
         goto cleanup;
     }
-    if (overlay_set_flux (ctx.overlay, ctx.h) < 0) {
-        log_err ("overlay_set_flux");
+    if (!(ctx.overlay = overlay_create (ctx.h, ctx.sec_typemask, keydir))) {
+        log_err ("overlay_create");
         goto cleanup;
     }
-    if (overlay_setup_sec (ctx.overlay, ctx.sec_typemask, keydir) < 0) {
-        log_err ("overlay_setup_sec");
-        goto cleanup;
-    }
-
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
 

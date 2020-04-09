@@ -102,6 +102,7 @@ static struct endpoint *endpoint_vcreate (const char *fmt, va_list ap)
 void overlay_destroy (overlay_t *ov)
 {
     if (ov) {
+        int saved_errno = errno;
         if (ov->sec)
             zsecurity_destroy (ov->sec);
         if (ov->heartbeat)
@@ -116,28 +117,43 @@ void overlay_destroy (overlay_t *ov)
         endpoint_destroy (ov->child);
         zhash_destroy (&ov->children);
         free (ov);
+        errno = saved_errno;
     }
 }
 
-overlay_t *overlay_create (void)
+overlay_t *overlay_create (flux_t *h, int sec_typemask, const char *keydir)
 {
-    overlay_t *ov = calloc (1, sizeof (*ov) );
+    overlay_t *ov;
+    struct flux_match match = FLUX_MATCH_EVENT;
 
-    if (!ov) {
-        errno = ENOMEM;
+    if (!(ov = calloc (1, sizeof (*ov))))
         return NULL;
-    }
-
     ov->rank = FLUX_NODEID_ANY;
     ov->parent_lastsent = -1;
-
+    ov->h = h;
     if (!(ov->children = zhash_new ())) {
-        overlay_destroy (ov);
         errno = ENOMEM;
-        return NULL;
+        goto error;
     }
+    if (!(ov->sec = zsecurity_create (sec_typemask, keydir)))
+        goto error;
+
+    /* Set up heartbeat event handler
+     */
+    match.topic_glob = "hb";
+    if (!(ov->heartbeat = flux_msg_handler_create (h,
+                                                   match,
+                                                   heartbeat_handler,
+                                                   ov)))
+        goto error;
+    flux_msg_handler_start (ov->heartbeat);
+    if (flux_event_subscribe (ov->h, "hb") < 0)
+        goto error;
 
     return ov;
+error:
+    overlay_destroy (ov);
+    return NULL;
 }
 
 void overlay_set_init_callback (overlay_t *ov, overlay_init_cb_f cb, void *arg)
@@ -173,41 +189,6 @@ uint32_t overlay_get_size (overlay_t *ov)
 int overlay_get_child_peer_count (overlay_t *ov)
 {
     return ov->child_peer_count;
-}
-
-/* Cleanup not done in this function, responsibiility of caller to
- * call overlay_destroy() eventually */
-int overlay_set_flux (overlay_t *ov, flux_t *h)
-{
-    struct flux_match match = FLUX_MATCH_EVENT;
-
-    ov->h = h;
-
-    match.topic_glob = "hb";
-    if (!(ov->heartbeat = flux_msg_handler_create (ov->h, match,
-                                                   heartbeat_handler, ov))) {
-        log_err ("flux_msg_handler_create");
-        return -1;
-    }
-    flux_msg_handler_start (ov->heartbeat);
-    if (flux_event_subscribe (ov->h, "hb") < 0) {
-        log_err ("flux_event_subscribe");
-        return -1;
-    }
-    return 0;
-}
-
-int overlay_setup_sec (overlay_t *ov, int sec_typemask, const char *keydir)
-{
-    if (!keydir) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!(ov->sec = zsecurity_create (sec_typemask, keydir))) {
-        log_err ("zsecurity_create");
-        return -1;
-    }
-    return 0;
 }
 
 void overlay_set_idle_warning (overlay_t *ov, int heartbeats)

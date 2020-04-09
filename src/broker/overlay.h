@@ -19,7 +19,7 @@ typedef void (*overlay_cb_f)(overlay_t *ov, void *sock, void *arg);
 typedef int (*overlay_init_cb_f)(overlay_t *ov, void *arg);
 typedef void (*overlay_monitor_cb_f)(overlay_t *ov, void *arg);
 
-overlay_t *overlay_create (void);
+overlay_t *overlay_create (flux_t *h, int sec_typemask, const char *keydir);
 void overlay_destroy (overlay_t *ov);
 
 /* Set a callback triggered during overlay_init()
@@ -29,8 +29,6 @@ void overlay_set_init_callback (overlay_t *ov,
 
 /* These need to be called before connect/bind.
  */
-int overlay_set_flux (overlay_t *ov, flux_t *h);
-int overlay_setup_sec (overlay_t *ov, int sec_typemask, const char *keydir);
 int overlay_init (overlay_t *ov, uint32_t size, uint32_t rank, int tbon_k);
 void overlay_set_idle_warning (overlay_t *ov, int heartbeats);
 
