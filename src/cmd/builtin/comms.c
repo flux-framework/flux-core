@@ -63,7 +63,7 @@ static int internal_comms_panic (optparse_t *p, int ac, char *av[])
     return 0;
 }
 
-static int internal_comms_idle (optparse_t *p, int ac, char *av[])
+static int internal_comms_lspeer (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
     flux_future_t *f;
@@ -75,10 +75,10 @@ static int internal_comms_idle (optparse_t *p, int ac, char *av[])
     }
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
-    if (!(f = flux_rpc (h, "cmb.lspeer", NULL, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc (h, "overlay.lspeer", NULL, FLUX_NODEID_ANY, 0)))
         log_err_exit ("flux_rpc");
     if (flux_rpc_get (f, &peers) < 0)
-        log_err_exit ("cmb.lspeer");
+        log_msg_exit ("overlay.lspeer: %s", flux_future_error_string (f));
     printf ("%s\n", peers);
     flux_future_destroy (f);
 
@@ -96,10 +96,10 @@ int cmd_comms (optparse_t *p, int ac, char *av[])
 }
 
 static struct optparse_subcommand comms_subcmds[] = {
-    { "idle",
+    { "lspeer",
       "",
-      "List idle times of broker peers",
-      internal_comms_idle,
+      "List broker peers with idle times",
+      internal_comms_lspeer,
       0,
       NULL,
     },

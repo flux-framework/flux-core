@@ -1322,22 +1322,6 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    char *out;
-
-    if (!(out = overlay_lspeer_encode (ctx->overlay))) {
-        if (flux_respond_error (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-        return;
-    }
-    if (flux_respond (h, msg, out) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (out);
-}
-
 #if CODE_COVERAGE_ENABLED
 void __gcov_flush (void);
 #endif
@@ -1545,12 +1529,6 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "cmb.lspeer",
-        cmb_lspeer_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
         "cmb.panic",
         cmb_panic_cb,
         0
@@ -1602,6 +1580,7 @@ static struct internal_service services[] = {
     { "heaptrace",          NULL },
     { "event",              "[0]" },
     { "service",            NULL },
+    { "overlay",            NULL },
     { "config",             NULL },
     { NULL, NULL, },
 };

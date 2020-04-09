@@ -54,11 +54,11 @@ test_expect_success 'flux-start in subprocess/pmi mode works (size 2)' "
 	flux start ${ARGS} --size=2 'flux comms info' | grep 'size=2'
 "
 test_expect_success 'flux-start with size 1 has no peers' "
-	flux start ${ARGS} --size=1 'flux comms idle' > idle.out &&
+	flux start ${ARGS} --size=1 'flux comms lspeer' > idle.out &&
         ! grep 'idle' idle.out
 "
 test_expect_success 'flux-start with size 2 has a peer' "
-	flux start ${ARGS} --size=2 'flux comms idle' > idle.out &&
+	flux start ${ARGS} --size=2 'flux comms lspeer' > idle.out &&
         grep 'idle' idle.out
 "
 test_expect_success 'flux-start --size=1 --bootstrap=selfpmi works' "

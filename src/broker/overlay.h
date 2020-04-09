@@ -77,10 +77,6 @@ void overlay_set_monitor_cb (struct overlay *ov,
                              overlay_monitor_cb_f cb,
                              void *arg);
 
-/* Encode cmb.lspeer response payload.
- */
-char *overlay_lspeer_encode (struct overlay *ov);
-
 /* Establish connections.
  * These functions are idempotent as the bind may need to be called
  * early to resolve wildcard addresses (e.g. during PMI endpoint exchange).

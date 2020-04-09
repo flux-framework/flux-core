@@ -140,35 +140,6 @@ void overlay_set_idle_warning (struct overlay *ov, int heartbeats)
     ov->idle_warning = heartbeats;
 }
 
-char *overlay_lspeer_encode (struct overlay *ov)
-{
-    json_t *o = NULL;
-    json_t *child_o;
-    const char *uuid;
-    child_t *child;
-    char *json_str;
-
-    if (!(o = json_object ()))
-        goto nomem;
-    FOREACH_ZHASH (ov->children, uuid, child) {
-        if (!(child_o = json_pack ("{s:i}", "idle",
-                                   ov->epoch - child->lastseen)))
-            goto nomem;
-        if (json_object_set_new (o, uuid, child_o) < 0) {
-            json_decref (child_o);
-            goto nomem;
-        }
-    }
-    if (!(json_str = json_dumps (o, 0)))
-        goto nomem;
-    json_decref (o);
-    return json_str;
-nomem:
-    json_decref (o);
-    errno = ENOMEM;
-    return NULL;
-}
-
 void overlay_log_idle_children (struct overlay *ov)
 {
     const char *uuid;
@@ -593,6 +564,54 @@ void overlay_set_monitor_cb (struct overlay *ov,
     ov->child_monitor_arg = arg;
 }
 
+static json_t *lspeer_object_create (struct overlay *ov)
+{
+    json_t *o = NULL;
+    json_t *child_o;
+    const char *uuid;
+    child_t *child;
+
+    if (!(o = json_object ()))
+        goto nomem;
+    FOREACH_ZHASH (ov->children, uuid, child) {
+        if (!(child_o = json_pack ("{s:i}",
+                                   "idle",
+                                   ov->epoch - child->lastseen)))
+            goto nomem;
+        if (json_object_set_new (o, uuid, child_o) < 0) {
+            json_decref (child_o);
+            goto nomem;
+        }
+    }
+    return o;
+nomem:
+    json_decref (o);
+    errno = ENOMEM;
+    return NULL;
+}
+
+
+static void lspeer_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
+{
+    struct overlay *ov = arg;
+    json_t *o;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!(o = lspeer_object_create (ov)))
+        goto error;
+    if (flux_respond_pack (h, msg, "O", o) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    json_decref (o);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
 void overlay_destroy (struct overlay *ov)
 {
     if (ov) {
@@ -616,6 +635,7 @@ void overlay_destroy (struct overlay *ov)
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_EVENT,  "heartbeat", heartbeat_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "overlay.lspeer", lspeer_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
