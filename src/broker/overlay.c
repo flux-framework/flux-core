@@ -40,7 +40,7 @@ struct overlay {
     bool sec_initialized;
     flux_t *h;
     zhash_t *children;          /* child_t - by uuid */
-    flux_msg_handler_t *heartbeat;
+    flux_msg_handler_t **handlers;
     int epoch;
 
     uint32_t size;
@@ -75,9 +75,6 @@ typedef struct {
     int lastseen;
 } child_t;
 
-static void heartbeat_handler (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg);
-
 static void endpoint_destroy (struct endpoint *ep)
 {
     if (ep) {
@@ -97,63 +94,6 @@ static struct endpoint *endpoint_vcreate (const char *fmt, va_list ap)
         return NULL;
     }
     return ep;
-}
-
-void overlay_destroy (struct overlay *ov)
-{
-    if (ov) {
-        int saved_errno = errno;
-        if (ov->sec)
-            zsecurity_destroy (ov->sec);
-        if (ov->heartbeat)
-            flux_msg_handler_destroy (ov->heartbeat);
-        if (ov->h)
-            (void)flux_event_unsubscribe (ov->h, "hb");
-
-        flux_watcher_destroy (ov->child_monitor_w);
-        zsock_destroy (&ov->child_monitor_sock);
-
-        endpoint_destroy (ov->parent);
-        endpoint_destroy (ov->child);
-        zhash_destroy (&ov->children);
-        free (ov);
-        errno = saved_errno;
-    }
-}
-
-struct overlay *overlay_create (flux_t *h, int sec_typemask, const char *keydir)
-{
-    struct overlay *ov;
-    struct flux_match match = FLUX_MATCH_EVENT;
-
-    if (!(ov = calloc (1, sizeof (*ov))))
-        return NULL;
-    ov->rank = FLUX_NODEID_ANY;
-    ov->parent_lastsent = -1;
-    ov->h = h;
-    if (!(ov->children = zhash_new ())) {
-        errno = ENOMEM;
-        goto error;
-    }
-    if (!(ov->sec = zsecurity_create (sec_typemask, keydir)))
-        goto error;
-
-    /* Set up heartbeat event handler
-     */
-    match.topic_glob = "hb";
-    if (!(ov->heartbeat = flux_msg_handler_create (h,
-                                                   match,
-                                                   heartbeat_handler,
-                                                   ov)))
-        goto error;
-    flux_msg_handler_start (ov->heartbeat);
-    if (flux_event_subscribe (ov->h, "hb") < 0)
-        goto error;
-
-    return ov;
-error:
-    overlay_destroy (ov);
-    return NULL;
 }
 
 void overlay_set_init_callback (struct overlay *ov,
@@ -309,8 +249,10 @@ done:
     return rc;
 }
 
-static void heartbeat_handler (flux_t *h, flux_msg_handler_t *mh,
-                               const flux_msg_t *msg, void *arg)
+static void heartbeat_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     struct overlay *ov = arg;
 
@@ -650,6 +592,60 @@ void overlay_set_monitor_cb (struct overlay *ov,
     ov->child_monitor_cb = cb;
     ov->child_monitor_arg = arg;
 }
+
+void overlay_destroy (struct overlay *ov)
+{
+    if (ov) {
+        int saved_errno = errno;
+        if (ov->sec)
+            zsecurity_destroy (ov->sec);
+        if (ov->h)
+            (void)flux_event_unsubscribe (ov->h, "hb");
+
+        flux_watcher_destroy (ov->child_monitor_w);
+        zsock_destroy (&ov->child_monitor_sock);
+
+        flux_msg_handler_delvec (ov->handlers);
+        endpoint_destroy (ov->parent);
+        endpoint_destroy (ov->child);
+        zhash_destroy (&ov->children);
+        free (ov);
+        errno = saved_errno;
+    }
+}
+
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_EVENT,  "heartbeat", heartbeat_cb, 0 },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+struct overlay *overlay_create (flux_t *h, int sec_typemask, const char *keydir)
+{
+    struct overlay *ov;
+
+    if (!(ov = calloc (1, sizeof (*ov))))
+        return NULL;
+    ov->rank = FLUX_NODEID_ANY;
+    ov->parent_lastsent = -1;
+    ov->h = h;
+    if (!(ov->children = zhash_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (!(ov->sec = zsecurity_create (sec_typemask, keydir)))
+        goto error;
+
+    if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
+        goto error;
+    if (flux_event_subscribe (ov->h, "hb") < 0)
+        goto error;
+
+    return ov;
+error:
+    overlay_destroy (ov);
+    return NULL;
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
