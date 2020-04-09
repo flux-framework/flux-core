@@ -22,8 +22,8 @@
 
 #include <czmq.h>
 
-#include "src/common/liblsd/list.h"
 #include "src/common/libutil/fsd.h"
+
 #include "optparse.h"
 #include "getopt.h"
 #include "getopt_int.h"
@@ -50,7 +50,7 @@ struct opt_parser {
     int            left_margin;     /* Size of --help output left margin    */
     int            option_width;    /* Width of --help output for optiion   */
     int            current_group;   /* Current option group number          */
-    List           option_list;     /* List of options for this program    */
+    zlist_t *      option_list;     /* List of options for this program    */
 
     unsigned int   skip_subcmds:1;  /* Do not Print subcommands in --help   */
     unsigned int   no_options:1;    /* Skip option processing for subcmd    */
@@ -69,9 +69,8 @@ struct opt_parser {
  */
 struct option_info {
     struct optparse_option * p_opt;   /* Copy of program option structure  */
-    List                    optargs;  /* If non-NULL, the option argument(s) */
+    zlist_t *               optargs;  /* If non-NULL, the option argument(s) */
     const char *            optarg;   /* Pointer to last element in optargs  */
-    ListIterator            argi;     /* iterator for optargs */
 
     unsigned int            found;    /* number of times we saw this option */
 
@@ -124,7 +123,6 @@ static struct option_info *option_info_create (const struct optparse_option *o)
         c->found = 0;
         c->optargs = NULL;
         c->optarg = NULL;
-        c->argi = NULL;
         c->p_opt = optparse_option_dup (o);
         if (!o->name)
             c->isdoc = 1;
@@ -139,10 +137,8 @@ static struct option_info *option_info_create (const struct optparse_option *o)
 static void option_info_destroy (struct option_info *c)
 {
     optparse_option_destroy (c->p_opt);
-    if (c->argi)
-        list_iterator_destroy (c->argi);
     if (c->optargs)
-        list_destroy (c->optargs);
+        zlist_destroy (&c->optargs);
     c->optarg = NULL;
     free (c);
 }
@@ -153,8 +149,10 @@ static void option_info_destroy (struct option_info *c)
  *   then options alphabetically by key if alphanumeric, otherwise
  *   by option name.
  */
-static int option_info_cmp (struct option_info *x, struct option_info *y)
+static int option_info_cmp (void *arg1, void *arg2)
 {
+    const struct option_info *x = arg1;
+    const struct option_info *y = arg2;
     const struct optparse_option *o1 = x->p_opt;
     const struct optparse_option *o2 = y->p_opt;
 
@@ -177,25 +175,34 @@ static int option_info_cmp (struct option_info *x, struct option_info *y)
     return (o1->group - o2->group);
 }
 
-
-/*
- *  List find function for option_info structures:
- */
-static int option_info_cmp_name (struct option_info *o, const char *name)
-{
-    if (!o->p_opt->name)
-        return (0);
-    return (strcmp (o->p_opt->name, name) == 0);
-}
-
 /*
  *  Return option_info structure for option with [name]
  */
 static struct option_info *find_option_info (optparse_t *p, const char *name)
 {
-    return (list_find_first (p->option_list,
-                             (ListFindF) option_info_cmp_name,
-                             (void *) name));
+    struct option_info *o;
+    if (name == NULL)
+        return NULL;
+
+    o = zlist_first (p->option_list);
+    while (o) {
+        if (o->p_opt->name != NULL
+            && strcmp (o->p_opt->name, name) == 0)
+            return o;
+        o = zlist_next (p->option_list);
+    }
+    return NULL;
+}
+
+static struct option_info *find_option_by_val (optparse_t *p, int val)
+{
+    struct option_info *o = zlist_first (p->option_list);
+    while (o) {
+        if (o->p_opt->key == val)
+            return o;
+        o = zlist_next (p->option_list);
+    }
+    return NULL;
 }
 
 /*   Remove the options in table [opts], up to but not including [end]
@@ -512,25 +519,24 @@ static int optparse_print_options (optparse_t *p)
 {
     int columns;
     struct option_info *o;
-    ListIterator i;
 
-    if (!p || !p->option_list || !list_count(p->option_list))
+    if (!p || !p->option_list || !zlist_size (p->option_list))
         return (0);
 
     /*
      *  Sort option table by group then by name
      */
-    list_sort (p->option_list, (ListCmpF) option_info_cmp);
+    zlist_sort (p->option_list, option_info_cmp);
 
     columns = get_term_columns();
-    i = list_iterator_create (p->option_list);
-    while ((o = list_next (i))) {
+    o = zlist_first (p->option_list);
+    while (o) {
         if (o->isdoc)
             optparse_doc_print (p, o->p_opt, columns);
         else if (!o->hidden)
             optparse_option_print (p, o->p_opt, columns);
+        o = zlist_next (p->option_list);
     }
-    list_iterator_destroy (i);
 
     return (0);
 }
@@ -643,7 +649,7 @@ void optparse_destroy (optparse_t *p)
     if (p->parent && p->parent->subcommands)
         zhash_delete (p->parent->subcommands, p->program_name);
 
-    list_destroy (p->option_list);
+    zlist_destroy (&p->option_list);
     zhash_destroy (&p->dhash);
     zhash_destroy (&p->subcommands);
     free (p->program_name);
@@ -676,7 +682,7 @@ optparse_t *optparse_create (const char *prog)
     }
     p->usage = NULL;
     p->parent = NULL;
-    p->option_list = list_create ((ListDelF) option_info_destroy);
+    p->option_list = zlist_new ();
     p->dhash = zhash_new ();
     p->subcommands = zhash_new ();
     if (!p->option_list || !p->dhash || !p->subcommands) {
@@ -922,13 +928,16 @@ const char *optparse_get_str (optparse_t *p, const char *name,
 const char *optparse_getopt_next (optparse_t *p, const char *name)
 {
     struct option_info *c;
+    const char *current;
     if (!(c = find_option_info (p, name)))
         return (NULL);
     if (c->found == 0 || !c->optargs)
         return (NULL);
-    if (!c->argi)
-        c->argi = list_iterator_create (c->optargs);
-    return (list_next (c->argi));
+    /*  Return current item and advance list */
+    if (!(current = zlist_item (c->optargs)))
+        return NULL;
+    zlist_next (c->optargs);
+    return current;
 }
 
 int optparse_getopt_iterator_reset (optparse_t *p, const char *name)
@@ -938,9 +947,8 @@ int optparse_getopt_iterator_reset (optparse_t *p, const char *name)
         return (-1);
     if (c->found == 0 || !c->optargs)
         return (0);
-    if (c->argi)
-        list_iterator_reset (c->argi);
-    return (list_count (c->optargs));
+    zlist_first (c->optargs);
+    return (zlist_size (c->optargs));
 }
 
 optparse_err_t optparse_add_option (optparse_t *p,
@@ -957,24 +965,28 @@ optparse_err_t optparse_add_option (optparse_t *p,
     if (!(c = option_info_create (o)))
         return OPTPARSE_NOMEM;
 
-    if (!list_append (p->option_list, c))
+    if (zlist_append (p->option_list, c) < 0)
         return OPTPARSE_NOMEM;
+    zlist_freefn (p->option_list,
+                  c,
+                  (zlist_free_fn *) option_info_destroy,
+                  true);
 
     return (OPTPARSE_SUCCESS);
 }
 
 optparse_err_t optparse_remove_option (optparse_t *p, const char *name)
 {
-    optparse_err_t rc = OPTPARSE_SUCCESS;
+    struct option_info *o = NULL;
 
-    int n = list_delete_all (p->option_list,
-                (ListFindF) option_info_cmp_name,
-                (void *) name);
+    if (!p || !name)
+        return OPTPARSE_FAILURE;
 
-    if (n != 1)
-        rc = OPTPARSE_FAILURE;
+    if (!(o = find_option_info (p, name)))
+        return OPTPARSE_FAILURE;
+    zlist_remove (p->option_list, o);
 
-    return (rc);
+    return OPTPARSE_SUCCESS;
 }
 
 optparse_err_t optparse_add_option_table (optparse_t *p,
@@ -982,6 +994,9 @@ optparse_err_t optparse_add_option_table (optparse_t *p,
 {
     optparse_err_t rc = OPTPARSE_SUCCESS;
     const struct optparse_option *o = opts;
+
+    if (!p)
+        return OPTPARSE_BAD_ARG;
 
     while (o->usage) {
         if ((rc = optparse_add_option (p, o++)) != OPTPARSE_SUCCESS) {
@@ -1175,9 +1190,8 @@ static struct option * option_table_create (optparse_t *p, char **sp)
     struct option *opts;
     int n;
     int j;
-    ListIterator i;
 
-    n = list_count (p->option_list);
+    n = zlist_size (p->option_list);
     opts = malloc ((n + 1) * sizeof (struct option));
     if (opts == NULL)
         return (NULL);
@@ -1191,23 +1205,22 @@ static struct option * option_table_create (optparse_t *p, char **sp)
     }
 
     j = 0;
-    i = list_iterator_create (p->option_list);
-    while ((o = list_next (i))) {
-        if (o->isdoc)
-            continue;
-        /* Initialize option field from cached option structure */
-        opt_init (&opts[j++], o->p_opt);
-        if (sp) {
-            *sp = optstring_append (*sp, o->p_opt);
-            if (*sp == NULL) {
-                free (opts);
-                opts = NULL;
-                break;
+    o = zlist_first (p->option_list);
+    while (o) {
+        if (!o->isdoc) {
+            /* Initialize option field from cached option structure */
+            opt_init (&opts[j++], o->p_opt);
+            if (sp) {
+                *sp = optstring_append (*sp, o->p_opt);
+                if (*sp == NULL) {
+                    free (opts);
+                    opts = NULL;
+                    break;
+                }
             }
-
         }
+        o = zlist_next (p->option_list);
     }
-    list_iterator_destroy (i);
 
     /*
      *  Initialize final element of option array to zeros:
@@ -1218,24 +1231,25 @@ static struct option * option_table_create (optparse_t *p, char **sp)
     return (opts);
 }
 
-static int by_val (struct option_info *c, int *val)
-{
-    return (c->p_opt->key == *val);
-}
-
-static int opt_append_sep (struct option_info *opt, const char *s)
+static int opt_append_sep (struct option_info *opt, const char *str)
 {
     error_t e;
     char *arg = NULL;
     char *argz = NULL;
     size_t len = 0;
-    if ((e = argz_create_sep (s, ',', &argz, &len))) {
+    if ((e = argz_create_sep (str, ',', &argz, &len))) {
         errno = e;
         return (-1);
     }
-    while ((arg = argz_next (argz, len, arg)))
-        opt->optarg = list_append (opt->optargs, strdup (arg));
-
+    while ((arg = argz_next (argz, len, arg))) {
+        char *s = strdup (arg);
+        if (s == NULL)
+            return -1;
+        opt->optarg = s;
+        zlist_append (opt->optargs, s);
+        zlist_freefn (opt->optargs, s, free, true);
+    }
+    zlist_first (opt->optargs);
     free (argz);
     return (0);
 }
@@ -1244,7 +1258,7 @@ static void opt_append_optarg (optparse_t *p, struct option_info *opt, const cha
 {
     char *s;
     if (!opt->optargs)
-        opt->optargs = list_create ((ListDelF) free);
+        opt->optargs = zlist_new ();
     if (opt->autosplit) {
         if (opt_append_sep (opt, optarg) < 0)
             optparse_fatalmsg (p, 1, "%s: append '%s': %s\n", p->program_name,
@@ -1253,8 +1267,11 @@ static void opt_append_optarg (optparse_t *p, struct option_info *opt, const cha
     }
     if ((s = strdup (optarg)) == NULL)
         optparse_fatalmsg (p, 1, "%s: out of memory\n", p->program_name);
-    list_append (opt->optargs, s);
+    zlist_append (opt->optargs, s);
+    zlist_freefn (opt->optargs, s, free, true);
     opt->optarg = s;
+    /*  Ensure iterator is reset on first append */
+    zlist_first (opt->optargs);
 }
 
 /*
@@ -1308,7 +1325,7 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
         if (li >= 0)
             opt = find_option_info (p, optz[li].name);
         else
-            opt = list_find_first (p->option_list, (ListFindF) by_val, &c);
+            opt = find_option_by_val (p, c);
 
         /* Reset li for next iteration */
         li = -1;
@@ -1398,28 +1415,25 @@ int optparse_option_index (optparse_t *p)
 static void optparse_reset_one (optparse_t *p)
 {
     struct option_info *o;
-    ListIterator i;
 
     if (!p)
         return;
 
     p->option_index = -1;
 
-    if (!p->option_list || !list_count (p->option_list))
+    if (!p->option_list || !zlist_size (p->option_list))
         return;
 
-    i = list_iterator_create (p->option_list);
-    while ((o = list_next (i))) {
+    o = zlist_first (p->option_list);
+    while (o) {
         if (o->isdoc)
             continue;
         o->found = 0;
-        if (o->optargs) {
-            list_destroy (o->optargs);
-            o->optargs = NULL;
-        }
+        if (o->optargs)
+            zlist_destroy (&o->optargs);
         o->optarg = NULL;
+        o = zlist_next (p->option_list);
     }
-    list_iterator_destroy (i);
     return;
 }
 
