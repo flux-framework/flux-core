@@ -207,6 +207,11 @@ error:
     return NULL;
 }
 
+const char *shell_svc_name (struct shell_svc *svc)
+{
+    return svc->name;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

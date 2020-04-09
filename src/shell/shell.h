@@ -100,6 +100,7 @@ int flux_shell_unsetenv (flux_shell_t *shell, const char *name);
  *   "rank":i,
  *   "size":i,
  *   "ntasks";i,
+ *   "service":s,
  *   "options": { "verbose":b, "standalone":b },
  *   "jobspec":o,
  *   "R":o
