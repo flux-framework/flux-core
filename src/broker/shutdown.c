@@ -43,7 +43,7 @@
 
 struct shutdown {
     flux_t *h;
-    overlay_t *overlay;
+    struct overlay *overlay;
     flux_msg_handler_t **handlers;
     flux_watcher_t *timer;
     double grace;
@@ -88,7 +88,7 @@ static void grace_timeout_cb (flux_reactor_t *r,
     shutdown_timeout (s);
 }
 
-void monitor_cb (overlay_t *overlay, void *arg)
+void monitor_cb (struct overlay *overlay, void *arg)
 {
     struct shutdown *s = arg;
     if (overlay_get_child_peer_count (overlay) == 0)
@@ -180,7 +180,7 @@ struct shutdown *shutdown_create (flux_t *h,
                                   double grace,
                                   uint32_t size,
                                   int tbon_k,
-                                  overlay_t *overlay)
+                                  struct overlay *overlay)
 {
     struct shutdown *s;
 

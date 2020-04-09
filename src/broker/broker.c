@@ -85,7 +85,7 @@ typedef struct {
 
     /* Sockets.
      */
-    overlay_t *overlay;
+    struct overlay *overlay;
 
     /* Session parameters
      */
@@ -127,8 +127,8 @@ static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
                                             const flux_msg_t *msg);
 
-static void parent_cb (overlay_t *ov, void *sock, void *arg);
-static void child_cb (overlay_t *ov, void *sock, void *arg);
+static void parent_cb (struct overlay *ov, void *sock, void *arg);
+static void child_cb (struct overlay *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
@@ -159,7 +159,7 @@ static void runlevel_io_cb (struct runlevel *r,
                             void *arg);
 
 static int create_rundir (attr_t *attrs);
-static int create_broker_rundir (overlay_t *ov, void *arg);
+static int create_broker_rundir (struct overlay *ov, void *arg);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg);
@@ -1047,7 +1047,7 @@ done:
     return rc;
 }
 
-static int create_broker_rundir (overlay_t *ov, void *arg)
+static int create_broker_rundir (struct overlay *ov, void *arg)
 {
     attr_t *attrs = arg;
     uint32_t rank;
@@ -1645,7 +1645,7 @@ static void broker_remove_services (flux_msg_handler_t *handlers[])
 
 /* Handle requests from overlay peers.
  */
-static void child_cb (overlay_t *ov, void *sock, void *arg)
+static void child_cb (struct overlay *ov, void *sock, void *arg)
 {
     broker_ctx_t *ctx = arg;
     int type;
@@ -1741,7 +1741,7 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 
 /* Handle messages from one or more parents.
  */
-static void parent_cb (overlay_t *ov, void *sock, void *arg)
+static void parent_cb (struct overlay *ov, void *sock, void *arg)
 {
     broker_ctx_t *ctx = arg;
     flux_msg_t *msg = flux_msg_recvzsock (sock);

@@ -19,7 +19,7 @@ struct shutdown *shutdown_create (flux_t *h,
                                   double grace,
                                   uint32_t size,
                                   int tbon_k,
-                                  overlay_t *overlay);
+                                  struct overlay *overlay);
 void shutdown_destroy (struct shutdown *s);
 
 void shutdown_set_callback (struct shutdown *s, shutdown_cb_f cb, void *arg);
