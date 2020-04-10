@@ -1379,7 +1379,7 @@ int optparse_run_subcommand (optparse_t *p, int argc, char *argv[])
 
     if (!(cb = zhash_lookup (sp->dhash, "optparse::cb"))) {
         return optparse_fatalmsg (p, 1,
-            "subcommand %s: failed to lookup callback!\n");
+            "subcommand %s: failed to lookup callback!\n", av[0]);
     }
 
     return ((*cb) (sp, ac, av));
