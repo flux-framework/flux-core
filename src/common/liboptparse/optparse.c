@@ -1000,7 +1000,7 @@ optparse_err_t optparse_add_option_table (optparse_t *p,
 
     while (o->usage) {
         if ((rc = optparse_add_option (p, o++)) != OPTPARSE_SUCCESS) {
-            option_table_remove (p, opts, o);
+            option_table_remove (p, opts, o-1);
             return (rc);
         }
     }
