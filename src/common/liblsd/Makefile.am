@@ -12,7 +12,5 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = liblsd.la
 
 liblsd_la_SOURCES = \
-	list.c \
-	list.h \
 	cbuf.c \
 	cbuf.h
