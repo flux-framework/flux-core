@@ -25,7 +25,7 @@
  */
 static double default_reduction_timeout = 10.;
 
-struct hello_struct {
+struct hello {
     flux_t *h;
     attr_t *attrs;
     flux_msg_handler_t **handlers;
@@ -58,9 +58,9 @@ struct flux_reduce_ops reduce_ops = {
     .itemweight = r_itemweight,
 };
 
-hello_t *hello_create (void)
+struct hello *hello_create (void)
 {
-    hello_t *hello = calloc (1, sizeof (*hello));
+    struct hello *hello = calloc (1, sizeof (*hello));
 
     if (!hello) {
         errno = ENOMEM;
@@ -71,7 +71,7 @@ hello_t *hello_create (void)
     return hello;
 }
 
-void hello_destroy (hello_t *hello)
+void hello_destroy (struct hello *hello)
 {
     if (hello) {
         flux_reduce_destroy (hello->reduce);
@@ -90,7 +90,7 @@ static int hwm_from_topology (attr_t *attrs)
     return strtoul (s, NULL, 10) + 1;
 }
 
-int hello_register_attrs (hello_t *hello, attr_t *attrs)
+int hello_register_attrs (struct hello *hello, attr_t *attrs)
 {
     const char *s;
     double timeout = default_reduction_timeout;
@@ -125,35 +125,35 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-void hello_set_flux (hello_t *hello, flux_t *h)
+void hello_set_flux (struct hello *hello, flux_t *h)
 {
     hello->h = h;
 }
 
-double hello_get_time (hello_t *hello)
+double hello_get_time (struct hello *hello)
 {
     if (hello->start == 0. || hello->h == NULL)
         return 0.;
     return flux_reactor_now (flux_get_reactor (hello->h)) - hello->start;
 }
 
-int hello_get_count (hello_t *hello)
+int hello_get_count (struct hello *hello)
 {
     return hello->count;
 }
 
-void hello_set_callback (hello_t *hello, hello_cb_f cb, void *arg)
+void hello_set_callback (struct hello *hello, hello_cb_f cb, void *arg)
 {
     hello->cb = cb;
     hello->cb_arg = arg;
 }
 
-bool hello_complete (hello_t *hello)
+bool hello_complete (struct hello *hello)
 {
     return (hello->size == hello->count);
 }
 
-int hello_start (hello_t *hello)
+int hello_start (struct hello *hello)
 {
     int rc = -1;
     int flags = 0;
@@ -214,7 +214,7 @@ done:
 static void join_request (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
-    hello_t *hello = arg;
+    struct hello *hello = arg;
     int count, batch;
 
     if (flux_request_unpack (msg, NULL, "{ s:i s:i }",
@@ -256,7 +256,7 @@ static void r_reduce (flux_reduce_t *r, int batch, void *arg)
  */
 static void r_sink (flux_reduce_t *r, int batch, void *arg)
 {
-    hello_t *hello = arg;
+    struct hello *hello = arg;
     int count = (uintptr_t)flux_reduce_pop (r);
 
     assert (batch == 0);
@@ -274,7 +274,7 @@ static void r_sink (flux_reduce_t *r, int batch, void *arg)
 static void r_forward (flux_reduce_t *r, int batch, void *arg)
 {
     flux_future_t *f;
-    hello_t *hello = arg;
+    struct hello *hello = arg;
     int count = (uintptr_t)flux_reduce_pop (r);
 
     assert (batch == 0);

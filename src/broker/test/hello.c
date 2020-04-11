@@ -23,7 +23,7 @@ void fatal_err (const char *message, void *arg)
     BAIL_OUT ("fatal error: %s", message);
 }
 
-void hello_cb (hello_t *hello, void *arg)
+void hello_cb (struct hello *hello, void *arg)
 {
     int *ip = arg;
     (*ip)++;
@@ -31,7 +31,7 @@ void hello_cb (hello_t *hello, void *arg)
 
 int main (int argc, char **argv)
 {
-    hello_t *hello;
+    struct hello *hello;
     uint32_t rank, size;
     int cb_counter = 0;
 

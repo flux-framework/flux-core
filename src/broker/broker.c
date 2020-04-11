@@ -114,7 +114,7 @@ typedef struct {
     int tbon_k;
     /* Bootstrap
      */
-    hello_t *hello;
+    struct hello *hello;
     struct runlevel *runlevel;
 
     char *init_shell_cmd;
@@ -131,7 +131,7 @@ static void parent_cb (struct overlay *ov, void *sock, void *arg);
 static void child_cb (struct overlay *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
-static void hello_update_cb (hello_t *h, void *arg);
+static void hello_update_cb (struct hello *h, void *arg);
 static void shutdown_cb (struct shutdown *s, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
@@ -851,7 +851,7 @@ static void init_attrs (attr_t *attrs, pid_t pid)
         log_err_exit ("attr_add version");
 }
 
-static void hello_update_cb (hello_t *hello, void *arg)
+static void hello_update_cb (struct hello *hello, void *arg)
 {
     broker_ctx_t *ctx = arg;
 
