@@ -131,7 +131,7 @@ static void parent_cb (struct overlay *ov, void *sock, void *arg);
 static void child_cb (struct overlay *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
-static void hello_update_cb (struct hello *h, void *arg);
+static void hello_cb (struct hello *h, void *arg);
 static void shutdown_cb (struct shutdown *s, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
@@ -321,8 +321,6 @@ int main (int argc, char *argv[])
     if (!(ctx.modhash = modhash_create ()))
         oom ();
     if (!(ctx.services = service_switch_create ()))
-        oom ();
-    if (!(ctx.hello = hello_create ()))
         oom ();
     if (!(ctx.heartbeat = heartbeat_create ()))
         oom ();
@@ -688,12 +686,10 @@ int main (int argc, char *argv[])
 
     /* Send hello message to parent.
      * N.B. uses tbon topology attributes set above.
-     * Start init once wireup is complete.
+     * hello_cb() tracks progress on rank 0.
      */
-    hello_set_flux (ctx.hello, ctx.h);
-    hello_set_callback (ctx.hello, hello_update_cb, &ctx);
-    if (hello_register_attrs (ctx.hello, ctx.attrs) < 0) {
-        log_err ("configuring hello attributes");
+    if (!(ctx.hello = hello_create (ctx.h, ctx.attrs, hello_cb, &ctx))) {
+        log_err ("hello_create");
         goto cleanup;
     }
     if (hello_start (ctx.hello) < 0) {
@@ -851,7 +847,7 @@ static void init_attrs (attr_t *attrs, pid_t pid)
         log_err_exit ("attr_add version");
 }
 
-static void hello_update_cb (struct hello *hello, void *arg)
+static void hello_cb (struct hello *hello, void *arg)
 {
     broker_ctx_t *ctx = arg;
 

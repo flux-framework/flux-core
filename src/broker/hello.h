@@ -21,20 +21,8 @@ struct hello;
 
 typedef void (*hello_cb_f)(struct hello *hello, void *arg);
 
-struct hello *hello_create (void);
+struct hello *hello_create (flux_t *h, attr_t *attrs, hello_cb_f cb, void *arg);
 void hello_destroy (struct hello *hello);
-
-/* Register handle
- */
-void hello_set_flux (struct hello *hello, flux_t *h);
-
-/* Set up broker attributes
- */
-int hello_register_attrs (struct hello *hello, attr_t *attrs);
-
-/* Register callback for completion/progress.
- */
-void hello_set_callback (struct hello *hello, hello_cb_f cb, void *arg);
 
 /* Get time in seconds elapsed since hello_start()
  */

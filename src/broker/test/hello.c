@@ -54,10 +54,8 @@ int main (int argc, char **argv)
     ok (flux_get_rank (h, &rank) == 0 && rank == 0,
         "rank == 0");
 
-    ok ((hello = hello_create ()) != NULL,
+    ok ((hello = hello_create (h, NULL, hello_cb, &cb_counter)) != NULL,
         "hello_create works");
-    hello_set_flux (hello, h);
-    hello_set_callback (hello, hello_cb, &cb_counter);
     ok (hello_get_count (hello) == 0,
         "hello_get_count returned 0");
     ok (hello_complete (hello) == 0,
@@ -83,10 +81,8 @@ int main (int argc, char **argv)
         "rank == 0");
 
     cb_counter = 0;
-    ok ((hello = hello_create ()) != NULL,
+    ok ((hello = hello_create (h, NULL, hello_cb, &cb_counter)) != NULL,
         "hello_create works");
-    hello_set_flux (hello, h);
-    hello_set_callback (hello, hello_cb, &cb_counter);
     ok (hello_get_count (hello) == 0,
         "hello_get_count returned 0");
     ok (hello_complete (hello) == 0,
