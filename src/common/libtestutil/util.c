@@ -313,6 +313,15 @@ static flux_t *test_connector_create (const char *shmem_name,
     }
     if (!(tcon->h = flux_handle_create (tcon, &handle_ops, flags)))
         BAIL_OUT ("flux_handle_create");
+    /* Allow server to have children
+     */
+    if (server) {
+        flux_reactor_t *r = flux_reactor_create (FLUX_REACTOR_SIGCHLD);
+        if (!r || flux_set_reactor (tcon->h, r) < 0)
+            BAIL_OUT ("failed to set reactor for flux handle");
+        /* Schedule custom reactor for destruction on flux_close() */
+        flux_aux_set (tcon->h, NULL, r, (flux_free_f) flux_reactor_destroy);
+    }
     return tcon->h;
 }
 
