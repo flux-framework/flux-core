@@ -86,12 +86,6 @@ char *overlay_lspeer_encode (struct overlay *ov);
 int overlay_bind (struct overlay *ov);
 int overlay_connect (struct overlay *ov);
 
-/* Switch parent DEALER socket to a new peer.  If the uri is already present
- * in the parent endpoint stack, reuse the existing socket ('recycled' set
- * to true).  The new parent is moved to the top of the parent stack.
- */
-int overlay_reparent (struct overlay *ov, const char *uri, bool *recycled);
-
 /* Add attributes to 'attrs' to reveal information about the overlay network.
  * Active attrs:
  *   tbon.parent-endpoint
