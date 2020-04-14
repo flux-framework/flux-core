@@ -850,21 +850,27 @@ static void init_attrs (attr_t *attrs, pid_t pid)
 static void hello_cb (struct hello *hello, void *arg)
 {
     broker_ctx_t *ctx = arg;
+    char *s;
+
+    if (!(s = idset_encode (hello_get_idset (hello),
+                            IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
+        log_err_exit ("hello: idset_encode");
+
+    flux_log (ctx->h,
+              LOG_INFO,
+              "wireup: %s (%s) %.1fs",
+              s,
+              hello_complete (hello) ? "complete" : "incomplete",
+              hello_get_time (hello));
 
     if (hello_complete (hello)) {
-        flux_log (ctx->h, LOG_INFO, "wireup: %d/%d (complete) %.1fs",
-                  hello_get_count (hello), overlay_get_size(ctx->overlay),
-                  hello_get_time (hello));
         flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
         overlay_set_idle_warning (ctx->overlay, 3);
         if (runlevel_set_level (ctx->runlevel, 1) < 0)
             log_err_exit ("runlevel_set_level 1");
-        /* FIXME: shutdown hello protocol */
-    } else  {
-        flux_log (ctx->h, LOG_INFO, "wireup: %d/%d (incomplete) %.1fs",
-                  hello_get_count (hello), overlay_get_size(ctx->overlay),
-                  hello_get_time (hello));
     }
+
+    free (s);
 }
 
 /* If shutdown timeout has occured, exit immediately.

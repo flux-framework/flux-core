@@ -14,9 +14,6 @@
 #include <stdbool.h>
 #include "attr.h"
 
-/* hello protocol is used to detect that TBON overlay has wired up.
- */
-
 struct hello;
 
 typedef void (*hello_cb_f)(struct hello *hello, void *arg);
@@ -35,6 +32,10 @@ int hello_get_count (struct hello *hello);
 /* Get completion status
  */
 bool hello_complete (struct hello *hello);
+
+/* Get the current idset containing ranks that have checked in.
+ */
+const struct idset *hello_get_idset (struct hello *hello);
 
 /* Start the hello protocol (call on all ranks).
  */

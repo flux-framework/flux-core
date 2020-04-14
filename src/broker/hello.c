@@ -16,6 +16,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libidset/idset.h"
 
 #include "hello.h"
 #include "reduce.h"
@@ -30,7 +31,7 @@ struct hello {
     flux_msg_handler_t **handlers;
     uint32_t rank;
     uint32_t size;
-    uint32_t count;
+    struct idset *idset;
 
     double start;
 
@@ -49,65 +50,105 @@ double hello_get_time (struct hello *hello)
 
 int hello_get_count (struct hello *hello)
 {
-    return hello->count;
+    return hello->idset ? idset_count (hello->idset) : 0;
+}
+
+const struct idset *hello_get_idset (struct hello *hello)
+{
+    return hello->idset;
 }
 
 bool hello_complete (struct hello *hello)
 {
-    return (hello->size == hello->count);
+    if (!hello->idset)
+        return false;
+    if (idset_count (hello->idset) < hello->size)
+        return false;
+    return true;
 }
 
 int hello_start (struct hello *hello)
 {
+    struct idset *idset;
+
     flux_reactor_t *r = flux_get_reactor (hello->h);
     flux_reactor_now_update (r);
     hello->start = flux_reactor_now (r);
-    if (flux_reduce_append (hello->reduce, (void *)(uintptr_t)1, 0) < 0)
+
+    if (!(idset = idset_create (hello->size, 0)))
         return -1;
+    if (idset_set (idset, hello->rank) < 0)
+        goto error;
+    if (flux_reduce_append (hello->reduce, idset, 0) < 0)
+        goto error;
     return 0;
+error:
+    idset_destroy (idset);
+    return -1;
 }
 
 /* handle a message sent from downstream via downstream's r_forward op.
  */
-static void join_request (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void join_request (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     struct hello *hello = arg;
-    int count, batch;
+    int batch;
+    const char *s;
+    struct idset *item;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:i }",
-                             "count", &count,
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{ s:s s:i }",
+                             "idset", &s,
                              "batch", &batch) < 0)
-        log_err_exit ("hello: flux_request_unpack");
-    if (batch != 0 || count <= 0)
-        log_msg_exit ("hello: error decoding join request");
-    if (flux_reduce_append (hello->reduce, (void *)(uintptr_t)count, batch) < 0)
+        log_err_exit ("hello: join");
+    if (batch != 0)
+        log_msg_exit ("hello: join contained nonzero batch");
+    if (!(item = idset_decode (s)))
+        log_err_exit( "hello: join idset_decode");
+    if (flux_reduce_append (hello->reduce, item, batch) < 0)
         log_err_exit ("hello: flux_reduce_append");
 }
 
 /* Reduction ops
- * N.B. since we are reducing integers, we cheat and avoid memory
- * allocation by stuffing the int inside the pointer value.
  */
 
-/* Pop one or more counts, push their sum
+/* Pop one or more idsets, push their union
  */
 static void r_reduce (flux_reduce_t *r, int batch, void *arg)
 {
-    int i, count = 0;
+    struct idset *new = NULL;
+    struct idset *item;
+    unsigned int rank;
 
     assert (batch == 0);
 
-    while ((i = (uintptr_t)flux_reduce_pop (r)) > 0)
-        count += i;
-    if (count > 0 && flux_reduce_push (r, (void *)(uintptr_t)count) < 0)
-        log_err_exit ("hello: flux_reduce_push");
+    while ((item = flux_reduce_pop (r))) {
+        if (!new)
+            new = item;
+        else {
+            rank = idset_first (item);
+            while (rank != IDSET_INVALID_ID) {
+                if (idset_set (new, rank) < 0)
+                    log_err_exit ("hello: idset_set");
+                rank = idset_next (item, rank);
+            }
+            idset_destroy (item);
+        }
+    }
+    if (new) {
+        if (flux_reduce_push (r, new) < 0)
+            log_err_exit ("hello: flux_reduce_push");
+    }
     /* Invariant for r_sink and r_forward:
      * after reduce, handle contains exactly one item.
      */
 }
 
-/* (called on rank 0 only) Pop exactly one count, update global count,
+/* (called on rank 0 only) Pop exactly one idset, update global idset,
  * call the registered callback.
  * This may be called once the total hwm is reached on rank 0,
  * or after the timeout, as new messages arrive (after r_reduce).
@@ -115,17 +156,28 @@ static void r_reduce (flux_reduce_t *r, int batch, void *arg)
 static void r_sink (flux_reduce_t *r, int batch, void *arg)
 {
     struct hello *hello = arg;
-    int count = (uintptr_t)flux_reduce_pop (r);
+    struct idset *item = flux_reduce_pop (r);
+    unsigned int rank;
 
     assert (batch == 0);
-    assert (count > 0);
+    assert (item != NULL);
 
-    hello->count += count;
+    if (!hello->idset)
+        hello->idset = item;
+    else {
+        rank = idset_first (item);
+        while (rank != IDSET_INVALID_ID) {
+            if (idset_set (hello->idset, rank) < 0)
+                log_err_exit ("hello: idset_set");
+            rank = idset_next (item, rank);
+        }
+        idset_destroy (item);
+    }
     if (hello->cb)
         hello->cb (hello, hello->cb_arg);
 }
 
-/* (called on rank > 0 only) Pop exactly one count, forward upstream.
+/* (called on rank > 0 only) Pop exactly one idset, forward upstream.
  * This may be called once the hwm is reached on this rank (based on topo),
  * or after the timeout, as new messages arrive (after r_reduce).
  */
@@ -133,25 +185,34 @@ static void r_forward (flux_reduce_t *r, int batch, void *arg)
 {
     flux_future_t *f;
     struct hello *hello = arg;
-    int count = (uintptr_t)flux_reduce_pop (r);
+    struct idset *item = flux_reduce_pop (r);
+    char *s;
 
     assert (batch == 0);
-    assert (count > 0);
+    assert (item != NULL);
 
-    if (!(f = flux_rpc_pack (hello->h, "hello.join", FLUX_NODEID_UPSTREAM,
-                             FLUX_RPC_NORESPONSE, "{ s:i s:i }",
-                             "count", count,
-                             "batch", batch)))
+    if (!(s = idset_encode (item, IDSET_FLAG_RANGE)))
+        log_err_exit ("hello: idset_encode");
+    if (!(f = flux_rpc_pack (hello->h,
+                             "hello.join",
+                             FLUX_NODEID_UPSTREAM,
+                             FLUX_RPC_NORESPONSE,
+                             "{ s:s s:i }",
+                             "idset",
+                             s,
+                             "batch",
+                             batch)))
         log_err_exit ("hello: flux_rpc_pack");
     flux_future_destroy (f);
+    free (s);
+    idset_destroy (item);
 }
 
 /* How many original items does this item represent after reduction?
- * In this simple case it is just the value of the item (the count).
  */
 static int r_itemweight (void *item)
 {
-    return (uintptr_t)item;
+    return idset_count ((struct idset *)item);
 }
 
 struct flux_reduce_ops reduce_ops = {
@@ -259,6 +320,7 @@ void hello_destroy (struct hello *hello)
         int saved_errno = errno;
         flux_reduce_destroy (hello->reduce);
         flux_msg_handler_delvec (hello->handlers);
+        idset_destroy (hello->idset);
         free (hello);
         errno = saved_errno;
     }
