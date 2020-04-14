@@ -72,6 +72,7 @@ TESTSCRIPTS = \
 	t0016-cron-faketime.t \
 	t0017-security.t \
 	t0019-jobspec-schema.t \
+	t0020-terminus.t \
 	t0021-flux-jobspec.t \
 	t0022-jj-reader.t \
 	t1000-kvs.t \
