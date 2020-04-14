@@ -26,6 +26,10 @@
  */
 static double default_reduction_timeout = 10.;
 
+/* Delay allowed for join response, after which a non-fatal error is logged.
+ */
+static double join_response_timeout = 10.;
+
 struct hello {
     flux_t *h;
     flux_msg_handler_t **handlers;
@@ -98,19 +102,45 @@ static void join_request (flux_t *h,
     int batch;
     const char *s;
     struct idset *item;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
                              "{ s:s s:i }",
-                             "idset", &s,
-                             "batch", &batch) < 0)
-        log_err_exit ("hello: join");
-    if (batch != 0)
-        log_msg_exit ("hello: join contained nonzero batch");
-    if (!(item = idset_decode (s)))
-        log_err_exit( "hello: join idset_decode");
-    if (flux_reduce_append (hello->reduce, item, batch) < 0)
-        log_err_exit ("hello: flux_reduce_append");
+                             "idset",
+                             &s,
+                             "batch",
+                             &batch) < 0)
+        goto error;
+    if (batch != 0) {
+        errno = EPROTO;
+        errmsg = "join contains nozero batch id";
+        goto error;
+    }
+    if (!(item = idset_decode (s))) {
+        errno = EPROTO;
+        errmsg = "join failed to decode idset";
+        goto error;
+    }
+    if (flux_reduce_append (hello->reduce, item, batch) < 0) {
+        idset_destroy (item);
+        errno = ENOMEM;
+        errmsg = "join could not append to reduction handle";
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        log_err ("hello: join respond error");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        log_err ("hello: join respond error");
+}
+
+static void join_continuation (flux_future_t *f, void *arg)
+{
+    if (flux_rpc_get (f, NULL) < 0)
+        log_err_exit ("join: %s", flux_future_error_string (f));
+    flux_future_destroy (f);
 }
 
 /* Reduction ops
@@ -196,14 +226,18 @@ static void r_forward (flux_reduce_t *r, int batch, void *arg)
     if (!(f = flux_rpc_pack (hello->h,
                              "hello.join",
                              FLUX_NODEID_UPSTREAM,
-                             FLUX_RPC_NORESPONSE,
+                             0,
                              "{ s:s s:i }",
                              "idset",
                              s,
                              "batch",
                              batch)))
         log_err_exit ("hello: flux_rpc_pack");
-    flux_future_destroy (f);
+    if (flux_future_then (f,
+                          join_response_timeout,
+                          join_continuation,
+                          hello) < 0)
+        log_err_exit ("hello: flux_future_then");
     free (s);
     idset_destroy (item);
 }
