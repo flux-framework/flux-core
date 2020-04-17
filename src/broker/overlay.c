@@ -51,12 +51,12 @@ struct overlay {
     int tbon_descendants;
 
     struct endpoint *parent;    /* DEALER - requests to parent */
-    overlay_cb_f parent_cb;
+    overlay_sock_cb_f parent_cb;
     void *parent_arg;
     int parent_lastsent;
 
     struct endpoint *child;     /* ROUTER - requests from children */
-    overlay_cb_f child_cb;
+    overlay_sock_cb_f child_cb;
     void *child_arg;
 
     zsock_t *child_monitor_sock;
@@ -320,7 +320,7 @@ static void heartbeat_handler (flux_t *h, flux_msg_handler_t *mh,
     overlay_log_idle_children (ov);
 }
 
-void overlay_set_parent_cb (struct overlay *ov, overlay_cb_f cb, void *arg)
+void overlay_set_parent_cb (struct overlay *ov, overlay_sock_cb_f cb, void *arg)
 {
     ov->parent_cb = cb;
     ov->parent_arg = arg;
@@ -346,7 +346,7 @@ const char *overlay_get_child (struct overlay *ov)
     return ov->child->uri;
 }
 
-void overlay_set_child_cb (struct overlay *ov, overlay_cb_f cb, void *arg)
+void overlay_set_child_cb (struct overlay *ov, overlay_sock_cb_f cb, void *arg)
 {
     ov->child_cb = cb;
     ov->child_arg = arg;

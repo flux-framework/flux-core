@@ -16,7 +16,7 @@
 
 struct overlay;
 
-typedef void (*overlay_cb_f)(struct overlay *ov, void *sock, void *arg);
+typedef void (*overlay_sock_cb_f)(struct overlay *ov, void *sock, void *arg);
 typedef int (*overlay_init_cb_f)(struct overlay *ov, void *arg);
 typedef void (*overlay_monitor_cb_f)(struct overlay *ov, void *arg);
 
@@ -49,7 +49,9 @@ int overlay_get_child_peer_count (struct overlay *ov);
  */
 int overlay_set_parent (struct overlay *ov, const char *fmt, ...);
 const char *overlay_get_parent (struct overlay *ov);
-void overlay_set_parent_cb (struct overlay *ov, overlay_cb_f cb, void *arg);
+void overlay_set_parent_cb (struct overlay *ov,
+                            overlay_sock_cb_f cb,
+                            void *arg);
 int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
 
 /* The child is where other ranks connect to send requests.
@@ -57,7 +59,7 @@ int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
  */
 int overlay_set_child (struct overlay *ov, const char *fmt, ...);
 const char *overlay_get_child (struct overlay *ov);
-void overlay_set_child_cb (struct overlay *ov, overlay_cb_f cb, void *arg);
+void overlay_set_child_cb (struct overlay *ov, overlay_sock_cb_f cb, void *arg);
 int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
 /* We can "multicast" events to all child peers using mcast_child().
  * It walks the 'children' hash, finding peers and routeing them a copy of msg.
