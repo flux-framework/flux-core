@@ -23,7 +23,7 @@ if test -z "$FLUX_BUILD_DIR"; then
 fi
 if test -z "$FLUX_SOURCE_DIR"; then
     if test -z "${srcdir}"; then
-        FLUX_SOURCE_DIR="$(cd .. && pwd)"
+        FLUX_SOURCE_DIR="$(cd ${SHARNESS_TEST_SRCDIR}/.. && pwd)"
     else
         FLUX_SOURCE_DIR="$(cd ${srcdir}/.. && pwd)"
     fi
