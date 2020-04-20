@@ -37,6 +37,7 @@ with the following layout:
  "rank":i,
  "size":i,
  "ntasks";i,
+ "service";s,
  "options": { "verbose":b, "standalone":b },
  "jobspec":o,
  "R":o

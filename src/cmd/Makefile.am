@@ -70,6 +70,7 @@ dist_fluxcmd_SCRIPTS = \
 
 fluxcmd_PROGRAMS = \
 	flux-aggregate \
+	flux-terminus \
 	flux-ping \
 	flux-keygen \
 	flux-logger \
@@ -91,6 +92,15 @@ flux_job_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(top_builddir)/src/shell/libmpir.la \
 	$(top_builddir)/src/common/libdebugged/libdebugged.la \
+	$(top_builddir)/src/common/libterminus/libterminus.la \
+	$(LIBUTIL)
+
+flux_terminus_LDADD = \
+	$(fluxcmd_ldadd) \
+	$(top_builddir)/src/common/libterminus/libterminus.la \
+	$(top_builddir)/src/common/libidset/libidset.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(ZMQ_LIBS) \
 	$(LIBUTIL)
 
 #

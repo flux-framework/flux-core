@@ -80,6 +80,7 @@ flux_shell_SOURCES = \
 	affinity.c \
 	gpubind.c \
 	evlog.c \
+	pty.c \
 	mpir/mpir.c \
 	mpir/ptrace.c
 
@@ -91,6 +92,8 @@ flux_shell_LDADD = \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
+	$(top_builddir)/src/common/libterminus/libterminus.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
 	$(LUA_LIB) \
 	$(HWLOC_LIBS)
 

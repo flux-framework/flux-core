@@ -343,11 +343,12 @@ static json_t *flux_shell_get_info_object (flux_shell_t *shell)
         return o;
 
     if (!(o = json_pack_ex (&err, 0,
-                            "{ s:I s:i s:i s:i s:O s:{ s:i s:b }}",
+                            "{ s:I s:i s:i s:i s:s s:O s:{ s:i s:b }}",
                             "jobid", shell->info->jobid,
                             "rank",  shell->info->shell_rank,
                             "size",  shell->info->shell_size,
                             "ntasks", shell->info->rankinfo.ntasks,
+                            "service", shell_svc_name (shell->svc),
                             "jobspec", shell->info->jobspec->jobspec,
                             "options",
                                "verbose", shell->verbose,
@@ -1002,12 +1003,18 @@ static int shell_task_init (flux_shell_t *shell)
     return plugstack_call (shell->plugstack, "task.init", NULL);
 }
 
+#if CODE_COVERAGE_ENABLED
+extern void __gcov_flush ();
+#endif
 static void shell_task_exec (flux_shell_task_t *task, void *arg)
 {
     flux_shell_t *shell = arg;
     shell->current_task->in_pre_exec = true;
     if (plugstack_call (shell->plugstack, "task.exec", NULL) < 0)
         shell_log_errno ("task.exec plugin(s) failed");
+#if CODE_COVERAGE_ENABLED
+    __gcov_flush ();
+#endif
 }
 
 static int shell_task_forked (flux_shell_t *shell)

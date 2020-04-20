@@ -72,6 +72,7 @@ TESTSCRIPTS = \
 	t0016-cron-faketime.t \
 	t0017-security.t \
 	t0019-jobspec-schema.t \
+	t0020-terminus.t \
 	t0021-flux-jobspec.t \
 	t0022-jj-reader.t \
 	t1000-kvs.t \
@@ -124,6 +125,7 @@ TESTSCRIPTS = \
 	t2609-job-shell-events.t \
 	t2610-job-shell-mpir.t \
 	t2611-debug-emulate.t \
+	t2612-job-shell-pty.t \
 	t2700-mini-cmd.t \
 	t2800-jobs-cmd.t \
 	t3000-mpi-basic.t \
@@ -198,6 +200,7 @@ dist_check_SCRIPTS = \
 	scripts/t0004-event-helper.sh \
 	scripts/tssh \
 	scripts/sign-as.py \
+	scripts/runpty.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
 	kvs/kvs-helper.sh \
