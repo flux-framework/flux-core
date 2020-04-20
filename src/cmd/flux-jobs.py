@@ -17,6 +17,7 @@ import argparse
 import time
 import pwd
 import string
+import errno
 from datetime import timedelta
 
 import flux.job
@@ -190,6 +191,48 @@ def fetch_jobs_stdin():
     return jobs
 
 
+def list_id_cb(future, arg):
+    (cbargs, jobid) = arg
+    try:
+        job = future.get_job()
+        cbargs["jobs"].append(job)
+    except EnvironmentError as err:
+        if err.errno == errno.ENOENT:
+            print("JobID {} unknown".format(jobid), file=sys.stderr)
+        else:
+            print("{}: {}".format("rpc", err.strerror), file=sys.stderr)
+
+    cbargs["count"] += 1
+    if cbargs["count"] == cbargs["total"]:
+        cbargs["flux_handle"].reactor_stop(future.get_reactor())
+
+
+def fetch_jobs_ids(flux_handle, args, attrs):
+    cbargs = {
+        "flux_handle": flux_handle,
+        "jobs": [],
+        "count": 0,
+        "total": len(args.jobids),
+    }
+    for jobid in args.jobids:
+        rpc_handle = flux.job.job_list_id(flux_handle, jobid, list(attrs))
+        rpc_handle.then(list_id_cb, arg=(cbargs, jobid))
+    ret = flux_handle.reactor_run(rpc_handle.get_reactor(), 0)
+    if ret < 0:
+        sys.exit(1)
+    return cbargs["jobs"]
+
+
+def fetch_jobs_all(flux_handle, args, attrs, userid, states):
+    rpc_handle = flux.job.job_list(flux_handle, args.count, list(attrs), userid, states)
+    try:
+        jobs = rpc_handle.get_jobs()
+    except EnvironmentError as err:
+        print("{}: {}".format("rpc", err.strerror), file=sys.stderr)
+        sys.exit(1)
+    return jobs
+
+
 def fetch_jobs_flux(args, fields):
     flux_handle = flux.Flux()
 
@@ -225,6 +268,10 @@ def fetch_jobs_flux(args, fields):
     for field in fields:
         attrs.update(fields2attrs[field])
 
+    if args.jobids:
+        jobs = fetch_jobs_ids(flux_handle, args, attrs)
+        return jobs
+
     if args.a:
         args.user = str(os.getuid())
     if args.A:
@@ -256,13 +303,7 @@ def fetch_jobs_flux(args, fields):
         states |= flux.constants.FLUX_JOB_PENDING
         states |= flux.constants.FLUX_JOB_RUNNING
 
-    rpc_handle = flux.job.job_list(flux_handle, args.count, list(attrs), userid, states)
-    try:
-        jobs = rpc_handle.get_jobs()
-    except EnvironmentError as err:
-        print("{}: {}".format("rpc", err.strerror), file=sys.stderr)
-        sys.exit(1)
-
+    jobs = fetch_jobs_all(flux_handle, args, attrs, userid, states)
     return jobs
 
 
@@ -325,6 +366,13 @@ def parse_args():
         type=str,
         metavar="FORMAT",
         help="Specify output format using Python's string format syntax",
+    )
+    parser.add_argument(
+        "jobids",
+        type=int,
+        metavar="JOBID",
+        nargs="*",
+        help="Limit output to specific Job IDs",
     )
     # Hidden '--from-stdin' option for testing only.
     parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
