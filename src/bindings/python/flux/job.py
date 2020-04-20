@@ -297,6 +297,18 @@ def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=N
     return JobListRPC(flux_handle, "job-info.list-inactive", payload)
 
 
+class JobListIdRPC(RPC):
+    def get_job(self):
+        return self.get()["job"]
+
+
+# list-id is not like list or list-inactive, it doesn't return an
+# array, so don't use JobListRPC
+def job_list_id(flux_handle, jobid, attrs=[]):
+    payload = {"id": jobid, "attrs": attrs}
+    return JobListIdRPC(flux_handle, "job-info.list-id", payload)
+
+
 def _validate_keys(expected, given, keys_optional=False, allow_additional=False):
     if not isinstance(expected, set):
         expected = set(expected)
