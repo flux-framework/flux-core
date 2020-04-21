@@ -67,6 +67,7 @@ class EventLogOutput(OutputHandler):
             ),
         )
         self.fp.write("{}\n".format(json.dumps(header)))
+        self.fp.flush()
 
     def format_entry(self, data):
         entry = dict(
@@ -88,6 +89,7 @@ class AsciicastOutput(OutputHandler):
         ts = int(self.t0)
         header = dict(version=2, width=self.width, height=self.height, timestamp=ts)
         self.fp.write("{}\n".format(json.dumps(header)))
+        self.fp.flush()
 
     def format_entry(self, data):
         dt = time.time() - self.t0
