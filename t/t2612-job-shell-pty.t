@@ -51,11 +51,34 @@ test_expect_success NO_CHAIN_LINT 'pty: run job with pty' '
 	wait $pid
 '
 # Interactively attach to pty many times to ensure no hangs, etc.
-test_expect_success 'pty: interactive job with pty' '
+#
+# Ensure `flux job attach` has a chance to attach to pty before `stty size`
+#  is executed by blocking and waiting for `test-ready` key to appear in
+#  the job's kvs namespace.
+#
+# Test driver waits for "shell.start" event to be output by `flux-job attach`
+#  which guarantees we're attached to pty, since this is done synchronously
+#  in flux-job attach after the `shell.init` event.
+#
+# Finally, put the test-ready key into kvs, unblocking the test job so
+#  it can proceed to print result.
+#
+test_expect_success NO_CHAIN_LINT 'pty: interactive job with pty' '
+	cat <<-EOF >stty-test.sh &&
+	#!/bin/sh
+	# Do not continue until test is ready:
+	flux kvs get --waitcreate --count=1 --label test-ready
+	stty size
+	EOF
+	chmod +x stty-test.sh &&
 	for i in `seq 0 10`; do
-	    run_timeout 10 $runpty -w 80x25 -o log.interactive \
-	        flux mini run -n1 -o pty stty size &&
-	    $waitfile -t 20 -vp "25 80" log.interactive
+	    id=$(flux mini submit -n1 -o pty ./stty-test.sh)
+	    $runpty -w 80x25 -o log.interactive.$i \
+	        flux job attach --show-exec ${id} &
+	    pid=$! &&
+	    $waitfile -t 20 -vp "shell.start" log.interactive.$i &&
+	    flux kvs put -N $(flux job namespace ${id}) test-ready=${i} &&
+	    $waitfile -t 20 -vp "25 80" log.interactive.$i
 	done
 '
 test_done
