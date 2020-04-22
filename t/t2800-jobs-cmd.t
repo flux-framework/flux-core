@@ -195,6 +195,37 @@ test_expect_success 'flux-jobs --count works' '
 '
 
 #
+# test specific IDs
+#
+
+test_expect_success 'flux-jobs specific IDs works' '
+        ids=`cat job_ids_pending.out` &&
+        count=`flux jobs --suppress-header ${ids} | wc -l` &&
+        test $count -eq 6 &&
+        ids=`cat job_ids_running.out` &&
+        count=`flux jobs --suppress-header ${ids} | wc -l` &&
+        test $count -eq 8 &&
+        ids=`cat job_ids_inactive.out` &&
+        count=`flux jobs --suppress-header ${ids} | wc -l` &&
+        test $count -eq 5
+'
+
+test_expect_success 'flux-jobs error on bad IDs' '
+        flux jobs --suppress-header 0 1 2 2> ids.err &&
+        count=`grep -i unknown ids.err | wc -l` &&
+        test $count -eq 3
+'
+
+test_expect_success 'flux-jobs good and bad IDs works' '
+        ids=`cat job_ids_pending.out` &&
+        flux jobs --suppress-header ${ids} 0 1 2 > ids.out 2> ids.err &&
+        count=`wc -l < ids.out` &&
+        test $count -eq 6 &&
+        count=`grep -i unknown ids.err | wc -l` &&
+        test $count -eq 3
+'
+
+#
 # format tests
 #
 
