@@ -198,6 +198,15 @@ int flux_msg_vpack (flux_msg_t *msg, const char *fmt, va_list ap);
 int flux_msg_unpack (const flux_msg_t *msg, const char *fmt, ...);
 int flux_msg_vunpack (const flux_msg_t *msg, const char *fmt, va_list ap);
 
+/* Return a string representation of the last error encountered for `msg`.
+ *
+ * If no last error is available, an empty string will be returned.
+ *
+ * Currently, only flux_msg_pack/unpack() (and related) functions will set
+ * the last error for `msg`. (Useful to get more detail from EPROTO errors)
+ */
+const char *flux_msg_last_error (const flux_msg_t *msg);
+
 /* Get/set nodeid (request only)
  */
 int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid);

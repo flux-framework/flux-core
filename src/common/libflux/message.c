@@ -44,6 +44,7 @@
 struct flux_msg {
     zmsg_t *zmsg;
     json_t *json;
+    char *lasterr;
     struct aux_item *aux;
     int refcount;
 };
@@ -221,6 +222,7 @@ void flux_msg_destroy (flux_msg_t *msg)
         json_decref (msg->json);
         zmsg_destroy (&msg->zmsg);
         aux_destroy (&msg->aux);
+        free (msg->lasterr);
         free (msg);
         errno = saved_errno;
     }
@@ -1110,20 +1112,54 @@ done:
     return rc;
 }
 
+static inline void msg_lasterr_reset (flux_msg_t *msg)
+{
+    if (msg) {
+        free (msg->lasterr);
+        msg->lasterr = NULL;
+    }
+}
+
+static inline void msg_lasterr_set (flux_msg_t *msg,
+                                    const char *fmt,
+                                    ...)
+{
+    va_list ap;
+    int saved_errno = errno;
+
+    va_start (ap, fmt);
+    if (vasprintf (&msg->lasterr, fmt, ap) < 0)
+        msg->lasterr = NULL;
+    va_end (ap);
+
+    errno = saved_errno;
+}
+
 int flux_msg_vpack (flux_msg_t *msg, const char *fmt, va_list ap)
 {
     char *json_str = NULL;
     json_t *json;
+    json_error_t err;
     int saved_errno;
 
-    if (!(json = json_vpack_ex (NULL, 0, fmt, ap)))
+    msg_lasterr_reset (msg);
+
+    if (!(json = json_vpack_ex (&err, 0, fmt, ap))) {
+        msg_lasterr_set (msg, "%s", err.text);
         goto error_inval;
-    if (!json_is_object (json))
+    }
+    if (!json_is_object (json)) {
+        msg_lasterr_set (msg, "payload is not a JSON object");
         goto error_inval;
-    if (!(json_str = json_dumps (json, JSON_COMPACT)))
+    }
+    if (!(json_str = json_dumps (json, JSON_COMPACT))) {
+        msg_lasterr_set (msg, "json_dumps failed on pack result");
         goto error_inval;
-    if (flux_msg_set_string (msg, json_str) < 0)
+    }
+    if (flux_msg_set_string (msg, json_str) < 0) {
+        msg_lasterr_set (msg, "flux_msg_set_string: %s", strerror (errno));
         goto error;
+    }
     free (json_str);
     json_decref (json);
     return 0;
@@ -1233,23 +1269,38 @@ int flux_msg_vunpack (const flux_msg_t *cmsg, const char *fmt, va_list ap)
 {
     int rc = -1;
     const char *json_str;
-    json_error_t error;
+    json_error_t err;
     flux_msg_t *msg = (flux_msg_t *)cmsg;
+
+    msg_lasterr_reset (msg);
 
     if (!msg || !fmt || *fmt == '\0') {
         errno = EINVAL;
         goto done;
     }
     if (!msg->json) {
-        if (flux_msg_get_string (msg, &json_str) < 0)
+        if (flux_msg_get_string (msg, &json_str) < 0) {
+            msg_lasterr_set (msg, "flux_msg_get_string: %s", strerror (errno));
             goto done;
-        if (!json_str || !(msg->json = json_loads (json_str, 0, &error))
-                      || !json_is_object (msg->json)) {
+        }
+        if (!json_str) {
+            msg_lasterr_set (msg, "message does not have a string payload");
+            errno = EPROTO;
+            goto done;
+        }
+        if (!(msg->json = json_loads (json_str, 0, &err))) {
+            msg_lasterr_set (msg, "%s", err.text);
+            errno = EPROTO;
+            goto done;
+        }
+        if (!json_is_object (msg->json)) {
+            msg_lasterr_set (msg, "payload is not a JSON object");
             errno = EPROTO;
             goto done;
         }
     }
-    if (json_vunpack_ex (msg->json, &error, 0, fmt, ap) < 0) {
+    if (json_vunpack_ex (msg->json, &err, 0, fmt, ap) < 0) {
+        msg_lasterr_set (msg, "%s", err.text);
         errno = EPROTO;
         goto done;
     }
@@ -1267,6 +1318,15 @@ int flux_msg_unpack (const flux_msg_t *msg, const char *fmt, ...)
     rc = flux_msg_vunpack (msg, fmt, ap);
     va_end (ap);
     return rc;
+}
+
+const char *flux_msg_last_error (const flux_msg_t *msg)
+{
+    if (msg == NULL)
+        return "msg object is NULL";
+    if (msg->lasterr == NULL)
+        return "";
+    return msg->lasterr;
 }
 
 int flux_msg_set_topic (flux_msg_t *msg, const char *topic)

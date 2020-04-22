@@ -145,15 +145,37 @@ void check_payload_json (void)
     ok (flux_msg_get_string (msg, &s) == 0 && s == NULL,
        "flux_msg_get_string returns success with no payload");
 
+    ok (strlen(flux_msg_last_error (msg)) == 0,
+        "flux_msg_last_error() returns empty string before pack/unpack");
+
+    is (flux_msg_last_error (NULL), "msg object is NULL",
+        "flux_msg_last_error() returns 'msg object is NULL' on NULL arg");
+
+    /* Unpack on a message with invalid string payload should be an error
+     */
+    errno = 0;
+    ok (flux_msg_set_payload (msg, "fluffy", 6) == 0,
+        "set invalid string payload on msg");
+    ok (flux_msg_unpack (msg, "{s:i}", "foo", &i) < 0 && errno == EPROTO,
+        "flux_msg_unpack() on message with invalid payload returns EPROTO");
+    is (flux_msg_last_error (msg),
+        "flux_msg_get_string: Protocol error",
+        "flux_msg_last_error reports '%s'",
+        flux_msg_last_error(msg));
+
     /* RFC 3 - json payload must be an object
      * Encoding should return EINVAL.
      */
     errno = 0;
     ok (flux_msg_pack (msg, "[1,2,3]") < 0 && errno == EINVAL,
        "flux_msg_pack array fails with EINVAL");
+    ok (strlen(flux_msg_last_error (msg)) > 0,
+        "flux_msg_last_error: %s", flux_msg_last_error (msg));
     errno = 0;
     ok (flux_msg_pack (msg, "3.14") < 0 && errno == EINVAL,
        "flux_msg_pack scalar fails with EINVAL");
+    ok (strlen(flux_msg_last_error (msg)) > 0,
+        "flux_msg_last_error: %s", flux_msg_last_error (msg));
 
     /* Sneak in a malformed JSON payloads and test decoding.
      * 1) array
@@ -163,6 +185,8 @@ void check_payload_json (void)
     errno = 0;
     ok (flux_msg_unpack (msg, "o", &o) < 0 && errno == EPROTO,
         "flux_msg_unpack array fails with EPROTO");
+    ok (strlen(flux_msg_last_error (msg)) > 0,
+        "flux_msg_last_error: %s", flux_msg_last_error (msg));
     /* 2) bare value
      */
     if (flux_msg_set_string (msg, "3.14") < 0)
@@ -170,6 +194,8 @@ void check_payload_json (void)
     errno = 0;
     ok (flux_msg_unpack (msg, "o", &o) < 0 && errno == EPROTO,
         "flux_msg_unpack scalar fails with EPROTO");
+    ok (strlen(flux_msg_last_error (msg)) > 0,
+        "flux_msg_last_error: %s", flux_msg_last_error (msg));
     /* 3) malformed object (no trailing })
      */
     if (flux_msg_set_string (msg, "{\"a\":42") < 0)
@@ -177,12 +203,18 @@ void check_payload_json (void)
     errno = 0;
     ok (flux_msg_unpack (msg, "o", &o) < 0 && errno == EPROTO,
         "flux_msg_unpack malformed object fails with EPROTO");
+    ok (strlen(flux_msg_last_error (msg)) > 0,
+        "flux_msg_last_error: %s", flux_msg_last_error (msg));
 
     ok (flux_msg_pack (msg, "{s:i}", "foo", 42) == 0,
        "flux_msg_pack works");
+    ok (strlen(flux_msg_last_error (msg)) == 0,
+        "flux_msg_last_error returns empty string after ok pack");
     i = 0;
     ok (flux_msg_unpack (msg, "{s:i}", "foo", &i) == 0 && i == 42,
        "flux_msg_unpack returns payload intact");
+    ok (strlen(flux_msg_last_error (msg)) == 0,
+        "flux_msg_last_error returns empty string after ok unpack");
 
     flux_msg_destroy (msg);
 }
@@ -198,19 +230,29 @@ void check_payload_json_formatted (void)
     errno = 0;
     ok (flux_msg_unpack (msg, "{}") < 0 && errno == EPROTO,
         "flux_msg_unpack fails with EPROTO with no payload");
+    ok (strlen (flux_msg_last_error (msg)) > 0,
+        "flux_msg_last_error: %s", flux_msg_last_error (msg));
 
     errno = 0;
     ok (flux_msg_pack (msg, "[i,i,i]", 1,2,3) < 0 && errno == EINVAL,
         "flux_msg_pack array fails with EINVAL");
+    is (flux_msg_last_error (msg), "payload is not a JSON object",
+        "flux_msg_last_error: %s", flux_msg_last_error (msg));
     errno = 0;
     ok (flux_msg_pack (msg, "i", 3.14) < 0 && errno == EINVAL,
        "flux_msg_pack scalar fails with EINVAL");
+    ok (strlen (flux_msg_last_error (msg)) > 0,
+        "flux_msg_last_error: %s", flux_msg_last_error (msg));
     ok (flux_msg_pack (msg, "{s:i, s:s}", "foo", 42, "bar", "baz") == 0,
        "flux_msg_pack object works");
+    ok (strlen (flux_msg_last_error (msg)) == 0,
+        "flux_msg_last_error is empty string after ok pack");
     i = 0;
     s = NULL;
     ok (flux_msg_unpack (msg, "{s:i, s:s}", "foo", &i, "bar", &s) == 0,
        "flux_msg_unpack object works");
+    ok (strlen (flux_msg_last_error (msg)) == 0,
+        "flux_msg_last_error is empty string after ok unpack");
     ok (i == 42 && s != NULL && !strcmp (s, "baz"),
         "decoded content matches encoded content");
 
@@ -234,14 +276,20 @@ void check_payload_json_formatted (void)
     errno = 0;
     ok (flux_msg_unpack (msg, NULL) < 0 && errno == EINVAL,
         "flux_msg_unpack fails with EINVAL with NULL format");
+    ok (strlen (flux_msg_last_error (msg)) == 0,
+        "flux_msg_last_error is empty string on EINVAL");
 
     errno = 0;
     ok (flux_msg_unpack (msg, "") < 0 && errno == EINVAL,
         "flux_msg_unpack fails with EINVAL with \"\" format");
+    ok (strlen (flux_msg_last_error (msg)) == 0,
+        "flux_msg_last_error is empty string on EINVAL");
 
     errno = 0;
     ok (flux_msg_unpack (msg, "{s:s}", "nope", &s) < 0 && errno == EPROTO,
         "flux_msg_unpack fails with EPROTO with nonexistent key");
+    ok (strlen (flux_msg_last_error (msg)) > 0,
+        "flux_msg_last_error is %s", flux_msg_last_error (msg));
 
     flux_msg_destroy (msg);
 }
