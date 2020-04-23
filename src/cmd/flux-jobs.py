@@ -319,19 +319,54 @@ def fetch_jobs(args, fields):
     return [JobInfo(job) for job in lst]
 
 
+class FilterAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+        setattr(namespace, "filtered", True)
+
+
+# pylint: disable=redefined-builtin
+class FilterTrueAction(argparse.Action):
+    def __init__(
+        self,
+        option_strings,
+        dest,
+        const=True,
+        default=False,
+        required=False,
+        help=None,
+        metavar=None,
+    ):
+        super(FilterTrueAction, self).__init__(
+            option_strings=option_strings,
+            dest=dest,
+            nargs=0,
+            const=const,
+            default=default,
+            help=help,
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, self.const)
+        setattr(namespace, "filtered", True)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="flux-jobs", formatter_class=flux.util.help_formatter()
     )
     # -a equivalent to -s "pending,running,inactive" and -u set to userid
     parser.add_argument(
-        "-a", action="store_true", help="List all jobs for current user"
+        "-a", action=FilterTrueAction, help="List all jobs for current user"
     )
     # -A equivalent to -s "pending,running,inactive" and -u set to "all"
-    parser.add_argument("-A", action="store_true", help="List all jobs for all users")
+    parser.add_argument(
+        "-A", action=FilterTrueAction, help="List all jobs for all users"
+    )
     parser.add_argument(
         "-c",
         "--count",
+        action=FilterAction,
         type=int,
         metavar="N",
         default=1000,
@@ -340,6 +375,7 @@ def parse_args():
     parser.add_argument(
         "-s",
         "--states",
+        action=FilterAction,
         type=str,
         metavar="STATES",
         default="pending,running",
@@ -354,6 +390,7 @@ def parse_args():
     parser.add_argument(
         "-u",
         "--user",
+        action=FilterAction,
         type=str,
         metavar="[USERNAME|UID]",
         default=str(os.getuid()),
@@ -376,6 +413,7 @@ def parse_args():
     )
     # Hidden '--from-stdin' option for testing only.
     parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
+    parser.set_defaults(filtered=False)
     return parser.parse_args()
 
 
@@ -478,6 +516,9 @@ class JobsOutputFormat(flux.util.OutputFormat):
 @flux.util.CLIMain(LOGGER)
 def main():
     args = parse_args()
+
+    if args.jobids and args.filtered:
+        LOGGER.warning("Filtering options ignored with jobid list")
 
     if args.format:
         fmt = args.format
