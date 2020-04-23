@@ -101,6 +101,8 @@ t_inactive:: time job entered inactive state
 runtime:: job runtime
 runtime_fsd:: job runtime in Flux standard duration format
 runtime_hms:: job runtime in H:M:S format
+status:: job status (PENDING, RUNNING, COMPLETED, FAILED, or CANCELLED)
+status_abbrev:: status but in a max 2 character abbreviation
 
 AUTHOR
 ------

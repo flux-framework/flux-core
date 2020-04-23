@@ -70,6 +70,16 @@ def resulttostr(resultid, singlechar=False):
     return raw.flux_job_resulttostr(resultid, singlechar).decode("utf-8")
 
 
+def statustostr(stateid, resultid, abbrev=False):
+    if stateid & flux.constants.FLUX_JOB_PENDING:
+        statusstr = "PD" if abbrev else "PENDING"
+    elif stateid & flux.constants.FLUX_JOB_RUNNING:
+        statusstr = "R" if abbrev else "RUNNING"
+    else:  # flux.constants.FLUX_JOB_INACTIVE
+        statusstr = resulttostr(resultid, abbrev)
+    return statusstr
+
+
 def get_username(userid):
     try:
         return pwd.getpwuid(userid).pw_name
@@ -189,6 +199,14 @@ class JobInfo:
     def runtime(self):
         return self.get_runtime()
 
+    @memoized_property
+    def status(self):
+        return statustostr(self.state_id, self.result_id, False)
+
+    @memoized_property
+    def status_abbrev(self):
+        return statustostr(self.state_id, self.result_id, True)
+
 
 def fetch_jobs_stdin():
     """
@@ -243,8 +261,10 @@ def fetch_jobs_ids(flux_handle, args, attrs):
     return cbargs["jobs"]
 
 
-def fetch_jobs_all(flux_handle, args, attrs, userid, states):
-    rpc_handle = flux.job.job_list(flux_handle, args.count, list(attrs), userid, states)
+def fetch_jobs_all(flux_handle, args, attrs, userid, states, results):
+    rpc_handle = flux.job.job_list(
+        flux_handle, args.count, list(attrs), userid, states, results
+    )
     try:
         jobs = rpc_handle.get_jobs()
     except EnvironmentError as err:
@@ -284,6 +304,8 @@ def fetch_jobs_flux(args, fields):
         "runtime": ("t_run", "t_cleanup"),
         "runtime_fsd": ("t_run", "t_cleanup"),
         "runtime_hms": ("t_run", "t_cleanup"),
+        "status": ("state", "result"),
+        "status_abbrev": ("state", "result"),
     }
 
     attrs = set()
@@ -325,7 +347,7 @@ def fetch_jobs_flux(args, fields):
         states |= flux.constants.FLUX_JOB_PENDING
         states |= flux.constants.FLUX_JOB_RUNNING
 
-    jobs = fetch_jobs_all(flux_handle, args, attrs, userid, states)
+    jobs = fetch_jobs_all(flux_handle, args, attrs, userid, states, 0)
     return jobs
 
 
@@ -479,6 +501,8 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "runtime": "RUNTIME",
         "runtime_fsd": "RUNTIME",
         "runtime_hms": "RUNTIME",
+        "status": "STATUS",
+        "status_abbrev": "STATUS",
     }
 
     exception_headings = ExceptionInfo(
