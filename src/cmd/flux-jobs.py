@@ -17,6 +17,7 @@ import argparse
 import time
 import pwd
 import string
+import errno
 from datetime import timedelta
 
 import flux.job
@@ -190,6 +191,48 @@ def fetch_jobs_stdin():
     return jobs
 
 
+def list_id_cb(future, arg):
+    (cbargs, jobid) = arg
+    try:
+        job = future.get_job()
+        cbargs["jobs"].append(job)
+    except EnvironmentError as err:
+        if err.errno == errno.ENOENT:
+            print("JobID {} unknown".format(jobid), file=sys.stderr)
+        else:
+            print("{}: {}".format("rpc", err.strerror), file=sys.stderr)
+
+    cbargs["count"] += 1
+    if cbargs["count"] == cbargs["total"]:
+        cbargs["flux_handle"].reactor_stop(future.get_reactor())
+
+
+def fetch_jobs_ids(flux_handle, args, attrs):
+    cbargs = {
+        "flux_handle": flux_handle,
+        "jobs": [],
+        "count": 0,
+        "total": len(args.jobids),
+    }
+    for jobid in args.jobids:
+        rpc_handle = flux.job.job_list_id(flux_handle, jobid, list(attrs))
+        rpc_handle.then(list_id_cb, arg=(cbargs, jobid))
+    ret = flux_handle.reactor_run(rpc_handle.get_reactor(), 0)
+    if ret < 0:
+        sys.exit(1)
+    return cbargs["jobs"]
+
+
+def fetch_jobs_all(flux_handle, args, attrs, userid, states):
+    rpc_handle = flux.job.job_list(flux_handle, args.count, list(attrs), userid, states)
+    try:
+        jobs = rpc_handle.get_jobs()
+    except EnvironmentError as err:
+        print("{}: {}".format("rpc", err.strerror), file=sys.stderr)
+        sys.exit(1)
+    return jobs
+
+
 def fetch_jobs_flux(args, fields):
     flux_handle = flux.Flux()
 
@@ -225,6 +268,10 @@ def fetch_jobs_flux(args, fields):
     for field in fields:
         attrs.update(fields2attrs[field])
 
+    if args.jobids:
+        jobs = fetch_jobs_ids(flux_handle, args, attrs)
+        return jobs
+
     if args.a:
         args.user = str(os.getuid())
     if args.A:
@@ -256,13 +303,7 @@ def fetch_jobs_flux(args, fields):
         states |= flux.constants.FLUX_JOB_PENDING
         states |= flux.constants.FLUX_JOB_RUNNING
 
-    rpc_handle = flux.job.job_list(flux_handle, args.count, list(attrs), userid, states)
-    try:
-        jobs = rpc_handle.get_jobs()
-    except EnvironmentError as err:
-        print("{}: {}".format("rpc", err.strerror), file=sys.stderr)
-        sys.exit(1)
-
+    jobs = fetch_jobs_all(flux_handle, args, attrs, userid, states)
     return jobs
 
 
@@ -278,19 +319,54 @@ def fetch_jobs(args, fields):
     return [JobInfo(job) for job in lst]
 
 
+class FilterAction(argparse.Action):
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, values)
+        setattr(namespace, "filtered", True)
+
+
+# pylint: disable=redefined-builtin
+class FilterTrueAction(argparse.Action):
+    def __init__(
+        self,
+        option_strings,
+        dest,
+        const=True,
+        default=False,
+        required=False,
+        help=None,
+        metavar=None,
+    ):
+        super(FilterTrueAction, self).__init__(
+            option_strings=option_strings,
+            dest=dest,
+            nargs=0,
+            const=const,
+            default=default,
+            help=help,
+        )
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        setattr(namespace, self.dest, self.const)
+        setattr(namespace, "filtered", True)
+
+
 def parse_args():
     parser = argparse.ArgumentParser(
         prog="flux-jobs", formatter_class=flux.util.help_formatter()
     )
     # -a equivalent to -s "pending,running,inactive" and -u set to userid
     parser.add_argument(
-        "-a", action="store_true", help="List all jobs for current user"
+        "-a", action=FilterTrueAction, help="List all jobs for current user"
     )
     # -A equivalent to -s "pending,running,inactive" and -u set to "all"
-    parser.add_argument("-A", action="store_true", help="List all jobs for all users")
+    parser.add_argument(
+        "-A", action=FilterTrueAction, help="List all jobs for all users"
+    )
     parser.add_argument(
         "-c",
         "--count",
+        action=FilterAction,
         type=int,
         metavar="N",
         default=1000,
@@ -299,6 +375,7 @@ def parse_args():
     parser.add_argument(
         "-s",
         "--states",
+        action=FilterAction,
         type=str,
         metavar="STATES",
         default="pending,running",
@@ -313,6 +390,7 @@ def parse_args():
     parser.add_argument(
         "-u",
         "--user",
+        action=FilterAction,
         type=str,
         metavar="[USERNAME|UID]",
         default=str(os.getuid()),
@@ -326,8 +404,16 @@ def parse_args():
         metavar="FORMAT",
         help="Specify output format using Python's string format syntax",
     )
+    parser.add_argument(
+        "jobids",
+        type=int,
+        metavar="JOBID",
+        nargs="*",
+        help="Limit output to specific Job IDs",
+    )
     # Hidden '--from-stdin' option for testing only.
     parser.add_argument("--from-stdin", action="store_true", help=argparse.SUPPRESS)
+    parser.set_defaults(filtered=False)
     return parser.parse_args()
 
 
@@ -360,10 +446,6 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "nnodes": "NNODES",
         "ranks": "RANKS",
         "success": "SUCCESS",
-        "exception.occurred": "",
-        "exception.severity": "",
-        "exception.type": "",
-        "exception.note": "",
         "t_submit": "T_SUBMIT",
         "t_depend": "T_DEPEND",
         "t_sched": "T_SCHED",
@@ -434,6 +516,9 @@ class JobsOutputFormat(flux.util.OutputFormat):
 @flux.util.CLIMain(LOGGER)
 def main():
     args = parse_args()
+
+    if args.jobids and args.filtered:
+        LOGGER.warning("Filtering options ignored with jobid list")
 
     if args.format:
         fmt = args.format
