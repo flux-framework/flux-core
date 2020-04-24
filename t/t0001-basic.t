@@ -54,11 +54,11 @@ test_expect_success 'flux-start in subprocess/pmi mode works (size 2)' "
 	flux start ${ARGS} --size=2 'flux comms info' | grep 'size=2'
 "
 test_expect_success 'flux-start with size 1 has no peers' "
-	flux start ${ARGS} --size=1 'flux comms idle' > idle.out &&
+	flux start ${ARGS} --size=1 'flux comms lspeer' > idle.out &&
         ! grep 'idle' idle.out
 "
 test_expect_success 'flux-start with size 2 has a peer' "
-	flux start ${ARGS} --size=2 'flux comms idle' > idle.out &&
+	flux start ${ARGS} --size=2 'flux comms lspeer' > idle.out &&
         grep 'idle' idle.out
 "
 test_expect_success 'flux-start --size=1 --bootstrap=selfpmi works' "
@@ -352,7 +352,7 @@ test_expect_success 'reactor: reactorcat example program works' '
 
 test_expect_success 'flux-start: panic rank 1 of a size=2 instance' '
 	! flux start --killer-timeout=0.2 --bootstrap=selfpmi --size=2 \
-		bash -c "flux getattr rundir; flux comms -r 1 panic fubar; sleep 5" >panic.out 2>panic.err
+		bash -c "flux getattr rundir; flux exec -r 1 flux comms panic fubar; sleep 5" >panic.out 2>panic.err
 '
 test_expect_success 'flux-start: panic message reached stderr' '
 	grep -q fubar panic.err

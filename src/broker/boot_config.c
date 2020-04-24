@@ -356,7 +356,7 @@ int boot_config_geturibyrank (json_t *hosts,
     return 0;
 }
 
-int boot_config (flux_t *h, overlay_t *overlay, attr_t *attrs, int tbon_k)
+int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k)
 {
     struct boot_conf conf;
     uint32_t rank;

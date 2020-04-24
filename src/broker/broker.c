@@ -85,7 +85,7 @@ typedef struct {
 
     /* Sockets.
      */
-    overlay_t *overlay;
+    struct overlay *overlay;
 
     /* Session parameters
      */
@@ -127,8 +127,8 @@ static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
                                             const flux_msg_t *msg);
 
-static void parent_cb (overlay_t *ov, void *sock, void *arg);
-static void child_cb (overlay_t *ov, void *sock, void *arg);
+static void parent_cb (struct overlay *ov, void *sock, void *arg);
+static void child_cb (struct overlay *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void hello_update_cb (hello_t *h, void *arg);
@@ -159,7 +159,7 @@ static void runlevel_io_cb (struct runlevel *r,
                             void *arg);
 
 static int create_rundir (attr_t *attrs);
-static int create_broker_rundir (overlay_t *ov, void *arg);
+static int create_broker_rundir (struct overlay *ov, void *arg);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg);
@@ -322,8 +322,6 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.services = service_switch_create ()))
         oom ();
-    if (!(ctx.overlay = overlay_create ()))
-        oom ();
     if (!(ctx.hello = hello_create ()))
         oom ();
     if (!(ctx.heartbeat = heartbeat_create ()))
@@ -422,15 +420,10 @@ int main (int argc, char *argv[])
         log_err ("getattr security.keydir");
         goto cleanup;
     }
-    if (overlay_set_flux (ctx.overlay, ctx.h) < 0) {
-        log_err ("overlay_set_flux");
+    if (!(ctx.overlay = overlay_create (ctx.h, ctx.sec_typemask, keydir))) {
+        log_err ("overlay_create");
         goto cleanup;
     }
-    if (overlay_setup_sec (ctx.overlay, ctx.sec_typemask, keydir) < 0) {
-        log_err ("overlay_setup_sec");
-        goto cleanup;
-    }
-
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
 
@@ -1054,7 +1047,7 @@ done:
     return rc;
 }
 
-static int create_broker_rundir (overlay_t *ov, void *arg)
+static int create_broker_rundir (struct overlay *ov, void *arg)
 {
     attr_t *attrs = arg;
     uint32_t rank;
@@ -1329,22 +1322,6 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void cmb_lspeer_cb (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    char *out;
-
-    if (!(out = overlay_lspeer_encode (ctx->overlay))) {
-        if (flux_respond_error (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-        return;
-    }
-    if (flux_respond (h, msg, out) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    free (out);
-}
-
 #if CODE_COVERAGE_ENABLED
 void __gcov_flush (void);
 #endif
@@ -1552,12 +1529,6 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "cmb.lspeer",
-        cmb_lspeer_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
         "cmb.panic",
         cmb_panic_cb,
         0
@@ -1609,6 +1580,7 @@ static struct internal_service services[] = {
     { "heaptrace",          NULL },
     { "event",              "[0]" },
     { "service",            NULL },
+    { "overlay",            NULL },
     { "config",             NULL },
     { NULL, NULL, },
 };
@@ -1652,7 +1624,7 @@ static void broker_remove_services (flux_msg_handler_t *handlers[])
 
 /* Handle requests from overlay peers.
  */
-static void child_cb (overlay_t *ov, void *sock, void *arg)
+static void child_cb (struct overlay *ov, void *sock, void *arg)
 {
     broker_ctx_t *ctx = arg;
     int type;
@@ -1748,7 +1720,7 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 
 /* Handle messages from one or more parents.
  */
-static void parent_cb (overlay_t *ov, void *sock, void *arg)
+static void parent_cb (struct overlay *ov, void *sock, void *arg)
 {
     broker_ctx_t *ctx = arg;
     flux_msg_t *msg = flux_msg_recvzsock (sock);

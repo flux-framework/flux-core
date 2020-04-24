@@ -177,7 +177,7 @@ static int set_instance_level_attr (struct pmi_handle *pmi,
     return 0;
 }
 
-int boot_pmi (overlay_t *overlay, attr_t *attrs, int tbon_k)
+int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
 {
     int parent_rank;
     const char *child_uri;

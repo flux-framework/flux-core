@@ -14,76 +14,75 @@
 #include "attr.h"
 #include "src/common/libutil/zsecurity.h"
 
-typedef struct overlay_struct overlay_t;
-typedef void (*overlay_cb_f)(overlay_t *ov, void *sock, void *arg);
-typedef int (*overlay_init_cb_f)(overlay_t *ov, void *arg);
-typedef void (*overlay_monitor_cb_f)(overlay_t *ov, void *arg);
+struct overlay;
 
-overlay_t *overlay_create (void);
-void overlay_destroy (overlay_t *ov);
+typedef void (*overlay_sock_cb_f)(struct overlay *ov, void *sock, void *arg);
+typedef int (*overlay_init_cb_f)(struct overlay *ov, void *arg);
+typedef void (*overlay_monitor_cb_f)(struct overlay *ov, void *arg);
+
+struct overlay *overlay_create (flux_t *h,
+                                int sec_typemask,
+                                const char *keydir);
+void overlay_destroy (struct overlay *ov);
 
 /* Set a callback triggered during overlay_init()
  */
-void overlay_set_init_callback (overlay_t *ov,
-                                overlay_init_cb_f cb, void *arg);
+void overlay_set_init_callback (struct overlay *ov,
+                                overlay_init_cb_f cb,
+                                void *arg);
 
 /* These need to be called before connect/bind.
  */
-int overlay_set_flux (overlay_t *ov, flux_t *h);
-int overlay_setup_sec (overlay_t *ov, int sec_typemask, const char *keydir);
-int overlay_init (overlay_t *ov, uint32_t size, uint32_t rank, int tbon_k);
-void overlay_set_idle_warning (overlay_t *ov, int heartbeats);
+int overlay_init (struct overlay *ov,
+                  uint32_t size,
+                  uint32_t rank,
+                  int tbon_k);
+void overlay_set_idle_warning (struct overlay *ov, int heartbeats);
 
 /* Accessors
  */
-uint32_t overlay_get_rank (overlay_t *ov);
-uint32_t overlay_get_size (overlay_t *ov);
-int overlay_get_child_peer_count (overlay_t *ov);
+uint32_t overlay_get_rank (struct overlay *ov);
+uint32_t overlay_get_size (struct overlay *ov);
+int overlay_get_child_peer_count (struct overlay *ov);
 
 /* All ranks but rank 0 connect to a parent to form the main TBON.
  */
-int overlay_set_parent (overlay_t *ov, const char *fmt, ...);
-const char *overlay_get_parent (overlay_t *ov);
-void overlay_set_parent_cb (overlay_t *ov, overlay_cb_f cb, void *arg);
-int overlay_sendmsg_parent (overlay_t *ov, const flux_msg_t *msg);
+int overlay_set_parent (struct overlay *ov, const char *fmt, ...);
+const char *overlay_get_parent (struct overlay *ov);
+void overlay_set_parent_cb (struct overlay *ov,
+                            overlay_sock_cb_f cb,
+                            void *arg);
+int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
 
 /* The child is where other ranks connect to send requests.
  * This is the ROUTER side of parent sockets described above.
  */
-int overlay_set_child (overlay_t *ov, const char *fmt, ...);
-const char *overlay_get_child (overlay_t *ov);
-void overlay_set_child_cb (overlay_t *ov, overlay_cb_f cb, void *arg);
-int overlay_sendmsg_child (overlay_t *ov, const flux_msg_t *msg);
+int overlay_set_child (struct overlay *ov, const char *fmt, ...);
+const char *overlay_get_child (struct overlay *ov);
+void overlay_set_child_cb (struct overlay *ov, overlay_sock_cb_f cb, void *arg);
+int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
 /* We can "multicast" events to all child peers using mcast_child().
  * It walks the 'children' hash, finding peers and routeing them a copy of msg.
  */
-int overlay_mcast_child (overlay_t *ov, const flux_msg_t *msg);
+int overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg);
 
 /* Call when message is received from child 'uuid'.
  */
-void overlay_checkin_child (overlay_t *ov, const char *uuid);
+void overlay_checkin_child (struct overlay *ov, const char *uuid);
 
 /* Register callback that will be called each time a child connects/disconnects.
  * Use overlay_get_child_peer_count() to access the actual count.
  */
-void overlay_set_monitor_cb (overlay_t *ov, overlay_monitor_cb_f cb, void *arg);
-
-/* Encode cmb.lspeer response payload.
- */
-char *overlay_lspeer_encode (overlay_t *ov);
+void overlay_set_monitor_cb (struct overlay *ov,
+                             overlay_monitor_cb_f cb,
+                             void *arg);
 
 /* Establish connections.
  * These functions are idempotent as the bind may need to be called
  * early to resolve wildcard addresses (e.g. during PMI endpoint exchange).
  */
-int overlay_bind (overlay_t *ov);
-int overlay_connect (overlay_t *ov);
-
-/* Switch parent DEALER socket to a new peer.  If the uri is already present
- * in the parent endpoint stack, reuse the existing socket ('recycled' set
- * to true).  The new parent is moved to the top of the parent stack.
- */
-int overlay_reparent (overlay_t *ov, const char *uri, bool *recycled);
+int overlay_bind (struct overlay *ov);
+int overlay_connect (struct overlay *ov);
 
 /* Add attributes to 'attrs' to reveal information about the overlay network.
  * Active attrs:
@@ -97,7 +96,7 @@ int overlay_reparent (overlay_t *ov, const char *uri, bool *recycled);
  *   tbon.descendants
  * Returns 0 on success, -1 on error.
  */
-int overlay_register_attrs (overlay_t *overlay, attr_t *attrs);
+int overlay_register_attrs (struct overlay *overlay, attr_t *attrs);
 
 #endif /* !_BROKER_OVERLAY_H */
 
