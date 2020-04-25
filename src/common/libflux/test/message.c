@@ -896,6 +896,26 @@ void check_flags (void)
     ok (flux_msg_is_streaming (msg) == true,
         "flux_msg_is_streaming = true");
 
+    /* FLUX_MSGFLAG_NORESPONSE */
+    ok (flux_msg_is_noresponse (msg) == false,
+        "flux_msg_is_noresponse = false");
+    ok (flux_msg_set_noresponse (msg) == 0,
+        "flux_msg_set_noresponse_works");
+    ok (flux_msg_is_noresponse (msg) == true,
+        "flux_msg_is_noresponse = true");
+
+    /* noresponse and streaming are mutually exclusive */
+    ok (flux_msg_set_streaming (msg) == 0
+        && flux_msg_set_noresponse (msg) == 0
+        && flux_msg_is_streaming (msg) == false
+        && flux_msg_is_noresponse (msg) == true,
+        "flux_msg_set_noresponse clears streaming flag");
+    ok (flux_msg_set_noresponse (msg) == 0
+        && flux_msg_set_streaming (msg) == 0
+        && flux_msg_is_noresponse (msg) == false
+        && flux_msg_is_streaming (msg) == true,
+        "flux_msg_set_streaming clears noresponse flag");
+
     ok (flux_msg_set_topic (msg, "foo") == 0
         && flux_msg_get_flags (msg, &flags) == 0
         && (flags & FLUX_MSGFLAG_TOPIC),
@@ -928,7 +948,11 @@ void check_flags (void)
     errno = 0;
     ok (flux_msg_set_flags (msg, 0xff) < 0 && errno == EINVAL,
         "flux_msg_set_flags flags=(invalid) fails with EINVAL");
-
+    errno = 0;
+    ok (flux_msg_set_flags (msg, FLUX_MSGFLAG_STREAMING
+                                | FLUX_MSGFLAG_NORESPONSE) < 0
+        && errno == EINVAL,
+        "flux_msg_set_flags streaming|noresponse fails with EINVAL");
     errno = 0;
     ok (flux_msg_set_private (NULL) < 0 && errno == EINVAL,
         "flux_msg_set_private msg=NULL fails with EINVAL");
@@ -940,6 +964,12 @@ void check_flags (void)
         "flux_msg_set_streaming msg=NULL fails with EINVAL");
     ok (flux_msg_is_streaming (NULL) == true,
         "flux_msg_is_streaming msg=NULL returns true");
+
+    errno = 0;
+    ok (flux_msg_set_noresponse (NULL) < 0 && errno == EINVAL,
+        "flux_msg_set_noresponse msg=NULL fails with EINVAL");
+    ok (flux_msg_is_noresponse (NULL) == true,
+        "flux_msg_is_noresponse msg=NULL returns true");
 }
 
 void check_refcount (void)

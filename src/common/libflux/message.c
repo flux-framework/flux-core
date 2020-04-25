@@ -385,9 +385,11 @@ int flux_msg_set_flags (flux_msg_t *msg, uint8_t fl)
 {
     const uint8_t valid_flags = FLUX_MSGFLAG_TOPIC | FLUX_MSGFLAG_PAYLOAD
                               | FLUX_MSGFLAG_ROUTE | FLUX_MSGFLAG_UPSTREAM
-                              | FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING;
+                              | FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING
+                              | FLUX_MSGFLAG_NORESPONSE;
 
-    if (!msg || (fl & ~valid_flags) != 0) {
+    if (!msg || fl & ~valid_flags || ((fl & FLUX_MSGFLAG_STREAMING)
+                                   && (fl & FLUX_MSGFLAG_NORESPONSE)) != 0) {
         errno = EINVAL;
         return -1;
     }
@@ -436,6 +438,7 @@ int flux_msg_set_streaming (flux_msg_t *msg)
     uint8_t flags;
     if (flux_msg_get_flags (msg, &flags) < 0)
         return -1;
+    flags &= ~FLUX_MSGFLAG_NORESPONSE;
     if (flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_STREAMING) < 0)
         return -1;
     return 0;
@@ -447,6 +450,25 @@ bool flux_msg_is_streaming (const flux_msg_t *msg)
     if (flux_msg_get_flags (msg, &flags) < 0)
         return true;
     return (flags & FLUX_MSGFLAG_STREAMING) ? true : false;
+}
+
+int flux_msg_set_noresponse (flux_msg_t *msg)
+{
+    uint8_t flags;
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        return -1;
+    flags &= ~FLUX_MSGFLAG_STREAMING;
+    if (flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_NORESPONSE) < 0)
+        return -1;
+    return 0;
+}
+
+bool flux_msg_is_noresponse (const flux_msg_t *msg)
+{
+    uint8_t flags;
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        return true;
+    return (flags & FLUX_MSGFLAG_NORESPONSE) ? true : false;
 }
 
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
