@@ -189,7 +189,7 @@ void test_nsrc (flux_t *h, uint32_t nodeid)
     json_t *o;
 
     if (!(f = flux_rpc_pack (h, "req.nsrc",
-                             FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE,
+                             FLUX_NODEID_ANY, 0,
                              "{s:i}", "count", count)))
         log_err_exit ("%s", __FUNCTION__);
     flux_future_destroy (f);
@@ -231,7 +231,7 @@ void test_putmsg (flux_t *h, uint32_t nodeid)
         oom ();
 
     if (!(f = flux_rpc_pack (h, "req.nsrc",
-                             FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE,
+                             FLUX_NODEID_ANY, 0,
                              "{s:i}", "count", count)))
         log_err_exit ("%s", __FUNCTION__);
     flux_future_destroy (f);
