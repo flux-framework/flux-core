@@ -34,10 +34,10 @@ enum {
 };
 
 enum {
-    FLUX_MSGFLAG_TOPIC      = 0x01,	/* message has topic string */
-    FLUX_MSGFLAG_PAYLOAD    = 0x02,	/* message has payload */
+    FLUX_MSGFLAG_TOPIC      = 0x01, /* message has topic string */
+    FLUX_MSGFLAG_PAYLOAD    = 0x02, /* message has payload */
     FLUX_MSGFLAG_NORESPONSE = 0x04, /* request needs no response */
-    FLUX_MSGFLAG_ROUTE      = 0x08,	/* message is routable */
+    FLUX_MSGFLAG_ROUTE      = 0x08, /* message is routable */
     FLUX_MSGFLAG_UPSTREAM   = 0x10, /* request nodeid is sender (route away) */
     FLUX_MSGFLAG_PRIVATE    = 0x20, /* private to instance owner and sender */
     FLUX_MSGFLAG_STREAMING  = 0x40, /* request/response is streaming RPC */
