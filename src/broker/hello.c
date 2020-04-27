@@ -16,6 +16,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libidset/idset.h"
 
 #include "hello.h"
@@ -36,6 +37,7 @@ struct hello {
     uint32_t rank;
     uint32_t size;
     struct idset *idset;
+    zlist_t *idset_requests;
 
     double start;
 
@@ -44,6 +46,70 @@ struct hello {
 
     flux_reduce_t *reduce;
 };
+
+static int idset_respond (struct hello *hello, const flux_msg_t *msg)
+{
+    char *s = NULL;
+    int rc = -1;
+
+    if (hello->idset && !(s = idset_encode (hello->idset, IDSET_FLAG_BRACKETS
+                                                        | IDSET_FLAG_RANGE)))
+        goto done;
+    if (flux_respond_pack (hello->h,
+                           msg,
+                           "{s:s s:i}",
+                           "idset",
+                           s ? s : "",
+                           "size",
+                           hello->size) < 0)
+        goto done;
+    rc = 0;
+done:
+    ERRNO_SAFE_WRAP (free, s);
+    return rc;
+}
+
+static bool match_msg_matchtag (const flux_msg_t *msg, uint32_t match_matchtag)
+{
+    uint32_t matchtag;
+
+    if (match_matchtag == FLUX_MATCHTAG_NONE)
+        return true;
+    if (flux_msg_get_matchtag (msg, &matchtag) < 0)
+        return false;
+    return (matchtag == match_matchtag ? true : false);
+}
+
+static bool match_msg_sender (const flux_msg_t *msg, const char *match_sender)
+{
+    char *sender;
+    int cmp;
+
+    if (flux_msg_get_route_first (msg, &sender) < 0 || sender == NULL)
+        return false;
+    cmp = strcmp (sender, match_sender);
+    free (sender);
+    return (cmp == 0 ? true : false);
+}
+
+/* Search hello->idset_requests for a request matching sender and matchtag.
+ * matchtag=FLUX_MATCTHAG_NONE acts as a wildcard.
+ */
+static const flux_msg_t *idset_request_find (struct hello *hello,
+                                             const char *sender,
+                                             uint32_t matchtag)
+{
+    const flux_msg_t *msg;
+
+    msg = zlist_first (hello->idset_requests);
+    while (msg) {
+        if (match_msg_matchtag (msg, matchtag)
+                || match_msg_sender (msg, sender))
+            break;
+        msg = zlist_next (hello->idset_requests);
+    }
+    return msg;
+}
 
 double hello_get_time (struct hello *hello)
 {
@@ -89,6 +155,82 @@ int hello_start (struct hello *hello)
 error:
     idset_destroy (idset);
     return -1;
+}
+
+static void idset_request (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct hello *hello = arg;
+    const char *errmsg = NULL;
+
+    if (hello->rank > 0) {
+        errno = EPROTO;
+        errmsg = "idset request only works on rank 0";
+        goto error;
+    }
+    if (idset_respond (hello, msg) < 0)
+        goto error;
+    /* If streaming flag is set on this message, continue to send
+     * responses until cancel/disconnect.
+     */
+    if (flux_msg_is_streaming (msg)) {
+        if (zlist_append (hello->idset_requests,
+                          (flux_msg_t *)flux_msg_incref (msg)) < 0) {
+            flux_msg_decref (msg);
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "hello: wait respond error");
+}
+
+static void disconnect_request (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    struct hello *hello = arg;
+    const flux_msg_t *req;
+    char *sender;
+
+    if (flux_msg_get_route_first (msg, &sender) < 0 || sender == NULL)
+        return;
+    while ((req = idset_request_find (hello, sender, FLUX_MATCHTAG_NONE))) {
+        zlist_remove (hello->idset_requests, (flux_msg_t *)req);
+        flux_msg_decref (req);
+    }
+    free (sender);
+}
+
+/* User specifies matchtag of request to cancel (use flux_rpc_get_matchtag()).
+ * Cancel request does not receive a response.
+ * The canceled idset request receives an ENODATA response per RFC 6.
+ */
+static void cancel_request (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
+{
+    struct hello *hello = arg;
+    const flux_msg_t *req;
+    char *sender;
+    uint32_t matchtag;
+
+    if (flux_request_unpack (msg, NULL, "{s:i}", &matchtag) < 0)
+        return;
+    if (flux_msg_get_route_first (msg, &sender) < 0 || sender == NULL)
+        return;
+    if ((req = idset_request_find (hello, sender, matchtag))) {
+        (void)flux_respond_error (h, req, ECANCELED, "Request was canceled");
+        zlist_remove (hello->idset_requests, (flux_msg_t *)req);
+        flux_msg_decref (req);
+    }
+    free (sender);
 }
 
 /* handle a message sent from downstream via downstream's r_forward op.
@@ -205,6 +347,13 @@ static void r_sink (flux_reduce_t *r, int batch, void *arg)
     }
     if (hello->cb)
         hello->cb (hello, hello->cb_arg);
+    if (hello->idset_requests) {
+        const flux_msg_t *msg = zlist_first (hello->idset_requests);
+        while (msg) {
+            (void)idset_respond (hello, msg);
+            msg = zlist_next (hello->idset_requests);
+        }
+    }
 }
 
 /* (called on rank > 0 only) Pop exactly one idset, forward upstream.
@@ -258,7 +407,10 @@ struct flux_reduce_ops reduce_ops = {
 };
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "hello.join",     join_request, 0 },
+    { FLUX_MSGTYPE_REQUEST, "hello.join",       join_request, 0 },
+    { FLUX_MSGTYPE_REQUEST, "hello.idset",      idset_request, 0 },
+    { FLUX_MSGTYPE_REQUEST, "hello.disconnect", disconnect_request, 0 },
+    { FLUX_MSGTYPE_REQUEST, "hello.cancel",     cancel_request, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -276,6 +428,11 @@ struct hello *hello_create (flux_t *h, attr_t *attrs, hello_cb_f cb, void *arg)
     hello->size = 1;
     hello->cb = cb;
     hello->cb_arg = arg;
+
+    if (!(hello->idset_requests = zlist_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
 
     if (flux_msg_handler_addvec (hello->h, htab, hello, &hello->handlers) < 0)
         goto error;
@@ -355,6 +512,12 @@ void hello_destroy (struct hello *hello)
         flux_reduce_destroy (hello->reduce);
         flux_msg_handler_delvec (hello->handlers);
         idset_destroy (hello->idset);
+        if (hello->idset_requests) {
+            const flux_msg_t *msg;
+            while ((msg = zlist_pop (hello->idset_requests)))
+                flux_msg_decref (msg);
+            zlist_destroy (&hello->idset_requests);
+        }
         free (hello);
         errno = saved_errno;
     }
