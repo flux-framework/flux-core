@@ -74,6 +74,9 @@ test_ldadd = \
 test_cppflags = \
 	$(AM_CPPFLAGS)
 
+test_ldflags = \
+	-no-install
+
 check_PROGRAMS = $(TESTS)
 
 TEST_EXTENSIONS = .t
@@ -84,32 +87,44 @@ test_job_t_SOURCES = test/job.c
 test_job_t_CPPFLAGS = $(test_cppflags)
 test_job_t_LDADD = \
         $(test_ldadd)
+test_job_t_LDFLAGS = \
+        $(test_ldflags)
 
 test_list_t_SOURCES = test/list.c
 test_list_t_CPPFLAGS = $(test_cppflags)
 test_list_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/list.o \
-        $(test_ldadd)
+	$(test_ldadd)
+test_list_t_LDFLAGS = \
+        $(test_ldflags)
 
 test_raise_t_SOURCES = test/raise.c
 test_raise_t_CPPFLAGS = $(test_cppflags)
 test_raise_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/raise.o \
         $(test_ldadd)
+test_raise_t_LDFLAGS = \
+        $(test_ldflags)
 
 test_kill_t_SOURCES = test/kill.c
 test_kill_t_CPPFLAGS = $(test_cppflags)
 test_kill_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/kill.o \
         $(test_ldadd)
+test_kill_t_LDFLAGS = \
+        $(test_ldflags)
 
 test_restart_t_SOURCES = test/restart.c
 test_restart_t_CPPFLAGS = $(test_cppflags)
 test_restart_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/restart.o \
         $(test_ldadd)
+test_restart_t_LDFLAGS = \
+        $(test_ldflags)
 
 test_submit_t_SOURCES = test/submit.c
 test_submit_t_CPPFLAGS = $(test_cppflags)
 test_submit_t_LDADD = \
         $(test_ldadd)
+test_submit_t_LDFLAGS = \
+        $(test_ldflags)

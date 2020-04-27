@@ -62,6 +62,9 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(ZMQ_LIBS) $(LIBPTHREAD) $(JANSSON_LIBS)
 
+test_ldflags = \
+	-no-install
+
 test_cppflags = \
 	$(AM_CPPFLAGS)
 
@@ -79,3 +82,5 @@ test_rset_t_CPPFLAGS = \
 	$(test_cppflags)
 test_rset_t_LDADD = \
 	$(test_ldadd)
+test_rset_t_LDFLAGS = \
+	$(test_ldflags)

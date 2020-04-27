@@ -66,34 +66,45 @@ test_cppflags = \
         $(AM_CPPFLAGS) \
         -I$(top_srcdir)/src/common/libtap
 
+test_ldflags = \
+	-no-install
+
 test_sendfd_t_SOURCES = test/sendfd.c
 test_sendfd_t_CPPFLAGS = $(test_cppflags)
 test_sendfd_t_LDADD = $(test_ldadd)
+test_sendfd_t_LDFLAGS = $(test_ldflags)
 
 test_disconnect_t_SOURCES = test/disconnect.c
 test_disconnect_t_CPPFLAGS = $(test_cppflags)
 test_disconnect_t_LDADD = $(test_ldadd)
+test_disconnect_t_LDFLAGS = $(test_ldflags)
 
 test_auth_t_SOURCES = test/auth.c
 test_auth_t_CPPFLAGS = $(test_cppflags)
 test_auth_t_LDADD = $(test_ldadd)
+test_auth_t_LDFLAGS = $(test_ldflags)
 
 test_usock_t_SOURCES = test/usock.c
 test_usock_t_CPPFLAGS = $(test_cppflags)
 test_usock_t_LDADD = $(test_ldadd)
+test_usock_t_LDFLAGS = $(test_ldflags)
 
 test_usock_echo_t_SOURCES = test/usock_echo.c
 test_usock_echo_t_CPPFLAGS = $(test_cppflags)
 test_usock_echo_t_LDADD = $(test_ldadd)
+test_usock_echo_t_LDFLAGS = $(test_ldflags)
 
 test_subhash_t_SOURCES = test/subhash.c
 test_subhash_t_CPPFLAGS = $(test_cppflags)
 test_subhash_t_LDADD = $(test_ldadd)
+test_subhash_t_LDFLAGS = $(test_ldflags)
 
 test_router_t_SOURCES = test/router.c
 test_router_t_CPPFLAGS = $(test_cppflags)
 test_router_t_LDADD = $(test_ldadd)
+test_router_t_LDFLAGS = $(test_ldflags)
 
 test_servhash_t_SOURCES = test/servhash.c
 test_servhash_t_CPPFLAGS = $(test_cppflags)
 test_servhash_t_LDADD = $(test_ldadd)
+test_servhash_t_LDFLAGS = $(test_ldflags)

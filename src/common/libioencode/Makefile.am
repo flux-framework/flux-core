@@ -34,6 +34,9 @@ test_ldadd = \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libtap/libtap.la
 
+test_ldflags = \
+	-no-install
+
 test_cppflags = \
         $(AM_CPPFLAGS) \
 	-I$(top_srcdir)/src/common/libtap
@@ -41,3 +44,4 @@ test_cppflags = \
 test_ioencode_t_SOURCES = test/ioencode.c
 test_ioencode_t_CPPFLAGS = $(test_cppflags)
 test_ioencode_t_LDADD = $(test_ldadd)
+test_ioencode_t_LDFLAGS = $(test_ldflags)

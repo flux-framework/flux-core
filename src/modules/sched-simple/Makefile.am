@@ -53,6 +53,9 @@ test_ldadd = \
 test_cppflags = \
 	$(AM_CPPFLAGS)
 
+test_ldflags = \
+	-no-install
+
 TESTS = \
 	test_rnode.t \
 	test_rlist.t
@@ -69,6 +72,8 @@ test_rnode_t_CPPFLAGS = \
 	$(test_cppflags)
 test_rnode_t_LDADD = \
 	$(test_ldadd)
+test_rnode_t_LDFLAGS = \
+	$(test_ldflags)
 
 test_rlist_t_SOURCES = \
 	rnode.c \
@@ -80,6 +85,8 @@ test_rlist_t_CPPFLAGS = \
 	$(test_cppflags)
 test_rlist_t_LDADD = \
 	$(test_ldadd)
+test_rlist_t_LDFLAGS = \
+	$(test_ldflags)
 
 rlist_query_SOURCES = \
 	rnode.c \

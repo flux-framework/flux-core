@@ -89,6 +89,9 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la
 
+test_ldflags = \
+	-no-install
+
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
@@ -103,31 +106,39 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_heartbeat_t_SOURCES = test/heartbeat.c
 test_heartbeat_t_CPPFLAGS = $(test_cppflags)
 test_heartbeat_t_LDADD = $(test_ldadd)
+test_heartbeat_t_LDFLAGS = $(test_ldflags)
 
 test_hello_t_SOURCES = test/hello.c
 test_hello_t_CPPFLAGS = $(test_cppflags)
 test_hello_t_LDADD = $(test_ldadd)
+test_hello_t_LDFLAGS = $(test_ldflags)
 
 test_attr_t_SOURCES = test/attr.c
 test_attr_t_CPPFLAGS = $(test_cppflags)
 test_attr_t_LDADD = $(test_ldadd)
+test_attr_t_LDFLAGS = $(test_ldflags)
 
 test_service_t_SOURCES = test/service.c
 test_service_t_CPPFLAGS = $(test_cppflags)
 test_service_t_LDADD = $(test_ldadd)
+test_service_t_LDFLAGS = $(test_ldflags)
 
 test_reduce_t_SOURCES = test/reduce.c
 test_reduce_t_CPPFLAGS = $(test_cppflags)
 test_reduce_t_LDADD = $(test_ldadd)
+test_reduce_t_LDFLAGS = $(test_ldflags)
 
 test_liblist_t_SOURCES = test/liblist.c
 test_liblist_t_CPPFLAGS = $(test_cppflags)
 test_liblist_t_LDADD = $(test_ldadd)
+test_liblist_t_LDFLAGS = $(test_ldflags)
 
 test_pmiutil_t_SOURCES = test/pmiutil.c
 test_pmiutil_t_CPPFLAGS = $(test_cppflags)
 test_pmiutil_t_LDADD = $(test_ldadd)
+test_pmiutil_t_LDFLAGS = $(test_ldflags)
 
 test_boot_config_t_SOURCES = test/boot_config.c
 test_boot_config_t_CPPFLAGS = $(test_cppflags)
 test_boot_config_t_LDADD = $(test_ldadd)
+test_boot_config_t_LDFLAGS = $(test_ldflags)

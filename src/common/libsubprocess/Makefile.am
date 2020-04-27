@@ -51,6 +51,9 @@ test_ldadd = \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libtap/libtap.la
 
+test_ldflags = \
+	-no-install
+
 test_cppflags = \
         $(AM_CPPFLAGS) \
 	-I$(top_srcdir)/src/common/libtap
@@ -58,12 +61,14 @@ test_cppflags = \
 test_cmd_t_SOURCES = test/cmd.c
 test_cmd_t_CPPFLAGS = $(test_cppflags)
 test_cmd_t_LDADD = $(test_ldadd)
+test_cmd_t_LDFLAGS = $(test_ldflags)
 
 test_subprocess_t_SOURCES = test/subprocess.c
 test_subprocess_t_CPPFLAGS = \
 	-DTEST_SUBPROCESS_DIR=\"$(top_builddir)/src/common/libsubprocess/\" \
 	$(test_cppflags)
 test_subprocess_t_LDADD = $(test_ldadd)
+test_subprocess_t_LDFLAGS = $(test_ldflags)
 
 test_echo_SOURCES = test/test_echo.c
 
