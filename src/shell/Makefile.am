@@ -117,6 +117,9 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la
 
+test_ldflags = \
+	-no-install
+
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \
         $(AM_CPPFLAGS)
@@ -138,39 +141,49 @@ test_jobspec_t_CPPFLAGS = $(test_cppflags)
 test_jobspec_t_LDADD = \
 	$(builddir)/libshell.la \
 	$(test_ldadd)
+test_jobspec_t_LDFLAGS = \
+	$(test_ldflags)
 
 test_plugstack_t_SOURCES = plugstack.c test/plugstack.c
 test_plugstack_t_CPPFLAGS = $(test_cppflags) -DPLUGSTACK_STANDALONE
 test_plugstack_t_LDADD = \
 	$(builddir)/libshell.la \
 	$(test_ldadd)
+test_plugstack_t_LDFLAGS = \
+	$(test_ldflags)
 
 test_a_plugin_la_SOURCES = test/plugin_test.c
 test_a_plugin_la_CPPFLAGS = $(test_cppflags) -DTEST_PLUGIN_RESULT=\"A\"
-test_a_plugin_la_LDFLAGS = -module -rpath /nowhere
+test_a_plugin_la_LDFLAGS = -module -rpath /nowhere $(test_ldflags)
 
 test_b_plugin_la_SOURCES = test/plugin_test.c
 test_b_plugin_la_CPPFLAGS = $(test_cppflags) -DTEST_PLUGIN_RESULT=\"B\"
-test_b_plugin_la_LDFLAGS = -module -rpath /nowhere
+test_b_plugin_la_LDFLAGS = -module -rpath /nowhere $(test_ldflags)
 
 test_c_plugin_la_SOURCES = test/plugin_test.c
 test_c_plugin_la_CPPFLAGS = $(test_cppflags) -DTEST_PLUGIN_RESULT=\"C\"
-test_c_plugin_la_LDFLAGS = -module -rpath /nowhere
+test_c_plugin_la_LDFLAGS = -module -rpath /nowhere $(test_ldflags)
 
 mpir_test_rangelist_t_SOURCES = mpir/test/rangelist.c
 mpir_test_rangelist_t_CPPFLAGS = $(test_cppflags)
 mpir_test_rangelist_t_LDADD = \
 	$(builddir)/libmpir.la \
 	$(test_ldadd)
+mpir_test_rangelist_t_LDFLAGS = \
+	$(test_ldflags)
 
 mpir_test_nodelist_t_SOURCES = mpir/test/nodelist.c
 mpir_test_nodelist_t_CPPFLAGS = $(test_cppflags)
 mpir_test_nodelist_t_LDADD = \
 	$(builddir)/libmpir.la \
 	$(test_ldadd)
+mpir_test_nodelist_t_LDFLAGS = \
+	$(test_ldflags)
 
 mpir_test_proctable_t_SOURCES = mpir/test/proctable.c
 mpir_test_proctable_t_CPPFLAGS = $(test_cppflags)
 mpir_test_proctable_t_LDADD = \
 	$(builddir)/libmpir.la \
 	$(test_ldadd)
+mpir_test_proctable_t_LDFLAGS = \
+	$(test_ldflags)

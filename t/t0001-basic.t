@@ -366,6 +366,18 @@ test_expect_success 'flux-start: rank 0 Killed' '
 	egrep "flux-start: 0 .* Killed" panic.err
 '
 
+test_expect_success 'no unit tests built with libtool wrapper' '
+	find ${FLUX_BUILD_DIR} \
+		-name "test_*.t" \
+		-type f \
+		-executable \
+		-printf "%h\n" \
+		| uniq \
+		| xargs -i basename {} > test_dirs &&
+	test_debug "cat test_dirs" &&
+	test_must_fail grep -q "\.libs" test_dirs
+'
+
 # Note: flux-start auto-removes rundir
 
 test_done
