@@ -114,7 +114,7 @@ typedef struct {
     int tbon_k;
     /* Bootstrap
      */
-    hello_t *hello;
+    struct hello *hello;
     struct runlevel *runlevel;
 
     char *init_shell_cmd;
@@ -131,7 +131,7 @@ static void parent_cb (struct overlay *ov, void *sock, void *arg);
 static void child_cb (struct overlay *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
-static void hello_update_cb (hello_t *h, void *arg);
+static void hello_cb (struct hello *h, void *arg);
 static void shutdown_cb (struct shutdown *s, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
@@ -321,8 +321,6 @@ int main (int argc, char *argv[])
     if (!(ctx.modhash = modhash_create ()))
         oom ();
     if (!(ctx.services = service_switch_create ()))
-        oom ();
-    if (!(ctx.hello = hello_create ()))
         oom ();
     if (!(ctx.heartbeat = heartbeat_create ()))
         oom ();
@@ -688,12 +686,10 @@ int main (int argc, char *argv[])
 
     /* Send hello message to parent.
      * N.B. uses tbon topology attributes set above.
-     * Start init once wireup is complete.
+     * hello_cb() tracks progress on rank 0.
      */
-    hello_set_flux (ctx.hello, ctx.h);
-    hello_set_callback (ctx.hello, hello_update_cb, &ctx);
-    if (hello_register_attrs (ctx.hello, ctx.attrs) < 0) {
-        log_err ("configuring hello attributes");
+    if (!(ctx.hello = hello_create (ctx.h, ctx.attrs, hello_cb, &ctx))) {
+        log_err ("hello_create");
         goto cleanup;
     }
     if (hello_start (ctx.hello) < 0) {
@@ -851,24 +847,30 @@ static void init_attrs (attr_t *attrs, pid_t pid)
         log_err_exit ("attr_add version");
 }
 
-static void hello_update_cb (hello_t *hello, void *arg)
+static void hello_cb (struct hello *hello, void *arg)
 {
     broker_ctx_t *ctx = arg;
+    char *s;
+
+    if (!(s = idset_encode (hello_get_idset (hello),
+                            IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
+        log_err_exit ("hello: idset_encode");
+
+    flux_log (ctx->h,
+              LOG_INFO,
+              "wireup: %s (%s) %.1fs",
+              s,
+              hello_complete (hello) ? "complete" : "incomplete",
+              hello_get_time (hello));
 
     if (hello_complete (hello)) {
-        flux_log (ctx->h, LOG_INFO, "wireup: %d/%d (complete) %.1fs",
-                  hello_get_count (hello), overlay_get_size(ctx->overlay),
-                  hello_get_time (hello));
         flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
         overlay_set_idle_warning (ctx->overlay, 3);
         if (runlevel_set_level (ctx->runlevel, 1) < 0)
             log_err_exit ("runlevel_set_level 1");
-        /* FIXME: shutdown hello protocol */
-    } else  {
-        flux_log (ctx->h, LOG_INFO, "wireup: %d/%d (incomplete) %.1fs",
-                  hello_get_count (hello), overlay_get_size(ctx->overlay),
-                  hello_get_time (hello));
     }
+
+    free (s);
 }
 
 /* If shutdown timeout has occured, exit immediately.

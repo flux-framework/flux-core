@@ -14,43 +14,32 @@
 #include <stdbool.h>
 #include "attr.h"
 
-/* hello protocol is used to detect that TBON overlay has wired up.
- */
+struct hello;
 
-typedef struct hello_struct hello_t;
+typedef void (*hello_cb_f)(struct hello *hello, void *arg);
 
-typedef void (*hello_cb_f)(hello_t *hello, void *arg);
-
-hello_t *hello_create (void);
-void hello_destroy (hello_t *hello);
-
-/* Register handle
- */
-void hello_set_flux (hello_t *hello, flux_t *h);
-
-/* Set up broker attributes
- */
-int hello_register_attrs (hello_t *hello, attr_t *attrs);
-
-/* Register callback for completion/progress.
- */
-void hello_set_callback (hello_t *hello, hello_cb_f cb, void *arg);
+struct hello *hello_create (flux_t *h, attr_t *attrs, hello_cb_f cb, void *arg);
+void hello_destroy (struct hello *hello);
 
 /* Get time in seconds elapsed since hello_start()
  */
-double hello_get_time (hello_t *hello);
+double hello_get_time (struct hello *hello);
 
 /* Get number of ranks currently accounted for.
  */
-int hello_get_count (hello_t *hello);
+int hello_get_count (struct hello *hello);
 
 /* Get completion status
  */
-bool hello_complete (hello_t *hello);
+bool hello_complete (struct hello *hello);
+
+/* Get the current idset containing ranks that have checked in.
+ */
+const struct idset *hello_get_idset (struct hello *hello);
 
 /* Start the hello protocol (call on all ranks).
  */
-int hello_start (hello_t *hello);
+int hello_start (struct hello *hello);
 
 #endif /* !_BROKER_HELLO_H */
 
