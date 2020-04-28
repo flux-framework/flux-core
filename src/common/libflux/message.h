@@ -34,9 +34,10 @@ enum {
 };
 
 enum {
-    FLUX_MSGFLAG_TOPIC      = 0x01,	/* message has topic string */
-    FLUX_MSGFLAG_PAYLOAD    = 0x02,	/* message has payload */
-    FLUX_MSGFLAG_ROUTE      = 0x08,	/* message is routable */
+    FLUX_MSGFLAG_TOPIC      = 0x01, /* message has topic string */
+    FLUX_MSGFLAG_PAYLOAD    = 0x02, /* message has payload */
+    FLUX_MSGFLAG_NORESPONSE = 0x04, /* request needs no response */
+    FLUX_MSGFLAG_ROUTE      = 0x08, /* message is routable */
     FLUX_MSGFLAG_UPSTREAM   = 0x10, /* request nodeid is sender (route away) */
     FLUX_MSGFLAG_PRIVATE    = 0x20, /* private to instance owner and sender */
     FLUX_MSGFLAG_STREAMING  = 0x40, /* request/response is streaming RPC */
@@ -155,6 +156,12 @@ bool flux_msg_is_private (const flux_msg_t *msg);
  */
 int flux_msg_set_streaming (flux_msg_t *msg);
 bool flux_msg_is_streaming (const flux_msg_t *msg);
+
+/* Get/set noresponse flag.
+ * Request is advisory and should not receive a response.
+ */
+int flux_msg_set_noresponse (flux_msg_t *msg);
+bool flux_msg_is_noresponse (const flux_msg_t *msg);
 
 /* Get/set/compare message topic string.
  * set adds/deletes/replaces topic frame as needed.

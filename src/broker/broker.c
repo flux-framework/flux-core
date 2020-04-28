@@ -1757,6 +1757,14 @@ done:
     flux_msg_destroy (msg);
 }
 
+/* Callback to send disconnect messages on behalf of unloading module.
+ */
+void disconnect_send_cb (const flux_msg_t *msg, void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    broker_request_sendmsg (ctx, msg);
+}
+
 /* Handle messages on the service socket of a comms module.
  */
 static void module_cb (module_t *p, void *arg)
@@ -1776,6 +1784,12 @@ static void module_cb (module_t *p, void *arg)
             break;
         case FLUX_MSGTYPE_REQUEST:
             broker_request_sendmsg (ctx, msg);
+            if (flux_msg_get_route_count (msg) == 1
+                && module_disconnect_arm (p, msg, disconnect_send_cb, ctx) < 0) {
+                    flux_log_error (ctx->h,
+                                    "%s: module_disconnect_arm",
+                                    module_get_name (p));
+            }
             break;
         case FLUX_MSGTYPE_EVENT:
             if (broker_event_sendmsg (ctx, msg) < 0) {

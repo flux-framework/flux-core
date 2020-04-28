@@ -211,7 +211,7 @@ void xping_request_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_log (h, LOG_DEBUG, "Tping seq=%d %d!%s", seq, rank, service);
 
     flux_future_t *f;
-    if (!(f = flux_rpc_pack (h, service, rank, FLUX_RPC_NORESPONSE,
+    if (!(f = flux_rpc_pack (h, service, rank, 0,
                              "{s:i}", "seq", seq)))
         goto error;
     flux_future_destroy (f);

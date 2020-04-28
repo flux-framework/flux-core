@@ -80,6 +80,8 @@ struct module_struct {
     module_status_cb_f status_cb;
     void *status_arg;
 
+    struct disconnect *disconnect;
+
     zlist_t *rmmod;
     flux_msg_t *insmod;
 
@@ -388,6 +390,20 @@ done:
     return rc;
 }
 
+int module_disconnect_arm (module_t *p,
+                           const flux_msg_t *msg,
+                           disconnect_send_f cb,
+                           void *arg)
+{
+    if (!p->disconnect) {
+        if (!(p->disconnect = disconnect_create (cb, arg)))
+            return -1;
+    }
+    if (disconnect_arm (p->disconnect, msg) < 0)
+        return -1;
+    return 0;
+}
+
 static void module_destroy (module_t *p)
 {
     int e;
@@ -402,6 +418,10 @@ static void module_destroy (module_t *p)
         if ((e = pthread_join (p->t, &res)) != 0)
             log_errn_exit (e, "pthread_cancel");
     }
+
+    /* Send disconnect messages to services used by this module.
+     */
+    disconnect_destroy (p->disconnect);
 
     flux_watcher_stop (p->broker_w);
     flux_watcher_destroy (p->broker_w);

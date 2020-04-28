@@ -259,6 +259,8 @@ static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
     }
     if ((flags & FLUX_RPC_STREAMING))
         msgflags |= FLUX_MSGFLAG_STREAMING;
+    if ((flags & FLUX_RPC_NORESPONSE))
+        msgflags |= FLUX_MSGFLAG_NORESPONSE;
     if (flux_msg_set_flags (msg, msgflags) < 0)
         goto error;
     if (flux_msg_set_nodeid (msg, nodeid) < 0)

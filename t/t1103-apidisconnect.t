@@ -8,6 +8,8 @@ test_description='Test api disconnect generation
 SIZE=4
 test_under_flux ${SIZE} kvs
 
+TEST_WATCHER=${FLUX_BUILD_DIR}/t/disconnect/.libs/watcher.so
+
 # Usage: check_watchers #expected #tries
 check_kvs_watchers() {
 	local i n
@@ -32,5 +34,13 @@ test_expect_success 'multi-node kvs watcher gets disconnected on client exit' '
 	${FLUX_BUILD_DIR}/t/kvs/watch_disconnect $SIZE
 '
 
+test_expect_success 'module watcher gets disconnected on module unload' '
+	before_watchers=`flux module stats --parse "watchers" kvs-watch` &&
+	echo "waiters before loading module: $before_watchers" &&
+	flux module load ${TEST_WATCHER} &&
+	check_kvs_watchers $(($before_watchers+1)) 3 &&
+	flux module remove watcher &&
+	check_kvs_watchers $before_watchers 3
+'
 
 test_done

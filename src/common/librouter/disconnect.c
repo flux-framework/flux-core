@@ -148,11 +148,14 @@ flux_msg_t *disconnect_msg (const flux_msg_t *msg)
         return NULL;
     if (!(cpy = flux_msg_copy (msg, false)))
         return NULL;
-    if (flux_msg_set_topic (cpy, distopic) < 0) {
-        flux_msg_destroy (cpy);
-        return NULL;
-    }
+    if (flux_msg_set_topic (cpy, distopic) < 0)
+        goto error;
+    if (flux_msg_set_noresponse (cpy) < 0)
+        goto error;
     return cpy;
+error:
+    flux_msg_destroy (cpy);
+    return NULL;
 }
 
 /* Insert a disconnect message cloned from 'msg' in the disconnect hash,
@@ -162,6 +165,8 @@ int disconnect_arm (struct disconnect *dcon, const flux_msg_t *msg)
 {
     char key[HASHKEY_BUFSIZE];
 
+    if (flux_msg_is_noresponse (msg))
+        return 0;
     if (disconnect_hashkey (msg, key, sizeof (key)) < 0)
         return -1;
     if (!zhashx_lookup (dcon->hash, key)) {

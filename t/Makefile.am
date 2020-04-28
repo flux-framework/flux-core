@@ -269,6 +269,7 @@ check_LTLIBRARIES = \
 	request/req.la \
 	ingest/job-manager-dummy.la \
 	job-manager/sched-dummy.la \
+	disconnect/watcher.la \
 	shell/plugins/dummy.la \
 	shell/plugins/conftest.la \
 	shell/plugins/invalid-args.la \
@@ -503,6 +504,12 @@ job_manager_sched_dummy_la_CPPFLAGS = $(test_cppflags)
 job_manager_sched_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 job_manager_sched_dummy_la_LIBADD = \
         $(top_builddir)/src/common/libschedutil/libschedutil.la \
+        $(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+disconnect_watcher_la_SOURCES = disconnect/watcher.c
+disconnect_watcher_la_CPPFLAGS = $(test_cppflags)
+disconnect_watcher_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
+disconnect_watcher_la_LIBADD = \
         $(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 sched_simple_jj_reader_SOURCES = sched-simple/jj-reader.c

@@ -13,6 +13,8 @@
 
 #include <jansson.h>
 
+#include "src/common/librouter/disconnect.h"
+
 #include "heartbeat.h"
 #include "service.h"
 
@@ -57,6 +59,15 @@ void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg);
  */
 flux_msg_t *module_recvmsg (module_t *p);
 int module_sendmsg (module_t *p, const flux_msg_t *msg);
+
+/* Pass module's requests through this function to enable disconnect
+ * messages to be sent when the module is unloaded.  The callback will
+ * be used to send those messages.
+ */
+int module_disconnect_arm (module_t *p,
+                           const flux_msg_t *msg,
+                           disconnect_send_f cb,
+                           void *arg);
 
 /* Send an event message to all modules that have matching subscription.
  */
