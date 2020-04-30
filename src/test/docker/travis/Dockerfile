@@ -64,6 +64,7 @@ RUN mkdir -p /var/run/munge \
  && chown -R munge /etc/munge/munge.key /var/run/munge \
  && chmod 600 /etc/munge/munge.key
 
+COPY entrypoint.sh /usr/local/sbin/
 
 ENV BASE_IMAGE=$BASE_IMAGE
 USER $USER

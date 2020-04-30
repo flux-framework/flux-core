@@ -165,7 +165,8 @@ if test -n "$TAG"; then
                userdel $USER" \
 	|| (docker rm tmp.$$; die "docker run of 'make install' failed")
     docker commit \
-	--change 'CMD "/usr/bin/flux"' \
+	--change 'ENTRYPOINT [ "/usr/local/sbin/entrypoint.sh" ]' \
+	--change 'CMD [ "/usr/bin/flux",  "start", "/bin/bash" ]' \
 	--change 'USER flux' \
 	--change 'WORKDIR /home/flux' \
 	tmp.$$ $TAG \
