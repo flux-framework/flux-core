@@ -30,6 +30,16 @@ json_t *get_job_by_id (struct info_ctx *ctx,
                        json_t *attrs,
                        bool *stall);
 
+/* Filter test to determine if job desired by caller */
+bool job_filter (struct job *job, uint32_t userid, int states)
+{
+    if (!(job->state & states))
+        return false;
+    if (userid != FLUX_USERID_UNKNOWN && job->userid != userid)
+        return false;
+    return true;
+}
+
 /* Put jobs from list onto jobs array, breaking if max_entries has
  * been reached. Returns 1 if jobs array is full, 0 if continue, -1
  * one error with errno set:
@@ -47,19 +57,17 @@ int get_jobs_from_list (json_t *jobs,
 
     job = zlistx_first (list);
     while (job) {
-        if (job->state & states) {
-            if (userid == FLUX_USERID_UNKNOWN || job->userid == userid) {
-                json_t *o;
-                if (!(o = job_to_json (job, attrs)))
-                    return -1;
-                if (json_array_append_new (jobs, o) < 0) {
-                    json_decref (o);
-                    errno = ENOMEM;
-                    return -1;
-                }
-                if (json_array_size (jobs) == max_entries)
-                    return 1;
+        if (job_filter (job, userid, states)) {
+            json_t *o;
+            if (!(o = job_to_json (job, attrs)))
+                return -1;
+            if (json_array_append_new (jobs, o) < 0) {
+                json_decref (o);
+                errno = ENOMEM;
+                return -1;
             }
+            if (json_array_size (jobs) == max_entries)
+                return 1;
         }
         job = zlistx_next (list);
     }
