@@ -126,7 +126,7 @@ wait_states() {
         local i=0
         while ( [ "$(flux job list --states=sched | wc -l)" != "8" ] \
                 || [ "$(flux job list --states=run | wc -l)" != "8" ] \
-                || [ "$(flux job list --states=inactive | wc -l)" != "4" ]) \
+                || [ "$(flux job list --states=inactive | wc -l)" != "6" ]) \
                && [ $i -lt 50 ]
         do
                 sleep 0.1
@@ -144,7 +144,9 @@ test_expect_success 'submit jobs for job list testing' '
             flux job submit hostname.json >> job_ids1.out; \
             fj_wait_event `tail -n 1 job_ids1.out` clean ; \
         done &&
-        tac job_ids1.out > job_ids_inactive.out &&
+        jobid=`flux mini submit nosuchcommand` &&
+        flux job wait-event $jobid clean &&
+        echo $jobid >> job_ids1.out &&
         for i in `seq 1 8`; do \
             flux job submit sleeplong.json >> job_ids2.out; \
             fj_wait_event `tail -n 1 job_ids2.out` start; \
@@ -168,6 +170,12 @@ test_expect_success 'submit jobs for job list testing' '
         echo $id8 >> job_ids_pending.out &&
         cat job_ids_pending.out > active.out &&
         cat job_ids_running.out >> active.out &&
+        jobid=`flux mini submit cancelledjob` &&
+        flux job wait-event $jobid depend &&
+        flux job cancel $jobid &&
+        flux job wait-event $jobid clean &&
+        echo $jobid >> job_ids1.out &&
+        tac job_ids1.out > job_ids_inactive.out &&
         wait_states
 '
 
@@ -207,7 +215,7 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
 '
 
 test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
-        for count in `seq 1 4`; do \
+        for count in `seq 1 6`; do \
             echo "32" >> list_state_I.exp; \
         done &&
         flux job list -s inactive | jq .state > list_state_I.out &&
@@ -270,7 +278,7 @@ test_expect_success HAVE_JQ 'flux job list active jobs in correct order' '
 '
 
 test_expect_success HAVE_JQ 'flux job list jobs with correct userid' '
-        for count in `seq 1 20`; do \
+        for count in `seq 1 22`; do \
             id -u >> list_userid.exp; \
         done &&
         flux job list -a | jq .userid > list_userid.out &&
@@ -325,8 +333,8 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
         flux job stats | jq -e ".job_states.sched == 8" &&
         flux job stats | jq -e ".job_states.run == 8" &&
         flux job stats | jq -e ".job_states.cleanup == 0" &&
-        flux job stats | jq -e ".job_states.inactive == 4" &&
-        flux job stats | jq -e ".job_states.total == 20"
+        flux job stats | jq -e ".job_states.inactive == 6" &&
+        flux job stats | jq -e ".job_states.total == 22"
 '
 
 test_expect_success 'cleanup job listing jobs ' '
@@ -342,7 +350,7 @@ test_expect_success 'cleanup job listing jobs ' '
 
 wait_inactive() {
         local i=0
-        while [ "$(flux job list --states=inactive | wc -l)" != "20" ] \
+        while [ "$(flux job list --states=inactive | wc -l)" != "22" ] \
                && [ $i -lt 50 ]
         do
                 sleep 0.1
@@ -364,7 +372,7 @@ test_expect_success 'reload the job-info module' '
 # construct order based on order of jobs canceled above
 test_expect_success HAVE_JQ 'job-info: list successfully reconstructed' '
         flux job list -a > list_reload.out &&
-        for count in `seq 1 20`; do \
+        for count in `seq 1 22`; do \
             echo "32" >> list_reload_state.exp; \
         done &&
         cat list_reload.out | jq .state  > list_reload_state.out &&
@@ -381,8 +389,8 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
         flux job stats | jq -e ".job_states.sched == 0" &&
         flux job stats | jq -e ".job_states.run == 0" &&
         flux job stats | jq -e ".job_states.cleanup == 0" &&
-        flux job stats | jq -e ".job_states.inactive == 20" &&
-        flux job stats | jq -e ".job_states.total == 20"
+        flux job stats | jq -e ".job_states.inactive == 22" &&
+        flux job stats | jq -e ".job_states.total == 22"
 '
 
 # job list-inactive
@@ -390,12 +398,12 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
 test_expect_success HAVE_JQ 'flux job list-inactive lists all inactive jobs' '
         flux job list-inactive > list-inactive.out &&
         count=`cat list-inactive.out | wc -l` &&
-        test $count -eq 20
+        test $count -eq 22
 '
 
 test_expect_success HAVE_JQ 'flux job list-inactive w/ since 0 lists all inactive jobs' '
         count=`flux job list-inactive --since=0 | wc -l` &&
-        test $count -eq 20
+        test $count -eq 22
 '
 
 test_expect_success HAVE_JQ 'flux job list-inactive w/ count limits output of inactive jobs' '
@@ -426,7 +434,7 @@ test_expect_success HAVE_JQ 'flux job list-inactive w/ since (second to most rec
 test_expect_success HAVE_JQ 'flux job list-inactive w/ since (oldest timestamp)' '
         timestamp=`cat list-inactive.out | tail -n 1 | jq .t_inactive` &&
         count=`flux job list-inactive --since=${timestamp} | wc -l` &&
-        test $count -eq 19
+        test $count -eq 21
 '
 
 test_expect_success HAVE_JQ 'flux job list-inactive w/ since (middle timestamp #1)' '
