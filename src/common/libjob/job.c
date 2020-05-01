@@ -521,6 +521,37 @@ inval:
     return -1;
 }
 
+const char *flux_job_resulttostr (flux_job_result_t result, bool abbrev)
+{
+    switch (result) {
+        case FLUX_JOB_RESULT_COMPLETED:
+            return abbrev ? "CD" : "COMPLETED";
+        case FLUX_JOB_RESULT_FAILED:
+            return abbrev ? "F" : "FAILED";
+        case FLUX_JOB_RESULT_CANCELLED:
+            return abbrev ? "CA" : "CANCELLED";
+    }
+    return abbrev ? "?" : "(unknown)";
+}
+
+int flux_job_strtoresult (const char *s, flux_job_result_t *result)
+{
+    if (!s || !result)
+        goto inval;
+    if (!strcasecmp (s, "CD") || !strcasecmp (s, "COMPLETED"))
+        *result = FLUX_JOB_RESULT_COMPLETED;
+    else if (!strcasecmp (s, "F") || !strcasecmp (s, "FAILED"))
+        *result = FLUX_JOB_RESULT_FAILED;
+    else if (!strcasecmp (s, "CA") || !strcasecmp (s, "CANCELLED"))
+        *result = FLUX_JOB_RESULT_CANCELLED;
+    else
+        goto inval;
+
+    return 0;
+inval:
+    errno = EINVAL;
+    return -1;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

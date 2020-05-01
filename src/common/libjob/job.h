@@ -66,6 +66,10 @@ const char *flux_job_statetostr (flux_job_state_t state, bool single_char);
 
 int flux_job_strtostate (const char *s, flux_job_state_t *state);
 
+const char *flux_job_resulttostr (flux_job_result_t result, bool abbrev);
+
+int flux_job_strtoresult (const char *s, flux_job_result_t *result);
+
 /* Submit a job to the system.
  * 'jobspec' should be RFC 14 jobspec.
  * 'priority' should be a value from 0 to 31 (16 if not instance owner).
