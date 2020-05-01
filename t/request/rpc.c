@@ -54,7 +54,7 @@ int main (int argc, char *argv[])
                               topic, errno, expected_errno);
         }
         else
-            log_err_exit ("%s", topic);
+            log_msg_exit ("%s: %s", topic, future_strerror (f, errno));
     }
     else {
         if (expected_errno > 0)
