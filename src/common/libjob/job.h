@@ -52,6 +52,14 @@ enum {
     FLUX_JOB_ACTIVE     = 30,   // (FLUX_JOB_PENDING | FLUX_JOB_RUNNING)
 };
 
+/* Result of a job
+ */
+typedef enum {
+    FLUX_JOB_RESULT_COMPLETED = 1,
+    FLUX_JOB_RESULT_FAILED = 2,
+    FLUX_JOB_RESULT_CANCELLED = 4,
+} flux_job_result_t;
+
 typedef uint64_t flux_jobid_t;
 
 const char *flux_job_statetostr (flux_job_state_t state, bool single_char);

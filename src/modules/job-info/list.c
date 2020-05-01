@@ -518,7 +518,8 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                             "t_sched", "t_run", "t_cleanup", "t_inactive",
                             "state", "name", "ntasks", "nnodes", "ranks",
                             "success", "exception_occurred", "exception_type",
-                            "exception_severity", "exception_note", NULL };
+                            "exception_severity", "exception_note", "result",
+                            NULL };
     json_t *a = NULL;
     int i;
 

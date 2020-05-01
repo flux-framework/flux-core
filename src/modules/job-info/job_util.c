@@ -130,6 +130,11 @@ json_t *job_to_json (struct job *job, json_t *attrs)
                 continue;
             val = json_string (job->exception_note);
         }
+        else if (!strcmp (attr, "result")) {
+            if (!(job->states_mask & FLUX_JOB_INACTIVE))
+                continue;
+            val = json_integer (job->result);
+        }
         else {
             errno = EINVAL;
             goto error;
