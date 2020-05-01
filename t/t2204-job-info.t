@@ -250,10 +250,8 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct state' '
         for count in `seq 1 8`; do \
             echo "4" >> list_state_S.exp; \
         done &&
-        flux job list -s pending | jq .state > list_state_S1.out &&
-        flux job list -s depend,sched | jq .state > list_state_S2.out &&
-        flux job list -s sched | jq .state > list_state_S3.out &&
-        test_cmp list_state_S3.out list_state_S.exp
+        flux job list -s sched | jq .state > list_state_S.out &&
+        test_cmp list_state_S.out list_state_S.exp
 '
 
 test_expect_success HAVE_JQ 'flux job list no jobs in depend state' '
