@@ -220,6 +220,21 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
         test_cmp list_state_I.out list_state_I.exp
 '
 
+test_expect_success HAVE_JQ 'flux job list inactive jobs results are correct' '
+        flux job list -s inactive | jq .result > list_result_I.out &&
+        head -n 1 list_result_I.out > list_result_I_cancelled.out &&
+        echo "4" >> list_result_I_cancelled.exp &&
+        test_cmp list_result_I_cancelled.out list_result_I_cancelled.exp &&
+        head -n 2 list_result_I.out | tail -n 1 > list_result_I_failed.out &&
+        echo "2" >> list_result_I_failed.exp &&
+        test_cmp list_result_I_failed.out list_result_I_failed.exp &&
+        tail -n 4 list_result_I.out > list_result_I_completed.out &&
+        for count in `seq 1 4`; do \
+            echo "1" >> list_result_I_completed.exp; \
+        done &&
+        test_cmp list_result_I_completed.out list_result_I_completed.exp
+'
+
 # Note: "pending" = "depend" & "sched", we also test just "sched"
 # state since we happen to know all these jobs are in the "sched"
 # state given checks above
@@ -833,7 +848,8 @@ test_expect_success HAVE_JQ 'list-attrs works' '
         grep exception_occurred list_attrs.out &&
         grep exception_type list_attrs.out &&
         grep exception_severity list_attrs.out &&
-        grep exception_note list_attrs.out
+        grep exception_note list_attrs.out &&
+        grep result list_attrs.out
 '
 
 #
