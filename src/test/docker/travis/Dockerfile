@@ -66,6 +66,7 @@ RUN mkdir -p /var/run/munge \
 
 COPY entrypoint.sh /usr/local/sbin/
 
+ENV LANG=en_US.UTF-8
 ENV BASE_IMAGE=$BASE_IMAGE
 USER $USER
 WORKDIR /home/$USER
