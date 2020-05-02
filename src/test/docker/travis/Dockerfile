@@ -65,6 +65,9 @@ RUN mkdir -p /var/run/munge \
  && chmod 600 /etc/munge/munge.key
 
 COPY entrypoint.sh /usr/local/sbin/
+COPY bashrc /tmp
+RUN cat /tmp/bashrc >> ~flux/.bashrc \
+ && rm /tmp/bashrc
 
 ENV LANG=en_US.UTF-8
 ENV BASE_IMAGE=$BASE_IMAGE
