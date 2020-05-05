@@ -1,0 +1,4 @@
+if ! echo "$PS1" | grep -q FLUX; then
+  PS1=$'${FLUX_URI+\u0192(s=$(flux getattr size),d=$(flux getattr instance-level)$(which flux|grep -q src/cmd && echo ,builddir))} '${PS1}
+fi
+

@@ -5,7 +5,7 @@ FROM $IMAGESRC
 # Allow flux-security version, username, UID, and GID to be overidden on
 #  docker build command line:
 #
-ARG USER=flux
+ARG USER=fluxuser
 ARG UID=1000
 ARG GID=1000
 ARG FLUX_SECURITY_VERSION
@@ -35,14 +35,14 @@ RUN set -x && groupadd -g $UID $USER \
 
 # Also add "flux" user to image with sudo access:
 #
-RUN set -x && groupadd flux \
- && useradd -g flux -d /home/flux -m flux \
- && printf "flux ALL= NOPASSWD: ALL\\n" >> /etc/sudoers
+RUN set -x && groupadd fluxuser \
+ && useradd -g fluxuser -d /home/fluxuser -m fluxuser -s /bin/bash \
+ && printf "fluxuser ALL= NOPASSWD: ALL\\n" >> /etc/sudoers
 
 # Make sure user in appropriate group for sudo on different platorms
 RUN case $BASE_IMAGE in \
-     bionic*) adduser $USER sudo && adduser flux sudo ;; \
-     centos*) usermod -G wheel $USER && usermod -G wheel flux ;; \
+     bionic*) adduser $USER sudo && adduser fluxuser sudo ;; \
+     centos*) usermod -G wheel $USER && usermod -G wheel fluxuser ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
@@ -65,7 +65,11 @@ RUN mkdir -p /var/run/munge \
  && chmod 600 /etc/munge/munge.key
 
 COPY entrypoint.sh /usr/local/sbin/
+COPY bashrc /tmp
+RUN cat /tmp/bashrc >> ~fluxuser/.bashrc \
+ && rm /tmp/bashrc
 
+ENV LANG=en_US.UTF-8
 ENV BASE_IMAGE=$BASE_IMAGE
 USER $USER
 WORKDIR /home/$USER
