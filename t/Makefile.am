@@ -109,6 +109,7 @@ TESTSCRIPTS = \
 	t2220-job-archive.t \
 	t2300-sched-simple.t \
 	t2301-schedutil-outstanding-requests.t \
+	t2310-resource-module.t \
 	t2400-job-exec-test.t \
 	t2401-job-exec-hello.t \
 	t2402-job-exec-dummy.t \
