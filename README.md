@@ -5,7 +5,7 @@ _NOTE: The interfaces of flux-core are being actively developed
 and are not yet stable._ The github issue tracker is the primary
 way to communicate with the developers.
 
-See also the flux-framework.org [Online Documentation](http://flux-framework.org/docs/home/).
+See also our [Online Documentation](https://flux-framework.readthedocs.io).
 
 ### flux-core
 
