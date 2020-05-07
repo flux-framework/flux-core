@@ -833,7 +833,11 @@ test_expect_success HAVE_JQ 'list-attrs works' '
         grep ntasks list_attrs.out &&
         grep nnodes list_attrs.out &&
         grep ranks list_attrs.out &&
-        grep success list_attrs.out
+        grep success list_attrs.out &&
+        grep exception_occurred list_attrs.out &&
+        grep exception_type list_attrs.out &&
+        grep exception_severity list_attrs.out &&
+        grep exception_note list_attrs.out
 '
 
 #
