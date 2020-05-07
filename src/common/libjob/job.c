@@ -203,11 +203,12 @@ flux_future_t *flux_job_list (flux_t *h,
         return NULL;
     }
     if (!(f = flux_rpc_pack (h, "job-info.list", FLUX_NODEID_ANY, 0,
-                             "{s:i s:o s:i s:i}",
+                             "{s:i s:o s:i s:i s:i}",
                              "max_entries", max_entries,
                              "attrs", o,
                              "userid", userid,
-                             "states", states))) {
+                             "states", states,
+                             "results", 0))) {
         saved_errno = errno;
         json_decref (o);
         errno = saved_errno;
