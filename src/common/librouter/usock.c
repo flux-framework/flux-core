@@ -83,6 +83,9 @@ struct usock_conn {
     struct usock_io out;
     zlist_t *outqueue;
 
+    usock_conn_close_f close_cb;
+    void *close_arg;
+
     usock_conn_error_f error_cb;
     void *error_arg;
 
@@ -124,6 +127,17 @@ void usock_conn_set_error_cb (struct usock_conn *conn,
         conn->error_arg = arg;
     }
 }
+
+void usock_conn_set_close_cb (struct usock_conn *conn,
+                              usock_conn_close_f cb,
+                              void *arg)
+{
+    if (conn) {
+        conn->close_cb = cb;
+        conn->close_arg = arg;
+    }
+}
+
 
 void usock_conn_set_recv_cb (struct usock_conn *conn,
                              usock_conn_recv_f cb,
@@ -292,6 +306,8 @@ void usock_conn_destroy (struct usock_conn *conn)
 {
     if (conn) {
         int saved_errno = errno;
+        if (conn->close_cb)
+            (*conn->close_cb) (conn, conn->close_arg);
         aux_destroy (&conn->aux);
         flux_watcher_destroy (conn->in.w);
         iobuf_clean (&conn->in.iobuf);
