@@ -364,24 +364,14 @@ wait_inactive() {
 }
 
 test_expect_success 'reload the job-info module' '
+        flux job list -a > before_reload.out &&
         flux exec -r all flux module reload job-info &&
         wait_inactive
 '
 
-# inactive jobs are listed by most recently completed first, so must
-# construct order based on order of jobs canceled above
 test_expect_success HAVE_JQ 'job-info: list successfully reconstructed' '
-        flux job list -a > list_reload.out &&
-        for count in `seq 1 22`; do \
-            echo "32" >> list_reload_state.exp; \
-        done &&
-        cat list_reload.out | jq .state  > list_reload_state.out &&
-        test_cmp list_reload_state.exp list_reload_state.out &&
-        tac job_ids_running.out >> list_reload_ids.exp &&
-        tac job_ids_pending.out >> list_reload_ids.exp &&
-        cat job_ids_inactive.out >> list_reload_ids.exp &&
-        cat list_reload.out | jq .id > list_reload_ids.out &&
-        test_cmp list_reload_ids.exp list_reload_ids.out
+        flux job list -a > after_reload.out &&
+        test_cmp before_reload.out after_reload.out
 '
 
 test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive)' '
