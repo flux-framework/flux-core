@@ -235,6 +235,33 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs results are correct' '
         test_cmp list_result_I_completed.out list_result_I_completed.exp
 '
 
+# Hard code state/results values for these tests, as we did not add a results
+# option to flux_job_list() or the flux-job command.
+
+test_expect_success HAVE_JQ 'flux job list only cancelled jobs' '
+        id=$(id -u) &&
+        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:32, results:4, attrs:[]}" \
+          | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_cancelled.out &&
+        head -n 1 job_ids_inactive.out > result_cancelled.exp &&
+        test_cmp result_cancelled.exp list_result_cancelled.out
+'
+
+test_expect_success HAVE_JQ 'flux job list only failed jobs' '
+        id=$(id -u) &&
+        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:32, results:2, attrs:[]}" \
+          | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_failed.out &&
+        head -n 2 job_ids_inactive.out | tail -n 1 > result_failed.exp &&
+        test_cmp result_failed.exp list_result_failed.out
+'
+
+test_expect_success HAVE_JQ 'flux job list only completed jobs' '
+        id=$(id -u) &&
+        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:32, results:1, attrs:[]}" \
+          | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_completed.out &&
+        tail -n 4 job_ids_inactive.out > result_completed.exp &&
+        test_cmp result_completed.exp list_result_completed.out
+'
+
 # Note: "pending" = "depend" & "sched", we also test just "sched"
 # state since we happen to know all these jobs are in the "sched"
 # state given checks above
