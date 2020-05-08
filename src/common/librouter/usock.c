@@ -229,6 +229,15 @@ error:
     conn_io_error (conn, errno);
 }
 
+static int conn_outqueue_drop (struct usock_conn *conn)
+{
+    flux_msg_t *msg = zlist_pop (conn->outqueue);
+    if (msg == NULL)
+        return 0;
+    flux_msg_decref (msg);
+    return 1;
+}
+
 static void conn_write_cb (flux_reactor_t *r,
                            flux_watcher_t *w,
                            int revents,
@@ -245,12 +254,23 @@ static void conn_write_cb (flux_reactor_t *r,
         const flux_msg_t *msg = zlist_head (conn->outqueue);
         if (msg) {
             if (sendfd (conn->out.fd, msg, &conn->out.iobuf) < 0) {
-                if (errno != EWOULDBLOCK && errno != EAGAIN)
+                if (errno == EPIPE) {
+                    /* Remote peer has closed connection.
+                     * However, there may still be pending messages sent
+                     * by peer, so do not destroy connection here. Instead,
+                     * drop all pending messsages in the output queue, and
+                     * let connection be closed after EOF/ECONNRESET from
+                     * *read* side of connection.
+                     */
+                    while (conn_outqueue_drop (conn))
+                        ;
+                    flux_watcher_stop (conn->out.w);
+                }
+                else if (errno != EWOULDBLOCK && errno != EAGAIN)
                     goto error;
             }
             else {
-                (void)zlist_pop (conn->outqueue);
-                flux_msg_decref (msg);
+                (void) conn_outqueue_drop (conn);
                 if (zlist_size (conn->outqueue) == 0)
                     flux_watcher_stop (conn->out.w);
             }
