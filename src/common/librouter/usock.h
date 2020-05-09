@@ -38,6 +38,8 @@ struct usock_retry_params {
 
 typedef void (*usock_acceptor_f)(struct usock_conn *conn, void *arg);
 
+typedef void (*usock_conn_close_f)(struct usock_conn *conn,
+                                   void *arg);
 typedef void (*usock_conn_error_f)(struct usock_conn *conn,
                                    int errnum,
                                    void *arg);
@@ -65,6 +67,10 @@ int usock_conn_send (struct usock_conn *conn, const flux_msg_t *msg);
 const struct flux_msg_cred *usock_conn_get_cred (struct usock_conn *conn);
 
 const char *usock_conn_get_uuid (struct usock_conn *conn);
+
+void usock_conn_set_close_cb (struct usock_conn *conn,
+                              usock_conn_close_f cb,
+                              void *arg);
 
 void usock_conn_set_error_cb (struct usock_conn *conn,
                               usock_conn_error_f cb,

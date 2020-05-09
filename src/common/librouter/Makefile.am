@@ -37,6 +37,7 @@ TESTS = \
 	test_auth.t \
 	test_usock.t \
 	test_usock_echo.t \
+	test_usock_epipe.t \
 	test_subhash.t \
 	test_router.t \
 	test_servhash.t
@@ -93,6 +94,11 @@ test_usock_echo_t_SOURCES = test/usock_echo.c
 test_usock_echo_t_CPPFLAGS = $(test_cppflags)
 test_usock_echo_t_LDADD = $(test_ldadd)
 test_usock_echo_t_LDFLAGS = $(test_ldflags)
+
+test_usock_epipe_t_SOURCES = test/usock_epipe.c
+test_usock_epipe_t_CPPFLAGS = $(test_cppflags)
+test_usock_epipe_t_LDADD = $(test_ldadd)
+test_usock_epipe_t_LDFLAGS = $(test_ldflags)
 
 test_subhash_t_SOURCES = test/subhash.c
 test_subhash_t_CPPFLAGS = $(test_cppflags)
