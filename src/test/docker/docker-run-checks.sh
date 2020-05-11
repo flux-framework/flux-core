@@ -140,6 +140,7 @@ else
         -e USER \
         -e TRAVIS \
         -e TAP_DRIVER_QUIET \
+        -e TEST_CHECK_PREREQS \
         -e PYTHON_VERSION \
         -e PRELOAD \
         -e ASAN_OPTIONS \
