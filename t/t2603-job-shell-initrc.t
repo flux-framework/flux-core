@@ -40,7 +40,7 @@ test_expect_success HAVE_JQ 'flux-shell: initrc: bad initrc in jobspec fails' '
 	    > j2 &&
 	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j2 -R R1 0
 '
-test_expect_success 'flux-shell: initrc: in jobspec works' '
+test_expect_success HAVE_JQ 'flux-shell: initrc: in jobspec works' '
 	name=ok &&
 	cat >${name}.lua <<-EOT &&
 	    print ("jobspec initrc OK")

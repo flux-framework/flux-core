@@ -593,7 +593,7 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job r
 # job names
 #
 
-test_expect_success 'flux job list outputs user job name' '
+test_expect_success HAVE_JQ 'flux job list outputs user job name' '
         jobid=`flux mini submit --setattr system.job.name=foobar A B C` &&
         echo $jobid > jobname1.id &&
         fj_wait_event $jobid clean >/dev/null &&
@@ -601,7 +601,7 @@ test_expect_success 'flux job list outputs user job name' '
         flux job list -s inactive | grep $jobid | jq -e ".name == \"foobar\""
 '
 
-test_expect_success 'flux job lists first argument for job name' '
+test_expect_success HAVE_JQ 'flux job lists first argument for job name' '
         jobid=`flux mini submit mycmd arg1 arg2` &&
         echo $jobid > jobname2.id &&
         fj_wait_event $jobid clean >/dev/null &&
@@ -609,7 +609,7 @@ test_expect_success 'flux job lists first argument for job name' '
         flux job list -s inactive | grep $jobid | jq -e ".name == \"mycmd\""
 '
 
-test_expect_success 'flux job lists basename of first argument for job name' '
+test_expect_success HAVE_JQ 'flux job lists basename of first argument for job name' '
         jobid=`flux mini submit /foo/bar arg1 arg2` &&
         echo $jobid > jobname3.id &&
         fj_wait_event $jobid clean >/dev/null &&
@@ -617,7 +617,7 @@ test_expect_success 'flux job lists basename of first argument for job name' '
         flux job list -s inactive | grep $jobid | jq -e ".name == \"bar\""
 '
 
-test_expect_success 'flux job lists full path for job name if basename fails on first arg' '
+test_expect_success HAVE_JQ 'flux job lists full path for job name if basename fails on first arg' '
         jobid=`flux mini submit /foo/bar/ arg1 arg2` &&
         echo $jobid > jobname4.id &&
         fj_wait_event $jobid clean >/dev/null &&
@@ -629,7 +629,7 @@ test_expect_success 'reload the job-info module' '
         flux exec -r all flux module reload job-info
 '
 
-test_expect_success 'verify job names preserved across restart' '
+test_expect_success HAVE_JQ 'verify job names preserved across restart' '
         jobid1=`cat jobname1.id` &&
         jobid2=`cat jobname2.id` &&
         jobid3=`cat jobname3.id` &&
@@ -644,7 +644,7 @@ test_expect_success 'verify job names preserved across restart' '
 # job task count
 #
 
-test_expect_success 'flux job list outputs ntasks correctly (1 task)' '
+test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (1 task)' '
         jobid=`flux mini submit hostname` &&
         echo $jobid > taskcount1.id &&
         fj_wait_event $jobid clean >/dev/null &&
@@ -653,7 +653,7 @@ test_expect_success 'flux job list outputs ntasks correctly (1 task)' '
         echo $obj | jq -e ".ntasks == 1"
 '
 
-test_expect_success 'flux job list outputs ntasks correctly (4 tasks)' '
+test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (4 tasks)' '
         jobid=`flux mini submit -n4 hostname` &&
         echo $jobid > taskcount2.id &&
         fj_wait_event $jobid clean >/dev/null &&
@@ -666,7 +666,7 @@ test_expect_success 'reload the job-info module' '
         flux exec -r all flux module reload job-info
 '
 
-test_expect_success 'verify task count preserved across restart' '
+test_expect_success HAVE_JQ 'verify task count preserved across restart' '
         jobid1=`cat taskcount1.id` &&
         jobid2=`cat taskcount2.id` &&
         obj=$(flux job list -s inactive | grep ${jobid1}) &&
@@ -679,7 +679,7 @@ test_expect_success 'verify task count preserved across restart' '
 # job node count / rank list
 #
 
-test_expect_success 'flux job list outputs nnodes/ranks correctly (1 task / 1 node)' '
+test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (1 task / 1 node)' '
         jobid=`flux mini submit -n1 hostname` &&
         echo $jobid > nodecount1.id &&
         fj_wait_event $jobid clean >/dev/null &&
@@ -689,7 +689,7 @@ test_expect_success 'flux job list outputs nnodes/ranks correctly (1 task / 1 no
         echo $obj | jq -e ".ranks == \"0\""
 '
 
-test_expect_success 'flux job list outputs nnodes/ranks correctly (2 tasks, / 1 node)' '
+test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (2 tasks, / 1 node)' '
         jobid=`flux mini submit -n2 hostname` &&
         echo $jobid > nodecount2.id &&
         fj_wait_event $jobid clean >/dev/null &&
@@ -699,7 +699,7 @@ test_expect_success 'flux job list outputs nnodes/ranks correctly (2 tasks, / 1 
         echo $obj | jq -e ".ranks == \"0\""
 '
 
-test_expect_success 'flux job list outputs nnodes/ranks correctly (3 tasks, / 2 nodes)' '
+test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (3 tasks, / 2 nodes)' '
         jobid=`flux mini submit -n3 hostname` &&
         echo $jobid > nodecount3.id &&
         fj_wait_event $jobid clean >/dev/null &&
@@ -709,7 +709,7 @@ test_expect_success 'flux job list outputs nnodes/ranks correctly (3 tasks, / 2 
         echo $obj | jq -e ".ranks == \"[0-1]\""
 '
 
-test_expect_success 'flux job list outputs nnodes/ranks correctly (5 tasks, / 3 nodes)' '
+test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (5 tasks, / 3 nodes)' '
         jobid=`flux mini submit -n5 hostname` &&
         echo $jobid > nodecount4.id &&
         fj_wait_event $jobid clean >/dev/null &&
@@ -723,7 +723,7 @@ test_expect_success 'flux job list outputs nnodes/ranks correctly (5 tasks, / 3 
 # job success
 #
 
-test_expect_success 'flux job list outputs success correctly (true)' '
+test_expect_success HAVE_JQ 'flux job list outputs success correctly (true)' '
         jobid=`flux mini submit hostname` &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -731,7 +731,7 @@ test_expect_success 'flux job list outputs success correctly (true)' '
         echo $obj | jq -e ".success == true"
 '
 
-test_expect_success 'flux job list outputs success correctly (false)' '
+test_expect_success HAVE_JQ 'flux job list outputs success correctly (false)' '
         jobid=`flux mini submit nosuchcommand` &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -741,7 +741,7 @@ test_expect_success 'flux job list outputs success correctly (false)' '
 
 # job exceptions
 
-test_expect_success 'flux job list outputs exceptions correctly (no exception)' '
+test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (no exception)' '
         jobid=`flux mini submit hostname` &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -752,7 +752,7 @@ test_expect_success 'flux job list outputs exceptions correctly (no exception)' 
         echo $obj | jq -e ".exception_note == null"
 '
 
-test_expect_success 'flux job list outputs exceptions correctly (exception)' '
+test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (exception)' '
         jobid=`flux mini submit nosuchcommand` &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -767,7 +767,7 @@ test_expect_success 'reload the job-info module' '
         flux exec -r all flux module reload job-info
 '
 
-test_expect_success 'verify nnodes preserved across restart' '
+test_expect_success HAVE_JQ 'verify nnodes preserved across restart' '
         jobid1=`cat nodecount1.id` &&
         jobid2=`cat nodecount2.id` &&
         jobid3=`cat nodecount3.id` &&
