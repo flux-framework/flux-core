@@ -29,8 +29,22 @@ struct rlist {
 /*  Create an empty rlist object */
 struct rlist *rlist_create (void);
 
+/*  Mark ranks down
+ */
+int rlist_mark_down (struct rlist *rl, const char *ids);
+
+/*  Mark ranks up
+ */
+int rlist_mark_up (struct rlist *rl, const char *ids);
+
 /*  Create a copy of rlist rl with all cores available */
 struct rlist *rlist_copy_empty (const struct rlist *rl);
+
+/*  Create a copy of rl including only down resources */
+struct rlist *rlist_copy_down (const struct rlist *orig);
+
+/*  Create a copy of rl including only allocated resources */
+struct rlist *rlist_copy_allocated (const struct rlist *orig);
 
 /*  Create an rlist object from resource.hwloc.by_rank JSON input
  */
