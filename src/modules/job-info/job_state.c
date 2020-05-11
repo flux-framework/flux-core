@@ -1423,6 +1423,11 @@ static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
             goto done;
     }
 
+    if (job->states_mask & FLUX_JOB_INACTIVE) {
+        if (eventlog_inactive_parse (ctx, job, eventlog) < 0)
+            goto done;
+    }
+
     if (zhashx_insert (ctx->jsctx->index, &job->id, job) < 0) {
         flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
         goto done;
