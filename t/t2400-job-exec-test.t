@@ -8,13 +8,7 @@ test_under_flux 1 job
 
 flux setattr log-stderr-level 1
 
-#  Set path to jq(1)
-#
-jq=$(which jq 2>/dev/null)
-if test -z "$jq"; then
-    skip_all='jq not found. Skipping all tests'
-    test_done
-fi
+skip_all_unless_have jq
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 

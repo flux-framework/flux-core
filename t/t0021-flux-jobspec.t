@@ -10,11 +10,6 @@ SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
 MINI_SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec_v1.jsonschema
 SUMMARIZE="flux python ${JOBSPEC}/summarize-minimal-jobspec.py"
 
-#  Set path to jq
-#
-jq=$(which jq 2>/dev/null)
-test -n "$jq" && test_set_prereq HAVE_JQ
-
 validate_emission() {
     flux jobspec $@ | ${VALIDATE} --schema ${SCHEMA}
 }

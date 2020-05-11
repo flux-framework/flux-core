@@ -8,9 +8,6 @@ test_description="Test that Flux's MPI personalities work"
 SIZE=4
 test_under_flux ${SIZE}
 
-jq=$(which jq 2>/dev/null)
-test -z "$jq" || test_set_prereq HAVE_JQ
-
 run_program() {
         local timeout=$1
 	local nnodes=$2

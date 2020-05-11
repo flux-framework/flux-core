@@ -8,8 +8,6 @@ test_description='Test flux job info service'
 
 test_under_flux 4 job
 
-jq=$(which jq 2>/dev/null)
-test -n "$jq" && test_set_prereq HAVE_JQ
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 if test "$TEST_LONG" = "t"; then

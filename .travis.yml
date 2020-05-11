@@ -60,6 +60,7 @@ jobs:
        - CC=clang-6.0
        - CXX=clang++-6.0
        - chain_lint=t
+       - TEST_CHECK_PREREQS=t
        - ARGS="--with-flux-security"
        - PYTHON_VERSION=3.7
     - name: "Ubuntu: COVERAGE=t, --with-flux-security --enable-caliper"

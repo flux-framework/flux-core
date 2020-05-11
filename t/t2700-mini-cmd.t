@@ -6,8 +6,6 @@ test_description='Test flux mini command'
 
 test_under_flux 4
 
-jq=$(which jq 2>/dev/null)
-test -z "$jq" || test_set_prereq HAVE_JQ
 test $(nproc) -gt 1 && test_set_prereq HAVE_MULTICORE
 
 # Set CLIMain log level to logging.DEBUG (10), to enable stack traces

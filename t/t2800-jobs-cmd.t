@@ -4,11 +4,6 @@ test_description='Test flux jobs command'
 
 . $(dirname $0)/sharness.sh
 
-#  Set path to jq(1)
-#
-jq=$(which jq 2>/dev/null)
-test -n "$jq" && test_set_prereq HAVE_JQ
-
 test_under_flux 4 job
 
 # submit a whole bunch of jobs for job list testing

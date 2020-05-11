@@ -34,11 +34,6 @@ test_expect_success 'hwloc: load hwloc xml' '
 lstopo=$(which lstopo 2>/dev/null || which lstopo-no-graphics 2>/dev/null)
 test -n "$lstopo" && test_set_prereq HAVE_LSTOPO
 
-#  Set path to jq
-#
-jq=$(which jq 2>/dev/null)
-test -n "$jq" && test_set_prereq HAVE_JQ
-
 invalid_rank() {
 	echo $((${SIZE} + 1))
 }

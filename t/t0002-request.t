@@ -10,11 +10,6 @@ Verify basic request/response/rpc handling.
 . `dirname $0`/sharness.sh
 test_under_flux 2 minimal
 
-#  Set path to jq(1)
-#
-jq=$(which jq 2>/dev/null)
-test -n "$jq" && test_set_prereq HAVE_JQ
-
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 test_expect_success 'flux_rpc(3) example runs' '

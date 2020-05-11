@@ -6,9 +6,6 @@ test_description='Test flux job manager service'
 
 test_under_flux 4 kvs
 
-jq=$(which jq 2>/dev/null)
-test -n "$jq" && test_set_prereq HAVE_JQ
-
 flux setattr log-stderr-level 1
 
 DRAIN_CANCEL="flux python ${FLUX_SOURCE_DIR}/t/job-manager/drain-cancel.py"

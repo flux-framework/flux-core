@@ -8,13 +8,7 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 test_under_flux 8
 
-#  Set path to jq
-#
-jq=$(which jq 2>/dev/null)
-if test -z "$jq"; then
-    skip_all='jq not found. Skipping all tests'
-    test_done
-fi
+skip_all_unless_have jq
 
 kvs_json_check() {
     flux kvs get $1 | $jq -e "$2"
