@@ -50,7 +50,7 @@ test_expect_success HAVE_JQ 'job-exec: job as guest tries to run IMP' '
 	flux dmesg | grep "test-imp: Running.*${id}"
 '
 
-test_expect_success 'job-exec: kill multiuser job uses the IMP' '
+test_expect_success HAVE_JQ 'job-exec: kill multiuser job uses the IMP' '
 	FAKE_USERID=42 &&
 	flux mini run --dry-run -n2 -N2 sleep 1000 | \
 	    flux python ${SIGN_AS} ${FAKE_USERID} > sleep-job.signed &&

@@ -33,7 +33,7 @@ test_expect_success 'debugger: submitting under debugger via flux-mini works' '
         flux job wait-event -vt 2.5  ${jobid} finish
 '
 
-test_expect_success 'debugger: submitting under debugger via flux-job works' '
+test_expect_success HAVE_JQ 'debugger: submitting under debugger via flux-job works' '
         flux jobspec srun -N2 -n 2 hostname | stop_tasks_test > stop_tasks.json &&
         jobid=$(flux job submit stop_tasks.json) &&
         flux job wait-event -vt 2.5  ${jobid} start &&
