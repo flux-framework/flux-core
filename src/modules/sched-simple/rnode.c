@@ -38,6 +38,7 @@ struct rnode *rnode_create (uint32_t rank, const char *ids)
     if (!(n->ids = idset_decode (ids))
         || !(n->avail = idset_copy (n->ids)))
         goto fail;
+    n->up = true;
     return (n);
 fail:
     rnode_destroy (n);
@@ -53,6 +54,7 @@ struct rnode *rnode_create_idset (uint32_t rank, struct idset *ids)
     if (!(n->ids = idset_copy (ids))
         || !(n->avail = idset_copy (ids)))
         goto fail;
+    n->up = true;
     return (n);
 fail:
     rnode_destroy (n);
@@ -69,6 +71,7 @@ struct rnode *rnode_create_count (uint32_t rank, int count)
         || (idset_range_set (n->ids, 0, count-1) < 0)
         || !(n->avail = idset_copy (n->ids)))
         goto fail;
+    n->up = true;
     return (n);
 fail:
     rnode_destroy (n);
@@ -79,6 +82,10 @@ int rnode_alloc (struct rnode *n, int count, struct idset **setp)
 {
     struct idset *ids = NULL;
     unsigned int i;
+    if (!n->up) {
+        errno = EHOSTDOWN;
+        return -1;
+    }
     if (idset_count (n->avail) < count) {
         errno = ENOSPC;
         return -1;
@@ -185,7 +192,9 @@ int rnode_free (struct rnode *n, const char *s)
 
 size_t rnode_avail (const struct rnode *n)
 {
-    return (idset_count (n->avail));
+    if (n->up)
+        return (idset_count (n->avail));
+    return 0;
 }
 
 size_t rnode_count (const struct rnode *n)

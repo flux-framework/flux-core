@@ -21,6 +21,7 @@
 
 /* Simple resource node object */
 struct rnode {
+    bool up;
     uint32_t rank;
     struct idset * ids;
     struct idset * avail;
