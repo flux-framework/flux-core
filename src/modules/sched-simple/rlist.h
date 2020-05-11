@@ -87,9 +87,9 @@ struct rlist * rlist_alloc (struct rlist *rl, const char *mode,
                             int nnodes, int slot_size, int nslots);
 
 
-/*  Remove rlist "alloc" from rlist "rl".
+/*  Mark rlist "alloc" as allocated in rlist "rl".
  */
-int rlist_remove (struct rlist *rl, struct rlist *alloc);
+int rlist_set_allocated (struct rlist *rl, struct rlist *alloc);
 
 /*  Free resource list `to_free` from resource list `rl`
  */

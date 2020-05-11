@@ -328,7 +328,7 @@ static int hello_cb (flux_t *h,
         return -1;
     }
     s = rlist_dumps (alloc);
-    if ((rc = rlist_remove (ss->rlist, alloc)) < 0)
+    if ((rc = rlist_set_allocated (ss->rlist, alloc)) < 0)
         flux_log_error (h, "hello: rlist_remove (%s)", s);
     else
         flux_log (h, LOG_DEBUG, "hello: alloc %s", s);

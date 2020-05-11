@@ -820,7 +820,7 @@ static int rlist_free_rnode (struct rlist *rl, struct rnode *n)
     return 0;
 }
 
-static int rlist_remove_rnode (struct rlist *rl, struct rnode *n)
+static int rlist_alloc_rnode (struct rlist *rl, struct rnode *n)
 {
     struct rnode *rnode = rlist_find_rank (rl, n->rank);
     if (!rnode) {
@@ -854,14 +854,14 @@ cleanup:
     /* re-allocate all freed items */
     n = zlistx_first (freed);
     while (n) {
-        rlist_remove_rnode (rl, n);
+        rlist_alloc_rnode (rl, n);
         n = zlistx_next (freed);
     }
     zlistx_destroy (&freed);
     return (-1);
 }
 
-int rlist_remove (struct rlist *rl, struct rlist *alloc)
+int rlist_set_allocated (struct rlist *rl, struct rlist *alloc)
 {
     zlistx_t *allocd = NULL;
     struct rnode *n = NULL;
@@ -869,7 +869,7 @@ int rlist_remove (struct rlist *rl, struct rlist *alloc)
         return -1;
     n = zlistx_first (alloc->nodes);
     while (n) {
-        if (rlist_remove_rnode (rl, n) < 0)
+        if (rlist_alloc_rnode (rl, n) < 0)
             goto cleanup;
         zlistx_add_end (allocd, n);
         n = zlistx_next (alloc->nodes);
