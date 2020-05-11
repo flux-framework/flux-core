@@ -4,9 +4,6 @@ test_description='Test flux-shell in --standalone mode'
 
 . `dirname $0`/sharness.sh
 
-jq=$(which jq 2>/dev/null)
-test -n "$jq" && test_set_prereq HAVE_JQ
-
 #  Run flux-shell under flux command to get correct paths
 FLUX_SHELL="flux ${FLUX_BUILD_DIR}/src/shell/flux-shell"
 

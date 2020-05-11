@@ -4,6 +4,8 @@ test_description='Test flux-shell MPIR and ptrace support'
 
 . `dirname $0`/sharness.sh
 
+skip_all_unless_have jq
+
 test_under_flux 4 job
 
 FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
@@ -11,12 +13,6 @@ FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"
 INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
 mpir="${SHARNESS_TEST_DIRECTORY}/shell/mpir"
-
-test -z "$jq" || test_set_prereq HAVE_JQ
-if ! test_have_prereq HAVE_JQ; then
-    skip_all='skipping tests, jq not available'
-    test_done
-fi
 
 shell_leader_rank() {
     flux job wait-event -f json -p guest.exec.eventlog $1 shell.init | \

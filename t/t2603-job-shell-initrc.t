@@ -4,9 +4,6 @@ test_description='Test flux-shell initrc.lua implementation'
 
 . `dirname $0`/sharness.sh
 
-jq=$(which jq 2>/dev/null)
-test -z "$jq" || test_set_prereq HAVE_JQ
-
 FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
 INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"

@@ -11,12 +11,6 @@ if ! test_have_prereq FLUX_SECURITY; then
     test_done
 fi
 
-#  Set path to jq
-#
-jq=$(which jq 2>/dev/null)
-test -n "$jq" && test_set_prereq HAVE_JQ
-
-
 IMP=${SHARNESS_TEST_SRCDIR}/job-exec/imp.sh
 #  Configure dummy IMP
 if ! test -d conf.d; then

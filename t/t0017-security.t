@@ -8,9 +8,6 @@ test_description='Test broker security'
 export FLUX_CONF_DIR=$(pwd)
 test_under_flux 4 minimal
 
-jq=$(which jq 2>/dev/null)
-test -z "$jq" || test_set_prereq HAVE_JQ
-
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 test_expect_success 'connector-local starts with private access policy' '

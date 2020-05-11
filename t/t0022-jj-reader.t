@@ -4,10 +4,6 @@ test_description='Test json-jobspec *cough* parser *cough*'
 
 . `dirname $0`/sharness.sh
 
-#  Set path to jq
-#
-jq=$(which jq 2>/dev/null)
-test -n "$jq" && test_set_prereq HAVE_JQ
 jj=${FLUX_BUILD_DIR}/t/sched-simple/jj-reader
 y2j="flux python ${SHARNESS_TEST_SRCDIR}/jobspec/y2j.py"
 

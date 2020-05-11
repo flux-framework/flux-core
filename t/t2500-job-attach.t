@@ -104,9 +104,6 @@ test_expect_success 'attach: output events processed after shell.init failure' '
 	grep "FATAL:.*noinitrc: No such file or directory" init-failure.output
 '
 
-which jq >/dev/null 2>&1 && test_set_prereq HAVE_JQ
-
-
 # use a shell function to make sane quoting possible
 filter_log_context() {
     jq -c '. | select(.name == "log") | .context'
