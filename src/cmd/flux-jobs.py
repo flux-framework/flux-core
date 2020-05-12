@@ -572,7 +572,7 @@ def main():
         fmt = args.format
     else:
         fmt = (
-            "{id:>18} {username:<8.8} {name:<10.10} {state:<8.8} "
+            "{id:>18} {username:<8.8} {name:<10.10} {status_abbrev:>6.6} "
             "{ntasks:>6} {nnodes:>6h} {runtime_fsd:>8h} "
             "{ranks:h}"
         )
