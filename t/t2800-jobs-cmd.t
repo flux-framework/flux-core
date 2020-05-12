@@ -530,6 +530,20 @@ test_expect_success 'flux-jobs --format={result},{result:h},{result_abbrev},{res
         test_cmp result_abbrevI.out result_abbrevI.exp
 '
 
+test_expect_success 'flux-jobs --format={status},{status_abbrev} works' '
+        flux jobs --suppress-header --state=pending --format="{status},{status_abbrev}" > statusP.out &&
+        for i in `seq 1 6`; do echo "PENDING,PD" >> statusP.exp; done &&
+        test_cmp statusP.out statusP.exp &&
+        flux jobs --suppress-header --state=running --format="{status},{status_abbrev}" > statusR.out &&
+        for i in `seq 1 8`; do echo "RUNNING,R" >> statusR.exp; done &&
+        test_cmp statusR.out statusR.exp &&
+        flux jobs --suppress-header --state=inactive --format="{status},{status_abbrev}" > statusI.out &&
+        echo "CANCELLED,CA" >> statusI.exp &&
+        echo "FAILED,F" >> statusI.exp &&
+        for i in `seq 1 4`; do echo "COMPLETED,CD" >> statusI.exp; done &&
+        test_cmp statusI.out statusI.exp
+'
+
 #
 # format header tests
 #
