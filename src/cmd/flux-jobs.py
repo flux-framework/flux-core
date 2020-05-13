@@ -39,6 +39,12 @@ STATE_CONST_DICT = {
     "active": flux.constants.FLUX_JOB_ACTIVE,
 }
 
+RESULT_CONST_DICT = {
+    "completed": flux.constants.FLUX_JOB_RESULT_COMPLETED,
+    "failed": flux.constants.FLUX_JOB_RESULT_FAILED,
+    "cancelled": flux.constants.FLUX_JOB_RESULT_CANCELLED,
+}
+
 
 def fsd(secs, hyphenifzero):
     #  Round <1ms down to 0s for now
@@ -321,7 +327,7 @@ def fetch_jobs_flux(args, fields):
     if args.A:
         args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
     if args.a or args.A:
-        args.states = "pending,running,inactive"
+        args.filter = "pending,running,inactive"
 
     if args.user == "all":
         userid = flux.constants.FLUX_USERID_UNKNOWN
@@ -336,18 +342,23 @@ def fetch_jobs_flux(args, fields):
                 sys.exit(1)
 
     states = 0
-    for state in args.states.split(","):
-        try:
-            states |= STATE_CONST_DICT[state.lower()]
-        except KeyError:
-            print("Invalid state specified: {}".format(state), file=sys.stderr)
+    results = 0
+    for fname in args.filter.split(","):
+        if fname.lower() in STATE_CONST_DICT:
+            states |= STATE_CONST_DICT[fname.lower()]
+        elif fname.lower() in RESULT_CONST_DICT:
+            # Must specify "inactive" to get results
+            states |= STATE_CONST_DICT["inactive"]
+            results |= RESULT_CONST_DICT[fname.lower()]
+        else:
+            print("Invalid filter specified: {}".format(fname), file=sys.stderr)
             sys.exit(1)
 
     if states == 0:
         states |= flux.constants.FLUX_JOB_PENDING
         states |= flux.constants.FLUX_JOB_RUNNING
 
-    jobs = fetch_jobs_all(flux_handle, args, attrs, userid, states, 0)
+    jobs = fetch_jobs_all(flux_handle, args, attrs, userid, states, results)
     return jobs
 
 
@@ -417,13 +428,13 @@ def parse_args():
         help="Limit output to N jobs(default 1000)",
     )
     parser.add_argument(
-        "-s",
-        "--states",
+        "-f",
+        "--filter",
         action=FilterAction,
         type=str,
-        metavar="STATES",
+        metavar="STATE|RESULT",
         default="pending,running",
-        help="List jobs in specific job states or virtual job states",
+        help="List jobs with specific job state or result",
     )
     parser.add_argument(
         "-n",

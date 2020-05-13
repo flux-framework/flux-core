@@ -25,7 +25,7 @@ test_expect_success 'restart instance and run another job' '
 test_expect_success 'restart instance and list inactive jobs' '
 	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
 	           flux jobs --suppress-header --format={id} \
-		   	--states=INACTIVE >list.out
+		   	--filter=INACTIVE >list.out
 '
 
 test_expect_success 'inactive job list contains all jobs run before' '

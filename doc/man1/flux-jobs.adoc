@@ -41,22 +41,33 @@ List jobs for a specific username or userid.  Specify 'all' for all users.
 *-c, --count*'=N'::
 Limit output to N jobs (default 1000)
 
-*-s, --states*'=STATES'::
-List jobs in specific job states or virtual job states.  Multiple
-states can be listed separated by comma.  See JOB STATES below for
+*-f, --filter*'=STATE|RESULT'::
+List jobs with specific job state or result.  Multiple states or
+results can be listed separated by comma.  See JOB STATUS below for
 additional information.  Defaults to 'pending,running'.
 
 *-o, --format*'=FORMAT'::
 Specify output format using Python's string format syntax.  See OUTPUT
 FORMAT below for field names.
 
-JOB STATES
+JOB STATUS
 ----------
 Jobs may be observed to pass through five job states in Flux: DEPEND,
-SCHED, RUN, CLEANUP, and INACTIVE (see Flux RFC 21). For convenience
-and clarity, some options accept the following virtual job states:
-"pending", an alias for DEPEND,SCHED; "running", an alias for
-RUN,CLEANUP; "active", an alias for "pending,running".
+SCHED, RUN, CLEANUP, and INACTIVE (see Flux RFC 21).  Under the
+`state_single` field name, these are abbreviated as D, S, R, C, and I
+respectively.  For convenience and clarity, the following virtual job
+states also exist: "pending", an alias for DEPEND,SCHED; "running", an
+alias for RUN,CLEANUP; "active", an alias for "pending,running".
+
+After a job has finished and is in the INACTIVE state, it can be
+marked with one of three possible results: COMPLETED, FAILED,
+CANCELLED.  Under the 'result_abbrev' field name, these are
+abbreviated as CD, F, and CA respectively.
+
+The job status is a user friendly mix of both, a job is always in one
+of the following five statuses: PENDING, RUNNING, COMPLETED, FAILED,
+or CANCELLED.  Under the 'status_abbrev' field name, these are
+abbreviated as P, R, CD, F, and CA respectively.
 
 OUTPUT FORMAT
 -------------
