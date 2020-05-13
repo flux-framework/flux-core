@@ -212,6 +212,8 @@ for prereq in $GLOBAL_PROGRAM_PREREQS; do
 		exit 1
 		EOF
 		chmod +x ${dir}/$prog
+		# Override $$prog to point to wrapper script:
+		eval "${prog}=${dir}/${prog}"
     fi
 done
 
