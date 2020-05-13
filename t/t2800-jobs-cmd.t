@@ -118,7 +118,7 @@ test_expect_success 'flux-jobs -a and -A works' '
 
 # Recall pending = depend & sched, running = run & cleanup,
 #  active = pending & running
-test_expect_success 'flux-jobs --filter works' '
+test_expect_success 'flux-jobs --filter works (job states)' '
         count=`flux jobs --suppress-header --filter=depend | wc -l` &&
         test $count -eq 0 &&
         count=`flux jobs --suppress-header --filter=sched | wc -l` &&
@@ -155,6 +155,33 @@ test_expect_success 'flux-jobs --filter works' '
         test $count -eq 20 &&
         count=`flux jobs --suppress-header --filter=depend,cleanup | wc -l` &&
         test $count -eq 0
+'
+
+test_expect_success 'flux-jobs --filter works (job results)' '
+        count=`flux jobs --suppress-header --filter=completed | wc -l` &&
+        test $count -eq 4 &&
+        count=`flux jobs --suppress-header --filter=failed | wc -l` &&
+        test $count -eq 1 &&
+        count=`flux jobs --suppress-header --filter=cancelled | wc -l` &&
+        test $count -eq 1 &&
+        count=`flux jobs --suppress-header --filter=completed,failed | wc -l` &&
+        test $count -eq 5 &&
+        count=`flux jobs --suppress-header --filter=completed,cancelled | wc -l` &&
+        test $count -eq 5 &&
+        count=`flux jobs --suppress-header --filter=completed,failed,cancelled | wc -l` &&
+        test $count -eq 6 &&
+        count=`flux jobs --suppress-header --filter=pending,completed | wc -l` &&
+        test $count -eq 10 &&
+        count=`flux jobs --suppress-header --filter=pending,failed | wc -l` &&
+        test $count -eq 7 &&
+        count=`flux jobs --suppress-header --filter=pending,cancelled | wc -l` &&
+        test $count -eq 7 &&
+        count=`flux jobs --suppress-header --filter=running,completed | wc -l` &&
+        test $count -eq 12 &&
+        count=`flux jobs --suppress-header --filter=running,failed | wc -l` &&
+        test $count -eq 9 &&
+        count=`flux jobs --suppress-header --filter=running,cancelled | wc -l` &&
+        test $count -eq 9
 '
 
 test_expect_success 'flux-jobs --filter with invalid state fails' '
