@@ -35,7 +35,6 @@ static int topology_restrict (hwloc_topology_t topo, hwloc_cpuset_t set)
     int flags = HWLOC_RESTRICT_FLAG_ADAPT_DISTANCES |
                 HWLOC_RESTRICT_FLAG_ADAPT_MISC |
                 HWLOC_RESTRICT_FLAG_ADAPT_IO;
-    flags = 0;
     if (hwloc_topology_restrict (topo, set, flags) < 0)
         return (-1);
     return (0);
