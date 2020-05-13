@@ -128,38 +128,7 @@ static int lookup_one_topo_xml (flux_t *h, char **valp, uint32_t rank)
     return (rc);
 }
 
-/*  Given an array of topology XML strings with `n` entries, return
- *   a "global" topology object.
- */
-static hwloc_topology_t global_hwloc_create (char **xml, int n)
-{
-    hwloc_topology_t global;
-    int i;
-
-    if (hwloc_topology_init (&global) < 0
-        || hwloc_topology_set_custom (global) < 0)
-        log_err_exit ("gather: unable to init topology");
-
-    for (i = 0; i < n; i++) {
-        hwloc_topology_t topo;
-        if (hwloc_topology_init (&topo) < 0)
-            log_err_exit ("hwloc_topology_init");
-        if (hwloc_topology_set_xmlbuffer (topo, xml[i], strlen(xml[i])+1) < 0)
-            log_err_exit ("hwloc_topology_set_xmlbuffer");
-        if (hwloc_topology_load (topo) < 0)
-            log_err_exit ("hwloc_topology_load");
-        if (hwloc_custom_insert_topology (global,
-                                          hwloc_get_root_obj (global),
-                                          topo, NULL) < 0)
-            log_err_exit ("hwloc_custom_insert_topo");
-        hwloc_topology_destroy (topo);
-    }
-    hwloc_topology_load (global);
-
-    return (global);
-}
-
-static void string_array_destroy (char **arg, int n)
+static void string_array_destroy (char **arg, uint32_t n)
 {
     int i;
     for (i = 0; i < n; i++)
@@ -167,17 +136,11 @@ static void string_array_destroy (char **arg, int n)
     free (arg);
 }
 
-char * flux_hwloc_global_xml (optparse_t *p)
+void flux_hwloc_global_xml (optparse_t *p, char ***xmlv, uint32_t *size)
 {
     flux_t *h = NULL;
-    uint32_t size;
-    char *xml;
-    char *buf;
     const char *arg;
-    int buflen;
     struct idset *idset = NULL;
-    hwloc_topology_t global = NULL;
-    char **xmlv = NULL;
 
     if (!(h = builtin_get_flux_handle (p)))
         log_err_exit ("flux_open");
@@ -187,30 +150,17 @@ char * flux_hwloc_global_xml (optparse_t *p)
     if (!(idset = ranks_to_idset (h, arg)))
         log_msg_exit ("failed to get target ranks");
 
-    if ((size = idset_count (idset)) == 0)
+    if ((*size = idset_count (idset)) == 0)
         log_msg_exit ("Invalid rank set when fetching global XML");
 
-    if (!(xmlv = calloc (size, sizeof (char *))))
-        log_msg_exit ("failed to alloc array for %d ranks", size);
+    if (!(*xmlv = calloc (*size, sizeof (char *))))
+        log_msg_exit ("failed to alloc array for %"PRIu32" ranks", *size);
 
-    if (lookup_all_topo_xml (h, xmlv, idset) < 0)
+    if (lookup_all_topo_xml (h, *xmlv, idset) < 0)
         log_err_exit ("gather: failed to get all topo xml");
 
-    if (!(global = global_hwloc_create (xmlv, size)))
-        log_err_exit ("gather: failed create global xml");
-
-    if (hwloc_topology_export_xmlbuffer (global, &buf, &buflen) < 0)
-        log_err_exit ("hwloc export XML");
-
-    /* XML buffer must be destroyed by hwloc_free_xmlbuffer, so copy it here */
-    xml = strdup (buf);
-
-    hwloc_free_xmlbuffer (global, buf);
-    string_array_destroy (xmlv, size);
-    hwloc_topology_destroy (global);
     idset_destroy (idset);
     flux_close (h);
-    return (xml);
 }
 
 /*  HWLOC topology helpers:
@@ -273,15 +223,18 @@ static char *flux_hwloc_local_xml (void)
 }
 
 /*
- *  Return hwloc XML as a malloc()'d string. Returns the topolog of this
+ *  Return hwloc XML as a malloc()'d string. Returns the topology of this
  *   system if "--local" is set in the optparse object `p`, otherwise
  *   returns the global XML. Caller must free the result.
  */
-static char *flux_hwloc_xml (optparse_t *p)
+static void flux_hwloc_xml (optparse_t *p, char ***xmlv, uint32_t *size)
 {
-    if (optparse_hasopt (p, "local"))
-        return flux_hwloc_local_xml ();
-    return flux_hwloc_global_xml (p);
+    if (optparse_hasopt (p, "local")) {
+        *size = 1;
+        *xmlv = calloc(*size, sizeof(char *));
+        *xmlv[0] = flux_hwloc_local_xml ();
+    }
+    flux_hwloc_global_xml (p, xmlv, size);
 }
 
 static int argz_appendf (char **argzp, size_t *argz_len, const char *fmt, ...)
@@ -315,9 +268,17 @@ int argz_execp (char *argz, size_t argz_len)
 
 static int cmd_topology (optparse_t *p, int ac, char *av[])
 {
-    char *xml = flux_hwloc_xml (p);
-    puts (xml);
-    free (xml);
+    char **xmlv = NULL;
+    char *xml = NULL;
+    uint32_t i = 0;
+    uint32_t size = 0;
+
+    flux_hwloc_xml (p, &xmlv, &size);
+    for (i = 0; i < size; i++) {
+        xml = xmlv[i];
+        puts (xml);
+    }
+    string_array_destroy (xmlv, size);
     return (0);
 }
 
@@ -340,21 +301,29 @@ static int init_topo_from_xml (hwloc_topology_t *tp, const char *xml)
 
 static int cmd_info (optparse_t *p, int ac, char *av[])
 {
-    char *xml = flux_hwloc_xml (p);
+    char **xmlv = NULL;
+    char *xml = NULL;
+    uint32_t size = 0, i = 0;
+    int ncores = 0, npu = 0, nnodes = 0;
     hwloc_topology_t topo;
 
-    if (!xml || init_topo_from_xml (&topo, xml) < 0)
-        log_msg_exit ("info: Failed to initialize topology from XML");
+    flux_hwloc_xml (p, &xmlv, &size);
 
-    int ncores = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_CORE);
-    int npu    = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_PU);
-    int nnodes = hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_MACHINE);
+    for (i = 0; i < size; i++) {
+        xml = xmlv[i];
+        if (!xml || init_topo_from_xml (&topo, xml) < 0)
+            log_msg_exit ("info: Failed to initialize topology from XML");
+
+        ncores += hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_CORE);
+        npu    += hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_PU);
+        nnodes += hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_MACHINE);
+        hwloc_topology_destroy (topo);
+    }
 
     printf ("%d Machine%s, %d Cores, %d PUs\n",
             nnodes, nnodes > 1 ? "s" : "", ncores, npu);
 
-    hwloc_topology_destroy (topo);
-    free (xml);
+    string_array_destroy (xmlv, size);
     return (0);
 }
 

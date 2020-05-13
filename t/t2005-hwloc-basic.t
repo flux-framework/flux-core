@@ -39,10 +39,10 @@ invalid_rank() {
 }
 
 test_expect_success 'hwloc: ensure we have system lstopo output' '
-    flux hwloc topology > system.xml &&
-    test -f system.xml &&
-    test -s system.xml &&
-    grep "<object type=\"System\" os_index=\"0\">" system.xml
+    flux hwloc topology > system.topology.out &&
+    test -f system.topology.out &&
+    test -s system.topology.out &&
+    grep "<object type=\"Machine\" os_index=\"0\">" system.topology.out
 '
 
 test_expect_success 'hwloc: each rank reloads a non-overlapping set of a node ' '
@@ -152,7 +152,7 @@ test_expect_success 'hwloc: reload with invalid rank fails' '
 test_expect_success 'hwloc: reload with no args reloads system topology' '
     flux hwloc reload &&
     flux hwloc topology > system.out4 &&
-    test_cmp system.xml system.out4
+    test_cmp system.topology.out system.out4
 '
 
 test_expect_success 'hwloc: unload aggregator' '
