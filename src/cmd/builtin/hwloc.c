@@ -172,12 +172,27 @@ static void topo_init_common (hwloc_topology_t *tp)
 {
     if (hwloc_topology_init (tp) < 0)
         log_err_exit ("hwloc_topology_init");
+#if HWLOC_API_VERSION < 0x20000
     if (hwloc_topology_set_flags (*tp, HWLOC_TOPOLOGY_FLAG_IO_DEVICES) < 0)
         log_err_exit ("hwloc_topology_set_flags");
     if (hwloc_topology_ignore_type (*tp, HWLOC_OBJ_CACHE) < 0)
         log_err_exit ("hwloc_topology_ignore_type OBJ_CACHE failed");
     if (hwloc_topology_ignore_type (*tp, HWLOC_OBJ_GROUP) < 0)
         log_err_exit ("hwloc_topology_ignore_type OBJ_GROUP failed");
+#else
+    if (hwloc_topology_set_io_types_filter(*tp,
+                                           HWLOC_TYPE_FILTER_KEEP_IMPORTANT)
+        < 0)
+        log_err_exit ("hwloc_topology_set_io_types_filter");
+    if (hwloc_topology_set_cache_types_filter(*tp,
+                                              HWLOC_TYPE_FILTER_KEEP_STRUCTURE)
+        < 0)
+        log_err_exit ("hwloc_topology_set_cache_types_filter");
+    if (hwloc_topology_set_icache_types_filter(*tp,
+                                               HWLOC_TYPE_FILTER_KEEP_STRUCTURE)
+        < 0)
+        log_err_exit ("hwloc_topology_set_icache_types_filter");
+#endif
 }
 
 /*  Load the local topology in a manner most useful to Flux components,
@@ -215,8 +230,14 @@ static char *flux_hwloc_local_xml (void)
     hwloc_topology_t topo = local_topo_load ();
     if (topo == NULL)
         return (NULL);
-    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen) < 0)
+#if HWLOC_API_VERSION >= 0x20000
+    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen,
+                                         HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1) < 0) {
+#else
+    if (hwloc_topology_export_xmlbuffer (topo, &buf, &buflen) < 0) {
+#endif
         log_err_exit ("Failed to export hwloc to XML");
+    }
     copy = strdup (buf);
     hwloc_free_xmlbuffer (topo, buf);
     return (copy);
@@ -365,8 +386,14 @@ static flux_future_t *kvs_txn_put_xml_file (flux_kvs_txn_t *txn, int rank,
     if (hwloc_topology_load (topo) < 0)
         log_err_exit ("hwloc_topology_load (%s)", path);
 
-    if (hwloc_topology_export_xmlbuffer (topo, &xml, &len) < 0)
+#if HWLOC_API_VERSION >= 0x20000
+    if (hwloc_topology_export_xmlbuffer (topo, &xml, &len,
+                                         HWLOC_TOPOLOGY_EXPORT_XML_FLAG_V1) < 0) {
+#else
+    if (hwloc_topology_export_xmlbuffer (topo, &xml, &len) < 0) {
+#endif
         log_err_exit ("hwloc_topology_export_xmlbuffer");
+    }
 
     if (kvs_txn_put_xml (txn, rank, xml) < 0)
         log_err_exit ("kvs_txn_put_xml");
