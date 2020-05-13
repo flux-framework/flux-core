@@ -149,31 +149,10 @@ test_expect_success 'hwloc: reload with invalid rank fails' '
     test_expect_code 1 flux hwloc reload -r foo
 '
 
-test_expect_success HAVE_LSTOPO 'hwloc: lstopo works' '
-    flux hwloc reload $exclu2 &&
-    flux hwloc lstopo > lstopo.out1 &&
-    sed -n 1p lstopo.out1 | grep "^System (32G.*"
-'
-
-test_expect_success HAVE_LSTOPO 'hwloc: lstopo subcommand passes options to lstopo' '
-    flux hwloc lstopo --help | grep ^Usage
-'
-
-test_expect_success HAVE_LSTOPO 'hwloc: topology subcommand works' '
-    flux hwloc topology > topology.out2 &&
-    flux hwloc lstopo > lstopo.out2 &&
-    $lstopo --if xml -i topology.out2 --of console > lstopo.out3 &&
-    test_cmp lstopo.out2 lstopo.out3
-'
-
 test_expect_success 'hwloc: reload with no args reloads system topology' '
     flux hwloc reload &&
     flux hwloc topology > system.out4 &&
     test_cmp system.xml system.out4
-'
-
-test_expect_success HAVE_LSTOPO 'hwloc: test failure of lstopo command' '
-    test_must_fail flux hwloc lstopo --input f:g:y
 '
 
 test_expect_success 'hwloc: unload aggregator' '

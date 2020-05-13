@@ -302,25 +302,6 @@ out:
     return (rc);
 }
 
-static void lstopo_argz_init (char *cmd, char **argzp, size_t *argz_lenp,
-                              char *extra_args[])
-{
-    char *extra;
-    size_t extra_len;
-    int e;
-    char *argv[] = { cmd, "-i", "-", "--if", "xml",
-                     "--of", "console", NULL };
-    if (  (e = argz_create (argv, argzp, argz_lenp)) != 0
-       || (e = argz_create (extra_args, &extra, &extra_len)) != 0)
-        log_msg_exit ("argz_create: %s", strerror (e));
-
-    /*  Append any extra args in av[] */
-    if ((e = argz_append (argzp, argz_lenp, extra, extra_len)) != 0)
-        log_msg_exit ("argz_append: %s", strerror (e));
-
-    free (extra);
-}
-
 int argz_execp (char *argz, size_t argz_len)
 {
     char *argv [argz_count (argz, argz_len) + 1];
@@ -328,100 +309,6 @@ int argz_execp (char *argz, size_t argz_len)
     return execvp (argv[0], argv);
 }
 
-FILE * argz_popen (char *argz, size_t argz_len, pid_t *pidptr)
-{
-    int pfds[2];
-    pid_t pid;
-    if (pipe (pfds) < 0)
-        log_err_exit ("pipe");
-    switch ((pid = fork ())) {
-    case -1:
-        log_err_exit ("fork");
-    case  0:
-        close (pfds[1]);
-        dup2 (pfds[0], STDIN_FILENO);
-        argz_execp (argz, argz_len);
-        if (errno != ENOENT)
-            log_err ("exec");
-        exit (errno); /* So we can detect ENOENT.. Sorry */
-    default:
-        break;
-    }
-    close (pfds[0]);
-    *pidptr = pid;
-    return (fdopen (pfds[1], "w"));
-}
-
-/*
- *  Execute lstopo from user's PATH sending full topology XML over stdin.
- *   Pass any extra options along to lstopo(1).
- *
- *  If running lstopo fails with ENOENT, try lstopo-no-graphics.
- */
-static int exec_lstopo (optparse_t *p, int ac, char *av[], const char *topo)
-{
-    int status;
-    FILE *fp;
-    char *argz;
-    size_t argz_len;
-    pid_t pid;
-    const char *cmds[] = { "lstopo", "lstopo-no-graphics", NULL };
-    const char **cp = cmds;
-
-    /* Ignore SIGPIPE so we don't get killed when exec() fails */
-    signal (SIGPIPE, SIG_IGN);
-
-    /* Initialize argz with first command in cmds above: */
-    lstopo_argz_init ((char *) *cp, &argz, &argz_len, av+1);
-
-    while (true) {
-        const char *next = *(cp+1);
-        if (!(fp = argz_popen (argz, argz_len, &pid)))
-            log_err_exit ("popen (lstopo)");
-        fputs (topo, fp);
-        fclose (fp);
-        if (waitpid (pid, &status, 0) < 0)
-            log_err_exit ("waitpid");
-
-        /* Break out of loop if exec() was succcessful, failed with
-         *  an error other than "File not found", or we ran out programs
-         *  to try.
-         */
-        if (status == 0 || !next || WEXITSTATUS (status) != ENOENT)
-            break;
-
-        /* Replace previous cmd in argz with next command to try:
-         */
-        argz_replace (&argz, &argz_len, *(cp++), next, NULL);
-    }
-
-    return (status);
-}
-
-static int cmd_lstopo (optparse_t *p, int ac, char *av[])
-{
-    int status;
-    char *xml = flux_hwloc_global_xml (p);
-    if (xml == NULL)
-        log_msg_exit ("Failed to fetch global hwloc XML");
-
-    status = exec_lstopo (p, ac, av, xml);
-    if (status) {
-        if (WIFEXITED (status)) {
-            if (WEXITSTATUS (status) == ENOENT)
-                log_msg_exit ("Unable to find an lstopo variant to execute.");
-            else
-                log_msg_exit ("lstopo: Exited with %d", WEXITSTATUS (status));
-        }
-        if (WIFSIGNALED (status) && WTERMSIG (status) != SIGPIPE)
-            log_msg_exit ("lstopo: %s%s", strsignal (WTERMSIG (status)),
-                      WCOREDUMP (status) ? " (core dumped)" : "");
-    }
-
-    free (xml);
-
-    return (0);
-}
 
 /*  flux-hwloc topology:
  */
@@ -974,13 +861,6 @@ static struct optparse_subcommand hwloc_subcmds[] = {
       internal_hwloc_reload,
       0,
       reload_opts,
-    },
-    { "lstopo",
-      "[lstopo-OPTIONS]",
-      "Show hwloc topology of the system",
-      cmd_lstopo,
-      OPTPARSE_SUBCMD_SKIP_OPTS,
-      NULL,
     },
     { "topology",
       NULL,
