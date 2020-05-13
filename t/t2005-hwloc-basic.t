@@ -82,7 +82,7 @@ test_expect_success HAVE_JQ 'hwloc: by_rank aggregate key exists after reload' '
 '
 
 #  Keep this test after 'reload exclu2' above so we're processing
-#   know topology xml from reload.
+#   known topology xml from reload.
 #
 test_expect_success 'hwloc: flux-hwloc info reports expected resources' '
     cat <<-EOF > hwloc-info.expected1 &&
