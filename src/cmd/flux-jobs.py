@@ -279,6 +279,27 @@ def fetch_jobs_all(flux_handle, args, attrs, userid, states, results):
     return jobs
 
 
+def calc_filters(args):
+    states = 0
+    results = 0
+    for fname in args.filter.split(","):
+        if fname.lower() in STATE_CONST_DICT:
+            states |= STATE_CONST_DICT[fname.lower()]
+        elif fname.lower() in RESULT_CONST_DICT:
+            # Must specify "inactive" to get results
+            states |= STATE_CONST_DICT["inactive"]
+            results |= RESULT_CONST_DICT[fname.lower()]
+        else:
+            print("Invalid filter specified: {}".format(fname), file=sys.stderr)
+            sys.exit(1)
+
+    if states == 0:
+        states |= flux.constants.FLUX_JOB_PENDING
+        states |= flux.constants.FLUX_JOB_RUNNING
+
+    return (states, results)
+
+
 def fetch_jobs_flux(args, fields):
     flux_handle = flux.Flux()
 
@@ -341,22 +362,7 @@ def fetch_jobs_flux(args, fields):
                 print("invalid user specified", file=sys.stderr)
                 sys.exit(1)
 
-    states = 0
-    results = 0
-    for fname in args.filter.split(","):
-        if fname.lower() in STATE_CONST_DICT:
-            states |= STATE_CONST_DICT[fname.lower()]
-        elif fname.lower() in RESULT_CONST_DICT:
-            # Must specify "inactive" to get results
-            states |= STATE_CONST_DICT["inactive"]
-            results |= RESULT_CONST_DICT[fname.lower()]
-        else:
-            print("Invalid filter specified: {}".format(fname), file=sys.stderr)
-            sys.exit(1)
-
-    if states == 0:
-        states |= flux.constants.FLUX_JOB_PENDING
-        states |= flux.constants.FLUX_JOB_RUNNING
+    (states, results) = calc_filters(args)
 
     jobs = fetch_jobs_all(flux_handle, args, attrs, userid, states, results)
     return jobs
