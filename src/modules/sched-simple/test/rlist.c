@@ -533,6 +533,7 @@ static void test_issue2473 (void)
         "issue2473: rlist_dumps shows one core per node");
     free (result);
     rlist_free (rl, a);
+    rlist_destroy (a);
 
     /* problem: unsatisfiable */
     a = rlist_alloc (rl, "worst-fit", 3, 8, 1);
