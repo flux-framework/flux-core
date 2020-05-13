@@ -339,6 +339,9 @@ def fetch_jobs_flux(args, fields):
     for field in fields:
         attrs.update(fields2attrs[field])
 
+    if args.color == "always" or args.color == "auto":
+        attrs.update(fields2attrs["result"])
+
     if args.jobids:
         jobs = fetch_jobs_ids(flux_handle, args, attrs)
         return jobs
@@ -466,6 +469,14 @@ def parse_args():
         help="Specify output format using Python's string format syntax",
     )
     parser.add_argument(
+        "--color",
+        type=str,
+        metavar="WHEN",
+        choices=["never", "always", "auto"],
+        default="auto",
+        help="Colorize output; WHEN can be 'never', 'always', or 'auto' (default)",
+    )
+    parser.add_argument(
         "jobids",
         type=int,
         metavar="JOBID",
@@ -578,6 +589,24 @@ class JobsOutputFormat(flux.util.OutputFormat):
         )
 
 
+def color_setup(args, job):
+    if args.color == "always" or (args.color == "auto" and sys.stdout.isatty()):
+        if job.result:
+            if job.result == "COMPLETED":
+                sys.stdout.write("\033[01;32m")
+            elif job.result == "FAILED":
+                sys.stdout.write("\033[01;31m")
+            elif job.result == "CANCELLED":
+                sys.stdout.write("\033[37m")
+            return True
+    return False
+
+
+def color_reset(color_set):
+    if color_set:
+        sys.stdout.write("\033[0;0m")
+
+
 @flux.util.CLIMain(LOGGER)
 def main():
     args = parse_args()
@@ -604,7 +633,9 @@ def main():
         print(formatter.header())
 
     for job in jobs:
+        color_set = color_setup(args, job)
         print(formatter.format(job))
+        color_reset(color_set)
 
 
 if __name__ == "__main__":
