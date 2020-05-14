@@ -539,7 +539,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
         flux jobs --format={username} | head -1 | grep "USER" &&
         flux jobs --format={priority} | head -1 | grep "PRI" &&
         flux jobs --format={state} | head -1 | grep "STATE" &&
-        flux jobs --format={state_single} | head -1 | grep "STATE" &&
+        flux jobs --format={state_single} | head -1 | grep "ST" &&
         flux jobs --format={name} | head -1 | grep "NAME" &&
         flux jobs --format={ntasks} | head -1 | grep "NTASKS" &&
         flux jobs --format={nnodes} | head -1 | grep "NNODES" &&
@@ -550,7 +550,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
         flux jobs --format={exception.type} | head -1 | grep "EXCEPTION-TYPE" &&
         flux jobs --format={exception.note} | head -1 | grep "EXCEPTION-NOTE" &&
         flux jobs --format={result} | head -1 | grep "RESULT" &&
-        flux jobs --format={result_abbrev} | head -1 | grep "RESULT" &&
+        flux jobs --format={result_abbrev} | head -1 | grep "RS" &&
         flux jobs --format={t_submit} | head -1 | grep "T_SUBMIT" &&
         flux jobs --format={t_depend} | head -1 | grep "T_DEPEND" &&
         flux jobs --format={t_sched} | head -1 | grep "T_SCHED" &&
