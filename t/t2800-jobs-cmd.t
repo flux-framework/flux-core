@@ -511,6 +511,25 @@ test_expect_success 'flux-jobs --format={exception.note},{exception.note:h} work
         test_cmp exception_noteI_tail.out exception_noteI.exp
 '
 
+test_expect_success 'flux-jobs --format={result},{result:h},{result_abbrev},{result_abbrev:h} works' '
+        flux jobs --suppress-header --state=pending,running --format="{result},{result:h}" > resultPR.out &&
+        for i in `seq 1 14`; do echo ",-" >> resultPR.exp; done &&
+        test_cmp resultPR.out resultPR.exp &&
+        flux jobs --suppress-header --state=pending,running --format="{result_abbrev},{result_abbrev:h}" > result_abbrevPR.out &&
+        for i in `seq 1 14`; do echo ",-" >> result_abbrevPR.exp; done &&
+        test_cmp result_abbrevPR.out result_abbrevPR.exp &&
+        flux jobs --suppress-header --state=inactive --format="{result},{result:h}" > resultI.out &&
+        echo "CANCELLED,CANCELLED" >> resultI.exp &&
+        echo "FAILED,FAILED" >> resultI.exp &&
+        for i in `seq 1 4`; do echo "COMPLETED,COMPLETED" >> resultI.exp; done &&
+        test_cmp resultI.out resultI.exp &&
+        flux jobs --suppress-header --state=inactive --format="{result_abbrev},{result_abbrev:h}" > result_abbrevI.out &&
+        echo "CA,CA" >> result_abbrevI.exp &&
+        echo "F,F" >> result_abbrevI.exp &&
+        for i in `seq 1 4`; do echo "CD,CD" >> result_abbrevI.exp; done &&
+        test_cmp result_abbrevI.out result_abbrevI.exp
+'
+
 #
 # format header tests
 #
@@ -520,7 +539,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
         flux jobs --format={username} | head -1 | grep "USER" &&
         flux jobs --format={priority} | head -1 | grep "PRI" &&
         flux jobs --format={state} | head -1 | grep "STATE" &&
-        flux jobs --format={state_single} | head -1 | grep "STATE" &&
+        flux jobs --format={state_single} | head -1 | grep "ST" &&
         flux jobs --format={name} | head -1 | grep "NAME" &&
         flux jobs --format={ntasks} | head -1 | grep "NTASKS" &&
         flux jobs --format={nnodes} | head -1 | grep "NNODES" &&
@@ -530,6 +549,8 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
         flux jobs --format={exception.severity} | head -1 | grep "EXCEPTION-SEVERITY" &&
         flux jobs --format={exception.type} | head -1 | grep "EXCEPTION-TYPE" &&
         flux jobs --format={exception.note} | head -1 | grep "EXCEPTION-NOTE" &&
+        flux jobs --format={result} | head -1 | grep "RESULT" &&
+        flux jobs --format={result_abbrev} | head -1 | grep "RS" &&
         flux jobs --format={t_submit} | head -1 | grep "T_SUBMIT" &&
         flux jobs --format={t_depend} | head -1 | grep "T_DEPEND" &&
         flux jobs --format={t_sched} | head -1 | grep "T_SCHED" &&

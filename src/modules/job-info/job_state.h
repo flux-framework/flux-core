@@ -76,6 +76,7 @@ struct job {
     int exception_severity;
     const char *exception_type;
     const char *exception_note;
+    flux_job_result_t result;
 
     /* cache of job information */
     json_t *jobspec_job;

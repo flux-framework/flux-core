@@ -960,6 +960,23 @@ error:
     return rc;
 }
 
+/* calculate any remaining fields */
+static int eventlog_inactive_finish (struct info_ctx *ctx,
+                                     struct job *job)
+{
+    if (job->success)
+        job->result = FLUX_JOB_RESULT_COMPLETED;
+    else {
+        if (job->exception_occurred
+            && !strcmp (job->exception_type, "cancel"))
+            job->result = FLUX_JOB_RESULT_CANCELLED;
+        else
+            job->result = FLUX_JOB_RESULT_FAILED;
+    }
+
+    return 0;
+}
+
 static void state_inactive_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
@@ -975,6 +992,9 @@ static void state_inactive_lookup_continuation (flux_future_t *f, void *arg)
     }
 
     if (eventlog_inactive_parse (ctx, job, s) < 0)
+        goto out;
+
+    if (eventlog_inactive_finish (ctx, job) < 0)
         goto out;
 
     st = zlist_head (job->next_states);
@@ -1425,6 +1445,9 @@ static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
 
     if (job->states_mask & FLUX_JOB_INACTIVE) {
         if (eventlog_inactive_parse (ctx, job, eventlog) < 0)
+            goto done;
+
+        if (eventlog_inactive_finish (ctx, job) < 0)
             goto done;
     }
 

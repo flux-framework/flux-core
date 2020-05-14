@@ -63,6 +63,13 @@ def statetostr(stateid, singlechar=False):
     return raw.flux_job_statetostr(stateid, singlechar).decode("utf-8")
 
 
+def resulttostr(resultid, singlechar=False):
+    # if result not returned, just return empty string back
+    if resultid == "":
+        return ""
+    return raw.flux_job_resulttostr(resultid, singlechar).decode("utf-8")
+
+
 def get_username(userid):
     try:
         return pwd.getpwuid(userid).pw_name
@@ -96,6 +103,7 @@ class JobInfo:
         "nnodes": "",
         "ranks": "",
         "success": "",
+        "result": "",
     }
 
     def __init__(self, info_resp):
@@ -103,9 +111,13 @@ class JobInfo:
         combined_dict = self.defaults.copy()
         combined_dict.update(info_resp)
 
-        #  Rename "state" to "state_id" until returned state is a string:
+        #  Rename "state" to "state_id" and "result" to "result_id"
+        #  until returned state is a string:
         if "state" in combined_dict:
             combined_dict["state_id"] = combined_dict.pop("state")
+
+        if "result" in combined_dict:
+            combined_dict["result_id"] = combined_dict.pop("result")
 
         # Overwrite "exception" with our exception object
         exc1 = combined_dict.get("exception_occurred", "")
@@ -151,6 +163,14 @@ class JobInfo:
     @memoized_property
     def state_single(self):
         return statetostr(self.state_id, True)
+
+    @memoized_property
+    def result(self):
+        return resulttostr(self.result_id)
+
+    @memoized_property
+    def result_abbrev(self):
+        return resulttostr(self.result_id, True)
 
     @memoized_property
     def username(self):
@@ -253,6 +273,8 @@ def fetch_jobs_flux(args, fields):
         "exception.severity": ("exception_severity",),
         "exception.type": ("exception_type",),
         "exception.note": ("exception_note",),
+        "result": ("result",),
+        "result_abbrev": ("result",),
         "t_submit": ("t_submit",),
         "t_depend": ("t_depend",),
         "t_sched": ("t_sched",),
@@ -440,12 +462,14 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "username": "USER",
         "priority": "PRI",
         "state": "STATE",
-        "state_single": "STATE",
+        "state_single": "ST",
         "name": "NAME",
         "ntasks": "NTASKS",
         "nnodes": "NNODES",
         "ranks": "RANKS",
         "success": "SUCCESS",
+        "result": "RESULT",
+        "result_abbrev": "RS",
         "t_submit": "T_SUBMIT",
         "t_depend": "T_DEPEND",
         "t_sched": "T_SCHED",

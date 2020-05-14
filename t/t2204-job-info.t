@@ -220,6 +220,48 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
         test_cmp list_state_I.out list_state_I.exp
 '
 
+test_expect_success HAVE_JQ 'flux job list inactive jobs results are correct' '
+        flux job list -s inactive | jq .result > list_result_I.out &&
+        head -n 1 list_result_I.out > list_result_I_cancelled.out &&
+        echo "4" >> list_result_I_cancelled.exp &&
+        test_cmp list_result_I_cancelled.out list_result_I_cancelled.exp &&
+        head -n 2 list_result_I.out | tail -n 1 > list_result_I_failed.out &&
+        echo "2" >> list_result_I_failed.exp &&
+        test_cmp list_result_I_failed.out list_result_I_failed.exp &&
+        tail -n 4 list_result_I.out > list_result_I_completed.out &&
+        for count in `seq 1 4`; do \
+            echo "1" >> list_result_I_completed.exp; \
+        done &&
+        test_cmp list_result_I_completed.out list_result_I_completed.exp
+'
+
+# Hard code state/results values for these tests, as we did not add a results
+# option to flux_job_list() or the flux-job command.
+
+test_expect_success HAVE_JQ 'flux job list only cancelled jobs' '
+        id=$(id -u) &&
+        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:32, results:4, attrs:[]}" \
+          | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_cancelled.out &&
+        head -n 1 job_ids_inactive.out > result_cancelled.exp &&
+        test_cmp result_cancelled.exp list_result_cancelled.out
+'
+
+test_expect_success HAVE_JQ 'flux job list only failed jobs' '
+        id=$(id -u) &&
+        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:32, results:2, attrs:[]}" \
+          | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_failed.out &&
+        head -n 2 job_ids_inactive.out | tail -n 1 > result_failed.exp &&
+        test_cmp result_failed.exp list_result_failed.out
+'
+
+test_expect_success HAVE_JQ 'flux job list only completed jobs' '
+        id=$(id -u) &&
+        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:32, results:1, attrs:[]}" \
+          | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_completed.out &&
+        tail -n 4 job_ids_inactive.out > result_completed.exp &&
+        test_cmp result_completed.exp list_result_completed.out
+'
+
 # Note: "pending" = "depend" & "sched", we also test just "sched"
 # state since we happen to know all these jobs are in the "sched"
 # state given checks above
@@ -792,7 +834,7 @@ test_expect_success 'list count / max_entries works' '
 '
 test_expect_success HAVE_JQ 'list request with empty attrs works' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:[]}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[]}" \
           | $RPC job-info.list > list_empty_attrs.out &&
         test_must_fail grep "userid" list_empty_attrs.out &&
         test_must_fail grep "priority" list_empty_attrs.out &&
@@ -811,7 +853,7 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
 '
 test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:100000, userid:${id}, states:0, attrs:[]}" \
+        $jq -j -c -n  "{max_entries:100000, userid:${id}, states:0, results:0, attrs:[]}" \
           | $RPC job-info.list
 '
 test_expect_success HAVE_JQ 'list-attrs works' '
@@ -833,7 +875,8 @@ test_expect_success HAVE_JQ 'list-attrs works' '
         grep exception_occurred list_attrs.out &&
         grep exception_type list_attrs.out &&
         grep exception_severity list_attrs.out &&
-        grep exception_note list_attrs.out
+        grep exception_note list_attrs.out &&
+        grep result list_attrs.out
 '
 
 #
@@ -1244,17 +1287,17 @@ test_expect_success 'list request with empty payload fails with EPROTO(71)' '
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:5}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:5}" \
           | $RPC job-info.list 71
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:[5]}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[5]}" \
           | $RPC job-info.list 22
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, attrs:[\"foo\"]}" \
+        $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[\"foo\"]}" \
           | $RPC job-info.list 22
 '
 test_expect_success 'list-id request with empty payload fails with EPROTO(71)' '

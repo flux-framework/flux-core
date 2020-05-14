@@ -263,6 +263,44 @@ void check_statestr(void)
         "flux_job_statetostr (0, false) returned non-NULL");
 }
 
+struct rr {
+    flux_job_result_t result;
+    const char *r;
+    const char *r_long;
+};
+
+struct rr rrtab[] = {
+    { FLUX_JOB_RESULT_COMPLETED, "CD", "COMPLETED" },
+    { FLUX_JOB_RESULT_FAILED,    "F",  "FAILED" },
+    { FLUX_JOB_RESULT_CANCELLED, "CA", "CANCELLED" },
+    { -1, NULL, NULL },
+};
+
+void check_resultstr(void)
+{
+    struct rr *rr;
+
+    for (rr = &rrtab[0]; rr->r != NULL; rr++) {
+        const char *r = flux_job_resulttostr (rr->result, true);
+        const char *r_long = flux_job_resulttostr (rr->result, false);
+        ok (r && !strcmp (r, rr->r),
+            "flux_job_resulttostr (%d, true) = %s", rr->result, rr->r);
+        ok (r_long && !strcmp (r_long, rr->r_long),
+            "flux_job_resulttostr (%d, false) = %s", rr->result, rr->r_long);
+    }
+    for (rr = &rrtab[0]; rr->r != NULL; rr++) {
+        flux_job_result_t result;
+        ok (flux_job_strtoresult (rr->r, &result) == 0 && result == rr->result,
+            "flux_job_strtoresult (%s) = %d", rr->r, rr->result);
+        ok (flux_job_strtoresult (rr->r_long, &result) == 0 && result == rr->result,
+            "flux_job_strtoresult (%s) = %d", rr->r_long, rr->result);
+    }
+    ok (flux_job_resulttostr (0, true) != NULL,
+        "flux_job_resulttostr (0, true) returned non-NULL");
+    ok (flux_job_resulttostr (0, false) != NULL,
+        "flux_job_resulttostr (0, false) returned non-NULL");
+}
+
 void check_kvs_namespace (void)
 {
     char buf[64];
@@ -288,6 +326,8 @@ int main (int argc, char *argv[])
     check_corner_case ();
 
     check_statestr ();
+
+    check_resultstr ();
 
     check_kvs_namespace ();
 

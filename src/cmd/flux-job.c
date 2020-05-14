@@ -999,7 +999,7 @@ static const char *list_attrs =
     "[\"userid\",\"priority\",\"t_submit\",\"state\","          \
     "\"name\",\"ntasks\",\"nnodes\",\"ranks\",\"success\","             \
     "\"exception_occurred\",\"exception_severity\",\"exception_type\"," \
-    "\"exception_note\","                                               \
+    "\"exception_note\",\"result\","                                    \
     "\"t_depend\",\"t_sched\",\"t_run\",\"t_cleanup\",\"t_inactive\"]";
 
 int cmd_list (optparse_t *p, int argc, char **argv)
