@@ -39,3 +39,32 @@ resource_la_LIBADD = $(fluxmod_libadd) \
 		    $(top_builddir)/src/common/libflux-internal.la \
 		    $(top_builddir)/src/common/libflux-core.la \
 		    $(ZMQ_LIBS)
+
+TESTS = test_rutil.t
+
+test_ldadd = \
+        $(top_builddir)/src/common/libflux-internal.la \
+        $(top_builddir)/src/common/libflux-core.la \
+        $(top_builddir)/src/common/libtap/libtap.la \
+        $(ZMQ_LIBS) $(LIBPTHREAD)
+
+test_ldflags = \
+        -no-install
+
+test_cppflags = \
+        $(AM_CPPFLAGS)
+
+check_PROGRAMS = $(TESTS)
+
+TEST_EXTENSIONS = .t
+T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
+       $(top_srcdir)/config/tap-driver.sh
+
+test_rutil_t_SOURCES = test/rutil.c
+test_rutil_t_CPPFLAGS = $(test_cppflags)
+test_rutil_t_LDADD = \
+        $(top_builddir)/src/modules/resource/rutil.o \
+        $(test_ldadd)
+test_rutil_t_LDFLAGS = \
+        $(test_ldflags)
+
