@@ -39,6 +39,12 @@ STATE_CONST_DICT = {
     "active": flux.constants.FLUX_JOB_ACTIVE,
 }
 
+RESULT_CONST_DICT = {
+    "completed": flux.constants.FLUX_JOB_RESULT_COMPLETED,
+    "failed": flux.constants.FLUX_JOB_RESULT_FAILED,
+    "cancelled": flux.constants.FLUX_JOB_RESULT_CANCELLED,
+}
+
 
 def fsd(secs, hyphenifzero):
     #  Round <1ms down to 0s for now
@@ -68,6 +74,16 @@ def resulttostr(resultid, singlechar=False):
     if resultid == "":
         return ""
     return raw.flux_job_resulttostr(resultid, singlechar).decode("utf-8")
+
+
+def statustostr(stateid, resultid, abbrev=False):
+    if stateid & flux.constants.FLUX_JOB_PENDING:
+        statusstr = "PD" if abbrev else "PENDING"
+    elif stateid & flux.constants.FLUX_JOB_RUNNING:
+        statusstr = "R" if abbrev else "RUNNING"
+    else:  # flux.constants.FLUX_JOB_INACTIVE
+        statusstr = resulttostr(resultid, abbrev)
+    return statusstr
 
 
 def get_username(userid):
@@ -189,6 +205,14 @@ class JobInfo:
     def runtime(self):
         return self.get_runtime()
 
+    @memoized_property
+    def status(self):
+        return statustostr(self.state_id, self.result_id, False)
+
+    @memoized_property
+    def status_abbrev(self):
+        return statustostr(self.state_id, self.result_id, True)
+
 
 def fetch_jobs_stdin():
     """
@@ -243,14 +267,37 @@ def fetch_jobs_ids(flux_handle, args, attrs):
     return cbargs["jobs"]
 
 
-def fetch_jobs_all(flux_handle, args, attrs, userid, states):
-    rpc_handle = flux.job.job_list(flux_handle, args.count, list(attrs), userid, states)
+def fetch_jobs_all(flux_handle, args, attrs, userid, states, results):
+    rpc_handle = flux.job.job_list(
+        flux_handle, args.count, list(attrs), userid, states, results
+    )
     try:
         jobs = rpc_handle.get_jobs()
     except EnvironmentError as err:
         print("{}: {}".format("rpc", err.strerror), file=sys.stderr)
         sys.exit(1)
     return jobs
+
+
+def calc_filters(args):
+    states = 0
+    results = 0
+    for fname in args.filter.split(","):
+        if fname.lower() in STATE_CONST_DICT:
+            states |= STATE_CONST_DICT[fname.lower()]
+        elif fname.lower() in RESULT_CONST_DICT:
+            # Must specify "inactive" to get results
+            states |= STATE_CONST_DICT["inactive"]
+            results |= RESULT_CONST_DICT[fname.lower()]
+        else:
+            print("Invalid filter specified: {}".format(fname), file=sys.stderr)
+            sys.exit(1)
+
+    if states == 0:
+        states |= flux.constants.FLUX_JOB_PENDING
+        states |= flux.constants.FLUX_JOB_RUNNING
+
+    return (states, results)
 
 
 def fetch_jobs_flux(args, fields):
@@ -284,6 +331,8 @@ def fetch_jobs_flux(args, fields):
         "runtime": ("t_run", "t_cleanup"),
         "runtime_fsd": ("t_run", "t_cleanup"),
         "runtime_hms": ("t_run", "t_cleanup"),
+        "status": ("state", "result"),
+        "status_abbrev": ("state", "result"),
     }
 
     attrs = set()
@@ -299,7 +348,7 @@ def fetch_jobs_flux(args, fields):
     if args.A:
         args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
     if args.a or args.A:
-        args.states = "pending,running,inactive"
+        args.filter = "pending,running,inactive"
 
     if args.user == "all":
         userid = flux.constants.FLUX_USERID_UNKNOWN
@@ -313,19 +362,9 @@ def fetch_jobs_flux(args, fields):
                 print("invalid user specified", file=sys.stderr)
                 sys.exit(1)
 
-    states = 0
-    for state in args.states.split(","):
-        try:
-            states |= STATE_CONST_DICT[state.lower()]
-        except KeyError:
-            print("Invalid state specified: {}".format(state), file=sys.stderr)
-            sys.exit(1)
+    (states, results) = calc_filters(args)
 
-    if states == 0:
-        states |= flux.constants.FLUX_JOB_PENDING
-        states |= flux.constants.FLUX_JOB_RUNNING
-
-    jobs = fetch_jobs_all(flux_handle, args, attrs, userid, states)
+    jobs = fetch_jobs_all(flux_handle, args, attrs, userid, states, results)
     return jobs
 
 
@@ -395,13 +434,13 @@ def parse_args():
         help="Limit output to N jobs(default 1000)",
     )
     parser.add_argument(
-        "-s",
-        "--states",
+        "-f",
+        "--filter",
         action=FilterAction,
         type=str,
-        metavar="STATES",
+        metavar="STATE|RESULT",
         default="pending,running",
-        help="List jobs in specific job states or virtual job states",
+        help="List jobs with specific job state or result",
     )
     parser.add_argument(
         "-n",
@@ -479,6 +518,8 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "runtime": "RUNTIME",
         "runtime_fsd": "RUNTIME",
         "runtime_hms": "RUNTIME",
+        "status": "STATUS",
+        "status_abbrev": "STATUS",
     }
 
     exception_headings = ExceptionInfo(
@@ -548,7 +589,7 @@ def main():
         fmt = args.format
     else:
         fmt = (
-            "{id:>18} {username:<8.8} {name:<10.10} {state:<8.8} "
+            "{id:>18} {username:<8.8} {name:<10.10} {status_abbrev:>6.6} "
             "{ntasks:>6} {nnodes:>6h} {runtime_fsd:>8h} "
             "{ranks:h}"
         )

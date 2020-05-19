@@ -41,22 +41,33 @@ List jobs for a specific username or userid.  Specify 'all' for all users.
 *-c, --count*'=N'::
 Limit output to N jobs (default 1000)
 
-*-s, --states*'=STATES'::
-List jobs in specific job states or virtual job states.  Multiple
-states can be listed separated by comma.  See JOB STATES below for
+*-f, --filter*'=STATE|RESULT'::
+List jobs with specific job state or result.  Multiple states or
+results can be listed separated by comma.  See JOB STATUS below for
 additional information.  Defaults to 'pending,running'.
 
 *-o, --format*'=FORMAT'::
 Specify output format using Python's string format syntax.  See OUTPUT
 FORMAT below for field names.
 
-JOB STATES
+JOB STATUS
 ----------
 Jobs may be observed to pass through five job states in Flux: DEPEND,
-SCHED, RUN, CLEANUP, and INACTIVE (see Flux RFC 21). For convenience
-and clarity, some options accept the following virtual job states:
-"pending", an alias for DEPEND,SCHED; "running", an alias for
-RUN,CLEANUP; "active", an alias for "pending,running".
+SCHED, RUN, CLEANUP, and INACTIVE (see Flux RFC 21).  Under the
+`state_single` field name, these are abbreviated as D, S, R, C, and I
+respectively.  For convenience and clarity, the following virtual job
+states also exist: "pending", an alias for DEPEND,SCHED; "running", an
+alias for RUN,CLEANUP; "active", an alias for "pending,running".
+
+After a job has finished and is in the INACTIVE state, it can be
+marked with one of three possible results: COMPLETED, FAILED,
+CANCELLED.  Under the 'result_abbrev' field name, these are
+abbreviated as CD, F, and CA respectively.
+
+The job status is a user friendly mix of both, a job is always in one
+of the following five statuses: PENDING, RUNNING, COMPLETED, FAILED,
+or CANCELLED.  Under the 'status_abbrev' field name, these are
+abbreviated as P, R, CD, F, and CA respectively.
 
 OUTPUT FORMAT
 -------------
@@ -65,7 +76,7 @@ The '--format' option can be used to specify an output format to
 flux-jobs(1) using Python's string format syntax.  For example, the
 following is the format used for the default format:
 
-  {id:>18} {username:<8.8} {name:<10.10} {state:<8.8} {ntasks:>6} {nnodes:>6h} {runtime_fsd:>8h} {ranks:h}
+  {id:>18} {username:<8.8} {name:<10.10} {status:>6.6} {ntasks:>6} {nnodes:>6h} {runtime_fsd:>8h} {ranks:h}
 
 The conversion type 'h' can be used to convert an empty string, "0s",
 "0.0", or "0:00:00" to a hyphen.  For example, normally "{ranks}"
@@ -79,19 +90,21 @@ id:: job ID
 userid:: job submitter's userid
 username:: job submitter's username
 priority:: job priority
-state:: job state
-state_single:: job state as a single character
+status:: job status (PENDING, RUNNING, COMPLETED, FAILED, or CANCELLED)
+status_abbrev:: status but in a max 2 character abbreviation
 name:: job name
 ntasks:: job task count
 nnodes:: job node count (if job ran / is running), empty string otherwise
 ranks:: job ranks (if job ran / is running), empty string otherwise
+state:: job state (DEPEND, SCHED, RUN, CLEANUP, INACTIVE)
+state_single:: job state as a single character
+result:: job result if job is inactive (COMPLETED, FAILED, CANCELLED), empty string otherwise
+result_abbrev:: result but in a max 2 character abbreviation
 success:: True of False if job completed successfully, empty string otherwise
 exception.occurred:: True of False if job had an exception, empty string otherwise
 exception.severity:: If exception.occurred True, the highest severity, empty string otherwise
 exception.type:: If exception.occurred True, the highest severity exception type, empty string otherwise
 exception.note:: If exception.occurred True, the highest severity exception note, empty string otherwise
-result:: job result if job is inactive, empty string otherwise
-result_abbrev:: result but in a max 2 character abbreviation
 t_submit:: time job was submitted
 t_depend:: time job entered depend state
 t_sched:: time job entered sched state
