@@ -50,6 +50,10 @@ additional information.  Defaults to 'pending,running'.
 Specify output format using Python's string format syntax.  See OUTPUT
 FORMAT below for field names.
 
+*--color*'=WHEN'::
+Control output coloring.  WHEN can be 'never', 'always', or 'auto'.
+Defaults to 'auto'.
+
 JOB STATUS
 ----------
 Jobs may be observed to pass through five job states in Flux: DEPEND,

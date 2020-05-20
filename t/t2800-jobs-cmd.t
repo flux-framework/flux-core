@@ -6,6 +6,8 @@ test_description='Test flux jobs command'
 
 test_under_flux 4 job
 
+runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast"
+
 # submit a whole bunch of jobs for job list testing
 #
 # - the first loop of job submissions are intended to have some jobs run
@@ -608,6 +610,132 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 '
 
 #
+# color tests
+#
+
+check_no_color() {
+    local file=$1
+    count=`grep "\\u001b" $file | wc -l`
+    if [ "$count" -eq 0 ]; then
+        return 0
+    fi
+    return 1
+}
+
+test_expect_success 'flux-jobs default color works (pty)' '
+        $runpty flux jobs --suppress-header --filter=pending | tail -n +2 > colorP_default.out &&
+        check_no_color colorP_default.out &&
+        $runpty flux jobs --suppress-header --filter=running | tail -n +2 > colorR_default.out &&
+        check_no_color colorR_default.out &&
+        $runpty flux jobs --suppress-header --filter=completed | tail -n +2 > colorCD_default.out &&
+        count=`grep "\\u001b\[01\;32m" colorCD_default.out | wc -l` &&
+        test $count -eq 4 &&
+        $runpty flux jobs --suppress-header --filter=failed | tail -n +2 > colorF_default.out &&
+        count=`grep "\\u001b\[01\;31m" colorF_default.out | wc -l` &&
+        test $count -eq 1 &&
+        $runpty flux jobs --suppress-header --filter=cancelled | tail -n +2 > colorCA_default.out &&
+        count=`grep "\\u001b\[37m" colorCA_default.out | wc -l` &&
+        test $count -eq 1
+'
+
+test_expect_success 'flux-jobs --color=always works (pty)' '
+        $runpty flux jobs --suppress-header --color=always --filter=pending | tail -n +2 > colorP_always.out &&
+        check_no_color colorP_always.out &&
+        $runpty flux jobs --suppress-header --color=always --filter=running | tail -n +2 > colorR_always.out &&
+        check_no_color colorR_always.out &&
+        $runpty flux jobs --suppress-header --color=always --filter=completed | tail -n +2 > colorCD_always.out &&
+        count=`grep -o "\\u001b\[01\;32m" colorCD_always.out | wc -l` &&
+        test $count -eq 4 &&
+        $runpty flux jobs --suppress-header --color=always --filter=failed | tail -n +2 > colorF_always.out &&
+        count=`grep -o "\\u001b\[01\;31m" colorF_always.out | wc -l` &&
+        test $count -eq 1 &&
+        $runpty flux jobs --suppress-header --color=always --filter=cancelled | tail -n +2 > colorCA_always.out &&
+        count=`grep -o "\\u001b\[37m" colorCA_always.out | wc -l` &&
+        test $count -eq 1
+'
+
+test_expect_success 'flux-jobs --color=never works (pty)' '
+        $runpty flux jobs --suppress-header --color=never --filter=pending | tail -n +2 > colorP_never.out &&
+        check_no_color colorP_never.out &&
+        $runpty flux jobs --suppress-header --color=never --filter=running | tail -n +2 > colorR_never.out &&
+        check_no_color colorR_never.out &&
+        $runpty flux jobs --suppress-header --color=never --filter=completed | tail -n +2 > colorCD_never.out &&
+        check_no_color colorCD_never.out &&
+        $runpty flux jobs --suppress-header --color=never --filter=failed | tail -n +2 > colorF_never.out &&
+        check_no_color colorF_never.out &&
+        $runpty flux jobs --suppress-header --color=never --filter=cancelled | tail -n +2 > colorCA_never.out &&
+        check_no_color colorCA_never.out
+'
+
+test_expect_success 'flux-jobs --color=auto works (pty)' '
+        $runpty flux jobs --suppress-header --color=auto --filter=pending | tail -n +2 > colorP_auto.out &&
+        check_no_color colorP_auto.out &&
+        $runpty flux jobs --suppress-header --color=auto --filter=running | tail -n +2 > colorR_auto.out &&
+        check_no_color colorR_auto.out &&
+        $runpty flux jobs --suppress-header --color=auto --filter=completed | tail -n +2 > colorCD_auto.out &&
+        count=`grep -o "\\u001b\[01\;32m" colorCD_auto.out | wc -l` &&
+        test $count -eq 4 &&
+        $runpty flux jobs --suppress-header --color=auto --filter=failed | tail -n +2 > colorF_auto.out &&
+        count=`grep -o "\\u001b\[01\;31m" colorF_auto.out | wc -l` &&
+        test $count -eq 1 &&
+        $runpty flux jobs --suppress-header --color=auto --filter=cancelled | tail -n +2 > colorCA_auto.out &&
+        count=`grep -o "\\u001b\[37m" colorCA_auto.out | wc -l` &&
+        test $count -eq 1
+'
+
+test_expect_success 'flux-jobs default color works (no tty)' '
+        flux jobs --suppress-header --filter=pending > colorP_notty_default.out &&
+        test_must_fail grep "" colorP_notty_default.out &&
+        flux jobs --suppress-header --filter=running > colorR_notty_default.out &&
+        test_must_fail grep "" colorR_notty_default.out &&
+        flux jobs --suppress-header --filter=completed > colorCD_notty_default.out &&
+        test_must_fail grep "" colorCD_notty_default.out &&
+        flux jobs --suppress-header --filter=failed > colorF_notty_default.out &&
+        test_must_fail grep "" colorF_notty_default.out &&
+        flux jobs --suppress-header --filter=cancelled > colorCA_notty_default.out &&
+        test_must_fail grep "" colorCA_notty_default.out
+'
+
+test_expect_success 'flux-jobs --color=always works (no tty)' '
+        flux jobs --suppress-header --color=always --filter=pending > colorP_notty_always.out &&
+        test_must_fail grep "" colorP_notty_always.out &&
+        flux jobs --suppress-header --color=always --filter=running > colorR_notty_always.out &&
+        test_must_fail grep "" colorR_notty_always.out &&
+        flux jobs --suppress-header --color=always --filter=completed > colorCD_notty_always.out &&
+        grep "" colorCD_notty_always.out &&
+        flux jobs --suppress-header --color=always --filter=failed > colorF_notty_always.out &&
+        grep "" colorF_notty_always.out &&
+        flux jobs --suppress-header --color=always --filter=cancelled > colorCA_notty_always.out &&
+        grep "" colorCA_notty_always.out
+'
+
+test_expect_success 'flux-jobs --color=never works (no tty)' '
+        flux jobs --suppress-header --color=never --filter=pending > colorP_notty_never.out &&
+        test_must_fail grep "" colorP_notty_never.out &&
+        flux jobs --suppress-header --color=never --filter=running > colorR_notty_never.out &&
+        test_must_fail grep "" colorR_notty_never.out &&
+        flux jobs --suppress-header --color=never --filter=completed > colorCD_notty_never.out &&
+        test_must_fail grep "" colorCD_notty_never.out &&
+        flux jobs --suppress-header --color=never --filter=failed > colorF_notty_never.out &&
+        test_must_fail grep "" colorF_notty_never.out &&
+        flux jobs --suppress-header --color=never --filter=cancelled > colorCA_notty_never.out &&
+        test_must_fail grep "" colorCA_notty_never.out
+'
+
+test_expect_success 'flux-jobs --color=auto works (no tty)' '
+        flux jobs --suppress-header --color=auto --filter=pending > colorP_notty_auto.out &&
+        test_must_fail grep "" colorP_notty_auto.out &&
+        flux jobs --suppress-header --color=auto --filter=running > colorR_notty_auto.out &&
+        test_must_fail grep "" colorR_notty_auto.out &&
+        flux jobs --suppress-header --color=auto --filter=completed > colorCD_notty_auto.out &&
+        test_must_fail grep "" colorCD_notty_auto.out &&
+        flux jobs --suppress-header --color=auto --filter=failed > colorF_notty_auto.out &&
+        test_must_fail grep "" colorF_notty_auto.out &&
+        flux jobs --suppress-header --color=auto --filter=cancelled > colorCA_notty_auto.out &&
+        test_must_fail grep "" colorCA_notty_auto.out
+'
+
+#
 # corner cases
 #
 
@@ -617,6 +745,10 @@ test_expect_success 'flux-jobs illegal count leads to RPC error' '
 
 test_expect_success 'flux-jobs --format with illegal field is an error' '
         test_must_fail flux jobs --format="{foobar}"
+'
+
+test_expect_success 'flux-jobs illegal color options is an error' '
+        test_must_fail flux jobs --color=foobar
 '
 
 test_expect_success 'flux-jobs --from-stdin works with no input' '
