@@ -628,13 +628,13 @@ test_expect_success 'flux-jobs default color works (pty)' '
         $runpty flux jobs --suppress-header --filter=running | tail -n +2 > colorR_default.out &&
         check_no_color colorR_default.out &&
         $runpty flux jobs --suppress-header --filter=completed | tail -n +2 > colorCD_default.out &&
-        count=`grep "\\u001b\[01\;32m" colorCD_default.out | wc -l` &&
+        count=`grep -o "\\u001b\[01\;32m" colorCD_default.out | wc -l` &&
         test $count -eq 4 &&
         $runpty flux jobs --suppress-header --filter=failed | tail -n +2 > colorF_default.out &&
-        count=`grep "\\u001b\[01\;31m" colorF_default.out | wc -l` &&
+        count=`grep -o "\\u001b\[01\;31m" colorF_default.out | wc -l` &&
         test $count -eq 1 &&
         $runpty flux jobs --suppress-header --filter=cancelled | tail -n +2 > colorCA_default.out &&
-        count=`grep "\\u001b\[37m" colorCA_default.out | wc -l` &&
+        count=`grep -o "\\u001b\[37m" colorCA_default.out | wc -l` &&
         test $count -eq 1
 '
 
