@@ -8,7 +8,7 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 
 test_under_flux 4 job
 
-query=${FLUX_BUILD_DIR}/src/modules/sched-simple/rlist-query
+query="flux resource list --state=free -no {rlist}"
 
 hwloc_by_rank='{"0-1": {"Core": 2, "cpuset": "0-1"}}'
 hwloc_by_rank_first_fit='{"0": {"Core": 2}, "1": {"Core": 1}}'
