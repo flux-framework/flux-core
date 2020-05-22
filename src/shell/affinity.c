@@ -125,6 +125,10 @@ static hwloc_cpuset_t shell_affinity_get_cpuset (struct shell_affinity *sa,
             shell_log_error ("affinity: core%d not in topology", i);
             goto err;
         }
+        if (!core->cpuset) {
+            shell_log_error ("affinity: core%d cpuset is null", i);
+            goto err;
+        }
         hwloc_bitmap_or (resultset, resultset, core->cpuset);
         i = hwloc_bitmap_next (coreset, i);
     }
