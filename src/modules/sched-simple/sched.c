@@ -340,8 +340,8 @@ static int hello_cb (flux_t *h,
     return 0;
 }
 
-static void status_cb (flux_t *h, flux_msg_handler_t *mh,
-                       const flux_msg_t *msg, void *arg)
+static void old_status_cb (flux_t *h, flux_msg_handler_t *mh,
+                           const flux_msg_t *msg, void *arg)
 {
     struct simple_sched *ss = arg;
     json_t *o = NULL;
@@ -359,6 +359,65 @@ static void status_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 err:
     json_decref (o);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "flux_respond_error");
+}
+
+static void status_cb (flux_t *h, flux_msg_handler_t *mh,
+                       const flux_msg_t *msg, void *arg)
+{
+    struct simple_sched *ss = arg;
+    struct rlist *rl = NULL;
+    json_t *all = NULL;
+    json_t *alloc = NULL;
+    json_t *down = NULL;
+
+    if (ss->rlist == NULL) {
+        flux_respond_error (h, msg, EAGAIN, "sched-simple not initialized");
+        return;
+    }
+
+    /*  Create list of all resources
+     */
+    if (!(rl = rlist_copy_empty (ss->rlist))
+        || rlist_mark_up (rl, "all") < 0
+        || !(all = rlist_to_R (rl))) {
+        flux_log_error (h, "failed to create list of all resources");
+        goto err;
+    }
+    rlist_destroy (rl);
+    rl = NULL;
+
+    /*  Create list of down resources
+     */
+    if (!(rl = rlist_copy_down (ss->rlist))
+        || !(down = rlist_to_R (rl))) {
+        flux_log_error (h, "failed to create list of down resources");
+        goto err;
+    }
+    rlist_destroy (rl);
+    rl = NULL;
+
+    /*  Create list of allocated resources
+     */
+    if (!(rl = rlist_copy_allocated (ss->rlist))
+        || !(alloc = rlist_to_R (rl))) {
+        flux_log_error (h, "faile to create list of allocated resources");
+        goto err;
+    }
+    rlist_destroy (rl);
+
+    if (flux_respond_pack (h, msg, "{s:o s:o s:o}",
+                           "all", all,
+                           "allocated", alloc,
+                           "down", down) < 0)
+        flux_log_error (h, "flux_respond_pack");
+    return;
+err:
+    rlist_destroy (rl);
+    json_decref (all);
+    json_decref (alloc);
+    json_decref (down);
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "flux_respond_error");
 }
@@ -526,7 +585,8 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "sched-simple.status", status_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "*.resource-status", status_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "*.status", old_status_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
