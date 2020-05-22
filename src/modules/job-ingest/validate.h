@@ -15,7 +15,7 @@
 
 #include "types.h"
 
-struct validate *v;
+struct validate;
 
 /* Submit jobspec ('buf, 'len') for validation.
  * Future is fulfilled once validation is complete.
