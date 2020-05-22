@@ -10,7 +10,7 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS) $(VALGRIND_CFLAGS) \
 	$(LUA_INCLUDE) \
-	$(HWLOC_INCLUDE)
+	$(HWLOC_CFLAGS)
 
 shellrcdir = \
 	$(fluxrcdir)/shell
