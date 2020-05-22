@@ -105,6 +105,7 @@ TESTSCRIPTS = \
 	t2207-job-manager-wait.t \
 	t2208-queue-cmd.t \
 	t2210-job-manager-bugs.t \
+	t2220-job-archive.t \
 	t2300-sched-simple.t \
 	t2301-schedutil-outstanding-requests.t \
 	t2400-job-exec-test.t \
@@ -216,6 +217,7 @@ dist_check_SCRIPTS = \
 	job-exec/dummy.sh \
 	job-exec/imp.sh \
 	job-info/list-id.py \
+	job-archive/query.py \
 	schedutil/req_and_unload.py \
 	ingest/fake-validate.sh \
 	ingest/bad-validate.sh
