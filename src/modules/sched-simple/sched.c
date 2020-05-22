@@ -34,6 +34,8 @@ struct jobreq {
 
 struct simple_sched {
     flux_t *h;
+    flux_future_t *acquire_f; /* resource.acquire future */
+
     char *mode;             /* allocation mode */
     bool single;
     struct rlist *rlist;    /* list of resources */
@@ -114,6 +116,7 @@ static void simple_sched_destroy (flux_t *h, struct simple_sched *ss)
         flux_respond_error (h, job->msg, ENOSYS, "simple sched exiting");
         job = zlistx_next (ss->queue);
     }
+    flux_future_destroy (ss->acquire_f);
     zlistx_destroy (&ss->queue);
     flux_watcher_destroy (ss->prep);
     flux_watcher_destroy (ss->check);
@@ -360,27 +363,117 @@ err:
         flux_log_error (h, "flux_respond_error");
 }
 
-static int simple_sched_init (flux_t *h, struct simple_sched *ss)
+static int ss_resource_update (struct simple_sched *ss, flux_future_t *f)
+{
+    const char *up = NULL;
+    const char *down = NULL;
+    const char *s;
+
+    int rc = flux_rpc_get_unpack (f, "{s?s s?s}",
+                                  "up", &up,
+                                  "down", &down);
+    if (rc < 0) {
+        flux_log (ss->h, LOG_ERR, "unpacking acquire response failed");
+        goto err;
+    }
+
+    flux_rpc_get (f, &s);
+    flux_log (ss->h, LOG_INFO, "resource update: %s", s);
+
+    /* Update resource states:
+     */
+    if ((up && rlist_mark_up (ss->rlist, up) < 0)
+        || (down && rlist_mark_down (ss->rlist, down) < 0)) {
+        flux_log_error (ss->h, "failed to update resource state");
+        goto err;
+    }
+    rc = 0;
+err:
+    flux_future_reset (f);
+    return rc;
+}
+
+static void acquire_continuation (flux_future_t *f, void *arg)
+{
+    struct simple_sched *ss = arg;
+    if (flux_future_get (f, NULL) < 0) {
+        flux_log (ss->h, LOG_ERR,
+                  "exiting due to resource update failure: %s",
+                  future_strerror (f, errno));
+        flux_reactor_stop (flux_get_reactor (ss->h));
+        return;
+    }
+    if (ss_resource_update (ss, f) == 0)
+        try_alloc (ss->h, ss);
+}
+
+/*  Synchronously acquire resources from resource module.
+ *  Configure internal resource state based on initial acquire response.
+ */
+static int ss_acquire_resources (flux_t *h, struct simple_sched *ss)
 {
     int rc = -1;
-    char *s = NULL;
     flux_future_t *f = NULL;
-    const char *by_rank = NULL;
+    json_t *o;
+    char *by_rank = NULL;
 
-    /* synchronously lookup by_rank for initialization */
-    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WAITCREATE,
-                                  "resource.hwloc.by_rank"))) {
-        flux_log_error (h, "lookup resource.hwloc.by_rank");
+    if (!(f = flux_rpc (h, "resource.acquire",
+                        NULL,
+                        FLUX_NODEID_ANY,
+                        FLUX_RPC_STREAMING))) {
+        flux_log_error (h, "rpc: resources.acquire");
         goto out;
     }
-    if (flux_kvs_lookup_get (f, &by_rank) < 0) {
-        flux_log_error (h, "kvs_lookup_get (resource.hwloc.by_rank)");
+    ss->acquire_f = f;
+    if (flux_rpc_get_unpack (f, "{s:o}", "resources", &o) < 0) {
+        flux_log_error (h, "rpc_get (resource.acquire)");
+        goto out;
+    }
+    if (!(by_rank = json_dumps (o, JSON_COMPACT))) {
+        flux_log_error (h, "json_dumps (by_rank)");
         goto out;
     }
     if (!(ss->rlist = rlist_from_hwloc_by_rank (by_rank))) {
         flux_log_error (h, "rank_list_create");
         goto out;
     }
+
+    /* Update resource states:
+     * - All resources down by default on first response
+     */
+    if (rlist_mark_down (ss->rlist, "all") < 0) {
+        flux_log_error (h, "failed to set all discovered resources down");
+        goto out;
+    }
+
+    if (ss_resource_update (ss, f) < 0) {
+        flux_log_error (h, "failed to set initial resource state");
+        goto out;
+    }
+
+    /* Add callback for multi-response acquire RPC
+     */
+    if (flux_future_then (f, -1., acquire_continuation, ss) < 0) {
+        flux_log_error (h, "flux_future_then");
+        goto out;
+    }
+    rc = 0;
+out:
+    free (by_rank);
+    return rc;
+}
+
+static int simple_sched_init (flux_t *h, struct simple_sched *ss)
+{
+    int rc = -1;
+    char *s = NULL;
+
+    /*  Acquire resources from resource module and set initial
+     *   resource state.
+     */
+    if (ss_acquire_resources (h, ss) < 0)
+        goto out;
+
     /*  Complete synchronous hello protocol:
      */
     if (schedutil_hello (ss->util_ctx, hello_cb, ss) < 0) {
@@ -399,7 +492,6 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
     free (s);
     rc = 0;
 out:
-    flux_future_destroy (f);
     return rc;
 }
 
@@ -479,10 +571,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_msg_handler_add");
         goto done;
     }
-    if (flux_reactor_run (r, 0) < 0) {
-        flux_log_error (h, "flux_reactor_run");
+    if (flux_reactor_run (r, 0) < 0)
         goto done;
-    }
     rc = 0;
 done:
     simple_sched_destroy (h, ss);
