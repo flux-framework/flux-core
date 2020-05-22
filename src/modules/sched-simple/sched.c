@@ -340,29 +340,6 @@ static int hello_cb (flux_t *h,
     return 0;
 }
 
-static void old_status_cb (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
-{
-    struct simple_sched *ss = arg;
-    json_t *o = NULL;
-
-    if (ss->rlist == NULL) {
-        flux_respond_error (h, msg, EAGAIN, "sched-simple not initialized");
-        return;
-    }
-    if (!(o = rlist_to_R (ss->rlist))) {
-        flux_log_error (h, "rlist_to_R_compressed");
-        goto err;
-    }
-    if (flux_respond_pack (h, msg, "o", o) < 0)
-        flux_log_error (h, "flux_respond_pack");
-    return;
-err:
-    json_decref (o);
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "flux_respond_error");
-}
-
 static void status_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
@@ -586,7 +563,6 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "*.resource-status", status_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "*.status", old_status_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
