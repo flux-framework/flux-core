@@ -86,7 +86,7 @@
    match-leak-kinds: definite
    fun:malloc
    fun:dl_open_worker
-   fun:_dl_catch_error
+   fun:_dl_catch_*
    fun:_dl_open
    ...
 }
