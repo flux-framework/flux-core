@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <unistd.h>
+#include <jansson.h>
 #include <stdio.h>
 #include <flux/core.h>
 
@@ -25,44 +26,44 @@ int main (int argc, char *argv[])
     const char *topic;
     ssize_t inlen;
     void *inbuf;
-    const void *outbuf;
-    int outlen;
-    int expected_errno = -1;
+    const char *out;
+    const char *end_key = NULL;
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
     if (argc != 2 && argc != 3) {
-        fprintf (stderr, "Usage: rpc topic [errnum] <payload >payload\n");
+        fprintf (stderr, "Usage: rpc_stream topic [end-key] <payload\n");
         exit (1);
     }
     topic = argv[1];
     if (argc == 3)
-        expected_errno = strtoul (argv[2], NULL, 10);
+        end_key = argv[2];
 
     if ((inlen = read_all (STDIN_FILENO, &inbuf)) < 0)
         log_err_exit ("read from stdin");
     if (inlen > 0)  // flux stringified JSON payloads are sent with \0-term
         inlen++;    //  and read_all() ensures inbuf has one, not acct in inlen
 
-    if (!(f = flux_rpc_raw (h, topic, inbuf, inlen, FLUX_NODEID_ANY, 0)))
+    if (!(f = flux_rpc_raw (h, topic, inbuf, inlen, FLUX_NODEID_ANY, FLUX_RPC_STREAMING)))
         log_err_exit ("flux_rpc_raw %s", topic);
-    if (flux_rpc_get_raw (f, &outbuf, &outlen) < 0) {
-        if (expected_errno > 0) {
-            if (errno != expected_errno)
-                log_msg_exit ("%s: failed with errno=%d != expected %d",
-                              topic, errno, expected_errno);
-        }
-        else
+    bool done = false;
+    do {
+        if (flux_rpc_get (f, &out) < 0)
             log_msg_exit ("%s: %s", topic, future_strerror (f, errno));
-    }
-    else {
-        if (expected_errno > 0)
-            log_msg_exit ("%s: succeeded but expected failure errno=%d",
-                          topic, expected_errno);
-        if (write_all (STDOUT_FILENO, outbuf, outlen) < 0)
-            log_err_exit ("write to stdout");
-    }
+        printf ("%s\n", out);
+        fflush (stdout);
+        if (end_key) {
+            json_t *o = json_loads (out, 0, NULL);
+            if (!o)
+                log_msg_exit ("failed to parse response payload");
+            if (json_object_get (o, end_key))
+                done = true;
+            json_decref (o);
+        }
+        if (!done)
+            flux_future_reset (f);
+    } while (!done);
     flux_future_destroy (f);
     free (inbuf);
     flux_close (h);

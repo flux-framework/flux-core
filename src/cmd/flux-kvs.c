@@ -1872,10 +1872,12 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
         log_err_exit ("eventlog_decode");
 
     json_array_foreach (a, index, value) {
-        if (optparse_hasopt (ctx->p, "unformatted"))
-            eventlog_unformatted_print (value);
-        else
-            eventlog_prettyprint (value);
+        if (ctx->maxcount == 0 || ctx->count < ctx->maxcount) {
+            if (optparse_hasopt (ctx->p, "unformatted"))
+                eventlog_unformatted_print (value);
+            else
+                eventlog_prettyprint (value);
+        }
         if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount)
             limit_reached = true;
     }

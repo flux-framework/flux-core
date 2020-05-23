@@ -109,6 +109,7 @@ TESTSCRIPTS = \
 	t2220-job-archive.t \
 	t2300-sched-simple.t \
 	t2301-schedutil-outstanding-requests.t \
+	t2310-resource-module.t \
 	t2400-job-exec-test.t \
 	t2401-job-exec-hello.t \
 	t2402-job-exec-dummy.t \
@@ -247,6 +248,7 @@ check_PROGRAMS = \
 	kvs/checkpoint \
 	request/treq \
 	request/rpc \
+	request/rpc_stream \
 	barrier/tbarrier \
 	reactor/reactorcat \
 	rexec/rexec \
@@ -421,6 +423,11 @@ request_treq_LDADD = \
 request_rpc_SOURCES = request/rpc.c
 request_rpc_CPPFLAGS = $(test_cppflags)
 request_rpc_LDADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+request_rpc_stream_SOURCES = request/rpc_stream.c
+request_rpc_stream_CPPFLAGS = $(test_cppflags)
+request_rpc_stream_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 module_parent_la_SOURCES = module/parent.c

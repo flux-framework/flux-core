@@ -12,4 +12,5 @@ SUBDIRS = \
  job-info \
  job-exec \
  job-archive \
+ resource \
  sched-simple

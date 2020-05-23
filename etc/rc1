@@ -24,7 +24,7 @@ wait_check ${pids[@]}
 unset pids
 
 declare -a pids
-flux hwloc reload & pids+=($!)
+flux module load resource
 flux exec -r all flux module load job-info & pids+=($!)
 flux module load cron sync=hb & pids+=($!)
 flux module load job-manager & pids+=($!)
