@@ -32,10 +32,11 @@ struct shell_affinity {
  */
 static int topology_restrict (hwloc_topology_t topo, hwloc_cpuset_t set)
 {
-    int flags = HWLOC_RESTRICT_FLAG_ADAPT_DISTANCES |
-                HWLOC_RESTRICT_FLAG_ADAPT_MISC |
+    int flags = HWLOC_RESTRICT_FLAG_ADAPT_MISC |
                 HWLOC_RESTRICT_FLAG_ADAPT_IO;
-    flags = 0;
+#if HWLOC_API_VERSION < 0x20000
+    flags = flags | HWLOC_RESTRICT_FLAG_ADAPT_DISTANCES;
+#endif
     if (hwloc_topology_restrict (topo, set, flags) < 0)
         return (-1);
     return (0);
@@ -122,6 +123,10 @@ static hwloc_cpuset_t shell_affinity_get_cpuset (struct shell_affinity *sa,
         hwloc_obj_t core = hwloc_get_obj_by_depth (sa->topo, depth, i);
         if (!core) {
             shell_log_error ("affinity: core%d not in topology", i);
+            goto err;
+        }
+        if (!core->cpuset) {
+            shell_log_error ("affinity: core%d cpuset is null", i);
             goto err;
         }
         hwloc_bitmap_or (resultset, resultset, core->cpuset);

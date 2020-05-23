@@ -91,6 +91,7 @@ TESTSCRIPTS = \
 	t1106-ssh-connector.t \
 	t2004-hydra.t \
 	t2005-hwloc-basic.t \
+	t2006-hwloc-versions.t \
 	t2007-caliper.t \
 	t2008-althash.t \
 	t2010-kvs-snapshot-restore.t \
@@ -258,7 +259,9 @@ check_PROGRAMS = \
 	shell/rcalc \
 	shell/lptest \
 	shell/mpir \
-	debug/stall
+	debug/stall \
+	hwloc/hwloc-convert \
+	hwloc/hwloc-version
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -286,6 +289,9 @@ dist_check_DATA = \
 	hwloc-data/1N/shared/02-brokers/1.xml \
 	hwloc-data/1N/nonoverlapping/02-brokers/0.xml \
 	hwloc-data/1N/nonoverlapping/02-brokers/1.xml \
+	hwloc-data/1N/hwloc-versions/v1.11.11/0.xml \
+	hwloc-data/1N/hwloc-versions/v2.1.0/0.xml \
+	hwloc-data/1N/hwloc-versions/v2to1/0.xml \
 	valgrind/valgrind.supp
 
 test_ldadd = \
@@ -554,3 +560,13 @@ shell_plugins_test_event_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_test_event_la_LDFLAGS = -module -rpath /nowhere
 shell_plugins_test_event_la_LIBADD = \
         $(top_builddir)/src/common/libflux-core.la
+
+hwloc_hwloc_convert_SOURCES = hwloc/hwloc-convert.c
+hwloc_hwloc_convert_CPPFLAGS = $(HWLOC_CFLAGS) $(test_cppflags)
+hwloc_hwloc_convert_LDADD = $(HWLOC_LIBS) \
+	$(test_ldadd)
+
+hwloc_hwloc_version_SOURCES = hwloc/hwloc-version.c
+hwloc_hwloc_version_CPPFLAGS = $(HWLOC_CFLAGS) $(test_cppflags)
+hwloc_hwloc_version_LDADD = $(HWLOC_LIBS) \
+	$(test_ldadd)

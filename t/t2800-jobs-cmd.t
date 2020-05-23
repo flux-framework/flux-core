@@ -760,7 +760,7 @@ test_expect_success 'flux-jobs --from-stdin fails with invalid input' '
 '
 
 find_invalid_userid() {
-	python -c 'import pwd; \
+	flux python -c 'import pwd; \
                    ids = [e.pw_uid for e in pwd.getpwall()]; \
                    print (next(i for i in range(65536) if not i in ids));'
 }

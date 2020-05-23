@@ -8,6 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#include <hwloc.h>
 #include <config.h>
 
 #include "builtin.h"
@@ -57,6 +58,11 @@ static int cmd_version (optparse_t *p, int ac, char *av[])
 #if HAVE_CALIPER
     printf ("+caliper");
 #endif
+    printf ("+hwloc==%d.%d.%d",
+            HWLOC_API_VERSION >> 16 & 0x000000ff,
+            HWLOC_API_VERSION >>  8 & 0x000000ff,
+            HWLOC_API_VERSION       & 0x000000ff
+            );
     printf ("\n");
     return (0);
 }
