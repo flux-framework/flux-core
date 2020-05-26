@@ -90,6 +90,7 @@
 #include <jansson.h>
 #include <czmq.h>
 #include <flux/core.h>
+#include <flux/schedutil.h>
 #include <assert.h>
 
 #include "job.h"
@@ -265,7 +266,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
     switch (type) {
-    case 0: // success
+    case FLUX_SCHED_ALLOC_SUCCESS:
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
         if (job->has_resources) {
@@ -281,9 +282,9 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "note", note ? note : "") < 0)
             goto teardown;
         break;
-    case 1: // annotation FIXME
+    case FLUX_SCHED_ALLOC_ANNOTATE: // annotation FIXME
         break;
-    case 2: // error
+    case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
         if (event_job_post_pack (ctx->event, job, "exception",
@@ -294,7 +295,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "note", note ? note : "") < 0)
             goto teardown;
         break;
-    case 3: // canceled
+    case FLUX_SCHED_ALLOC_CANCEL:
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
         if (event_job_action (ctx->event, job) < 0) {

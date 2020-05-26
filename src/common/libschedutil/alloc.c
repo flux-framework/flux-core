@@ -53,18 +53,21 @@ static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
 int schedutil_alloc_respond_note (schedutil_t *util, const flux_msg_t *msg,
                                   const char *note)
 {
-    return schedutil_alloc_respond (util->h, msg, 1, note);
+    return schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_ANNOTATE,
+                                    note);
 }
 
 int schedutil_alloc_respond_denied (schedutil_t *util, const flux_msg_t *msg,
                                     const char *note)
 {
-    return schedutil_alloc_respond (util->h, msg, 2, note);
+    return schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_DENY,
+                                    note);
 }
 
 int schedutil_alloc_respond_cancel (schedutil_t *util, const flux_msg_t *msg)
 {
-    return schedutil_alloc_respond (util->h, msg, 3, NULL);
+    return schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_CANCEL,
+                                    NULL);
 }
 
 struct alloc {
@@ -124,7 +127,8 @@ static void alloc_continuation (flux_future_t *f, void *arg)
         goto error;
     }
     schedutil_remove_outstanding_future (util, f);
-    if (schedutil_alloc_respond (h, ctx->msg, 0, ctx->note) < 0) {
+    if (schedutil_alloc_respond (h, ctx->msg, FLUX_SCHED_ALLOC_SUCCESS,
+                                 ctx->note) < 0) {
         flux_log_error (h, "alloc response");
         goto error;
     }
