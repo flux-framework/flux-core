@@ -173,7 +173,7 @@ class OutputFormat:
     a new format suitable for headers display, etc...
     """
 
-    def __init__(self, valid_headings, fmt):
+    def __init__(self, valid_headings, fmt, prepend=None):
         """
         Parse the input format fmt with string.Formatter.
         Save off the fields and list of format tokens for later use,
@@ -200,6 +200,10 @@ class OutputFormat:
         for field in self._fields:
             if field and not field in self.headings:
                 raise ValueError("Unknown format field: " + field)
+
+        #  Prepend arbitrary string to format fields if requested
+        if prepend:
+            self.fmt = self.get_format_prepended(prepend)
 
     @property
     def fields(self):
@@ -234,6 +238,19 @@ class OutputFormat:
 
     def header(self):
         return self.header_format().format(**self.headings)
+
+    def get_format_prepended(self, prepend):
+        """
+        Return the format string, ensuring that the string in "prepend"
+        is prepended to each format field
+        """
+        lst = []
+        for (text, field, spec, conv) in self.format_list:
+            # If field doesn't have 'prepend' then add it
+            if field and not field.startswith(prepend):
+                field = prepend + field
+            lst.append(self._fmt_tuple(text, field, spec, conv))
+        return "".join(lst)
 
     def get_format(self):
         """
