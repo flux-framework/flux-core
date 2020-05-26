@@ -16,6 +16,13 @@
 
 #include "init.h"
 
+enum {
+    FLUX_SCHED_ALLOC_SUCCESS = 0,
+    FLUX_SCHED_ALLOC_NOTE    = 1,
+    FLUX_SCHED_ALLOC_DENIED  = 2,
+    FLUX_SCHED_ALLOC_CANCEL  = 3,
+};
+
 /* Decode an alloc request message.
  * Return 0 on success, -1 on error with errno set.
  */
