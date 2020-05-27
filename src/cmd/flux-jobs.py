@@ -552,27 +552,7 @@ class JobsOutputFormat(flux.util.OutputFormat):
         self.headings["exception.severity"] = None
         self.headings["exception.type"] = None
         self.headings["exception.note"] = None
-        super().__init__(self.headings, fmt)
-
-    def get_format(self):
-        """
-        Return the format string with prepended `0.` if necessary.
-        """
-        try:
-            # pylint: disable=access-member-before-definition
-            return self._jobfmt
-        except AttributeError:
-            pass
-
-        lst = []
-        for (text, field, spec, conv) in self.format_list:
-            # If field doesn't have `0.` then add it
-            if field and not field.startswith("0."):
-                field = "0." + field
-            lst.append(self._fmt_tuple(text, field, spec, conv))
-        # pylint: disable=attribute-defined-outside-init
-        self._jobfmt = "".join(lst)
-        return self._jobfmt
+        super().__init__(self.headings, fmt, prepend="0.")
 
     def format(self, obj):
         """

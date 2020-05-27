@@ -8,7 +8,7 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 
 test_under_flux 4 job
 
-query=${FLUX_BUILD_DIR}/src/modules/sched-simple/rlist-query
+query="flux resource list --state=free -no {rlist}"
 
 hwloc_by_rank='{"0-1": {"Core": 2, "cpuset": "0-1"}}'
 hwloc_by_rank_first_fit='{"0": {"Core": 2}, "1": {"Core": 1}}'
@@ -45,8 +45,12 @@ test_expect_success 'sched-simple: load default by_rank' '
 	flux kvs get resource.hwloc.by_rank
 '
 test_expect_success 'sched-simple: reload sched-simple' '
-	flux module reload sched-simple &&
-	flux dmesg 2>&1 | grep "ready:.*rank\[0-1\]/core\[0-1\]" &&
+	flux module unload sched-simple &&
+	flux module reload resource &&
+	flux module load sched-simple &&
+	flux dmesg 2>&1 >reload.dmesg.log &&
+	grep "ready:.*rank\[0-1\]/core\[0-1\]" reload.dmesg.log &&
+	test_debug "echo result=\"$($query)\"" &&
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
 test_expect_success 'sched-simple: unsatisfiable request is canceled' '
@@ -145,7 +149,9 @@ test_expect_success 'sched-simple: cancel remaining jobs' '
 '
 test_expect_success 'sched-simple: reload in first-fit mode' '
         flux module remove sched-simple &&
+        flux module remove resource &&
 	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank_first_fit)" &&
+	flux module load resource &&
         flux module load sched-simple mode=first-fit &&
 	flux dmesg | grep "ready:.*rank0/core\[0-1\] rank1/core0"
 '

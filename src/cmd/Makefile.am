@@ -68,7 +68,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-cron \
 	flux-jobspec.py \
 	flux-mini.py \
-	flux-jobs.py
+	flux-jobs.py \
+	flux-resource.py
 
 fluxcmd_PROGRAMS = \
 	flux-aggregate \

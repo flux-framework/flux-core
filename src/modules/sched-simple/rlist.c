@@ -71,6 +71,79 @@ fail:
     return NULL;
 }
 
+struct rlist *rlist_copy_down (const struct rlist *orig)
+{
+    struct rnode *n;
+    struct rlist *rl = rlist_create ();
+    if (!rl)
+        return NULL;
+    n = zlistx_first (orig->nodes);
+    while (n) {
+        if (!n->up) {
+            n = rnode_create_idset (n->rank, n->ids);
+            if (!n || !zlistx_add_end (rl->nodes, n))
+                goto fail;
+            rl->total += rnode_count (n);
+        }
+        n = zlistx_next (orig->nodes);
+    }
+    rl->avail = rl->total;
+    return rl;
+fail:
+    rlist_destroy (rl);
+    return NULL;
+}
+
+static struct idset *idset_subtract (const struct idset *orig, struct idset *x)
+{
+    struct idset *ids = idset_copy (orig);
+    unsigned int i;
+
+    if (!ids)
+        return NULL;
+
+    i = idset_first (x);
+    while (i != IDSET_INVALID_ID) {
+        idset_clear (ids, i);
+        i = idset_next (x, i);
+    }
+    return ids;
+}
+
+static struct rnode *rnode_create_alloc (const struct rnode *n)
+{
+    struct rnode *result;
+    struct idset *ids = idset_subtract (n->ids, n->avail);
+    if (!ids)
+        return NULL;
+    result = rnode_create_idset (n->rank, ids);
+    idset_destroy (ids);
+    return result;
+}
+
+struct rlist *rlist_copy_allocated (const struct rlist *orig)
+{
+    struct rnode *n;
+    struct rlist *rl = rlist_create ();
+    if (!rl)
+        return NULL;
+    n = zlistx_first (orig->nodes);
+    while (n) {
+        int nalloc = idset_count (n->ids) - idset_count (n->avail);
+        if (nalloc > 0) {
+            n = rnode_create_alloc (n);
+            if (!n || !zlistx_add_end (rl->nodes, n))
+                goto fail;
+            rl->total += nalloc;
+        }
+        n = zlistx_next (orig->nodes);
+    }
+    rl->avail = rl->total;
+    return rl;
+fail:
+    rlist_destroy (rl);
+    return NULL;
+}
 
 static struct rnode *rlist_find_rank (struct rlist *rl, uint32_t rank)
 {
@@ -163,7 +236,8 @@ static int rlist_add_rnode (struct rlist *rl, struct rnode *n)
     else if (!zlistx_add_end (rl->nodes, n))
         return -1;
     rl->total += rnode_count (n);
-    rl->avail += rnode_avail (n);
+    if (n->up)
+        rl->avail += rnode_avail (n);
     if (found)
         rnode_destroy (n);
     return 0;
@@ -318,9 +392,16 @@ struct multi_rnode {
     const struct rnode *rnode;
 };
 
-static int multi_rnode_cmp (struct multi_rnode *x, struct idset *ids)
+static int multi_rnode_cmp (struct multi_rnode *x, const struct rnode *n)
 {
-    return (idset_cmp (x->rnode->avail, ids));
+    int rv = idset_cmp (x->rnode->avail, n->avail);
+
+    /* Only collapse nodes with same avail idset + same up/down status */
+    if (rv == 0 && n->up == x->rnode->up)
+        return 0;
+
+    /* O/w, order doesn't matter too much, but put up nodes first */
+    return n->up ? -1 : 1;
 }
 
 static void multi_rnode_destroy (struct multi_rnode **mrn)
@@ -351,9 +432,10 @@ fail:
 json_t *multi_rnode_tojson (struct multi_rnode *mrn)
 {
     json_t *o = NULL;
-    char *ids = idset_encode (mrn->rnode->avail, IDSET_FLAG_RANGE);
+    char *ids = NULL;
     char *ranks = idset_encode (mrn->ids, IDSET_FLAG_RANGE);
 
+    ids = idset_encode (mrn->rnode->avail, IDSET_FLAG_RANGE);
     if (!ids || !ranks)
         goto done;
     o = json_pack ("{s:s,s:{s:s}}", "rank", ranks, "children", "core", ids);
@@ -361,6 +443,18 @@ done:
     free (ids);
     free (ranks);
     return (o);
+}
+
+
+static int multi_rnode_by_rank (const void *item1, const void *item2)
+{
+    const struct multi_rnode *mrn1 = item1;
+    const struct multi_rnode *mrn2 = item2;
+
+    unsigned int x = idset_first (mrn1->ids);
+    unsigned int y = idset_first (mrn2->ids);
+
+    return (x - y);
 }
 
 static zlistx_t * rlist_mrlist (struct rlist *rl)
@@ -374,15 +468,15 @@ static zlistx_t * rlist_mrlist (struct rlist *rl)
 
     n = zlistx_first (rl->nodes);
     while (n) {
-        if (zlistx_find (l, n->avail)) {
+        if (zlistx_find (l, n)) {
             if (!(mrn = zlistx_handle_item (zlistx_cursor (l)))
-              || idset_set (mrn->ids, n->rank) < 0) {
+                    || idset_set (mrn->ids, n->rank) < 0) {
                 goto fail;
             }
         }
-        else if (rnode_avail (n) > 0) {
+        else {
             if (!(mrn = multi_rnode_create (n))
-                || !zlistx_add_end (l, mrn)) {
+                    || !zlistx_add_end (l, mrn)) {
                 goto fail;
             }
         }
@@ -402,12 +496,16 @@ static json_t * rlist_compressed (struct rlist *rl)
 
     if (!l)
         return NULL;
+    zlistx_set_comparator (l, (czmq_comparator *) multi_rnode_by_rank);
+    zlistx_sort (l);
     mrn = zlistx_first (l);
     while (mrn) {
-        json_t *entry = multi_rnode_tojson (mrn);
-        if (!entry || json_array_append_new (o, entry) != 0) {
-            json_decref (entry);
-            goto fail;
+        if (rnode_avail (mrn->rnode) > 0) {
+            json_t *entry = multi_rnode_tojson (mrn);
+            if (!entry || json_array_append_new (o, entry) != 0) {
+                json_decref (entry);
+                goto fail;
+            }
         }
         mrn = zlistx_next (l);
     }
@@ -466,7 +564,10 @@ char * rlist_dumps (struct rlist *rl)
     while (mrn) {
         char *ranks = idset_encode (mrn->ids, flags);
         char *cores = idset_encode (mrn->rnode->avail, flags);
-        if (sprintfcat (&result, &size, &len , "%srank%s/core%s",
+
+        /* Be sure to skip empty corelists */
+        if (strlen (cores) > 0
+            && sprintfcat (&result, &size, &len , "%srank%s/core%s",
                          result[0] != '\0' ? " ": "",
                          ranks, cores) < 0)
             goto fail;
@@ -640,10 +741,16 @@ static zlistx_t *rlist_get_nnodes (struct rlist *rl, int nnodes)
         return NULL;
     n = zlistx_first (rl->nodes);
     while (nnodes > 0) {
-        if (zlistx_add_end (l, n) < 0)
+        if (n == NULL) {
+            errno = ENOSPC;
             goto err;
+        }
+        if (n->up) {
+            if (zlistx_add_end (l, n) < 0)
+                goto err;
+            nnodes--;
+        }
         n = zlistx_next (rl->nodes);
-        nnodes--;
     }
     return (l);
 err:
@@ -678,10 +785,10 @@ static struct rlist *rlist_alloc_nnodes (struct rlist *rl, int nnodes,
     zlistx_set_comparator (rl->nodes, by_used);
     zlistx_sort (rl->nodes);
 
-    /* 2. get a list of the first n nodes
+    /* 2. get a list of the first up n nodes
      */
     if (!(cl = rlist_get_nnodes (rl, nnodes)))
-        return NULL;
+        goto unwind;
 
     /* We will sort candidate list by used cores on each iteration to
      *  ensure even spread of slots across nodes
@@ -816,11 +923,12 @@ static int rlist_free_rnode (struct rlist *rl, struct rnode *n)
     }
     if (rnode_free_idset (rnode, n->ids) < 0)
         return -1;
-    rl->avail += idset_count (n->ids);
+    if (rnode->up)
+        rl->avail += idset_count (n->ids);
     return 0;
 }
 
-static int rlist_remove_rnode (struct rlist *rl, struct rnode *n)
+static int rlist_alloc_rnode (struct rlist *rl, struct rnode *n)
 {
     struct rnode *rnode = rlist_find_rank (rl, n->rank);
     if (!rnode) {
@@ -854,14 +962,14 @@ cleanup:
     /* re-allocate all freed items */
     n = zlistx_first (freed);
     while (n) {
-        rlist_remove_rnode (rl, n);
+        rlist_alloc_rnode (rl, n);
         n = zlistx_next (freed);
     }
     zlistx_destroy (&freed);
     return (-1);
 }
 
-int rlist_remove (struct rlist *rl, struct rlist *alloc)
+int rlist_set_allocated (struct rlist *rl, struct rlist *alloc)
 {
     zlistx_t *allocd = NULL;
     struct rnode *n = NULL;
@@ -869,7 +977,7 @@ int rlist_remove (struct rlist *rl, struct rlist *alloc)
         return -1;
     n = zlistx_first (alloc->nodes);
     while (n) {
-        if (rlist_remove_rnode (rl, n) < 0)
+        if (rlist_alloc_rnode (rl, n) < 0)
             goto cleanup;
         zlistx_add_end (allocd, n);
         n = zlistx_next (alloc->nodes);
@@ -889,6 +997,63 @@ cleanup:
 size_t rlist_nnodes (struct rlist *rl)
 {
     return zlistx_size (rl->nodes);
+}
+
+/* Mark all nodes in state 'up'. Count number of cores that changed
+ *  availability state.
+ */
+static int rlist_mark_all (struct rlist *rl, bool up)
+{
+    int count = 0;
+    struct rnode *n = zlistx_first (rl->nodes);
+    while (n) {
+        if (n->up != up)
+            count += idset_count (n->avail);
+        n->up = up;
+        n = zlistx_next (rl->nodes);
+    }
+    return count;
+}
+
+static int rlist_mark_state (struct rlist *rl, bool up, const char *ids)
+{
+    int count = 0;
+    unsigned int i;
+    struct idset *idset = idset_decode (ids);
+    if (idset == NULL)
+        return -1;
+    i = idset_first (idset);
+    while (i != IDSET_INVALID_ID) {
+        struct rnode *n = rlist_find_rank (rl, i);
+        if (n->up != up)
+            count += idset_count (n->avail);
+        n->up = up;
+        i = idset_next (idset, i);
+    }
+    idset_destroy (idset);
+    return count;
+}
+
+int rlist_mark_down (struct rlist *rl, const char *ids)
+{
+    int count;
+    if (strcmp (ids, "all") == 0)
+        count = rlist_mark_all (rl, false);
+    else
+        count = rlist_mark_state (rl, false, ids);
+    rl->avail -= count;
+    return 0;
+}
+
+int rlist_mark_up (struct rlist *rl, const char *ids)
+{
+    int count;
+    if (strcmp (ids, "all") == 0)
+        count = rlist_mark_all (rl, true);
+    else
+        count = rlist_mark_state (rl, true, ids);
+    rl->avail += count;
+    return 0;
 }
 
 /* vi: ts=4 sw=4 expandtab

@@ -55,6 +55,16 @@ int main (int ac, char *av[])
 
     if (!(n = rnode_create (0, "0-3")))
         BAIL_OUT ("could not create an rnode object");
+    ok (n->up,
+        "rnode is created in up state by default");
+    n->up = false;
+    ok (rnode_avail (n) == 0,
+        "rnode_avail == 0 for down rnode");
+
+    ok (rnode_alloc (n, 1, &ids) < 0 && errno == EHOSTDOWN,
+        "rnode_alloc on down host returns EHOSTDOWN");
+
+    n->up = true;
     ok (rnode_avail (n) == 4,
         "rnode_avail == 4");
 
