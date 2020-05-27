@@ -38,7 +38,7 @@ int schedutil_alloc_request_decode (const flux_msg_t *msg,
  * Return 0 on success, -1 on error with errno set.
  */
 int schedutil_alloc_respond_annotate (schedutil_t *util, const flux_msg_t *msg,
-                                      const char *note);
+                                      const char *annotations_json_str);
 
 /* Respond to alloc request message - the job cannot run.
  * Include human readable error message in 'note'.

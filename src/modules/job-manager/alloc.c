@@ -13,7 +13,6 @@
  * Please refer to RFC27 for scheduler protocol
  *
  * TODO:
- * - handle type=1 annotation for queue listing (currently ignored)
  * - implement flow control (credit based?) interface mode
  * - handle post alloc request job priority change
  */
@@ -167,6 +166,43 @@ int cancel_request (struct alloc *alloc, struct job *job)
     return 0;
 }
 
+static void update_annotations (flux_t *h, struct job *job, flux_jobid_t id,
+                                json_t *annotations)
+{
+    if (annotations) {
+        if (!job->annotations) {
+            if (!(job->annotations = json_object ()))
+                flux_log (h,
+                          LOG_ERR,
+                          "%s: id=%ju json_object",
+                          __FUNCTION__, (uintmax_t)id);
+        }
+        if (job->annotations) {
+            const char *key;
+            json_t *value;
+
+            json_object_foreach (annotations, key, value) {
+                if (!json_is_null (value)) {
+                    if (json_object_set (job->annotations, key, value) < 0)
+                        flux_log (h,
+                                  LOG_ERR,
+                                  "%s: id=%ju update key=%s",
+                                  __FUNCTION__, (uintmax_t)id, key);
+                }
+                else
+                    /* not an error if key doesn't exist in job->annotations */
+                    (void)json_object_del (job->annotations, key);
+            }
+            /* Special case: if user cleared all entries, assume we no
+             * longer need annotations object */
+            if (!json_object_size (job->annotations)) {
+                json_decref (job->annotations);
+                job->annotations = NULL;
+            }
+        }
+    }
+}
+
 /* Handle a sched.alloc response.
  * Update flags.
  */
@@ -177,15 +213,17 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     struct alloc *alloc = ctx->alloc;
     flux_jobid_t id;
     int type;
-    const char *note = NULL;
+    char *note = NULL;
+    json_t *annotations = NULL;
     struct job *job;
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown; // ENOSYS here if scheduler not loaded/shutting down
-    if (flux_msg_unpack (msg, "{s:I s:i s?:s}",
+    if (flux_msg_unpack (msg, "{s:I s:i s?:s s?:o}",
                               "id", &id,
                               "type", &type,
-                              "note", &note) < 0)
+                              "note", &note,
+                              "annotations", &annotations) < 0)
         goto teardown;
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log (h, LOG_ERR, "sched.alloc-response: id=%ju not active",
@@ -216,7 +254,12 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "note", note ? note : "") < 0)
             goto teardown;
         break;
-    case FLUX_SCHED_ALLOC_ANNOTATE: // annotation FIXME
+    case FLUX_SCHED_ALLOC_ANNOTATE: // annotation
+        if (!annotations) {
+            errno = EPROTO;
+            goto teardown;
+        }
+        update_annotations (h, job, id, annotations);
         break;
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;

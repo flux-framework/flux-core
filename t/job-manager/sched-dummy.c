@@ -93,6 +93,7 @@ void try_alloc (struct sched_ctx *sc)
 
     while (job) {
         if (!job->scheduled) {
+            char annotations[256];
             if (flux_module_debug_test (sc->h, DEBUG_FAIL_ALLOC, false)) {
                 if (schedutil_alloc_respond_deny (sc->schedutil_ctx,
                                                   job->msg,
@@ -108,8 +109,13 @@ void try_alloc (struct sched_ctx *sc)
                 sc->cores_free--;
             }
             else {
-                if (schedutil_alloc_respond_annotate (sc->schedutil_ctx, job->msg,
-                                                      "no cores available") < 0)
+                snprintf (annotations,
+                          sizeof (annotations),
+                          "{%s:%s}",
+                          "\"sched.reason_pending\"", "\"no cores available\"");
+                if (schedutil_alloc_respond_annotate (sc->schedutil_ctx,
+                                                      job->msg,
+                                                      annotations) < 0)
                     flux_log_error (sc->h, "schedutil_alloc_respond_annotate");
             }
         }
