@@ -108,6 +108,7 @@ TESTSCRIPTS = \
 	t2220-job-archive.t \
 	t2230-job-info.t \
 	t2231-job-info-lookup.t \
+	t2232-job-info-eventlog-watch.t \
 	t2300-sched-simple.t \
 	t2301-schedutil-outstanding-requests.t \
 	t2302-sched-simple-up-down.t \
