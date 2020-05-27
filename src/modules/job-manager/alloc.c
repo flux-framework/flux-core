@@ -282,7 +282,15 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "note", note ? note : "") < 0)
             goto teardown;
         break;
-    case FLUX_SCHED_ALLOC_NOTE: // annotation FIXME
+    case FLUX_SCHED_ALLOC_NOTE: // annotation
+        if (job->alloc_pending_note) {
+            free (job->alloc_pending_note);
+            job->alloc_pending_note = NULL;
+        }
+        if (note) {
+            if (!(job->alloc_pending_note = strdup (note)))
+                goto teardown;
+        }
         break;
     case FLUX_SCHED_ALLOC_DENIED: // error
         alloc->alloc_pending_count--;
