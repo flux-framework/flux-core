@@ -100,13 +100,13 @@ TESTSCRIPTS = \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
 	t2203-job-manager-dummysched.t \
-	t2204-job-info.t \
 	t2205-job-info-security.t \
 	t2206-job-manager-bulk-state.t \
 	t2207-job-manager-wait.t \
 	t2208-queue-cmd.t \
 	t2210-job-manager-bugs.t \
 	t2220-job-archive.t \
+	t2230-job-info.t \
 	t2300-sched-simple.t \
 	t2301-schedutil-outstanding-requests.t \
 	t2302-sched-simple-up-down.t \
