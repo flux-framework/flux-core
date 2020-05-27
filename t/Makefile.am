@@ -107,6 +107,7 @@ TESTSCRIPTS = \
 	t2210-job-manager-bugs.t \
 	t2220-job-archive.t \
 	t2230-job-info.t \
+	t2231-job-info-lookup.t \
 	t2300-sched-simple.t \
 	t2301-schedutil-outstanding-requests.t \
 	t2302-sched-simple-up-down.t \
