@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test flux job info service'
+test_description='Test flux job info list services'
 
 . $(dirname $0)/sharness.sh
 
