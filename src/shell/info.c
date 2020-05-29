@@ -160,11 +160,31 @@ out:
     return rc;
 }
 
+static int get_per_resource_option (struct jobspec *jobspec,
+                                    const char **typep,
+                                    int *countp)
+{
+    json_error_t err;
+    json_t *o = NULL;
+
+    if (!(o = json_object_get (jobspec->options, "per-resource")))
+        return 0;
+    *countp = 1;
+    if (json_unpack_ex (o, &err, 0,
+                        "{s:s s?i}",
+                        "type", typep,
+                        "count", countp) < 0)
+        return shell_log_errn (0, "invalid per-resource spec: %s", err.text);
+    return 0;
+}
+
 struct shell_info *shell_info_create (flux_shell_t *shell)
 {
     struct shell_info *info;
     char *R = NULL;
     char *jobspec = NULL;
+    const char *per_resource = NULL;
+    int per_resource_count = -1;
     int broker_rank = shell->broker_rank;
 
     if (!(info = calloc (1, sizeof (*info)))) {
@@ -185,7 +205,21 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
     free (jobspec);
     free (R);
 
-   if (rcalc_distribute (info->rcalc, info->jobspec->task_count) < 0) {
+    if (get_per_resource_option (info->jobspec,
+                                 &per_resource,
+                                 &per_resource_count) < 0)
+        goto error;
+
+    if (per_resource != NULL) {
+        if (rcalc_distribute_per_resource (info->rcalc,
+                                           per_resource,
+                                           per_resource_count) < 0) {
+            shell_log_error ("error distributing %d tasks per-%s over R",
+                             per_resource_count, per_resource);
+            goto error;
+        }
+    }
+    else if (rcalc_distribute (info->rcalc, info->jobspec->task_count) < 0) {
         shell_log_error ("error distributing %d tasks over R",
                          info->jobspec->task_count);
         goto error;
