@@ -27,4 +27,20 @@ for file in ${OUTPUTDIR}/*.expected; do
     '
 done
 
+for file in ${OUTPUTDIR}/per-resource/*.expected; do
+    base=$(basename $file .expected)
+    count=$(echo $base | sed 's/.*\.//')
+    base=$(basename $base .${count})
+    type=$(echo $base | sed 's/.*\.//')
+    base=$(basename $base .${type})
+    input=${INPUTDIR}/${base}.json
+    output=${base}.${type}.${count}.out
+    err=${base}.${type}.${count}.err
+     test_expect_success NO_CHAIN_LINT "$(head -1 $file)" '
+        ${rcalc} -R $type $count <$input >$output 2>$err || true &&
+        test_cmp $file $output &&
+        test_cmp $OUTPUTDIR/per-resource/$err $err
+    '
+done
+
 test_done
