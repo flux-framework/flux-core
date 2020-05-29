@@ -47,6 +47,8 @@ libbroker_la_SOURCES = \
 	content-cache.c \
 	runlevel.h \
 	runlevel.c \
+	runat.h \
+	runat.c \
 	heaptrace.h \
 	heaptrace.c \
 	exec.h \

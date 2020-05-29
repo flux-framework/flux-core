@@ -1542,6 +1542,7 @@ static struct internal_service services[] = {
     { "service",            NULL },
     { "overlay",            NULL },
     { "config",             NULL },
+    { "runat",              NULL },
     { NULL, NULL, },
 };
 
