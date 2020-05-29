@@ -47,6 +47,8 @@ int rcalc_has_rank (rcalc_t *r, int rank);
 
 /*  Distribute ntasks across cores in r */
 int rcalc_distribute (rcalc_t *r, int ntasks);
+/*  Distribute ntasks *per-resource* of type `name` in `r` */
+int rcalc_distribute_per_resource (rcalc_t *r, const char *name, int ntasks);
 
 /*  Fill in rcalc_rankinfo for rank */
 int rcalc_get_rankinfo (rcalc_t *r, int rank, struct rcalc_rankinfo *ri);
