@@ -32,6 +32,8 @@ endif
 clean-local:
 	-rm -rf flux
 
+CLEANFILES=completions/flux
+
 if WITH_PKG_CONFIG
 pkgconfig_DATA = flux-core.pc \
 	flux-pmi.pc \
@@ -40,5 +42,20 @@ pkgconfig_DATA = flux-core.pc \
 	flux-schedutil.pc
 endif
 
+noinst_SCRIPTS = \
+	completions/get_builtins.sh \
+	completions/flux.pre
+
 EXTRA_DIST = \
-	gen-cmdhelp.py
+	gen-cmdhelp.py \
+	$(noinst_SCRIPTS)
+
+completions/flux: $(srcdir)/completions/flux.pre
+	$(AM_V_GEN)test -d completions || mkdir completions && \
+	cp $< $@ && chmod +w $@ && \
+	$(srcdir)/completions/get_builtins.sh \
+	$(top_srcdir)/src/cmd/builtin >> $@
+
+fluxcompdir = $(sysconfdir)/bash_completion.d
+fluxcomp_SCRIPTS = \
+	completions/flux
