@@ -347,7 +347,7 @@ static json_t *flux_shell_get_info_object (flux_shell_t *shell)
                             "jobid", shell->info->jobid,
                             "rank",  shell->info->shell_rank,
                             "size",  shell->info->shell_size,
-                            "ntasks", shell->info->rankinfo.ntasks,
+                            "ntasks", shell->info->total_ntasks,
                             "service", shell_svc_name (shell->svc),
                             "jobspec", shell->info->jobspec->jobspec,
                             "options",
@@ -1041,7 +1041,7 @@ static void shell_log_info (flux_shell_t *shell)
         if (info->shell_rank == 0)
             shell_debug ("0: task_count=%d slot_count=%d "
                          "cores_per_slot=%d slots_per_node=%d",
-                         info->jobspec->task_count,
+                         info->total_ntasks,
                          info->jobspec->slot_count,
                          info->jobspec->cores_per_slot,
                          info->jobspec->slots_per_node);
@@ -1076,7 +1076,7 @@ static int shell_register_event_context (flux_shell_t *shell)
     if (flux_shell_add_event_context (shell, "shell.start", 0,
                                       "{s:i}",
                                       "task-count",
-                                      shell->info->jobspec->task_count) < 0)
+                                      shell->info->total_ntasks) < 0)
         return -1;
     return 0;
 }

@@ -196,6 +196,7 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
     }
     info->shell_size = rcalc_total_nodes (info->rcalc);
     info->shell_rank = info->rankinfo.nodeid;
+    info->total_ntasks = rcalc_total_ntasks (info->rcalc);
     return info;
 error:
     shell_info_destroy (info);

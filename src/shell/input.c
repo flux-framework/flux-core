@@ -346,9 +346,9 @@ static int shell_input_type_file_setup (struct shell_input *in)
                                           in)))
         return shell_log_errno ("flux_fd_watcher_create");
 
-    if (in->shell->info->jobspec->task_count > 1) {
+    if (in->shell->info->total_ntasks > 1) {
         if (asprintf (&fp->rankstr, "[0-%d]",
-                      in->shell->info->jobspec->task_count) < 0)
+                      in->shell->info->total_ntasks) < 0)
             return shell_log_errno ("asprintf");
     }
     else {

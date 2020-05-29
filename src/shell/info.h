@@ -25,6 +25,7 @@ struct shell_info {
     flux_jobid_t jobid;
     int shell_rank;
     int shell_size;
+    int total_ntasks;
     struct jobspec *jobspec;
     rcalc_t *rcalc;
     struct rcalc_rankinfo rankinfo;

@@ -34,6 +34,8 @@ rcalc_t *rcalc_createf (FILE *);
 
 void rcalc_destroy (rcalc_t *r);
 
+/*  Return # of total tasks contained in rcalc object */
+int rcalc_total_ntasks (rcalc_t *r);
 /*  Return # of total cores asssigned to rcalc object */
 int rcalc_total_cores (rcalc_t *r);
 /*  Return # of total gpus asssigned to rcalc object */

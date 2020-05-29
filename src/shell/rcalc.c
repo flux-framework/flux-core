@@ -304,6 +304,11 @@ int rcalc_total_gpus (rcalc_t *r)
     return r->ngpus;
 }
 
+int rcalc_total_ntasks (rcalc_t *r)
+{
+    return r->ntasks;
+}
+
 int rcalc_total_nodes_used (rcalc_t *r)
 {
     int i;
