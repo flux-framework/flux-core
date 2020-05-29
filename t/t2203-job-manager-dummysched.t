@@ -19,6 +19,7 @@ get_state() {
 		&& state=I
 	echo $state
 }
+
 check_state() {
 	local id=$1
 	local wantstate=$2
@@ -53,7 +54,6 @@ test_expect_success 'job-manager: job state SSSSS (no scheduler)' '
 	check_state $(cat job3.id) S &&
 	check_state $(cat job4.id) S &&
 	check_state $(cat job5.id) S
-
 '
 
 test_expect_success 'job-manager: load sched-dummy --cores=2' '
