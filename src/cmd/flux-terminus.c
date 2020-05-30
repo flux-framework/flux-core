@@ -691,7 +691,7 @@ int cmd_kill (optparse_t *p, int argc, char **argv)
     flux_future_t *f;
     char service [128];
     const char *idstr;
-    int id;
+    int id = -1;
     int optindex = optparse_option_index (p);
     int rank = optparse_get_int (p, "rank", FLUX_NODEID_ANY);
 
