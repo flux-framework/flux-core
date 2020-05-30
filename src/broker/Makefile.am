@@ -83,10 +83,12 @@ TESTS = test_heartbeat.t \
 	test_reduce.t \
 	test_liblist.t \
 	test_pmiutil.t \
-	test_boot_config.t
+	test_boot_config.t \
+	test_runat.t
 
 test_ldadd = \
 	$(builddir)/libbroker.la \
+	$(top_builddir)/src/common/libtestutil/libtestutil.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libpmi/libpmi_client.la \
 	$(top_builddir)/src/common/libflux-internal.la \
@@ -145,3 +147,8 @@ test_boot_config_t_SOURCES = test/boot_config.c
 test_boot_config_t_CPPFLAGS = $(test_cppflags)
 test_boot_config_t_LDADD = $(test_ldadd)
 test_boot_config_t_LDFLAGS = $(test_ldflags)
+
+test_runat_t_SOURCES = test/runat.c
+test_runat_t_CPPFLAGS = $(test_cppflags)
+test_runat_t_LDADD = $(test_ldadd)
+test_runat_t_LDFLAGS = $(test_ldflags)
