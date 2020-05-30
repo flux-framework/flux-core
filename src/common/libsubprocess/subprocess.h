@@ -186,6 +186,16 @@ int flux_cmd_argv_appendf (flux_cmd_t *cmd, const char *fmt, ...)
 int flux_cmd_argv_append (flux_cmd_t *cmd, const char *arg);
 
 /*
+ *  Delete the nth argument in cmd's argv
+ */
+int flux_cmd_argv_delete (flux_cmd_t *cmd, int n);
+
+/*
+ *  Insert arg before the nth argument in cmd's argv
+ */
+int flux_cmd_argv_insert (flux_cmd_t *cmd, int n, const char *arg);
+
+/*
  *  Return the current argument count for `cmd`.
  */
 int flux_cmd_argc (const flux_cmd_t *cmd);
