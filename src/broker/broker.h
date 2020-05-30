@@ -39,7 +39,8 @@ struct broker {
     int tbon_k;
 
     struct hello *hello;
-    struct runlevel *runlevel;
+    struct runat *runat;
+    broker_state_t state;
 
     char *init_shell_cmd;
     size_t init_shell_cmd_len;

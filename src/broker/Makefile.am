@@ -45,10 +45,10 @@ libbroker_la_SOURCES = \
 	log.c \
 	content-cache.h \
 	content-cache.c \
-	runlevel.h \
-	runlevel.c \
 	runat.h \
 	runat.c \
+	state_machine.h \
+	state_machine.c \
 	heaptrace.h \
 	heaptrace.c \
 	exec.h \

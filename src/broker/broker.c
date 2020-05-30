@@ -68,7 +68,7 @@
 #include "attr.h"
 #include "log.h"
 #include "content-cache.h"
-#include "runlevel.h"
+#include "runat.h"
 #include "heaptrace.h"
 #include "exec.h"
 #include "ping.h"
@@ -76,8 +76,10 @@
 #include "boot_config.h"
 #include "boot_pmi.h"
 #include "publisher.h"
+#include "state_machine.h"
 
 #include "broker.h"
+
 
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
@@ -105,20 +107,12 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
                                  const flux_msg_t *request);
 
 static void set_proctitle (uint32_t rank);
-static void runlevel_cb (struct runlevel *r,
-                         int level,
-                         int rc,
-                         double elapsed,
-                         const char *state,
-                         void *arg);
-static void runlevel_io_cb (struct runlevel *r,
-                            const char *name,
-                            const char *msg,
-                            void *arg);
 
 static int create_rundir (attr_t *attrs);
 static int create_broker_rundir (struct overlay *ov, void *arg);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
+
+static int create_runat_phases (broker_ctx_t *ctx, uint32_t rank);
 
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg);
 
@@ -299,6 +293,7 @@ int main (int argc, char *argv[])
     ctx.cred.rolemask = FLUX_ROLE_OWNER;
     ctx.heartbeat_rate = 2;
     ctx.sec_typemask = ZSECURITY_TYPE_CURVE;
+    ctx.state = STATE_NONE;
 
     init_attrs (ctx.attrs, getpid ());
 
@@ -479,86 +474,10 @@ int main (int argc, char *argv[])
 
     set_proctitle (rank);
 
-    if (rank == 0) {
-        const char *rc1, *rc3, *pmi, *uri;
-        bool rc2_none = false;
+    if (create_runat_phases (&ctx, rank) < 0)
+        goto cleanup;
 
-        if (attr_get (ctx.attrs, "local-uri", &uri, NULL) < 0) {
-            log_err ("local-uri is not set");
-            goto cleanup;
-        }
-        if (attr_get (ctx.attrs, "broker.rc1_path", &rc1, NULL) < 0) {
-            log_err ("broker.rc1_path is not set");
-            goto cleanup;
-        }
-        if (attr_get (ctx.attrs, "broker.rc3_path", &rc3, NULL) < 0) {
-            log_err ("broker.rc3_path is not set");
-            goto cleanup;
-        }
-        if (attr_get (ctx.attrs, "broker.rc2_none", NULL, NULL) == 0)
-            rc2_none = true;
-
-        if (attr_get (ctx.attrs, "conf.pmi_library_path", &pmi, NULL) < 0) {
-            log_err ("conf.pmi_library_path is not set");
-            goto cleanup;
-        }
-
-        if (!(ctx.runlevel = runlevel_create (ctx.h, ctx.attrs))) {
-            log_err ("creating runlevel handler");
-            goto cleanup;
-        }
-
-        runlevel_set_callback (ctx.runlevel, runlevel_cb, &ctx);
-        runlevel_set_io_callback (ctx.runlevel, runlevel_io_cb, &ctx);
-
-        /* N.B. if runlevel_set_rc() is not called for run levels 1 or 3,
-         * then that level will immediately transition to the next one.
-         * One may set -Sbroker.rc1_path= -Sbroker.rc2_path= on the broker
-         * command line to set an empty rc1/rc3 and skip calling set_rc().
-         */
-        if (rc1 && strlen (rc1) > 0) {
-            if (runlevel_set_rc (ctx.runlevel,
-                                 1,
-                                 rc1,
-                                 strlen (rc1) + 1,
-                                 uri) < 0) {
-                log_err ("runlevel_set_rc 1");
-                goto cleanup;
-            }
-        }
-
-        /* N.B. initial program has the following cases:
-         * 1) if command line, ctx.init_shell_cmd will be non-NULL
-         * 2) if broker.rc2_none is set, skip calling runlevel_set_rc().
-         *    Broker must call runlevel_abort() to transition out of level.
-         * 3) if neither command line nor broker.rc2_none are set,
-         *    call runlevel_set_rc() with empty string and let it configure
-         *    its default command (interactive shell).
-         */
-        if (!rc2_none) {
-            if (runlevel_set_rc (ctx.runlevel,
-                                 2,
-                                 ctx.init_shell_cmd,
-                                 ctx.init_shell_cmd_len,
-                                 uri) < 0) {
-                log_err ("runlevel_set_rc 2");
-                goto cleanup;
-            }
-        }
-
-        if (rc3 && strlen (rc3) > 0) {
-            if (runlevel_set_rc (ctx.runlevel,
-                                 3,
-                                 rc3,
-                                 strlen (rc3) + 1,
-                                 uri) < 0) {
-                log_err ("runlevel_set_rc 3");
-                goto cleanup;
-            }
-        }
-    }
-
-    /* If Flux was launched by Flux, now that PMI bootstrap and runlevel
+    /* If Flux was launched by Flux, now that PMI bootstrap and runat
      * initialization is complete, unset Flux job environment variables
      * so that they don't leak into the jobs other children of this instance.
      */
@@ -715,10 +634,10 @@ cleanup:
     broker_remove_services (handlers);
     publisher_destroy (ctx.publisher);
     brokercfg_destroy (ctx.config);
+    runat_destroy (ctx.runat);
     flux_close (ctx.h);
     flux_reactor_destroy (ctx.reactor);
     zlist_destroy (&ctx.subscriptions);
-    runlevel_destroy (ctx.runlevel);
     free (ctx.init_shell_cmd);
 
     return exit_rc;
@@ -822,10 +741,8 @@ static void hello_cb (struct hello *hello, void *arg)
               hello_get_time (hello));
 
     if (hello_complete (hello)) {
-        flux_log (ctx->h, LOG_INFO, "Run level %d starting", 1);
         overlay_set_idle_warning (ctx->overlay, 3);
-        if (runlevel_set_level (ctx->runlevel, 1) < 0)
-            log_err_exit ("runlevel_set_level 1");
+        state_machine (ctx, "wireup-complete");
     }
 
     free (s);
@@ -863,58 +780,106 @@ static void set_proctitle (uint32_t rank)
     (void)prctl (PR_SET_NAME, proctitle, 0, 0, 0);
 }
 
-/* Handle line by line output on stdout, stderr of runlevel subprocess.
- */
-static void runlevel_io_cb (struct runlevel *r,
-                            const char *name,
-                            const char *msg,
-                            void *arg)
+static void runat_completion_cb (struct runat *r, const char *name, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    int loglevel = !strcmp (name, "stderr") ? LOG_ERR : LOG_INFO;
-    int runlevel = runlevel_get_level (r);
+    int rc = 1;
 
-    flux_log (ctx->h, loglevel, "rc%d: %s", runlevel, msg);
+    if (runat_get_exit_code (r, name, &rc) < 0)
+        log_err ("runat_get_exit_code %s", name);
+
+    if (!strcmp (name, "rc1")) {
+        if (rc != 0)
+            exit_rc = rc;
+        state_machine (ctx, rc == 0 ? "rc1-success" : "rc1-fail");
+    }
+    else if (!strcmp (name, "rc2")) {
+        if (rc != 0)
+            exit_rc = rc;
+        state_machine (ctx, rc == 0 ? "rc2-success" : "rc2-fail");
+    }
+    else if (!strcmp (name, "rc3")) {
+        if (rc != 0)
+            exit_rc = rc;
+        state_machine (ctx, rc == 0 ? "rc3-success" : "rc3-fail");
+    }
 }
 
-/* Handle completion of runlevel subprocess.
- */
-static void runlevel_cb (struct runlevel *r,
-                         int level,
-                         int rc,
-                         double elapsed,
-                         const char *exit_string,
-                         void *arg)
+static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
 {
-    broker_ctx_t *ctx = arg;
-    int new_level = -1;
-
-    flux_log (ctx->h, rc == 0 ? LOG_INFO : LOG_ERR,
-              "Run level %d %s (rc=%d) %.1fs", level, exit_string, rc, elapsed);
-
-    switch (level) {
-        case 1: /* init completed */
-            if (rc != 0) {
-                exit_rc = rc;
-                new_level = 3;
-            } else
-                new_level = 2;
-            break;
-        case 2: /* initial program completed */
-            exit_rc = rc;
-            new_level = 3;
-            break;
-        case 3: /* finalization completed */
-            if (rc != 0 && exit_rc == 0)
-                exit_rc = rc;
-            shutdown_instance (ctx->shutdown); // initiate shutdown from rank 0
-            break;
+    if (argz == NULL) { // run interactive shell
+        if (runat_push_shell (r, "rc2") < 0)
+            return -1;
     }
-    if (new_level != -1) {
-        flux_log (ctx->h, LOG_INFO, "Run level %d starting", new_level);
-        if (runlevel_set_level (r, new_level) < 0)
-            log_err_exit ("runlevel_set_level %d", new_level);
+    else if (argz_count (argz, argz_len) == 1) { // run shell -c "command"
+        if (runat_push_shell_command (r, "rc2", argz, false) < 0)
+            return -1;
     }
+    else { // direct exec
+        if (runat_push_command (r, "rc2", argz, argz_len, false) < 0)
+            return -1;
+    }
+    return 0;
+}
+
+static int create_runat_phases (broker_ctx_t *ctx, uint32_t rank)
+{
+    if (rank == 0) {
+        const char *rc1, *rc3, *local_uri;
+        bool rc2_none = false;
+
+        if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0) {
+            log_err ("local-uri is not set");
+            return -1;
+        }
+        if (attr_get (ctx->attrs, "broker.rc1_path", &rc1, NULL) < 0) {
+            log_err ("broker.rc1_path is not set");
+            return -1;
+        }
+        if (attr_get (ctx->attrs, "broker.rc3_path", &rc3, NULL) < 0) {
+            log_err ("broker.rc3_path is not set");
+            return -1;
+        }
+        if (attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
+            rc2_none = true;
+
+        if (!(ctx->runat = runat_create (ctx->h,
+                                         local_uri,
+                                         runat_completion_cb,
+                                         ctx))) {
+            log_err ("runat_create");
+            return -1;
+        }
+
+        /* rc1 - initialization
+         */
+        if (rc1 && strlen (rc1) > 0) {
+            if (runat_push_shell_command (ctx->runat, "rc1", rc1, true) < 0) {
+                log_err ("runat_push_shell_command rc1");
+                return -1;
+            }
+        }
+
+        /* rc2 - initial program
+         */
+        if (!rc2_none) {
+            if (create_runat_rc2 (ctx->runat, ctx->init_shell_cmd,
+                                              ctx->init_shell_cmd_len) < 0) {
+                log_err ("create_runat_rc2");
+                return -1;
+            }
+        }
+
+        /* rc3 - finalization
+         */
+        if (rc3 && strlen (rc3) > 0) {
+            if (runat_push_shell_command (ctx->runat, "rc3", rc3, true) < 0) {
+                log_err ("runat_push_shell_command rc3");
+                return -1;
+            }
+        }
+    }
+    return 0;
 }
 
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size)
@@ -1871,20 +1836,11 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                          int revents, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    int rank = overlay_get_rank (ctx->overlay);
     int signum = flux_signal_watcher_get_signum (w);
-    int level;
 
-    if (rank > 0) {
-        flux_log (ctx->h, LOG_INFO, "signal %d ignored on rank > 0", signum);
-        return;
-    }
-    if ((level = runlevel_get_level (ctx->runlevel)) == 3) {
-        flux_log (ctx->h, LOG_INFO, "signal %d ignored in run level 3", signum);
-        return;
-    }
-    flux_log (ctx->h, LOG_INFO, "signal %d aborting runlevel %d", signum, level);
-    runlevel_abort (ctx->runlevel);
+    flux_log (ctx->h, LOG_INFO, "signal %d", signum);
+    if (overlay_get_rank (ctx->overlay) == 0)
+        state_abort (ctx);
 }
 
 /* Send a request message down the TBON.
