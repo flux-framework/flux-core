@@ -17,7 +17,8 @@ fluxcmd_PROGRAMS = flux-broker
 noinst_LTLIBRARIES = libbroker.la
 
 flux_broker_SOURCES = \
-	broker.c
+	broker.c \
+	broker.h
 
 libbroker_la_SOURCES = \
 	brokercfg.c \

@@ -77,49 +77,7 @@
 #include "boot_pmi.h"
 #include "publisher.h"
 
-typedef struct {
-    /* Reactor
-     */
-    flux_t *h;
-    flux_reactor_t *reactor;
-
-    /* Sockets.
-     */
-    struct overlay *overlay;
-
-    /* Session parameters
-     */
-    attr_t *attrs;
-    struct flux_msg_cred cred;  /* instance owner */
-
-    /* Modules
-     */
-    modhash_t *modhash;
-    /* Misc
-     */
-    bool verbose;
-    int event_recv_seq;
-    zlist_t *sigwatchers;
-    struct service_switch *services;
-    heartbeat_t *heartbeat;
-    struct brokercfg *config;
-    const char *config_path;
-    struct shutdown *shutdown;
-    double shutdown_grace;
-    double heartbeat_rate;
-    int sec_typemask;
-    zlist_t *subscriptions;     /* subscripts for internal services */
-    content_cache_t *cache;
-    struct publisher *publisher;
-    int tbon_k;
-    /* Bootstrap
-     */
-    struct hello *hello;
-    struct runlevel *runlevel;
-
-    char *init_shell_cmd;
-    size_t init_shell_cmd_len;
-} broker_ctx_t;
+#include "broker.h"
 
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
