@@ -32,8 +32,8 @@ class MiniCmd:
     def __init__(self):
         self.parser = self.create_parser()
 
-    # pylint: disable=no-self-use
-    def create_parser(self):
+    @staticmethod
+    def create_parser():
         """
         Create default parser with args for mini subcommands
         """
