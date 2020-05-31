@@ -16,6 +16,7 @@ import sys
 import logging
 import argparse
 import json
+from itertools import chain
 
 import flux
 from flux import job
@@ -146,7 +147,7 @@ class MiniCmd:
             jobspec.setattr_shell_option("input.stdin.type", "file")
             jobspec.setattr_shell_option("input.stdin.path", args.input)
 
-        if args.output is not None and args.output != "none":
+        if args.output is not None and args.output not in ["none", "kvs"]:
             jobspec.setattr_shell_option("output.stdout.type", "file")
             jobspec.setattr_shell_option("output.stdout.path", args.output)
             if args.label_io:
@@ -318,6 +319,138 @@ class RunCmd(SubmitCmd):
         os.execvp("flux-job", attach_args)
 
 
+def add_batch_alloc_args(parser):
+    """
+    Add "batch"-specific resource allocation arguments to parser object
+    which deal in slots instead of tasks.
+    """
+    parser.add_argument(
+        "--broker-opts",
+        metavar="OPTS",
+        default=None,
+        action="append",
+        help="Pass options to flux brokers",
+    )
+    parser.add_argument(
+        "-n",
+        "--nslots",
+        type=int,
+        metavar="N",
+        help="Number of total resource slots requested."
+        + " The size of a resource slot may be specified via the"
+        + " -c, --cores-per-slot and -g, --gpus-per-slot options."
+        + " The default slot size is 1 core.",
+    )
+    parser.add_argument(
+        "-c",
+        "--cores-per-slot",
+        type=int,
+        metavar="N",
+        default=1,
+        help="Number of cores to allocate per slot",
+    )
+    parser.add_argument(
+        "-g",
+        "--gpus-per-slot",
+        type=int,
+        metavar="N",
+        help="Number of GPUs to allocate per slot",
+    )
+    parser.add_argument(
+        "-N",
+        "--nodes",
+        type=int,
+        metavar="N",
+        help="Distribute allocated resource slots across N individual nodes",
+    )
+
+
+def list_split(opts):
+    """
+    Return a list by splitting each member of opts on ','
+    """
+    if opts:
+        x = chain.from_iterable([x.split(",") for x in opts])
+        return list(x)
+    return []
+
+
+class BatchCmd(MiniCmd):
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.parser.add_argument(
+            "--wrap",
+            action="store_true",
+            help="Wrap arguments or stdin in a /bin/sh script",
+        )
+        add_batch_alloc_args(self.parser)
+        self.parser.add_argument(
+            "SCRIPT",
+            nargs=argparse.REMAINDER,
+            help="Batch script and arguments to submit",
+        )
+
+    @staticmethod
+    def read_script(args):
+        if args.SCRIPT:
+            if args.wrap:
+                #  Wrap args in /bin/sh script
+                return "#!/bin/sh\n" + " ".join(args.SCRIPT) + "\n"
+
+            # O/w, open script for reading
+            name = args.SCRIPT[0]
+            filep = open(name, "r", encoding="utf-8")
+        else:
+            name = "stdin"
+            filep = open(0, "r", encoding="utf-8")
+        try:
+            #  Read first two bytes and ensure it starts with #!
+            script = "#!/bin/sh\n" if args.wrap else filep.read(2)
+            if not args.wrap and script[:2] != "#!":
+                raise ValueError(f"{name} does not appear to start with '#!'")
+            #  Read rest of script
+            script += filep.read()
+        except UnicodeError:
+            raise ValueError(
+                f"{name} does not appear to be a script, or failed to encode as utf-8"
+            )
+        return script
+
+    def init_jobspec(self, args):
+        # If no script (reading from stdin), then use "flux" as arg[0]
+        command = args.SCRIPT
+        if not command:
+            command = ["flux"]
+
+        if not args.nslots:
+            raise ValueError("Number of slots to allocate must be specified")
+
+        jobspec = JobspecV1.from_command(
+            command=command,
+            num_tasks=args.nslots,
+            cores_per_task=args.cores_per_slot,
+            gpus_per_task=args.gpus_per_slot,
+            num_nodes=args.nodes,
+        )
+        #  Start one flux-broker per node:
+        jobspec.setattr_shell_option("per-resource.type", "node")
+
+        #  Copy script contents into jobspec:
+        jobspec.setattr("system.batch.script", self.read_script(args))
+        jobspec.setattr("system.batch.broker-opts", list_split(args.broker_opts))
+
+        # Default output is flux-{{jobid}}.out
+        # overridden by either --output=none or --output=kvs
+        if not args.output:
+            jobspec.setattr_shell_option("output.stdout.type", "file")
+            jobspec.setattr_shell_option("output.stdout.path", "flux-{{id}}.out")
+        return jobspec
+
+    def main(self, args):
+        jobid = self.submit(args)
+        print(jobid, file=sys.stdout)
+
+
 LOGGER = logging.getLogger("flux-mini")
 
 
@@ -348,6 +481,23 @@ def main():
         formatter_class=flux.util.help_formatter(),
     )
     mini_submit_parser_sub.set_defaults(func=submit.main)
+
+    # batch
+    batch = BatchCmd()
+    description = """
+    Submit a batch SCRIPT and ARGS to be run as the initial program of
+    a Flux instance.  If no batch script is provided, one will be read
+    from stdin.
+    """
+    mini_batch_parser_sub = subparsers.add_parser(
+        "batch",
+        parents=[batch.get_parser()],
+        help="enqueue a batch script",
+        usage="flux mini batch [OPTIONS...] [SCRIPT] [ARGS...]",
+        description=description,
+        formatter_class=flux.util.help_formatter(),
+    )
+    mini_batch_parser_sub.set_defaults(func=batch.main)
 
     args = parser.parse_args()
     args.func(args)
