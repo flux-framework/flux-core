@@ -24,11 +24,9 @@ from flux import util
 from flux import debugged
 
 
-class SubmitCmd:
+class MiniCmd:
     """
-    SubmitCmd submits a job, displays the jobid on stdout, and returns.
-
-    Usage: flux mini submit [OPTIONS] cmd ...
+    MiniCmd is the base class for all flux-mini subcommands
     """
 
     def __init__(self):
@@ -37,35 +35,9 @@ class SubmitCmd:
     # pylint: disable=no-self-use
     def create_parser(self):
         """
-        Create parser with args for submit subcommand
+        Create default parser with args for mini subcommands
         """
         parser = argparse.ArgumentParser(add_help=False)
-        parser.add_argument(
-            "-N", "--nodes", type=int, metavar="N", help="Number of nodes to allocate"
-        )
-        parser.add_argument(
-            "-n",
-            "--ntasks",
-            type=int,
-            metavar="N",
-            default=1,
-            help="Number of tasks to start",
-        )
-        parser.add_argument(
-            "-c",
-            "--cores-per-task",
-            type=int,
-            metavar="N",
-            default=1,
-            help="Number of cores to allocate per task",
-        )
-        parser.add_argument(
-            "-g",
-            "--gpus-per-task",
-            type=int,
-            metavar="N",
-            help="Number of GPUs to allocate per task",
-        )
         parser.add_argument(
             "-t",
             "--time-limit",
@@ -138,10 +110,14 @@ class SubmitCmd:
         parser.add_argument(
             "--debug-emulate", action="store_true", help=argparse.SUPPRESS
         )
-        parser.add_argument(
-            "command", nargs=argparse.REMAINDER, help="Job command and arguments"
-        )
         return parser
+
+    def init_jobspec(self, args):
+        """
+        Return initialized jobspec. This is an abstract method which must
+        be provided by each base class
+        """
+        raise NotImplementedError()
 
     # pylint: disable=too-many-branches,too-many-statements
     def submit(self, args):
@@ -149,16 +125,7 @@ class SubmitCmd:
         Submit job, constructing jobspec from args.
         Returns jobid.
         """
-        if not args.command:
-            raise ValueError("job command and arguments are missing")
-
-        jobspec = JobspecV1.from_command(
-            args.command,
-            num_tasks=args.ntasks,
-            cores_per_task=args.cores_per_task,
-            gpus_per_task=args.gpus_per_task,
-            num_nodes=args.nodes,
-        )
+        jobspec = self.init_jobspec(args)
         jobspec.cwd = os.getcwd()
         jobspec.environment = dict(os.environ)
         if args.time_limit is not None:
@@ -171,7 +138,7 @@ class SubmitCmd:
             jobspec.setattr_shell_option("input.stdin.type", "file")
             jobspec.setattr_shell_option("input.stdin.path", args.input)
 
-        if args.output is not None:
+        if args.output is not None and args.output != "none":
             jobspec.setattr_shell_option("output.stdout.type", "file")
             jobspec.setattr_shell_option("output.stdout.path", args.output)
             if args.label_io:
@@ -237,12 +204,64 @@ class SubmitCmd:
             debug=arg_debug,
         )
 
+    def get_parser(self):
+        return self.parser
+
+
+class SubmitCmd(MiniCmd):
+    """
+    SubmitCmd submits a job, displays the jobid on stdout, and returns.
+
+    Usage: flux mini submit [OPTIONS] cmd ...
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.parser.add_argument(
+            "-N", "--nodes", type=int, metavar="N", help="Number of nodes to allocate"
+        )
+        self.parser.add_argument(
+            "-n",
+            "--ntasks",
+            type=int,
+            metavar="N",
+            default=1,
+            help="Number of tasks to start",
+        )
+        self.parser.add_argument(
+            "-c",
+            "--cores-per-task",
+            type=int,
+            metavar="N",
+            default=1,
+            help="Number of cores to allocate per task",
+        )
+        self.parser.add_argument(
+            "-g",
+            "--gpus-per-task",
+            type=int,
+            metavar="N",
+            help="Number of GPUs to allocate per task",
+        )
+        self.parser.add_argument(
+            "command", nargs=argparse.REMAINDER, help="Job command and arguments"
+        )
+
+    def init_jobspec(self, args):
+        if not args.command:
+            raise ValueError("job command and arguments are missing")
+
+        return JobspecV1.from_command(
+            args.command,
+            num_tasks=args.ntasks,
+            cores_per_task=args.cores_per_task,
+            gpus_per_task=args.gpus_per_task,
+            num_nodes=args.nodes,
+        )
+
     def main(self, args):
         jobid = self.submit(args)
         print(jobid, file=sys.stdout)
-
-    def get_parser(self):
-        return self.parser
 
 
 class RunCmd(SubmitCmd):
