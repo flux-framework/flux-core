@@ -206,6 +206,11 @@ int flux_cmd_argc (const flux_cmd_t *cmd);
 const char *flux_cmd_arg (const flux_cmd_t *cmd, int n);
 
 /*
+ *  Return a copy of the current cmd as a string. Caller must free
+ */
+char *flux_cmd_stringify (const flux_cmd_t *cmd);
+
+/*
  *  Set a single environment variable (name) to formatted string `fmt`.
  *   If `overwrite` is non-zero then overwrite any existing setting for `name`.
  */

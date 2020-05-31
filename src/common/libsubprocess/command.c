@@ -462,6 +462,17 @@ int flux_cmd_argc (const flux_cmd_t *cmd)
     return argz_count (cmd->argz, cmd->argz_len);
 }
 
+char *flux_cmd_stringify (const flux_cmd_t *cmd)
+{
+    char *result = calloc (1, cmd->argz_len);
+    if (!memcpy (result, cmd->argz, cmd->argz_len)) {
+        free (result);
+        return NULL;
+    }
+    argz_stringify (result, cmd->argz_len, ' ');
+    return result;
+}
+
 const char *flux_cmd_arg (const flux_cmd_t *cmd, int n)
 {
     char *arg = NULL;
