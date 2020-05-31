@@ -19,7 +19,7 @@
 
 #include "heartbeat.h"
 
-struct heartbeat_struct {
+struct heartbeat {
     flux_t *h;
     double rate;
     flux_watcher_t *timer;

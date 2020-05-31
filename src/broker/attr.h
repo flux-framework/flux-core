@@ -27,7 +27,7 @@ enum {
 typedef int (*attr_get_f)(const char *name, const char **val, void *arg);
 typedef int (*attr_set_f)(const char *name, const char *val, void *arg);
 
-typedef struct attr_struct attr_t;
+typedef struct broker_attr attr_t;
 
 /* Create/destroy attribute cache
  */

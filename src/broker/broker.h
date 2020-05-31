@@ -17,16 +17,16 @@ struct broker {
 
     struct overlay *overlay;
 
-    struct attr_struct *attrs;
+    struct broker_attr *attrs;
     struct flux_msg_cred cred;  /* instance owner */
 
-    struct modhash_struct *modhash;
+    struct modhash *modhash;
 
     bool verbose;
     int event_recv_seq;
     zlist_t *sigwatchers;
     struct service_switch *services;
-    struct heartbeat_struct *heartbeat;
+    struct heartbeat *heartbeat;
     struct brokercfg *config;
     const char *config_path;
     struct shutdown *shutdown;

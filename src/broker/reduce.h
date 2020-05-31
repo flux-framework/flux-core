@@ -17,7 +17,7 @@
 extern "C" {
 #endif
 
-typedef struct flux_reduce_struct flux_reduce_t;
+typedef struct flux_reduce flux_reduce_t;
 
 struct flux_reduce_ops {
     flux_free_f destroy;
