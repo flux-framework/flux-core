@@ -81,6 +81,7 @@ flux_shell_SOURCES = \
 	gpubind.c \
 	evlog.c \
 	pty.c \
+	batch.c \
 	mpir/mpir.c \
 	mpir/ptrace.c
 
