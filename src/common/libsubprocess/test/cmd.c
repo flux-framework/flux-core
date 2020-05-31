@@ -190,6 +190,50 @@ void test_find_opts (void)
         "flux_cmd_find_opts doesn't find substrings");
 }
 
+void test_stringify (void)
+{
+    flux_cmd_t *cmd;
+    char *s;
+    char * argv[] = {
+        "test",
+        "--option=foo",
+        "-c",
+        "5",
+        "bar",
+        NULL
+    };
+    int argc = (sizeof (argv)/sizeof (argv[0])) - 1;
+    char * env[] = {
+        "FOO=bar",
+        "PATH=/bin",
+        NULL
+    };
+
+    ok ((cmd = flux_cmd_create (0, NULL, NULL)) != NULL,
+        "flux_cmd_create empty");
+
+    s = flux_cmd_stringify (cmd);
+    ok (s != NULL,
+        "flux_cmd_stringify on empty cmd works");
+    is (s, "",
+        "flux_cmd_stringify on empty cmd returns empty string");
+    free (s);
+    flux_cmd_destroy (cmd);
+
+   ok ((cmd = flux_cmd_create (argc, argv, env)) != NULL,
+        "flux_cmd_create");
+   if (!cmd)
+       BAIL_OUT ("flux_cmd_create failed");
+
+    s = flux_cmd_stringify (cmd);
+    ok (s != NULL,
+        "flux_cmd_stringify works");
+    is (s, "test --option=foo -c 5 bar",
+        "flux_cmd_stringify returns expected string");
+    free (s);
+    flux_cmd_destroy (cmd);
+}
+
 void test_arg_insert_delete (void)
 {
     flux_cmd_t *cmd;
@@ -356,6 +400,8 @@ int main (int argc, char *argv[])
     test_find_opts ();
 
     test_arg_insert_delete ();
+
+    test_stringify ();
 
     done_testing ();
     return 0;
