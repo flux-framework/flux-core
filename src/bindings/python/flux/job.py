@@ -498,6 +498,8 @@ class Jobspec(object):
             raise TypeError("count must be a mapping")
 
         command = task["command"]
+        if len(command) == 0:
+            raise TypeError("command array cannot have length of zero")
         if not (
             (  # sequence of strings - N.B. also true for just a plain string
                 isinstance(command, abc.Sequence)
