@@ -29,11 +29,11 @@ class MiniCmd:
     MiniCmd is the base class for all flux-mini subcommands
     """
 
-    def __init__(self):
-        self.parser = self.create_parser()
+    def __init__(self, **kwargs):
+        self.parser = self.create_parser(kwargs)
 
     @staticmethod
-    def create_parser():
+    def create_parser(exclude_io=False):
         """
         Create default parser with args for mini subcommands
         """
@@ -75,25 +75,33 @@ class MiniCmd:
         parser.add_argument(
             "--input",
             type=str,
-            help="Redirect job stdin from FILENAME, bypassing KVS",
+            help="Redirect job stdin from FILENAME, bypassing KVS"
+            if not exclude_io
+            else argparse.SUPPRESS,
             metavar="FILENAME",
         )
         parser.add_argument(
             "--output",
             type=str,
-            help="Redirect job stdout to FILENAME, bypassing KVS",
+            help="Redirect job stdout to FILENAME, bypassing KVS"
+            if not exclude_io
+            else argparse.SUPPRESS,
             metavar="FILENAME",
         )
         parser.add_argument(
             "--error",
             type=str,
-            help="Redirect job stderr to FILENAME, bypassing KVS",
+            help="Redirect job stderr to FILENAME, bypassing KVS"
+            if not exclude_io
+            else argparse.SUPPRESS,
             metavar="FILENAME",
         )
         parser.add_argument(
             "--label-io",
             action="store_true",
-            help="Add rank labels to stdout, stderr lines",
+            help="Add rank labels to stdout, stderr lines"
+            if not exclude_io
+            else argparse.SUPPRESS,
         )
         parser.add_argument(
             "--flags",
