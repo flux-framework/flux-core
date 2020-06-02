@@ -451,6 +451,47 @@ class BatchCmd(MiniCmd):
         print(jobid, file=sys.stdout)
 
 
+class AllocCmd(MiniCmd):
+    def __init__(self):
+        super().__init__(exclude_io=True)
+        add_batch_alloc_args(self.parser)
+        self.parser.add_argument(
+            "COMMAND",
+            nargs=argparse.REMAINDER,
+            help="Set the initial COMMAND of new Flux instance."
+            + "(default is an interactive shell)",
+        )
+
+    def init_jobspec(self, args):
+
+        if not args.nslots:
+            raise ValueError("Number of slots to allocate must be specified")
+
+        broker_opts = list_split(args.broker_opts)
+        jobspec = JobspecV1.from_command(
+            command=["flux", "broker", *broker_opts, *args.COMMAND],
+            num_tasks=args.nslots,
+            cores_per_task=args.cores_per_slot,
+            gpus_per_task=args.gpus_per_slot,
+            num_nodes=args.nodes,
+        )
+        jobspec.setattr_shell_option("per-resource.type", "node")
+        if sys.stdin.isatty():
+            jobspec.setattr_shell_option("pty", True)
+        return jobspec
+
+    def main(self, args):
+        jobid = self.submit(args)
+
+        # Build args for flux job attach
+        attach_args = ["flux-job", "attach"]
+        attach_args.append(str(jobid))
+
+        # Exec flux-job attach, searching for it in FLUX_EXEC_PATH.
+        os.environ["PATH"] = os.environ["FLUX_EXEC_PATH"] + ":" + os.environ["PATH"]
+        os.execvp("flux-job", attach_args)
+
+
 LOGGER = logging.getLogger("flux-mini")
 
 
@@ -498,6 +539,22 @@ def main():
         formatter_class=flux.util.help_formatter(),
     )
     mini_batch_parser_sub.set_defaults(func=batch.main)
+
+    # alloc
+    alloc = AllocCmd()
+    description = """
+    Allocate resources and start a new Flux instance. Once the instance
+    has started, attach to it interactively.
+    """
+    mini_alloc_parser_sub = subparsers.add_parser(
+        "alloc",
+        parents=[alloc.get_parser()],
+        help="allocate a new instance for interactive use",
+        usage="flux mini alloc [COMMAND] [ARGS...]",
+        description=description,
+        formatter_class=flux.util.help_formatter(),
+    )
+    mini_alloc_parser_sub.set_defaults(func=alloc.main)
 
     args = parser.parse_args()
     args.func(args)
