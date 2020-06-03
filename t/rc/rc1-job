@@ -4,7 +4,7 @@ set_fake_hwloc_by_rank() {
     cores=${1}
     ranklist="0-$(($(flux getattr size) - 1))"
     corelist="0-$((${cores} - 1))"
-    by_rank="{\"${ranklist}\":{\"Core\":${cores},\"cpuset\":\"${corelist}\"}}"
+    by_rank="{\"${ranklist}\":{\"Core\":${cores},\"coreids\":\"${corelist}\"}}"
     echo Setting fake by_rank="${by_rank}" >&2
     flux kvs put resource.hwloc.by_rank="${by_rank}"
     flux kvs eventlog append resource.eventlog \
