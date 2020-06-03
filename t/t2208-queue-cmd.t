@@ -9,6 +9,11 @@ flux setattr log-stderr-level 1
 
 LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 
+test_expect_success 'flux-queue: reload sched-simple with sched-PUs' '
+	flux module reload -f sched-simple sched-PUs &&
+	flux resource list -v
+'
+
 test_expect_success 'flux-queue: unknown sub-command fails with usage message' '
 	test_must_fail flux queue wrongsubcmd 2>usage.out &&
 	grep Usage: usage.out
@@ -119,7 +124,8 @@ test_expect_success 'flux-queue: queue empties out' '
 '
 
 test_expect_success 'flux-queue: start long job that uses all cores' '
-	id=$(flux mini submit -n $(nproc) sleep 600) &&
+	ncores=$(flux resource list -s up -no {ncores}) &&
+	id=$(flux mini submit -n ${ncores} sleep 600) &&
 	flux job wait-event ${id} start &&
 	echo ${id} >longjob
 '
@@ -192,7 +198,8 @@ test_expect_success 'flux-queue: job in queue ran' '
 '
 
 test_expect_success 'flux-queue: submit a long job that uses all cores' '
-	flux mini submit -n $(nproc) sleep 600
+	ncores=$(flux resource list -s up -no {ncores}) &&
+	flux mini submit -n ${ncores} sleep 600
 '
 
 test_expect_success 'flux-queue: submit 2 more jobs' '
