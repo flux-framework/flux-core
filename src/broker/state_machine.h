@@ -17,6 +17,7 @@ typedef enum {
     STATE_NONE,
     STATE_INIT,             // rc1
     STATE_RUN,              // initial program
+    STATE_CLEANUP,
     STATE_FINALIZE,         // rc3
     STATE_SHUTDOWN,
 } broker_state_t;

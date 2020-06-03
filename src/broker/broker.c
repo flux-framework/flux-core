@@ -798,6 +798,11 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
             exit_rc = rc;
         state_machine (ctx, rc == 0 ? "rc2-success" : "rc2-fail");
     }
+    else if (!strcmp (name, "cleanup")) {
+        if (rc != 0)
+            exit_rc = rc;
+        state_machine (ctx, rc == 0 ? "cleanup-success" : "cleanup-fail");
+    }
     else if (!strcmp (name, "rc3")) {
         if (rc != 0)
             exit_rc = rc;

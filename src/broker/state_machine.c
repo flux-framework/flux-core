@@ -28,6 +28,7 @@ const char *statestr (broker_state_t state)
     return (state == STATE_NONE ? "none" :
             state == STATE_INIT ? "init" :
             state == STATE_RUN ? "run" :
+            state == STATE_CLEANUP ? "cleanup" :
             state == STATE_FINALIZE ? "finalize" :
             state == STATE_SHUTDOWN ? "shutdown" : "???");
 }
@@ -50,6 +51,11 @@ broker_state_t state_next (broker_state_t state, const char *event)
           || !strcmp (event, "rc2-success")
           || !strcmp (event, "rc2-abort-noscript")) {
         if (state == STATE_RUN)
+            state = STATE_CLEANUP;
+    }
+    else if (!strcmp (event, "cleanup-fail")
+          || !strcmp (event, "cleanup-success")) {
+        if (state == STATE_CLEANUP)
             state = STATE_FINALIZE;
     }
     else if (!strcmp (event, "rc3-fail")
@@ -70,6 +76,10 @@ void state_action (struct broker *ctx, broker_state_t state)
         case STATE_RUN:
             if (runat_start (ctx->runat, "rc2") < 0)
                 flux_log (ctx->h, LOG_DEBUG, "no initial program defined");
+            break;
+        case STATE_CLEANUP:
+            if (runat_start (ctx->runat, "cleanup") < 0)
+                state_machine (ctx, "cleanup-success");
             break;
         case STATE_FINALIZE:
             if (runat_start (ctx->runat, "rc3") < 0)
@@ -118,6 +128,9 @@ void state_abort (struct broker *ctx)
         case STATE_RUN:
             if (runat_abort (ctx->runat, "rc2") < 0)
                 state_machine (ctx, "rc2-abort-noscript");
+            break;
+        case STATE_CLEANUP:
+            (void)runat_abort (ctx->runat, "cleanup");
             break;
         case STATE_FINALIZE:
             (void)runat_abort (ctx->runat, "rc3");
