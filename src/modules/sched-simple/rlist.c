@@ -243,7 +243,10 @@ static int rlist_add_rnode (struct rlist *rl, struct rnode *n)
     return 0;
 }
 
-static int rlist_append (struct rlist *rl, const char *ranks, json_t *e)
+static int rlist_append (struct rlist *rl,
+                         const char *ranks,
+                         json_t *e,
+                         const char *name)
 {
     int rc = -1;
     unsigned int n;
@@ -255,7 +258,7 @@ static int rlist_append (struct rlist *rl, const char *ranks, json_t *e)
 
     if (!ids || json_unpack_ex (e, &err, 0, "{s:i,s?s}",
                                 "Core", &n,
-                                "cpuset", &corelist) < 0)
+                                name, &corelist) < 0)
         goto out;
     i = idset_first (ids);
     while (i != IDSET_INVALID_ID) {
@@ -275,7 +278,7 @@ out:
     return rc;
 }
 
-struct rlist *rlist_from_hwloc_by_rank (const char *by_rank)
+struct rlist *rlist_from_hwloc_by_rank (const char *by_rank, bool sched_pus)
 {
     struct rlist *rl = NULL;
     const char *key = NULL;
@@ -288,7 +291,7 @@ struct rlist *rlist_from_hwloc_by_rank (const char *by_rank)
         goto err;
 
     json_object_foreach (o, key, entry) {
-        if (rlist_append (rl, key, entry) < 0)
+        if (rlist_append (rl, key, entry, sched_pus ? "cpuset" : "coreids") < 0)
             goto err;
     }
     json_decref (o);

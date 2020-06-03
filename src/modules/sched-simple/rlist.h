@@ -47,8 +47,9 @@ struct rlist *rlist_copy_down (const struct rlist *orig);
 struct rlist *rlist_copy_allocated (const struct rlist *orig);
 
 /*  Create an rlist object from resource.hwloc.by_rank JSON input
+ *  If sched_pus is true, then rlist contains PUs not cores.
  */
-struct rlist *rlist_from_hwloc_by_rank (const char *by_rank);
+struct rlist *rlist_from_hwloc_by_rank (const char *by_rank, bool sched_pus);
 
 /*  Destroy an rlist object */
 void rlist_destroy (struct rlist *rl);
