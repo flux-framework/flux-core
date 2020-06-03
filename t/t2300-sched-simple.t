@@ -10,7 +10,7 @@ test_under_flux 4 job
 
 query="flux resource list --state=free -no {rlist}"
 
-hwloc_by_rank='{"0-1": {"Core": 2, "cpuset": "0-1"}}'
+hwloc_by_rank='{"0-1": {"Core": 2, "cpuset":"0-3", "coreids":"0-1" }}'
 hwloc_by_rank_first_fit='{"0": {"Core": 2}, "1": {"Core": 1}}'
 
 
@@ -146,6 +146,13 @@ test_expect_success 'sched-simple: cancel remaining jobs' '
 	flux job cancel $(cat job8.id) &&
 	flux job cancel $(cat job9.id) &&
 	flux job wait-event --timeout=5.0 $(cat job9.id) free
+'
+test_expect_success 'sched-simple: reload with sched-PUs option' '
+	flux module reload -f sched-simple sched-PUs
+'
+test_expect_success 'sched-simple: PUs now treated as cores' '
+	test_debug "flux resource list -v" &&
+	test "$($query)" = "rank[0-1]/core[0-3]"
 '
 test_expect_success 'sched-simple: reload in first-fit mode' '
         flux module remove sched-simple &&
