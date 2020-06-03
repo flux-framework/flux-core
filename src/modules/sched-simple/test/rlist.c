@@ -412,7 +412,7 @@ static void test_issue2202 (void)
     char *result = NULL;
     struct rlist *a = NULL;
 
-    struct rlist *rl = rlist_from_hwloc_by_rank (by_rank_issue2202);
+    struct rlist *rl = rlist_from_hwloc_by_rank (by_rank_issue2202, true);
     ok (rl != NULL, "issue2202: rlist_from_by_rank");
     if (!rl)
         BAIL_OUT ("unable to create rlist from by_rank_issue2202");
@@ -449,7 +449,7 @@ static void test_issue2202 (void)
 
     /*  Part B:  test with multiple cores per rank, same cpuset size
      */
-    rl = rlist_from_hwloc_by_rank (by_rank_issue2202b);
+    rl = rlist_from_hwloc_by_rank (by_rank_issue2202b, true);
     ok (rl != NULL, "issue2202: rlist_from_hwloc_by_rank");
     if (!rl)
         BAIL_OUT ("unable to create rlist from by_rank_issue2202b");
@@ -505,7 +505,7 @@ static void test_issue2473 (void)
     struct rlist *rl;
     struct rlist *a, *a2;
 
-    rl = rlist_from_hwloc_by_rank (by_rank_issue2473);
+    rl = rlist_from_hwloc_by_rank (by_rank_issue2473, true);
     ok (rl != NULL, "issue2473: add_hwloc_by_rank");
     if (rl == NULL)
         BAIL_OUT ("unable to create rlist from by_rank_issue2473");
@@ -577,6 +577,48 @@ static void test_issue2473 (void)
 
     rlist_destroy (rl);
 }
+
+
+const char by_rank_coreids[] = "{\
+\"0\": {\
+    \"Package\": 1,\
+    \"Core\": 4,\
+    \"PU\": 8,\
+    \"cpuset\": \"0-7\",\
+    \"coreids\": \"0-3\"\
+  },\
+\"1-2\": {\
+    \"Package\": 1,\
+    \"Core\": 2,\
+    \"PU\": 2,\
+    \"cpuset\": \"0-1\",\
+    \"coreids\": \"0-1\"\
+  }\
+}";
+
+
+static void test_by_rank_coreids (void)
+{
+    char *result;
+    struct rlist *rl;
+
+    rl = rlist_from_hwloc_by_rank (by_rank_coreids, false);
+    ok (rl != NULL, "by_rank_coreids: rlist_hwloc_by_rank");
+    if (rl == NULL)
+        BAIL_OUT ("unable to create rlist from by_rank_coreids");
+    ok (rl->total == 8,
+        "coreids: rlist contains only cores");
+    ok (rlist_nnodes (rl) == 3,
+        "coreids: created rlist with 3 nodes");
+    result = rlist_dumps (rl);
+    is (result,
+        "rank0/core[0-3] rank[1-2]/core[0-1]",
+        "coreids: rlist_dumps works");
+    free (result);
+    rlist_destroy (rl);
+    return;
+}
+
 
 static void test_dumps (void)
 {
@@ -689,6 +731,7 @@ int main (int ac, char *av[])
     run_test_entries (test_1024n_4c, 1024, 4);
     test_issue2202 ();
     test_issue2473 ();
+    test_by_rank_coreids ();
     test_updown ();
 
     done_testing ();
