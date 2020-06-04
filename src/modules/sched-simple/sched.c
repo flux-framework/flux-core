@@ -38,6 +38,7 @@ struct simple_sched {
 
     char *mode;             /* allocation mode */
     bool single;
+    bool sched_pus;         /* schedule PUs as cores */
     struct rlist *rlist;    /* list of resources */
     zlistx_t *queue;        /* job queue */
     schedutil_t *util_ctx;
@@ -469,7 +470,7 @@ static int ss_acquire_resources (flux_t *h, struct simple_sched *ss)
         flux_log_error (h, "json_dumps (by_rank)");
         goto out;
     }
-    if (!(ss->rlist = rlist_from_hwloc_by_rank (by_rank))) {
+    if (!(ss->rlist = rlist_from_hwloc_by_rank (by_rank, ss->sched_pus))) {
         flux_log_error (h, "rank_list_create");
         goto out;
     }
@@ -552,6 +553,9 @@ static int process_args (flux_t *h, struct simple_sched *ss,
         }
         else if (strcmp ("unlimited", argv[i]) == 0) {
             ss->single = false;
+        }
+        else if (strcmp ("sched-PUs", argv[i]) == 0) {
+            ss->sched_pus = true;
         }
         else {
             flux_log_error (h, "Unknown module option: '%s'", argv[i]);

@@ -32,12 +32,7 @@ struct shell_affinity {
  */
 static int topology_restrict (hwloc_topology_t topo, hwloc_cpuset_t set)
 {
-    int flags = HWLOC_RESTRICT_FLAG_ADAPT_MISC |
-                HWLOC_RESTRICT_FLAG_ADAPT_IO;
-#if HWLOC_API_VERSION < 0x20000
-    flags = flags | HWLOC_RESTRICT_FLAG_ADAPT_DISTANCES;
-#endif
-    if (hwloc_topology_restrict (topo, set, flags) < 0)
+    if (hwloc_topology_restrict (topo, set, 0) < 0)
         return (-1);
     return (0);
 }

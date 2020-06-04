@@ -13,8 +13,9 @@ flux setattr log-stderr-level 1
 #
 
 test_expect_success 'issue2664: start three jobs ' '
-	echo Requesting $(nproc) cores &&
-	flux mini submit -n $(nproc) sleep 3600 >job1.out &&
+	ncores=$(flux resource list -s up -no {ncores}) &&
+	echo Requesting ${ncores} cores &&
+	flux mini submit -n ${ncores} sleep 3600 >job1.out &&
 	flux mini submit hostname >job2.out &&
 	flux mini submit hostname >job3.out
 '

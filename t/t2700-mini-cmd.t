@@ -6,12 +6,19 @@ test_description='Test flux mini command'
 
 test_under_flux 4
 
-test $(nproc) -gt 1 && test_set_prereq HAVE_MULTICORE
-
 # Set CLIMain log level to logging.DEBUG (10), to enable stack traces
 export FLUX_PYCLI_LOGLEVEL=10
 
 flux setattr log-stderr-level 1
+
+#  Reload sched-simple with PU scheduling so we can treat single-core
+#  system with many threads per core as MULTICORE
+#
+test_expect_success 'reload sched-simple with sched-PUs' '
+	flux module reload -f sched-simple sched-PUs
+'
+
+test $(nproc) -gt 1 && test_set_prereq HAVE_MULTICORE
 
 test_expect_success 'flux mini fails with usage message' '
 	test_must_fail flux mini 2>usage.err &&

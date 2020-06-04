@@ -11,7 +11,7 @@ test_under_flux 4 job
 query="flux resource list --state=free -no {rlist}"
 
 
-hwloc_by_rank='{"0-1": {"Core": 2, "cpuset": "0-3"}}'
+hwloc_by_rank='{"0-1": {"Core": 4, "cpuset": "0-3", "coreids": "0-3"}}'
 
 
 SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
