@@ -136,6 +136,7 @@ TESTSCRIPTS = \
 	t2613-job-shell-batch.t \
 	t2700-mini-cmd.t \
 	t2701-mini-batch.t \
+	t2702-mini-alloc.t \
 	t2800-jobs-cmd.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
