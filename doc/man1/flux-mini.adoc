@@ -186,10 +186,10 @@ overridden in some cases:
 Load the MPI personality plugin for IBM Spectrum MPI.  All other MPI
 plugins are loaded by default.
 
-*affinity=per-task*::
+*cpu-affinity=per-task*::
 Tasks are distributed across the assigned resources.
 
-*affinity=off*::
+*cpu-affinity=off*::
 Disable task affinity plugin.
 
 *gpu-affinity=per-task*::
@@ -199,7 +199,8 @@ GPU device affinity is to the job.
 *gpu-affinity=off*::
 Disable GPU affinity for this job.
 
-
+*verbose*::
+Increase verbosity of the job shell log.
 
 AUTHOR
 ------
