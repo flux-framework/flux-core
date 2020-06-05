@@ -304,6 +304,11 @@ int rcalc_total_gpus (rcalc_t *r)
     return r->ngpus;
 }
 
+int rcalc_total_ntasks (rcalc_t *r)
+{
+    return r->ntasks;
+}
+
 int rcalc_total_nodes_used (rcalc_t *r)
 {
     int i;
@@ -411,6 +416,43 @@ int rcalc_distribute (rcalc_t *r, int ntasks)
     /*  Assign taskid basis to each rank in block allocation order */
     rcalc_compute_taskids (r);
     return (0);
+}
+
+/*  Distribute tasks over resources in `r` by resource type. Assigns
+ *   ntasks tasks to each resource of type name.
+ */
+int rcalc_distribute_per_resource (rcalc_t *r, const char *name, int ntasks)
+{
+    bool by_core = false;
+    bool by_node = false;
+
+    if (strcmp (name, "core") == 0)
+        by_core = true;
+    else if (strcmp (name, "node") == 0)
+        by_node = true;
+    else {
+        errno = EINVAL;
+        return  -1;
+    }
+
+    allocinfo_clear (r);
+    r->ntasks = 0;
+    for (int i = 0; i < r->nranks; i++) {
+        if (by_node) {
+            r->alloc[i].ntasks = ntasks;
+            r->alloc[i].ncores_avail = 0;
+            r->ntasks += ntasks;
+        }
+        else if (by_core) {
+            int n = r->alloc[i].ncores_avail * ntasks;
+            r->alloc[i].ntasks = n;
+            r->alloc[i].ncores_avail = 0;
+            r->ntasks += n;
+        }
+    }
+
+    rcalc_compute_taskids (r);
+    return 0;
 }
 
 static struct rankinfo *rcalc_rankinfo_find (rcalc_t *r, int rank)

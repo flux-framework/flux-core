@@ -462,6 +462,17 @@ int flux_cmd_argc (const flux_cmd_t *cmd)
     return argz_count (cmd->argz, cmd->argz_len);
 }
 
+char *flux_cmd_stringify (const flux_cmd_t *cmd)
+{
+    char *result = calloc (1, cmd->argz_len);
+    if (!memcpy (result, cmd->argz, cmd->argz_len)) {
+        free (result);
+        return NULL;
+    }
+    argz_stringify (result, cmd->argz_len, ' ');
+    return result;
+}
+
 const char *flux_cmd_arg (const flux_cmd_t *cmd, int n)
 {
     char *arg = NULL;
@@ -478,6 +489,34 @@ const char *flux_cmd_arg (const flux_cmd_t *cmd, int n)
         arg = argz_next (cmd->argz, cmd->argz_len, arg);
 
     return arg;
+}
+
+int flux_cmd_argv_insert (flux_cmd_t *cmd, int n, const char *entry)
+{
+    const char *arg = flux_cmd_arg (cmd, n);
+
+    /*  Always allow n == 0, even if flux_cmd_arg (cmd, 0) returned NULL.
+     *  This means the argv is currently empty and insert is equivalent
+     *   to append. (argz_insert with entry == NULL is an implicit append)
+     */
+    if (arg == NULL && n > 0)
+        return -1;
+
+    if (argz_insert (&cmd->argz, &cmd->argz_len, (char *)arg, entry) != 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+int flux_cmd_argv_delete (flux_cmd_t *cmd, int n)
+{
+    const char *arg = flux_cmd_arg (cmd, n);
+    if (arg == NULL)
+        return -1;
+
+    argz_delete (&cmd->argz, &cmd->argz_len, (char *) arg);
+    return 0;
 }
 
 int flux_cmd_argv_appendf (flux_cmd_t *cmd, const char *fmt, ...)

@@ -190,6 +190,130 @@ void test_find_opts (void)
         "flux_cmd_find_opts doesn't find substrings");
 }
 
+void test_stringify (void)
+{
+    flux_cmd_t *cmd;
+    char *s;
+    char * argv[] = {
+        "test",
+        "--option=foo",
+        "-c",
+        "5",
+        "bar",
+        NULL
+    };
+    int argc = (sizeof (argv)/sizeof (argv[0])) - 1;
+    char * env[] = {
+        "FOO=bar",
+        "PATH=/bin",
+        NULL
+    };
+
+    ok ((cmd = flux_cmd_create (0, NULL, NULL)) != NULL,
+        "flux_cmd_create empty");
+
+    s = flux_cmd_stringify (cmd);
+    ok (s != NULL,
+        "flux_cmd_stringify on empty cmd works");
+    is (s, "",
+        "flux_cmd_stringify on empty cmd returns empty string");
+    free (s);
+    flux_cmd_destroy (cmd);
+
+   ok ((cmd = flux_cmd_create (argc, argv, env)) != NULL,
+        "flux_cmd_create");
+   if (!cmd)
+       BAIL_OUT ("flux_cmd_create failed");
+
+    s = flux_cmd_stringify (cmd);
+    ok (s != NULL,
+        "flux_cmd_stringify works");
+    is (s, "test --option=foo -c 5 bar",
+        "flux_cmd_stringify returns expected string");
+    free (s);
+    flux_cmd_destroy (cmd);
+}
+
+void test_arg_insert_delete (void)
+{
+    flux_cmd_t *cmd;
+    char **av;
+    char * argv[] = {
+        "test",
+        "--option=foo",
+        "-c",
+        "5",
+        "bar",
+        NULL
+    };
+    int argc = (sizeof (argv)/sizeof (argv[0])) - 1;
+    char * env[] = {
+        "FOO=bar",
+        "PATH=/bin",
+        NULL
+    };
+
+    ok ((cmd = flux_cmd_create (0, NULL, NULL)) != NULL,
+        "flux_cmd_create empty");
+    ok (flux_cmd_argv_delete (cmd, 0) < 0 && errno == EINVAL,
+        "flux_cmd_delete 0 on empty cmd returns EINVAL");
+    ok (flux_cmd_argv_insert (cmd, 0, "foo") == 0,
+        "flux_cmd_insert (cmd, 0) inserts at front of empty cmd");
+    ok (flux_cmd_argc (cmd) == 1,
+        "flux_cmd argc == 1");
+    is (flux_cmd_arg (cmd, 0), "foo",
+        "flux_cmd_arg returns foo for arg0");
+    flux_cmd_destroy (cmd);
+
+
+    ok ((cmd = flux_cmd_create (argc, argv, env)) != NULL,
+        "flux_cmd_create");
+    if (!cmd)
+        BAIL_OUT ("flux_cmd_create failed");
+
+    ok (flux_cmd_argc (cmd) == argc,
+        "flux_cmd_argc == %d (expected %d)",
+        flux_cmd_argc (cmd), argc);
+
+    ok (flux_cmd_argv_delete (cmd, 10) < 0 && errno == EINVAL,
+        "flux_cmd_argv_delete returns EINVAL for invalid index");
+
+    ok (flux_cmd_argv_delete (cmd, 0) == 0,
+        "flux_cmd_argv_delete first entry");
+    ok (flux_cmd_argc (cmd) == argc - 1,
+        "flux_cmd_argc is now %d (expected %d)",
+        flux_cmd_argc (cmd), argc - 1);
+    ok (flux_cmd_argv_insert (cmd, 0, "inserted") == 0,
+        "flux_cmd_argv_insert (cmd, 0, inserted)");
+    ok (flux_cmd_argc (cmd) == argc,
+        "flux_cmd_argc is now %d (expected %d)",
+        flux_cmd_argc (cmd), argc);
+    is (flux_cmd_arg (cmd, 0), "inserted",
+        "first argument is now `inserted`");
+
+    ok (flux_cmd_argv_delete (cmd, 2) == 0,
+        "flux_cmd_argv_delete from middle of argv works");
+    ok (flux_cmd_argc (cmd) == argc - 1,
+        "flux_cmd_argc is now %d (expected %d)",
+        flux_cmd_argc (cmd), argc - 1);
+    ok (flux_cmd_argv_insert (cmd, 2, "-d") == 0,
+        "flux_cmd_argv_insert (cmd, 2, -d)");
+    is (flux_cmd_arg (cmd, 2), "-d",
+        "arg 3 is now `-d`");
+
+    av = flux_cmd_argv_expand (cmd);
+    ok (av != NULL, "flux_cmd_argv_expand ()");
+    is (av[0], "inserted", "av[0] == inserted");
+    is (av[1], "--option=foo", "av[1] == --option=foo");
+    is (av[2], "-d", "av[2] == -d");
+    is (av[3], "5", "av[3] == 5");
+    is (av[4], "bar", "av[4] == bar");
+    ok (av[5] == NULL, "av[5] == NULL");
+
+    free (av);
+    flux_cmd_destroy (cmd);
+}
+
 int main (int argc, char *argv[])
 {
     char *s;
@@ -274,6 +398,10 @@ int main (int argc, char *argv[])
     flux_cmd_destroy (cmd);
 
     test_find_opts ();
+
+    test_arg_insert_delete ();
+
+    test_stringify ();
 
     done_testing ();
     return 0;

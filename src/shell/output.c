@@ -810,8 +810,8 @@ static int shell_output_header (struct shell_output *out)
                                "stdout", "base64",
                                "stderr", "base64",
                              "count",
-                               "stdout", out->shell->info->jobspec->task_count,
-                               "stderr", out->shell->info->jobspec->task_count,
+                               "stdout", out->shell->info->total_ntasks,
+                               "stderr", out->shell->info->total_ntasks,
                              "options");
     if (!o) {
         errno = ENOMEM;
@@ -904,9 +904,9 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
                                              out) < 0)
                 goto error;
             if (output_type_requires_service (out->stdout_type))
-                out->eof_pending += shell->info->jobspec->task_count;
+                out->eof_pending += shell->info->total_ntasks;
             if (output_type_requires_service (out->stderr_type))
-                out->eof_pending += shell->info->jobspec->task_count;
+                out->eof_pending += shell->info->total_ntasks;
             if (flux_shell_add_completion_ref (shell, "output.write") < 0)
                 goto error;
             if (!(out->output = json_array ())) {

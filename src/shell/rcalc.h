@@ -34,6 +34,8 @@ rcalc_t *rcalc_createf (FILE *);
 
 void rcalc_destroy (rcalc_t *r);
 
+/*  Return # of total tasks contained in rcalc object */
+int rcalc_total_ntasks (rcalc_t *r);
 /*  Return # of total cores asssigned to rcalc object */
 int rcalc_total_cores (rcalc_t *r);
 /*  Return # of total gpus asssigned to rcalc object */
@@ -47,6 +49,8 @@ int rcalc_has_rank (rcalc_t *r, int rank);
 
 /*  Distribute ntasks across cores in r */
 int rcalc_distribute (rcalc_t *r, int ntasks);
+/*  Distribute ntasks *per-resource* of type `name` in `r` */
+int rcalc_distribute_per_resource (rcalc_t *r, const char *name, int ntasks);
 
 /*  Fill in rcalc_rankinfo for rank */
 int rcalc_get_rankinfo (rcalc_t *r, int rank, struct rcalc_rankinfo *ri);

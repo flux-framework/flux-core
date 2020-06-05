@@ -486,3 +486,6 @@ hms
 username
 submitter's
 CANCELLED
+enqueue
+nslots
+alloc

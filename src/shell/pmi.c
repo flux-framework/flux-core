@@ -446,7 +446,7 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
     snprintf (kvsname, sizeof (kvsname), "%ju", (uintmax_t)shell->jobid);
     if (!(pmi->server = pmi_simple_server_create (shell_pmi_ops,
                                                   0, // appnum
-                                                  info->jobspec->task_count,
+                                                  info->total_ntasks,
                                                   info->rankinfo.ntasks,
                                                   kvsname,
                                                   flags,
