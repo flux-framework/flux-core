@@ -133,6 +133,7 @@ TESTSCRIPTS = \
 	t2610-job-shell-mpir.t \
 	t2611-debug-emulate.t \
 	t2612-job-shell-pty.t \
+	t2613-job-shell-batch.t \
 	t2700-mini-cmd.t \
 	t2800-jobs-cmd.t \
 	t3000-mpi-basic.t \
