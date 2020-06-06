@@ -9,6 +9,7 @@
 ###############################################################
 
 import six
+import signal
 
 from flux.wrapper import Wrapper
 from flux.rpc import RPC
@@ -178,3 +179,42 @@ class Flux(Wrapper):
 
     def attr_get(self, attr_name):
         return self.flux_attr_get(attr_name).decode("utf-8")
+
+    def reactor_run(self, reactor=None, flags=0):
+        """
+        Run reactor associated with this Flux handle or reactor argument
+        if it is provided. Sets a signal watcher for SIGINT to return
+        from the reactor on Ctrl-C, and raise KeyboardInterrupt.
+        """
+        if reactor is None:
+            reactor = self.get_reactor()
+
+        reactor_interrupted = False
+
+        def reactor_interrupt(h, *args):
+            #  ensure reactor_interrupted from enclosing scope:
+            nonlocal reactor_interrupted
+            reactor_interrupted = True
+            h.reactor_stop(reactor)
+
+        with self.signal_watcher_create(signal.SIGINT, reactor_interrupt):
+            rc = self.flux_reactor_run(reactor, flags)
+            if reactor_interrupted:
+                raise KeyboardInterrupt
+
+        # If rc > 0, we need to subtract our added SIGINT watcher, which
+        # will now be destroyed since it has left scope
+        return rc if rc <= 0 else rc - 1
+
+    def reactor_stop(self, reactor=None):
+        if reactor is None:
+            reactor = self.get_reactor()
+        self.flux_reactor_stop(reactor)
+
+    def reactor_stop_error(self, reactor=None):
+        if reactor is None:
+            reactor = self.get_reactor()
+        self.flux_reactor_stop_error(reactor)
+
+
+# vi: ts=4 sw=4 expandtab
