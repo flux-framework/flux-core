@@ -1,49 +1,22 @@
 #!/bin/sh
 #
 
-test_description='Verify runlevels work properly
+test_description='Verify rc scripts excute with proper semantics
 '
 
 . `dirname $0`/sharness.sh
-test_under_flux 1 minimal
 
-test_expect_success 'sharness minimal init.run-level=2' '
-	runlevel=$(flux getattr init.run-level) &&
-	test $runlevel -eq 2
-'
-
-test_expect_success 'sharness minimal has transitioned normally thus far' '
-	flux dmesg >default.log &&
-	grep -q "Run level 1 starting" default.log &&
-	grep -q "Run level 1 Not configured" default.log &&
-	grep -q "Run level 2 starting" default.log &&
-	! grep -q "Run level 2 Not configured" default.log &&
-	! grep -q "Run level 3" default.log
-'
-
-test_expect_success 'new instance transitions appropriately' '
+test_expect_success 'initial program is run when rc1/rc3 are nullified' '
 	flux start -o,-Slog-stderr-level=6 \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
-		/bin/true 2>normal.log &&
-	grep -q "Run level 1 starting" normal.log &&
-	grep -q "Run level 1 Not configured" normal.log &&
-	grep -q "Run level 2 starting" normal.log &&
-	grep -q "Run level 2 Exited" normal.log &&
-	grep -q "Run level 3 starting" normal.log &&
-	grep -q "Run level 3 Not configured" normal.log
+		/bin/true 2>normal.log
 '
 
-test_expect_success 'rc1 failure transitions to rc3, fails instance' '
+test_expect_success 'rc1 failure causes instance failure' '
 	test_expect_code 1 flux start \
 		-o,-Sbroker.rc1_path=/bin/false,-Sbroker.rc3_path= \
 		-o,-Slog-stderr-level=6 \
-		/bin/true 2>false.log &&
-	grep -q "Run level 1 starting" false.log &&
-	grep -q "Run level 1 Exited with non-zero status" false.log &&
-	! grep -q "Run level 2 starting" false.log &&
-	! grep -q "Run level 2 Exited" false.log &&
-	grep -q "Run level 3 starting" false.log &&
-	grep -q "Run level 3 Not configured" false.log
+		sleep 3600 2>rc1_failure.log
 '
 
 test_expect_success 'rc1 bad path handled same as failure' '
@@ -53,32 +26,78 @@ test_expect_success 'rc1 bad path handled same as failure' '
 		-o,-Sbroker.rc1_path=rc1-nonexist,-Sbroker.rc3_path= \
 		-o,-Slog-stderr-level=6 \
 		/bin/true 2>bad1.log
-	) &&
-	grep -q "Run level 1 starting" bad1.log &&
-	grep -q "Run level 1 Exited with non-zero status" bad1.log &&
-	! grep -q "Run level 2 starting" bad1.log &&
-	! grep -q "Run level 2 Exited" bad1.log &&
-	grep -q "Run level 3 starting" bad1.log &&
-	grep -q "Run level 3 Not configured" bad1.log
+	)
+'
+
+test_expect_success 'default initial program is $SHELL' '
+	SHELL=/bin/sh flux start -o,-Slog-stderr-level=6 \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		</dev/null 2>shell.log &&
+	grep "rc2.0: /bin/sh Exited" shell.log
 '
 
 test_expect_success 'rc3 failure causes instance failure' '
-	! flux start \
+	test_expect_code 1 flux start \
 		-o,-Sbroker.rc3_path=/bin/false \
 		-o,-Slog-stderr-level=6 \
-		/bin/true 2>false3.log &&
-	grep -q "Run level 1 starting" false3.log &&
-	grep -q "Run level 1 Exited" false3.log &&
-	grep -q "Run level 2 starting" false3.log &&
-	grep -q "Run level 2 Exited" false3.log &&
-	grep -q "Run level 3 starting" false3.log &&
-	grep -q "Run level 3 Exited with non-zero status" false3.log
+		/bin/true 2>rc3_failure.log
 '
 
-test_expect_success 'instance with no rc2 terminated cleanly by timeout' '
+test_expect_success 'broker.rc2_none terminates by signal without error' '
 	run_timeout -s ALRM 0.5 flux start \
 		-o,-Slog-stderr-level=6 \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Sbroker.rc2_none
+'
+
+test_expect_success 'flux admin cleanup-push /bin/true works' '
+	flux start -o,-Slog-stderr-level=6 \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		flux admin cleanup-push /bin/true
+'
+
+test_expect_success 'flux admin cleanup-push /bin/false causes instance failure' '
+	test_expect_code 1 flux start -o,-Slog-stderr-level=6 \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		flux admin cleanup-push /bin/false
+'
+
+test_expect_success 'cleanup does not run if rc1 fails' '
+	test_expect_code 1 flux start -o,-Slog-stderr-level=6 \
+		-o,-Sbroker.rc1_path=/bin/false,-Sbroker.rc3_path= \
+		flux admin cleanup-push memorable-string 2>nocleanup.err && \
+	test_must_fail grep memorable-string nocleanup.err
+'
+
+test_expect_success 'flux admin cleanup-push (empty) fails' '
+	test_expect_code 1 flux start \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		flux admin cleanup-push "" 2>push.err &&
+	grep "cannot push an empty command line" push.err
+'
+
+test_expect_success 'flux admin cleanup-push with no commands fails' '
+	test_expect_code 1 flux start \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		flux admin cleanup-push </dev/null 2>push2.err &&
+	grep "commands array is empty" push2.err
+'
+
+test_expect_success 'flux admin cleanup-push (stdin) works' '
+	echo /bin/true | flux start -o,-Slog-stderr-level=6 \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		flux admin cleanup-push 2>push-stdin.err &&
+	grep cleanup.0 push-stdin.err
+'
+
+test_expect_success 'flux admin cleanup-push (stdin) retains cmd block order' '
+	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,-Slog-stderr-level=6 \
+		flux admin cleanup-push <<-EOT 2>hello.err &&
+	echo Hello world
+	echo Hello solar system
+	EOT
+	grep "cleanup.0: Hello world" hello.err &&
+	grep "cleanup.1: Hello solar system" hello.err
 '
 
 test_expect_success 'rc1 environment is as expected' '

@@ -18,8 +18,8 @@
 #include "heartbeat.h"
 #include "service.h"
 
-typedef struct module_struct module_t;
-typedef struct modhash_struct modhash_t;
+typedef struct broker_module module_t;
+typedef struct modhash modhash_t;
 typedef void (*modpoller_cb_f)(module_t *p, void *arg);
 typedef void (*module_status_cb_f)(module_t *p, int prev_status, void *arg);
 

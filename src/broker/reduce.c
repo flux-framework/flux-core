@@ -17,7 +17,7 @@
 
 #include "reduce.h"
 
-struct flux_reduce_struct {
+struct flux_reduce {
     struct flux_reduce_ops ops;
     void *arg;
 

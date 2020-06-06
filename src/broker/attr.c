@@ -16,7 +16,7 @@
 
 #include "attr.h"
 
-struct attr_struct {
+struct broker_attr {
     zhash_t *hash;
     flux_msg_handler_t **handlers;
 };

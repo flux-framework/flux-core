@@ -48,7 +48,7 @@
 
 
 #define MODULE_MAGIC    0xfeefbe01
-struct module_struct {
+struct broker_module {
     int magic;
 
     uint32_t rank;
@@ -90,7 +90,7 @@ struct module_struct {
     zlist_t *subs;          /* subscription strings */
 };
 
-struct modhash_struct {
+struct modhash {
     zhash_t *zh_byuuid;
     uint32_t rank;
     flux_t *broker_h;

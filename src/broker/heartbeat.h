@@ -25,7 +25,7 @@
  * heartbeat event, not its generation.
  */
 
-typedef struct heartbeat_struct heartbeat_t;
+typedef struct heartbeat heartbeat_t;
 
 heartbeat_t *heartbeat_create (void);
 void heartbeat_destroy (heartbeat_t *hb);

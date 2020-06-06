@@ -50,3 +50,9 @@ for rcdir in $all_dirs; do
     done
 done
 shopt -u nullglob
+
+flux admin cleanup-push <<-EOT
+	flux queue stop --quiet
+	flux job cancelall --user=all --quiet -f --states RUN
+	flux queue idle --quiet
+EOT
