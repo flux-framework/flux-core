@@ -135,3 +135,10 @@ class Future(WrapperPimpl):
 
     def wait_for(self, timeout=-1.0):
         self.pimpl.wait_for(timeout)
+
+    def get(self):
+        """
+        Base Future.get() method. Does not return a result, just blocks
+        until future is fulfilled and throws OSError on failure.
+        """
+        self.pimpl.flux_future_get(ffi.NULL)
