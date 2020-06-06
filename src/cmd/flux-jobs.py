@@ -248,7 +248,7 @@ def list_id_cb(future, arg):
 
     cbargs["count"] += 1
     if cbargs["count"] == cbargs["total"]:
-        cbargs["flux_handle"].reactor_stop(future.get_reactor())
+        cbargs["flux_handle"].reactor_stop()
 
 
 def fetch_jobs_ids(flux_handle, args, attrs):
@@ -261,7 +261,7 @@ def fetch_jobs_ids(flux_handle, args, attrs):
     for jobid in args.jobids:
         rpc_handle = flux.job.job_list_id(flux_handle, jobid, list(attrs))
         rpc_handle.then(list_id_cb, arg=(cbargs, jobid))
-    ret = flux_handle.reactor_run(rpc_handle.get_reactor(), 0)
+    ret = flux_handle.reactor_run()
     if ret < 0:
         sys.exit(1)
     return cbargs["jobs"]
