@@ -16,6 +16,7 @@ import sys
 import json
 import unittest
 import datetime
+import signal
 from glob import glob
 
 import yaml
@@ -25,10 +26,27 @@ import flux
 import flux.kvs
 from flux import job
 from flux.job import Jobspec, JobspecV1, ffi
+from flux.future import Future
 
 
 def __flux_size():
     return 1
+
+
+def job_event_wait(h, jobid, name, eventlog="eventlog", flags=0):
+    """
+    Synchronously wait for job event 'name' in eventlog 'eventlog'
+    """
+    result = ffi.new("char *[1]")
+    future = Future(h.job_event_watch(int(jobid), eventlog, flags))
+    while True:
+        h.job_event_watch_get(future, result)
+        if result == ffi.NULL:
+            return None
+        event = json.loads(ffi.string(result[0]).decode("utf-8"))
+        if event["name"] == name:
+            return event
+        future.reset()
 
 
 def yaml_to_json(s):
@@ -161,6 +179,39 @@ class TestJob(unittest.TestCase):
             self.assertTrue(flux.kvs.exists(self.fh, job_kvs_dir.path))
             self.assertTrue(flux.kvs.isdir(self.fh, job_kvs_dir.path))
 
+    def test_14_job_cancel_invalid_args(self):
+        with self.assertRaises(ValueError):
+            job.kill(self.fh, "abc")
+        with self.assertRaises(ValueError):
+            job.cancel(self.fh, "abc")
+        with self.assertRaises(OSError):
+            job.kill(self.fh, 123)
+        with self.assertRaises(OSError):
+            job.cancel(self.fh, 123)
+
+    def test_15_job_cancel(self):
+        self.sleep_jobspec = JobspecV1.from_command(["sleep", "1000"])
+        jobid = job.submit(self.fh, self.sleep_jobspec, waitable=True)
+        job.cancel(self.fh, jobid)
+        fut = job.wait_async(self.fh, jobid=jobid).wait_for(5.0)
+        return_id, success, errmsg = fut.get_status()
+        self.assertEqual(return_id, jobid)
+        self.assertFalse(success)
+
+    def test_16_job_kill(self):
+        self.sleep_jobspec = JobspecV1.from_command(["sleep", "1000"])
+        jobid = job.submit(self.fh, self.sleep_jobspec, waitable=True)
+
+        #  Wait for shell to fully start to avoid delay in signal
+        job_event_wait(
+            self.fh, jobid, name="shell.start", eventlog="guest.exec.eventlog"
+        )
+        job.kill(self.fh, jobid, signum=signal.SIGKILL)
+        fut = job.wait_async(self.fh, jobid=jobid).wait_for(5.0)
+        return_id, success, errmsg = fut.get_status()
+        self.assertEqual(return_id, jobid)
+        self.assertFalse(success)
+
 
 if __name__ == "__main__":
     from subflux import rerun_under_flux
@@ -169,3 +220,6 @@ if __name__ == "__main__":
         from pycotap import TAPTestRunner
 
         unittest.main(testRunner=TAPTestRunner())
+
+
+# vi: ts=4 sw=4 expandtab
