@@ -67,7 +67,7 @@ class TestServiceAddRemove(unittest.TestCase):
         def cb(f, t, msg, arg):
             cb_called[0] = True
             self.assertEqual(msg.payload, p)
-            f.reactor_stop(f.get_reactor())
+            f.reactor_stop()
 
         w2 = self.f.msg_watcher_create(cb, FLUX_MSGTYPE_RESPONSE, "foo.echo")
         w2.start()
@@ -80,7 +80,7 @@ class TestServiceAddRemove(unittest.TestCase):
         ret = self.f.send(m)
         self.assertEqual(ret, 0)
 
-        ret = self.f.reactor_run(self.f.get_reactor(), 0)
+        ret = self.f.reactor_run()
         self.assertTrue(ret >= 0)
         self.assertTrue(cb_called[0])
         w2.stop()
