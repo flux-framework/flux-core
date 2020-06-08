@@ -17,10 +17,10 @@
 #include "init.h"
 
 enum {
-    FLUX_SCHED_ALLOC_SUCCESS = 0,
-    FLUX_SCHED_ALLOC_NOTE    = 1,
-    FLUX_SCHED_ALLOC_DENIED  = 2,
-    FLUX_SCHED_ALLOC_CANCEL  = 3,
+    FLUX_SCHED_ALLOC_SUCCESS  = 0,
+    FLUX_SCHED_ALLOC_METADATA = 1,
+    FLUX_SCHED_ALLOC_DENIED   = 2,
+    FLUX_SCHED_ALLOC_CANCEL   = 3,
 };
 
 /* Decode an alloc request message.
@@ -37,8 +37,8 @@ int schedutil_alloc_request_decode (const flux_msg_t *msg,
  * is finally terminated with alloc_respond_denied() or alloc_respond_R().
  * Return 0 on success, -1 on error with errno set.
  */
-int schedutil_alloc_respond_note (schedutil_t *util, const flux_msg_t *msg,
-                                  const char *note);
+int schedutil_alloc_respond_metadata (schedutil_t *util, const flux_msg_t *msg,
+                                      const char *metadata);
 
 /* Respond to alloc request message - the job cannot run.
  * Include human readable error message in 'note'.

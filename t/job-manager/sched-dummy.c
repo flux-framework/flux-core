@@ -102,9 +102,9 @@ void try_alloc (struct sched_ctx *sc)
             sc->cores_free--;
             goto done;
         }
-        if (schedutil_alloc_respond_note (sc->schedutil_ctx, sc->job->msg,
-                                          "no cores available") < 0)
-            flux_log_error (sc->h, "schedutil_alloc_respond_note");
+        if (schedutil_alloc_respond_metadata (sc->schedutil_ctx, sc->job->msg,
+                                              "no cores available") < 0)
+            flux_log_error (sc->h, "schedutil_alloc_respond_metadata");
     }
     return;
 done:

@@ -50,10 +50,11 @@ static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
     return rc;
 }
 
-int schedutil_alloc_respond_note (schedutil_t *util, const flux_msg_t *msg,
-                                  const char *note)
+int schedutil_alloc_respond_metadata (schedutil_t *util, const flux_msg_t *msg,
+                                      const char *metadata)
 {
-    return schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_NOTE, note);
+    return schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_METADATA,
+                                    metadata);
 }
 
 int schedutil_alloc_respond_denied (schedutil_t *util, const flux_msg_t *msg,

@@ -94,7 +94,7 @@ int main (int argc, char *argv[])
         double t_submit;
         char timestr[80];
         flux_job_state_t state;
-        char *note = NULL;
+        char *metadata = NULL;
 
         if (json_unpack (value, "{s:I s:i s:i s:f s:i s?:s}",
                                 "id", &id,
@@ -102,7 +102,7 @@ int main (int argc, char *argv[])
                                 "userid", &userid,
                                 "t_submit", &t_submit,
                                 "state", &state,
-                                "note", &note) < 0)
+                                "metadata", &metadata) < 0)
             log_msg_exit ("error parsing job data");
         if (iso_timestr (t_submit, timestr, sizeof (timestr)) < 0)
             log_err_exit ("time conversion error");
@@ -112,8 +112,8 @@ int main (int argc, char *argv[])
                 (unsigned long)userid,
                 priority,
                 timestr,
-                note ? "\t" : "",
-                note ? note : "");
+                metadata ? "\t" : "",
+                metadata ? metadata : "");
     }
 
     flux_future_destroy (f);

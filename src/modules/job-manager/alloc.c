@@ -34,7 +34,7 @@
  *   {"id":I, "type":i, "note"?:s}
  * Where type is one of:
  * 0 - resources allocated (sched commits R to KVS before responding)
- * 1 - annotation (just updates note, see below)
+ * 1 - metadata annotation (adds metadata info about allocation, see below)
  * 2 - job cannot run (note is set to error string)
  * 3 - alloc was canceled
  * Type 0, 2, 3 are taken as final responses, type 1 is not.
@@ -75,8 +75,9 @@
  * 3) alloc/free requests and responses are matched using jobid, not
  *    the normal matchtag, for scalability.
  * 4) a normal RPC error response to alloc/free triggers teardown
- * 5) 'note' in alloc response is intended to be human readable note displayed
- *    with job info (could be estimated start time, or error detail)
+ * 5) 'metadata' in alloc response is intended to be human readable
+ *    note displayed with job info (could be estimated start time, or
+ *    error detail)
  *
  * TODO:
  * - handle type=1 annotation for queue listing (currently ignored)
@@ -282,13 +283,13 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "note", note ? note : "") < 0)
             goto teardown;
         break;
-    case FLUX_SCHED_ALLOC_NOTE: // annotation
-        if (job->alloc_pending_note) {
-            free (job->alloc_pending_note);
-            job->alloc_pending_note = NULL;
+    case FLUX_SCHED_ALLOC_METADATA: // annotation
+        if (job->alloc_pending_metadata) {
+            free (job->alloc_pending_metadata);
+            job->alloc_pending_metadata = NULL;
         }
         if (note) {
-            if (!(job->alloc_pending_note = strdup (note)))
+            if (!(job->alloc_pending_metadata = strdup (note)))
                 goto teardown;
         }
         break;
