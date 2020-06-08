@@ -307,6 +307,10 @@ int main (int argc, char *argv[])
 
     plan (NO_PLAN);
 
+    /* these tests require bourne shell */
+    if (setenv ("SHELL", "/bin/sh", 1) < 0)
+        BAIL_OUT ("setenv set /bin/sh failed");
+
     if (!(logs = zlist_new ()))
         BAIL_OUT ("zlist_new failed");
     if (!(r = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
