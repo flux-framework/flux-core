@@ -31,7 +31,7 @@
  * Job manager sends sched.alloc request:
  *   {"id":I, "priority":i, "userid":i, "t_submit":f}
  * Scheduler responds with:
- *   {"id":I, "type":i, "note"?:s}
+ *   {"id":I, "type":i, "note"?:s, "metadata"?:s}
  * Where type is one of:
  * 0 - resources allocated (sched commits R to KVS before responding)
  * 1 - metadata annotation (adds metadata info about allocation, see below)
@@ -245,14 +245,16 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_jobid_t id;
     int type;
     const char *note = NULL;
+    const char *metadata = NULL;
     struct job *job;
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown; // ENOSYS here if scheduler not loaded/shutting down
-    if (flux_msg_unpack (msg, "{s:I s:i s?:s}",
+    if (flux_msg_unpack (msg, "{s:I s:i s?:s s?:s}",
                               "id", &id,
                               "type", &type,
-                              "note", &note) < 0)
+                              "note", &note,
+                              "metadata", &metadata) < 0)
         goto teardown;
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log (h, LOG_ERR, "sched.alloc-response: id=%ju not active",
@@ -288,8 +290,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             free (job->alloc_pending_metadata);
             job->alloc_pending_metadata = NULL;
         }
-        if (note) {
-            if (!(job->alloc_pending_metadata = strdup (note)))
+        if (metadata) {
+            if (!(job->alloc_pending_metadata = strdup (metadata)))
                 goto teardown;
         }
         break;
