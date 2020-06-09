@@ -135,6 +135,7 @@ class Future(WrapperPimpl):
 
     def wait_for(self, timeout=-1.0):
         self.pimpl.wait_for(timeout)
+        return self
 
     def get(self):
         """
