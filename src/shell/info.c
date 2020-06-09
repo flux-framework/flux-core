@@ -150,7 +150,11 @@ static int shell_init_jobinfo (flux_shell_t *shell,
         shell_log_error ("error parsing jobspec: %s", error.text);
         goto out;
     }
-    if (!(info->rcalc = rcalc_create (R))) {
+    if (!(info->R = json_loads (R, 0, &error))) {
+        shell_log_error ("error parsing R: %s", error.text);
+        goto out;
+    }
+    if (!(info->rcalc = rcalc_create_json (info->R))) {
         shell_log_error ("error decoding R");
         goto out;
     }
@@ -241,6 +245,7 @@ void shell_info_destroy (struct shell_info *info)
 {
     if (info) {
         int saved_errno = errno;
+        json_decref (info->R);
         jobspec_destroy (info->jobspec);
         rcalc_destroy (info->rcalc);
         free (info);
