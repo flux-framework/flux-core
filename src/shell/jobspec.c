@@ -63,6 +63,9 @@ static int parse_res_level (json_t *o,
 void jobspec_destroy (struct jobspec *job)
 {
     if (job) {
+        /*  refcounts were incremented on environment, options */
+        json_decref (job->environment);
+        json_decref (job->options);
         json_decref (job->jobspec);
         free (job);
     }
@@ -82,8 +85,19 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
     }
     if (!(job->jobspec = json_loads (jobspec, 0, error)))
         goto error;
+
+    /* N.B.: members of jobspec like environment and shell.options may
+     *  be modified with json_object_update_new() via the shell API
+     *  calls flux_shell_setenvf(3), flux_shell_unsetenv(3), and
+     *  flux_shell_setopt(3). Therefore, the refcount of these objects
+     *  is incremented during unpack (via the "O" specifier), so that
+     *  the objects have json_decref() called directly on them to
+     *  avoid potential leaks (the json_decref() of the outer jobspec
+     *  object itself doesn't seem to catch the changes to these inner
+     *  json_t * objects)
+     */
     if (json_unpack_ex (job->jobspec, error, 0,
-                        "{s:i s:o s:o s:{s:{s?:s s?:o s?:{s?:o}}}}",
+                        "{s:i s:o s:o s:{s:{s?:s s?:O s?:{s?:O}}}}",
                         "version", &version,
                         "resources", &resources,
                         "tasks", &tasks,
