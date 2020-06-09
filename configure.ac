@@ -494,6 +494,7 @@ AC_CONFIG_FILES( \
   src/modules/kvs/Makefile \
   src/modules/kvs-watch/Makefile \
   src/modules/content-sqlite/Makefile \
+  src/modules/content-files/Makefile \
   src/modules/barrier/Makefile \
   src/modules/cron/Makefile \
   src/modules/aggregator/Makefile \
