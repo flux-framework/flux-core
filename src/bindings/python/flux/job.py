@@ -15,6 +15,7 @@ import json
 import errno
 import datetime
 import collections
+import signal
 
 import six
 import yaml
@@ -265,6 +266,58 @@ def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
     """
     future = wait_async(flux_handle, jobid)
     return future.get_status()
+
+
+def kill_async(flux_handle, jobid, signum=None):
+    """Send a signal to a running job asynchronously
+
+    :param flux_handle: handle for Flux broker from flux.Flux()
+    :type flux_handle: Flux
+    :param jobid: the job ID of the job to kill
+    :param signum: signal to send (default SIGTERM)
+    :returns: a Future
+    :rtype: Future
+    """
+    if not signum:
+        signum = signal.SIGTERM
+    return Future(RAW.kill(flux_handle, int(jobid), signum))
+
+
+def kill(flux_handle, jobid, signum=None):
+    """Send a signal to a running job.
+
+    :param flux_handle: handle for Flux broker from flux.Flux()
+    :type flux_handle: Flux
+    :param jobid: the job ID of the job to kill
+    :param signum: signal to send (default SIGTERM)
+    """
+    return kill_async(flux_handle, jobid, signum).get()
+
+
+def cancel_async(flux_handle, jobid, reason=None):
+    """Cancel a pending or or running job asynchronously
+
+    :param flux_handle: handle for Flux broker from flux.Flux()
+    :type flux_handle: Flux
+    :param jobid: the job ID of the job to cancel
+    :returns: a Future
+    :rtype: Future
+
+    """
+    if not reason:
+        reason = ffi.NULL
+    return Future(RAW.cancel(flux_handle, int(jobid), reason))
+
+
+def cancel(flux_handle, jobid, signum=None):
+    """Cancel a pending or or running job
+
+    :param flux_handle: handle for Flux broker from flux.Flux()
+    :type flux_handle: Flux
+    :param jobid: the job ID of the job to cancel
+
+    """
+    return cancel_async(flux_handle, jobid, signum).get()
 
 
 class JobListRPC(RPC):
