@@ -446,7 +446,7 @@ class Jobspec(object):
             raise TypeError("tasks must be a sequence")
         if not isinstance(version, int):
             raise TypeError("version must be an integer")
-        if attributes is not None and not isinstance(attributes, abc.Mapping):
+        if not isinstance(attributes, abc.Mapping):
             raise TypeError("attributes must be a mapping")
         elif version < 1:
             raise ValueError("version must be >= 1")
