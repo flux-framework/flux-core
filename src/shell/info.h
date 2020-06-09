@@ -26,6 +26,7 @@ struct shell_info {
     int shell_rank;
     int shell_size;
     int total_ntasks;
+    json_t *R;
     struct jobspec *jobspec;
     rcalc_t *rcalc;
     struct rcalc_rankinfo rankinfo;

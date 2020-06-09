@@ -229,7 +229,7 @@ void rcalc_destroy (rcalc_t *r)
     free (r);
 }
 
-static rcalc_t * rcalc_create_json (json_t *o)
+rcalc_t * rcalc_create_json (json_t *o)
 {
     int i;
     int version;

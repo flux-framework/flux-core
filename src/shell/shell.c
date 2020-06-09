@@ -343,13 +343,14 @@ static json_t *flux_shell_get_info_object (flux_shell_t *shell)
         return o;
 
     if (!(o = json_pack_ex (&err, 0,
-                            "{ s:I s:i s:i s:i s:s s:O s:{ s:i s:b }}",
+                            "{ s:I s:i s:i s:i s:s s:O s:O s:{ s:i s:b }}",
                             "jobid", shell->info->jobid,
                             "rank",  shell->info->shell_rank,
                             "size",  shell->info->shell_size,
                             "ntasks", shell->info->total_ntasks,
                             "service", shell_svc_name (shell->svc),
                             "jobspec", shell->info->jobspec->jobspec,
+                            "R", shell->info->R,
                             "options",
                                "verbose", shell->verbose,
                                "standalone", shell->standalone)))

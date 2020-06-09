@@ -29,6 +29,8 @@ type_ok (info.rank, "number",
     "shell.info.rank is a number")
 type_ok (info.jobspec, "table",
      "info.jobspec is a table")
+type_ok (info.R, "table",
+    "info.R is a table")
 is (info.rank, 0,
     "shell.info.rank is expected value");
 ok (info.options.standalone,
@@ -37,6 +39,10 @@ ok (info.options.standalone,
 jobspec = shell.info.jobspec
 type_ok (jobspec, "table",
     "shell.info.jobspec is a table")
+
+R = shell.info.R
+type_ok (R, "table",
+    "shell.info.R is a table")
 
 rankinfo = shell.rankinfo
 type_ok (rankinfo, "table",
