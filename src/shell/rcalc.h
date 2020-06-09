@@ -12,6 +12,7 @@
 #define SHELL_RCALC_H
 
 #include <sched.h>
+#include <jansson.h>
 #include <flux/core.h>
 
 typedef struct rcalc rcalc_t;
@@ -29,6 +30,10 @@ struct rcalc_rankinfo {
 
 /* Create resource calc object from JSON string in "Rlite" format */
 rcalc_t *rcalc_create (const char *json_in);
+
+/* As above, but from Jansson json_t object */
+rcalc_t *rcalc_create_json (json_t *R);
+
 /* Same as above, but read JSON input from file */
 rcalc_t *rcalc_createf (FILE *);
 
