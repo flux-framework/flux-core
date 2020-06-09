@@ -35,10 +35,15 @@ get_annotation() {
         echo $note
 }
 
-check_annotation() {
+check_annotation_msg() {
 	local id=$1
 	for try in $(seq 1 10); do
-		test "$(get_annotation $id)" = "no cores available" && return 0
+                metadata="$(get_annotation $id)"
+                echo $metadata
+                if echo $metadata | jq -e ".msg == \"no cores available\""
+                then
+                    return 0
+                fi
                 sleep 0.5
 	done
 	return 1
@@ -100,7 +105,7 @@ test_expect_success 'job-manager: job state RRSSS' '
 test_expect_success 'job-manager: annotate job id 3 (RRSSS)' '
 	no_annotation $(cat job1.id) &&
 	no_annotation $(cat job2.id) &&
-        check_annotation $(cat job3.id) &&
+        check_annotation_msg $(cat job3.id) &&
 	no_annotation $(cat job4.id) &&
 	no_annotation $(cat job5.id)
 '
@@ -125,7 +130,7 @@ test_expect_success 'job-manager: annotate job id 4 (RIRSS)' '
 	no_annotation $(cat job1.id) &&
 	no_annotation $(cat job2.id) &&
 	no_annotation $(cat job3.id) &&
-        check_annotation $(cat job4.id) &&
+        check_annotation_msg $(cat job4.id) &&
 	no_annotation $(cat job5.id)
 '
 
