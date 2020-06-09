@@ -29,3 +29,4 @@ flux exec -r all -x 0 flux module remove -f kvs
 flux module remove -f kvs
 flux content flush
 flux module remove -f content-sqlite
+flux module remove -f content-files
