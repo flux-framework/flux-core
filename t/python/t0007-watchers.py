@@ -11,7 +11,8 @@
 ###############################################################
 
 import unittest
-
+import os
+import signal
 import flux
 from subflux import rerun_under_flux
 
@@ -53,11 +54,11 @@ class TestTimer(unittest.TestCase):
 
         def cb(x, y, z, w):
             timer_ran[0] = True
-            x.reactor_stop(self.f.get_reactor())
+            x.reactor_stop()
 
         with self.f.timer_watcher_create(0.1, cb) as timer:
             self.assertIsNotNone(timer, msg="timeout create")
-            ret = self.f.reactor_run(self.f.get_reactor(), 0)
+            ret = self.f.reactor_run()
             self.assertEqual(ret, 0, msg="Reactor exit")
             self.assertTrue(timer_ran[0], msg="Timer did not run successfully")
 
@@ -76,8 +77,70 @@ class TestTimer(unittest.TestCase):
             self.assertIsNotNone(mw)
 
 
+class TestSignal(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        self.f = flux.Flux()
+
+    def test_signal_watcher_invalid(self):
+        """Add an invalid signal"""
+        with self.assertRaises(EnvironmentError):
+            self.f.signal_watcher_create(
+                -500, lambda x, y: x.fatal_error("signal should not fire")
+            )
+        with self.assertRaises(EnvironmentError):
+            self.f.signal_watcher_create(
+                0, lambda x, y: x.fatal_error("signal should not fire")
+            )
+        with self.assertRaises(EnvironmentError):
+            self.f.signal_watcher_create(
+                500, lambda x, y: x.fatal_error("signal should not fire")
+            )
+
+    def test_s0_signal_watcher_add(self):
+        """Add a signal watcher"""
+        with self.f.signal_watcher_create(
+            2, lambda x, y, z, w: x.fatal_error("signal should not fire")
+        ) as sigw:
+            self.assertIsNotNone(sigw)
+
+    def test_s1_signal_watcher_remove(self):
+        """Remove a timer"""
+        sigw = self.f.signal_watcher_create(
+            2, lambda x, y: x.fatal_error("signal should not fire")
+        )
+        sigw.stop()
+        sigw.destroy()
+
+    def test_signal_watcher(self):
+        cb_called = [False]
+
+        def cb(handle, watcher, signum, args):
+            cb_called[0] = True
+            handle.reactor_stop()
+
+        def raise_signal(handle, wathcer, revents, args):
+            os.kill(os.getpid(), signal.SIGUSR1)
+
+        def stop(h, w, r, y):
+            h.reactor_stop()
+
+        with self.f.signal_watcher_create(signal.SIGUSR1, cb) as watcher:
+            self.assertIsNotNone(watcher, msg="signalWatcher create")
+            to1 = self.f.timer_watcher_create(0.10, raise_signal)
+            to2 = self.f.timer_watcher_create(0.15, stop)
+            to1.start()
+            to2.start()
+            rc = self.f.reactor_run()
+            self.assertTrue(rc >= 0, msg="reactor exit")
+            self.assertTrue(cb_called[0], "Signal Watcher Called")
+
+
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
         from pycotap import TAPTestRunner
 
         unittest.main(testRunner=TAPTestRunner())
+
+
+# vi: ts=4 sw=4 expandtab

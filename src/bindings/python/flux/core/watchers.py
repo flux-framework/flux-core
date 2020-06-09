@@ -9,9 +9,11 @@
 ###############################################################
 
 import abc
+import errno
+import signal
 from flux.core.inner import raw, lib, ffi
 
-__all__ = ["TimerWatcher", "FDWatcher"]
+__all__ = ["TimerWatcher", "FDWatcher", "SignalWatcher"]
 
 
 class Watcher(object):
@@ -99,3 +101,37 @@ class FDWatcher(Watcher):
                 self.wargs,
             )
         )
+
+
+@ffi.def_extern()
+def signal_handler_wrapper(unused1, unused2, revents, opaque_handle):
+    del unused1, unused2  # unused arguments
+    watcher = ffi.from_handle(opaque_handle)
+    signal_int = raw.signal_watcher_get_signum(watcher.handle)
+    watcher.callback(watcher.flux_handle, watcher, signal_int, watcher.args)
+
+
+class SignalWatcher(Watcher):
+    def __init__(self, flux_handle, signal_int, callback, args=None):
+        self.flux_handle = flux_handle
+        self.signal_int = signal_int
+        self.callback = callback
+        self.args = args
+        self.handle = None
+        self.wargs = ffi.new_handle(self)
+        super(SignalWatcher, self).__init__(
+            raw.flux_signal_watcher_create(
+                raw.flux_get_reactor(flux_handle),
+                self.signal_int,
+                lib.signal_handler_wrapper,
+                self.wargs,
+            )
+        )
+        # N.B.: check for error only after SignalWatcher object fully
+        #  initialized to avoid 'no attribute self.handle' in __del__
+        #  method.
+        if signal_int < 1 or signal_int >= signal.NSIG:
+            raise OSError(errno.EINVAL, "invalid signal number")
+
+
+# vi: ts=4 sw=4 expandtab

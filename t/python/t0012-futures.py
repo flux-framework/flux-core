@@ -78,7 +78,7 @@ class TestHandle(unittest.TestCase):
         self.f.rpc(b"cmb.ping", self.ping_payload).then(then_cb, arg=self.ping_payload)
         # force a full garbage collection pass to test that our anonymous RPC doesn't disappear
         gc.collect(2)
-        ret = self.f.reactor_run(self.f.get_reactor(), 0)
+        ret = self.f.reactor_run()
         self.assertGreaterEqual(ret, 0, msg="Reactor exited with {}".format(ret))
         self.assertTrue(cb_ran[0], msg="Callback did not run successfully")
 
@@ -119,7 +119,7 @@ class TestHandle(unittest.TestCase):
         def continuation_cb(future, arg):
             arg["count"] += 1
             if arg["count"] >= arg["target"]:
-                self.f.reactor_stop(self.f.get_reactor())
+                self.f.reactor_stop()
             future.reset()
 
         def service_cb(fh, t, msg, arg):
@@ -138,7 +138,7 @@ class TestHandle(unittest.TestCase):
         self.f.rpc("rpctest.multi", {"count": arg["target"]}).then(
             continuation_cb, arg=arg
         )
-        ret = self.f.reactor_run(self.f.get_reactor(), 0)
+        ret = self.f.reactor_run()
         self.assertEqual(arg["count"], arg["target"])
 
         watcher.stop()

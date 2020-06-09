@@ -39,7 +39,7 @@ h = flux.Flux()
 for i in range(njobs):
     job.submit_async(h, jobspec).then(submit_cb)
 
-if h.reactor_run(h.get_reactor(), 0) < 0:
+if h.reactor_run() < 0:
     h.fatal_error("reactor_run failed")
 
 # vim: tabstop=4 shiftwidth=4 expandtab
