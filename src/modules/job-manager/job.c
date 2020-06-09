@@ -27,7 +27,7 @@ void job_decref (struct job *job)
         int saved_errno = errno;
         json_decref (job->end_event);
         flux_msg_decref (job->waiter);
-        free (job->alloc_pending_metadata);
+        json_decref (job->alloc_pending_metadata);
         free (job);
         errno = saved_errno;
     }

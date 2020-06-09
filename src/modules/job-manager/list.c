@@ -54,9 +54,9 @@ int list_append_job (json_t *jobs, struct job *job)
         return -1;
     }
     if (job->alloc_pending && job->alloc_pending_metadata) {
-        json_t *metadata = json_string (job->alloc_pending_metadata);
-        if (!metadata || json_object_set_new (o, "metadata", metadata) < 0) {
-            json_decref (metadata);
+        if (json_object_set (o,
+                             "metadata",
+                             job->alloc_pending_metadata) < 0) {
             json_decref (o);
             errno = ENOMEM;
             return -1;

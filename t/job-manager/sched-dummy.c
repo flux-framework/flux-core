@@ -88,6 +88,7 @@ error:
 void try_alloc (struct sched_ctx *sc)
 {
     if (sc->job) {
+        const char *metadata = "{\"msg\":\"no cores available\"}";
         if (flux_module_debug_test (sc->h, DEBUG_FAIL_ALLOC, false)) {
             if (schedutil_alloc_respond_denied (sc->schedutil_ctx,
                                                 sc->job->msg,
@@ -103,7 +104,7 @@ void try_alloc (struct sched_ctx *sc)
             goto done;
         }
         if (schedutil_alloc_respond_metadata (sc->schedutil_ctx, sc->job->msg,
-                                              "no cores available") < 0)
+                                              metadata) < 0)
             flux_log_error (sc->h, "schedutil_alloc_respond_metadata");
     }
     return;

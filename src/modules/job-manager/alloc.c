@@ -31,7 +31,7 @@
  * Job manager sends sched.alloc request:
  *   {"id":I, "priority":i, "userid":i, "t_submit":f}
  * Scheduler responds with:
- *   {"id":I, "type":i, "note"?:s, "metadata"?:s}
+ *   {"id":I, "type":i, "note"?:s, "metadata"?:o}
  * Where type is one of:
  * 0 - resources allocated (sched commits R to KVS before responding)
  * 1 - metadata annotation (adds metadata info about allocation, see below)
@@ -245,12 +245,12 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_jobid_t id;
     int type;
     const char *note = NULL;
-    const char *metadata = NULL;
+    json_t *metadata = NULL;
     struct job *job;
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown; // ENOSYS here if scheduler not loaded/shutting down
-    if (flux_msg_unpack (msg, "{s:I s:i s?:s s?:s}",
+    if (flux_msg_unpack (msg, "{s:I s:i s?:s s?:o}",
                               "id", &id,
                               "type", &type,
                               "note", &note,
@@ -287,13 +287,11 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         break;
     case FLUX_SCHED_ALLOC_METADATA: // annotation
         if (job->alloc_pending_metadata) {
-            free (job->alloc_pending_metadata);
+            json_decref (job->alloc_pending_metadata);
             job->alloc_pending_metadata = NULL;
         }
-        if (metadata) {
-            if (!(job->alloc_pending_metadata = strdup (metadata)))
-                goto teardown;
-        }
+        if (metadata)
+            job->alloc_pending_metadata = json_incref (metadata);
         break;
     case FLUX_SCHED_ALLOC_DENIED: // error
         alloc->alloc_pending_count--;

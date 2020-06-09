@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "schedutil_private.h"
 #include "init.h"
@@ -32,7 +33,7 @@ int schedutil_alloc_request_decode (const flux_msg_t *msg,
 
 static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
                                     int type, const char *note,
-                                    const char *metadata)
+                                    json_t *metadata)
 {
     flux_jobid_t id;
     int rc;
@@ -45,7 +46,7 @@ static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
                                         "type", type,
                                         "note", note);
     else if (metadata)
-        rc = flux_respond_pack (h, msg, "{s:I s:i s:s}",
+        rc = flux_respond_pack (h, msg, "{s:I s:i s:O}",
                                         "id", id,
                                         "type", type,
                                         "metadata", metadata);
@@ -59,8 +60,17 @@ static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
 int schedutil_alloc_respond_metadata (schedutil_t *util, const flux_msg_t *msg,
                                       const char *metadata)
 {
-    return schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_METADATA,
-                                    NULL, metadata);
+    json_t *o = json_loads (metadata, 0, NULL);
+    int rc;
+    if (!o || !json_is_object (o)) {
+        json_decref (o);
+        errno = EINVAL;
+        return -1;
+    }
+    rc = schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_METADATA,
+                                  NULL, o);
+    json_decref (o);
+    return rc;
 }
 
 int schedutil_alloc_respond_denied (schedutil_t *util, const flux_msg_t *msg,
