@@ -98,12 +98,20 @@ int libjj_get_counts (const char *spec, struct jj_counts *jj)
         errno = EINVAL;
         return -1;
     }
-
-    if (json_unpack_ex (o, &error, 0, "{s:i,s:o}",
+    if (json_unpack_ex (o, &error, 0, "{s:i s:o}",
                         "version", &version,
                         "resources", &resources) < 0) {
         snprintf (jj->error, sizeof (jj->error) - 1,
                   "at top level: %s", error.text);
+        errno = EINVAL;
+        goto err;
+    }
+    if (json_unpack_ex (o, &error, 0, "{s:{s?{s?F}}}",
+                        "attributes",
+                          "system",
+                            "duration", &jj->duration) < 0) {
+        snprintf (jj->error, sizeof (jj->error) - 1,
+                  "at top level: getting duration: %s", error.text);
         errno = EINVAL;
         goto err;
     }
