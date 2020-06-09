@@ -643,8 +643,21 @@ static void content_register_backing_request (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (!(cache->backing_name = strdup (name)))
+    /* cache->backing_name is either set to the initial value of the
+     * "content.backing-module" attribute (e.g. from broker command line),
+     * or to the first-registered backing store name.  Once set, it cannot
+     * be changed.
+     */
+    if (!cache->backing_name) {
+        if (!(cache->backing_name = strdup (name)))
+            goto error;
+    }
+    if (strcmp (cache->backing_name, name) != 0) {
+        flux_log (h, LOG_ERR, "content backing store is locked in to %s",
+                  cache->backing_name);
+        errno = EINVAL;
         goto error;
+    }
     cache->backing = 1;
     flux_log (h, LOG_DEBUG, "content backing store: enabled %s", name);
     if (flux_respond (h, msg, NULL) < 0)
@@ -670,8 +683,6 @@ static void content_unregister_backing_request (flux_t *h,
         goto error;
     }
     cache->backing = 0;
-    free (cache->backing_name);
-    cache->backing_name = NULL;
     flux_log (h, LOG_DEBUG, "content backing store: disabled");
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "flux_respond");
@@ -953,7 +964,7 @@ static int content_cache_getattr (const char *name, const char **val, void *arg)
 
     if (!strcmp (name, "content.hash"))
         *val = cache->hash_name;
-    else if (!strcmp (name, "content.backing"))
+    else if (!strcmp (name, "content.backing-module"))
         *val = cache->backing_name;
     else if (!strcmp (name, "content.acct-entries")) {
         snprintf (s, sizeof (s), "%zd", zhash_size (cache->entries));
@@ -965,6 +976,18 @@ static int content_cache_getattr (const char *name, const char **val, void *arg)
 
 int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
 {
+    const char *s;
+
+    /* Take initial value of content->backing_name from content.backing-module
+     * attribute, if set.  The attribute is re-added below.
+     */
+    if (attr_get (attr, "content.backing-module", &s, NULL) == 0) {
+        if (!(cache->backing_name = strdup (s)))
+            return -1;
+        if (attr_delete (attr, "content.backing-module", 1) < 0)
+            return -1;
+    }
+
     /* Purge tunables
      */
     if (attr_add_active_uint32 (attr, "content.purge-target-entries",
@@ -1001,7 +1024,7 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
     if (attr_add_active_uint32 (attr, "content.blob-size-limit",
                 &cache->blob_size_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_active (attr, "content.backing",FLUX_ATTRFLAG_READONLY,
+    if (attr_add_active (attr, "content.backing-module",FLUX_ATTRFLAG_READONLY,
                  content_cache_getattr, NULL, cache) < 0)
         return -1;
     if (attr_add_active_uint32 (attr, "content.flush-batch-count",
