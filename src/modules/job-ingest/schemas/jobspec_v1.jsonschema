@@ -84,7 +84,7 @@
     },
     "attributes": {
       "description": "system and user attributes",
-      "type": ["object", "null"],
+      "type": ["object"],
       "properties": {
         "system": {
           "type": "object",
