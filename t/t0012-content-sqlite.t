@@ -27,6 +27,10 @@ test_expect_success 'load content-sqlite module on rank 0' '
 	flux module load content-sqlite
 '
 
+test_expect_success 'verify content.backing-module=content-sqlite' '
+	test "$(flux getattr content.backing-module)" = "content-sqlite"
+'
+
 test_expect_success 'store 100 blobs on rank 0' '
 	store_junk test 100 &&
         TOTAL=`flux module stats --type int --parse count content` &&
@@ -78,7 +82,7 @@ test_expect_success 'load 1m blob bypassing cache' '
 '
 
 # Verify same blobs on all ranks
-# forcing content to fault in from the content.backing service
+# forcing content to fault in from the content backing service
 
 test_expect_success 'load and verify 64b blob on all ranks' '
         HASHSTR=`cat 64.0.hash` &&
