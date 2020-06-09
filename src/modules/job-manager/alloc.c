@@ -286,12 +286,19 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             goto teardown;
         break;
     case FLUX_SCHED_ALLOC_METADATA: // annotation
-        if (job->alloc_pending_metadata) {
+        if (metadata) {
+            if (job->alloc_pending_metadata) {
+                if (json_object_update (job->alloc_pending_metadata,
+                                        metadata) < 0)
+                    goto teardown;
+            }
+            else
+                job->alloc_pending_metadata = json_incref (metadata);
+        }
+        else {
             json_decref (job->alloc_pending_metadata);
             job->alloc_pending_metadata = NULL;
         }
-        if (metadata)
-            job->alloc_pending_metadata = json_incref (metadata);
         break;
     case FLUX_SCHED_ALLOC_DENIED: // error
         alloc->alloc_pending_count--;
