@@ -15,6 +15,7 @@ import json
 import errno
 import datetime
 import collections
+import numbers
 import signal
 
 import six
@@ -813,7 +814,29 @@ class JobspecV1(Jobspec):
             kwargs["version"] = 1
         elif kwargs["version"] != 1:
             raise ValueError("version must be 1")
+
         super(JobspecV1, self).__init__(resources, tasks, **kwargs)
+
+        # validate V1 specific requirements:
+        self._v1_validate(resources, tasks, kwargs)
+
+    @staticmethod
+    def _v1_validate(resources, tasks, kwargs):
+        # process extra V1 attributes requirements:
+
+        # attributes already required by base Jobspec validator
+        attributes = kwargs["attributes"]
+
+        # attributes.system.duration is required
+        if "system" not in attributes:
+            raise ValueError("attributes.system is a required key")
+        system = attributes["system"]
+        if not isinstance(system, abc.Mapping):
+            raise ValueError("attributes.system must be a mapping")
+        if "duration" not in system:
+            raise ValueError("attributes.system.duration is a required key")
+        if not isinstance(system["duration"], numbers.Number):
+            raise ValueError("attributes.system.duration must be a number")
 
     @classmethod
     def from_command(
