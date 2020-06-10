@@ -85,9 +85,11 @@
     "attributes": {
       "description": "system and user attributes",
       "type": ["object"],
+      "required": ["system"],
       "properties": {
         "system": {
           "type": "object",
+          "required": ["duration"],
           "properties": {
             "duration": { "type": "number", "minimum": 0 },
             "cwd": { "type": "string" },
