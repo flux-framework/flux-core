@@ -50,15 +50,15 @@ static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
     return rc;
 }
 
-int schedutil_alloc_respond_note (schedutil_t *util, const flux_msg_t *msg,
-                                  const char *note)
+int schedutil_alloc_respond_annotate (schedutil_t *util, const flux_msg_t *msg,
+                                      const char *note)
 {
     return schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_ANNOTATE,
                                     note);
 }
 
-int schedutil_alloc_respond_denied (schedutil_t *util, const flux_msg_t *msg,
-                                    const char *note)
+int schedutil_alloc_respond_deny (schedutil_t *util, const flux_msg_t *msg,
+                                  const char *note)
 {
     return schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_DENY,
                                     note);
@@ -140,8 +140,8 @@ error:
     flux_future_destroy (f);
 }
 
-int schedutil_alloc_respond_R (schedutil_t *util, const flux_msg_t *msg,
-                               const char *R, const char *note)
+int schedutil_alloc_respond_success (schedutil_t *util, const flux_msg_t *msg,
+                                     const char *R, const char *note)
 {
     struct alloc *ctx;
     flux_future_t *f;

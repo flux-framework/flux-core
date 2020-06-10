@@ -206,16 +206,16 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
             return rc;
         else if (errno == EOVERFLOW)
             note = "unsatisfiable request";
-        if (schedutil_alloc_respond_denied (ss->util_ctx,
-                                            job->msg,
-                                            note) < 0)
-            flux_log_error (h, "schedutil_alloc_respond_denied");
+        if (schedutil_alloc_respond_deny (ss->util_ctx,
+                                          job->msg,
+                                          note) < 0)
+            flux_log_error (h, "schedutil_alloc_respond_deny");
         goto out;
     }
     s = rlist_dumps (alloc);
 
-    if (schedutil_alloc_respond_R (ss->util_ctx, job->msg, R, s) < 0)
-        flux_log_error (h, "schedutil_alloc_respond_R");
+    if (schedutil_alloc_respond_success (ss->util_ctx, job->msg, R, s) < 0)
+        flux_log_error (h, "schedutil_alloc_respond_success");
 
     flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t) job->id, s);
     rc = 0;
@@ -307,10 +307,10 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
         goto err;
     }
     if (job->errnum != 0) {
-        if (schedutil_alloc_respond_denied (ss->util_ctx,
-                                            msg,
-                                            job->jj.error) < 0)
-            flux_log_error (h, "alloc_respond_denied");
+        if (schedutil_alloc_respond_deny (ss->util_ctx,
+                                          msg,
+                                          job->jj.error) < 0)
+            flux_log_error (h, "alloc_respond_deny");
         jobreq_destroy (job);
         return;
     }

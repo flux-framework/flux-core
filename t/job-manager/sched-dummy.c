@@ -89,22 +89,23 @@ void try_alloc (struct sched_ctx *sc)
 {
     if (sc->job) {
         if (flux_module_debug_test (sc->h, DEBUG_FAIL_ALLOC, false)) {
-            if (schedutil_alloc_respond_denied (sc->schedutil_ctx,
-                                                sc->job->msg,
-                                                "DEBUG_FAIL_ALLOC") < 0)
-                flux_log_error (sc->h, "schedutil_alloc_respond_denied");
+            if (schedutil_alloc_respond_deny (sc->schedutil_ctx,
+                                              sc->job->msg,
+                                              "DEBUG_FAIL_ALLOC") < 0)
+                flux_log_error (sc->h, "schedutil_alloc_respond_deny");
             goto done;
         }
         if (sc->cores_free > 0) {
-            if (schedutil_alloc_respond_R (sc->schedutil_ctx, sc->job->msg,
-                                           "1core", NULL) < 0)
-                flux_log_error (sc->h, "schedutil_alloc_respond_R");
+            if (schedutil_alloc_respond_success (sc->schedutil_ctx,
+                                                 sc->job->msg, "1core",
+                                                 NULL) < 0)
+                flux_log_error (sc->h, "schedutil_alloc_respond_success");
             sc->cores_free--;
             goto done;
         }
-        if (schedutil_alloc_respond_note (sc->schedutil_ctx, sc->job->msg,
-                                          "no cores available") < 0)
-            flux_log_error (sc->h, "schedutil_alloc_respond_note");
+        if (schedutil_alloc_respond_annotate (sc->schedutil_ctx, sc->job->msg,
+                                              "no cores available") < 0)
+            flux_log_error (sc->h, "schedutil_alloc_respond_annotate");
     }
     return;
 done:
