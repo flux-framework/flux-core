@@ -19,7 +19,6 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/blobref.h"
-#include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
 
@@ -585,10 +584,9 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
     /* If 'content.backing-path' attribute is already set, then:
      * - value is the sqlite backing file
      * - if it exists, preserve existing content; else create empty
-     * - ensure that file perists when the instance exits
      * Otherwise:
      * - ${rundir}/content.sqlite is the backing file
-     * - ensure that file is cleaned up when the instance exits
+     * - ${rundir} is normally recursively cleaned up when the instance exits
      * - set 'content.backing-path' to this name
      */
     backing_path = flux_attr_get (h, "content.backing-path");
@@ -606,7 +604,6 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
             goto error;
         if (flux_attr_set (h, "content.backing-path", ctx->dbfile) < 0)
             goto error;
-        cleanup_push_string (cleanup_file, ctx->dbfile);
     }
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;
