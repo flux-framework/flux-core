@@ -58,6 +58,7 @@ typedef enum {
     FLUX_JOB_RESULT_COMPLETED = 1,
     FLUX_JOB_RESULT_FAILED = 2,
     FLUX_JOB_RESULT_CANCELLED = 4,
+    FLUX_JOB_RESULT_TIMEOUT = 8,
 } flux_job_result_t;
 
 typedef uint64_t flux_jobid_t;
