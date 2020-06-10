@@ -185,7 +185,8 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!results)
         results = (FLUX_JOB_RESULT_COMPLETED
                    | FLUX_JOB_RESULT_FAILED
-                   | FLUX_JOB_RESULT_CANCELLED);
+                   | FLUX_JOB_RESULT_CANCELLED
+                   | FLUX_JOB_RESULT_TIMEOUT);
 
     if (!(jobs = get_jobs (ctx, max_entries, attrs, userid, states, results)))
         goto error;
