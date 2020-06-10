@@ -43,6 +43,7 @@ RESULT_CONST_DICT = {
     "completed": flux.constants.FLUX_JOB_RESULT_COMPLETED,
     "failed": flux.constants.FLUX_JOB_RESULT_FAILED,
     "cancelled": flux.constants.FLUX_JOB_RESULT_CANCELLED,
+    "timeout": flux.constants.FLUX_JOB_RESULT_TIMEOUT,
 }
 
 
@@ -578,6 +579,8 @@ def color_setup(args, job):
                 sys.stdout.write("\033[01;31m")
             elif job.result == "CANCELLED":
                 sys.stdout.write("\033[37m")
+            elif job.result == "TIMEOUT":
+                sys.stdout.write("\033[01;31m")
             return True
     return False
 
