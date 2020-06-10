@@ -107,8 +107,10 @@ def create_slurm_style_jobspec(
         "tasks": [{"command": command, "slot": "task", "count": task_count_dict}],
         "attributes": {"system": {"cwd": os.getcwd(), "environment": environ}},
     }
-    if walltime:
-        jobspec["attributes"]["system"]["duration"] = walltime
+    if not walltime:
+        walltime = 0.0
+
+    jobspec["attributes"]["system"]["duration"] = walltime
 
     return jobspec
 
