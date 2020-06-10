@@ -461,6 +461,7 @@ AC_CONFIG_FILES( \
   src/common/libflux/version.h \
   src/common/libtestutil/Makefile \
   src/common/libkvs/Makefile \
+  src/common/libcontent/Makefile \
   src/common/libjob/Makefile \
   src/common/libsubprocess/Makefile \
   src/common/liboptparse/Makefile \

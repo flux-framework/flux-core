@@ -23,6 +23,8 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
 
+#include "src/common/libcontent/content-util.h"
+
 const size_t lzo_buf_chunksize = 1024*1024;
 const size_t compression_threshold = 256; /* compress blobs >= this size */
 
@@ -55,7 +57,6 @@ struct content_sqlite {
     sqlite3_stmt *checkpt_put_stmt;
     flux_t *h;
     const char *hashfun;
-    uint32_t blob_size_limit;
     size_t lzo_bufsize;
     void *lzo_buf;
 };
@@ -213,10 +214,6 @@ static int content_sqlite_store (struct content_sqlite *ctx,
     int hash_len;
     int uncompressed_size = -1;
 
-    if (size > ctx->blob_size_limit) {
-        errno = EFBIG;
-        return -1;
-    }
     if (blobref_hash (ctx->hashfun,
                       (uint8_t *)data,
                       size,
@@ -427,48 +424,6 @@ error:
     (void )sqlite3_reset (ctx->checkpt_put_stmt);
 }
 
-
-int register_backing_store (flux_t *h, const char *name)
-{
-    flux_future_t *f;
-    int rc;
-
-    if (!(f = flux_rpc_pack (h,
-                             "content.register-backing",
-                             0,
-                             0,
-                             "{s:s}",
-                             "name",
-                             name)))
-        return -1;
-    rc = flux_future_get (f, NULL);
-    flux_future_destroy (f);
-    return rc;
-}
-
-int unregister_backing_store (flux_t *h)
-{
-    flux_future_t *f;
-    int rc;
-
-    if (!(f = flux_rpc (h, "content.unregister-backing", NULL, 0, 0)))
-        return -1;
-    rc = flux_future_get (f, NULL);
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int register_service (flux_t *h, const char *name)
-{
-    int rc;
-    flux_future_t *f;
-    if (!(f = flux_service_register (h, name)))
-        return -1;
-    rc = flux_future_get (f, NULL);
-    flux_future_destroy (f);
-    return rc;
-}
-
 static void content_sqlite_closedb (struct content_sqlite *ctx)
 {
     if (ctx) {
@@ -609,7 +564,6 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
 {
     struct content_sqlite *ctx;
     const char *backing_path;
-    const char *tmp;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
@@ -627,11 +581,6 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
         flux_log_error (h, "content.hash");
         goto error;
     }
-    if (!(tmp = flux_attr_get (h, "content.blob-size-limit"))) {
-        flux_log_error (h, "content.blob-size-limit");
-        goto error;
-    }
-    ctx->blob_size_limit = strtoul (tmp, NULL, 10);
 
     /* If 'content.backing-path' attribute is already set, then:
      * - value is the sqlite backing file
@@ -677,26 +626,18 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (content_sqlite_opendb(ctx) < 0)
         goto done;
-    if (register_backing_store (h, "content-sqlite") < 0) {
-        flux_log_error (h, "registering backing store");
+    if (content_register_backing_store (h, "content-sqlite") < 0)
         goto done;
-    }
-    if (register_service (h, "content-backing") < 0) {
-        flux_log_error (h, "service.add: content-backing");
+    if (content_register_service (h, "content-backing") < 0)
         goto done;
-    }
-    if (register_service (h, "kvs-checkpoint") < 0) {
-        flux_log_error (h, "service.add: kvs-checkpiont");
+    if (content_register_service (h, "kvs-checkpoint") < 0)
         goto done;
-    }
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;
     }
-    if (unregister_backing_store (h) < 0) {
-        flux_log_error (h, "unregistering backing store");
+    if (content_unregister_backing_store (h) < 0)
         goto done;
-    }
 done:
     content_sqlite_closedb (ctx);
     content_sqlite_destroy (ctx);

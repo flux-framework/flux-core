@@ -18,6 +18,8 @@ content_sqlite_la_SOURCES = \
 	content-sqlite.c
 
 content_sqlite_la_LDFLAGS = $(fluxmod_ldflags) -module
-content_sqlite_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
+content_sqlite_la_LIBADD = \
+		$(top_builddir)/src/common/libcontent/libcontent.la \
+		$(top_builddir)/src/common/libflux-internal.la \
 		$(top_builddir)/src/common/libflux-core.la \
 		$(ZMQ_LIBS) $(SQLITE_LIBS) $(LZ4_LIBS)
