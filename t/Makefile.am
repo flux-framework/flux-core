@@ -100,7 +100,8 @@ TESTSCRIPTS = \
 	t2200-job-ingest.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
-	t2203-job-manager-dummysched.t \
+	t2203-job-manager-dummysched-single.t \
+	t2204-job-manager-dummysched-unlimited.t \
 	t2206-job-manager-bulk-state.t \
 	t2207-job-manager-wait.t \
 	t2208-queue-cmd.t \
@@ -222,6 +223,7 @@ dist_check_SCRIPTS = \
 	job-manager/submit-waitany.py \
 	job-manager/submit-sliding-window.py \
 	job-manager/wait-interrupted.py \
+	job-manager/sched-helper.sh \
 	job-attach/outputsleep.sh \
 	job-exec/dummy.sh \
 	job-exec/imp.sh \

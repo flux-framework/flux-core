@@ -41,6 +41,7 @@ struct job {
     double t_submit;
     char *jobspec;
     bool scheduled;
+    int annotate_count;
 };
 
 struct sched_ctx {
@@ -90,6 +91,7 @@ error:
 void try_alloc (struct sched_ctx *sc)
 {
     struct job *job = zlist_first (sc->jobs);
+    int jobs_ahead_count = 0;
 
     while (job) {
         if (!job->scheduled) {
@@ -109,14 +111,32 @@ void try_alloc (struct sched_ctx *sc)
                 sc->cores_free--;
             }
             else {
-                snprintf (annotations,
-                          sizeof (annotations),
-                          "{%s:%s}",
-                          "\"sched.reason_pending\"", "\"no cores available\"");
+                if (!strcmp (sc->mode, "single")) {
+                    snprintf (annotations,
+                              sizeof (annotations),
+                              "{%s:%s}",
+                              "\"sched.reason_pending\"",
+                              "\"no cores available\"");
+                }
+                else {
+                    if (job->annotate_count)
+                        snprintf (annotations,
+                                  sizeof (annotations),
+                                  "{%s:%d}",
+                                  "\"sched.jobs_ahead\"", jobs_ahead_count);
+                    else
+                        snprintf (annotations,
+                                  sizeof (annotations),
+                                  "{%s:%s,%s:%d}",
+                                  "\"sched.reason_pending\"", "\"no cores\"",
+                                  "\"sched.jobs_ahead\"", jobs_ahead_count);
+                }
                 if (schedutil_alloc_respond_annotate (sc->schedutil_ctx,
                                                       job->msg,
                                                       annotations) < 0)
                     flux_log_error (sc->h, "schedutil_alloc_respond_annotate");
+                job->annotate_count++;
+                jobs_ahead_count++;
             }
         }
         /* if in single mode, break after one iteration */
