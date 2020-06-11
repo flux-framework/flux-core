@@ -155,7 +155,7 @@ static int start_timer (flux_t *h, struct testexec *te, struct jobinfo *job)
      */
     if (t < 0.)
         t = 1.e-5;
-    if (t > 0.) {
+    if (t >= 0.) {
         char timebuf[256];
         te->timer = flux_timer_watcher_create (r, t, 0., timer_cb, job);
         if (!te->timer) {

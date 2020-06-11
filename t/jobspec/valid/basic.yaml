@@ -1,4 +1,4 @@
-version: 1
+version: 999
 resources:
   - type: slot
     count: 1
@@ -11,4 +11,4 @@ tasks:
     slot: foo
     count:
       per_slot: 1
-attributes:
+attributes: {}
