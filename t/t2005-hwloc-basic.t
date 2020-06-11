@@ -100,7 +100,7 @@ test_expect_success HAVE_JQ 'hwloc: only one rank reloads an xml file' '
     flux kvs get resource.hwloc.by_rank | $jq -S . > mixed.out &&
     $jq -e ".\"0\".cpuset == \"0-7\"" < mixed.out &&
     $jq -e ".\"0\".Core == 8" < mixed.out &&
-    $jq -e ".\"1\".cpuset == \"0-15\"" < mixed.out
+    $jq -e ".\"1\".cpuset == \"0-15\"" < mixed.out &&
     $jq -e ".\"1\".Core == 16" < mixed.out
 '
 
@@ -126,10 +126,15 @@ test_expect_success 'hwloc: reload with invalid rank fails' '
     test_expect_code 1 flux hwloc reload -r foo
 '
 
+sanitize_hwloc_xml() {
+    sed 's/pci_link_speed=".*"//g' $1
+}
 test_expect_success 'hwloc: reload with no args reloads system topology' '
     flux hwloc reload &&
     flux hwloc topology > system.out4 &&
-    test_cmp system.topology.out system.out4
+    sanitize_hwloc_xml system.topology.out >system.topology.sanitized &&
+    sanitize_hwloc_xml system.out4 > system.sanitized.4 &&
+    test_cmp system.topology.sanitized system.sanitized.4
 '
 
 test_expect_success 'hwloc: unload aggregator' '
