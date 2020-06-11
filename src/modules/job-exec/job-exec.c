@@ -1038,8 +1038,17 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (severity == 0
         && (job = zhashx_lookup (ctx->jobs, &id))
-        && (!job->finalizing)
-        && (!job->exception_in_progress)) {
+        && (!job->finalizing)) {
+        if (job->exception_in_progress) {
+            /*  Resend SIGTERM even if exception in progress */
+            (*job->impl->kill) (job, SIGTERM);
+            return;
+        }
+        /*  !job->exception_in_progress:
+         *
+         *  Set job->exception_in_progress so that jobinfo_fatal_error()
+         *   doesn't dump a duplicate exception into the eventlog.
+         */
         job->exception_in_progress = 1;
         flux_log (h, LOG_DEBUG, "exec aborted: id=%ld", id);
         jobinfo_fatal_error (job, 0, "aborted due to exception type=%s", type);
