@@ -115,6 +115,7 @@ class JobInfo:
         "t_run": 0.0,
         "t_cleanup": 0.0,
         "t_inactive": 0.0,
+        "expiration": 0.0,
         "nnodes": "",
         "ranks": "",
         "success": "",
@@ -170,6 +171,19 @@ class JobInfo:
         else:
             runtime = 0.0
         return runtime
+
+    def get_remaining_time(self):
+        status = str(self.status)
+        if status != "RUNNING":
+            return 0.0
+        tleft = self.expiration - time.time()
+        if tleft < 0.0:
+            return 0.0
+        return tleft
+
+    @property
+    def t_remaining(self):
+        return self.get_remaining_time()
 
     @memoized_property
     def state(self):
@@ -332,6 +346,8 @@ def fetch_jobs_flux(args, fields):
         "runtime_hms": ("t_run", "t_cleanup"),
         "status": ("state", "result"),
         "status_abbrev": ("state", "result"),
+        "expiration": ("expiration", "state", "result"),
+        "t_remaining": ("expiration", "state", "result"),
     }
 
     attrs = set()
@@ -543,6 +559,8 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "name": "NAME",
         "ntasks": "NTASKS",
         "nnodes": "NNODES",
+        "expiration": "EXPIRATION",
+        "t_remaining": "T_REMAINING",
         "ranks": "RANKS",
         "success": "SUCCESS",
         "result": "RESULT",
