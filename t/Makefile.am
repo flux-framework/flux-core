@@ -138,6 +138,7 @@ TESTSCRIPTS = \
 	t2701-mini-batch.t \
 	t2702-mini-alloc.t \
 	t2800-jobs-cmd.t \
+	t2900-job-timelimits.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
 	t4000-issues-test-driver.t \
