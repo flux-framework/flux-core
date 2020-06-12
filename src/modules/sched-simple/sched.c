@@ -192,11 +192,19 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     jj = &job->jj;
     alloc = rlist_alloc (ss->rlist, ss->mode,
                          jj->nnodes, jj->nslots, jj->slot_size);
-    if (!alloc) {
+    if (!alloc || !(R = Rstring_create (alloc, now, jj->duration))) {
         const char *note = "unable to allocate provided jobspec";
-        if (errno == ENOSPC)
+        if (alloc != NULL) {
+            /*  unlikely: allocation succeeded but Rstring_create failed */
+            note = "internal scheduler error generating R";
+            flux_log (ss->h, LOG_ERR, "%s", note);
+            if (rlist_free (ss->rlist, alloc) < 0)
+                flux_log_error (h, "try_alloc: rlist_free");
+            rlist_destroy (alloc);
+            alloc = NULL;
+        } else if (errno == ENOSPC)
             return rc;
-        if (errno == EOVERFLOW)
+        else if (errno == EOVERFLOW)
             note = "unsatisfiable request";
         if (schedutil_alloc_respond_denied (ss->util_ctx,
                                             job->msg,
@@ -206,10 +214,7 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     }
     s = rlist_dumps (alloc);
 
-    if (!(R = Rstring_create (alloc, now, jj->duration)))
-        flux_log_error (h, "Rstring_create");
-
-    if (R && schedutil_alloc_respond_R (ss->util_ctx, job->msg, R, s) < 0)
+    if (schedutil_alloc_respond_R (ss->util_ctx, job->msg, R, s) < 0)
         flux_log_error (h, "schedutil_alloc_respond_R");
 
     flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t) job->id, s);
