@@ -86,10 +86,10 @@ static int rset_read_time_window (struct resource_set *r, json_error_t *errp)
         errno = EINVAL;
         return -1;
     }
-    /*  Default values: < 0 indicates "unset"
+    /*  Default values: 0. indicates "unset"
      */
-    r->expiration = -1.;
-    r-> starttime = -1.;
+    r->expiration = 0.;
+    r-> starttime = 0.;
     if (json_unpack_ex (r->R, errp, 0,
                         "{s:{s?F s?F}}",
                         "execution",
