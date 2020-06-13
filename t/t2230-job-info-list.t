@@ -748,6 +748,17 @@ test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (excepti
         echo $obj | jq .exception_note | grep "No such file or directory"
 '
 
+# expiration time
+
+test_expect_success HAVE_JQ 'flux job list outputs expiration time when set' '
+	jobid=$(flux mini submit -t 30 sleep 1000) &&
+	fj_wait_event $jobid start &&
+	flux job list | grep $jobid > expiration.json &&
+	test_debug "cat expiration.json" &&
+	jq -e ".expiration > now" < expiration.json &&
+	flux job cancel $jobid
+'
+
 test_expect_success 'reload the job-info module' '
         flux module reload job-info
 '
@@ -781,24 +792,40 @@ test_expect_success 'list count / max_entries works' '
         count=`flux job list -s inactive -c 5 | wc -l` &&
         test $count -eq 5
 '
+
+# List of all attributes (XXX: maybe this should be pulled in from somewhere
+#  else? E.g. documentation?
+
+ALL_ATTRIBUTES="\
+userid \
+priority \
+t_submit \
+t_depend \
+t_sched \
+t_run \
+t_cleanup \
+t_inactive \
+state \
+name \
+ntasks \
+nnodes \
+ranks \
+success \
+exception_occurred \
+exception_type \
+exception_severity \
+exception_note \
+result \
+expiration
+"
+
 test_expect_success HAVE_JQ 'list request with empty attrs works' '
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[]}" \
           | $RPC job-info.list > list_empty_attrs.out &&
-        test_must_fail grep "userid" list_empty_attrs.out &&
-        test_must_fail grep "priority" list_empty_attrs.out &&
-        test_must_fail grep "t_submit" list_empty_attrs.out &&
-        test_must_fail grep "t_depend" list_empty_attrs.out &&
-        test_must_fail grep "t_sched" list_empty_attrs.out &&
-        test_must_fail grep "t_run" list_empty_attrs.out &&
-        test_must_fail grep "t_cleanup" list_empty_attrs.out &&
-        test_must_fail grep "t_inactive" list_empty_attrs.out &&
-        test_must_fail grep "state" list_empty_attrs.out &&
-        test_must_fail grep "name" list_empty_attrs.out &&
-        test_must_fail grep "ntasks" list_empty_attrs.out &&
-        test_must_fail grep "nnodes" list_empty_attrs.out &&
-        test_must_fail grep "ranks" list_empty_attrs.out &&
-        test_must_fail grep "success" list_empty_attrs.out
+	for attr in $ALL_ATTRIBUTES; do
+	    test_must_fail grep $attr list_empty_attrs.out
+	done
 '
 test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
         id=$(id -u) &&
@@ -807,25 +834,9 @@ test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
 '
 test_expect_success HAVE_JQ 'list-attrs works' '
         $RPC job-info.list-attrs < /dev/null > list_attrs.out &&
-        grep userid list_attrs.out &&
-        grep priority list_attrs.out &&
-        grep t_submit list_attrs.out &&
-        grep t_depend list_attrs.out &&
-        grep t_sched list_attrs.out &&
-        grep t_run list_attrs.out &&
-        grep t_cleanup list_attrs.out &&
-        grep t_inactive list_attrs.out &&
-        grep state list_attrs.out &&
-        grep name list_attrs.out &&
-        grep ntasks list_attrs.out &&
-        grep nnodes list_attrs.out &&
-        grep ranks list_attrs.out &&
-        grep success list_attrs.out &&
-        grep exception_occurred list_attrs.out &&
-        grep exception_type list_attrs.out &&
-        grep exception_severity list_attrs.out &&
-        grep exception_note list_attrs.out &&
-        grep result list_attrs.out
+	for attr in $ALL_ATTRIBUTES; do
+	    grep $attr list_attrs.out
+	done
 '
 
 #
