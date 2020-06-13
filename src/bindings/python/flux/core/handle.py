@@ -198,7 +198,9 @@ class Flux(Wrapper):
             h.reactor_stop(reactor)
 
         with self.signal_watcher_create(signal.SIGINT, reactor_interrupt):
+            self.reactor_active_decref(reactor)
             rc = self.flux_reactor_run(reactor, flags)
+            self.reactor_active_incref(reactor)
             if reactor_interrupted:
                 raise KeyboardInterrupt
 
