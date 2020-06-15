@@ -237,8 +237,10 @@ class OutputFormat:
             #   will not apply to a heading, but keeps width and alignment.
             match = re.match(r"(.?[<>=^])?(\d+)", spec)
             if match is None:
-                 spec = ""
-            format_list.append(self._fmt_tuple(text, field, spec, conv))
+                spec = ""
+
+            #  Remove any conversion, these do not make sense for headings
+            format_list.append(self._fmt_tuple(text, field, spec, None))
         fmt = "".join(format_list)
         return fmt
 
