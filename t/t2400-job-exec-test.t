@@ -88,6 +88,15 @@ test_expect_success 'job-exec: simulate epilog/cleanup tasks' '
 	grep "cleanup\.start" exec.eventlog.$jobid &&
 	grep "cleanup\.finish" exec.eventlog.$jobid
 '
+test_expect_success 'job-exec: R with invalid expiration raises exception' '
+	flux module unload job-exec &&
+	jobid=$(flux job submit basic.json) &&
+	key=$(flux job id --to=kvs $jobid).R &&
+	R=$(flux kvs get --wait $key | jq -c ".execution.expiration = -1.") &&
+	flux kvs put ${key}=${R} &&
+	flux module load job-exec &&
+	flux job wait-event -v $jobid exception
+'
 #
 # XXX: Trying to generate an exception during cleanup is racy, however,
 #  there is not currently another way to do this until we have a *real*

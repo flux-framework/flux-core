@@ -964,16 +964,16 @@ error:
 static int eventlog_inactive_finish (struct info_ctx *ctx,
                                      struct job *job)
 {
+    /* Default result is failed, overridden below */
+    job->result = FLUX_JOB_RESULT_FAILED;
     if (job->success)
         job->result = FLUX_JOB_RESULT_COMPLETED;
-    else {
-        if (job->exception_occurred
-            && !strcmp (job->exception_type, "cancel"))
+    else if (job->exception_occurred) {
+        if (!strcmp (job->exception_type, "cancel"))
             job->result = FLUX_JOB_RESULT_CANCELLED;
-        else
-            job->result = FLUX_JOB_RESULT_FAILED;
+        else if (!strcmp (job->exception_type, "timeout"))
+            job->result = FLUX_JOB_RESULT_TIMEOUT;
     }
-
     return 0;
 }
 

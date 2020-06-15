@@ -139,12 +139,39 @@ static struct simple_sched * simple_sched_create (void)
     return ss;
 }
 
-static char *Rstring_create (struct rlist *l)
+static int R_add_expiration (json_t *R, double now, double timelimit)
+{
+    int rc = -1;
+    json_t *exec = NULL;
+    json_t *o = NULL;
+    double starttime = now;
+    double expiration = now + timelimit;
+
+    if (!(exec = json_object_get (R, "execution"))
+        || (!(o = json_real (starttime)))
+        || json_object_set_new (exec, "starttime", o) < 0) {
+        json_decref (o);
+        goto out;
+    }
+    if (!(o = json_real (expiration))
+        || json_object_set_new (exec, "expiration", o) < 0) {
+        json_decref (o);
+        goto out;
+    }
+    rc = 0;
+out:
+    return rc;
+}
+
+static char *Rstring_create (struct rlist *l, double now, double timelimit)
 {
     char *s = NULL;
     json_t *R = rlist_to_R (l);
     if (R) {
+        if (timelimit > 0. &&  R_add_expiration (R, now, timelimit) < 0)
+            goto out;
         s = json_dumps (R, JSON_COMPACT);
+out:
         json_decref (R);
     }
     return (s);
@@ -158,16 +185,26 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     struct jj_counts *jj = NULL;
     char *R = NULL;
     struct jobreq *job = zlistx_first (ss->queue);
+    double now = flux_reactor_now (flux_get_reactor (h));
+
     if (!job)
         return -1;
     jj = &job->jj;
     alloc = rlist_alloc (ss->rlist, ss->mode,
                          jj->nnodes, jj->nslots, jj->slot_size);
-    if (!alloc) {
+    if (!alloc || !(R = Rstring_create (alloc, now, jj->duration))) {
         const char *note = "unable to allocate provided jobspec";
-        if (errno == ENOSPC)
+        if (alloc != NULL) {
+            /*  unlikely: allocation succeeded but Rstring_create failed */
+            note = "internal scheduler error generating R";
+            flux_log (ss->h, LOG_ERR, "%s", note);
+            if (rlist_free (ss->rlist, alloc) < 0)
+                flux_log_error (h, "try_alloc: rlist_free");
+            rlist_destroy (alloc);
+            alloc = NULL;
+        } else if (errno == ENOSPC)
             return rc;
-        if (errno == EOVERFLOW)
+        else if (errno == EOVERFLOW)
             note = "unsatisfiable request";
         if (schedutil_alloc_respond_denied (ss->util_ctx,
                                             job->msg,
@@ -176,10 +213,8 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
         goto out;
     }
     s = rlist_dumps (alloc);
-    if (!(R = Rstring_create (alloc)))
-        flux_log_error (h, "Rstring_create");
 
-    if (R && schedutil_alloc_respond_R (ss->util_ctx, job->msg, R, s) < 0)
+    if (schedutil_alloc_respond_R (ss->util_ctx, job->msg, R, s) < 0)
         flux_log_error (h, "schedutil_alloc_respond_R");
 
     flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t) job->id, s);
@@ -279,9 +314,10 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
         jobreq_destroy (job);
         return;
     }
-    flux_log (h, LOG_DEBUG, "req: %ju: spec={%d,%d,%d}",
+    flux_log (h, LOG_DEBUG, "req: %ju: spec={%d,%d,%d} duration=%.1f",
                             (uintmax_t) job->id, job->jj.nnodes,
-                            job->jj.nslots, job->jj.slot_size);
+                            job->jj.nslots, job->jj.slot_size,
+                            job->jj.duration);
     job->handle = zlistx_insert (ss->queue,
                                  job,
                                  job->priority > FLUX_JOB_PRIORITY_DEFAULT);

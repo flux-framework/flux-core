@@ -22,6 +22,8 @@ struct jj_counts {
     int nslots;    /* total number of slots requested */
     int slot_size; /* number of cores per slot        */
 
+    double duration; /* attributes.system.duration if set */
+
     char error[JJ_ERROR_TEXT_LENGTH]; /* On error, contains error description */
 };
 

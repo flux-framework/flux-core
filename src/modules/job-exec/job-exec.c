@@ -129,6 +129,7 @@ void jobinfo_decref (struct jobinfo *job)
     if (job && (--job->refcount == 0)) {
         int saved_errno = errno;
         flux_watcher_destroy (job->kill_timer);
+        flux_watcher_destroy (job->expiration_timer);
         zhashx_delete (job->ctx->jobs, &job->id);
         if (job->impl && job->impl->exit)
             (*job->impl->exit) (job);
@@ -252,9 +253,12 @@ int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
     return rc;
 }
 
-static int jobid_respond_error (flux_t *h, flux_jobid_t id,
-                                const flux_msg_t *msg,
-                                int errnum, const char *text)
+static int jobid_exception (flux_t *h, flux_jobid_t id,
+                            const flux_msg_t *msg,
+                            const char *type,
+                            int severity,
+                            int errnum,
+                            const char *text)
 {
     char note [256];
     if (errnum)
@@ -268,15 +272,21 @@ static int jobid_respond_error (flux_t *h, flux_jobid_t id,
                                       "id", id,
                                       "type", "exception",
                                       "data",
-                                      "severity", 0,
-                                      "type", "exec",
+                                      "severity", severity,
+                                      "type", type,
                                       "note", note);
 }
 
 static int jobinfo_respond_error (struct jobinfo *job, int errnum,
                                   const char *msg)
 {
-    return jobid_respond_error (job->ctx->h, job->id, job->req, errnum, msg);
+    return jobid_exception (job->ctx->h,
+                            job->id,
+                            job->req,
+                            "exec",
+                            0,
+                            errnum,
+                            msg);
 }
 
 static int jobinfo_send_release (struct jobinfo *job,
@@ -343,6 +353,20 @@ static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     (*job->impl->kill) (job, SIGKILL);
 }
 
+
+static void jobinfo_killtimer_start (struct jobinfo *job, double after)
+{
+    /* Only start kill timer if not already running */
+    if (job->kill_timer == NULL) {
+        job->kill_timer = flux_timer_watcher_create (flux_get_reactor (job->h),
+                                                     after,
+                                                     0.,
+                                                     kill_timer_cb,
+                                                     job);
+        flux_watcher_start (job->kill_timer);
+    }
+}
+
 /*  Cancel any pending shells to execute with implementations cancel
  *   method, send SIGTERM to executing shells to notify them to terminate,
  *   schedule SIGKILL to be sent after kill_timeout seconds.
@@ -357,10 +381,7 @@ static void jobinfo_cancel (struct jobinfo *job)
         (*job->impl->cancel) (job);
 
     (*job->impl->kill) (job, SIGTERM);
-    job->kill_timer = flux_timer_watcher_create (flux_get_reactor (job->h),
-                                                 job->kill_timeout, 0.,
-                                                 kill_timer_cb, job);
-    flux_watcher_start (job->kill_timer);
+    jobinfo_killtimer_start (job, job->kill_timeout);
 }
 
 static int jobinfo_finalize (struct jobinfo *job);
@@ -696,6 +717,68 @@ static int jobinfo_load_implementation (struct jobinfo *job)
     return -1;
 }
 
+static void timelimit_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
+{
+    struct jobinfo *job = arg;
+
+    /*  Timelimit reached. Generate "timeout" exception and send SIGALRM.
+     *  Wait for a gracetime then forcibly terminate job.
+     */
+    if (jobid_exception (job->h, job->id, job->req, "timeout", 0, 0,
+                         "resource allocation expired") < 0)
+        flux_log_error (job->h,
+                        "failed to generate timeout exception for %ju",
+                        job->id);
+    (*job->impl->kill) (job, SIGALRM);
+    flux_watcher_stop (w);
+    job->exception_in_progress = 1;
+    jobinfo_killtimer_start (job, job->kill_timeout);
+}
+
+static int jobinfo_set_expiration (struct jobinfo *job)
+{
+    flux_watcher_t *w = NULL;
+    double expiration = resource_set_expiration (job->R);
+    double offset;
+
+    if (expiration < 0.) {
+        jobinfo_fatal_error (job,
+                             EINVAL,
+                             "Invalid resource set expiration %.2f",
+                             expiration);
+        return -1;
+    }
+
+    /* Timelimit disabled if expiration is set to 0.
+     */
+    if (expiration == 0.)
+        return 0;
+
+    /* N.B. Use of flux_reactor_time(3) here instead of flux_reactor_now(3)
+     *  is purposeful, Since this is used to find the time the job has
+     *  remaining, we should be as accurate as possible.
+     */
+    offset = expiration - flux_reactor_time ();
+    if (offset <= 0.) {
+        jobinfo_fatal_error (job, 0, "job started after expiration");
+        return -1;
+    }
+    if (!(w = flux_timer_watcher_create (flux_get_reactor(job->h),
+                                         offset,
+                                         0.,
+                                         timelimit_cb,
+                                         job))) {
+        jobinfo_fatal_error (job, errno, "unable to start expiration timer");
+        return -1;
+    }
+    flux_watcher_start (w);
+    job->expiration_timer = w;
+    return 0;
+}
+
 /*  Completion for jobinfo_initialize(), finish init of jobinfo using
  *   data fetched from KVS
  */
@@ -730,6 +813,8 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         jobinfo_fatal_error (job, errno, "reading R: %s", error.text);
         goto done;
     }
+    if (jobinfo_set_expiration (job) < 0)
+        goto done;
     if (job->multiuser) {
         const char *J = jobinfo_kvs_lookup_get (f, "J");
         if (!J || !(job->J = strdup (J))) {
@@ -953,8 +1038,17 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (severity == 0
         && (job = zhashx_lookup (ctx->jobs, &id))
-        && (!job->finalizing)
-        && (!job->exception_in_progress)) {
+        && (!job->finalizing)) {
+        if (job->exception_in_progress) {
+            /*  Resend SIGTERM even if exception in progress */
+            (*job->impl->kill) (job, SIGTERM);
+            return;
+        }
+        /*  !job->exception_in_progress:
+         *
+         *  Set job->exception_in_progress so that jobinfo_fatal_error()
+         *   doesn't dump a duplicate exception into the eventlog.
+         */
         job->exception_in_progress = 1;
         flux_log (h, LOG_DEBUG, "exec aborted: id=%ld", id);
         jobinfo_fatal_error (job, 0, "aborted due to exception type=%s", type);

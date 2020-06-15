@@ -101,14 +101,17 @@ done <invalid.txt
 # <jobspec command args> == <expected result>
 #
 cat <<EOF >inputs.txt
-srun              ==nnodes=0 nslots=1 slot_size=1
-srun -N1          ==nnodes=1 nslots=1 slot_size=1
-srun -N1 -n4      ==nnodes=1 nslots=4 slot_size=1
-srun -N1 -n4 -c4  ==nnodes=1 nslots=4 slot_size=4
-srun -n4 -c4      ==nnodes=0 nslots=4 slot_size=4
-srun -n4 -c4      ==nnodes=0 nslots=4 slot_size=4
-srun -n4 -c1      ==nnodes=0 nslots=4 slot_size=1
-srun -N4 -n4 -c4  ==nnodes=4 nslots=4 slot_size=4
+srun              ==nnodes=0 nslots=1 slot_size=1 duration=0.0
+srun -N1          ==nnodes=1 nslots=1 slot_size=1 duration=0.0
+srun -N1 -n4      ==nnodes=1 nslots=4 slot_size=1 duration=0.0
+srun -N1 -n4 -c4  ==nnodes=1 nslots=4 slot_size=4 duration=0.0
+srun -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 duration=0.0
+srun -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 duration=0.0
+srun -n4 -c1      ==nnodes=0 nslots=4 slot_size=1 duration=0.0
+srun -N4 -n4 -c4  ==nnodes=4 nslots=4 slot_size=4 duration=0.0
+srun -t 1 -N4     ==nnodes=4 nslots=4 slot_size=1 duration=60.0
+srun -t 0:5 -N4   ==nnodes=4 nslots=4 slot_size=1 duration=5.0
+srun -t 1:0:0 -N4 ==nnodes=4 nslots=4 slot_size=1 duration=3600.0
 EOF
 
 while read line; do

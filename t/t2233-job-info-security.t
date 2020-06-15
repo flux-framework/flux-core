@@ -14,7 +14,7 @@ update_job_userid() {
         if test -n "$userid"; then
             local kvsdir=$(flux job id --to=kvs $jobid)
             flux kvs get --raw ${kvsdir}.eventlog \
-                | sed -e 's/\("userid":\)[0-9]*/\1'${userid}/ \
+                | sed -e 's/\("userid":\)-*[0-9]*/\1'${userid}/ \
                 | flux kvs put --raw ${kvsdir}.eventlog=-
         fi
 }

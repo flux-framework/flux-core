@@ -273,6 +273,7 @@ struct rr rrtab[] = {
     { FLUX_JOB_RESULT_COMPLETED, "CD", "COMPLETED" },
     { FLUX_JOB_RESULT_FAILED,    "F",  "FAILED" },
     { FLUX_JOB_RESULT_CANCELLED, "CA", "CANCELLED" },
+    { FLUX_JOB_RESULT_TIMEOUT,   "TO", "TIMEOUT" },
     { -1, NULL, NULL },
 };
 

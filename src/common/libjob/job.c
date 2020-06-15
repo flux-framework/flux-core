@@ -531,6 +531,8 @@ const char *flux_job_resulttostr (flux_job_result_t result, bool abbrev)
             return abbrev ? "F" : "FAILED";
         case FLUX_JOB_RESULT_CANCELLED:
             return abbrev ? "CA" : "CANCELLED";
+        case FLUX_JOB_RESULT_TIMEOUT:
+            return abbrev ? "TO" : "TIMEOUT";
     }
     return abbrev ? "?" : "(unknown)";
 }
@@ -545,6 +547,8 @@ int flux_job_strtoresult (const char *s, flux_job_result_t *result)
         *result = FLUX_JOB_RESULT_FAILED;
     else if (!strcasecmp (s, "CA") || !strcasecmp (s, "CANCELLED"))
         *result = FLUX_JOB_RESULT_CANCELLED;
+    else if (!strcasecmp (s, "TO") || !strcasecmp (s, "TIMEOUT"))
+        *result = FLUX_JOB_RESULT_TIMEOUT;
     else
         goto inval;
 
