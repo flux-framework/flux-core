@@ -206,15 +206,6 @@ class JobInfo:
         return get_username(self.userid)
 
     @memoized_property
-    def runtime_fsd(self):
-        return fsd(self.runtime)
-
-    @memoized_property
-    def runtime_hms(self):
-        runtime = self.get_runtime(True)
-        return str(timedelta(seconds=runtime))
-
-    @memoized_property
     def runtime(self):
         return self.get_runtime()
 
@@ -342,8 +333,6 @@ def fetch_jobs_flux(args, fields):
         "t_cleanup": ("t_cleanup",),
         "t_inactive": ("t_inactive",),
         "runtime": ("t_run", "t_cleanup"),
-        "runtime_fsd": ("t_run", "t_cleanup"),
-        "runtime_hms": ("t_run", "t_cleanup"),
         "status": ("state", "result"),
         "status_abbrev": ("state", "result"),
         "expiration": ("expiration", "state", "result"),
@@ -572,8 +561,6 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "t_cleanup": "T_CLEANUP",
         "t_inactive": "T_INACTIVE",
         "runtime": "RUNTIME",
-        "runtime_fsd": "RUNTIME",
-        "runtime_hms": "RUNTIME",
         "status": "STATUS",
         "status_abbrev": "STATUS",
     }
@@ -646,7 +633,7 @@ def main():
     else:
         fmt = (
             "{id:>18} {username:<8.8} {name:<10.10} {status_abbrev:>6.6} "
-            "{ntasks:>6} {nnodes:>6h} {runtime_fsd:>8h} "
+            "{ntasks:>6} {nnodes:>6h} {runtime!F:>8h} "
             "{ranks:h}"
         )
     try:
