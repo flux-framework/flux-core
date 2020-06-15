@@ -47,7 +47,7 @@ RESULT_CONST_DICT = {
 }
 
 
-def fsd(secs, hyphenifzero):
+def fsd(secs):
     #  Round <1ms down to 0s for now
     if secs < 1.0e-3:
         strtmp = "0s"
@@ -61,8 +61,6 @@ def fsd(secs, hyphenifzero):
         strtmp = "%.4gh" % (secs / (60.0 * 60.0))
     else:
         strtmp = "%.4gd" % (secs / (60.0 * 60.0 * 24.0))
-    if hyphenifzero and strtmp == "0s":
-        return "-"
     return strtmp
 
 
@@ -195,7 +193,7 @@ class JobInfo:
 
     @memoized_property
     def runtime_fsd(self):
-        return fsd(self.runtime, False)
+        return fsd(self.runtime)
 
     @memoized_property
     def runtime_hms(self):
