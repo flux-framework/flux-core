@@ -18,7 +18,7 @@ import time
 import pwd
 import string
 import errno
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import flux.job
 import flux.constants
@@ -496,9 +496,37 @@ class JobsOutputFormat(flux.util.OutputFormat):
     """
 
     class JobFormatter(string.Formatter):
+        def convert_field(self, value, conv):
+            """
+            Flux job-specific field conversions. Avoids the need
+            to create many different format field names to represent
+            different conversion types. (mainly used for time-specific
+            fields for now).
+            """
+            if conv == "d":
+                # convert from float seconds sinc epoch to a datetime.
+                # User can than use datetime specific format fields, e.g.
+                # {t_inactive!D:%H:%M:S}.
+                value = datetime.fromtimestamp(value)
+            elif conv == "D":
+                # As above, but convert to ISO 8601 date time string.
+                value = datetime.fromtimestamp(value).strftime("%FT%T")
+            elif conv == "F":
+                # convert to Flux Standard Duration (fsd) string.
+                value = fsd(value)
+            elif conv == "H":
+                # if > 0, always round up to at least one second to
+                #  avoid presenting a nonzero timedelta as zero
+                if 0 < value < 1:
+                    value = 1
+                value = str(timedelta(seconds=round(value)))
+            else:
+                value = super().convert_field(value, conv)
+            return value
+
         def format_field(self, value, spec):
             if spec.endswith("h"):
-                basecases = ("", "0s", "0.0", "0:00:00")
+                basecases = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00")
                 value = "-" if str(value) in basecases else str(value)
                 spec = spec[:-1] + "s"
             return super().format_field(value, spec)
