@@ -44,6 +44,8 @@ wait_states() {
         return 0
 }
 
+export FLUX_PYCLI_LOGLEVEL=10
+
 test_expect_success 'submit jobs for job list testing' '
         for i in `seq 1 4`; do \
             jobid=`flux mini submit hostname`; \
@@ -577,36 +579,98 @@ test_expect_success 'flux-jobs --format={status},{status_abbrev} works' '
         test_cmp statusI.out statusI.exp
 '
 
+test_expect_success 'flux-jobs --format={expiration},{t_remaining} works' '
+	expiration=$(flux jobs -f running -c1 -no "{expiration:.0f}") &&
+	t_remaining=$(flux jobs -f running -c1 -no "{t_remaining:.0f}") &&
+	t_now=$(date +%s) &&
+	test_debug "echo expiration=$expiration, t_remaining=$t_remaining" &&
+	test $t_remaining -gt 0 &&
+	test $expiration  -gt $t_now
+'
+test_expect_success 'flux-jobs --format={expiration!D},{t_remaining!F} works' '
+	exp=$(($(date +%s) + 600)) &&
+	cat <<-EOF >expiration.in &&
+{"id": 1447588528128, "state": 8,  "expiration": ${exp}.0 }
+	EOF
+	expiration=$(cat expiration.in | \
+                     flux jobs --from-stdin -no "{expiration!D}") &&
+	t_remaining=$(cat expiration.in | \
+		     flux jobs --from-stdin -no "{t_remaining!F}") &&
+	test_debug "echo expiration=$expiration, t_remaining=$t_remaining" &&
+	test "${expiration}" = "$(date --date=@${exp} +%FT%T)" &&
+	test_debug "echo expiration OK" &&
+	echo ${t_remaining} | grep "^[0-9.][0-9.]*[smdh]"
+'
+test_expect_success 'flux-jobs --format={expiration!d:%FT%T},{t_remaining!H} works' '
+	exp=$(($(date +%s) + 600)) &&
+	cat <<-EOF >expiration.in &&
+{"id": 1447588528128, "state": 8,  "expiration": ${exp}.0 }
+	EOF
+	expiration=$(cat expiration.in | \
+                     flux jobs --from-stdin -no "{expiration!d:%FT%T}") &&
+	t_remaining=$(cat expiration.in | \
+		     flux jobs --from-stdin -no "{t_remaining!H}") &&
+	test_debug "echo expiration=$expiration, t_remaining=$t_remaining" &&
+	test "${expiration}" = "$(date --date=@${exp} +%FT%T)" &&
+	test_debug "echo expiration OK" &&
+	echo ${t_remaining} | grep "[0-9]:[0-9][0-9]:[0-9][0-9]"
+'
+test_expect_success 'flux-jobs --format={expiration!D:h},{t_remaining!H:h} works' '
+	cat <<-EOF >expiration.in &&
+{"id": 1447588528128, "state": 8,  "expiration": 0 }
+	EOF
+	expiration=$(cat expiration.in | \
+                     flux jobs --from-stdin -no "{expiration!D:h}") &&
+	t_remaining=$(cat expiration.in | \
+		     flux jobs --from-stdin -no "{t_remaining!H:h}") &&
+	test_debug "echo expiration=$expiration, t_remaining=$t_remaining" &&
+	test "${expiration}" = "-" &&
+	test "${t_remaining}" = "-"
+'
 #
 # format header tests
 #
 test_expect_success 'flux-jobs: header included with all custom formats' '
 	flux jobs --format={id} | head -1 | grep "JOBID" &&
-        flux jobs --format={userid} | head -1 | grep "UID" &&
-        flux jobs --format={username} | head -1 | grep "USER" &&
-        flux jobs --format={priority} | head -1 | grep "PRI" &&
-        flux jobs --format={state} | head -1 | grep "STATE" &&
-        flux jobs --format={state_single} | head -1 | grep "ST" &&
-        flux jobs --format={name} | head -1 | grep "NAME" &&
-        flux jobs --format={ntasks} | head -1 | grep "NTASKS" &&
-        flux jobs --format={nnodes} | head -1 | grep "NNODES" &&
-        flux jobs --format={ranks} | head -1 | grep "RANKS" &&
-        flux jobs --format={success} | head -1 | grep "SUCCESS" &&
-        flux jobs --format={exception.occurred} | head -1 | grep "EXCEPTION-OCCURRED" &&
-        flux jobs --format={exception.severity} | head -1 | grep "EXCEPTION-SEVERITY" &&
-        flux jobs --format={exception.type} | head -1 | grep "EXCEPTION-TYPE" &&
-        flux jobs --format={exception.note} | head -1 | grep "EXCEPTION-NOTE" &&
-        flux jobs --format={result} | head -1 | grep "RESULT" &&
-        flux jobs --format={result_abbrev} | head -1 | grep "RS" &&
-        flux jobs --format={t_submit} | head -1 | grep "T_SUBMIT" &&
-        flux jobs --format={t_depend} | head -1 | grep "T_DEPEND" &&
-        flux jobs --format={t_sched} | head -1 | grep "T_SCHED" &&
-        flux jobs --format={t_run} | head -1 | grep "T_RUN" &&
-        flux jobs --format={t_cleanup} | head -1 | grep "T_CLEANUP" &&
-        flux jobs --format={t_inactive} | head -1 | grep "T_INACTIVE" &&
-        flux jobs --format={runtime} | head -1 | grep "RUNTIME" &&
-        flux jobs --format={runtime!F} | head -1 | grep "RUNTIME" &&
-        flux jobs --format={runtime!H} | head -1 | grep "RUNTIME"
+	flux jobs --format={userid} | head -1 | grep "UID" &&
+	flux jobs --format={username} | head -1 | grep "USER" &&
+	flux jobs --format={priority} | head -1 | grep "PRI" &&
+	flux jobs --format={state} | head -1 | grep "STATE" &&
+	flux jobs --format={state_single} | head -1 | grep "ST" &&
+	flux jobs --format={name} | head -1 | grep "NAME" &&
+	flux jobs --format={ntasks} | head -1 | grep "NTASKS" &&
+	flux jobs --format={nnodes} | head -1 | grep "NNODES" &&
+	flux jobs --format={ranks} | head -1 | grep "RANKS" &&
+	flux jobs --format={success} | head -1 | grep "SUCCESS" &&
+	flux jobs --format={exception.occurred} | head -1 | grep "EXCEPTION-OCCURRED" &&
+	flux jobs --format={exception.severity} | head -1 | grep "EXCEPTION-SEVERITY" &&
+	flux jobs --format={exception.type} | head -1 | grep "EXCEPTION-TYPE" &&
+	flux jobs --format={exception.note} | head -1 | grep "EXCEPTION-NOTE" &&
+	flux jobs --format={result} | head -1 | grep "RESULT" &&
+	flux jobs --format={result_abbrev} | head -1 | grep "RS" &&
+	flux jobs --format={t_submit} | head -1 | grep "T_SUBMIT" &&
+	flux jobs --format={t_depend} | head -1 | grep "T_DEPEND" &&
+	flux jobs --format={t_sched} | head -1 | grep "T_SCHED" &&
+	flux jobs --format={t_run} | head -1 | grep "T_RUN" &&
+	flux jobs --format={t_cleanup} | head -1 | grep "T_CLEANUP" &&
+	flux jobs --format={t_inactive} | head -1 | grep "T_INACTIVE" &&
+	flux jobs --format={runtime} | head -1 | grep "RUNTIME" &&
+	flux jobs --format={runtime!F} | head -1 | grep "RUNTIME" &&
+	flux jobs --format={runtime!H} | head -1 | grep "RUNTIME" &&
+	flux jobs --format={expiration} | head -1 | grep "EXPIRATION" &&
+	flux jobs --format={expiration!D} | head -1 | grep "EXPIRATION" &&
+	flux jobs --format={expiration!d:%FT%T} | head -1 | grep "EXPIRATION" &&
+	flux jobs --format={t_remaining} | head -1 | grep "T_REMAINING" &&
+	flux jobs --format={t_remaining!F} | head -1 | grep "T_REMAINING" &&
+	flux jobs --format={t_remaining!H} | head -1 | grep "T_REMAINING"
+'
+
+test_expect_success 'flux-jobs: header still prints with conversion spec' '
+	flux jobs --format={t_inactive!d},{t_cleanup!D},{t_run!F} | \
+		head -1 > conv_header.out &&
+	grep T_INACTIVE conv_header.out &&
+	grep T_CLEANUP conv_header.out &&
+	grep T_RUN conv_header.out
 '
 
 #
