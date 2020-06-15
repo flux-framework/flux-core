@@ -54,7 +54,7 @@ test_expect_success 'submit jobs for job list testing' '
         flux job wait-event $jobid clean &&
         echo $jobid >> job_ids1.out &&
         for i in `seq 1 8`; do \
-            jobid=`flux mini submit sleep 600`; \
+            jobid=`flux mini submit --time-limit=5m sleep 600`; \
             flux job wait-event $jobid start; \
             echo $jobid >> job_ids2.out; \
         done &&
@@ -431,11 +431,11 @@ test_expect_success 'flux-jobs --format={t_XXX} works' '
         test $count -eq 6
 '
 
-test_expect_success 'flux-jobs --format={runtime},{runtime_fsd},{runtime_fsd:h},{runtime_hms},{runtime_hms:h} works' '
-        flux jobs --suppress-header --filter=pending --format="{runtime},{runtime_fsd},{runtime_hms}" > runtimeP.out &&
+test_expect_success 'flux-jobs --format={runtime},{runtime!F},{runtime!F:h},{runtime!H},{runtime!H:h} works' '
+        flux jobs --suppress-header --filter=pending --format="{runtime},{runtime!F},{runtime!H}" > runtimeP.out &&
         for i in `seq 1 6`; do echo "0.0,0s,0:00:00" >> runtimeP.exp; done &&
         test_cmp runtimeP.out runtimeP.exp &&
-        flux jobs --suppress-header --filter=pending --format="{runtime_fsd:h},{runtime_hms:h}" > runtimeP_h.out &&
+        flux jobs --suppress-header --filter=pending --format="{runtime!F:h},{runtime!H:h}" > runtimeP_h.out &&
         for i in `seq 1 6`; do echo "-,-" >> runtimeP_h.exp; done &&
         test_cmp runtimeP_h.out runtimeP_h.exp &&
         flux jobs --suppress-header --filter=running --format="{runtime}" > runtimeR_1.out &&
@@ -444,16 +444,16 @@ test_expect_success 'flux-jobs --format={runtime},{runtime_fsd},{runtime_fsd:h},
         flux jobs --suppress-header --filter=running --format="{runtime:h}" > runtimeR_1_h.out &&
         count=`cat runtimeR_1_h.out | grep -v "^-$" | wc -l` &&
         test $count -eq 8 &&
-        flux jobs --suppress-header --filter=running --format="{runtime_fsd}" > runtimeR_2.out &&
+        flux jobs --suppress-header --filter=running --format="{runtime!F}" > runtimeR_2.out &&
         count=`cat runtimeR_2.out | grep -v "^0s" | wc -l` &&
         test $count -eq 8 &&
-        flux jobs --suppress-header --filter=running --format="{runtime_fsd:h}" > runtimeR_2_h.out &&
+        flux jobs --suppress-header --filter=running --format="{runtime!F:h}" > runtimeR_2_h.out &&
         count=`cat runtimeR_2_h.out | grep -v "^-$" | wc -l` &&
         test $count -eq 8 &&
-        flux jobs --suppress-header --filter=running --format="{runtime_hms}" > runtimeR_3.out &&
+        flux jobs --suppress-header --filter=running --format="{runtime!H}" > runtimeR_3.out &&
         count=`cat runtimeR_3.out | grep -v "^0:00:00$" | wc -l` &&
         test $count -eq 8 &&
-        flux jobs --suppress-header --filter=running --format="{runtime_hms:h}" > runtimeR_3_h.out &&
+        flux jobs --suppress-header --filter=running --format="{runtime!H:h}" > runtimeR_3_h.out &&
         count=`cat runtimeR_3_h.out | grep -v "^-$" | wc -l` &&
         test $count -eq 8 &&
         flux jobs --suppress-header --filter=inactive --format="{runtime}" > runtimeI_1.out &&
@@ -466,22 +466,22 @@ test_expect_success 'flux-jobs --format={runtime},{runtime_fsd},{runtime_fsd:h},
         test $count -eq 1 &&
         count=`tail -n 5 runtimeI_1_h.out | grep -v "^-$" | wc -l` &&
         test $count -eq 5 &&
-        flux jobs --suppress-header --filter=inactive --format="{runtime_fsd}" > runtimeI_2.out &&
+        flux jobs --suppress-header --filter=inactive --format="{runtime!F}" > runtimeI_2.out &&
         count=`head -n 1 runtimeI_2.out | grep "^0s" | wc -l` &&
         test $count -eq 1 &&
         count=`tail -n 5 runtimeI_2.out | grep -v "^0s" | wc -l` &&
         test $count -eq 5 &&
-        flux jobs --suppress-header --filter=inactive --format="{runtime_fsd:h}" > runtimeI_2_h.out &&
+        flux jobs --suppress-header --filter=inactive --format="{runtime!F:h}" > runtimeI_2_h.out &&
         count=`head -n 1 runtimeI_2_h.out | grep "^-$" | wc -l` &&
         test $count -eq 1 &&
         count=`tail -n 5 runtimeI_2_h.out | grep -v "^-$" | wc -l` &&
         test $count -eq 5 &&
-        flux jobs --suppress-header --filter=inactive --format="{runtime_hms}" > runtimeI_3.out &&
+        flux jobs --suppress-header --filter=inactive --format="{runtime!H}" > runtimeI_3.out &&
         count=`head -n 1 runtimeI_3.out | grep "^0:00:00$" | wc -l` &&
         test $count -eq 1 &&
         count=`tail -n 5 runtimeI_3.out | grep -v "^0:00:00$" | wc -l` &&
         test $count -eq 5 &&
-        flux jobs --suppress-header --filter=inactive --format="{runtime_hms:h}" > runtimeI_3_h.out &&
+        flux jobs --suppress-header --filter=inactive --format="{runtime!H:h}" > runtimeI_3_h.out &&
         count=`head -n 1 runtimeI_3_h.out | grep "^-$" | wc -l` &&
         test $count -eq 1 &&
         count=`tail -n 5 runtimeI_3_h.out | grep -v "^-$" | wc -l` &&
@@ -605,8 +605,8 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
         flux jobs --format={t_cleanup} | head -1 | grep "T_CLEANUP" &&
         flux jobs --format={t_inactive} | head -1 | grep "T_INACTIVE" &&
         flux jobs --format={runtime} | head -1 | grep "RUNTIME" &&
-        flux jobs --format={runtime_fsd} | head -1 | grep "RUNTIME" &&
-        flux jobs --format={runtime_hms} | head -1 | grep "RUNTIME"
+        flux jobs --format={runtime!F} | head -1 | grep "RUNTIME" &&
+        flux jobs --format={runtime!H} | head -1 | grep "RUNTIME"
 '
 
 #
