@@ -15,7 +15,14 @@
 
 #include "job_state.h"
 
-json_t *job_to_json (struct job *job, json_t *attrs);
+typedef struct {
+    char text[160];
+} job_info_error_t;
+
+void __attribute__((format (printf, 2, 3)))
+seterror (job_info_error_t *errp, const char *fmt, ...);
+
+json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp);
 
 #endif /* ! _FLUX_JOB_INFO_JOB_UTIL_H */
 

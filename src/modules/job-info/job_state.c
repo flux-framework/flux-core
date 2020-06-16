@@ -357,9 +357,10 @@ static void list_id_respond (struct info_ctx *ctx,
                              struct idsync_data *isd,
                              struct job *job)
 {
+    job_info_error_t err;
     json_t *o;
 
-    if (!(o = job_to_json (job, isd->attrs)))
+    if (!(o = job_to_json (job, isd->attrs, &err)))
         goto error;
 
     if (flux_respond_pack (ctx->h, isd->msg, "{s:O}", "job", o) < 0) {
@@ -371,7 +372,7 @@ static void list_id_respond (struct info_ctx *ctx,
     return;
 
 error:
-    if (flux_respond_error (ctx->h, isd->msg, errno, NULL) < 0)
+    if (flux_respond_error (ctx->h, isd->msg, errno, err.text) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (o);
 }
