@@ -142,7 +142,6 @@ TESTSCRIPTS = \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
 	t4000-issues-test-driver.t \
-	t9001-pymod.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
 	lua/t0003-events.t \

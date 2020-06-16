@@ -300,8 +300,6 @@ AS_VAR_SET(fluxpydir, $pyexecdir/flux)
 AC_SUBST(fluxpydir)
 AS_VAR_SET(fluxpysodir, $pyexecdir/_flux)
 AC_SUBST(fluxpysodir)
-AS_VAR_SET(fluxpymoddir, $pyexecdir/flux/modules)
-AC_SUBST(fluxpymoddir)
 AC_SUBST(PYTHON_LIBRARY, lib${ac_python_library}.so)
 
 AC_DEFINE_UNQUOTED([PYTHON_INTERPRETER], ["$PYTHON"], [The python interpreter flux is configured with])
@@ -494,7 +492,6 @@ AC_CONFIG_FILES( \
   src/modules/barrier/Makefile \
   src/modules/cron/Makefile \
   src/modules/aggregator/Makefile \
-  src/modules/pymod/Makefile \
   src/modules/job-ingest/Makefile \
   src/modules/job-manager/Makefile \
   src/modules/job-info/Makefile \
