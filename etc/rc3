@@ -22,7 +22,7 @@ flux module remove -f cron
 flux exec -r all flux module remove -f aggregator
 flux exec -r all flux module remove -f barrier
 
-flux exec -r all flux module remove -f job-info
+flux module remove -f job-info
 flux exec -r all flux module remove -f kvs-watch
 flux exec -r all -x 0 flux module remove -f kvs
 
