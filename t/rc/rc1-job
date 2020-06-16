@@ -19,9 +19,9 @@ flux exec -r all flux module load kvs-watch
 flux module load job-manager
 flux module load job-ingest
 
-flux exec -r all -x 0 flux module load job-ingest & pids="$pids $!"
-flux module load job-info & pids="$pids $!"
-flux exec -r all flux module load barrier & pids="$pids $!"
+flux exec -r all -x 0 flux module load job-ingest
+flux module load job-info
+flux exec -r all flux module load barrier
 
 # Load a fake resource.hwloc.by_rank key for sched-simple
 set_fake_hwloc_by_rank ${TEST_UNDER_FLUX_CORES_PER_RANK:-2}
