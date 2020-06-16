@@ -7,6 +7,7 @@ test_description='Test flux job info list services'
 test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-info/list-rpc.py"
 
 if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
@@ -851,59 +852,106 @@ test_expect_success 'job-info stats works' '
         flux module stats --parse idsync.lookups job-info &&
         flux module stats --parse idsync.waits job-info
 '
-
 test_expect_success 'list request with empty payload fails with EPROTO(71)' '
 	${RPC} job-info.list 71 </dev/null
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EPROTO(71) (attrs not an array)' '
+	name="attrs-not-array" &&
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:5}" \
-          | $RPC job-info.list 71
+          | $listRPC >${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 71: invalid payload: attrs must be an array
+	EOF
+	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs non-string)' '
+	name="attr-not-string" &&
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[5]}" \
-          | $RPC job-info.list 22
+	  | $listRPC > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: attr has no string value
+	EOF
+	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success HAVE_JQ 'list request with invalid input fails with EINVAL(22) (attrs illegal field)' '
+	name="field-not-valid" &&
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[\"foo\"]}" \
-          | $RPC job-info.list 22
+          | $listRPC > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: foo is not a valid attribute
+	EOF
+	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success 'list-id request with empty payload fails with EPROTO(71)' '
 	${RPC} job-info.list-id 71 </dev/null
 '
 test_expect_success HAVE_JQ 'list-id request with invalid input fails with EPROTO(71) (attrs not an array)' '
+	name="list-id-attrs-not-array" &&
         id=`flux mini submit hostname` &&
         $jq -j -c -n  "{id:${id}, attrs:5}" \
-          | $RPC job-info.list-id 71
+          | $listRPC list-id > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 71: invalid payload: attrs must be an array
+	EOF
+	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVAL(22) (attrs non-string)' '
-        id=`flux mini submit hostname` &&
+	name="list-id-invalid-attrs" &&
+	id=$(flux jobs -c1 -ano {id}) &&
         $jq -j -c -n  "{id:${id}, attrs:[5]}" \
-          | $RPC job-info.list-id 22
+          | $listRPC list-id > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: attr has no string value
+	EOF
+	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVAL(22) (attrs illegal field)' '
-        id=`flux mini submit hostname` &&
+	name="list-id-invalid-attr" &&
+	id=$(flux jobs -c1 -ano {id}) &&
         $jq -j -c -n  "{id:${id}, attrs:[\"foo\"]}" \
-          | $RPC job-info.list-id 22
+          | $listRPC list-id >${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: foo is not a valid attribute
+	EOF
+	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success 'list-inactive request with empty payload fails with EPROTO(71)' '
-	${RPC} job-info.list-inactive 71 </dev/null
+	name="list-inactive-empty" &&
+	${listRPC} list-inactive </dev/null >${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 71: invalid payload: '\''['\'' or '\''{'\'' expected near end of file
+	EOF
+	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with EPROTO(71) (attrs not an array)' '
+	name="list-inactive-invalid" &&
         $jq -j -c -n  "{max_entries:5, since:0.0, attrs:5}" \
-          | $RPC job-info.list-inactive 71
+          | $listRPC list-inactive > ${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 71: invalid payload: attrs must be an array
+	EOF
+	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with EINVAL(22) (attrs non-string)' '
+	name="list-inactive-attrs-invalid" &&
         $jq -j -c -n  "{max_entries:5, since:0.0, attrs:[5]}" \
-          | $RPC job-info.list-inactive 22
+          | $listRPC list-inactive >${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: attr has no string value
+	EOF
+	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with EINVAL(22) (attrs illegal field)' '
         $jq -j -c -n  "{max_entries:5, since:0.0, attrs:[\"foo\"]}" \
-          | $RPC job-info.list-inactive 22
+          | $listRPC list-inactive >${name}.out &&
+	cat <<-EOF >${name}.expected &&
+	errno 22: foo is not a valid attribute
+	EOF
+	test_cmp ${name}.expected ${name}.out
 '
-
 
 #
 # stress test
