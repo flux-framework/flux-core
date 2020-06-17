@@ -85,7 +85,7 @@ test_expect_success 'job-ingest: job-ingest fails with bad validator path' '
 test_expect_success 'job-ingest: load job-ingest && job-info' '
 	ingest_module load \
 		validator=${BINDINGS_VALIDATOR} &&
-	flux exec -r all flux module load job-info
+	flux module load job-info
 '
 
 test_expect_success HAVE_JQ 'job-ingest: dummy job-manager has expected max_jobid' '
@@ -217,7 +217,7 @@ test_expect_success 'job-ingest: validator unexpected exit is handled' '
 
 test_expect_success 'job-ingest: remove modules' '
 	flux module remove job-manager &&
-	flux exec -r all flux module remove job-info &&
+	flux module remove job-info &&
 	flux exec -r all flux module remove job-ingest
 '
 

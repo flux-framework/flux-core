@@ -36,7 +36,7 @@ test_expect_success 'job-manager: load job-ingest, job-manager' '
 	flux module load job-manager &&
 	flux module load job-ingest &&
 	flux exec -r all -x 0 flux module load job-ingest &&
-	flux exec -r all flux module load job-info
+	flux module load job-info
 '
 
 test_expect_success 'job-manager: submit 5 jobs' '
@@ -162,7 +162,7 @@ test_expect_success 'job-manager: remove sched-dummy' '
 
 test_expect_success 'job-manager: remove job-manager, job-ingest' '
 	flux module remove job-manager &&
-	flux exec -r all flux module remove job-info &&
+	flux module remove job-info &&
 	flux exec -r all flux module remove job-ingest
 '
 
