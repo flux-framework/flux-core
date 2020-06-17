@@ -354,7 +354,7 @@ wait_inactive() {
 
 test_expect_success 'reload the job-info module' '
         flux job list -a > before_reload.out &&
-        flux exec -r all flux module reload job-info &&
+        flux module reload job-info &&
         wait_inactive
 '
 
@@ -611,7 +611,7 @@ test_expect_success HAVE_JQ 'flux job lists full path for job name if basename f
 '
 
 test_expect_success 'reload the job-info module' '
-        flux exec -r all flux module reload job-info
+        flux module reload job-info
 '
 
 test_expect_success HAVE_JQ 'verify job names preserved across restart' '
@@ -648,7 +648,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (4 tasks)' '
 '
 
 test_expect_success 'reload the job-info module' '
-        flux exec -r all flux module reload job-info
+        flux module reload job-info
 '
 
 test_expect_success HAVE_JQ 'verify task count preserved across restart' '
@@ -749,7 +749,7 @@ test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (excepti
 '
 
 test_expect_success 'reload the job-info module' '
-        flux exec -r all flux module reload job-info
+        flux module reload job-info
 '
 
 test_expect_success HAVE_JQ 'verify nnodes preserved across restart' '

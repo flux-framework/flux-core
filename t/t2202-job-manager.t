@@ -20,7 +20,7 @@ test_expect_success 'job-manager: load job-ingest, job-info, job-manager' '
 	flux module load job-manager &&
 	flux module load job-ingest &&
 	flux exec -r all -x 0 flux module load job-ingest &&
-	flux exec -r all flux module load job-info
+	flux module load job-info
 '
 
 test_expect_success HAVE_JQ 'job-manager: max_jobid=0 before jobs run' '
@@ -307,7 +307,7 @@ test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 
 test_expect_success 'job-manager: remove job-manager, job-info, job-ingest' '
 	flux module remove job-manager &&
-	flux exec -r all flux module remove job-info &&
+	flux module remove job-info &&
 	flux exec -r all flux module remove job-ingest
 '
 

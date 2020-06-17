@@ -20,7 +20,7 @@ flux module load job-manager
 flux module load job-ingest
 
 flux exec -r all -x 0 flux module load job-ingest & pids="$pids $!"
-flux exec -r all flux module load job-info & pids="$pids $!"
+flux module load job-info & pids="$pids $!"
 flux exec -r all flux module load barrier & pids="$pids $!"
 
 # Load a fake resource.hwloc.by_rank key for sched-simple
