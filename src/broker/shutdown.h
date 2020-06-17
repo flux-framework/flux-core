@@ -13,21 +13,12 @@
 
 struct shutdown;
 
-typedef void (*shutdown_cb_f) (struct shutdown *s, void *arg);
-
-struct shutdown *shutdown_create (flux_t *h,
-                                  double grace,
-                                  uint32_t size,
-                                  int tbon_k,
-                                  struct overlay *overlay);
+struct shutdown *shutdown_create (struct broker *ctx);
 void shutdown_destroy (struct shutdown *s);
 
-void shutdown_set_callback (struct shutdown *s, shutdown_cb_f cb, void *arg);
-
-bool shutdown_is_complete (struct shutdown *s);
-bool shutdown_is_expired (struct shutdown *s);
-
-void shutdown_instance (struct shutdown *s);
+/* Call when broker transitions into SHUTDOWN state.
+ */
+void shutdown_notify (struct shutdown *s);
 
 #endif /* !_BROKER_SHUTDOWN_H */
 

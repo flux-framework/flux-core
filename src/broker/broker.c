@@ -64,7 +64,6 @@
 #include "overlay.h"
 #include "service.h"
 #include "hello.h"
-#include "shutdown.h"
 #include "attr.h"
 #include "log.h"
 #include "content-cache.h"
@@ -78,6 +77,7 @@
 #include "publisher.h"
 #include "state_machine.h"
 #include "join.h"
+#include "shutdown.h"
 
 #include "broker.h"
 
@@ -93,7 +93,6 @@ static void child_cb (struct overlay *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void hello_cb (struct hello *h, void *arg);
-static void shutdown_cb (struct shutdown *s, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
 static int broker_handle_signals (broker_ctx_t *ctx);
@@ -294,7 +293,6 @@ int main (int argc, char *argv[])
     ctx.cred.rolemask = FLUX_ROLE_OWNER;
     ctx.heartbeat_rate = 2;
     ctx.sec_typemask = ZSECURITY_TYPE_CURVE;
-    ctx.state = STATE_NONE;
 
     init_attrs (ctx.attrs, getpid ());
 
@@ -496,15 +494,10 @@ int main (int argc, char *argv[])
         }
     }
 
-    if (!(ctx.shutdown = shutdown_create (ctx.h,
-                                          ctx.shutdown_grace,
-                                          ctx.size,
-                                          ctx.tbon_k,
-                                          ctx.overlay))) {
+    if (!(ctx.shutdown = shutdown_create (&ctx))) {
         log_err ("shutdown_create");
         goto cleanup;
     }
-    shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
 
     /* Register internal services
      */
@@ -565,6 +558,14 @@ int main (int argc, char *argv[])
         log_msg ("installing session heartbeat: T=%0.1fs",
                   heartbeat_get_rate (ctx.heartbeat));
 
+    /* Configure broker state machine
+     */
+    if (!(ctx.state_machine = state_machine_create (&ctx))) {
+        log_err ("error creating broker state machine");
+        goto cleanup;
+    }
+    state_machine_post (ctx.state_machine, "start");
+
     /* Send hello message to parent.
      * N.B. uses tbon topology attributes set above.
      * hello_cb() tracks progress on rank 0.
@@ -580,7 +581,6 @@ int main (int argc, char *argv[])
     /* Load the local connector module.
      * Other modules will be loaded in rc1 using flux module,
      * which uses the local connector.
-     * The shutdown protocol unloads it.
      */
     if (ctx.verbose)
         log_msg ("loading connector-local");
@@ -588,7 +588,6 @@ int main (int argc, char *argv[])
         log_err ("load_module connector-local");
         goto cleanup;
     }
-
     /* Event loop
      */
     if (ctx.verbose)
@@ -631,6 +630,7 @@ cleanup:
     modhash_destroy (ctx.modhash);
     zlist_destroy (&ctx.sigwatchers);
     join_destroy (ctx.join);
+    state_machine_destroy (ctx.state_machine);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);
@@ -747,34 +747,10 @@ static void hello_cb (struct hello *hello, void *arg)
 
     if (hello_complete (hello)) {
         overlay_set_idle_warning (ctx->overlay, 3);
-        state_machine (ctx, "wireup-complete");
+        state_machine_post (ctx->state_machine, "wireup-complete");
     }
 
     free (s);
-}
-
-/* If shutdown timeout has occured, exit immediately.
- * If shutdown is beginning, start unload of connector-local module.
- * If shutdown is ending, then IFF connector-local has finished
- * unloading, stop the reactor.  Otherwise module_status_cb() will do it.
- */
-static void shutdown_cb (struct shutdown *s, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-
-    if (shutdown_is_expired (s)) {
-        log_msg ("shutdown timer expired on rank %"PRIu32, ctx->rank);
-        _exit (1);
-    }
-    if (!shutdown_is_complete (s)) {
-        module_t *p;
-        if ((p = module_lookup_byname (ctx->modhash, "connector-local")))
-            module_stop (p);
-    }
-    else {
-        if (!module_lookup_byname (ctx->modhash, "connector-local"))
-            flux_reactor_stop (flux_get_reactor (ctx->h));
-    }
 }
 
 static void set_proctitle (uint32_t rank)
@@ -782,36 +758,6 @@ static void set_proctitle (uint32_t rank)
     static char proctitle[32];
     snprintf (proctitle, sizeof (proctitle), "flux-broker-%"PRIu32, rank);
     (void)prctl (PR_SET_NAME, proctitle, 0, 0, 0);
-}
-
-static void runat_completion_cb (struct runat *r, const char *name, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    int rc = 1;
-
-    if (runat_get_exit_code (r, name, &rc) < 0)
-        log_err ("runat_get_exit_code %s", name);
-
-    if (!strcmp (name, "rc1")) {
-        if (rc != 0)
-            ctx->exit_rc = rc;
-        state_machine (ctx, rc == 0 ? "rc1-success" : "rc1-fail");
-    }
-    else if (!strcmp (name, "rc2")) {
-        if (rc != 0)
-            ctx->exit_rc = rc;
-        state_machine (ctx, rc == 0 ? "rc2-success" : "rc2-fail");
-    }
-    else if (!strcmp (name, "cleanup")) {
-        if (rc != 0)
-            ctx->exit_rc = rc;
-        state_machine (ctx, rc == 0 ? "cleanup-success" : "cleanup-fail");
-    }
-    else if (!strcmp (name, "rc3")) {
-        if (rc != 0)
-            ctx->exit_rc = rc;
-        state_machine (ctx, rc == 0 ? "rc3-success" : "rc3-fail");
-    }
 }
 
 static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
@@ -833,59 +779,55 @@ static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
 
 static int create_runat_phases (broker_ctx_t *ctx)
 {
-    if (ctx->rank == 0) {
-        const char *rc1, *rc3, *local_uri;
-        bool rc2_none = false;
+    const char *rc1, *rc3, *local_uri;
+    bool rc2_none = false;
 
-        if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0) {
-            log_err ("local-uri is not set");
+    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0) {
+        log_err ("local-uri is not set");
+        return -1;
+    }
+    if (attr_get (ctx->attrs, "broker.rc1_path", &rc1, NULL) < 0) {
+        log_err ("broker.rc1_path is not set");
+        return -1;
+    }
+    if (attr_get (ctx->attrs, "broker.rc3_path", &rc3, NULL) < 0) {
+        log_err ("broker.rc3_path is not set");
+        return -1;
+    }
+    if (ctx->rank > 0
+            || attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
+        rc2_none = true;
+
+    if (!(ctx->runat = runat_create (ctx->h, local_uri))) {
+        log_err ("runat_create");
+        return -1;
+    }
+
+    /* rc1 - initialization
+     */
+    if (rc1 && strlen (rc1) > 0) {
+        if (runat_push_shell_command (ctx->runat, "rc1", rc1, true) < 0) {
+            log_err ("runat_push_shell_command rc1");
             return -1;
         }
-        if (attr_get (ctx->attrs, "broker.rc1_path", &rc1, NULL) < 0) {
-            log_err ("broker.rc1_path is not set");
+    }
+
+    /* rc2 - initial program
+     */
+    if (!rc2_none) {
+        if (create_runat_rc2 (ctx->runat, ctx->init_shell_cmd,
+                                          ctx->init_shell_cmd_len) < 0) {
+            log_err ("create_runat_rc2");
             return -1;
         }
-        if (attr_get (ctx->attrs, "broker.rc3_path", &rc3, NULL) < 0) {
-            log_err ("broker.rc3_path is not set");
+    }
+
+    /* rc3 - finalization
+     */
+    if (rc3 && strlen (rc3) > 0) {
+        if (runat_push_shell_command (ctx->runat, "rc3", rc3, true) < 0) {
+            log_err ("runat_push_shell_command rc3");
             return -1;
-        }
-        if (attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
-            rc2_none = true;
-
-        if (!(ctx->runat = runat_create (ctx->h,
-                                         local_uri,
-                                         runat_completion_cb,
-                                         ctx))) {
-            log_err ("runat_create");
-            return -1;
-        }
-
-        /* rc1 - initialization
-         */
-        if (rc1 && strlen (rc1) > 0) {
-            if (runat_push_shell_command (ctx->runat, "rc1", rc1, true) < 0) {
-                log_err ("runat_push_shell_command rc1");
-                return -1;
-            }
-        }
-
-        /* rc2 - initial program
-         */
-        if (!rc2_none) {
-            if (create_runat_rc2 (ctx->runat, ctx->init_shell_cmd,
-                                              ctx->init_shell_cmd_len) < 0) {
-                log_err ("create_runat_rc2");
-                return -1;
-            }
-        }
-
-        /* rc3 - finalization
-         */
-        if (rc3 && strlen (rc3) > 0) {
-            if (runat_push_shell_command (ctx->runat, "rc3", rc3, true) < 0) {
-                log_err ("runat_push_shell_command rc3");
-                return -1;
-            }
         }
     }
     return 0;
@@ -1517,6 +1459,8 @@ static struct internal_service services[] = {
     { "overlay",            NULL },
     { "config",             NULL },
     { "runat",              NULL },
+    { "join",               NULL },
+    { "shutdown",           NULL },
     { NULL, NULL, },
 };
 
@@ -1634,8 +1578,12 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 
     /* Forward to this rank's children.
      */
-    if (overlay_mcast_child (ctx->overlay, msg) < 0)
-        flux_log_error (ctx->h, "%s: overlay_mcast_child", __FUNCTION__);
+    if (overlay_mcast_child (ctx->overlay, msg) < 0) {
+        flux_log_error (ctx->h,
+                        "%s: overlay_mcast_child topic=%s",
+                        __FUNCTION__,
+                        topic);
+    }
 
     /* Internal services may install message handlers for events.
      */
@@ -1829,14 +1777,6 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
         if (module_rmmod_respond (ctx->h, p) < 0)
             flux_log_error (ctx->h, "flux_respond to rmmod %s", name);
 
-        /* Special case for connector-local removal:
-         * If shutdown is complete, stop the reactor.
-         */
-        if (!strcmp (name, "connector-local")) {
-            if (shutdown_is_complete (ctx->shutdown))
-                flux_reactor_stop (flux_get_reactor (ctx->h));
-        }
-
         module_remove (ctx->modhash, p);
     }
 }
@@ -1848,8 +1788,7 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     int signum = flux_signal_watcher_get_signum (w);
 
     flux_log (ctx->h, LOG_INFO, "signal %d", signum);
-    if (ctx->rank == 0)
-        state_abort (ctx);
+    state_machine_kill (ctx->state_machine, signum);
 }
 
 /* Send a request message down the TBON.
