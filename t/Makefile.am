@@ -225,6 +225,7 @@ dist_check_SCRIPTS = \
 	job-exec/dummy.sh \
 	job-exec/imp.sh \
 	job-info/list-id.py \
+	job-info/list-rpc.py \
 	job-archive/query.py \
 	schedutil/req_and_unload.py \
 	ingest/fake-validate.sh \

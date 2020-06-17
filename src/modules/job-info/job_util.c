@@ -15,12 +15,25 @@
 #endif
 #include <czmq.h>
 #include <jansson.h>
+#include <stdarg.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/errno_safe.h"
 
 #include "job_util.h"
 #include "job_state.h"
+
+void seterror (job_info_error_t *errp, const char *fmt, ...)
+{
+    if (errp) {
+        va_list ap;
+        int saved_errno = errno;
+        va_start (ap, fmt);
+        (void) vsnprintf (errp->text, sizeof (errp->text), fmt, ap);
+        va_end (ap);
+        errno = saved_errno;
+    }
+}
 
 /* For a given job, create a JSON object containing the jobid and any
  * additional requested attributes and their values.  Returns JSON
@@ -30,12 +43,14 @@
  * EPROTO - malformed attrs array
  * ENOMEM - out of memory
  */
-json_t *job_to_json (struct job *job, json_t *attrs)
+json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
 {
     size_t index;
     json_t *value;
     json_t *o;
     json_t *val = NULL;
+
+    memset (errp, 0, sizeof (*errp));
 
     if (!(o = json_object ()))
         goto error_nomem;
@@ -48,6 +63,7 @@ json_t *job_to_json (struct job *job, json_t *attrs)
     json_array_foreach (attrs, index, value) {
         const char *attr = json_string_value (value);
         if (!attr) {
+            seterror (errp, "attr has no string value");
             errno = EINVAL;
             goto error;
         }
@@ -141,6 +157,7 @@ json_t *job_to_json (struct job *job, json_t *attrs)
             val = json_integer (job->result);
         }
         else {
+            seterror (errp, "%s is not a valid attribute", attr);
             errno = EINVAL;
             goto error;
         }

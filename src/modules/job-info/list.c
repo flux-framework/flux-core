@@ -25,6 +25,7 @@
 #include "job_state.h"
 
 json_t *get_job_by_id (struct info_ctx *ctx,
+                       job_info_error_t *errp,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
                        json_t *attrs,
@@ -50,6 +51,7 @@ bool job_filter (struct job *job, uint32_t userid, int states, int results)
  * ENOMEM - out of memory
  */
 int get_jobs_from_list (json_t *jobs,
+                        job_info_error_t *errp,
                         zlistx_t *list,
                         int max_entries,
                         json_t *attrs,
@@ -63,7 +65,7 @@ int get_jobs_from_list (json_t *jobs,
     while (job) {
         if (job_filter (job, userid, states, results)) {
             json_t *o;
-            if (!(o = job_to_json (job, attrs)))
+            if (!(o = job_to_json (job, attrs, errp)))
                 return -1;
             if (json_array_append_new (jobs, o) < 0) {
                 json_decref (o);
@@ -87,6 +89,7 @@ int get_jobs_from_list (json_t *jobs,
  * ENOMEM - out of memory
  */
 json_t *get_jobs (struct info_ctx *ctx,
+                  job_info_error_t *errp,
                   int max_entries,
                   json_t *attrs,
                   uint32_t userid,
@@ -105,6 +108,7 @@ json_t *get_jobs (struct info_ctx *ctx,
 
     if (states & FLUX_JOB_PENDING) {
         if ((ret = get_jobs_from_list (jobs,
+                                       errp,
                                        ctx->jsctx->pending,
                                        max_entries,
                                        attrs,
@@ -117,6 +121,7 @@ json_t *get_jobs (struct info_ctx *ctx,
     if (states & FLUX_JOB_RUNNING) {
         if (!ret) {
             if ((ret = get_jobs_from_list (jobs,
+                                           errp,
                                            ctx->jsctx->running,
                                            max_entries,
                                            attrs,
@@ -130,6 +135,7 @@ json_t *get_jobs (struct info_ctx *ctx,
     if (states & FLUX_JOB_INACTIVE) {
         if (!ret) {
             if ((ret = get_jobs_from_list (jobs,
+                                           errp,
                                            ctx->jsctx->inactive,
                                            max_entries,
                                            attrs,
@@ -155,6 +161,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
               const flux_msg_t *msg, void *arg)
 {
     struct info_ctx *ctx = arg;
+    job_info_error_t err;
     json_t *jobs = NULL;
     json_t *attrs;
     int max_entries;
@@ -167,14 +174,21 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
                              "attrs", &attrs,
                              "userid", &userid,
                              "states", &states,
-                             "results", &results) < 0)
-        goto error;
-
-    if (max_entries < 0 || !json_is_array (attrs)) {
+                             "results", &results) < 0) {
+        seterror (&err, "invalid payload: %s", flux_msg_last_error (msg));
         errno = EPROTO;
         goto error;
     }
-
+    if (max_entries < 0) {
+        seterror (&err, "invalid payload: max_entries < 0 not allowed");
+        errno = EPROTO;
+        goto error;
+    }
+    if (!json_is_array (attrs)) {
+        seterror (&err, "invalid payload: attrs must be an array");
+        errno = EPROTO;
+        goto error;
+    }
     /* If user sets no states, assume they want all information */
     if (!states)
         states = (FLUX_JOB_PENDING
@@ -188,7 +202,8 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
                    | FLUX_JOB_RESULT_CANCELLED
                    | FLUX_JOB_RESULT_TIMEOUT);
 
-    if (!(jobs = get_jobs (ctx, max_entries, attrs, userid, states, results)))
+    if (!(jobs = get_jobs (ctx, &err, max_entries,
+                           attrs, userid, states, results)))
         goto error;
 
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0) {
@@ -200,7 +215,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, err.text) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (jobs);
 }
@@ -214,6 +229,7 @@ error:
  * ENOMEM - out of memory
  */
 json_t *get_inactive_jobs (struct info_ctx *ctx,
+                           job_info_error_t *errp,
                            int max_entries,
                            double since,
                            json_t *attrs,
@@ -230,7 +246,7 @@ json_t *get_inactive_jobs (struct info_ctx *ctx,
     while (job && (job->t_inactive > since)) {
         json_t *o;
         if (!name || strcmp (job->name, name) == 0) {
-            if (!(o = job_to_json (job, attrs)))
+            if (!(o = job_to_json (job, attrs, errp)))
                 goto error;
             if (json_array_append_new (jobs, o) < 0) {
                 json_decref (o);
@@ -259,6 +275,7 @@ void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     struct info_ctx *ctx = arg;
+    job_info_error_t err = {{0}};
     json_t *jobs = NULL;
     int max_entries;
     double since;
@@ -269,15 +286,25 @@ void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
                              "max_entries", &max_entries,
                              "since", &since,
                              "attrs", &attrs,
-                             "name", &name) < 0)
+                             "name", &name) < 0) {
+        seterror (&err, "invalid payload: %s", flux_msg_last_error (msg));
         goto error;
-
-    if (max_entries < 0 || !json_is_array (attrs)) {
+    }
+    if (max_entries < 0) {
+        seterror (&err, "invalid payload: max_entries < 0 not allowed");
         errno = EPROTO;
         goto error;
     }
-
-    if (!(jobs = get_inactive_jobs (ctx, max_entries, since, attrs, name)))
+    if (!json_is_array (attrs)) {
+        seterror (&err, "invalid payload: attrs must be an array");
+        errno = EPROTO;
+        goto error;
+    }
+    if (!(jobs = get_inactive_jobs (ctx, &err,
+                                    max_entries,
+                                    since,
+                                    attrs,
+                                    name)))
         goto error;
 
     if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0) {
@@ -289,7 +316,7 @@ void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, err.text) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (jobs);
 }
@@ -358,7 +385,8 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
         }
         else {
             json_t *o;
-            if (!(o = get_job_by_id (ctx, isd->msg, isd->id, isd->attrs, NULL))) {
+            if (!(o = get_job_by_id (ctx, NULL, isd->msg,
+                                     isd->id, isd->attrs, NULL))) {
                 flux_log_error (ctx->h, "%s: get_job_by_id", __FUNCTION__);
                 goto cleanup;
             }
@@ -434,6 +462,7 @@ error:
  * ENOMEM - out of memory
  */
 json_t *get_job_by_id (struct info_ctx *ctx,
+                       job_info_error_t *errp,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
                        json_t *attrs,
@@ -469,13 +498,14 @@ json_t *get_job_by_id (struct info_ctx *ctx,
         return NULL;
     }
 
-    return job_to_json (job, attrs);
+    return job_to_json (job, attrs, errp);
 }
 
 void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
                   const flux_msg_t *msg, void *arg)
 {
     struct info_ctx *ctx = arg;
+    job_info_error_t err = {{0}};
     json_t *job = NULL;
     flux_jobid_t id;
     json_t *attrs;
@@ -483,15 +513,19 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_unpack (msg, NULL, "{s:I s:o}",
                              "id", &id,
-                             "attrs", &attrs) < 0)
-        goto error;
-
-    if (!json_is_array (attrs)) {
+                             "attrs", &attrs) < 0) {
+        seterror (&err, "invalid payload: %s", flux_msg_last_error (msg));
         errno = EPROTO;
         goto error;
     }
 
-    if (!(job = get_job_by_id (ctx, msg, id, attrs, &stall))) {
+    if (!json_is_array (attrs)) {
+        seterror (&err, "invalid payload: attrs must be an array");
+        errno = EPROTO;
+        goto error;
+    }
+
+    if (!(job = get_job_by_id (ctx, &err, msg, id, attrs, &stall))) {
         /* response handled after KVS lookup complete */
         if (stall)
             goto stall;
@@ -508,7 +542,7 @@ stall:
     return;
 
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, err.text) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (job);
 }

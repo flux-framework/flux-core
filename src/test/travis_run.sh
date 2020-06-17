@@ -41,7 +41,7 @@ fi
 ARGS="$@"
 JOBS=${JOBS:-2}
 MAKECMDS="${MAKE} -j ${JOBS}"
-CHECKCMDS="${MAKE} -k -j ${JOBS} ${DISTCHECK:+dist}check"
+CHECKCMDS="${MAKE} -j ${JOBS} ${DISTCHECK:+dist}check"
 
 # Add non-standard path for libfaketime to LD_LIBRARY_PATH:
 export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu/faketime"

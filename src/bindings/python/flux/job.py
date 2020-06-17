@@ -338,9 +338,9 @@ def job_list(
     flux_handle, max_entries=1000, attrs=[], userid=os.getuid(), states=0, results=0
 ):
     payload = {
-        "max_entries": max_entries,
+        "max_entries": int(max_entries),
         "attrs": attrs,
-        "userid": userid,
+        "userid": int(userid),
         "states": states,
         "results": results,
     }
@@ -348,7 +348,7 @@ def job_list(
 
 
 def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=None):
-    payload = {"since": since, "max_entries": max_entries, "attrs": attrs}
+    payload = {"since": float(since), "max_entries": int(max_entries), "attrs": attrs}
     if name:
         payload["name"] = name
     return JobListRPC(flux_handle, "job-info.list-inactive", payload)
@@ -362,7 +362,7 @@ class JobListIdRPC(RPC):
 # list-id is not like list or list-inactive, it doesn't return an
 # array, so don't use JobListRPC
 def job_list_id(flux_handle, jobid, attrs=[]):
-    payload = {"id": jobid, "attrs": attrs}
+    payload = {"id": int(jobid), "attrs": attrs}
     return JobListIdRPC(flux_handle, "job-info.list-id", payload)
 
 
