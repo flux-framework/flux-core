@@ -798,9 +798,10 @@ static int R_lookup_parse (struct info_ctx *ctx,
     }
 
     if (json_unpack_ex (job->R, &error, 0,
-                        "{s:i s:{s:o}}",
+                        "{s:i s:{s?F s:o}}",
                         "version", &version,
                         "execution",
+                        "expiration", &job->expiration,
                         "R_lite", &R_lite) < 0) {
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid R: %s",

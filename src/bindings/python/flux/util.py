@@ -232,7 +232,15 @@ class OutputFormat:
         for (text, field, spec, conv) in self.format_list:
             #  Remove number formatting on any spec:
             spec = re.sub(r"(0?\.)?(\d+)?[bcdoxXeEfFgGn%]$", r"\2", spec)
-            format_list.append(self._fmt_tuple(text, field, spec, conv))
+            #  Only keep fill, align, and min width of the result.
+            #  This strips possible type-specific formatting spec that
+            #   will not apply to a heading, but keeps width and alignment.
+            match = re.match(r"(.?[<>=^])?(\d+)", spec)
+            if match is None:
+                spec = ""
+
+            #  Remove any conversion, these do not make sense for headings
+            format_list.append(self._fmt_tuple(text, field, spec, None))
         fmt = "".join(format_list)
         return fmt
 

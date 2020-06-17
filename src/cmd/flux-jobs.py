@@ -18,7 +18,7 @@ import time
 import pwd
 import string
 import errno
-from datetime import timedelta
+from datetime import datetime, timedelta
 
 import flux.job
 import flux.constants
@@ -47,7 +47,7 @@ RESULT_CONST_DICT = {
 }
 
 
-def fsd(secs, hyphenifzero):
+def fsd(secs):
     #  Round <1ms down to 0s for now
     if secs < 1.0e-3:
         strtmp = "0s"
@@ -61,8 +61,6 @@ def fsd(secs, hyphenifzero):
         strtmp = "%.4gh" % (secs / (60.0 * 60.0))
     else:
         strtmp = "%.4gd" % (secs / (60.0 * 60.0 * 24.0))
-    if hyphenifzero and strtmp == "0s":
-        return "-"
     return strtmp
 
 
@@ -117,6 +115,7 @@ class JobInfo:
         "t_run": 0.0,
         "t_cleanup": 0.0,
         "t_inactive": 0.0,
+        "expiration": 0.0,
         "nnodes": "",
         "ranks": "",
         "success": "",
@@ -173,6 +172,19 @@ class JobInfo:
             runtime = 0.0
         return runtime
 
+    def get_remaining_time(self):
+        status = str(self.status)
+        if status != "RUNNING":
+            return 0.0
+        tleft = self.expiration - time.time()
+        if tleft < 0.0:
+            return 0.0
+        return tleft
+
+    @property
+    def t_remaining(self):
+        return self.get_remaining_time()
+
     @memoized_property
     def state(self):
         return statetostr(self.state_id)
@@ -192,15 +204,6 @@ class JobInfo:
     @memoized_property
     def username(self):
         return get_username(self.userid)
-
-    @memoized_property
-    def runtime_fsd(self):
-        return fsd(self.runtime, False)
-
-    @memoized_property
-    def runtime_hms(self):
-        runtime = self.get_runtime(True)
-        return str(timedelta(seconds=runtime))
 
     @memoized_property
     def runtime(self):
@@ -330,10 +333,10 @@ def fetch_jobs_flux(args, fields):
         "t_cleanup": ("t_cleanup",),
         "t_inactive": ("t_inactive",),
         "runtime": ("t_run", "t_cleanup"),
-        "runtime_fsd": ("t_run", "t_cleanup"),
-        "runtime_hms": ("t_run", "t_cleanup"),
         "status": ("state", "result"),
         "status_abbrev": ("state", "result"),
+        "expiration": ("expiration", "state", "result"),
+        "t_remaining": ("expiration", "state", "result"),
     }
 
     attrs = set()
@@ -498,9 +501,37 @@ class JobsOutputFormat(flux.util.OutputFormat):
     """
 
     class JobFormatter(string.Formatter):
+        def convert_field(self, value, conv):
+            """
+            Flux job-specific field conversions. Avoids the need
+            to create many different format field names to represent
+            different conversion types. (mainly used for time-specific
+            fields for now).
+            """
+            if conv == "d":
+                # convert from float seconds sinc epoch to a datetime.
+                # User can than use datetime specific format fields, e.g.
+                # {t_inactive!D:%H:%M:S}.
+                value = datetime.fromtimestamp(value)
+            elif conv == "D":
+                # As above, but convert to ISO 8601 date time string.
+                value = datetime.fromtimestamp(value).strftime("%FT%T")
+            elif conv == "F":
+                # convert to Flux Standard Duration (fsd) string.
+                value = fsd(value)
+            elif conv == "H":
+                # if > 0, always round up to at least one second to
+                #  avoid presenting a nonzero timedelta as zero
+                if 0 < value < 1:
+                    value = 1
+                value = str(timedelta(seconds=round(value)))
+            else:
+                value = super().convert_field(value, conv)
+            return value
+
         def format_field(self, value, spec):
             if spec.endswith("h"):
-                basecases = ("", "0s", "0.0", "0:00:00")
+                basecases = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00")
                 value = "-" if str(value) in basecases else str(value)
                 spec = spec[:-1] + "s"
             return super().format_field(value, spec)
@@ -517,6 +548,8 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "name": "NAME",
         "ntasks": "NTASKS",
         "nnodes": "NNODES",
+        "expiration": "EXPIRATION",
+        "t_remaining": "T_REMAINING",
         "ranks": "RANKS",
         "success": "SUCCESS",
         "result": "RESULT",
@@ -528,8 +561,6 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "t_cleanup": "T_CLEANUP",
         "t_inactive": "T_INACTIVE",
         "runtime": "RUNTIME",
-        "runtime_fsd": "RUNTIME",
-        "runtime_hms": "RUNTIME",
         "status": "STATUS",
         "status_abbrev": "STATUS",
     }
@@ -602,7 +633,7 @@ def main():
     else:
         fmt = (
             "{id:>18} {username:<8.8} {name:<10.10} {status_abbrev:>6.6} "
-            "{ntasks:>6} {nnodes:>6h} {runtime_fsd:>8h} "
+            "{ntasks:>6} {nnodes:>6h} {runtime!F:>8h} "
             "{ranks:h}"
         )
     try:

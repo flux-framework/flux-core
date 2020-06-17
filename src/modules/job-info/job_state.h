@@ -70,6 +70,7 @@ struct job {
     int ntasks;
     int nnodes;
     char *ranks;
+    double expiration;
     bool success;
     bool exception_occurred;
     json_t *exception_context;

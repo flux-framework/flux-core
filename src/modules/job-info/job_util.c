@@ -102,6 +102,11 @@ json_t *job_to_json (struct job *job, json_t *attrs)
                 continue;
             val = json_string (job->ranks);
         }
+        else if (!strcmp (attr, "expiration")) {
+            if (!(job->states_mask & FLUX_JOB_RUN))
+                continue;
+            val = json_real (job->expiration);
+        }
         else if (!strcmp (attr, "success")) {
             if (!(job->states_mask & FLUX_JOB_INACTIVE))
                 continue;
