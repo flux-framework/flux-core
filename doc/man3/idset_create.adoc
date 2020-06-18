@@ -125,11 +125,11 @@ compressed into hyphenated ranges in the encoded string.
 RETURN VALUE
 ------------
 
-`idset_create()`, `idset_encode()`, and `idset_copy()` return an
+`idset_create()`, `idset_decode()`, and `idset_copy()` return an
 idset on success which must be freed with `idset_destroy()`.
 On error, NULL is returned with errno set.
 
-`idset_decode()` returns a string on success which must be freed
+`idset_encode()` returns a string on success which must be freed
 with `free()`.  On error, NULL is returned with errno set.
 
 `idset_first()`, `idset_next()`, and `idset_last()` return an id,
