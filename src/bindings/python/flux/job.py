@@ -446,7 +446,19 @@ def event_watch(flux_handle, jobid, eventlog="eventlog"):
         event = watcher.get_event()
 
 
-def event_wait(flux_handle, jobid, name, eventlog="eventlog"):
+class JobException(Exception):
+    def __init__(self, event):
+        self.timestamp = event.timestamp
+        self.type = event.context["type"]
+        self.note = event.context["note"]
+        self.severity = event.context["severity"]
+        super().__init__(self)
+
+    def __str__(self):
+        return f"job.exception: type={self.type}: {self.note}"
+
+
+def event_wait(flux_handle, jobid, name, eventlog="eventlog", raiseJobException=True):
     """Wait for a job eventlog entry 'name'
 
     Wait synchronously for an eventlog entry named "name" and
@@ -458,6 +470,8 @@ def event_wait(flux_handle, jobid, name, eventlog="eventlog"):
     :param jobid: the job ID on which to wait for eventlog events
     :param name: The event name for which to wait
     :param eventlog: eventlog path in job kvs directory (default: eventlog)
+    :param raiseJobException: if True, watch for job exception events and
+      raise a JobException if one is seen before event 'name' (default=True)
     :returns: an EventLogEntry object, or raises OSError if eventlog
      ended before matching event was found
     :rtype: EventLogEntry
@@ -465,6 +479,12 @@ def event_wait(flux_handle, jobid, name, eventlog="eventlog"):
     for event in event_watch(flux_handle, jobid, eventlog):
         if event.name == name:
             return event
+        if (
+            raiseJobException
+            and event.name == "exception"
+            and event.context["severity"] == 0
+        ):
+            raise JobException(event)
     raise OSError(errno.ENODATA, f"eventlog ended before event='{name}'")
 
 
