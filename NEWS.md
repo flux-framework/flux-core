@@ -1,3 +1,105 @@
+flux-core version 0.17.0 - 2020-06-18
+-------------------------------------
+
+*NOTE*: Support has been removed for Python 2.
+
+### New features
+
+ * Improved interface for batch jobs: `flux mini batch` and `flux mini alloc`
+   (#2962)
+ * Pty support for Flux jobs via `-o pty` shell option (#2894)
+ * New resource module for monitoring and control of resources,
+   including ability to exclude and drain/undrain ranks. (#2918, #2949)
+ * New `flux resource` utility to drain and list resources. (#2949)
+ * Multiple improvements for `flux jobs`: colorize output, add "status"
+   and "exception" fields, allow jobids as positional arguments, and
+   add a custom conversion type `h` for "-" (#2798, #2858, #2902, #2910,
+   #2940, #2926, #2865)
+ * Support for hwloc v2.0+ (#2944)
+ * Support for MPIR debugging of jobs (#2654)
+ * New job-archive module optionally stores job data in sqlite. (#2880)
+ * single-broker system instance support, including minimal
+   support for restart (archived job information is saved) (#2783, #2820,
+   #2813, #2809)
+ * Add support for multi-user execution (#2822, #2813)
+ * Add support for enforcing job time limits (#2995)
+ * python: Add bindings for job cancel and kill (#2976)
+ * python: Add bindings for watching job eventlog events (#2986)
+
+### Improvements
+
+ * support systemctl reload flux (#2879)
+ * enhance job throughput (#2777, #2792)
+ * sched-simple: schedule cores instead of PUs by default (#2966)
+ * broker: send service.disconnect requests on module unload (#2913)
+ * broker: add interface for monitoring broker liveness (#2914)
+ * broker: add cleanup phase (#2971)
+ * broker: only allow userid- services to be registered by guests (#2813)
+ * libflux: add `flux_msg_last_json_error(3)` (#2905)
+ * flux-job: Use common attrs for list cmds (#2901)
+ * doc: add flux job shell API manpages (#2793)
+ * job-info: Support "exception" and "success" list attributes (#2831, #2858)
+ * job-info: improve error responses from various list RPCs (#3010)
+ * rc: load job-info on rank 0 only (#3009)
+ * python: remove support for Python 2 (#2805)
+ * python: cache python wrappers in the class (#2878)
+ * python: tweaks in preparation for flux-tree-helper (#2804)
+ * python: add 'flux_job_list_inactive' Python binding (#2790)
+ * python: allow reactor_run() to be interrupted (#2974)
+ * config: parse TOML once in broker, share with modules (#2866)
+ * config: use config file for access policy (#2871)
+ * docker: add default PS1 that includes flux instance size, depth (#2925)
+ * docker: start munge in published docker images (#2922)
+
+### Fixes
+
+ * Fix compilation under GCC 10.1.0 (#2954)
+ * librouter: avoid dropping messages on EPIPE (#2934)
+ * README: update documentation link (#2929)
+ * README.md: fix required Lua version (#2923)
+ * README: add missing dependencies: aspell-en and make (#2889)
+ * shell: make registered services secure by default (#2877)
+ * cmd/flux-kvs: Fix segfault in dir -R (#2847)
+ * job-exec: drop use of broker attrs, use conf file or cmdline instead
+   (#2821)
+ * broker: clean shutdown on SIGTERM (#2794)
+ * flux-ping: fix problems with route string (#2811)
+ * libsubprocess:  don't clobber errno in destructors, handle ENOMEM (#2808)
+ * Fix flux-job status for jobs with exceptions before start (#2784)
+ * shell: Add missing R member to shell info JSON object (#2989)
+ * job-ingest: fix validation of V1 jobspec (duration required) (#2994)
+ * doc: fixes and updates for idset manpages (#3012)
+
+### Cleanup
+
+ * removed outdated pymod module (#3008)
+ * broker and flux-comms cleanup (#2907)
+ * cmd/flux-kvs: Remove legacy --json options and json output (#2807)
+ * doc: Fix typos in man pages (#2725)
+ * libutil: improve out of memory handling, conform to RFC 7 (#2785)
+ * content-sqlite, content-cache: cleanup and refactoring (#2786)
+
+### Testsuite enhancements
+
+ * Fix skipped tests in t2205-hwloc-basic.t (#2998)
+ * t2204-job-info: Split up tests into new files (#2957)
+ * t/t2800-jobs-cmd: Fix racy test (#2951)
+ * t: add `HAVE_JQ` prereq to tests that use `jq` (#2936)
+ * sharness: fix TEST_CHECK_PREREQS for tests using $jq (#2939)
+ * job-info: module & test cleanup (#2932)
+ * testsuite: add ability to ensure programs are used under appropriate
+   prereqs (#2937)
+ * ensure unit tests do not link against installed flux libraries (#2917)
+ * t2204-job-info: Fix racy tests (#2862)
+ * test rehab: new flexible run_timeout, speeding up asan, and many more
+   timeouts and test repairs (#2849)
+ * Mypy: add static type checking for python to travis (#2836)
+ * testsuite: minor fixes and slight improvements (#2842)
+ * README: update Travis CI badge after transition to travis-ci.com (#2843)
+ * tests: timeout in automake harness (#2840)
+ * t/t0005-exec: Increase timeout lengths (#2828)
+
+
 flux-core version 0.16.0 - 2020-02-24
 -------------------------------------
 
