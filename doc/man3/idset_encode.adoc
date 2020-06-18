@@ -1,0 +1,101 @@
+idset_encode(3)
+===============
+:doctype: manpage
+
+
+NAME
+----
+idset_encode, idset_decode - Convert idset to string and string to idset
+
+SYNOPSIS
+--------
+ #include <flux/idset.h>
+
+ char *idset_encode (const struct idset *idset, int flags);
+
+ struct idset *idset_decode (const char *s);
+
+
+USAGE
+-----
+
+cc [flags] files -lflux-idset [libraries]
+
+DESCRIPTION
+-----------
+
+Refer to `idset_create(3)` for a general description of idsets.
+
+`idset_encode()` creates a string from 'idset'.  The string contains
+a comma-separated list of ids, potentially modified by 'flags'
+(see FLAGS below).
+
+`idset_decode()` creates an idset from a string 's'.  The string may
+have been produced by `idset_encode()`.  It must consist of comma-separated
+non-negative integer ids, and may also contain hyphenated ranges.
+If enclosed in square brackets, the brackets are ignored.  Some examples
+of valid input strings are:
+
+  1,2,5,4
+
+  1-4,7,9-10
+
+  42
+
+  [99-101]
+
+
+
+FLAGS
+-----
+
+IDSET_FLAG_BRACKETS::
+Valid for `idset_encode()` only.  If set, the encoded string will be
+enclosed in brackets, unless the idset is a singleton (contains only
+one id).
+
+IDSET_FLAG_RANGE::
+Valid for `idset_encode()` only.  If set, any consecutive ids are
+compressed into hyphenated ranges in the encoded string.
+
+RETURN VALUE
+------------
+
+`idset_decode()` returns idset on success which must be freed
+with `idset_destroy(3)`.  On error, NULL is returned with errno set.
+
+`idset_encode()` returns a string on success which must be freed
+with `free()`.  On error, NULL is returned with errno set.
+
+
+ERRORS
+------
+
+EINVAL::
+One or more arguments were invalid.
+
+ENOMEM::
+Out of memory.
+
+
+AUTHOR
+------
+This page is maintained by the Flux community.
+
+
+RESOURCES
+---------
+Github: <http://github.com/flux-framework>
+
+
+COPYRIGHT
+---------
+include::COPYRIGHT.adoc[]
+
+
+SEE ALSO
+--------
+
+idset_create(3)
+
+https://github.com/flux-framework/rfc/blob/master/spec_22.adoc[RFC 22: Idset String Representation]

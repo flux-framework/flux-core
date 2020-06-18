@@ -66,7 +66,8 @@ MAN3_FILES_PRIMARY = \
 	flux_kvs_getroot.3 \
 	flux_kvs_copy.3 \
 	flux_core_version.3 \
-	idset_create.3
+	idset_create.3 \
+	idset_encode.3
 
 # These files are generated as roff .so includes of a primary page.
 # A2X handles this automatically if mentioned in NAME section
@@ -205,13 +206,13 @@ MAN3_FILES_SECONDARY = \
 	flux_kvs_move.3 \
 	flux_core_version_string.3 \
 	idset_destroy.3 \
-	idset_encode.3 \
 	idset_decode.3 \
 	idset_set.3 \
 	idset_clear.3 \
 	idset_first.3 \
 	idset_next.3 \
-	idset_count.3
+	idset_count.3 \
+	idset_equal.3
 
 ADOC_FILES  = $(MAN3_FILES_PRIMARY:%.3=%.adoc)
 XML_FILES   = $(MAN3_FILES_PRIMARY:%.3=%.xml)
@@ -356,15 +357,16 @@ flux_kvs_txn_put_raw.3: flux_kvs_txn_create.3
 flux_kvs_namespace_remove.3: flux_kvs_namespace_create.3
 flux_kvs_move.3: flux_kvs_copy.3
 flux_core_version_string.3: flux_core_version.3
+
 idset_destroy.3: idset_create.3
-idset_encode.3: idset_create.3
-idset_decode.3: idset_create.3
 idset_set.3: idset_create.3
 idset_clear.3: idset_create.3
 idset_first.3: idset_create.3
 idset_next.3: idset_create.3
 idset_count.3: idset_create.3
-# N.B. exceeds max 8 stubs  idset_equal.3
+idset_equal.3: idset_create.3
+
+idset_decode.3: idset_encode.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c
