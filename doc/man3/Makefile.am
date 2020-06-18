@@ -207,6 +207,7 @@ MAN3_FILES_SECONDARY = \
 	flux_core_version_string.3 \
 	idset_destroy.3 \
 	idset_decode.3 \
+	idset_ndecode.3 \
 	idset_set.3 \
 	idset_clear.3 \
 	idset_first.3 \
@@ -367,6 +368,7 @@ idset_count.3: idset_create.3
 idset_equal.3: idset_create.3
 
 idset_decode.3: idset_encode.3
+idset_ndecode.3: idset_encode.3
 
 flux_open.3: topen.c
 flux_send.3: tsend.c

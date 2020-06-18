@@ -5,7 +5,7 @@ idset_encode(3)
 
 NAME
 ----
-idset_encode, idset_decode - Convert idset to string and string to idset
+idset_encode, idset_decode, idset_ndecode - Convert idset to string and string to idset
 
 SYNOPSIS
 --------
@@ -14,6 +14,8 @@ SYNOPSIS
  char *idset_encode (const struct idset *idset, int flags);
 
  struct idset *idset_decode (const char *s);
+
+ struct idset *idset_ndecode (const char *s, size_t len);
 
 
 USAGE
@@ -44,6 +46,8 @@ of valid input strings are:
 
   [99-101]
 
+`idset_ndecode()` creates an idset from a sub-string 's' defined by
+length 'len'.
 
 
 FLAGS
@@ -61,8 +65,8 @@ compressed into hyphenated ranges in the encoded string.
 RETURN VALUE
 ------------
 
-`idset_decode()` returns idset on success which must be freed
-with `idset_destroy(3)`.  On error, NULL is returned with errno set.
+`idset_decode()` and `idset_ndecode()` return idset on success which must
+be freed with `idset_destroy(3)`.  On error, NULL is returned with errno set.
 
 `idset_encode()` returns a string on success which must be freed
 with `free()`.  On error, NULL is returned with errno set.

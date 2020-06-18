@@ -491,3 +491,4 @@ nslots
 alloc
 datetime
 formatter
+ndecode
