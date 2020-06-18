@@ -197,7 +197,7 @@ class TestJob(unittest.TestCase):
         self.assertEqual(return_id, jobid)
         self.assertFalse(success)
 
-    def test_20_001_job_event_functions_invalid_args(self):
+    def test_20_000_job_event_functions_invalid_args(self):
         with self.assertRaises(OSError) as cm:
             for event in job.event_watch(self.fh, 123):
                 print(event)
@@ -318,6 +318,25 @@ class TestJob(unittest.TestCase):
         self.assertEqual(event.name, "clean")
         with self.assertRaises(OSError):
             job.event_wait(self.fh, jobid, "foo")
+
+    def test_20_007_job_event_wait_exception(self):
+        event = None
+        jobid = job.submit(
+            self.fh, JobspecV1.from_command(["sleep", "0"], num_tasks=128)
+        )
+        self.assertTrue(jobid > 0)
+        try:
+            event = job.event_wait(self.fh, jobid, "start")
+        except job.JobException as err:
+            self.assertEqual(err.severity, 0)
+            self.assertEqual(err.type, "alloc")
+            self.assertGreater(err.timestamp, 0.0)
+        self.assertIs(event, None)
+        try:
+            event = job.event_wait(self.fh, jobid, "start", raiseJobException=False)
+        except OSError as err:
+            self.assertEqual(err.errno, errno.ENODATA)
+        self.assertIs(event, None)
 
 
 if __name__ == "__main__":
