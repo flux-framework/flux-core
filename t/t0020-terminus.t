@@ -10,6 +10,9 @@ Verify basic functionality of flux-terminus command
 SIZE=2
 test_under_flux ${SIZE} minimal
 
+# Unset any existing terminus session
+unset FLUX_TERMINUS_SESSION
+
 userid=$(id -u)
 default_service="${userid}-terminus"
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast"
