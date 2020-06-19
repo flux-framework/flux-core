@@ -244,7 +244,11 @@ if test "X$PYTHON_VERSION" = "X" ; then
     PYTHON_VERSION=3
   fi
 fi
+
+# Do not let AX_PYTHON_DEVEL set PYTHON_SITE_PKG
+saved_PYTHON_SITE_PKG=$PYTHON_SITE_PKG
 AX_PYTHON_DEVEL([>='3.6'])
+PYTHON_SITE_PKG=$saved_PYTHON_SITE_PKG
 
 AM_PATH_PYTHON([$ac_python_version])
 if test "X$PYTHON" = "X"; then
