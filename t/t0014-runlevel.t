@@ -44,9 +44,12 @@ test_expect_success 'rc3 failure causes instance failure' '
 '
 
 test_expect_success 'broker.rc2_none terminates by signal without error' '
-	run_timeout -s ALRM 0.5 flux start \
+	for timeout in 0.5 1 2 4; do
+	    run_timeout -s ALRM $timeout flux start \
 		-o,-Slog-stderr-level=6 \
-		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Sbroker.rc2_none
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path=,-Sbroker.rc2_none &&
+	    break
+	done
 '
 
 test_expect_success 'flux admin cleanup-push /bin/true works' '

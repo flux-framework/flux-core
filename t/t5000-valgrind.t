@@ -38,7 +38,7 @@ VALGRIND_NBROKERS=${VALGRIND_NBROKERS:-2}
 
 test_expect_success \
   "valgrind reports no new errors on $VALGRIND_NBROKERS broker run" '
-	run_timeout 120 \
+	run_timeout 300 \
 	flux start -s ${VALGRIND_NBROKERS} \
 		--killer-timeout=120 \
 		--wrap=libtool,e,${VALGRIND} \

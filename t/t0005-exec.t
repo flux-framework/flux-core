@@ -184,8 +184,8 @@ test_expect_success 'signal forwarding works' '
 	exit \$?
 	EOF
 	chmod +x test_signal.sh &&
-	test_expect_code 130 run_timeout 10 ./test_signal.sh INT &&
-	test_expect_code 143 run_timeout 10 ./test_signal.sh TERM
+	test_expect_code 130 run_timeout 20 ./test_signal.sh INT &&
+	test_expect_code 143 run_timeout 20 ./test_signal.sh TERM
 '
 
 test_expect_success 'flux-exec: stdin bcast to all ranks (default)' '
