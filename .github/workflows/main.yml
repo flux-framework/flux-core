@@ -45,6 +45,7 @@ jobs:
         CXX: g++-8
         PRELOAD: /usr/lib/gcc/x86_64-linux-gnu/8/libasan.so
         ASAN_OPTIONS: detect_leaks=0,start_deactivated=true
+        FLUX_TEST_SIZE_MAX: 4
         TAP_DRIVER_QUIET: t
         FLUX_TEST_TIMEOUT: 300
       run: >
