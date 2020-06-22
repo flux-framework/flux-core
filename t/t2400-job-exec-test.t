@@ -103,7 +103,7 @@ test_expect_success 'job-exec: R with invalid expiration raises exception' '
 #  epilog script which could be triggered by events. If this test becomes
 #  a problem, we can disable it until that time.
 #
-test_expect_success 'job-exec: exception during cleanup' '
+test_expect_success FLAKY_TESTS 'job-exec: exception during cleanup' '
 	flux jobspec srun hostname | \
 	  exec_testattr cleanup_duration 1s > cleanup-long.json &&
 	jobid=$(flux job submit cleanup-long.json) &&

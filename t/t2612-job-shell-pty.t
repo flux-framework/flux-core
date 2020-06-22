@@ -6,6 +6,9 @@ test_description='Test flux-shell pty support'
 
 test_under_flux 4 job
 
+# an existing FLUX_TERMINUS_SESSION will interfere with tests below
+unset FLUX_TERMINUS_SESSION
+
 FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
 INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"
