@@ -16,6 +16,8 @@ struct broker {
     flux_reactor_t *reactor;
 
     struct overlay *overlay;
+    uint32_t rank;
+    uint32_t size;
 
     struct broker_attr *attrs;
     struct flux_msg_cred cred;  /* instance owner */
