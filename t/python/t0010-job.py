@@ -347,6 +347,24 @@ class TestJob(unittest.TestCase):
                 setattr(jobspec, stream, path)
                 self.assertEqual(getattr(jobspec, stream), path)
 
+    def test_22_from_batch_command(self):
+        """Test that `from_batch_command` produces a valid jobspec"""
+        jobid = job.submit(
+            self.fh, JobspecV1.from_batch_command("#!/bin/sh\nsleep 0", "nested sleep")
+        )
+        self.assertGreater(jobid, 0)
+        # test that a shebang is required
+        with self.assertRaises(ValueError):
+            job.submit(
+                self.fh,
+                JobspecV1.from_batch_command("sleep 0", "nested sleep with no shebang"),
+            )
+
+    def test_23_from_nest_command(self):
+        """Test that `from_batch_command` produces a valid jobspec"""
+        jobid = job.submit(self.fh, JobspecV1.from_nest_command(["sleep", "0"]))
+        self.assertGreater(jobid, 0)
+
 
 if __name__ == "__main__":
     from subflux import rerun_under_flux
