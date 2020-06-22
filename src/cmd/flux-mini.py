@@ -144,18 +144,15 @@ class MiniCmd:
             jobspec.setattr("system.job.name", args.job_name)
 
         if args.input is not None:
-            jobspec.setattr_shell_option("input.stdin.type", "file")
-            jobspec.setattr_shell_option("input.stdin.path", args.input)
+            jobspec.stdin = args.input
 
         if args.output is not None and args.output not in ["none", "kvs"]:
-            jobspec.setattr_shell_option("output.stdout.type", "file")
-            jobspec.setattr_shell_option("output.stdout.path", args.output)
+            jobspec.stdout = args.output
             if args.label_io:
                 jobspec.setattr_shell_option("output.stdout.label", True)
 
         if args.error is not None:
-            jobspec.setattr_shell_option("output.stderr.type", "file")
-            jobspec.setattr_shell_option("output.stderr.path", args.error)
+            jobspec.stderr = args.error
             if args.label_io:
                 jobspec.setattr_shell_option("output.stderr.label", True)
 
@@ -442,8 +439,7 @@ class BatchCmd(MiniCmd):
         # Default output is flux-{{jobid}}.out
         # overridden by either --output=none or --output=kvs
         if not args.output:
-            jobspec.setattr_shell_option("output.stdout.type", "file")
-            jobspec.setattr_shell_option("output.stdout.path", "flux-{{id}}.out")
+            jobspec.stdout = "flux-{{id}}.out"
         return jobspec
 
     def main(self, args):

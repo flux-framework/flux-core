@@ -829,6 +829,56 @@ class Jobspec(object):
             raise ValueError("environment must be a mapping")
         self.setattr("system.environment", environ)
 
+    @property
+    def stdin(self):
+        return self._get_io_path("input", "stdin")
+
+    @stdin.setter
+    def stdin(self, path):
+        """Redirect stdin to a file given by `path`"""
+        self._set_io_path("input", "stdin", path)
+
+    @property
+    def stdout(self):
+        return self._get_io_path("output", "stdout")
+
+    @stdout.setter
+    def stdout(self, path):
+        """Redirect stdout to a file given by `path`"""
+        self._set_io_path("output", "stdout", path)
+
+    @property
+    def stderr(self):
+        return self._get_io_path("output", "stderr")
+
+    @stderr.setter
+    def stderr(self, path):
+        """Redirect stderr to a file given by `path`"""
+        self._set_io_path("output", "stderr", path)
+
+    def _get_io_path(self, io, stream_name):
+        """Get the path of a stdio stream, if set.
+
+        :param io: the stream type, one of `"input"` or `"output"`
+        :param stream_name: the name of the io stream
+        """
+        try:
+            return self.jobspec["attributes"]["system"]["shell"]["options"][io][
+                stream_name
+            ]["path"]
+        except KeyError:
+            return None
+
+    def _set_io_path(self, io, stream_name, path):
+        """Set the path of a stdio stream.
+
+        :param io: the stream type, one of `"input"` or `"output"`
+        :param stream_name: the name of the io stream
+        :param path: the path to redirect the stream
+        """
+        self.setattr_shell_option("{}.{}.type".format(io, stream_name), "file")
+        self.setattr_shell_option("{}.{}.path".format(io, stream_name), path)
+
     def _set_treedict(self, in_dict, key, val):
         """
         _set_treedict(d, "a.b.c", 42) is like d[a][b][c] = 42
