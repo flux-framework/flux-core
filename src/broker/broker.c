@@ -425,8 +425,7 @@ int main (int argc, char *argv[])
     }
     ctx.rank = overlay_get_rank (ctx.overlay);
     ctx.size = overlay_get_size (ctx.overlay);
-    char rank_str[16];
-    snprintf (rank_str, sizeof (rank_str), "%"PRIu32, ctx.rank);
+    snprintf (ctx.uuid, sizeof (ctx.uuid), "%"PRIu32, ctx.rank);
 
     assert (ctx.size > 0);
 
@@ -520,7 +519,7 @@ int main (int argc, char *argv[])
         log_err ("exec_initialize");
         goto cleanup;
     }
-    if (ping_initialize (ctx.h, "cmb", rank_str) < 0) {
+    if (ping_initialize (ctx.h, "cmb", ctx.uuid) < 0) {
         log_err ("ping_initialize");
         goto cleanup;
     }
@@ -1859,12 +1858,10 @@ static int sendmsg_child_request (broker_ctx_t *ctx,
                                   uint32_t nodeid)
 {
     flux_msg_t *cpy = flux_msg_copy (msg, true);
-    int saved_errno;
     char uuid[16];
     int rc = -1;
 
-    snprintf (uuid, sizeof (uuid), "%"PRIu32, ctx->rank);
-    if (flux_msg_push_route (cpy, uuid) < 0)
+    if (flux_msg_push_route (cpy, ctx->uuid) < 0)
         goto done;
     snprintf (uuid, sizeof (uuid), "%"PRIu32, nodeid);
     if (flux_msg_push_route (cpy, uuid) < 0)
@@ -1873,9 +1870,7 @@ static int sendmsg_child_request (broker_ctx_t *ctx,
         goto done;
     rc = 0;
 done:
-    saved_errno = errno;
     flux_msg_destroy (cpy);
-    errno = saved_errno;
     return rc;
 }
 
