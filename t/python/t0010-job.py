@@ -264,7 +264,7 @@ class TestJob(unittest.TestCase):
         self.assertIsInstance(future, job.JobEventWatchFuture)
         event = future.get_event()
         self.assertIsInstance(event, job.EventLogEvent)
-        self.assertEquals(event.name, "submit")
+        self.assertEqual(event.name, "submit")
         future.cancel()
 
     def test_20_004_job_event_watch(self):
@@ -337,6 +337,15 @@ class TestJob(unittest.TestCase):
         except OSError as err:
             self.assertEqual(err.errno, errno.ENODATA)
         self.assertIs(event, None)
+
+    def test_21_stdio(self):
+        """Test getter/setter methods for stdio properties"""
+        jobspec = Jobspec.from_yaml_stream(self.basic_jobspec)
+        for stream in ("stderr", "stdout", "stdin"):
+            self.assertEqual(getattr(jobspec, stream), None)
+            for path in ("foo.txt", "bar.md", "foo.json"):
+                setattr(jobspec, stream, path)
+                self.assertEqual(getattr(jobspec, stream), path)
 
 
 if __name__ == "__main__":
