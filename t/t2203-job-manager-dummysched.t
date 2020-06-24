@@ -30,6 +30,27 @@ check_state() {
 	return 1
 }
 
+get_annotation() {
+        local id=$1
+        note=$(${LIST_JOBS} | grep ${id} | cut -f 6- | jq .\"sched.reason_pending\")
+        echo $note
+}
+
+check_annotation() {
+	local id=$1
+	for try in $(seq 1 10); do
+		test "$(get_annotation $id)" = "\"no cores available\"" && return 0
+                sleep 0.5
+	done
+	return 1
+}
+
+check_no_annotations() {
+        local id=$1
+        test -z "$(${LIST_JOBS} | grep ${id} | cut -f 6-)" && return 0
+        return 1
+}
+
 test_expect_success 'flux-job: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
@@ -57,6 +78,14 @@ test_expect_success 'job-manager: job state SSSSS (no scheduler)' '
 	check_state $(cat job5.id) S
 '
 
+test_expect_success HAVE_JQ 'job-manager: no annotations (SSSSS)' '
+	check_no_annotations $(cat job1.id) &&
+	check_no_annotations $(cat job2.id) &&
+	check_no_annotations $(cat job3.id) &&
+	check_no_annotations $(cat job4.id) &&
+	check_no_annotations $(cat job5.id)
+'
+
 test_expect_success 'job-manager: load sched-dummy --cores=2' '
 	flux module load ${SCHED_DUMMY} --cores=2
 '
@@ -67,6 +96,14 @@ test_expect_success 'job-manager: job state RRSSS' '
 	check_state $(cat job3.id) S &&
 	check_state $(cat job4.id) S &&
 	check_state $(cat job5.id) S
+'
+
+test_expect_success HAVE_JQ 'job-manager: annotate job id 3 (RRSSS)' '
+	check_no_annotations $(cat job1.id) &&
+	check_no_annotations $(cat job2.id) &&
+        check_annotation $(cat job3.id) &&
+	check_no_annotations $(cat job4.id) &&
+	check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: running job has alloc event' '
@@ -83,6 +120,14 @@ test_expect_success 'job-manager: job state RIRSS' '
 	check_state $(cat job3.id) R &&
 	check_state $(cat job4.id) S &&
 	check_state $(cat job5.id) S
+'
+
+test_expect_success HAVE_JQ 'job-manager: annotate job id 4 (RIRSS)' '
+	check_no_annotations $(cat job1.id) &&
+	check_no_annotations $(cat job2.id) &&
+	check_no_annotations $(cat job3.id) &&
+        check_annotation $(cat job4.id) &&
+	check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: first S job sent alloc, second S did not' '
@@ -122,6 +167,14 @@ test_expect_success 'job-manager: job state RIRRR' '
 	check_state $(cat job5.id) R
 '
 
+test_expect_success HAVE_JQ 'job-manager: no annotations (RIRRR)' '
+	check_no_annotations $(cat job1.id) &&
+	check_no_annotations $(cat job2.id) &&
+	check_no_annotations $(cat job3.id) &&
+	check_no_annotations $(cat job4.id) &&
+	check_no_annotations $(cat job5.id)
+'
+
 test_expect_success 'job-manager: cancel 1' '
 	flux job cancel $(cat job1.id)
 '
@@ -146,6 +199,14 @@ test_expect_success 'job-manager: job state IIIII' '
 	check_state $(cat job3.id) I &&
 	check_state $(cat job4.id) I &&
 	check_state $(cat job5.id) I
+'
+
+test_expect_success HAVE_JQ 'job-manager: no annotations (IIIII)' '
+	check_no_annotations $(cat job1.id) &&
+	check_no_annotations $(cat job2.id) &&
+	check_no_annotations $(cat job3.id) &&
+	check_no_annotations $(cat job4.id) &&
+	check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: simulate alloc failure' '
