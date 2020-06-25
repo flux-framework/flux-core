@@ -52,7 +52,8 @@ int schedutil_alloc_respond_deny (schedutil_t *util, const flux_msg_t *msg,
  * If something goes wrong after this function returns, the reactor is stopped.
  */
 int schedutil_alloc_respond_success (schedutil_t *util, const flux_msg_t *msg,
-                                     const char *R, const char *note);
+                                     const char *R,
+                                     const char *annotations_json_str);
 
 /* Respond to an alloc request message - canceled.
  * N.B. 'msg' is the alloc request, not the cancel request.

@@ -86,7 +86,7 @@ int schedutil_alloc_respond_cancel (schedutil_t *util, const flux_msg_t *msg)
 }
 
 struct alloc {
-    char *note;
+    json_t *annotations;
     const flux_msg_t *msg;
     flux_kvs_txn_t *txn;
 };
@@ -97,14 +97,14 @@ static void alloc_destroy (struct alloc *ctx)
         int saved_errno = errno;
         flux_kvs_txn_destroy (ctx->txn);
         flux_msg_decref (ctx->msg);
-        free (ctx->note);
+        json_decref (ctx->annotations);
         free (ctx);
         errno = saved_errno;
     }
 }
 
 static struct alloc *alloc_create (const flux_msg_t *msg, const char *R,
-                                   const char *note)
+                                   const char *annotations_json_str)
 {
     struct alloc *ctx;
     flux_jobid_t id;
@@ -119,7 +119,8 @@ static struct alloc *alloc_create (const flux_msg_t *msg, const char *R,
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
     ctx->msg = flux_msg_incref (msg);
-    if (note && !(ctx->note = strdup (note)))
+    if (annotations_json_str
+        && !(ctx->annotations = json_loads (annotations_json_str, 0, NULL)))
         goto error;
     if (!(ctx->txn = flux_kvs_txn_create ()))
         goto error;
@@ -143,7 +144,7 @@ static void alloc_continuation (flux_future_t *f, void *arg)
     }
     schedutil_remove_outstanding_future (util, f);
     if (schedutil_alloc_respond (h, ctx->msg, FLUX_SCHED_ALLOC_SUCCESS,
-                                 ctx->note, NULL) < 0) {
+                                 NULL, ctx->annotations) < 0) {
         flux_log_error (h, "alloc response");
         goto error;
     }
@@ -156,13 +157,14 @@ error:
 }
 
 int schedutil_alloc_respond_success (schedutil_t *util, const flux_msg_t *msg,
-                                     const char *R, const char *note)
+                                     const char *R,
+                                     const char *annotations_json_str)
 {
     struct alloc *ctx;
     flux_future_t *f;
     flux_t *h = util->h;
 
-    if (!(ctx = alloc_create (msg, R, note)))
+    if (!(ctx = alloc_create (msg, R, annotations_json_str)))
         return -1;
     if (!(f = flux_kvs_commit (h, NULL, 0, ctx->txn)))
         goto error;

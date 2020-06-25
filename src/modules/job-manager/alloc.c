@@ -249,10 +249,17 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = EEXIST;
             goto teardown;
         }
-        if (event_job_post_pack (ctx->event, job, "alloc",
-                                 "{ s:s }",
-                                 "note", note ? note : "") < 0)
-            goto teardown;
+        update_annotations (h, job, id, annotations);
+        if (job->annotations) {
+            if (event_job_post_pack (ctx->event, job, "alloc",
+                                     "{ s:O }",
+                                     "annotations", job->annotations) < 0)
+                goto teardown;
+        }
+        else {
+            if (event_job_post_pack (ctx->event, job, "alloc", NULL) < 0)
+                goto teardown;
+        }
         break;
     case FLUX_SCHED_ALLOC_ANNOTATE: // annotation
         if (!annotations) {
