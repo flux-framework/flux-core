@@ -75,21 +75,18 @@ jobs:
       stage: test
       compiler: gcc
       env:
-       - ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --with-flux-security --enable-caliper"
        - TEST_INSTALL=t
        - DOCKER_TAG=t
     - name: "Centos 7: security,caliper,docker-deploy"
       stage: test
       compiler: gcc
       env:
-       - ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --with-flux-security --enable-caliper"
        - IMG=centos7
        - DOCKER_TAG=t
     - name: "Centos 8: security,caliper,docker-deploy"
       stage: test
       compiler: gcc
       env:
-       - ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --with-flux-security --enable-caliper"
        - IMG=centos8
        - DOCKER_TAG=t
        - PYTHON_VERSION=3.6
@@ -128,6 +125,8 @@ before_install:
     -a \( "$TRAVIS_BRANCH" = "master" -o -n "$TRAVIS_TAG" \); then
      export TAGNAME="${DOCKERREPO}:${IMG}${TRAVIS_TAG:+-${TRAVIS_TAG}}"
      echo "Tagging new image $TAGNAME"
+     #  Force ARGS to correct prefix, etc for docker image
+     export ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --with-flux-security --enable-caliper"
   fi
 
 script:
