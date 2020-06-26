@@ -35,6 +35,7 @@ local getopt = require 'flux.alt_getopt' .get_opts
 local posix  = require 'flux.posix'
 local flux   = require 'flux'
 local timer  = require 'flux.timer'
+local loadstring = loadstring or load
 
 local opts, optind = getopt (arg, "hvqc:t:p:P:",
                              { timeout = 't',
