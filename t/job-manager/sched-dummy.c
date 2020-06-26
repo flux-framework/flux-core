@@ -88,6 +88,65 @@ error:
     return NULL;
 }
 
+static void respond_success_single (struct sched_ctx *sc,
+                                    struct job *job)
+{
+    if (schedutil_alloc_respond_success_pack (sc->schedutil_ctx,
+                                              job->msg,
+                                              "1core",
+                                              "{ s:n }",
+                                              "sched.reason_pending") < 0)
+        flux_log_error (sc->h, "schedutil_alloc_respond_success_pack");
+}
+
+static void respond_success_unlimited (struct sched_ctx *sc,
+                                       struct job *job)
+{
+    if (schedutil_alloc_respond_success_pack (sc->schedutil_ctx,
+                                              job->msg,
+                                              "1core",
+                                              "{ s:s s:n s:n }",
+                                              "sched.resource_summary", "1core",
+                                              "sched.reason_pending",
+                                              "sched.jobs_ahead") < 0)
+        flux_log_error (sc->h, "schedutil_alloc_respond_success_pack");
+}
+
+static void respond_annotate_single (struct sched_ctx *sc,
+                                     struct job *job)
+{
+    if (schedutil_alloc_respond_annotate_pack (sc->schedutil_ctx,
+                                               job->msg,
+                                               "{ s:s }",
+                                               "sched.reason_pending",
+                                               "no cores available") < 0)
+        flux_log_error (sc->h, "schedutil_alloc_respond_annotate_pack");
+}
+
+static void respond_annotate_unlimited (struct sched_ctx *sc,
+                                        struct job *job,
+                                        int jobs_ahead_count)
+{
+    if (job->annotate_count) {
+        if (schedutil_alloc_respond_annotate_pack (sc->schedutil_ctx,
+                                                   job->msg,
+                                                   "{ s:i }",
+                                                   "sched.jobs_ahead",
+                                                   jobs_ahead_count) < 0)
+            flux_log_error (sc->h, "schedutil_alloc_respond_annotate_pack");
+    }
+    else {
+        if (schedutil_alloc_respond_annotate_pack (sc->schedutil_ctx,
+                                                   job->msg,
+                                                   "{ s:s s:i }",
+                                                   "sched.reason_pending",
+                                                   "no cores",
+                                                   "sched.jobs_ahead",
+                                                   jobs_ahead_count) < 0)
+            flux_log_error (sc->h, "schedutil_alloc_respond_annotate_pack");
+    }
+}
+
 void try_alloc (struct sched_ctx *sc)
 {
     struct job *job = zlist_first (sc->jobs);
@@ -95,7 +154,6 @@ void try_alloc (struct sched_ctx *sc)
 
     while (job) {
         if (!job->scheduled) {
-            char annotations[256];
             if (flux_module_debug_test (sc->h, DEBUG_FAIL_ALLOC, false)) {
                 if (schedutil_alloc_respond_deny (sc->schedutil_ctx,
                                                   job->msg,
@@ -104,49 +162,17 @@ void try_alloc (struct sched_ctx *sc)
             }
             else if (sc->cores_free > 0) {
                 if (!strcmp (sc->mode, "single"))
-                    snprintf (annotations,
-                              sizeof (annotations),
-                              "{%s:%s}",
-                              "\"sched.reason_pending\"", "null");
+                    respond_success_single (sc, job);
                 else
-                    snprintf (annotations,
-                              sizeof (annotations),
-                              "{%s:%s,%s:%s,%s:%s}",
-                              "\"sched.resource_summary\"", "\"1core\"",
-                              "\"sched.reason_pending\"", "null",
-                              "\"sched.jobs_ahead\"", "null");
-                if (schedutil_alloc_respond_success (sc->schedutil_ctx,
-                                                     job->msg, "1core",
-                                                     annotations) < 0)
-                    flux_log_error (sc->h, "schedutil_alloc_respond_success");
+                    respond_success_unlimited (sc, job);
                 job->scheduled = true;
                 sc->cores_free--;
             }
             else {
-                if (!strcmp (sc->mode, "single")) {
-                    snprintf (annotations,
-                              sizeof (annotations),
-                              "{%s:%s}",
-                              "\"sched.reason_pending\"",
-                              "\"no cores available\"");
-                }
-                else {
-                    if (job->annotate_count)
-                        snprintf (annotations,
-                                  sizeof (annotations),
-                                  "{%s:%d}",
-                                  "\"sched.jobs_ahead\"", jobs_ahead_count);
-                    else
-                        snprintf (annotations,
-                                  sizeof (annotations),
-                                  "{%s:%s,%s:%d}",
-                                  "\"sched.reason_pending\"", "\"no cores\"",
-                                  "\"sched.jobs_ahead\"", jobs_ahead_count);
-                }
-                if (schedutil_alloc_respond_annotate (sc->schedutil_ctx,
-                                                      job->msg,
-                                                      annotations) < 0)
-                    flux_log_error (sc->h, "schedutil_alloc_respond_annotate");
+                if (!strcmp (sc->mode, "single"))
+                    respond_annotate_single (sc, job);
+                else
+                    respond_annotate_unlimited (sc, job, jobs_ahead_count);
                 job->annotate_count++;
                 jobs_ahead_count++;
             }

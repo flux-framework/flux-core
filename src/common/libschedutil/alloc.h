@@ -37,8 +37,9 @@ int schedutil_alloc_request_decode (const flux_msg_t *msg,
  * is finally terminated with alloc_respond_deny() or alloc_respond_success().
  * Return 0 on success, -1 on error with errno set.
  */
-int schedutil_alloc_respond_annotate (schedutil_t *util, const flux_msg_t *msg,
-                                      const char *annotations_json_str);
+int schedutil_alloc_respond_annotate_pack (schedutil_t *util,
+                                           const flux_msg_t *msg,
+                                           const char *fmt, ...);
 
 /* Respond to alloc request message - the job cannot run.
  * Include human readable error message in 'note'.
@@ -51,9 +52,10 @@ int schedutil_alloc_respond_deny (schedutil_t *util, const flux_msg_t *msg,
  * R is committed to the KVS first, then the response is sent.
  * If something goes wrong after this function returns, the reactor is stopped.
  */
-int schedutil_alloc_respond_success (schedutil_t *util, const flux_msg_t *msg,
-                                     const char *R,
-                                     const char *annotations_json_str);
+int schedutil_alloc_respond_success_pack (schedutil_t *util,
+                                          const flux_msg_t *msg,
+                                          const char *R,
+                                          const char *fmt, ...);
 
 /* Respond to an alloc request message - canceled.
  * N.B. 'msg' is the alloc request, not the cancel request.

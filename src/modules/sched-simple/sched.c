@@ -177,30 +177,6 @@ out:
     return (s);
 }
 
-static char *create_annotations (flux_t *h, const char *str)
-{
-    json_t *annotations = NULL;
-    char *annotations_str = NULL;
-    char *rv = NULL;
-
-    if (!(annotations = json_pack ("{ s:s }",
-                                   "sched.resource_summary", str))) {
-        flux_log_error (h, "json_pack");
-        goto error;
-    }
-
-    if (!(annotations_str = json_dumps (annotations, 0))) {
-        flux_log_error (h, "json_dumps");
-        goto error;
-    }
-
-    rv = annotations_str;
-
- error:
-    json_decref (annotations);
-    return rv;
-}
-
 static int try_alloc (flux_t *h, struct simple_sched *ss)
 {
     int rc = -1;
@@ -210,7 +186,6 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     char *R = NULL;
     struct jobreq *job = zlistx_first (ss->queue);
     double now = flux_reactor_now (flux_get_reactor (h));
-    char *annotations_str = NULL;
 
     if (!job)
         return -1;
@@ -239,14 +214,12 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     }
     s = rlist_dumps (alloc);
 
-    if (!(annotations_str = create_annotations (h, s)))
-        goto out;
-
-    if (schedutil_alloc_respond_success (ss->util_ctx,
-                                         job->msg,
-                                         R,
-                                         annotations_str) < 0)
-        flux_log_error (h, "schedutil_alloc_respond_success");
+    if (schedutil_alloc_respond_success_pack (ss->util_ctx,
+                                              job->msg,
+                                              R,
+                                              "{ s:s }",
+                                              "sched.resource_summary", s) < 0)
+        flux_log_error (h, "schedutil_alloc_respond_success_pack");
 
     flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t) job->id, s);
     rc = 0;
@@ -256,7 +229,6 @@ out:
     rlist_destroy (alloc);
     free (R);
     free (s);
-    free (annotations_str);
     return rc;
 }
 

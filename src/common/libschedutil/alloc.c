@@ -57,17 +57,23 @@ static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
     return rc;
 }
 
-int schedutil_alloc_respond_annotate (schedutil_t *util, const flux_msg_t *msg,
-                                      const char *annotations_json_str)
+int schedutil_alloc_respond_annotate_pack (schedutil_t *util,
+                                           const flux_msg_t *msg,
+                                           const char *fmt, ...)
 {
-    json_t *o;
-    int rc;
-    if (!(o = json_loads (annotations_json_str, 0, NULL))) {
+    va_list ap;
+    json_t *o = NULL;
+    int rc = -1;
+
+    va_start (ap, fmt);
+    if (!(o = json_vpack_ex (NULL, 0, fmt, ap))) {
         errno = EINVAL;
-        return -1;
+        goto error;
     }
     rc = schedutil_alloc_respond (util->h, msg, FLUX_SCHED_ALLOC_ANNOTATE,
                                   NULL, o);
+error:
+    va_end (ap);
     json_decref (o);
     return rc;
 }
@@ -104,7 +110,7 @@ static void alloc_destroy (struct alloc *ctx)
 }
 
 static struct alloc *alloc_create (const flux_msg_t *msg, const char *R,
-                                   const char *annotations_json_str)
+                                   const char *fmt, va_list ap)
 {
     struct alloc *ctx;
     flux_jobid_t id;
@@ -119,9 +125,10 @@ static struct alloc *alloc_create (const flux_msg_t *msg, const char *R,
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
     ctx->msg = flux_msg_incref (msg);
-    if (annotations_json_str
-        && !(ctx->annotations = json_loads (annotations_json_str, 0, NULL)))
-        goto error;
+    if (fmt) {
+        if (!(ctx->annotations = json_vpack_ex (NULL, 0, fmt, ap)))
+            goto error;
+    }
     if (!(ctx->txn = flux_kvs_txn_create ()))
         goto error;
     if (flux_kvs_txn_put (ctx->txn, 0, key, R) < 0)
@@ -156,15 +163,20 @@ error:
     flux_future_destroy (f);
 }
 
-int schedutil_alloc_respond_success (schedutil_t *util, const flux_msg_t *msg,
-                                     const char *R,
-                                     const char *annotations_json_str)
+int schedutil_alloc_respond_success_pack (schedutil_t *util,
+                                          const flux_msg_t *msg,
+                                          const char *R,
+                                          const char *fmt, ...)
 {
     struct alloc *ctx;
     flux_future_t *f;
     flux_t *h = util->h;
+    va_list ap;
 
-    if (!(ctx = alloc_create (msg, R, annotations_json_str)))
+    va_start (ap, fmt);
+    ctx = alloc_create (msg, R, fmt, ap);
+    va_end (ap);
+    if (!ctx)
         return -1;
     if (!(f = flux_kvs_commit (h, NULL, 0, ctx->txn)))
         goto error;
