@@ -10,73 +10,7 @@
 
 /* alloc.c - scheduler interface
  *
- * STARTUP:
- *
- * 1) Scheduler sends job-manager.sched-hello request:
- *   <empty payload>
- * Job manager responds with array of job objects that have allocated resources:
- *   {"alloc":[{"id":I, "priority":i, "userid":i, "t_submit":f},{},{},...]}
- * Scheduler should read those jobs' R from KVS and mark resources allocated.
- *
- * 2) Scheduler sends job-manager.sched-ready request:
- *   {"mode":s}
- * mode is scheduler's preference for throttling alloc requests:
- *   "single"    - limit of one pending alloc request (e.g. for FCFS)
- *   "unlimited" - no limit on number of pending alloc requests
- * Job manager responds with alloc queue depth (sched may ignore this)
- *   {"count":i}
- *
- * ALLOCATION (see notes 3-4 below):
- *
- * Job manager sends sched.alloc request:
- *   {"id":I, "priority":i, "userid":i, "t_submit":f}
- * Scheduler responds with:
- *   {"id":I, "type":i, "note"?:s}
- * Where type is one of:
- * 0 - resources allocated (sched commits R to KVS before responding)
- * 1 - annotation (just updates note, see below)
- * 2 - job cannot run (note is set to error string)
- * 3 - alloc was canceled
- * Type 0, 2, 3 are taken as final responses, type 1 is not.
- *
- * CANCELLATION
- *
- * Job manager sends sched.cancel request:
- *   {"id":I}
- * Scheduler does not respond to the cancellation, but does respond to
- * the alloc request for 'id' if still pending (see ALLOCATION above).
- *
- * DE-ALLOCATION (see notes 3-4 below):
- *
- * Job manager sends sched.free request:
- *   {"id":I}
- * Scheduler reads R from KVS and marks resources free and responds with
- *   {"id":I}
- *
- * EXCEPTION:
- *
- * Job manager sends a job-exception event:
- *   {"id":I, "type":s, "severity":i}
- * If severity=0 exception is received for a job with a pending alloc request,
- * scheduler responds with with type=2 (error).
- *
- * TEARDOWN:
- *
- * Scheduler sends each internally queued alloc request a regular ENOSYS
- * RPC error response.
- *
- * The receipt of a regular RPC error of any type from the scheduler
- * causes the job manager to assume the scheduler is unloading and to
- * stop sending requests.
- *
- * Notes:
- * 1) scheduler can be loaded after jobs have begun to be submitted
- * 2) scheduler can be unloaded without affecting workload
- * 3) alloc/free requests and responses are matched using jobid, not
- *    the normal matchtag, for scalability.
- * 4) a normal RPC error response to alloc/free triggers teardown
- * 5) 'note' in alloc response is intended to be human readable note displayed
- *    with job info (could be estimated start time, or error detail)
+ * Please refer to RFC27 for scheduler protocol
  *
  * TODO:
  * - handle type=1 annotation for queue listing (currently ignored)
