@@ -10,7 +10,7 @@ INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"
 INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
 
 # test initrc files need to be able to find fluxometer.lua:
-export LUA_PATH="$LUA_PATH;${SHARNESS_TEST_DIRECTORY}/?.lua"
+export LUA_PATH="$(lua -e 'print(package.path)');${SHARNESS_TEST_DIRECTORY}/?.lua"
 
 test_expect_success 'flux-shell: initrc: generate 1-task jobspec and matching R' '
 	flux jobspec srun -N1 -n1 echo Hi >j1 &&
