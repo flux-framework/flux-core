@@ -79,6 +79,16 @@ TOP=$(git rev-parse --show-toplevel 2>&1) \
 which docker >/dev/null \
     || die "unable to find a docker binary"
 
+# distcheck incompatible with some configure args
+if test "$DISTCHECK" = "t"; then
+    for arg in "$@"; do
+        case $arg in
+          --sysconfdir=*|systemdsystemunitdir=*)
+            die "distcheck incompatible with configure arg $arg"
+        esac
+    done
+fi
+
 CONFIGURE_ARGS="$@"
 
 . ${TOP}/src/test/travis-lib.sh
