@@ -68,6 +68,18 @@ check_annotation() {
         return 1
 }
 
+# verify if job contains specific annotation key
+#
+# arg1 - jobid
+# arg2 - key in annotation
+#
+# callers should set HAVE_JQ requirement
+check_annotation_exists() {
+        local id=$1
+        local key=$2
+        ${LIST_JOBS} | grep ${id} | cut -f 6- | jq -e .\"${key}\" > /dev/null
+}
+
 # verify that job contains no annotations
 #
 # arg1 - jobid

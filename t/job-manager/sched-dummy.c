@@ -103,9 +103,21 @@ void try_alloc (struct sched_ctx *sc)
                     flux_log_error (sc->h, "schedutil_alloc_respond_deny");
             }
             else if (sc->cores_free > 0) {
+                if (!strcmp (sc->mode, "single"))
+                    snprintf (annotations,
+                              sizeof (annotations),
+                              "{%s:%s}",
+                              "\"sched.reason_pending\"", "null");
+                else
+                    snprintf (annotations,
+                              sizeof (annotations),
+                              "{%s:%s,%s:%s,%s:%s}",
+                              "\"sched.resource_summary\"", "\"1core\"",
+                              "\"sched.reason_pending\"", "null",
+                              "\"sched.jobs_ahead\"", "null");
                 if (schedutil_alloc_respond_success (sc->schedutil_ctx,
                                                      job->msg, "1core",
-                                                     NULL) < 0)
+                                                     annotations) < 0)
                     flux_log_error (sc->h, "schedutil_alloc_respond_success");
                 job->scheduled = true;
                 sc->cores_free--;

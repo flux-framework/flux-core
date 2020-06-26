@@ -60,8 +60,8 @@ test_expect_success 'job-manager: job state RRSSS' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate job id 3-5 (RRSSS)' '
-        check_no_annotations $(cat job1.id) &&
-        check_no_annotations $(cat job2.id) &&
+        check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
+        check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
         check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores\"" &&
         check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
         check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores\"" &&
@@ -83,20 +83,44 @@ test_expect_success 'job-manager: job state RIRSS' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 (RIRSS)' '
-        check_no_annotations $(cat job1.id) &&
+        check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
         check_no_annotations $(cat job2.id) &&
-        check_no_annotations $(cat job3.id) &&
+        check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
+        test_must_fail check_annotation_exists $(cat job3.id) "sched.reason_pending" &&
+        test_must_fail check_annotation_exists $(cat job3.id) "sched.jobs_ahead" &&
         check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores\"" &&
         check_annotation $(cat job4.id) "sched.jobs_ahead" "0" &&
         check_annotation $(cat job5.id) "sched.reason_pending" "\"no cores\"" &&
         check_annotation $(cat job5.id) "sched.jobs_ahead" "1"
 '
 
+test_expect_success 'job-manager: cancel 5' '
+        flux job cancel $(cat job5.id)
+'
+
+test_expect_success 'job-manager: job state RIRSI' '
+        check_state $(cat job1.id) R &&
+        check_state $(cat job2.id) I &&
+        check_state $(cat job3.id) R &&
+        check_state $(cat job4.id) S &&
+        check_state $(cat job5.id) I
+'
+
+test_expect_success HAVE_JQ 'job-manager: annotate job id 4 (RIRSI)' '
+        check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
+        check_no_annotations $(cat job2.id) &&
+        check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
+        test_must_fail check_annotation_exists $(cat job3.id) "sched.reason_pending" &&
+        test_must_fail check_annotation_exists $(cat job3.id) "sched.jobs_ahead" &&
+        check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores\"" &&
+        check_annotation $(cat job4.id) "sched.jobs_ahead" "0" &&
+        check_no_annotations $(cat job5.id)
+'
+
 test_expect_success 'job-manager: cancel all jobs' '
         flux job cancel $(cat job1.id) &&
         flux job cancel $(cat job3.id) &&
-        flux job cancel $(cat job4.id) &&
-        flux job cancel $(cat job5.id)
+        flux job cancel $(cat job4.id)
 '
 
 test_expect_success 'job-manager: job state IIIII' '
