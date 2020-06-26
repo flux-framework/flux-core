@@ -79,6 +79,16 @@ TOP=$(git rev-parse --show-toplevel 2>&1) \
 which docker >/dev/null \
     || die "unable to find a docker binary"
 
+# distcheck incompatible with some configure args
+if test "$DISTCHECK" = "t"; then
+    for arg in "$@"; do
+        case $arg in
+          --sysconfdir=*|systemdsystemunitdir=*)
+            die "distcheck incompatible with configure arg $arg"
+        esac
+    done
+fi
+
 CONFIGURE_ARGS="$@"
 
 . ${TOP}/src/test/travis-lib.sh
@@ -157,7 +167,7 @@ if test -n "$TAG"; then
     # Re-run 'make install' in fresh image, otherwise we get all
     # the context from the build above
     docker run --name=tmp.$$ \
-	--workdir=/usr/src \
+	--workdir=/usr/src/${BUILD_DIR} \
         --volume=$TOP:/usr/src \
         --user="root" \
 	travis-builder:${IMAGE} \
