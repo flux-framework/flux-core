@@ -38,12 +38,11 @@ jobs:
     - name: "Ubuntu: no configure flags"
       stage: test
       compiler: gcc
-    - name: "Ubuntu 20.04: py3.8 distcheck"
+    - name: "Ubuntu 20.04: py3.8"
       stage: test
       compiler: gcc
       env:
        - IMG=focal
-       - DISTCHECK=t
        - PYTHON_VERSION=3.8
        - GITHUB_RELEASES_DEPLOY=t
        - DOCKER_TAG=t
