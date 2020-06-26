@@ -167,7 +167,7 @@ if test -n "$TAG"; then
     # Re-run 'make install' in fresh image, otherwise we get all
     # the context from the build above
     docker run --name=tmp.$$ \
-	--workdir=/usr/src \
+	--workdir=/usr/src/${BUILD_DIR} \
         --volume=$TOP:/usr/src \
         --user="root" \
 	travis-builder:${IMAGE} \
