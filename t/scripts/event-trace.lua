@@ -30,6 +30,7 @@ OPTIONS:
 
 local flux = require 'flux'
 local getopt = require 'flux.alt_getopt'.get_opts
+local loadstring = loadstring or load
 
 -- Process command line arguments:
 local opts, optind = getopt (arg, "he:t:",

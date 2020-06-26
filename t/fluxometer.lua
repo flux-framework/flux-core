@@ -33,6 +33,7 @@
 --  If FLUXOMETER_LUA_PATH is set, place this path at the front of
 --  package.path so we load the same fluxometer.conf as before.
 --
+local unpack = table.unpack or unpack
 local fpath = os.getenv ("FLUXOMETER_LUA_PATH")
 if fpath then
     package.path = fpath .. ';' .. package.path
