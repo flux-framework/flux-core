@@ -11,7 +11,6 @@
 /* Simple scheduler for testing:
  * - presume that each job is requesting one core
  * - track core counts, not specific core id's
- * - mode=single
  *
  * Command line usage:
  *   flux module load sched-dummy [--cores=N]
@@ -41,20 +40,23 @@ struct job {
     uint32_t userid;
     double t_submit;
     char *jobspec;
+    bool scheduled;
 };
 
 struct sched_ctx {
     flux_t *h;
     schedutil_t *schedutil_ctx;
     optparse_t *opt;
-    struct job *job; // backlog of 1 alloc request
     int cores_total;
     int cores_free;
+    const char *mode;
     flux_watcher_t *prep;
+    zlist_t *jobs;
 };
 
-static void job_destroy (struct job *job)
+static void job_destroy (void *data)
 {
+    struct job *job = data;
     if (job) {
         int saved_errno = errno;
         free (job->jobspec);
@@ -87,44 +89,73 @@ error:
 
 void try_alloc (struct sched_ctx *sc)
 {
-    if (sc->job) {
-        if (flux_module_debug_test (sc->h, DEBUG_FAIL_ALLOC, false)) {
-            if (schedutil_alloc_respond_deny (sc->schedutil_ctx,
-                                              sc->job->msg,
-                                              "DEBUG_FAIL_ALLOC") < 0)
-                flux_log_error (sc->h, "schedutil_alloc_respond_deny");
-            goto done;
+    struct job *job = zlist_first (sc->jobs);
+
+    while (job) {
+        if (!job->scheduled) {
+            if (flux_module_debug_test (sc->h, DEBUG_FAIL_ALLOC, false)) {
+                if (schedutil_alloc_respond_deny (sc->schedutil_ctx,
+                                                  job->msg,
+                                                  "DEBUG_FAIL_ALLOC") < 0)
+                    flux_log_error (sc->h, "schedutil_alloc_respond_deny");
+            }
+            else if (sc->cores_free > 0) {
+                if (schedutil_alloc_respond_success (sc->schedutil_ctx,
+                                                     job->msg, "1core",
+                                                     NULL) < 0)
+                    flux_log_error (sc->h, "schedutil_alloc_respond_success");
+                job->scheduled = true;
+                sc->cores_free--;
+            }
+            else {
+                if (schedutil_alloc_respond_annotate (sc->schedutil_ctx, job->msg,
+                                                      "no cores available") < 0)
+                    flux_log_error (sc->h, "schedutil_alloc_respond_annotate");
+            }
         }
-        if (sc->cores_free > 0) {
-            if (schedutil_alloc_respond_success (sc->schedutil_ctx,
-                                                 sc->job->msg, "1core",
-                                                 NULL) < 0)
-                flux_log_error (sc->h, "schedutil_alloc_respond_success");
-            sc->cores_free--;
-            goto done;
+        /* if in single mode, break after one iteration */
+        if (!strcmp (sc->mode, "single"))
+            break;
+
+        job = zlist_next (sc->jobs);
+    }
+
+    /* hackish, but safe way to remove jobs safely from list while
+     * iterating them */
+    job = zlist_first (sc->jobs);
+    while (job) {
+        if (job->scheduled) {
+            zlist_remove (sc->jobs, job);
+            job = zlist_first (sc->jobs);
         }
-        if (schedutil_alloc_respond_annotate (sc->schedutil_ctx, sc->job->msg,
-                                              "no cores available") < 0)
-            flux_log_error (sc->h, "schedutil_alloc_respond_annotate");
+        else
+            job = zlist_next (sc->jobs);
     }
     return;
-done:
-    job_destroy (sc->job);
-    sc->job = NULL;
 }
 
 void cancel_cb (flux_t *h, flux_jobid_t id,
                 const char *unused_arg1, int unused_arg2, void *arg)
 {
     struct sched_ctx *sc = arg;
+    struct job *job;
 
-    if (sc->job == NULL || sc->job->id != id)
+    if (!(job = zlist_first (sc->jobs)))
         return;
-    if (schedutil_alloc_respond_cancel (sc->schedutil_ctx,
-                                        sc->job->msg) < 0)
-        flux_log_error (h, "%s: alloc_respond_cancel", __FUNCTION__);
-    job_destroy (sc->job);
-    sc->job = NULL;
+
+    if (!strcmp (sc->mode, "single") && job->id != id)
+        return;
+
+    while (job) {
+        if (job->id == id) {
+            if (schedutil_alloc_respond_cancel (sc->schedutil_ctx,
+                                                job->msg) < 0)
+                flux_log_error (h, "%s: alloc_respond_cancel", __FUNCTION__);
+            zlist_remove (sc->jobs, job);
+            break;
+        }
+        job = zlist_next (sc->jobs);
+    }
 }
 
 void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
@@ -156,11 +187,15 @@ void alloc_cb (flux_t *h, const flux_msg_t *msg,
         flux_log_error (h, "%s: job_create", __FUNCTION__);
         goto error;
     }
-    if (sc->job) {
+    if (!strcmp (sc->mode, "single") && zlist_size (sc->jobs) > 0) {
         flux_log_error (h, "alloc received before previous one handled");
         goto error;
     }
-    sc->job = job;
+    if (zlist_append (sc->jobs, job) < 0) {
+        flux_log_error (h, "%s: zlist_append", __FUNCTION__);
+        goto error;
+    }
+    zlist_freefn (sc->jobs, job, job_destroy, true);
     flux_log (h, LOG_DEBUG, "alloc: id=%ju jobspec=%s",
               (uintmax_t)job->id, job->jobspec);
     try_alloc (sc);
@@ -199,6 +234,12 @@ static struct optparse_option dummy_opts[] = {
         .arginfo = "COUNT",
         .usage = "Core count (default 16)",
     },
+    {   .name = "mode",
+        .has_arg = 1,
+        .flags = 0,
+        .arginfo = "single|unlimited",
+        .usage = "Specify mode",
+    },
     OPTPARSE_TABLE_END,
 };
 
@@ -225,17 +266,19 @@ error:
 void sched_destroy (struct sched_ctx *sc)
 {
     if (sc) {
+        struct job *job;
         int saved_errno = errno;
         schedutil_destroy (sc->schedutil_ctx);
         optparse_destroy (sc->opt);
-        if (sc->job) {
+        while ((job = zlist_pop (sc->jobs))) {
             /* Causes job-manager to pause scheduler interface.
              */
-            if (flux_respond_error (sc->h, sc->job->msg, ENOSYS,
+            if (flux_respond_error (sc->h, job->msg, ENOSYS,
                                     "scheduler unloading") < 0)
                 flux_log_error (sc->h, "flux_respond_error");
-            job_destroy (sc->job);
+            job_destroy (job);
         }
+        zlist_destroy (&sc->jobs);
         free (sc);
         errno = saved_errno;
     }
@@ -263,6 +306,15 @@ struct sched_ctx *sched_create (flux_t *h, int argc, char **argv)
     }
     sc->cores_total = optparse_get_int (sc->opt, "cores", 16);
     sc->cores_free = sc->cores_total;
+    sc->mode = optparse_get_str (sc->opt, "mode", "single");
+    if (strcmp (sc->mode, "single") && strcmp (sc->mode, "unlimited")) {
+        flux_log_error (h, "invalid mode specified");
+        goto error;
+    }
+    if (!(sc->jobs = zlist_new ())) {
+        flux_log_error (h, "zlist_new");
+        goto error;
+    }
     return sc;
 error:
     sched_destroy (sc);
@@ -282,7 +334,7 @@ int mod_main (flux_t *h, int argc, char *argv[])
         flux_log_error (h, "schedutil_hello");
         goto done;
     }
-    if (schedutil_ready (sc->schedutil_ctx, "single", &count) < 0) {
+    if (schedutil_ready (sc->schedutil_ctx, sc->mode, &count) < 0) {
         flux_log_error (h, "schedutil_ready");
         goto done;
     }
