@@ -395,46 +395,38 @@ class BatchCmd(MiniCmd):
                 return "#!/bin/sh\n" + " ".join(args.SCRIPT) + "\n"
 
             # O/w, open script for reading
-            name = args.SCRIPT[0]
-            filep = open(name, "r", encoding="utf-8")
+            name = open_arg = args.SCRIPT[0]
         else:
             name = "stdin"
-            filep = open(0, "r", encoding="utf-8")
-        try:
-            #  Read first two bytes and ensure it starts with #!
-            script = "#!/bin/sh\n" if args.wrap else filep.read(2)
-            if not args.wrap and script[:2] != "#!":
-                raise ValueError(f"{name} does not appear to start with '#!'")
-            #  Read rest of script
-            script += filep.read()
-        except UnicodeError:
-            raise ValueError(
-                f"{name} does not appear to be a script, or failed to encode as utf-8"
-            )
-        return script
+            open_arg = 0  # when passed to `open`, 0 gives the `stdin` stream
+        with open(open_arg, "r", encoding="utf-8") as filep:
+            try:
+                #  Read script
+                script = filep.read()
+                if args.wrap:
+                    script = "#!/bin/sh\n" + script
+            except UnicodeError:
+                raise ValueError(
+                    f"{name} does not appear to be a script, "
+                    "or failed to encode as utf-8"
+                )
+            return script
 
     def init_jobspec(self, args):
         # If no script (reading from stdin), then use "flux" as arg[0]
-        command = args.SCRIPT
-        if not command:
-            command = ["flux"]
-
         if not args.nslots:
             raise ValueError("Number of slots to allocate must be specified")
 
-        jobspec = JobspecV1.from_command(
-            command=command,
-            num_tasks=args.nslots,
-            cores_per_task=args.cores_per_slot,
-            gpus_per_task=args.gpus_per_slot,
+        jobspec = JobspecV1.from_batch_command(
+            script=self.read_script(args),
+            jobname=args.SCRIPT[0] if args.SCRIPT else "batchscript",
+            args=args.SCRIPT[1:],
+            num_slots=args.nslots,
+            cores_per_slot=args.cores_per_slot,
+            gpus_per_slot=args.gpus_per_slot,
             num_nodes=args.nodes,
+            broker_opts=list_split(args.broker_opts),
         )
-        #  Start one flux-broker per node:
-        jobspec.setattr_shell_option("per-resource.type", "node")
-
-        #  Copy script contents into jobspec:
-        jobspec.setattr("system.batch.script", self.read_script(args))
-        jobspec.setattr("system.batch.broker-opts", list_split(args.broker_opts))
 
         # Default output is flux-{{jobid}}.out
         # overridden by either --output=none or --output=kvs
@@ -463,15 +455,14 @@ class AllocCmd(MiniCmd):
         if not args.nslots:
             raise ValueError("Number of slots to allocate must be specified")
 
-        broker_opts = list_split(args.broker_opts)
-        jobspec = JobspecV1.from_command(
-            command=["flux", "broker", *broker_opts, *args.COMMAND],
-            num_tasks=args.nslots,
-            cores_per_task=args.cores_per_slot,
-            gpus_per_task=args.gpus_per_slot,
+        jobspec = JobspecV1.from_nest_command(
+            command=args.COMMAND,
+            num_slots=args.nslots,
+            cores_per_slot=args.cores_per_slot,
+            gpus_per_slot=args.gpus_per_slot,
             num_nodes=args.nodes,
+            broker_opts=list_split(args.broker_opts),
         )
-        jobspec.setattr_shell_option("per-resource.type", "node")
         if sys.stdin.isatty():
             jobspec.setattr_shell_option("pty", True)
         return jobspec
