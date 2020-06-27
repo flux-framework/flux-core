@@ -25,6 +25,7 @@ check_state() {
 	local wantstate=$2
 	for try in $(seq 1 10); do
 		test $(get_state $id) = $wantstate && return 0
+                sleep 0.5
 	done
 	return 1
 }
