@@ -112,20 +112,16 @@ done:
     sc->job = NULL;
 }
 
-void exception_cb (flux_t *h, flux_jobid_t id,
-                   const char *type, int severity, void *arg)
+void cancel_cb (flux_t *h, flux_jobid_t id,
+                const char *unused_arg1, int unused_arg2, void *arg)
 {
     struct sched_ctx *sc = arg;
-    char note[80];
 
-    if (severity > 0 || sc->job == NULL || sc->job->id != id)
+    if (sc->job == NULL || sc->job->id != id)
         return;
-    (void)snprintf (note, sizeof(note),
-                    "alloc aborted due to exception type=%s", type);
-    if (schedutil_alloc_respond_denied (sc->schedutil_ctx,
-                                        sc->job->msg,
-                                        note) < 0)
-        flux_log_error (h, "%s: alloc_respond_denied", __FUNCTION__);
+    if (schedutil_alloc_respond_cancel (sc->schedutil_ctx,
+                                        sc->job->msg) < 0)
+        flux_log_error (h, "%s: alloc_respond_cancel", __FUNCTION__);
     job_destroy (sc->job);
     sc->job = NULL;
 }
@@ -254,7 +250,7 @@ struct sched_ctx *sched_create (flux_t *h, int argc, char **argv)
     sc->schedutil_ctx = schedutil_create (h,
                                           alloc_cb,
                                           free_cb,
-                                          exception_cb,
+                                          cancel_cb,
                                           sc);
     if (sc->schedutil_ctx == NULL) {
         flux_log_error (h, "schedutil_create");
