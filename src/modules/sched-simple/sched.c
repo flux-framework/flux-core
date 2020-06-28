@@ -338,8 +338,6 @@ err:
  */
 static void cancel_cb (flux_t *h,
                        flux_jobid_t id,
-                       const char *unused_arg1,
-                       int unused_arg2,
                        void *arg)
 {
     struct simple_sched *ss = arg;

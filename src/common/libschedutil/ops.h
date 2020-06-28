@@ -38,13 +38,9 @@ typedef void (schedutil_free_cb_f)(flux_t *h,
 /* The job manager wants to cancel a pending alloc request.
  * The scheduler should look up the job in its queue.  If not found, do nothing.
  * If found, call schedutil_alloc_respond_cancel() and dequeue.
- * N.B. same calling footprint as former exception callback to facilitate
- * transition.
  */
 typedef void (schedutil_cancel_cb_f)(flux_t *h,
                                      flux_jobid_t id,
-                                     const char *unused_arg1,
-                                     int unused_arg2,
                                      void *arg);
 
 #endif /* !_FLUX_SCHEDUTIL_OPS_H */

@@ -198,8 +198,7 @@ void try_alloc (struct sched_ctx *sc)
     return;
 }
 
-void cancel_cb (flux_t *h, flux_jobid_t id,
-                const char *unused_arg1, int unused_arg2, void *arg)
+void cancel_cb (flux_t *h, flux_jobid_t id, void *arg)
 {
     struct sched_ctx *sc = arg;
     struct job *job;
