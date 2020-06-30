@@ -183,7 +183,8 @@ void event_batch_destroy (struct event_batch *batch)
         if (batch->f)
             (void)flux_future_wait_for (batch->f, -1);
         if (batch->state_trans) {
-            event_publish_state (batch->event, batch->state_trans);
+            if (json_array_size (batch->state_trans) > 0)
+                event_publish_state (batch->event, batch->state_trans);
             json_decref (batch->state_trans);
         }
         if (batch->responses) {
