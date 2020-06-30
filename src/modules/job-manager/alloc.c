@@ -51,11 +51,13 @@ struct alloc {
     unsigned int free_pending_count;
 };
 
-static void clear_annotations (struct job *job)
+static void clear_annotations (struct job *job, bool *cleared)
 {
     if (job->annotations) {
         json_decref (job->annotations);
         job->annotations = NULL;
+        if (cleared)
+            (*cleared) = true;
     }
 }
 
@@ -79,13 +81,20 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
             if (job->alloc_pending) {
                 bool fwd = job->priority > FLUX_JOB_PRIORITY_DEFAULT ? true
                                                                      : false;
+                bool cleared = false;
 
                 assert (job->handle == NULL);
                 if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
                     flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
                 job->alloc_pending = 0;
                 job->alloc_queued = 1;
-                clear_annotations (job);
+                clear_annotations (job, &cleared);
+                if (cleared) {
+                    if (event_batch_pub_annotations (ctx->event, job) < 0)
+                        flux_log_error (ctx->h,
+                                        "%s: event_batch_pub_annotations",
+                                        __FUNCTION__);
+                }
             }
             /* jobs with free request pending (much smaller window for this
              * to be true) need to be picked up again after 'ready'.
@@ -246,9 +255,14 @@ static void update_annotations (flux_t *h, struct job *job, flux_jobid_t id,
             update_recursive (job, job->annotations, annotations,
                               annotate_err, h);
             /* Special case: if user cleared all entries, assume we no
-             * longer need annotations object */
+             * longer need annotations object
+             *
+             * if cleared no need to call
+             * event_batch_pub_annotations(), should be handled by
+             * caller.
+             */
             if (!json_object_size (job->annotations))
-                clear_annotations (job);
+                clear_annotations (job, NULL);
         }
     }
 }
@@ -266,6 +280,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     char *note = NULL;
     json_t *annotations = NULL;
     struct job *job;
+    bool cleared = false;
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown; // ENOSYS here if scheduler not loaded/shutting down
@@ -300,6 +315,12 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             goto teardown;
         }
         update_annotations (h, job, id, annotations);
+        if (annotations) {
+            if (event_batch_pub_annotations (ctx->event, job) < 0)
+                flux_log_error (ctx->h,
+                                "%s: event_batch_pub_annotations: id=%ju",
+                                __FUNCTION__, (uintmax_t)id);
+        }
         if (job->annotations) {
             if (event_job_post_pack (ctx->event, job, "alloc",
                                      "{ s:O }",
@@ -317,11 +338,21 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             goto teardown;
         }
         update_annotations (h, job, id, annotations);
+        if (event_batch_pub_annotations (ctx->event, job) < 0)
+            flux_log_error (ctx->h,
+                            "%s: event_batch_pub_annotations: id=%ju",
+                            __FUNCTION__, (uintmax_t)id);
         break;
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
-        clear_annotations (job);
+        clear_annotations (job, &cleared);
+        if (cleared) {
+            if (event_batch_pub_annotations (ctx->event, job) < 0)
+                flux_log_error (ctx->h,
+                                "%s: event_batch_pub_annotations: id=%ju",
+                                __FUNCTION__, (uintmax_t)id);
+        }
         if (event_job_post_pack (ctx->event, job, "exception",
                                  "{ s:s s:i s:i s:s }",
                                  "type", "alloc",
@@ -333,7 +364,13 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_CANCEL:
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
-        clear_annotations (job);
+        clear_annotations (job, &cleared);
+        if (cleared) {
+            if (event_batch_pub_annotations (ctx->event, job) < 0)
+                flux_log_error (ctx->h,
+                                "%s: event_batch_pub_annotations: id=%ju",
+                                __FUNCTION__, (uintmax_t)id);
+        }
         if (event_job_action (ctx->event, job) < 0) {
             flux_log_error (h,
                             "event_job_action id=%ju on alloc cancel",
