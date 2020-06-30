@@ -12,7 +12,6 @@ echo "# $0: flux session size will be ${SIZE}"
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
-MAXBLOB=`flux getattr content.blob-size-limit`
 HASHFUN=`flux getattr content.hash`
 
 
@@ -50,12 +49,6 @@ test_expect_success 'store blobs bypassing cache' '
         flux content store --bypass-cache <4k.0.store >4k.0.hash &&
         dd if=/dev/urandom count=256 bs=4096 >1m.0.store 2>/dev/null &&
         flux content store --bypass-cache <1m.0.store >1m.0.hash
-'
-
-test_expect_success LONGTEST "cannot store blob that exceeds max size of $MAXBLOB" '
-        dd if=/dev/zero count=$(($MAXBLOB/4096+1)) bs=4096 \
-			skip=$(($MAXBLOB/4096)) >toobig 2>/dev/null &&
-        test_must_fail flux content store --bypass-cache <toobig
 '
 
 test_expect_success 'load 0b blob bypassing cache' '
