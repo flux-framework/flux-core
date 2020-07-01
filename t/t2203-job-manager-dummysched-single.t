@@ -32,19 +32,19 @@ test_expect_success 'job-manager: submit 5 jobs' '
 '
 
 test_expect_success 'job-manager: job state SSSSS (no scheduler)' '
-        check_state $(cat job1.id) S &&
-        check_state $(cat job2.id) S &&
-        check_state $(cat job3.id) S &&
-        check_state $(cat job4.id) S &&
-        check_state $(cat job5.id) S
+        jmgr_check_state $(cat job1.id) S &&
+        jmgr_check_state $(cat job2.id) S &&
+        jmgr_check_state $(cat job3.id) S &&
+        jmgr_check_state $(cat job4.id) S &&
+        jmgr_check_state $(cat job5.id) S
 '
 
 test_expect_success HAVE_JQ 'job-manager: no annotations (SSSSS)' '
-        check_no_annotations $(cat job1.id) &&
-        check_no_annotations $(cat job2.id) &&
-        check_no_annotations $(cat job3.id) &&
-        check_no_annotations $(cat job4.id) &&
-        check_no_annotations $(cat job5.id)
+        jmgr_check_no_annotations $(cat job1.id) &&
+        jmgr_check_no_annotations $(cat job2.id) &&
+        jmgr_check_no_annotations $(cat job3.id) &&
+        jmgr_check_no_annotations $(cat job4.id) &&
+        jmgr_check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: load sched-dummy --cores=2' '
@@ -52,19 +52,19 @@ test_expect_success 'job-manager: load sched-dummy --cores=2' '
 '
 
 test_expect_success 'job-manager: job state RRSSS' '
-        check_state $(cat job1.id) R &&
-        check_state $(cat job2.id) R &&
-        check_state $(cat job3.id) S &&
-        check_state $(cat job4.id) S &&
-        check_state $(cat job5.id) S
+        jmgr_check_state $(cat job1.id) R &&
+        jmgr_check_state $(cat job2.id) R &&
+        jmgr_check_state $(cat job3.id) S &&
+        jmgr_check_state $(cat job4.id) S &&
+        jmgr_check_state $(cat job5.id) S
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate job id 3 (RRSSS)' '
-        check_no_annotations $(cat job1.id) &&
-        check_no_annotations $(cat job2.id) &&
-        check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores available\""&&
-        check_no_annotations $(cat job4.id) &&
-        check_no_annotations $(cat job5.id)
+        jmgr_check_no_annotations $(cat job1.id) &&
+        jmgr_check_no_annotations $(cat job2.id) &&
+        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores available\""&&
+        jmgr_check_no_annotations $(cat job4.id) &&
+        jmgr_check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: running job has alloc event' '
@@ -76,19 +76,19 @@ test_expect_success 'job-manager: cancel 2' '
 '
 
 test_expect_success 'job-manager: job state RIRSS' '
-        check_state $(cat job1.id) R &&
-        check_state $(cat job2.id) I &&
-        check_state $(cat job3.id) R &&
-        check_state $(cat job4.id) S &&
-        check_state $(cat job5.id) S
+        jmgr_check_state $(cat job1.id) R &&
+        jmgr_check_state $(cat job2.id) I &&
+        jmgr_check_state $(cat job3.id) R &&
+        jmgr_check_state $(cat job4.id) S &&
+        jmgr_check_state $(cat job5.id) S
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate job id 4 (RIRSS)' '
-        check_no_annotations $(cat job1.id) &&
-        check_no_annotations $(cat job2.id) &&
-        check_no_annotations $(cat job3.id) &&
-        check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores available\"" &&
-        check_no_annotations $(cat job5.id)
+        jmgr_check_no_annotations $(cat job1.id) &&
+        jmgr_check_no_annotations $(cat job2.id) &&
+        jmgr_check_no_annotations $(cat job3.id) &&
+        jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores available\"" &&
+        jmgr_check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: first S job sent alloc, second S did not' '
@@ -121,19 +121,19 @@ test_expect_success 'job-manager: hello handshake userid is expected' '
 '
 
 test_expect_success 'job-manager: job state RIRRR' '
-        check_state $(cat job1.id) R &&
-        check_state $(cat job2.id) I &&
-        check_state $(cat job3.id) R &&
-        check_state $(cat job4.id) R &&
-        check_state $(cat job5.id) R
+        jmgr_check_state $(cat job1.id) R &&
+        jmgr_check_state $(cat job2.id) I &&
+        jmgr_check_state $(cat job3.id) R &&
+        jmgr_check_state $(cat job4.id) R &&
+        jmgr_check_state $(cat job5.id) R
 '
 
 test_expect_success HAVE_JQ 'job-manager: no annotations (RIRRR)' '
-        check_no_annotations $(cat job1.id) &&
-        check_no_annotations $(cat job2.id) &&
-        check_no_annotations $(cat job3.id) &&
-        check_no_annotations $(cat job4.id) &&
-        check_no_annotations $(cat job5.id)
+        jmgr_check_no_annotations $(cat job1.id) &&
+        jmgr_check_no_annotations $(cat job2.id) &&
+        jmgr_check_no_annotations $(cat job3.id) &&
+        jmgr_check_no_annotations $(cat job4.id) &&
+        jmgr_check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: cancel 1' '
@@ -141,11 +141,11 @@ test_expect_success 'job-manager: cancel 1' '
 '
 
 test_expect_success 'job-manager: job state IIRRR' '
-        check_state $(cat job1.id) I &&
-        check_state $(cat job2.id) I &&
-        check_state $(cat job3.id) R &&
-        check_state $(cat job4.id) R &&
-        check_state $(cat job5.id) R
+        jmgr_check_state $(cat job1.id) I &&
+        jmgr_check_state $(cat job2.id) I &&
+        jmgr_check_state $(cat job3.id) R &&
+        jmgr_check_state $(cat job4.id) R &&
+        jmgr_check_state $(cat job5.id) R
 '
 
 test_expect_success 'job-manager: cancel all jobs' '
@@ -155,19 +155,19 @@ test_expect_success 'job-manager: cancel all jobs' '
 '
 
 test_expect_success 'job-manager: job state IIIII' '
-        check_state $(cat job1.id) I &&
-        check_state $(cat job2.id) I &&
-        check_state $(cat job3.id) I &&
-        check_state $(cat job4.id) I &&
-        check_state $(cat job5.id) I
+        jmgr_check_state $(cat job1.id) I &&
+        jmgr_check_state $(cat job2.id) I &&
+        jmgr_check_state $(cat job3.id) I &&
+        jmgr_check_state $(cat job4.id) I &&
+        jmgr_check_state $(cat job5.id) I
 '
 
 test_expect_success HAVE_JQ 'job-manager: no annotations (IIIII)' '
-        check_no_annotations $(cat job1.id) &&
-        check_no_annotations $(cat job2.id) &&
-        check_no_annotations $(cat job3.id) &&
-        check_no_annotations $(cat job4.id) &&
-        check_no_annotations $(cat job5.id)
+        jmgr_check_no_annotations $(cat job1.id) &&
+        jmgr_check_no_annotations $(cat job2.id) &&
+        jmgr_check_no_annotations $(cat job3.id) &&
+        jmgr_check_no_annotations $(cat job4.id) &&
+        jmgr_check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: simulate alloc failure' '
