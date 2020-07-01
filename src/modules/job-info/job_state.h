@@ -78,6 +78,7 @@ struct job {
     const char *exception_type;
     const char *exception_note;
     flux_job_result_t result;
+    json_t *annotations;
 
     /* cache of job information */
     json_t *jobspec_job;
@@ -122,6 +123,9 @@ void job_state_destroy (void *data);
 
 void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
                    const flux_msg_t *msg, void *arg);
+
+void job_annotations_cb (flux_t *h, flux_msg_handler_t *mh,
+                         const flux_msg_t *msg, void *arg);
 
 void job_state_pause_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg);
