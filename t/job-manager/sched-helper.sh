@@ -88,3 +88,58 @@ jmgr_check_no_annotations() {
         test -z "$(${JMGR_JOB_LIST} | grep ${id} | cut -f 6-)" && return 0
         return 1
 }
+
+# internal function to get job annotation key value via flux job list
+#
+# arg1 - jobid
+# arg2 - key
+_jinfo_get_annotation() {
+        local id=$1
+        local key=$2
+        local note="$(flux job list -A | grep ${id} | jq .annotations | jq ."${key}")"
+        echo $note
+}
+
+# verify if annotation published to job-info
+#
+# function will loop for up to 5 seconds in case annotation update
+# arrives slowly
+#
+# arg1 - jobid
+# arg2 - key in annotation
+# arg3 - value of key in annotation
+#
+# callers should set HAVE_JQ requirement
+jinfo_check_annotation() {
+        local id=$1
+        local key=$2
+        local value="$3"
+        for try in $(seq 1 10); do
+                test "$(_jinfo_get_annotation $id $key)" = "${value}" && return 0
+                sleep 0.5
+        done
+        return 1
+}
+
+# verify that job contains no annotations via job-info
+#
+# arg1 - jobid
+#
+# callers should set HAVE_JQ requirement
+jinfo_check_no_annotations() {
+        local id=$1
+        flux job list -A | grep ${id} | jq -e .annotations > /dev/null && return 1
+        return 0
+}
+
+# verify if job contains specific annotation key through job-info
+#
+# arg1 - jobid
+# arg2 - key in annotation
+#
+# callers should set HAVE_JQ requirement
+jinfo_check_annotation_exists() {
+        local id=$1
+        local key=$2
+        flux job list -A | grep ${id} | jq .annotations | jq -e ."${key}" > /dev/null
+}
