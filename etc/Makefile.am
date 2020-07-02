@@ -17,9 +17,9 @@ flux/curve:
 
 fluxhelpdir = $(datadir)/flux/help.d
 fluxhelp_DATA = flux/help.d/core.json
-flux/help.d/core.json: $(top_srcdir)/doc/man1
+flux/help.d/core.json: $(top_srcdir)/doc/conf.py
 	$(AM_V_GEN)umask 077 && $(MKDIR_P) flux/help.d && \
-	$(srcdir)/gen-cmdhelp.pl --category=core $^/*.adoc >$@
+	$(PYTHON) $(srcdir)/gen-cmdhelp.py $< > $@
 
 if !ENABLE_DOCS
 fluxnodocsdir = $(datadir)/flux/.nodocs
@@ -41,4 +41,4 @@ pkgconfig_DATA = flux-core.pc \
 endif
 
 EXTRA_DIST = \
-	gen-cmdhelp.pl
+	gen-cmdhelp.py
