@@ -1,0 +1,33 @@
+// Usage: dot -Tpng file.dot -o file.png
+
+digraph finite_state_machine {
+    rankdir=LR;
+    size="8,5"
+
+    node [shape = point ]; N
+    node [shape = doublecircle ]; E
+
+    node [shape = circle];
+    N -> J [ color= "green" ];
+    J -> 1 [ label = "parent-ready", color = "green" ];
+    J -> 1 [ label = "parent-none", color = "blue" ];
+    J -> S [ label = "parent-fail" ];
+    J -> S [ label = "parent-timeout" ];
+    1 -> 2 [ label = "rc1-none" ];
+    1 -> 2 [ label = "rc1-success", color = "green" ];
+    1 -> S [ label = "rc1-fail" ];
+    2 -> 2 [ label = "rc2-none", color = "green" ];
+    2 -> C [ label = "rc2-success", color = "blue" ];
+    2 -> C [ label = "rc2-fail" ];
+    2 -> C [ label = "shutdown-abort", color = "green" ];
+    2 -> C [ label = "signal-abort" ];
+    C -> S [ label = "cleanup-none", color = "green" ];
+    C -> S [ label = "cleanup-success", color = "blue" ];
+    C -> S [ label = "cleanup-fail" ];
+    S -> 3 [ label = "children-complete", color = "green" ];
+    S -> 3 [ label = "children-none", color = "red" ];
+    S -> 3 [ label = "children-timeout" ];
+    3 -> E [ label = "rc3-none" ];
+    3 -> E [ label = "rc3-success", color = "green" ];
+    3 -> E [ label = "rc3-fail" ];
+}
