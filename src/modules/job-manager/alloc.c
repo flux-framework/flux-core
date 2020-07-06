@@ -51,6 +51,14 @@ struct alloc {
     unsigned int free_pending_count;
 };
 
+static void clear_annotations (struct job *job)
+{
+    if (job->annotations) {
+        json_decref (job->annotations);
+        job->annotations = NULL;
+    }
+}
+
 /* Initiate teardown.  Clear any alloc/free requests, and clear
  * the alloc->ready flag to stop prep/check from allocating.
  */
@@ -77,6 +85,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
                     flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
                 job->alloc_pending = 0;
                 job->alloc_queued = 1;
+                clear_annotations (job);
             }
             /* jobs with free request pending (much smaller window for this
              * to be true) need to be picked up again after 'ready'.
@@ -195,10 +204,8 @@ static void update_annotations (flux_t *h, struct job *job, flux_jobid_t id,
             }
             /* Special case: if user cleared all entries, assume we no
              * longer need annotations object */
-            if (!json_object_size (job->annotations)) {
-                json_decref (job->annotations);
-                job->annotations = NULL;
-            }
+            if (!json_object_size (job->annotations))
+                clear_annotations (job);
         }
     }
 }
@@ -271,6 +278,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
+        clear_annotations (job);
         if (event_job_post_pack (ctx->event, job, "exception",
                                  "{ s:s s:i s:i s:s }",
                                  "type", "alloc",
@@ -282,6 +290,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_CANCEL:
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
+        clear_annotations (job);
         if (event_job_action (ctx->event, job) < 0) {
             flux_log_error (h,
                             "event_job_action id=%ju on alloc cancel",
