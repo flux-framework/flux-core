@@ -10,11 +10,13 @@
 
 import errno
 
+from typing import Dict
+
 from flux.util import check_future_error
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
-from typing import Dict
 
+import flux.core.handle
 
 # Reference count dictionary to keep futures with a pending `then` callback
 # alive, even if there are no remaining references to the future in the user's
@@ -86,8 +88,6 @@ class Future(WrapperPimpl):
 
     def get_flux(self):
         # pylint: disable=cyclic-import
-        import flux.core.handle
-
         flux_handle = self.pimpl.get_flux()
         if flux_handle == ffi.NULL:
             return None

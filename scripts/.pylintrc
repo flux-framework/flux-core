@@ -44,7 +44,7 @@ symbols=no
 # --enable=similarities". If you want to run only the classes checker, but have
 # no Warning level messages displayed, use"--disable=all --enable=classes
 # --disable=W"
-disable=missing-docstring, too-few-public-methods, too-many-arguments, star-args, arguments-differ, no-member, import-error, no-name-in-module, useless-object-inheritance, fixme, bad-continuation
+disable=missing-docstring, too-few-public-methods, too-many-arguments, star-args, arguments-differ, no-member, import-error, no-name-in-module, useless-object-inheritance, fixme, bad-continuation, too-many-lines
 
 
 [REPORTS]
@@ -91,7 +91,7 @@ logging-modules=logging
 bad-functions=map,filter,apply,input,file
 
 # Good variable names which should always be accepted, separated by a comma
-good-names=i,j,k,x,y,z,ex,Run,_
+good-names=i,j,k,x,y,z,ex,io,rc,Run,_
 
 # Bad variable names which should always be refused, separated by a comma
 bad-names=foo,bar,baz,toto,tutu,tata
@@ -110,10 +110,10 @@ function-rgx=[a-z_][a-z0-9_]{2,30}$
 function-name-hint=[a-z_][a-z0-9_]{2,30}$
 
 # Regular expression matching correct variable names
-variable-rgx=[a-z_][a-z0-9_]{2,30}$
+variable-rgx=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Naming hint for variable names
-variable-name-hint=[a-z_][a-z0-9_]{2,30}$
+variable-name-hint=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Regular expression matching correct constant names
 const-rgx=(([A-Z_][A-Z0-9_]*)|(__.*__))$
@@ -122,16 +122,16 @@ const-rgx=(([A-Z_][A-Z0-9_]*)|(__.*__))$
 const-name-hint=(([A-Z_][A-Z0-9_]*)|(__.*__))$
 
 # Regular expression matching correct attribute names
-attr-rgx=[a-z_][a-z0-9_]{2,30}$
+attr-rgx=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Naming hint for attribute names
-attr-name-hint=[a-z_][a-z0-9_]{2,30}$
+attr-name-hint=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Regular expression matching correct argument names
-argument-rgx=[a-z_][a-z0-9_]{2,30}$
+argument-rgx=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Naming hint for argument names
-argument-name-hint=[a-z_][a-z0-9_]{2,30}$
+argument-name-hint=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Regular expression matching correct class attribute names
 class-attribute-rgx=([A-Za-z_][A-Za-z0-9_]{2,30}|(__.*__))$

@@ -19,7 +19,7 @@ jobs:
       name: 'python lint'
       language: 'python'
       python: '3.6'
-      install: pip install 'pylint==2.2.2' --force-reinstall
+      install: pip install 'pylint==2.4.4' --force-reinstall
       script: ./scripts/pylint
       before_deploy: skip
       deploy: skip

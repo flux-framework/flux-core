@@ -8,14 +8,17 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import six
 import signal
+import six
 
 from flux.wrapper import Wrapper
 from flux.rpc import RPC
 from flux.message import Message
 from flux.util import encode_topic, encode_payload
 from flux.core.inner import raw
+from flux.message import MessageWatcher
+from flux.core.watchers import TimerWatcher
+from flux.core.watchers import SignalWatcher
 from _flux._core import ffi, lib
 
 
@@ -155,18 +158,12 @@ class Flux(Wrapper):
         args=None,
         match_tag=raw.FLUX_MATCHTAG_NONE,
     ):
-        from flux.message import MessageWatcher
-
         return MessageWatcher(self, type_mask, callback, topic_glob, match_tag, args)
 
     def timer_watcher_create(self, after, callback, repeat=0.0, args=None):
-        from flux.core.watchers import TimerWatcher
-
         return TimerWatcher(self, after, callback, repeat=repeat, args=args)
 
     def signal_watcher_create(self, signum, callback, args=None):
-        from flux.core.watchers import SignalWatcher
-
         return SignalWatcher(self, signum, callback, args)
 
     def barrier(self, name, nprocs):
@@ -191,11 +188,11 @@ class Flux(Wrapper):
 
         reactor_interrupted = False
 
-        def reactor_interrupt(h, *args):
+        def reactor_interrupt(handle, *args):
             #  ensure reactor_interrupted from enclosing scope:
             nonlocal reactor_interrupted
             reactor_interrupted = True
-            h.reactor_stop(reactor)
+            handle.reactor_stop(reactor)
 
         with self.signal_watcher_create(signal.SIGINT, reactor_interrupt):
             self.reactor_active_decref(reactor)

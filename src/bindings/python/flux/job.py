@@ -13,6 +13,7 @@ import json
 import errno
 import datetime
 import collections
+import collections.abc as abc
 import numbers
 import signal
 
@@ -26,8 +27,6 @@ from flux.util import check_future_error, parse_fsd
 from flux.future import Future
 from flux.rpc import RPC
 from _flux._core import ffi, lib
-
-import collections.abc as abc
 
 
 class JobWrapper(Wrapper):
@@ -328,7 +327,7 @@ class EventLogEvent:
         """
         "Initialize from a string or dict eventlog event
         """
-        if type(event) is str:
+        if isinstance(event, str):
             event = json.loads(event)
         self._name = event["name"]
         self._timestamp = event["timestamp"]
@@ -386,9 +385,8 @@ class JobEventWatchFuture(Future):
             if exc.errno == errno.ENODATA:
                 self.needs_cancel = False
                 return None
-            else:
-                # re-raise all other exceptions
-                raise
+            # re-raise all other exceptions
+            raise
         event = EventLogEvent(ffi.string(result[0]).decode("utf-8"))
         if autoreset is True:
             self.reset()
@@ -614,7 +612,7 @@ class Jobspec(object):
             raise TypeError("version must be an integer")
         if not isinstance(attributes, abc.Mapping):
             raise TypeError("attributes must be a mapping")
-        elif version < 1:
+        if version < 1:
             raise ValueError("version must be >= 1")
 
         self.jobspec = {
@@ -655,7 +653,7 @@ class Jobspec(object):
                 continue
             if not isinstance(range_dict[key], six.integer_types):
                 raise TypeError("{} must be an int".format(key))
-            elif range_dict[key] < 1:
+            if range_dict[key] < 1:
                 raise ValueError("{} must be > 0".format(key))
         valid_operator_values = ["+", "*", "^"]
         if (
@@ -735,7 +733,7 @@ class Jobspec(object):
     def _create_resource(res_type, count, with_child=None):
         if with_child is not None and not isinstance(with_child, abc.Sequence):
             raise TypeError("child resource must None or a sequence")
-        elif with_child is not None and isinstance(with_child, six.string_types):
+        if with_child is not None and isinstance(with_child, six.string_types):
             raise TypeError("child resource must not be a string")
         if not count > 0:
             raise ValueError("resource count must be > 0")
@@ -854,28 +852,28 @@ class Jobspec(object):
         """Redirect stderr to a file given by `path`"""
         self._set_io_path("output", "stderr", path)
 
-    def _get_io_path(self, io, stream_name):
+    def _get_io_path(self, iotype, stream_name):
         """Get the path of a stdio stream, if set.
 
-        :param io: the stream type, one of `"input"` or `"output"`
+        :param iotype: the stream type, one of `"input"` or `"output"`
         :param stream_name: the name of the io stream
         """
         try:
-            return self.jobspec["attributes"]["system"]["shell"]["options"][io][
+            return self.jobspec["attributes"]["system"]["shell"]["options"][iotype][
                 stream_name
             ]["path"]
         except KeyError:
             return None
 
-    def _set_io_path(self, io, stream_name, path):
+    def _set_io_path(self, iotype, stream_name, path):
         """Set the path of a stdio stream.
 
-        :param io: the stream type, one of `"input"` or `"output"`
+        :param iotype: the stream type, one of `"input"` or `"output"`
         :param stream_name: the name of the io stream
         :param path: the path to redirect the stream
         """
-        self.setattr_shell_option("{}.{}.type".format(io, stream_name), "file")
-        self.setattr_shell_option("{}.{}.path".format(io, stream_name), path)
+        self.setattr_shell_option("{}.{}.type".format(iotype, stream_name), "file")
+        self.setattr_shell_option("{}.{}.path".format(iotype, stream_name), path)
 
     def _set_treedict(self, in_dict, key, val):
         """

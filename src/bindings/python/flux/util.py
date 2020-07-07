@@ -16,7 +16,9 @@ import logging
 import os
 import math
 import argparse
+import traceback
 from datetime import timedelta
+from string import Formatter
 
 import six
 
@@ -67,7 +69,7 @@ def encode_topic(topic):
     # Convert topic to utf-8 binary string
     if topic is None or topic == ffi.NULL:
         raise EnvironmentError(errno.EINVAL, "Topic must not be None/NULL")
-    elif isinstance(topic, six.text_type):
+    if isinstance(topic, six.text_type):
         topic = topic.encode("UTF-8")
     elif not isinstance(topic, six.binary_type):
         errmsg = "Topic must be a string, not {}".format(type(topic))
@@ -137,8 +139,6 @@ class CLIMain(object):
         except Exception as ex:  # pylint: disable=broad-except
             exit_code = 1
             self.logger.error(str(ex))
-            import traceback
-
             self.logger.debug(traceback.format_exc())
         finally:
             logging.shutdown()
@@ -182,8 +182,6 @@ class OutputFormat:
         Throws an exception if any format fields do not match the allowed
         list of headings.
         """
-        from string import Formatter
-
         self.headings = valid_headings
         self.fmt = fmt
         #  Parse format into list of (string, field, spec, conv) tuples,
