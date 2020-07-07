@@ -13,10 +13,10 @@ from __future__ import print_function
 import json
 import errno
 
+import collections.abc as abc
+
 from _flux._core import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl
-
-import collections.abc as abc
 
 
 class KVSWrapper(Wrapper):

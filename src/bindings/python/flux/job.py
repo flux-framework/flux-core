@@ -16,6 +16,8 @@ import collections
 import numbers
 import signal
 
+import collections.abc as abc
+
 import six
 import yaml
 
@@ -26,8 +28,6 @@ from flux.util import check_future_error, parse_fsd
 from flux.future import Future
 from flux.rpc import RPC
 from _flux._core import ffi, lib
-
-import collections.abc as abc
 
 
 class JobWrapper(Wrapper):

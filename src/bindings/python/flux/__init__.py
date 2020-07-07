@@ -11,11 +11,11 @@
 """
 python bindings to flux-core, the main core of the flux resource manager
 """
+import flux.core.handle
+
 # Manually lazy
 # pylint: disable=invalid-name
 def Flux(*args, **kwargs):
-    import flux.core.handle
-
     return flux.core.handle.Flux(*args, **kwargs)
 
 

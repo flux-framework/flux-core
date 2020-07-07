@@ -11,6 +11,7 @@
 import sys
 import logging
 import argparse
+import re
 from itertools import count, groupby
 
 import flux
@@ -74,8 +75,6 @@ def bracket(setstr):
     """
     Add brackets to idset if not already present and idset is not single number
     """
-    import re
-
     if not setstr or setstr[0] == "[" or re.match(r"^[^,-]+$", setstr):
         return setstr
     return f"[{setstr}]"
