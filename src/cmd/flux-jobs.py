@@ -18,6 +18,8 @@ import time
 import pwd
 import string
 import errno
+import fileinput
+import json
 from datetime import datetime, timedelta
 
 import flux.job
@@ -225,9 +227,6 @@ def fetch_jobs_stdin():
     flux-jobs utility, and thus, all filtering options are currently
     ignored.
     """
-    import fileinput
-    import json
-
     jobs = []
     for line in fileinput.input("-"):
         try:
