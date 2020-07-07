@@ -613,7 +613,7 @@ class Jobspec(object):
             raise TypeError("version must be an integer")
         if not isinstance(attributes, abc.Mapping):
             raise TypeError("attributes must be a mapping")
-        elif version < 1:
+        if version < 1:
             raise ValueError("version must be >= 1")
 
         self.jobspec = {
@@ -654,7 +654,7 @@ class Jobspec(object):
                 continue
             if not isinstance(range_dict[key], six.integer_types):
                 raise TypeError("{} must be an int".format(key))
-            elif range_dict[key] < 1:
+            if range_dict[key] < 1:
                 raise ValueError("{} must be > 0".format(key))
         valid_operator_values = ["+", "*", "^"]
         if (
@@ -734,7 +734,7 @@ class Jobspec(object):
     def _create_resource(res_type, count, with_child=None):
         if with_child is not None and not isinstance(with_child, abc.Sequence):
             raise TypeError("child resource must None or a sequence")
-        elif with_child is not None and isinstance(with_child, six.string_types):
+        if with_child is not None and isinstance(with_child, six.string_types):
             raise TypeError("child resource must not be a string")
         if not count > 0:
             raise ValueError("resource count must be > 0")
