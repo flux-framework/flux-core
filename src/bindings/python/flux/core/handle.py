@@ -8,8 +8,8 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import six
 import signal
+import six
 
 from flux.wrapper import Wrapper
 from flux.rpc import RPC

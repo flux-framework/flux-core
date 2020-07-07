@@ -10,10 +10,11 @@
 
 import errno
 
+from typing import Dict
+
 from flux.util import check_future_error
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
-from typing import Dict
 
 import flux.core.handle
 
