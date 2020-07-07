@@ -328,7 +328,7 @@ class EventLogEvent:
         """
         "Initialize from a string or dict eventlog event
         """
-        if type(event) is str:
+        if isinstance(event, str):
             event = json.loads(event)
         self._name = event["name"]
         self._timestamp = event["timestamp"]
