@@ -386,9 +386,8 @@ class JobEventWatchFuture(Future):
             if exc.errno == errno.ENODATA:
                 self.needs_cancel = False
                 return None
-            else:
-                # re-raise all other exceptions
-                raise
+            # re-raise all other exceptions
+            raise
         event = EventLogEvent(ffi.string(result[0]).decode("utf-8"))
         if autoreset is True:
             self.reset()
