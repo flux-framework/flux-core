@@ -110,10 +110,10 @@ function-rgx=[a-z_][a-z0-9_]{2,30}$
 function-name-hint=[a-z_][a-z0-9_]{2,30}$
 
 # Regular expression matching correct variable names
-variable-rgx=[a-z_][a-z0-9_]{2,30}$
+variable-rgx=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Naming hint for variable names
-variable-name-hint=[a-z_][a-z0-9_]{2,30}$
+variable-name-hint=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Regular expression matching correct constant names
 const-rgx=(([A-Z_][A-Z0-9_]*)|(__.*__))$
@@ -122,16 +122,16 @@ const-rgx=(([A-Z_][A-Z0-9_]*)|(__.*__))$
 const-name-hint=(([A-Z_][A-Z0-9_]*)|(__.*__))$
 
 # Regular expression matching correct attribute names
-attr-rgx=[a-z_][a-z0-9_]{2,30}$
+attr-rgx=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Naming hint for attribute names
-attr-name-hint=[a-z_][a-z0-9_]{2,30}$
+attr-name-hint=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Regular expression matching correct argument names
-argument-rgx=[a-z_][a-z0-9_]{2,30}$
+argument-rgx=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Naming hint for argument names
-argument-name-hint=[a-z_][a-z0-9_]{2,30}$
+argument-name-hint=[a-zA-Z_][a-zA-Z0-9_]{2,30}$
 
 # Regular expression matching correct class attribute names
 class-attribute-rgx=([A-Za-z_][A-Za-z0-9_]{2,30}|(__.*__))$
