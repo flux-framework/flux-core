@@ -191,11 +191,11 @@ class Flux(Wrapper):
 
         reactor_interrupted = False
 
-        def reactor_interrupt(h, *args):
+        def reactor_interrupt(handle, *args):
             #  ensure reactor_interrupted from enclosing scope:
             nonlocal reactor_interrupted
             reactor_interrupted = True
-            h.reactor_stop(reactor)
+            handle.reactor_stop(reactor)
 
         with self.signal_watcher_create(signal.SIGINT, reactor_interrupt):
             self.reactor_active_decref(reactor)

@@ -853,28 +853,28 @@ class Jobspec(object):
         """Redirect stderr to a file given by `path`"""
         self._set_io_path("output", "stderr", path)
 
-    def _get_io_path(self, io, stream_name):
+    def _get_io_path(self, iotype, stream_name):
         """Get the path of a stdio stream, if set.
 
-        :param io: the stream type, one of `"input"` or `"output"`
+        :param iotype: the stream type, one of `"input"` or `"output"`
         :param stream_name: the name of the io stream
         """
         try:
-            return self.jobspec["attributes"]["system"]["shell"]["options"][io][
+            return self.jobspec["attributes"]["system"]["shell"]["options"][iotype][
                 stream_name
             ]["path"]
         except KeyError:
             return None
 
-    def _set_io_path(self, io, stream_name, path):
+    def _set_io_path(self, iotype, stream_name, path):
         """Set the path of a stdio stream.
 
-        :param io: the stream type, one of `"input"` or `"output"`
+        :param iotype: the stream type, one of `"input"` or `"output"`
         :param stream_name: the name of the io stream
         :param path: the path to redirect the stream
         """
-        self.setattr_shell_option("{}.{}.type".format(io, stream_name), "file")
-        self.setattr_shell_option("{}.{}.path".format(io, stream_name), path)
+        self.setattr_shell_option("{}.{}.type".format(iotype, stream_name), "file")
+        self.setattr_shell_option("{}.{}.path".format(iotype, stream_name), path)
 
     def _set_treedict(self, in_dict, key, val):
         """
