@@ -13,10 +13,9 @@ import json
 import errno
 import datetime
 import collections
+import collections.abc as abc
 import numbers
 import signal
-
-import collections.abc as abc
 
 import six
 import yaml
