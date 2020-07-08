@@ -39,7 +39,9 @@ job_manager_la_SOURCES = \
 	list.h \
 	list.c \
 	priority.h \
-	priority.c
+	priority.c \
+	annotate.h \
+	annotate.c
 
 job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_manager_la_LIBADD = $(fluxmod_libadd) \
@@ -65,6 +67,7 @@ test_ldadd = \
         $(top_builddir)/src/modules/job-manager/drain.o \
         $(top_builddir)/src/modules/job-manager/submit.o \
         $(top_builddir)/src/modules/job-manager/wait.o \
+        $(top_builddir)/src/modules/job-manager/annotate.o \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
