@@ -52,12 +52,6 @@ struct job *alloc_queue_next (struct alloc *alloc);
  */
 void alloc_queue_reorder (struct alloc *alloc, struct job *job);
 
-/* exposed for unit testing only */
-typedef void (*annotate_log_f)(void *arg, const char *fmt, ...);
-
-void update_recursive (struct job *job, json_t *orig, json_t *new,
-                       annotate_log_f log_f, void *arg);
-
 #endif /* ! _FLUX_JOB_MANAGER_ALLOC_H */
 
 /*

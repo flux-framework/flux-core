@@ -27,6 +27,7 @@
 #include "event.h"
 #include "drain.h"
 #include "wait.h"
+#include "annotate.h"
 
 #include "job-manager.h"
 
@@ -120,6 +121,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating kill interface");
         goto done;
     }
+    if (!(ctx.annotate = annotate_ctx_create (&ctx))) {
+        flux_log_error (h, "error creating annotate interface");
+        goto done;
+    }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
         flux_log_error (h, "flux_msghandler_add");
         goto done;
@@ -139,6 +144,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (ctx.handlers);
+    annotate_ctx_destroy (ctx.annotate);
     kill_ctx_destroy (ctx.kill);
     raise_ctx_destroy (ctx.raise);
     wait_ctx_destroy (ctx.wait);

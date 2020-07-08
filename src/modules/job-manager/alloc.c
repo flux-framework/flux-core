@@ -30,6 +30,7 @@
 #include "alloc.h"
 #include "event.h"
 #include "drain.h"
+#include "annotate.h"
 
 typedef enum {
     SCHED_SINGLE,       // only allow one outstanding sched.alloc request
@@ -50,16 +51,6 @@ struct alloc {
     unsigned int alloc_pending_count; // for mode=single, max of 1
     unsigned int free_pending_count;
 };
-
-static void clear_annotations (struct job *job, bool *cleared)
-{
-    if (job->annotations) {
-        json_decref (job->annotations);
-        job->annotations = NULL;
-        if (cleared)
-            (*cleared) = true;
-    }
-}
 
 /* Initiate teardown.  Clear any alloc/free requests, and clear
  * the alloc->ready flag to stop prep/check from allocating.
@@ -88,7 +79,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
                     flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
                 job->alloc_pending = 0;
                 job->alloc_queued = 1;
-                clear_annotations (job, &cleared);
+                annotations_clear (job, &cleared);
                 if (cleared) {
                     if (event_batch_pub_annotations (ctx->event, job) < 0)
                         flux_log_error (ctx->h,
@@ -184,89 +175,6 @@ int cancel_request (struct alloc *alloc, struct job *job)
     return 0;
 }
 
-void annotate_err (void *arg, const char *fmt, ...)
-{
-    flux_t *h = (flux_t *)arg;
-    va_list ap;
-    flux_vlog (h, LOG_ERR, fmt, ap);
-    va_end (ap);
-}
-
-/* we want to delete items set to 'null', so this is not the same
- * as json_object_update_recursive() in jansson 2.13.1
- */
-void update_recursive (struct job *job, json_t *orig, json_t *new,
-                       annotate_log_f log_f, void *arg)
-{
-    const char *key;
-    json_t *value;
-
-    assert (job && orig && new);
-
-    json_object_foreach (new, key, value) {
-        if (!json_is_null (value)) {
-            json_t *orig_value = json_object_get (orig, key);
-
-            if (json_is_object (value)) {
-                if (!json_is_object (orig_value)) {
-                    json_t *o = json_object ();
-                    if (!o || json_object_set_new (orig, key, o) < 0) {
-                        if (log_f)
-                            (*log_f)(arg,
-                                     "%s: id=%ju create object=%s",
-                                     __FUNCTION__, (uintmax_t)job->id, key);
-                        json_decref (o);
-                        continue;
-                    }
-                    orig_value = o;
-                }
-                update_recursive (job, orig_value, value, log_f, arg);
-                /* if object is now empty, remove it */
-                if (!json_object_size (orig_value))
-                    (void)json_object_del (orig, key);
-            }
-            else {
-                if (json_object_set (orig, key, value) < 0) {
-                    if (log_f)
-                        (*log_f)(arg,
-                                 "%s: id=%ju update key=%s",
-                                 __FUNCTION__, (uintmax_t)job->id, key);
-                }
-            }
-        }
-        else
-            /* not an error if key doesn't exist in orig */
-            (void)json_object_del (orig, key);
-    }
-}
-
-static void update_annotations (flux_t *h, struct job *job, flux_jobid_t id,
-                                json_t *annotations)
-{
-    if (annotations) {
-        if (!job->annotations) {
-            if (!(job->annotations = json_object ()))
-                flux_log (h,
-                          LOG_ERR,
-                          "%s: id=%ju json_object",
-                          __FUNCTION__, (uintmax_t)id);
-        }
-        if (job->annotations) {
-            update_recursive (job, job->annotations, annotations,
-                              annotate_err, h);
-            /* Special case: if user cleared all entries, assume we no
-             * longer need annotations object
-             *
-             * if cleared no need to call
-             * event_batch_pub_annotations(), should be handled by
-             * caller.
-             */
-            if (!json_object_size (job->annotations))
-                clear_annotations (job, NULL);
-        }
-    }
-}
-
 /* Handle a sched.alloc response.
  * Update flags.
  */
@@ -314,7 +222,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = EEXIST;
             goto teardown;
         }
-        update_annotations (h, job, id, annotations);
+        if (annotations_update (h, job, annotations) < 0)
+            flux_log_error (h, "annotations_update: id=%ju", (uintmax_t)id);
         if (annotations) {
             if (event_batch_pub_annotations (ctx->event, job) < 0)
                 flux_log_error (ctx->h,
@@ -337,7 +246,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = EPROTO;
             goto teardown;
         }
-        update_annotations (h, job, id, annotations);
+        if (annotations_update (h, job, annotations) < 0)
+            flux_log_error (h, "annotations_update: id=%ju", (uintmax_t)id);
         if (event_batch_pub_annotations (ctx->event, job) < 0)
             flux_log_error (ctx->h,
                             "%s: event_batch_pub_annotations: id=%ju",
@@ -346,7 +256,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
-        clear_annotations (job, &cleared);
+        annotations_clear (job, &cleared);
         if (cleared) {
             if (event_batch_pub_annotations (ctx->event, job) < 0)
                 flux_log_error (ctx->h,
@@ -364,7 +274,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_CANCEL:
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
-        clear_annotations (job, &cleared);
+        annotations_clear (job, &cleared);
         if (cleared) {
             if (event_batch_pub_annotations (ctx->event, job) < 0)
                 flux_log_error (ctx->h,
