@@ -9,9 +9,13 @@ wait_check() {
 # Allow connector-local more time to start listening on socket in rc1 only
 export FLUX_LOCAL_CONNECTOR_RETRY_COUNT=10
 
+if ! content_backing=$(flux getattr content.backing-module 2>/dev/null); then
+    content_backing=content-sqlite
+fi
+
 declare -a pids
 flux exec -r all flux module load barrier & pids+=($!)
-flux module load content-sqlite & pids+=($!)
+flux module load ${content_backing} & pids+=($!)
 flux exec -r all flux module load aggregator & pids+=($!)
 wait_check ${pids[@]}
 unset pids

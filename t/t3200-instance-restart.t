@@ -39,4 +39,23 @@ test_expect_success 'job IDs were issued in ascending order' '
 	test $(cat id2.out) -lt $(cat id3.out)
 '
 
+test_expect_success 'run a job in persistent instance (content-files)' '
+	flux start \
+	    -o,-Scontent.backing-module=content-files \
+	    -o,-Scontent.backing-path=$(pwd)/content.files \
+	    flux mini run -v /bin/true 2>&1 | sed "s/jobid: //" >files_id1.out
+'
+test_expect_success 'restart instance and list inactive jobs' '
+	flux start \
+	    -o,-Scontent.backing-module=content-files \
+	    -o,-Scontent.backing-path=$(pwd)/content.files \
+	    flux jobs --suppress-header --format={id} \
+	        --filter=INACTIVE >files_list.out
+'
+
+test_expect_success 'inactive job list contains job from before restart' '
+	grep $(cat files_id1.out) files_list.out
+'
+
+
 test_done

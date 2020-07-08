@@ -636,24 +636,43 @@ static void content_register_backing_request (flux_t *h,
 {
     content_cache_t *cache = arg;
     const char *name;
+    const char *errstr = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "name", &name) < 0)
         goto error;
-    if (cache->rank != 0 || cache->backing) {
+    if (cache->rank != 0) {
         errno = EINVAL;
+        errstr = "content backing store can only be registered on rank 0";
         goto error;
     }
-    if (!(cache->backing_name = strdup (name)))
+    if (cache->backing) {
+        errno = EBUSY;
+        errstr = "content backing store is already active";
         goto error;
+    }
+    /* cache->backing_name is either set to the initial value of the
+     * "content.backing-module" attribute (e.g. from broker command line),
+     * or to the first-registered backing store name.  Once set, it cannot
+     * be changed.
+     */
+    if (!cache->backing_name) {
+        if (!(cache->backing_name = strdup (name)))
+            goto error;
+    }
+    if (strcmp (cache->backing_name, name) != 0) {
+        errno = EINVAL;
+        errstr = "content backing store cannot be changed on the fly";
+        goto error;
+    }
     cache->backing = 1;
     flux_log (h, LOG_DEBUG, "content backing store: enabled %s", name);
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "content backing");
+        flux_log_error (h, "error responding to register-backing request");
     (void)cache_flush (cache);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "content backing");
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to register-backing request");
 };
 
 static void content_unregister_backing_request (flux_t *h,
@@ -662,25 +681,25 @@ static void content_unregister_backing_request (flux_t *h,
                                                 void *arg)
 {
     content_cache_t *cache = arg;
+    const char *errstr = NULL;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     if (!cache->backing) {
         errno = EINVAL;
+        errstr = "content backing store is not active";
         goto error;
     }
     cache->backing = 0;
-    free (cache->backing_name);
-    cache->backing_name = NULL;
     flux_log (h, LOG_DEBUG, "content backing store: disabled");
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "flux_respond");
+        flux_log_error (h, "error responding to unregister-backing request");
     if (cache->acct_dirty > 0)
         flux_log (h, LOG_ERR, "%d unflushables", cache->acct_dirty);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "flux_respond_error");
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to unregister-backing request");
 }
 
 /* Forcibly drop all entries from the cache that can be dropped
@@ -953,7 +972,7 @@ static int content_cache_getattr (const char *name, const char **val, void *arg)
 
     if (!strcmp (name, "content.hash"))
         *val = cache->hash_name;
-    else if (!strcmp (name, "content.backing"))
+    else if (!strcmp (name, "content.backing-module"))
         *val = cache->backing_name;
     else if (!strcmp (name, "content.acct-entries")) {
         snprintf (s, sizeof (s), "%zd", zhash_size (cache->entries));
@@ -965,6 +984,18 @@ static int content_cache_getattr (const char *name, const char **val, void *arg)
 
 int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
 {
+    const char *s;
+
+    /* Take initial value of content->backing_name from content.backing-module
+     * attribute, if set.  The attribute is re-added below.
+     */
+    if (attr_get (attr, "content.backing-module", &s, NULL) == 0) {
+        if (!(cache->backing_name = strdup (s)))
+            return -1;
+        if (attr_delete (attr, "content.backing-module", 1) < 0)
+            return -1;
+    }
+
     /* Purge tunables
      */
     if (attr_add_active_uint32 (attr, "content.purge-target-entries",
@@ -1001,7 +1032,7 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
     if (attr_add_active_uint32 (attr, "content.blob-size-limit",
                 &cache->blob_size_limit, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_active (attr, "content.backing",FLUX_ATTRFLAG_READONLY,
+    if (attr_add_active (attr, "content.backing-module",FLUX_ATTRFLAG_READONLY,
                  content_cache_getattr, NULL, cache) < 0)
         return -1;
     if (attr_add_active_uint32 (attr, "content.flush-batch-count",

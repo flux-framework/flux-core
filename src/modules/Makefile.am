@@ -4,6 +4,7 @@ SUBDIRS = \
  kvs \
  kvs-watch \
  content-sqlite \
+ content-files \
  cron \
  aggregator \
  job-ingest \
