@@ -51,13 +51,13 @@ void flux_pty_set_log (struct flux_pty *pty,
                        pty_log_f log,
                        void *log_data);
 
-int flux_pty_master_fd (struct flux_pty *pty);
+int flux_pty_leader_fd (struct flux_pty *pty);
 
-/*  Return the slave name for this pty
+/*  Return the follower name for this pty
  */
 const char *flux_pty_name (struct flux_pty *pty);
 
-/*  Attach the current process to slave end of pty
+/*  Attach the current process to follower end of pty
  *  (e.g. called from pre_exec hook of a flux_subprocess_t)
  */
 int flux_pty_attach (struct flux_pty *pty);
