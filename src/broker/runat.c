@@ -11,7 +11,7 @@
 /* runat.c - run named list of sequential commands
  *
  * Notes:
- * - Command env is inherited from broker, minus blacklist, plus FLUX_URI.
+ * - Command env is inherited from broker, minus blocklist, plus FLUX_URI.
  * - All commands in a list are executed, even if one fails.
  * - The exit code of the first failed command is captured.
  */
@@ -60,7 +60,7 @@ static void start_next_command (struct runat *r, struct runat_entry *entry);
 
 static const int abort_signal = SIGTERM;
 
-static const char *env_blacklist[] = {
+static const char *env_blocklist[] = {
     "PMI_FD",
     "PMI_RANK",
     "PMI_SIZE",
@@ -277,17 +277,17 @@ error:
     return NULL;
 }
 
-/* Unset blacklisted variables in command environment.
+/* Unset blocklisted variables in command environment.
  * Set FLUX_URI if local_uri is non-NULL.
  */
 static int runat_command_modenv (struct runat_command *cmd,
-                                 const char **blacklist,
+                                 const char **blocklist,
                                  const char *local_uri)
 {
-    if (blacklist) {
+    if (blocklist) {
         int i;
-        for (i = 0; blacklist[i] != NULL; i++)
-            flux_cmd_unsetenv (cmd->cmd, blacklist[i]);
+        for (i = 0; blocklist[i] != NULL; i++)
+            flux_cmd_unsetenv (cmd->cmd, blocklist[i]);
     }
     if (local_uri) {
         if (flux_cmd_setenvf (cmd->cmd, 1, "FLUX_URI", "%s", local_uri) < 0)
@@ -404,7 +404,7 @@ int runat_push_shell_command (struct runat *r,
         return -1;
     if (runat_command_set_cmdline (cmd, cmdline) < 0)
         goto error;
-    if (runat_command_modenv (cmd, env_blacklist, r->local_uri) < 0)
+    if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
         goto error;
     if (runat_push (r, name, cmd) < 0)
         goto error;
@@ -426,7 +426,7 @@ int runat_push_shell (struct runat *r, const char *name)
         return -1;
     if (runat_command_set_cmdline (cmd, NULL) < 0)
         goto error;
-    if (runat_command_modenv (cmd, env_blacklist, r->local_uri) < 0)
+    if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
         goto error;
     if (runat_push (r, name, cmd) < 0)
         goto error;
@@ -452,7 +452,7 @@ int runat_push_command (struct runat *r,
         return -1;
     if (runat_command_set_argz (cmd, argz, argz_len) < 0)
         goto error;
-    if (runat_command_modenv (cmd, env_blacklist, r->local_uri) < 0)
+    if (runat_command_modenv (cmd, env_blocklist, r->local_uri) < 0)
         goto error;
     if (runat_push (r, name, cmd) < 0)
         goto error;
