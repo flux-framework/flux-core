@@ -72,8 +72,8 @@ struct flux_pty {
     pty_log_f llog;
     void *llog_data;
 
-    int master;
-    char *slave;
+    int leader;
+    char *follower;
     flux_watcher_t *fdw;
 
     int flags;
@@ -192,10 +192,10 @@ int flux_pty_kill (struct flux_pty *pty, int sig)
         errno = EINVAL;
         return -1;
     }
-    if (ioctl (pty->master, TIOCSIG, sig) >= 0)
+    if (ioctl (pty->leader, TIOCSIG, sig) >= 0)
         return 0;
     llog_debug (pty, "ioctl (TIOCSIG): %s", strerror (errno));
-    if (ioctl (pty->master, TIOCGPGRP, &pgrp) >= 0
+    if (ioctl (pty->leader, TIOCGPGRP, &pgrp) >= 0
         && pgrp > 0
         && kill (-pgrp, sig) >= 0)
         return 0;
@@ -219,9 +219,9 @@ void flux_pty_close (struct flux_pty *pty, int status)
         pty_clients_notify_exit (pty, status);
         pty_clients_destroy (pty);
         zlist_destroy (&pty->clients);
-        if (pty->master >= 0)
-            close (pty->master);
-        free (pty->slave);
+        if (pty->leader >= 0)
+            close (pty->leader);
+        free (pty->follower);
         free (pty);
     }
 }
@@ -231,7 +231,7 @@ static struct flux_pty * flux_pty_create ()
     struct flux_pty *pty = calloc (1, sizeof (*pty));
     if (!pty)
         return NULL;
-    pty->master = -1;
+    pty->leader = -1;
     pty->clients = zlist_new ();
     return pty;
 }
@@ -251,17 +251,17 @@ struct flux_pty * flux_pty_open ()
     struct winsize ws = { 0 };
     if (!pty)
         return NULL;
-    if ((pty->master = posix_openpt (O_RDWR | O_NOCTTY |O_CLOEXEC)) < 0
-        || grantpt (pty->master) < 0
-        || unlockpt (pty->master) < 0
-        || !(name = ptsname (pty->master))
-        || !(pty->slave = strdup (name)))
+    if ((pty->leader = posix_openpt (O_RDWR | O_NOCTTY |O_CLOEXEC)) < 0
+        || grantpt (pty->leader) < 0
+        || unlockpt (pty->leader) < 0
+        || !(name = ptsname (pty->leader))
+        || !(pty->follower = strdup (name)))
         goto err;
 
     /*  Set a default winsize, so it isn't 0,0 */
     ws.ws_row = 25;
     ws.ws_col = 80;
-    if (ioctl (pty->master, TIOCSWINSZ, &ws) < 0)
+    if (ioctl (pty->leader, TIOCSWINSZ, &ws) < 0)
         goto err;
 
     return pty;
@@ -280,13 +280,13 @@ void flux_pty_set_log (struct flux_pty *pty,
     }
 }
 
-int flux_pty_master_fd (struct flux_pty *pty)
+int flux_pty_leader_fd (struct flux_pty *pty)
 {
     if (!pty) {
         errno = EINVAL;
         return -1;
     }
-    return pty->master;
+    return pty->leader;
 }
 
 const char *flux_pty_name (struct flux_pty *pty)
@@ -295,23 +295,24 @@ const char *flux_pty_name (struct flux_pty *pty)
         errno = EINVAL;
         return NULL;
     }
-    return pty->slave;
+    return pty->follower;
 }
 
 int flux_pty_attach (struct flux_pty *pty)
 {
     int fd;
-    if (!pty || !pty->slave) {
+    if (!pty || !pty->follower) {
         errno = EINVAL;
         return -1;
     }
-    if ((fd = open (pty->slave, O_RDWR|O_NOCTTY)) < 0)
+    if ((fd = open (pty->follower, O_RDWR|O_NOCTTY)) < 0)
         return -1;
 
     /*  New session so we can attach this process to tty */
     (void) setsid ();
 
-    /*  Make the slave pty our controlling terminal */
+    /*  Make the follower pty (known in documentation as the slave
+     *  side of pty) our controlling terminal */
     if (ioctl (fd, TIOCSCTTY, NULL) < 0)
         return -1;
 
@@ -324,8 +325,8 @@ int flux_pty_attach (struct flux_pty *pty)
     }
     if (fd > 2)
         (void) close (fd);
-    if (pty->master >= 0)
-        (void) close (pty->master);
+    if (pty->leader >= 0)
+        (void) close (pty->leader);
     return 0;
 }
 
@@ -359,12 +360,12 @@ static void pty_read (flux_reactor_t *r,
     if (revents & FLUX_POLLERR)
         return;
 
-    n = read (pty->master, buf, sizeof (buf));
+    n = read (pty->leader, buf, sizeof (buf));
     if (n < 0) {
         if (errno == EAGAIN || errno == EINTR)
             return;
         /*
-         *  pty: EIO indicates pty slave has closed.
+         *  pty: EIO indicates pty follower has closed.
          *   Stop the fd watcher and continue.
          */
         if (errno == EIO) {
@@ -396,7 +397,7 @@ static int pty_resize (struct flux_pty *pty, const flux_msg_t *msg)
         llog_error (pty, "bad resize: row=%d, col=%d", ws.ws_row, ws.ws_col);
         return -1;
     }
-    if (ioctl (pty->master, TIOCSWINSZ, &ws) < 0) {
+    if (ioctl (pty->leader, TIOCSWINSZ, &ws) < 0) {
         llog_error (pty, "ioctl: TIOCSWINSZ: %s", strerror (errno));
         return -1;
     }
@@ -485,7 +486,7 @@ static int pty_write (struct flux_pty *pty, const flux_msg_t *msg)
         llog_error (pty, "msg_unpack failed");
         return -1;
     }
-    if (write (pty->master, data, len) < 0) {
+    if (write (pty->leader, data, len) < 0) {
         llog_error (pty, "write: %s", strerror (errno));
         return -1;
     }
@@ -581,14 +582,14 @@ int flux_pty_set_flux (struct flux_pty *pty, flux_t *h)
      *   client attaches
      */
     pty->fdw = flux_fd_watcher_create (flux_get_reactor (h),
-                                       pty->master,
+                                       pty->leader,
                                        FLUX_POLLIN,
                                        pty_read,
                                        pty);
     if (!pty->fdw)
         return -1;
 
-    fd_set_nonblocking (pty->master);
+    fd_set_nonblocking (pty->leader);
 
     return 0;
 }

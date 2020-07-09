@@ -39,8 +39,8 @@ static void test_invalid_args ()
         "flux_pty_kill() with NULL pty returns EINVAL");
     ok (flux_pty_kill (pty, -1) < 0 && errno == EINVAL,
         "flux_pty_kill() with invalid signal returns EINVAL");
-    ok (flux_pty_master_fd (NULL) < 0 && errno == EINVAL,
-        "flux_pty_master_fd() returns EINVAL with NULL arg");
+    ok (flux_pty_leader_fd (NULL) < 0 && errno == EINVAL,
+        "flux_pty_leader_fd() returns EINVAL with NULL arg");
     ok (flux_pty_name (NULL) == NULL && errno == EINVAL,
         "flux_pty_name() returns EINVAL with NULL arg");
     ok (flux_pty_attach (NULL) < 0 && errno == EINVAL,
@@ -99,8 +99,8 @@ static void test_empty_server ()
 
     ok (pty != NULL,
         "flux_pty_open works");
-    ok (flux_pty_master_fd (pty) >= 0,
-        "pty master fd is valid");
+    ok (flux_pty_leader_fd (pty) >= 0,
+        "pty leader fd is valid");
     ok (flux_pty_client_count (pty) == 0,
         "pty client count is 0 for newly created pty server");
     flux_pty_close (pty, 0);
