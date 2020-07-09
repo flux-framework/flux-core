@@ -214,7 +214,7 @@ struct entry {
     char *reason;
 };
 
-const struct entry bad_input_blacklist[] = {
+const struct entry bad_input_blocklist[] = {
     { NULL, NULL },
 };
 
@@ -245,9 +245,9 @@ void parse_bad_input (void)
         char errbuf[255];
         char *name = basename (results.gl_pathv[i]);
         const char *reason;
-        bool blacklisted = matchtab (name, bad_input_blacklist, &reason);
+        bool blocklist = matchtab (name, bad_input_blocklist, &reason);
 
-        skip (blacklisted, 1, "%s: %s", name, reason);
+        skip (blocklist, 1, "%s: %s", name, reason);
         ok (parse_bad_file (results.gl_pathv[i], errbuf, 255) == true,
             "%s: %s", name, errbuf);
         end_skip;
