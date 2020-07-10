@@ -44,6 +44,7 @@ struct runat_entry {
     int exit_code;
     int count;
     bool aborted;
+    bool completed;
 };
 
 struct runat {
@@ -245,6 +246,7 @@ static void start_next_command (struct runat *r, struct runat_entry *entry)
         }
     }
     if (zlist_size (entry->commands) == 0) {
+        entry->completed = true;
         if (r->cb)
             r->cb (r, entry->name, r->cb_arg);
     }
@@ -492,6 +494,22 @@ int runat_start (struct runat *r, const char *name)
     }
     start_next_command (r, entry);
     return 0;
+}
+
+bool runat_is_defined (struct runat *r, const char *name)
+{
+    if (!r || !name || !zhashx_lookup (r->entries, name))
+        return false;
+    return true;
+}
+
+bool runat_is_completed (struct runat *r, const char *name)
+{
+    struct runat_entry *entry;
+
+    if (!r || !name || !(entry = zhashx_lookup (r->entries, name)))
+        return false;
+    return entry->completed;
 }
 
 int runat_abort (struct runat *r, const char *name)

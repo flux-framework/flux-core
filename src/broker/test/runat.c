@@ -75,9 +75,17 @@ void basic (flux_t *h)
 
     /* run true;true */
     clear_list (logs);
+    ok (runat_is_defined (r, "test1") == false,
+        "runat_is_defined name=test1 returns false");
+    ok (runat_is_completed (r, "test1") == false,
+        "runat_is_completed name=test1 returns false");
     ok (runat_push_shell_command (r, "test1", "/bin/true", false) == 0
         && runat_push_shell_command (r, "test1", "/bin/true", false) == 0,
         "pushed true;true");
+    ok (runat_is_defined (r, "test1") == true,
+        "runat_is_defined name=test1 returns true after creation");
+    ok (runat_is_completed (r, "test1") == false,
+        "runat_is_completed returns false");
     ok (runat_start (r, "test1") == 0,
         "runat_start works");
     completion_called = 0;
@@ -89,6 +97,8 @@ void basic (flux_t *h)
         "exit code is zero");
     ok (match_list (logs, "Exited") == 2,
         "Exited was logged twice");
+    ok (runat_is_completed (r, "test1") == true,
+        "runat_is_completed returns true");
 
     /* run false;true */
     clear_list (logs);
@@ -236,6 +246,15 @@ void badinput (flux_t *h)
 
     if (!(r = runat_create (h, NULL, NULL, NULL)))
         BAIL_OUT ("runat_create failed");
+
+    ok (runat_is_defined (NULL, "foo") == false,
+        "runat_is_defined r=NULL returns false");
+    ok (runat_is_defined (r, NULL) == false,
+        "runat_is_defined name=NULL returns false");
+    ok (runat_is_completed (NULL, "foo") == false,
+        "runat_is_completed r=NULL returns false");
+    ok (runat_is_completed (r, NULL) == false,
+        "runat_is_completed name=NULL returns false");
 
     errno = 0;
     ok (runat_start (NULL, "foo") < 0 && errno == EINVAL,

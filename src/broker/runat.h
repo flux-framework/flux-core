@@ -64,6 +64,14 @@ int runat_start (struct runat *r, const char *name);
  */
 int runat_abort (struct runat *r, const char *name);
 
+/* Test whether named list has been defined.
+ */
+bool runat_is_defined (struct runat *r, const char *name);
+
+/* Test whether named list has completed running.
+ */
+bool runat_is_completed (struct runat *r, const char *name);
+
 #endif /* !_BROKER_RUNAT_H */
 
 /*
