@@ -44,6 +44,7 @@ struct broker {
     struct hello *hello;
     struct runat *runat;
     broker_state_t state;
+    struct join *join;
 
     char *init_shell_cmd;
     size_t init_shell_cmd_len;

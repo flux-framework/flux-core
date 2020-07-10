@@ -77,6 +77,7 @@
 #include "boot_pmi.h"
 #include "publisher.h"
 #include "state_machine.h"
+#include "join.h"
 
 #include "broker.h"
 
@@ -532,6 +533,10 @@ int main (int argc, char *argv[])
         log_err ("broker_add_services");
         goto cleanup;
     }
+    if (!(ctx.join = join_create (&ctx))) {
+        log_err ("error creating join handler");
+        goto cleanup;
+    }
 
     /* Initialize comms module infrastructure.
      */
@@ -625,6 +630,7 @@ cleanup:
 
     modhash_destroy (ctx.modhash);
     zlist_destroy (&ctx.sigwatchers);
+    join_destroy (ctx.join);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);

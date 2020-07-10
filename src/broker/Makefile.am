@@ -39,6 +39,8 @@ libbroker_la_SOURCES = \
 	reduce.c \
 	shutdown.h \
 	shutdown.c \
+	join.h \
+	join.c \
 	attr.h \
 	attr.c \
 	log.h \
