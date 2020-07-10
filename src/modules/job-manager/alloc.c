@@ -10,76 +10,9 @@
 
 /* alloc.c - scheduler interface
  *
- * STARTUP:
- *
- * 1) Scheduler sends job-manager.sched-hello request:
- *   <empty payload>
- * Job manager responds with array of job objects that have allocated resources:
- *   {"alloc":[{"id":I, "priority":i, "userid":i, "t_submit":f},{},{},...]}
- * Scheduler should read those jobs' R from KVS and mark resources allocated.
- *
- * 2) Scheduler sends job-manager.sched-ready request:
- *   {"mode":s}
- * mode is scheduler's preference for throttling alloc requests:
- *   "single"    - limit of one pending alloc request (e.g. for FCFS)
- *   "unlimited" - no limit on number of pending alloc requests
- * Job manager responds with alloc queue depth (sched may ignore this)
- *   {"count":i}
- *
- * ALLOCATION (see notes 3-4 below):
- *
- * Job manager sends sched.alloc request:
- *   {"id":I, "priority":i, "userid":i, "t_submit":f}
- * Scheduler responds with:
- *   {"id":I, "type":i, "note"?:s}
- * Where type is one of:
- * 0 - resources allocated (sched commits R to KVS before responding)
- * 1 - annotation (just updates note, see below)
- * 2 - job cannot run (note is set to error string)
- * 3 - alloc was canceled
- * Type 0, 2, 3 are taken as final responses, type 1 is not.
- *
- * CANCELLATION
- *
- * Job manager sends sched.cancel request:
- *   {"id":I}
- * Scheduler does not respond to the cancellation, but does respond to
- * the alloc request for 'id' if still pending (see ALLOCATION above).
- *
- * DE-ALLOCATION (see notes 3-4 below):
- *
- * Job manager sends sched.free request:
- *   {"id":I}
- * Scheduler reads R from KVS and marks resources free and responds with
- *   {"id":I}
- *
- * EXCEPTION:
- *
- * Job manager sends a job-exception event:
- *   {"id":I, "type":s, "severity":i}
- * If severity=0 exception is received for a job with a pending alloc request,
- * scheduler responds with with type=2 (error).
- *
- * TEARDOWN:
- *
- * Scheduler sends each internally queued alloc request a regular ENOSYS
- * RPC error response.
- *
- * The receipt of a regular RPC error of any type from the scheduler
- * causes the job manager to assume the scheduler is unloading and to
- * stop sending requests.
- *
- * Notes:
- * 1) scheduler can be loaded after jobs have begun to be submitted
- * 2) scheduler can be unloaded without affecting workload
- * 3) alloc/free requests and responses are matched using jobid, not
- *    the normal matchtag, for scalability.
- * 4) a normal RPC error response to alloc/free triggers teardown
- * 5) 'note' in alloc response is intended to be human readable note displayed
- *    with job info (could be estimated start time, or error detail)
+ * Please refer to RFC27 for scheduler protocol
  *
  * TODO:
- * - handle type=1 annotation for queue listing (currently ignored)
  * - implement flow control (credit based?) interface mode
  * - handle post alloc request job priority change
  */
@@ -90,6 +23,7 @@
 #include <jansson.h>
 #include <czmq.h>
 #include <flux/core.h>
+#include <flux/schedutil.h>
 #include <assert.h>
 
 #include "job.h"
@@ -117,6 +51,14 @@ struct alloc {
     unsigned int free_pending_count;
 };
 
+static void clear_annotations (struct job *job)
+{
+    if (job->annotations) {
+        json_decref (job->annotations);
+        job->annotations = NULL;
+    }
+}
+
 /* Initiate teardown.  Clear any alloc/free requests, and clear
  * the alloc->ready flag to stop prep/check from allocating.
  */
@@ -143,6 +85,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
                     flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
                 job->alloc_pending = 0;
                 job->alloc_queued = 1;
+                clear_annotations (job);
             }
             /* jobs with free request pending (much smaller window for this
              * to be true) need to be picked up again after 'ready'.
@@ -232,6 +175,41 @@ int cancel_request (struct alloc *alloc, struct job *job)
     return 0;
 }
 
+static void update_annotations (flux_t *h, struct job *job, flux_jobid_t id,
+                                json_t *annotations)
+{
+    if (annotations) {
+        if (!job->annotations) {
+            if (!(job->annotations = json_object ()))
+                flux_log (h,
+                          LOG_ERR,
+                          "%s: id=%ju json_object",
+                          __FUNCTION__, (uintmax_t)id);
+        }
+        if (job->annotations) {
+            const char *key;
+            json_t *value;
+
+            json_object_foreach (annotations, key, value) {
+                if (!json_is_null (value)) {
+                    if (json_object_set (job->annotations, key, value) < 0)
+                        flux_log (h,
+                                  LOG_ERR,
+                                  "%s: id=%ju update key=%s",
+                                  __FUNCTION__, (uintmax_t)id, key);
+                }
+                else
+                    /* not an error if key doesn't exist in job->annotations */
+                    (void)json_object_del (job->annotations, key);
+            }
+            /* Special case: if user cleared all entries, assume we no
+             * longer need annotations object */
+            if (!json_object_size (job->annotations))
+                clear_annotations (job);
+        }
+    }
+}
+
 /* Handle a sched.alloc response.
  * Update flags.
  */
@@ -242,15 +220,17 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     struct alloc *alloc = ctx->alloc;
     flux_jobid_t id;
     int type;
-    const char *note = NULL;
+    char *note = NULL;
+    json_t *annotations = NULL;
     struct job *job;
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown; // ENOSYS here if scheduler not loaded/shutting down
-    if (flux_msg_unpack (msg, "{s:I s:i s?:s}",
+    if (flux_msg_unpack (msg, "{s:I s:i s?:s s?:o}",
                               "id", &id,
                               "type", &type,
-                              "note", &note) < 0)
+                              "note", &note,
+                              "annotations", &annotations) < 0)
         goto teardown;
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         flux_log (h, LOG_ERR, "sched.alloc-response: id=%ju not active",
@@ -265,7 +245,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto teardown;
     }
     switch (type) {
-    case 0: // success
+    case FLUX_SCHED_ALLOC_SUCCESS:
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
         if (job->has_resources) {
@@ -276,16 +256,29 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = EEXIST;
             goto teardown;
         }
-        if (event_job_post_pack (ctx->event, job, "alloc",
-                                 "{ s:s }",
-                                 "note", note ? note : "") < 0)
+        update_annotations (h, job, id, annotations);
+        if (job->annotations) {
+            if (event_job_post_pack (ctx->event, job, "alloc",
+                                     "{ s:O }",
+                                     "annotations", job->annotations) < 0)
+                goto teardown;
+        }
+        else {
+            if (event_job_post_pack (ctx->event, job, "alloc", NULL) < 0)
+                goto teardown;
+        }
+        break;
+    case FLUX_SCHED_ALLOC_ANNOTATE: // annotation
+        if (!annotations) {
+            errno = EPROTO;
             goto teardown;
+        }
+        update_annotations (h, job, id, annotations);
         break;
-    case 1: // annotation FIXME
-        break;
-    case 2: // error
+    case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
+        clear_annotations (job);
         if (event_job_post_pack (ctx->event, job, "exception",
                                  "{ s:s s:i s:i s:s }",
                                  "type", "alloc",
@@ -294,9 +287,10 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "note", note ? note : "") < 0)
             goto teardown;
         break;
-    case 3: // canceled
+    case FLUX_SCHED_ALLOC_CANCEL:
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
+        clear_annotations (job);
         if (event_job_action (ctx->event, job) < 0) {
             flux_log_error (h,
                             "event_job_action id=%ju on alloc cancel",

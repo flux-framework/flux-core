@@ -104,11 +104,7 @@ static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "sched.cancel");
         return;
     }
-    /* N.B. in case scheduler hasn't transitioned to new cancel_cb,
-     * call as though this were the old exception_cb, with type=cancel,
-     * severity=0.
-     */
-    util->cancel_cb (h, id, "cancel", 0, util->cb_arg);
+    util->cancel_cb (h, id, util->cb_arg);
 }
 
 static void free_continuation (flux_future_t *f, void *arg)
