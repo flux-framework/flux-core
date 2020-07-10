@@ -86,6 +86,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_wait (optparse_t *p, int argc, char **argv);
+int cmd_annotate (optparse_t *p, int argc, char **argv);
 
 int stdin_flags;
 
@@ -446,6 +447,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_wait,
       0,
       wait_opts,
+    },
+    { "annotate",
+      "[OPTIONS] id key value",
+      "Annotate job with key and value",
+      cmd_annotate,
+      0,
+      NULL,
     },
     OPTPARSE_SUBCMD_END
 };
@@ -2852,6 +2860,51 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     }
     flux_close (h);
     return (rc);
+}
+
+int cmd_annotate (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h;
+    flux_jobid_t id;
+    const char *key;
+    const char *value;
+    json_t *v;
+    json_error_t error;
+    json_t *a;
+    flux_future_t *f;
+
+    if ((argc - optindex) < 3) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    id = parse_arg_unsigned (argv[optindex], "id");
+    key = argv[optindex + 1];
+    value = argv[optindex + 2];
+
+    /* make sure value is legal json */
+    if (!(v = json_loads (value, JSON_DECODE_ANY, &error)))
+        log_err_exit ("invalid value: %s", error.text);
+
+    if (!(a = json_pack ("{s:o}", key, v)))
+        log_err_exit ("json_pack");
+
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.annotate",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:I s:o}",
+                             "id", id,
+                             "annotations", a)))
+        log_err_exit ("flux_rpc_pack");
+    if (flux_rpc_get (f, NULL) < 0)
+        log_err_exit ("flux_rpc_get");
+
+    flux_close (h);
+    return (0);
 }
 
 /*
