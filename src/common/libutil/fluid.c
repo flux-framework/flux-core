@@ -18,7 +18,9 @@
 #include <time.h>
 #include <unistd.h>
 #include <stdint.h>
+#include <stdbool.h>
 #include <errno.h>
+#include <ctype.h>
 
 #include "fluid.h"
 #include "mnemonic.h"
@@ -361,6 +363,81 @@ int fluid_decode (const char *s, fluid_t *fluidp, fluid_string_type_t type)
     if (fluid_validate (fluid) < 0)
         return -1;
     *fluidp = fluid;
+    return 0;
+}
+
+static bool fluid_is_dothex (const char *s)
+{
+    return (strchr (s, '.') != NULL);
+}
+
+static bool fluid_is_words (const char *s)
+{
+    return (strchr (s, '-') != NULL);
+}
+
+fluid_string_type_t fluid_string_detect_type (const char *s)
+{
+    /* N.B.: An F58 encoded FLUID may start with 'f', which also could
+     *  be true for dothex or words representations. Therefore, always
+     *  check for these encodings first, since F58 must not have '.'
+     *  or '-' characters, which distinguish dothex and mnemonic.
+     */
+    if (fluid_is_dothex (s))
+        return FLUID_STRING_DOTHEX;
+    if (fluid_is_words (s))
+        return FLUID_STRING_MNEMONIC;
+    if (fluid_is_f58 (s) > 0)
+        return FLUID_STRING_F58;
+    return 0;
+}
+
+static bool is_trailing_space (const char *p)
+{
+    while (*p != '\0' && isspace (*p))
+        p++;
+    return (*p == '\0');
+}
+
+int fluid_parse (const char *s, fluid_t *fluidp)
+{
+    int base = 10;
+    unsigned long long l;
+    char *endptr;
+    fluid_string_type_t type;
+
+    if (s == NULL || s[0] == '\0') {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /*  Skip leading whitepsace
+     */
+    while (*s != '\0' && isspace (*s))
+        s++;
+
+    if ((type = fluid_string_detect_type (s)) != 0)
+        return fluid_decode (s, fluidp, type);
+
+    /* O/w, FLUID encoded as an integer, either base16 (prefix="0x")
+     *  or base10 (no prefix).
+     */
+    if (strncmp (s, "0x", 2) == 0)
+        base = 16;
+    errno = 0;
+    l = strtoull (s, &endptr, base);
+    if (errno != 0)
+        return -1;
+    /*  Ignore trailing whitespace */
+    if (!is_trailing_space(endptr)) {
+        errno = EINVAL;
+        return -1;
+    }
+    *fluidp = l;
+
+    if (fluid_validate (*fluidp) < 0)
+        return -1;
+
     return 0;
 }
 
