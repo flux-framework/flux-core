@@ -100,6 +100,95 @@ void test_f58 (void)
         "fluid_decode ('x1', FLUID_STRING_F58) returns EINVAL");
 }
 
+struct fluid_parse_test {
+    fluid_t id;
+    const char *input;
+};
+
+struct fluid_parse_test fluid_parse_tests [] = {
+    { 0, "ƒ1" },
+    { 1, "ƒ2" },
+    { 57, "ƒz" },
+    { 1234, "ƒNH" },
+    { 1888, "ƒZZ" },
+    { 3363, "ƒzz" },
+    { 3364, "ƒ211" },
+    { 4369, "ƒ2JL" },
+    { 65535, "ƒLUv" },
+    { 4294967295, "ƒ7YXq9G" },
+    { 633528662, "ƒxyzzy" },
+    { 6731191091817518LL, "ƒuZZybuNNy" },
+    { 18446744073709551614UL, "ƒjpXCZedGfVP" },
+    { 18446744073709551615UL, "ƒjpXCZedGfVQ" },
+    { 0, "f1" },
+    { 1, "f2" },
+    { 4294967295, "f7YXq9G" },
+    { 633528662, "fxyzzy" },
+    { 18446744073709551614UL, "fjpXCZedGfVP" },
+    { 18446744073709551615UL, "fjpXCZedGfVQ" },
+    { 1234, "1234" },
+    { 1888, "1888" },
+    { 3363, "3363" },
+    { 3364, "3364" },
+    { 4369, "4369" },
+    { 6731191091817518LL, "6731191091817518" },
+    { 18446744073709551614UL, "18446744073709551614" },
+    { 18446744073709551615UL, "18446744073709551615" },
+    { 0, "0x0" },
+    { 1, "0x1" },
+    { 57, "0x39" },
+    { 1234, "0x4d2" },
+    { 1888, "0x760" },
+    { 3363, "0xd23" },
+    { 4369, "0x1111" },
+    { 65535, "0xffff" },
+    { 4294967295, "0xffffffff" },
+    { 633528662,  "0x25c2e156" },
+    { 6731191091817518LL, "0x17e9fb8df16c2e" },
+    { 18446744073709551615UL, "0xffffffffffffffff" },
+    { 0, "0.0.0.0" },
+    { 1, "0000.0000.0000.0001" },
+    { 57, "0.0.0.0039" },
+    { 1234, "0000.0000.0000.04d2" },
+    { 1888, "0000.0000.0000.0760" },
+    { 4369, "0000.0000.0000.1111" },
+    { 65535, "0.0.0.ffff" },
+    { 4294967295, "0000.0000.ffff.ffff" },
+    { 18446744073709551615UL, "ffff.ffff.ffff.ffff" },
+    { 0, NULL },
+};
+
+static void test_fluid_parse (void)
+{
+    fluid_t id;
+    struct fluid_parse_test *tp = fluid_parse_tests;
+    while (tp->input != NULL) {
+        id = 0;
+        ok (fluid_parse (tp->input, &id) == 0,
+            "fluid_parse (%s) works", tp->input);
+        ok (id == tp->id,
+            "%s -> %ju", tp->input, (uintmax_t) id);
+        tp++;
+    }
+
+    ok (fluid_parse (" 0xffff   ", &id) == 0,
+        "flux_parse() works with leading/trailing whitespace");
+    ok (id == 65535,
+        "flux_parse with whitespace works");
+
+    id = 0;
+    ok (fluid_parse (NULL, &id) < 0 && errno == EINVAL,
+        "fluid_parse returns EINVAL for with NULL string");
+    ok (fluid_parse ("", &id) < 0 && errno == EINVAL,
+        "fluid_parse returns EINVAL for with empty string");
+    ok (fluid_parse ("boo", &id) < 0 && errno == EINVAL,
+        "fluid_parse returns EINVAL for 'boo'");
+    ok (fluid_parse ("f", &id) < 0 && errno == EINVAL,
+        "fluid_parse returns EINVAL for 'f'");
+    ok (fluid_parse ("-1", &id) < 0 && errno == EINVAL,
+        "fluid_parse returns EINVAL for '-1'");
+}
+
 void test_basic (void)
 {
     struct fluid_generator gen;
@@ -231,6 +320,7 @@ int main (int argc, char *argv[])
 
     test_basic ();
     test_f58 ();
+    test_fluid_parse ();
 
     done_testing ();
     return 0;
