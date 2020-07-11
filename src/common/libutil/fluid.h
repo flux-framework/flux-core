@@ -22,6 +22,7 @@
 typedef enum {
     FLUID_STRING_DOTHEX = 1,    // x.x.x.x
     FLUID_STRING_MNEMONIC = 2,  // mnemonicode x-x-x--x-x-x
+    FLUID_STRING_F58 = 3,       // base58 ƒXXXX
 } fluid_string_type_t;
 
 struct fluid_generator {
