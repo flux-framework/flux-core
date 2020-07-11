@@ -33,7 +33,6 @@
 #endif
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/fluid.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/monotime.h"
@@ -244,12 +243,8 @@ static struct optparse_option status_opts[] = {
 };
 
 static struct optparse_option id_opts[] =  {
-    { .name = "from", .key = 'f', .has_arg = 1,
-      .arginfo = "dec|kvs|hex|words",
-      .usage = "Convert jobid from specified form",
-    },
     { .name = "to", .key = 't', .has_arg = 1,
-      .arginfo = "dec|kvs|hex|words",
+      .arginfo = "dec|kvs|hex|dothex|words|f58",
       .usage = "Convert jobid to specified form",
     },
     OPTPARSE_TABLE_END
@@ -2239,51 +2234,21 @@ int cmd_status (optparse_t *p, int argc, char **argv)
 
 void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
 {
-    const char *from = optparse_get_str (p, "from", "dec");
     const char *to = optparse_get_str (p, "to", "dec");
     flux_jobid_t id;
 
-    /* src to id
+    /*  Parse as any valid JOBID
      */
-    if (!strcmp (from, "dec")) {
-        id = parse_arg_unsigned (src, "input");
-    }
-    else if (!strcmp (from, "hex")) {
-        if (fluid_decode (src, &id, FLUID_STRING_DOTHEX) < 0)
-            log_msg_exit ("%s: malformed input", src);
-    }
-    else if (!strcmp (from, "kvs")) {
-        if (strncmp (src, "job.", 4) != 0)
-            log_msg_exit ("%s: missing 'job.' prefix", src);
-        if (fluid_decode (src + 4, &id, FLUID_STRING_DOTHEX) < 0)
-            log_msg_exit ("%s: malformed input", src);
-    }
-    else if (!strcmp (from, "words")) {
-        if (fluid_decode (src, &id, FLUID_STRING_MNEMONIC) < 0)
-            log_msg_exit ("%s: malformed input", src);
-    }
-    else
-        log_msg_exit ("Unknown from=%s", from);
+    if (flux_job_id_parse (src, &id) < 0)
+        log_msg_exit ("%s: malformed input", src);
 
-    /* id to dst
+    /*  Now encode into requested representation:
      */
-    if (!strcmp (to, "dec")) {
-        snprintf (dst, dstsz, "%ju", (uintmax_t) id);
+    if (flux_job_id_encode (id, to, dst, dstsz) < 0) {
+        if (errno == EPROTO)
+            log_msg_exit ("Unknown to=%s", to);
+        log_msg_exit ("Unable to encode id %ju to %s", (uintmax_t) id, to);
     }
-    else if (!strcmp (to, "kvs")) {
-        if (flux_job_kvs_key (dst, dstsz, id, NULL) < 0)
-            log_msg_exit ("error encoding id");
-    }
-    else if (!strcmp (to, "hex")) {
-        if (fluid_encode (dst, dstsz, id, FLUID_STRING_DOTHEX) < 0)
-            log_msg_exit ("error encoding id");
-    }
-    else if (!strcmp (to, "words")) {
-        if (fluid_encode (dst, dstsz, id, FLUID_STRING_MNEMONIC) < 0)
-            log_msg_exit ("error encoding id");
-    }
-    else
-        log_msg_exit ("Unknown to=%s", to);
 }
 
 char *trim_string (char *s)
