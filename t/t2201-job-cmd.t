@@ -10,12 +10,10 @@ fi
 # 2^64 - 1
 MAXJOBID_DEC=18446744073709551615
 MAXJOBID_KVS="job.ffff.ffff.ffff.ffff"
-MAXJOBID_HEX="ffff.ffff.ffff.ffff"
 MAXJOBID_WORDS="natural-analyze-verbal--natural-analyze-verbal"
 
 MINJOBID_DEC=0
 MINJOBID_KVS="job.0000.0000.0000.0000"
-MINJOBID_HEX="0000.0000.0000.0000"
 MINJOBID_WORDS="academy-academy-academy--academy-academy-academy"
 
 test_under_flux 1 job
@@ -83,7 +81,7 @@ test_expect_success 'flux-job: can submit jobspec on stdin without -' '
         flux job submit <basic.json
 '
 
-test_expect_success 'flux-job: id without from/to args is dec to dec' '
+test_expect_success 'flux-job: id without to arg is dec to dec' '
 	jobid=$(flux job id 42) &&
 	test "$jobid" = "42"
 '
@@ -93,37 +91,8 @@ test_expect_success 'flux-job: id from stdin works' '
 	test "$jobid" = "42"
 '
 
-test_expect_success 'flux-job: id with invalid from/to arg fails' '
-	test_must_fail flux job id --from=invalid 42 &&
+test_expect_success 'flux-job: id with invalid --to arg fails' '
 	test_must_fail flux job id --to=invalid 42
-'
-
-test_expect_success 'flux-job: id --from=dec works' '
-	jobid=$(flux job id --from=dec $MAXJOBID_DEC) &&
-	test "$jobid" = "$MAXJOBID_DEC" &&
-	jobid=$(flux job id --from=dec $MINJOBID_DEC) &&
-	test "$jobid" = "$MINJOBID_DEC"
-'
-
-test_expect_success 'flux-job: id --from=words works' '
-	jobid=$(flux job id --from=words $MAXJOBID_WORDS) &&
-	test "$jobid" = "$MAXJOBID_DEC" &&
-	jobid=$(flux job id --from=words $MINJOBID_WORDS) &&
-	test "$jobid" = "$MINJOBID_DEC"
-'
-
-test_expect_success 'flux-job: id --from=kvs works' '
-	jobid=$(flux job id --from=kvs $MAXJOBID_KVS) &&
-	test "$jobid" = "$MAXJOBID_DEC" &&
-	jobid=$(flux job id --from=kvs $MINJOBID_KVS) &&
-	test "$jobid" = "$MINJOBID_DEC"
-'
-
-test_expect_success 'flux-job: id --from=hex works' '
-	jobid=$(flux job id --from=hex $MAXJOBID_HEX) &&
-	test "$jobid" = "$MAXJOBID_DEC" &&
-	jobid=$(flux job id --from=hex $MINJOBID_HEX) &&
-	test "$jobid" = "$MINJOBID_DEC"
 '
 
 test_expect_success 'flux-job: id --to=dec works' '
@@ -145,31 +114,6 @@ test_expect_success 'flux-job: id --to=kvs works' '
 	test "$jobid" = "$MAXJOBID_KVS" &&
 	jobid=$(flux job id --to=kvs $MINJOBID_DEC) &&
 	test "$jobid" = "$MINJOBID_KVS"
-'
-
-test_expect_success 'flux-job: id --to=hex works' '
-	jobid=$(flux job id --to=hex $MAXJOBID_DEC) &&
-	test "$jobid" = "$MAXJOBID_HEX" &&
-	jobid=$(flux job id --to=hex $MINJOBID_DEC) &&
-	test "$jobid" = "$MINJOBID_HEX"
-'
-
-test_expect_success 'flux-job: id --from=kvs fails on bad input' '
-	test_must_fail flux job id --from=kvs badstring &&
-	test_must_fail flux job id --from=kvs \
-	    job.0000.0000 &&
-	test_must_fail flux job id --from=kvs \
-	    job.0000.0000.0000.000P
-'
-
-test_expect_success 'flux-job: id --from=dec fails on bad input' '
-	test_must_fail flux job id --from=dec 42plusbad &&
-	test_must_fail flux job id --from=dec meep &&
-	test_must_fail flux job id --from=dec 18446744073709551616
-'
-
-test_expect_success 'flux-job: id --from=words fails on bad input' '
-	test_must_fail flux job id --from=words badwords
 '
 
 test_expect_success 'flux-job: priority fails with bad FLUX_URI' '
