@@ -108,8 +108,8 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
                                 "shell", "options", &job->options) < 0) {
         goto error;
     }
-    if (version != 1) {
-        set_error (error, "Invalid jobspec version: expected 1 got %d",
+    if (version != 1 && version != 2) {
+        set_error (error, "Invalid jobspec version: expected 1 or 2 got %d",
                    version);
         goto error;
     }
