@@ -25,7 +25,7 @@ import six
 import flux
 import flux.kvs
 from flux import job
-from flux.job import Jobspec, JobspecV1, ffi
+from flux.job import Jobspec, JobspecV1, JobspecV2, ffi
 from flux.future import Future
 
 
@@ -75,7 +75,7 @@ class TestJob(unittest.TestCase):
         self.assertGreater(jobid, 0)
 
     def test_03_invalid_construction(self):
-        for cls in [Jobspec, JobspecV1]:
+        for cls in [Jobspec, JobspecV1, JobspecV2]:
             for invalid_jobspec_filepath in glob(
                 os.path.join(self.jobspec_dir, "invalid", "*.yaml")
             ):
@@ -424,6 +424,34 @@ class TestJob(unittest.TestCase):
                 if key not in ["int", "dec"]:
                     # Ensure encode back to same type works
                     self.assertEqual(getattr(jobid, key), test[key])
+    def test_25_valid_v2_construction(self):
+        """Test that V2 produces valid jobspecs. If V2 is intended to be a true
+           superset of v1, its probably a good idea to test against the cases in
+           the valid_v1 directory as well. 
+        """
+        for jobspec_filepath in glob(
+            os.path.join(self.jobspec_dir, "valid_v2", "*.yaml")
+        ):
+            JobspecV2.from_yaml_file(jobspec_filepath)
+
+    def test_26_v2_from_batch_command(self):
+        """Test that `from_batch_command` produces a valid jobspec"""
+        jobid = job.submit(
+            self.fh, JobspecV2.from_batch_command("#!/bin/sh\nsleep 0", "nested sleep")
+        )
+        self.assertGreater(jobid, 0)
+
+        # test that a shebang is required
+        with self.assertRaises(ValueError):
+            job.submit(
+                self.fh,
+                JobspecV2.from_batch_command("sleep 0", "nested sleep with no shebang"),
+            )
+
+    def test_27_v2_from_nest_command(self):
+        """Test that `from_nest_command` produces a valid jobspec"""
+        jobid = job.submit(self.fh, JobspecV2.from_nest_command(["sleep", "0"]))
+        self.assertGreater(jobid, 0)
 
 
 if __name__ == "__main__":

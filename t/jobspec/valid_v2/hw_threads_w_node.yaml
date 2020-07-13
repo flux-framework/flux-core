@@ -1,0 +1,25 @@
+version: 2 
+resources:
+  - type: node
+    count: 4
+    with:  
+      - type: slot
+        count: 10
+        label: default
+        with:
+          - type: core
+            count: 2
+            with:
+              - type: hardware-thread
+                count: 2
+tasks:
+  - command: [ "myapp" ]
+    slot: default
+    count:
+      per_slot: 1
+attributes:
+  system:
+    duration: 3600.
+    cwd: "/home/flux"
+    environment:
+      HOME: "/home/flux"
