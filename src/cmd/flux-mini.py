@@ -257,20 +257,40 @@ class SubmitCmd(MiniCmd):
             help="Number of GPUs to allocate per task",
         )
         self.parser.add_argument(
+            "-V",
+            "--jobspec-version",
+            type=int,
+            metavar="N",
+            default=1,
+            help="Version of Jobspec to submit, used for testing",
+        )
+        self.parser.add_argument(
             "command", nargs=argparse.REMAINDER, help="Job command and arguments"
         )
 
     def init_jobspec(self, args):
         if not args.command:
             raise ValueError("job command and arguments are missing")
-
-        return JobspecV1.from_command(
-            args.command,
-            num_tasks=args.ntasks,
-            cores_per_task=args.cores_per_task,
-            gpus_per_task=args.gpus_per_task,
-            num_nodes=args.nodes,
-        )
+        if args.jobspec_version == 1:
+            return JobspecV1.from_command(
+                args.command,
+                num_tasks=args.ntasks,
+                cores_per_task=args.cores_per_task,
+                gpus_per_task=args.gpus_per_task,
+                num_nodes=args.nodes,
+            )
+        elif args.jobspec_version == 2:
+            print("Jobspec V2 is an experimental Feature. Flux may not support all allowed V2 resources", file=sys.stderr)
+            return JobspecV2.from_command(
+                args.command,
+                num_tasks=args.ntasks,
+                cores_per_task=args.cores_per_task,
+                hw_threads_per_core=args.hw_threads_per_core,
+                gpus_per_task=args.gpus_per_task,
+                num_nodes=args.nodes,
+            )
+        else:
+            raise ValueError("Only Jobspec Versions 1 and 2 are supported")
 
     def main(self, args):
         jobid = self.submit(args)
@@ -374,6 +394,14 @@ def add_batch_alloc_args(parser):
         metavar="N",
         help="Distribute allocated resource slots across N individual nodes",
     )
+    parser.add_argument(
+        "-V",
+        "--jobspec-version",
+        type=int,
+        metavar="N",
+        default=1,
+        help="Version of Jobspec to submit, used for testing",
+    )
 
 
 def list_split(opts):
@@ -431,16 +459,32 @@ class BatchCmd(MiniCmd):
         if not args.nslots:
             raise ValueError("Number of slots to allocate must be specified")
 
-        jobspec = JobspecV1.from_batch_command(
-            script=self.read_script(args),
-            jobname=args.SCRIPT[0] if args.SCRIPT else "batchscript",
-            args=args.SCRIPT[1:],
-            num_slots=args.nslots,
-            cores_per_slot=args.cores_per_slot,
-            gpus_per_slot=args.gpus_per_slot,
-            num_nodes=args.nodes,
-            broker_opts=list_split(args.broker_opts),
-        )
+        if args.jobspec_version == 1:
+            jobspec = JobspecV1.from_batch_command(
+                script=self.read_script(args),
+                jobname=args.SCRIPT[0] if args.SCRIPT else "batchscript",
+                args=args.SCRIPT[1:],
+                num_slots=args.nslots,
+                cores_per_slot=args.cores_per_slot,
+                gpus_per_slot=args.gpus_per_slot,
+                num_nodes=args.nodes,
+                broker_opts=list_split(args.broker_opts),
+            )
+        elif args.jobspec_version == 2:
+            print("Jobspec V2 is an experimental Feature. Flux may not support all allowed V2 resources", file=sys.stderr)
+            jobspec = JobspecV2.from_batch_command(
+                script=self.read_script(args),
+                jobname=args.SCRIPT[0] if args.SCRIPT else "batchscript",
+                args=args.SCRIPT[1:],
+                num_slots=args.nslots,
+                cores_per_slot=args.cores_per_slot,
+                hw_threads_per_core=args.hw_threads_per_core,
+                gpus_per_slot=args.gpus_per_slot,
+                num_nodes=args.nodes,
+                broker_opts=list_split(args.broker_opts),
+            )
+        else:
+            raise ValueError("Only Jobspec Versions 1 and 2 are supported")
 
         # Default output is flux-{{jobid}}.out
         # overridden by either --output=none or --output=kvs
@@ -468,15 +512,28 @@ class AllocCmd(MiniCmd):
 
         if not args.nslots:
             raise ValueError("Number of slots to allocate must be specified")
-
-        jobspec = JobspecV1.from_nest_command(
-            command=args.COMMAND,
-            num_slots=args.nslots,
-            cores_per_slot=args.cores_per_slot,
-            gpus_per_slot=args.gpus_per_slot,
-            num_nodes=args.nodes,
-            broker_opts=list_split(args.broker_opts),
-        )
+        if args.jobspec_version == 1:
+            jobspec = JobspecV2.from_nest_command(
+                command=args.COMMAND,
+                num_slots=args.nslots,
+                cores_per_slot=args.cores_per_slot,
+                gpus_per_slot=args.gpus_per_slot,
+                num_nodes=args.nodes,
+                broker_opts=list_split(args.broker_opts),
+            )
+        elif args.jobspec_version == 2:
+            print("Jobspec V2 is an experimental Feature. Flux may not support all allowed V2 resources", file=sys.stderr)
+            jobspec = JobspecV2.from_nest_command(
+                command=args.COMMAND,
+                num_slots=args.nslots,
+                cores_per_slot=args.cores_per_slot,
+                hw_threads_per_core=args.hw_threads_per_core,
+                gpus_per_slot=args.gpus_per_slot,
+                num_nodes=args.nodes,
+                broker_opts=list_split(args.broker_opts),
+            )
+        else:
+            raise ValueError("Only Jobspec Versions 1 and 2 are supported")
         if sys.stdin.isatty():
             jobspec.setattr_shell_option("pty", True)
         return jobspec
