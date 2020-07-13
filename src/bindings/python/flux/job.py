@@ -655,6 +655,8 @@ def validate_jobspec(jobspec, require_version=None):
     _validate_keys(Jobspec.top_level_keys, jobspec_obj.keys())
     if require_version == 1 or jobspec_obj.get("version", 0) == 1:
         JobspecV1(**jobspec_obj)
+    if require_version == 2 or jobspec_obj.get("version", 0) == 2:
+        JobspecV2(**jobspec_obj)
     else:
         Jobspec(**jobspec_obj)
     return True
@@ -1281,6 +1283,217 @@ class JobspecV1(Jobspec):
             command=["flux", "broker", *broker_opts, *command],
             num_tasks=num_slots,
             cores_per_task=cores_per_slot,
+            gpus_per_task=gpus_per_slot,
+            num_nodes=num_nodes,
+        )
+        jobspec.setattr_shell_option("per-resource.type", "node")
+        return jobspec
+
+
+class JobspecV2(Jobspec):
+    def __init__(self, resources, tasks, **kwargs):
+        """
+        Constructor for Version 2 of the Jobspec
+
+        :param resources:  dictionary following the specification in RFC14 for
+                           the `resources` top-level key
+        :param tasks: dictionary following the specification in RFC14 for the
+                      `tasks` top-level key
+        :param attributes: dictionary following the specification in RFC14 for
+                           the `attributes` top-level key
+        :param version: must be 2, included to allow for usage like
+                        JobspecV2(**jobspec)
+        """
+
+        # ensure that no unknown keyword arguments are used
+        _validate_keys(
+            ["attributes", "version"],
+            kwargs,
+            keys_optional=True,
+            allow_additional=False,
+        )
+
+        if "version" not in kwargs:
+            kwargs["version"] = 2
+        elif kwargs["version"] != 2:
+            raise ValueError("version must be 2")
+
+        super(JobspecV2, self).__init__(resources, tasks, **kwargs)
+
+        # validate V2 specific requirements:
+        self._v2_validate(resources, tasks, kwargs)
+
+    @staticmethod
+    def _v2_validate(resources, tasks, kwargs):
+        # process extra V2 attributes requirements:
+
+        # attributes already required by base Jobspec validator
+        attributes = kwargs["attributes"]
+
+        # attributes.system.duration is required
+        if "system" not in attributes:
+            raise ValueError("attributes.system is a required key")
+        system = attributes["system"]
+        if not isinstance(system, abc.Mapping):
+            raise ValueError("attributes.system must be a mapping")
+        if "duration" not in system:
+            raise ValueError("attributes.system.duration is a required key")
+        if not isinstance(system["duration"], numbers.Number):
+            raise ValueError("attributes.system.duration must be a number")
+
+    @classmethod
+    def from_command(
+        cls,
+        command,
+        num_tasks=1,
+        cores_per_task=1,
+        hw_threads_per_core=None,
+        gpus_per_task=None,
+        num_nodes=None,
+    ):
+        """
+        Factory function that builds the minimum legal v2 jobspec.
+
+        Use setters to assign additional properties.
+
+        :param command: command to execute
+        :type command: iterable of str
+        :param num_tasks: number of MPI tasks to create
+        :param cores_per_task: number of cores to allocate per task
+        :param hw_threads_per_core: Number of hardware threads to allocate per core
+        :param gpus_per_task: number of GPUs to allocate per task
+        :param num_nodes: distribute allocated tasks across N individual nodes
+        """
+        if not isinstance(num_tasks, int) or num_tasks < 1:
+            raise ValueError("task count must be a integer >= 1")
+        if not isinstance(cores_per_task, int) or cores_per_task < 1:
+            raise ValueError("cores per task must be an integer >= 1")
+        if hw_threads_per_core is not None:
+            if not isinstance(hw_threads_per_core, int) or hw_threads_per_core < 0:
+                raise ValueError("hardware threads per core must be an integer >= 0")
+        if gpus_per_task is not None:
+            if not isinstance(gpus_per_task, int) or gpus_per_task < 0:
+                raise ValueError("gpus per task must be an integer >= 0")
+        if num_nodes is not None:
+            if not isinstance(num_nodes, int) or num_nodes < 1:
+                raise ValueError("node count must be an integer >= 1 (if set)")
+            if num_nodes > num_tasks:
+                raise ValueError("node count must not be greater than task count")
+        slot_children = []
+        core_children = []
+        if hw_threads_per_core not in (None, 0):
+            core_children.append(cls._create_resource("PU", hw_threads_per_core))
+        slot_children.append(
+            cls._create_resource("core", cores_per_task, core_children)
+        )
+        if gpus_per_task not in (None, 0):
+            slot_children.append(cls._create_resource("gpu", gpus_per_task))
+        if num_nodes is not None:
+            num_slots = int(math.ceil(num_tasks / float(num_nodes)))
+            if num_tasks % num_nodes != 0:
+                # N.B. uneven distribution results in wasted task slots
+                task_count_dict = {"total": num_tasks}
+            else:
+                task_count_dict = {"per_slot": 1}
+            slot = cls._create_slot("task", num_slots, slot_children)
+            resource_section = cls._create_resource("node", num_nodes, [slot])
+        else:
+            task_count_dict = {"per_slot": 1}
+            slot = cls._create_slot("task", num_tasks, slot_children)
+            resource_section = slot
+        resources = [resource_section]
+        tasks = [{"command": command, "slot": "task", "count": task_count_dict}]
+        attributes = {"system": {"duration": 0}}
+        return cls(resources, tasks, attributes=attributes)
+
+    @classmethod
+    def from_batch_command(
+        cls,
+        script,
+        jobname,
+        args=None,
+        num_slots=1,
+        cores_per_slot=1,
+        hw_threads_per_core=None,
+        gpus_per_slot=None,
+        num_nodes=None,
+        broker_opts=None,
+    ):
+        """Identical to from_batch_command method in the JobspecV1 class with a
+        modified interface to allow for hw_threads_per_core. It may be possible to
+        play around with the inheritance and refactor so that the base job spec
+        includes a from_batch_command while still allowing for varying interfaces
+        in V1 and V2.
+
+        :param script: contents of the script to execute, as a string. The
+            script should have a shebang (e.g. `#!/bin/sh`) at the top.
+        :param jobname: name to use as the argv[0] for this job.
+            This will be the default job name reported by Flux.
+            (Note the actual argv is overridden by the job shell when executed.)
+        :type jobname: str
+        :param args: arguments to pass to `script`
+        :type args: iterable of `str`
+        :param num_slots: number of resource slots to create. Slots are an abstraction,
+            and are only used (along with `cores_per_slot` and `gpus_per_slot`) to
+            determine the nested instance's allocation size and layout.
+        :param cores_per_slot: number of cores to allocate per slot
+        :param gpus_per_slot: number of GPUs to allocate per slot
+        :param num_nodes: distribute allocated resource slots across N individual nodes
+        :param broker_opts: options to pass to the new Flux broker
+        :type broker_opts: iterable of str
+        """
+        if not script.startswith("#!"):
+            raise ValueError(f"{jobname} does not appear to start with '#!'")
+        args = () if args is None else args
+        jobspec = cls.from_command(
+            command=[jobname, *args],  # argv[0] will be replaced with the script
+            num_tasks=num_slots,
+            cores_per_task=cores_per_slot,
+            hw_threads_per_core=hw_threads_per_core,
+            gpus_per_task=gpus_per_slot,
+            num_nodes=num_nodes,
+        )
+        jobspec.setattr_shell_option("per-resource.type", "node")
+        #  Copy script contents into jobspec
+        jobspec.setattr("system.batch.script", script)
+        if broker_opts is not None:
+            jobspec.setattr("system.batch.broker-opts", broker_opts)
+        return jobspec
+
+    @classmethod
+    def from_nest_command(
+        cls,
+        command,
+        num_slots=1,
+        cores_per_slot=1,
+        hw_threads_per_core=None,
+        gpus_per_slot=None,
+        num_nodes=None,
+        broker_opts=None,
+    ):
+        """Identical to from_nest_command method in the JobspecV1 class with a
+        modified interface to allow for hw_threads_per_core. It may be possible to
+        play around with the inheritance and refactor so that the base job spec
+        includes a from_nest_command while still allowing for varying interfaces
+        in V1 and V2.
+
+        :param command: initial program for the nested Flux instance
+        :type command: iterable of str
+        :param num_slots: number of resource slots to create. Slots are an abstraction,
+            and are only used (along with `cores_per_slot` and `gpus_per_slot`) to
+            determine the nested instance's allocation size and layout.
+        :param cores_per_slot: number of cores to allocate per slot
+        :param gpus_per_slot: number of GPUs to allocate per slot
+        :param num_nodes: distribute allocated resource slots across N individual nodes
+        :param broker_opts: options to pass to the new Flux broker
+        :type broker_opts: iterable of str
+        """
+        broker_opts = () if broker_opts is None else broker_opts
+        jobspec = cls.from_command(
+            command=["flux", "broker", *broker_opts, *command],
+            num_tasks=num_slots,
+            cores_per_task=cores_per_slot,
+            hw_threads_per_core=hw_threads_per_core,
             gpus_per_task=gpus_per_slot,
             num_nodes=num_nodes,
         )
