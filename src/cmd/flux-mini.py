@@ -18,7 +18,7 @@ from itertools import chain
 
 import flux
 from flux import job
-from flux.job import JobspecV1, JobID
+from flux.job import JobspecV1, JobID, JobspecV2
 from flux import util
 from flux import debugged
 
@@ -243,6 +243,13 @@ class SubmitCmd(MiniCmd):
             help="Number of cores to allocate per task",
         )
         self.parser.add_argument(
+            "-T",
+            "--hw-threads-per-core",
+            type=int,
+            metavar="N",
+            help="Number of threads to allocate per core",
+        )
+        self.parser.add_argument(
             "-g",
             "--gpus-per-task",
             type=int,
@@ -337,6 +344,13 @@ def add_batch_alloc_args(parser):
         + " The size of a resource slot may be specified via the"
         + " -c, --cores-per-slot and -g, --gpus-per-slot options."
         + " The default slot size is 1 core.",
+    )
+    parser.add_argument(
+        "-T",
+        "--hw-threads-per-core",
+        type=int,
+        metavar="N",
+        help="Number of threads to allocate per core",
     )
     parser.add_argument(
         "-c",
