@@ -1,6 +1,7 @@
 #!/bin/bash -e
 
-flux module load content-sqlite
+rank=$(flux getattr rank)
+
+test $rank -ne 0 || flux module load content-sqlite
 flux module load kvs
-flux exec -r all -x 0 flux module load kvs
-flux exec -r all flux module load kvs-watch
+flux module load kvs-watch
