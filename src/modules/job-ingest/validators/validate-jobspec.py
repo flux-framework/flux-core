@@ -36,9 +36,9 @@ if args.require_version is not None:
             file=sys.stderr,
         )
         exit(1)
-    elif args.require_version > 1:
+    elif args.require_version > 2:
         print(
-            "Required version too high: {} is > 1".format(args.require_version),
+            "Required version too high: {} is > 2".format(args.require_version),
             file=sys.stderr,
         )
         exit(1)
