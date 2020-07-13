@@ -8,10 +8,10 @@ jj=${FLUX_BUILD_DIR}/t/sched-simple/jj-reader
 y2j="flux python ${SHARNESS_TEST_SRCDIR}/jobspec/y2j.py"
 
 test_expect_success HAVE_JQ 'jj-reader: unexpected version throws error' '
-	flux jobspec srun hostname | jq ".version = 2" >input.$test_count &&
+	flux jobspec srun hostname | jq ".version = 3" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
-	jj-reader: Invalid version: expected 1, got 2
+	jj-reader: Invalid version: expected 1 or 2, got 3
 	EOF
 	test_cmp expected.$test_count out.$test_count
 '
@@ -133,6 +133,26 @@ done < inputs.txt
 cat <<EOF >mini-invalid.txt
 run -g1             ==jj-reader: Unsupported resource type 'gpu'
 run -N1 -n2 -c2 -g1 ==jj-reader: Unsupported resource type 'gpu'
+EOF
+
+while read line; do
+  args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+  expected=$(echo $line | awk -F== '{print $2}')
+
+  test_expect_success "jj-reader: flux mini $args gets expected error" '
+	echo $expected >expected.$test_count &&
+	flux mini $args --dry-run hostname >$test_count.json &&
+	test_expect_code 1 $jj<$test_count.json > out.$test_count 2>&1 &&
+	test_cmp expected.$test_count out.$test_count
+  '
+done <mini-invalid.txt
+
+# Invalid inputs:
+# <mini command args> == <expected result>
+#
+cat <<EOF >mini-invalid.txt
+run -V2 -T1             ==jj-reader: Unsupported resource type 'PU'
+run -V2 -N1 -n2 -c2 -T1 ==jj-reader: Unsupported resource type 'PU'
 EOF
 
 while read line; do
