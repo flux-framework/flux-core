@@ -183,5 +183,29 @@ test_expect_success HAVE_JQ 'flux mini --job-name works' '
 	test $(jq ".attributes.system.job.name" name.out) = "\"foobar\""
 '
 
+test_expect_success HAVE_JQ 'flux mini submit --hw-threads-per-core adds PUs as children of core' '
+	flux mini submit --dry-run -V2 -T2 hostname > hw-thread.out &&
+	test $(jq ".resources[0].type" hw-thread.out) = "\"slot\"" &&
+	test $(jq ".resources[0].with[0].type" hw-thread.out) = "\"core\"" &&
+	test $(jq ".resources[0].with[0].with[0].type" hw-thread.out) = "\"PU\"" &&
+	test $(jq ".resources[0].with[0].with[0].count" hw-thread.out) = "2"
+'
+
+test_expect_success HAVE_JQ 'flux mini submit --hw-threads-per-core works when node is specified' '
+	flux mini submit --dry-run -V2 -N2 -n2 -T1 hostname > hw-thread.out  &&
+	test $(jq ".resources[0].type" hw-thread.out) = "\"node\"" &&
+	test $(jq ".resources[0].with[0].type" hw-thread.out) = "\"slot\"" &&
+	test $(jq ".resources[0].with[0].with[0].type" hw-thread.out) = "\"core\"" &&
+	test $(jq ".resources[0].with[0].with[0].with[0].type" hw-thread.out) = "\"PU\""
+'
+
+test_expect_success HAVE_JQ 'flux mini submit --hw-threads-per-core works in concert with --gpus-per-task' '
+	flux mini submit --dry-run -V2 -N2 -n2 -T1 -g1 hostname > hw-thread.out  &&
+	test $(jq ".resources[0].type" hw-thread.out) = "\"node\"" &&
+	test $(jq ".resources[0].with[0].type" hw-thread.out) = "\"slot\"" &&
+	test $(jq ".resources[0].with[0].with[0].type" hw-thread.out) = "\"core\"" &&
+	test $(jq ".resources[0].with[0].with[1].type" hw-thread.out) = "\"gpu\"" &&
+	test $(jq ".resources[0].with[0].with[0].with[0].type" hw-thread.out) = "\"PU\""
+'
 
 test_done

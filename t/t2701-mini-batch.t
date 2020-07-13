@@ -20,6 +20,7 @@ test_expect_success 'create generic test batch script' '
 	flux mini run -n \$ncores hostname
 	EOF
 '
+
 test_expect_success HAVE_JQ 'flux-mini batch copies script into jobspec' '
 	flux mini batch -n1 --dry-run batch-script.sh | \
 		jq -j .attributes.system.batch.script > script.sh &&
@@ -90,4 +91,28 @@ test_expect_success 'flux-mini batch: --broker-opts works' '
 	grep "boot: rank=0 size=1" flux-${id2}.out &&
 	grep "heartbeat: T=5.0s" flux-${id2}.out
 '
+
+test_expect_success 'create hardware-thread batch script' '
+	cat <<-EOF >hardware-thread-batch-script.sh
+	#!/bin/sh
+	ncores=\$(flux resource list -s all -no {ncores})
+	nnodes=\$(flux resource list -s all -no {nnodes})
+	printf "size=%d nodes=%d\n" \$(flux getattr size) \$nnodes
+	flux mini run -V2 -T2 hostname
+	EOF
+'
+
+test_expect_success 'flux-mini batch: hardware-thread jobs can be submitted but fail to run' '
+	hwt_id1=$(flux mini batch --flags=waitable -n1 hardware-thread-batch-script.sh) &&
+	hwt_id2=$(flux mini batch --flags=waitable -n4 hardware-thread-batch-script.sh) &&
+	test_must_fail flux job wait --all
+'
+
+test_expect_success 'flux-mini batch: jobs failed to run because simple-sched does not support hardware-thread resource' '
+	grep "Unsupported resource type" flux-${hwt_id1}.out &&
+	grep "Unexpected resources: slot->core->PU(null)" flux-${hwt_id1}.out &&
+	grep "Unsupported resource type" flux-${hwt_id2}.out &&
+	grep "Unexpected resources: slot->core->PU(null)" flux-${hwt_id2}.out
+'
+
 test_done
