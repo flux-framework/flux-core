@@ -115,9 +115,9 @@ int libjj_get_counts (const char *spec, struct jj_counts *jj)
         errno = EINVAL;
         goto err;
     }
-    if (version != 1) {
+    if (version != 1 && version != 2) {
         snprintf (jj->error, sizeof (jj->error) - 1,
-                 "Invalid version: expected 1, got %d", version);
+                 "Invalid version: expected 1 or 2, got %d", version);
         errno = EINVAL;
         goto err;
     }
