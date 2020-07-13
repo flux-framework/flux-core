@@ -63,6 +63,22 @@ typedef enum {
 
 typedef uint64_t flux_jobid_t;
 
+/*  Parse a jobid from NULL-teminated string 's' in any supported encoding.
+ *  Returns 0 on success, -1 on failure.
+ */
+int flux_job_id_parse (const char *s, flux_jobid_t *id);
+
+/*  Encode a jobid into encoding "type", writing the result to buffer
+ *   buf of size bufsz.
+ *  Supported encoding types include:
+ *   "dec", "hex", "kvs", "dothex", "words", or "f58".
+ *  Returns 0 on success, -1 on failure with errno set:
+ *   EPROTO: Invalid encoding type
+ *   EINVAL: Invalid other argument
+ */
+int flux_job_id_encode (flux_jobid_t id, const char *type,
+                        char *buf, size_t bufsz);
+
 const char *flux_job_statetostr (flux_job_state_t state, bool single_char);
 
 int flux_job_strtostate (const char *s, flux_job_state_t *state);
