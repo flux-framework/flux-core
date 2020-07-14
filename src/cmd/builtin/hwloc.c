@@ -177,8 +177,6 @@ static void topo_init_common (hwloc_topology_t *tp)
         log_err_exit ("hwloc_topology_set_flags");
     if (hwloc_topology_ignore_type (*tp, HWLOC_OBJ_CACHE) < 0)
         log_err_exit ("hwloc_topology_ignore_type OBJ_CACHE failed");
-    if (hwloc_topology_ignore_type (*tp, HWLOC_OBJ_GROUP) < 0)
-        log_err_exit ("hwloc_topology_ignore_type OBJ_GROUP failed");
 #else
     if (hwloc_topology_set_io_types_filter(*tp,
                                            HWLOC_TYPE_FILTER_KEEP_IMPORTANT)
