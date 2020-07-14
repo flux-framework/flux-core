@@ -19,6 +19,8 @@ import datetime
 import signal
 from glob import glob
 
+from io import StringIO
+
 import yaml
 import six
 
@@ -424,6 +426,7 @@ class TestJob(unittest.TestCase):
                 if key not in ["int", "dec"]:
                     # Ensure encode back to same type works
                     self.assertEqual(getattr(jobid, key), test[key])
+
     def test_25_valid_v2_construction(self):
         """Test that V2 produces valid jobspecs. If V2 is intended to be a true
            superset of v1, its probably a good idea to test against the cases in
@@ -452,6 +455,17 @@ class TestJob(unittest.TestCase):
         """Test that `from_nest_command` produces a valid jobspec"""
         jobid = job.submit(self.fh, JobspecV2.from_nest_command(["sleep", "0"]))
         self.assertGreater(jobid, 0)
+
+    def test_27_v2_warns_experimental_feature(self):
+        """Test that using jobspec v2 emits a warning on stderr"""
+        err_buffer = StringIO()
+        sys.stderr = err_buffer
+        job.submit(self.fh, JobspecV2.from_nest_command(["sleep", "0"]))
+        captured_err = err_buffer.getvalue().strip()
+        self.assertEqual(
+            captured_err,
+            "Jobspec V2 is an experimental Feature. Flux may not support all allowed V2 resources",
+        )
 
 
 if __name__ == "__main__":
