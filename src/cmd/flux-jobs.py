@@ -21,6 +21,7 @@ import errno
 import fileinput
 import json
 from datetime import datetime, timedelta
+from collections import namedtuple
 
 import flux.job
 import flux.constants
@@ -102,6 +103,36 @@ class ExceptionInfo:
         self.note = note
 
 
+# AnnotationsInfo is a wrapper for a namedtuple.  We need this simple
+# object so that we can we return an empty string under several
+# circumstances (e.g. when an attribute does not exist in a
+# namedtuple).
+#
+# recursive namedtuple trick inspired via
+# https://stackoverflow.com/questions/1305532/convert-nested-python-dict-to-object/1305663
+class AnnotationsInfo:
+    def __init__(self, annotationsDict):
+        self.annotationsDict = annotationsDict
+        self.atuple = namedtuple("X", annotationsDict.keys())(
+            *(
+                AnnotationsInfo(v) if isinstance(v, dict) else v
+                for v in annotationsDict.values()
+            )
+        )
+
+    def __repr__(self):
+        # Special case, empty dict return empty string
+        if self.annotationsDict:
+            return json.dumps(self.annotationsDict)
+        return ""
+
+    def __getattr__(self, attr):
+        try:
+            return object.__getattribute__(self.atuple, attr)
+        except AttributeError:
+            return ""
+
+
 class JobInfo:
     """
     JobInfo class: encapsulate job-info.list response in an object
@@ -143,6 +174,9 @@ class JobInfo:
         exc3 = combined_dict.get("exception_type", "")
         exc4 = combined_dict.get("exception_note", "")
         combined_dict["exception"] = ExceptionInfo(exc1, exc2, exc3, exc4)
+
+        aDict = combined_dict.get("annotations", {})
+        combined_dict["annotations"] = AnnotationsInfo(aDict)
 
         #  Set all keys as self._{key} to be found by getattr and
         #   memoized_property decorator:
@@ -336,6 +370,11 @@ def fetch_jobs_flux(args, fields):
         "status_abbrev": ("state", "result"),
         "expiration": ("expiration", "state", "result"),
         "t_remaining": ("expiration", "state", "result"),
+        "annotations": ("annotations",),
+        "annotations.sched": ("annotations",),
+        "annotations.sched.reason_pending": ("annotations",),
+        "annotations.sched.resource_summary": ("annotations",),
+        "annotations.sched.t_estimate": ("annotations",),
     }
 
     attrs = set()
@@ -581,6 +620,11 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "exception.severity": "EXCEPTION-SEVERITY",
         "exception.type": "EXCEPTION-TYPE",
         "exception.note": "EXCEPTION-NOTE",
+        "annotations": "ANNOTATIONS",
+        "annotations.sched": "SCHED",
+        "annotations.sched.reason_pending": "REASON_PENDING",
+        "annotations.sched.resource_summary": "RESOURCE_SUMMARY",
+        "annotations.sched.t_estimate": "T_ESTIMATE",
     }
 
     def __init__(self, fmt):
