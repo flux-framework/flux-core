@@ -523,7 +523,7 @@ class AllocCmd(MiniCmd):
                 raise ValueError(
                     "hardware-thread or PU resource is not supported by jobspec V1."
                 )
-            jobspec = JobspecV2.from_nest_command(
+            jobspec = JobspecV1.from_nest_command(
                 command=args.COMMAND,
                 num_slots=args.nslots,
                 cores_per_slot=args.cores_per_slot,
