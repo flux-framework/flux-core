@@ -535,8 +535,23 @@ class JobsOutputFormat(flux.util.OutputFormat):
                 spec = spec[:-1] + "s"
             return super().format_field(value, spec)
 
+    class HeaderFormatter(JobFormatter):
+        """Custom formatter for flux-jobs(1) header row.
+
+        Override default formatter behavior of calling getattr() on dotted
+        field names. Instead look up header literally in kwargs.
+        This greatly simplifies header name registration as well as
+        registration of "valid" fields.
+        """
+
+        def get_field(self, field_name, args, kwargs):
+            """Override get_field() so we don't do the normal gettatr thing"""
+            if field_name in kwargs:
+                return kwargs[field_name], None
+            return super().get_field(field_name, args, kwargs)
+
+
     #  List of legal format fields and their header names
-    #  - Note special cases added in constructor below
     headings = {
         "id": "JOBID",
         "userid": "UID",
@@ -562,11 +577,11 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "runtime": "RUNTIME",
         "status": "STATUS",
         "status_abbrev": "STATUS",
+        "exception.occurred": "EXCEPTION-OCCURRED",
+        "exception.severity": "EXCEPTION-SEVERITY",
+        "exception.type": "EXCEPTION-TYPE",
+        "exception.note": "EXCEPTION-NOTE",
     }
-
-    exception_headings = ExceptionInfo(
-        "EXCEPTION-OCCURRED", "EXCEPTION-SEVERITY", "EXCEPTION-TYPE", "EXCEPTION-NOTE"
-    )
 
     def __init__(self, fmt):
         """
@@ -577,12 +592,6 @@ class JobsOutputFormat(flux.util.OutputFormat):
         Throws an exception if any format fields do not match the allowed
         list of headings above.
         """
-        # Add some special format fields just for the validity checks,
-        # values are held in other objects
-        self.headings["exception.occurred"] = None
-        self.headings["exception.severity"] = None
-        self.headings["exception.type"] = None
-        self.headings["exception.note"] = None
         super().__init__(self.headings, fmt, prepend="0.")
 
     def format(self, obj):
@@ -593,11 +602,9 @@ class JobsOutputFormat(flux.util.OutputFormat):
 
     def header(self):
         """
-        format header with our JobFormatter
+        format header with custom HeaderFormatter
         """
-        return self.JobFormatter().format(
-            self.header_format(), **self.headings, exception=self.exception_headings
-        )
+        return self.HeaderFormatter().format(self.header_format(), **self.headings)
 
 
 def color_setup(args, job):
