@@ -628,6 +628,9 @@ def color_reset(color_set):
 
 @flux.util.CLIMain(LOGGER)
 def main():
+
+    sys.stdout = open(sys.stdout.fileno(), "w", encoding="utf8")
+
     args = parse_args()
 
     if args.jobids and args.filtered:
