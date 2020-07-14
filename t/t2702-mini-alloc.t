@@ -44,4 +44,12 @@ test_expect_success 'flux-mini alloc runs one broker per node by default' '
 	test_debug "cat multi.out" &&
 	grep "size  *2" multi.out
 '
+
+test_expect_success HAVE_JQ 'flux-mini alloc can use both jobspec versions' '
+	flux mini alloc -n1 -V1 --dry-run myapp --foo | \
+	    jq -e ".version == 1" &&
+	flux mini alloc -n1 -V2 --dry-run myapp --foo | \
+	    jq -e ".version == 2"	
+'
+
 test_done

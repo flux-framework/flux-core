@@ -95,9 +95,6 @@ test_expect_success 'flux-mini batch: --broker-opts works' '
 test_expect_success 'create hardware-thread batch script' '
 	cat <<-EOF >hardware-thread-batch-script.sh
 	#!/bin/sh
-	ncores=\$(flux resource list -s all -no {ncores})
-	nnodes=\$(flux resource list -s all -no {nnodes})
-	printf "size=%d nodes=%d\n" \$(flux getattr size) \$nnodes
 	flux mini run -V2 -T2 hostname
 	EOF
 '
@@ -113,6 +110,20 @@ test_expect_success 'flux-mini batch: jobs failed to run because simple-sched do
 	grep "Unexpected resources: slot->core->PU(null)" flux-${hwt_id1}.out &&
 	grep "Unsupported resource type" flux-${hwt_id2}.out &&
 	grep "Unexpected resources: slot->core->PU(null)" flux-${hwt_id2}.out
+'
+
+test_expect_success 'create version batch script' '
+	cat <<-EOF >version-batch-script.sh
+	#!/bin/sh
+	flux mini run hostname
+	EOF
+'
+
+test_expect_success HAVE_JQ 'flux-mini batch: Jobs of both versions can be assembled from batch script' '
+	flux mini batch --dry-run --flags=waitable -n1 -V1 hardware-thread-batch-script.sh > v1.out &&
+	flux mini batch --dry-run --flags=waitable -n1 -V2 hardware-thread-batch-script.sh > v2.out &&
+	test $(jq ".version" v1.out) = 1 &&
+	test $(jq ".version" v2.out) = 2
 '
 
 test_done

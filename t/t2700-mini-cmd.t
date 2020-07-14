@@ -214,4 +214,14 @@ test_expect_success 'using -T with jobpsec version 1 fails' '
 	grep -i "hardware-thread or PU resource is not supported by jobspec V1." TwithV1.err
 '
 
+test_expect_success HAVE_JQ 'flux mini submit -V1 correctly uses JobspecV1' '
+	flux mini submit --dry-run -V1 hostname > hw-thread.out  &&
+	test $(jq ".version" hw-thread.out) = 1
+'
+
+test_expect_success HAVE_JQ 'flux mini submit -V2 correctly uses JobspecV2' '
+	flux mini submit --dry-run -V2 hostname > hw-thread.out  &&
+	test $(jq ".version" hw-thread.out) = 2
+'
+
 test_done
