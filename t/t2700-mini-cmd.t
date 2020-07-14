@@ -208,4 +208,10 @@ test_expect_success HAVE_JQ 'flux mini submit --hw-threads-per-core works in con
 	test $(jq ".resources[0].with[0].with[0].with[0].type" hw-thread.out) = "\"PU\""
 '
 
+test_expect_success 'using -T with jobpsec version 1 fails' '
+	test_must_fail flux mini submit -V1 -T1 hostname 2>TwithV1.err \
+	> hw-thread.out &&
+	grep -i "hardware-thread or PU resource is not supported by jobspec V1." TwithV1.err
+'
+
 test_done
