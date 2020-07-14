@@ -365,6 +365,66 @@ class TestJob(unittest.TestCase):
         jobid = job.submit(self.fh, JobspecV1.from_nest_command(["sleep", "0"]))
         self.assertGreater(jobid, 0)
 
+    def test_24_jobid(self):
+        """Test JobID class"""
+        parse_tests = [
+            {
+                "int": 0,
+                "dec": "0",
+                "hex": "0x0",
+                "dothex": "0000.0000.0000.0000",
+                "kvs": "job.0000.0000.0000.0000",
+                "f58": "ƒ1",
+                "words": "academy-academy-academy--academy-academy-academy",
+            },
+            {
+                "int": 1,
+                "dec": "1",
+                "hex": "0x1",
+                "dothex": "0000.0000.0000.0001",
+                "kvs": "job.0000.0000.0000.0001",
+                "f58": "ƒ2",
+                "words": "acrobat-academy-academy--academy-academy-academy",
+            },
+            {
+                "int": 65535,
+                "dec": "65535",
+                "hex": "0xffff",
+                "dothex": "0000.0000.0000.ffff",
+                "kvs": "job.0000.0000.0000.ffff",
+                "f58": "ƒLUv",
+                "words": "nevada-archive-academy--academy-academy-academy",
+            },
+            {
+                "int": 6787342413402046,
+                "dec": "6787342413402046",
+                "hex": "0x181d0d4d850fbe",
+                "dothex": "0018.1d0d.4d85.0fbe",
+                "kvs": "job.0018.1d0d.4d85.0fbe",
+                "f58": "ƒuzzybunny",
+                "words": "cake-plume-nepal--neuron-pencil-academy",
+            },
+            {
+                "int": 18446744073709551614,
+                "dec": "18446744073709551614",
+                "hex": "0xfffffffffffffffe",
+                "dothex": "ffff.ffff.ffff.fffe",
+                "kvs": "job.ffff.ffff.ffff.fffe",
+                "f58": "ƒjpXCZedGfVP",
+                "words": "mustang-analyze-verbal--natural-analyze-verbal",
+            },
+        ]
+        for test in parse_tests:
+            for key in test:
+                jobid_int = test["int"]
+                jobid = job.JobID(test[key])
+                self.assertEqual(jobid, jobid_int)
+                jobid_repr = repr(jobid)
+                self.assertEqual(jobid_repr, f"JobID({jobid_int})")
+                if key not in ["int", "dec"]:
+                    # Ensure encode back to same type works
+                    self.assertEqual(getattr(jobid, key), test[key])
+
 
 if __name__ == "__main__":
     from subflux import rerun_under_flux
