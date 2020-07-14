@@ -21,6 +21,7 @@ import errno
 import fileinput
 import json
 from datetime import datetime, timedelta
+from collections import namedtuple
 
 import flux.constants
 import flux.util
@@ -102,6 +103,38 @@ class ExceptionInfo:
         self.note = note
 
 
+# AnnotationsInfo is a wrapper for a namedtuple.  We need this
+# object so that we can we detect when an attribute is missing and
+# ultimately return an empty string (e.g. when an attribute does not
+# exist in a namedtuple).
+#
+# recursive namedtuple trick inspired via
+# https://stackoverflow.com/questions/1305532/convert-nested-python-dict-to-object/1305663
+class AnnotationsInfo:
+    def __init__(self, annotationsDict):
+        self.annotationsDict = annotationsDict
+        self.atuple = namedtuple("X", annotationsDict.keys())(
+            *(
+                AnnotationsInfo(v) if isinstance(v, dict) else v
+                for v in annotationsDict.values()
+            )
+        )
+
+    def __repr__(self):
+        # Special case, empty dict return empty string
+        if self.annotationsDict:
+            return json.dumps(self.annotationsDict)
+        return ""
+
+    def __getattr__(self, attr):
+        try:
+            return object.__getattribute__(self.atuple, attr)
+        except AttributeError:
+            # We return an empty AnnotationsInfo so that we can recursively
+            # handle errors.  e.g. annotations.user.illegal.illegal.illegal
+            return AnnotationsInfo({})
+
+
 class JobInfo:
     """
     JobInfo class: encapsulate job-info.list response in an object
@@ -146,6 +179,9 @@ class JobInfo:
         exc3 = combined_dict.get("exception_type", "")
         exc4 = combined_dict.get("exception_note", "")
         combined_dict["exception"] = ExceptionInfo(exc1, exc2, exc3, exc4)
+
+        aDict = combined_dict.get("annotations", {})
+        combined_dict["annotations"] = AnnotationsInfo(aDict)
 
         #  Set all keys as self._{key} to be found by getattr and
         #   memoized_property decorator:
@@ -340,11 +376,17 @@ def fetch_jobs_flux(args, fields):
         "status_abbrev": ("state", "result"),
         "expiration": ("expiration", "state", "result"),
         "t_remaining": ("expiration", "state", "result"),
+        "annotations": ("annotations",),
     }
 
     attrs = set()
     for field in fields:
-        attrs.update(fields2attrs[field])
+        # Special case for annotations, can be arbitrary field names determined
+        # by scheduler/user.
+        if field.startswith("annotations."):
+            attrs.update(fields2attrs["annotations"])
+        else:
+            attrs.update(fields2attrs[field])
 
     if args.color == "always" or args.color == "auto":
         attrs.update(fields2attrs["result"])
@@ -589,6 +631,7 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "exception.severity": "EXCEPTION-SEVERITY",
         "exception.type": "EXCEPTION-TYPE",
         "exception.note": "EXCEPTION-NOTE",
+        "annotations": "ANNOTATIONS",
     }
 
     def __init__(self, fmt):
@@ -599,7 +642,15 @@ class JobsOutputFormat(flux.util.OutputFormat):
 
         Throws an exception if any format fields do not match the allowed
         list of headings above.
+
+        Special case for annotations, which may be arbitrary
+        creations of scheduler or user.
         """
+        format_list = string.Formatter().parse(fmt)
+        for (_, field, _, _) in format_list:
+            if field and field.startswith("annotations."):
+                field_heading = field[len("annotations.") :].upper()
+                self.headings[field] = field_heading
         super().__init__(self.headings, fmt, prepend="0.")
 
     def format(self, obj):

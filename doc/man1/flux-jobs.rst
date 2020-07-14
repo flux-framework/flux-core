@@ -111,6 +111,12 @@ the following conversion flags are supported by *flux-jobs*:
 **!H**
    convert a duration to hours:minutes:seconds form (e.g. *{runtime!H}*)
 
+Scheduler and user annotations can be retrieved via the *annotations*
+field name.  Specific keys and sub-object keys can be retrieved
+separated by a period (".").  For example, if the scheduler has
+annotated the job with a reason pending status, it can be retrieved
+via "{annotations.sched.reason_pending}".
+
 The field names that can be specified are:
 
 **id**
@@ -196,6 +202,9 @@ The field names that can be specified are:
 
 **t_remaining**
    If job is running, amount of time remaining before expiration
+
+**annotations**
+   annotations metadata, use "." to get specific keys
 
 
 RESOURCES
