@@ -9,12 +9,20 @@ fi
 
 # 2^64 - 1
 MAXJOBID_DEC=18446744073709551615
+MAXJOBID_HEX="0xffffffffffffffff"
 MAXJOBID_KVS="job.ffff.ffff.ffff.ffff"
+MAXJOBID_DOTHEX="ffff.ffff.ffff.ffff"
 MAXJOBID_WORDS="natural-analyze-verbal--natural-analyze-verbal"
+MAXJOBID_F58="ƒjpXCZedGfVQ"
+MAXJOBIDS_LIST="$MAXJOBID_DEC $MAXJOBID_HEX $MAXJOBID_KVS $MAXJOBID_DOTHEX $MAXJOBID_WORDS $MAXJOBID_F58"
 
 MINJOBID_DEC=0
+MINJOBID_HEX="0x0"
 MINJOBID_KVS="job.0000.0000.0000.0000"
+MINJOBID_DOTHEX="0000.0000.0000.0000"
 MINJOBID_WORDS="academy-academy-academy--academy-academy-academy"
+MINJOBID_F58="ƒ1"
+MINJOBIDS_LIST="$MINJOBID_DEC $MINJOBID_HEX $MINJOBID_KVS $MINJOBID_DOTHEX $MINJOBID_WORDS $MINJOBID_F58"
 
 test_under_flux 1 job
 
@@ -95,6 +103,19 @@ test_expect_success 'flux-job: id with invalid --to arg fails' '
 	test_must_fail flux job id --to=invalid 42
 '
 
+test_expect_success 'flux-job: id works with min/max jobids' '
+    for max in $MAXJOBIDS_LIST; do
+        jobid=$(flux job id $max) &&
+        test_debug "echo flux jobid $max -> $jobid" &&
+        test "$jobid" = "$MAXJOBID_DEC"
+    done &&
+    for min in $MINJOBIDS_LIST; do
+        jobid=$(flux job id $min) &&
+        test_debug "echo flux jobid $min -> $jobid" &&
+        test "$jobid" = "$MINJOBID_DEC"
+    done
+'
+
 test_expect_success 'flux-job: id --to=dec works' '
 	jobid=$(flux job id --to=dec $MAXJOBID_DEC) &&
 	test "$jobid" = "$MAXJOBID_DEC" &&
@@ -114,6 +135,43 @@ test_expect_success 'flux-job: id --to=kvs works' '
 	test "$jobid" = "$MAXJOBID_KVS" &&
 	jobid=$(flux job id --to=kvs $MINJOBID_DEC) &&
 	test "$jobid" = "$MINJOBID_KVS"
+'
+
+test_expect_success 'flux-job: id --to=hex works' '
+	jobid=$(flux job id --to=hex $MAXJOBID_DEC) &&
+	test "$jobid" = "$MAXJOBID_HEX" &&
+	jobid=$(flux job id --to=hex $MINJOBID_DEC) &&
+	test "$jobid" = "$MINJOBID_HEX"
+'
+
+test_expect_success 'flux-job: id --to=dothex works' '
+	jobid=$(flux job id --to=dothex $MAXJOBID_DEC) &&
+	test "$jobid" = "$MAXJOBID_DOTHEX" &&
+	jobid=$(flux job id --to=dothex $MINJOBID_DEC) &&
+	test "$jobid" = "$MINJOBID_DOTHEX"
+'
+
+test_expect_success 'flux-job: id --to=f58 works' '
+	jobid=$(flux job id --to=f58 $MAXJOBID_DEC) &&
+	test "$jobid" = "$MAXJOBID_F58" &&
+	jobid=$(flux job id --to=f58 $MINJOBID_DEC) &&
+	test "$jobid" = "$MINJOBID_F58"
+'
+
+test_expect_success 'flux-job: id fails on bad input' '
+	test_must_fail flux job id badstring &&
+	test_must_fail flux job id job.0000.0000 &&
+	test_must_fail flux job id job.0000.0000.0000.000P
+'
+
+test_expect_success 'flux-job: id fails on bad input' '
+	test_must_fail flux job id 42plusbad &&
+	test_must_fail flux job id meep &&
+	test_must_fail flux job id 18446744073709551616
+'
+
+test_expect_success 'flux-job: id fails on bad words input' '
+	test_must_fail flux job id bad-words
 '
 
 test_expect_success 'flux-job: priority fails with bad FLUX_URI' '
