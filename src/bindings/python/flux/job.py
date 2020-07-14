@@ -8,6 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 import os
+import sys
 import math
 import json
 import errno
@@ -1364,6 +1365,10 @@ class JobspecV2(Jobspec):
         :param gpus_per_task: number of GPUs to allocate per task
         :param num_nodes: distribute allocated tasks across N individual nodes
         """
+        print(
+            "Jobspec V2 is an experimental Feature. Flux may not support all allowed V2 resources",
+            file=sys.stderr,
+        )
         if not isinstance(num_tasks, int) or num_tasks < 1:
             raise ValueError("task count must be a integer >= 1")
         if not isinstance(cores_per_task, int) or cores_per_task < 1:
