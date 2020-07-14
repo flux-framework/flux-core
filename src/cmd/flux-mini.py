@@ -272,6 +272,10 @@ class SubmitCmd(MiniCmd):
         if not args.command:
             raise ValueError("job command and arguments are missing")
         if args.jobspec_version == 1:
+            if args.hw_threads_per_core:
+                raise ValueError(
+                    "hardware-thread or PU resource is not supported by jobspec V1."
+                )
             return JobspecV1.from_command(
                 args.command,
                 num_tasks=args.ntasks,
@@ -280,7 +284,6 @@ class SubmitCmd(MiniCmd):
                 num_nodes=args.nodes,
             )
         elif args.jobspec_version == 2:
-            print("Jobspec V2 is an experimental Feature. Flux may not support all allowed V2 resources", file=sys.stderr)
             return JobspecV2.from_command(
                 args.command,
                 num_tasks=args.ntasks,
@@ -460,6 +463,10 @@ class BatchCmd(MiniCmd):
             raise ValueError("Number of slots to allocate must be specified")
 
         if args.jobspec_version == 1:
+            if args.hw_threads_per_core:
+                raise ValueError(
+                    "hardware-thread or PU resource is not supported by jobspec V1."
+                )
             jobspec = JobspecV1.from_batch_command(
                 script=self.read_script(args),
                 jobname=args.SCRIPT[0] if args.SCRIPT else "batchscript",
@@ -471,7 +478,6 @@ class BatchCmd(MiniCmd):
                 broker_opts=list_split(args.broker_opts),
             )
         elif args.jobspec_version == 2:
-            print("Jobspec V2 is an experimental Feature. Flux may not support all allowed V2 resources", file=sys.stderr)
             jobspec = JobspecV2.from_batch_command(
                 script=self.read_script(args),
                 jobname=args.SCRIPT[0] if args.SCRIPT else "batchscript",
@@ -513,6 +519,10 @@ class AllocCmd(MiniCmd):
         if not args.nslots:
             raise ValueError("Number of slots to allocate must be specified")
         if args.jobspec_version == 1:
+            if args.hw_threads_per_core:
+                raise ValueError(
+                    "hardware-thread or PU resource is not supported by jobspec V1."
+                )
             jobspec = JobspecV2.from_nest_command(
                 command=args.COMMAND,
                 num_slots=args.nslots,
@@ -522,7 +532,6 @@ class AllocCmd(MiniCmd):
                 broker_opts=list_split(args.broker_opts),
             )
         elif args.jobspec_version == 2:
-            print("Jobspec V2 is an experimental Feature. Flux may not support all allowed V2 resources", file=sys.stderr)
             jobspec = JobspecV2.from_nest_command(
                 command=args.COMMAND,
                 num_slots=args.nslots,
