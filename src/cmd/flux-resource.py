@@ -13,6 +13,7 @@ import logging
 import argparse
 import re
 from itertools import count, groupby
+import json
 
 import flux
 from flux.rpc import RPC
@@ -100,9 +101,11 @@ class Rv1:
     Simple class encapsulating a Flux Rv1 resource set
     """
 
-    def __init__(self, rset, state=None):
+    def __init__(self, rset=None, state=None):
         # pylint: disable=invalid-name
-        self.R_lite = rset["execution"]["R_lite"]
+        self.R_lite = []
+        if rset is not None:
+            self.R_lite = rset["execution"]["R_lite"]
         if state:
             self._state = state
 
@@ -235,8 +238,8 @@ class SchedResourceList:
     """
 
     def __init__(self, resp):
-        for state in resp:
-            setattr(self, f"_{state}", Rv1(resp[state], state=state))
+        for state in ["all", "down", "allocated"]:
+            setattr(self, f"_{state}", Rv1(resp.get(state), state=state))
 
     def __getattr__(self, attr):
         if attr.startswith("_"):
