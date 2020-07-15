@@ -217,8 +217,8 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     if (schedutil_alloc_respond_success_pack (ss->util_ctx,
                                               job->msg,
                                               R,
-                                              "{ s:s }",
-                                              "sched.resource_summary", s) < 0)
+                                              "{ s:{s:s} }",
+                                              "sched", "resource_summary", s) < 0)
         flux_log_error (h, "schedutil_alloc_respond_success_pack");
 
     flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t) job->id, s);
