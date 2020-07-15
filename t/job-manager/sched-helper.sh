@@ -43,7 +43,7 @@ jmgr_check_state() {
 _jmgr_get_annotation() {
         local id=$1
         local key=$2
-        local note="$(${JMGR_JOB_LIST} | grep ${id} | cut -f 6- | jq .\"${key}\")"
+        local note="$(${JMGR_JOB_LIST} | grep ${id} | cut -f 6- | jq ."${key}")"
         echo $note
 }
 
@@ -77,7 +77,7 @@ jmgr_check_annotation() {
 jmgr_check_annotation_exists() {
         local id=$1
         local key=$2
-        ${JMGR_JOB_LIST} | grep ${id} | cut -f 6- | jq -e .\"${key}\" > /dev/null
+        ${JMGR_JOB_LIST} | grep ${id} | cut -f 6- | jq -e ."${key}" > /dev/null
 }
 
 # verify that job contains no annotations through job manager
@@ -96,7 +96,7 @@ jmgr_check_no_annotations() {
 _jinfo_get_annotation() {
         local id=$1
         local key=$2
-        local note="$(flux job list -A | grep ${id} | jq .annotations | jq .\"${key}\")"
+        local note="$(flux job list -A | grep ${id} | jq .annotations | jq ."${key}")"
         echo $note
 }
 
@@ -141,5 +141,5 @@ jinfo_check_no_annotations() {
 jinfo_check_annotation_exists() {
         local id=$1
         local key=$2
-        flux job list -A | grep ${id} | jq .annotations | jq -e .\"${key}\" > /dev/null
+        flux job list -A | grep ${id} | jq .annotations | jq -e ."${key}" > /dev/null
 }
