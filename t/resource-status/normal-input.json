@@ -1,0 +1,27 @@
+{
+  "all": {
+    "execution": {
+      "R_lite": [
+        {
+          "children": {
+            "core": "0-3"
+          },
+          "rank": "0-3"
+        }
+      ]
+    },
+    "version": 1
+  },
+  "allocated": {
+    "execution": {
+      "R_lite": []
+    },
+    "version": 1
+  },
+  "down": {
+    "execution": {
+      "R_lite": []
+    },
+    "version": 1
+  }
+}

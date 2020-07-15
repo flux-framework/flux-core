@@ -115,6 +115,7 @@ TESTSCRIPTS = \
 	t2301-schedutil-outstanding-requests.t \
 	t2302-sched-simple-up-down.t \
 	t2310-resource-module.t \
+	t2350-resource-list.t \
 	t2400-job-exec-test.t \
 	t2401-job-exec-hello.t \
 	t2402-job-exec-dummy.t \
@@ -192,7 +193,8 @@ EXTRA_DIST= \
 	shell/initrc/tests \
 	flux-jobs/tests \
 	scripts/run_timeout.py \
-	jobspec
+	jobspec \
+	resource-status
 
 dist_check_SCRIPTS = \
 	$(TESTSCRIPTS) \
