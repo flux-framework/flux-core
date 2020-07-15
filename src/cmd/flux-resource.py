@@ -13,6 +13,7 @@ import logging
 import argparse
 import re
 from itertools import count, groupby
+import json
 
 import flux
 from flux.rpc import RPC
@@ -100,9 +101,11 @@ class Rv1:
     Simple class encapsulating a Flux Rv1 resource set
     """
 
-    def __init__(self, rset, state=None):
+    def __init__(self, rset=None, state=None):
         # pylint: disable=invalid-name
-        self.R_lite = rset["execution"]["R_lite"]
+        self.R_lite = []
+        if rset is not None:
+            self.R_lite = rset["execution"]["R_lite"]
         if state:
             self._state = state
 
@@ -235,8 +238,8 @@ class SchedResourceList:
     """
 
     def __init__(self, resp):
-        for state in resp:
-            setattr(self, f"_{state}", Rv1(resp[state], state=state))
+        for state in ["all", "down", "allocated"]:
+            setattr(self, f"_{state}", Rv1(resp.get(state), state=state))
 
     def __getattr__(self, attr):
         if attr.startswith("_"):
@@ -289,7 +292,10 @@ def list_handler(args):
 
     formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
 
-    resp = RPC(flux.Flux(), "sched.resource-status").get()
+    if args.from_stdin:
+        resp = json.load(sys.stdin)
+    else:
+        resp = RPC(flux.Flux(), "sched.resource-status").get()
     resources = SchedResourceList(resp)
 
     if not args.no_header:
@@ -346,6 +352,9 @@ def main():
     )
     list_parser.add_argument(
         "-n", "--no-header", action="store_true", help="Suppress header output"
+    )
+    list_parser.add_argument(
+        "--from-stdin", action="store_true", help=argparse.SUPPRESS
     )
     list_parser.set_defaults(func=list_handler)
 
