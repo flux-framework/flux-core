@@ -292,7 +292,10 @@ def list_handler(args):
 
     formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
 
-    resp = RPC(flux.Flux(), "sched.resource-status").get()
+    if args.from_stdin:
+        resp = json.load(sys.stdin)
+    else:
+        resp = RPC(flux.Flux(), "sched.resource-status").get()
     resources = SchedResourceList(resp)
 
     if not args.no_header:
@@ -349,6 +352,9 @@ def main():
     )
     list_parser.add_argument(
         "-n", "--no-header", action="store_true", help="Suppress header output"
+    )
+    list_parser.add_argument(
+        "--from-stdin", action="store_true", help=argparse.SUPPRESS
     )
     list_parser.set_defaults(func=list_handler)
 
