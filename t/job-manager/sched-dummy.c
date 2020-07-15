@@ -94,8 +94,8 @@ static void respond_success_single (struct sched_ctx *sc,
     if (schedutil_alloc_respond_success_pack (sc->schedutil_ctx,
                                               job->msg,
                                               "1core",
-                                              "{ s:n }",
-                                              "sched.reason_pending") < 0)
+                                              "{ s:{s:n} }",
+                                              "sched", "reason_pending") < 0)
         flux_log_error (sc->h, "schedutil_alloc_respond_success_pack");
 }
 
@@ -105,10 +105,11 @@ static void respond_success_unlimited (struct sched_ctx *sc,
     if (schedutil_alloc_respond_success_pack (sc->schedutil_ctx,
                                               job->msg,
                                               "1core",
-                                              "{ s:s s:n s:n }",
-                                              "sched.resource_summary", "1core",
-                                              "sched.reason_pending",
-                                              "sched.jobs_ahead") < 0)
+                                              "{ s:{s:s s:n s:n} }",
+                                              "sched",
+                                              "resource_summary", "1core",
+                                              "reason_pending",
+                                              "jobs_ahead") < 0)
         flux_log_error (sc->h, "schedutil_alloc_respond_success_pack");
 }
 
@@ -117,8 +118,8 @@ static void respond_annotate_single (struct sched_ctx *sc,
 {
     if (schedutil_alloc_respond_annotate_pack (sc->schedutil_ctx,
                                                job->msg,
-                                               "{ s:s }",
-                                               "sched.reason_pending",
+                                               "{ s:{s:s} }",
+                                               "sched", "reason_pending",
                                                "no cores available") < 0)
         flux_log_error (sc->h, "schedutil_alloc_respond_annotate_pack");
 }
@@ -130,18 +131,19 @@ static void respond_annotate_unlimited (struct sched_ctx *sc,
     if (job->annotate_count) {
         if (schedutil_alloc_respond_annotate_pack (sc->schedutil_ctx,
                                                    job->msg,
-                                                   "{ s:i }",
-                                                   "sched.jobs_ahead",
+                                                   "{ s:{s:i} }",
+                                                   "sched", "jobs_ahead",
                                                    jobs_ahead_count) < 0)
             flux_log_error (sc->h, "schedutil_alloc_respond_annotate_pack");
     }
     else {
         if (schedutil_alloc_respond_annotate_pack (sc->schedutil_ctx,
                                                    job->msg,
-                                                   "{ s:s s:i }",
-                                                   "sched.reason_pending",
+                                                   "{ s:{s:s s:i} }",
+                                                   "sched",
+                                                   "reason_pending",
                                                    "no cores",
-                                                   "sched.jobs_ahead",
+                                                   "jobs_ahead",
                                                    jobs_ahead_count) < 0)
             flux_log_error (sc->h, "schedutil_alloc_respond_annotate_pack");
     }
