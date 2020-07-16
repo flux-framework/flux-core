@@ -120,8 +120,6 @@ static void init_attrs (attr_t *attrs, pid_t pid);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-static int exit_rc = 1;
-
 #define OPTIONS "+vs:X:k:H:g:S:c:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
@@ -267,6 +265,8 @@ int main (int argc, char *argv[])
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
+
+    ctx.exit_rc = 1;
 
     if (!(ctx.sigwatchers = zlist_new ()))
         oom ();
@@ -590,7 +590,7 @@ int main (int argc, char *argv[])
     if (ctx.verbose)
         log_msg ("entering event loop");
     /* Once we enter the reactor, default exit_rc is now 0 */
-    exit_rc = 0;
+    ctx.exit_rc = 0;
     if (flux_reactor_run (ctx.reactor, 0) < 0)
         log_err ("flux_reactor_run");
     if (ctx.verbose)
@@ -640,7 +640,7 @@ cleanup:
     zlist_destroy (&ctx.subscriptions);
     free (ctx.init_shell_cmd);
 
-    return exit_rc;
+    return ctx.exit_rc;
 }
 
 struct attrmap {
@@ -789,22 +789,22 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
 
     if (!strcmp (name, "rc1")) {
         if (rc != 0)
-            exit_rc = rc;
+            ctx->exit_rc = rc;
         state_machine (ctx, rc == 0 ? "rc1-success" : "rc1-fail");
     }
     else if (!strcmp (name, "rc2")) {
         if (rc != 0)
-            exit_rc = rc;
+            ctx->exit_rc = rc;
         state_machine (ctx, rc == 0 ? "rc2-success" : "rc2-fail");
     }
     else if (!strcmp (name, "cleanup")) {
         if (rc != 0)
-            exit_rc = rc;
+            ctx->exit_rc = rc;
         state_machine (ctx, rc == 0 ? "cleanup-success" : "cleanup-fail");
     }
     else if (!strcmp (name, "rc3")) {
         if (rc != 0)
-            exit_rc = rc;
+            ctx->exit_rc = rc;
         state_machine (ctx, rc == 0 ? "rc3-success" : "rc3-fail");
     }
 }
