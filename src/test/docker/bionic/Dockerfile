@@ -19,7 +19,6 @@ RUN apt-get update \
         sudo \
         vim \
         luarocks \
-        ruby \
         munge \
         lcov \
         ccache \
@@ -61,7 +60,9 @@ RUN apt-get update \
         python3-wheel \
  && rm -rf /var/lib/apt/lists/* \
  && for PY in python3.6 python3.7 python3.8 ; do \
-        sudo $PY -m pip install --upgrade --ignore-installed coverage cffi six pyyaml jsonschema ; \
+        sudo $PY -m pip install --upgrade --ignore-installed \
+            coverage cffi six pyyaml jsonschema \
+            sphinx sphinx-rtd-theme sphinxcontrib-spelling; \
     done ; \
     apt-get -qq purge -y python3-pip \
  && apt-get -qq autoremove -y
@@ -90,6 +91,7 @@ RUN apt-get update \
         libfaketime \
         pylint \
         cppcheck \
+        enchant \
         aspell \
         aspell-en \
  && rm -rf /var/lib/apt/lists/*
@@ -98,9 +100,6 @@ RUN locale-gen en_US.UTF-8
 
 # NOTE: luaposix installed by rocks due to Ubuntu bug: #1752082 https://bugs.launchpad.net/ubuntu/+source/lua-posix/+bug/1752082
 RUN luarocks install luaposix
-
-# NOTE: we need asciidoctor 1.5.7 to handle manpages, install with gem install
-RUN /usr/bin/gem install asciidoctor
 
 # Install caliper by hand for now:
 RUN mkdir caliper \

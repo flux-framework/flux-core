@@ -37,7 +37,6 @@ RUN apt-get update \
         lua-posix \
         mpich \
         valgrind \
-        asciidoctor \
         jq \
  && rm -rf /var/lib/apt/lists/*
 
@@ -70,6 +69,9 @@ RUN apt-get update \
         python3-jsonschema \
  && rm -rf /var/lib/apt/lists/*
 
+# Sphinx packages for docs
+RUN python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-spelling
+
 # Other deps
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
@@ -95,6 +97,7 @@ RUN apt-get update \
         libfaketime \
         pylint \
         cppcheck \
+        enchant \
         aspell \
         aspell-en \
  && rm -rf /var/lib/apt/lists/*

@@ -17,7 +17,6 @@ RUN yum -y install \
 	man-db \
 	git \
 	sudo \
-	ruby \
 	munge \
 	ccache \
 	lua \
@@ -40,7 +39,7 @@ RUN yum -y install \
 	gcc-c++ \
 	make \
 	cmake
-	
+
 #  Python
 RUN yum -y install \
 	python36 \
@@ -72,6 +71,7 @@ RUN yum -y install \
 	lua-posix \
 	libfaketime \
 	cppcheck \
+	enchant \
 	aspell \
 	aspell-en
 
@@ -84,7 +84,8 @@ RUN alternatives --set python /usr/bin/python3
 #  Add /usr/bin/mpicc link so MPI tests are built
 RUN alternatives --install /usr/bin/mpicc mpicc /usr/lib64/mpich/bin/mpicc 100
 
-RUN /usr/bin/gem install asciidoctor
+# Sphinx packages for docs
+RUN python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-spelling
 
 # Install caliper by hand for now:
 RUN mkdir caliper \
