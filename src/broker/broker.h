@@ -46,6 +46,8 @@ struct broker {
 
     char *init_shell_cmd;
     size_t init_shell_cmd_len;
+
+    int exit_rc;
 };
 
 typedef struct broker broker_ctx_t;
