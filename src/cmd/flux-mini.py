@@ -283,7 +283,7 @@ class SubmitCmd(MiniCmd):
                 gpus_per_task=args.gpus_per_task,
                 num_nodes=args.nodes,
             )
-        elif args.jobspec_version == 2:
+        if args.jobspec_version == 2:
             return JobspecV2.from_command(
                 args.command,
                 num_tasks=args.ntasks,
@@ -292,8 +292,7 @@ class SubmitCmd(MiniCmd):
                 gpus_per_task=args.gpus_per_task,
                 num_nodes=args.nodes,
             )
-        else:
-            raise ValueError("Only Jobspec Versions 1 and 2 are supported")
+        raise ValueError("Only Jobspec Versions 1 and 2 are supported")
 
     def main(self, args):
         jobid = self.submit(args)
