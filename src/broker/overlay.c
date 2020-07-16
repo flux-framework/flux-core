@@ -278,31 +278,50 @@ done:
     return rc;
 }
 
-int overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
+static int overlay_mcast_child_one (void *zsock,
+                                    const flux_msg_t *msg,
+                                    const char *uuid)
 {
-    flux_msg_t *cpy = NULL;
-    const char *uuid;
-    child_t *child;
+    flux_msg_t *cpy;
     int rc = -1;
 
-    if (!ov->child || !ov->child->zs || !ov->children)
-        return 0;
-    FOREACH_ZHASH (ov->children, uuid, child) {
-        if (!(cpy = flux_msg_copy (msg, true)))
+    if (!(cpy = flux_msg_copy (msg, true)))
+        return -1;
+    if (flux_msg_enable_route (cpy) < 0)
+        goto done;
+    if (flux_msg_push_route (cpy, uuid) < 0)
+        goto done;
+    if (flux_msg_sendzsock (zsock, cpy) < 0) {
+        if (errno != EHOSTUNREACH) // a child has disconnected - not an error
             goto done;
-        if (flux_msg_enable_route (cpy) < 0)
-            goto done;
-        if (flux_msg_push_route (cpy, uuid) < 0)
-            goto done;
-        if (flux_msg_sendzsock (ov->child->zs, cpy) < 0)
-            goto done;
-        flux_msg_destroy (cpy);
-        cpy = NULL;
     }
     rc = 0;
 done:
     flux_msg_destroy (cpy);
     return rc;
+}
+
+int overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
+{
+    const char *uuid;
+    child_t *child;
+    int first_errno;
+    int failures = 0;
+
+    if (!ov->child || !ov->child->zs || !ov->children)
+        return 0;
+    FOREACH_ZHASH (ov->children, uuid, child) {
+        if (overlay_mcast_child_one (ov->child->zs, msg, uuid) < 0) {
+            if (failures == 0)
+                first_errno = errno;
+            failures++;
+        }
+    }
+    if (failures > 0) {
+        errno = first_errno;
+        return -1;
+    }
+    return 0;
 }
 
 /* Handle notification of peer connect/disconnect on child monitor socket.
