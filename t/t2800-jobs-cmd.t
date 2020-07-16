@@ -101,11 +101,6 @@ test_expect_success 'flux-jobs --suppress-header works' '
         test $count -eq 14
 '
 
-test_expect_success 'flux-jobs: header included with custom formats' '
-	flux jobs --format={id} &&
-	test "$(flux jobs --format={id} | head -1)" = "JOBID"
-'
-
 test_expect_success 'flux-jobs: custom format with numeric spec works' '
 	flux jobs --format="{t_run:12.2f}" > format-test.out 2>&1 &&
 	test_debug "cat format-test.out" &&
@@ -628,49 +623,53 @@ test_expect_success 'flux-jobs --format={expiration!D:h},{t_remaining!H:h} works
 	test "${t_remaining}" = "-"
 '
 #
-# format header tests
+# format header tests.
+#
+# to add additional tests, simply add a line with custom format and
+# expected header, separated by '=='
 #
 test_expect_success 'flux-jobs: header included with all custom formats' '
-	flux jobs --format={id} | head -1 | grep "JOBID" &&
-	flux jobs --format={userid} | head -1 | grep "UID" &&
-	flux jobs --format={username} | head -1 | grep "USER" &&
-	flux jobs --format={priority} | head -1 | grep "PRI" &&
-	flux jobs --format={state} | head -1 | grep "STATE" &&
-	flux jobs --format={state_single} | head -1 | grep "ST" &&
-	flux jobs --format={name} | head -1 | grep "NAME" &&
-	flux jobs --format={ntasks} | head -1 | grep "NTASKS" &&
-	flux jobs --format={nnodes} | head -1 | grep "NNODES" &&
-	flux jobs --format={ranks} | head -1 | grep "RANKS" &&
-	flux jobs --format={success} | head -1 | grep "SUCCESS" &&
-	flux jobs --format={exception.occurred} | head -1 | grep "EXCEPTION-OCCURRED" &&
-	flux jobs --format={exception.severity} | head -1 | grep "EXCEPTION-SEVERITY" &&
-	flux jobs --format={exception.type} | head -1 | grep "EXCEPTION-TYPE" &&
-	flux jobs --format={exception.note} | head -1 | grep "EXCEPTION-NOTE" &&
-	flux jobs --format={result} | head -1 | grep "RESULT" &&
-	flux jobs --format={result_abbrev} | head -1 | grep "RS" &&
-	flux jobs --format={t_submit} | head -1 | grep "T_SUBMIT" &&
-	flux jobs --format={t_depend} | head -1 | grep "T_DEPEND" &&
-	flux jobs --format={t_sched} | head -1 | grep "T_SCHED" &&
-	flux jobs --format={t_run} | head -1 | grep "T_RUN" &&
-	flux jobs --format={t_cleanup} | head -1 | grep "T_CLEANUP" &&
-	flux jobs --format={t_inactive} | head -1 | grep "T_INACTIVE" &&
-	flux jobs --format={runtime} | head -1 | grep "RUNTIME" &&
-	flux jobs --format={runtime!F} | head -1 | grep "RUNTIME" &&
-	flux jobs --format={runtime!H} | head -1 | grep "RUNTIME" &&
-	flux jobs --format={expiration} | head -1 | grep "EXPIRATION" &&
-	flux jobs --format={expiration!D} | head -1 | grep "EXPIRATION" &&
-	flux jobs --format={expiration!d:%FT%T} | head -1 | grep "EXPIRATION" &&
-	flux jobs --format={t_remaining} | head -1 | grep "T_REMAINING" &&
-	flux jobs --format={t_remaining!F} | head -1 | grep "T_REMAINING" &&
-	flux jobs --format={t_remaining!H} | head -1 | grep "T_REMAINING"
-'
-
-test_expect_success 'flux-jobs: header still prints with conversion spec' '
-	flux jobs --format={t_inactive!d},{t_cleanup!D},{t_run!F} | \
-		head -1 > conv_header.out &&
-	grep T_INACTIVE conv_header.out &&
-	grep T_CLEANUP conv_header.out &&
-	grep T_RUN conv_header.out
+	cat <<-EOF >headers.expected &&
+	id==JOBID
+	userid==UID
+	username==USER
+	priority==PRI
+	state==STATE
+	state_single==ST
+	name==NAME
+	ntasks==NTASKS
+	nnodes==NNODES
+	ranks==RANKS
+	success==SUCCESS
+	exception.occurred==EXCEPTION-OCCURRED
+	exception.severity==EXCEPTION-SEVERITY
+	exception.type==EXCEPTION-TYPE
+	exception.note==EXCEPTION-NOTE
+	result==RESULT
+	result_abbrev==RS
+	t_submit==T_SUBMIT
+	t_depend==T_DEPEND
+	t_sched==T_SCHED
+	t_run==T_RUN
+	t_cleanup==T_CLEANUP
+	t_inactive==T_INACTIVE
+	runtime==RUNTIME
+	runtime!F==RUNTIME
+	runtime!H==RUNTIME
+	expiration==EXPIRATION
+	expiration!D==EXPIRATION
+	expiration!d:%FT%T==EXPIRATION
+	t_remaining==T_REMAINING
+	t_remaining!F==T_REMAINING
+	t_remaining!H==T_REMAINING
+	t_inactive!d==T_INACTIVE
+	t_cleanup!D==T_CLEANUP
+	t_run!F==T_RUN
+	EOF
+	sed "s/\(.*\)==.*/\1=={\1}/" headers.expected > headers.fmt &&
+	flux jobs --from-stdin --format="$(cat headers.fmt)" \
+	    > headers.output </dev/null &&
+	test_cmp headers.expected headers.output
 '
 
 #
