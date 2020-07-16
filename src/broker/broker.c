@@ -778,36 +778,6 @@ static void set_proctitle (uint32_t rank)
     (void)prctl (PR_SET_NAME, proctitle, 0, 0, 0);
 }
 
-static void runat_completion_cb (struct runat *r, const char *name, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    int rc = 1;
-
-    if (runat_get_exit_code (r, name, &rc) < 0)
-        log_err ("runat_get_exit_code %s", name);
-
-    if (!strcmp (name, "rc1")) {
-        if (rc != 0)
-            ctx->exit_rc = rc;
-        state_machine (ctx, rc == 0 ? "rc1-success" : "rc1-fail");
-    }
-    else if (!strcmp (name, "rc2")) {
-        if (rc != 0)
-            ctx->exit_rc = rc;
-        state_machine (ctx, rc == 0 ? "rc2-success" : "rc2-fail");
-    }
-    else if (!strcmp (name, "cleanup")) {
-        if (rc != 0)
-            ctx->exit_rc = rc;
-        state_machine (ctx, rc == 0 ? "cleanup-success" : "cleanup-fail");
-    }
-    else if (!strcmp (name, "rc3")) {
-        if (rc != 0)
-            ctx->exit_rc = rc;
-        state_machine (ctx, rc == 0 ? "rc3-success" : "rc3-fail");
-    }
-}
-
 static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
 {
     if (argz == NULL) { // run interactive shell
@@ -846,10 +816,7 @@ static int create_runat_phases (broker_ctx_t *ctx)
         if (attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
             rc2_none = true;
 
-        if (!(ctx->runat = runat_create (ctx->h,
-                                         local_uri,
-                                         runat_completion_cb,
-                                         ctx))) {
+        if (!(ctx->runat = runat_create (ctx->h, local_uri))) {
             log_err ("runat_create");
             return -1;
         }

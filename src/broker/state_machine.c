@@ -23,6 +23,8 @@
 #include "runat.h"
 #include "overlay.h"
 
+static void runat_completion_cb (struct runat *r, const char *name, void *arg);
+
 const char *statestr (broker_state_t state)
 {
     return (state == STATE_NONE ? "none" :
@@ -70,19 +72,19 @@ void state_action (struct broker *ctx, broker_state_t state)
 {
     switch (state) {
         case STATE_INIT:
-            if (runat_start (ctx->runat, "rc1") < 0)
+            if (runat_start (ctx->runat, "rc1", runat_completion_cb, ctx) < 0)
                 state_machine (ctx, "rc1-success");
             break;
         case STATE_RUN:
-            if (runat_start (ctx->runat, "rc2") < 0)
+            if (runat_start (ctx->runat, "rc2", runat_completion_cb, ctx) < 0)
                 flux_log (ctx->h, LOG_DEBUG, "no initial program defined");
             break;
         case STATE_CLEANUP:
-            if (runat_start (ctx->runat, "cleanup") < 0)
+            if (runat_start (ctx->runat, "cleanup", runat_completion_cb, ctx) < 0)
                 state_machine (ctx, "cleanup-success");
             break;
         case STATE_FINALIZE:
-            if (runat_start (ctx->runat, "rc3") < 0)
+            if (runat_start (ctx->runat, "rc3", runat_completion_cb, ctx) < 0)
                 state_machine (ctx, "rc3-success");
             break;
         case STATE_SHUTDOWN:
@@ -137,6 +139,36 @@ void state_abort (struct broker *ctx)
             break;
         case STATE_SHUTDOWN:
             break;
+    }
+}
+
+static void runat_completion_cb (struct runat *r, const char *name, void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    int rc = 1;
+
+    if (runat_get_exit_code (r, name, &rc) < 0)
+        log_err ("runat_get_exit_code %s", name);
+
+    if (!strcmp (name, "rc1")) {
+        if (rc != 0)
+            ctx->exit_rc = rc;
+        state_machine (ctx, rc == 0 ? "rc1-success" : "rc1-fail");
+    }
+    else if (!strcmp (name, "rc2")) {
+        if (rc != 0)
+            ctx->exit_rc = rc;
+        state_machine (ctx, rc == 0 ? "rc2-success" : "rc2-fail");
+    }
+    else if (!strcmp (name, "cleanup")) {
+        if (rc != 0)
+            ctx->exit_rc = rc;
+        state_machine (ctx, rc == 0 ? "cleanup-success" : "cleanup-fail");
+    }
+    else if (!strcmp (name, "rc3")) {
+        if (rc != 0)
+            ctx->exit_rc = rc;
+        state_machine (ctx, rc == 0 ? "rc3-success" : "rc3-fail");
     }
 }
 
