@@ -53,21 +53,17 @@ RUN apt-get update \
 # mapped into the container and contains the same libraries
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
-        python-dev \
         python3-dev \
         python3.7-dev \
         python3.8-dev \
-        python-pip \
-        python-setuptools \
-        python-wheel \
         python3-pip \
         python3-setuptools \
         python3-wheel \
  && rm -rf /var/lib/apt/lists/* \
- && for PY in python2 python3.6 python3.7 python3.8 ; do \
-        sudo $PY -m pip install --upgrade --ignore-installed cffi six pyyaml jsonschema ; \
+ && for PY in python3.6 python3.7 python3.8 ; do \
+        sudo $PY -m pip install --upgrade --ignore-installed coverage cffi six pyyaml jsonschema ; \
     done ; \
-    apt-get -qq purge -y python-pip python3-pip \
+    apt-get -qq purge -y python3-pip \
  && apt-get -qq autoremove -y
 
 # Other deps
