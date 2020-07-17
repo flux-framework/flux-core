@@ -49,7 +49,7 @@ czmq-devel        | libczmq-dev       | >= 3.0.1          |
 jansson-devel     | libjansson-dev    | >= 2.6            |
 libuuid-devel     | uuid-dev          |                   |
 lz4-devel         | liblz4-dev        |                   |
-hwloc-devel       | libhwloc-dev      | >= v1.11.1, < 2.0 |
+hwloc-devel       | libhwloc-dev      | >= v1.11.1        |
 sqlite-devel      | libsqlite3-dev    | >= 3.0.0          |
 lua               | lua5.1            | >= 5.1, < 5.4     |
 lua-devel         | liblua5.1-dev     | >= 5.1, < 5.4     |
