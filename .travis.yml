@@ -1,6 +1,6 @@
 sudo: required
 services: docker
-dist: trusty
+dist: bionic
 language: c
 
 jobs:
@@ -67,6 +67,7 @@ jobs:
     - name: "Ubuntu: COVERAGE=t, --with-flux-security --enable-caliper"
       stage: test
       compiler: gcc
+      python: '3.6'
       env:
        - COVERAGE=t
        - ARGS="--with-flux-security --enable-caliper"
@@ -112,8 +113,6 @@ before_install:
  - python -c 'import os,sys,fcntl; flags = fcntl.fcntl(sys.stdout, fcntl.F_GETFL); fcntl.fcntl(sys.stdout, fcntl.F_SETFL, flags&~os.O_NONBLOCK);'
  # die if non-blocking is still enabled
  - python -c 'import os,sys,fcntl; flags = fcntl.fcntl(sys.stdout, fcntl.F_GETFL); exit(flags&os.O_NONBLOCK);'
- # coveralls-lcov required only for coveralls upload:
- - if test "$COVERAGE" = "t" ; then gem install coveralls-lcov; fi
  - if test -z "${IMG}"; then IMG="bionic"; fi
  #
  #  Tag image if this build is on master or result of a tag:
@@ -128,6 +127,16 @@ before_install:
      export ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --localstatedir=/var --with-flux-security --enable-caliper"
   fi
 
+install:
+ - |
+   if test "$COVERAGE" = "t"; then \
+     # Use python3 coverage to match version in flux docker image
+     sudo apt update ; \
+     sudo apt install -yy python3-pip ; \
+     pip3 install --upgrade pip ; \
+     pip3 install --upgrade --force-reinstall coverage ; \
+   fi
+
 script:
  # Unshallow repository so git describe works.
  # (The one inside docker-run-checks may fail if git version is too old)
@@ -141,11 +150,7 @@ script:
 after_success:
  - ccache -s
  # Upload coverage results for COVERAGE run
- - |
-  if test "$COVERAGE" = "t"; \
-     then coveralls-lcov flux*-coverage.info; \
-     bash <(curl -s https://codecov.io/bash); \
-  fi
+ - if test "$COVERAGE" = "t"; then bash <(curl -s https://codecov.io/bash); fi
  #  Deploy resulting docker image to Docker Hub with appropriate tag
  - |
   if test -n "$TAGNAME"; then
