@@ -319,6 +319,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     struct content_files *ctx;
     bool testing = false;
+    int rc = -1;
 
     if (parse_args (h, argc, argv, &testing) < 0)
         return -1;
@@ -342,9 +343,11 @@ int mod_main (flux_t *h, int argc, char **argv)
         if (content_unregister_backing_store (h) < 0)
             goto done;
     }
+
+    rc = 0;
 done:
     content_files_destroy (ctx);
-    return 0;
+    return rc;
 }
 
 MOD_NAME ("content-files");
