@@ -368,6 +368,15 @@ if test "$enable_caliper" = "yes"; then
     AC_DEFINE([HAVE_CALIPER], [1], [Define if you have libcaliper])
 fi
 
+AC_ARG_ENABLE([content-s3],
+    AS_HELP_STRING([--enable-content-s3], [Enable S3 storage backend]))
+
+AS_IF([test "x$enable_content_s3" = "xyes"], [
+    X_AC_CHECK_COND_LIB(s3, S3_initialize)
+])
+
+AM_CONDITIONAL([ENABLE_CONTENT_S3], [test "x$enable_content_s3" = "xyes"])
+
 ##
 # Check for systemd
 ##
@@ -495,6 +504,7 @@ AC_CONFIG_FILES( \
   src/modules/kvs-watch/Makefile \
   src/modules/content-sqlite/Makefile \
   src/modules/content-files/Makefile \
+  src/modules/content-s3/Makefile \
   src/modules/barrier/Makefile \
   src/modules/cron/Makefile \
   src/modules/aggregator/Makefile \
