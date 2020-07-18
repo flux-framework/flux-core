@@ -662,7 +662,12 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	flux jobs --format={expiration!d:%FT%T} | head -1 | grep "EXPIRATION" &&
 	flux jobs --format={t_remaining} | head -1 | grep "T_REMAINING" &&
 	flux jobs --format={t_remaining!F} | head -1 | grep "T_REMAINING" &&
-	flux jobs --format={t_remaining!H} | head -1 | grep "T_REMAINING"
+	flux jobs --format={t_remaining!H} | head -1 | grep "T_REMAINING" &&
+	flux jobs --format={annotations} | head -1 | grep "ANNOTATIONS" &&
+	flux jobs --format={annotations.sched} | head -1 | grep "SCHED" &&
+	flux jobs --format={annotations.sched.reason_pending} | head -1 | grep "REASON_PENDING" &&
+	flux jobs --format={annotations.sched.resource_summary} | head -1 | grep "RESOURCE_SUMMARY" &&
+	flux jobs --format={annotations.sched.t_estimate} | head -1 | grep "T_ESTIMATE"
 '
 
 test_expect_success 'flux-jobs: header still prints with conversion spec' '
