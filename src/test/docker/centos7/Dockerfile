@@ -61,6 +61,7 @@ RUN yum -y update \
       devtoolset-7-make \
       lz4-devel \
       jq \
+      libs3-devel \
  && yum clean all
 
 # The cmake from yum is incredibly ancient, download a less ancient one

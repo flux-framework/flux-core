@@ -80,6 +80,7 @@ RUN apt-get update \
         uuid-dev \
         libhwloc-dev \
         libmpich-dev \
+        libs3-dev \
  && rm -rf /var/lib/apt/lists/*
 
 # Testing utils and libs

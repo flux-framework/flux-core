@@ -48,10 +48,6 @@ RUN case $BASE_IMAGE in \
     esac
 
 # Install extra dependencies if necessary here.
-RUN case $BASE_IMAGE in \
-     bionic*) apt-get update -y && apt-get install -y libs3-dev ;; \
-     *) (>&2 echo "Not installing libs3") ;; \
-    esac
 
 # Do not forget to run `apt update` on Ubuntu/bionic.
 # Do NOT run `yum upgrade` on CentOS (this will unnecessarily upgrade
