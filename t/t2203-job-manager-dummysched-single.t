@@ -62,7 +62,7 @@ test_expect_success 'job-manager: job state RRSSS' '
 test_expect_success HAVE_JQ 'job-manager: annotate job id 3 (RRSSS)' '
         check_no_annotations $(cat job1.id) &&
         check_no_annotations $(cat job2.id) &&
-        check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores available\""&&
+        check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores available\"" &&
         check_no_annotations $(cat job4.id) &&
         check_no_annotations $(cat job5.id)
 '
