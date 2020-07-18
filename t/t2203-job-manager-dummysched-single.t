@@ -75,6 +75,14 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 3 in job-info (RRSSS)'
         jinfo_check_no_annotations $(cat job5.id)
 '
 
+test_expect_success 'job-manager: annotate job id 3 in flux-jobs (RRSSS)' '
+        fjobs_check_no_annotations $(cat job1.id) &&
+        fjobs_check_no_annotations $(cat job2.id) &&
+        fjobs_check_annotation $(cat job3.id) "annotations.sched.reason_pending" "no cores available" &&
+        fjobs_check_no_annotations $(cat job4.id) &&
+        fjobs_check_no_annotations $(cat job5.id)
+'
+
 test_expect_success 'job-manager: running job has alloc event' '
         flux job wait-event --timeout=5.0 $(cat job1.id) alloc
 '
@@ -99,12 +107,20 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 4 (RIRSS)' '
         jmgr_check_no_annotations $(cat job5.id)
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate job id 4 in job-info (RRSSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate job id 4 in job-info (RIRSS)' '
         jinfo_check_no_annotations $(cat job1.id) &&
         jinfo_check_no_annotations $(cat job2.id) &&
         jinfo_check_no_annotations $(cat job3.id) &&
         jinfo_check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores available\"" &&
         jinfo_check_no_annotations $(cat job5.id)
+'
+
+test_expect_success 'job-manager: annotate job id 4 in flux jobs (RRSSS)' '
+        fjobs_check_no_annotations $(cat job1.id) &&
+        fjobs_check_no_annotations $(cat job2.id) &&
+        fjobs_check_no_annotations $(cat job3.id) &&
+        fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "no cores available" &&
+        fjobs_check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: first S job sent alloc, second S did not' '
@@ -160,6 +176,14 @@ test_expect_success HAVE_JQ 'job-manager: no annotations in job-info (RIRRR)' '
         jinfo_check_no_annotations $(cat job5.id)
 '
 
+test_expect_success 'job-manager: no annotations in flux jobs (RIRRR)' '
+        fjobs_check_no_annotations $(cat job1.id) &&
+        fjobs_check_no_annotations $(cat job2.id) &&
+        fjobs_check_no_annotations $(cat job3.id) &&
+        fjobs_check_no_annotations $(cat job4.id) &&
+        fjobs_check_no_annotations $(cat job5.id)
+'
+
 test_expect_success 'job-manager: cancel 1' '
         flux job cancel $(cat job1.id)
 '
@@ -200,6 +224,14 @@ test_expect_success HAVE_JQ 'job-manager: no annotations in job-info (IIIII)' '
         jinfo_check_no_annotations $(cat job3.id) &&
         jinfo_check_no_annotations $(cat job4.id) &&
         jinfo_check_no_annotations $(cat job5.id)
+'
+
+test_expect_success 'job-manager: no annotations in flux jobs (IIIII)' '
+        fjobs_check_no_annotations $(cat job1.id) &&
+        fjobs_check_no_annotations $(cat job2.id) &&
+        fjobs_check_no_annotations $(cat job3.id) &&
+        fjobs_check_no_annotations $(cat job4.id) &&
+        fjobs_check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: simulate alloc failure' '

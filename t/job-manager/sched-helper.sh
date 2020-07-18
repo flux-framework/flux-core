@@ -143,3 +143,42 @@ jinfo_check_annotation_exists() {
         local key=$2
         flux job list -A | grep ${id} | jq .annotations | jq -e ."${key}" > /dev/null
 }
+
+# verify if annotation seen via flux-jobs
+#
+# function will loop for up to 5 seconds in case annotation update
+# arrives slowly
+#
+# arg1 - jobid
+# arg2 - key in annotation
+# arg3 - value of key in annotation
+fjobs_check_annotation() {
+        local id=$1
+        local key=$2
+        local value="$3"
+        for try in $(seq 1 10); do
+                test "$(flux jobs -n --format={${key}} ${id})" = "${value}" && return 0
+                sleep 0.5
+        done
+        return 1
+}
+
+# verify that flux-jobs see no annotations
+#
+# arg1 - jobid
+fjobs_check_no_annotations() {
+        local id=$1
+        test -z $(flux jobs -n --format="{annotations}" ${id}) && return 0
+        return 1
+}
+
+# verify flux-jobs sees annotation
+#
+# arg1 - jobid
+# arg2 - key in annotation
+fjobs_check_annotation_exists() {
+        local id=$1
+        local key=$2
+        test -z $(flux jobs -n --format="{${key}}" ${id}) && return 1
+        return 0
+}

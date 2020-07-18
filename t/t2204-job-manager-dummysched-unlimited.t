@@ -81,6 +81,17 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 3-5 in job-info (RRSSS
         jinfo_check_annotation $(cat job5.id) "sched.jobs_ahead" "2"
 '
 
+test_expect_success HAVE_JQ 'job-manager: annotate job id 3-5 in flux-jobs (RRSSS)' '
+        fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "1core" &&
+        fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "1core" &&
+        fjobs_check_annotation $(cat job3.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job3.id) "annotations.sched.jobs_ahead" "0" &&
+        fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job4.id) "annotations.sched.jobs_ahead" "1" &&
+        fjobs_check_annotation $(cat job5.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job5.id) "annotations.sched.jobs_ahead" "2"
+'
+
 test_expect_success 'job-manager: cancel 2' '
         flux job cancel $(cat job2.id)
 '
@@ -119,6 +130,20 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 in job-info (RIRSS
         jinfo_check_annotation $(cat job5.id) "sched.jobs_ahead" "1"
 '
 
+# compared to above, note that job id #2 retains annotations, it is
+# cached in job-info
+test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 in flux-jobs (RIRSS)' '
+        fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "1core" &&
+        fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "1core" &&
+        fjobs_check_annotation $(cat job3.id) "annotations.sched.resource_summary" "1core" &&
+        test_must_fail fjobs_check_annotation_exists $(cat job3.id) "annotations.sched.reason_pending" &&
+        test_must_fail fjobs_check_annotation_exists $(cat job3.id) "annotations.sched.jobs_ahead" &&
+        fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job4.id) "annotations.sched.jobs_ahead" "0" &&
+        fjobs_check_annotation $(cat job5.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job5.id) "annotations.sched.jobs_ahead" "1"
+'
+
 test_expect_success 'job-manager: cancel 5' '
         flux job cancel $(cat job5.id)
 '
@@ -155,6 +180,19 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 in job-info (RIRSS
         jinfo_check_no_annotations $(cat job5.id)
 '
 
+# compared to above, note that job id #2 retains annotations, it is
+# cached in job-info
+test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 in flux jobs (RIRSS)' '
+        fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "1core" &&
+        fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "1core" &&
+        fjobs_check_annotation $(cat job3.id) "annotations.sched.resource_summary" "1core" &&
+        test_must_fail fjobs_check_annotation_exists $(cat job3.id) "annotations.sched.reason_pending" &&
+        test_must_fail fjobs_check_annotation_exists $(cat job3.id) "annotations.sched.jobs_ahead" &&
+        fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job4.id) "annotations.sched.jobs_ahead" "0" &&
+        fjobs_check_no_annotations $(cat job5.id)
+'
+
 # cancel non-running jobs first, to ensure they are not accidentally run when
 # running jobs free resources.
 test_expect_success 'job-manager: cancel all jobs' '
@@ -185,6 +223,15 @@ test_expect_success HAVE_JQ 'job-manager: no annotations in canceled jobs in job
         jinfo_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
         jinfo_check_no_annotations $(cat job4.id) &&
         jinfo_check_no_annotations $(cat job5.id)
+'
+
+# compared to above, note that job ids that ran retain annotations
+test_expect_success HAVE_JQ 'job-manager: no annotations in canceled jobs in flux jobs (IIIII)' '
+        fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "1core" &&
+        fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "1core" &&
+        fjobs_check_annotation $(cat job3.id) "annotations.sched.resource_summary" "1core" &&
+        fjobs_check_no_annotations $(cat job4.id) &&
+        fjobs_check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: remove sched-dummy' '
