@@ -7,6 +7,10 @@ test_description='Test instance restart'
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
+if test -n "$S3_ACCESS_KEY_ID"; then
+    test_set_prereq S3
+fi
+
 test_expect_success 'run a job in persistent instance' '
 	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
 	           flux mini run -v /bin/true 2>&1 | sed "s/jobid: //" >id1.out
@@ -57,5 +61,20 @@ test_expect_success 'inactive job list contains job from before restart' '
 	grep $(cat files_id1.out) files_list.out
 '
 
+test_expect_success S3 'run a job in persistent instance (content-s3)' '
+	flux start \
+	    -o,-Scontent.backing-module=content-s3 \
+	    flux mini run -v /bin/true 2>&1 | sed "s/jobid: //" >files_id2.out
+'
+test_expect_success S3 'restart instance and list inactive jobs' '
+	flux start \
+	    -o,-Scontent.backing-module=content-s3 \
+	    flux jobs --suppress-header --format={id} \
+	        --filter=INACTIVE >files_list2.out
+'
+
+test_expect_success S3 'inactive job list contains job from before restart' '
+	grep $(cat files_id2.out) files_list2.out
+'
 
 test_done

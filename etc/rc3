@@ -28,5 +28,6 @@ flux exec -r all -x 0 flux module remove -f kvs
 
 flux module remove -f kvs
 flux content flush
-flux module remove -f content-sqlite
-flux module remove -f content-files
+
+backingmod=$(flux getattr content.backing-module 2>/dev/null) || true
+flux module remove -f ${backingmod:-content-sqlite}

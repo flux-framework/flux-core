@@ -14,3 +14,7 @@ SUBDIRS = \
  job-archive \
  resource \
  sched-simple
+
+if ENABLE_CONTENT_S3
+SUBDIRS += content-s3
+endif
