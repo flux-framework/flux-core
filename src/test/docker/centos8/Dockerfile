@@ -26,7 +26,9 @@ RUN yum -y install \
 	jq \
 	which \
 	file \
-	vim
+	vim \
+	patch \
+	diffutils
 
 #  Compilers, autotools
 RUN yum -y install \
