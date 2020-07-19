@@ -113,3 +113,5 @@ RUN mkdir caliper \
  && make install \
  && cd ../.. \
  && rm -rf caliper
+
+ENV LANG=C.UTF-8

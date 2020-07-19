@@ -96,4 +96,6 @@ RUN mkdir caliper \
  && cd ../.. \
  && rm -rf caliper
 
+ENV LANG=C.UTF-8
+
 COPY config.site /usr/share/config.site

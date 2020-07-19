@@ -87,5 +87,7 @@ RUN mkdir caliper \
 
 COPY config.site /usr/share/config.site
 
+ENV LANG=en_US.UTF-8
+
 # Create /tmp -> /var/tmp link to ensure Flux tests work in this configuration
 RUN rm -rf /tmp && ln -sf /var/tmp /tmp

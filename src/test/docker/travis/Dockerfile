@@ -71,7 +71,6 @@ COPY bashrc /tmp
 RUN cat /tmp/bashrc >> ~fluxuser/.bashrc \
  && rm /tmp/bashrc
 
-ENV LANG=en_US.UTF-8
 ENV BASE_IMAGE=$BASE_IMAGE
 USER $USER
 WORKDIR /home/$USER

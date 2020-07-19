@@ -100,6 +100,7 @@ RUN apt-get update \
  && rm -rf /var/lib/apt/lists/*
 
 RUN locale-gen en_US.UTF-8
+ENV LANG=C.UTF-8
 
 # Install caliper by hand for now:
 RUN mkdir caliper \
