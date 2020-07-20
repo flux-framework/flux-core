@@ -26,7 +26,9 @@ RUN yum -y install \
 	jq \
 	which \
 	file \
-	vim
+	vim \
+	patch \
+	diffutils
 
 #  Compilers, autotools
 RUN yum -y install \
@@ -51,7 +53,7 @@ RUN yum -y install \
 #  Development dependencies
 RUN yum -y install \
 	libsodium-devel \
-        zeromq-devel \
+	zeromq-devel \
 	czmq-devel \
 	jansson-devel \
 	munge-devel \
@@ -61,7 +63,8 @@ RUN yum -y install \
 	hwloc-devel \
 	mpich-devel \
 	lua-devel \
-	valgrind-devel
+	valgrind-devel \
+	libs3-devel
 
 #  Other deps
 RUN yum -y install \
@@ -94,5 +97,7 @@ RUN mkdir caliper \
  && make install \
  && cd ../.. \
  && rm -rf caliper
+
+ENV LANG=C.UTF-8
 
 COPY config.site /usr/share/config.site

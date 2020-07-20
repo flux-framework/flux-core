@@ -52,12 +52,9 @@ jobs:
       env:
        - CC=gcc-8
        - CXX=g++-8
-       - ARGS="--with-flux-security --enable-caliper --enable-content-s3"
+       - ARGS="--with-flux-security --enable-caliper"
        - DISTCHECK=t
-       - S3_ACCESS_KEY_ID=minioadmin
-       - S3_SECRET_ACCESS_KEY=minioadmin
-       - S3_HOSTNAME=127.0.0.1:9000
-       - S3_BUCKET=flux-minio
+       - TEST_CONTENT_S3=t
     - name: "Ubuntu: py3.7, clang-6.0 chain-lint --with-flux-security"
       stage: test
       compiler: clang-6.0
@@ -118,6 +115,15 @@ before_install:
  # die if non-blocking is still enabled
  - python -c 'import os,sys,fcntl; flags = fcntl.fcntl(sys.stdout, fcntl.F_GETFL); exit(flags&os.O_NONBLOCK);'
  - if test -z "${IMG}"; then IMG="bionic"; fi
+ # set S3 environment if testing S3
+ - |
+  if test "$TEST_CONTENT_S3"; then
+    export S3_ACCESS_KEY_ID=minioadmin; \
+    export S3_SECRET_ACCESS_KEY=minioadmin; \
+    export S3_HOSTNAME=127.0.0.1:9000; \
+    export S3_BUCKET=flux-minio; \
+    export ARGS="$ARGS --enable-content-s3"; \
+  fi
  #
  #  Tag image if this build is on master or result of a tag:
  - |
@@ -140,7 +146,10 @@ install:
      pip3 install --upgrade pip ; \
      pip3 install --upgrade --force-reinstall coverage ; \
    fi
- - if test -n "$S3_HOSTNAME"; then docker run -d -p 9000:9000 minio/minio server /data; fi
+ - |
+  if test -n "$S3_HOSTNAME"; then \
+      docker run -d -p 9000:9000 minio/minio server /data; \
+  fi
     
 script:
  # Unshallow repository so git describe works.

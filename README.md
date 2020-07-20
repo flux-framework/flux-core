@@ -1,5 +1,5 @@
 [![Build Status](https://travis-ci.com/flux-framework/flux-core.svg?branch=master)](https://travis-ci.com/flux-framework/flux-core)
-[![Coverage Status](https://coveralls.io/repos/flux-framework/flux-core/badge.svg?branch=master&service=github)](https://coveralls.io/github/flux-framework/flux-core?branch=master)
+[![codecov](https://codecov.io/gh/flux-framework/flux-core/branch/master/graph/badge.svg)](https://codecov.io/gh/flux-framework/flux-core)
 
 _NOTE: The interfaces of flux-core are being actively developed
 and are not yet stable._ The github issue tracker is the primary

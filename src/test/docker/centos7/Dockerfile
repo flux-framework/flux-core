@@ -61,6 +61,7 @@ RUN yum -y update \
       devtoolset-7-make \
       lz4-devel \
       jq \
+      libs3-devel \
  && yum clean all
 
 # The cmake from yum is incredibly ancient, download a less ancient one
@@ -85,6 +86,8 @@ RUN mkdir caliper \
  && rm -rf caliper
 
 COPY config.site /usr/share/config.site
+
+ENV LANG=en_US.UTF-8
 
 # Create /tmp -> /var/tmp link to ensure Flux tests work in this configuration
 RUN rm -rf /tmp && ln -sf /var/tmp /tmp

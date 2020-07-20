@@ -48,10 +48,6 @@ RUN case $BASE_IMAGE in \
     esac
 
 # Install extra dependencies if necessary here.
-RUN case $BASE_IMAGE in \
-     bionic*) apt-get update -y && apt-get install -y libs3-dev ;; \
-     *) (>&2 echo "Not installing libs3") ;; \
-    esac
 
 # Do not forget to run `apt update` on Ubuntu/bionic.
 # Do NOT run `yum upgrade` on CentOS (this will unnecessarily upgrade
@@ -75,7 +71,6 @@ COPY bashrc /tmp
 RUN cat /tmp/bashrc >> ~fluxuser/.bashrc \
  && rm /tmp/bashrc
 
-ENV LANG=en_US.UTF-8
 ENV BASE_IMAGE=$BASE_IMAGE
 USER $USER
 WORKDIR /home/$USER
