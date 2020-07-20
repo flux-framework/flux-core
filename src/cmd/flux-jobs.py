@@ -161,15 +161,11 @@ class JobInfo:
         except KeyError:
             raise AttributeError("invalid JobInfo attribute '{}'".format(attr))
 
-    def get_runtime(self, roundup=False):
+    def get_runtime(self):
         if self.t_cleanup > 0 and self.t_run > 0:
             runtime = self.t_cleanup - self.t_run
-            if roundup:
-                runtime = round(runtime + 0.5)
         elif self.t_run > 0:
             runtime = time.time() - self.t_run
-            if roundup:
-                runtime = round(runtime + 0.5)
         else:
             runtime = 0.0
         return runtime
