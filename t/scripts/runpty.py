@@ -139,9 +139,55 @@ def parse_args():
         help=f"Set the QUIT character (written to pty on SIGUSR1)",
         default="",
     )
+    parser.add_argument(
+        "--line-buffer", help="Attempt to line buffer theoutput", action="store_true"
+    )
     parser.add_argument("COMMAND")
     parser.add_argument("ARGS", nargs=argparse.REMAINDER)
     return parser.parse_args()
+
+
+class TTYBuffer:
+    def __init__(self, fd, linebuffer=False, bufsize=1024):
+        self.linebuffered = linebuffer
+        self.bufsize = bufsize
+        self.fd = fd
+        self.eof = False
+        self.data = bytearray()
+
+    def setlinebuf(self):
+        self.linebuffered = True
+
+    def read(self):
+        try:
+            data = os.read(self.fd, self.bufsize)
+            self.data += data
+        except OSError as e:
+            self.eof = True
+
+    def get(self):
+        data = bytes(self.data)
+        self.data = bytearray()
+        return data
+
+    def getline(self):
+        if not self.data:
+            return None
+        (line, sep, rest) = self.data.partition(b"\r\n")
+        if sep:
+            self.data = rest
+            return line + sep
+
+    def send_data(self, writer):
+        if self.linebuffered:
+            line = self.getline()
+            while line:
+                writer(line)
+                line = self.getline()
+            if self.eof:
+                writer(self.get())
+        else:
+            writer(self.get())
 
 
 log = logging.getLogger("runpty")
@@ -180,18 +226,14 @@ def main():
         signal(SIGUSR1, lambda sig, _: os.write(fd, quit_char))
 
         ofile = formatter(args.output, width=width, height=height)
-
+        buf = TTYBuffer(fd, linebuffer=args.line_buffer)
         while True:
-            try:
-                data = os.read(fd, 1024)
-            except OSError as e:
-                data = None
-            if not data:
+            buf.read()
+            buf.send_data(ofile.write_entry)
+            if buf.eof:
                 (pid, status) = os.waitpid(pid, 0)
                 log.info("child exited with status %s", hex(status))
                 sys.exit(status_to_exitcode(status))
-            else:
-                ofile.write_entry(data)
 
 
 if __name__ == "__main__":
