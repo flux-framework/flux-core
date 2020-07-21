@@ -614,7 +614,7 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
 
     /*  Complete synchronous hello protocol:
      */
-    if (schedutil_hello (ss->util_ctx, hello_cb, ss) < 0) {
+    if (schedutil_hello (ss->util_ctx) < 0) {
         flux_log_error (h, "schedutil_hello");
         goto out;
     }
@@ -670,6 +670,7 @@ static const struct flux_msg_handler_spec htab[] = {
 };
 
 static const struct schedutil_ops ops = {
+    .hello = hello_cb,
     .alloc = alloc_cb,
     .free = free_cb,
     .cancel = cancel_cb,

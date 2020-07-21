@@ -22,6 +22,17 @@ extern "C" {
  * count is decremented when the callback returns.
  */
 struct schedutil_ops {
+    /* Callback for ingesting R + metadata for jobs that have resources
+     * Return 0 on success, -1 on failure with errno set.
+     */
+    int (*hello)(flux_t *h,
+                 flux_jobid_t id,
+                 int priority,
+                 uint32_t userid,
+                 double t_submit,
+                 const char *R,
+                 void *arg);
+
     /* Callback for an alloc request.  jobspec is looked up as a
      * convenience.  Decode msg with schedutil_alloc_request_decode().
      * 'msg' and 'jobspec' are only valid for the duration of this
