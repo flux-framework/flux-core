@@ -669,6 +669,12 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
+static const struct schedutil_ops ops = {
+    .alloc = alloc_cb,
+    .free = free_cb,
+    .cancel = cancel_cb,
+};
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     int rc = -1;
@@ -684,7 +690,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (process_args (h, ss, argc, argv) < 0)
         return -1;
 
-    ss->util_ctx = schedutil_create (h, alloc_cb, free_cb, cancel_cb, ss);
+    ss->util_ctx = schedutil_create (h, &ops, ss);
     if (ss->util_ctx == NULL) {
         flux_log_error (h, "schedutil_create");
         goto done;

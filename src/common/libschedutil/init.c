@@ -28,14 +28,16 @@ static void future_destructor (void **item)
 
 
 schedutil_t *schedutil_create (flux_t *h,
-                               schedutil_alloc_cb_f *alloc_cb,
-                               schedutil_free_cb_f *free_cb,
-                               schedutil_cancel_cb_f *cancel_cb,
-                               void *cb_arg)
+                               const struct schedutil_ops *ops,
+                               void *arg)
 {
     schedutil_t *util;
 
-    if (!h || !alloc_cb || !free_cb || !cancel_cb) {
+    if (!h
+        || !ops
+        || !ops->alloc
+        || !ops->free
+        || !ops->cancel) {
         errno = EINVAL;
         return NULL;
     }
@@ -43,10 +45,8 @@ schedutil_t *schedutil_create (flux_t *h,
         return NULL;
 
     util->h = h;
-    util->alloc_cb = alloc_cb;
-    util->free_cb = free_cb;
-    util->cancel_cb = cancel_cb;
-    util->cb_arg = cb_arg;
+    util->ops = ops;
+    util->cb_arg = arg;
     if (!(util->outstanding_futures = zlistx_new ()))
         goto error;
     zlistx_set_destructor (util->outstanding_futures, future_destructor);

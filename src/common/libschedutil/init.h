@@ -28,10 +28,8 @@ typedef struct schedutil_ctx schedutil_t;
  * Return NULL on error.
  */
 schedutil_t *schedutil_create (flux_t *h,
-                               schedutil_alloc_cb_f *alloc_cb,
-                               schedutil_free_cb_f *free_cb,
-                               schedutil_cancel_cb_f *cancel_cb,
-                               void *cb_arg);
+                               const struct schedutil_ops *ops,
+                               void *arg);
 
 /* Destroy the handle for the schedutil convenience library.
  *

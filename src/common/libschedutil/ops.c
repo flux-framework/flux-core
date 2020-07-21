@@ -37,7 +37,7 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (!(jobspec = json_dumps (o, JSON_COMPACT)))
         goto nomem;
-    util->alloc_cb (h, msg, jobspec, util->cb_arg);
+    util->ops->alloc (h, msg, jobspec, util->cb_arg);
     free (jobspec);
     return;
 nomem:
@@ -60,7 +60,7 @@ static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "sched.cancel");
         return;
     }
-    util->cancel_cb (h, id, util->cb_arg);
+    util->ops->cancel (h, id, util->cb_arg);
 }
 
 static void free_continuation (flux_future_t *f, void *arg)
@@ -76,7 +76,7 @@ static void free_continuation (flux_future_t *f, void *arg)
     }
     if (schedutil_remove_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.free unable to remove outstanding future");
-    util->free_cb (h, msg, R, util->cb_arg);
+    util->ops->free (h, msg, R, util->cb_arg);
     flux_future_destroy (f);
     return;
 error:
