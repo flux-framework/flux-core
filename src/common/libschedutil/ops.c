@@ -38,7 +38,11 @@ static void alloc_continuation (flux_future_t *f, void *arg)
     }
     if (schedutil_remove_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.alloc unable to remove outstanding future");
-    util->alloc_cb (h, msg, jobspec, util->cb_arg);
+    if (!util->ops->alloc) {
+        errno = ENOSYS;
+        goto error;
+    }
+    util->ops->alloc (h, msg, jobspec, util->cb_arg);
     flux_future_destroy (f);
     return;
 error:
@@ -104,7 +108,8 @@ static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "sched.cancel");
         return;
     }
-    util->cancel_cb (h, id, util->cb_arg);
+    if (util->ops->cancel)
+        util->ops->cancel (h, id, util->cb_arg);
 }
 
 static void free_continuation (flux_future_t *f, void *arg)
@@ -120,7 +125,11 @@ static void free_continuation (flux_future_t *f, void *arg)
     }
     if (schedutil_remove_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.free unable to remove outstanding future");
-    util->free_cb (h, msg, R, util->cb_arg);
+    if (!util->ops->free) {
+        errno = ENOSYS;
+        goto error;
+    }
+    util->ops->free (h, msg, R, util->cb_arg);
     flux_future_destroy (f);
     return;
 error:

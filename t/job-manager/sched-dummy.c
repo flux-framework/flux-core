@@ -349,6 +349,12 @@ void sched_destroy (struct sched_ctx *sc)
     }
 }
 
+const struct schedutil_ops ops = {
+    .alloc = alloc_cb,
+    .free = free_cb,
+    .cancel = cancel_cb,
+};
+
 struct sched_ctx *sched_create (flux_t *h, int argc, char **argv)
 {
     struct sched_ctx *sc;
@@ -356,11 +362,7 @@ struct sched_ctx *sched_create (flux_t *h, int argc, char **argv)
     if (!(sc = calloc (1, sizeof (*sc))))
         return NULL;
     sc->h = h;
-    sc->schedutil_ctx = schedutil_create (h,
-                                          alloc_cb,
-                                          free_cb,
-                                          cancel_cb,
-                                          sc);
+    sc->schedutil_ctx = schedutil_create (h, &ops, sc);
     if (sc->schedutil_ctx == NULL) {
         flux_log_error (h, "schedutil_create");
         goto error;
