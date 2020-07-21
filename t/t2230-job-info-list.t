@@ -34,11 +34,6 @@ wait_jobid_state() {
         return 0
 }
 
-test_expect_success 'job-info: generate jobspec for simple test job' '
-        flux jobspec --format json srun -N1 hostname > hostname.json &&
-        flux jobspec --format json srun -N1 sleep 300 > sleeplong.json
-'
-
 #
 # job list tests
 #
@@ -63,7 +58,23 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
 #
 # TODO
 # - alternate userid job listing
+
+# Return the expected jobids list in a given state:
+#   "all", "pending", "running", "inactive", "active",
+#   "completed", "cancelled", "failed"
 #
+state_ids() {
+    for f in "$@"; do
+        cat ${f}.ids
+    done
+}
+
+# Return the expected count of jobs in a given state (See above for list)
+#
+state_count() {
+    state_ids "$@" | wc -l
+}
+
 # the job-info module has eventual consistency with the jobs stored in
 # the job-manager's queue.  To ensure no raciness in tests, we spin
 # until all of the pending jobs have reached SCHED state, running jobs
@@ -71,10 +82,13 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
 # state.
 
 wait_states() {
+        pending=$(state_count pending)
+        running=$(state_count running)
+        inactive=$(state_count inactive)
         local i=0
-        while ( [ "$(flux job list --states=sched | wc -l)" != "8" ] \
-                || [ "$(flux job list --states=run | wc -l)" != "8" ] \
-                || [ "$(flux job list --states=inactive | wc -l)" != "6" ]) \
+        while ( [ "$(flux job list --states=sched | wc -l)" != "$pending" ] \
+                || [ "$(flux job list --states=run | wc -l)" != "$running" ] \
+                || [ "$(flux job list --states=inactive | wc -l)" != "$inactive" ]) \
                && [ $i -lt 50 ]
         do
                 sleep 0.1
@@ -88,18 +102,39 @@ wait_states() {
 }
 
 test_expect_success 'submit jobs for job list testing' '
-        for i in `seq 1 4`; do \
-            flux job submit hostname.json >> job_ids1.out; \
-            fj_wait_event `tail -n 1 job_ids1.out` clean ; \
+        #  Create `hostname` and `sleep` jobspec
+        #
+        flux jobspec --format json srun -N1 hostname > hostname.json &&
+        flux jobspec --format json srun -N1 sleep 300 > sleeplong.json &&
+        #
+        # submit jobs that will complete
+        #
+        for i in $(seq 0 3); do \
+                flux job submit hostname.json >> inactiveids; \
+                fj_wait_event `tail -n 1 inactiveids` clean ; \
         done &&
+        #
+        #  Currently all inactive ids are "completed"
+        #
+        tac inactiveids > completed.ids &&
+        #
+        #  Run a job that will fail, copy its JOBID to both inactive and
+        #   failed lists.
+        #
         jobid=`flux mini submit nosuchcommand` &&
-        flux job wait-event $jobid clean &&
-        echo $jobid >> job_ids1.out &&
-        for i in `seq 1 8`; do \
-            flux job submit sleeplong.json >> job_ids2.out; \
-            fj_wait_event `tail -n 1 job_ids2.out` start; \
+        fj_wait_event $jobid clean &&
+        echo $jobid >> inactiveids &&
+        echo $jobid > failed.ids &&
+        #
+        #  Submit 8 sleep jobs to fill up resources
+        #
+        for i in $(seq 0 7); do
+                flux job submit sleeplong.json >> runningids
         done &&
-        tac job_ids2.out > job_ids_running.out &&
+        tac runningids > running.ids &&
+        #
+        #  Submit a set of jobs with misc priorities
+        #
         id1=$(flux job submit -p20 hostname.json) &&
         id2=$(flux job submit      hostname.json) &&
         id3=$(flux job submit -p31 hostname.json) &&
@@ -108,22 +143,31 @@ test_expect_success 'submit jobs for job list testing' '
         id6=$(flux job submit      hostname.json) &&
         id7=$(flux job submit -p31 hostname.json) &&
         id8=$(flux job submit -p0  hostname.json) &&
-        echo $id3 > job_ids_pending.out &&
-        echo $id7 >> job_ids_pending.out &&
-        echo $id1 >> job_ids_pending.out &&
-        echo $id5 >> job_ids_pending.out &&
-        echo $id2 >> job_ids_pending.out &&
-        echo $id6 >> job_ids_pending.out &&
-        echo $id4 >> job_ids_pending.out &&
-        echo $id8 >> job_ids_pending.out &&
-        cat job_ids_pending.out > active.out &&
-        cat job_ids_running.out >> active.out &&
+        echo $id3 > pending.ids &&
+        echo $id7 >> pending.ids &&
+        echo $id1 >> pending.ids &&
+        echo $id5 >> pending.ids &&
+        echo $id2 >> pending.ids &&
+        echo $id6 >> pending.ids &&
+        echo $id4 >> pending.ids &&
+        echo $id8 >> pending.ids &&
+        cat pending.ids > active.ids &&
+        cat running.ids >> active.ids &&
+        #
+        #  Submit a job and cancel it
+        #
         jobid=`flux mini submit cancelledjob` &&
         flux job wait-event $jobid depend &&
         flux job cancel $jobid &&
         flux job wait-event $jobid clean &&
-        echo $jobid >> job_ids1.out &&
-        tac job_ids1.out > job_ids_inactive.out &&
+        echo $jobid >> inactiveids &&
+        echo $jobid > cancelled.ids &&
+        tac inactiveids > inactive.ids &&
+        cat active.ids > all.ids &&
+        cat inactive.ids >> all.ids &&
+        #
+        #  Synchronize all expected states
+        #
         wait_states
 '
 
@@ -135,9 +179,9 @@ test_expect_success HAVE_JQ 'flux job list running jobs in started order' '
         flux job list -s running | jq .id > list_started1.out &&
         flux job list -s run,cleanup | jq .id > list_started2.out &&
         flux job list -s run | jq .id > list_started3.out &&
-        test_cmp list_started1.out job_ids_running.out &&
-        test_cmp list_started2.out job_ids_running.out &&
-        test_cmp list_started3.out job_ids_running.out
+        test_cmp list_started1.out running.ids &&
+        test_cmp list_started2.out running.ids &&
+        test_cmp list_started3.out running.ids
 '
 
 test_expect_success HAVE_JQ 'flux job list running jobs with correct state' '
@@ -159,7 +203,7 @@ test_expect_success HAVE_JQ 'flux job list no jobs in cleanup state' '
 
 test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
         flux job list -s inactive | jq .id > list_inactive.out &&
-        test_cmp list_inactive.out job_ids_inactive.out
+        test_cmp list_inactive.out inactive.ids
 '
 
 test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
@@ -172,17 +216,12 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
 
 test_expect_success HAVE_JQ 'flux job list inactive jobs results are correct' '
         flux job list -s inactive | jq .result > list_result_I.out &&
-        head -n 1 list_result_I.out > list_result_I_cancelled.out &&
-        echo "4" >> list_result_I_cancelled.exp &&
-        test_cmp list_result_I_cancelled.out list_result_I_cancelled.exp &&
-        head -n 2 list_result_I.out | tail -n 1 > list_result_I_failed.out &&
-        echo "2" >> list_result_I_failed.exp &&
-        test_cmp list_result_I_failed.out list_result_I_failed.exp &&
-        tail -n 4 list_result_I.out > list_result_I_completed.out &&
+        echo "4" >> list_result_I.exp &&
+        echo "2" >> list_result_I.exp &&
         for count in `seq 1 4`; do \
-            echo "1" >> list_result_I_completed.exp; \
+            echo "1" >> list_result_I.exp; \
         done &&
-        test_cmp list_result_I_completed.out list_result_I_completed.exp
+        test_cmp list_result_I.out list_result_I.exp
 '
 
 # Hard code state/results values for these tests, as we did not add a results
@@ -192,24 +231,21 @@ test_expect_success HAVE_JQ 'flux job list only cancelled jobs' '
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:1000, userid:${id}, states:32, results:4, attrs:[]}" \
           | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_cancelled.out &&
-        head -n 1 job_ids_inactive.out > result_cancelled.exp &&
-        test_cmp result_cancelled.exp list_result_cancelled.out
+        test_cmp cancelled.ids list_result_cancelled.out
 '
 
 test_expect_success HAVE_JQ 'flux job list only failed jobs' '
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:1000, userid:${id}, states:32, results:2, attrs:[]}" \
           | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_failed.out &&
-        head -n 2 job_ids_inactive.out | tail -n 1 > result_failed.exp &&
-        test_cmp result_failed.exp list_result_failed.out
+        test_cmp failed.ids list_result_failed.out
 '
 
 test_expect_success HAVE_JQ 'flux job list only completed jobs' '
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:1000, userid:${id}, states:32, results:1, attrs:[]}" \
           | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_completed.out &&
-        tail -n 4 job_ids_inactive.out > result_completed.exp &&
-        test_cmp result_completed.exp list_result_completed.out
+        test_cmp completed.ids list_result_completed.out
 '
 
 # Note: "pending" = "depend" & "sched", we also test just "sched"
@@ -220,9 +256,9 @@ test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
         flux job list -s pending | jq .id > list_pending1.out &&
         flux job list -s depend,sched | jq .id > list_pending2.out &&
         flux job list -s sched | jq .id > list_pending3.out &&
-        test_cmp list_pending1.out job_ids_pending.out &&
-        test_cmp list_pending2.out job_ids_pending.out &&
-        test_cmp list_pending3.out job_ids_pending.out
+        test_cmp list_pending1.out pending.ids &&
+        test_cmp list_pending2.out pending.ids &&
+        test_cmp list_pending3.out pending.ids
 '
 
 test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
@@ -262,13 +298,13 @@ test_expect_success HAVE_JQ 'flux job list active jobs in correct order' '
         flux job list -s active | jq .id > list_active1.out &&
         flux job list -s depend,sched,run,cleanup | jq .id > list_active2.out &&
         flux job list -s sched,run | jq .id > list_active3.out &&
-        test_cmp list_active1.out active.out &&
-        test_cmp list_active2.out active.out &&
-        test_cmp list_active3.out active.out
+        test_cmp list_active1.out active.ids &&
+        test_cmp list_active2.out active.ids &&
+        test_cmp list_active3.out active.ids
 '
 
 test_expect_success HAVE_JQ 'flux job list jobs with correct userid' '
-        for count in `seq 1 22`; do \
+        for count in `seq 1 $(state_count all)`; do \
             id -u >> list_userid.exp; \
         done &&
         flux job list -a | jq .userid > list_userid.out &&
@@ -276,63 +312,51 @@ test_expect_success HAVE_JQ 'flux job list jobs with correct userid' '
 '
 
 test_expect_success HAVE_JQ 'flux job list defaults to listing pending & running jobs' '
-        flux job list > list_default.out &&
+        flux job list | jq .id > list_default.out &&
         count=$(wc -l < list_default.out) &&
-        test "$count" = "16" &&
-        tail -n 8 list_default.out | jq .id  > list_default_running.out &&
-        test_cmp list_default_running.out job_ids_running.out &&
-        head -n 8 list_default.out | jq .id > list_default_pending.out &&
-        test_cmp list_default_pending.out job_ids_pending.out
+        test $count = $(state_count active) &&
+        test_cmp list_default.out active.ids
 '
 
 test_expect_success 'flux job list --user=userid works' '
         uid=$(id -u) &&
         flux job list --user=$uid> list_userid.out &&
         count=$(wc -l < list_userid.out) &&
-        test "$count" = "16"
+        test $count = $(state_count active)
 '
 
 test_expect_success 'flux job list --user=all works' '
         flux job list --user=all > list_all.out &&
         count=$(wc -l < list_all.out) &&
-        test "$count" = "16"
+        test $count = $(state_count active)
 '
 
+# we hard count numbers here b/c its a --count test
 test_expect_success HAVE_JQ 'flux job list --count works' '
-        flux job list -s active,inactive --count=12 > list_count.out &&
+        flux job list -s active,inactive --count=12 | jq .id > list_count.out &&
         count=$(wc -l < list_count.out) &&
         test "$count" = "12" &&
-        head -n 8 list_count.out | jq .id > list_count_pending.out &&
-        test_cmp list_count_pending.out job_ids_pending.out &&
-        tail -n 4 list_count.out | jq .id > list_count_running.out &&
-        head -n 4 job_ids_running.out > job_ids_running_head4.out &&
-        test_cmp list_count_running.out job_ids_running_head4.out
+        cat pending.ids > list_count.exp &&
+        head -n 4 running.ids >> list_count.exp &&
+        test_cmp list_count.out list_count.exp
 '
 
 test_expect_success HAVE_JQ 'flux job list all jobs works' '
-        flux job list -a > list_all.out &&
-        cat list_all.out | jq .id > list_all_jobids.out &&
-        cat job_ids_pending.out >> list_all_jobids.exp &&
-        cat job_ids_running.out >> list_all_jobids.exp &&
-        cat job_ids_inactive.out >> list_all_jobids.exp &&
-        test_cmp list_all_jobids.exp list_all_jobids.out
+        flux job list -a | jq .id > list_all_jobids.out &&
+        test_cmp all.ids list_all_jobids.out
 '
 
 test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
         flux job stats | jq -e ".job_states.depend == 0" &&
-        flux job stats | jq -e ".job_states.sched == 8" &&
-        flux job stats | jq -e ".job_states.run == 8" &&
+        flux job stats | jq -e ".job_states.sched == $(state_count pending)" &&
+        flux job stats | jq -e ".job_states.run == $(state_count running)" &&
         flux job stats | jq -e ".job_states.cleanup == 0" &&
-        flux job stats | jq -e ".job_states.inactive == 6" &&
-        flux job stats | jq -e ".job_states.total == 22"
+        flux job stats | jq -e ".job_states.inactive == $(state_count inactive)" &&
+        flux job stats | jq -e ".job_states.total == $(state_count all)"
 '
 
 test_expect_success 'cleanup job listing jobs ' '
-        for jobid in `cat job_ids_pending.out`; do \
-            flux job cancel $jobid; \
-            fj_wait_event $jobid clean; \
-        done &&
-        for jobid in `cat job_ids_running.out`; do \
+        for jobid in `cat active.ids`; do \
             flux job cancel $jobid; \
             fj_wait_event $jobid clean; \
         done
@@ -340,7 +364,7 @@ test_expect_success 'cleanup job listing jobs ' '
 
 wait_inactive() {
         local i=0
-        while [ "$(flux job list --states=inactive | wc -l)" != "22" ] \
+        while [ "$(flux job list --states=inactive | wc -l)" != "$(state_count all)" ] \
                && [ $i -lt 50 ]
         do
                 sleep 0.1
@@ -369,8 +393,8 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
         flux job stats | jq -e ".job_states.sched == 0" &&
         flux job stats | jq -e ".job_states.run == 0" &&
         flux job stats | jq -e ".job_states.cleanup == 0" &&
-        flux job stats | jq -e ".job_states.inactive == 22" &&
-        flux job stats | jq -e ".job_states.total == 22"
+        flux job stats | jq -e ".job_states.inactive == $(state_count all)" &&
+        flux job stats | jq -e ".job_states.total == $(state_count all)"
 '
 
 # job list-inactive
@@ -378,14 +402,15 @@ test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive
 test_expect_success HAVE_JQ 'flux job list-inactive lists all inactive jobs' '
         flux job list-inactive > list-inactive.out &&
         count=`cat list-inactive.out | wc -l` &&
-        test $count -eq 22
+        test $count -eq $(state_count all)
 '
 
 test_expect_success HAVE_JQ 'flux job list-inactive w/ since 0 lists all inactive jobs' '
         count=`flux job list-inactive --since=0 | wc -l` &&
-        test $count -eq 22
+        test $count -eq $(state_count all)
 '
 
+# we hard count numbers here b/c its a --count test
 test_expect_success HAVE_JQ 'flux job list-inactive w/ count limits output of inactive jobs' '
         count=`flux job list-inactive --count=14 | wc -l` &&
         test $count -eq 14
@@ -433,27 +458,27 @@ test_expect_success HAVE_JQ 'flux job list-inactive w/ since (middle timestamp #
 # job list-id
 
 test_expect_success HAVE_JQ 'flux job list-ids works with a single ID' '
-        id=`head -n 1 job_ids_pending.out` &&
+        id=`head -n 1 pending.ids` &&
         flux job list-ids $id | jq -e ".id == ${id}" &&
-        id=`head -n 1 job_ids_running.out` &&
+        id=`head -n 1 running.ids` &&
         flux job list-ids $id | jq -e ".id == ${id}" &&
-        id=`head -n 1 job_ids_inactive.out` &&
+        id=`head -n 1 inactive.ids` &&
         flux job list-ids $id | jq -e ".id == ${id}"
 '
 
 test_expect_success HAVE_JQ 'flux job list-ids multiple IDs works' '
-        ids=`cat job_ids_pending.out | tr "\n" " "` &&
+        ids=$(state_ids pending) &&
         flux job list-ids $ids | jq .id > list_idsP.out &&
-        test_cmp list_idsP.out job_ids_pending.out &&
-        ids=`cat job_ids_running.out | tr "\n" " "` &&
+        test_cmp list_idsP.out pending.ids &&
+        ids=$(state_ids running) &&
         flux job list-ids $ids | jq .id > list_idsR.out &&
-        test_cmp list_idsR.out job_ids_running.out &&
-        ids=`cat job_ids_inactive.out | tr "\n" " "` &&
+        test_cmp list_idsR.out running.ids &&
+        ids=$(state_ids inactive) &&
         flux job list-ids $ids | jq .id > list_idsI.out &&
-        test_cmp list_idsI.out job_ids_inactive.out &&
-        ids=`cat job_ids_pending.out job_ids_running.out job_ids_inactive.out | tr "\n" " "` &&
+        test_cmp list_idsI.out inactive.ids &&
+        ids=$(state_ids all) &&
         flux job list-ids $ids | jq .id > list_idsPRI.out &&
-        cat job_ids_pending.out job_ids_running.out job_ids_inactive.out > list_idsPRI.exp &&
+        cat pending.ids running.ids inactive.ids > list_idsPRI.exp &&
         test_cmp list_idsPRI.exp list_idsPRI.out
 '
 
@@ -470,9 +495,9 @@ test_expect_success HAVE_JQ 'flux job list-ids fails with not an ID' '
 '
 
 test_expect_success HAVE_JQ 'flux job list-ids fails with one bad ID out of several' '
-        id1=`head -n 1 job_ids_pending.out` &&
-        id2=`head -n 1 job_ids_running.out` &&
-        id3=`head -n 1 job_ids_inactive.out` &&
+        id1=`head -n 1 pending.ids` &&
+        id2=`head -n 1 running.ids` &&
+        id3=`head -n 1 inactive.ids` &&
         test_must_fail flux job list-ids ${id1} ${id2} 1234567890 ${id3}
 '
 
