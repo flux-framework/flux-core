@@ -18,19 +18,17 @@
 #include "init.h"
 #include "hello.h"
 
-static int schedutil_hello_job (flux_t *h,
+static int schedutil_hello_job (schedutil_t *util,
                                 flux_jobid_t id,
                                 int priority,
                                 uint32_t userid,
-                                double t_submit,
-                                schedutil_hello_cb_f *cb,
-                                void *arg)
+                                double t_submit)
 {
     char key[64];
     flux_future_t *f;
     const char *R;
 
-    if (!h) {
+    if (!util) {
         errno = EINVAL;
         return -1;
     }
@@ -39,29 +37,35 @@ static int schedutil_hello_job (flux_t *h,
         errno = EPROTO;
         return -1;
     }
-    if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
+    if (!(f = flux_kvs_lookup (util->h, NULL, 0, key)))
         return -1;
     if (flux_kvs_lookup_get (f, &R) < 0)
         goto error;
-    if (cb (h, id, priority, userid, t_submit, R, arg) < 0)
+    if (util->ops->hello (util->h,
+                          id,
+                          priority,
+                          userid,
+                          t_submit,
+                          R,
+                          util->cb_arg) < 0)
         goto error;
     flux_future_destroy (f);
     return 0;
 error:
-    flux_log_error (h, "hello: error loading R for id=%ju",
+    flux_log_error (util->h, "hello: error loading R for id=%ju",
                     (uintmax_t)id);
     flux_future_destroy (f);
     return -1;
 }
 
-int schedutil_hello (schedutil_t *util, schedutil_hello_cb_f *cb, void *arg)
+int schedutil_hello (schedutil_t *util)
 {
     flux_future_t *f;
     json_t *jobs;
     json_t *entry;
     size_t index;
 
-    if (!util || !cb) {
+    if (!util || !util->ops->hello) {
         errno = EINVAL;
         return -1;
     }
@@ -84,13 +88,11 @@ int schedutil_hello (schedutil_t *util, schedutil_hello_cb_f *cb, void *arg)
             errno = EPROTO;
             goto error;
         }
-        if (schedutil_hello_job (util->h,
+        if (schedutil_hello_job (util,
                                  id,
                                  priority,
                                  userid,
-                                 t_submit,
-                                 cb,
-                                 arg) < 0)
+                                 t_submit) < 0)
             goto error;
     }
     flux_future_destroy (f);

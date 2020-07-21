@@ -350,6 +350,7 @@ void sched_destroy (struct sched_ctx *sc)
 }
 
 const struct schedutil_ops ops = {
+    .hello = hello_cb,
     .alloc = alloc_cb,
     .free = free_cb,
     .cancel = cancel_cb,
@@ -397,7 +398,7 @@ int mod_main (flux_t *h, int argc, char *argv[])
     if (!(sc = sched_create (h, argc, argv)))
         return -1;
     flux_log (h, LOG_DEBUG, "res pool is %d cores", sc->cores_total);
-    if (schedutil_hello (sc->schedutil_ctx, hello_cb, sc) < 0) {
+    if (schedutil_hello (sc->schedutil_ctx) < 0) {
         flux_log_error (h, "schedutil_hello");
         goto done;
     }
