@@ -6,7 +6,7 @@ test_description='Test flux jobs command'
 
 test_under_flux 4 job
 
-runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast"
+runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
 
 # submit a whole bunch of jobs for job list testing
 #
