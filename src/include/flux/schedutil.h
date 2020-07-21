@@ -15,7 +15,6 @@
 #define _FLUX_SCHEDUTIL_H
 
 #include "src/common/libschedutil/init.h"
-#include "src/common/libschedutil/hello.h"
 #include "src/common/libschedutil/ready.h"
 #include "src/common/libschedutil/alloc.h"
 #include "src/common/libschedutil/free.h"

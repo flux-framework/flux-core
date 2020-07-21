@@ -15,7 +15,6 @@ noinst_LTLIBRARIES = \
 	libschedutil.la
 
 fluxschedutilinclude_HEADERS = init.h \
-	hello.h \
 	ready.h \
 	ops.h \
 	alloc.h \
@@ -25,7 +24,6 @@ libschedutil_la_SOURCES = \
 	schedutil_private.h \
 	init.h \
 	init.c \
-	hello.h \
 	hello.c \
 	ready.h \
 	ready.c \

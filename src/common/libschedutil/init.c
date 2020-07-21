@@ -27,6 +27,10 @@ enum module_debug_flags {
     DEBUG_HANG_RESPONSES = 0x8000, // 16th bit
 };
 
+int schedutil_init (schedutil_t *util)
+{
+    return su_hello_begin (util);
+}
 
 schedutil_t *schedutil_create (flux_t *h,
                                const struct schedutil_ops *ops,

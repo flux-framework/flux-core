@@ -16,7 +16,6 @@ extern "C" {
 #endif
 
 #include "schedutil/init.h"
-#include "schedutil/hello.h"
 #include "schedutil/ready.h"
 #include "schedutil/alloc.h"
 #include "schedutil/free.h"

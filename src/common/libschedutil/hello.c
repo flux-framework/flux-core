@@ -19,7 +19,6 @@
 
 #include "schedutil_private.h"
 #include "init.h"
-#include "hello.h"
 
 struct job_info {
     flux_jobid_t id;
@@ -155,7 +154,7 @@ error:
     flux_reactor_stop_error (flux_get_reactor (util->h));
 }
 
-int schedutil_hello (schedutil_t *util)
+int su_hello_begin (schedutil_t *util)
 {
     flux_future_t *f;
 

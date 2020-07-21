@@ -34,4 +34,9 @@ schedutil_t *schedutil_create (flux_t *h,
  */
 void schedutil_destroy (schedutil_t* ctx);
 
+/* Kick off scheduler initialization protocols.
+ * The reactor must run to make progress.
+ */
+int schedutil_init (schedutil_t *ctx);
+
 #endif /* !_FLUX_SCHEDUTIL_INIT_H */

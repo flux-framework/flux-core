@@ -28,6 +28,15 @@ struct schedutil_ctx {
     int hello_job_count;
 };
 
+/* (Un-)register callbacks for alloc, free, cancel.
+ */
+int su_ops_register (schedutil_t *util);
+void su_ops_unregister (schedutil_t *util);
+
+/* Initiate hello protocol
+ */
+int su_hello_begin (schedutil_t *util);
+
 /*
  * Add/remove futures that have associated outstandings messages whose response
  * is blocked on the future's fulfillment.  Schedutil will automatically reply
@@ -37,11 +46,6 @@ struct schedutil_ctx {
  */
 int su_add_outstanding_future (schedutil_t *util, flux_future_t *fut);
 int su_remove_outstanding_future (schedutil_t *util, flux_future_t *fut);
-
-/* (Un-)register callbacks for alloc, free, cancel.
- */
-int su_ops_register (schedutil_t *util);
-void su_ops_unregister (schedutil_t *util);
 
 /* Testing interfaces
  *

@@ -411,8 +411,8 @@ int mod_main (flux_t *h, int argc, char *argv[])
     if (!(sc = sched_create (h, argc, argv)))
         return -1;
     flux_log (h, LOG_DEBUG, "res pool is %d cores", sc->cores_total);
-    if (schedutil_hello (sc->schedutil_ctx) < 0) {
-        flux_log_error (h, "schedutil_hello");
+    if (schedutil_init (sc->schedutil_ctx) < 0) {
+        flux_log_error (h, "schedutil_init");
         goto done;
     }
     if ((rc = flux_reactor_run (flux_get_reactor (h), 0)) < 0)

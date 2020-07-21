@@ -567,10 +567,10 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
     if (ss_acquire_resources (h, ss) < 0)
         goto out;
 
-    /*  Complete synchronous hello protocol:
+    /*  Begin scheduler initialization
      */
-    if (schedutil_hello (ss->util_ctx) < 0) {
-        flux_log_error (h, "schedutil_hello");
+    if (schedutil_init (ss->util_ctx) < 0) {
+        flux_log_error (h, "schedutil_init");
         goto out;
     }
 
