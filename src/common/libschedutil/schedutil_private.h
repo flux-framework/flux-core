@@ -35,20 +35,19 @@ struct schedutil_ctx {
  * unloaded.
  * Return 0 on success and -1 on error.
  */
-int schedutil_add_outstanding_future (schedutil_t *util, flux_future_t *fut);
-int schedutil_remove_outstanding_future (schedutil_t *util,
-                                         flux_future_t *fut);
+int su_add_outstanding_future (schedutil_t *util, flux_future_t *fut);
+int su_remove_outstanding_future (schedutil_t *util, flux_future_t *fut);
 
 /* (Un-)register callbacks for alloc, free, cancel.
  */
-int schedutil_ops_register (schedutil_t *util);
-void schedutil_ops_unregister (schedutil_t *util);
+int su_ops_register (schedutil_t *util);
+void su_ops_unregister (schedutil_t *util);
 
 /* Testing interfaces
  *
  * Check to see if the scheduler has the debug flag set such
  * that responses should hang, forcing outstanding requests to exist.
  */
-bool schedutil_hang_responses (const schedutil_t *util);
+bool su_hang_responses (const schedutil_t *util);
 
 #endif /* HAVE_SCHEDUTIL_PRIVATE_H */

@@ -50,7 +50,7 @@ schedutil_t *schedutil_create (flux_t *h,
         errno = ENOMEM;
         goto error;
     }
-    if (schedutil_ops_register (util) < 0)
+    if (su_ops_register (util) < 0)
         goto error;
 
     return util;
@@ -98,26 +98,26 @@ void schedutil_destroy (schedutil_t *util)
                 flux_future_destroy (f);
             zlist_destroy (&util->f_hello);
         }
-        schedutil_ops_unregister (util);
+        su_ops_unregister (util);
         free (util);
         errno = saved_errno;
     }
     return;
 }
 
-bool schedutil_hang_responses (const schedutil_t *util)
+bool su_hang_responses (const schedutil_t *util)
 {
     return flux_module_debug_test (util->h, DEBUG_HANG_RESPONSES, false);
 }
 
-int schedutil_add_outstanding_future (schedutil_t *util, flux_future_t *fut)
+int su_add_outstanding_future (schedutil_t *util, flux_future_t *fut)
 {
     if (zlistx_add_end (util->outstanding_futures, fut) == NULL)
         return -1;
     return 0;
 }
 
-int schedutil_remove_outstanding_future (schedutil_t *util, flux_future_t *fut)
+int su_remove_outstanding_future (schedutil_t *util, flux_future_t *fut)
 {
     if (!zlistx_find (util->outstanding_futures, fut))
         return -1;

@@ -36,7 +36,7 @@ static void alloc_continuation (flux_future_t *f, void *arg)
         flux_log_error (h, "sched.alloc lookup R");
         goto error;
     }
-    if (schedutil_remove_outstanding_future (util, f) < 0)
+    if (su_remove_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.alloc unable to remove outstanding future");
     if (!util->ops->alloc) {
         errno = ENOSYS;
@@ -80,13 +80,13 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_msg_decref (msg);
         goto error_future;
     }
-    if (!schedutil_hang_responses (util)) {
+    if (!su_hang_responses (util)) {
         if (flux_future_then (f, -1, alloc_continuation, util) < 0)
             goto error_future;
     }
     // else: intentionally do not register a continuation to force a permanent
     // outstanding request for testing
-    if (schedutil_add_outstanding_future (util, f) < 0)
+    if (su_add_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.alloc unable to add outstanding future");
 
     return;
@@ -123,7 +123,7 @@ static void free_continuation (flux_future_t *f, void *arg)
         flux_log_error (h, "sched.free lookup R");
         goto error;
     }
-    if (schedutil_remove_outstanding_future (util, f) < 0)
+    if (su_remove_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.free unable to remove outstanding future");
     if (!util->ops->free) {
         errno = ENOSYS;
@@ -162,14 +162,14 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_msg_decref (msg);
         goto error_future;
     }
-    if (!schedutil_hang_responses (util)) {
+    if (!su_hang_responses (util)) {
         if (flux_future_then (f, -1, free_continuation, util) < 0)
             goto error_future;
     }
     /* else: intentionally do not register a continuation to force
      * a permanent outstanding request for testing
      */
-    if (schedutil_add_outstanding_future (util, f) < 0)
+    if (su_add_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.free unable to add outstanding future");
 
     return;
@@ -224,7 +224,7 @@ static void service_unregister (flux_t *h)
     flux_future_destroy (f);
 }
 
-int schedutil_ops_register (schedutil_t *util)
+int su_ops_register (schedutil_t *util)
 {
     flux_t *h = util->h;
 
@@ -238,11 +238,11 @@ int schedutil_ops_register (schedutil_t *util)
         goto error;
     return 0;
 error:
-    schedutil_ops_unregister (util);
+    su_ops_unregister (util);
     return -1;
 }
 
-void schedutil_ops_unregister (schedutil_t *util)
+void su_ops_unregister (schedutil_t *util)
 {
     if (!util)
         return;

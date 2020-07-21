@@ -149,7 +149,7 @@ static void alloc_continuation (flux_future_t *f, void *arg)
         flux_log_error (h, "commit R");
         goto error;
     }
-    schedutil_remove_outstanding_future (util, f);
+    su_remove_outstanding_future (util, f);
     if (schedutil_alloc_respond (h, ctx->msg, FLUX_SCHED_ALLOC_SUCCESS,
                                  NULL, ctx->annotations) < 0) {
         flux_log_error (h, "alloc response");
@@ -186,14 +186,14 @@ int schedutil_alloc_respond_success_pack (schedutil_t *util,
     }
     if (flux_future_then (f, -1, alloc_continuation, ctx) < 0)
         goto error;
-    if (!schedutil_hang_responses (util)) {
+    if (!su_hang_responses (util)) {
         if (flux_future_then (f, -1, alloc_continuation, util) < 0)
             goto error;
     }
     /* else: intentionally do not register a continuation to force
      * a permanent outstanding request for testing
      */
-    schedutil_add_outstanding_future (util, f);
+    su_add_outstanding_future (util, f);
     return 0;
 error:
     alloc_destroy (ctx);
