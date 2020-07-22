@@ -24,6 +24,8 @@ struct schedutil_ctx {
     void *cb_arg;
     zlistx_t *outstanding_futures;
 
+    bool resource_acquired;
+    flux_future_t *f_res;
     zlist_t *f_hello;
     int hello_job_count;
 };
@@ -32,6 +34,10 @@ struct schedutil_ctx {
  */
 int su_ops_register (schedutil_t *util);
 void su_ops_unregister (schedutil_t *util);
+
+/* Initiate resource acquire protocol
+ */
+int su_resource_begin (schedutil_t *util);
 
 /* Initiate hello protocol
  */

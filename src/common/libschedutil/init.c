@@ -29,7 +29,10 @@ enum module_debug_flags {
 
 int schedutil_init (schedutil_t *util)
 {
-    return su_hello_begin (util);
+    if (util->ops->resource_acquire)
+        return su_resource_begin (util);
+    else
+        return su_hello_begin (util);
 }
 
 schedutil_t *schedutil_create (flux_t *h,
@@ -102,6 +105,7 @@ void schedutil_destroy (schedutil_t *util)
                 flux_future_destroy (f);
             zlist_destroy (&util->f_hello);
         }
+        flux_future_destroy (util->f_res);
         su_ops_unregister (util);
         free (util);
         errno = saved_errno;

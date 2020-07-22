@@ -14,6 +14,17 @@
 #include <flux/core.h>
 
 struct schedutil_ops {
+    /* Here are the resources that the scheduler can manage.
+     * Assume all are down until marked up.
+     * (N.B. resource.acquire RPC is skipped if this callback is NULL)
+     */
+    void (*resource_acquire)(flux_t *h, const char *resobj, void *arg);
+
+    /* Scheduler should mark idset execution targets id's up/down.
+     */
+    void (*resource_down)(flux_t *h, const char *idset, void *arg);
+    void (*resource_up)(flux_t *h, const char *idset, void *arg);
+
     /* Callback for ingesting R + metadata for jobs that have resources
      * Return 0 on success, -1 on failure with errno set.
      */

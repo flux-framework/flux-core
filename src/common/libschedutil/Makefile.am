@@ -32,7 +32,8 @@ libschedutil_la_SOURCES = \
 	alloc.h \
 	alloc.c \
 	free.h \
-	free.c
+	free.c \
+	resource.c
 
 libschedutil_la_LIBADD = \
 	$(ZMQ_LIBS)
