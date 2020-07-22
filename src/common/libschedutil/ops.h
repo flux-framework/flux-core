@@ -27,6 +27,7 @@ struct schedutil_ops {
 
     /* Callback for ingesting R + metadata for jobs that have resources
      * Return 0 on success, -1 on failure with errno set.
+     * (N.B. job-manager.sched-hello RPC is skipped if this callback is NULL)
      */
     int (*hello)(flux_t *h,
                  flux_jobid_t id,

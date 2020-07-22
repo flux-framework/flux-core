@@ -66,8 +66,13 @@ static void acquire_continuation (flux_future_t *f, void *arg)
     if (!util->resource_acquired) {
         if (acquire_first (util, f) < 0)
             goto error;
-        if (su_hello_begin (util) < 0)
-            goto error;
+        /* Now that base resource set has been acquired, proceed with
+         * job manager initialization protocol (disabled if callback is NULL).
+         */
+        if (util->ops->hello) {
+            if (su_hello_begin (util) < 0)
+                goto error;
+        }
         util->resource_acquired = true;
     }
     else {

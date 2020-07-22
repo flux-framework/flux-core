@@ -29,10 +29,26 @@ enum module_debug_flags {
 
 int schedutil_init (schedutil_t *util)
 {
-    if (util->ops->resource_acquire)
-        return su_resource_begin (util);
-    else
-        return su_hello_begin (util);
+    /* ops->resource_acquire is defined, so start resource acquisition.
+     * Upon receipt of first acquire response, su_hello_begin() is called
+     * if ops->hello is defined.
+     */
+    if (util->ops->resource_acquire) {
+        if (su_resource_begin (util) < 0)
+            return -1;
+    }
+    /* ops->resource_acquire is not defined, so start with su_hello_begin()
+     * if ops->hello is defined.
+     */
+    else if (util->ops->hello) {
+        if (su_hello_begin (util) < 0)
+            return -1;
+    }
+    else {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
 }
 
 schedutil_t *schedutil_create (flux_t *h,
