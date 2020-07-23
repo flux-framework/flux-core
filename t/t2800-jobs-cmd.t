@@ -687,6 +687,8 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	t_inactive!d==T_INACTIVE
 	t_cleanup!D==T_CLEANUP
 	t_run!F==T_RUN
+	status==STATUS
+	status_abbrev==ST
 	EOF
 	sed "s/\(.*\)==.*/\1=={\1}/" headers.expected > headers.fmt &&
 	flux jobs --from-stdin --format="$(cat headers.fmt)" \
