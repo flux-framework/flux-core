@@ -648,6 +648,25 @@ test_expect_success 'flux-jobs --format={expiration!D:h},{t_remaining!H:h} works
 #
 # as the schedulers in those tests do varied but testable annotations
 
+test_expect_success 'flux-jobs annotation "sched" short hands work' '
+	fmt="{annotations.sched},{annotations.sched.resource_summary}" &&
+	flux jobs -no "${fmt}" > sched_long_hand.out &&
+	fmt="{sched},{sched.resource_summary}" &&
+	flux jobs -no "${fmt}" > sched_short_hand.out &&
+	test_cmp sched_long_hand.out sched_short_hand.out
+'
+
+test_expect_success 'flux-jobs annotation "user" short hands work' '
+	for id in $(state_ids sched); do
+		flux job annotate $id foo 42
+	done &&
+	fmt="{annotations.user},{annotations.user.foo}" &&
+	flux jobs -no "${fmt}" > user_long_hand.out &&
+	fmt="{user},{user.foo}" &&
+	flux jobs -no "${fmt}" > user_short_hand.out &&
+	test_cmp user_long_hand.out user_short_hand.out
+'
+
 test_expect_success 'flux-jobs emits empty string on invalid annotations fields' '
 	fmt="{annotations.foo},{annotations.foo:h}" &&
 	fmt="${fmt},{annotations.sched.bar},{annotations.sched.bar:h}" &&
@@ -714,6 +733,13 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	annotations.sched.reason_pending==REASON
 	annotations.sched.resource_summary==RESOURCES
 	annotations.sched.foobar==SCHED.FOOBAR
+	sched==SCHED
+	sched.t_estimate==T_ESTIMATE
+	sched.reason_pending==REASON
+	sched.resource_summary==RESOURCES
+	sched.foobar==SCHED.FOOBAR
+	user==USER
+	user.foobar==USER.FOOBAR
 	EOF
 	sed "s/\(.*\)==.*/\1=={\1}/" headers.expected > headers.fmt &&
 	flux jobs --from-stdin --format="$(cat headers.fmt)" \

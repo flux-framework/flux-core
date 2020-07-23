@@ -182,6 +182,8 @@ class JobInfo:
 
         aDict = combined_dict.get("annotations", {})
         combined_dict["annotations"] = AnnotationsInfo(aDict)
+        combined_dict["sched"] = combined_dict["annotations"].sched
+        combined_dict["user"] = combined_dict["annotations"].user
 
         #  Set all keys as self._{key} to be found by getattr and
         #   memoized_property decorator:
@@ -377,13 +379,20 @@ def fetch_jobs_flux(args, fields):
         "expiration": ("expiration", "state", "result"),
         "t_remaining": ("expiration", "state", "result"),
         "annotations": ("annotations",),
+        # Special cases, pointers to sub-dicts in annotations
+        "sched": ("annotations",),
+        "user": ("annotations",),
     }
 
     attrs = set()
     for field in fields:
         # Special case for annotations, can be arbitrary field names determined
         # by scheduler/user.
-        if field.startswith("annotations."):
+        if (
+            field.startswith("annotations.")
+            or field.startswith("sched.")
+            or field.startswith("user.")
+        ):
             attrs.update(fields2attrs["annotations"])
         else:
             attrs.update(fields2attrs[field])
@@ -636,6 +645,11 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "annotations.sched.t_estimate": "T_ESTIMATE",
         "annotations.sched.reason_pending": "REASON",
         "annotations.sched.resource_summary": "RESOURCES",
+        "sched": "SCHED",
+        "sched.t_estimate": "T_ESTIMATE",
+        "sched.reason_pending": "REASON",
+        "sched.resource_summary": "RESOURCES",
+        "user": "USER",
     }
 
     def __init__(self, fmt):
@@ -652,13 +666,13 @@ class JobsOutputFormat(flux.util.OutputFormat):
         """
         format_list = string.Formatter().parse(fmt)
         for (_, field, _, _) in format_list:
-            if (
-                field
-                and not field in self.headings
-                and field.startswith("annotations.")
-            ):
-                field_heading = field[len("annotations.") :].upper()
-                self.headings[field] = field_heading
+            if field and not field in self.headings:
+                if field.startswith("annotations."):
+                    field_heading = field[len("annotations.") :].upper()
+                    self.headings[field] = field_heading
+                elif field.startswith("sched.") or field.startswith("user."):
+                    field_heading = field.upper()
+                    self.headings[field] = field_heading
         super().__init__(self.headings, fmt, prepend="0.")
 
     def format(self, obj):
