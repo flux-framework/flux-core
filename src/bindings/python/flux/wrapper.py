@@ -190,7 +190,7 @@ class FunctionWrapper(object):
                 # Unpack wrapper objects
                 args[i] = args[i].handle
             elif isinstance(args[i], six.text_type):
-                args[i] = args[i].encode("utf-8")
+                args[i] = args[i].encode("utf-8", errors="surrogateescape")
 
         try:
             result = self.fun(*args)
