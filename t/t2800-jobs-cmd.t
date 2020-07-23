@@ -710,7 +710,9 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	status_abbrev==ST
 	annotations==ANNOTATIONS
 	annotations.sched==SCHED
-	annotations.sched.reason_pending==SCHED.REASON_PENDING
+	annotations.sched.t_estimate==T_ESTIMATE
+	annotations.sched.reason_pending==REASON
+	annotations.sched.resource_summary==RESOURCES
 	annotations.sched.foobar==SCHED.FOOBAR
 	EOF
 	sed "s/\(.*\)==.*/\1=={\1}/" headers.expected > headers.fmt &&

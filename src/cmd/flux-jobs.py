@@ -632,6 +632,10 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "exception.type": "EXCEPTION-TYPE",
         "exception.note": "EXCEPTION-NOTE",
         "annotations": "ANNOTATIONS",
+        # The following are special pre-defined cases per RFC27
+        "annotations.sched.t_estimate": "T_ESTIMATE",
+        "annotations.sched.reason_pending": "REASON",
+        "annotations.sched.resource_summary": "RESOURCES",
     }
 
     def __init__(self, fmt):
@@ -648,7 +652,11 @@ class JobsOutputFormat(flux.util.OutputFormat):
         """
         format_list = string.Formatter().parse(fmt)
         for (_, field, _, _) in format_list:
-            if field and field.startswith("annotations."):
+            if (
+                field
+                and not field in self.headings
+                and field.startswith("annotations.")
+            ):
                 field_heading = field[len("annotations.") :].upper()
                 self.headings[field] = field_heading
         super().__init__(self.headings, fmt, prepend="0.")
