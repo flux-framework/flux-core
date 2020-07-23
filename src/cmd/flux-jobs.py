@@ -584,7 +584,7 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "t_inactive": "T_INACTIVE",
         "runtime": "RUNTIME",
         "status": "STATUS",
-        "status_abbrev": "STATUS",
+        "status_abbrev": "ST",
         "exception.occurred": "EXCEPTION-OCCURRED",
         "exception.severity": "EXCEPTION-SEVERITY",
         "exception.type": "EXCEPTION-TYPE",
@@ -649,7 +649,7 @@ def main():
         fmt = args.format
     else:
         fmt = (
-            "{id.f58:>12} {username:<8.8} {name:<10.10} {status_abbrev:>6.6} "
+            "{id.f58:>12} {username:<8.8} {name:<10.10} {status_abbrev:>2.2} "
             "{ntasks:>6} {nnodes:>6h} {runtime!F:>8h} "
             "{ranks:h}"
         )
