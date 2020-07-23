@@ -55,7 +55,8 @@ TESTS = \
 	test_raise.t \
 	test_kill.t \
 	test_restart.t \
-	test_submit.t
+	test_submit.t \
+	test_annotate.t
 
 test_ldadd = \
         $(top_builddir)/src/modules/job-manager/event.o \
@@ -127,4 +128,11 @@ test_submit_t_CPPFLAGS = $(test_cppflags)
 test_submit_t_LDADD = \
         $(test_ldadd)
 test_submit_t_LDFLAGS = \
+        $(test_ldflags)
+
+test_annotate_t_SOURCES = test/annotate.c
+test_annotate_t_CPPFLAGS = $(test_cppflags)
+test_annotate_t_LDADD = \
+        $(test_ldadd)
+test_annotate_t_LDFLAGS = \
         $(test_ldflags)

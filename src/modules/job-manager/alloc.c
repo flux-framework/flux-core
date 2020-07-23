@@ -175,6 +175,62 @@ int cancel_request (struct alloc *alloc, struct job *job)
     return 0;
 }
 
+void annotate_err (void *arg, const char *fmt, ...)
+{
+    flux_t *h = (flux_t *)arg;
+    va_list ap;
+    flux_vlog (h, LOG_ERR, fmt, ap);
+    va_end (ap);
+}
+
+/* we want to delete items set to 'null', so this is not the same
+ * as json_object_update_recursive() in jansson 2.13.1
+ */
+void update_recursive (struct job *job, json_t *orig, json_t *new,
+                       annotate_log_f log_f, void *arg)
+{
+    const char *key;
+    json_t *value;
+
+    assert (job && orig && new);
+
+    json_object_foreach (new, key, value) {
+        if (!json_is_null (value)) {
+            json_t *orig_value = json_object_get (orig, key);
+
+            if (json_is_object (value)) {
+                if (!json_is_object (orig_value)) {
+                    json_t *o = json_object ();
+                    if (!o || json_object_set_new (orig, key, o) < 0) {
+                        if (log_f)
+                            (*log_f)(arg,
+                                     "%s: id=%ju create object=%s",
+                                     __FUNCTION__, (uintmax_t)job->id, key);
+                        json_decref (o);
+                        continue;
+                    }
+                    orig_value = o;
+                }
+                update_recursive (job, orig_value, value, log_f, arg);
+                /* if object is now empty, remove it */
+                if (!json_object_size (orig_value))
+                    (void)json_object_del (orig, key);
+            }
+            else {
+                if (json_object_set (orig, key, value) < 0) {
+                    if (log_f)
+                        (*log_f)(arg,
+                                 "%s: id=%ju update key=%s",
+                                 __FUNCTION__, (uintmax_t)job->id, key);
+                }
+            }
+        }
+        else
+            /* not an error if key doesn't exist in orig */
+            (void)json_object_del (orig, key);
+    }
+}
+
 static void update_annotations (flux_t *h, struct job *job, flux_jobid_t id,
                                 json_t *annotations)
 {
@@ -187,21 +243,8 @@ static void update_annotations (flux_t *h, struct job *job, flux_jobid_t id,
                           __FUNCTION__, (uintmax_t)id);
         }
         if (job->annotations) {
-            const char *key;
-            json_t *value;
-
-            json_object_foreach (annotations, key, value) {
-                if (!json_is_null (value)) {
-                    if (json_object_set (job->annotations, key, value) < 0)
-                        flux_log (h,
-                                  LOG_ERR,
-                                  "%s: id=%ju update key=%s",
-                                  __FUNCTION__, (uintmax_t)id, key);
-                }
-                else
-                    /* not an error if key doesn't exist in job->annotations */
-                    (void)json_object_del (job->annotations, key);
-            }
+            update_recursive (job, job->annotations, annotations,
+                              annotate_err, h);
             /* Special case: if user cleared all entries, assume we no
              * longer need annotations object */
             if (!json_object_size (job->annotations))

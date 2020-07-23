@@ -129,7 +129,7 @@ void raise_handle_request (flux_t *h,
     }
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
         errstr = "unknown job id";
-        errno = EINVAL;
+        errno = ENOENT;
         goto error;
     }
     if (flux_msg_cred_authorize (cred, job->userid) < 0) {

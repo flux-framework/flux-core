@@ -1334,6 +1334,12 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
             update_job_state (ctx, job, FLUX_JOB_SCHED, timestamp);
         }
         else if (!strcmp (name, "priority")) {
+            if (!context) {
+                flux_log_error (ctx->h, "%s: no priority context for %ju",
+                                __FUNCTION__, (uintmax_t)job->id);
+                goto error;
+            }
+
             if (json_unpack (context, "{ s:i }",
                                       "priority", &job->priority) < 0) {
                 flux_log_error (ctx->h, "%s: priority context for %ju invalid",
@@ -1343,6 +1349,12 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
         }
         else if (!strcmp (name, "exception")) {
             int severity;
+            if (!context) {
+                flux_log_error (ctx->h, "%s: no exception context for %ju",
+                                __FUNCTION__, (uintmax_t)job->id);
+                goto error;
+            }
+
             if (json_unpack (context, "{ s:i }", "severity", &severity) < 0) {
                 flux_log_error (ctx->h, "%s: exception context for %ju invalid",
                                 __FUNCTION__, (uintmax_t)job->id);
