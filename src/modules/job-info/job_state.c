@@ -1127,6 +1127,35 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
     }
 }
 
+static int parse_transition (json_t *transition, flux_jobid_t *id,
+                             flux_job_state_t *state, double *timestamp)
+{
+    json_t *o;
+
+    if (!json_is_array (transition))
+        return -1;
+
+    if (!(o = json_array_get (transition, 0))
+        || !json_is_integer (o))
+        return -1;
+
+    (*id) = json_integer_value (o);
+
+    if (!(o = json_array_get (transition, 1))
+        || !json_is_string (o))
+        return -1;
+
+    if (flux_job_strtostate (json_string_value (o), state) < 0)
+        return -1;
+
+    if (!(o = json_array_get (transition, 2))
+        || !json_is_real (o))
+        return -1;
+
+    (*timestamp) = json_real_value (o);
+    return 0;
+}
+
 static void update_jobs (struct info_ctx *ctx, json_t *transitions)
 {
     struct job_state_ctx *jsctx = ctx->jsctx;
@@ -1134,48 +1163,20 @@ static void update_jobs (struct info_ctx *ctx, json_t *transitions)
     json_t *value;
 
     if (!json_is_array (transitions)) {
-        flux_log_error (ctx->h, "%s: transitions EPROTO", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: transitions EPROTO", __FUNCTION__);
         return;
     }
 
     json_array_foreach (transitions, index, value) {
         struct job *job;
-        json_t *o;
         flux_jobid_t id;
         flux_job_state_t state;
         double timestamp;
 
-        if (!json_is_array (value)) {
-            flux_log_error (jsctx->h, "%s: transition EPROTO", __FUNCTION__);
+        if (parse_transition (value, &id, &state, &timestamp) < 0) {
+            flux_log (jsctx->h, LOG_ERR, "%s: transition EPROTO", __FUNCTION__);
             return;
         }
-
-        if (!(o = json_array_get (value, 0))
-            || !json_is_integer (o)) {
-            flux_log_error (jsctx->h, "%s: transition EPROTO", __FUNCTION__);
-            return;
-        }
-
-        id = json_integer_value (o);
-
-        if (!(o = json_array_get (value, 1))
-            || !json_is_string (o)) {
-            flux_log_error (jsctx->h, "%s: transition EPROTO", __FUNCTION__);
-            return;
-        }
-
-        if (flux_job_strtostate (json_string_value (o), &state) < 0) {
-            flux_log_error (jsctx->h, "%s: transition EPROTO", __FUNCTION__);
-            return;
-        }
-
-        if (!(o = json_array_get (value, 2))
-            || !json_is_real (o)) {
-            flux_log_error (jsctx->h, "%s: transition EPROTO", __FUNCTION__);
-            return;
-        }
-
-        timestamp = json_real_value (o);
 
         if (!(job = zhashx_lookup (jsctx->index, &id))) {
             if (!(job = job_create (ctx, id))){
