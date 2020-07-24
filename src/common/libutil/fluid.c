@@ -178,11 +178,14 @@ int fluid_decode (const char *s, fluid_t *fluidp, fluid_string_type_t type)
              * Also, 's' is not modified so it is safe to cast away const.
              */
             rc = mn_decode ((char *)s, (void *)&fluid, sizeof (fluid_t));
-            if (rc != 8)
+            if (rc != 8) {
+                errno = EINVAL;
                 return -1;
+            }
             break;
 
         default:
+            errno = EINVAL;
             return -1;
     }
     if (fluid_validate (fluid) < 0)
