@@ -22,11 +22,11 @@ import fileinput
 import json
 from datetime import datetime, timedelta
 
-import flux.job
 import flux.constants
 import flux.util
 from flux.core.inner import raw
 from flux.memoized_property import memoized_property
+from flux.job import JobID
 
 LOGGER = logging.getLogger("flux-jobs")
 
@@ -128,6 +128,9 @@ class JobInfo:
         #  Set defaults, then update with job-info.list response items:
         combined_dict = self.defaults.copy()
         combined_dict.update(info_resp)
+
+        #  Cast jobid to JobID
+        combined_dict["id"] = JobID(combined_dict["id"])
 
         #  Rename "state" to "state_id" and "result" to "result_id"
         #  until returned state is a string:
@@ -305,6 +308,11 @@ def fetch_jobs_flux(args, fields):
     # Note there is no attr for "id", its always returned
     fields2attrs = {
         "id": (),
+        "id.hex": (),
+        "id.f58": (),
+        "id.kvs": (),
+        "id.words": (),
+        "id.dothex": (),
         "userid": ("userid",),
         "username": ("userid",),
         "priority": ("priority",),
@@ -477,8 +485,8 @@ def parse_args():
     )
     parser.add_argument(
         "jobids",
-        type=int,
         metavar="JOBID",
+        type=JobID,
         nargs="*",
         help="Limit output to specific Job IDs",
     )
@@ -549,6 +557,11 @@ class JobsOutputFormat(flux.util.OutputFormat):
     #  List of legal format fields and their header names
     headings = {
         "id": "JOBID",
+        "id.hex": "JOBID",
+        "id.f58": "JOBID",
+        "id.kvs": "JOBID",
+        "id.words": "JOBID",
+        "id.dothex": "JOBID",
         "userid": "UID",
         "username": "USER",
         "priority": "PRI",
@@ -571,7 +584,7 @@ class JobsOutputFormat(flux.util.OutputFormat):
         "t_inactive": "T_INACTIVE",
         "runtime": "RUNTIME",
         "status": "STATUS",
-        "status_abbrev": "STATUS",
+        "status_abbrev": "ST",
         "exception.occurred": "EXCEPTION-OCCURRED",
         "exception.severity": "EXCEPTION-SEVERITY",
         "exception.type": "EXCEPTION-TYPE",
@@ -636,7 +649,7 @@ def main():
         fmt = args.format
     else:
         fmt = (
-            "{id:>18} {username:<8.8} {name:<10.10} {status_abbrev:>6.6} "
+            "{id.f58:>12} {username:<8.8} {name:<10.10} {status_abbrev:>2.2} "
             "{ntasks:>6} {nnodes:>6h} {runtime!F:>8h} "
             "{ranks:h}"
         )

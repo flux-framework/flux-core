@@ -293,6 +293,16 @@ test_expect_success 'flux-jobs specific IDs works' '
 	done
 '
 
+test_expect_success 'flux jobs can take specific IDs in any form' '
+	id=$(head -1 run.ids) &&
+	for f in f58 hex dothex kvs words; do
+		flux job id --to=${f} ${id}
+	done > ids.specific.list &&
+	flux jobs -no {id} $(cat ids.specific.list) > ids.specific.out &&
+	for i in $(seq 1 5); do echo $id >>ids.specific.expected; done &&
+	test_cmp ids.specific.expected ids.specific.out
+'
+
 test_expect_success 'flux-jobs error on bad IDs' '
 	flux jobs --suppress-header 0 1 2 2> ids.err &&
 	count=`grep -i unknown ids.err | wc -l` &&
@@ -325,6 +335,21 @@ test_expect_success 'flux-jobs --format={id} works' '
 	test_cmp idsR.out run.ids &&
 	flux jobs --suppress-header --filter=inactive --format="{id}" > idsI.out &&
 	test_cmp idsI.out inactive.ids
+'
+
+test_expect_success 'flux-jobs --format={id.f58},{id.hex},{id.dothex},{id.words} works' '
+	flux jobs -ano {id},{id.f58},{id.hex},{id.kvs},{id.dothex},{id.words} \
+	    | sort -n > ids.XX.out &&
+	for id in $(cat all.ids); do
+		printf "%s,%s,%s,%s,%s,%s\n" \
+		       $id \
+		       $(flux job id --to=f58 $id) \
+		       $(flux job id --to=hex $id) \
+		       $(flux job id --to=kvs $id) \
+		       $(flux job id --to=dothex $id) \
+		       $(flux job id --to=words $id)
+	done | sort -n > ids.XX.expected &&
+	test_cmp ids.XX.expected ids.XX.out
 '
 
 test_expect_success 'flux-jobs --format={userid},{username} works' '
@@ -624,6 +649,10 @@ test_expect_success 'flux-jobs --format={expiration!D:h},{t_remaining!H:h} works
 test_expect_success 'flux-jobs: header included with all custom formats' '
 	cat <<-EOF >headers.expected &&
 	id==JOBID
+	id.f58==JOBID
+	id.hex==JOBID
+	id.dothex==JOBID
+	id.words==JOBID
 	userid==UID
 	username==USER
 	priority==PRI
@@ -658,6 +687,8 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	t_inactive!d==T_INACTIVE
 	t_cleanup!D==T_CLEANUP
 	t_run!F==T_RUN
+	status==STATUS
+	status_abbrev==ST
 	EOF
 	sed "s/\(.*\)==.*/\1=={\1}/" headers.expected > headers.fmt &&
 	flux jobs --from-stdin --format="$(cat headers.fmt)" \

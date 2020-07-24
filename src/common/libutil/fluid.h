@@ -22,6 +22,7 @@
 typedef enum {
     FLUID_STRING_DOTHEX = 1,    // x.x.x.x
     FLUID_STRING_MNEMONIC = 2,  // mnemonicode x-x-x--x-x-x
+    FLUID_STRING_F58 = 3,       // FLUID base58 enc: ƒXXXX or fXXXX
 } fluid_string_type_t;
 
 struct fluid_generator {
@@ -67,6 +68,20 @@ int fluid_encode (char *buf, int bufsz, fluid_t fluid,
  */
 int fluid_decode (const char *s, fluid_t *fluid,
                   fluid_string_type_t type);
+
+/* Attempt to detect the string type of encoded FLUID in `s`.
+ *  returns the string type or 0 if not one the defined encodings above.
+ *  (FLUID may still be encoded as integer in decimal or hex)
+ */
+fluid_string_type_t fluid_string_detect_type (const char *s);
+
+/* Convert NULL-terminated string 's' to 'fluid' by auto-detecting
+ *  the encoding in 's'.
+ * Supported encodings include any fluid_string_type_t, or an integer
+ *  in decimal or hexidecimal prefixed with "0x".
+ * Return 0 on success, -1 on failure.
+ */
+int fluid_parse (const char *s, fluid_t *fluid);
 
 #endif /* !_UTIL_FLUID_H */
 

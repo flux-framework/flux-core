@@ -317,6 +317,82 @@ void check_kvs_namespace (void)
         "flux_job_kvs_namespace returns EINVAL on invalid buffer");
 }
 
+struct jobid_parse_test {
+    const char *type;
+    flux_jobid_t id;
+    const char *string;
+};
+
+struct jobid_parse_test jobid_parse_tests[] = {
+    { "dec",    0,     "0" },
+    { "hex",    0,     "0x0" },
+    { "dothex", 0,     "0000.0000.0000.0000" },
+    { "kvs",    0,     "job.0000.0000.0000.0000" },
+    { "words",  0,     "academy-academy-academy--academy-academy-academy" },
+    { "f58",    0,     "ƒ1" },
+
+    { "dec",    1,     "1" },
+    { "hex",    1,     "0x1" },
+    { "dothex", 1,     "0000.0000.0000.0001" },
+    { "kvs",    1,     "job.0000.0000.0000.0001" },
+    { "words",  1,     "acrobat-academy-academy--academy-academy-academy" },
+    { "f58",    1,     "ƒ2" },
+
+    { "dec",    65535, "65535" },
+    { "hex",    65535, "0xffff" },
+    { "dothex", 65535, "0000.0000.0000.ffff" },
+    { "kvs",    65535, "job.0000.0000.0000.ffff" },
+    { "words",  65535, "nevada-archive-academy--academy-academy-academy" },
+    { "f58",    65535, "ƒLUv" },
+
+    { "dec",    6787342413402046, "6787342413402046" },
+    { "hex",    6787342413402046, "0x181d0d4d850fbe" },
+    { "dothex", 6787342413402046, "0018.1d0d.4d85.0fbe" },
+    { "kvs",    6787342413402046, "job.0018.1d0d.4d85.0fbe" },
+    { "words",  6787342413402046, "cake-plume-nepal--neuron-pencil-academy" },
+    { "f58",    6787342413402046, "ƒuzzybunny" },
+
+    { NULL, 0, NULL }
+};
+
+void check_jobid_parse_encode (void)
+{
+    char buf[1024];
+    flux_jobid_t jobid;
+    struct jobid_parse_test *tp = jobid_parse_tests;
+    while (tp->type != NULL) {
+        memset (buf, 0, sizeof (buf));
+        ok (flux_job_id_encode (tp->id, tp->type, buf, sizeof (buf)) == 0,
+            "flux_job_id_encode (%ju, %s) == 0", (uintmax_t) tp->id, tp->type);
+        is (buf, tp->string,
+            "flux_job_id_encode() got %s", buf);
+        ok (flux_job_id_parse (buf, &jobid) == 0,
+            "flux_job_id_parse() of result works: %s", strerror (errno));
+        ok (jobid == tp->id,
+            "flux_job_id_parse() returned correct id");
+        tp++;
+    }
+
+    ok (flux_job_id_encode (1234, NULL, buf, sizeof (buf)) == 0,
+        "flux_job_id_encode() with NULL type works");
+    is (buf, "1234",
+        "flux_job_id_encode() encodes to decimal by default");
+
+    ok (flux_job_id_parse ("  1234  ", &jobid) == 0,
+        "flux_job_id_parse works with leading whitespace");
+    ok (jobid == 1234,
+        "flux_job_id_parse got expected result");
+
+    ok (flux_job_id_encode (1234, NULL, NULL, 33) < 0 && errno == EINVAL,
+        "flux_job_id_encode with NULL buffer returns EINVAL");
+    ok (flux_job_id_encode (1234, "dec", buf, 4) < 0 && errno == ENOSPC,
+        "flux_job_id_encode with too small buffer returns ENOSPC");
+    ok (flux_job_id_encode (1234, "dothex", buf, 19) < 0 && errno == ENOSPC,
+        "flux_job_id_encode with too small buffer returns ENOSPC");
+    ok (flux_job_id_encode (1234, "foo", buf, 1024) < 0 && errno == EPROTO,
+        "flux_job_id_encode with unknown encode type returns EPROTO");
+}
+
 
 int main (int argc, char *argv[])
 {
@@ -331,6 +407,8 @@ int main (int argc, char *argv[])
     check_resultstr ();
 
     check_kvs_namespace ();
+
+    check_jobid_parse_encode ();
 
     done_testing ();
     return 0;

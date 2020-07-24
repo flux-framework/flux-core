@@ -33,7 +33,6 @@
 #endif
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/fluid.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/monotime.h"
@@ -244,12 +243,8 @@ static struct optparse_option status_opts[] = {
 };
 
 static struct optparse_option id_opts[] =  {
-    { .name = "from", .key = 'f', .has_arg = 1,
-      .arginfo = "dec|kvs|hex|words",
-      .usage = "Convert jobid from specified form",
-    },
     { .name = "to", .key = 't', .has_arg = 1,
-      .arginfo = "dec|kvs|hex|words",
+      .arginfo = "dec|kvs|hex|dothex|words|f58",
       .usage = "Convert jobid to specified form",
     },
     OPTPARSE_TABLE_END
@@ -510,6 +505,14 @@ int main (int argc, char *argv[])
     return (exitval);
 }
 
+static flux_jobid_t parse_jobid (const char *s)
+{
+    flux_jobid_t id;
+    if (flux_job_id_parse (s, &id) < 0)
+        log_msg_exit ("error parsing jobid: \"%s\"", s);
+    return id;
+}
+
 /* Parse a free argument 's', expected to be a 64-bit unsigned.
  * On error, exit complaining about parsing 'name'.
  */
@@ -609,7 +612,7 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    id = parse_arg_unsigned (argv[optindex++], "jobid");
+    id = parse_jobid (argv[optindex++]);
     priority = parse_arg_unsigned (argv[optindex++], "priority");
 
     if (!(f = flux_job_set_priority (h, id, priority)))
@@ -636,7 +639,7 @@ int cmd_raise (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    id = parse_arg_unsigned (argv[optindex++], "jobid");
+    id = parse_jobid (argv[optindex++]);
     if (optindex < argc)
         note = parse_arg_message (argv + optindex, "message");
 
@@ -842,7 +845,7 @@ int cmd_kill (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    id = parse_arg_unsigned (argv[optindex++], "jobid");
+    id = parse_jobid (argv[optindex++]);
 
     s = optparse_get_str (p, "signal", "SIGTERM");
     if ((signum = str2signum (s))< 0)
@@ -932,7 +935,7 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    id = parse_arg_unsigned (argv[optindex++], "jobid");
+    id = parse_jobid (argv[optindex++]);
     if (optindex < argc)
         note = parse_arg_message (argv + optindex, "message");
 
@@ -1118,7 +1121,7 @@ int cmd_list_ids (optparse_t *p, int argc, char **argv)
 
     ids_len = argc - optindex;
     for (i = 0; i < ids_len; i++) {
-        flux_jobid_t id = parse_arg_unsigned (argv[optindex + i], "id");
+        flux_jobid_t id = parse_jobid (argv[optindex + i]);
         flux_future_t *f;
         if (!(f = flux_job_list_id (h, id, list_attrs)))
             log_err_exit ("flux_job_list_id");
@@ -2020,7 +2023,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
-    ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
+    ctx.id = parse_jobid (argv[optindex++]);
     ctx.p = p;
 
     if (!(ctx.h = flux_open (NULL, 0)))
@@ -2191,7 +2194,7 @@ int cmd_status (optparse_t *p, int argc, char **argv)
 
     for (i = 0; i < njobs; i++) {
         struct job_status *stat = &stats[i];
-        stat->id = parse_arg_unsigned (argv[optindex+i], "jobid");
+        stat->id = parse_jobid (argv[optindex+i]);
         stat->exception_exit_code = exception_exit_code;
 
         if (!(f = flux_job_event_watch (h, stat->id, "eventlog", 0)))
@@ -2239,51 +2242,21 @@ int cmd_status (optparse_t *p, int argc, char **argv)
 
 void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
 {
-    const char *from = optparse_get_str (p, "from", "dec");
     const char *to = optparse_get_str (p, "to", "dec");
     flux_jobid_t id;
 
-    /* src to id
+    /*  Parse as any valid JOBID
      */
-    if (!strcmp (from, "dec")) {
-        id = parse_arg_unsigned (src, "input");
-    }
-    else if (!strcmp (from, "hex")) {
-        if (fluid_decode (src, &id, FLUID_STRING_DOTHEX) < 0)
-            log_msg_exit ("%s: malformed input", src);
-    }
-    else if (!strcmp (from, "kvs")) {
-        if (strncmp (src, "job.", 4) != 0)
-            log_msg_exit ("%s: missing 'job.' prefix", src);
-        if (fluid_decode (src + 4, &id, FLUID_STRING_DOTHEX) < 0)
-            log_msg_exit ("%s: malformed input", src);
-    }
-    else if (!strcmp (from, "words")) {
-        if (fluid_decode (src, &id, FLUID_STRING_MNEMONIC) < 0)
-            log_msg_exit ("%s: malformed input", src);
-    }
-    else
-        log_msg_exit ("Unknown from=%s", from);
+    if (flux_job_id_parse (src, &id) < 0)
+        log_msg_exit ("%s: malformed input", src);
 
-    /* id to dst
+    /*  Now encode into requested representation:
      */
-    if (!strcmp (to, "dec")) {
-        snprintf (dst, dstsz, "%ju", (uintmax_t) id);
+    if (flux_job_id_encode (id, to, dst, dstsz) < 0) {
+        if (errno == EPROTO)
+            log_msg_exit ("Unknown to=%s", to);
+        log_msg_exit ("Unable to encode id %ju to %s", (uintmax_t) id, to);
     }
-    else if (!strcmp (to, "kvs")) {
-        if (flux_job_kvs_key (dst, dstsz, id, NULL) < 0)
-            log_msg_exit ("error encoding id");
-    }
-    else if (!strcmp (to, "hex")) {
-        if (fluid_encode (dst, dstsz, id, FLUID_STRING_DOTHEX) < 0)
-            log_msg_exit ("error encoding id");
-    }
-    else if (!strcmp (to, "words")) {
-        if (fluid_encode (dst, dstsz, id, FLUID_STRING_MNEMONIC) < 0)
-            log_msg_exit ("error encoding id");
-    }
-    else
-        log_msg_exit ("Unknown to=%s", to);
 }
 
 char *trim_string (char *s)
@@ -2325,7 +2298,7 @@ int cmd_id (optparse_t *p, int argc, char **argv)
 static void print_job_namespace (const char *src)
 {
     char ns[64];
-    flux_jobid_t id = parse_arg_unsigned (src, "jobid");
+    flux_jobid_t id = parse_jobid (src);
     if (flux_job_kvs_namespace (ns, sizeof (ns), id) < 0)
         log_msg_exit ("error getting kvs namespace for %ju", id);
     printf ("%s\n", ns);
@@ -2501,7 +2474,7 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
+    ctx.id = parse_jobid (argv[optindex++]);
     ctx.path = optparse_get_str (p, "path", "eventlog");
     ctx.p = p;
     entry_format_parse_options (p, &ctx.e);
@@ -2656,7 +2629,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
-    ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
+    ctx.id = parse_jobid (argv[optindex++]);
     ctx.p = p;
     ctx.wait_event = argv[optindex++];
     ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
@@ -2734,7 +2707,7 @@ int cmd_info (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    ctx.id = parse_arg_unsigned (argv[optindex++], "jobid");
+    ctx.id = parse_jobid (argv[optindex++]);
 
     if (!(ctx.keys = json_array ()))
         log_msg_exit ("json_array");
@@ -2800,7 +2773,7 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     if (optindex < argc) {
-        id = parse_arg_unsigned (argv[optindex++], "jobid");
+        id = parse_jobid (argv[optindex++]);
         if (optparse_hasopt (p, "all"))
             log_err_exit ("jobid not supported with --all");
     }
