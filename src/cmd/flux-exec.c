@@ -32,7 +32,7 @@ static struct optparse_option cmdopts[] = {
       .usage = "Exclude ranks from target." },
     { .name = "dir", .key = 'd', .has_arg = 1, .arginfo = "PATH",
       .usage = "Set the working directory to PATH" },
-    { .name = "labelio", .key = 'l', .has_arg = 0,
+    { .name = "label-io", .key = 'l', .has_arg = 0,
       .usage = "Label lines of output with the source RANK" },
     { .name = "noinput", .key = 'n', .has_arg = 0,
       .usage = "Redirect stdin from /dev/null" },
@@ -191,7 +191,7 @@ void output_cb (flux_subprocess_t *p, const char *stream)
         log_err_exit ("flux_subprocess_getline");
 
     if (lenp) {
-        if (optparse_getopt (opts, "labelio", NULL) > 0)
+        if (optparse_getopt (opts, "label-io", NULL) > 0)
             fprintf (fstream, "%d: ", flux_subprocess_rank (p));
         fwrite (ptr, lenp, 1, fstream);
     }

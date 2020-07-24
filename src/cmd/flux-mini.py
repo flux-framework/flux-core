@@ -98,6 +98,7 @@ class MiniCmd:
             metavar="FILENAME",
         )
         parser.add_argument(
+            "-l",
             "--label-io",
             action="store_true",
             help="Add rank labels to stdout, stderr lines"
