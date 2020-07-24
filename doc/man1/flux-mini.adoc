@@ -120,7 +120,7 @@ set FILENAME to 'none' or 'kvs'.
 Redirect stderr to the specified FILENAME, bypassing the KVS.
 The mustache template '{{id}}' is expanded as above.
 
-*--label-io*::
+*-l, --label-io*::
 Add task rank prefixes to each line of output.
 
 

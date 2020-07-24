@@ -11,7 +11,7 @@ flux-exec - Execute processes across flux ranks
 
 SYNOPSIS
 --------
-*flux* *exec* [--noinput] ['--labelio] ['--dir=DIR'] ['--rank=NODESET'] ['--verbose'] COMMANDS...
+*flux* *exec* [--noinput] ['--label-io] ['--dir=DIR'] ['--rank=NODESET'] ['--verbose'] COMMANDS...
 
 
 DESCRIPTION
@@ -46,7 +46,7 @@ exits with exit code 128+signo.
 OPTIONS
 -------
 
-*-l, --labelio*::
+*-l, --label-io*::
 Label lines of output with the source RANK.
 
 *-n, --noinput*::
