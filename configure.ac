@@ -135,41 +135,6 @@ AC_DEFINE_UNQUOTED([PATH_SSH], "$SSH",
 LT_INIT
 AC_PROG_AWK
 
-AC_ARG_ENABLE([docs],
-	      AS_HELP_STRING([--disable-docs], [disable building docs]))
-AS_IF([test "x$enable_docs" != "xno"], [
-  AC_CHECK_PROGS(ADOC, [a2x asciidoctor])
-  AS_IF([test "$ADOC" == "a2x"], [
-        ADOC_FORMAT_OPT="--format"
-        AC_SUBST([ADOC_FORMAT_OPT])
-  ])
-  AS_IF([test "$ADOC" == "asciidoctor"], [
-        AC_MSG_CHECKING([Asciidoctor version])
-        ASCIIDOCTOR_VERSION=$(asciidoctor --version|sed -n 's/Asciidoctor \(.*\) .*/\1/p')
-        AC_MSG_RESULT([$ASCIIDOCTOR_VERSION])
-        AS_IF([test -z "$ASCIIDOCTOR_VERSION"],[
-              AC_MSG_ERROR([Failed to read asciidoctor version])
-        ])
-        AX_COMPARE_VERSION([$ASCIIDOCTOR_VERSION],[ge],[1.5.7], [
-          ADOC_FORMAT_OPT="--backend"
-          AC_SUBST([ADOC_FORMAT_OPT])
-        ],[
-          ADOC_ERROR_MSG="asciidoctor version >= 1.5.7 required, got $ASCIIDOCTOR_VERSION"
-          AC_MSG_WARN([$ADOC_ERROR_MSG])
-          ADOC=""
-        ])
-  ])
-])
-#
-#  If --enable-docs=yes, but no doc generator found,
-#   then error immediately:
-#
-AS_IF([test "x$enable_docs" = "xyes" -a -z "$ADOC"],[
-  AC_MSG_ERROR([--enable-docs used but no document generator found!])
-])
-AM_CONDITIONAL([ENABLE_DOCS], [test -n "$ADOC"])
-AC_CHECK_PROG(ASPELL,[aspell],[aspell])
-
 ##
 # Checks for header files.
 ##
@@ -193,7 +158,7 @@ AC_CHECK_HEADERS( \
 
 ##
 # Checks for typedefs, structures, and compiler characteristics
-## 
+##
 AC_C_BIGENDIAN
 AC_C_CONST
 AC_TYPE_SIZE_T
@@ -285,6 +250,26 @@ AM_CHECK_PYMOD(jsonschema,
                ,
                [AC_MSG_ERROR([could not find python module jsonschema, version 2.3.0+ required])]
                )
+
+AC_ARG_ENABLE([docs],
+	      AS_HELP_STRING([--disable-docs], [disable building docs]))
+AS_IF([test "x$enable_docs" != "xno"], [
+            AM_CHECK_PYMOD(sphinx,
+                           [StrictVersion(sphinx.__version__) >= StrictVersion ('1.6.7')],
+                           [sphinx=true],
+                           [sphinx=false; AC_MSG_WARN([could not find sphinx to generate docs, version 1.6.7+ required])]
+                           )
+])
+
+#  If --enable-docs=yes, but no doc generator found,
+#   then error immediately:
+#
+AS_IF([test "x$enable_docs" = "xyes" -a "x$sphinx" = "xfalse"],[
+  AC_MSG_ERROR([--enable-docs used but no document generator found!])
+])
+AM_CONDITIONAL([ENABLE_DOCS], [test "x$sphinx" = "xtrue"])
+AC_CHECK_PROG(ASPELL,[aspell],[aspell])
+
 
 # Remove -L<path> from PYTHON_LDFLAGS if it is in a standard path
 # (e.g. /usr/lib64).  Placing a standard path earlier in the linker
@@ -524,10 +509,6 @@ AC_CONFIG_FILES( \
   etc/flux-schedutil.pc \
   etc/flux.service \
   doc/Makefile \
-  doc/man1/Makefile \
-  doc/man3/Makefile \
-  doc/man5/Makefile \
-  doc/man7/Makefile \
   doc/test/Makefile \
   t/Makefile \
   t/fluxometer/conf.lua \
@@ -541,7 +522,8 @@ AC_CONFIG_LINKS([ \
 AC_OUTPUT
 
 AS_IF([test "x$enable_docs" != "xno"], [
-  if test -z "$ADOC"; then
-    AC_MSG_WARN([${ADOC_ERROR_MSG:-No asciidoc formatter found}. Manual pages will not be generated.])
+  if test "x$sphinx" = "xfalse"; then
+    AC_MSG_WARN([Sphinx not found. Manual pages will not be generated.])
   fi
 ])
+

@@ -51,11 +51,11 @@ RUN yum -y update \
       python36-six \
       python36-yaml \
       python36-jsonschema \
-      ruby \
       sqlite \
       valgrind \
       valgrind-devel \
       man-db \
+      enchant \
       aspell \
       aspell-en \
       devtoolset-7-make \
@@ -64,14 +64,15 @@ RUN yum -y update \
       libs3-devel \
  && yum clean all
 
+# Sphinx packages for docs
+RUN python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-spelling
+
 # The cmake from yum is incredibly ancient, download a less ancient one
 RUN wget -q --no-check-certificate https://cmake.org/files/v3.10/cmake-3.10.1-Linux-x86_64.tar.gz\
  && tar -xzf cmake-3.10.1-Linux-x86_64.tar.gz\
  && cp -fR cmake-3.10.1-Linux-x86_64/* /usr\
  && rm -rf cmake-3.10.1-Linux-x86_64\
  && rm cmake-3.10.1-Linux-x86_64.tar.gz
-
-RUN /usr/bin/gem install asciidoctor
 
 # Install caliper by hand for now:
 RUN mkdir caliper \

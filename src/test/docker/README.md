@@ -13,12 +13,13 @@ or a tagged version of flux-core.
 
 #### fluxrm/testenv Docker images
 
-The Dockerfiles under `bionic/Dockerfile`, `focal/Dockerfile` and
-`centos7/Dockerfile` describe the images built under the
-`fluxrm/testenv:bionic`, `fluxrm/testenv:focal` and `fluxrm/testenv:centos7`
-respectively, and include the base dependencies required to build
-flux-core. These images are updated manually by flux-core maintainers, but
-the Dockerfiles should be kept up to date for a single point of management.
+The Dockerfiles `bionic/Dockerfile`, `focal/Dockerfile`,
+`centos7/Dockerfile`, and `centos8/Dockerfile` describe the images built
+under the `fluxrm/testenv:bionic`, `fluxrm/testenv:focal`,
+`fluxrm/testenv:centos7`, and `fluxrm/testenv:centos8` respectively, and
+include the base dependencies required to build flux-core. These images
+are updated manually by flux-core maintainers, but the Dockerfiles should
+be kept up to date for a single point of management.
 
 #### The travis build Dockerfile
 
@@ -55,3 +56,18 @@ $ for i in bionic centos7; do
    done
 ```
 
+#### Local Testing
+
+Developers can test the docker images themselves. If new dependencies are needed,
+they can update the `$image` Dockerfiles manually (where `$image` is one of bionic, centos7, centos8, or focal).
+To create a local Docker image, run the command:
+
+```
+docker build -t fluxrm/testenv:$image src/test/docker/$image
+```
+
+To test the locally created image, run:
+
+```
+src/test/docker/docker-run-checks.sh -i $image [options] -- [arguments]
+```

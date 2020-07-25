@@ -1,4 +1,7 @@
 personal_ws-1.1 en 0
+literalinclude
+toctree
+rst
 proc
 localid
 exitcode
@@ -320,6 +323,7 @@ cron
 lifecycle
 rexec
 subcommand
+subcommands
 stddev
 RTT
 wakeup
