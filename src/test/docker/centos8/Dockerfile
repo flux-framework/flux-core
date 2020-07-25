@@ -6,13 +6,11 @@ LABEL maintainer="Mark Grondona <mgrondona@llnl.gov>"
 RUN yum -y update \
  && dnf -y install 'dnf-command(config-manager)' \
  && yum config-manager --set-enabled PowerTools \
- && yum -y update
-
+ && yum -y update \
 #  Enable EPEL
-RUN yum -y install epel-release
-
+ && yum -y install epel-release \
 #  Utilities
-RUN yum -y install \
+ && yum -y install \
 	wget \
 	man-db \
 	git \
@@ -27,10 +25,8 @@ RUN yum -y install \
 	file \
 	vim \
 	patch \
-	diffutils
-
+	diffutils \
 #  Compilers, autotools
-RUN yum -y install \
 	pkgconfig \
 	libtool \
 	autoconf \
@@ -38,19 +34,15 @@ RUN yum -y install \
 	gcc \
 	gcc-c++ \
 	make \
-	cmake
-
+	cmake \
 #  Python
-RUN yum -y install \
 	python36 \
 	python3-devel \
 	python3-cffi \
 	python3-six \
 	python3-yaml \
-	python3-jsonschema
-
+	python3-jsonschema \
 #  Development dependencies
-RUN yum -y install \
 	libsodium-devel \
 	zeromq-devel \
 	czmq-devel \
@@ -63,20 +55,16 @@ RUN yum -y install \
 	mpich-devel \
 	lua-devel \
 	valgrind-devel \
-	libs3-devel
-
+	libs3-devel \
 #  Other deps
-RUN yum -y install \
 	perl-Time-HiRes \
 	lua-posix \
 	libfaketime \
 	cppcheck \
 	enchant \
 	aspell \
-	aspell-en
-
-#  Clean up
-RUN yum clean all
+	aspell-en \
+ && yum clean all
 
 #  Set default /usr/bin/python to python3
 RUN alternatives --set python /usr/bin/python3
