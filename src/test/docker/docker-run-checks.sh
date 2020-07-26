@@ -120,14 +120,18 @@ export chain_lint
 
 if [[ "$INSTALL_ONLY" == "t" ]]; then
     docker run --rm \
-	--workdir=/usr/src \
+        --workdir=/usr/src \
         --volume=$TOP:/usr/src \
-	travis-builder:${IMAGE} \
-	sh -c "./autogen.sh &&
-               ./configure --prefix=/usr &&
+        travis-builder:${IMAGE} \
+        sh -c "./autogen.sh &&
+               ./configure --prefix=/usr --sysconfdir=/etc \
+                --with-systemdsystemunitdir=/etc/systemd/system \
+                --localstatedir=/var \
+                --with-flux-security \
+                --enable-caliper &&
                make clean && 
                make -j${JOBS}" \
-	|| (docker rm tmp.$$; die "docker run of 'make install' failed")
+    || (docker rm tmp.$$; die "docker run of 'make install' failed")
 else
     docker run --rm \
         --workdir=/usr/src \
