@@ -48,18 +48,18 @@ arguments are described below.
 COMMANDS
 ========
 
-**namespace create** [-o owner] *name* [*name…​*]
+**namespace create** [-o owner] *name* [*name* ...]
    Create a new kvs namespace. User may specify an alternate userid of a
    user that owns the namespace via *-o*. Specifying an alternate owner
    would allow a non-instance owner to read/write to a namespace.
 
-**namespace remove** *name* [*name…​*]
+**namespace remove** *name* [*name...*]
    Remove a kvs namespace.
 
 **namespace list**
    List all current namespaces and info on each namespace.
 
-**get** [-N ns] [-r|-t] [-a treeobj] [-l] [-W] [-w] [-u] [-A] [-f] [-c count] *key* [*key…​*]
+**get** [-N ns] [-r|-t] [-a treeobj] [-l] [-W] [-w] [-u] [-A] [-f] [-c count] *key* [*key* ...]
    Retrieve the value stored under *key*. If nothing has been stored
    under *key*, display an error message. Specify an alternate namespace
    to retrieve *key* from via *-N*. If no options, value is displayed
@@ -78,7 +78,7 @@ COMMANDS
    directory. The *-f* option can be specified to monitor for many of
    these special situations.
 
-**put** [-N ns] [-O|-s] [-r|-t] [-n] [-A] *key=value* [*key=value…​*]
+**put** [-N ns] [-O|-s] [-r|-t] [-n] [-A] *key=value* [*key=value* ...]
    Store *value* under *key* and commit it. Specify an alternate
    namespace to commit value(s) via *-N*. If it already has a value,
    overwrite it. If no options, value is stored directly. If *-r* or
@@ -91,7 +91,7 @@ COMMANDS
    *-s* can be specified to output the RFC11 treeobj or root sequence
    number of the root containing the put(s).
 
-**ls** [-N ns] [-R] [-d] [-F] [-w COLS] [-1] [*key* …​]
+**ls** [-N ns] [-R] [-d] [-F] [-w COLS] [-1] [*key* ...]
    Display directory referred to by *key*, or "." (root) if unspecified.
    Specify an alternate namespace to display via *-N*. Remaining options are
    roughly equivalent to a subset of ls(1) options. *-R* lists directory
@@ -111,7 +111,7 @@ COMMANDS
    treeobj* causes the lookup to be relative to an RFC 11 snapshot
    reference.
 
-**unlink** [-N ns] [-O|-s] [-R] [-f] *key* [*key…​*]
+**unlink** [-N ns] [-O|-s] [-R] [-f] *key* [*key* ...]
    Remove *key* from the KVS and commit the change. Specify an alternate
    namespace to commit to via *-N*. If *key* represents a directory,
    specify *-R* to remove all keys underneath it. If *-f* is specified,
@@ -127,7 +127,7 @@ COMMANDS
    successfully created link, *-O* or *-s* can be specified to output the
    RFC11 treeobj or root sequence number of the root containing the link.
 
-**readlink** [-N ns] [-a treeobj] [ -o \| -k ] *key* [*key…​*]
+**readlink** [-N ns] [-a treeobj] [ -o \| -k ] *key* [*key* ...]
    Retrieve the key a link refers to rather than its value, as would be
    returned by **get**. Specify an alternate namespace to retrieve from
    via *-N*. *-a treeobj* causes the lookup to be relative to an RFC 11
@@ -136,7 +136,7 @@ COMMANDS
    can be used to only output namespaces and the *-k* can be used to only
    output keys.
 
-**mkdir** [-N ns] [-O|-s] *key* [*key…​*]
+**mkdir** [-N ns] [-O|-s] *key* [*key* ...]
    Create an empty directory and commit the change. If *key* exists,
    it is overwritten. Specify an alternate namespace to commit to via
    *-N*. After a successful mkdir, *-O* or *-s* can be specified to
@@ -186,7 +186,7 @@ COMMANDS
    the number of events is limited with the *-c* option. Specify an
    alternate namespace to display from via *-N*.
 
-**eventlog append** [-N ns] [-t SECONDS] *key* *name* [*context …​*]
+**eventlog append** [-N ns] [-t SECONDS] *key* *name* [*context* ...]
    Append an event to an RFC 18 KVS eventlog referred to by *key*.
    The event *name* and optional *context* are specified on the command line.
    The timestamp may optionally be specified with *-t* as decimal seconds since

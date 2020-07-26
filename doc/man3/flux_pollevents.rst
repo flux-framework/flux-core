@@ -80,7 +80,7 @@ execute the prepare and check callbacks.
 The net results are 1) the edge-triggered notification provided by
 ``flux_pollfd()`` is integrated with libev's level-triggered watcher
 processing; 2) the handle is able to give control back to the event
-loop between handle event callbacks to preserve fairness—​in other words
+loop between handle event callbacks to preserve fairness, i.e.
 it doesn't have to consume events until they they are gone in one
 callback; and 3) the event loop is able to sleep when there are no
 handle events pending.

@@ -36,7 +36,7 @@ to monitor for events on a file descriptor *fd*. When events occur,
 the user-supplied *callback* is invoked.
 
 The *events* and *revents* arguments are a bitmask containing a logical
-“or” of the following bits. If a bit is set in *events*, it indicates
+OR of the following bits. If a bit is set in *events*, it indicates
 interest in this type of event. If a bit is set in *revents*, it
 indicates that this event has occurred.
 

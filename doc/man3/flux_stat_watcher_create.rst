@@ -47,7 +47,7 @@ The callback *revents* argument should be ignored.
 within *callback*. If non-NULL, *stat* receives the current status.
 If non-NULL, *prev* receives the previous status.
 
-If the object does not exist, stat→st_nlink will be zero and other
+If the object does not exist, stat->st_nlink will be zero and other
 status fields are undefined. The appearance/disappearance of a file
 is considered a status change like any other.
 
