@@ -81,6 +81,17 @@ void priority_handle_request (flux_t *h,
         errno = EPERM;
         goto error;
     }
+    /* RFC 27 does not yet handle priority changes after alloc request
+     * has been sent to the scheduler.  Also, alloc_queue_reorder() will
+     * segfault if job->handle is NULL, which is the case if the job is
+     * no longer in alloc->queue.
+     */
+    if (job->alloc_pending) {
+        errstr = "job has made an alloc request to scheduler, "
+                 "priority cannot be changed";
+        errno = EINVAL;
+        goto error;
+    }
     /* Post event, change job's queue position, and respond.
      */
     if (event_job_post_pack (ctx->event, job,
