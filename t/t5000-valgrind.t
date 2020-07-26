@@ -32,7 +32,6 @@ export FLUX_PMI_SINGLETON=1 # avoid finding leaks in slurm libpmi.so
 VALGRIND=`which valgrind`
 VALGRIND_SUPPRESSIONS=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind.supp
 VALGRIND_WORKLOAD=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind-workload.sh
-BROKER=${FLUX_BUILD_DIR}/src/broker/flux-broker
 
 VALGRIND_NBROKERS=${VALGRIND_NBROKERS:-2}
 
