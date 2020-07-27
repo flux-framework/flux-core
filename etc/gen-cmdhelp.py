@@ -34,7 +34,7 @@ for (path, cmd, descr, author, section) in man_pages:
     if section is not 1 or path in visited:
         continue
     visited[path] = True
-    with open(f"{docsdir}/{path}.rst", "r") as f:
+    with open(f"{docsdir}/{path}.rst", "r", encoding='utf-8') as f:
         include_flag = False
         for line in f:
             line = line.rstrip("\n")
