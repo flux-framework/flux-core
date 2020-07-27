@@ -76,7 +76,7 @@ static hwloc_cpuset_t *distribute_tasks (hwloc_topology_t topo,
     /* NB: hwloc_distrib() will alloc ntasks cpusets in cpusetp, which
      *     later need to be destroyed with hwloc_bitmap_free().
      */
-    hwloc_distrib (topo, obj, 1, cpusetp, ntasks, HWLOC_OBJ_PU, 0);
+    hwloc_distrib (topo, obj, 1, cpusetp, ntasks, INT_MAX, 0);
     return (cpusetp);
 }
 
