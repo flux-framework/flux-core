@@ -435,7 +435,6 @@ test_expect_success 'flux-jobs emits useful error on invalid format specifier' '
 	grep "Invalid format specifier" invalid-spec.out
 '
 
-
 test_expect_success 'flux-jobs --format={ranks},{ranks:h} works' '
 	flux jobs --filter=pending -no "{ranks},{ranks:h}" > ranksP.out &&
 	for i in `seq 1 $(state_count sched)`; do
@@ -640,6 +639,45 @@ test_expect_success 'flux-jobs --format={expiration!D:h},{t_remaining!H:h} works
 	test "${expiration}" = "-" &&
 	test "${t_remaining}" = "-"
 '
+# note that a significant amount of annotation format tests occur in
+# job-manager tests such as
+#
+# t2203-job-manager-dummysched-single.t
+# t2204-job-manager-dummysched-unlimited.t
+# t2205-job-manager-annotate.t
+#
+# as the schedulers in those tests do varied but testable annotations
+
+test_expect_success 'flux-jobs annotation "sched" short hands work' '
+	fmt="{annotations.sched},{annotations.sched.resource_summary}" &&
+	flux jobs -no "${fmt}" > sched_long_hand.out &&
+	fmt="{sched},{sched.resource_summary}" &&
+	flux jobs -no "${fmt}" > sched_short_hand.out &&
+	test_cmp sched_long_hand.out sched_short_hand.out
+'
+
+test_expect_success 'flux-jobs annotation "user" short hands work' '
+	for id in $(state_ids sched); do
+		flux job annotate $id foo 42
+	done &&
+	fmt="{annotations.user},{annotations.user.foo}" &&
+	flux jobs -no "${fmt}" > user_long_hand.out &&
+	fmt="{user},{user.foo}" &&
+	flux jobs -no "${fmt}" > user_short_hand.out &&
+	test_cmp user_long_hand.out user_short_hand.out
+'
+
+test_expect_success 'flux-jobs emits empty string on invalid annotations fields' '
+	fmt="{annotations.foo},{annotations.foo:h}" &&
+	fmt="${fmt},{annotations.sched.bar},{annotations.sched.bar:h}" &&
+	fmt="${fmt},{annotations.x.y.z},{annotations.x.y.z:h}" &&
+	flux jobs -no "${fmt}" >invalid-annotations.out 2>&1 &&
+	test_debug "cat invalid-annotations.out" &&
+	for i in `seq 1 $(state_count active)`; do
+		echo ",-,,-,,-" >> invalid-annotations.exp
+	done &&
+	test_cmp invalid-annotations.out invalid-annotations.exp
+'
 #
 # format header tests.
 #
@@ -689,6 +727,19 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	t_run!F==T_RUN
 	status==STATUS
 	status_abbrev==ST
+	annotations==ANNOTATIONS
+	annotations.sched==SCHED
+	annotations.sched.t_estimate==T_ESTIMATE
+	annotations.sched.reason_pending==REASON
+	annotations.sched.resource_summary==RESOURCES
+	annotations.sched.foobar==SCHED.FOOBAR
+	sched==SCHED
+	sched.t_estimate==T_ESTIMATE
+	sched.reason_pending==REASON
+	sched.resource_summary==RESOURCES
+	sched.foobar==SCHED.FOOBAR
+	user==USER
+	user.foobar==USER.FOOBAR
 	EOF
 	sed "s/\(.*\)==.*/\1=={\1}/" headers.expected > headers.fmt &&
 	flux jobs --from-stdin --format="$(cat headers.fmt)" \

@@ -178,6 +178,11 @@ static const struct flux_msg_handler_spec htab[] = {
       .cb           = job_state_cb,
       .rolemask     = 0
     },
+    { .typemask     = FLUX_MSGTYPE_EVENT,
+      .topic_glob   = "job-annotations",
+      .cb           = job_annotations_cb,
+      .rolemask     = 0
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

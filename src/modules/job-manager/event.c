@@ -64,6 +64,7 @@ struct event_batch {
     flux_kvs_txn_t *txn;
     flux_future_t *f;
     json_t *state_trans;
+    json_t *annotations;
     zlist_t *responses; // responses deferred until batch complete
 };
 
@@ -141,17 +142,18 @@ void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     event_batch_commit (ctx->event);
 }
 
-void event_publish_state (struct event *event, json_t *state_trans)
+void event_publish (struct event *event, const char *topic,
+                    const char *key, json_t *o)
 {
     struct job_manager *ctx = event->ctx;
     flux_future_t *f;
 
-    if (!(f = flux_event_publish_pack (ctx->h,
-                                       "job-state",
-                                       0,
-                                       "{s:O}",
-                                       "transitions",
-                                       state_trans))) {
+    /* O? support in jansson 2.8 */
+    if (o)
+        f = flux_event_publish_pack (ctx->h, topic, 0, "{s:O}", key, o);
+    else
+        f = flux_event_publish_pack (ctx->h, topic, 0, "{s:n}", key);
+    if (!f) {
         flux_log_error (ctx->h, "%s: flux_event_publish_pack", __FUNCTION__);
         goto error;
     }
@@ -184,8 +186,19 @@ void event_batch_destroy (struct event_batch *batch)
             (void)flux_future_wait_for (batch->f, -1);
         if (batch->state_trans) {
             if (json_array_size (batch->state_trans) > 0)
-                event_publish_state (batch->event, batch->state_trans);
+                event_publish (batch->event,
+                               "job-state",
+                               "transitions",
+                               batch->state_trans);
             json_decref (batch->state_trans);
+        }
+        if (batch->annotations) {
+            if (json_array_size (batch->annotations) > 0)
+                event_publish (batch->event,
+                               "job-annotations",
+                               "annotations",
+                               batch->annotations);
+            json_decref (batch->annotations);
         }
         if (batch->responses) {
             flux_msg_t *msg;
@@ -209,14 +222,8 @@ struct event_batch *event_batch_create (struct event *event)
 
     if (!(batch = calloc (1, sizeof (*batch))))
         return NULL;
-    if (!(batch->state_trans = json_array ()))
-        goto nomem;
     batch->event = event;
     return batch;
-nomem:
-    errno = ENOMEM;
-    event_batch_destroy (batch);
-    return NULL;
 }
 
 /* Create a new "batch" if there is none.
@@ -266,12 +273,47 @@ int event_batch_pub_state (struct event *event, struct job *job,
 
     if (event_batch_start (event) < 0)
         goto error;
+    if (!event->batch->state_trans) {
+        if (!(event->batch->state_trans = json_array ()))
+            goto nomem;
+    }
     if (!(o = json_pack ("[I,s,f]",
                          job->id,
                          flux_job_statetostr (job->state, false),
                          timestamp)))
         goto nomem;
     if (json_array_append_new (event->batch->state_trans, o)) {
+        json_decref (o);
+        goto nomem;
+    }
+    return 0;
+nomem:
+    errno = ENOMEM;
+error:
+    return -1;
+}
+
+int event_batch_pub_annotations (struct event *event, struct job *job)
+{
+    json_t *o;
+
+    /* do not check for job->annotations == NULL, all annotations
+     * being cleared is a possible change.
+     */
+    if (event_batch_start (event) < 0)
+        goto error;
+    if (!event->batch->annotations) {
+        if (!(event->batch->annotations = json_array ()))
+            goto nomem;
+    }
+    /* O? support in jansson 2.8 */
+    if (job->annotations)
+        o = json_pack ("[I,O]", job->id, job->annotations);
+    else
+        o = json_pack ("[I,n]", job->id);
+    if (!o)
+        goto nomem;
+    if (json_array_append_new (event->batch->annotations, o)) {
         json_decref (o);
         goto nomem;
     }

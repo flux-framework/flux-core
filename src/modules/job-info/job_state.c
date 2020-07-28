@@ -77,6 +77,7 @@ static void job_destroy (void *data)
     struct job *job = data;
     if (job) {
         json_decref (job->exception_context);
+        json_decref (job->annotations);
         json_decref (job->jobspec_job);
         json_decref (job->jobspec_cmd);
         json_decref (job->R);
@@ -162,6 +163,11 @@ struct job_state_ctx *job_state_create (flux_t *h)
     zlistx_set_destructor (jsctx->transitions, flux_msg_destroy_wrapper);
 
     if (flux_event_subscribe (h, "job-state") < 0) {
+        flux_log_error (h, "flux_event_subscribe");
+        goto error;
+    }
+
+    if (flux_event_subscribe (h, "job-annotations") < 0) {
         flux_log_error (h, "flux_event_subscribe");
         goto error;
     }
@@ -1127,6 +1133,35 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
     }
 }
 
+static int parse_transition (json_t *transition, flux_jobid_t *id,
+                             flux_job_state_t *state, double *timestamp)
+{
+    json_t *o;
+
+    if (!json_is_array (transition))
+        return -1;
+
+    if (!(o = json_array_get (transition, 0))
+        || !json_is_integer (o))
+        return -1;
+
+    (*id) = json_integer_value (o);
+
+    if (!(o = json_array_get (transition, 1))
+        || !json_is_string (o))
+        return -1;
+
+    if (flux_job_strtostate (json_string_value (o), state) < 0)
+        return -1;
+
+    if (!(o = json_array_get (transition, 2))
+        || !json_is_real (o))
+        return -1;
+
+    (*timestamp) = json_real_value (o);
+    return 0;
+}
+
 static void update_jobs (struct info_ctx *ctx, json_t *transitions)
 {
     struct job_state_ctx *jsctx = ctx->jsctx;
@@ -1134,48 +1169,20 @@ static void update_jobs (struct info_ctx *ctx, json_t *transitions)
     json_t *value;
 
     if (!json_is_array (transitions)) {
-        flux_log_error (ctx->h, "%s: transitions EPROTO", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: transitions EPROTO", __FUNCTION__);
         return;
     }
 
     json_array_foreach (transitions, index, value) {
         struct job *job;
-        json_t *o;
         flux_jobid_t id;
         flux_job_state_t state;
         double timestamp;
 
-        if (!json_is_array (value)) {
-            flux_log_error (jsctx->h, "%s: transition EPROTO", __FUNCTION__);
+        if (parse_transition (value, &id, &state, &timestamp) < 0) {
+            flux_log (jsctx->h, LOG_ERR, "%s: transition EPROTO", __FUNCTION__);
             return;
         }
-
-        if (!(o = json_array_get (value, 0))
-            || !json_is_integer (o)) {
-            flux_log_error (jsctx->h, "%s: transition EPROTO", __FUNCTION__);
-            return;
-        }
-
-        id = json_integer_value (o);
-
-        if (!(o = json_array_get (value, 1))
-            || !json_is_string (o)) {
-            flux_log_error (jsctx->h, "%s: transition EPROTO", __FUNCTION__);
-            return;
-        }
-
-        if (flux_job_strtostate (json_string_value (o), &state) < 0) {
-            flux_log_error (jsctx->h, "%s: transition EPROTO", __FUNCTION__);
-            return;
-        }
-
-        if (!(o = json_array_get (value, 2))
-            || !json_is_real (o)) {
-            flux_log_error (jsctx->h, "%s: transition EPROTO", __FUNCTION__);
-            return;
-        }
-
-        timestamp = json_real_value (o);
 
         if (!(job = zhashx_lookup (jsctx->index, &id))) {
             if (!(job = job_create (ctx, id))){
@@ -1233,6 +1240,81 @@ void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
 
         update_jobs (ctx, transitions);
     }
+
+    return;
+}
+
+static int parse_annotation (json_t *annotation, flux_jobid_t *id, json_t **aValue)
+{
+    json_t *o;
+
+    if (!json_is_array (annotation))
+        return -1;
+
+    if (!(o = json_array_get (annotation, 0))
+        || !json_is_integer (o))
+        return -1;
+
+    (*id) = json_integer_value (o);
+
+    if (!(o = json_array_get (annotation, 1))
+        || (!json_is_object (o) && !json_is_null (o)))
+        return -1;
+
+    (*aValue) = o;
+    return 0;
+}
+
+static void update_annotations (struct info_ctx *ctx, json_t *annotations)
+{
+    struct job_state_ctx *jsctx = ctx->jsctx;
+    size_t index;
+    json_t *value;
+
+    if (!json_is_array (annotations)) {
+        flux_log (ctx->h, LOG_ERR, "annotations event is not an array");
+        return;
+    }
+
+    json_array_foreach (annotations, index, value) {
+        struct job *job;
+        flux_jobid_t id;
+        json_t *aValue;
+
+        if (parse_annotation (value, &id, &aValue) < 0) {
+            flux_log (jsctx->h, LOG_ERR, "%s: annotation parse error",
+                      __FUNCTION__);
+            return;
+        }
+
+        if ((job = zhashx_lookup (jsctx->index, &id))) {
+            json_decref (job->annotations);
+            if (json_is_null (aValue))
+                job->annotations = NULL;
+            else
+                job->annotations = json_incref (aValue);
+        }
+        else
+            flux_log_error (jsctx->h, "%s: job %ju not found",
+                            __FUNCTION__, (uintmax_t)id);
+    }
+
+}
+
+void job_annotations_cb (flux_t *h, flux_msg_handler_t *mh,
+                         const flux_msg_t *msg, void *arg)
+{
+    struct info_ctx *ctx = arg;
+    json_t *annotations;
+
+    if (flux_event_unpack (msg, NULL, "{s:o}",
+                           "annotations",
+                           &annotations) < 0) {
+        flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
+        return;
+    }
+
+    update_annotations (ctx, annotations);
 
     return;
 }
@@ -1364,6 +1446,18 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                 update_job_state (ctx, job, FLUX_JOB_CLEANUP, timestamp);
         }
         else if (!strcmp (name, "alloc")) {
+            /* context not required if no annotations */
+            if (context) {
+                json_t *annotations;
+                if (!(annotations = json_object_get (context, "annotations"))) {
+                    flux_log (ctx->h, LOG_ERR,
+                              "%s: alloc context for %ju invalid",
+                              __FUNCTION__, (uintmax_t)job->id);
+                    goto error;
+                }
+                job->annotations = json_incref (annotations);
+            }
+
             if (job->state == FLUX_JOB_SCHED)
                 update_job_state (ctx, job, FLUX_JOB_RUN, timestamp);
         }

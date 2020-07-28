@@ -85,6 +85,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_wait (optparse_t *p, int argc, char **argv);
+int cmd_annotate (optparse_t *p, int argc, char **argv);
 
 int stdin_flags;
 
@@ -441,6 +442,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_wait,
       0,
       wait_opts,
+    },
+    { "annotate",
+      "[OPTIONS] id key value",
+      "Annotate job with key and value",
+      cmd_annotate,
+      0,
+      NULL,
     },
     OPTPARSE_SUBCMD_END
 };
@@ -1003,7 +1011,8 @@ static const char *list_attrs =
     "\"name\",\"ntasks\",\"nnodes\",\"ranks\",\"expiration\",\"success\"," \
     "\"exception_occurred\",\"exception_severity\",\"exception_type\"," \
     "\"exception_note\",\"result\","                                    \
-    "\"t_depend\",\"t_sched\",\"t_run\",\"t_cleanup\",\"t_inactive\"]";
+    "\"t_depend\",\"t_sched\",\"t_run\",\"t_cleanup\",\"t_inactive\"," \
+    "\"annotations\"]";
 
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
@@ -2824,6 +2833,64 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     }
     flux_close (h);
     return (rc);
+}
+
+int cmd_annotate (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h;
+    flux_jobid_t id;
+    const char *key;
+    const char *value;
+    void *valbuf = NULL;
+    json_t *v;
+    json_error_t error;
+    json_t *a;
+    flux_future_t *f;
+
+    if ((argc - optindex) != 3) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    id = parse_jobid (argv[optindex]);
+    key = argv[optindex + 1];
+
+    if (!strcmp (argv[optindex + 2], "-")) {
+        ssize_t size;
+        if ((size = read_all (STDIN_FILENO, &valbuf)) < 0)
+            log_err_exit ("read_all");
+        value = (const char *)valbuf;
+    }
+    else
+        value = argv[optindex + 2];
+
+    /* if value is not legal json, assume string */
+    if (!(v = json_loads (value, JSON_DECODE_ANY, &error))) {
+        if (!(v = json_string (value)))
+            log_msg_exit ("json_string");
+    }
+
+    if (!(a = json_pack ("{s:{s:o}}", "user", key, v)))
+        log_err_exit ("json_pack");
+
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.annotate",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:I s:o}",
+                             "id", id,
+                             "annotations", a)))
+        log_err_exit ("flux_rpc_pack");
+    if (flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("annotate: %s", future_strerror (f, errno));
+
+    flux_future_destroy (f);
+    flux_close (h);
+    free (valbuf);
+    return (0);
 }
 
 /*
