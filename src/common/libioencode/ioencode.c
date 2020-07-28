@@ -17,51 +17,11 @@
 #include <stdbool.h>
 #include <errno.h>
 
-#include <sodium.h>
 #include <jansson.h>
 
 #include "src/common/libutil/macros.h"
 
 #include "ioencode.h"
-
-static char *bin2base64 (const char *bin_data, int bin_len)
-{
-    char *base64_data;
-    int base64_len;
-
-    base64_len = sodium_base64_encoded_len (bin_len, sodium_base64_VARIANT_ORIGINAL);
-
-    if (!(base64_data = calloc (1, base64_len)))
-        return NULL;
-
-    sodium_bin2base64 (base64_data, base64_len,
-                       (unsigned char *)bin_data, bin_len,
-                       sodium_base64_VARIANT_ORIGINAL);
-
-    return base64_data;
-}
-
-static char *base642bin (const char *base64_data, size_t *bin_len)
-{
-    size_t base64_len;
-    char *bin_data = NULL;
-
-    base64_len = strlen (base64_data);
-    (*bin_len) = BASE64_DECODE_SIZE (base64_len);
-
-    if (!(bin_data = calloc (1, (*bin_len))))
-        return NULL;
-
-    if (sodium_base642bin ((unsigned char *)bin_data, (*bin_len),
-                           base64_data, base64_len,
-                           NULL, bin_len, NULL,
-                           sodium_base64_VARIANT_ORIGINAL) < 0) {
-        free (bin_data);
-        return NULL;
-    }
-
-    return bin_data;
-}
 
 json_t *ioencode (const char *stream,
                   const char *rank,
@@ -69,7 +29,6 @@ json_t *ioencode (const char *stream,
                   int len,
                   bool eof)
 {
-    char *base64_data = NULL;
     json_t *o = NULL;
     json_t *rv = NULL;
 
@@ -84,12 +43,10 @@ json_t *ioencode (const char *stream,
     }
 
     if (data && len) {
-        if (!(base64_data = bin2base64 (data, len)))
-            goto error;
-        if (!(o = json_pack ("{s:s s:s s:s}",
+        if (!(o = json_pack ("{s:s s:s s:s#}",
                              "stream", stream,
                              "rank", rank,
-                             "data", base64_data)))
+                             "data", data, len)))
             goto error;
     }
     else {
@@ -104,7 +61,6 @@ json_t *ioencode (const char *stream,
     }
     rv = o;
 error:
-    free (base64_data);
     return rv;
 }
 
@@ -117,7 +73,6 @@ int iodecode (json_t *o,
 {
     const char *stream;
     const char *rank;
-    const char *base64_data;
     char *bin_data = NULL;
     size_t bin_len = 0;
     int eof = 0;
@@ -134,10 +89,8 @@ int iodecode (json_t *o,
                      "stream", &stream,
                      "rank", &rank) < 0)
         goto cleanup;
-    if (json_unpack (o, "{s:s}", "data", &base64_data) == 0) {
+    if (json_unpack (o, "{s:s%}", "data", &bin_data, &bin_len) == 0) {
         has_data = true;
-        if (!(bin_data = base642bin (base64_data, &bin_len)))
-            goto cleanup;
     }
     if (json_unpack (o, "{s:b}", "eof", &eof) == 0)
         has_eof = true;
@@ -152,8 +105,13 @@ int iodecode (json_t *o,
     if (rankp)
         (*rankp) = rank;
     if (datap) {
-        (*datap) = bin_data;
-        bin_data = NULL;
+        *datap = NULL;
+        if (bin_data) {
+            if (!(*datap = malloc (bin_len)))
+                goto cleanup;
+            memcpy (*datap, bin_data, bin_len);
+            bin_data = NULL;
+        }
     }
     if (lenp)
         (*lenp) = bin_len;
@@ -162,7 +120,6 @@ int iodecode (json_t *o,
 
     rv = 0;
 cleanup:
-    free (bin_data);
     return rv;
 }
 
