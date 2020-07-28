@@ -84,7 +84,7 @@ following is the format used for the default format:
 
 ::
 
-   {id:>18} {username:<8.8} {name:<10.10} {status:>6.6} {ntasks:>6} {nnodes:>6h} {runtime!F:>8h} {ranks:h}
+   {id.f58:>12} {username:<8.8} {name:<10.10} {status_abbrev:>2.2} {ntasks:>6} {nnodes:>6h} {runtime!F:>8h} {ranks:h}
 
 The special presentation type *h* can be used to convert an empty
 string, "0s", "0.0", or "0:00:00" to a hyphen. For example, normally
@@ -126,6 +126,18 @@ The field names that can be specified are:
 
 **id**
    job ID
+
+**id.f58**
+  job ID in RFC 19 F58 (base58) encoding
+
+**id.hex**
+   job ID in ``0x`` prefix hexadecimal representation
+
+**id.dothex**
+   job ID in dotted hexadecimal representation (``xx.xx.xx.xx``)
+
+**id.words**
+  job ID in mnemonic encoding
 
 **userid**
    job submitter's userid
