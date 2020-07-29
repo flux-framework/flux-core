@@ -1,3 +1,51 @@
+flux-core version 0.18.0 - 2020-07-29
+-------------------------------------
+
+This release features a more compact default representation for Flux JOBIDs,
+manual pages converted to ReST format and published on
+[readthedocs.io](https://flux-framework.readthedocs.io/projects/flux-core/),
+and the ability for schedulers to add data to jobs which can be displayed
+with `flux jobs`.
+
+### New features
+
+ * doc: man pages converted to ReST for publication on readthedocs.io
+   (#3033, #3078, #3085)
+ * Add support for RFC19 F58 encoded JOBIDs (#3045)
+ * Support user and scheduler job annotations (#3065, #3062, #2960)
+ * add content-s3, content-files alternate backing stores (#3025, #2992)
+ * Python interface to 'mini batch' (#3020)
+
+### Fixes
+
+ * shell: fix bug in cpu-affinity=per-task (#3080)
+ * flux-hwloc: remove ignore of `HWLOC_OBJ_GROUP` (#3046)
+ * cmd: Make label io options consistent (#3068)
+ * flux-resource list: Allow null/missing key to designate empty set (#3047)
+ * flux-jobs: small functionality and testing updates (#3060)
+ * job-manager: avoid segfault on priority change with pending alloc (#3072)
+
+### Cleanup
+
+ * doc: adjust dependency table to reflect hwloc v2.0+ support (#3053)
+ * Update terminology to use more inclusive words (#3040)
+
+### Testsuite enhancements
+
+ * testsuite: remove use of -S option in `run_timeout` (#3079)
+ * testsuite: minor valgrind test cleanup (#3077)
+ * docker: small updates for testenv images, travis builds (#3058)
+ * travis-ci: add python coverage (#3056)
+ * travis-ci: Add `--localstatedir=/var` to docker tag builds (#3050)
+ * pylint: Update pylint to 2.4.4 (#3035)
+ * Fix testsuite for Lua 5.3 on Ubuntu 20.04 (#3028)
+ * docker: really actually fix Ubuntu 20.04 (focal) docker tags (#3027)
+ * travis-ci: enforce correct configure ARGS for docker tags (#3023)
+ * travis: tag a docker image for ubuntu 20.04 (#3022)
+ * python: add stdio properties to Jobspec class (#3019)
+ * build and test fixes (#3016)
+
+
 flux-core version 0.17.0 - 2020-06-18
 -------------------------------------
 
