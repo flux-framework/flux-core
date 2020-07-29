@@ -291,6 +291,20 @@ void check_payload_json_formatted (void)
     ok (strlen (flux_msg_last_error (msg)) > 0,
         "flux_msg_last_error is %s", flux_msg_last_error (msg));
 
+    /* flux_msg_pack/unpack doesn't reject packed NUL chars */
+    char buf[4] = "foo";
+    char *result = NULL;
+    size_t len = -1;
+
+    ok (flux_msg_pack (msg, "{ss#}", "result", buf, 4) == 0,
+        "flux_msg_pack with NUL char works");
+    ok (flux_msg_unpack (msg, "{ss%}", "result", &result, &len) == 0,
+        "flux_msg_unpack with NUL char works");
+    ok (len == 4,
+        "flux_msg_unpack returned correct length");
+    ok (memcmp (buf, result, 4) == 0,
+        "original buffer and result match");
+
     flux_msg_destroy (msg);
 }
 
