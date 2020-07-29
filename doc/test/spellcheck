@@ -34,7 +34,8 @@ for f in $*; do
     filename=$(basename $f)
     dir=$(basename $(dirname $f))
     tmpfile=$(mktemp)
-    rc=$(cat $f | $ASPELL -p $dict -n list | sort | uniq | tee $tmpfile | wc -l)
+    rc=$(cat $f | $ASPELL -p $dict --encoding='utf-8' -n list \
+        | sort | uniq | tee $tmpfile | wc -l)
     if test $rc == 0; then
         echo "ok $count - spell check $dir/$filename"
     else

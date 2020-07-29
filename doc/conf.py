@@ -50,6 +50,11 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 master_doc = 'index'
 source_suffix = '.rst'
 
+# Disable "smartquotes" to avoid things such as turning long-options
+#  "--" into en-dash in html output, which won't make much sense for
+#  manpages.
+smartquotes = False
+
 # -- Options for HTML output -------------------------------------------------
 
 # The theme to use for HTML and HTML Help pages.  See the documentation for
