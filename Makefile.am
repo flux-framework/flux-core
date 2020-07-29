@@ -7,6 +7,7 @@ EXTRA_DIST = \
 	config/tap-driver.py \
 	NOTICE.LLNS \
 	README.md \
+	NEWS.md \
 	scripts/.pylintrc
 
 ACLOCAL_AMFLAGS = -I config
