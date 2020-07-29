@@ -39,18 +39,6 @@ release = '0.13.0'
 
 # -- General configuration ---------------------------------------------------
 
-# Add any Sphinx extension module names here, as strings. They can be
-# extensions coming with Sphinx (named 'sphinx.ext.*') or your custom
-# ones.
-extensions = [
-    'sphinxcontrib.spelling',
-]
-
-# sphinxcontrib.spelling settings
-spelling_word_list_filename = [
-    'test/spell.en.pws'
-]
-
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
 
