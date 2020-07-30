@@ -25,6 +25,12 @@ struct schedutil_ops {
                  const char *R,
                  void *arg);
 
+    /* Hello handshake has completed. Scheduler should call schedutil_ready()
+     * when it is ready to begin handling alloc/free/cancel requests.
+     * Return 0 on success, -1 on failure with errno set.
+     */
+    int (*ready)(flux_t *h, void *arg);
+
     /* Callback for an alloc request.  jobspec is looked up as a convenience.
      * Decode msg with schedutil_alloc_request_decode().
      * 'msg' and 'jobspec' are only valid for the duration of this call.

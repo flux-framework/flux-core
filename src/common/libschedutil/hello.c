@@ -65,7 +65,7 @@ int schedutil_hello (schedutil_t *util)
     json_t *entry;
     size_t index;
 
-    if (!util || !util->ops->hello) {
+    if (!util || !util->ops->hello || !util->ops->ready) {
         errno = EINVAL;
         return -1;
     }
@@ -95,6 +95,8 @@ int schedutil_hello (schedutil_t *util)
                                  t_submit) < 0)
             goto error;
     }
+    if (util->ops->ready (util->h, util->cb_arg) < 0)
+        goto error;
     flux_future_destroy (f);
     return 0;
 error:

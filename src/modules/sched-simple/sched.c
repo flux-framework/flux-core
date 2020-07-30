@@ -538,10 +538,28 @@ out:
     return rc;
 }
 
+static int ready_cb (flux_t *h, void *arg)
+{
+    struct simple_sched *ss = arg;
+    char *s = NULL;
+
+    if (schedutil_ready (ss->util_ctx,
+                         ss->single ? "single": "unlimited",
+                         NULL) < 0) {
+        flux_log_error (h, "schedutil_ready");
+        return -1;
+    }
+    if (!(s = rlist_dumps (ss->rlist)))
+        return -1;
+    flux_log (h, LOG_DEBUG, "ready: %d of %d cores: %s",
+                             ss->rlist->avail, ss->rlist->total, s);
+    free (s);
+    return 0;
+}
+
 static int simple_sched_init (flux_t *h, struct simple_sched *ss)
 {
     int rc = -1;
-    char *s = NULL;
 
     /*  Acquire resources from resource module and set initial
      *   resource state.
@@ -555,16 +573,7 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
         flux_log_error (h, "schedutil_hello");
         goto out;
     }
-    if (schedutil_ready (ss->util_ctx,
-                         ss->single ? "single": "unlimited",
-                         NULL) < 0) {
-        flux_log_error (h, "schedutil_ready");
-        goto out;
-    }
-    s = rlist_dumps (ss->rlist);
-    flux_log (h, LOG_DEBUG, "ready: %d of %d cores: %s",
-                            ss->rlist->avail, ss->rlist->total, s);
-    free (s);
+
     rc = 0;
 out:
     return rc;
@@ -610,6 +619,7 @@ static const struct flux_msg_handler_spec htab[] = {
 
 static const struct schedutil_ops ops = {
     .hello = hello_cb,
+    .ready = ready_cb,
     .alloc = alloc_cb,
     .free = free_cb,
     .cancel = cancel_cb,

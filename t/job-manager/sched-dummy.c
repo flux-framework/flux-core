@@ -292,6 +292,19 @@ int hello_cb (flux_t *h,
     return 0;
 }
 
+int ready_cb (flux_t *h, void *arg)
+{
+    struct sched_ctx *sc = arg;
+    int count;
+
+    if (schedutil_ready (sc->schedutil_ctx, sc->mode, &count) < 0) {
+        flux_log_error (h, "schedutil_ready");
+        return -1;
+    }
+    flux_log (h, LOG_DEBUG, "ready: count=%d", count);
+    return 0;
+}
+
 static struct optparse_option dummy_opts[] = {
     {   .name = "cores",
         .has_arg = 1,
@@ -351,6 +364,7 @@ void sched_destroy (struct sched_ctx *sc)
 
 const struct schedutil_ops ops = {
     .hello = hello_cb,
+    .ready = ready_cb,
     .alloc = alloc_cb,
     .free = free_cb,
     .cancel = cancel_cb,
@@ -393,7 +407,6 @@ int mod_main (flux_t *h, int argc, char *argv[])
 {
     int rc = -1;
     struct sched_ctx *sc;
-    int count;
 
     if (!(sc = sched_create (h, argc, argv)))
         return -1;
@@ -402,12 +415,6 @@ int mod_main (flux_t *h, int argc, char *argv[])
         flux_log_error (h, "schedutil_hello");
         goto done;
     }
-    if (schedutil_ready (sc->schedutil_ctx, sc->mode, &count) < 0) {
-        flux_log_error (h, "schedutil_ready");
-        goto done;
-    }
-    flux_log (sc->h, LOG_DEBUG, "ready: count=%d", count);
-
     if ((rc = flux_reactor_run (flux_get_reactor (h), 0)) < 0)
         flux_log_error (h, "flux_reactor_run");
 done:
