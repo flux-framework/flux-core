@@ -794,7 +794,7 @@ error:
 }
 
 /* Write RFC 24 header event to KVS.  Assume:
- * - fixed base64 encoding for stdout, stderr
+ * - fixed utf-8 encoding for stdout, stderr
  * - no options
  * - no stdlog
  */
@@ -807,8 +807,8 @@ static int shell_output_header (struct shell_output *out)
                              "{s:i s:{s:s s:s} s:{s:i s:i} s:{}}",
                              "version", 1,
                              "encoding",
-                               "stdout", "base64",
-                               "stderr", "base64",
+                               "stdout", "UTF-8",
+                               "stderr", "UTF-8",
                              "count",
                                "stdout", out->shell->info->total_ntasks,
                                "stderr", out->shell->info->total_ntasks,

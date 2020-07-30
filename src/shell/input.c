@@ -266,7 +266,7 @@ static int shell_input_header (struct shell_input *in)
                              "{s:i s:{s:s} s:{s:i} s:{}}",
                              "version", 1,
                              "encoding",
-                             "stdin", "base64",
+                             "stdin", "UTF-8",
                              "count",
                              "stdin", 1,
                              "options");

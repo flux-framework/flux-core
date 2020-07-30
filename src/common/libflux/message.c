@@ -1310,7 +1310,7 @@ int flux_msg_vunpack (const flux_msg_t *cmsg, const char *fmt, va_list ap)
             errno = EPROTO;
             goto done;
         }
-        if (!(msg->json = json_loads (json_str, 0, &err))) {
+        if (!(msg->json = json_loads (json_str, JSON_ALLOW_NUL, &err))) {
             msg_lasterr_set (msg, "%s", err.text);
             errno = EPROTO;
             goto done;
