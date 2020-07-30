@@ -23,6 +23,9 @@ struct schedutil_ctx {
     const struct schedutil_ops *ops;
     void *cb_arg;
     zlistx_t *outstanding_futures;
+
+    zlist_t *f_hello;
+    int hello_job_count;
 };
 
 /*

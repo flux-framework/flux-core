@@ -46,6 +46,10 @@ schedutil_t *schedutil_create (flux_t *h,
     util->cb_arg = arg;
     if ((util->outstanding_futures = zlistx_new ()) == NULL)
         goto error;
+    if (!(util->f_hello = zlist_new ())) {
+        errno = ENOMEM;
+        goto error;
+    }
     if (schedutil_ops_register (util) < 0)
         goto error;
 
@@ -88,6 +92,12 @@ void schedutil_destroy (schedutil_t *util)
         int saved_errno = errno;
         respond_to_outstanding_msgs (util);
         zlistx_destroy (&util->outstanding_futures);
+        if (util->f_hello) {
+            flux_future_t *f;
+            while ((f = zlist_pop (util->f_hello)))
+                flux_future_destroy (f);
+            zlist_destroy (&util->f_hello);
+        }
         schedutil_ops_unregister (util);
         free (util);
         errno = saved_errno;
