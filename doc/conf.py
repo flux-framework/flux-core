@@ -33,10 +33,6 @@ copyright = '''Copyright 2014 Lawrence Livermore National Security, LLC and Flux
 SPDX-License-Identifier: LGPL-3.0'''
 author = 'This page is maintained by the Flux community.'
 
-# The full version, including alpha/beta/rc tags
-release = '0.13.0'
-
-
 # -- General configuration ---------------------------------------------------
 
 # Add any paths that contain templates here, relative to this directory.
