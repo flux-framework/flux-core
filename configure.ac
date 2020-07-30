@@ -5,7 +5,7 @@ AC_INIT([flux-core],
         m4_esyscmd([git describe --always | awk '/.*/ {sub(/^v/, ""); printf "%s",$1; exit}']))
 AC_CONFIG_AUX_DIR([config])
 AC_CONFIG_MACRO_DIR([config])
-AC_CONFIG_SRCDIR([NEWS])
+AC_CONFIG_SRCDIR([NEWS.md])
 AC_CANONICAL_SYSTEM
 ##
 # If runstatedir not explicitly set on command line, use '/run' as default
