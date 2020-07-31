@@ -240,6 +240,7 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_kvs_txn_unlink.3 \
 	man3/flux_kvs_txn_symlink.3 \
 	man3/flux_kvs_txn_put_raw.3 \
+	man3/flux_kvs_txn_put_treeobj.3 \
 	man3/flux_kvs_namespace_remove.3 \
 	man3/flux_kvs_move.3 \
 	man3/flux_core_version_string.3 \
@@ -265,7 +266,8 @@ MAN7_FILES_PRIMARY = \
 	man7/flux-broker-attributes.7
 
 
-RST_FILES  = $(MAN1_FILES_PRIMARY:.1=.rst)
+RST_FILES  = \
+	$(MAN1_FILES_PRIMARY:.1=.rst) \
 	$(MAN3_FILES_PRIMARY:.3=.rst) \
 	$(MAN5_FILES_PRIMARY:.5=.rst) \
 	$(MAN7_FILES_PRIMARY:.7=.rst)
@@ -297,6 +299,7 @@ $(MAN_FILES): conf.py $(RST_FILES)
 
 EXTRA_DIST = \
 	conf.py \
+	index.rst \
 	$(RST_FILES) \
 	man1/NODESET.rst \
 	man3/JSON_PACK.rst \
