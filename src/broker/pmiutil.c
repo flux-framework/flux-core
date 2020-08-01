@@ -26,6 +26,12 @@
 #include "pmiutil.h"
 #include "liblist.h"
 
+typedef enum {
+    PMI_MODE_SINGLETON,
+    PMI_MODE_DLOPEN,
+    PMI_MODE_WIRE1,
+} pmi_mode_t;
+
 struct pmi_dso {
     void *dso;
     int (*init) (int *spawned);
@@ -43,7 +49,30 @@ struct pmi_handle {
     struct pmi_dso *dso;
     struct pmi_simple_client *cli;
     int debug;
+    pmi_mode_t mode;
 };
+
+static void vdebugf (struct pmi_handle *pmi, const char *fmt, va_list ap)
+{
+
+    if (pmi->debug) {
+        char buf[1024];
+        (void)vsnprintf (buf, sizeof (buf), fmt, ap);
+        fprintf (stderr, "pmi-debug-%s: %s",
+                pmi->mode == PMI_MODE_SINGLETON ? "singleton" :
+                pmi->mode == PMI_MODE_WIRE1 ? "wire.1" :
+                pmi->mode == PMI_MODE_DLOPEN ? "dlopen" : "unknown",
+                buf);
+    }
+}
+
+static void debugf (struct pmi_handle *pmi, const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    vdebugf (pmi, fmt, ap);
+    va_end (ap);
+}
 
 static void broker_pmi_dlclose (struct pmi_dso *dso)
 {
@@ -77,20 +106,20 @@ static struct pmi_dso *broker_pmi_dlopen (const char *pmi_library, int debug)
             if (debug) {
                 char *errstr = dlerror ();
                 if (errstr)
-                    log_msg ("%s", errstr);
+                    log_msg ("pmi-debug-dlopen: %s", errstr);
                 else
-                    log_msg ("dlopen %s failed", name);
+                    log_msg ("pmi-debug-dlopen: dlopen %s failed", name);
             }
         }
         else if (dlsym (dso->dso, "flux_pmi_library")) {
             if (debug)
-                log_msg ("skipping %s", name);
+                log_msg ("pmi-debug-dlopen: skipping %s", name);
             dlclose (dso->dso);
             dso->dso = NULL;
         }
         else {
             if (debug)
-                log_msg ("dlopen %s", name);
+                log_msg ("pmi-debug-dlopen: library name %s", name);
         }
     }
     liblist_destroy (libs);
@@ -110,7 +139,8 @@ static struct pmi_dso *broker_pmi_dlopen (const char *pmi_library, int debug)
     if (!dso->init || !dso->finalize || !dso->get_size || !dso->get_rank
             || !dso->barrier || !dso->kvs_get_my_name
             || !dso->kvs_put || !dso->kvs_commit || !dso->kvs_get) {
-        log_msg ("dlsym: %s is missing required symbols", pmi_library);
+        log_msg ("pmi-debug-dlopen: dlsym: %s is missing required symbols",
+                 pmi_library);
         goto error;
     }
     return dso;
@@ -247,21 +277,26 @@ struct pmi_handle *broker_pmi_create (void)
     pmi_debug = getenv ("FLUX_PMI_DEBUG");
     if (pmi_debug)
         pmi->debug = strtol (pmi_debug, NULL, 10);
-    pmi->cli = pmi_simple_client_create_fd (getenv ("PMI_FD"),
-                                            getenv ("PMI_RANK"),
-                                            getenv ("PMI_SIZE"),
-                                            NULL);
+    if ((pmi->cli = pmi_simple_client_create_fd (getenv ("PMI_FD"),
+                                                 getenv ("PMI_RANK"),
+                                                 getenv ("PMI_SIZE"),
+                                                 NULL))) {
+        pmi->mode = PMI_MODE_WIRE1;
+    }
     /* N.B. SLURM boldly installs its libpmi.so into the system libdir,
      * so it will be found here, even if not running in a SLURM job.
      * Fortunately it emulates singleton in that case, in lieu of failing.
      */
-    if (!pmi->cli)
-        pmi->dso = broker_pmi_dlopen (getenv ("PMI_LIBRARY"), pmi->debug);
-    /* If neither pmi->cli nor pmi->dso is set, singleton is assumed later.
+    else if ((pmi->dso = broker_pmi_dlopen (getenv ("PMI_LIBRARY"),
+                                            pmi->debug))) {
+        pmi->mode = PMI_MODE_DLOPEN;
+    }
+    /* If neither pmi->cli nor pmi->dso is set, singleton is assumed.
      */
-    if (pmi->debug)
-        log_msg ("using %s", pmi->cli ? "PMI-1 wire protocol"
-                           : pmi->dso ? "dlopen" : "singleton");
+    else {
+        pmi->mode = PMI_MODE_SINGLETON;
+    }
+    debugf (pmi, "initialized");
     return pmi;
 }
 
