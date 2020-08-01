@@ -19,6 +19,7 @@
 
 #include "module.h"
 #include "message.h"
+#include "keepalive.h"
 #include "rpc.h"
 
 #include "src/common/libutil/log.h"
@@ -123,6 +124,25 @@ bool flux_module_debug_test (flux_t *h, int flag, bool clear)
     if (clear)
         *flagsp &= ~flag;
     return true;
+}
+
+int flux_module_set_running (flux_t *h)
+{
+    flux_msg_t *msg;
+    int rc = -1;
+
+    if (!h) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(msg = flux_keepalive_encode (0, FLUX_MODSTATE_RUNNING)))
+        return -1;
+    if (flux_send (h, msg, 0) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_msg_decref (msg);
+    return rc;
 }
 
 /*

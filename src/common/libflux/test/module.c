@@ -20,6 +20,7 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libtestutil/util.h"
 
 /* N.B. FAKE1 and FAKE2 are defined with -D on the CC command line.
  * They are set to the full path of two test modules, module_fake1.so
@@ -182,6 +183,22 @@ void test_debug (void)
     flux_handle_destroy (h);
 }
 
+void test_set_running (void)
+{
+    flux_t *h;
+
+    if (!(h = loopback_create (0)))
+        BAIL_OUT ("loopback_create failed");
+
+    ok (flux_module_set_running (h) == 0,
+        "flux_module_set_running returns success");
+    errno = 0;
+    ok (flux_module_set_running (NULL) < 0 && errno == EINVAL,
+        "flux_module_set_running h=NULL fails with EINVAL");
+
+    flux_close (h);
+}
+
 int main (int argc, char *argv[])
 {
 
@@ -190,6 +207,7 @@ int main (int argc, char *argv[])
     test_modname ();
     test_modfind ();
     test_debug ();
+    test_set_running ();
 
     done_testing();
     return (0);
