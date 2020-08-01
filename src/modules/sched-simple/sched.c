@@ -643,6 +643,12 @@ int mod_main (flux_t *h, int argc, char **argv)
     zlistx_set_comparator (ss->queue, jobreq_cmp);
     zlistx_set_destructor (ss->queue, jobreq_destructor);
 
+    /* Let `flux module load simple-sched` return before synchronous
+     * initialization with resource and job-manager modules.
+     */
+    if (flux_module_set_running (h) < 0)
+        goto done;
+
     if (simple_sched_init (h, ss) < 0)
         goto done;
     if (flux_msg_handler_addvec (h, htab, ss, &handlers) < 0) {
