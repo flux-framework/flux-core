@@ -31,7 +31,7 @@ entries = []
 visited = dict()
 
 for (path, cmd, descr, author, section) in man_pages:
-    if section is not 1 or path in visited:
+    if section != 1 or path in visited:
         continue
     visited[path] = True
     with open(f"{docsdir}/{path}.rst", "r", encoding='utf-8') as f:
