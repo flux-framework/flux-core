@@ -267,4 +267,15 @@ test_expect_success 'flux module load "noexist" fails' '
 	grep -q "not found" noexist.out
 '
 
+test_expect_success 'flux_module_set_running - load test module' '
+	run_timeout 10 \
+		flux module load ${FLUX_BUILD_DIR}/t/module/.libs/running.so
+'
+test_expect_success 'flux_module_set_running - signal module to enter reactor' '
+	flux event pub running.go
+'
+test_expect_success 'flux_module_set_running - remove test module' '
+	flux module remove running
+'
+
 test_done

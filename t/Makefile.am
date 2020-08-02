@@ -287,6 +287,7 @@ endif
 check_LTLIBRARIES = \
 	module/parent.la \
 	module/child.la \
+	module/running.la \
 	request/req.la \
 	ingest/job-manager-dummy.la \
 	job-manager/sched-dummy.la \
@@ -454,6 +455,12 @@ module_child_la_SOURCES = module/child.c
 module_child_la_CPPFLAGS = $(test_cppflags)
 module_child_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 module_child_la_LIBADD = \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+
+module_running_la_SOURCES = module/running.c
+module_running_la_CPPFLAGS = $(test_cppflags)
+module_running_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
+module_running_la_LIBADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 barrier_tbarrier_SOURCES = barrier/tbarrier.c

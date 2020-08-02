@@ -62,6 +62,13 @@ char *flux_modfind (const char *searchpath, const char *modname,
  */
 bool flux_module_debug_test (flux_t *h, int flag, bool clear);
 
+/* Set module state to RUNNING.  This transition occurs automatically when the
+ * reactor is entered, but this function can set the state to RUNNING early,
+ * e.g. if flux module load must complete before the module enters the reactor.
+ * Returns 0 on success, -1 on error with errno set.
+ */
+int flux_module_set_running (flux_t *h);
+
 #ifdef __cplusplus
 }
 #endif
