@@ -175,25 +175,37 @@ void state_machine_post (struct state_machine *s, const char *event)
     }
 }
 
-void state_machine_abort (struct state_machine *s)
+void state_machine_kill (struct state_machine *s, int signum)
 {
+    flux_t *h = s->ctx->h;
+
     switch (s->state) {
-        case STATE_NONE:
-            break;
         case STATE_INIT:
-            (void)runat_abort (s->ctx->runat, "rc1");
+            if (runat_abort (s->ctx->runat, "rc1") < 0)
+                flux_log_error (h, "runat_abort rc1 (signal %d)", signum);
             break;
         case STATE_RUN:
-            if (runat_abort (s->ctx->runat, "rc2") < 0)
+            if (runat_is_defined (s->ctx->runat, "rc2")) {
+                if (runat_abort (s->ctx->runat, "rc2") < 0)
+                    flux_log_error (h, "runat_abort rc2 (signal %d)", signum);
+            }
+            else
                 state_machine_post (s, "rc2-abort");
             break;
         case STATE_CLEANUP:
-            (void)runat_abort (s->ctx->runat, "cleanup");
+            if (runat_abort (s->ctx->runat, "cleanup") < 0)
+                flux_log_error (h, "runat_abort cleanup (signal %d)", signum);
             break;
         case STATE_FINALIZE:
             (void)runat_abort (s->ctx->runat, "rc3");
             break;
+        case STATE_NONE:
         case STATE_SHUTDOWN:
+            flux_log (h,
+                      LOG_INFO,
+                      "ignored signal %d in %s",
+                      signum,
+                      statestr (s->state));
             break;
     }
 }

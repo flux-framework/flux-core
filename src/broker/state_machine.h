@@ -32,7 +32,7 @@ broker_state_t state_machine_get_state (struct state_machine *s);
 
 void state_machine_shutdown (struct state_machine *s);
 
-void state_machine_abort (struct state_machine *s);
+void state_machine_kill (struct state_machine *s, int signum);
 
 #endif /* !_BROKER_STATE_MACHINE_H */
 
