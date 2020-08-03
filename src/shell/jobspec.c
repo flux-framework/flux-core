@@ -77,7 +77,7 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
     int version;
     json_t *tasks;
     json_t *resources;
-    struct res_level res[3];
+    struct res_level res[4];
 
     if (!(job = calloc (1, sizeof (*job)))) {
         set_error (error, "Out of memory");
@@ -129,20 +129,32 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
         goto error;
     if (res[1].with && parse_res_level (res[1].with, 2, &res[2], error) < 0)
         goto error;
+    if (res[2].with && parse_res_level (res[2].with, 3, &res[3], error) < 0)
+        goto error;
     if (res[0].type != NULL && !strcmp (res[0].type, "slot")
             && res[1].type != NULL && !strcmp (res[1].type, "core")
-            && res[1].with == NULL) {
+            && ((res[1].with == NULL) || (res[1].with != NULL  && !strcmp (res[2].type, "pu")))) {
         job->slot_count = res[0].count;
         job->cores_per_slot = res[1].count;
         job->slots_per_node = -1; // unspecified
+        job->threads_per_core = -1; // unspecified
+
+        if (res[1].with != NULL  && !strcmp (res[2].type, "pu")){
+            job->threads_per_core = res[2].count;
+        }
     }
     else if (res[0].type != NULL && !strcmp (res[0].type, "node")
-            && res[1].type != NULL && !strcmp (res[1].type, "slot")
-            && res[2].type != NULL && !strcmp (res[2].type, "core")
-            && res[2].with == NULL) {
+                 && res[1].type != NULL && !strcmp (res[1].type, "slot")
+                 && res[2].type != NULL && !strcmp (res[2].type, "core")
+                 && ((res[2].with == NULL) || (res[2].with != NULL  && !strcmp (res[3].type, "pu")))) {
         job->slot_count = res[0].count * res[1].count;
         job->cores_per_slot = res[2].count;
         job->slots_per_node = res[1].count;
+        job->threads_per_core = -1; // unspecified
+
+        if (res[2].with != NULL  && !strcmp (res[3].type, "pu")){
+            job->threads_per_core = res[3].count;
+        }
     }
     else {
         set_error (error, "Unexpected resource hierarchy: %s->%s->%s%s",
