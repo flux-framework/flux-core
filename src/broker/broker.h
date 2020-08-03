@@ -43,7 +43,7 @@ struct broker {
 
     struct hello *hello;
     struct runat *runat;
-    broker_state_t state;
+    struct state_machine *state_machine;
 
     char *init_shell_cmd;
     size_t init_shell_cmd_len;

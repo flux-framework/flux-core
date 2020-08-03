@@ -293,7 +293,6 @@ int main (int argc, char *argv[])
     ctx.cred.rolemask = FLUX_ROLE_OWNER;
     ctx.heartbeat_rate = 2;
     ctx.sec_typemask = ZSECURITY_TYPE_CURVE;
-    ctx.state = STATE_NONE;
 
     init_attrs (ctx.attrs, getpid ());
 
@@ -560,6 +559,13 @@ int main (int argc, char *argv[])
         log_msg ("installing session heartbeat: T=%0.1fs",
                   heartbeat_get_rate (ctx.heartbeat));
 
+    /* Configure broker state machine
+     */
+    if (!(ctx.state_machine = state_machine_create (&ctx))) {
+        log_err ("error creating broker state machine");
+        goto cleanup;
+    }
+
     /* Send hello message to parent.
      * N.B. uses tbon topology attributes set above.
      * hello_cb() tracks progress on rank 0.
@@ -625,6 +631,7 @@ cleanup:
 
     modhash_destroy (ctx.modhash);
     zlist_destroy (&ctx.sigwatchers);
+    state_machine_destroy (ctx.state_machine);
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);
@@ -741,7 +748,7 @@ static void hello_cb (struct hello *hello, void *arg)
 
     if (hello_complete (hello)) {
         overlay_set_idle_warning (ctx->overlay, 3);
-        state_machine (ctx, "wireup-complete");
+        state_machine_post (ctx->state_machine, "wireup-complete");
     }
 
     free (s);
@@ -1810,7 +1817,7 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     flux_log (ctx->h, LOG_INFO, "signal %d", signum);
     if (ctx->rank == 0)
-        state_abort (ctx);
+        state_machine_abort (ctx->state_machine);
 }
 
 /* Send a request message down the TBON.
