@@ -1387,7 +1387,7 @@ class JobspecV2(Jobspec):
         slot_children = []
         core_children = []
         if hw_threads_per_core not in (None, 0):
-            core_children.append(cls._create_resource("PU", hw_threads_per_core))
+            core_children.append(cls._create_resource("pu", hw_threads_per_core))
         slot_children.append(
             cls._create_resource("core", cores_per_task, core_children)
         )
