@@ -107,9 +107,7 @@ test_expect_success 'flux-mini batch: hardware-thread jobs can be submitted but 
 
 test_expect_success 'flux-mini batch: jobs failed to run because simple-sched does not support hardware-thread resource' '
 	grep "Unsupported resource type" flux-${hwt_id1}.out &&
-	grep "Unexpected resources: slot->core->PU(null)" flux-${hwt_id1}.out &&
-	grep "Unsupported resource type" flux-${hwt_id2}.out &&
-	grep "Unexpected resources: slot->core->PU(null)" flux-${hwt_id2}.out
+	grep "Unsupported resource type" flux-${hwt_id2}.out
 '
 
 test_expect_success 'create version batch script' '
