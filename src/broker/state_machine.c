@@ -26,6 +26,11 @@
 struct state_machine {
     struct broker *ctx;
     broker_state_t state;
+
+    zlist_t *events;
+    flux_watcher_t *prep;
+    flux_watcher_t *check;
+    flux_watcher_t *idle;
 };
 
 typedef void (*action_f)(struct state_machine *s);
@@ -151,7 +156,7 @@ static void action_shutdown (struct state_machine *s)
     shutdown_instance (s->ctx->shutdown);
 }
 
-void state_machine_post (struct state_machine *s, const char *event)
+static void process_event (struct state_machine *s, const char *event)
 {
     broker_state_t next_state;
 
@@ -173,6 +178,12 @@ void state_machine_post (struct state_machine *s, const char *event)
                   event,
                   statestr (s->state));
     }
+}
+
+void state_machine_post (struct state_machine *s, const char *event)
+{
+    if (zlist_append (s->events, (char *)event) < 0)
+        flux_log (s->ctx->h, LOG_ERR, "state_machine_post %s failed", event);
 }
 
 void state_machine_kill (struct state_machine *s, int signum)
@@ -240,10 +251,40 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
     }
 }
 
+static void prep_cb (flux_reactor_t *r,
+                     flux_watcher_t *w,
+                     int revents,
+                     void *arg)
+{
+    struct state_machine *s = arg;
+
+    if (zlist_size (s->events) > 0)
+        flux_watcher_start (s->idle);
+}
+
+static void check_cb (flux_reactor_t *r,
+                      flux_watcher_t *w,
+                      int revents,
+                      void *arg)
+{
+    struct state_machine *s = arg;
+    char *event;
+
+    if ((event = zlist_pop (s->events))) {
+        process_event (s, event);
+        free (event);
+    }
+    flux_watcher_stop (s->idle);
+}
+
 void state_machine_destroy (struct state_machine *s)
 {
     if (s) {
         int saved_errno = errno;
+        zlist_destroy (&s->events);
+        flux_watcher_destroy (s->prep);
+        flux_watcher_destroy (s->check);
+        flux_watcher_destroy (s->idle);
         free (s);
         errno = saved_errno;
     }
@@ -252,13 +293,26 @@ void state_machine_destroy (struct state_machine *s)
 struct state_machine *state_machine_create (struct broker *ctx)
 {
     struct state_machine *s;
+    flux_reactor_t *r = flux_get_reactor (ctx->h);
 
     if (!(s = calloc (1, sizeof (*s))))
         return NULL;
     s->ctx = ctx;
     s->state = STATE_NONE;
-
+    if (!(s->events = zlist_new ()))
+        goto nomem;
+    zlist_autofree (s->events);
+    s->prep = flux_prepare_watcher_create (r, prep_cb, s);
+    s->check = flux_check_watcher_create (r, check_cb, s);
+    s->idle = flux_idle_watcher_create (r, NULL, NULL);
+    if (!s->prep || !s->check || !s->idle)
+        goto nomem;
+    flux_watcher_start (s->prep);
+    flux_watcher_start (s->check);
     return s;
+nomem:
+    state_machine_destroy (s);
+    return NULL;
 }
 
 /*
