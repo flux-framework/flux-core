@@ -602,7 +602,7 @@ static int jobspec_parse (struct info_ctx *ctx,
                         "[{s:{s:i}}]",
                         "count", "total", &job->ntasks) < 0) {
         int per_slot, slot_count = 0;
-        struct res_level res[3];
+        struct res_level res[4];
 
         if (json_unpack_ex (tasks, NULL, 0,
                             "[{s:{s:i}}]",
@@ -623,6 +623,9 @@ static int jobspec_parse (struct info_ctx *ctx,
          * - node->slot->core->NIL
          * - slot->core->NIL
          * Set job->slot_count and job->cores_per_slot.
+         * For jobspec version 2, PU is also available under core
+         * - node->slot->core->PU->NIL
+         * - slot->core->PU->NIL
          */
         memset (res, 0, sizeof (res));
         if (parse_res_level (ctx, job, resources, &res[0]) < 0)
@@ -631,26 +634,30 @@ static int jobspec_parse (struct info_ctx *ctx,
             goto error;
         if (res[1].with && parse_res_level (ctx, job, res[1].with, &res[2]) < 0)
             goto error;
+        if (res[2].with && parse_res_level (ctx, job, res[2].with, &res[3]) < 0)
+            goto error;
+
         if (res[0].type != NULL && !strcmp (res[0].type, "slot")
             && res[1].type != NULL && !strcmp (res[1].type, "core")
-            && res[1].with == NULL) {
+            && ((res[1].with == NULL) || (res[1].with != NULL  && !strcmp (res[2].type, "pu")))) {
             slot_count = res[0].count;
         }
         else if (res[0].type != NULL && !strcmp (res[0].type, "node")
                  && res[1].type != NULL && !strcmp (res[1].type, "slot")
                  && res[2].type != NULL && !strcmp (res[2].type, "core")
-                 && res[2].with == NULL) {
+                 && ((res[2].with == NULL) || (res[2].with != NULL  && !strcmp (res[3].type, "pu")))) {
             slot_count = res[0].count * res[1].count;
         }
         else {
             flux_log (ctx->h, LOG_ERR,
-                      "%s: job %ju: Unexpected resources: %s->%s->%s%s",
+                      "%s: job %ju: Unexpected resources: %s->%s->%s->%s%s",
                       __FUNCTION__,
                       (uintmax_t)job->id,
                       res[0].type ? res[0].type : "NULL",
                       res[1].type ? res[1].type : "NULL",
                       res[2].type ? res[2].type : "NULL",
-                      res[2].with ? "->..." : NULL);
+                      res[3].type ? res[3].type : "NULL",
+                      res[3].with ? "->..." : NULL);
             goto error;
         }
         job->ntasks = slot_count;
