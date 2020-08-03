@@ -183,11 +183,11 @@ test_expect_success HAVE_JQ 'flux mini --job-name works' '
 	test $(jq ".attributes.system.job.name" name.out) = "\"foobar\""
 '
 
-test_expect_success HAVE_JQ 'flux mini submit --hw-threads-per-core adds PUs as children of core' '
+test_expect_success HAVE_JQ 'flux mini submit --hw-threads-per-core adds pus as children of core' '
 	flux mini submit --dry-run -V2 -T2 hostname > hw-thread.out &&
 	test $(jq ".resources[0].type" hw-thread.out) = "\"slot\"" &&
 	test $(jq ".resources[0].with[0].type" hw-thread.out) = "\"core\"" &&
-	test $(jq ".resources[0].with[0].with[0].type" hw-thread.out) = "\"PU\"" &&
+	test $(jq ".resources[0].with[0].with[0].type" hw-thread.out) = "\"pu\"" &&
 	test $(jq ".resources[0].with[0].with[0].count" hw-thread.out) = "2"
 '
 
@@ -196,7 +196,7 @@ test_expect_success HAVE_JQ 'flux mini submit --hw-threads-per-core works when n
 	test $(jq ".resources[0].type" hw-thread.out) = "\"node\"" &&
 	test $(jq ".resources[0].with[0].type" hw-thread.out) = "\"slot\"" &&
 	test $(jq ".resources[0].with[0].with[0].type" hw-thread.out) = "\"core\"" &&
-	test $(jq ".resources[0].with[0].with[0].with[0].type" hw-thread.out) = "\"PU\""
+	test $(jq ".resources[0].with[0].with[0].with[0].type" hw-thread.out) = "\"pu\""
 '
 
 test_expect_success HAVE_JQ 'flux mini submit --hw-threads-per-core works in concert with --gpus-per-task' '
@@ -205,13 +205,13 @@ test_expect_success HAVE_JQ 'flux mini submit --hw-threads-per-core works in con
 	test $(jq ".resources[0].with[0].type" hw-thread.out) = "\"slot\"" &&
 	test $(jq ".resources[0].with[0].with[0].type" hw-thread.out) = "\"core\"" &&
 	test $(jq ".resources[0].with[0].with[1].type" hw-thread.out) = "\"gpu\"" &&
-	test $(jq ".resources[0].with[0].with[0].with[0].type" hw-thread.out) = "\"PU\""
+	test $(jq ".resources[0].with[0].with[0].with[0].type" hw-thread.out) = "\"pu\""
 '
 
 test_expect_success 'using -T with jobpsec version 1 fails' '
 	test_must_fail flux mini submit -V1 -T1 hostname 2>TwithV1.err \
 	> hw-thread.out &&
-	grep -i "hardware-thread or PU resource is not supported by jobspec V1." TwithV1.err
+	grep -i "hardware-thread or pu resource is not supported by jobspec V1." TwithV1.err
 '
 
 test_expect_success HAVE_JQ 'flux mini submit -V1 correctly uses JobspecV1' '
