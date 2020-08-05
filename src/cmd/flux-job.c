@@ -612,6 +612,7 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
     flux_future_t *f;
     int priority;
     flux_jobid_t id;
+    const char *jobid = NULL;
 
     if (optindex != argc - 2) {
         optparse_print_usage (p);
@@ -620,13 +621,14 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    id = parse_jobid (argv[optindex++]);
+    jobid = argv[optindex++];
+    id = parse_jobid (jobid);
     priority = parse_arg_unsigned (argv[optindex++], "priority");
 
     if (!(f = flux_job_set_priority (h, id, priority)))
         log_err_exit ("flux_job_set_priority");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("%ju: %s", (uintmax_t) id, future_strerror (f, errno));
+        log_msg_exit ("%s: %s", jobid, future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     return 0;
@@ -639,6 +641,7 @@ int cmd_raise (optparse_t *p, int argc, char **argv)
     const char *type = optparse_get_str (p, "type", "cancel");
     flux_t *h;
     flux_jobid_t id;
+    const char *jobid = NULL;
     char *note = NULL;
     flux_future_t *f;
 
@@ -647,7 +650,8 @@ int cmd_raise (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    id = parse_jobid (argv[optindex++]);
+    jobid = argv[optindex++];
+    id = parse_jobid (jobid);
     if (optindex < argc)
         note = parse_arg_message (argv + optindex, "message");
 
@@ -656,7 +660,7 @@ int cmd_raise (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_raise (h, id, type, severity, note)))
         log_err_exit ("flux_job_raise");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("%ju: %s", (uintmax_t) id, future_strerror (f, errno));
+        log_msg_exit ("%s: %s", jobid, future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     free (note);
@@ -845,6 +849,7 @@ int cmd_kill (optparse_t *p, int argc, char **argv)
     flux_future_t *f;
     int optindex = optparse_option_index (p);
     flux_jobid_t id;
+    const char *jobid;
     const char *s;
     int signum;
 
@@ -853,7 +858,8 @@ int cmd_kill (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    id = parse_jobid (argv[optindex++]);
+    jobid = argv[optindex++];
+    id = parse_jobid (jobid);
 
     s = optparse_get_str (p, "signal", "SIGTERM");
     if ((signum = str2signum (s))< 0)
@@ -864,8 +870,8 @@ int cmd_kill (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_kill (h, id, signum)))
         log_err_exit ("flux_job_kill");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("kill %ju: %s",
-                      (uintmax_t) id,
+        log_msg_exit ("kill %s: %s",
+                      jobid,
                       future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
@@ -935,6 +941,7 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     flux_t *h;
     flux_jobid_t id;
+    const char *jobid;
     char *note = NULL;
     flux_future_t *f;
 
@@ -943,7 +950,8 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    id = parse_jobid (argv[optindex++]);
+    jobid = argv[optindex++];
+    id = parse_jobid (jobid);
     if (optindex < argc)
         note = parse_arg_message (argv + optindex, "message");
 
@@ -952,7 +960,7 @@ int cmd_cancel (optparse_t *p, int argc, char **argv)
     if (!(f = flux_job_cancel (h, id, note)))
         log_err_exit ("flux_job_cancel");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("%ju: %s", (uintmax_t) id, future_strerror (f, errno));
+        log_msg_exit ("%s: %s", jobid, future_strerror (f, errno));
     flux_future_destroy (f);
     flux_close (h);
     free (note);
@@ -1168,6 +1176,15 @@ size_t read_jobspec (const char *name, void **bufp)
     return size;
 }
 
+static void print_jobid (flux_jobid_t id)
+{
+    char buf[32];
+    if (flux_job_id_encode (id, "f58", buf, sizeof (buf)) < 0)
+        printf ("%ju\n", (uintmax_t) id);
+    else
+        printf ("%s\n", buf);
+}
+
 int cmd_submit (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
@@ -1239,7 +1256,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     if (flux_job_submit_get_id (f, &id) < 0) {
         log_msg_exit ("%s", future_strerror (f, errno));
     }
-    printf ("%ju\n", (uintmax_t) id);
+    print_jobid (id);
     flux_future_destroy (f);
 #if HAVE_FLUX_SECURITY
     flux_security_destroy (sec); // invalidates J
@@ -1253,6 +1270,7 @@ struct attach_ctx {
     flux_t *h;
     int exit_code;
     flux_jobid_t id;
+    const char *jobid;
     flux_future_t *eventlog_f;
     flux_future_t *exec_eventlog_f;
     flux_future_t *output_f;
@@ -1649,7 +1667,7 @@ static void valid_or_exit_for_debug (struct attach_ctx *ctx)
         log_err_exit ("flux_job_list_id");
 
     if (flux_rpc_get_unpack (f, "{s:{s:i}}", "job", "state", &state) < 0)
-        log_err_exit ("Invalid job id (%ju) for debugging", ctx->id);
+        log_err_exit ("Invalid job id (%s) for debugging", ctx->jobid);
 
     flux_future_destroy (f);
 
@@ -1683,8 +1701,8 @@ static void gen_attach_signal (struct attach_ctx *ctx)
     if (!(f = flux_job_kill (ctx->h, ctx->id, SIGCONT)))
         log_err_exit ("flux_job_kill");
     if (flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("kill %ju: %s",
-                      (uintmax_t) ctx->id,
+        log_msg_exit ("kill %s: %s",
+                      ctx->jobid,
                       future_strerror (f, errno));
     flux_future_destroy (f);
 }
@@ -1941,7 +1959,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
         if (errno == ENODATA)
             goto done;
         if (errno == ENOENT)
-            log_msg_exit ("Failed to attach to %ju: No such job", ctx->id);
+            log_msg_exit ("Failed to attach to %s: No such job", ctx->jobid);
         log_msg_exit ("flux_job_event_watch_get: %s",
                       future_strerror (f, errno));
     }
@@ -2032,7 +2050,8 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
-    ctx.id = parse_jobid (argv[optindex++]);
+    ctx.jobid = argv[optindex++];
+    ctx.id = parse_jobid (ctx.jobid);
     ctx.p = p;
 
     if (!(ctx.h = flux_open (NULL, 0)))
@@ -2102,6 +2121,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
 #define EXCEPTION_TYPE_LENGTH 64
 struct job_status {
     flux_jobid_t id;
+    const char *jobid;
     int status;
     int exit_code;
     int exception_exit_code;
@@ -2147,10 +2167,9 @@ static void status_eventlog_cb (flux_future_t *f, void *arg)
         if (errno == ENODATA)
             goto done;
         if (errno == ENOENT)
-            log_msg_exit ("%ju: No such job",
-                          (uintmax_t) stat->id);
-        log_msg_exit ("%ju: flux_job_event_watch_get: %s",
-                      (uintmax_t) stat->id,
+            log_msg_exit ("%s: No such job", stat->jobid);
+        log_msg_exit ("%s: flux_job_event_watch_get: %s",
+                      stat->jobid,
                       future_strerror (f, errno));
     }
     if (!(o = eventlog_entry_decode (entry)))
@@ -2203,7 +2222,8 @@ int cmd_status (optparse_t *p, int argc, char **argv)
 
     for (i = 0; i < njobs; i++) {
         struct job_status *stat = &stats[i];
-        stat->id = parse_jobid (argv[optindex+i]);
+        stat->jobid = argv[optindex+i];
+        stat->id = parse_jobid (stat->jobid);
         stat->exception_exit_code = exception_exit_code;
 
         if (!(f = flux_job_event_watch (h, stat->id, "eventlog", 0)))
@@ -2228,18 +2248,18 @@ int cmd_status (optparse_t *p, int argc, char **argv)
             exit_code = stat->exit_code;
         if (optparse_hasopt (p, "verbose")) {
             if (WIFSIGNALED (stat->status)) {
-                log_msg ("%ju: job shell died by signal %d",
-                         (uintmax_t) stat->id,
+                log_msg ("%s: job shell died by signal %d",
+                         stat->jobid,
                          WTERMSIG (stat->status));
             }
             else if (verbose > 1 || stat->exit_code != 0) {
                 if (!stat->exception)
-                    log_msg ("%ju: exited with exit code %d",
-                            (uintmax_t) stat->id,
+                    log_msg ("%s: exited with exit code %d",
+                            stat->jobid,
                             stat->exit_code);
                 else
-                    log_msg ("%ju: exception type=%s",
-                            (uintmax_t) stat->id,
+                    log_msg ("%s: exception type=%s",
+                            stat->jobid,
                             stat->ex_type);
             }
         }
@@ -2264,7 +2284,7 @@ void id_convert (optparse_t *p, const char *src, char *dst, int dstsz)
     if (flux_job_id_encode (id, to, dst, dstsz) < 0) {
         if (errno == EPROTO)
             log_msg_exit ("Unknown to=%s", to);
-        log_msg_exit ("Unable to encode id %ju to %s", (uintmax_t) id, to);
+        log_msg_exit ("Unable to encode id %s to %s", src, to);
     }
 }
 
@@ -2317,7 +2337,7 @@ static void print_job_namespace (const char *src)
     char ns[64];
     flux_jobid_t id = parse_jobid (src);
     if (flux_job_kvs_namespace (ns, sizeof (ns), id) < 0)
-        log_msg_exit ("error getting kvs namespace for %ju", id);
+        log_msg_exit ("error getting kvs namespace for %s", src);
     printf ("%s\n", ns);
 }
 
@@ -2358,6 +2378,7 @@ void entry_format_parse_options (optparse_t *p, struct entry_format *e)
 
 struct eventlog_ctx {
     optparse_t *p;
+    const char *jobid;
     flux_jobid_t id;
     const char *path;
     struct entry_format e;
@@ -2455,7 +2476,7 @@ void eventlog_continuation (flux_future_t *f, void *arg)
         if (errno == ENOENT) {
             flux_future_destroy (f);
             if (!strcmp (ctx->path, "eventlog"))
-                log_msg_exit ("job %lu not found", ctx->id);
+                log_msg_exit ("job %s not found", ctx->jobid);
             else
                 log_msg_exit ("eventlog path %s not found", ctx->path);
         }
@@ -2491,7 +2512,8 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
         exit (1);
     }
 
-    ctx.id = parse_jobid (argv[optindex++]);
+    ctx.jobid = argv[optindex++];
+    ctx.id = parse_jobid (ctx.jobid);
     ctx.path = optparse_get_str (p, "path", "eventlog");
     ctx.p = p;
     entry_format_parse_options (p, &ctx.e);
@@ -2515,6 +2537,7 @@ struct wait_event_ctx {
     optparse_t *p;
     const char *wait_event;
     double timeout;
+    const char *jobid;
     flux_jobid_t id;
     const char *path;
     bool got_event;
@@ -2586,7 +2609,7 @@ void wait_event_continuation (flux_future_t *f, void *arg)
         if (errno == ENOENT) {
             flux_future_destroy (f);
             if (!strcmp (ctx->path, "eventlog"))
-                log_msg_exit ("job %lu not found", ctx->id);
+                log_msg_exit ("job %s not found", ctx->jobid);
             else
                 log_msg_exit ("eventlog path %s not found", ctx->path);
         }
@@ -2646,7 +2669,8 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
-    ctx.id = parse_jobid (argv[optindex++]);
+    ctx.jobid = argv[optindex++];
+    ctx.id = parse_jobid (ctx.jobid);
     ctx.p = p;
     ctx.wait_event = argv[optindex++];
     ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
@@ -2775,6 +2799,13 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
+static char *to_f58 (flux_jobid_t id, char *buf, int len)
+{
+    if (flux_job_id_encode (id, "f58", buf, len) < 0)
+        (void) snprintf (buf, len, "%ju", (uintmax_t) id);
+    return buf;
+}
+
 int cmd_wait (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
@@ -2783,6 +2814,7 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     flux_jobid_t id = FLUX_JOBID_ANY;
     bool success;
     const char *errstr;
+    char buf[32];
     int rc = 0;
 
     if ((argc - optindex) > 1) {
@@ -2813,14 +2845,16 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
                 log_msg_exit ("flux_job_wait_get_id: %s",
                               future_strerror (f, errno));
             if (!success) {
-                fprintf (stderr, "%ju: %s\n", (uintmax_t)id, errstr);
+                fprintf (stderr, "%s: %s\n",
+                         to_f58 (id, buf, sizeof (buf)),
+                         errstr);
                 rc = 1;
             }
             else {
                 if (optparse_hasopt (p, "verbose"))
                     fprintf (stderr,
-                             "%ju: job completed successfully\n",
-                             (uintmax_t)id);
+                             "%s: job completed successfully\n",
+                             to_f58 (id, buf, sizeof (buf)));
             }
             flux_future_destroy (f);
         }
@@ -2833,7 +2867,7 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
         if (id == FLUX_JOBID_ANY) {
             if (flux_job_wait_get_id (f, &id) < 0)
                 log_err_exit ("flux_job_wait_get_id");
-            printf ("%ju\n", (uintmax_t)id);
+            printf ("%s\n", to_f58 (id, buf, sizeof (buf)));
         }
         if (!success)
             log_msg_exit ("%s", errstr);
