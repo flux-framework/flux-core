@@ -346,6 +346,7 @@ def fetch_jobs_flux(args, fields):
     # Note there is no attr for "id", its always returned
     fields2attrs = {
         "id": (),
+        "id.dec": (),
         "id.hex": (),
         "id.f58": (),
         "id.kvs": (),
@@ -608,6 +609,7 @@ class JobsOutputFormat(flux.util.OutputFormat):
     #  List of legal format fields and their header names
     headings = {
         "id": "JOBID",
+        "id.dec": "JOBID",
         "id.hex": "JOBID",
         "id.f58": "JOBID",
         "id.kvs": "JOBID",
