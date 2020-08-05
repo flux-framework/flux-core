@@ -81,6 +81,11 @@ int s3_init (struct s3_config *cfg, const char **errstr)
 {
     S3Status status = S3_initialize ("s3", S3_INIT_ALL, cfg->hostname);
 
+    if (cfg->is_virtual_host)
+        uri_style = S3UriStyleVirtualHost;
+    if (cfg->is_secure)
+        protocol = S3ProtocolHTTPS;
+
     if (status != S3StatusOK) {
         errno = ECONNREFUSED;
         if (errstr)
@@ -88,7 +93,7 @@ int s3_init (struct s3_config *cfg, const char **errstr)
 
         return -1;
     }
-    
+
     return 0;
 }
 
@@ -151,7 +156,7 @@ int s3_put (struct s3_config *cfg, const char *key, const void *data, size_t siz
 {
     int retries = cfg->retries;
     S3Status status = S3StatusOK;
-    
+
     S3ResponseHandler resp_hndl = {
         .propertiesCallback = &response_props_cb,
         .completeCallback = &response_complete_cb
@@ -240,7 +245,7 @@ int s3_get (struct s3_config *cfg, const char *key, void **datap, size_t *sizep,
         .count = 0,
         .status = status
     };
-   
+
     if (strlen (key) == 0 || strchr (key, '/') || !strcmp (key, "..") || !strcmp (key, ".")) {
         errno = EINVAL;
         if (errstr)
@@ -250,7 +255,7 @@ int s3_get (struct s3_config *cfg, const char *key, void **datap, size_t *sizep,
     }
 
     do {
-        S3_get_object (&bucket_ctx, 
+        S3_get_object (&bucket_ctx,
                        key,
                        NULL, // getConditions (NULL for none)
                        0,    // startByte

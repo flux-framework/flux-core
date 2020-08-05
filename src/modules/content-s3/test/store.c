@@ -24,6 +24,8 @@ int main (int argc, char **argv)
         fprintf(stderr, "calloc error");
     
     cfg->retries = 5;
+    cfg->is_virtual_host = 0;
+    cfg->is_secure = 0;
     cfg->bucket = getenv("S3_BUCKET");
     cfg->access_key = getenv("S3_ACCESS_KEY_ID");
     cfg->secret_key = getenv("S3_SECRET_ACCESS_KEY");
