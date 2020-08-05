@@ -14,6 +14,7 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 
 if test -n "$S3_ACCESS_KEY_ID"; then
     test_set_prereq S3
+    export FLUX_CONF_DIR=$(pwd)
 fi
 
 test_expect_success 'Started instance with content.hash=sha1' '
@@ -34,6 +35,24 @@ test_expect_success 'Started instance with content.hash=sha256,content-files' '
     ls -1 content.files | tail -1 | grep sha256
 '
 
+test_expect_success S3 'create creds.toml from env' '
+	mkdir -p creds &&
+	cat >creds/creds.toml <<-CREDS
+	access-key-id = "$S3_ACCESS_KEY_ID"
+	secret-access-key = "$S3_SECRET_ACCESS_KEY"
+	CREDS
+'
+
+test_expect_success S3 'create content-s3.toml from env' '
+	cat >content-s3.toml <<-TOML
+	[content-s3]
+	credential-file = "$(pwd)/creds/creds.toml"
+	uri = "http://$S3_HOSTNAME"
+	bucket = "$S3_BUCKET"
+	virtual-host-style = false
+	TOML
+'
+
 test_expect_success S3 'Started instance with content.hash=sha256,content-s3' '
     OUT=$(flux start -o,-Scontent.hash=sha256 \
           -o,-Scontent.backing-module=content-s3 \
@@ -42,12 +61,14 @@ test_expect_success S3 'Started instance with content.hash=sha256,content-s3' '
 '
 test_expect_success S3 'Content store nil returns correct hash for sha256' '
     OUT=$(flux start -o,-Scontent.hash=sha256 \
+          -o,-Scontent.backing-module=content-s3 \
           flux content store </dev/null) &&
         test "$OUT" = "$nil256"
 '
 
 test_expect_success S3 'Content store nil returns correct hash for sha1' '
     OUT=$(flux start -o,-Scontent.hash=sha1 \
+          -o,-Scontent.backing-module=content-s3 \
           flux content store </dev/null) &&
         test "$OUT" = "$nil1"
 '

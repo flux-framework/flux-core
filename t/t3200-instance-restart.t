@@ -9,6 +9,7 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 
 if test -n "$S3_ACCESS_KEY_ID"; then
     test_set_prereq S3
+    export FLUX_CONF_DIR=$(pwd)
 fi
 
 test_expect_success 'run a job in persistent instance' '
@@ -59,6 +60,24 @@ test_expect_success 'restart instance and list inactive jobs' '
 
 test_expect_success 'inactive job list contains job from before restart' '
 	grep $(cat files_id1.out) files_list.out
+'
+
+test_expect_success S3 'create creds.toml from env' '
+	mkdir -p creds &&
+	cat >creds/creds.toml <<-CREDS
+	access-key-id = "$S3_ACCESS_KEY_ID"
+	secret-access-key = "$S3_SECRET_ACCESS_KEY"
+	CREDS
+'
+
+test_expect_success S3 'create content-s3.toml from env' '
+	cat >content-s3.toml <<-TOML
+	[content-s3]
+	credential-file = "$(pwd)/creds/creds.toml"
+	uri = "http://$S3_HOSTNAME"
+	bucket = "$S3_BUCKET"
+	virtual-host-style = false
+	TOML
 '
 
 test_expect_success S3 'run a job in persistent instance (content-s3)' '
