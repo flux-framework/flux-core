@@ -2288,20 +2288,28 @@ int cmd_id (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     char dst[256];
 
+    /*  Require at least one id to be processed for success.
+     *  Thus, `flux job id` with no input or args will exit with
+     *   non-zero exit code.
+     */
+    int rc = -1;
+
     if (optindex == argc) {
         char src[256];
         while ((fgets (src, sizeof (src), stdin))) {
             id_convert (p, trim_string (src), dst, sizeof (dst));
             printf ("%s\n", dst);
+            rc = 0;
         }
     }
     else {
         while (optindex < argc) {
             id_convert (p, argv[optindex++], dst, sizeof (dst));
             printf ("%s\n", dst);
+            rc = 0;
         }
     }
-    return 0;
+    return rc;
 }
 
 static void print_job_namespace (const char *src)
