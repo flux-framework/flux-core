@@ -137,6 +137,11 @@ class JobID(int):
         return id_encode(self, encoding)
 
     @property
+    def dec(self):
+        """Return decimal integer representation of a JobID"""
+        return self.encode()
+
+    @property
     def f58(self):
         """Return RFC19 F58 representation of a JobID"""
         return self.encode("f58")
@@ -165,7 +170,7 @@ class JobID(int):
         return self.encode()
 
     def __repr__(self):
-        return f"JobID({self})"
+        return f"JobID({self.dec})"
 
 
 class SubmitFuture(Future):
