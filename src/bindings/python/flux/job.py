@@ -167,7 +167,7 @@ class JobID(int):
         return self.encode("kvs")
 
     def __str__(self):
-        return self.encode()
+        return self.encode("f58")
 
     def __repr__(self):
         return f"JobID({self.dec})"
