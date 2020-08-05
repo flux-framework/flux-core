@@ -20,10 +20,7 @@ typedef void (*runat_completion_f)(struct runat *r,
                                    const char *name,
                                    void *arg);
 
-struct runat *runat_create (flux_t *h,
-                            const char *local_uri,
-                            runat_completion_f cb,
-                            void *arg);
+struct runat *runat_create (flux_t *h, const char *local_uri);
 void runat_destroy (struct runat *r);
 
 /* Push command, to be run under shell -c, onto named list.
@@ -57,12 +54,23 @@ int runat_get_exit_code (struct runat *r, const char *name, int *rc);
  * Completion callback is called once command finish execution.
  * The completion callback may call runat_get_exit_code().
  */
-int runat_start (struct runat *r, const char *name);
+int runat_start (struct runat *r,
+                 const char *name,
+                 runat_completion_f cb,
+                 void *arg);
 
 /* Abort execution of named list.
  * If a command is running, it is signaled.
  */
 int runat_abort (struct runat *r, const char *name);
+
+/* Test whether named list has been defined.
+ */
+bool runat_is_defined (struct runat *r, const char *name);
+
+/* Test whether named list has completed running.
+ */
+bool runat_is_completed (struct runat *r, const char *name);
 
 #endif /* !_BROKER_RUNAT_H */
 

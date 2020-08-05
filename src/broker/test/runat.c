@@ -69,16 +69,24 @@ void basic (flux_t *h)
 
     ctx.h = h;
 
-    r = runat_create (h, "local://notreally", test_completion, &ctx);
+    r = runat_create (h, "local://notreally");
     ok (r != NULL,
         "runat_create works");
 
     /* run true;true */
     clear_list (logs);
+    ok (runat_is_defined (r, "test1") == false,
+        "runat_is_defined name=test1 returns false");
+    ok (runat_is_completed (r, "test1") == false,
+        "runat_is_completed name=test1 returns false");
     ok (runat_push_shell_command (r, "test1", "/bin/true", false) == 0
         && runat_push_shell_command (r, "test1", "/bin/true", false) == 0,
         "pushed true;true");
-    ok (runat_start (r, "test1") == 0,
+    ok (runat_is_defined (r, "test1") == true,
+        "runat_is_defined name=test1 returns true after creation");
+    ok (runat_is_completed (r, "test1") == false,
+        "runat_is_completed returns false");
+    ok (runat_start (r, "test1", test_completion, &ctx) == 0,
         "runat_start works");
     completion_called = 0;
     ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0
@@ -89,13 +97,15 @@ void basic (flux_t *h)
         "exit code is zero");
     ok (match_list (logs, "Exited") == 2,
         "Exited was logged twice");
+    ok (runat_is_completed (r, "test1") == true,
+        "runat_is_completed returns true");
 
     /* run false;true */
     clear_list (logs);
     ok (runat_push_shell_command (r, "test2", "/bin/true", false) == 0
         && runat_push_shell_command (r, "test2", "/bin/false", false) == 0,
         "pushed true;true");
-    ok (runat_start (r, "test2") == 0,
+    ok (runat_start (r, "test2", test_completion, &ctx) == 0,
         "runat_start works");
     completion_called = 0;
     ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0
@@ -113,7 +123,7 @@ void basic (flux_t *h)
     ok (runat_push_command (r, "test3", "/bin/false", 11, false) == 0
         && runat_push_command (r, "test3", "/bin/true", 10, false) == 0,
         "pushed true;true");
-    ok (runat_start (r, "test3") == 0,
+    ok (runat_start (r, "test3", test_completion, &ctx) == 0,
         "runat_start works");
     completion_called = 0;
     ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0
@@ -131,7 +141,7 @@ void basic (flux_t *h)
     ok (runat_push_shell_command (r, "test4", "echo test4-out", true) == 0
     && runat_push_shell_command (r, "test4", "echo test4-err>&2", true) == 0,
         "pushed echo;echo");
-    ok (runat_start (r, "test4") == 0,
+    ok (runat_start (r, "test4", test_completion, &ctx) == 0,
         "runat_start works");
     completion_called = 0;
     ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0
@@ -152,7 +162,7 @@ void basic (flux_t *h)
     ok (runat_push_shell_command (r, "test5", "echo test5-out", true) == 0
         && runat_push_shell_command (r, "test5", "notfound", false) == 0,
         "pushed notfound;echo");
-    ok (runat_start (r, "test5") == 0,
+    ok (runat_start (r, "test5", test_completion, &ctx) == 0,
         "runat_start works");
     completion_called = 0;
     ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0
@@ -170,7 +180,7 @@ void basic (flux_t *h)
     clear_list (logs);
     ok (runat_push_shell_command (r, "test6", "printenv FLUX_URI", true) == 0,
         "pushed printenv FLUX_URI");
-    ok (runat_start (r, "test6") == 0,
+    ok (runat_start (r, "test6", test_completion, &ctx) == 0,
         "runat_start works");
     completion_called = 0;
     ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0
@@ -192,7 +202,7 @@ void basic (flux_t *h)
     ok (runat_push_shell_command (r, "test7", "/bin/true", false) == 0
             && runat_push_shell_command (r, "test7", "sleep 3600", false) == 0,
         "pushed /bin/true;sleep 3600");
-    ok (runat_start (r, "test7") == 0,
+    ok (runat_start (r, "test7", test_completion, &ctx) == 0,
         "runat_start works");
     ok (runat_abort (r, "test7") == 0,
         "runat_abort works");
@@ -234,17 +244,26 @@ void badinput (flux_t *h)
     struct runat *r;
     int rc;
 
-    if (!(r = runat_create (h, NULL, NULL, NULL)))
+    if (!(r = runat_create (h, NULL)))
         BAIL_OUT ("runat_create failed");
 
+    ok (runat_is_defined (NULL, "foo") == false,
+        "runat_is_defined r=NULL returns false");
+    ok (runat_is_defined (r, NULL) == false,
+        "runat_is_defined name=NULL returns false");
+    ok (runat_is_completed (NULL, "foo") == false,
+        "runat_is_completed r=NULL returns false");
+    ok (runat_is_completed (r, NULL) == false,
+        "runat_is_completed name=NULL returns false");
+
     errno = 0;
-    ok (runat_start (NULL, "foo") < 0 && errno == EINVAL,
+    ok (runat_start (NULL, "foo", NULL, NULL) < 0 && errno == EINVAL,
         "runat_start r=NULL fails with EINVAL");
     errno = 0;
-    ok (runat_start (r, NULL) < 0 && errno == EINVAL,
+    ok (runat_start (r, NULL, NULL, NULL) < 0 && errno == EINVAL,
         "runat_start name=NULL fails with EINVAL");
     errno = 0;
-    ok (runat_start (r, "noexit") < 0 && errno == ENOENT,
+    ok (runat_start (r, "noexit", NULL, NULL) < 0 && errno == ENOENT,
         "runat_start name=noexist fails with ENOENT");
 
     errno = 0;

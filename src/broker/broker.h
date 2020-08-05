@@ -16,6 +16,9 @@ struct broker {
     flux_reactor_t *reactor;
 
     struct overlay *overlay;
+    uint32_t rank;
+    uint32_t size;
+    char uuid[16];
 
     struct broker_attr *attrs;
     struct flux_msg_cred cred;  /* instance owner */
@@ -40,10 +43,12 @@ struct broker {
 
     struct hello *hello;
     struct runat *runat;
-    broker_state_t state;
+    struct state_machine *state_machine;
 
     char *init_shell_cmd;
     size_t init_shell_cmd_len;
+
+    int exit_rc;
 };
 
 typedef struct broker broker_ctx_t;

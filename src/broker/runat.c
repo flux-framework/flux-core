@@ -44,13 +44,14 @@ struct runat_entry {
     int exit_code;
     int count;
     bool aborted;
+    bool completed;
+    runat_completion_f cb;
+    void *cb_arg;
 };
 
 struct runat {
     flux_t *h;
     const char *local_uri;
-    runat_completion_f cb;
-    void *cb_arg;
     zhashx_t *entries;
     flux_msg_handler_t **handlers;
 };
@@ -245,8 +246,9 @@ static void start_next_command (struct runat *r, struct runat_entry *entry)
         }
     }
     if (zlist_size (entry->commands) == 0) {
-        if (r->cb)
-            r->cb (r, entry->name, r->cb_arg);
+        entry->completed = true;
+        if (entry->cb)
+            entry->cb (r, entry->name, entry->cb_arg);
     }
 }
 
@@ -478,7 +480,10 @@ int runat_get_exit_code (struct runat *r, const char *name, int *rc)
     return 0;
 }
 
-int runat_start (struct runat *r, const char *name)
+int runat_start (struct runat *r,
+                 const char *name,
+                 runat_completion_f cb,
+                 void *arg)
 {
     struct runat_entry *entry;
 
@@ -490,8 +495,26 @@ int runat_start (struct runat *r, const char *name)
         errno = ENOENT;
         return -1;
     }
+    entry->cb = cb;
+    entry->cb_arg = arg;
     start_next_command (r, entry);
     return 0;
+}
+
+bool runat_is_defined (struct runat *r, const char *name)
+{
+    if (!r || !name || !zhashx_lookup (r->entries, name))
+        return false;
+    return true;
+}
+
+bool runat_is_completed (struct runat *r, const char *name)
+{
+    struct runat_entry *entry;
+
+    if (!r || !name || !(entry = zhashx_lookup (r->entries, name)))
+        return false;
+    return entry->completed;
 }
 
 int runat_abort (struct runat *r, const char *name)
@@ -566,10 +589,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct runat *runat_create (flux_t *h,
-                            const char *local_uri,
-                            runat_completion_f cb,
-                            void *arg)
+struct runat *runat_create (flux_t *h, const char *local_uri)
 {
     struct runat *r;
 
@@ -582,8 +602,6 @@ struct runat *runat_create (flux_t *h,
     zhashx_set_destructor (r->entries, runat_entry_destroy_wrapper);
     r->h = h;
     r->local_uri = local_uri;
-    r->cb = cb;
-    r->cb_arg = arg;
     return r;
 error:
     runat_destroy (r);

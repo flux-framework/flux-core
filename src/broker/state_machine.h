@@ -22,9 +22,17 @@ typedef enum {
     STATE_SHUTDOWN,
 } broker_state_t;
 
-void state_machine (struct broker *ctx, const char *event);
 
-void state_abort (struct broker *ctx);
+struct state_machine *state_machine_create (struct broker *ctx);
+void state_machine_destroy (struct state_machine *s);
+
+void state_machine_post (struct state_machine *s, const char *event);
+
+broker_state_t state_machine_get_state (struct state_machine *s);
+
+void state_machine_shutdown (struct state_machine *s);
+
+void state_machine_kill (struct state_machine *s, int signum);
 
 #endif /* !_BROKER_STATE_MACHINE_H */
 
