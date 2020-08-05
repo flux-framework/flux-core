@@ -47,7 +47,7 @@ test_expect_success HAVE_JQ 'job-exec: job as guest tries to run IMP' '
 	flux job attach ${id} &&
 	flux job list-ids ${id} > ${id}.json &&
 	jq -e ".userid == 42" < ${id}.json &&
-	flux dmesg | grep "test-imp: Running.*${id}"
+	flux dmesg | grep "test-imp: Running.*$(flux job id ${id})"
 '
 
 test_expect_success HAVE_JQ 'job-exec: kill multiuser job uses the IMP' '

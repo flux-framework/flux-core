@@ -42,12 +42,12 @@ test_expect_success HAVE_JQ 'pty: submit a job with pty' '
 '
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'pty: run job with pty' '
 	printf "PS1=XXX:\n" >ps1.rc
-	id=$(flux mini submit -o pty bash --rcfile ps1.rc)
+	id=$(flux mini submit -o pty bash --rcfile ps1.rc | flux job id)
 	$runpty -o log.job-pty flux job attach ${id} &
 	pid=$! &&
 	terminus_jobid ${id} list &&
 	$waitfile -t 20 -vp "XXX:" log.job-pty &&
-	printf "printenv FLUX_JOB_ID\r" | terminus_jobid ${id} attach -p 0 &&
+	printf "flux job id \$FLUX_JOB_ID\r" | terminus_jobid ${id} attach -p 0 &&
 	$waitfile -t 20 -vp ${id} log.job-pty &&
 	printf "exit\r\n" | terminus_jobid ${id} attach -p 0 &&
 	$waitfile -t 20 -vp exit log.job-pty &&

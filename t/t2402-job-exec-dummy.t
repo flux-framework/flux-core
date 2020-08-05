@@ -38,7 +38,7 @@ test_expect_success 'job-exec: job shell output sent to flux log' '
 	id=$(flux jobspec srun -n 1 "echo Hello from job \$JOBID" \
 	     | flux job submit) &&
 	flux job wait-event $id clean &&
-	flux dmesg | grep "Hello from job $id"
+	flux dmesg | grep "Hello from job $(flux job id $id)"
 '
 test_expect_success 'job-exec: job shell failure recorded' '
 	id=$(flux jobspec srun -N4  "test \$JOB_SHELL_RANK = 0 && exit 1" \
@@ -76,7 +76,7 @@ test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
 		trap-ready &&
 	flux job cancel $id &&
 	sleep 0.2 &&
-	flux dmesg | grep $id &&
+	flux dmesg | grep $(flux job id $id) &&
 	flux job wait-event -vt 5 $id clean &&
 	flux dmesg | grep "trap-sigterm got SIGTERM" &&
 	flux module reload job-exec

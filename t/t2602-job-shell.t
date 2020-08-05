@@ -182,7 +182,7 @@ test_expect_success 'job-shell: test shell kill event handling: numeric signal' 
 	grep status=$((2+128<<8)) kill3.finish.out
 '
 test_expect_success 'job-shell: mangled shell kill event logged' '
-	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
+	id=$(flux jobspec srun -N4 sleep 60 | flux job submit | flux job id) &&
 	flux job wait-event $id start &&
 	flux event pub shell-${id}.kill "{}" &&
 	flux job kill ${id} &&
@@ -192,7 +192,7 @@ test_expect_success 'job-shell: mangled shell kill event logged' '
 	grep "ignoring malformed event" kill4.log
 '
 test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
-	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
+	id=$(flux jobspec srun -N4 sleep 60 | flux job submit | flux job id) &&
 	flux job wait-event $id start &&
 	flux event pub shell-${id}.kill "{\"signum\":199}" &&
 	flux job kill ${id} &&

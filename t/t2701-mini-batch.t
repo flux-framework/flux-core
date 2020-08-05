@@ -61,9 +61,9 @@ test_expect_success 'flux-mini batch fails for file without she-bang' '
 	test_expect_code 1 flux mini batch -n1 invalid-script.sh
 '
 test_expect_success 'flux-mini batch: submit a series of jobs' '
-	id1=$(flux mini batch --flags=waitable -n1 batch-script.sh) &&
-	id2=$(flux mini batch --flags=waitable -n4 batch-script.sh) &&
-	id3=$(flux mini batch --flags=waitable -N2 -n4 batch-script.sh) &&
+	id1=$(flux mini batch --flags=waitable -n1 batch-script.sh | flux job id) &&
+	id2=$(flux mini batch --flags=waitable -n4 batch-script.sh | flux job id) &&
+	id3=$(flux mini batch --flags=waitable -N2 -n4 batch-script.sh | flux job id) &&
 	flux job wait --all
 '
 test_expect_success 'flux-mini batch: job results are expected' '
@@ -80,9 +80,9 @@ test_expect_success 'flux-mini batch: --output=kvs directs output to kvs' '
 '
 test_expect_success 'flux-mini batch: --broker-opts works' '
 	id=$(flux mini batch -n1 --flags=waitable \
-	     --broker-opts=-v batch-script.sh) &&
+	     --broker-opts=-v batch-script.sh | flux job id) &&
 	id2=$(flux mini batch -n1 --flags=waitable \
-	     --broker-opts=-v,-H5 batch-script.sh) &&
+	     --broker-opts=-v,-H5 batch-script.sh | flux job id) &&
 	flux job wait $id &&
 	test_debug "cat flux-${id}.out" &&
 	grep "boot: rank=0 size=1" flux-${id}.out &&

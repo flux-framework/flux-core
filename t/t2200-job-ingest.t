@@ -115,7 +115,7 @@ test_expect_success 'job-ingest: jobspec stored accurately in KVS' '
 '
 
 test_expect_success 'job-ingest: job announced to job manager' '
-	jobid=$(flux job submit --priority=10 basic.json) &&
+	jobid=$(flux job submit --priority=10 basic.json | flux job id) &&
 	flux kvs eventlog get ${DUMMY_EVENTLOG} \
 		| grep "\"id\":${jobid}" >jobman.out &&
 	grep -q "\"priority\":10" jobman.out &&

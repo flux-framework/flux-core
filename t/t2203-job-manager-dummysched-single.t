@@ -140,8 +140,8 @@ test_expect_success 'job-manager: reload sched-dummy --cores=4' '
 '
 
 test_expect_success 'job-manager: hello handshake found jobs 1 3' '
-        grep id=$(cat job1.id) hello.dmesg &&
-        grep id=$(cat job3.id) hello.dmesg
+        grep id=$(flux job id < job1.id) hello.dmesg &&
+        grep id=$(flux job id < job3.id) hello.dmesg
 '
 
 test_expect_success 'job-manager: hello handshake priority is default' '

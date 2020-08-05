@@ -12,7 +12,7 @@ JMGR_JOB_LIST=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 #
 # arg1 - jobid
 _jmgr_get_state() {
-        local id=$1
+        local id=$(flux job id $1)
         local state=$(${JMGR_JOB_LIST} | awk '$1 == "'${id}'" { print $2; }')
         test -z "$state" \
                 && flux job wait-event --timeout=5 ${id} clean >/dev/null \
@@ -41,7 +41,7 @@ jmgr_check_state() {
 # arg1 - jobid
 # arg2 - key
 _jmgr_get_annotation() {
-        local id=$1
+        local id=$(flux job id $1)
         local key=$2
         local note="$(${JMGR_JOB_LIST} | grep ${id} | cut -f 6- | jq ."${key}")"
         echo $note
@@ -75,7 +75,7 @@ jmgr_check_annotation() {
 #
 # callers should set HAVE_JQ requirement
 jmgr_check_annotation_exists() {
-        local id=$1
+        local id=$(flux job id $1)
         local key=$2
         ${JMGR_JOB_LIST} | grep ${id} | cut -f 6- | jq -e ."${key}" > /dev/null
 }
@@ -84,7 +84,7 @@ jmgr_check_annotation_exists() {
 #
 # arg1 - jobid
 jmgr_check_no_annotations() {
-        local id=$1
+        local id=$(flux job id $1)
         test -z "$(${JMGR_JOB_LIST} | grep ${id} | cut -f 6-)" && return 0
         return 1
 }
@@ -94,7 +94,7 @@ jmgr_check_no_annotations() {
 # arg1 - jobid
 # arg2 - key
 _jinfo_get_annotation() {
-        local id=$1
+        local id=$(flux job id $1)
         local key=$2
         local note="$(flux job list -A | grep ${id} | jq .annotations | jq ."${key}")"
         echo $note
@@ -127,7 +127,7 @@ jinfo_check_annotation() {
 #
 # callers should set HAVE_JQ requirement
 jinfo_check_no_annotations() {
-        local id=$1
+        local id=$(flux job id $1)
         flux job list -A | grep ${id} | jq -e .annotations > /dev/null && return 1
         return 0
 }
@@ -139,7 +139,7 @@ jinfo_check_no_annotations() {
 #
 # callers should set HAVE_JQ requirement
 jinfo_check_annotation_exists() {
-        local id=$1
+        local id=$(flux job id $1)
         local key=$2
         flux job list -A | grep ${id} | jq .annotations | jq -e ."${key}" > /dev/null
 }
@@ -153,7 +153,7 @@ jinfo_check_annotation_exists() {
 # arg2 - key in annotation
 # arg3 - value of key in annotation
 fjobs_check_annotation() {
-        local id=$1
+        local id=$(flux job id $1)
         local key=$2
         local value="$3"
         for try in $(seq 1 10); do
