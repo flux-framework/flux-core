@@ -103,6 +103,10 @@ test_expect_success 'flux-job: id with invalid --to arg fails' '
 	test_must_fail flux job id --to=invalid 42
 '
 
+test_expect_success 'flux-job: fails with no input and no args' '
+	test_expect_code 1 flux job id < /dev/null
+'
+
 test_expect_success 'flux-job: id works with min/max jobids' '
     for max in $MAXJOBIDS_LIST; do
         jobid=$(flux job id $max) &&
