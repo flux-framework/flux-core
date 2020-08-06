@@ -151,8 +151,8 @@ done <mini-invalid.txt
 # <mini command args> == <expected result>
 #
 cat <<EOF >mini-invalid.txt
-run -V2 -T1             ==jj-reader: Unsupported resource type 'pu'
-run -V2 -N1 -n2 -c2 -T1 ==jj-reader: Unsupported resource type 'pu'
+run -V2 --hw-threads-per-core 1 		    ==jj-reader: Unsupported resource type 'pu'
+run -V2 -N1 -n2 -c2 --hw-threads-per-core 1 ==jj-reader: Unsupported resource type 'pu'
 EOF
 
 while read line; do
