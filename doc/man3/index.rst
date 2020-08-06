@@ -3,6 +3,7 @@ man3
 
 .. toctree::
    :caption: C Library Functions
+   :maxdepth: 1
 
    flux_attr_get
    flux_aux_set

@@ -3,6 +3,7 @@ man1
 
 .. toctree::
    :caption: General Commands
+   :maxdepth: 1
 
    flux-broker
    flux-content
