@@ -64,6 +64,7 @@ RUN yum -y update \
 	enchant \
 	aspell \
 	aspell-en \
+	glibc-langpack-en \
  && yum clean all
 
 #  Set default /usr/bin/python to python3
@@ -88,5 +89,6 @@ RUN mkdir caliper \
  && rm -rf caliper
 
 ENV LANG=C.UTF-8
+RUN printf "LANG=C.UTF-8" > /etc/locale.conf
 
 COPY config.site /usr/share/config.site
