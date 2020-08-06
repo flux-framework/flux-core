@@ -1,7 +1,7 @@
 .. flux-help-description: Invoke Flux comms message broker daemon
 
 ==============
-FLUX-BROKER(1)
+flux-broker(1)
 ==============
 
 

@@ -1,7 +1,7 @@
 .. flux-help-include: true
 
 ============
-FLUX-MINI(1)
+flux-mini(1)
 ============
 
 

@@ -1,7 +1,7 @@
 .. flux-help-include: true
 
 ============
-FLUX-JOBS(1)
+flux-jobs(1)
 ============
 
 

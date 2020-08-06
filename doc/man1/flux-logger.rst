@@ -1,7 +1,7 @@
 .. flux-help-include: true
 
 ==============
-FLUX-LOGGER(1)
+flux-logger(1)
 ==============
 
 

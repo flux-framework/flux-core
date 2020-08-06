@@ -1,7 +1,7 @@
 .. flux-help-description : Print or run inside a Flux environment
 
 ===========
-FLUX-ENV(1)
+flux-env(1)
 ===========
 
 

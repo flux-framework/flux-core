@@ -2,7 +2,7 @@
 .. flux-help-description: Control/query resource-hwloc service
 
 =============
-FLUX-HWLOC(1)
+flux-hwloc(1)
 =============
 
 

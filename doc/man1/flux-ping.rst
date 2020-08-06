@@ -1,7 +1,7 @@
 .. flux-help-include: true
 
 ============
-FLUX-PING(1)
+flux-ping(1)
 ============
 
 

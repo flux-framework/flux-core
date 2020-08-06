@@ -1,7 +1,7 @@
 .. flux-help-description: Schedule tasks on timers and events
 
 ============
-FLUX-CRON(1)
+flux-cron(1)
 ============
 
 

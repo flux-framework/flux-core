@@ -2,7 +2,7 @@
 .. flux-help-description: Access instance content storage
 
 ===============
-FLUX-CONTENT(1)
+flux-content(1)
 ===============
 
 
