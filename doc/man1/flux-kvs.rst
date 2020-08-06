@@ -1,7 +1,7 @@
 .. flux-help-include: true
 
 ===========
-FLUX-KVS(1)
+flux-kvs(1)
 ===========
 
 

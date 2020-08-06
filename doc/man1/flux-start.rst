@@ -1,7 +1,7 @@
 .. flux-help-include: true
 
 =============
-FLUX-START(1)
+flux-start(1)
 =============
 
 

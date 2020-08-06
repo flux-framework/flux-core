@@ -2,7 +2,7 @@
 .. flux-help-description: Access, modify, and list broker attributes
 
 ===============
-FLUX-GETATTR(1)
+flux-getattr(1)
 ===============
 
 

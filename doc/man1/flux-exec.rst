@@ -1,7 +1,7 @@
 .. flux-help-include: true
 
 ============
-FLUX-EXEC(1)
+flux-exec(1)
 ============
 
 

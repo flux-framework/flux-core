@@ -1,7 +1,7 @@
 .. flux-help-include: true
 
 ==============
-FLUX-KEYGEN(1)
+flux-keygen(1)
 ==============
 
 

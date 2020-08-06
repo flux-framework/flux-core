@@ -1,7 +1,7 @@
 .. flux-help-include: true
 
 =============
-FLUX-EVENT(1)
+flux-event(1)
 =============
 
 

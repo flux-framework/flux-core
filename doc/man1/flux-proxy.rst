@@ -2,7 +2,7 @@
 .. flux-help-description: Create proxy environment for Flux instance
 
 =============
-FLUX-PROXY(1)
+flux-proxy(1)
 =============
 
 

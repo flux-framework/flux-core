@@ -1,7 +1,7 @@
 .. flux-help-description: manipulate broker log ring buffer
 
 =============
-FLUX-DMESG(1)
+flux-dmesg(1)
 =============
 
 

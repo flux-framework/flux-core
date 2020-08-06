@@ -1,7 +1,7 @@
 .. flux-help-description : Display flux version information
 
 ===============
-FLUX-VERSION(1)
+flux-version(1)
 ===============
 
 
