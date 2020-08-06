@@ -243,8 +243,8 @@ class SubmitCmd(MiniCmd):
             help="Number of cores to allocate per task",
         )
         self.parser.add_argument(
-            "-T",
             "--hw-threads-per-core",
+            "--smt",
             type=int,
             metavar="N",
             help="Number of threads to allocate per core",
@@ -368,8 +368,8 @@ def add_batch_alloc_args(parser):
         + " The default slot size is 1 core.",
     )
     parser.add_argument(
-        "-T",
         "--hw-threads-per-core",
+        "--smt",
         type=int,
         metavar="N",
         help="Number of threads to allocate per core",
