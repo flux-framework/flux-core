@@ -93,6 +93,7 @@ struct shell_task *shell_task_create (struct shell_info *info,
     const char *key;
     json_t *entry;
     size_t i;
+    char buf[64];
 
     if (!(task = shell_task_new ()))
         return NULL;
@@ -128,9 +129,13 @@ struct shell_task *shell_task_create (struct shell_info *info,
     if (flux_cmd_setenvf (task->cmd, 1, "FLUX_JOB_NNODES", "%d",
                           info->shell_size) < 0)
         goto error;
-    if (flux_cmd_setenvf (task->cmd, 1, "FLUX_JOB_ID", "%ju",
-                          (uintmax_t)info->jobid) < 0)
+
+    /* Attempt to encode jobid as F58 by default */
+    if (flux_job_id_encode (info->jobid, "f58", buf, sizeof (buf)) < 0)
+       snprintf (buf, sizeof (buf), "%ju", (uintmax_t)info->jobid);
+    if (flux_cmd_setenvf (task->cmd, 1, "FLUX_JOB_ID", "%s", buf) < 0)
         goto error;
+
     flux_cmd_unsetenv (task->cmd, "FLUX_URI");
     if (getenv ("FLUX_URI")) {
         if (flux_cmd_setenvf (task->cmd, 1, "FLUX_URI", "%s",
