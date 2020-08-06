@@ -95,7 +95,7 @@ test_expect_success 'flux-mini batch: --broker-opts works' '
 test_expect_success 'create hardware-thread batch script' '
 	cat <<-EOF >hardware-thread-batch-script.sh
 	#!/bin/sh
-	flux mini run -V2 -T2 hostname
+	flux mini run -V2 --hw-threads-per-core 2 hostname
 	EOF
 '
 
