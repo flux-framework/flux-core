@@ -8,8 +8,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-from __future__ import print_function
-
 # pylint: disable=duplicate-code
 import os
 import sys
@@ -487,8 +485,12 @@ LOGGER = logging.getLogger("flux-mini")
 @util.CLIMain(LOGGER)
 def main():
 
-    sys.stdout = open(sys.stdout.fileno(), "w", encoding="utf8")
-    sys.stderr = open(sys.stderr.fileno(), "w", encoding="utf8")
+    sys.stdout = open(
+        sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
+    )
+    sys.stderr = open(
+        sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
+    )
 
     parser = argparse.ArgumentParser(prog="flux-mini")
     subparsers = parser.add_subparsers(
