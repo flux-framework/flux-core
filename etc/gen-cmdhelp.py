@@ -40,6 +40,8 @@ for (path, cmd, descr, author, section) in man_pages:
             line = line.rstrip("\n")
             if ".. flux-help-" in line:
                 include_flag = True
+                if cmd.startswith("flux-"):
+                    cmd = cmd[5:]
                 if ".. flux-help-description: " in line:
                     descr = " ".join(line.split(" ")[2:])
                 if ".. flux-help-command: " in line:
