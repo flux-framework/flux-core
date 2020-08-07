@@ -24,6 +24,18 @@ Man Pages
    man7/index
 
 
+Python Bindings
+===============
+
+.. toctree::
+
+   bindings/python/flux
+   bindings/python/flux.core
+   bindings/python/modules
+   bindings/python/setup
+
+
+
 Indices and tables
 ==================
 
