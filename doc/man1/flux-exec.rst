@@ -66,7 +66,7 @@ OPTIONS
 NODESET FORMAT
 ==============
 
-.. literalinclude:: NODESET.rst
+.. include:: NODESET.rst
 
 
 RESOURCES
