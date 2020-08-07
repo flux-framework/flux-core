@@ -15,6 +15,8 @@
  */
 struct s3_config {
     int retries;        // number of times to retry each operation
+    int is_secure;
+    int is_virtual_host;
     char *bucket;       // the bucket name for the instance to use
     char *access_key;   // access key id string
     char *secret_key;   // secret access key id string
