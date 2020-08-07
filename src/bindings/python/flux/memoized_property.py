@@ -40,6 +40,7 @@ def memoized_property(fget):
     getter on the first access. The result is stored and on subsequent
     accesses is returned, preventing the need to call the getter any more.
     Example::
+
         >>> class C(object):
         ...     load_name_count = 0
         ...     @memoized_property

@@ -221,8 +221,8 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         conform to the Mapping interface
 
         :param contents: A dict of keys and values to be created in the
-        directory or None, sub-directories can be created by using `dir.file`
-        syntax, sub-dicts will be stored as json values in a single key
+            directory or None, sub-directories can be created by using ``dir.file``
+            syntax, sub-dicts will be stored as json values in a single key
         """
 
         if contents is None:
