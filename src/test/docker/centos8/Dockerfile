@@ -13,6 +13,7 @@ RUN yum -y update \
  && yum -y install \
 	wget \
 	man-db \
+	less \
 	git \
 	sudo \
 	munge \
