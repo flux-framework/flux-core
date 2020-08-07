@@ -25,6 +25,7 @@ struct schedutil_ctx {
     schedutil_cancel_cb_f *cancel_cb;
     void *cb_arg;
     zlistx_t *outstanding_futures;
+    zlistx_t *alloc_queue;
 };
 
 /*
@@ -37,6 +38,14 @@ struct schedutil_ctx {
 int schedutil_add_outstanding_future (schedutil_t *util, flux_future_t *fut);
 int schedutil_remove_outstanding_future (schedutil_t *util,
                                          flux_future_t *fut);
+
+/* Enqueue and dequeue pending alloc requests while they are waiting on
+ *  async operations to complete. Ensures alloc callback of scheduler is
+ *  called in the same order as alloc requests recvd by schedutil.
+ */
+int schedutil_enqueue_alloc (schedutil_t *util, flux_future_t *f);
+flux_future_t *schedutil_peek_alloc (schedutil_t *util);
+int schedutil_dequeue_alloc (schedutil_t *util);
 
 /* (Un-)register callbacks for alloc, free, cancel.
  */

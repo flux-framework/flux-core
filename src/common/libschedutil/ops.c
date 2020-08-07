@@ -23,29 +23,30 @@
 static void alloc_continuation (flux_future_t *f, void *arg)
 {
     schedutil_t *util = arg;
-    flux_t *h = util->h;
-    const flux_msg_t *msg = flux_future_aux_get (f, "schedutil::msg");
 
-    if (util == NULL) {
-        errno = EINVAL;
-        goto error;
-    }
-    const char *jobspec;
+    /* An enqueued alloc request is ready. Process the pending alloc
+     * queue in order until the first unfulfilled future is found. This
+     * ensures the scheduler does not get alloc requests out-of-order,
+     * even if kvs lookups return in a different order than initiated.
+     */
+    while ((f = schedutil_peek_alloc (util)) && flux_future_is_ready (f)) {
+        const flux_msg_t *msg = flux_future_aux_get (f, "schedutil::msg");
+        const char *jobspec;
 
-    if (flux_kvs_lookup_get (f, &jobspec) < 0) {
-        flux_log_error (h, "sched.alloc lookup R");
-        goto error;
+        flux_log (util->h, LOG_INFO, "f=%p", f);
+
+        if (flux_kvs_lookup_get (f, &jobspec) < 0) {
+            flux_log_error (util->h, "sched.alloc lookup R");
+            if (flux_respond_error (util->h, msg, errno, NULL) < 0)
+                flux_log_error (util->h, "sched.alloc respond_error");
+            return;
+        }
+        if (schedutil_dequeue_alloc (util) < 0)
+            flux_log_error (util->h, "failed to dequeue alloc request");
+
+        util->alloc_cb (util->h, msg, jobspec, util->cb_arg);
+        flux_future_destroy (f);
     }
-    if (schedutil_remove_outstanding_future (util, f) < 0)
-        flux_log_error (h, "sched.alloc unable to remove outstanding future");
-    util->alloc_cb (h, msg, jobspec, util->cb_arg);
-    flux_future_destroy (f);
-    return;
-error:
-    flux_log_error (h, "sched.alloc");
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "sched.alloc respond_error");
-    flux_future_destroy (f);
 }
 
 static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -82,8 +83,8 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     // else: intentionally do not register a continuation to force a permanent
     // outstanding request for testing
-    if (schedutil_add_outstanding_future (util, f) < 0)
-        flux_log_error (h, "sched.alloc unable to add outstanding future");
+    if (schedutil_enqueue_alloc (util, f) < 0)
+        flux_log_error (h, "sched.alloc unable to enqueue alloc request");
 
     return;
 error_future:

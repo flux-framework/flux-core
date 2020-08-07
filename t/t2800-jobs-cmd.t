@@ -66,7 +66,9 @@ wait_states() {
 export FLUX_PYCLI_LOGLEVEL=10
 
 listjobs() {
-	${FLUX_BUILD_DIR}/t/job-manager/list-jobs | awk '{print $1}'
+	${FLUX_BUILD_DIR}/t/job-manager/list-jobs \
+	    | awk '{print $1}' \
+	    | flux job id --to=f58
 }
 
 test_expect_success 'submit jobs for job list testing' '
@@ -338,11 +340,11 @@ test_expect_success 'flux-jobs --format={id} works' '
 '
 
 test_expect_success 'flux-jobs --format={id.f58},{id.hex},{id.dothex},{id.words} works' '
-	flux jobs -ano {id},{id.f58},{id.hex},{id.kvs},{id.dothex},{id.words} \
+	flux jobs -ano {id.dec},{id.f58},{id.hex},{id.kvs},{id.dothex},{id.words} \
 	    | sort -n > ids.XX.out &&
 	for id in $(cat all.ids); do
 		printf "%s,%s,%s,%s,%s,%s\n" \
-		       $id \
+		       $(flux job id --to=dec $id) \
 		       $(flux job id --to=f58 $id) \
 		       $(flux job id --to=hex $id) \
 		       $(flux job id --to=kvs $id) \

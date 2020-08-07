@@ -103,6 +103,10 @@ test_expect_success 'flux-job: id with invalid --to arg fails' '
 	test_must_fail flux job id --to=invalid 42
 '
 
+test_expect_success 'flux-job: fails with no input and no args' '
+	test_expect_code 1 flux job id < /dev/null
+'
+
 test_expect_success 'flux-job: id works with min/max jobids' '
     for max in $MAXJOBIDS_LIST; do
         jobid=$(flux job id $max) &&
@@ -255,7 +259,7 @@ test_expect_success 'flux-job: attach fails without jobid argument' '
 '
 
 test_expect_success 'flux-job: attach fails on invalid jobid' '
-	test_must_fail flux job attach $((${validjob}+1))
+	test_must_fail flux job attach $(($(flux job id ${validjob})+1))
 '
 
 test_expect_success 'flux-job: kill fails without jobid argument' '
@@ -263,7 +267,7 @@ test_expect_success 'flux-job: kill fails without jobid argument' '
 '
 
 test_expect_success 'flux-job: kill fails on invalid jobid' '
-	test_expect_code 1 flux job kill $((${validjob}+1))
+	test_expect_code 1 flux job kill $(($(flux job id ${validjob})+1))
 '
 
 test_expect_success 'flux-job: kill fails on non-running job' '

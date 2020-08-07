@@ -8,8 +8,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-from __future__ import print_function
-
 # pylint: disable=duplicate-code
 import os
 import sys
@@ -20,7 +18,7 @@ from itertools import chain
 
 import flux
 from flux import job
-from flux.job import JobspecV1
+from flux.job import JobspecV1, JobID
 from flux import util
 from flux import debugged
 
@@ -203,13 +201,14 @@ class MiniCmd:
             sys.exit(0)
 
         flux_handle = flux.Flux()
-        return job.submit(
+        jobid = job.submit(
             flux_handle,
             jobspec.dumps(),
             priority=args.priority,
             waitable=arg_waitable,
             debug=arg_debug,
         )
+        return JobID(jobid)
 
     def get_parser(self):
         return self.parser
@@ -310,7 +309,7 @@ class RunCmd(SubmitCmd):
             attach_args.append("--show-exec")
         if args.debug_emulate:
             attach_args.append("--debug-emulate")
-        attach_args.append(str(jobid))
+        attach_args.append(jobid.f58.encode("utf-8", errors="surrogateescape"))
 
         # Exec flux-job attach, searching for it in FLUX_EXEC_PATH.
         os.environ["PATH"] = os.environ["FLUX_EXEC_PATH"] + ":" + os.environ["PATH"]
@@ -473,7 +472,7 @@ class AllocCmd(MiniCmd):
 
         # Build args for flux job attach
         attach_args = ["flux-job", "attach"]
-        attach_args.append(str(jobid))
+        attach_args.append(jobid.f58.encode("utf-8", errors="surrogateescape"))
 
         # Exec flux-job attach, searching for it in FLUX_EXEC_PATH.
         os.environ["PATH"] = os.environ["FLUX_EXEC_PATH"] + ":" + os.environ["PATH"]
@@ -485,6 +484,14 @@ LOGGER = logging.getLogger("flux-mini")
 
 @util.CLIMain(LOGGER)
 def main():
+
+    sys.stdout = open(
+        sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
+    )
+    sys.stderr = open(
+        sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
+    )
+
     parser = argparse.ArgumentParser(prog="flux-mini")
     subparsers = parser.add_subparsers(
         title="supported subcommands", description="", dest="subcommand"

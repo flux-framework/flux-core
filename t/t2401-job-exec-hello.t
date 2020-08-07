@@ -20,7 +20,7 @@ test_expect_success NO_CHAIN_LINT 'exec hello: start exec server-in-a-script' '
 	id=$(flux jobspec srun hostname | flux job submit --flags=debug) &&
 	flux job wait-event ${id} clean &&
 	test_debug "cat server1.log" &&
-	grep "start: ${id}" server1.log
+	grep "start: $(flux job id ${id})" server1.log
 '
 test_expect_success NO_CHAIN_LINT 'exec hello: takeover: start new service' '
 	${execservice} test-exec2 > server2.log &
@@ -28,7 +28,7 @@ test_expect_success NO_CHAIN_LINT 'exec hello: takeover: start new service' '
 	flux kvs get -c 1 --watch --waitcreate test.exec-hello.test-exec2 &&
 	id=$(flux jobspec srun hostname | flux job submit --flags=debug) &&
 	flux job wait-event ${id} clean &&
-	grep "start: ${id}" server2.log
+	grep "start: $(flux job id ${id})" server2.log
 '
 test_expect_success NO_CHAIN_LINT 'exec hello: teardown existing servers' "
 	kill -9 ${SERVER1} && kill -9 ${SERVER2} &&
@@ -51,7 +51,7 @@ test_expect_success NO_CHAIN_LINT 'exec hello: start server with job timer' '
 test_expect_success NO_CHAIN_LINT 'exec hello: paused job now has start event' '
 	flux job wait-event -t 2 ${id} start &&
 	test_debug "cat server3.log" &&
-	grep "test-exec3: start: ${id}" server3.log
+	grep "test-exec3: start: $(flux job id ${id})" server3.log
 '
 test_expect_success NO_CHAIN_LINT 'exec hello: hello now returns error due to running job' '
 	test_expect_code 1 run_timeout 5 ${execservice} testexecfoo

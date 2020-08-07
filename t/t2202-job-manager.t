@@ -28,7 +28,7 @@ test_expect_success HAVE_JQ 'job-manager: max_jobid=0 before jobs run' '
 '
 
 test_expect_success 'job-manager: submit one job' '
-	flux job submit basic.json >submit1.out
+	flux job submit basic.json | flux job id >submit1.out
 '
 
 test_expect_success HAVE_JQ 'job-manager: max_jobid=last' '
@@ -97,9 +97,9 @@ test_expect_success 'job-manager: queue contains 0 jobs' '
 '
 
 test_expect_success 'job-manager: submit jobs with priority=min,default,max' '
-	flux job submit -p0  basic.json >submit_min.out &&
-	flux job submit      basic.json >submit_def.out &&
-	flux job submit -p31 basic.json >submit_max.out
+	flux job submit -p0  basic.json | flux job id >submit_min.out &&
+	flux job submit      basic.json | flux job id >submit_def.out &&
+	flux job submit -p31 basic.json | flux job id >submit_max.out
 '
 
 test_expect_success 'job-manager: queue contains 3 jobs' '
@@ -139,7 +139,7 @@ test_expect_success 'job-manager: queue contains 0 jobs' '
 test_expect_success 'job-manager: submit 10 jobs of equal priority' '
 	rm -f submit10.out &&
 	for i in $(seq 1 10); do \
-	    flux job submit basic.json >>submit10.out; \
+	    flux job submit basic.json | flux job id >>submit10.out; \
 	done
 '
 

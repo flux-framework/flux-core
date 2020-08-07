@@ -17,7 +17,7 @@ fj_wait_event() {
 }
 
 wait_jobid_state() {
-        local jobid=$1
+        local jobid=$(flux job id $1)
         local state=$2
         local i=0
         while ! flux job list --states=${state} | grep $jobid > /dev/null \
@@ -34,7 +34,7 @@ wait_jobid_state() {
 }
 
 wait_db() {
-        local jobid=$1
+        local jobid=$(flux job id $1)
         local dbpath=$2
         local i=0
         query="select id from jobs;"
@@ -59,7 +59,7 @@ db_count_entries() {
 }
 
 db_check_entries() {
-        local id=$1
+        local id=$(flux job id $1)
         local dbpath=$2
         query="select * from jobs where id=$id;"
         ${QUERYCMD} -t 10000 ${dbpath} "${query}" > query.out
@@ -81,7 +81,7 @@ db_check_entries() {
 }
 
 get_db_values() {
-        local id=$1
+        local id=$(flux job id $1)
         local dbpath=$2
         query="select * from jobs where id=$id;"
         ${QUERYCMD} -t 10000 ${dbpath} "${query}" > query.out
@@ -98,7 +98,7 @@ get_db_values() {
 }
 
 db_check_values_run() {
-        local id=$1
+        local id=$(flux job id $1)
         local dbpath=$2
         get_db_values $id $dbpath
         if [ -z "$userid" ] \
@@ -118,7 +118,7 @@ db_check_values_run() {
 }
 
 db_check_values_no_run() {
-        local id=$1
+        local id=$(flux job id $1)
         local dbpath=$2
         get_db_values $id $dbpath
         if [ -z "$userid" ] \

@@ -18,7 +18,7 @@ fj_wait_event() {
 }
 
 wait_jobid_state() {
-        local jobid=$1
+        local jobid=$(flux job id $1)
         local state=$2
         local i=0
         while ! flux job list --states=${state} | grep $jobid > /dev/null \
@@ -116,7 +116,7 @@ test_expect_success 'submit jobs for job list testing' '
         #
         #  Currently all inactive ids are "completed"
         #
-        tac inactiveids > completed.ids &&
+        tac inactiveids | flux job id > completed.ids &&
         #
         #  Run a job that will fail, copy its JOBID to both inactive and
         #   failed lists.
@@ -124,14 +124,14 @@ test_expect_success 'submit jobs for job list testing' '
         jobid=`flux mini submit nosuchcommand` &&
         fj_wait_event $jobid clean &&
         echo $jobid >> inactiveids &&
-        echo $jobid > failed.ids &&
+        flux job id $jobid > failed.ids &&
         #
         #  Submit 8 sleep jobs to fill up resources
         #
         for i in $(seq 0 7); do
                 flux job submit sleeplong.json >> runningids
         done &&
-        tac runningids > running.ids &&
+        tac runningids | flux job id > running.ids &&
         #
         #  Submit a set of jobs with misc priorities
         #
@@ -143,14 +143,14 @@ test_expect_success 'submit jobs for job list testing' '
         id6=$(flux job submit      hostname.json) &&
         id7=$(flux job submit -p31 hostname.json) &&
         id8=$(flux job submit -p0  hostname.json) &&
-        echo $id3 > pending.ids &&
-        echo $id7 >> pending.ids &&
-        echo $id1 >> pending.ids &&
-        echo $id5 >> pending.ids &&
-        echo $id2 >> pending.ids &&
-        echo $id6 >> pending.ids &&
-        echo $id4 >> pending.ids &&
-        echo $id8 >> pending.ids &&
+        flux job id $id3 > pending.ids &&
+        flux job id $id7 >> pending.ids &&
+        flux job id $id1 >> pending.ids &&
+        flux job id $id5 >> pending.ids &&
+        flux job id $id2 >> pending.ids &&
+        flux job id $id6 >> pending.ids &&
+        flux job id $id4 >> pending.ids &&
+        flux job id $id8 >> pending.ids &&
         cat pending.ids > active.ids &&
         cat running.ids >> active.ids &&
         #
@@ -160,9 +160,9 @@ test_expect_success 'submit jobs for job list testing' '
         flux job wait-event $jobid depend &&
         flux job cancel $jobid &&
         flux job wait-event $jobid clean &&
-        echo $jobid >> inactiveids &&
-        echo $jobid > cancelled.ids &&
-        tac inactiveids > inactive.ids &&
+        flux job id $jobid >> inactiveids &&
+        flux job id $jobid > cancelled.ids &&
+        tac inactiveids | flux job id > inactive.ids &&
         cat active.ids > all.ids &&
         cat inactive.ids >> all.ids &&
         #
@@ -529,7 +529,7 @@ wait_idsync() {
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (one id)' '
 	${RPC} job-info.job-state-pause 0 </dev/null
-        jobid=`flux mini submit hostname`
+        jobid=`flux mini submit hostname | flux job id`
         fj_wait_event $jobid clean >/dev/null
         flux job list-ids ${jobid} > list_id_wait1.out &
         pid=$!
@@ -541,8 +541,8 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (different ids)' '
 	${RPC} job-info.job-state-pause 0 </dev/null
-        jobid1=`flux mini submit hostname`
-        jobid2=`flux mini submit hostname`
+        jobid1=`flux mini submit hostname | flux job id`
+        jobid2=`flux mini submit hostname | flux job id`
         fj_wait_event ${jobid1} clean >/dev/null
         fj_wait_event ${jobid2} clean >/dev/null
         flux job list-ids ${jobid1} ${jobid2} > list_id_wait2.out &
@@ -556,7 +556,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (same id)' '
 	${RPC} job-info.job-state-pause 0 </dev/null
-        jobid=`flux mini submit hostname`
+        jobid=`flux mini submit hostname | flux job id`
         fj_wait_event $jobid clean >/dev/null
         flux job list-ids ${jobid} > list_id_wait3A.out &
         pid1=$!
@@ -576,7 +576,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids waits for job ids (
 
 # simply test that value in timestamp increases through job states
 test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job inactive)' '
-        jobid=$(flux mini submit hostname) &&
+        jobid=$(flux mini submit hostname | flux job id) &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
@@ -588,7 +588,7 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job i
 
 # since job is running, make sure latter states don't exist
 test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job running)' '
-        jobid=$(flux mini submit sleep 60) &&
+        jobid=$(flux mini submit sleep 60 | flux job id) &&
         fj_wait_event $jobid start >/dev/null &&
         wait_jobid_state $jobid running &&
         obj=$(flux job list -s running | grep $jobid) &&
@@ -605,7 +605,7 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job r
 #
 
 test_expect_success HAVE_JQ 'flux job list outputs user job name' '
-        jobid=`flux mini submit --setattr system.job.name=foobar A B C` &&
+        jobid=`flux mini submit --setattr system.job.name=foobar A B C | flux job id` &&
         echo $jobid > jobname1.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -613,7 +613,7 @@ test_expect_success HAVE_JQ 'flux job list outputs user job name' '
 '
 
 test_expect_success HAVE_JQ 'flux job lists first argument for job name' '
-        jobid=`flux mini submit mycmd arg1 arg2` &&
+        jobid=`flux mini submit mycmd arg1 arg2 | flux job id` &&
         echo $jobid > jobname2.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -621,7 +621,7 @@ test_expect_success HAVE_JQ 'flux job lists first argument for job name' '
 '
 
 test_expect_success HAVE_JQ 'flux job lists basename of first argument for job name' '
-        jobid=`flux mini submit /foo/bar arg1 arg2` &&
+        jobid=`flux mini submit /foo/bar arg1 arg2 | flux job id` &&
         echo $jobid > jobname3.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -629,7 +629,7 @@ test_expect_success HAVE_JQ 'flux job lists basename of first argument for job n
 '
 
 test_expect_success HAVE_JQ 'flux job lists full path for job name if basename fails on first arg' '
-        jobid=`flux mini submit /foo/bar/ arg1 arg2` &&
+        jobid=`flux mini submit /foo/bar/ arg1 arg2 | flux job id` &&
         echo $jobid > jobname4.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -656,7 +656,7 @@ test_expect_success HAVE_JQ 'verify job names preserved across restart' '
 #
 
 test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (1 task)' '
-        jobid=`flux mini submit hostname` &&
+        jobid=`flux mini submit hostname | flux job id` &&
         echo $jobid > taskcount1.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -665,7 +665,7 @@ test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (1 task)' '
 '
 
 test_expect_success HAVE_JQ 'flux job list outputs ntasks correctly (4 tasks)' '
-        jobid=`flux mini submit -n4 hostname` &&
+        jobid=`flux mini submit -n4 hostname | flux job id` &&
         echo $jobid > taskcount2.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -691,7 +691,7 @@ test_expect_success HAVE_JQ 'verify task count preserved across restart' '
 #
 
 test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (1 task / 1 node)' '
-        jobid=`flux mini submit -n1 hostname` &&
+        jobid=`flux mini submit -n1 hostname | flux job id` &&
         echo $jobid > nodecount1.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -701,7 +701,7 @@ test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (1 tas
 '
 
 test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (2 tasks, / 1 node)' '
-        jobid=`flux mini submit -n2 hostname` &&
+        jobid=`flux mini submit -n2 hostname | flux job id` &&
         echo $jobid > nodecount2.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -711,7 +711,7 @@ test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (2 tas
 '
 
 test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (3 tasks, / 2 nodes)' '
-        jobid=`flux mini submit -n3 hostname` &&
+        jobid=`flux mini submit -n3 hostname | flux job id` &&
         echo $jobid > nodecount3.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -721,7 +721,7 @@ test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (3 tas
 '
 
 test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (5 tasks, / 3 nodes)' '
-        jobid=`flux mini submit -n5 hostname` &&
+        jobid=`flux mini submit -n5 hostname | flux job id` &&
         echo $jobid > nodecount4.id &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
@@ -735,7 +735,7 @@ test_expect_success HAVE_JQ 'flux job list outputs nnodes/ranks correctly (5 tas
 #
 
 test_expect_success HAVE_JQ 'flux job list outputs success correctly (true)' '
-        jobid=`flux mini submit hostname` &&
+        jobid=`flux mini submit hostname | flux job id` &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
@@ -743,7 +743,7 @@ test_expect_success HAVE_JQ 'flux job list outputs success correctly (true)' '
 '
 
 test_expect_success HAVE_JQ 'flux job list outputs success correctly (false)' '
-        jobid=`flux mini submit nosuchcommand` &&
+        jobid=`flux mini submit nosuchcommand | flux job id` &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
@@ -753,7 +753,7 @@ test_expect_success HAVE_JQ 'flux job list outputs success correctly (false)' '
 # job exceptions
 
 test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (no exception)' '
-        jobid=`flux mini submit hostname` &&
+        jobid=`flux mini submit hostname | flux job id` &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
@@ -764,7 +764,7 @@ test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (no exce
 '
 
 test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (exception)' '
-        jobid=`flux mini submit nosuchcommand` &&
+        jobid=`flux mini submit nosuchcommand | flux job id` &&
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
@@ -777,7 +777,7 @@ test_expect_success HAVE_JQ 'flux job list outputs exceptions correctly (excepti
 # expiration time
 
 test_expect_success HAVE_JQ 'flux job list outputs expiration time when set' '
-	jobid=$(flux mini submit -t 30 sleep 1000) &&
+	jobid=$(flux mini submit -t 30 sleep 1000 | flux job id) &&
 	fj_wait_event $jobid start &&
 	flux job list | grep $jobid > expiration.json &&
 	test_debug "cat expiration.json" &&
@@ -916,7 +916,7 @@ test_expect_success 'list-id request with empty payload fails with EPROTO(71)' '
 '
 test_expect_success HAVE_JQ 'list-id request with invalid input fails with EPROTO(71) (attrs not an array)' '
 	name="list-id-attrs-not-array" &&
-        id=`flux mini submit hostname` &&
+        id=`flux mini submit hostname | flux job id` &&
         $jq -j -c -n  "{id:${id}, attrs:5}" \
           | $listRPC list-id > ${name}.out &&
 	cat <<-EOF >${name}.expected &&
@@ -926,7 +926,7 @@ test_expect_success HAVE_JQ 'list-id request with invalid input fails with EPROT
 '
 test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVAL(22) (attrs non-string)' '
 	name="list-id-invalid-attrs" &&
-	id=$(flux jobs -c1 -ano {id}) &&
+	id=$(flux jobs -c1 -ano {id.dec}) &&
         $jq -j -c -n  "{id:${id}, attrs:[5]}" \
           | $listRPC list-id > ${name}.out &&
 	cat <<-EOF >${name}.expected &&
@@ -936,7 +936,7 @@ test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVA
 '
 test_expect_success HAVE_JQ 'list-id request with invalid input fails with EINVAL(22) (attrs illegal field)' '
 	name="list-id-invalid-attr" &&
-	id=$(flux jobs -c1 -ano {id}) &&
+	id=$(flux jobs -c1 -ano {id.dec}) &&
         $jq -j -c -n  "{id:${id}, attrs:[\"foo\"]}" \
           | $listRPC list-id >${name}.out &&
 	cat <<-EOF >${name}.expected &&

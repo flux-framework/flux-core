@@ -443,7 +443,17 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
     if (!(pmi = calloc (1, sizeof (*pmi))))
         return NULL;
     pmi->shell = shell;
-    snprintf (kvsname, sizeof (kvsname), "%ju", (uintmax_t)shell->jobid);
+
+    /* Use F58 representation of jobid for "kvsname", since the broker
+     * will pull the kvsname and use it as the broker 'jobid' attribute.
+     * This allows the broker attribute to be in the "common" user-facing
+     * jobid representation.
+     */
+    if (flux_job_id_encode (shell->jobid,
+                            "f58",
+                            kvsname,
+                            sizeof (kvsname)) < 0)
+        goto error;
     if (!(pmi->server = pmi_simple_server_create (shell_pmi_ops,
                                                   0, // appnum
                                                   info->total_ntasks,

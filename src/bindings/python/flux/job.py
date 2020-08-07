@@ -49,7 +49,7 @@ def _convert_jobspec_arg_to_string(jobspec):
     if isinstance(jobspec, Jobspec):
         jobspec = jobspec.dumps()
     elif isinstance(jobspec, six.text_type):
-        jobspec = jobspec.encode("utf-8")
+        jobspec = jobspec.encode("utf-8", errors="surrogateescape")
     elif jobspec is None or jobspec == ffi.NULL:
         # catch this here rather than in C for a better error message
         raise EnvironmentError(errno.EINVAL, "jobspec must not be None/NULL")
@@ -137,6 +137,11 @@ class JobID(int):
         return id_encode(self, encoding)
 
     @property
+    def dec(self):
+        """Return decimal integer representation of a JobID"""
+        return self.encode()
+
+    @property
     def f58(self):
         """Return RFC19 F58 representation of a JobID"""
         return self.encode("f58")
@@ -162,10 +167,10 @@ class JobID(int):
         return self.encode("kvs")
 
     def __str__(self):
-        return self.encode()
+        return self.encode("f58")
 
     def __repr__(self):
-        return f"JobID({self})"
+        return f"JobID({self.dec})"
 
 
 class SubmitFuture(Future):
@@ -981,7 +986,7 @@ class Jobspec(object):
         self.setattr("system.shell.options." + key, val)
 
     def dumps(self, **kwargs):
-        return json.dumps(self.jobspec, **kwargs)
+        return json.dumps(self.jobspec, ensure_ascii=False, **kwargs)
 
     @property
     def resources(self):

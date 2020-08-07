@@ -99,7 +99,8 @@ test_expect_success 'flux-shell: 1: FLUX_TASK_LOCAL_ID, TASK_RANK set' '
 test_expect_success 'flux-shell: FLUX_JOB_SIZE, JOB_NNODES, JOB_ID set' '
 	grep FLUX_JOB_SIZE=2 printenv.out &&
 	grep FLUX_JOB_NNODES=1 printenv.out &&
-	grep FLUX_JOB_ID=42 printenv.out
+	(grep FLUX_JOB_ID=$(flux job id --to=f58 42) printenv.out ||
+	 grep FLUX_JOB_ID=42 printenv.out)
 '
 test_expect_success 'flux-shell: FLUX_URI is not set by shell' '
 	test_must_fail grep FLUX_URI printenv.out

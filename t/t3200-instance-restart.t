@@ -39,8 +39,8 @@ test_expect_success 'inactive job list contains all jobs run before' '
 '
 
 test_expect_success 'job IDs were issued in ascending order' '
-	test $(cat id1.out) -lt $(cat id2.out) &&
-	test $(cat id2.out) -lt $(cat id3.out)
+	test $(cat id1.out | flux job id) -lt $(cat id2.out | flux job id) &&
+	test $(cat id2.out | flux job id) -lt $(cat id3.out | flux job id)
 '
 
 test_expect_success 'run a job in persistent instance (content-files)' '
