@@ -78,19 +78,21 @@ jobs:
       env:
        - TEST_INSTALL=t
        - DOCKER_TAG=t
-    - name: "Centos 7: security,caliper,docker-deploy"
+    - name: "Centos 7: security,caliper,enable-content-s3,docker-deploy"
       stage: test
       compiler: gcc
       env:
        - IMG=centos7
        - DOCKER_TAG=t
-    - name: "Centos 8: security,caliper,docker-deploy"
+       - TEST_CONTENT_S3=t
+    - name: "Centos 8: security,caliper,enable-content-s3,docker-deploy"
       stage: test
       compiler: gcc
       env:
        - IMG=centos8
        - DOCKER_TAG=t
        - PYTHON_VERSION=3.6
+       - TEST_CONTENT_S3=t
 
 stages:
   - 'style checks'

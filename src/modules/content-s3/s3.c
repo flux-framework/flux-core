@@ -22,6 +22,20 @@
 
 #include "s3.h"
 
+#if HAVE_S3_AUTH_REGION
+#define S3_create_bucket(proto, access, secret, host, buck, acl, loc, req, cb, data) \
+    S3_create_bucket(proto, access, secret, NULL, host, buck, acl, loc, req, cb, data)
+#endif
+
+#if HAVE_S3_TIMEOUT_ARG
+#define S3_create_bucket(proto, access, secret, host, buck, acl, loc, req, cb, data) \
+    S3_create_bucket(proto, access, secret, NULL, host, buck, NULL, acl, loc, req, 0, cb, data)
+#define S3_put_object(ctx, key, size, prop, req, cb, data) \
+    S3_put_object(ctx, key, size, prop, req, 0, cb, data)
+#define S3_get_object(ctx, key, cond, start, cnt, req, cb, data) \
+    S3_get_object(ctx, key, cond, start, cnt, req, 0, cb, data)
+#endif
+
 static S3Protocol protocol = S3ProtocolHTTP;
 static S3UriStyle uri_style = S3UriStylePath;
 
