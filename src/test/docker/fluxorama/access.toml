@@ -1,0 +1,3 @@
+[access]
+allow-guest-user = true
+allow-root-owner = true

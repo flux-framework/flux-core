@@ -1,0 +1,3 @@
+[exec]
+allowed-users = [ "flux" ]
+allowed-shells = [ "/usr/libexec/flux/flux-shell" ]
