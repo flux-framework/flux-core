@@ -136,7 +136,7 @@ before_install:
      export TAGNAME="${DOCKERREPO}:${IMG}${TRAVIS_TAG:+-${TRAVIS_TAG}}"
      echo "Tagging new image $TAGNAME"
      #  Force ARGS to correct prefix, etc for docker image
-     export ARGS="--prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --localstatedir=/var --with-flux-security --enable-caliper"
+     export ARGS="$ARGS --prefix=/usr --sysconfdir=/etc --with-systemdsystemunitdir=/etc/systemd/system --localstatedir=/var --with-flux-security --enable-caliper"
   fi
 
 install:
