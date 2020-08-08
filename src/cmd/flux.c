@@ -21,6 +21,7 @@
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <pwd.h>
+#include <locale.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"
@@ -103,6 +104,26 @@ static optparse_t * setup_optparse_parse_args (int argc, char *argv[])
         exit (1);
 
     return (p);
+}
+
+static void set_utf8_locale (struct environment *env)
+{
+    char *locale = setlocale (LC_ALL, NULL);
+
+    /*  If current LC_ALL is set to C or POSIX or not set/empty,
+     *   then attempt to set to a valid utf-8 locale. Prefer C.UTF-8
+     *   and fall back to en_US.UTF-8.
+     */
+    if (locale == NULL || *locale == '\0'
+        || strcmp (locale, "C") == 0
+        || strcmp (locale, "POSIX") == 0) {
+        if (setlocale (LC_ALL, "C.UTF-8"))
+            environment_set (env, "LC_ALL", "C.UTF-8", 0);
+        else if (setlocale (LC_ALL, "en_US.UTF-8"))
+            environment_set (env, "LC_ALL", "en_US.UTF-8", 0);
+        else
+            log_err ("Warning: Failed to set a valid utf-8 locale");
+    }
 }
 
 
@@ -207,6 +228,9 @@ int main (int argc, char *argv[])
 
     if (getenv ("FLUX_URI"))
         environment_from_env (env, "FLUX_URI", "", 0); /* pass-thru */
+
+    /* Set utf-8 locale if possible */
+    set_utf8_locale (env);
 
     environment_from_env (env,
                           "FLUX_PMI_LIBRARY_PATH",
