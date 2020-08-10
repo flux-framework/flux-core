@@ -358,17 +358,17 @@ AC_ARG_ENABLE([content-s3],
 
 AS_IF([test "x$enable_content_s3" = "xyes"], [
     X_AC_CHECK_COND_LIB(s3, S3_initialize)
-	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([#include <libs3.h>],
-            [S3_create_bucket (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);])],
-		    [AC_DEFINE([HAVE_S3_AUTH_REGION], [1], 
-                       [Use libs3 functions with auth region])],
-            []),
-	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([#include <libs3.h>],
-            [S3_create_bucket (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);])],
-		    [AC_DEFINE([HAVE_S3_TIMEOUT_ARG], [1], 
-                       [Use libs3 functions with timeout arg])],
-            [])
-    ], [])
+    AC_COMPILE_IFELSE(
+        [AC_LANG_PROGRAM([#include <libs3.h>],
+                         [S3_create_bucket (0,0,0,0,0,0,0,0,0,0,0);])],
+        AC_DEFINE([HAVE_S3_AUTH_REGION], [1], [S3_create_bucket has 11 args]),
+        AC_COMPILE_IFELSE(
+            [AC_LANG_PROGRAM([#include <libs3.h>],
+                             [S3_create_bucket (0,0,0,0,0,0,0,0,0,0,0,0,0);])],
+            AC_DEFINE([HAVE_S3_TIMEOUT_ARG], [1], [S3_create_bucket has 13 args])
+        )
+    )
+])
 
 AM_CONDITIONAL([ENABLE_CONTENT_S3], [test "x$enable_content_s3" = "xyes"])
 
