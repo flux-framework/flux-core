@@ -357,7 +357,7 @@ AC_ARG_ENABLE([content-s3],
     AS_HELP_STRING([--enable-content-s3], [Enable S3 storage backend]))
 
 AS_IF([test "x$enable_content_s3" = "xyes"], [
-    X_AC_CHECK_COND_LIB(s3, S3_initialize),
+    X_AC_CHECK_COND_LIB(s3, S3_initialize)
 	AC_COMPILE_IFELSE([AC_LANG_PROGRAM([#include <libs3.h>],
             [S3_create_bucket (0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0);])],
 		    [AC_DEFINE([HAVE_S3_AUTH_REGION], [1], 
