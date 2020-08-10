@@ -25,8 +25,3 @@ man1
    flux-start
    flux-version
    flux
-
-.. toctree::
-   :hidden:
-
-   NODESET
