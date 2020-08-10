@@ -181,9 +181,15 @@ after_success:
      fi
      # If this is centos8 build, then build fluxorama image
      if echo "$TAGNAME" | grep -q "centos8"; then
-       FLUXORAMATAG="fluxrm/fluxorama${TRAVIS_TAG+:$TRAVIS_TAG}"
-       docker build -t ${FLUXORAMATAG} src/test/docker/fluxorama
-       docker push ${FLUXORAMATAG}
+       FLUXORAMA="fluxrm/fluxorama"
+       docker build -t ${FLUXORAMA} src/test/docker/fluxorama
+       docker push ${FLUXORAMA}
+       # If this is a tag, also push tagged version of fluxorama image
+       if test -n "${TRAVIS_TAG}"; then
+         t="${FLUXORAMA}:${TRAVIS_TAG}"
+         docker tag ${FLUXORAMA} ${t} &&
+         docker push ${t}
+       fi
      fi
   fi
 
