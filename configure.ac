@@ -358,6 +358,10 @@ AC_ARG_ENABLE([content-s3],
 
 AS_IF([test "x$enable_content_s3" = "xyes"], [
     X_AC_CHECK_COND_LIB(s3, S3_initialize)
+    AS_IF([test "x$ac_cv_lib_s3_S3_initialize" != "xyes"], [
+      AC_MSG_ERROR([configured with --enable-content-s3, but libs3 not found])
+    ])
+
     AC_COMPILE_IFELSE(
         [AC_LANG_PROGRAM([#include <libs3.h>],
                          [S3_create_bucket (0,0,0,0,0,0,0,0,0,0,0);])],
