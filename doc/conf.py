@@ -40,7 +40,7 @@ author = 'This page is maintained by the Flux community.'
 # ones.
 extensions = ['sphinx.ext.autodoc']
 
-autodoc_mock_imports = ["_flux._security"]
+autodoc_mock_imports = ["_flux._core"]
 
 # Add any paths that contain templates here, relative to this directory.
 templates_path = ['_templates']
