@@ -65,6 +65,7 @@ int MPIR_i_am_starter            = 1;
 int MPIR_acquired_pre_main       = 1;
 int MPIR_force_to_main           = 1;
 int MPIR_partial_attach_ok       = 1;
+char *totalview_jobid            = NULL;
 
 int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_list_inactive (optparse_t *p, int argc, char **argv);
@@ -2067,8 +2068,13 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
 
     if (optparse_hasopt (ctx.p, "debug-emulate"))
         MPIR_being_debugged = 1;
-    if (MPIR_being_debugged)
+    if (MPIR_being_debugged) {
+        int verbose = optparse_getopt (p, "verbose", NULL);
         valid_or_exit_for_debug (&ctx);
+        totalview_jobid = xasprintf ("%ju", (uintmax_t)ctx.id);
+        if (verbose > 1)
+            log_msg ("totalview_jobid=%s", totalview_jobid);
+    }
 
     if (!(ctx.eventlog_f = flux_job_event_watch (ctx.h,
                                                  ctx.id,
@@ -2121,6 +2127,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     flux_watcher_destroy (ctx.stdin_w);
     flux_close (ctx.h);
     free (ctx.service);
+    free (totalview_jobid);
     return ctx.exit_code;
 }
 
