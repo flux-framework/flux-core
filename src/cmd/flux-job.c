@@ -1680,9 +1680,7 @@ static void valid_or_exit_for_debug (struct attach_ctx *ctx)
 
     if (state != FLUX_JOB_NEW && state != FLUX_JOB_DEPEND
         && state != FLUX_JOB_SCHED && state != FLUX_JOB_RUN) {
-        errno = EINVAL;
-        log_err_exit ("Invalid job state (%s) for debugging",
-                      flux_job_statetostr(state, false));
+        log_msg_exit ("cannot debug job that isn't running");
     }
 
     return;
