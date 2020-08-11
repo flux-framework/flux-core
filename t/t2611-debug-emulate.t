@@ -14,8 +14,15 @@ stop_tasks_test()     {
 test_under_flux 2
 
 parse_jobid() {
-        outfile=$1
-        jobid=$(cat ${outfile} | grep jobid | awk '{ print $2 }')
+        outfile=$1 &&
+        jobid=$(cat ${outfile} | grep ^jobid: | awk '{ print $2 }') &&
+        echo ${jobid}
+}
+
+parse_totalview_jobid() {
+        outfile=$1 &&
+        jobid=$(cat ${outfile} | grep totalview_jobid | \
+        awk '{ print $2 }' | awk -F= '{ print $2 }') &&
         echo ${jobid}
 }
 
@@ -66,6 +73,17 @@ test_expect_success 'debug-emulate: attaching to a failed job must fail' '
         jobid=$(flux jobspec srun -n 2 ./bad_cmd | flux job submit) &&
         flux job wait-event -vt 2.5 ${jobid} finish &&
         test_must_fail flux job attach --debug-emulate ${jobid}
+'
+
+test_expect_success 'debugger: totalview_jobid is set for attach mode' '
+        jobid=$(flux jobspec srun -n 1 ${stall} done2 10 | flux job submit) &&
+        jobid=$(flux job id ${jobid}) &&
+        flux job wait-event -vt 2.5 ${jobid} start &&
+        ${waitfile} -v -t 2.5 done2 &&
+        flux job attach -vv --debug-emulate ${jobid} 2> jobid.out2 &&
+        flux job wait-event -vt 2.5 ${jobid} finish &&
+        tv_jobid=$(parse_totalview_jobid jobid.out2) &&
+        test ${tv_jobid} = "${jobid}"
 '
 
 test_done
