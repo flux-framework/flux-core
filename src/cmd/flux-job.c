@@ -225,6 +225,9 @@ static struct optparse_option attach_opts[] =  {
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Suppress warnings written to stderr from flux-job",
     },
+    { .name = "debug", .has_arg = 0,
+      .usage = "Enable parallel debugger to attach to a running job",
+    },
     { .name = "debug-emulate", .has_arg = 0, .flags = OPTPARSE_OPT_HIDDEN,
       .usage = "Set MPIR_being_debugged for testing",
     },
@@ -2064,8 +2067,10 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (!(r = flux_get_reactor (ctx.h)))
         log_err_exit ("flux_get_reactor");
 
-    if (optparse_hasopt (ctx.p, "debug-emulate"))
+    if (optparse_hasopt (ctx.p, "debug")
+        || optparse_hasopt (ctx.p, "debug-emulate")) {
         MPIR_being_debugged = 1;
+    }
     if (MPIR_being_debugged) {
         int verbose = optparse_getopt (p, "verbose", NULL);
         valid_or_exit_for_debug (&ctx);
