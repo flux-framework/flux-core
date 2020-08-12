@@ -16,7 +16,7 @@ test_have_prereq ASAN && TIMEOUT=3
 
 test_expect_success 'job time limits are enforced' '
 	test_expect_code 142 \
-		flux mini run --time-limit=${TIMEOUT} sleep 10 2>limit1.err &&
+		flux mini run --time-limit=${TIMEOUT} sleep 30 2>limit1.err &&
 	grep "resource allocation expired" limit1.err
 '
 test_expect_success 'job may exit before time limit' '
