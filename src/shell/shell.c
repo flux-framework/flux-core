@@ -954,7 +954,7 @@ out:
     return rc;
 }
 
-static int shell_init (flux_shell_t *shell)
+static int load_initrc (flux_shell_t *shell)
 {
     bool required = false;
     const char *rcfile = NULL;
@@ -968,18 +968,31 @@ static int shell_init (flux_shell_t *shell)
     else
         rcfile = shell_conf_get ("shell_initrc");
 
-    /*  Only try loading initrc if the file is readable or required:
+    /* Skip loading initrc file if it is not required and either the shell
+     *  is running in standalone mode, or the file isn't readable.
      */
-    if (access (rcfile, R_OK) == 0 || required) {
-        shell_debug ("Loading %s", rcfile);
+    if (!required && (shell->standalone || access (rcfile, R_OK) < 0))
+        return 0;
 
-        if (shell_rc (shell, rcfile) < 0) {
-            shell_die (1, "loading rc file %s%s%s",
-                       rcfile,
-                       errno ? ": " : "",
-                       errno ? strerror (errno) : "");
-        }
+    shell_debug ("Loading %s", rcfile);
+
+    if (shell_rc (shell, rcfile) < 0) {
+        shell_die (1, "loading rc file %s%s%s",
+                   rcfile,
+                   errno ? ": " : "",
+                   errno ? strerror (errno) : "");
+        return -1;
     }
+
+    return 0;
+}
+
+static int shell_init (flux_shell_t *shell)
+{
+    /*  Load initrc file if necessary
+     */
+    if (load_initrc (shell) < 0)
+        return -1;
 
     /* Change current working directory once before all tasks are
      * created, so that each task does not need to chdir().
