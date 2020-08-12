@@ -1,5 +1,3 @@
--- Skip initrc if running in standalone mode
-if shell.info.options.standalone then return end
 
 -- Load all *.so plugins from plugin.searchpath
 plugin.load { file = "*.so", conf = {} }
