@@ -79,6 +79,21 @@ test_expect_success 'flux-shell: initrc: bad plugin.register usage fails' '
 	test_debug "cat ${name}.log" &&
 	grep "required handlers table missing" ${name}.log
 '
+test_expect_success 'flux-shell: initrc: bad plugin.register usage fails' '
+	name=handlers-not-array &&
+	cat >${name}.lua <<-EOT &&
+	    plugin.register {
+          handlers = {
+             topic = "*",
+             fn = function (topic) shell.log (topic) end
+          }
+        }
+	EOT
+	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
+		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_debug "cat ${name}.log" &&
+	grep "no entries" ${name}.log
+'
 test_expect_success 'flux-shell: initrc: assignment to shell method fails' '
 	name=bad-assign &&
 	cat >${name}.lua <<-EOT &&
