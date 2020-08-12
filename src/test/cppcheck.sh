@@ -6,7 +6,6 @@ cppcheck --force --inline-suppr -j 2 --std=c99 --quiet \
     -i src/common/libtap \
     -i src/common/libminilzo \
     -i src/bindings/python \
-    -i src/common/libutil/sds.c \
     -i src/modules/kvs/test \
     -i src/broker/test \
     -i src/common/libtomlc99/test \
