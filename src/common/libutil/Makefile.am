@@ -42,9 +42,6 @@ libutil_la_SOURCES = \
 	cleanup.h \
 	unlink_recursive.c \
 	unlink_recursive.h \
-	sds.c \
-	sds.h \
-	sdsalloc.h \
 	iterators.h \
 	macros.h \
 	sha1.h \

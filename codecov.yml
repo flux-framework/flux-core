@@ -12,7 +12,6 @@ coverage:
  - ".*/common/libtomlc99/.*"
  - ".*/common/liboptparse/getopt*"
  - ".*/bindings/python/.*.c"
- - ".*/common/libutil/sds.*"
  - ".*/common/libminilzo/.*"
  - "/usr/include/.*"
  - "/usr/lib/.*"

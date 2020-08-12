@@ -8,9 +8,13 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+#include <stdarg.h>
+
 #include "src/common/libtap/tap.h"
 #include "src/common/liboptparse/optparse.h"
-#include "src/common/libutil/sds.h"
 
 static void *myfatal_h = NULL;
 
@@ -20,22 +24,32 @@ int myfatal (void *h, int exit_code)
     return (0);
 }
 
-sds usage_out = NULL;
+char * usage_out = NULL;
+size_t usage_len = 0;
+
 void output_f (const char *fmt, ...)
 {
     va_list ap;
-    sds s = usage_out ? usage_out : sdsempty();
+    char s[4096];
+    int len;
     va_start (ap, fmt);
-    usage_out = sdscatvprintf (s, fmt, ap);
+    if ((len = vsnprintf (s, sizeof (s), fmt, ap)) >= sizeof (s))
+        BAIL_OUT ("unexpected snprintf failure");
     va_end (ap);
+    if (!(usage_out = realloc (usage_out, usage_len + len + 1)))
+        BAIL_OUT ("realloc failed usage_len = %d", usage_len);
+    usage_out[usage_len] = '\0';
+    strcat (usage_out, s);
+    usage_len += len + 1;
 }
 
 void usage_output_is (const char *expected, const char *msg)
 {
     ok (usage_out != NULL, "optparse_print_usage");
     is (usage_out, expected, msg);
-    sdsfree (usage_out);
+    free (usage_out);
     usage_out = NULL;
+    usage_len = 0;
 }
 
 void usage_ok (optparse_t *p, const char *expected, const char *msg)

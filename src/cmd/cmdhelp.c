@@ -13,41 +13,42 @@
 #endif
 #include <glob.h>
 #include <string.h>
+#include <argz.h>
 #include <czmq.h>
 #include <jansson.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/xzmalloc.h"
-#include "src/common/libutil/sds.h"
 
 #include "cmdhelp.h"
 
 struct cmdhelp {
-    sds cmd;
-    sds description;
+    char *cmd;
+    char *description;
 };
-
-static struct cmdhelp *cmdhelp_create (const char *cmd, const char *desc)
-{
-    struct cmdhelp *ch = xzmalloc (sizeof (*ch));
-    ch->cmd = sdsnew (cmd);
-    ch->description = sdsnew (desc);
-    if (!ch->cmd || !ch->description) {
-        free (ch);
-        return (NULL);
-    }
-    return (ch);
-}
 
 static void cmdhelp_destroy (struct cmdhelp **p)
 {
     if (*p) {
         struct cmdhelp *ch = *p;
-        sdsfree (ch->cmd);
-        sdsfree (ch->description);
+        free (ch->cmd);
+        free (ch->description);
         free (ch);
         *p = NULL;
     }
+}
+
+static struct cmdhelp *cmdhelp_create (const char *cmd, const char *desc)
+{
+    struct cmdhelp *ch = calloc (1, sizeof (*ch));
+    if (!ch)
+        return NULL;
+    ch->cmd = strdup (cmd);
+    ch->description = strdup (desc);
+    if (!ch->cmd || !ch->description) {
+        cmdhelp_destroy (&ch);
+        return (NULL);
+    }
+    return (ch);
 }
 
 static void cmd_list_destroy (zlist_t *zl)
@@ -226,13 +227,17 @@ static void emit_command_help_from_pattern (const char *pattern, FILE *fp)
 
 void emit_command_help (const char *plist, FILE *fp)
 {
-    int i, count;
-    sds *p;
-    if (!(p = sdssplitlen (plist, strlen (plist), ":", 1, &count)))
+    char *argz = NULL;
+    size_t argz_len = 0;
+    char *entry = NULL;
+
+    if (argz_create_sep (plist, ':', &argz, &argz_len) != 0)
         return;
-    for (i = 0; i < count; i++)
-        emit_command_help_from_pattern (p[i], fp);
-    sdsfreesplitres (p, count);
+
+    while ((entry = argz_next (argz, argz_len, entry)))
+        emit_command_help_from_pattern (entry, fp);
+
+    free (argz);
 }
 
 /*

@@ -25,7 +25,6 @@ CODE_COVERAGE_IGNORE_PATTERN = \
 	"/usr/lib*" \
 	"*/bindings/python/*" \
 	"*/common/liblsd/*" \
-	"*/common/libutil/sds.*" \
 	"*/common/liboptparse/getopt*" \
 	"*/common/libtestutil/*" \
 	"*/common/libyuarel/*"
