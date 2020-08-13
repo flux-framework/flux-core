@@ -100,8 +100,8 @@ test_expect_success 'create hardware-thread batch script' '
 '
 
 test_expect_success 'flux-mini batch: hardware-thread jobs can be submitted but fail to run' '
-	hwt_id1=$(flux mini batch --flags=waitable -n1 hardware-thread-batch-script.sh) &&
-	hwt_id2=$(flux mini batch --flags=waitable -n4 hardware-thread-batch-script.sh) &&
+	hwt_id1=$(flux mini batch --flags=waitable -n1 hardware-thread-batch-script.sh | flux job id) &&
+	hwt_id2=$(flux mini batch --flags=waitable -n4 hardware-thread-batch-script.sh | flux job id) &&
 	test_must_fail flux job wait --all
 '
 
@@ -118,7 +118,7 @@ test_expect_success 'create version batch script' '
 '
 
 test_expect_success HAVE_JQ 'flux-mini batch: Jobs of both versions can be assembled from batch script' '
-	flux mini batch --dry-run --flags=waitable -n1 -V1 hardware-thread-batch-script.sh > v1.out &&
+	flux mini batch --dry-run --flags=waitable -n1 -V1 batch-script.sh > v1.out &&
 	flux mini batch --dry-run --flags=waitable -n1 -V2 hardware-thread-batch-script.sh > v2.out &&
 	test $(jq ".version" v1.out) = 1 &&
 	test $(jq ".version" v2.out) = 2
