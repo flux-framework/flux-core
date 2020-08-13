@@ -12,7 +12,7 @@
 #define _FLUX_CORE_MODULE_H
 
 /* Module management messages are constructed according to Flux RFC 5.
- * https://github.com/flux-framework/rfc/blob/master/spec_5.adoc
+ * https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_5.html
  */
 
 #include <stdint.h>
