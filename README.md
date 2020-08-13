@@ -24,9 +24,9 @@ including a fully functional workload
 
 Framework projects use the C4 development model pioneered in
 the ZeroMQ project and forked as
-[Flux RFC 1](https://github.com/flux-framework/rfc/blob/master/spec_1.adoc).
+[Flux RFC 1](https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_1.html).
 Flux licensing and collaboration plans are described in
-[Flux RFC 2](https://github.com/flux-framework/rfc/blob/master/spec_2.adoc).
+[Flux RFC 2](https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_2.html).
 Protocols and API's used in Flux will be documented as Flux RFC's.
 
 #### Build Requirements

@@ -26,6 +26,6 @@ in the following RFCs from the [flux-framework/rfc][1] project:
     to Flux projects.
 
 [1]: https://github.com/flux-framework/rfc
-[2]: https://github.com/flux-framework/rfc/blob/master/spec_1.adoc
-[3]: https://github.com/flux-framework/rfc/blob/master/spec_2.adoc
-[4]: https://github.com/flux-framework/rfc/blob/master/spec_7.adoc
+[2]: https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_1.html
+[3]: https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_2.html
+[4]: https://flux-framework.rtfd.io/projects/flux-rfc/en/latest/spec_7.html
