@@ -257,6 +257,13 @@ static int l_plugin_register (lua_State *L)
         lua_rawgeti (L, -1, ++i);
     }
 
+    /*  If no handlers were specified, assume this was a mistake in
+     *   the plugin.register() call and throw an error.
+     */
+    if (i == 1)
+        return luaL_error (L, "plugin.register: handlers table exists "
+                              "but has no entries. (not an array?)");
+
     /*  Finally, add plugin to shell plugin  stack
      */
     if (plugstack_push (rc_shell->plugstack, p) < 0)

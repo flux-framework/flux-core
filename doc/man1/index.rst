@@ -23,6 +23,7 @@ man1
    flux-ping
    flux-proxy
    flux-start
+   flux-shell
    flux-version
    flux
 
