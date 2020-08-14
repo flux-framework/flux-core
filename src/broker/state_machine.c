@@ -36,6 +36,7 @@ struct state_machine {
 typedef void (*action_f)(struct state_machine *s);
 
 struct state {
+    broker_state_t state;
     const char *name;
     action_f action;
 };
@@ -54,14 +55,13 @@ static void action_shutdown (struct state_machine *s);
 
 static void runat_completion_cb (struct runat *r, const char *name, void *arg);
 
-/* order assumes broker_state_t enum values can be used as array index */
 static struct state statetab[] = {
-    { "none",             NULL },
-    { "init",             action_init },
-    { "run",              action_run },
-    { "cleanup",          action_cleanup },
-    { "finalize",         action_finalize },
-    { "shutdown",         action_shutdown },
+    { STATE_NONE,       "none",             NULL },
+    { STATE_INIT,       "init",             action_init },
+    { STATE_RUN,        "run",              action_run },
+    { STATE_CLEANUP,    "cleanup",          action_cleanup },
+    { STATE_FINALIZE,   "finalize",         action_finalize },
+    { STATE_SHUTDOWN,   "shutdown",         action_shutdown },
 };
 
 static struct state_next nexttab[] = {
@@ -79,24 +79,36 @@ static struct state_next nexttab[] = {
     { "rc3-success",        STATE_FINALIZE,     STATE_SHUTDOWN },
     { "rc3-none",           STATE_FINALIZE,     STATE_SHUTDOWN },
     { "rc3-fail",           STATE_FINALIZE,     STATE_SHUTDOWN },
-    { NULL, 0, 0 },
 };
+
+#define TABLE_LENGTH(t) (sizeof(t) / sizeof((t)[0]))
 
 static void state_action (struct state_machine *s, broker_state_t state)
 {
-    if (statetab[state].action)
-        statetab[state].action (s);
+    int i;
+    for (i = 0; i < TABLE_LENGTH (statetab); i++) {
+        if (statetab[i].state == state) {
+            if (statetab[i].action)
+                statetab[i].action (s);
+            break;
+        }
+    }
 }
 
 static const char *statestr (broker_state_t state)
 {
-    return statetab[state].name;
+    int i;
+    for (i = 0; i < TABLE_LENGTH (statetab); i++) {
+        if (statetab[i].state == state)
+            return statetab[i].name;
+    }
+    return "unknown";
 }
 
 static broker_state_t state_next (broker_state_t current, const char *event)
 {
     int i;
-    for (i = 0; nexttab[i].event != NULL; i++) {
+    for (i = 0; i < TABLE_LENGTH (nexttab); i++) {
         if (nexttab[i].current == current && !strcmp (event, nexttab[i].event))
             return nexttab[i].next;
     }
