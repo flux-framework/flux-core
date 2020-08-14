@@ -15,6 +15,7 @@ struct broker;
 
 typedef enum {
     STATE_NONE,
+    STATE_JOIN,
     STATE_INIT,             // rc1
     STATE_RUN,              // initial program
     STATE_CLEANUP,
