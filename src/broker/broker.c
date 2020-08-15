@@ -565,6 +565,7 @@ int main (int argc, char *argv[])
         log_err ("error creating broker state machine");
         goto cleanup;
     }
+    state_machine_post (ctx.state_machine, "start");
 
     /* Send hello message to parent.
      * N.B. uses tbon topology attributes set above.
@@ -763,7 +764,6 @@ static void hello_cb (struct hello *hello, void *arg)
 
     if (hello_complete (hello)) {
         overlay_set_idle_warning (ctx->overlay, 3);
-        state_machine_post (ctx->state_machine, "wireup-complete");
     }
 
     free (s);

@@ -15,6 +15,8 @@
 #include <czmq.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/errno_safe.h"
+#include "src/common/libidset/idset.h"
 
 #include "state_machine.h"
 
@@ -22,6 +24,17 @@
 #include "shutdown.h"
 #include "runat.h"
 #include "overlay.h"
+#include "attr.h"
+
+static const double quorum_batch_timeout = 0.1;
+
+struct quorum {
+    zlist_t *requests;
+
+    struct idset *want;
+    struct idset *have; // cumulative on rank 0, batch buffer on rank > 0
+    flux_watcher_t *batch_timer;
+};
 
 struct monitor {
     zlist_t *requests;
@@ -44,6 +57,7 @@ struct state_machine {
     flux_msg_handler_t **handlers;
 
     struct monitor monitor;
+    struct quorum quorum;
 };
 
 typedef void (*action_f)(struct state_machine *s);
@@ -61,6 +75,7 @@ struct state_next {
 };
 
 static void action_join (struct state_machine *s);
+static void action_quorum (struct state_machine *s);
 static void action_init (struct state_machine *s);
 static void action_run (struct state_machine *s);
 static void action_cleanup (struct state_machine *s);
@@ -70,11 +85,18 @@ static void action_shutdown (struct state_machine *s);
 static void runat_completion_cb (struct runat *r, const char *name, void *arg);
 static void monitor_update (flux_t *h, zlist_t *requests, broker_state_t state);
 static void join_check_parent (struct state_machine *s);
+static int quorum_add_self (struct state_machine *s);
+static void quorum_check_parent (struct state_machine *s);
+static bool test_idset_subset (struct idset *idset1, struct idset *idset2);
+static void quorum_monitor_update (flux_t *h,
+                                   zlist_t *requests,
+                                   struct idset *idset);
 
 static struct state statetab[] = {
     { STATE_NONE,       "none",             NULL },
     { STATE_JOIN,       "join",             action_join },
     { STATE_INIT,       "init",             action_init },
+    { STATE_QUORUM,     "quorum",           action_quorum },
     { STATE_RUN,        "run",              action_run },
     { STATE_CLEANUP,    "cleanup",          action_cleanup },
     { STATE_FINALIZE,   "finalize",         action_finalize },
@@ -82,10 +104,12 @@ static struct state statetab[] = {
 };
 
 static struct state_next nexttab[] = {
-    { "wireup-complete",    STATE_NONE,         STATE_JOIN },
-    { "parent-ready",       STATE_JOIN,         STATE_INIT },
-    { "parent-none",        STATE_JOIN,         STATE_INIT },
+    { "start",              STATE_NONE,         STATE_JOIN },
+    { "parent-ready",       STATE_JOIN,         STATE_QUORUM },
+    { "parent-none",        STATE_JOIN,         STATE_QUORUM },
     { "parent-fail",        STATE_JOIN,         STATE_SHUTDOWN },
+    { "quorum-full",        STATE_QUORUM,       STATE_INIT },
+    { "quorum-fail",        STATE_QUORUM,       STATE_SHUTDOWN },
     { "rc1-success",        STATE_INIT,         STATE_RUN },
     { "rc1-none",           STATE_INIT,         STATE_RUN },
     { "rc1-fail",           STATE_INIT,         STATE_FINALIZE },
@@ -153,6 +177,21 @@ static void action_join (struct state_machine *s)
         state_machine_post (s, "parent-none");
     else
         join_check_parent (s);
+}
+
+static void action_quorum (struct state_machine *s)
+{
+    if (quorum_add_self (s) < 0) {
+        state_machine_post (s, "quorum-fail");
+        return;
+    }
+    if (s->ctx->rank == 0) {
+        if (test_idset_subset (s->quorum.want, s->quorum.have))
+            state_machine_post (s, "quorum-full");
+        quorum_monitor_update (s->ctx->h, s->quorum.requests, s->quorum.have);
+    }
+    else
+        quorum_check_parent (s);
 }
 
 static void action_run (struct state_machine *s)
@@ -238,6 +277,9 @@ void state_machine_kill (struct state_machine *s, int signum)
             break;
         case STATE_JOIN:
             state_machine_post (s, "parent-fail");
+            break;
+        case STATE_QUORUM:
+            state_machine_post (s, "quorum-fail");
             break;
         case STATE_RUN:
             if (runat_is_defined (s->ctx->runat, "rc2")) {
@@ -332,17 +374,316 @@ static void join_check_parent (struct state_machine *s)
         switch (s->monitor.parent_state) {
             case STATE_NONE:
             case STATE_JOIN:
-                state_machine_post (s, "parent-ready");
                 break;
+            case STATE_QUORUM:
             case STATE_INIT:
             case STATE_RUN:
+                state_machine_post (s, "parent-ready");
+                break;
             case STATE_CLEANUP:
             case STATE_FINALIZE:
             case STATE_SHUTDOWN:
                 state_machine_post (s, "parent-fail");
+        }
+    }
+}
+
+/* Empty an idset.
+ */
+static int clear_idset (struct idset *idset)
+{
+    unsigned int id;
+
+    id = idset_first (idset);
+    while (id != IDSET_INVALID_ID) {
+        if (idset_clear (idset, id) < 0)
+            return -1;
+        id = idset_next (idset, id);
+    }
+    return 0;
+}
+
+/* Decode 's' as an idset, then merge its ids into 'idset1'.
+ */
+static int merge_idset (struct idset *idset1, const char *s)
+{
+    struct idset *idset2;
+    unsigned int id;
+    int rc = -1;
+
+    if (!(idset2 = idset_decode (s)))
+        return -1;
+    id = idset_first (idset2);
+    while (id != IDSET_INVALID_ID) {
+        if (idset_set (idset1, id) < 0)
+            goto done;
+        id = idset_next (idset2, id);
+    }
+    rc = 0;
+done:
+    idset_destroy (idset2);
+    return rc;
+}
+
+/* Return true if idset2 is a subset of idset1.
+ */
+static bool test_idset_subset (struct idset *idset1, struct idset *idset2)
+{
+    unsigned int id;
+    id = idset_first (idset1);
+    while (id != IDSET_INVALID_ID) {
+        if (!idset_test (idset2, id))
+            return false;
+        id = idset_next (idset1, id);
+    }
+    return true;
+}
+
+/* Assumes local state is STATE_QUORUM.
+ * If parent has left STATE_QUORUM, post quorum-full or quorum-fail.
+ */
+static void quorum_check_parent (struct state_machine *s)
+{
+    if (s->monitor.parent_error)
+        state_machine_post (s, "quorum-fail");
+    else if (s->monitor.parent_valid) {
+        switch (s->monitor.parent_state) {
+            case STATE_NONE:
+            case STATE_JOIN:
+            case STATE_QUORUM:
+                break;
+            case STATE_INIT:
+            case STATE_RUN:
+                state_machine_post (s, "quorum-full");
+                break;
+            case STATE_CLEANUP:
+            case STATE_FINALIZE:
+            case STATE_SHUTDOWN:
+                state_machine_post (s, "quorum-fail");
                 break;
         }
     }
+}
+
+/* Batch timer has expired.
+ * If rank 0, post event if quorum has been achieved.
+ * If rank > 0, send aggregated request upstream.
+ */
+static void quorum_batch (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
+{
+    struct state_machine *s = arg;
+
+    if (s->ctx->rank == 0) {
+        if (s->state == STATE_QUORUM
+                && test_idset_subset (s->quorum.want, s->quorum.have))
+            state_machine_post (s, "quorum-full");
+        quorum_monitor_update (s->ctx->h, s->quorum.requests, s->quorum.have);
+    }
+    else {
+        flux_future_t *f;
+        char *tmp;
+        if (!(tmp = idset_encode (s->quorum.have, IDSET_FLAG_RANGE)))
+            goto error;
+        flux_log (s->ctx->h, LOG_DEBUG, "quorum send %s", tmp);
+        if (!(f = flux_rpc_pack (s->ctx->h,
+                                 "state-machine.quorum",
+                                 FLUX_NODEID_UPSTREAM,
+                                 FLUX_RPC_NORESPONSE,
+                                 "{s:s}",
+                                 "idset",
+                                 tmp))) {
+            ERRNO_SAFE_WRAP (free, tmp);
+            goto error;
+        }
+        flux_future_destroy (f);
+        clear_idset (s->quorum.have);
+        free (tmp);
+    }
+    return;
+error:
+    flux_log_error (s->ctx->h, "quorum_batch failed");
+    if (s->state == STATE_QUORUM)
+        state_machine_post (s, "quorum-fail");
+}
+
+/* A downstream peer adds ranks to quorum.  This message comes in waves as
+ * each TBON level reports in.  The short 'quorum_batch_timeout" is intended
+ * to allow messages from peers at the same level to be aggregated into one
+ * message that is passed upstream.
+ */
+static void quorum_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
+{
+    struct state_machine *s = arg;
+    const char *idset = NULL;
+    unsigned int rank = FLUX_NODEID_ANY;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s?s s?i}",
+                             "idset",
+                             &idset,
+                             "rank",
+                             &rank) < 0)
+        goto error;
+    if (idset && merge_idset (s->quorum.have, idset) < 0)
+        goto error;
+    if (rank != FLUX_NODEID_ANY && idset_set (s->quorum.have, rank) < 0)
+        goto error;
+    flux_watcher_start (s->quorum.batch_timer);
+    return;
+error:
+    flux_log_error (s->ctx->h, "error handling quorum request");
+}
+
+/* Add this broker rank to quorum.
+ * On rank == 0, add my rank directly to the 'got' idset.
+ * On rank > 0, send a fire-and-forget RPC to parent containing my rank.
+ */
+static int quorum_add_self (struct state_machine *s)
+{
+    if (s->ctx->rank == 0) {
+        if (idset_set (s->quorum.have, s->ctx->rank) < 0)
+            return -1;
+    }
+    else {
+        flux_future_t *f;
+        flux_log (s->ctx->h,
+                  LOG_DEBUG,
+                  "quorum send %lu",
+                  (long unsigned)s->ctx->rank);
+        if (!(f = flux_rpc_pack (s->ctx->h,
+                                 "state-machine.quorum",
+                                 FLUX_NODEID_UPSTREAM,
+                                 FLUX_RPC_NORESPONSE,
+                                 "{s:i}",
+                                 "rank",
+                                 s->ctx->rank)))
+            return -1;
+        flux_future_destroy (f);
+    }
+    return 0;
+}
+
+/* Configure the set of broker ranks needed for quorum (default=all).
+ */
+static int quorum_configure (struct state_machine *s)
+{
+    const char *val;
+    char *tmp;
+    unsigned long id;
+
+    if (attr_get (s->ctx->attrs, "broker.quorum", &val, NULL) == 0) {
+        if (!(s->quorum.want = idset_decode (val))) {
+            log_msg ("Error parsing broker.quorum attribute");
+            return -1;
+        }
+        id = idset_last (s->quorum.want);
+        if (id != IDSET_INVALID_ID && id >= s->ctx->size) {
+            log_msg ("Error parsing broker.quorum attribute: exceeds size");
+            return -1;
+        }
+        if (attr_delete (s->ctx->attrs, "broker.quorum", true) < 0)
+            return -1;
+    }
+    else {
+        if (!(s->quorum.want = idset_create (s->ctx->size, 0)))
+            return -1;
+        if (idset_range_set (s->quorum.want, 0, s->ctx->size - 1) < 0)
+            return -1;
+    }
+    if (!(tmp = idset_encode (s->quorum.want, IDSET_FLAG_RANGE)))
+        return -1;
+    if (attr_add (s->ctx->attrs,
+                  "broker.quorum",
+                  tmp,
+                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        ERRNO_SAFE_WRAP (free, tmp);
+        return -1;
+    }
+    free (tmp);
+    return 0;
+}
+
+/* Create the batch timer.
+ * Timer is started on first receipt of quorum RPC.
+ * When timer fires, quorum.have is forwarded upstream and cleared.
+ * The timer is rearmed at that time, for the next wave.
+ * Tune the timeout by adjusting 'quorum_batch_timeout'.
+ */
+static flux_watcher_t *quorum_create_batch_timer (struct state_machine *s)
+{
+    return flux_timer_watcher_create (s->ctx->reactor,
+                                      quorum_batch_timeout,
+                                      0,
+                                      quorum_batch,
+                                      s);
+}
+
+/* (rank 0 only) Update any queued 'state-machine.quorum-monitor' requests.
+ *
+ */
+static void quorum_monitor_update (flux_t *h,
+                                   zlist_t *requests,
+                                   struct idset *idset)
+{
+    const flux_msg_t *msg;
+    char *tmp;
+
+    if (!(tmp = idset_encode (idset,
+                              IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS))) {
+        flux_log_error (h, "error responding to quorum-monitor requests");
+        return;
+    }
+    msg = zlist_first (requests);
+    while (msg) {
+        if (flux_respond_pack (h, msg, "{s:s}", "idset", tmp) < 0)
+            flux_log_error (h, "error responding to quorum-monitor request");
+        msg = zlist_next (requests);
+    }
+    free (tmp);
+}
+
+static void quorum_monitor_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
+{
+    struct state_machine *s = arg;
+    const char *errstr = NULL;
+    char *tmp = NULL;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (s->ctx->rank != 0) {
+        errstr = "quorum-monitor RPC is only available on rank 0";
+        errno = EPROTO;
+        goto error;
+    }
+    if (!(tmp = idset_encode (s->quorum.have,
+                              IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
+        goto error;
+    if (flux_respond_pack (h, msg, "{s:s}", "idset", tmp) < 0)
+        goto error;
+    if (flux_msg_is_streaming (msg)) {
+        if (zlist_append (s->quorum.requests,
+                          (flux_msg_t *)flux_msg_incref (msg)) < 0) {
+            flux_msg_decref (msg);
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+    free (tmp);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to quorum-monitor request");
+    free (tmp);
 }
 
 static void monitor_update (flux_t *h, zlist_t *requests, broker_state_t state)
@@ -400,6 +741,8 @@ static void monitor_continuation (flux_future_t *f, void *arg)
     flux_future_reset (f);
     if (s->state == STATE_JOIN)
         join_check_parent (s);
+    else if (s->state == STATE_QUORUM)
+        quorum_check_parent (s);
 }
 
 static flux_future_t *monitor_parent (flux_t *h, void *arg)
@@ -421,6 +764,9 @@ static flux_future_t *monitor_parent (flux_t *h, void *arg)
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "state-machine.monitor", monitor_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "state-machine.quorum", quorum_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "state-machine.quorum-monitor",
+                                                      quorum_monitor_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -445,6 +791,10 @@ void state_machine_destroy (struct state_machine *s)
         flux_msg_handler_delvec (s->handlers);
         flux_future_destroy (s->monitor.f);
         msglist_destroy (s->monitor.requests);
+        msglist_destroy (s->quorum.requests);
+        idset_destroy (s->quorum.want);
+        idset_destroy (s->quorum.have);
+        flux_watcher_destroy (s->quorum.batch_timer);
         free (s);
         errno = saved_errno;
     }
@@ -477,6 +827,14 @@ struct state_machine *state_machine_create (struct broker *ctx)
         if (!(s->monitor.f = monitor_parent (ctx->h, s)))
             goto error;
     }
+    if (!(s->quorum.requests = zlist_new ()))
+        goto nomem;
+    if (!(s->quorum.have = idset_create (ctx->size, 0)))
+        goto error;
+    if (quorum_configure (s) < 0)
+        goto error;
+    if (!(s->quorum.batch_timer = quorum_create_batch_timer (s)))
+        goto error;
     return s;
 nomem:
     errno = ENOMEM;
