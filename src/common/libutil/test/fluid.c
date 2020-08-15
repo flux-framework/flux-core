@@ -9,6 +9,8 @@
 \************************************************************/
 
 #include <errno.h>
+#include <string.h>
+#include <locale.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/fluid.h"
@@ -16,43 +18,44 @@
 struct f58_test {
     fluid_t id;
     const char *f58;
+    const char *f58_alt;
 };
 
 struct f58_test f58_tests [] = {
-    { 0, "ƒ1" },
-    { 1, "ƒ2" },
-    { 57, "ƒz" },
-    { 1234, "ƒNH" },
-    { 1888, "ƒZZ" },
-    { 3363, "ƒzz" },
-    { 3364, "ƒ211" },
-    { 4369, "ƒ2JL" },
-    { 65535, "ƒLUv" },
-    { 4294967295, "ƒ7YXq9G" },
-    { 633528662, "ƒxyzzy" },
-    { 6731191091817518LL, "ƒuZZybuNNy" },
-    { 18446744073709551614UL, "ƒjpXCZedGfVP" },
-    { 18446744073709551615UL, "ƒjpXCZedGfVQ" },
-    { 0, NULL },
+    { 0, "ƒ1", "f1" },
+    { 1, "ƒ2", "f2" },
+    { 57, "ƒz", "fz" },
+    { 1234, "ƒNH", "fNH" },
+    { 1888, "ƒZZ", "fZZ" },
+    { 3363, "ƒzz", "fzz" },
+    { 3364, "ƒ211", "f211" },
+    { 4369, "ƒ2JL", "f2JL" },
+    { 65535, "ƒLUv", "fLUv" },
+    { 4294967295, "ƒ7YXq9G", "f7YXq9G" },
+    { 633528662, "ƒxyzzy", "fxyzzy" },
+    { 6731191091817518LL, "ƒuZZybuNNy", "fuZZybuNNy" },
+    { 18446744073709551614UL, "ƒjpXCZedGfVP", "fjpXCZedGfVP" },
+    { 18446744073709551615UL, "ƒjpXCZedGfVQ", "fjpXCZedGfVQ" },
+    { 0, NULL, NULL },
 };
 
 struct f58_test f58_alt_tests [] = {
-    { 0, "f1" },
-    { 0, "f111" },
-    { 1, "f2" },
-    { 57, "fz" },
-    { 1234, "fNH" },
-    { 1888, "fZZ" },
-    { 3363, "fzz" },
-    { 3364, "f211" },
-    { 4369, "f2JL" },
-    { 65535, "fLUv" },
-    { 4294967295, "f7YXq9G" },
-    { 633528662, "fxyzzy" },
-    { 6731191091817518LL, "fuZZybuNNy" },
-    { 18446744073709551614UL, "fjpXCZedGfVP" },
-    { 18446744073709551615UL, "fjpXCZedGfVQ" },
-    { 0, NULL },
+    { 0, "f1", NULL },
+    { 0, "f111", NULL },
+    { 1, "f2", NULL },
+    { 57, "fz", NULL },
+    { 1234, "fNH", NULL },
+    { 1888, "fZZ", NULL },
+    { 3363, "fzz", NULL },
+    { 3364, "f211", NULL },
+    { 4369, "f2JL", NULL },
+    { 65535, "fLUv", NULL },
+    { 4294967295, "f7YXq9G", NULL },
+    { 633528662, "fxyzzy", NULL },
+    { 6731191091817518LL, "fuZZybuNNy", NULL },
+    { 18446744073709551614UL, "fjpXCZedGfVP", NULL },
+    { 18446744073709551615UL, "fjpXCZedGfVQ", NULL },
+    { 0, NULL, NULL },
 };
 
 void test_f58 (void)
@@ -64,8 +67,12 @@ void test_f58 (void)
     while (tp->f58 != NULL) {
         ok (fluid_encode (buf, sizeof(buf), tp->id, type) == 0,
             "f58_encode (%ju)", tp->id);
-        is (buf, tp->f58,
-            "f58_encode %ju -> %s", tp->id, buf);
+        if (strcmp (buf, tp->f58) == 0
+            || strcmp (buf, tp->f58_alt) == 0)
+            pass ("f58_encode %ju -> %s", tp->id, buf);
+        else
+            fail ("f58_encode %ju: got %s expected %s",
+                  tp->id, buf, tp->f58);
         ok (fluid_decode (tp->f58, &id, type) == 0,
             "f58_decode (%s)", tp->f58);
         ok (id == tp->id,
@@ -83,8 +90,9 @@ void test_f58 (void)
 
     ok (fluid_encode (buf, 1, 1, type) < 0 && errno == EOVERFLOW,
         "fluid_encode (buf, 1, 1, F58) returns EOVERFLOW");
-    ok (fluid_encode (buf, 5, 65535, type) < 0 && errno == EOVERFLOW,
-        "fluid_encode (buf, 5, 65535, F58) returns EOVERFLOW");
+    errno = 0;
+    ok (fluid_encode (buf, 4, 65535, type) < 0 && errno == EOVERFLOW,
+        "fluid_encode (buf, 4, 65535, F58) returns EOVERFLOW: %s", strerror (errno));
 
     ok (fluid_decode ("1234", &id, type) < 0 && errno == EINVAL,
         "fluid_decode ('aaa', FLUID_STRING_F58) returns EINVAL");
@@ -317,6 +325,9 @@ void test_basic (void)
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
+
+    /* Locale initialization required for fluid_f58_encode() */
+    setlocale (LC_ALL, "");
 
     test_basic ();
     test_f58 ();
