@@ -21,10 +21,10 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <ctype.h>
+#include <locale.h>
 
 #include "fluid.h"
 #include "mnemonic.h"
-
 
 /* fluid: [ts:40 id:14 seq:10] */
 static const int bits_per_ts = 40;
@@ -169,27 +169,43 @@ static int b58revenc (char *buf, int bufsz, fluid_t id)
     return index;
 }
 
+static inline int is_utf8_locale (void)
+{
+    /* Assume if MB_CUR_MAX > 1, this locale can handle wide characters
+     *  and therefore will properly handle UTF-8.
+     */
+    if (MB_CUR_MAX > 1)
+        return 1;
+    return 0;
+}
+
 static int fluid_f58_encode (char *buf, int bufsz, fluid_t id)
 {
     int count;
+    const char *prefix = f58_prefix;
     char b58reverse[13];
     int index = 0;
+
     if (buf == NULL || bufsz <= 0) {
         errno = EINVAL;
         return -1;
     }
-    if (bufsz <= strlen (f58_prefix) + 1) {
+
+    /* Use alternate "f" prefix if locale is not multibyte */
+    if (!is_utf8_locale())
+        prefix = f58_alt_prefix;
+
+    if (bufsz <= strlen (prefix) + 1) {
         errno = EOVERFLOW;
         return -1;
     }
-
     if ((count = b58revenc (b58reverse, sizeof (b58reverse), id)) < 0) {
         errno = EINVAL;
         return -1;
     }
 
     /* Copy prefix to buf and zero remaining bytes */
-    (void) strncpy (buf, f58_prefix, bufsz);
+    (void) strncpy (buf, prefix, bufsz);
     index = strlen (buf);
 
     if (index + count + 1 > bufsz) {
