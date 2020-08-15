@@ -162,6 +162,13 @@ test_expect_success 'flux-job: id --to=f58 works' '
 	test "$jobid" = "$MINJOBID_F58"
 '
 
+UTF8_LOCALE=$(locale -a | grep UTF-8)
+test -n "$UTF8_LOCALE" && test_set_prereq UTF8_LOCALE
+test_expect_success UTF8_LOCALE 'flux-job: f58 can use multibyte prefix' '
+	jobid=$(LC_ALL=${UTF8_LOCALE} flux job id --to=f58 1) &&
+	test "$jobid" = "ƒ2"
+'
+
 test_expect_success 'flux-job: id fails on bad input' '
 	test_must_fail flux job id badstring &&
 	test_must_fail flux job id job.0000.0000 &&
