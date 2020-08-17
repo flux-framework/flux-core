@@ -17,6 +17,7 @@ import json
 import unittest
 import datetime
 import signal
+import locale
 from glob import glob
 
 import yaml
@@ -42,6 +43,7 @@ class TestJob(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.fh = flux.Flux()
+        self.use_ascii = locale.getlocale()[1] != "UTF-8"
 
         self.jobspec_dir = os.path.abspath(
             os.path.join(os.environ["FLUX_SOURCE_DIR"], "t", "jobspec")
@@ -416,6 +418,8 @@ class TestJob(unittest.TestCase):
         ]
         for test in parse_tests:
             for key in test:
+                if key == "f58" and self.use_ascii:
+                    continue
                 jobid_int = test["int"]
                 jobid = job.JobID(test[key])
                 self.assertEqual(jobid, jobid_int)
