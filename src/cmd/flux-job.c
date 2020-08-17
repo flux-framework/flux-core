@@ -23,6 +23,7 @@
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
+#include <locale.h>
 #include <jansson.h>
 #include <argz.h>
 #include <czmq.h>
@@ -473,6 +474,11 @@ int main (int argc, char *argv[])
     optparse_t *p;
     int optindex;
     int exitval;
+
+    /*  Initialize locale from environment. Allows unicode character
+     *   prefix in F58 encoded JOBIDs in wide-character capable locales.
+     */
+    setlocale (LC_ALL, "");
 
     log_init ("flux-job");
 

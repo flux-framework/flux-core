@@ -18,6 +18,7 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdarg.h>
+#include <locale.h>
 #include <jansson.h>
 #include <czmq.h>
 #include <flux/core.h>
@@ -1099,6 +1100,10 @@ int main (int argc, char *argv[])
 {
     flux_shell_t shell;
     int i;
+
+    /* Initialize locale from environment
+     */
+    setlocale (LC_ALL, "");
 
     shell_log_init (&shell, shell_name);
 

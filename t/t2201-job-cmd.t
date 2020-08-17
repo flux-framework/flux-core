@@ -13,7 +13,7 @@ MAXJOBID_HEX="0xffffffffffffffff"
 MAXJOBID_KVS="job.ffff.ffff.ffff.ffff"
 MAXJOBID_DOTHEX="ffff.ffff.ffff.ffff"
 MAXJOBID_WORDS="natural-analyze-verbal--natural-analyze-verbal"
-MAXJOBID_F58="ƒjpXCZedGfVQ"
+MAXJOBID_F58="fjpXCZedGfVQ"
 MAXJOBIDS_LIST="$MAXJOBID_DEC $MAXJOBID_HEX $MAXJOBID_KVS $MAXJOBID_DOTHEX $MAXJOBID_WORDS $MAXJOBID_F58"
 
 MINJOBID_DEC=0
@@ -21,7 +21,7 @@ MINJOBID_HEX="0x0"
 MINJOBID_KVS="job.0000.0000.0000.0000"
 MINJOBID_DOTHEX="0000.0000.0000.0000"
 MINJOBID_WORDS="academy-academy-academy--academy-academy-academy"
-MINJOBID_F58="ƒ1"
+MINJOBID_F58="f1"
 MINJOBIDS_LIST="$MINJOBID_DEC $MINJOBID_HEX $MINJOBID_KVS $MINJOBID_DOTHEX $MINJOBID_WORDS $MINJOBID_F58"
 
 test_under_flux 1 job
@@ -160,6 +160,13 @@ test_expect_success 'flux-job: id --to=f58 works' '
 	test "$jobid" = "$MAXJOBID_F58" &&
 	jobid=$(flux job id --to=f58 $MINJOBID_DEC) &&
 	test "$jobid" = "$MINJOBID_F58"
+'
+
+UTF8_LOCALE=$(locale -a | grep UTF-8)
+test -n "$UTF8_LOCALE" && test_set_prereq UTF8_LOCALE
+test_expect_success UTF8_LOCALE 'flux-job: f58 can use multibyte prefix' '
+	jobid=$(LC_ALL=${UTF8_LOCALE} flux job id --to=f58 1) &&
+	test "$jobid" = "ƒ2"
 '
 
 test_expect_success 'flux-job: id fails on bad input' '

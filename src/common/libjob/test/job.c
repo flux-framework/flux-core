@@ -12,6 +12,8 @@
 #include "config.h"
 #endif
 
+#include <locale.h>
+
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
@@ -362,6 +364,11 @@ void check_jobid_parse_encode (void)
     struct jobid_parse_test *tp = jobid_parse_tests;
     while (tp->type != NULL) {
         memset (buf, 0, sizeof (buf));
+        if (MB_CUR_MAX == 1 && strcmp (tp->type, "f58") == 0) {
+            tap_skip (4, "Skipping F58 encode/decode due to current locale");
+            tp++;
+            continue;
+        }
         ok (flux_job_id_encode (tp->id, tp->type, buf, sizeof (buf)) == 0,
             "flux_job_id_encode (%ju, %s) == 0", (uintmax_t) tp->id, tp->type);
         is (buf, tp->string,
@@ -397,6 +404,9 @@ void check_jobid_parse_encode (void)
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
+
+    /* fluid F58 tests require unicode locale initialization */
+    setlocale (LC_ALL, "en_US.UTF-8");
 
     check_jobkey ();
 
