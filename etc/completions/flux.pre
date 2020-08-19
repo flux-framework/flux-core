@@ -1,0 +1,64 @@
+#
+# Copyright 2020 Lawrence Livermore National Security, LLC
+# (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+#
+# This file is part of the Flux resource manager framework.
+# For details, see https://github.com/flux-framework.
+#
+# SPDX-License-Identifier: LGPL-3.0
+#
+shopt -s extglob
+
+_flux_core()
+{
+    OIFS=$IFS
+    local cur prev opts
+    COMPREPLY=()
+    cur="${COMP_WORDS[COMP_CWORD]}"
+    prev="${COMP_WORDS[COMP_CWORD-1]}"
+
+    __get_compopts
+
+    IFS=$OIFS
+    opts=$compopts
+
+    if [[ "${prev##*/}" == "flux" ]]; then
+        case "${cur}" in
+            @(-*))
+                COMPREPLY=( $(compgen -W "--help" -- "${cur}") )
+                ;;
+            *)
+                COMPREPLY=( $(compgen -W "${opts}" "${cur}") )
+                ;;
+        esac
+    else
+        case "${prev}" in
+        !(-h|--help|help))
+            COMPREPLY=( $(compgen -W "--help" -- "${cur}") )
+            ;;
+        esac
+    fi
+
+    return 0
+}
+
+__get_compopts() {
+    if [ -z $FLUX_EXEC_PATH ]; then
+        FLUX_EXEC_PATH=`flux env printenv FLUX_EXEC_PATH`
+    fi
+
+    IFS=":"
+    for op in $FLUX_EXEC_PATH/*; do
+        if [[ -x $op && "${op##*/}" == "flux-"* ]]; then
+            op="${op##*-}"
+            compopts+="${op%.*} "
+        fi
+    done
+
+    for builtin in $FLUX_BUILTINS; do
+        compopts+="$builtin "
+    done
+}
+
+complete -F _flux_core flux
+
