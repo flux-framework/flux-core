@@ -182,6 +182,59 @@ test_expect_success HAVE_JQ 'flux mini --job-name works' '
 	flux mini submit --dry-run --job-name=foobar hostname >name.out &&
 	test $(jq ".attributes.system.job.name" name.out) = "\"foobar\""
 '
+test_expect_success HAVE_JQ 'flux-mini --env=-*/--env-remove=* works' '
+	flux mini submit --dry-run --env=-* hostname > no-env.out &&
+	jq -e ".attributes.system.environment == {}" < no-env.out &&
+	flux mini submit --dry-run --env-remove=* hostname > no-env2.out &&
+	jq -e ".attributes.system.environment == {}" < no-env2.out
+'
+test_expect_success HAVE_JQ 'flux-mini --env=VAR works' '
+	FOO=bar flux mini submit --dry-run \
+	    --env=-* --env FOO hostname >FOO-env.out &&
+	jq -e ".attributes.system.environment == {\"FOO\": \"bar\"}" FOO-env.out
+'
+test_expect_success HAVE_JQ 'flux-mini --env=PATTERN works' '
+	FOO_ONE=bar FOO_TWO=baz flux mini submit --dry-run \
+	    --env=-* --env="FOO_*" hostname >FOO-pattern-env.out &&
+	jq -e ".attributes.system.environment == \
+           {\"FOO_ONE\": \"bar\", \"FOO_TWO\": \"baz\"}" FOO-pattern-env.out &&
+	FOO_ONE=bar FOO_TWO=baz flux mini submit --dry-run \
+	    --env=-* --env="/^FOO_.*/" hostname >FOO-pattern2-env.out &&
+	jq -e ".attributes.system.environment == \
+           {\"FOO_ONE\": \"bar\", \"FOO_TWO\": \"baz\"}" FOO-pattern2-env.out
 
-
+'
+test_expect_success HAVE_JQ 'flux-mini --env=VAR=VAL works' '
+	flux mini submit --dry-run \
+	    --env=-* --env PATH=/bin hostname >PATH-env.out &&
+	jq -e ".attributes.system.environment == {\"PATH\": \"/bin\"}" PATH-env.out &&
+	FOO=bar flux mini submit --dry-run \
+	    --env=-* --env FOO=\$FOO:baz hostname >FOO-append.out &&
+	jq -e ".attributes.system.environment == {\"FOO\": \"bar:baz\"}" FOO-append.out
+'
+test_expect_success 'flux-mini --env=VAR=${VAL:-default} fails' '
+    test_expect_code 1 flux mini run --dry-run \
+        --env=* --env=VAR=\${VAL:-default} hostname >env-fail.err 2>&1 &&
+    test_debug "cat env-fail.err" &&
+    grep "Unable to substitute" env-fail.err
+'
+test_expect_success 'flux-mini --env=VAR=$VAL fails when VAL not in env' '
+    unset VAL &&
+    test_expect_code 1 flux mini run --dry-run \
+        --env=* --env=VAR=\$VAL hostname >env-notset.err 2>&1 &&
+    test_debug "cat env-notset.err" &&
+    grep "env: Variable .* not found" env-notset.err
+'
+test_expect_success HAVE_JQ 'flux-mini --env-file works' '
+	cat <<-EOF >envfile &&
+	-*
+	FOO=bar
+	BAR=\${FOO}/baz
+	EOF
+    for arg in "--env=^envfile" "--env-file=envfile"; do
+	  flux mini submit --dry-run ${arg} hostname >envfile.out &&
+	  jq -e ".attributes.system.environment == \
+	       {\"FOO\":\"bar\", \"BAR\":\"bar/baz\"}" envfile.out
+    done
+'
 test_done
