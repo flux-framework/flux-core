@@ -29,6 +29,7 @@ struct flux_plugin {
     char *path;
     char *name;
     json_t *conf;
+    char *conf_str;
     struct aux_item *aux;
     void *dso;
     zlistx_t *handlers;
@@ -105,6 +106,7 @@ void flux_plugin_destroy (flux_plugin_t *p)
         int saved_errno = errno;
         json_decref (p->conf);
         zlistx_destroy (&p->handlers);
+        free (p->conf_str);
         free (p->path);
         free (p->name);
         aux_destroy (&p->aux);
@@ -223,7 +225,34 @@ int flux_plugin_set_conf (flux_plugin_t *p, const char *json_str)
                                 "parse error: col %d: %s",
                                  err.column, err.text);
     }
+    if (p->conf_str) {
+        free (p->conf_str);
+        p->conf_str = NULL;
+    }
     return 0;
+}
+
+const char *flux_plugin_get_conf (flux_plugin_t *p)
+{
+    if (!p) {
+        plugin_seterror (p, EINVAL, NULL);
+        return NULL;
+    }
+    if (!p->conf_str) {
+        if (!p->conf) {
+            plugin_seterror (p, ENOENT, "No plugin conf set");
+            return NULL;
+        }
+        p->conf_str = json_dumps (p->conf, JSON_ENCODE_ANY|JSON_COMPACT);
+        if (!p->conf_str) {
+            plugin_seterror (p,
+                             errno,
+                             "json_dumps failed: %s",
+                             strerror (errno));
+            return NULL;
+        }
+    }
+    return p->conf_str;
 }
 
 int flux_plugin_conf_unpack (flux_plugin_t *p, const char *fmt, ...)
