@@ -86,4 +86,23 @@ test_expect_success 'debugger: totalview_jobid is set for attach mode' '
         test ${tv_jobid} = "${jobid}"
 '
 
+flux_job_attach() {
+        flux job attach -vv --debug ${1} 2> ${2} &
+        ${waitfile} -v -t 2.5 --pattern="totalview_jobid" ${2}
+}
+
+# flux job attach --debug JOBID must not continue target processes
+test_expect_success 'debugger: job attach --debug must not continue target' '
+        jobid=$(flux jobspec srun -n 1 ${stall} done3 100 | flux job submit) &&
+        jobid=$(flux job id ${jobid}) &&
+        flux job wait-event -vt 2.5 ${jobid} start &&
+        ${waitfile} -v -t 2.5 done3 &&
+        flux_job_attach ${jobid} jobid.out3 &&
+        tv_jobid=$(parse_totalview_jobid jobid.out3) &&
+        test ${tv_jobid} = "${jobid}" &&
+        test_must_fail flux job wait-event -vt 2.5 ${jobid} finish &&
+        flux job cancel ${jobid} &&
+        flux job wait-event -vt 2.5 ${jobid} finish
+'
+
 test_done
