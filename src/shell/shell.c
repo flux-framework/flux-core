@@ -990,6 +990,14 @@ static int load_initrc (flux_shell_t *shell)
 
 static int shell_init (flux_shell_t *shell)
 {
+    const char *pluginpath;
+
+    /*  Override pluginpath from broker attribute if not standalone
+    */
+    if (!shell->standalone
+        && (pluginpath = flux_attr_get (shell->h, "conf.shell_pluginpath")))
+        plugstack_set_searchpath (shell->plugstack, pluginpath);
+
     /*  Load initrc file if necessary
      */
     if (load_initrc (shell) < 0)
