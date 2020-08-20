@@ -41,7 +41,6 @@ struct broker {
     struct publisher *publisher;
     int tbon_k;
 
-    struct hello *hello;
     struct runat *runat;
     struct state_machine *state_machine;
 

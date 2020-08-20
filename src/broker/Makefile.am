@@ -33,10 +33,6 @@ libbroker_la_SOURCES = \
 	heartbeat.c \
 	service.h \
 	service.c \
-	hello.h \
-	hello.c \
-	reduce.h \
-	reduce.c \
 	shutdown.h \
 	shutdown.c \
 	attr.h \
@@ -77,10 +73,8 @@ flux_broker_LDADD = \
 flux_broker_LDFLAGS =
 
 TESTS = test_heartbeat.t \
-	test_hello.t \
 	test_attr.t \
 	test_service.t \
-	test_reduce.t \
 	test_liblist.t \
 	test_pmiutil.t \
 	test_boot_config.t \
@@ -113,11 +107,6 @@ test_heartbeat_t_CPPFLAGS = $(test_cppflags)
 test_heartbeat_t_LDADD = $(test_ldadd)
 test_heartbeat_t_LDFLAGS = $(test_ldflags)
 
-test_hello_t_SOURCES = test/hello.c
-test_hello_t_CPPFLAGS = $(test_cppflags)
-test_hello_t_LDADD = $(test_ldadd)
-test_hello_t_LDFLAGS = $(test_ldflags)
-
 test_attr_t_SOURCES = test/attr.c
 test_attr_t_CPPFLAGS = $(test_cppflags)
 test_attr_t_LDADD = $(test_ldadd)
@@ -127,11 +116,6 @@ test_service_t_SOURCES = test/service.c
 test_service_t_CPPFLAGS = $(test_cppflags)
 test_service_t_LDADD = $(test_ldadd)
 test_service_t_LDFLAGS = $(test_ldflags)
-
-test_reduce_t_SOURCES = test/reduce.c
-test_reduce_t_CPPFLAGS = $(test_cppflags)
-test_reduce_t_LDADD = $(test_ldadd)
-test_reduce_t_LDFLAGS = $(test_ldflags)
 
 test_liblist_t_SOURCES = test/liblist.c
 test_liblist_t_CPPFLAGS = $(test_cppflags)

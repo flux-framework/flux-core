@@ -10,8 +10,8 @@
 
 /* monitor.c - resource monitoring
  *
- * Use the 'hello.idset' RPC to track broker ranks that come online.
- * Maintain the set of "up" brokers internally, and call a callback
+ * Use the 'state-machine.quorum-monitor' RPC to track broker ranks that come
+ * online.  Maintain the set of "up" brokers internally, and call a callback
  * each time that set changes.
  *
  * Post online/offline events with incremental changes to execution
@@ -70,7 +70,7 @@ const struct idset *monitor_get_down (struct monitor *monitor)
  * Post online/offline events for any newly up or down ranks.
  * Update monitor->up and call callback if any.
  */
-static void hello_idset_continuation (flux_future_t *f, void *arg)
+static void quorum_monitor_continuation (flux_future_t *f, void *arg)
 {
     struct monitor *monitor = arg;
     flux_t *h = monitor->ctx->h;
@@ -79,11 +79,11 @@ static void hello_idset_continuation (flux_future_t *f, void *arg)
 
     if (flux_rpc_get_unpack (f, "{s:s}", "idset", &s) < 0
             || !(idset = idset_decode (s))) {
-        flux_log_error (h, "error parsing hello.idset response");
+        flux_log_error (h, "error parsing quorum-monitor response");
         return;
     }
     if (rutil_idset_diff (monitor->up, idset, &up, &dn) < 0) {
-        flux_log_error (h, "error analyzing hello.idset response");
+        flux_log_error (h, "error analyzing quorum_monitor response");
         idset_destroy (idset);
         return;
     }
@@ -120,17 +120,17 @@ static void hello_idset_continuation (flux_future_t *f, void *arg)
     flux_future_reset (monitor->f);
 }
 
-/* Send hello.idset request, process the first response (synchronously),
- * set up continuation for next responses.
+/* Send state-machine.quorum-monitor request, process the first response
+ * (synchronously), set up continuation for next responses.
  */
-static int hello_start (struct monitor *monitor)
+static int quorum_monitor_start (struct monitor *monitor)
 {
     flux_future_t *f;
     const char *s;
     struct idset *idset = NULL;
 
     if (!(f = flux_rpc (monitor->ctx->h,
-                        "hello.idset",
+                        "state-machine.quorum-monitor",
                         NULL,
                         0,
                         FLUX_RPC_STREAMING)))
@@ -140,7 +140,7 @@ static int hello_start (struct monitor *monitor)
     if (!(idset = idset_decode (s)))
         goto error;
     flux_future_reset (f);
-    if (flux_future_then (f, -1, hello_idset_continuation, monitor) < 0)
+    if (flux_future_then (f, -1, quorum_monitor_continuation, monitor) < 0)
         goto error;
     monitor->f = f;
     monitor->up = idset;
@@ -176,8 +176,8 @@ struct monitor *monitor_create (struct resource_ctx *ctx)
     if (!(monitor = calloc (1, sizeof (*monitor))))
         return NULL;
     monitor->ctx = ctx;
-    if (hello_start (monitor) < 0) {
-        flux_log_error (ctx->h, "hello.idset during initialization");
+    if (quorum_monitor_start (monitor) < 0) {
+        flux_log_error (ctx->h, "state-machine.quorum-monitor during initialization");
         goto error;
     }
     return monitor;

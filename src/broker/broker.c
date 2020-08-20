@@ -63,7 +63,6 @@
 #include "brokercfg.h"
 #include "overlay.h"
 #include "service.h"
-#include "hello.h"
 #include "shutdown.h"
 #include "attr.h"
 #include "log.h"
@@ -91,7 +90,6 @@ static void parent_cb (struct overlay *ov, void *sock, void *arg);
 static void child_cb (struct overlay *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
-static void hello_cb (struct hello *h, void *arg);
 static void shutdown_cb (struct shutdown *s, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
@@ -567,18 +565,6 @@ int main (int argc, char *argv[])
     }
     state_machine_post (ctx.state_machine, "start");
 
-    /* Send hello message to parent.
-     * N.B. uses tbon topology attributes set above.
-     * hello_cb() tracks progress on rank 0.
-     */
-    if (!(ctx.hello = hello_create (ctx.h, ctx.attrs, hello_cb, &ctx))) {
-        log_err ("hello_create");
-        goto cleanup;
-    }
-    if (hello_start (ctx.hello) < 0) {
-        log_err ("hello_start");
-        goto cleanup;
-    }
     /* Load the local connector module.
      * Other modules will be loaded in rc1 using flux module,
      * which uses the local connector.
@@ -636,7 +622,6 @@ cleanup:
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);
-    hello_destroy (ctx.hello);
     shutdown_destroy (ctx.shutdown);
     broker_remove_services (handlers);
     publisher_destroy (ctx.publisher);
@@ -744,29 +729,6 @@ static void init_attrs (attr_t *attrs, pid_t pid)
     if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_add version");
-}
-
-static void hello_cb (struct hello *hello, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    char *s;
-
-    if (!(s = idset_encode (hello_get_idset (hello),
-                            IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
-        log_err_exit ("hello: idset_encode");
-
-    flux_log (ctx->h,
-              LOG_INFO,
-              "wireup: %s (%s) %.1fs",
-              s,
-              hello_complete (hello) ? "complete" : "incomplete",
-              hello_get_time (hello));
-
-    if (hello_complete (hello)) {
-        overlay_set_idle_warning (ctx->overlay, 3);
-    }
-
-    free (s);
 }
 
 /* If shutdown timeout has occured, exit immediately.
@@ -1492,7 +1454,6 @@ static struct internal_service services[] = {
     { "cmb",                NULL }, // kind of a catch-all, slowly deprecating
     { "log",                NULL },
     { "content",            NULL },
-    { "hello",              NULL },
     { "attr",               NULL },
     { "heaptrace",          NULL },
     { "event",              "[0]" },

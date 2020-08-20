@@ -53,8 +53,8 @@ test_expect_success 'flux comms up --wait-for fails with out of range argument' 
 	test_must_fail flux comms up --wait-for=0-$SIZE
 '
 
-test_expect_success 'hello.idset RPC directed to rank > 0 fails with EPROTO' '
-	flux exec -r 1 $RPC hello.idset 71 </dev/null
+test_expect_success 'state-machine.quorum-monitor RPC directed to rank > 0 fails with EPROTO' '
+	flux exec -r 1 $RPC state-machine.quorum-monitor 71 </dev/null
 '
 
 test_done
