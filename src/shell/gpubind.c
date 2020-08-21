@@ -113,6 +113,13 @@ static int gpubind_init (flux_plugin_t *p,
         shell_debug ("disabling affinity due to gpu-affinity=off");
         return 0;
     }
+
+    /*  Set default CUDA_VISIBLE_DEVICES to an invalid id, -1, so that
+     *  jobs which are not assigned any GPUs do not use GPUs which
+     *  happen to be available on the current node.
+     */
+    flux_shell_setenvf (shell, 0, "CUDA_VISIBLE_DEVICES", "%d", -1);
+
     if (get_shell_gpus (shell, &ntasks, &gpus) < 0)
         return -1;
     if (flux_plugin_aux_set (p, NULL, gpus, (flux_free_f)idset_destroy) < 0) {
