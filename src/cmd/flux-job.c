@@ -65,6 +65,7 @@ int MPIR_i_am_starter            = 1;
 int MPIR_acquired_pre_main       = 1;
 int MPIR_force_to_main           = 1;
 int MPIR_partial_attach_ok       = 1;
+char *totalview_jobid            = NULL;
 
 int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_list_inactive (optparse_t *p, int argc, char **argv);
@@ -223,6 +224,9 @@ static struct optparse_option attach_opts[] =  {
       .usage = "Increase verbosity" },
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Suppress warnings written to stderr from flux-job",
+    },
+    { .name = "debug", .has_arg = 0,
+      .usage = "Enable parallel debugger to attach to a running job",
     },
     { .name = "debug-emulate", .has_arg = 0, .flags = OPTPARSE_OPT_HIDDEN,
       .usage = "Set MPIR_being_debugged for testing",
@@ -1679,9 +1683,7 @@ static void valid_or_exit_for_debug (struct attach_ctx *ctx)
 
     if (state != FLUX_JOB_NEW && state != FLUX_JOB_DEPEND
         && state != FLUX_JOB_SCHED && state != FLUX_JOB_RUN) {
-        errno = EINVAL;
-        log_err_exit ("Invalid job state (%s) for debugging",
-                      flux_job_statetostr(state, false));
+        log_msg_exit ("cannot debug job that isn't running");
     }
 
     return;
@@ -2065,10 +2067,17 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     if (!(r = flux_get_reactor (ctx.h)))
         log_err_exit ("flux_get_reactor");
 
-    if (optparse_hasopt (ctx.p, "debug-emulate"))
+    if (optparse_hasopt (ctx.p, "debug")
+        || optparse_hasopt (ctx.p, "debug-emulate")) {
         MPIR_being_debugged = 1;
-    if (MPIR_being_debugged)
+    }
+    if (MPIR_being_debugged) {
+        int verbose = optparse_getopt (p, "verbose", NULL);
         valid_or_exit_for_debug (&ctx);
+        totalview_jobid = xasprintf ("%ju", (uintmax_t)ctx.id);
+        if (verbose > 1)
+            log_msg ("totalview_jobid=%s", totalview_jobid);
+    }
 
     if (!(ctx.eventlog_f = flux_job_event_watch (ctx.h,
                                                  ctx.id,
@@ -2121,6 +2130,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     flux_watcher_destroy (ctx.stdin_w);
     flux_close (ctx.h);
     free (ctx.service);
+    free (totalview_jobid);
     return ctx.exit_code;
 }
 
