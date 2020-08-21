@@ -95,12 +95,6 @@ int flux_shell_setopt (flux_shell_t *shell,
 {
     json_error_t err;
     json_t *o;
-    if (!shell->info->jobspec->options) {
-        if (!(shell->info->jobspec->options = json_object ())) {
-            errno = ENOMEM;
-            return -1;
-        }
-    }
     /* If flux_shell_setopt (shell, name, NULL), delete option:
      */
     if (!json_str)
