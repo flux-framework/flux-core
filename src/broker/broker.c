@@ -781,56 +781,54 @@ static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
 
 static int create_runat_phases (broker_ctx_t *ctx)
 {
-    if (ctx->rank == 0) {
-        const char *rc1, *rc3, *local_uri;
-        bool rc2_none = false;
+    const char *rc1, *rc3, *local_uri;
+    bool rc2_none = false;
 
-        if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0) {
-            log_err ("local-uri is not set");
+    if (attr_get (ctx->attrs, "local-uri", &local_uri, NULL) < 0) {
+        log_err ("local-uri is not set");
+        return -1;
+    }
+    if (attr_get (ctx->attrs, "broker.rc1_path", &rc1, NULL) < 0) {
+        log_err ("broker.rc1_path is not set");
+        return -1;
+    }
+    if (attr_get (ctx->attrs, "broker.rc3_path", &rc3, NULL) < 0) {
+        log_err ("broker.rc3_path is not set");
+        return -1;
+    }
+    if (attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
+        rc2_none = true;
+
+    if (!(ctx->runat = runat_create (ctx->h, local_uri))) {
+        log_err ("runat_create");
+        return -1;
+    }
+
+    /* rc1 - initialization
+     */
+    if (ctx->rank == 0 && rc1 && strlen (rc1) > 0) {
+        if (runat_push_shell_command (ctx->runat, "rc1", rc1, true) < 0) {
+            log_err ("runat_push_shell_command rc1");
             return -1;
         }
-        if (attr_get (ctx->attrs, "broker.rc1_path", &rc1, NULL) < 0) {
-            log_err ("broker.rc1_path is not set");
+    }
+
+    /* rc2 - initial program
+     */
+    if (ctx->rank == 0 && !rc2_none) {
+        if (create_runat_rc2 (ctx->runat, ctx->init_shell_cmd,
+                                          ctx->init_shell_cmd_len) < 0) {
+            log_err ("create_runat_rc2");
             return -1;
         }
-        if (attr_get (ctx->attrs, "broker.rc3_path", &rc3, NULL) < 0) {
-            log_err ("broker.rc3_path is not set");
+    }
+
+    /* rc3 - finalization
+     */
+    if (ctx->rank == 0 && rc3 && strlen (rc3) > 0) {
+        if (runat_push_shell_command (ctx->runat, "rc3", rc3, true) < 0) {
+            log_err ("runat_push_shell_command rc3");
             return -1;
-        }
-        if (attr_get (ctx->attrs, "broker.rc2_none", NULL, NULL) == 0)
-            rc2_none = true;
-
-        if (!(ctx->runat = runat_create (ctx->h, local_uri))) {
-            log_err ("runat_create");
-            return -1;
-        }
-
-        /* rc1 - initialization
-         */
-        if (rc1 && strlen (rc1) > 0) {
-            if (runat_push_shell_command (ctx->runat, "rc1", rc1, true) < 0) {
-                log_err ("runat_push_shell_command rc1");
-                return -1;
-            }
-        }
-
-        /* rc2 - initial program
-         */
-        if (!rc2_none) {
-            if (create_runat_rc2 (ctx->runat, ctx->init_shell_cmd,
-                                              ctx->init_shell_cmd_len) < 0) {
-                log_err ("create_runat_rc2");
-                return -1;
-            }
-        }
-
-        /* rc3 - finalization
-         */
-        if (rc3 && strlen (rc3) > 0) {
-            if (runat_push_shell_command (ctx->runat, "rc3", rc3, true) < 0) {
-                log_err ("runat_push_shell_command rc3");
-                return -1;
-            }
         }
     }
     return 0;
