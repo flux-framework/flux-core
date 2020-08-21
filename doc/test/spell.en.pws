@@ -512,3 +512,6 @@ sysconfdir
 TRACEME
 WIFEXTED
 builtin
+OMP
+envfile
+regex

@@ -14,13 +14,133 @@ import sys
 import logging
 import argparse
 import json
+import fnmatch
+import re
 from itertools import chain
+from string import Template
+from collections import ChainMap
 
 import flux
 from flux import job
 from flux.job import JobspecV1, JobID
 from flux import util
 from flux import debugged
+
+
+def filter_dict(env, pattern, reverseMatch=True):
+    """
+    Filter out all keys that match "pattern" from dict 'env'
+
+    Pattern is assumed to be a shell glob(7) pattern, unless it begins
+    with '/', in which case the pattern is a regex.
+    """
+    if pattern.startswith("/"):
+        pattern = pattern[1::].rstrip("/")
+    else:
+        pattern = fnmatch.translate(pattern)
+    regex = re.compile(pattern)
+    if reverseMatch:
+        return dict(filter(lambda x: not regex.match(x[0]), env.items()))
+    return dict(filter(lambda x: regex.match(x[0]), env.items()))
+
+
+def get_filtered_environment(rules, environ=None):
+    """
+    Filter environment dictionary 'environ' given a list of rules.
+    Each rule can filter, set, or modify the existing environment.
+    """
+    if environ is None:
+        environ = dict(os.environ)
+    if rules is None:
+        return environ
+    for rule in rules:
+        #
+        #  If rule starts with '-' then the rest of the rule is a pattern
+        #   which filters matching environment variables from the
+        #   generated environment.
+        #
+        if rule.startswith("-"):
+            environ = filter_dict(environ, rule[1::])
+        #
+        #  If rule starts with '^', then the result of the rule is a filename
+        #   from which to read more rules.
+        #
+        elif rule.startswith("^"):
+            filename = os.path.expanduser(rule[1::])
+            with open(filename) as envfile:
+                lines = [line.strip() for line in envfile]
+                environ = get_filtered_environment(lines, environ=environ)
+        #
+        #  Otherwise, the rule is an explicit variable assignment
+        #   VAR=VAL. If =VAL is not provided then VAL refers to the
+        #   value for VAR in the current environment of this process.
+        #
+        #  Quoted shell variables are expanded using values from the
+        #   built environment, not the process environment. So
+        #   --env=PATH=/bin --env=PATH='$PATH:/foo' results in
+        #   PATH=/bin:/foo.
+        #
+        else:
+            var, *rest = rule.split("=", 1)
+            if not rest:
+                #
+                #  VAR alone with no set value pulls in all matching
+                #   variables from current environment that are not already
+                #   in the generated environment.
+                env = filter_dict(os.environ, var, reverseMatch=False)
+                for key, value in env.items():
+                    if key not in environ:
+                        environ[key] = value
+            else:
+                #
+                #  Template lookup: use jobspec environment first, fallback
+                #   to current process environment using ChainMap:
+                lookup = ChainMap(environ, os.environ)
+                try:
+                    environ[var] = Template(rest[0]).substitute(lookup)
+                except ValueError as ex:
+                    LOGGER.error("--env: Unable to substitute %s", rule)
+                    raise
+                except KeyError as ex:
+                    raise Exception(f"--env: Variable {ex} not found in {rule}")
+    return environ
+
+
+class EnvFileAction(argparse.Action):
+    """Convenience class to handle --env-file option
+
+    Append --env-file options to the "env" list in namespace, with "^"
+    prepended to the rule to indicate further rules are to be read
+    from the indicated file.
+
+    This is required to preserve ordering between the --env and --env-file
+    and --env-remove options.
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        items = getattr(namespace, "env", [])
+        if items is None:
+            items = []
+        items.append("^" + values)
+        setattr(namespace, "env", items)
+
+
+class EnvFilterAction(argparse.Action):
+    """Convenience class to handle --env-remove option
+
+    Append --env-remove options to the "env" list in namespace, with "-"
+    prepended to the option argument.
+
+    This is required to preserve ordering between the --env and --env-remove
+    options.
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        items = getattr(namespace, "env", [])
+        if items is None:
+            items = []
+        items.append("-" + values)
+        setattr(namespace, "env", items)
 
 
 class MiniCmd:
@@ -70,6 +190,33 @@ class MiniCmd:
             action="append",
             help="Set job attribute ATTR to VAL (multiple use OK)",
             metavar="ATTR=VAL",
+        )
+        parser.add_argument(
+            "--env",
+            action="append",
+            help="Control how environment variables are exported. If RULE "
+            + "starts with '-' apply rest of RULE as a remove filter (see "
+            + "--env-remove), if '^' then read rules from a file "
+            + "(see --env-file). Otherwise, set matching environment variables "
+            + "from the current environment (--env=PATTERN) or set a value "
+            + "explicitly (--env=VAR=VALUE). Rules are applied in the order "
+            + "they are used on the command line. (multiple use OK)",
+            metavar="RULE",
+        )
+        parser.add_argument(
+            "--env-remove",
+            action=EnvFilterAction,
+            help="Remove environment variables matching PATTERN. "
+            + "If PATTERN starts with a '/', then it is matched "
+            + "as a regular expression, otherwise PATTERN is a shell "
+            + "glob expression. (multiple use OK)",
+            metavar="PATTERN",
+        )
+        parser.add_argument(
+            "--env-file",
+            action=EnvFileAction,
+            help="Read a set of environment rules from FILE. (multiple use OK)",
+            metavar="FILE",
         )
         parser.add_argument(
             "--input",
@@ -135,7 +282,7 @@ class MiniCmd:
         """
         jobspec = self.init_jobspec(args)
         jobspec.cwd = os.getcwd()
-        jobspec.environment = dict(os.environ)
+        jobspec.environment = get_filtered_environment(args.env)
         if args.time_limit is not None:
             jobspec.duration = args.time_limit
 
