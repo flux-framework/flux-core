@@ -1,46 +1,34 @@
 #!/bin/bash -e
 
-# Usage: wait_check pid [pid ...]
-wait_check() {
-    local pid
-    for pid in $*; do wait $pid; done
-}
-
-# Allow connector-local more time to start listening on socket in rc1 only
-export FLUX_LOCAL_CONNECTOR_RETRY_COUNT=10
+# Allow connector-local more time to start listening on socket
+FLUX_LOCAL_CONNECTOR_RETRY_COUNT=10 RANK=$(flux getattr rank)
 
 if ! content_backing=$(flux getattr content.backing-module 2>/dev/null); then
     content_backing=content-sqlite
 fi
 
-declare -a pids
-flux exec -r all flux module load barrier & pids+=($!)
-flux module load ${content_backing} & pids+=($!)
-flux exec -r all flux module load aggregator & pids+=($!)
-wait_check ${pids[@]}
-unset pids
+# Usage: modload {all|<rank>} modname [args ...]
+modload() {
+    local where=$1; shift
+    if test "$where" = "all" || test $where -eq $RANK; then
+        flux module load $*
+    fi
+}
 
-declare -a pids
-flux module load kvs
-flux exec -r all -x 0 flux module load kvs & pids+=($!)
-flux exec -r all flux module load kvs-watch & pids+=($!)
-wait_check ${pids[@]}
-unset pids
+modload all barrier
+modload 0 ${content_backing}
+modload all aggregator
 
-declare -a pids
-flux module load resource
-flux module load job-info & pids+=($!)
-flux module load cron sync=hb & pids+=($!)
-flux module load job-manager & pids+=($!)
-wait_check ${pids[@]}
-unset pids
+modload all kvs
+modload all kvs-watch
 
-declare -a pids
-flux module load job-ingest
-flux exec -r all -x 0 flux module load job-ingest & pids+=($!)
-flux module load job-exec &  pids+=($!)
-wait_check ${pids[@]}
-unset pids
+modload 0 resource
+modload 0 job-info
+modload 0 cron sync=hb
+modload 0 job-manager
+
+modload all job-ingest
+modload 0 job-exec
 
 core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
@@ -59,11 +47,12 @@ lookup_sched_module() {
     flux module list | awk '$6 == "sched" { print $1 }'
 }
 
-if test "${FLUX_SCHED_MODULE}" != "none" -a -z "$(lookup_sched_module)"; then
+if test $RANK -eq 0 -a "${FLUX_SCHED_MODULE}" != "none" \
+                    -a -z "$(lookup_sched_module)"; then
     flux module load ${FLUX_SCHED_MODULE:-sched-simple}
 fi
 
-flux admin cleanup-push <<-EOT
+test $RANK -ne 0 || flux admin cleanup-push <<-EOT
 	flux queue stop --quiet
 	flux job cancelall --user=all --quiet -f --states RUN
 	flux queue idle --quiet

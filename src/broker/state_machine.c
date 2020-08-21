@@ -105,14 +105,14 @@ static struct state statetab[] = {
 
 static struct state_next nexttab[] = {
     { "start",              STATE_NONE,         STATE_JOIN },
-    { "parent-ready",       STATE_JOIN,         STATE_QUORUM },
-    { "parent-none",        STATE_JOIN,         STATE_QUORUM },
+    { "parent-ready",       STATE_JOIN,         STATE_INIT },
+    { "parent-none",        STATE_JOIN,         STATE_INIT },
     { "parent-fail",        STATE_JOIN,         STATE_SHUTDOWN },
-    { "quorum-full",        STATE_QUORUM,       STATE_INIT },
-    { "quorum-fail",        STATE_QUORUM,       STATE_SHUTDOWN },
-    { "rc1-success",        STATE_INIT,         STATE_RUN },
-    { "rc1-none",           STATE_INIT,         STATE_RUN },
+    { "rc1-success",        STATE_INIT,         STATE_QUORUM },
+    { "rc1-none",           STATE_INIT,         STATE_QUORUM },
     { "rc1-fail",           STATE_INIT,         STATE_FINALIZE },
+    { "quorum-full",        STATE_QUORUM,       STATE_RUN },
+    { "quorum-fail",        STATE_QUORUM,       STATE_FINALIZE },
     { "rc2-success",        STATE_RUN,          STATE_CLEANUP },
     { "rc2-fail",           STATE_RUN,          STATE_CLEANUP },
     { "rc2-abort",          STATE_RUN,          STATE_CLEANUP },
@@ -364,7 +364,7 @@ static void check_cb (flux_reactor_t *r,
 }
 
 /* Assumes local state is STATE_JOIN.
- * If parent has left STATE_JOIN, post parent-ready or parent-fail.
+ * If parent has left STATE_INIT, post parent-ready or parent-fail.
  */
 static void join_check_parent (struct state_machine *s)
 {
@@ -374,9 +374,9 @@ static void join_check_parent (struct state_machine *s)
         switch (s->monitor.parent_state) {
             case STATE_NONE:
             case STATE_JOIN:
+            case STATE_INIT:
                 break;
             case STATE_QUORUM:
-            case STATE_INIT:
             case STATE_RUN:
                 state_machine_post (s, "parent-ready");
                 break;
@@ -384,6 +384,7 @@ static void join_check_parent (struct state_machine *s)
             case STATE_FINALIZE:
             case STATE_SHUTDOWN:
                 state_machine_post (s, "parent-fail");
+                break;
         }
     }
 }
