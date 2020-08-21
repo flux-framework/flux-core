@@ -109,8 +109,10 @@ static int gpubind_init (flux_plugin_t *p,
         /* gpu-affinity defaults to "on" */
         opt = "on";
     }
-    if (strcmp (opt, "off") == 0)
+    if (strcmp (opt, "off") == 0) {
+        shell_debug ("disabling affinity due to gpu-affinity=off");
         return 0;
+    }
     if (get_shell_gpus (shell, &ntasks, &gpus) < 0)
         return -1;
     if (flux_plugin_aux_set (p, NULL, gpus, (flux_free_f)idset_destroy) < 0) {
