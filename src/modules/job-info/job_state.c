@@ -643,7 +643,7 @@ static int jobspec_parse (struct info_ctx *ctx,
             slot_count = res[0].count * res[1].count;
         }
         else {
-            flux_log (ctx->h, LOG_ERR,
+            flux_log (ctx->h, LOG_WARNING,
                       "%s: job %ju: Unexpected resources: %s->%s->%s%s",
                       __FUNCTION__,
                       (uintmax_t)job->id,
@@ -651,7 +651,7 @@ static int jobspec_parse (struct info_ctx *ctx,
                       res[1].type ? res[1].type : "NULL",
                       res[2].type ? res[2].type : "NULL",
                       res[2].with ? "->..." : NULL);
-            goto error;
+            slot_count = -1;
         }
         job->ntasks = slot_count;
     }
