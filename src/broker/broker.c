@@ -721,6 +721,11 @@ static void init_attrs_shell_paths (attr_t *attrs)
                   flux_conf_builtin_get ("shell_pluginpath", FLUX_CONF_AUTO),
                   0) < 0)
         log_err_exit ("attr_add conf.shell_pluginpath");
+    if (attr_add (attrs,
+                  "conf.shell_initrc",
+                  flux_conf_builtin_get ("shell_initrc", FLUX_CONF_AUTO),
+                  0) < 0)
+        log_err_exit ("attr_add conf.shell_initrc");
 }
 
 static void init_attrs (attr_t *attrs, pid_t pid)
