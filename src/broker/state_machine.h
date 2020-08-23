@@ -22,6 +22,7 @@ typedef enum {
     STATE_CLEANUP,
     STATE_FINALIZE,         // rc3
     STATE_SHUTDOWN,
+    STATE_EXIT,
 } broker_state_t;
 
 

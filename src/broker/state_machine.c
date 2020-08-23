@@ -81,6 +81,7 @@ static void action_run (struct state_machine *s);
 static void action_cleanup (struct state_machine *s);
 static void action_finalize (struct state_machine *s);
 static void action_shutdown (struct state_machine *s);
+static void action_exit (struct state_machine *s);
 
 static void runat_completion_cb (struct runat *r, const char *name, void *arg);
 static void monitor_update (flux_t *h, zlist_t *requests, broker_state_t state);
@@ -101,6 +102,7 @@ static struct state statetab[] = {
     { STATE_CLEANUP,    "cleanup",          action_cleanup },
     { STATE_FINALIZE,   "finalize",         action_finalize },
     { STATE_SHUTDOWN,   "shutdown",         action_shutdown },
+    { STATE_EXIT,       "exit",             action_exit },
 };
 
 static struct state_next nexttab[] = {
@@ -117,12 +119,14 @@ static struct state_next nexttab[] = {
     { "rc2-fail",           STATE_RUN,          STATE_CLEANUP },
     { "rc2-abort",          STATE_RUN,          STATE_CLEANUP },
     { "rc2-none",           STATE_RUN,          STATE_RUN },
+    { "exit",               STATE_RUN,          STATE_EXIT },
     { "cleanup-success",    STATE_CLEANUP,      STATE_FINALIZE},
     { "cleanup-none",       STATE_CLEANUP,      STATE_FINALIZE},
     { "cleanup-fail",       STATE_CLEANUP,      STATE_FINALIZE},
     { "rc3-success",        STATE_FINALIZE,     STATE_SHUTDOWN },
     { "rc3-none",           STATE_FINALIZE,     STATE_SHUTDOWN },
     { "rc3-fail",           STATE_FINALIZE,     STATE_SHUTDOWN },
+    { "exit",               STATE_SHUTDOWN,     STATE_EXIT },
 };
 
 #define TABLE_LENGTH(t) (sizeof(t) / sizeof((t)[0]))
@@ -235,6 +239,36 @@ static void action_shutdown (struct state_machine *s)
     shutdown_instance (s->ctx->shutdown);
 }
 
+static void rmmod_continuation (flux_future_t *f, void *arg)
+{
+    struct state_machine *s = arg;
+
+    if (flux_rpc_get (f, NULL) < 0)
+        flux_log_error (s->ctx->h, "cmb.rmmod connector-local");
+    flux_reactor_stop (flux_get_reactor (s->ctx->h));
+    flux_future_destroy (f);
+}
+
+/* Unload connector-local module, then stop the broker's reactor.
+ */
+static void action_exit (struct state_machine *s)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_rpc_pack (s->ctx->h,
+                             "cmb.rmmod",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s}",
+                             "name",
+                             "connector-local"))
+            || flux_future_then (f, -1, rmmod_continuation, s) < 0) {
+        flux_log_error (s->ctx->h, "error sending cmb.rmmod connector-local");
+        flux_future_destroy (f);
+        flux_reactor_stop (flux_get_reactor (s->ctx->h));
+    }
+}
+
 static void process_event (struct state_machine *s, const char *event)
 {
     broker_state_t next_state;
@@ -298,6 +332,7 @@ void state_machine_kill (struct state_machine *s, int signum)
             break;
         case STATE_NONE:
         case STATE_SHUTDOWN:
+        case STATE_EXIT:
             flux_log (h,
                       LOG_INFO,
                       "ignored signal %d in %s",
@@ -383,6 +418,7 @@ static void join_check_parent (struct state_machine *s)
             case STATE_CLEANUP:
             case STATE_FINALIZE:
             case STATE_SHUTDOWN:
+            case STATE_EXIT:
                 state_machine_post (s, "parent-fail");
                 break;
         }
@@ -460,6 +496,7 @@ static void quorum_check_parent (struct state_machine *s)
             case STATE_CLEANUP:
             case STATE_FINALIZE:
             case STATE_SHUTDOWN:
+            case STATE_EXIT:
                 state_machine_post (s, "quorum-fail");
                 break;
         }

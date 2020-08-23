@@ -731,11 +731,6 @@ static void init_attrs (attr_t *attrs, pid_t pid)
         log_err_exit ("attr_add version");
 }
 
-/* If shutdown timeout has occured, exit immediately.
- * If shutdown is beginning, start unload of connector-local module.
- * If shutdown is ending, then IFF connector-local has finished
- * unloading, stop the reactor.  Otherwise module_status_cb() will do it.
- */
 static void shutdown_cb (struct shutdown *s, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -744,15 +739,8 @@ static void shutdown_cb (struct shutdown *s, void *arg)
         log_msg ("shutdown timer expired on rank %"PRIu32, ctx->rank);
         _exit (1);
     }
-    if (!shutdown_is_complete (s)) {
-        module_t *p;
-        if ((p = module_lookup_byname (ctx->modhash, "connector-local")))
-            module_stop (p);
-    }
-    else {
-        if (!module_lookup_byname (ctx->modhash, "connector-local"))
-            flux_reactor_stop (flux_get_reactor (ctx->h));
-    }
+    if (shutdown_is_complete (s))
+        state_machine_post (ctx->state_machine, "exit");
 }
 
 static void set_proctitle (uint32_t rank)
@@ -1771,14 +1759,6 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
 
         if (module_rmmod_respond (ctx->h, p) < 0)
             flux_log_error (ctx->h, "flux_respond to rmmod %s", name);
-
-        /* Special case for connector-local removal:
-         * If shutdown is complete, stop the reactor.
-         */
-        if (!strcmp (name, "connector-local")) {
-            if (shutdown_is_complete (ctx->shutdown))
-                flux_reactor_stop (flux_get_reactor (ctx->h));
-        }
 
         module_remove (ctx->modhash, p);
     }
