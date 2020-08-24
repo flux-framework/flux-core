@@ -33,8 +33,6 @@ libbroker_la_SOURCES = \
 	heartbeat.c \
 	service.h \
 	service.c \
-	shutdown.h \
-	shutdown.c \
 	attr.h \
 	attr.c \
 	log.h \

@@ -63,7 +63,6 @@
 #include "brokercfg.h"
 #include "overlay.h"
 #include "service.h"
-#include "shutdown.h"
 #include "attr.h"
 #include "log.h"
 #include "content-cache.h"
@@ -90,7 +89,6 @@ static void parent_cb (struct overlay *ov, void *sock, void *arg);
 static void child_cb (struct overlay *ov, void *sock, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
-static void shutdown_cb (struct shutdown *s, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg);
 static int broker_handle_signals (broker_ctx_t *ctx);
@@ -492,16 +490,6 @@ int main (int argc, char *argv[])
         }
     }
 
-    if (!(ctx.shutdown = shutdown_create (ctx.h,
-                                          ctx.shutdown_grace,
-                                          ctx.size,
-                                          ctx.tbon_k,
-                                          ctx.overlay))) {
-        log_err ("shutdown_create");
-        goto cleanup;
-    }
-    shutdown_set_callback (ctx.shutdown, shutdown_cb, &ctx);
-
     /* Register internal services
      */
     if (attr_register_handlers (ctx.attrs, ctx.h) < 0) {
@@ -622,7 +610,6 @@ cleanup:
     overlay_destroy (ctx.overlay);
     heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);
-    shutdown_destroy (ctx.shutdown);
     broker_remove_services (handlers);
     publisher_destroy (ctx.publisher);
     brokercfg_destroy (ctx.config);
@@ -729,18 +716,6 @@ static void init_attrs (attr_t *attrs, pid_t pid)
     if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_add version");
-}
-
-static void shutdown_cb (struct shutdown *s, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-
-    if (shutdown_is_expired (s)) {
-        log_msg ("shutdown timer expired on rank %"PRIu32, ctx->rank);
-        _exit (1);
-    }
-    if (shutdown_is_complete (s))
-        state_machine_post (ctx->state_machine, "exit");
 }
 
 static void set_proctitle (uint32_t rank)

@@ -21,7 +21,6 @@
 #include "state_machine.h"
 
 #include "broker.h"
-#include "shutdown.h"
 #include "runat.h"
 #include "overlay.h"
 #include "attr.h"
@@ -58,6 +57,8 @@ struct state_machine {
 
     struct monitor monitor;
     struct quorum quorum;
+
+    int child_count;
 };
 
 typedef void (*action_f)(struct state_machine *s);
@@ -92,6 +93,7 @@ static bool test_idset_subset (struct idset *idset1, struct idset *idset2);
 static void quorum_monitor_update (flux_t *h,
                                    zlist_t *requests,
                                    struct idset *idset);
+static void run_check_parent (struct state_machine *s);
 
 static struct state statetab[] = {
     { STATE_NONE,       "none",             NULL },
@@ -118,8 +120,8 @@ static struct state_next nexttab[] = {
     { "rc2-success",        STATE_RUN,          STATE_CLEANUP },
     { "rc2-fail",           STATE_RUN,          STATE_CLEANUP },
     { "rc2-abort",          STATE_RUN,          STATE_CLEANUP },
+    { "shutdown-abort",     STATE_RUN,          STATE_CLEANUP },
     { "rc2-none",           STATE_RUN,          STATE_RUN },
-    { "exit",               STATE_RUN,          STATE_EXIT },
     { "cleanup-success",    STATE_CLEANUP,      STATE_FINALIZE},
     { "cleanup-none",       STATE_CLEANUP,      STATE_FINALIZE},
     { "cleanup-fail",       STATE_CLEANUP,      STATE_FINALIZE},
@@ -206,6 +208,8 @@ static void action_run (struct state_machine *s)
             state_machine_post (s, "rc2-fail");
         }
     }
+    else if (s->ctx->rank > 0)
+        run_check_parent (s);
     else
         state_machine_post (s, "rc2-none");
 }
@@ -236,7 +240,8 @@ static void action_finalize (struct state_machine *s)
 
 static void action_shutdown (struct state_machine *s)
 {
-    shutdown_instance (s->ctx->shutdown);
+    if (s->child_count == 0)
+        state_machine_post (s, "exit");
 }
 
 static void rmmod_continuation (flux_future_t *f, void *arg)
@@ -396,6 +401,30 @@ static void check_cb (flux_reactor_t *r,
         free (event);
     }
     flux_watcher_stop (s->idle);
+}
+
+static void run_check_parent (struct state_machine *s)
+{
+    if (s->monitor.parent_error)
+        state_machine_post (s, "parent-fail");
+    else if (s->monitor.parent_valid) {
+        switch (s->monitor.parent_state) {
+            case STATE_NONE:
+            case STATE_JOIN:
+            case STATE_INIT:
+            case STATE_QUORUM:
+            case STATE_RUN:
+            case STATE_CLEANUP:
+            case STATE_FINALIZE:
+                break;
+            case STATE_SHUTDOWN:
+                state_machine_post (s, "shutdown-abort");
+                break;
+            case STATE_EXIT:
+                state_machine_post (s, "parent-fail");
+                break;
+        }
+    }
 }
 
 /* Assumes local state is STATE_JOIN.
@@ -781,6 +810,8 @@ static void monitor_continuation (flux_future_t *f, void *arg)
         join_check_parent (s);
     else if (s->state == STATE_QUORUM)
         quorum_check_parent (s);
+    else if (s->state == STATE_RUN)
+        run_check_parent (s);
 }
 
 static flux_future_t *monitor_parent (flux_t *h, void *arg)
@@ -798,6 +829,20 @@ static flux_future_t *monitor_parent (flux_t *h, void *arg)
         return NULL;
     }
     return f;
+}
+
+/* This callback is called each time a child connects or disconnects.
+ * In SHUTDOWN state, post exit event if children have disconnected.
+ * If there are no children on entry to SHUTDOWN state (e.g. leaf node)
+ * the exit event is posted immediately in action_shutdown().
+ */
+static void child_connect_cb (struct overlay *overlay, void *arg)
+{
+    struct state_machine *s = arg;
+
+    s->child_count = overlay_get_child_peer_count (overlay);
+    if (s->state == STATE_SHUTDOWN && s->child_count == 0)
+        state_machine_post (s, "exit");
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -873,6 +918,8 @@ struct state_machine *state_machine_create (struct broker *ctx)
         goto error;
     if (!(s->quorum.batch_timer = quorum_create_batch_timer (s)))
         goto error;
+    s->child_count = overlay_get_child_peer_count (ctx->overlay);
+    overlay_set_monitor_cb (ctx->overlay, child_connect_cb, s);
     return s;
 nomem:
     errno = ENOMEM;
