@@ -5,7 +5,6 @@ nobase_fluxpy_PYTHON = \
 	rpc.py \
 	message.py \
 	constants.py \
-	job.py \
 	util.py \
 	future.py \
 	memoized_property.py \
@@ -14,7 +13,17 @@ nobase_fluxpy_PYTHON = \
 	core/watchers.py \
 	core/inner.py \
 	core/handle.py \
-	core/trampoline.py
+	core/trampoline.py \
+	job/__init__.py \
+	job/JobID.py \
+	job/Jobspec.py \
+	job/event.py \
+	job/kill.py \
+	job/kvs.py \
+	job/list.py \
+	job/submit.py \
+	job/wait.py \
+	job/_wrapper.py
 
 if HAVE_FLUX_SECURITY
 nobase_fluxpy_PYTHON += security.py
