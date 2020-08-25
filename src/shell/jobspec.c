@@ -117,6 +117,15 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
         set_error (error, "attributes.system.environment is not object type");
         goto error;
     }
+    /* Ensure that shell options is never NULL, but instead is an empty
+     * object. This ensures that if a shell component or plugin wants to
+     * set a new option, that will work.
+     */
+    if (!job->options && !(job->options = json_object ())) {
+        set_error (error, "unable to create empty jobspec options");
+        goto error;
+    }
+
     /* For jobspec version 1, expect either:
      * - node->slot->core->NIL
      * - slot->core->NIL

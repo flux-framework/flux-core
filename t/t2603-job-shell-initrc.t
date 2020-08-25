@@ -12,6 +12,29 @@ INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
 # test initrc files need to be able to find fluxometer.lua:
 export LUA_PATH="$(lua -e 'print(package.path)');${SHARNESS_TEST_DIRECTORY}/?.lua"
 
+test_expect_success 'flux-shell: initrc: conf.shell_* attributes are set' '
+	flux broker flux getattr conf.shell_initrc &&
+	flux broker flux getattr conf.shell_pluginpath
+'
+test_expect_success 'flux-shell: initrc: conf.shell_initrc can be set' '
+	cat <<-EOF >test-initrc.lua &&
+	shell.log("loaded test-initrc")
+	EOF
+	flux broker -Sconf.shell_initrc=$(pwd)/test-initrc.lua \
+		flux mini run /bin/true > test-initrc.output 2>&1 &&
+	test_debug "cat test-initrc.output" &&
+	grep "loaded test-initrc" test-initrc.output
+'
+test_expect_success 'flux-shell: initrc: plugin.searchpath set via broker attr' '
+	cat <<-EOF >print-searchpath.lua &&
+	shell.log("plugin.searchpath = "..plugin.searchpath)
+	EOF
+	flux broker -Sconf.shell_pluginpath=/test/foo \
+		flux mini run -o initrc=$(pwd)/print-searchpath.lua /bin/true \
+		>print-searchpath.out 2>&1 &&
+	test_debug "cat print-searchpath.out" &&
+	grep "plugin.searchpath = /test/foo" print-searchpath.out
+'
 test_expect_success 'flux-shell: initrc: generate 1-task jobspec and matching R' '
 	flux jobspec srun -N1 -n1 echo Hi >j1 &&
 	cat >R1 <<-EOT
@@ -211,6 +234,18 @@ test_expect_success HAVE_JQ 'flux-shell: initrc: load getopt plugin' '
 		> ${name}.log 2>&1 &&
 	test_debug "cat ${name}.log"
 '
+test_expect_success 'flux-shell: plugins can use setopt with empty options' '
+	name=setopt &&
+	cat >${name}.lua <<-EOF &&
+	plugin.searchpath = "${INITRC_PLUGINPATH}"
+	plugin.load { file = "${name}.so" }
+	EOF
+	cat j1 >j.${name} &&
+	${FLUX_SHELL} -v -s -r 0 -j j.${name} -R R1 --initrc=${name}.lua 0 \
+		> ${name}.log 2>&1 &&
+	test_debug "cat ${name}.log"
+'
+
 test_expect_success 'flux-shell: initrc: shell log functions available' '
 	name=shell.log &&
 	cat >${name}.lua <<-EOF &&

@@ -95,12 +95,6 @@ int flux_shell_setopt (flux_shell_t *shell,
 {
     json_error_t err;
     json_t *o;
-    if (!shell->info->jobspec->options) {
-        if (!(shell->info->jobspec->options = json_object ())) {
-            errno = ENOMEM;
-            return -1;
-        }
-    }
     /* If flux_shell_setopt (shell, name, NULL), delete option:
      */
     if (!json_str)
@@ -955,7 +949,7 @@ out:
     return rc;
 }
 
-static int load_initrc (flux_shell_t *shell)
+static int load_initrc (flux_shell_t *shell, const char *default_rcfile)
 {
     bool required = false;
     const char *rcfile = NULL;
@@ -967,7 +961,7 @@ static int load_initrc (flux_shell_t *shell)
         || flux_shell_getopt_unpack (shell, "initrc", "s", &rcfile) > 0)
         required = true;
     else
-        rcfile = shell_conf_get ("shell_initrc");
+        rcfile = default_rcfile;
 
     /* Skip loading initrc file if it is not required and either the shell
      *  is running in standalone mode, or the file isn't readable.
@@ -990,9 +984,22 @@ static int load_initrc (flux_shell_t *shell)
 
 static int shell_init (flux_shell_t *shell)
 {
+    const char *default_rcfile = shell_conf_get ("shell_initrc");
+
+    /*  Override pluginpath, default rcfile from broker attribute
+     *   if not in standalone mode.
+     */
+    if (!shell->standalone) {
+        const char *result;
+        if ((result = flux_attr_get (shell->h, "conf.shell_pluginpath")))
+            plugstack_set_searchpath (shell->plugstack, result);
+        if ((result = flux_attr_get (shell->h, "conf.shell_initrc")))
+            default_rcfile = result;
+    }
+
     /*  Load initrc file if necessary
      */
-    if (load_initrc (shell) < 0)
+    if (load_initrc (shell, default_rcfile) < 0)
         return -1;
 
     /* Change current working directory once before all tasks are

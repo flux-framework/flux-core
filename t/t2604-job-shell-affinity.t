@@ -61,6 +61,11 @@ test_expect_success 'flux-shell: invalid option is ignored' '
     test_debug "cat invalid.out" &&
     grep "invalid option" invalid.out
 '
+test_expect_success 'flux-shell: CUDA_VISIBLE_DEVICES=-1 set by default' '
+    flux mini run printenv CUDA_VISIBLE_DEVICES >default-gpubind.out 2>&1 &&
+    test_debug "cat default-gpubind.out" &&
+    grep "^-1" default-gpubind.out
+'
 #  GPU affinity tests use standalone shell since simple-sched doesnt
 #   schedule GPUs.
 #

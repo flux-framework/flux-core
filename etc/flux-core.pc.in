@@ -2,6 +2,17 @@ prefix=@prefix@
 exec_prefix=@exec_prefix@
 libdir=@libdir@
 includedir=@includedir@
+datarootdir=@datarootdir@
+mandir=@mandir@
+fluxrcdir=@fluxrcdir@
+fluxrc1dir=@fluxrc1dir@
+fluxrc3dir=@fluxrc3dir@
+fluxcmddir=@fluxcmddir@
+fluxlibdir=@fluxlibdir@
+fluxmoddir=@fluxmoddir@
+fluxcmdhelpdir=@datadir@/flux/help.d
+fluxshellrcdir=@fluxrcdir@/shell
+fluxshellpluginpath=@fluxlibdir@/shell/plugins
 
 Name: flux-core
 Description: Flux Resource Manager Framework Core

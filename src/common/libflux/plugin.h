@@ -102,6 +102,11 @@ void * flux_plugin_aux_get (flux_plugin_t *p, const char *key);
  */
 int flux_plugin_set_conf (flux_plugin_t *p, const char *json_str);
 
+/*  Get the current JSON string value of config for plugin 'p'.
+ *  Returns NULL on failure.
+ */
+const char *flux_plugin_get_conf (flux_plugin_t *p);
+
 /*  Read configuration for plugin 'p' using jansson style unpack args */
 int flux_plugin_conf_unpack (flux_plugin_t *p, const char *fmt, ...);
 

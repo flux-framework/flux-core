@@ -714,6 +714,20 @@ static void init_attrs_rc_paths (attr_t *attrs)
         log_err_exit ("attr_add rc3_path");
 }
 
+static void init_attrs_shell_paths (attr_t *attrs)
+{
+    if (attr_add (attrs,
+                  "conf.shell_pluginpath",
+                  flux_conf_builtin_get ("shell_pluginpath", FLUX_CONF_AUTO),
+                  0) < 0)
+        log_err_exit ("attr_add conf.shell_pluginpath");
+    if (attr_add (attrs,
+                  "conf.shell_initrc",
+                  flux_conf_builtin_get ("shell_initrc", FLUX_CONF_AUTO),
+                  0) < 0)
+        log_err_exit ("attr_add conf.shell_initrc");
+}
+
 static void init_attrs (attr_t *attrs, pid_t pid)
 {
     /* Initialize config attrs from environment set up by flux(1)
@@ -724,6 +738,7 @@ static void init_attrs (attr_t *attrs, pid_t pid)
      */
     init_attrs_broker_pid (attrs, pid);
     init_attrs_rc_paths (attrs);
+    init_attrs_shell_paths (attrs);
 
     if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)

@@ -119,11 +119,19 @@ name may be loaded at runtime.
    to Flux services may be restricted as a guest.
 
 C plugins are defined using the Flux standard plugin format. A shell C
-plugin should therefore export a single symbol ``flux_plugin_init``, in
+plugin should therefore export a single symbol ``flux_plugin_init()``, in
 which calls to ``flux_plugin_add_handler(3)`` should be used to register
-functions which will be invoked at defined points. These callbacks are
-defined by "topic strings" to which plugins can "subscribe" by calling
-with a topic glob string.
+functions which will be invoked at defined points during shell execution.
+These callbacks are defined by "topic strings" to which plugins can
+"subscribe" by calling ``flux_plugin_add_handler(3)`` and/or
+``flux_plugin_register(3)`` with topic ``glob(7)`` strings.
+
+.. note::
+   ``flux_plugin_init(3)`` is not called for builtin shell plugins. If
+   a dynamically loaded plugin wishes to set shell options to influence
+   a shell builtin plugin (e.g. to disable its operation), it should
+   therefore do so in ``flux_plugin_init()`` in order to guarantee that
+   the shell option is set before the builtin attempts to read them.
 
 Simple plugins may also be developed directly in the shell ``initrc.lua``
 file itself (see INITRC section, ``plugin.register()`` below)

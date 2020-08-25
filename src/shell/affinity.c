@@ -271,8 +271,10 @@ static int affinity_init (flux_plugin_t *p,
 
     if (!shell)
         return shell_log_errno ("flux_plugin_get_shell");
-    if (!affinity_getopt (shell, &option))
+    if (!affinity_getopt (shell, &option)) {
+        shell_debug ("disabling affinity due to cpu-affinity=off");
         return 0;
+    }
     if (!(sa = shell_affinity_create (shell)))
         return shell_log_errno ("shell_affinity_create");
 

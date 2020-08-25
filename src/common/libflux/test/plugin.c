@@ -78,6 +78,11 @@ void test_invalid_args ()
     like (flux_plugin_strerror (p), "^parse error: col 1:.*",
         "flux_plugin_last_error returns error text");
 
+    ok (flux_plugin_get_conf (NULL) == NULL && errno == EINVAL,
+        "flux_plugin_get_conf () with NULL arg returns EINVAL");
+    ok (flux_plugin_get_conf (p) == NULL && errno == ENOENT,
+        "flux_plugin_get_conf () with no conf returns ENOENT");
+
     ok (flux_plugin_conf_unpack (p, "{s:i}", "bar", &i) < 0 && errno == ENOENT,
         "flux_plugin_conf_unpack () with no conf returns ENOENT");
 
@@ -395,6 +400,11 @@ void test_load ()
 
     ok (flux_plugin_set_conf (p, "{\"foo\":\"bar\"}") == 0,
         "flux_plugin_set_conf (): %s", flux_plugin_strerror (p));
+    ok ((result = flux_plugin_get_conf (p)) != NULL,
+        "flux_plugin_get_conf () works");
+    ok (result != NULL,
+        "conf = %s", result);
+
     ok (flux_plugin_load_dso (p, "test/.libs/plugin_foo.so") == 0,
         "flux_plugin_load worked");
     is (flux_plugin_get_name (p), "plugin-test",
