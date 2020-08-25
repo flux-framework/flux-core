@@ -1,25 +1,28 @@
-fluxpy_PYTHON=\
-	      __init__.py\
-	      kvs.py\
-	      wrapper.py\
-	      rpc.py\
-	      message.py\
-	      constants.py\
-	      job.py \
-	      util.py \
-	      future.py \
-	      memoized_property.py \
-	      debugged.py
+nobase_fluxpy_PYTHON = \
+	__init__.py \
+	kvs.py \
+	wrapper.py \
+	rpc.py \
+	message.py \
+	constants.py \
+	job.py \
+	util.py \
+	future.py \
+	memoized_property.py \
+	debugged.py \
+	core/__init__.py \
+	core/watchers.py \
+	core/inner.py \
+	core/handle.py \
+	core/trampoline.py
 
 if HAVE_FLUX_SECURITY
-fluxpy_PYTHON += security.py
+nobase_fluxpy_PYTHON += security.py
 endif
 
 clean-local:
-	-rm -f *.pyc *.pyo
-	-rm -rf __pycache__
-
-SUBDIRS = core
+	-rm -f *.pyc */*.pyc *.pyo */*.pyo
+	-rm -rf __pycache__ */__pycache__
 
 install-data-hook:
 	$(AM_V_at)echo Linking python modules in non-standard location... && \
