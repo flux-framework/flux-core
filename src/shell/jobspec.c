@@ -49,7 +49,7 @@ static int parse_res_level (json_t *o,
     /* For jobspec version 1, expect exactly one array element per level.
      */
     if (json_unpack_ex (o, &loc_error, 0,
-                        "[{s:s s:i s?o}]",
+                        "{s:s s:i s?o}",
                         "type", &res.type,
                         "count", &res.count,
                         "with", &res.with) < 0) {
@@ -69,6 +69,122 @@ void jobspec_destroy (struct jobspec *job)
         json_decref (job->jobspec);
         free (job);
     }
+}
+
+static int recursive_parse_helper (struct jobspec *job,
+                                  json_t *curr_resource,
+                                  json_error_t *error,
+                                  struct res_level *res,
+                                  int level,
+                                  int with_multiplier,
+                                  int num_nodes
+                                  )
+{
+    size_t index;
+    json_t *value;
+    size_t size = json_array_size (curr_resource);
+
+    if (size == 0) {
+        set_error (error, "Malformed jobspec: resource entry is not a list");
+        return -1;
+    }
+
+    json_array_foreach (curr_resource, index, value) {
+        if (parse_res_level (value, level, res, error) < 0) {
+            return -1;
+        }
+        if (!strcmp (res->type, "core")) {
+            // We allow multiple resources to be defined at the core-level.
+            // We also allow resources below the core-level to be defined.
+            // Neither of these allowances adds much complication given that
+            // the finest granularity info we need is cores-per-slot.
+            break;
+        }
+        if ((index > 0) && (res->with != NULL)) {
+            set_error (error,
+                       "Unsupported jobspec: multiple resources at non-leaf level %d",
+                       level);
+            return -1;
+        }
+    }
+
+    with_multiplier = with_multiplier * res->count;
+
+    if (!strcmp (res->type, "node")) {
+        if (job->slot_count > 0) {
+            set_error (error, "node resource encountered after slot resource");
+            return -1;
+        }
+
+        num_nodes = with_multiplier;
+    } else if (!strcmp (res->type, "slot")) {
+        job->slot_count = with_multiplier;
+
+        // Reset the with_multiplier since we are now looking
+        // to calculate the cores_per_slot value
+        with_multiplier = 1;
+
+        // Check if we already encountered the `node` resource
+        if (num_nodes > 0) {
+            // N.B.: with a strictly enforced ordering of node then slot
+            // (with arbitrary non-core resources in between)
+            // the slots_per_node will always be a perfectly round integer
+            // (i.e., job->slot_count % num_nodes == 0)
+            job->slots_per_node = job->slot_count / num_nodes;
+        }
+    } else if (!strcmp (res->type, "core")) {
+        if (job->slot_count < 1) {
+            set_error (error, "core resource encountered before slot resource");
+            return -1;
+        }
+
+        job->cores_per_slot = with_multiplier;
+        // We've found everything we needed, we can stop recursing
+        return 0;
+    }
+
+    if (res->with != NULL) {
+        return recursive_parse_helper (job,
+                                       res->with,
+                                       error,
+                                       res,
+                                       level+1,
+                                       with_multiplier,
+                                       num_nodes);
+    }
+    return 0;
+}
+
+/* This function requires that the jobspec resource ordering is the
+ * same as the ordering specified in V1, but it allows additional
+ * resources before and in between the V1 resources
+ * (i.e., node, slot, and core).
+ * In shorthand, it requires that the jobspec follows the form
+ * ...->[node]->...->slot->...->core.  Where `node` is optional,
+ * and `...` represents any non-V1 resources.
+ */
+static int recursive_parse_jobspec_resources (struct jobspec *job,
+                                              json_t *curr_resource,
+                                              json_error_t *error)
+{
+    struct res_level res;
+
+    if (curr_resource == NULL) {
+        set_error (error, "jobspec top-level resources empty");
+        return -1;
+    }
+
+    // Set slots_per_node to -1 ahead of time, if the recursive descent
+    // encounters node->...->slot, it will overwrite this value
+    job->slots_per_node = -1;
+
+    int rc = recursive_parse_helper (job, curr_resource, error, &res, 0, 1, -1);
+
+    if ((rc == 0) && (job->cores_per_slot < 1)) {
+        set_error (error, "Missing core resource");
+        return -1;
+    }
+    return rc;
 }
 
 struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
@@ -132,11 +248,15 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
      * Set job->slot_count and job->cores_per_slot.
      */
     memset (res, 0, sizeof (res));
-    if (parse_res_level (resources, 0, &res[0], error) < 0)
+    if (parse_res_level (json_array_get(resources, 0), 0, &res[0], error) < 0)
         goto error;
-    if (res[0].with && parse_res_level (res[0].with, 1, &res[1], error) < 0)
+    if (res[0].with &&
+        (parse_res_level (json_array_get(res[0].with, 0), 1, &res[1], error)
+         < 0))
         goto error;
-    if (res[1].with && parse_res_level (res[1].with, 2, &res[2], error) < 0)
+    if (res[1].with &&
+        (parse_res_level (json_array_get(res[1].with, 0), 2, &res[2], error)
+         < 0))
         goto error;
     if (res[0].type != NULL && !strcmp (res[0].type, "slot")
             && res[1].type != NULL && !strcmp (res[1].type, "core")
@@ -153,12 +273,8 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
         job->cores_per_slot = res[2].count;
         job->slots_per_node = res[1].count;
     }
-    else {
-        set_error (error, "Unexpected resource hierarchy: %s->%s->%s%s",
-                   res[0].type ? res[0].type : "NULL",
-                   res[1].type ? res[1].type : "NULL",
-                   res[2].type ? res[2].type : "NULL",
-                   res[2].with ? "->..." : NULL);
+    else if (recursive_parse_jobspec_resources (job, resources, error) < 0) {
+        // recursive_parse_jobspec_resources calls set_error
         goto error;
     }
     /* Set job->task_count
