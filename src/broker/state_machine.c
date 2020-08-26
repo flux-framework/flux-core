@@ -846,11 +846,76 @@ static void child_connect_cb (struct overlay *overlay, void *arg)
         state_machine_post (s, "children-complete");
 }
 
+/* Returns true if 'sender' matches the sender of request 'msg'.
+ */
+static bool match_sender (const flux_msg_t *msg, const char *sender)
+{
+    char *sender2;
+    bool match = false;
+
+    if (flux_msg_get_route_first (msg, &sender2) == 0) {
+        if (!strcmp (sender2, sender))
+            match = true;
+        free (sender2);
+    }
+    return match;
+}
+
+/* Returns true if a matching request was found and removed.
+ * (Call until false to remove all matching requests - we can't do it in one
+ * go since zlist_t is not remove-save over iteration).
+ */
+static bool msglist_drop_sender (zlist_t *l, const char *sender)
+{
+    const flux_msg_t *msg;
+
+    msg = zlist_first (l);
+    while (msg) {
+        if (match_sender (msg, sender)) {
+            zlist_remove (l, (void *)msg);
+            flux_msg_decref (msg);
+            return true;
+        }
+        msg = zlist_next (l);
+    }
+    return false;
+}
+
+/* If a disconnect is received for streaming monitor or quorum-monitor
+ * requests, drop the request.  Example use cases:
+ * - monitor module unloads while still watching quorum-monitor
+ * - tests (potentially)
+ */
+static void disconnect_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct state_machine *s = arg;
+    char *sender;
+    int count = 0;
+
+    if (flux_msg_get_route_first (msg, &sender) == 0) {
+        while (msglist_drop_sender (s->quorum.requests, sender))
+            count++;
+        while (msglist_drop_sender (s->monitor.requests, sender))
+            count++;
+        free (sender);
+        if (count > 0) {
+            flux_log (s->ctx->h,
+                      LOG_DEBUG,
+                      "state-machine: goodbye to %d clients",
+                      count);
+        }
+    }
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "state-machine.monitor", monitor_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "state-machine.quorum", quorum_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "state-machine.quorum-monitor",
                                                       quorum_monitor_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "state-machine.disconnect", disconnect_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
