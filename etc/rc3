@@ -1,5 +1,15 @@
 #!/bin/bash
 
+RANK=$(flux getattr rank)
+
+# Usage: modrm {all|<rank>} modname
+modrm() {
+    local where=$1; shift
+    if test "$where" = "all" || test $where -eq $RANK; then
+        flux module remove -f $*
+    fi
+}
+
 core_dir=$(cd ${0%/*} && pwd -P)
 all_dirs=$core_dir${FLUX_RC_EXTRA:+":$FLUX_RC_EXTRA"}
 IFS=:
@@ -12,22 +22,21 @@ for rcdir in $all_dirs; do
 done
 shopt -u nullglob
 
-flux module remove -f sched-simple
-flux module remove -f resource
-flux module remove -f job-exec
-flux module remove -f job-manager
-flux exec -r all flux module remove -f job-ingest
+modrm 0 sched-simple
+modrm 0 resource
+modrm 0 job-exec
+modrm 0 job-manager
+modrm all job-ingest
 
-flux module remove -f cron
-flux exec -r all flux module remove -f aggregator
-flux exec -r all flux module remove -f barrier
+modrm 0 cron
+modrm all aggregator
+modrm all barrier
 
-flux module remove -f job-info
-flux exec -r all flux module remove -f kvs-watch
-flux exec -r all -x 0 flux module remove -f kvs
+modrm 0 job-info
+modrm all kvs-watch
+modrm all kvs
 
-flux module remove -f kvs
 flux content flush
 
 backingmod=$(flux getattr content.backing-module 2>/dev/null) || true
-flux module remove -f ${backingmod:-content-sqlite}
+modrm 0 ${backingmod:-content-sqlite}

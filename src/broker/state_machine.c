@@ -80,8 +80,8 @@ static void action_quorum (struct state_machine *s);
 static void action_init (struct state_machine *s);
 static void action_run (struct state_machine *s);
 static void action_cleanup (struct state_machine *s);
-static void action_finalize (struct state_machine *s);
 static void action_shutdown (struct state_machine *s);
+static void action_finalize (struct state_machine *s);
 static void action_exit (struct state_machine *s);
 
 static void runat_completion_cb (struct runat *r, const char *name, void *arg);
@@ -102,8 +102,8 @@ static struct state statetab[] = {
     { STATE_QUORUM,     "quorum",           action_quorum },
     { STATE_RUN,        "run",              action_run },
     { STATE_CLEANUP,    "cleanup",          action_cleanup },
-    { STATE_FINALIZE,   "finalize",         action_finalize },
     { STATE_SHUTDOWN,   "shutdown",         action_shutdown },
+    { STATE_FINALIZE,   "finalize",         action_finalize },
     { STATE_EXIT,       "exit",             action_exit },
 };
 
@@ -122,13 +122,14 @@ static struct state_next nexttab[] = {
     { "rc2-abort",          STATE_RUN,          STATE_CLEANUP },
     { "shutdown-abort",     STATE_RUN,          STATE_CLEANUP },
     { "rc2-none",           STATE_RUN,          STATE_RUN },
-    { "cleanup-success",    STATE_CLEANUP,      STATE_FINALIZE},
-    { "cleanup-none",       STATE_CLEANUP,      STATE_FINALIZE},
-    { "cleanup-fail",       STATE_CLEANUP,      STATE_FINALIZE},
-    { "rc3-success",        STATE_FINALIZE,     STATE_SHUTDOWN },
-    { "rc3-none",           STATE_FINALIZE,     STATE_SHUTDOWN },
-    { "rc3-fail",           STATE_FINALIZE,     STATE_SHUTDOWN },
-    { "exit",               STATE_SHUTDOWN,     STATE_EXIT },
+    { "cleanup-success",    STATE_CLEANUP,      STATE_SHUTDOWN },
+    { "cleanup-none",       STATE_CLEANUP,      STATE_SHUTDOWN },
+    { "cleanup-fail",       STATE_CLEANUP,      STATE_SHUTDOWN },
+    { "children-complete",  STATE_SHUTDOWN,     STATE_FINALIZE },
+    { "children-none",      STATE_SHUTDOWN,     STATE_FINALIZE },
+    { "rc3-success",        STATE_FINALIZE,     STATE_EXIT },
+    { "rc3-none",           STATE_FINALIZE,     STATE_EXIT },
+    { "rc3-fail",           STATE_FINALIZE,     STATE_EXIT },
 };
 
 #define TABLE_LENGTH(t) (sizeof(t) / sizeof((t)[0]))
@@ -241,7 +242,7 @@ static void action_finalize (struct state_machine *s)
 static void action_shutdown (struct state_machine *s)
 {
     if (s->child_count == 0)
-        state_machine_post (s, "exit");
+        state_machine_post (s, "children-none");
 }
 
 static void rmmod_continuation (flux_future_t *f, void *arg)
@@ -415,11 +416,11 @@ static void run_check_parent (struct state_machine *s)
             case STATE_QUORUM:
             case STATE_RUN:
             case STATE_CLEANUP:
-            case STATE_FINALIZE:
                 break;
             case STATE_SHUTDOWN:
                 state_machine_post (s, "shutdown-abort");
                 break;
+            case STATE_FINALIZE:
             case STATE_EXIT:
                 state_machine_post (s, "parent-fail");
                 break;
@@ -445,8 +446,8 @@ static void join_check_parent (struct state_machine *s)
                 state_machine_post (s, "parent-ready");
                 break;
             case STATE_CLEANUP:
-            case STATE_FINALIZE:
             case STATE_SHUTDOWN:
+            case STATE_FINALIZE:
             case STATE_EXIT:
                 state_machine_post (s, "parent-fail");
                 break;
@@ -523,8 +524,8 @@ static void quorum_check_parent (struct state_machine *s)
                 state_machine_post (s, "quorum-full");
                 break;
             case STATE_CLEANUP:
-            case STATE_FINALIZE:
             case STATE_SHUTDOWN:
+            case STATE_FINALIZE:
             case STATE_EXIT:
                 state_machine_post (s, "quorum-fail");
                 break;
@@ -842,7 +843,7 @@ static void child_connect_cb (struct overlay *overlay, void *arg)
 
     s->child_count = overlay_get_child_peer_count (overlay);
     if (s->state == STATE_SHUTDOWN && s->child_count == 0)
-        state_machine_post (s, "exit");
+        state_machine_post (s, "children-complete");
 }
 
 static const struct flux_msg_handler_spec htab[] = {

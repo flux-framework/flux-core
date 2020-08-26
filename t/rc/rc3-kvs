@@ -1,6 +1,18 @@
 #!/bin/bash -e
 
-flux exec -r all flux module remove kvs-watch
-flux exec -r all -x 0 flux module remove kvs
-flux module remove kvs
-flux module remove content-sqlite
+RANK=$(flux getattr rank)
+
+# Usage: modrm {all|<rank>} modname
+modrm() {
+    local where=$1; shift
+    if test "$where" = "all" || test $where -eq $RANK; then
+        flux module remove -f $*
+    fi
+}
+
+
+modrm all kvs-watch
+modrm all kvs
+
+flux content flush
+modrm 0 content-sqlite

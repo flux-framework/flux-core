@@ -20,8 +20,8 @@ typedef enum {
     STATE_QUORUM,
     STATE_RUN,              // initial program
     STATE_CLEANUP,
-    STATE_FINALIZE,         // rc3
     STATE_SHUTDOWN,
+    STATE_FINALIZE,         // rc3
     STATE_EXIT,
 } broker_state_t;
 

@@ -788,7 +788,7 @@ static int create_runat_phases (broker_ctx_t *ctx)
 
     /* rc3 - finalization
      */
-    if (ctx->rank == 0 && rc3 && strlen (rc3) > 0) {
+    if (rc3 && strlen (rc3) > 0) {
         if (runat_push_shell_command (ctx->runat, "rc3", rc3, true) < 0) {
             log_err ("runat_push_shell_command rc3");
             return -1;
