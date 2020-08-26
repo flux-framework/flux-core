@@ -1,9 +1,5 @@
 #!/bin/bash -e
 
-flux queue stop
-flux job cancelall -f --states RUN
-flux queue idle
-
 flux module remove -f job-exec
 flux module remove -f sched-simple
 flux module remove -f resource

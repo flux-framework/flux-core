@@ -41,3 +41,9 @@ modload 0 resource
 modload 0 job-exec
 
 modload 0 sched-simple
+
+test $RANK -ne 0 || flux admin cleanup-push <<-EOT
+	flux queue stop
+	flux job cancelall -f --states RUN
+	flux queue idle
+EOT
