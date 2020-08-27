@@ -8,6 +8,8 @@ test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-info/list-rpc.py"
+PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-info/jobspec-permissive.jsonschema
+JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
 
 if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
@@ -977,6 +979,67 @@ test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with
 	errno 22: foo is not a valid attribute
 	EOF
 	test_cmp ${name}.expected ${name}.out
+'
+
+# invalid job data tests
+#
+# to avoid potential racyness, wait up to 5 seconds for job to appear
+# in job list.  Note that we can't use `flux job list-ids`, b/c we
+# need specific job states to be crossed to ensure the job-info module
+# has processed the invalid data.
+#
+# In addition, note that the tests below are specific to how the data
+# is invalid in these tests and how job-info parses the invalid data.
+# Different parsing errors could have some fields initialized but
+# others not.
+
+# Following tests use invalid jobspecs, must load a more permissive validator
+
+ingest_module ()
+{
+        cmd=$1; shift
+        flux module ${cmd} job-ingest $*
+}
+
+test_expect_success 'reload job-ingest with more permissive validator' '
+        ingest_module reload \
+                validator=${JSONSCHEMA_VALIDATOR} validator-args=--schema,${PERMISSIVE_SCHEMA}
+'
+
+test_expect_success HAVE_JQ 'create illegal jobspec with empty command array' '
+        cat hostname.json | $jq ".tasks[0].command = []" > bad_jobspec.json
+'
+
+test_expect_success HAVE_JQ 'flux job list works on job with illegal jobspec' '
+        jobid=`flux job submit bad_jobspec.json | flux job id` &&
+        fj_wait_event $jobid clean >/dev/null &&
+        i=0 &&
+        while ! flux job list --states=inactive | grep $jobid > /dev/null \
+               && [ $i -lt 5 ]
+        do
+                sleep 1
+                i=$((i + 1))
+        done &&
+        test "$i" -lt "5" &&
+        flux job list --states=inactive | grep $jobid > list_illegal_jobspec.out &&
+        cat list_illegal_jobspec.out | $jq -e ".name == \"\"" &&
+        cat list_illegal_jobspec.out | $jq -e ".ntasks == 0"
+'
+
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with illegal jobspec' '
+	${RPC} job-info.job-state-pause 0 </dev/null
+        jobid=`flux job submit bad_jobspec.json | flux job id`
+        fj_wait_event $jobid clean >/dev/null
+        flux job list-ids ${jobid} > list_id_illegal_jobspec.out &
+        pid=$!
+        wait_idsync 1 &&
+	${RPC} job-info.job-state-unpause 0 </dev/null &&
+        wait $pid &&
+        cat list_id_illegal_jobspec.out | $jq -e ".id == ${jobid}"
+'
+
+test_expect_success 'reload job-ingest with defaults' '
+        ingest_module reload
 '
 
 #
