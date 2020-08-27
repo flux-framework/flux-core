@@ -480,8 +480,7 @@ class JobEventWatchFuture(Future):
         return event
 
     def cancel(self):
-        """Cancel a streaming job.event_watch_async() future
-        """
+        """Cancel a streaming job.event_watch_async() future"""
         RAW.event_watch_cancel(self.pimpl)
         self.needs_cancel = False
 

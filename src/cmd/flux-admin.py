@@ -31,7 +31,9 @@ def cleanup_push(args):
         commands = [line.strip() for line in sys.stdin]
 
     RPC(
-        flux.Flux(), "runat.push", {"name": "cleanup", "commands": commands[::-1]},
+        flux.Flux(),
+        "runat.push",
+        {"name": "cleanup", "commands": commands[::-1]},
     ).get()
 
 
