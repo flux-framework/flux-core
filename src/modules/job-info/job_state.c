@@ -110,6 +110,8 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
     job->ctx = ctx;
     job->id = id;
     job->state = FLUX_JOB_NEW;
+    job->userid = FLUX_USERID_UNKNOWN;
+    job->priority = -1;
 
     if (!(job->next_states = zlist_new ())) {
         errno = ENOMEM;
