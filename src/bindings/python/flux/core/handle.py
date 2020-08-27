@@ -24,11 +24,11 @@ from _flux._core import ffi, lib
 
 class Flux(Wrapper):
     """
-  The general Flux handle class, create one of these to connect to the
-  nearest enclosing flux instance
-  >>> flux.Flux() #doctest: +ELLIPSIS
-  <flux.core.Flux object at 0x...>
-  """
+    The general Flux handle class, create one of these to connect to the
+    nearest enclosing flux instance
+    >>> flux.Flux() #doctest: +ELLIPSIS
+    <flux.core.Flux object at 0x...>
+    """
 
     def __init__(self, url=ffi.NULL, flags=0, handle=None):
         super(Flux, self).__init__(
@@ -124,7 +124,7 @@ class Flux(Wrapper):
         return RPC(self, topic, payload, nodeid, flags)
 
     def event_create(self, topic, payload=None):
-        """ Create a new event message.
+        """Create a new event message.
 
         :param topic: A string, the event's topic
         :param payload: If a string, the payload is used unmodified, if it is
