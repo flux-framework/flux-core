@@ -31,7 +31,7 @@
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/dgetline.h"
 
-#define DEFAULT_KILLER_TIMEOUT 2.0
+#define DEFAULT_KILLER_TIMEOUT 20.0
 
 static struct {
     struct termios saved_termios;
