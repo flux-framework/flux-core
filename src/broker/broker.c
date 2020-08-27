@@ -138,7 +138,6 @@ static void usage (void)
 " -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
-" -g,--shutdown-grace SECS     Set shutdown grace period in seconds\n"
 " -S,--setattr ATTR=VAL        Set broker attribute\n"
 " -c,--config-path PATH        Set broker config directory (default: none)\n"
 );
@@ -185,11 +184,8 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
             if (fsd_parse_duration (optarg, &ctx->heartbeat_rate) < 0)
                 log_err_exit ("heartrate '%s'", optarg);
             break;
-        case 'g':   /* --shutdown-grace SECS */
-            if (fsd_parse_duration (optarg, &ctx->shutdown_grace) < 0) {
-                log_err_exit ("shutdown-grace '%s'", optarg);
-                usage ();
-            }
+        case 'g':   /* --shutdown-grace */
+            log_msg ("Warning: --shutdown-grace option is deprecated");
             break;
         case 'S': { /* --setattr ATTR=VAL */
             char *val, *attr = xstrdup (optarg);

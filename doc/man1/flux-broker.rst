@@ -67,10 +67,6 @@ OPTIONS
    Set the security mode. The mode may be *none*, *plain*, or *curve*
    (default: curve). See flux-keygen(1) for more information.
 
-**-g, --shutdown-grace**\ =\ *SECS*
-   Specify the shutdown grace period, in seconds (default: guess based
-   on session size).
-
 
 RESOURCES
 =========

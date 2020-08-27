@@ -41,9 +41,6 @@ test_expect_success 'flux-python command runs a python that finds flux' '
 # clear the RC paths
 ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 
-test_expect_success 'broker --shutdown-grace option works' "
-	flux start ${ARGS} -s2 -o,--shutdown-grace=5 /bin/true
-"
 test_expect_success 'flux-start in exec mode works' "
 	flux start ${ARGS} 'flux comms info' | grep 'size=1'
 "

@@ -32,7 +32,6 @@ struct broker {
     struct heartbeat *heartbeat;
     struct brokercfg *config;
     const char *config_path;
-    double shutdown_grace;
     double heartbeat_rate;
     int sec_typemask;
     zlist_t *subscriptions;     /* subscripts for internal services */
