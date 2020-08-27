@@ -9,7 +9,7 @@ jobs:
       name: 'python format'
       language: 'python'
       python: '3.6'
-      install: pip install --upgrade black
+      install: pip install 'black==20.08.b1' --force-reinstall
       script: ./scripts/check-format
       before_deploy: skip
       deploy: skip
