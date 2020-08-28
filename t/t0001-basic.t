@@ -157,7 +157,8 @@ test_expect_success 'tbon.endpoint with %B works' '
 # N.B. rank 1 has to be killed in this test after rank 0 fails gracefully
 # so test_must_fail won't work here
 test_expect_success 'tbon.endpoint fails on bad endpoint' '
-	! flux start -s2 -o,--setattr=tbon.endpoint=foo://bar /bin/true
+	! flux start -s2 --killer-timeout=0.2 \
+		-o,--setattr=tbon.endpoint=foo://bar /bin/true
 '
 test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
 	test_must_fail flux start -s2 flux getattr tbon.parent-endpoint
