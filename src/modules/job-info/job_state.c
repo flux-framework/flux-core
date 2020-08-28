@@ -525,7 +525,7 @@ static int jobspec_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
 
     if (jobspec_job) {
@@ -533,7 +533,7 @@ static int jobspec_parse (struct info_ctx *ctx,
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %ju invalid jobspec",
                       __FUNCTION__, (uintmax_t)job->id);
-            goto error;
+            goto nonfatal_error;
         }
         job->jobspec_job = json_incref (jobspec_job);
     }
@@ -544,7 +544,7 @@ static int jobspec_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
     if (json_unpack_ex (tasks, &error, 0,
                         "[{s:o}]",
@@ -552,14 +552,14 @@ static int jobspec_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
 
     if (!json_is_array (command)) {
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec",
                   __FUNCTION__, (uintmax_t)job->id);
-        goto error;
+        goto nonfatal_error;
     }
 
     job->jobspec_cmd = json_incref (command);
@@ -571,7 +571,7 @@ static int jobspec_parse (struct info_ctx *ctx,
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %ju invalid job dictionary: %s",
                       __FUNCTION__, (uintmax_t)job->id, error.text);
-            goto error;
+            goto nonfatal_error;
         }
     }
 
@@ -583,7 +583,7 @@ static int jobspec_parse (struct info_ctx *ctx,
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %ju invalid job command",
                       __FUNCTION__, (uintmax_t)job->id);
-            goto error;
+            goto nonfatal_error;
         }
         job->name = parse_job_name (json_string_value (arg0));
         assert (job->name);
@@ -595,7 +595,7 @@ static int jobspec_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
 
     /* Set job->ntasks
@@ -612,14 +612,14 @@ static int jobspec_parse (struct info_ctx *ctx,
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %ju invalid jobspec: %s",
                       __FUNCTION__, (uintmax_t)job->id, error.text);
-            goto error;
+            goto nonfatal_error;
         }
         if (per_slot != 1) {
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %ju: per_slot count: expected 1 got %d: %s",
                       __FUNCTION__, (uintmax_t)job->id, per_slot,
                       error.text);
-            goto error;
+            goto nonfatal_error;
         }
         /* For jobspec version 1, expect either:
          * - node->slot->core->NIL
@@ -628,11 +628,11 @@ static int jobspec_parse (struct info_ctx *ctx,
          */
         memset (res, 0, sizeof (res));
         if (parse_res_level (ctx, job, resources, &res[0]) < 0)
-            goto error;
+            goto nonfatal_error;
         if (res[0].with && parse_res_level (ctx, job, res[0].with, &res[1]) < 0)
-            goto error;
+            goto nonfatal_error;
         if (res[1].with && parse_res_level (ctx, job, res[1].with, &res[2]) < 0)
-            goto error;
+            goto nonfatal_error;
         if (res[0].type != NULL && !strcmp (res[0].type, "slot")
             && res[1].type != NULL && !strcmp (res[1].type, "core")
             && res[1].with == NULL) {
@@ -658,6 +658,9 @@ static int jobspec_parse (struct info_ctx *ctx,
         job->ntasks = slot_count;
     }
 
+    /* nonfatal error - jobspec illegal, but we'll continue on.  job
+     * listing will get initialized data */
+nonfatal_error:
     rc = 0;
 error:
     json_decref (jobspec);
