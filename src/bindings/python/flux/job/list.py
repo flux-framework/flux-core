@@ -9,12 +9,17 @@
 ###############################################################
 import os
 
+from flux.job.info import JobInfo
 from flux.rpc import RPC
 
 
 class JobListRPC(RPC):
     def get_jobs(self):
         return self.get()["jobs"]
+
+    def get_jobinfos(self):
+        for job in self.get_jobs():
+            yield JobInfo(job)
 
 
 # Due to subtleties in the python bindings and this call, this binding
@@ -48,6 +53,9 @@ def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=N
 class JobListIdRPC(RPC):
     def get_job(self):
         return self.get()["job"]
+
+    def get_jobinfo(self):
+        return JobInfo(self.get_job())
 
 
 # list-id is not like list or list-inactive, it doesn't return an
