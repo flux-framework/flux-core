@@ -413,7 +413,7 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
     if (!(a = eventlog_decode (s))) {
         flux_log_error (ctx->h, "%s: error parsing eventlog for %ju",
                         __FUNCTION__, (uintmax_t)job->id);
-        goto out;
+        goto nonfatal_error;
     }
 
     json_array_foreach (a, index, value) {
@@ -424,14 +424,14 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
         if (eventlog_entry_parse (value, &timestamp, &name, &context) < 0) {
             flux_log_error (ctx->h, "%s: error parsing entry for %ju",
                             __FUNCTION__, (uintmax_t)job->id);
-            goto out;
+            continue;
         }
 
         if (!strcmp (name, "submit")) {
             if (!context) {
                 flux_log_error (ctx->h, "%s: no submit context for %ju",
                                 __FUNCTION__, (uintmax_t)job->id);
-                goto out;
+                goto nonfatal_error;
             }
 
             if (json_unpack (context, "{ s:i s:i s:i }",
@@ -440,14 +440,16 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
                              "flags", &job->flags) < 0) {
                 flux_log_error (ctx->h, "%s: submit context for %ju invalid",
                                 __FUNCTION__, (uintmax_t)job->id);
-                goto out;
+                goto nonfatal_error;
             }
             break;
         }
     }
 
+    /* nonfatal error - eventlog illegal, but we'll continue on.  job
+     * listing will get initialized data */
+nonfatal_error:
     rc = 0;
-out:
     json_decref (a);
     return rc;
 }
@@ -915,7 +917,7 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju eventlog_decode: %s",
                   __FUNCTION__, (uintmax_t)job->id, strerror (errno));
-        goto error;
+        goto nonfatal_error;
     }
 
     json_array_foreach (a, index, value) {
@@ -927,7 +929,7 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
                       "%s: job %ju eventlog_entry_parse: %s",
                       __FUNCTION__, (uintmax_t)job->id,
                       strerror (errno));
-            goto error;
+            continue;
         }
 
         /* There is no need to check for "exception" events for the
@@ -940,7 +942,7 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
                 flux_log (ctx->h, LOG_ERR,
                           "%s: job %ju parse finish status",
                           __FUNCTION__, (uintmax_t)job->id);
-                goto error;
+                goto nonfatal_error;
             }
             if (!status)
                 job->success = true;
@@ -958,7 +960,7 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
                 flux_log (ctx->h, LOG_ERR,
                           "%s: job %ju parse exception",
                           __FUNCTION__, (uintmax_t)job->id);
-                goto error;
+                goto nonfatal_error;
             }
             if (!job->exception_occurred
                 || severity < job->exception_severity) {
@@ -972,8 +974,10 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
         }
     }
 
+    /* nonfatal error - eventlog illegal, but we'll continue on.  job
+     * listing will get initialized data */
+nonfatal_error:
     rc = 0;
-error:
     json_decref (a);
     return rc;
 }
