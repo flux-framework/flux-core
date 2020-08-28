@@ -1742,8 +1742,7 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     int signum = flux_signal_watcher_get_signum (w);
 
     flux_log (ctx->h, LOG_INFO, "signal %d", signum);
-    if (ctx->rank == 0)
-        state_machine_kill (ctx->state_machine, signum);
+    state_machine_kill (ctx->state_machine, signum);
 }
 
 /* Send a request message down the TBON.
