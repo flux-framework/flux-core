@@ -1042,6 +1042,42 @@ test_expect_success 'reload job-ingest with defaults' '
         ingest_module reload
 '
 
+# we make R invalid by overwriting it in the KVS before job-info will
+# look it up
+test_expect_success HAVE_JQ 'flux job list works on job with illegal R' '
+	${RPC} job-info.job-state-pause 0 </dev/null &&
+        jobid=`flux job submit hostname.json | flux job id` &&
+        fj_wait_event $jobid clean >/dev/null &&
+        jobkvspath=`flux job id --to kvs $jobid` &&
+        flux kvs put "${jobkvspath}.R=foobar" &&
+	${RPC} job-info.job-state-unpause 0 </dev/null &&
+        i=0 &&
+        while ! flux job list --states=inactive | grep $jobid > /dev/null \
+               && [ $i -lt 5 ]
+        do
+                sleep 1
+                i=$((i + 1))
+        done &&
+        test "$i" -lt "5" &&
+        flux job list --states=inactive | grep $jobid > list_illegal_R.out &&
+        cat list_illegal_R.out | $jq -e ".ranks == \"\"" &&
+        cat list_illegal_R.out | $jq -e ".nnodes == 0"
+'
+
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with illegal R' '
+	${RPC} job-info.job-state-pause 0 </dev/null
+        jobid=`flux job submit hostname.json | flux job id`
+        fj_wait_event $jobid clean >/dev/null
+        jobkvspath=`flux job id --to kvs $jobid` &&
+        flux kvs put "${jobkvspath}.R=foobar" &&
+        flux job list-ids ${jobid} > list_id_illegal_R.out &
+        pid=$!
+        wait_idsync 1 &&
+	${RPC} job-info.job-state-unpause 0 </dev/null &&
+        wait $pid &&
+        cat list_id_illegal_R.out | $jq -e ".id == ${jobid}"
+'
+
 #
 # stress test
 #
