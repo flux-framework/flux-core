@@ -21,6 +21,7 @@ nobase_fluxpy_PYTHON = \
 	job/kill.py \
 	job/kvs.py \
 	job/list.py \
+	job/info.py \
 	job/submit.py \
 	job/wait.py \
 	job/_wrapper.py
