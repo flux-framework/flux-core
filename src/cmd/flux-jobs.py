@@ -12,35 +12,16 @@ import os
 import sys
 import logging
 import argparse
-import pwd
 import errno
 import fileinput
 import json
 
 import flux.constants
 import flux.util
-from flux.job import JobInfo, JobInfoFormat
+from flux.job import JobInfo, JobInfoFormat, JobList
 from flux.job import JobID
 
 LOGGER = logging.getLogger("flux-jobs")
-
-STATE_CONST_DICT = {
-    "depend": flux.constants.FLUX_JOB_DEPEND,
-    "sched": flux.constants.FLUX_JOB_SCHED,
-    "run": flux.constants.FLUX_JOB_RUN,
-    "cleanup": flux.constants.FLUX_JOB_CLEANUP,
-    "inactive": flux.constants.FLUX_JOB_INACTIVE,
-    "pending": flux.constants.FLUX_JOB_PENDING,
-    "running": flux.constants.FLUX_JOB_RUNNING,
-    "active": flux.constants.FLUX_JOB_ACTIVE,
-}
-
-RESULT_CONST_DICT = {
-    "completed": flux.constants.FLUX_JOB_RESULT_COMPLETED,
-    "failed": flux.constants.FLUX_JOB_RESULT_FAILED,
-    "cancelled": flux.constants.FLUX_JOB_RESULT_CANCELLED,
-    "timeout": flux.constants.FLUX_JOB_RESULT_TIMEOUT,
-}
 
 
 def fetch_jobs_stdin():
@@ -53,7 +34,7 @@ def fetch_jobs_stdin():
     jobs = []
     for line in fileinput.input("-"):
         try:
-            job = json.loads(line)
+            job = JobInfo(json.loads(line))
         except ValueError as err:
             LOGGER.error("JSON input error: line %d: %s", fileinput.lineno(), str(err))
             sys.exit(1)
@@ -64,8 +45,7 @@ def fetch_jobs_stdin():
 def list_id_cb(future, arg):
     (cbargs, jobid) = arg
     try:
-        job = future.get_job()
-        cbargs["jobs"].append(job)
+        cbargs["jobs"].append(future.get_jobinfo())
     except EnvironmentError as err:
         if err.errno == errno.ENOENT:
             print("JobID {} unknown".format(jobid), file=sys.stderr)
@@ -103,27 +83,6 @@ def fetch_jobs_all(flux_handle, args, attrs, userid, states, results):
         print("{}: {}".format("rpc", err.strerror), file=sys.stderr)
         sys.exit(1)
     return jobs
-
-
-def calc_filters(args):
-    states = 0
-    results = 0
-    for fname in args.filter.split(","):
-        if fname.lower() in STATE_CONST_DICT:
-            states |= STATE_CONST_DICT[fname.lower()]
-        elif fname.lower() in RESULT_CONST_DICT:
-            # Must specify "inactive" to get results
-            states |= STATE_CONST_DICT["inactive"]
-            results |= RESULT_CONST_DICT[fname.lower()]
-        else:
-            print("Invalid filter specified: {}".format(fname), file=sys.stderr)
-            sys.exit(1)
-
-    if states == 0:
-        states |= flux.constants.FLUX_JOB_PENDING
-        states |= flux.constants.FLUX_JOB_RUNNING
-
-    return (states, results)
 
 
 def fetch_jobs_flux(args, fields):
@@ -198,21 +157,13 @@ def fetch_jobs_flux(args, fields):
     if args.a or args.A:
         args.filter = "pending,running,inactive"
 
-    if args.user == "all":
-        userid = flux.constants.FLUX_USERID_UNKNOWN
-    else:
-        try:
-            userid = pwd.getpwnam(args.user).pw_uid
-        except KeyError:
-            try:
-                userid = int(args.user)
-            except ValueError:
-                print("invalid user specified", file=sys.stderr)
-                sys.exit(1)
-
-    (states, results) = calc_filters(args)
-
-    jobs = fetch_jobs_all(flux_handle, args, attrs, userid, states, results)
+    jobs = JobList(
+        flux_handle,
+        attrs=attrs,
+        filters=[args.filter],
+        user=args.user,
+        max_entries=args.count,
+    ).jobs()
     return jobs
 
 
@@ -225,7 +176,7 @@ def fetch_jobs(args, fields):
         lst = fetch_jobs_stdin()
     else:
         lst = fetch_jobs_flux(args, fields)
-    return [JobInfo(job) for job in lst]
+    return lst
 
 
 class FilterAction(argparse.Action):
