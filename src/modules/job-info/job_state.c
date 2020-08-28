@@ -778,15 +778,17 @@ static int parse_rlite (struct info_ctx *ctx,
         const char *ranks = NULL;
         if ((json_unpack_ex (value, NULL, 0, "{s:s}", "rank", &ranks) < 0)
             || (idset_set_string (idset, ranks) < 0))
-            goto err;
+            goto nonfatal_err;
     }
 
     job->nnodes = idset_count (idset);
     if (!(job->ranks = idset_encode (idset, flags)))
-        goto err;
+        goto nonfatal_err;
 
+    /* nonfatal error - invalid rlite, but we'll continue on.  job
+     * listing will get initialized data */
+nonfatal_err:
     rc = 0;
-err:
     saved_errno = errno;
     idset_destroy (idset);
     errno = saved_errno;
@@ -806,7 +808,7 @@ static int R_lookup_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid R: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
 
     if (json_unpack_ex (job->R, &error, 0,
@@ -818,13 +820,13 @@ static int R_lookup_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid R: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
     if (version != 1) {
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid R version: %d",
                   __FUNCTION__, (uintmax_t)job->id, version);
-        goto error;
+        goto nonfatal_error;
     }
     if (parse_rlite (ctx, job, R_lite) < 0) {
         flux_log (ctx->h, LOG_ERR,
@@ -833,6 +835,9 @@ static int R_lookup_parse (struct info_ctx *ctx,
         goto error;
     }
 
+    /* nonfatal error - invalid rlite, but we'll continue on.  job
+     * listing will get initialized data */
+nonfatal_error:
     rc = 0;
 error:
     return rc;

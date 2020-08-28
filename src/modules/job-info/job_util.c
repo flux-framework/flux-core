@@ -120,7 +120,11 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
         else if (!strcmp (attr, "ranks")) {
             if (!(job->states_mask & FLUX_JOB_RUN))
                 continue;
-            val = json_string (job->ranks);
+            /* potentially NULL if R invalid */
+            if (job->ranks)
+                val = json_string (job->ranks);
+            else
+                val = json_string ("");
         }
         else if (!strcmp (attr, "expiration")) {
             if (!(job->states_mask & FLUX_JOB_RUN))
