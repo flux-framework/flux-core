@@ -758,6 +758,13 @@ static void monitor_update (flux_t *h, zlist_t *requests, broker_state_t state)
 {
     const flux_msg_t *msg;
 
+    /* Skip sending these states to avoid deadlock on disconnecting children
+     * on zeromq-4.1.4 (doesn't seem to be a problem on newer zmq).
+     * State machine doesn't need to know about parent transition to these
+     * states anyway.
+     */
+    if (state == STATE_FINALIZE || state == STATE_EXIT)
+        return;
     msg = zlist_first (requests);
     while (msg) {
         if (flux_respond_pack (h, msg, "{s:i}", "state", state) < 0) {
