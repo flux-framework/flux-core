@@ -13,7 +13,7 @@ from flux.job.JobID import id_parse, id_encode, JobID
 from flux.job.kvs import job_kvs, job_kvs_guest
 from flux.job.kill import kill_async, kill, cancel_async, cancel
 from flux.job.submit import submit_async, submit, submit_get_id
-from flux.job.info import JobInfo
+from flux.job.info import JobInfo, JobInfoFormat
 from flux.job.list import job_list, job_list_inactive, job_list_id
 from flux.job.wait import wait_async, wait, wait_get_status
 from flux.job.event import (
