@@ -77,6 +77,8 @@ plugin.register {
             -- Approximately `ulimit -Ss 10240`
             -- Used to silence IBM MCM warnings
             setrlimit ("stack", 10485760)
+            local rank = task.info.rank
+            task.setenv ("OMPI_COMM_WORLD_RANK", rank)
             end
         }
     }
