@@ -16,6 +16,8 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/monotime.h"
+#include "src/common/libutil/fsd.h"
 #include "src/common/libidset/idset.h"
 
 #include "state_machine.h"
@@ -47,6 +49,7 @@ struct monitor {
 struct state_machine {
     struct broker *ctx;
     broker_state_t state;
+    struct timespec t_start;
 
     zlist_t *events;
     flux_watcher_t *prep;
@@ -282,11 +285,17 @@ static void process_event (struct state_machine *s, const char *event)
     next_state = state_next (s->state, event);
 
     if (next_state != s->state) {
+        char fsd[64];
+        fsd_format_duration (fsd,
+                             sizeof (fsd),
+                             monotime_since (s->t_start) * 1E-3);
         flux_log (s->ctx->h,
-                  LOG_INFO, "%s: %s->%s",
+                  LOG_INFO, "%s: %s->%s %s",
                   event,
                   statestr (s->state),
-                  statestr (next_state));
+                  statestr (next_state),
+                  fsd);
+        monotime (&s->t_start);
         s->state = next_state;
         state_action (s, s->state);
         monitor_update (s->ctx->h, s->monitor.requests, s->state);
@@ -965,6 +974,7 @@ struct state_machine *state_machine_create (struct broker *ctx)
         return NULL;
     s->ctx = ctx;
     s->state = STATE_NONE;
+    monotime (&s->t_start);
     if (!(s->events = zlist_new ()))
         goto nomem;
     zlist_autofree (s->events);
