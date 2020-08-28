@@ -15,15 +15,13 @@ import sys
 import logging
 import argparse
 import pwd
-import string
 import errno
 import fileinput
 import json
-from datetime import datetime, timedelta
 
 import flux.constants
 import flux.util
-from flux.job import JobInfo
+from flux.job import JobInfo, JobInfoFormat
 from flux.job import JobID
 
 LOGGER = logging.getLogger("flux-jobs")
@@ -45,23 +43,6 @@ RESULT_CONST_DICT = {
     "cancelled": flux.constants.FLUX_JOB_RESULT_CANCELLED,
     "timeout": flux.constants.FLUX_JOB_RESULT_TIMEOUT,
 }
-
-
-def fsd(secs):
-    #  Round <1ms down to 0s for now
-    if secs < 1.0e-3:
-        strtmp = "0s"
-    elif secs < 10.0:
-        strtmp = "%.03fs" % secs
-    elif secs < 60.0:
-        strtmp = "%.4gs" % secs
-    elif secs < (60.0 * 60.0):
-        strtmp = "%.4gm" % (secs / 60.0)
-    elif secs < (60.0 * 60.0 * 24.0):
-        strtmp = "%.4gh" % (secs / (60.0 * 60.0))
-    else:
-        strtmp = "%.4gd" % (secs / (60.0 * 60.0 * 24.0))
-    return strtmp
 
 
 def fetch_jobs_stdin():
@@ -355,148 +336,6 @@ def parse_args():
     return parser.parse_args()
 
 
-class JobsOutputFormat(flux.util.OutputFormat):
-    """
-    Store a parsed version of the program's output format,
-    allowing the fields to iterated without modifiers, building
-    a new format suitable for headers display, etc...
-    """
-
-    class JobFormatter(string.Formatter):
-        def convert_field(self, value, conv):
-            """
-            Flux job-specific field conversions. Avoids the need
-            to create many different format field names to represent
-            different conversion types. (mainly used for time-specific
-            fields for now).
-            """
-            if conv == "d":
-                # convert from float seconds sinc epoch to a datetime.
-                # User can than use datetime specific format fields, e.g.
-                # {t_inactive!D:%H:%M:S}.
-                value = datetime.fromtimestamp(value)
-            elif conv == "D":
-                # As above, but convert to ISO 8601 date time string.
-                value = datetime.fromtimestamp(value).strftime("%FT%T")
-            elif conv == "F":
-                # convert to Flux Standard Duration (fsd) string.
-                value = fsd(value)
-            elif conv == "H":
-                # if > 0, always round up to at least one second to
-                #  avoid presenting a nonzero timedelta as zero
-                if 0 < value < 1:
-                    value = 1
-                value = str(timedelta(seconds=round(value)))
-            else:
-                value = super().convert_field(value, conv)
-            return value
-
-        def format_field(self, value, spec):
-            if spec.endswith("h"):
-                basecases = ("", "0s", "0.0", "0:00:00", "1970-01-01T00:00:00")
-                value = "-" if str(value) in basecases else str(value)
-                spec = spec[:-1] + "s"
-            return super().format_field(value, spec)
-
-    class HeaderFormatter(JobFormatter):
-        """Custom formatter for flux-jobs(1) header row.
-
-        Override default formatter behavior of calling getattr() on dotted
-        field names. Instead look up header literally in kwargs.
-        This greatly simplifies header name registration as well as
-        registration of "valid" fields.
-        """
-
-        def get_field(self, field_name, args, kwargs):
-            """Override get_field() so we don't do the normal gettatr thing"""
-            if field_name in kwargs:
-                return kwargs[field_name], None
-            return super().get_field(field_name, args, kwargs)
-
-    #  List of legal format fields and their header names
-    headings = {
-        "id": "JOBID",
-        "id.dec": "JOBID",
-        "id.hex": "JOBID",
-        "id.f58": "JOBID",
-        "id.kvs": "JOBID",
-        "id.words": "JOBID",
-        "id.dothex": "JOBID",
-        "userid": "UID",
-        "username": "USER",
-        "priority": "PRI",
-        "state": "STATE",
-        "state_single": "ST",
-        "name": "NAME",
-        "ntasks": "NTASKS",
-        "nnodes": "NNODES",
-        "expiration": "EXPIRATION",
-        "t_remaining": "T_REMAINING",
-        "ranks": "RANKS",
-        "success": "SUCCESS",
-        "result": "RESULT",
-        "result_abbrev": "RS",
-        "t_submit": "T_SUBMIT",
-        "t_depend": "T_DEPEND",
-        "t_sched": "T_SCHED",
-        "t_run": "T_RUN",
-        "t_cleanup": "T_CLEANUP",
-        "t_inactive": "T_INACTIVE",
-        "runtime": "RUNTIME",
-        "status": "STATUS",
-        "status_abbrev": "ST",
-        "exception.occurred": "EXCEPTION-OCCURRED",
-        "exception.severity": "EXCEPTION-SEVERITY",
-        "exception.type": "EXCEPTION-TYPE",
-        "exception.note": "EXCEPTION-NOTE",
-        "annotations": "ANNOTATIONS",
-        # The following are special pre-defined cases per RFC27
-        "annotations.sched.t_estimate": "T_ESTIMATE",
-        "annotations.sched.reason_pending": "REASON",
-        "annotations.sched.resource_summary": "RESOURCES",
-        "sched": "SCHED",
-        "sched.t_estimate": "T_ESTIMATE",
-        "sched.reason_pending": "REASON",
-        "sched.resource_summary": "RESOURCES",
-        "user": "USER",
-    }
-
-    def __init__(self, fmt):
-        """
-        Parse the input format fmt with string.Formatter.
-        Save off the fields and list of format tokens for later use,
-        (converting None to "" in the process)
-
-        Throws an exception if any format fields do not match the allowed
-        list of headings above.
-
-        Special case for annotations, which may be arbitrary
-        creations of scheduler or user.
-        """
-        format_list = string.Formatter().parse(fmt)
-        for (_, field, _, _) in format_list:
-            if field and not field in self.headings:
-                if field.startswith("annotations."):
-                    field_heading = field[len("annotations.") :].upper()
-                    self.headings[field] = field_heading
-                elif field.startswith("sched.") or field.startswith("user."):
-                    field_heading = field.upper()
-                    self.headings[field] = field_heading
-        super().__init__(self.headings, fmt, prepend="0.")
-
-    def format(self, obj):
-        """
-        format object with our JobFormatter
-        """
-        return self.JobFormatter().format(self.get_format(), obj)
-
-    def header(self):
-        """
-        format header with custom HeaderFormatter
-        """
-        return self.HeaderFormatter().format(self.header_format(), **self.headings)
-
-
 def color_setup(args, job):
     if args.color == "always" or (args.color == "auto" and sys.stdout.isatty()):
         if job.result:
@@ -536,7 +375,7 @@ def main():
             "{ranks:h}"
         )
     try:
-        formatter = JobsOutputFormat(fmt)
+        formatter = JobInfoFormat(fmt)
     except ValueError as err:
         raise ValueError("Error in user format: " + str(err))
 
