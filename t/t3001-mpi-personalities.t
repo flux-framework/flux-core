@@ -60,4 +60,14 @@ test_expect_success NO_ASAN,HAVE_JQ "spectrum mpi only enabled with option" '
   grep /opt/ibm/spectrum spectrum.out
 '
 
+test_expect_success HAVE_JQ 'spectrum mpi sets OMPI_COMM_WORLD_RANK' '
+  flux jobspec srun -n${SIZE} -N${SIZE} printenv OMPI_COMM_WORLD_RANK \
+    | jq ".attributes.system.shell.options.mpi = \"spectrum\"" > j.spectrum &&
+  jobid=$(flux job submit j.spectrum) &&
+  flux job attach ${jobid} | sort -n > spectrum.rank.out &&
+  test_debug "cat spectrum.rank.out" &&
+  printf "0\n1\n2\n3\n" > spectrum.rank.expected &&
+  test_cmp spectrum.rank.expected spectrum.rank.out
+'
+
 test_done
