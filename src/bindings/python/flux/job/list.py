@@ -78,6 +78,10 @@ def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=N
 
 
 class JobListIdRPC(RPC):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.jobid = None
+
     def get_job(self):
         return self.get()["job"]
 
@@ -89,7 +93,11 @@ class JobListIdRPC(RPC):
 # array, so don't use JobListRPC
 def job_list_id(flux_handle, jobid, attrs=[]):
     payload = {"id": int(jobid), "attrs": attrs}
-    return JobListIdRPC(flux_handle, "job-info.list-id", payload)
+    rpc = JobListIdRPC(flux_handle, "job-info.list-id", payload)
+    #  save original JobId argument for error reporting
+    rpc.jobid = jobid
+    return rpc
+
 
 
 class JobList:
