@@ -151,3 +151,31 @@ class Future(WrapperPimpl):
         until future is fulfilled and throws OSError on failure.
         """
         self.pimpl.flux_future_get(ffi.NULL)
+
+
+class WaitAllFuture(Future):
+    """Create a composite future which waits for all children to be fulfilled"""
+
+    def __init__(self, children=None):
+        self.children = children
+        if self.children is None:
+            self.children = []
+        future = raw.flux_future_wait_all_create()
+        super(WaitAllFuture, self).__init__(future)
+
+    def push(self, child, name=None):
+        if name is None:
+            name = ffi.NULL
+        #
+        #  if this future does not have a flux handle yet, attempt
+        #   to grab from the first pushed "child" future.
+        if self.get_flux() is None:
+            self.pimpl.set_flux(child.get_flux())
+
+        self.pimpl.push(name, child)
+        #
+        #  flux_future_push(3) "adopts" memory for child, so call
+        #   incref on child to avoid  calling flux_future_destroy(3) when
+        #   child goes out of scope in caller context.
+        child.pimpl.incref()
+        self.children.append(child)
