@@ -87,8 +87,16 @@ class Future(WrapperPimpl):
         return errmsg.decode("utf-8") if errmsg else None
 
     def get_flux(self):
-        # pylint: disable=cyclic-import
-        flux_handle = self.pimpl.get_flux()
+        try:
+            # pylint: disable=cyclic-import
+            flux_handle = self.pimpl.get_flux()
+        except OSError as exc:
+            #  get_flux() throws OSError of EINVAL if !f->h, but this should
+            #   a valid return (i.e. no flux handle set yet)
+            if exc.errno == errno.EINVAL:
+                return None
+            else:
+                raise
         if flux_handle == ffi.NULL:
             return None
         handle = flux.core.handle.Flux(handle=flux_handle)
