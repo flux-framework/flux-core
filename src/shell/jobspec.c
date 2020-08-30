@@ -74,15 +74,14 @@ void jobspec_destroy (struct jobspec *job)
 static int recursive_parse_helper (struct jobspec *job,
                                   json_t *curr_resource,
                                   json_error_t *error,
-                                  struct res_level *res,
                                   int level,
-                                  int with_multiplier,
-                                  int num_nodes
-                                  )
+                                  int with_multiplier)
 {
     size_t index;
     json_t *value;
     size_t size = json_array_size (curr_resource);
+    struct res_level res;
+    int curr_multiplier;
 
     if (size == 0) {
         set_error (error, "Malformed jobspec: resource entry is not a list");
@@ -90,95 +89,119 @@ static int recursive_parse_helper (struct jobspec *job,
     }
 
     json_array_foreach (curr_resource, index, value) {
-        if (parse_res_level (value, level, res, error) < 0) {
-            return -1;
-        }
-        if (!strcmp (res->type, "core")) {
-            // We allow multiple resources to be defined at the core-level.
-            // We also allow resources below the core-level to be defined.
-            // Neither of these allowances adds much complication given that
-            // the finest granularity info we need is cores-per-slot.
-            break;
-        }
-        if ((index > 0) && (res->with != NULL)) {
-            set_error (error,
-                       "Unsupported jobspec: multiple resources at non-leaf level %d",
-                       level);
-            return -1;
-        }
-    }
-
-    with_multiplier = with_multiplier * res->count;
-
-    if (!strcmp (res->type, "node")) {
-        if (job->slot_count > 0) {
-            set_error (error, "node resource encountered after slot resource");
+        if (parse_res_level (value, level, &res, error) < 0) {
             return -1;
         }
 
-        num_nodes = with_multiplier;
-    } else if (!strcmp (res->type, "slot")) {
-        job->slot_count = with_multiplier;
+        curr_multiplier = with_multiplier * res.count;
 
-        // Reset the with_multiplier since we are now looking
-        // to calculate the cores_per_slot value
-        with_multiplier = 1;
+        if (!strcmp (res.type, "node")) {
+            if (job->slot_count > 0) {
+                set_error (error, "node resource encountered after slot resource");
+                return -1;
+            }
+            if (job->cores_per_slot > 0) {
+                set_error (error, "node resource encountered after core resource");
+                return -1;
+            }
+            if (job->node_count > 0) {
+                set_error (error, "node resource encountered after node resource");
+                return -1;
+            }
 
-        // Check if we already encountered the `node` resource
-        if (num_nodes > 0) {
-            // N.B.: with a strictly enforced ordering of node then slot
-            // (with arbitrary non-core resources in between)
-            // the slots_per_node will always be a perfectly round integer
-            // (i.e., job->slot_count % num_nodes == 0)
-            job->slots_per_node = job->slot_count / num_nodes;
+            job->node_count = curr_multiplier;
+        } else if (!strcmp (res.type, "slot")) {
+            if (job->cores_per_slot > 0) {
+                set_error (error, "slot resource encountered after core resource");
+                return -1;
+            }
+            if (job->slot_count > 0) {
+                set_error (error, "slot resource encountered after slot resource");
+                return -1;
+            }
+
+            job->slot_count = curr_multiplier;
+
+            // Reset the multiplier since we are now looking
+            // to calculate the cores_per_slot value
+            curr_multiplier = 1;
+
+            // Check if we already encountered the `node` resource
+            if (job->node_count > 0) {
+                // N.B.: with a strictly enforced ordering of node then slot
+                // (with arbitrary non-core resources in between)
+                // the slots_per_node will always be a perfectly round integer
+                // (i.e., job->slot_count % job->node_count == 0)
+                job->slots_per_node = job->slot_count / job->node_count;
+            }
+        } else if (!strcmp (res.type, "core")) {
+            if (job->slot_count < 1) {
+                set_error (error, "core resource encountered before slot resource");
+                return -1;
+            }
+            if (job->cores_per_slot > 0) {
+                set_error (error, "core resource encountered after core resource");
+                return -1;
+            }
+
+            job->cores_per_slot = curr_multiplier;
+            // N.B.: despite having found everything we were looking for (i.e.,
+            // node, slot, and core resources), we have to keep recursing to
+            // make sure their aren't additional erroneous node/slot/core
+            // resources in the jobspec
         }
-    } else if (!strcmp (res->type, "core")) {
-        if (job->slot_count < 1) {
-            set_error (error, "core resource encountered before slot resource");
-            return -1;
+
+        if (res.with != NULL) {
+            if (recursive_parse_helper (job,
+                                        res.with,
+                                        error,
+                                        level+1,
+                                        curr_multiplier)
+                < 0) {
+                return -1;
+            }
         }
 
-        job->cores_per_slot = with_multiplier;
-        // We've found everything we needed, we can stop recursing
-        return 0;
-    }
-
-    if (res->with != NULL) {
-        return recursive_parse_helper (job,
-                                       res->with,
-                                       error,
-                                       res,
-                                       level+1,
-                                       with_multiplier,
-                                       num_nodes);
+        if (!strcmp (res.type, "node")) {
+            if ((job->slot_count <= 0) || (job->cores_per_slot <= 0)) {
+                set_error (error,
+                           "node encountered without slot&core below it");
+                return -1;
+            }
+        } else if (!strcmp (res.type, "slot")) {
+            if (job->cores_per_slot <= 0) {
+                set_error (error, "slot encountered without core below it");
+                return -1;
+            }
+        }
     }
     return 0;
 }
 
-/* This function requires that the jobspec resource ordering is the
- * same as the ordering specified in V1, but it allows additional
- * resources before and in between the V1 resources
- * (i.e., node, slot, and core).
- * In shorthand, it requires that the jobspec follows the form
- * ...->[node]->...->slot->...->core.  Where `node` is optional,
- * and `...` represents any non-V1 resources.
+/* This function requires that the jobspec resource ordering is the same as the
+ * ordering specified in V1, but it allows additional resources before and in
+ * between the V1 resources (i.e., node, slot, and core).  In shorthand, it
+ * requires that the jobspec follows the form ...->[node]->...->slot->...->core.
+ * Where `node` is optional, and `...` represents any non-V1
+ * resources. Additionally, this function also allows multiple resources at any
+ * level, as long as there is only a single node, slot, and core within the
+ * entire jobspec.
  */
 static int recursive_parse_jobspec_resources (struct jobspec *job,
                                               json_t *curr_resource,
                                               json_error_t *error)
 {
-    struct res_level res;
-
     if (curr_resource == NULL) {
         set_error (error, "jobspec top-level resources empty");
         return -1;
     }
 
-    // Set slots_per_node to -1 ahead of time, if the recursive descent
-    // encounters node->...->slot, it will overwrite this value
+    // Set node-related values to -1 ahead of time, if the recursive descent
+    // encounters node in the jobspec, it will overwrite these values
     job->slots_per_node = -1;
+    job->node_count = -1;
 
-    int rc = recursive_parse_helper (job, curr_resource, error, &res, 0, 1, -1);
+    int rc = recursive_parse_helper (job, curr_resource, error, 0, 1);
 
     if ((rc == 0) && (job->cores_per_slot < 1)) {
         set_error (error, "Missing core resource");
