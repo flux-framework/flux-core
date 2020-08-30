@@ -216,7 +216,6 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
     int version;
     json_t *tasks;
     json_t *resources;
-    struct res_level res[3];
 
     if (!(job = calloc (1, sizeof (*job)))) {
         set_error (error, "Out of memory");
@@ -265,41 +264,11 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
         goto error;
     }
 
-    /* For jobspec version 1, expect either:
-     * - node->slot->core->NIL
-     * - slot->core->NIL
-     * Set job->slot_count and job->cores_per_slot.
-     */
-    memset (res, 0, sizeof (res));
-    if (parse_res_level (json_array_get(resources, 0), 0, &res[0], error) < 0)
-        goto error;
-    if (res[0].with &&
-        (parse_res_level (json_array_get(res[0].with, 0), 1, &res[1], error)
-         < 0))
-        goto error;
-    if (res[1].with &&
-        (parse_res_level (json_array_get(res[1].with, 0), 2, &res[2], error)
-         < 0))
-        goto error;
-    if (res[0].type != NULL && !strcmp (res[0].type, "slot")
-            && res[1].type != NULL && !strcmp (res[1].type, "core")
-            && res[1].with == NULL) {
-        job->slot_count = res[0].count;
-        job->cores_per_slot = res[1].count;
-        job->slots_per_node = -1; // unspecified
-    }
-    else if (res[0].type != NULL && !strcmp (res[0].type, "node")
-            && res[1].type != NULL && !strcmp (res[1].type, "slot")
-            && res[2].type != NULL && !strcmp (res[2].type, "core")
-            && res[2].with == NULL) {
-        job->slot_count = res[0].count * res[1].count;
-        job->cores_per_slot = res[2].count;
-        job->slots_per_node = res[1].count;
-    }
-    else if (recursive_parse_jobspec_resources (job, resources, error) < 0) {
+    if (recursive_parse_jobspec_resources (job, resources, error) < 0) {
         // recursive_parse_jobspec_resources calls set_error
         goto error;
     }
+
     /* Set job->task_count
      */
     if (json_unpack_ex (tasks, NULL, 0,
