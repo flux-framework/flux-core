@@ -9,8 +9,10 @@
 ###############################################################
 import os
 import pwd
+import errno
 
 import flux.constants
+from flux.future import WaitAllFuture
 from flux.job.info import JobInfo
 from flux.rpc import RPC
 
@@ -99,8 +101,60 @@ def job_list_id(flux_handle, jobid, attrs=[]):
     return rpc
 
 
+class JobListIdsFuture(WaitAllFuture):
+    """Simulate interface of JobListRPC for listing multiple jobids"""
+
+    def __init__(self):
+        super(JobListIdsFuture, self).__init__()
+        self.errors = []
+
+    def get_jobs(self):
+        """get all successful results, appending errors into self.errors"""
+        jobs = []
+        #  Wait for all obid RPCs to complete
+        self.wait_for()
+
+        #  Get all successful jobs, accumulate errors in self.errors
+        for child in self.children:
+            try:
+                jobs.append(child.get_job())
+            except EnvironmentError as err:
+                if err.errno == errno.ENOENT:
+                    msg = f"JobID {child.jobid.orig} unknown"
+                else:
+                    msg = f"rpc: {err.strerror}"
+                self.errors.append(msg)
+        return jobs
+
+    def get_jobinfos(self):
+        """get all successful results as list of JobInfo objects
+
+        Any errors are appended to self.errors.
+        """
+        return [JobInfo(job) for job in self.get_jobs()]
+
 
 class JobList:
+    """User friendly class for querying lists of jobs from Flux
+
+    By default a JobList will query the last ``max_entries`` jobs for all
+    users. Other filter parameters can be passed to the constructor or
+    the ``set_user()`` and ``add_filter()`` methods.
+
+    Constructor arguments:
+    ======================
+    :flux_handle: A Flux handle obtained from flux.Flux()
+    :attrs: Optional list of job attributes to fetch. (default is all attrs)
+    :filters: List of strings defining the results or states to filter. E.g.,
+              [ "pending", "running" ].
+    :ids: List of jobids to return. Other filters are ignored if ``ids`` is
+          not empty.
+    :user: Username or userid for which to fetch jobs. Default is all users.
+    :max_entries: Maximum number of jobs to return
+    """
+
+    # pylint: disable=too-many-instance-attributes
+
     STATES = {
         "depend": flux.constants.FLUX_JOB_DEPEND,
         "sched": flux.constants.FLUX_JOB_SCHED,
@@ -123,9 +177,9 @@ class JobList:
         flux_handle,
         attrs=VALID_ATTRS,
         filters=[],
+        ids=[],
         user=None,
         max_entries=1000,
-        ids=None,
     ):
         self.handle = flux_handle
         self.attrs = list(attrs)
@@ -133,12 +187,14 @@ class JobList:
         self.results = 0
         self.max_entries = max_entries
         self.ids = ids
+        self.errors = []
         for fname in filters:
             for name in fname.split(","):
                 self.add_filter(name)
         self.set_user(user)
 
     def set_user(self, user):
+        """Only return jobs for user (may be a username or userid)"""
         if user is None:
             self.userid = os.getuid()
         elif user == "all":
@@ -152,6 +208,7 @@ class JobList:
                 raise ValueError(f"Invalid user {user} specified")
 
     def add_filter(self, fname):
+        """Append a state or result filter to JobList query"""
         fname = fname.lower()
         if fname == "all":
             self.states |= self.STATES["pending"]
@@ -168,6 +225,20 @@ class JobList:
             raise ValueError(f"Invalid filter specified: {fname}")
 
     def fetch_jobs(self):
+        """Initiate the JobList query to the Flux job-info module
+
+        JobList.fetch_jobs() returns a JobListRPC or JobListIdsFuture,
+        either of which will be fulfilled when the job data is available.
+
+        Once the Future has been fulfilled, a list of JobInfo objects
+        can be obtained via JobList.jobs(). If JobList.errors is non-empty,
+        then it will contain a list of errors returned via the query.
+        """
+        if self.ids:
+            listids = JobListIdsFuture()
+            for jobid in self.ids:
+                listids.push(job_list_id(self.handle, jobid, self.attrs))
+            return listids
         return job_list(
             self.handle,
             max_entries=self.max_entries,
@@ -178,5 +249,15 @@ class JobList:
         )
 
     def jobs(self):
-        for job in self.fetch_jobs().get_jobs():
-            yield JobInfo(job)
+        """Synchronously fetch a list of JobInfo objects from JobList query
+
+        If the Future object returned by JobList.fetch_jobs has not yet been
+        fulfilled (e.g. is_ready() returns False), then this call may block.
+        Otherwise, returns a list of JobInfo objects for all jobs returned
+        from the underlying job listing RPC.
+        """
+        rpc = self.fetch_jobs()
+        jobs = rpc.get_jobs()
+        if hasattr(rpc, "errors"):
+            self.errors = rpc.errors
+        return [JobInfo(job) for job in jobs]
