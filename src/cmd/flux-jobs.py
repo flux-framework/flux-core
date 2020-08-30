@@ -12,7 +12,6 @@ import os
 import sys
 import logging
 import argparse
-import errno
 import fileinput
 import json
 
@@ -40,37 +39,6 @@ def fetch_jobs_stdin():
             sys.exit(1)
         jobs.append(job)
     return jobs
-
-
-def list_id_cb(future, arg):
-    (cbargs, jobid) = arg
-    try:
-        cbargs["jobs"].append(future.get_jobinfo())
-    except EnvironmentError as err:
-        if err.errno == errno.ENOENT:
-            print("JobID {} unknown".format(jobid), file=sys.stderr)
-        else:
-            print("{}: {}".format("rpc", err.strerror), file=sys.stderr)
-
-    cbargs["count"] += 1
-    if cbargs["count"] == cbargs["total"]:
-        cbargs["flux_handle"].reactor_stop()
-
-
-def fetch_jobs_ids(flux_handle, args, attrs):
-    cbargs = {
-        "flux_handle": flux_handle,
-        "jobs": [],
-        "count": 0,
-        "total": len(args.jobids),
-    }
-    for jobid in args.jobids:
-        rpc_handle = flux.job.job_list_id(flux_handle, jobid, list(attrs))
-        rpc_handle.then(list_id_cb, arg=(cbargs, jobid))
-    ret = flux_handle.reactor_run()
-    if ret < 0:
-        sys.exit(1)
-    return cbargs["jobs"]
 
 
 def fetch_jobs_all(flux_handle, args, attrs, userid, states, results):
@@ -146,10 +114,6 @@ def fetch_jobs_flux(args, fields):
     if args.color == "always" or args.color == "auto":
         attrs.update(fields2attrs["result"])
 
-    if args.jobids:
-        jobs = fetch_jobs_ids(flux_handle, args, attrs)
-        return jobs
-
     if args.a:
         args.user = str(os.getuid())
     if args.A:
@@ -157,13 +121,24 @@ def fetch_jobs_flux(args, fields):
     if args.a or args.A:
         args.filter = "pending,running,inactive"
 
-    jobs = JobList(
+    jobs_rpc = JobList(
         flux_handle,
+        ids=args.jobids,
         attrs=attrs,
         filters=[args.filter],
         user=args.user,
         max_entries=args.count,
-    ).jobs()
+    )
+
+    jobs = jobs_rpc.jobs()
+
+    #  Print all errors accumulated in JobList RPC:
+    try:
+        for err in jobs_rpc.errors:
+            print(err, file=sys.stderr)
+    except EnvironmentError:
+        pass
+
     return jobs
 
 
