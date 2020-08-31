@@ -103,7 +103,11 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
             val = json_integer (job->state);
         }
         else if (!strcmp (attr, "name")) {
-            val = json_string (job->name);
+            /* potentially NULL if jobspec invalid */
+            if (job->name)
+                val = json_string (job->name);
+            else
+                val = json_string ("");
         }
         else if (!strcmp (attr, "ntasks")) {
             val = json_integer (job->ntasks);
@@ -116,7 +120,11 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
         else if (!strcmp (attr, "ranks")) {
             if (!(job->states_mask & FLUX_JOB_RUN))
                 continue;
-            val = json_string (job->ranks);
+            /* potentially NULL if R invalid */
+            if (job->ranks)
+                val = json_string (job->ranks);
+            else
+                val = json_string ("");
         }
         else if (!strcmp (attr, "expiration")) {
             if (!(job->states_mask & FLUX_JOB_RUN))

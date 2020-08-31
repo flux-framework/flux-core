@@ -6,7 +6,10 @@ test_description='Test flux jobs command'
 
 test_under_flux 4 job
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
+PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-info/jobspec-permissive.jsonschema
+JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
 
 # submit a whole bunch of jobs for job list testing
 #
@@ -882,6 +885,99 @@ for d in ${ISSUES_DIR}/*; do
 		test_cmp ${d}/output ${issue}.output
 	'
 done
+
+
+test_expect_success 'cleanup job listing jobs ' '
+        for jobid in `cat active.ids`; do \
+            flux job cancel $jobid; \
+            flux job wait-event $jobid clean; \
+        done
+'
+
+# Following tests use invalid jobspecs, must load a more permissive validator
+
+ingest_module ()
+{
+        cmd=$1; shift
+        flux module ${cmd} job-ingest $*
+}
+
+test_expect_success 'reload job-ingest with more permissive validator' '
+        ingest_module reload \
+                validator=${JSONSCHEMA_VALIDATOR} validator-args=--schema,${PERMISSIVE_SCHEMA}
+'
+
+test_expect_success HAVE_JQ 'create illegal jobspec with empty command array' '
+        cat hostname.json | $jq ".tasks[0].command = []" > bad_jobspec.json
+'
+
+# to avoid potential racyness, wait up to 5 seconds for job to appear
+# in job list.  note that how a jobspec is illegal can affect what
+# values below are set vs not set.
+test_expect_success HAVE_JQ 'flux jobs works on job with illegal jobspec' '
+        jobid=`flux job submit bad_jobspec.json` &&
+	flux job wait-event $jobid clean &&
+        i=0 &&
+        while ! flux jobs --filter=inactive | grep $jobid > /dev/null \
+               && [ $i -lt 5 ]
+        do
+                sleep 1
+                i=$((i + 1))
+        done &&
+        test "$i" -lt "5" &&
+        flux jobs -no "{name},{ntasks}" $jobid > list_illegal_jobspec.out &&
+        echo ",0" > list_illegal_jobspec.exp &&
+        test_cmp list_illegal_jobspec.out list_illegal_jobspec.exp
+'
+
+test_expect_success 'reload job-ingest with defaults' '
+        ingest_module reload
+'
+
+# we make R invalid by overwriting it in the KVS before job-info will
+# look it up
+test_expect_success HAVE_JQ 'flux jobs works on job with illegal R' '
+	${RPC} job-info.job-state-pause 0 </dev/null &&
+        jobid=`flux job submit hostname.json` &&
+        flux job wait-event $jobid clean >/dev/null &&
+        jobkvspath=`flux job id --to kvs $jobid` &&
+        flux kvs put "${jobkvspath}.R=foobar" &&
+	${RPC} job-info.job-state-unpause 0 </dev/null &&
+        i=0 &&
+        while ! flux jobs --filter=inactive | grep $jobid > /dev/null \
+               && [ $i -lt 5 ]
+        do
+                sleep 1
+                i=$((i + 1))
+        done &&
+        test "$i" -lt "5" &&
+        flux jobs -no "{ranks},{nnodes}" $jobid > list_illegal_R.out &&
+        echo ",0" > list_illegal_R.exp &&
+        test_cmp list_illegal_R.out list_illegal_R.exp
+'
+
+# we make the eventlog invalid by overwriting it in the KVS before job-info will
+# look it up.  Note that b/c the eventlog is corrupted, the userid for the job
+# is never established.  So we have to do "--all" and grep for the jobid.
+test_expect_success HAVE_JQ 'flux jobs works on job with illegal eventlog' '
+	${RPC} job-info.job-state-pause 0 </dev/null &&
+        jobid=`flux job submit hostname.json` &&
+        flux job wait-event $jobid clean >/dev/null &&
+        jobkvspath=`flux job id --to kvs $jobid` &&
+        flux kvs put "${jobkvspath}.eventlog=foobar" &&
+	${RPC} job-info.job-state-unpause 0 </dev/null &&
+        i=0 &&
+        while ! flux jobs --filter=inactive --user=all | grep $jobid > /dev/null \
+               && [ $i -lt 5 ]
+        do
+                sleep 1
+                i=$((i + 1))
+        done &&
+        test "$i" -lt "5" &&
+        flux jobs -no "{userid},{priority}" $jobid > list_illegal_eventlog.out &&
+        echo "4294967295,-1" > list_illegal_eventlog.exp &&
+        test_cmp list_illegal_eventlog.out list_illegal_eventlog.exp
+'
 
 #
 # leave job cleanup to rc3

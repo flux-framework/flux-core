@@ -110,6 +110,8 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
     job->ctx = ctx;
     job->id = id;
     job->state = FLUX_JOB_NEW;
+    job->userid = FLUX_USERID_UNKNOWN;
+    job->priority = -1;
 
     if (!(job->next_states = zlist_new ())) {
         errno = ENOMEM;
@@ -411,7 +413,7 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
     if (!(a = eventlog_decode (s))) {
         flux_log_error (ctx->h, "%s: error parsing eventlog for %ju",
                         __FUNCTION__, (uintmax_t)job->id);
-        goto out;
+        goto nonfatal_error;
     }
 
     json_array_foreach (a, index, value) {
@@ -422,14 +424,14 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
         if (eventlog_entry_parse (value, &timestamp, &name, &context) < 0) {
             flux_log_error (ctx->h, "%s: error parsing entry for %ju",
                             __FUNCTION__, (uintmax_t)job->id);
-            goto out;
+            continue;
         }
 
         if (!strcmp (name, "submit")) {
             if (!context) {
                 flux_log_error (ctx->h, "%s: no submit context for %ju",
                                 __FUNCTION__, (uintmax_t)job->id);
-                goto out;
+                goto nonfatal_error;
             }
 
             if (json_unpack (context, "{ s:i s:i s:i }",
@@ -438,14 +440,16 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
                              "flags", &job->flags) < 0) {
                 flux_log_error (ctx->h, "%s: submit context for %ju invalid",
                                 __FUNCTION__, (uintmax_t)job->id);
-                goto out;
+                goto nonfatal_error;
             }
             break;
         }
     }
 
+    /* nonfatal error - eventlog illegal, but we'll continue on.  job
+     * listing will get initialized data */
+nonfatal_error:
     rc = 0;
-out:
     json_decref (a);
     return rc;
 }
@@ -523,7 +527,7 @@ static int jobspec_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
 
     if (jobspec_job) {
@@ -531,7 +535,7 @@ static int jobspec_parse (struct info_ctx *ctx,
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %ju invalid jobspec",
                       __FUNCTION__, (uintmax_t)job->id);
-            goto error;
+            goto nonfatal_error;
         }
         job->jobspec_job = json_incref (jobspec_job);
     }
@@ -542,7 +546,7 @@ static int jobspec_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
     if (json_unpack_ex (tasks, &error, 0,
                         "[{s:o}]",
@@ -550,14 +554,14 @@ static int jobspec_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
 
     if (!json_is_array (command)) {
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec",
                   __FUNCTION__, (uintmax_t)job->id);
-        goto error;
+        goto nonfatal_error;
     }
 
     job->jobspec_cmd = json_incref (command);
@@ -569,7 +573,7 @@ static int jobspec_parse (struct info_ctx *ctx,
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %ju invalid job dictionary: %s",
                       __FUNCTION__, (uintmax_t)job->id, error.text);
-            goto error;
+            goto nonfatal_error;
         }
     }
 
@@ -581,7 +585,7 @@ static int jobspec_parse (struct info_ctx *ctx,
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %ju invalid job command",
                       __FUNCTION__, (uintmax_t)job->id);
-            goto error;
+            goto nonfatal_error;
         }
         job->name = parse_job_name (json_string_value (arg0));
         assert (job->name);
@@ -593,7 +597,7 @@ static int jobspec_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
 
     /* Set job->ntasks
@@ -610,14 +614,14 @@ static int jobspec_parse (struct info_ctx *ctx,
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %ju invalid jobspec: %s",
                       __FUNCTION__, (uintmax_t)job->id, error.text);
-            goto error;
+            goto nonfatal_error;
         }
         if (per_slot != 1) {
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %ju: per_slot count: expected 1 got %d: %s",
                       __FUNCTION__, (uintmax_t)job->id, per_slot,
                       error.text);
-            goto error;
+            goto nonfatal_error;
         }
         /* For jobspec version 1, expect either:
          * - node->slot->core->NIL
@@ -626,11 +630,11 @@ static int jobspec_parse (struct info_ctx *ctx,
          */
         memset (res, 0, sizeof (res));
         if (parse_res_level (ctx, job, resources, &res[0]) < 0)
-            goto error;
+            goto nonfatal_error;
         if (res[0].with && parse_res_level (ctx, job, res[0].with, &res[1]) < 0)
-            goto error;
+            goto nonfatal_error;
         if (res[1].with && parse_res_level (ctx, job, res[1].with, &res[2]) < 0)
-            goto error;
+            goto nonfatal_error;
         if (res[0].type != NULL && !strcmp (res[0].type, "slot")
             && res[1].type != NULL && !strcmp (res[1].type, "core")
             && res[1].with == NULL) {
@@ -656,6 +660,9 @@ static int jobspec_parse (struct info_ctx *ctx,
         job->ntasks = slot_count;
     }
 
+    /* nonfatal error - jobspec illegal, but we'll continue on.  job
+     * listing will get initialized data */
+nonfatal_error:
     rc = 0;
 error:
     json_decref (jobspec);
@@ -773,15 +780,17 @@ static int parse_rlite (struct info_ctx *ctx,
         const char *ranks = NULL;
         if ((json_unpack_ex (value, NULL, 0, "{s:s}", "rank", &ranks) < 0)
             || (idset_set_string (idset, ranks) < 0))
-            goto err;
+            goto nonfatal_err;
     }
 
     job->nnodes = idset_count (idset);
     if (!(job->ranks = idset_encode (idset, flags)))
-        goto err;
+        goto nonfatal_err;
 
+    /* nonfatal error - invalid rlite, but we'll continue on.  job
+     * listing will get initialized data */
+nonfatal_err:
     rc = 0;
-err:
     saved_errno = errno;
     idset_destroy (idset);
     errno = saved_errno;
@@ -801,7 +810,7 @@ static int R_lookup_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid R: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
 
     if (json_unpack_ex (job->R, &error, 0,
@@ -813,13 +822,13 @@ static int R_lookup_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid R: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
-        goto error;
+        goto nonfatal_error;
     }
     if (version != 1) {
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid R version: %d",
                   __FUNCTION__, (uintmax_t)job->id, version);
-        goto error;
+        goto nonfatal_error;
     }
     if (parse_rlite (ctx, job, R_lite) < 0) {
         flux_log (ctx->h, LOG_ERR,
@@ -828,6 +837,9 @@ static int R_lookup_parse (struct info_ctx *ctx,
         goto error;
     }
 
+    /* nonfatal error - invalid rlite, but we'll continue on.  job
+     * listing will get initialized data */
+nonfatal_error:
     rc = 0;
 error:
     return rc;
@@ -905,7 +917,7 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju eventlog_decode: %s",
                   __FUNCTION__, (uintmax_t)job->id, strerror (errno));
-        goto error;
+        goto nonfatal_error;
     }
 
     json_array_foreach (a, index, value) {
@@ -917,7 +929,7 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
                       "%s: job %ju eventlog_entry_parse: %s",
                       __FUNCTION__, (uintmax_t)job->id,
                       strerror (errno));
-            goto error;
+            continue;
         }
 
         /* There is no need to check for "exception" events for the
@@ -930,7 +942,7 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
                 flux_log (ctx->h, LOG_ERR,
                           "%s: job %ju parse finish status",
                           __FUNCTION__, (uintmax_t)job->id);
-                goto error;
+                goto nonfatal_error;
             }
             if (!status)
                 job->success = true;
@@ -948,7 +960,7 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
                 flux_log (ctx->h, LOG_ERR,
                           "%s: job %ju parse exception",
                           __FUNCTION__, (uintmax_t)job->id);
-                goto error;
+                goto nonfatal_error;
             }
             if (!job->exception_occurred
                 || severity < job->exception_severity) {
@@ -962,8 +974,10 @@ static int eventlog_inactive_parse (struct info_ctx *ctx,
         }
     }
 
+    /* nonfatal error - eventlog illegal, but we'll continue on.  job
+     * listing will get initialized data */
+nonfatal_error:
     rc = 0;
-error:
     json_decref (a);
     return rc;
 }

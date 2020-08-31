@@ -1,0 +1,7 @@
+{
+  "title": "permissive-jobspec",
+  "description": "Flux permissive jobspec",
+  "type": "object",
+  "properties": {
+  }
+}
