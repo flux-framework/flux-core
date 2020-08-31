@@ -27,6 +27,7 @@ import flux
 import flux.kvs
 from flux import job
 from flux.job import Jobspec, JobspecV1, ffi
+from flux.job.list import VALID_ATTRS
 from flux.future import Future
 
 
@@ -428,6 +429,10 @@ class TestJob(unittest.TestCase):
                 if key not in ["int", "dec"]:
                     # Ensure encode back to same type works
                     self.assertEqual(getattr(jobid, key), test[key])
+
+    def test_25_job_list_attrs(self):
+        valid_attrs = self.fh.rpc("job-info.list-attrs", "{}").get()["attrs"]
+        self.assertEqual(set(valid_attrs), set(VALID_ATTRS))
 
 
 if __name__ == "__main__":

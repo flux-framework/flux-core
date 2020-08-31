@@ -56,7 +56,9 @@ class JobID(int):
             jobid = value
         else:
             jobid = id_parse(value)
-        return super(cls, cls).__new__(cls, jobid)
+        self = super(cls, cls).__new__(cls, jobid)
+        self.orig_str = str(value)
+        return self
 
     def encode(self, encoding="dec"):
         """Encode a JobID to alternate supported format"""
@@ -91,6 +93,11 @@ class JobID(int):
     def kvs(self):
         """Return KVS directory path of a JobID"""
         return self.encode("kvs")
+
+    @property
+    def orig(self):
+        """Return the original string used to create the JobID"""
+        return self.orig_str
 
     def __str__(self):
         return self.encode("f58")

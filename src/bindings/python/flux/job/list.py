@@ -8,13 +8,47 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 import os
+import pwd
+import errno
 
+import flux.constants
+from flux.future import WaitAllFuture
+from flux.job.info import JobInfo
 from flux.rpc import RPC
+
+
+VALID_ATTRS = [
+    "userid",
+    "priority",
+    "t_submit",
+    "t_depend",
+    "t_sched",
+    "t_run",
+    "t_cleanup",
+    "t_inactive",
+    "state",
+    "name",
+    "ntasks",
+    "nnodes",
+    "ranks",
+    "success",
+    "exception_occurred",
+    "exception_type",
+    "exception_severity",
+    "exception_note",
+    "result",
+    "expiration",
+    "annotations",
+]
 
 
 class JobListRPC(RPC):
     def get_jobs(self):
         return self.get()["jobs"]
+
+    def get_jobinfos(self):
+        for job in self.get_jobs():
+            yield JobInfo(job)
 
 
 # Due to subtleties in the python bindings and this call, this binding
@@ -46,12 +80,184 @@ def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=N
 
 
 class JobListIdRPC(RPC):
+    def __init__(self, *args, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.jobid = None
+
     def get_job(self):
         return self.get()["job"]
+
+    def get_jobinfo(self):
+        return JobInfo(self.get_job())
 
 
 # list-id is not like list or list-inactive, it doesn't return an
 # array, so don't use JobListRPC
 def job_list_id(flux_handle, jobid, attrs=[]):
     payload = {"id": int(jobid), "attrs": attrs}
-    return JobListIdRPC(flux_handle, "job-info.list-id", payload)
+    rpc = JobListIdRPC(flux_handle, "job-info.list-id", payload)
+    #  save original JobId argument for error reporting
+    rpc.jobid = jobid
+    return rpc
+
+
+class JobListIdsFuture(WaitAllFuture):
+    """Simulate interface of JobListRPC for listing multiple jobids"""
+
+    def __init__(self):
+        super(JobListIdsFuture, self).__init__()
+        self.errors = []
+
+    def get_jobs(self):
+        """get all successful results, appending errors into self.errors"""
+        jobs = []
+        #  Wait for all obid RPCs to complete
+        self.wait_for()
+
+        #  Get all successful jobs, accumulate errors in self.errors
+        for child in self.children:
+            try:
+                jobs.append(child.get_job())
+            except EnvironmentError as err:
+                if err.errno == errno.ENOENT:
+                    msg = f"JobID {child.jobid.orig} unknown"
+                else:
+                    msg = f"rpc: {err.strerror}"
+                self.errors.append(msg)
+        return jobs
+
+    def get_jobinfos(self):
+        """get all successful results as list of JobInfo objects
+
+        Any errors are appended to self.errors.
+        """
+        return [JobInfo(job) for job in self.get_jobs()]
+
+
+class JobList:
+    """User friendly class for querying lists of jobs from Flux
+
+    By default a JobList will query the last ``max_entries`` jobs for all
+    users. Other filter parameters can be passed to the constructor or
+    the ``set_user()`` and ``add_filter()`` methods.
+
+    Constructor arguments:
+    ======================
+    :flux_handle: A Flux handle obtained from flux.Flux()
+    :attrs: Optional list of job attributes to fetch. (default is all attrs)
+    :filters: List of strings defining the results or states to filter. E.g.,
+              [ "pending", "running" ].
+    :ids: List of jobids to return. Other filters are ignored if ``ids`` is
+          not empty.
+    :user: Username or userid for which to fetch jobs. Default is all users.
+    :max_entries: Maximum number of jobs to return
+    """
+
+    # pylint: disable=too-many-instance-attributes
+
+    STATES = {
+        "depend": flux.constants.FLUX_JOB_DEPEND,
+        "sched": flux.constants.FLUX_JOB_SCHED,
+        "run": flux.constants.FLUX_JOB_RUN,
+        "cleanup": flux.constants.FLUX_JOB_CLEANUP,
+        "inactive": flux.constants.FLUX_JOB_INACTIVE,
+        "pending": flux.constants.FLUX_JOB_PENDING,
+        "running": flux.constants.FLUX_JOB_RUNNING,
+        "active": flux.constants.FLUX_JOB_ACTIVE,
+    }
+    RESULTS = {
+        "completed": flux.constants.FLUX_JOB_RESULT_COMPLETED,
+        "failed": flux.constants.FLUX_JOB_RESULT_FAILED,
+        "cancelled": flux.constants.FLUX_JOB_RESULT_CANCELLED,
+        "timeout": flux.constants.FLUX_JOB_RESULT_TIMEOUT,
+    }
+
+    def __init__(
+        self,
+        flux_handle,
+        attrs=VALID_ATTRS,
+        filters=[],
+        ids=[],
+        user=None,
+        max_entries=1000,
+    ):
+        self.handle = flux_handle
+        self.attrs = list(attrs)
+        self.states = 0
+        self.results = 0
+        self.max_entries = max_entries
+        self.ids = ids
+        self.errors = []
+        for fname in filters:
+            for name in fname.split(","):
+                self.add_filter(name)
+        self.set_user(user)
+
+    def set_user(self, user):
+        """Only return jobs for user (may be a username or userid)"""
+        if user is None:
+            self.userid = os.getuid()
+        elif user == "all":
+            self.userid = flux.constants.FLUX_USERID_UNKNOWN
+        else:
+            try:
+                self.userid = pwd.getpwnam(user).pw_uid
+            except KeyError:
+                self.userid = int(user)
+            except ValueError:
+                raise ValueError(f"Invalid user {user} specified")
+
+    def add_filter(self, fname):
+        """Append a state or result filter to JobList query"""
+        fname = fname.lower()
+        if fname == "all":
+            self.states |= self.STATES["pending"]
+            self.states |= self.STATES["running"]
+            return
+
+        if fname in self.STATES:
+            self.states |= self.STATES[fname]
+        elif fname in self.RESULTS:
+            # Must specify "inactive" to get results:
+            self.states |= self.STATES["inactive"]
+            self.results |= self.RESULTS[fname]
+        else:
+            raise ValueError(f"Invalid filter specified: {fname}")
+
+    def fetch_jobs(self):
+        """Initiate the JobList query to the Flux job-info module
+
+        JobList.fetch_jobs() returns a JobListRPC or JobListIdsFuture,
+        either of which will be fulfilled when the job data is available.
+
+        Once the Future has been fulfilled, a list of JobInfo objects
+        can be obtained via JobList.jobs(). If JobList.errors is non-empty,
+        then it will contain a list of errors returned via the query.
+        """
+        if self.ids:
+            listids = JobListIdsFuture()
+            for jobid in self.ids:
+                listids.push(job_list_id(self.handle, jobid, self.attrs))
+            return listids
+        return job_list(
+            self.handle,
+            max_entries=self.max_entries,
+            attrs=self.attrs,
+            userid=self.userid,
+            states=self.states,
+            results=self.results,
+        )
+
+    def jobs(self):
+        """Synchronously fetch a list of JobInfo objects from JobList query
+
+        If the Future object returned by JobList.fetch_jobs has not yet been
+        fulfilled (e.g. is_ready() returns False), then this call may block.
+        Otherwise, returns a list of JobInfo objects for all jobs returned
+        from the underlying job listing RPC.
+        """
+        rpc = self.fetch_jobs()
+        jobs = rpc.get_jobs()
+        if hasattr(rpc, "errors"):
+            self.errors = rpc.errors
+        return [JobInfo(job) for job in jobs]
