@@ -1,3 +1,53 @@
+flux-core version 0.19.0 - 2020-08-31
+-------------------------------------
+
+Notable features and improvements in this release include enhanced
+support for tools/debuggers (e.g. STAT, LaunchMON and TotalView), a
+new set of `--env` environment manipulation options for flux-mini(1),
+better support for listing jobs through the Python API, and a fix
+for an annoying usability issue with F58 encoded jobids in non-UTF-8
+locales.
+
+
+### New features
+
+ * switch to utf-8 for subprocess and job io encoding (#3086)
+ * improve support for shell plugin developers (#3159, #3132)
+ * flux-mini: add environment manipulation options (#3150)
+ * flux-mini: add --debug option for tools support (#3130)
+ * bash: top level command completions for flux (#2755)
+ * add fluxorama system instance docker image sources (#3031, #3128)
+ * content-s3: add configuration, support for libs3 variants (#3067, #3115)
+ * Use F58 JOBIDs in most user-facing commands (#3111)
+ * broker: state machine refactoring (#3107)
+ * broker: restore client-side PMI logging (#3105)
+ * libflux: add `flux_module_set_running()` (#3104)
+ * python: Add JobInfo, JobInfoFormat, and JobList classes (#3174)
+
+### Fixes
+
+ * Fix F58 encoding in non-multibyte locales (#3144)
+ * job-info,job-shell: allow non-V1 jobspec (#3160)
+ * build: fix innocuous configure error (#3129)
+ * travis-ci: fix ARGS when `DOCKER_TAG` set (#3125)
+ * doc: fix flux-help(1) output and rendering of NODESET.rst (#3119)
+ * flux-job: add `totalview_jobid` support and misc. fixes (#3130)
+ * small build/test/doc fixes (#3100)
+ * fix GitHub project license detection (#3089)
+ * shell/lua.d/openmpi: set env vars to force the use of flux plugins (#3099)
+ * job-info: do not fail on invalid jobspec / R / eventlog (#3171)
+ * flux-module: extend first column of flux-module list output (#3178)
+
+### Cleanup
+
+ * python: split flux.job module into multiple files (#3162)
+ * python: reformat with latest black formatter, pin black version (#3169)
+ * libflux: fix comment in module.h to reference readthedocs (#3138)
+ * Update rfc links to RTD site (#3137)
+ * remove the simple dynamic string (sds) code from libutil (#3135)
+ * Doc Cleanup (#3117)
+ * AUTHORS: remove (#3090)
+
 flux-core version 0.18.0 - 2020-07-29
 -------------------------------------
 
