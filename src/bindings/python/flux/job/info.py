@@ -244,9 +244,9 @@ class JobInfoFormat(flux.util.OutputFormat):
             fields for now).
             """
             if conv == "d":
-                # convert from float seconds sinc epoch to a datetime.
+                # convert from float seconds since epoch to a datetime.
                 # User can than use datetime specific format fields, e.g.
-                # {t_inactive!D:%H:%M:S}.
+                # {t_inactive!d:%H:%M:%S}.
                 value = datetime.fromtimestamp(value)
             elif conv == "D":
                 # As above, but convert to ISO 8601 date time string.
