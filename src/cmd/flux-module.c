@@ -457,7 +457,7 @@ char lsmod_state_char (int state)
 
 void lsmod_print_header (FILE *f)
 {
-    fprintf (f, "%-20s %8s %-7s %4s  %c %s\n",
+    fprintf (f, "%-24s %8s %-7s %4s  %c %s\n",
             "Module", "Size", "Digest", "Idle", 'S', "Service");
 }
 
@@ -473,7 +473,7 @@ void lsmod_print_entry (FILE *f,
     char *serv_s = lsmod_services_string (services, name);
     char idle_s[16];
 
-    fprintf (f, "%-20.20s %8d %7s %4s  %c %s\n",
+    fprintf (f, "%-24.24s %8d %7s %4s  %c %s\n",
              name,
              size,
              digest_len > 7 ? digest + digest_len - 7 : digest,
