@@ -683,6 +683,24 @@ test_expect_success 'flux-jobs emits empty string on invalid annotations fields'
 	done &&
 	test_cmp invalid-annotations.out invalid-annotations.exp
 '
+
+test_expect_success 'flux-jobs emits empty string for special case t_estimate' '
+	fmt="{annotations.sched.t_estimate}" &&
+	fmt="${fmt},{annotations.sched.t_estimate!d:%H:%M}" &&
+	fmt="${fmt},{annotations.sched.t_estimate!D}" &&
+	fmt="${fmt},{annotations.sched.t_estimate!F}" &&
+	fmt="${fmt},{annotations.sched.t_estimate!H}" &&
+	fmt="${fmt},{annotations.sched.t_estimate!D:h}" &&
+	fmt="${fmt},{annotations.sched.t_estimate!F:h}" &&
+	fmt="${fmt},{annotations.sched.t_estimate!H:h}" &&
+	flux jobs -no "${fmt}" >t_estimate_annotations.out 2>&1 &&
+	test_debug "cat t_estimate_annotations.out" &&
+	for i in `seq 1 $(state_count active)`; do
+		echo ",00:00,,,,-,-,-" >> t_estimate_annotations.exp
+	done &&
+	test_cmp t_estimate_annotations.out t_estimate_annotations.exp
+'
+
 #
 # format header tests.
 #
