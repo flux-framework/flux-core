@@ -958,7 +958,7 @@ test_expect_success HAVE_JQ 'flux jobs works on job with illegal R' '
 
 # we make the eventlog invalid by overwriting it in the KVS before job-info will
 # look it up.  Note that b/c the eventlog is corrupted, the userid for the job
-# is never established.  So we have to do "--all" and grep for the jobid.
+# is never established.  So we have to do "--user=all" and grep for the jobid.
 test_expect_success HAVE_JQ 'flux jobs works on job with illegal eventlog' '
 	${RPC} job-info.job-state-pause 0 </dev/null &&
         jobid=`flux job submit hostname.json` &&
