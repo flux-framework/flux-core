@@ -97,19 +97,23 @@ used to transform the value before formatting takes place. Currently,
 the following conversion flags are supported by *flux-jobs*:
 
 **!D**
-   convert a timestamp field to ISO8601 date and time (e.g. 2020-01-07T13:31:00)
+   convert a timestamp field to ISO8601 date and time (e.g. 2020-01-07T13:31:00).
+   Defaults to empty string if timestamp field does not exist.
 
 **!d**
    convert a timestamp to a Python datetime object. This allows datetime specific
    format to be used, e.g. *{t_inactive!d:%H:%M:%S}*. However, note that width
    and alignment specifiers are not supported for datetime formatting.
+   Defaults to datetime of epoch if timestamp field does not exist.
 
 **!F**
-   convert a duration in floating point seconds to Flux Standard Duration (FSD)
-   string.
+   convert a duration in floating point seconds to Flux Standard Duration (FSD).
+   string.  Defaults to empty string if duration field does not exist.
+
 
 **!H**
-   convert a duration to hours:minutes:seconds form (e.g. *{runtime!H}*)
+   convert a duration to hours:minutes:seconds form (e.g. *{runtime!H}*).
+   Defaults to empty string if duration field does not exist.
 
 Annotations can be retrieved via the *annotations* field name.
 Specific keys and sub-object keys can be retrieved separated by a

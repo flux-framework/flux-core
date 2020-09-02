@@ -41,18 +41,6 @@ def fetch_jobs_stdin():
     return jobs
 
 
-def fetch_jobs_all(flux_handle, args, attrs, userid, states, results):
-    rpc_handle = flux.job.job_list(
-        flux_handle, args.count, list(attrs), userid, states, results
-    )
-    try:
-        jobs = rpc_handle.get_jobs()
-    except EnvironmentError as err:
-        print("{}: {}".format("rpc", err.strerror), file=sys.stderr)
-        sys.exit(1)
-    return jobs
-
-
 def fetch_jobs_flux(args, fields):
     flux_handle = flux.Flux()
 

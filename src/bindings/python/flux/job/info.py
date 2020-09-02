@@ -243,23 +243,48 @@ class JobInfoFormat(flux.util.OutputFormat):
             different conversion types. (mainly used for time-specific
             fields for now).
             """
+            orig_value = str(value)
             if conv == "d":
-                # convert from float seconds sinc epoch to a datetime.
+                # convert from float seconds since epoch to a datetime.
                 # User can than use datetime specific format fields, e.g.
-                # {t_inactive!D:%H:%M:S}.
-                value = datetime.fromtimestamp(value)
+                # {t_inactive!d:%H:%M:%S}.
+                try:
+                    value = datetime.fromtimestamp(value)
+                except TypeError:
+                    if orig_value is "":
+                        value = datetime.fromtimestamp(0.0)
+                    else:
+                        raise
             elif conv == "D":
                 # As above, but convert to ISO 8601 date time string.
-                value = datetime.fromtimestamp(value).strftime("%FT%T")
+                try:
+                    value = datetime.fromtimestamp(value).strftime("%FT%T")
+                except TypeError:
+                    if orig_value is "":
+                        value = ""
+                    else:
+                        raise
             elif conv == "F":
                 # convert to Flux Standard Duration (fsd) string.
-                value = fsd(value)
+                try:
+                    value = fsd(value)
+                except TypeError:
+                    if orig_value is "":
+                        value = ""
+                    else:
+                        raise
             elif conv == "H":
                 # if > 0, always round up to at least one second to
                 #  avoid presenting a nonzero timedelta as zero
-                if 0 < value < 1:
-                    value = 1
-                value = str(timedelta(seconds=round(value)))
+                try:
+                    if 0 < value < 1:
+                        value = 1
+                    value = str(timedelta(seconds=round(value)))
+                except TypeError:
+                    if orig_value is "":
+                        value = ""
+                    else:
+                        raise
             else:
                 value = super().convert_field(value, conv)
             return value

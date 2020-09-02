@@ -111,7 +111,7 @@ class JobListIdsFuture(WaitAllFuture):
     def get_jobs(self):
         """get all successful results, appending errors into self.errors"""
         jobs = []
-        #  Wait for all obid RPCs to complete
+        #  Wait for all jobid RPCs to complete
         self.wait_for()
 
         #  Get all successful jobs, accumulate errors in self.errors
