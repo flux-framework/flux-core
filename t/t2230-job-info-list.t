@@ -1115,6 +1115,23 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with i
         cat list_id_illegal_eventlog.out | $jq -e ".id == ${jobid}"
 '
 
+test_expect_success HAVE_JQ 'flux job list works on racy annotations' '
+	${RPC} job-info.job-state-pause 0 </dev/null &&
+        jobid=`flux job submit hostname.json | flux job id` &&
+        fj_wait_event $jobid clean >/dev/null &&
+	${RPC} job-info.job-state-unpause 0 </dev/null &&
+        i=0 &&
+        while ! flux job list --states=inactive | grep $jobid > /dev/null \
+               && [ $i -lt 5 ]
+        do
+                sleep 1
+                i=$((i + 1))
+        done &&
+        test "$i" -lt "5"  &&
+        flux job list --states=inactive | grep $jobid > list_racy_annotation.out &&
+        cat list_racy_annotation.out | $jq -e ".annotations"
+'
+
 #
 # stress test
 #

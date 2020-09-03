@@ -51,6 +51,9 @@ struct job_state_ctx {
     int cleanup_count;
     int inactive_count;
 
+    /* annotations that arrived before job is known */
+    zhashx_t *early_annotations;
+
     /* debug/testing - if paused store job transitions on list for
      * processing later */
     bool pause;
