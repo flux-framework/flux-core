@@ -88,6 +88,7 @@ int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_wait (optparse_t *p, int argc, char **argv);
 int cmd_annotate (optparse_t *p, int argc, char **argv);
+int cmd_validate (optparse_t *p, int argc, char **argv);
 
 int stdin_flags;
 
@@ -452,6 +453,13 @@ static struct optparse_subcommand subcommands[] = {
       "[OPTIONS] id key value",
       "Annotate job with key and value",
       cmd_annotate,
+      0,
+      NULL,
+    },
+    { "validate",
+      "[OPTIONS] id",
+      "Validate job ID",
+      cmd_validate,
       0,
       NULL,
     },
@@ -2950,6 +2958,38 @@ int cmd_annotate (optparse_t *p, int argc, char **argv)
     free (valbuf);
     return (0);
 }
+
+int cmd_validate (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h;
+    flux_jobid_t id;
+    flux_future_t *f;
+
+    if ((argc - optindex) != 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    id = parse_jobid (argv[optindex]);
+
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.validate",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:I}",
+                             "id", id)))
+        log_err_exit ("error sending validate RPC");
+    if (flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("%s", future_strerror (f, errno));
+
+    flux_future_destroy (f);
+    flux_close (h);
+    return (0);
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
