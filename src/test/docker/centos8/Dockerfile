@@ -43,6 +43,7 @@ RUN yum -y update \
 	python3-six \
 	python3-yaml \
 	python3-jsonschema \
+	python3-sphinx \
 #  Development dependencies
 	libsodium-devel \
 	zeromq-devel \
@@ -73,9 +74,6 @@ RUN alternatives --set python /usr/bin/python3
 
 #  Add /usr/bin/mpicc link so MPI tests are built
 RUN alternatives --install /usr/bin/mpicc mpicc /usr/lib64/mpich/bin/mpicc 100
-
-# Sphinx packages for docs
-RUN python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-spelling
 
 # Install caliper by hand for now:
 RUN mkdir caliper \
