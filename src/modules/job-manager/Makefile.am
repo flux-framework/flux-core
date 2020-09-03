@@ -41,7 +41,9 @@ job_manager_la_SOURCES = \
 	priority.h \
 	priority.c \
 	annotate.h \
-	annotate.c
+	annotate.c \
+	validate.h \
+	validate.c
 
 job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_manager_la_LIBADD = $(fluxmod_libadd) \
