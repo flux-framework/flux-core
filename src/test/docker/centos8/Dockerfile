@@ -77,6 +77,9 @@ RUN alternatives --install /usr/bin/mpicc mpicc /usr/lib64/mpich/bin/mpicc 100
 # Sphinx packages for docs
 RUN python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-spelling
 
+# OpenShift and Kubernetes API clients
+RUN python3 -m pip install openshift
+
 # Install caliper by hand for now:
 RUN mkdir caliper \
  && cd caliper \

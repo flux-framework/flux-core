@@ -67,6 +67,9 @@ RUN yum -y update \
 # Sphinx packages for docs
 RUN python3 -m pip install sphinx sphinx-rtd-theme sphinxcontrib-spelling
 
+# OpenShift and Kubernetes API clients
+RUN python3 -m pip install openshift
+
 # The cmake from yum is incredibly ancient, download a less ancient one
 RUN wget -q --no-check-certificate https://cmake.org/files/v3.10/cmake-3.10.1-Linux-x86_64.tar.gz\
  && tar -xzf cmake-3.10.1-Linux-x86_64.tar.gz\

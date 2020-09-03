@@ -101,6 +101,9 @@ RUN locale-gen en_US.UTF-8
 # NOTE: luaposix installed by rocks due to Ubuntu bug: #1752082 https://bugs.launchpad.net/ubuntu/+source/lua-posix/+bug/1752082
 RUN luarocks install luaposix
 
+# OpenShift and Kubernetes API clients
+RUN python3 -m pip install openshift
+
 # Install caliper by hand for now:
 RUN mkdir caliper \
  && cd caliper \
