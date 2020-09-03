@@ -13,6 +13,8 @@ ExecStart=@X_BINDIR@/flux broker \
   -Sbroker.rc2_none \
   -Sbroker.quorum=0
 ExecReload=@X_BINDIR@/flux config reload
+Restart=on-success
+RestartSec=5s
 User=flux
 Group=flux
 RuntimeDirectory=flux
