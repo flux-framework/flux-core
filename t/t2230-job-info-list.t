@@ -1097,7 +1097,6 @@ test_expect_success HAVE_JQ 'flux job list works on job with illegal eventlog' '
         done &&
         test "$i" -lt "5" &&
         flux job list --states=inactive --user=all | grep $jobid > list_illegal_eventlog.out &&
-        cat list_illegal_eventlog.out &&
         cat list_illegal_eventlog.out | $jq -e ".priority == -1" &&
         cat list_illegal_eventlog.out | $jq -e ".userid == 4294967295"
 '
