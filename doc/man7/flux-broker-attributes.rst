@@ -112,10 +112,15 @@ log-filename
    (rank zero only) If set, session log entries, as filtered by log-forward-level,
    are directed to this file.
 
+log-stderr-mode
+   If set to "leader" (default), broker rank 0 emits forwarded logs from
+   other ranks to stderr, subject to the constraints of log-forward-level
+   and log-stderr-level.  If set to "local", each broker emits its own
+   logs to stderr, subject to the constraints of log-stderr-level.
+
 log-stderr-level
-   (rank zero only) Session log entries at syslog(3) level at or below this
-   value, and as filtered by log-forward-level, are copied to stderr of the
-   rank zero broker.
+   Log entries at syslog(3) level at or below this value to stderr,
+   subject to log-stderr-mode.
 
 log-level
    Log entries at syslog(3) level at or below this value are stored

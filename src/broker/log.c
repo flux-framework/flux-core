@@ -19,11 +19,14 @@
 
 #include "log.h"
 
+typedef enum { MODE_LEADER, MODE_LOCAL } stderr_mode_t;
+
 /* See descriptions in flux-broker-attributes(7) */
 static const int default_ring_size = 1024;
 static const int default_forward_level = LOG_DEBUG;
 static const int default_critical_level = LOG_CRIT;
 static const int default_stderr_level = LOG_ERR;
+static const stderr_mode_t default_stderr_mode = MODE_LEADER;
 static const int default_level = LOG_DEBUG;
 
 #define LOGBUF_MAGIC 0xe1e2e3e4
@@ -37,6 +40,7 @@ typedef struct {
     int forward_level;
     int critical_level;
     int stderr_level;
+    stderr_mode_t stderr_mode;
     int level;
     zlist_t *buf;
     int ring_size;
@@ -211,6 +215,7 @@ static logbuf_t *logbuf_create (void)
     logbuf->forward_level = default_forward_level;
     logbuf->critical_level = default_critical_level;
     logbuf->stderr_level = default_stderr_level;
+    logbuf->stderr_mode = default_stderr_mode;
     logbuf->level = default_level;
     logbuf->ring_size = default_ring_size;
     if (!(logbuf->buf = zlist_new ())) {
@@ -345,6 +350,11 @@ static int attr_get_log (const char *name, const char **val, void *arg)
         n = snprintf (s, sizeof (s), "%d", logbuf->stderr_level);
         assert (n < sizeof (s));
         *val = s;
+    } else if (!strcmp (name, "log-stderr-mode")) {
+        n = snprintf (s, sizeof (s), "%s",
+                      logbuf->stderr_mode == MODE_LEADER ? "leader" : "local");
+        assert (n < sizeof (s));
+        *val = s;
     } else if (!strcmp (name, "log-ring-size")) {
         n = snprintf (s, sizeof (s), "%d", logbuf->ring_size);
         assert (n < sizeof (s));
@@ -389,6 +399,15 @@ static int attr_set_log (const char *name, const char *val, void *arg)
         int level = strtol (val, NULL, 10);
         if (logbuf_set_stderr_level (logbuf, level) < 0)
             goto done;
+    } else if (!strcmp (name, "log-stderr-mode")) {
+        if (!strcmp (val, "leader"))
+            logbuf->stderr_mode = MODE_LEADER;
+        else if (!strcmp (val, "local"))
+            logbuf->stderr_mode = MODE_LOCAL;
+        else {
+            errno = EINVAL;
+            goto done;
+        }
     } else if (!strcmp (name, "log-ring-size")) {
         int size = strtol (val, NULL, 10);
         if (logbuf_set_ring_size (logbuf, size) < 0)
@@ -420,18 +439,18 @@ static int logbuf_register_attrs (logbuf_t *logbuf, attr_t *attrs)
         if (attr_add_active (attrs, "log-filename", 0,
                              attr_get_log, attr_set_log, logbuf) < 0)
             goto done;
-        if (attr_add_active (attrs, "log-stderr-level", 0,
-                             attr_get_log, attr_set_log, logbuf) < 0)
-            goto done;
     } else {
         (void)attr_delete (attrs, "log-filename", true);
         if (attr_add (attrs, "log-filename", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0)
             goto done;
-        (void)attr_delete (attrs, "log-stderr-level", true);
-        if (attr_add (attrs, "log-stderr-level", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0)
-            goto done;
     }
 
+    if (attr_add_active (attrs, "log-stderr-level", 0,
+                         attr_get_log, attr_set_log, logbuf) < 0)
+        goto done;
+    if (attr_add_active (attrs, "log-stderr-mode", 0,
+                         attr_get_log, attr_set_log, logbuf) < 0)
+        goto done;
     if (attr_add_active (attrs, "log-level", 0,
                          attr_get_log, attr_set_log, logbuf) < 0)
         goto done;
@@ -487,7 +506,9 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
             if (append_new_entry (logbuf, buf, len) < 0)
                 rc = -1;
         }
-        if (severity <= logbuf->critical_level) {
+        if (severity <= logbuf->critical_level
+                    || (severity <= logbuf->stderr_level
+                    && logbuf->stderr_mode == MODE_LOCAL)) {
             flux_log_fprint (buf, len, stderr);
             logged_stderr = true;
         }
@@ -500,8 +521,11 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
                 rc = -1;
         }
     }
-    if (!logged_stderr && severity <= logbuf->stderr_level && logbuf->rank == 0)
-        flux_log_fprint (buf, len, stderr);
+    if (!logged_stderr && severity <= logbuf->stderr_level
+                       && logbuf->stderr_mode == MODE_LEADER
+                       && logbuf->rank == 0) {
+            flux_log_fprint (buf, len, stderr);
+    }
     return rc;
 }
 
