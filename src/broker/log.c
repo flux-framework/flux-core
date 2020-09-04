@@ -486,6 +486,29 @@ static int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
     return 0;
 }
 
+/* Log a message to stderr without timestamp.
+ * This assumes a timestamp is added externally, e.g. by the systemd journal.
+ */
+static void log_stderr (const char *buf, int len)
+{
+    struct stdlog_header hdr;
+    const char *msg;
+    int msglen, severity;
+    uint32_t nodeid;
+
+    if (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) < 0)
+        fprintf (stderr, "%.*s\n", len, buf);
+    else {
+        nodeid = strtoul (hdr.hostname, NULL, 10);
+        severity = STDLOG_SEVERITY (hdr.pri);
+        fprintf (stderr, "%s.%s[%" PRIu32 "]: %.*s\n",
+                 hdr.appname,
+                 stdlog_severity_to_string (severity),
+                 nodeid,
+                 msglen, msg);
+    }
+}
+
 static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
 {
     assert (logbuf->magic == LOGBUF_MAGIC);
@@ -509,7 +532,10 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
         if (severity <= logbuf->critical_level
                     || (severity <= logbuf->stderr_level
                     && logbuf->stderr_mode == MODE_LOCAL)) {
-            flux_log_fprint (buf, len, stderr);
+            if (logbuf->stderr_mode == MODE_LOCAL)
+                log_stderr (buf, len);
+            else
+                flux_log_fprint (buf, len, stderr);
             logged_stderr = true;
         }
     }
