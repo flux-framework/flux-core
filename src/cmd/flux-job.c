@@ -2631,7 +2631,7 @@ void wait_event_continuation (flux_future_t *f, void *arg)
         }
         else if (errno == ETIMEDOUT) {
             flux_future_destroy (f);
-            log_msg_exit ("wait-event timeout on event '%s'\n",
+            log_msg_exit ("wait-event timeout on event '%s'",
                           ctx->wait_event);
         } else if (errno == ENODATA) {
             flux_future_destroy (f);
