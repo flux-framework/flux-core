@@ -195,6 +195,18 @@ COMMANDS
    the UNIX epoch (UTC), otherwise the current wall clock is used.
    Specify an alternate namespace to append to via *-N*.
 
+**eventlog wait-event** [-N ns] [-t SECONDS] [-u] [-W] [-q] [-v] *key* *event*
+   Wait for a specific *event* to occur in an RFC 18 KVS eventlog
+   referred to by *key*.  If *-t* is specified, timeout after
+   *SECONDS* if the event has not occurred.  If *-u* is specified,
+   display the log in raw form. If *-W* is specified and the eventlog
+   does not exist, wait until it has been created. If *-q* is
+   specified, not output the matched event.  If *-v* is specified,
+   output all events prior to the matched event.  This runs until the
+   program is interrupted, the event occurs, or a timeout occurs if
+   *-t* is specified.  Specify an alternate namespace to display from
+   via *-N*.
+
 
 RESOURCES
 =========
