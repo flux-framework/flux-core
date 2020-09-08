@@ -1846,6 +1846,14 @@ static void eventlog_prettyprint (json_t *event)
     fflush (stdout);
 }
 
+static void eventlog_print (optparse_t *p, json_t *event)
+{
+    if (optparse_hasopt (p, "unformatted"))
+        eventlog_unformatted_print (event);
+    else
+        eventlog_prettyprint (event);
+}
+
 void eventlog_get_continuation (flux_future_t *f, void *arg)
 {
     struct eventlog_get_ctx *ctx = arg;
@@ -1872,12 +1880,8 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
         log_err_exit ("eventlog_decode");
 
     json_array_foreach (a, index, value) {
-        if (ctx->maxcount == 0 || ctx->count < ctx->maxcount) {
-            if (optparse_hasopt (ctx->p, "unformatted"))
-                eventlog_unformatted_print (value);
-            else
-                eventlog_prettyprint (value);
-        }
+        if (ctx->maxcount == 0 || ctx->count < ctx->maxcount)
+            eventlog_print (ctx->p, value);
         if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount)
             limit_reached = true;
     }
