@@ -1926,6 +1926,8 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
         flags |= FLUX_KVS_WATCH;
         flags |= FLUX_KVS_WATCH_APPEND;
     }
+    if (optparse_hasopt (p, "waitcreate"))
+        flags |= FLUX_KVS_WAITCREATE;
 
     ctx.p = p;
     ctx.count = 0;
@@ -1955,6 +1957,9 @@ static struct optparse_option eventlog_get_opts[] =  {
     { .name = "namespace", .key = 'N', .has_arg = 1,
       .usage = "Specify KVS namespace to use.",
     },
+    { .name = "waitcreate", .key = 'W', .has_arg = 0,
+      .usage = "Wait for creation to occur on watch",
+    },
     { .name = "watch", .key = 'w', .has_arg = 0,
       .usage = "Monitor eventlog",
     },
@@ -1976,7 +1981,7 @@ static struct optparse_subcommand eventlog_subcommands[] = {
       eventlog_append_opts,
     },
     { "get",
-      "[-N ns] [-u] [-w] [-c COUNT] key",
+      "[-N ns] [-u] [-W] [-w] [-c COUNT] key",
       "Get eventlog",
       cmd_eventlog_get,
       0,

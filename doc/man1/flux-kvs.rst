@@ -177,14 +177,16 @@ COMMANDS
    specified, display the namespace owner. If *-s* is specified, display
    the root sequence number.
 
-**eventlog get** [-N ns] [-w] [-c count] [-u] *key*
+**eventlog get** [-N ns] [-W] [-w] [-c count] [-u] *key*
    Display the contents of an RFC 18 KVS eventlog referred to by *key*.
-   If *-u* is specified, display the log in raw form. If *-w* is
-   specified, after the existing contents have been displayed, the
-   eventlog is monitored and updates are displayed as they are committed.
-   This runs until the program is interrupted or an error occurs, unless
-   the number of events is limited with the *-c* option. Specify an
-   alternate namespace to display from via *-N*.
+   If *-u* is specified, display the log in raw form. If *-W* is
+   specified and the eventlog does not exist, wait until it has been
+   created. If *-w* is specified, after the existing contents have
+   been displayed, the eventlog is monitored and updates are displayed
+   as they are committed.  This runs until the program is interrupted
+   or an error occurs, unless the number of events is limited with the
+   *-c* option. Specify an alternate namespace to display from via
+   *-N*.
 
 **eventlog append** [-N ns] [-t SECONDS] *key* *name* [*context* ...]
    Append an event to an RFC 18 KVS eventlog referred to by *key*.
