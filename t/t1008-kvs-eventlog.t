@@ -2,6 +2,8 @@
 
 test_description='Test kvs eventlog get|append'
 
+. `dirname $0`/kvs/kvs-helper.sh
+
 . `dirname $0`/sharness.sh
 
 test_under_flux 4 kvs
@@ -51,6 +53,17 @@ test_expect_success NO_CHAIN_LINT 'flux kvs eventlog get --watch returns append 
 	done &&
 	wait $pid &&
 	test_cmp get_e.exp get_e.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs eventlog get --waitcreate works' '
+        test_must_fail flux kvs eventlog get --unformatted test.f &&
+	flux kvs eventlog get --unformatted --waitcreate test.f >get_f.out &
+	pid=$! &&
+        wait_watcherscount_nonzero primary &&
+	flux kvs eventlog append --timestamp=1 test.f foo "{\"data\":\"bar\"}" &&
+	echo "{\"timestamp\":1.0,\"name\":\"foo\",\"context\":{\"data\":\"bar\"}}" >get_f.exp
+	wait $pid &&
+	test_cmp get_f.exp get_f.out
 '
 
 test_expect_success 'flux kvs eventlog append and work on alternate namespaces' '
