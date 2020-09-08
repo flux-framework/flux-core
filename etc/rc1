@@ -39,7 +39,6 @@ declare -a pids
 flux module load job-ingest
 flux exec -r all -x 0 flux module load job-ingest & pids+=($!)
 flux module load job-exec &  pids+=($!)
-flux module load sched-simple & pids+=($!)
 wait_check ${pids[@]}
 unset pids
 
@@ -54,6 +53,15 @@ for rcdir in $all_dirs; do
     done
 done
 shopt -u nullglob
+
+# Print module that has registered 'sched' service, if any
+lookup_sched_module() {
+    flux module list | awk '$6 == "sched" { print $1 }'
+}
+
+if test "${FLUX_SCHED_MODULE}" != "none" -a -z "$(lookup_sched_module)"; then
+    flux module load ${FLUX_SCHED_MODULE:-sched-simple}
+fi
 
 flux admin cleanup-push <<-EOT
 	flux queue stop --quiet
