@@ -53,10 +53,6 @@ test_expect_success NO_CHAIN_LINT 'flux kvs eventlog get --watch returns append 
 	test_cmp get_e.exp get_e.out
 '
 
-test_expect_success 'flux kvs eventlog append fails with invalid context' '
-	! flux kvs eventlog append test.c foo not_a_object
-'
-
 test_expect_success 'flux kvs eventlog append and work on alternate namespaces' '
         flux kvs namespace create EVENTLOGTESTNS &&
         flux kvs eventlog append test.ns main &&
@@ -65,6 +61,22 @@ test_expect_success 'flux kvs eventlog append and work on alternate namespaces' 
         grep main get_f1.out &&
         flux kvs eventlog get --namespace=EVENTLOGTESTNS test.ns > get_f2.out &&
         grep guest get_f2.out
+'
+
+#
+# corner case tests
+#
+
+test_expect_success 'flux kvs eventlog get fails on bad input' '
+	test_must_fail flux kvs eventlog get
+'
+
+test_expect_success 'flux kvs eventlog append fails on bad input' '
+	test_must_fail flux kvs eventlog append
+'
+
+test_expect_success 'flux kvs eventlog append fails with invalid context' '
+	test_must_fail flux kvs eventlog append test.bad.context foo not_a_object
 '
 
 test_done
