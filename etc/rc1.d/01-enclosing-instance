@@ -2,7 +2,8 @@
 
 # Inform the enclosing instance (if any) of the URI's for this instance
 
-if parent_uri=$(flux getattr parent-uri 2>/dev/null) \
+if test $(flux getattr rank) -eq 0 \
+	&& parent_uri=$(flux getattr parent-uri 2>/dev/null) \
 	&& parent_ns=$(flux getattr parent-kvs-namespace 2>/dev/null); then
     key_prefix=flux
     local_uri=${FLUX_URI}

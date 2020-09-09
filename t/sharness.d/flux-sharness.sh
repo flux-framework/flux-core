@@ -94,12 +94,6 @@ test_under_flux() {
     if test -n "$SHARNESS_TEST_DIRECTORY"; then
         cd $SHARNESS_TEST_DIRECTORY
     fi
-    timeout="-o -Sinit.rc2_timeout=300"
-    if test -n "$FLUX_TEST_DISABLE_TIMEOUT"; then
-        timeout=""
-    elif test_have_prereq LONGTEST; then
-        timeout="-o,-Sinit.rc2_timeout=900"
-    fi
 
     if test "$personality" = "minimal"; then
         RC1_PATH=""
@@ -120,12 +114,9 @@ test_under_flux() {
         valgrind="$valgrind,--trace-children=no,--child-silent-after-fork=yes"
         valgrind="$valgrind,--leak-resolution=med,--error-exitcode=1"
         valgrind="$valgrind,--suppressions=${VALGRIND_SUPPRESSIONS}"
-        gracetime="-o,-g,10"
     fi
     # Extend timeouts when running under AddressSanitizer
     if test_have_prereq ASAN; then
-        gracetime="-o,-g,10"
-        timeout="-o -Sinit.rc2_timeout=800"
         # Set log_path for ASan o/w errors from broker may be lost
         ASAN_OPTIONS=${ASAN_OPTIONS}:log_path=${TEST_NAME}.asan
     fi
@@ -136,8 +127,6 @@ test_under_flux() {
                       ${RC1_PATH+-o -Sbroker.rc1_path=${RC1_PATH}} \
                       ${RC3_PATH+-o -Sbroker.rc3_path=${RC3_PATH}} \
                       ${logopts} \
-                      ${timeout} \
-                      ${gracetime} \
                       ${valgrind} \
                      "sh $0 ${flags}"
 }

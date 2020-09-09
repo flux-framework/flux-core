@@ -54,6 +54,7 @@ struct discover {
     bool ready;             // all broker ranks are online
     bool loaded;            // resource.hwloc is populated
     flux_future_t *f;
+    flux_msg_handler_t **handlers;
 };
 
 static const char *auxkey = "flux::discover";
@@ -117,7 +118,7 @@ static void hwloc_reload_completion (flux_subprocess_t *p)
     else if (rc > 0)
         flux_log (ctx->h, LOG_ERR, "%s exited with rc=%d", cmd, rc);
     else if ((signal = flux_subprocess_signaled (p)) > 0)
-        flux_log (ctx->h, LOG_ERR, "%s killed by %s", cmd, strsignal (signal));
+        flux_log (ctx->h, LOG_ERR, "%s %s", cmd, strsignal (signal));
     else
         flux_log (ctx->h, LOG_ERR, "%s completed (not signal or exit)", cmd);
     if (reslog_post_pack (ctx->reslog,
@@ -238,12 +239,48 @@ static int replay_eventlog (struct discover *discover, const json_t *eventlog)
     return 0;
 }
 
+/* rank 0 broker entered SHUTDOWN state.  If resource discovery is
+ * still in progress, ensure that:
+ * - running "flux hwloc reload" is terminated
+ * - hwloc-discover-finish is posted (loaded=false) to fail resource.acquire
+ */
+static void shutdown_cb (flux_t *h,
+                         flux_msg_handler_t *mh,
+                         const flux_msg_t *msg,
+                         void *arg)
+{
+    struct discover *discover = arg;
+
+    if (discover->p) {
+        flux_future_t *f = flux_subprocess_kill (discover->p, SIGKILL);
+        if (!f)
+            flux_log_error (h, "Error killing flux hwloc reload subproc");
+        flux_future_destroy (f);
+        /* hwloc_reload_completion() will post event */
+    }
+    else if (!discover->loaded) {
+        if (reslog_post_pack (discover->ctx->reslog,
+                              NULL,
+                              "hwloc-discover-finish",
+                              "{s:b}",
+                              "loaded",
+                              0) < 0)
+            flux_log_error (h, "Error posting hwloc-discover-finish");
+    }
+}
+
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_EVENT , "shutdown",  shutdown_cb, 0 },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
 void discover_destroy (struct discover *discover)
 {
     if (discover) {
         int saved_errno = errno;
         flux_subprocess_destroy (discover->p);
         flux_future_destroy (discover->f);
+        flux_msg_handler_delvec (discover->handlers);
         free (discover);
         errno = saved_errno;
     }
@@ -258,6 +295,13 @@ struct discover *discover_create (struct resource_ctx *ctx,
     if (!(discover = calloc (1, sizeof (*discover))))
         return NULL;
     discover->ctx = ctx;
+    if (flux_msg_handler_addvec (ctx->h,
+                                 htab,
+                                 discover,
+                                 &discover->handlers) < 0)
+        goto error;
+    if (flux_event_subscribe (ctx->h, "shutdown") < 0)
+        goto error;
     if (replay_eventlog (discover, eventlog) < 0)
         goto error;
     if (discover->loaded) {

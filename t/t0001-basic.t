@@ -41,9 +41,6 @@ test_expect_success 'flux-python command runs a python that finds flux' '
 # clear the RC paths
 ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 
-test_expect_success 'broker --shutdown-grace option works' "
-	flux start ${ARGS} -s2 -o,--shutdown-grace=5 /bin/true
-"
 test_expect_success 'flux-start in exec mode works' "
 	flux start ${ARGS} 'flux comms info' | grep 'size=1'
 "
@@ -83,17 +80,17 @@ test_expect_success 'flux-start in subprocess/pmi mode passes exit code due to s
 	test_expect_code 130 flux start ${ARGS} --size=1 'kill -INT \$\$'
 "
 test_expect_success 'flux-start in exec mode works as initial program' "
-	flux start --size=2 flux start ${ARGS} flux comms info | grep size=1
+	flux start ${ARGS} --size=2 flux start ${ARGS} flux comms info | grep size=1
 "
 test_expect_success 'flux-start in subprocess/pmi mode works as initial program' "
-	flux start --size=2 flux start ${ARGS} --size=1 flux comms info | grep size=1
+	flux start ${ARGS} --size=2 flux start ${ARGS} --size=1 flux comms info | grep size=1
 "
 
 test_expect_success 'flux-start --wrap option works' '
-	broker_path=$(flux start -vX 2>&1 | sed "s/^flux-start: *//g") &&
+	broker_path=$(flux start ${ARGS} -vX 2>&1 | sed "s/^flux-start: *//g") &&
 	echo broker_path=${broker_path} &&
 	test -n "${broker_path}" &&
-	flux start --wrap=/bin/echo,start: arg0 arg1 arg2 > wrap.output &&
+	flux start ${ARGS} --wrap=/bin/echo,start: arg0 arg1 arg2 > wrap.output &&
 	test_debug "cat wrap.output" &&
 	cat >wrap.expected <<-EOF &&
 	start: ${broker_path} arg0 arg1 arg2
@@ -101,7 +98,7 @@ test_expect_success 'flux-start --wrap option works' '
 	test_cmp wrap.expected wrap.output
 '
 test_expect_success 'flux-start --wrap option works with --size' '
-	flux start --size=2 -vX --wrap=test-wrap > wrap2.output 2>&1 &&
+	flux start ${ARGS} --size=2 -vX --wrap=test-wrap > wrap2.output 2>&1 &&
 	test_debug "cat wrap2.output" &&
 	test "$(grep -c test-wrap wrap2.output)" = "2"
 '
@@ -142,17 +139,17 @@ test_expect_success 'flux-start -o,--setattr ATTR=VAL can set broker attributes'
 	test $ATTR_VAL -eq 42
 '
 test_expect_success 'tbon.endpoint can be read' '
-	ATTR_VAL=`flux start -s2 flux getattr tbon.endpoint` &&
+	ATTR_VAL=`flux start ${ARGS} -s2 flux getattr tbon.endpoint` &&
 	echo $ATTR_VAL | grep "://"
 '
 test_expect_success 'tbon.endpoint can be set and %h works' '
-	flux start -s2 -o,--setattr=tbon.endpoint=tcp://%h:* \
+	flux start ${ARGS} -s2 -o,--setattr=tbon.endpoint=tcp://%h:* \
 		flux getattr tbon.endpoint >pct_h.out &&
 	grep "^tcp" pct_h.out &&
 	test_must_fail grep "%h" pct_h.out
 '
 test_expect_success 'tbon.endpoint with %B works' '
-	flux start -s2 -o,--setattr=tbon.endpoint=ipc://%B/req \
+	flux start ${ARGS} -s2 -o,--setattr=tbon.endpoint=ipc://%B/req \
 		flux getattr tbon.endpoint >pct_B.out &&
 	grep "^ipc" pct_B.out &&
 	test_must_fail grep "%B" pct_B.out
@@ -160,13 +157,14 @@ test_expect_success 'tbon.endpoint with %B works' '
 # N.B. rank 1 has to be killed in this test after rank 0 fails gracefully
 # so test_must_fail won't work here
 test_expect_success 'tbon.endpoint fails on bad endpoint' '
-	! flux start -s2 -o,--setattr=tbon.endpoint=foo://bar /bin/true
+	! flux start ${ARGS} -s2 --killer-timeout=0.2 \
+		-o,--setattr=tbon.endpoint=foo://bar /bin/true
 '
 test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
-	test_must_fail flux start -s2 flux getattr tbon.parent-endpoint
+	test_must_fail flux start ${ARGS} -s2 flux getattr tbon.parent-endpoint
 '
 test_expect_success 'tbon.parent-endpoint can be read on not rank 0' '
-       NUM=`flux start --size 4 flux exec -n flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
+       NUM=`flux start ${ARGS} --size 4 flux exec -n flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
        test $NUM -eq 3
 '
 test_expect_success 'flux start --bootstrap=pmi (singlton) cleans up rundir' '
@@ -292,14 +290,14 @@ test_expect_success 'builtin test_size_large () works' '
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 test_expect_success 'scripts/waitfile works' '
-	flux start $waitfile -v -t 5 -p "hello" waitfile.test.1 &
+	flux start ${ARGS} $waitfile -v -t 5 -p "hello" waitfile.test.1 &
 	p=$! &&
 	echo "hello" > waitfile.test.1 &&
 	wait $p
 '
 
 test_expect_success 'scripts/waitfile works after <1s' '
-	flux start $waitfile -v -t 2 -p "hello" -P- waitfile.test.2 <<-EOF &
+	flux start ${ARGS} $waitfile -v -t 2 -p "hello" -P- waitfile.test.2 <<-EOF &
 	-- open file at 250ms, write pattern at 500ms
 	f:timer{ timeout = 250,
 	         handler = function () tf = io.open ("waitfile.test.2", "w") end
@@ -313,7 +311,7 @@ test_expect_success 'scripts/waitfile works after <1s' '
 '
 
 test_expect_success 'scripts/waitfile works after 1s' '
-	flux start $waitfile -v -t 5 -p "hello" -P- waitfile.test.3 <<-EOF &
+	flux start ${ARGS} $waitfile -v -t 5 -p "hello" -P- waitfile.test.3 <<-EOF &
 	-- Wait 250ms and create file, at .5s write a line, at 1.1s write pattern:
 	f:timer{ timeout = 250,
 	         handler = function () tf = io.open ("waitfile.test.3", "w") end
@@ -351,7 +349,7 @@ test_expect_success 'reactor: reactorcat example program works' '
 '
 
 test_expect_success 'flux-start: panic rank 1 of a size=2 instance' '
-	! flux start --killer-timeout=0.2 --bootstrap=selfpmi --size=2 \
+	! flux start ${ARGS} --killer-timeout=0.2 --bootstrap=selfpmi --size=2 \
 		bash -c "flux getattr rundir; flux exec -r 1 flux comms panic fubar; sleep 5" >panic.out 2>panic.err
 '
 test_expect_success 'flux-start: panic message reached stderr' '

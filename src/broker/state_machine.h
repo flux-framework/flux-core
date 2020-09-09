@@ -15,11 +15,14 @@ struct broker;
 
 typedef enum {
     STATE_NONE,
+    STATE_JOIN,
     STATE_INIT,             // rc1
+    STATE_QUORUM,
     STATE_RUN,              // initial program
     STATE_CLEANUP,
-    STATE_FINALIZE,         // rc3
     STATE_SHUTDOWN,
+    STATE_FINALIZE,         // rc3
+    STATE_EXIT,
 } broker_state_t;
 
 
@@ -27,10 +30,6 @@ struct state_machine *state_machine_create (struct broker *ctx);
 void state_machine_destroy (struct state_machine *s);
 
 void state_machine_post (struct state_machine *s, const char *event);
-
-broker_state_t state_machine_get_state (struct state_machine *s);
-
-void state_machine_shutdown (struct state_machine *s);
 
 void state_machine_kill (struct state_machine *s, int signum);
 

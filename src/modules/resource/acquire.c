@@ -314,6 +314,7 @@ static void reslog_cb (struct reslog *reslog, const char *name, void *arg)
     struct acquire *acquire = arg;
     struct resource_ctx *ctx = acquire->ctx;
     const char *errmsg = NULL;
+    const json_t *resobj;
 
     flux_log (ctx->h, LOG_DEBUG, "%s: %s event posted", __func__, name);
 
@@ -322,8 +323,12 @@ static void reslog_cb (struct reslog *reslog, const char *name, void *arg)
 
     if (!strcmp (name, "hwloc-discover-finish")) {
         if (acquire->request->response_count == 0) {
-            if (acquire_request_init (acquire->request,
-                                      discover_get (ctx->discover)) < 0) {
+            if (!(resobj = discover_get (ctx->discover))) {
+                errmsg = "resource discovery failed or interrupted";
+                errno = ENOENT;
+                goto error;
+            }
+            if (acquire_request_init (acquire->request, resobj) < 0) {
                 errmsg = "error preparing first resource.acquire response";
                 goto error;
 

@@ -1,0 +1,222 @@
+#!/bin/sh
+#
+
+test_description='Test broker state machine'
+
+. `dirname $0`/sharness.sh
+
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+SRPC=${FLUX_BUILD_DIR}/t/request/rpc_stream
+ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
+
+test_expect_success 'flux comms up reports full quorum (1 TBON level)' '
+	echo "[0-2]" >full3.exp &&
+	flux start -s3 ${ARGS} flux comms up >full3.out &&
+	test_cmp full3.exp full3.out
+'
+
+test_expect_success 'flux comms up reports full quorum (2 TBON level)' '
+	echo "[0-6]" >full7.exp &&
+	flux start -s7 ${ARGS} flux comms up >full7.out &&
+	test_cmp full7.exp full7.out
+'
+
+test_expect_success 'flux comms up reports full quorum (3 TBON level)' '
+	echo "[0-14]" >full15.exp &&
+	flux start -s15 ${ARGS} flux comms up >full15.out &&
+	test_cmp full15.exp full15.out
+'
+
+test_expect_success 'broker.quorum can be set on the command line' '
+	flux start -s15 ${ARGS} -o,-Sbroker.quorum="0-14" \
+		flux comms up >full15_explicit.out &&
+	test_cmp full15.exp full15_explicit.out
+'
+
+test_expect_success 'broker fails with malformed broker.quorum' '
+	test_must_fail flux start ${ARGS} \
+		-o,-Sbroker.quorum="badids" /bin/true 2>qmalformed.err &&
+	grep "Error parsing broker.quorum attribute" qmalformed.err
+'
+
+test_expect_success 'broker fails with broker.quorum that exceeds size' '
+	test_must_fail flux start ${ARGS} \
+		-o,-Sbroker.quorum="0-1" /bin/true 2>qtoobig.err &&
+	grep "Error parsing broker.quorum attribute: exceeds size" qtoobig.err
+'
+
+test_expect_success 'create rc1 that blocks on FIFO for rank != 0' '
+	cat <<-EOT >rc1_block &&
+	#!/bin/bash
+	rank=\$(flux getattr rank)
+	test \$rank -eq 0 || cat fifo
+	EOT
+	chmod +x rc1_block
+'
+
+test_expect_success 'create rc2 that unblocks FIFO' '
+	cat <<-EOT >rc2_unblock &&
+	#!/bin/bash
+	flux comms up
+	echo UNBLOCKED! >>fifo
+	EOT
+	chmod +x rc2_unblock
+'
+
+# Delay rank 1 so that we can check that initial program ran with only
+# rank 0 in RUN state.
+test_expect_success 'instance functions with late-joiner' '
+	echo "0" >late.exp &&
+	rm -f fifo &&
+	mkfifo fifo &&
+	run_timeout 10 \
+		flux start -s2 \
+		-o,-Slog-stderr-level=6 \
+		-o,-Sbroker.rc1_path="$(pwd)/rc1_block" \
+		-o,-Sbroker.rc3_path= \
+		-o,-Sbroker.quorum="0" \
+		$(pwd)/rc2_unblock >late.out &&
+	test_cmp late.exp late.out
+'
+
+test_expect_success HAVE_JQ 'quorum-monitor singleton RPC works' '
+	flux start ${ARGS} \
+		$RPC state-machine.quorum-monitor \
+		</dev/null >qm0.out &&
+	jq -cea .idset qm0.out
+'
+
+test_expect_success HAVE_JQ 'quorum-monitor streaming RPC works' '
+	flux start ${ARGS} \
+		$SRPC state-machine.quorum-monitor idset \
+		</dev/null >qms.out &&
+	jq -cea .idset qms.out
+'
+
+test_expect_success 'quorum-monitor RPC fails on rank > 0' '
+	test_must_fail flux start -s2 ${ARGS} \
+		flux exec -r1 $RPC state-machine.quorum-monitor \
+		</dev/null 2>qm1.err &&
+	grep "only available on rank 0" qm1.err
+'
+
+test_expect_success HAVE_JQ 'monitor streaming RPC works' '
+	flux start ${ARGS} \
+		$SRPC state-machine.monitor state \
+		</dev/null >state.out &&
+	jq -cea .state state.out
+'
+
+test_expect_success 'create rc script that prints current state' '
+	cat <<-EOT >rc_getstate &&
+	#!/bin/bash
+	$RPC state-machine.monitor </dev/null | jq -cea .state >rc.out
+	EOT
+	chmod +x rc_getstate
+'
+
+test_expect_success HAVE_JQ 'monitor reports INIT(2) in rc1' '
+	echo 2 >rc1.exp &&
+	flux start \
+		-o,-Sbroker.rc1_path=$(pwd)/rc_getstate \
+		-o,-Sbroker.rc3_path= \
+		/bin/true &&
+	test_cmp rc1.exp rc.out
+'
+
+test_expect_success HAVE_JQ 'monitor reports RUN(4) in rc2' '
+	echo 4 >rc2.exp &&
+	flux start \
+		-o,-Sbroker.rc1_path= \
+		-o,-Sbroker.rc3_path= \
+		$(pwd)/rc_getstate &&
+	test_cmp rc2.exp rc.out
+'
+
+test_expect_success HAVE_JQ 'monitor reports CLEANUP(5) in cleanup script' '
+	echo 5 >cleanup.exp &&
+	flux start \
+		-o,-Sbroker.rc1_path= \
+		-o,-Sbroker.rc3_path= \
+		bash -c "echo $(pwd)/rc_getstate | flux admin cleanup-push" &&
+	test_cmp cleanup.exp rc.out
+'
+
+test_expect_success HAVE_JQ 'monitor reports FINALIZE(7) in rc3' '
+	echo 7 >rc3.exp &&
+	flux start \
+		-o,-Sbroker.rc1_path= \
+		-o,-Sbroker.rc3_path=$(pwd)/rc_getstate \
+		/bin/true &&
+	test_cmp rc3.exp rc.out
+'
+
+test_expect_success 'capture state transitions from size=1 instance' '
+	flux start ${ARGS} -o,-Slog-filename=states.log /bin/true
+'
+
+test_expect_success 'all expected events and state transitions occurred' '
+	grep "start: none->join"			states.log &&
+	grep "parent-none: join->init"			states.log &&
+	grep "rc1-none: init->quorum"			states.log &&
+	grep "quorum-full: quorum->run"			states.log &&
+	grep "rc2-success: run->cleanup"		states.log &&
+	grep "cleanup-none: cleanup->shutdown"		states.log &&
+	grep "children-none: shutdown->finalize"	states.log &&
+	grep "rc3-none: finalize->exit"			states.log
+'
+
+test_expect_success 'capture state transitions from instance with rc1 failure' '
+	test_must_fail flux start \
+	    -o,-Slog-filename=states_rc1.log \
+	    -o,-Sbroker.rc1_path=/bin/false \
+	    -o,-Sbroker.rc3_path= \
+	    /bin/true
+'
+
+test_expect_success 'all expected events and state transitions occurred' '
+	grep "start: none->join"			states_rc1.log &&
+	grep "parent-none: join->init"			states_rc1.log &&
+	grep "rc1-fail: init->shutdown"			states_rc1.log &&
+	grep "children-none: shutdown->finalize"	states_rc1.log &&
+	grep "rc3-none: finalize->exit"			states_rc1.log
+'
+
+test_expect_success 'capture state transitions from instance with rc2 failure' '
+	test_must_fail flux start \
+	    -o,-Slog-filename=states_rc2.log \
+	    ${ARGS} \
+	    /bin/false
+'
+
+test_expect_success 'all expected events and state transitions occurred' '
+	grep "start: none->join"			states_rc2.log &&
+	grep "parent-none: join->init"			states_rc2.log &&
+	grep "rc1-none: init->quorum"			states_rc2.log &&
+	grep "quorum-full: quorum->run"			states_rc2.log &&
+	grep "rc2-fail: run->cleanup"		        states_rc2.log &&
+	grep "cleanup-none: cleanup->shutdown"		states_rc2.log &&
+	grep "children-none: shutdown->finalize"	states_rc2.log &&
+	grep "rc3-none: finalize->exit"			states_rc2.log
+'
+
+test_expect_success 'capture state transitions from instance with rc3 failure' '
+	test_must_fail flux start \
+	    -o,-Slog-filename=states_rc3.log \
+	    -o,-Sbroker.rc1_path= \
+	    -o,-Sbroker.rc3_path=/bin/false \
+	    /bin/true
+'
+
+test_expect_success 'all expected events and state transitions occurred' '
+	grep "start: none->join"			states_rc3.log &&
+	grep "parent-none: join->init"			states_rc3.log &&
+	grep "rc1-none: init->quorum"			states_rc3.log &&
+	grep "quorum-full: quorum->run"			states_rc3.log &&
+	grep "rc2-success: run->cleanup"		states_rc3.log &&
+	grep "cleanup-none: cleanup->shutdown"		states_rc3.log &&
+	grep "children-none: shutdown->finalize"	states_rc3.log &&
+	grep "rc3-fail: finalize->exit"			states_rc3.log
+'
+
+test_done

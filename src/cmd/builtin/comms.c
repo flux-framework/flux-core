@@ -153,11 +153,12 @@ static int internal_comms_up (optparse_t *p, int ac, char *av[])
     if ((target = parse_idset_arg (p, "wait-for", size)))
         flags |= FLUX_RPC_STREAMING;
 
-    if (!(f = flux_rpc (h, "hello.idset", NULL, 0, flags)))
+    if (!(f = flux_rpc (h, "state-machine.quorum-monitor", NULL, 0, flags)))
         log_err_exit ("flux_rpc");
     do {
         if (flux_rpc_get_unpack (f, "{s:s}", "idset", &s) < 0)
-            log_msg_exit ("hello.idset: %s", flux_future_error_string (f));
+            log_msg_exit ("state-machine.quorum-monitor: %s",
+                          future_strerror (f, errno));
         if (!optparse_hasopt (p, "quiet"))
             printf ("%s\n", s);
         /* If target is non-NULL, then we keep listening until the
@@ -165,7 +166,7 @@ static int internal_comms_up (optparse_t *p, int ac, char *av[])
          */
         if (target) {
             if (!(cur = idset_decode (s)))
-                log_msg_exit ("hello.idset: bad idset in response");
+                log_msg_exit ("state-machine.quorum-monitor: bad idset in response");
             done = is_subset_of (target, cur);
             idset_destroy (cur);
         }

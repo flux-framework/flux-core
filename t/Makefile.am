@@ -67,6 +67,7 @@ TESTSCRIPTS = \
 	t0011-content-cache.t \
 	t0012-content-sqlite.t \
 	t0024-content-s3.t \
+	t0025-broker-state-machine.t \
 	t0013-config-file.t \
 	t0014-runlevel.t \
 	t0015-cron.t \
