@@ -118,7 +118,7 @@ static void hwloc_reload_completion (flux_subprocess_t *p)
     else if (rc > 0)
         flux_log (ctx->h, LOG_ERR, "%s exited with rc=%d", cmd, rc);
     else if ((signal = flux_subprocess_signaled (p)) > 0)
-        flux_log (ctx->h, LOG_ERR, "%s killed by %s", cmd, strsignal (signal));
+        flux_log (ctx->h, LOG_ERR, "%s %s", cmd, strsignal (signal));
     else
         flux_log (ctx->h, LOG_ERR, "%s completed (not signal or exit)", cmd);
     if (reslog_post_pack (ctx->reslog,

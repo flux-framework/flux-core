@@ -501,7 +501,8 @@ static int ss_acquire_resources (flux_t *h, struct simple_sched *ss)
     }
     ss->acquire_f = f;
     if (flux_rpc_get_unpack (f, "{s:o}", "resources", &o) < 0) {
-        flux_log_error (h, "rpc_get (resource.acquire)");
+        flux_log (h, LOG_ERR, "resource.acquire failed: %s",
+                  future_strerror (f, errno));
         goto out;
     }
     if (!(by_rank = json_dumps (o, JSON_COMPACT))) {

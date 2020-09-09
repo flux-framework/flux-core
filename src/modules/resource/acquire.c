@@ -324,7 +324,7 @@ static void reslog_cb (struct reslog *reslog, const char *name, void *arg)
     if (!strcmp (name, "hwloc-discover-finish")) {
         if (acquire->request->response_count == 0) {
             if (!(resobj = discover_get (ctx->discover))) {
-                errmsg = "resource discovery failed";
+                errmsg = "resource discovery failed or interrupted";
                 errno = ENOENT;
                 goto error;
             }
