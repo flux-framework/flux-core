@@ -172,9 +172,10 @@ static int b58revenc (char *buf, int bufsz, fluid_t id)
 static inline int is_utf8_locale (void)
 {
     /* Assume if MB_CUR_MAX > 1, this locale can handle wide characters
-     *  and therefore will properly handle UTF-8.
+     *  and therefore will properly handle UTF-8, but allow ascii encoding
+     *  to be enforced if FLUX_F58_FORCE_ASCII is set.
      */
-    if (MB_CUR_MAX > 1)
+    if (MB_CUR_MAX > 1 && !getenv ("FLUX_F58_FORCE_ASCII"))
         return 1;
     return 0;
 }
