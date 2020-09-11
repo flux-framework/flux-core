@@ -6,6 +6,7 @@ TimeoutStopSec=90
 KillMode=mixed
 ExecStart=@X_BINDIR@/flux broker \
   --config-path=@X_SYSCONFDIR@/flux/system/conf.d \
+  --k-ary=256 \
   -Srundir=@X_RUNSTATEDIR@/flux \
   -Slocal-uri=local://@X_RUNSTATEDIR@/flux/local \
   -Slog-stderr-level=6 \
