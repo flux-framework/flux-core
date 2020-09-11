@@ -49,7 +49,7 @@ void priority_handle_request (flux_t *h,
     struct flux_msg_cred cred;
     flux_jobid_t id;
     struct job *job;
-    int priority;
+    int priority, orig_priority;
     const char *errstr = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:I s:i}",
@@ -99,13 +99,15 @@ void priority_handle_request (flux_t *h,
     }
     /* Post event, change job's queue position, and respond.
      */
+    orig_priority = job->priority;
     if (event_job_post_pack (ctx->event, job,
                              "priority",
                              "{ s:i s:i }",
                              "userid", cred.userid,
                              "priority", priority) < 0)
         goto error;
-    alloc_queue_reorder (ctx->alloc, job);
+    if (priority != orig_priority)
+        alloc_queue_reorder (ctx->alloc, job);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
