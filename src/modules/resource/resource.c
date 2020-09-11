@@ -267,32 +267,36 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto error;
     if (flux_get_size (h, &ctx->size) < 0)
         goto error;
-    if (reload_eventlog (h, &eventlog) < 0)
-        goto error;
-    if (!(ctx->reslog = reslog_create (h)))
+    if (flux_get_rank (h, &ctx->rank) < 0)
         goto error;
     if (!(ctx->monitor = monitor_create (ctx))) // makes synchronous rpc
         goto error;
-    if (!(ctx->discover = discover_create (ctx, eventlog))) // uses monitor
-        goto error;
-    if (!(ctx->drain = drain_create (ctx, eventlog)))
-        goto error;
-    if (!(ctx->acquire = acquire_create (ctx)))
-        goto error;
-    if (parse_config (ctx,
-                      flux_get_conf (h),
-                      &exclude_idset,
-                      errbuf,
-                      sizeof (errbuf)) < 0) {
-        flux_log (h, LOG_ERR, "%s", errbuf);
-        goto error;
+    if (ctx->rank == 0) {
+        if (reload_eventlog (h, &eventlog) < 0)
+            goto error;
+        if (!(ctx->reslog = reslog_create (h)))
+            goto error;
+        if (!(ctx->discover = discover_create (ctx, eventlog))) // uses monitor
+            goto error;
+        if (!(ctx->drain = drain_create (ctx, eventlog)))
+            goto error;
+        if (!(ctx->acquire = acquire_create (ctx)))
+            goto error;
+        if (parse_config (ctx,
+                          flux_get_conf (h),
+                          &exclude_idset,
+                          errbuf,
+                          sizeof (errbuf)) < 0) {
+            flux_log (h, LOG_ERR, "%s", errbuf);
+            goto error;
+        }
+        if (!(ctx->exclude = exclude_create (ctx, exclude_idset)))
+            goto error;
+        if (post_restart_event (ctx, eventlog ? 1 : 0) < 0)
+            goto error;
+        if (reslog_sync (ctx->reslog) < 0)
+            goto error;
     }
-    if (!(ctx->exclude = exclude_create (ctx, exclude_idset)))
-        goto error;
-    if (post_restart_event (ctx, eventlog ? 1 : 0) < 0)
-        goto error;
-    if (reslog_sync (ctx->reslog) < 0)
-        goto error;
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {

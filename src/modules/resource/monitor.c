@@ -176,9 +176,12 @@ struct monitor *monitor_create (struct resource_ctx *ctx)
     if (!(monitor = calloc (1, sizeof (*monitor))))
         return NULL;
     monitor->ctx = ctx;
-    if (quorum_monitor_start (monitor) < 0) {
-        flux_log_error (ctx->h, "state-machine.quorum-monitor during initialization");
-        goto error;
+    if (ctx->rank == 0) {
+        if (quorum_monitor_start (monitor) < 0) {
+            flux_log_error (ctx->h, "state-machine.quorum-monitor "
+                            "during initialization");
+            goto error;
+        }
     }
     return monitor;
 error:

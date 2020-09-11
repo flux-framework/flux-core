@@ -21,6 +21,7 @@ struct resource_ctx {
     struct acquire *acquire;
     struct reslog *reslog;
 
+    uint32_t rank;
     uint32_t size;
 };
 

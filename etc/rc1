@@ -22,7 +22,7 @@ modload all aggregator
 modload all kvs
 modload all kvs-watch
 
-modload 0 resource
+modload all resource
 modload 0 job-info
 modload 0 cron sync=hb
 modload 0 job-manager

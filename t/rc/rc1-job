@@ -36,7 +36,7 @@ if test $RANK -eq 0; then
     # Load a fake resource.hwloc.by_rank key for sched-simple
     set_fake_hwloc_by_rank ${TEST_UNDER_FLUX_CORES_PER_RANK:-2}
 fi
-modload 0 resource
+modload all resource
 
 modload 0 job-exec
 

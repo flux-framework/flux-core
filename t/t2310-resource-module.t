@@ -60,7 +60,7 @@ test_expect_success 'load aggregator module needed for flux hwloc reload' '
 '
 
 test_expect_success 'load resource module' '
-	flux module load resource
+	flux exec -r all flux module load resource
 '
 
 test_expect_success HAVE_JQ 'resource.eventlog exists' '
@@ -201,7 +201,7 @@ test_expect_success 'reload config/module excluding rank 0' '
 	exclude = "0"
 	EOT
 	flux config reload &&
-	flux module reload resource
+	flux module reload resource monitor-force-up
 '
 
 test_expect_success HAVE_JQ 'acquire returns resources excluding rank 0' '
@@ -252,7 +252,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'add/remove new exclusion causes down/
 '
 
 test_expect_success 'unload resource module' '
-	flux module remove resource
+	flux exec -r all flux module remove resource
 '
 test_expect_success 'unload aggregator module' '
 	flux exec -r all flux module remove aggregator

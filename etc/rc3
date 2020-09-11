@@ -23,7 +23,7 @@ done
 shopt -u nullglob
 
 modrm 0 sched-simple
-modrm 0 resource
+modrm all resource
 modrm 0 job-exec
 modrm 0 job-manager
 modrm all job-ingest
