@@ -256,20 +256,45 @@ error:
     return -1;
 }
 
+int parse_args (flux_t *h,
+                int argc,
+                char **argv,
+                bool *monitor_force_up)
+{
+    int i;
+    for (i = 0; i < argc; i++) {
+        /* Test option to force all ranks to be marked online in the initial
+         * 'restart' event posted to resource.eventlog.
+         */
+        if (!strcmp (argv[i], "monitor-force-up"))
+            *monitor_force_up = true;
+        else  {
+            flux_log (h, LOG_ERR, "unknown option: %s", argv[i]);
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    return 0;
+}
+
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     struct resource_ctx *ctx;
     char errbuf[256];
     const char *exclude_idset;
     json_t *eventlog = NULL;
+    bool monitor_force_up = false;
 
     if (!(ctx = resource_ctx_create (h)))
+        goto error;
+    if (parse_args (h, argc, argv, &monitor_force_up) < 0)
         goto error;
     if (flux_get_size (h, &ctx->size) < 0)
         goto error;
     if (flux_get_rank (h, &ctx->rank) < 0)
         goto error;
-    if (!(ctx->monitor = monitor_create (ctx))) // makes synchronous rpc
+    if (!(ctx->monitor = monitor_create (ctx, monitor_force_up)))
         goto error;
     if (ctx->rank == 0) {
         if (reload_eventlog (h, &eventlog) < 0)

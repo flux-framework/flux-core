@@ -379,6 +379,7 @@ void acquire_destroy (struct acquire *acquire)
     if (acquire) {
         int saved_errno = errno;
         flux_msg_handler_delvec (acquire->handlers);
+        reslog_set_callback (acquire->ctx->reslog, NULL, NULL);
         if (acquire->request) {
             if (flux_respond_error (acquire->ctx->h,
                                     acquire->request->msg,

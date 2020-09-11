@@ -18,6 +18,10 @@
 int rutil_idset_sub (struct idset *ids1, const struct idset *ids2);
 int rutil_idset_add (struct idset *ids1, const struct idset *ids2);
 
+/* Same as above but ids2 is in string-encoded form.
+ */
+int rutil_idset_decode_add (struct idset *ids1, const char *s);
+
 /* Compare 'old_set' to 'new_set'.
  * Create '*add' for ids in new_set but not in old_set (sets NULL if n/a).
  * Create '*sub' for ids in old_set but not in new_set (sets NULL if n/a).

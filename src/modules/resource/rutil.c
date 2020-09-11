@@ -57,6 +57,18 @@ int rutil_idset_add (struct idset *ids1, const struct idset *ids2)
     return 0;
 }
 
+int rutil_idset_decode_add (struct idset *ids1, const char *s)
+{
+    struct idset *ids2;
+    int rc;
+
+    if (!(ids2 = idset_decode (s)))
+        return -1;
+    rc = rutil_idset_add (ids1, ids2);
+    idset_destroy (ids2);
+    return rc;
+}
+
 int rutil_idset_diff (const struct idset *ids1,
                       const struct idset *ids2,
                       struct idset **addp,

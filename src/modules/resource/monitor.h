@@ -13,7 +13,8 @@
 
 typedef void (*monitor_cb_f)(struct monitor *monitor, void *arg);
 
-struct monitor *monitor_create (struct resource_ctx *ctx);
+struct monitor *monitor_create (struct resource_ctx *ctx,
+                                bool monitor_force_up);
 void monitor_destroy (struct monitor *monitor);
 void monitor_set_callback (struct monitor *monitor, monitor_cb_f cb, void *arg);
 
