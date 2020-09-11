@@ -240,6 +240,7 @@ void job_state_destroy (void *data)
         zhashx_destroy (&jsctx->index);
         zlistx_destroy (&jsctx->transitions);
         (void)flux_event_unsubscribe (jsctx->h, "job-state");
+        (void)flux_event_unsubscribe (jsctx->h, "job-annotations");
         free (jsctx);
     }
 }
