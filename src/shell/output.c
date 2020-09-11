@@ -57,6 +57,8 @@
 #include "internal.h"
 #include "builtins.h"
 #include "eventlogger.h"
+#include "log.h"
+#include "mustache.h"
 
 enum {
     FLUX_OUTPUT_TYPE_TERM = 1,
@@ -586,37 +588,56 @@ static int shell_output_parse_type (struct shell_output *out,
     return 0;
 }
 
-/* handle mustache templates and the similar special cases */
-static char *shell_output_get_path (struct shell_output *out, const char *path)
+static int mustache_cb (FILE *fp, const char *name, void *arg)
 {
-    char *rv = NULL;
-    char *ptr;
+    flux_shell_t *shell = arg;
+    char value[128];
 
-    /* replace {{id}} with jobid */
-    if ((ptr = strstr (path, "{{id}}"))) {
-        char buf[32];
-        int len, buflen, total_len;
-
-        len = strlen (path);
-        buflen = snprintf (buf, sizeof (buf), "%ju",
-                           (uintmax_t)out->shell->info->jobid);
-        /* -6 for {{id}}, +1 for NUL */
-        total_len = len - 6 + buflen + 1;
-        if (total_len > (PATH_MAX + 1)) {
-            errno = EOVERFLOW;
-            return NULL;
+    /*  "jobid" is a synonym for "id" */
+    if (strncmp (name, "jobid", 5) == 0)
+        name += 3;
+    if (strncmp (name, "id", 2) == 0) {
+        const char *type = "dec";
+        if (strlen (name) > 2) {
+            if (name[2] != '.') {
+                shell_log_error ("Unknown mustache tag '%s'", name);
+                return -1;
+            }
+            type = name+3;
         }
-        if (!(rv = calloc (1, total_len)))
-            return NULL;
-        memcpy (rv, path, ptr - path);
-        memcpy (rv + (ptr - path), buf, buflen);
-        memcpy (rv + (ptr - path) + buflen, ptr + 6, len - (ptr - path) - 6);
+        if (flux_job_id_encode (shell->info->jobid,
+                                type,
+                                value,
+                                sizeof (value)) < 0) {
+            if (errno == EPROTO)
+                shell_log_error ("Invalid jobid encoding '%s' specified", name);
+            else
+                shell_log_errno ("flux_job_id_encode failed for %s", name);
+            return -1;
+        }
     }
     else {
-        if (!(rv = strdup (path)))
-            return NULL;
+        shell_log_error ("Unknown mustache tag '%s'", name);
+        return -1;
     }
-    return rv;
+    return fputs (value, fp);
+}
+
+static char * shell_output_mustache_render (struct shell_output *out,
+                                            const char *path)
+{
+    struct mustache_renderer *mr;
+    char *result = NULL;
+
+    mr = mustache_renderer_create (mustache_cb, out->shell);
+    if (!mr) {
+        shell_log_errno ("mustache_renderer_create");
+        return NULL;
+    }
+    mustache_renderer_set_log (mr, shell_llog, NULL);
+    result = mustache_render (mr, path);
+    mustache_renderer_destroy (mr);
+    return result;
 }
 
 static int
@@ -637,7 +658,7 @@ shell_output_setup_type_file (struct shell_output *out,
         return -1;
     }
 
-    if (!(ofp->path = shell_output_get_path (out, path)))
+    if (!(ofp->path = shell_output_mustache_render (out, path)))
         return -1;
 
     if (flux_shell_getopt_unpack (out->shell, "output",
