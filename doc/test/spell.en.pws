@@ -515,3 +515,6 @@ builtin
 OMP
 envfile
 regex
+encodings
+dec
+subkey
