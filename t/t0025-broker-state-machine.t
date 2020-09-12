@@ -3,6 +3,8 @@
 
 test_description='Test broker state machine'
 
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
