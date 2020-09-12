@@ -24,10 +24,6 @@ struct resource_ctx {
     uint32_t size;
 };
 
-/* Module name, service name, config table name.
- */
-#define MODULE_NAME "resource"
-
 #endif /* !_FLUX_RESOURCE_H */
 
 /*

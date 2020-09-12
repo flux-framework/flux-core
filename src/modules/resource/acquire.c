@@ -369,8 +369,8 @@ error:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  MODULE_NAME ".acquire", acquire_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  MODULE_NAME ".acquire-cancel", cancel_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "resource.acquire", acquire_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "resource.acquire-cancel", cancel_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

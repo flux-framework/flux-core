@@ -48,13 +48,12 @@ static int parse_config (struct resource_ctx *ctx,
     if (flux_conf_unpack (conf,
                           &error,
                           "{s?:{s?:s !}}",
-                          MODULE_NAME,
+                          "resource",
                             "exclude",
                             &exclude) < 0) {
         (void)snprintf (errbuf,
                         errbufsize,
-                        "error parsing [%s] configuration: %s",
-                        MODULE_NAME,
+                        "error parsing [resource] configuration: %s",
                         error.errbuf);
         return -1;
     }
@@ -147,13 +146,13 @@ static struct resource_ctx *resource_ctx_create (flux_t *h)
 static const struct flux_msg_handler_spec htab[] = {
     {
         .typemask = FLUX_MSGTYPE_REQUEST,
-        .topic_glob = MODULE_NAME ".config-reload",
+        .topic_glob = "resource.config-reload",
         .cb = config_reload_cb,
         .rolemask = 0
     },
     {
         .typemask = FLUX_MSGTYPE_REQUEST,
-        .topic_glob = MODULE_NAME ".disconnect",
+        .topic_glob = "resource.disconnect",
         .cb = disconnect_cb,
         .rolemask = 0
     },
@@ -309,7 +308,7 @@ error:
     return -1;
 }
 
-MOD_NAME (MODULE_NAME);
+MOD_NAME ("resource");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
