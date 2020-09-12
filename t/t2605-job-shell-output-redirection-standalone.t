@@ -205,6 +205,7 @@ test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout term/stderr
 #
 
 test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout file/stderr file)' '
+    id=$(flux job id --to=f58 14) &&
         cat j1echoboth \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out{{jobid}}\"" \
@@ -212,18 +213,19 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout
             |  $jq ".attributes.system.shell.options.output.stderr.path = \"err{{jobid}}\"" \
             > j1echoboth-14 &&
 	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-14 -R R1 14 &&
-	grep stdout:baz out14 &&
-	grep stderr:baz err14
+	grep stdout:baz out${id} &&
+	grep stderr:baz err${id}
 '
 
 test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout & stderr to stdout file)' '
+    id=$(flux job id --to=f58 15) &&
         cat j1echoboth \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
             |  $jq ".attributes.system.shell.options.output.stdout.path = \"out{{id}}\"" \
             > j1echoboth-15 &&
 	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-15 -R R1 15 &&
-	grep stdout:baz out15 &&
-	grep stderr:baz out15
+	grep stdout:baz out${id} &&
+	grep stderr:baz out${id}
 '
 
 for type in f58 dec hex dothex words; do

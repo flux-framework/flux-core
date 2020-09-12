@@ -597,7 +597,7 @@ static int mustache_cb (FILE *fp, const char *name, void *arg)
     if (strncmp (name, "jobid", 5) == 0)
         name += 3;
     if (strncmp (name, "id", 2) == 0) {
-        const char *type = "dec";
+        const char *type = "f58";
         if (strlen (name) > 2) {
             if (name[2] != '.') {
                 shell_log_error ("Unknown mustache tag '%s'", name);
