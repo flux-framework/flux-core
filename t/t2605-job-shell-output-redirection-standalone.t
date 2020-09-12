@@ -207,9 +207,9 @@ test_expect_success HAVE_JQ 'flux-shell: run 2-task echo job (stdout term/stderr
 test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout file/stderr file)' '
         cat j1echoboth \
             |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
-            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out{{id}}\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out{{jobid}}\"" \
             |  $jq ".attributes.system.shell.options.output.stderr.type = \"file\"" \
-            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err{{id}}\"" \
+            |  $jq ".attributes.system.shell.options.output.stderr.path = \"err{{jobid}}\"" \
             > j1echoboth-14 &&
 	${FLUX_SHELL} -v -s -r 0 -j j1echoboth-14 -R R1 14 &&
 	grep stdout:baz out14 &&
@@ -225,6 +225,20 @@ test_expect_success HAVE_JQ 'flux-shell: run 1-task echo job (mustache id stdout
 	grep stdout:baz out15 &&
 	grep stderr:baz out15
 '
+
+for type in f58 dec hex dothex words; do
+  test_expect_success HAVE_JQ "flux-shell: output template {{id.$type}}" '
+    jobid=123456789 &&
+    id=$(flux job id --to=${type} ${jobid}) &&
+        cat j1echoboth \
+            |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+            |  $jq ".attributes.system.shell.options.output.stdout.path = \"out{{id.${type}}}\"" \
+            > j1-mustache-${type} &&
+	${FLUX_SHELL} -v -s -r 0 -j j1-mustache-${type} -R R1 ${jobid} &&
+	grep stdout:baz out${id} &&
+	grep stderr:baz out${id}
+ '
+done
 
 #
 # output corner case tests
