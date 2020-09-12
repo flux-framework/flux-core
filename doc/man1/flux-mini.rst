@@ -108,17 +108,20 @@ KVS, where they may be accessed with the ``flux job attach`` command.
 In addition, ``flux-mini run`` processes standard I/O in real time,
 emitting the job's I/O to its stdout and stderr.
 
-**--output=FILENAME**
-   Redirect stdout to the specified FILENAME, bypassing the KVS.
-   The mustache template *{{id}}* is expanded to the numerical Job ID,
-   useful to ensure FILENAME is unique across multiple jobs. For
-   **flux mini batch** the default for FILENAME is *flux-{{id}}.out*.
-   To force output to go to KVS so it is available with ``flux job attach``,
-   set FILENAME to *none* or *kvs*.
+**--output=TEMPLATE**
+   Specify the filename *TEMPLATE* for stdout redirection, bypassing
+   the KVS.  *TEMPLATE* may be a mustache template which supports the
+   tags *{{id}}* and *{{jobid}}* which expand to the current jobid
+   in the F58 encoding.  If needed, an alternate encoding can be
+   selected by using a subkey with the name of the desired encoding,
+   e.g. *{{id.dec}}*. Supported encodings include *f58* (the default),
+   *dec*, *hex*, *dothex*, and *words*. For **flux mini batch** the
+   default *TEMPLATE* is *flux-{{id}}.out*. To force output to KVS so it is
+   available with ``flux job attach``, set *TEMPLATE* to *none* or *kvs*.
 
-**--error=FILENAME**
-   Redirect stderr to the specified FILENAME, bypassing the KVS.
-   The mustache template *{{id}}* is expanded as above.
+**--error=TEMPLATE**
+   Redirect stderr to the specified filename *TEMPLATE*, bypassing the KVS.
+   *TEMPLATE* is expanded as described above.
 
 **-l, --label-io**
    Add task rank prefixes to each line of output.
