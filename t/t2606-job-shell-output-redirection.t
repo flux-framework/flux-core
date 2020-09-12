@@ -165,6 +165,15 @@ test_expect_success 'flux-shell: run 1-task echo job (mustache id stdout & stder
         grep stderr:baz out${id}
 '
 
+test_expect_success 'flux-shell: bad mustache template still writes output' '
+        id=$(flux mini submit -n1 \
+             --output="out{{invalid" \
+             ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
+        flux job wait-event $id clean &&
+        grep stdout:baz out{{invalid &&
+        grep stderr:baz out{{invalid
+'
+
 #
 # output file outputs correct information to guest.output
 #

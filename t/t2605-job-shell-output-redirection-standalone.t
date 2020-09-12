@@ -242,6 +242,25 @@ for type in f58 dec hex dothex words; do
  '
 done
 
+test_expect_success HAVE_JQ "flux-shell: bad output mustache template is not rendered" '
+	cat j1echoboth \
+	    |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+	    |  $jq ".attributes.system.shell.options.output.stdout.path = \"{{idx}}.out\"" \
+	    > j1-mustache-error1 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1-mustache-error1 -R R1 1234 &&
+	grep stdout:baz {{idx}}.out &&
+	grep stderr:baz {{idx}}.out
+'
+test_expect_success HAVE_JQ "flux-shell: bad output mustache template is not rendered" '
+	cat j1echoboth \
+	    |  $jq ".attributes.system.shell.options.output.stdout.type = \"file\"" \
+	    |  $jq ".attributes.system.shell.options.output.stdout.path = \"{{id.x}}.out\"" \
+	    > j1-mustache-error2 &&
+	${FLUX_SHELL} -v -s -r 0 -j j1-mustache-error2 -R R1 1234 &&
+	grep stdout:baz {{id.x}}.out &&
+	grep stderr:baz {{id.x}}.out
+'
+
 #
 # output corner case tests
 #
