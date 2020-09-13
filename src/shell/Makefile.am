@@ -110,6 +110,7 @@ EXTRA_DIST = \
 TESTS = \
 	test_jobspec.t \
 	test_plugstack.t \
+	test_mustache.t \
 	mpir/test_rangelist.t \
 	mpir/test_nodelist.t \
 	mpir/test_proctable.t
@@ -189,4 +190,16 @@ mpir_test_proctable_t_LDADD = \
 	$(builddir)/libmpir.la \
 	$(test_ldadd)
 mpir_test_proctable_t_LDFLAGS = \
+	$(test_ldflags)
+
+test_mustache_t_SOURCES = \
+	mustache.c \
+	mustache.h \
+	test/mustache.c
+test_mustache_t_CPPFLAGS = \
+	$(test_cppflags)
+test_mustache_t_LDADD = \
+	$(builddir)/libshell.la \
+	$(test_ldadd)
+test_mustache_t_LDFLAGS = \
 	$(test_ldflags)
