@@ -83,7 +83,9 @@ flux_shell_SOURCES = \
 	pty.c \
 	batch.c \
 	mpir/mpir.c \
-	mpir/ptrace.c
+	mpir/ptrace.c \
+	mustache.h \
+	mustache.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
