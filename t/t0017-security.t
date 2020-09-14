@@ -87,9 +87,9 @@ test_expect_success 'connector-local restored private access policy' '
 '
 
 test_expect_success 'simulated local connector auth failure returns EPERM' '
-	flux comms info &&
+	flux getattr size &&
 	flux module debug --set 1 connector-local &&
-	test_must_fail flux comms info 2>authfail.out &&
+	test_must_fail flux getattr size 2>authfail.out &&
 	grep -q "Operation not permitted" authfail.out
 '
 

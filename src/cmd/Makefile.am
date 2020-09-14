@@ -45,7 +45,6 @@ flux_SOURCES = \
 	cmdhelp.c \
 	builtin.h \
 	builtin/attr.c \
-	builtin/comms.c \
 	builtin/config.c \
 	builtin/help.c \
 	builtin/dmesg.c \

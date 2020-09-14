@@ -59,12 +59,12 @@ test_expect_success 'test_on_rank works' '
 '
 
 test_expect_success 'test_on_rank sends to correct rank' '
-	flux comms info | grep rank=0 &&
-	test_on_rank 1 sh -c "flux comms info | grep -q rank=1"
+	flux getattr rank | grep 0 &&
+	test_on_rank 1 sh -c "flux getattr rank | grep -x 1"
 '
 
 test_expect_success 'test_on_rank works with test_must_fail' '
-	test_must_fail test_on_rank 1 sh -c "flux comms info | grep -q rank=0"
+	test_must_fail test_on_rank 1 sh -c "flux getattr rank | grep -x 0"
 '
 
 test_expect_success 'flux exec passes environment variables' '
@@ -96,7 +96,7 @@ test_expect_success 'test_on_rank works on multiple ranks' '
 	ouput_dir=$(pwd) &&
 	rm -f rank_output.* &&
 	cat >multiple_rank_test <<EOF &&
-rank=\`flux comms info | grep rank | sed s/rank=//\`
+rank=\`flux getattr rank\`
 echo \$rank > $(pwd)/rank_output.\${rank}
 exit 0
 EOF
@@ -145,15 +145,15 @@ test_expect_success 'basic IO testing' '
 '
 
 test_expect_success 'per rank output works' '
-	flux exec -n -r 1 sh -c "flux comms info | grep rank" | grep ^rank=1\$ &&
-	flux exec -n -lr 2 sh -c "flux comms info | grep rank" | grep ^2:\ rank=2\$ &&
+	flux exec -n -r 1 sh -c "flux getattr rank" | grep -x 1 &&
+	flux exec -n -lr 2 sh -c "flux getattr rank" | grep -x "2: 2" &&
 	cat >expected <<EOF &&
-0: rank=0
-1: rank=1
-2: rank=2
-3: rank=3
+0: 0
+1: 1
+2: 2
+3: 3
 EOF
-	flux exec -n -lr 0-3 sh -c "flux comms info | grep rank" | sort -n >output &&
+	flux exec -n -lr 0-3 sh -c "flux getattr rank" | sort -n >output &&
 	test_cmp output expected
 '
 

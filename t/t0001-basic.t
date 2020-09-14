@@ -12,6 +12,8 @@ other tests.
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
+RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
 test_expect_success 'TEST_NAME is set' '
 	test -n "$TEST_NAME"
 '
@@ -42,22 +44,24 @@ test_expect_success 'flux-python command runs a python that finds flux' '
 ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 
 test_expect_success 'flux-start in exec mode works' "
-	flux start ${ARGS} 'flux comms info' | grep 'size=1'
+	flux start ${ARGS} flux getattr size | grep -x 1
 "
 test_expect_success 'flux-start in subprocess/pmi mode works (size 1)' "
-	flux start ${ARGS} --size=1 'flux comms info' | grep 'size=1'
+	flux start ${ARGS} --size=1 flux getattr size | grep -x 1
 "
 test_expect_success 'flux-start in subprocess/pmi mode works (size 2)' "
-	flux start ${ARGS} --size=2 'flux comms info' | grep 'size=2'
+	flux start ${ARGS} --size=2 flux getattr size | grep -x 2
 "
-test_expect_success 'flux-start with size 1 has no peers' "
-	flux start ${ARGS} --size=1 'flux comms lspeer' > idle.out &&
-        ! grep 'idle' idle.out
-"
-test_expect_success 'flux-start with size 2 has a peer' "
-	flux start ${ARGS} --size=2 'flux comms lspeer' > idle.out &&
-        grep 'idle' idle.out
-"
+test_expect_success 'flux-start with size 1 has no peers' '
+	flux start ${ARGS} --size=1 \
+		flux python -c "import flux; print(flux.Flux().rpc(\"overlay.lspeer\").get())" >idle.out &&
+	test_must_fail grep idle idle.out
+'
+test_expect_success 'flux-start with size 2 has rank 1 peer' '
+	flux start ${ARGS} --size=2 \
+		flux python -c "import flux; print(flux.Flux().rpc(\"overlay.lspeer\").get())" >idle2.out &&
+	grep idle idle2.out
+'
 test_expect_success 'flux-start --size=1 --bootstrap=selfpmi works' "
 	flux start ${ARGS} --size=1 --bootstrap=selfpmi /bin/true
 "
@@ -80,10 +84,10 @@ test_expect_success 'flux-start in subprocess/pmi mode passes exit code due to s
 	test_expect_code 130 flux start ${ARGS} --size=1 'kill -INT \$\$'
 "
 test_expect_success 'flux-start in exec mode works as initial program' "
-	flux start ${ARGS} --size=2 flux start ${ARGS} flux comms info | grep size=1
+	flux start ${ARGS} --size=2 flux start ${ARGS} flux getattr size | grep -x 1
 "
 test_expect_success 'flux-start in subprocess/pmi mode works as initial program' "
-	flux start ${ARGS} --size=2 flux start ${ARGS} --size=1 flux comms info | grep size=1
+	flux start ${ARGS} --size=2 flux start ${ARGS} --size=1 flux getattr size | grep -x 1
 "
 
 test_expect_success 'flux-start --wrap option works' '
@@ -120,7 +124,7 @@ test_expect_success NO_ASAN 'test_under_flux works' '
 	export SHARNESS_TEST_SRCDIR SHARNESS_TEST_DIRECTORY FLUX_BUILD_DIR debug &&
 	run_timeout 10 "$SHARNESS_TEST_SRCDIR"/test-under-flux/test.t --verbose --debug >out 2>err
 	) &&
-	grep "size=2" test-under-flux/out
+	grep -x "2" test-under-flux/out
 '
 
 test_expect_success NO_ASAN 'test_under_flux fails if loaded modules are not unloaded' '
@@ -348,9 +352,19 @@ test_expect_success 'reactor: reactorcat example program works' '
 	test_must_fail test -s reactorcat.devnull.out
 '
 
+test_expect_success 'create panic script' '
+	cat >panic.sh <<-EOT &&
+	#!/bin/sh
+	echo "{\"reason\":\"fubar\", \"flags\":0}" | $RPC cmb.panic
+	exit 0
+	EOT
+	chmod +x panic.sh
+'
+
 test_expect_success 'flux-start: panic rank 1 of a size=2 instance' '
-	! flux start ${ARGS} --killer-timeout=0.2 --bootstrap=selfpmi --size=2 \
-		bash -c "flux getattr rundir; flux exec -r 1 flux comms panic fubar; sleep 5" >panic.out 2>panic.err
+	! flux start ${ARGS} \
+		--killer-timeout=0.2 --bootstrap=selfpmi --size=2 \
+		bash -c "flux getattr rundir; flux exec -r 1 ./panic.sh; sleep 5" >panic.out 2>panic.err
 '
 test_expect_success 'flux-start: panic message reached stderr' '
 	grep -q fubar panic.err
