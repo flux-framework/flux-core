@@ -200,6 +200,27 @@ void flux_shell_log (int level,
     va_end (ap);
 }
 
+/* llog compatible wrapper for flux_shell_log
+ */
+void shell_llog (void *arg,
+                 const char *file,
+                 int line,
+                 const char *func,
+                 const char *subsys,
+                 int level,
+                 const char *fmt,
+                 va_list ap)
+{
+    char buf [4096];
+    int buflen = sizeof (buf);
+    int n = vsnprintf (buf, buflen, fmt, ap);
+    if (n >= buflen) {
+        buf[buflen-1] = '\0';
+        buf[buflen-2] = '+';
+    }
+    flux_shell_log (level, file, line, "%s", buf);
+}
+
 int flux_shell_err (const char *file,
                    int line,
                    int errnum,
@@ -353,6 +374,7 @@ void shell_log_fini (void)
     free (logger.prog);
     fclose (logger.fp);
 }
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

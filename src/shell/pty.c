@@ -24,25 +24,7 @@
 #include "src/common/libterminus/pty.h"
 #include "src/common/libterminus/terminus.h"
 #include "builtins.h"
-
-static void shlog (void *arg,
-                   const char *file,
-                   int line,
-                   const char *func,
-                   const char *subsys,
-                   int level,
-                   const char *fmt,
-                   va_list ap)
-{
-    char buf [4096];
-    int buflen = sizeof (buf);
-    int n = vsnprintf (buf, buflen, fmt, ap);
-    if (n >= buflen) {
-        buf[buflen-1] = '\0';
-        buf[buflen-2] = '+';
-    }
-    flux_shell_log (level, file, line, "%s", buf);
-}
+#include "log.h"
 
 static struct flux_terminus_server *
 shell_terminus_server_start (flux_shell_t *shell, const char *shell_service)
@@ -70,7 +52,7 @@ shell_terminus_server_start (flux_shell_t *shell, const char *shell_service)
                             t,
                             (flux_free_f) flux_terminus_server_destroy) < 0)
         return NULL;
-    flux_terminus_server_set_log (t, shlog, NULL);
+    flux_terminus_server_set_log (t, shell_llog, NULL);
 
     /* Ensure process knows it is a terminus session */
     flux_shell_setenvf (shell, 1, "FLUX_TERMINUS_SESSION", "0");
