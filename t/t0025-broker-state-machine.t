@@ -95,13 +95,6 @@ test_expect_success HAVE_JQ 'quorum-monitor singleton RPC works' '
 	jq -cea .idset qm0.out
 '
 
-test_expect_success HAVE_JQ 'quorum-monitor streaming RPC works' '
-	flux start ${ARGS} \
-		$SRPC state-machine.quorum-monitor idset \
-		</dev/null >qms.out &&
-	jq -cea .idset qms.out
-'
-
 test_expect_success 'quorum-monitor RPC fails on rank > 0' '
 	test_must_fail flux start -s2 ${ARGS} \
 		flux exec -r1 $RPC state-machine.quorum-monitor \
