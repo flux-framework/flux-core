@@ -92,7 +92,6 @@ static void monitor_update (flux_t *h, zlist_t *requests, broker_state_t state);
 static void join_check_parent (struct state_machine *s);
 static int quorum_add_self (struct state_machine *s);
 static void quorum_check_parent (struct state_machine *s);
-static bool test_idset_subset (struct idset *idset1, struct idset *idset2);
 static void quorum_monitor_update (flux_t *h,
                                    zlist_t *requests,
                                    struct idset *idset);
@@ -196,7 +195,7 @@ static void action_quorum (struct state_machine *s)
         return;
     }
     if (s->ctx->rank == 0) {
-        if (test_idset_subset (s->quorum.want, s->quorum.have))
+        if (idset_equal (s->quorum.want, s->quorum.have))
             state_machine_post (s, "quorum-full");
         quorum_monitor_update (s->ctx->h, s->quorum.requests, s->quorum.have);
     }
@@ -507,20 +506,6 @@ done:
     return rc;
 }
 
-/* Return true if idset2 is a subset of idset1.
- */
-static bool test_idset_subset (struct idset *idset1, struct idset *idset2)
-{
-    unsigned int id;
-    id = idset_first (idset1);
-    while (id != IDSET_INVALID_ID) {
-        if (!idset_test (idset2, id))
-            return false;
-        id = idset_next (idset1, id);
-    }
-    return true;
-}
-
 /* Assumes local state is STATE_QUORUM.
  * If parent has left STATE_QUORUM, post quorum-full or quorum-fail.
  */
@@ -561,7 +546,7 @@ static void quorum_batch (flux_reactor_t *r,
 
     if (s->ctx->rank == 0) {
         if (s->state == STATE_QUORUM
-                && test_idset_subset (s->quorum.want, s->quorum.have))
+                && idset_equal (s->quorum.want, s->quorum.have))
             state_machine_post (s, "quorum-full");
         quorum_monitor_update (s->ctx->h, s->quorum.requests, s->quorum.have);
     }
@@ -624,31 +609,33 @@ error:
     flux_log_error (s->ctx->h, "error handling quorum request");
 }
 
-/* Add this broker rank to quorum.
- * On rank == 0, add my rank directly to the 'got' idset.
+/* Add this broker rank to quorum, if its rank is in the 'want' set.
+ * On rank == 0, add my rank directly to the 'have' idset.
  * On rank > 0, send a fire-and-forget RPC to parent containing my rank.
  */
 static int quorum_add_self (struct state_machine *s)
 {
-    if (s->ctx->rank == 0) {
-        if (idset_set (s->quorum.have, s->ctx->rank) < 0)
-            return -1;
-    }
-    else {
-        flux_future_t *f;
-        flux_log (s->ctx->h,
-                  LOG_DEBUG,
-                  "quorum send %lu",
-                  (long unsigned)s->ctx->rank);
-        if (!(f = flux_rpc_pack (s->ctx->h,
-                                 "state-machine.quorum",
-                                 FLUX_NODEID_UPSTREAM,
-                                 FLUX_RPC_NORESPONSE,
-                                 "{s:i}",
-                                 "rank",
-                                 s->ctx->rank)))
-            return -1;
-        flux_future_destroy (f);
+    if (idset_test (s->quorum.want, s->ctx->rank)) {
+        if (s->ctx->rank == 0) {
+            if (idset_set (s->quorum.have, s->ctx->rank) < 0)
+                return -1;
+        }
+        else {
+            flux_future_t *f;
+            flux_log (s->ctx->h,
+                      LOG_DEBUG,
+                      "quorum send %lu",
+                      (long unsigned)s->ctx->rank);
+            if (!(f = flux_rpc_pack (s->ctx->h,
+                                     "state-machine.quorum",
+                                     FLUX_NODEID_UPSTREAM,
+                                     FLUX_RPC_NORESPONSE,
+                                     "{s:i}",
+                                     "rank",
+                                     s->ctx->rank)))
+                return -1;
+            flux_future_destroy (f);
+        }
     }
     return 0;
 }
