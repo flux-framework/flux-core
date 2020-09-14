@@ -22,6 +22,11 @@ void wait_notify_active (struct waitjob *wait, struct job *job);
 struct waitjob *wait_ctx_create (struct job_manager *ctx);
 void wait_ctx_destroy (struct waitjob *wait);
 
+void wait_disconnect_rpc (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg);
+
 struct job *wait_zombie_first (struct waitjob *wait);
 struct job *wait_zombie_next (struct waitjob *wait);
 

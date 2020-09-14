@@ -299,10 +299,10 @@ error:
 
 /* A client has disconnected.  Destroy any waiters registered by that client.
  */
-static void disconnect_rpc (flux_t *h,
-                            flux_msg_handler_t *mh,
-                            const flux_msg_t *msg,
-                            void *arg)
+void wait_disconnect_rpc (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
 {
     struct job_manager *ctx = arg;
     struct waitjob *wait = ctx->wait;
@@ -405,12 +405,6 @@ static const struct flux_msg_handler_spec htab[] = {
         .typemask = FLUX_MSGTYPE_REQUEST,
         .topic_glob = "job-manager.wait",
         .cb = wait_rpc,
-        .rolemask = 0
-    },
-    {
-        .typemask = FLUX_MSGTYPE_REQUEST,
-        .topic_glob = "job-manager.disconnect",
-        .cb = disconnect_rpc,
         .rolemask = 0
     },
     FLUX_MSGHANDLER_TABLE_END,

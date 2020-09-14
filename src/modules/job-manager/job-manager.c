@@ -52,6 +52,14 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+void disconnect_rpc (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
+{
+    wait_disconnect_rpc (h, mh, msg, arg);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -70,6 +78,12 @@ static const struct flux_msg_handler_spec htab[] = {
         "job-manager.getinfo",
         getinfo_handle_request,
         FLUX_ROLE_USER
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.disconnect",
+        disconnect_rpc,
+        0
     },
     FLUX_MSGHANDLER_TABLE_END,
 };
