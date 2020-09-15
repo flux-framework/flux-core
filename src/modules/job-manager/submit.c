@@ -133,6 +133,8 @@ int submit_post_event (struct event *event, struct job *job)
         goto error;
     if (event_batch_pub_state (event, job, job->t_submit) < 0)
         goto error;
+    if (event_batch_process_event_entry (event, job, "submit", entry) < 0)
+        goto error;
     if (event_job_action (event, job) < 0)
         goto error;
     rv = 0;

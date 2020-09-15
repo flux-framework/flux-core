@@ -58,6 +58,7 @@ void disconnect_rpc (flux_t *h,
                      void *arg)
 {
     wait_disconnect_rpc (h, mh, msg, arg);
+    event_listeners_disconnect_rpc (h, mh, msg, arg);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
