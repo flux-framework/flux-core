@@ -18,28 +18,28 @@ test_expect_success 'create qget.sh script to query quorum' '
 	chmod +x qget.sh
 '
 
-test_expect_success HAVE_JQ 'quorum reached on 3 nodes (1 TBON level)' '
-	echo "[0-2]" >full3.exp &&
-	flux start -s3 ${ARGS} ./qget.sh >full3.out &&
+test_expect_success HAVE_JQ 'quorum reached on instance with 1 TBON level' '
+	echo "[0-2]" >full1.exp &&
+	flux start -s3 ${ARGS} ./qget.sh >full1.out &&
+	test_cmp full1.exp full1.out
+'
+
+test_expect_success HAVE_JQ 'quorum reached on instance with 2 TBON levels' '
+	echo "[0-3]" >full2.exp &&
+	flux start -s4 ${ARGS} ./qget.sh >full2.out &&
+	test_cmp full2.exp full2.out
+'
+
+test_expect_success HAVE_JQ 'quorum reached on instance with 3 TBON levels' '
+	echo "[0-7]" >full3.exp &&
+	flux start -s8 ${ARGS} ./qget.sh >full3.out &&
 	test_cmp full3.exp full3.out
 '
 
-test_expect_success HAVE_JQ 'quorum reached on 7 nodes (2 TBON level)' '
-	echo "[0-6]" >full7.exp &&
-	flux start -s7 ${ARGS} ./qget.sh >full7.out &&
-	test_cmp full7.exp full7.out
-'
-
-test_expect_success HAVE_JQ 'quorum reached on 15 nodes (3 TBON level)' '
-	echo "[0-14]" >full15.exp &&
-	flux start -s15 ${ARGS} ./qget.sh >full15.out &&
-	test_cmp full15.exp full15.out
-'
-
 test_expect_success HAVE_JQ 'broker.quorum can be set on the command line' '
-	flux start -s15 ${ARGS} -o,-Sbroker.quorum="0-14" \
-		./qget.sh >full15_explicit.out &&
-	test_cmp full15.exp full15_explicit.out
+	flux start -s3 ${ARGS} -o,-Sbroker.quorum="0-2" \
+		./qget.sh >full1_explicit.out &&
+	test_cmp full1.exp full1_explicit.out
 '
 
 test_expect_success 'broker fails with malformed broker.quorum' '
