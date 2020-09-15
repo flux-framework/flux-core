@@ -11,7 +11,7 @@ SIZE=4
 test_under_flux ${SIZE} minimal
 
 test_expect_success 'baseline works' '
-	flux comms info
+	flux getattr size
 '
 
 test_expect_success 'flux prepends to FLUX_MODULE_PATH' '
@@ -26,18 +26,18 @@ test_expect_success 'flux prepends to FLUX_CONNECTOR_PATH' '
 
 test_expect_success 'flux fails for unknown connector scheme' '
 	(FLUX_URI=noexist:// \
-		test_must_fail flux comms info)
+		test_must_fail flux getattr size)
 '
 
 test_expect_success 'flux fails for unknown connector path' '
 	(FLUX_URI=local://noexist \
-		test_must_fail flux comms info)
+		test_must_fail flux getattr size)
 '
 
 test_expect_success 'flux fails fails for non-connector dso' '
 	(FLUX_CONNECTOR_PATH=${FLUX_BUILD_DIR}/src/modules \
 	FLUX_URI=kvs:// \
-		test_must_fail flux comms info)
+		test_must_fail flux getattr size)
 '
 
 # Test flux 'env' builtin

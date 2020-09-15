@@ -147,10 +147,10 @@ test_expect_success 'flux-shell: shell PMI KVS works' '
 		>kvstest.out 2>kvstest.err
 '
 test_expect_success 'flux-shell: shell can launch flux' '
-	flux jobspec srun -N1 -n8 flux start flux comms info >j8flux &&
+	flux jobspec srun -N1 -n8 flux start flux getattr size >j8flux &&
 	${FLUX_SHELL} -v -s -r 0 -j j8flux -R R8 39 \
 		>flux.out 2>flux.err &&
-	grep size=8 flux.out
+	grep -x "0: 8" flux.out
 '
 
 test_expect_success 'flux-shell: shell exits with highest task exit value' '

@@ -11,28 +11,35 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SRPC=${FLUX_BUILD_DIR}/t/request/rpc_stream
 ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 
-test_expect_success 'flux comms up reports full quorum (1 TBON level)' '
-	echo "[0-2]" >full3.exp &&
-	flux start -s3 ${ARGS} flux comms up >full3.out &&
+test_expect_success 'create qget.sh script to query quorum' '
+	cat >qget.sh <<-EOT &&
+	$RPC state-machine.quorum-monitor | jq -r .idset
+	EOT
+	chmod +x qget.sh
+'
+
+test_expect_success HAVE_JQ 'quorum reached on instance with 1 TBON level' '
+	echo "[0-2]" >full1.exp &&
+	flux start -s3 ${ARGS} ./qget.sh >full1.out &&
+	test_cmp full1.exp full1.out
+'
+
+test_expect_success HAVE_JQ 'quorum reached on instance with 2 TBON levels' '
+	echo "[0-3]" >full2.exp &&
+	flux start -s4 ${ARGS} ./qget.sh >full2.out &&
+	test_cmp full2.exp full2.out
+'
+
+test_expect_success HAVE_JQ 'quorum reached on instance with 3 TBON levels' '
+	echo "[0-7]" >full3.exp &&
+	flux start -s8 ${ARGS} ./qget.sh >full3.out &&
 	test_cmp full3.exp full3.out
 '
 
-test_expect_success 'flux comms up reports full quorum (2 TBON level)' '
-	echo "[0-6]" >full7.exp &&
-	flux start -s7 ${ARGS} flux comms up >full7.out &&
-	test_cmp full7.exp full7.out
-'
-
-test_expect_success 'flux comms up reports full quorum (3 TBON level)' '
-	echo "[0-14]" >full15.exp &&
-	flux start -s15 ${ARGS} flux comms up >full15.out &&
-	test_cmp full15.exp full15.out
-'
-
-test_expect_success 'broker.quorum can be set on the command line' '
-	flux start -s15 ${ARGS} -o,-Sbroker.quorum="0-14" \
-		flux comms up >full15_explicit.out &&
-	test_cmp full15.exp full15_explicit.out
+test_expect_success HAVE_JQ 'broker.quorum can be set on the command line' '
+	flux start -s3 ${ARGS} -o,-Sbroker.quorum="0-2" \
+		./qget.sh >full1_explicit.out &&
+	test_cmp full1.exp full1_explicit.out
 '
 
 test_expect_success 'broker fails with malformed broker.quorum' '
@@ -56,10 +63,10 @@ test_expect_success 'create rc1 that blocks on FIFO for rank != 0' '
 	chmod +x rc1_block
 '
 
-test_expect_success 'create rc2 that unblocks FIFO' '
+test_expect_success HAVE_JQ 'create rc2 that unblocks FIFO' '
 	cat <<-EOT >rc2_unblock &&
 	#!/bin/bash
-	flux comms up
+	./qget.sh
 	echo UNBLOCKED! >>fifo
 	EOT
 	chmod +x rc2_unblock
@@ -67,7 +74,7 @@ test_expect_success 'create rc2 that unblocks FIFO' '
 
 # Delay rank 1 so that we can check that initial program ran with only
 # rank 0 in RUN state.
-test_expect_success 'instance functions with late-joiner' '
+test_expect_success HAVE_JQ 'instance functions with late-joiner' '
 	echo "0" >late.exp &&
 	rm -f fifo &&
 	mkfifo fifo &&
