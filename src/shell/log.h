@@ -32,6 +32,17 @@ void shell_log_set_level (int level);
  */
 void shell_log_set_exception_logged (void);
 
+/*  Shell log function compatible with libutil llog interface
+ */
+void shell_llog (void *arg,
+                 const char *file,
+                 int line,
+                 const char *func,
+                 const char *subsys,
+                 int level,
+                 const char *fmt,
+                 va_list ap);
+
 #endif /* !_SHELL_RC_H */
 
 /* vi: ts=4 sw=4 expandtab

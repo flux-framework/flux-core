@@ -150,8 +150,7 @@ test_expect_success 'job-shell: run 2-task echo job (stdout kvs/stderr file)' '
 test_expect_success 'job-shell: run 1-task echo job (mustache id stdout file/stderr file)' '
         id=$(flux mini submit -n1 \
              --output="out{{id}}" --error="err{{id}}" \
-             ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz \
-             | flux job id) &&
+             ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
         grep stdout:baz out${id} &&
         grep stderr:baz err${id}
@@ -160,11 +159,19 @@ test_expect_success 'job-shell: run 1-task echo job (mustache id stdout file/std
 test_expect_success 'flux-shell: run 1-task echo job (mustache id stdout & stderr to stdout file)' '
         id=$(flux mini submit -n1 \
              --output="out{{id}}" \
-             ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz \
-             | flux job id) &&
+             ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
         flux job wait-event $id clean &&
         grep stdout:baz out${id} &&
         grep stderr:baz out${id}
+'
+
+test_expect_success 'flux-shell: bad mustache template still writes output' '
+        id=$(flux mini submit -n1 \
+             --output="out{{invalid" \
+             ${TEST_SUBPROCESS_DIR}/test_echo -P -O -E baz) &&
+        flux job wait-event $id clean &&
+        grep stdout:baz out{{invalid &&
+        grep stderr:baz out{{invalid
 '
 
 #
