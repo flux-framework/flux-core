@@ -13,7 +13,7 @@ ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
 
 test_expect_success 'create qget.sh script to query quorum' '
 	cat >qget.sh <<-EOT &&
-	$RPC state-machine.quorum-monitor | jq -r .idset
+	$RPC state-machine.quorum-get | jq -r .idset
 	EOT
 	chmod +x qget.sh
 '
@@ -88,16 +88,16 @@ test_expect_success HAVE_JQ 'instance functions with late-joiner' '
 	test_cmp late.exp late.out
 '
 
-test_expect_success HAVE_JQ 'quorum-monitor singleton RPC works' '
+test_expect_success HAVE_JQ 'quorum-get RPC works' '
 	flux start ${ARGS} \
-		$RPC state-machine.quorum-monitor \
+		$RPC state-machine.quorum-get \
 		</dev/null >qm0.out &&
 	jq -cea .idset qm0.out
 '
 
-test_expect_success 'quorum-monitor RPC fails on rank > 0' '
+test_expect_success 'quorum-get RPC fails on rank > 0' '
 	test_must_fail flux start -s2 ${ARGS} \
-		flux exec -r1 $RPC state-machine.quorum-monitor \
+		flux exec -r1 $RPC state-machine.quorum-get \
 		</dev/null 2>qm1.err &&
 	grep "only available on rank 0" qm1.err
 '

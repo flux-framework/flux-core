@@ -688,10 +688,10 @@ static flux_watcher_t *quorum_create_batch_timer (struct state_machine *s)
                                       s);
 }
 
-static void quorum_monitor_cb (flux_t *h,
-                               flux_msg_handler_t *mh,
-                               const flux_msg_t *msg,
-                               void *arg)
+static void quorum_get_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     struct state_machine *s = arg;
     const char *errstr = NULL;
@@ -700,7 +700,7 @@ static void quorum_monitor_cb (flux_t *h,
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     if (s->ctx->rank != 0) {
-        errstr = "quorum-monitor RPC is only available on rank 0";
+        errstr = "quorum-get RPC is only available on rank 0";
         errno = EPROTO;
         goto error;
     }
@@ -713,7 +713,7 @@ static void quorum_monitor_cb (flux_t *h,
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to quorum-monitor request");
+        flux_log_error (h, "error responding to quorum-get request");
     free (tmp);
 }
 
@@ -851,10 +851,8 @@ static bool msglist_drop_sender (zlist_t *l, const char *sender)
     return false;
 }
 
-/* If a disconnect is received for streaming monitor or quorum-monitor
- * requests, drop the request.  Example use cases:
- * - monitor module unloads while still watching quorum-monitor
- * - tests (potentially)
+/* If a disconnect is received for streaming monitor request,
+ * drop the request.
  */
 static void disconnect_cb (flux_t *h,
                            flux_msg_handler_t *mh,
@@ -881,8 +879,7 @@ static void disconnect_cb (flux_t *h,
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "state-machine.monitor", monitor_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "state-machine.quorum", quorum_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "state-machine.quorum-monitor",
-                                                      quorum_monitor_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "state-machine.quorum-get", quorum_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "state-machine.disconnect", disconnect_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
