@@ -27,9 +27,10 @@ has_event() {
 wait_event() {
 	count=$1
 	name=$2
-	while test $count -gt 0 && ! has_event $name; do
-		sleep 1
+	while ! has_event $name; do
 		count=$(($count-1))
+		test $count -gt 0 || return 1
+		sleep 1
 	done
 }
 # Usage: drain_idset idset reason
@@ -54,9 +55,16 @@ acquire_stream() {
 	run_timeout $1 $RPC_STREAM resource.acquire $3 </dev/null >$2
 }
 
+test_expect_success HAVE_JQ 'wait_event function fails when it should' '
+	! wait_event 1 noexist
+'
 
 test_expect_success 'load aggregator module needed for flux hwloc reload' '
 	flux exec -r all flux module load aggregator
+'
+
+test_expect_success 'load resource module with bad option fails' '
+	test_must_fail flux module load resource badoption
 '
 
 test_expect_success 'load resource module' '
@@ -69,6 +77,10 @@ test_expect_success HAVE_JQ 'resource.eventlog exists' '
 
 test_expect_success HAVE_JQ 'resource-init context says restart=false' '
 	test "$(grep_event resource-init <eventlog.out|jq .restart)" = "false"
+'
+
+test_expect_success HAVE_JQ 'resource-init context says online=0' '
+	test "$(grep_event resource-init <eventlog.out|jq .online)" = "\"0\""
 '
 
 test_expect_success 'reconfigure with rank 0 exclusion' '
@@ -85,7 +97,7 @@ test_expect_success HAVE_JQ 'exclude event was posted with expected idset' '
 	test "$(jq .idset <exclude.out)" = "\"0\""
 '
 
-test_expect_success 'wait until hwloc-discover-finish event is posted' '
+test_expect_success HAVE_JQ 'wait until hwloc-discover-finish event is posted' '
 	wait_event 5 hwloc-discover-finish
 '
 
@@ -251,8 +263,42 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'add/remove new exclusion causes down/
 	kill -15 $pid && wait $pid || true
 '
 
-test_expect_success 'unload resource module' '
-	flux exec -r all flux module remove resource
+test_expect_success 'unload resource module (rank 0)' '
+	flux module remove resource
+'
+test_expect_success 'clear eventlog' '
+	flux kvs unlink resource.eventlog
+'
+test_expect_success 'unload resource module (rank 2)' '
+	flux exec -r 2 flux module remove resource
+'
+test_expect_success 'load resource module (rank 0) with monitor-force-up' '
+	flux module load resource monitor-force-up
+'
+test_expect_success HAVE_JQ 'resource-init context says online=<all>' '
+	wait_event 5 resource-init &&
+	flux kvs eventlog get -u resource.eventlog >ev2.out &&
+	echo "\"0-$((${SIZE}-1))\"" >ev2_online.exp &&
+	grep_event resource-init <ev2.out|jq .online >ev2_online.out &&
+	test_cmp ev2_online.exp ev2_online.out
+'
+test_expect_success HAVE_JQ 'no online events posted due to monitor-force-up' '
+	! wait_event 1 online
+'
+
+test_expect_success 'load-then-unload resource module (rank 2)' '
+	flux exec -r2 flux module load resource &&
+	flux exec -r2 flux module remove resource
+'
+
+test_expect_success HAVE_JQ 'offline event posted for rank 2' '
+	wait_event 5 offline &&
+	flux kvs eventlog get -u resource.eventlog >ev3.out &&
+	grep_event offline <ev3.out|jq .idset | grep -x "\"2\""
+'
+
+test_expect_success 'unload resource module (except rank 2)' '
+	flux exec -r all -x 2 flux module remove resource
 '
 test_expect_success 'unload aggregator module' '
 	flux exec -r all flux module remove aggregator
