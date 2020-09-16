@@ -33,8 +33,6 @@ static void alloc_continuation (flux_future_t *f, void *arg)
         const flux_msg_t *msg = flux_future_aux_get (f, "schedutil::msg");
         const char *jobspec;
 
-        flux_log (util->h, LOG_INFO, "f=%p", f);
-
         if (flux_kvs_lookup_get (f, &jobspec) < 0) {
             flux_log_error (util->h, "sched.alloc lookup R");
             if (flux_respond_error (util->h, msg, errno, NULL) < 0)
