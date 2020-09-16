@@ -48,13 +48,12 @@ static int parse_config (struct resource_ctx *ctx,
     if (flux_conf_unpack (conf,
                           &error,
                           "{s?:{s?:s !}}",
-                          MODULE_NAME,
+                          "resource",
                             "exclude",
                             &exclude) < 0) {
         (void)snprintf (errbuf,
                         errbufsize,
-                        "error parsing [%s] configuration: %s",
-                        MODULE_NAME,
+                        "error parsing [resource] configuration: %s",
                         error.errbuf);
         return -1;
     }
@@ -147,13 +146,13 @@ static struct resource_ctx *resource_ctx_create (flux_t *h)
 static const struct flux_msg_handler_spec htab[] = {
     {
         .typemask = FLUX_MSGTYPE_REQUEST,
-        .topic_glob = MODULE_NAME ".config-reload",
+        .topic_glob = "resource.config-reload",
         .cb = config_reload_cb,
         .rolemask = 0
     },
     {
         .typemask = FLUX_MSGTYPE_REQUEST,
-        .topic_glob = MODULE_NAME ".disconnect",
+        .topic_glob = "resource.disconnect",
         .cb = disconnect_cb,
         .rolemask = 0
     },
@@ -257,43 +256,72 @@ error:
     return -1;
 }
 
+int parse_args (flux_t *h,
+                int argc,
+                char **argv,
+                bool *monitor_force_up)
+{
+    int i;
+    for (i = 0; i < argc; i++) {
+        /* Test option to force all ranks to be marked online in the initial
+         * 'restart' event posted to resource.eventlog.
+         */
+        if (!strcmp (argv[i], "monitor-force-up"))
+            *monitor_force_up = true;
+        else  {
+            flux_log (h, LOG_ERR, "unknown option: %s", argv[i]);
+            errno = EINVAL;
+            return -1;
+        }
+    }
+    return 0;
+}
+
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     struct resource_ctx *ctx;
     char errbuf[256];
     const char *exclude_idset;
     json_t *eventlog = NULL;
+    bool monitor_force_up = false;
 
     if (!(ctx = resource_ctx_create (h)))
         goto error;
+    if (parse_args (h, argc, argv, &monitor_force_up) < 0)
+        goto error;
     if (flux_get_size (h, &ctx->size) < 0)
         goto error;
-    if (reload_eventlog (h, &eventlog) < 0)
+    if (flux_get_rank (h, &ctx->rank) < 0)
         goto error;
-    if (!(ctx->reslog = reslog_create (h)))
+    if (!(ctx->monitor = monitor_create (ctx, monitor_force_up)))
         goto error;
-    if (!(ctx->monitor = monitor_create (ctx))) // makes synchronous rpc
-        goto error;
-    if (!(ctx->discover = discover_create (ctx, eventlog))) // uses monitor
-        goto error;
-    if (!(ctx->drain = drain_create (ctx, eventlog)))
-        goto error;
-    if (!(ctx->acquire = acquire_create (ctx)))
-        goto error;
-    if (parse_config (ctx,
-                      flux_get_conf (h),
-                      &exclude_idset,
-                      errbuf,
-                      sizeof (errbuf)) < 0) {
-        flux_log (h, LOG_ERR, "%s", errbuf);
-        goto error;
+    if (ctx->rank == 0) {
+        if (reload_eventlog (h, &eventlog) < 0)
+            goto error;
+        if (!(ctx->reslog = reslog_create (h)))
+            goto error;
+        if (!(ctx->discover = discover_create (ctx, eventlog))) // uses monitor
+            goto error;
+        if (!(ctx->drain = drain_create (ctx, eventlog)))
+            goto error;
+        if (!(ctx->acquire = acquire_create (ctx)))
+            goto error;
+        if (parse_config (ctx,
+                          flux_get_conf (h),
+                          &exclude_idset,
+                          errbuf,
+                          sizeof (errbuf)) < 0) {
+            flux_log (h, LOG_ERR, "%s", errbuf);
+            goto error;
+        }
+        if (!(ctx->exclude = exclude_create (ctx, exclude_idset)))
+            goto error;
+        if (post_restart_event (ctx, eventlog ? 1 : 0) < 0)
+            goto error;
+        if (reslog_sync (ctx->reslog) < 0)
+            goto error;
     }
-    if (!(ctx->exclude = exclude_create (ctx, exclude_idset)))
-        goto error;
-    if (post_restart_event (ctx, eventlog ? 1 : 0) < 0)
-        goto error;
-    if (reslog_sync (ctx->reslog) < 0)
-        goto error;
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
@@ -309,7 +337,7 @@ error:
     return -1;
 }
 
-MOD_NAME (MODULE_NAME);
+MOD_NAME ("resource");
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

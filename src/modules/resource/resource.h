@@ -21,12 +21,9 @@ struct resource_ctx {
     struct acquire *acquire;
     struct reslog *reslog;
 
+    uint32_t rank;
     uint32_t size;
 };
-
-/* Module name, service name, config table name.
- */
-#define MODULE_NAME "resource"
 
 #endif /* !_FLUX_RESOURCE_H */
 

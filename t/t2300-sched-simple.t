@@ -46,7 +46,7 @@ test_expect_success 'sched-simple: load default by_rank' '
 '
 test_expect_success 'sched-simple: reload sched-simple' '
 	flux module unload sched-simple &&
-	flux module reload resource &&
+	flux module reload resource monitor-force-up &&
 	flux module load sched-simple &&
 	flux dmesg 2>&1 >reload.dmesg.log &&
 	grep "ready:.*rank\[0-1\]/core\[0-1\]" reload.dmesg.log &&

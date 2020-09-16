@@ -12,7 +12,6 @@ export FLUX_CONF_DIR=$(pwd)
 SIZE=$(test_size_large)
 test_under_flux $SIZE kvs
 
-RESNAME=resource
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 RPC_STREAM=${FLUX_BUILD_DIR}/t/request/rpc_stream
 WAITFILE="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
@@ -28,9 +27,10 @@ has_event() {
 wait_event() {
 	count=$1
 	name=$2
-	while test $count -gt 0 && ! has_event $name; do
-		sleep 1
+	while ! has_event $name; do
 		count=$(($count-1))
+		test $count -gt 0 || return 1
+		sleep 1
 	done
 }
 # Usage: drain_idset idset reason
@@ -38,30 +38,37 @@ drain_idset() {
 	local idset=$1; shift
 	local reason="$@"
 	jq -j -c -n  "{idset:\"$idset\",reason:\"$reason\"}" \
-		| $RPC $RESNAME.drain
+		| $RPC resource.drain
 }
 # Usage: drain_idset_noreason idset
 drain_idset_noreason() {
 	local idset=$1
-	jq -j -c -n  "{idset:\"$idset\"}" | $RPC $RESNAME.drain
+	jq -j -c -n  "{idset:\"$idset\"}" | $RPC resource.drain
 }
 # Usage: undrain_idset idset
 undrain_idset() {
 	local idset=$1
-	jq -j -c -n  "{idset:\"$idset\"}" | $RPC $RESNAME.undrain
+	jq -j -c -n  "{idset:\"$idset\"}" | $RPC resource.undrain
 }
 # Usage: acquire_stream timeout outfile [end-event]
 acquire_stream() {
-	run_timeout $1 $RPC_STREAM $RESNAME.acquire $3 </dev/null >$2
+	run_timeout $1 $RPC_STREAM resource.acquire $3 </dev/null >$2
 }
 
+test_expect_success HAVE_JQ 'wait_event function fails when it should' '
+	! wait_event 1 noexist
+'
 
 test_expect_success 'load aggregator module needed for flux hwloc reload' '
 	flux exec -r all flux module load aggregator
 '
 
+test_expect_success 'load resource module with bad option fails' '
+	test_must_fail flux module load resource badoption
+'
+
 test_expect_success 'load resource module' '
-	flux module load $RESNAME
+	flux exec -r all flux module load resource
 '
 
 test_expect_success HAVE_JQ 'resource.eventlog exists' '
@@ -72,9 +79,13 @@ test_expect_success HAVE_JQ 'resource-init context says restart=false' '
 	test "$(grep_event resource-init <eventlog.out|jq .restart)" = "false"
 '
 
+test_expect_success HAVE_JQ 'resource-init context says online=0' '
+	test "$(grep_event resource-init <eventlog.out|jq .online)" = "\"0\""
+'
+
 test_expect_success 'reconfigure with rank 0 exclusion' '
 	cat >resource.toml <<-EOT &&
-	[$RESNAME]
+	[resource]
 	exclude = "0"
 	EOT
 	flux config reload
@@ -86,7 +97,7 @@ test_expect_success HAVE_JQ 'exclude event was posted with expected idset' '
 	test "$(jq .idset <exclude.out)" = "\"0\""
 '
 
-test_expect_success 'wait until hwloc-discover-finish event is posted' '
+test_expect_success HAVE_JQ 'wait until hwloc-discover-finish event is posted' '
 	wait_event 5 hwloc-discover-finish
 '
 
@@ -139,9 +150,9 @@ test_expect_success HAVE_JQ 'drain fails if idset is out of range' '
 '
 
 test_expect_success 'reload resource module and re-capture eventlog' '
-	flux module remove $RESNAME &&
+	flux module remove resource &&
 	flux kvs eventlog get -u resource.eventlog >pre_restart.out &&
-	flux module load $RESNAME &&
+	flux module load resource &&
 	flux kvs eventlog get -u resource.eventlog >restart.out &&
 	pre=$(wc -l <pre_restart.out) &&
 	post=$(wc -l <restart.out) &&
@@ -155,7 +166,7 @@ test_expect_success HAVE_JQ 'new resource-init context says restart=true' '
 
 test_expect_success 'reconfig with extra key fails' '
 	cat >resource.toml <<-EOT &&
-	[$RESNAME]
+	[resource]
 	foo = 42
 	EOT
 	test_must_fail flux config reload
@@ -163,7 +174,7 @@ test_expect_success 'reconfig with extra key fails' '
 
 test_expect_success 'reconfig with bad exclude idset fails' '
 	cat >resource.toml <<-EOT &&
-	[$RESNAME]
+	[resource]
 	exclude = "xxzz"
 	EOT
 	test_must_fail flux config reload
@@ -171,7 +182,7 @@ test_expect_success 'reconfig with bad exclude idset fails' '
 
 test_expect_success 'reconfig with out of range exclude idset fails' '
 	cat >resource.toml <<-EOT &&
-	[$RESNAME]
+	[resource]
 	exclude = "0-$SIZE"
 	EOT
 	test_must_fail flux config reload
@@ -179,7 +190,7 @@ test_expect_success 'reconfig with out of range exclude idset fails' '
 
 test_expect_success HAVE_JQ 'reconfig with no exclude idset generates event' '
 	cat >resource.toml <<-EOT &&
-	[$RESNAME]
+	[resource]
 	EOT
 	flux config reload &&
 	flux kvs eventlog get -u resource.eventlog >reconfig.out &&
@@ -187,26 +198,26 @@ test_expect_success HAVE_JQ 'reconfig with no exclude idset generates event' '
 '
 
 test_expect_success HAVE_JQ 'acquire works and response contains up, resources' '
-	$RPC $RESNAME.acquire </dev/null >acquire.out &&
+	$RPC resource.acquire </dev/null >acquire.out &&
 	jq -c -e -a .resources acquire.out &&
 	jq -c -e -a .up acquire.out
 '
 
 test_expect_success 'acquire works again after first acquire disconnected' '
-	$RPC $RESNAME.acquire </dev/null
+	$RPC resource.acquire </dev/null
 '
 
 test_expect_success 'reload config/module excluding rank 0' '
 	cat >resource.toml <<-EOT &&
-	[$RESNAME]
+	[resource]
 	exclude = "0"
 	EOT
 	flux config reload &&
-	flux module reload $RESNAME
+	flux module reload resource monitor-force-up
 '
 
 test_expect_success HAVE_JQ 'acquire returns resources excluding rank 0' '
-	$RPC $RESNAME.acquire </dev/null >acquire2.out &&
+	$RPC resource.acquire </dev/null >acquire2.out &&
 	jq -c -e -a .resources.\"1-$(($SIZE-1))\" acquire2.out
 '
 
@@ -238,13 +249,13 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'add/remove new exclusion causes down/
 	pid=$! &&
 	$WAITFILE -t 10 -v -p \"resources\" acquire5.out &&
 	cat >resource.toml <<-EOT &&
-	[$RESNAME]
+	[resource]
 	exclude = "0,3"
 	EOT
 	flux config reload &&
 	$WAITFILE -t 10 -v -p \"down\" acquire5.out &&
 	cat >resource.toml <<-EOT &&
-	[$RESNAME]
+	[resource]
 	exclude = "0"
 	EOT
 	flux config reload &&
@@ -252,8 +263,42 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'add/remove new exclusion causes down/
 	kill -15 $pid && wait $pid || true
 '
 
-test_expect_success 'unload resource module' '
-	flux module remove $RESNAME
+test_expect_success 'unload resource module (rank 0)' '
+	flux module remove resource
+'
+test_expect_success 'clear eventlog' '
+	flux kvs unlink resource.eventlog
+'
+test_expect_success 'unload resource module (rank 2)' '
+	flux exec -r 2 flux module remove resource
+'
+test_expect_success 'load resource module (rank 0) with monitor-force-up' '
+	flux module load resource monitor-force-up
+'
+test_expect_success HAVE_JQ 'resource-init context says online=<all>' '
+	wait_event 5 resource-init &&
+	flux kvs eventlog get -u resource.eventlog >ev2.out &&
+	echo "\"0-$((${SIZE}-1))\"" >ev2_online.exp &&
+	grep_event resource-init <ev2.out|jq .online >ev2_online.out &&
+	test_cmp ev2_online.exp ev2_online.out
+'
+test_expect_success HAVE_JQ 'no online events posted due to monitor-force-up' '
+	! wait_event 1 online
+'
+
+test_expect_success 'load-then-unload resource module (rank 2)' '
+	flux exec -r2 flux module load resource &&
+	flux exec -r2 flux module remove resource
+'
+
+test_expect_success HAVE_JQ 'offline event posted for rank 2' '
+	wait_event 5 offline &&
+	flux kvs eventlog get -u resource.eventlog >ev3.out &&
+	grep_event offline <ev3.out|jq .idset | grep -x "\"2\""
+'
+
+test_expect_success 'unload resource module (except rank 2)' '
+	flux exec -r all -x 2 flux module remove resource
 '
 test_expect_success 'unload aggregator module' '
 	flux exec -r all flux module remove aggregator

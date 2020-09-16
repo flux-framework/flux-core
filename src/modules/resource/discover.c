@@ -278,6 +278,7 @@ void discover_destroy (struct discover *discover)
 {
     if (discover) {
         int saved_errno = errno;
+        monitor_set_callback (discover->ctx->monitor, NULL, NULL);
         flux_subprocess_destroy (discover->p);
         flux_future_destroy (discover->f);
         flux_msg_handler_delvec (discover->handlers);

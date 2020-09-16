@@ -369,8 +369,8 @@ error:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  MODULE_NAME ".acquire", acquire_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  MODULE_NAME ".acquire-cancel", cancel_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "resource.acquire", acquire_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "resource.acquire-cancel", cancel_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -379,6 +379,7 @@ void acquire_destroy (struct acquire *acquire)
     if (acquire) {
         int saved_errno = errno;
         flux_msg_handler_delvec (acquire->handlers);
+        reslog_set_callback (acquire->ctx->reslog, NULL, NULL);
         if (acquire->request) {
             if (flux_respond_error (acquire->ctx->h,
                                     acquire->request->msg,

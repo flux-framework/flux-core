@@ -260,8 +260,8 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  MODULE_NAME ".drain", drain_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  MODULE_NAME ".undrain", undrain_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "resource.drain", drain_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "resource.undrain", undrain_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
