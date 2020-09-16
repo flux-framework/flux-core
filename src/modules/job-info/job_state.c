@@ -468,6 +468,7 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
                           __FUNCTION__, (uintmax_t)job->id);
                 goto nonfatal_error;
             }
+            job->priority_timestamp = timestamp;
         }
         else if (!strcmp (name, "priority")) {
             if (!context) {
@@ -483,6 +484,7 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
                           __FUNCTION__, (uintmax_t)job->id);
                 goto nonfatal_error;
             }
+            job->priority_timestamp = timestamp;
         }
     }
 
@@ -1496,6 +1498,7 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                           __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
+            job->priority_timestamp = timestamp;
             update_job_state (ctx, job, FLUX_JOB_DEPEND, timestamp);
         }
         else if (!strcmp (name, "depend")) {
@@ -1515,6 +1518,7 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                           __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
+            job->priority_timestamp = timestamp;
         }
         else if (!strcmp (name, "exception")) {
             int severity;
