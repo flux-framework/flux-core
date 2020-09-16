@@ -76,11 +76,8 @@ static void worker_completion_cb (flux_subprocess_t *p)
     int rc;
 
     if ((rc = flux_subprocess_exit_code (p)) >= 0) {
-        if (rc == 0)
-            flux_log (w->h, LOG_DEBUG, "%s: exited normally", w->name);
-        else {
+        if (rc != 0)
             flux_log (w->h, LOG_ERR, "%s: exited with rc=%d", w->name, rc);
-        }
     }
     else if ((rc = flux_subprocess_signaled (p)) >= 0)
         flux_log (w->h, LOG_ERR, "%s: killed by %s", w->name, strsignal (rc));
@@ -110,8 +107,6 @@ static void worker_state_cb (flux_subprocess_t *p,
 
     switch (state) {
         case FLUX_SUBPROCESS_RUNNING:
-            flux_log (w->h, LOG_DEBUG, "%s: running (pid=%d)", w->name,
-                      (int)flux_subprocess_pid (p));
             break;
         case FLUX_SUBPROCESS_EXEC_FAILED:
         case FLUX_SUBPROCESS_FAILED:
@@ -252,7 +247,7 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
             worker_inactive (w);
     }
     else if (!strcmp (stream, "stderr")) {
-        flux_log (w->h, LOG_DEBUG, "%s: %s", w->name, s ? s : "");
+        //flux_log (w->h, LOG_DEBUG, "%s: %s", w->name, s ? s : "");
     }
 }
 
