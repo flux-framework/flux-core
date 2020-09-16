@@ -58,6 +58,9 @@ struct job_state_ctx {
      * processing later */
     bool pause;
     zlistx_t *transitions;
+
+    /* stream of job events from the job-manager */
+    flux_future_t *events;
 };
 
 struct job {
