@@ -1,3 +1,43 @@
+flux-core version 0.20.0 - 2020-09-30
+-------------------------------------
+
+This release features changes to support Flux as the native resource
+manager on small (<= 256 node) clusters, for testing only.  A draft system
+administration guide is available at:
+
+https://flux-framework.readthedocs.io/en/latest/adminguide.html
+
+### New features
+
+ * hwloc: add printing of num GPUs to `flux hwloc info` (#3217)
+ * resource: mark nodes down when they are stopped (#3207)
+ * broker:  allow late-joining brokers, execute rc1/rc3 on all ranks (#3168)
+ * shell/pmi: add improved PMI key exchange mechanism (#3219)
+
+### Fixes
+
+ * job-manager: communicate job priority changes to job-info (#3208)
+ * job-info: handle annotations race (#3196)
+ * python/job: Update `state_single` default header (#3227)
+ * libidset: reject idset strings that don't conform to RFC 22 (#3237)
+ * job-info: handle job-priority changes (#3208)
+ * doc: list sphinx as a doc dependency in README.md (#3225)
+ * testsuite: fix race in python SIGINT test (#3224)
+ * job-manager: fix segfault changing priority of a running job (#3220)
+ * shell: allow multiple resources per level in jobspec (#3175)
+ * python: allow Ctrl-C interrupt of `Future.get()` and `wait_for()` (#3215)
+ * shell: use F58/alternate encodings in output file template {{id}} (#3206)
+ * fallback to ASCII for F58 FLUIDs with `FLUX_F58_FORCE_ASCII` (#3204)
+ * rc: load sched-simple only if no other scheduler is loaded (#3177)
+ * docker: do not install Sphinx via pip in Centos8 image (#3195)
+ * flux-jobs / python bindings: handle empty string conversions (#3183)
+
+### Cleanup
+
+ * reduce log noise (#3226)
+ * flux-comms: remove obsolete command (#3211)
+
+
 flux-core version 0.19.0 - 2020-08-31
 -------------------------------------
 
