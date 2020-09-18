@@ -29,6 +29,7 @@
 #define XML_BASEDIR "resource.hwloc.xml"
 
 extern char **environ;
+static int hwloc_gpu_count (hwloc_topology_t topology);
 
 /*  idset helpers:
  */
@@ -323,7 +324,7 @@ static int cmd_info (optparse_t *p, int ac, char *av[])
     char **xmlv = NULL;
     char *xml = NULL;
     uint32_t size = 0, i = 0;
-    int ncores = 0, npu = 0, nnodes = 0;
+    int ncores = 0, npu = 0, nnodes = 0, ngpus = 0;
     hwloc_topology_t topo;
 
     flux_hwloc_xml (p, &xmlv, &size);
@@ -336,11 +337,17 @@ static int cmd_info (optparse_t *p, int ac, char *av[])
         ncores += hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_CORE);
         npu    += hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_PU);
         nnodes += hwloc_get_nbobjs_by_type (topo, HWLOC_OBJ_MACHINE);
+        ngpus += hwloc_gpu_count (topo);
         hwloc_topology_destroy (topo);
     }
 
-    printf ("%d Machine%s, %d Cores, %d PUs\n",
+    printf ("%d Machine%s, %d Cores, %d PUs",
             nnodes, nnodes > 1 ? "s" : "", ncores, npu);
+    if (ngpus > 0) {
+        printf (", %d GPU%s\n", ngpus, ngpus > 1 ? "s" : "");
+    } else {
+        printf ("\n");
+    }
 
     string_array_destroy (xmlv, size);
     return (0);
