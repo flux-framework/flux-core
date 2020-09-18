@@ -200,13 +200,14 @@ EXTRA_DIST= \
 
 dist_check_SCRIPTS = \
 	$(TESTSCRIPTS) \
-        issues/t0441-kvs-put-get.sh \
-        issues/t0505-msg-handler-reg.lua \
-        issues/t0821-kvs-segfault.sh \
+	issues/t0441-kvs-put-get.sh \
+	issues/t0505-msg-handler-reg.lua \
+	issues/t0821-kvs-segfault.sh \
 	issues/t1760-kvs-use-after-free.sh \
 	issues/t2281-service-add-crash.sh \
 	issues/t2284-initial-program-format-chars.sh \
 	issues/t2686-shell-input-race.sh \
+	issues/t3186-python-future-get-sigint.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
