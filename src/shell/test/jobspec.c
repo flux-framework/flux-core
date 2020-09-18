@@ -31,7 +31,7 @@ struct output {
 
 struct input good_input[] = {
     {
-        "flux jobspec srun hostname",
+        "flux jobspec srun hostname (slot->core)",
         "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": [\"hostname\"], \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"version\": 1, \"resources\": [{\"count\": 1, \"with\": [{\"count\": 1, \"type\": \"core\"}], \"type\": \"slot\", \"label\": \"task\"}]}",
     },
     {
@@ -58,6 +58,18 @@ struct input good_input[] = {
         "node->socket->slot->(core[2]->PU,gpu)",
         "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"socket\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"task\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 2, \"with\": [{\"type\": \"PU\", \"count\": 1}]}, {\"type\": \"gpu\", \"count\": 1}]}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}}}, \"version\": 1}",
     },
+    {
+        "node[2]->(storage,slot[3]->core[5])",
+        "{\"resources\": [{\"type\": \"node\", \"count\": 2, \"with\": [{\"type\": \"storage\", \"count\": 1}, {\"type\": \"slot\", \"label\": \"task\", \"count\": 3, \"with\": [{\"type\": \"core\", \"count\": 5}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}}}, \"version\": 1}",
+    },
+    {
+        "(storage,node->slot->core)",
+        "{\"version\": 1, \"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"default\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}]}]}, {\"type\": \"storage\", \"count\": 1562, \"exclusive\": true}], \"attributes\": {\"system\": {\"duration\": 57600}}, \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"default\", \"count\": {\"per_slot\": 1}}]}",
+    },
+    {
+        "cluster->(storage,node->slot->core)",
+        "{\"version\": 1, \"resources\": [{\"type\": \"cluster\", \"count\": 1, \"with\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"default\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}]}]}, {\"type\": \"storage\", \"count\": 1562, \"exclusive\": true}]}], \"attributes\": {\"system\": {\"duration\": 57600}}, \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"default\", \"count\": {\"per_slot\": 1}}]}",
+    },
     { NULL, NULL },
 };
 struct output good_output[] =
@@ -69,6 +81,9 @@ struct output good_output[] =
      {1, 1, 2, 1},
      {1, 1, 1, 1},
      {1, 1, 2, 1},
+     {6, 6, 5, 3},
+     {1, 1, 1, 1},
+     {1, 1, 1, 1},
      {0, 0, 0, 0},
 };
 struct input bad_input[] = {
@@ -121,12 +136,40 @@ struct input bad_input[] = {
         "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"task\", \"count\": 1}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}}}, \"version\": 1}",
     },
     {
-        "node->(storage,slot->core)",
-        "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"storage\", \"count\": 1}, {\"type\": \"slot\", \"label\": \"task\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}}}, \"version\": 1}",
+        "node->(storage,slot->PU)",
+        "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"storage\", \"count\": 1}, {\"type\": \"slot\", \"label\": \"task\", \"count\": 1, \"with\": [{\"type\": \"PU\", \"count\": 1}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}}}, \"version\": 1}",
     },
     {
         "node->slot->(PU,gpu)",
         "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"task\", \"count\": 1, \"with\": [{\"type\": \"PU\", \"count\": 1}, {\"type\": \"gpu\", \"count\": 1}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}}}, \"version\": 1}",
+    },
+    {
+        "node->(storage->core,slot->PU)",
+        "{\"version\": 1, \"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"storage\", \"count\": 1562, \"exclusive\": true, \"with\": [{\"type\": \"core\", \"count\": 1}]}, {\"type\": \"slot\", \"label\": \"default\", \"count\": 1, \"with\": [{\"type\": \"PU\", \"count\": 1}]}]}], \"attributes\": {\"system\": {\"duration\": 57600}}, \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"default\", \"count\": {\"per_slot\": 1}}]}",
+    },
+    {
+        "node->(slot,core)",
+        "{\"version\": 1, \"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"default\", \"count\": 1}, {\"type\": \"core\", \"count\": 1}]}], \"attributes\": {\"system\": {\"duration\": 57600}}, \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"default\", \"count\": {\"per_slot\": 1}}]}",
+    },
+    {
+        "(node,slot->core)",
+        "{\"version\": 1, \"resources\": [{\"type\": \"node\", \"count\": 1}, {\"type\": \"slot\", \"label\": \"default\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}]}], \"attributes\": {\"system\": {\"duration\": 57600}}, \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"default\", \"count\": {\"per_slot\": 1}}]}",
+    },
+    {
+        "cluster->(node->slot->core,node)",
+        "{\"version\": 1, \"resources\": [{\"type\": \"cluster\", \"count\": 1, \"with\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"default\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}]}]}, {\"type\": \"node\", \"count\": 1}]}], \"attributes\": {\"system\": {\"duration\": 57600}}, \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"default\", \"count\": {\"per_slot\": 1}}]}",
+    },
+    {
+        "cluster->(slot->core,node)",
+        "{\"version\": 1, \"resources\": [{\"type\": \"cluster\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"default\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}]}, {\"type\": \"node\", \"count\": 1}]}], \"attributes\": {\"system\": {\"duration\": 57600}}, \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"default\", \"count\": {\"per_slot\": 1}}]}",
+    },
+    {
+        "cluster->(slot->core,slot->core)",
+        "{\"version\": 1, \"resources\": [{\"type\": \"cluster\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"default\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}]}, {\"type\": \"slot\", \"label\": \"default\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}]}]}], \"attributes\": {\"system\": {\"duration\": 57600}}, \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"default\", \"count\": {\"per_slot\": 1}}]}",
+    },
+    {
+        "node->(slot->core,storage->core)",
+        "{\"version\": 1, \"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"default\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}]}, {\"type\": \"storage\", \"count\": 1562, \"exclusive\": true, \"with\": [{\"type\": \"core\", \"count\": 1}]}]}], \"attributes\": {\"system\": {\"duration\": 57600}}, \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"default\", \"count\": {\"per_slot\": 1}}]}",
     },
     { NULL, NULL },
 };

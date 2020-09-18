@@ -20,6 +20,7 @@ struct jobspec {
     int slot_count;             // number of task slots
     int cores_per_slot;         // number of cores per task slot
     int slots_per_node;         // number of slots per node (-1=unspecified)
+    int node_count;             // number of nodes (-1=unspecified)
     json_t *command;
     const char *cwd;
     json_t *environment;
