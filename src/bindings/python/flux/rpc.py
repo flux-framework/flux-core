@@ -15,7 +15,7 @@ from flux.wrapper import Wrapper
 from flux.future import Future
 from flux.core.inner import ffi, lib, raw
 import flux.constants
-from flux.util import encode_payload, encode_topic
+from flux.util import encode_payload, encode_topic, interruptible
 
 
 class RPC(Future):
@@ -66,6 +66,7 @@ class RPC(Future):
             pimpl_t=self.RPCInnerWrapper,
         )
 
+    @interruptible
     def get_str(self):
         payload_str = ffi.new("char *[1]")
         self.pimpl.flux_rpc_get(payload_str)
@@ -73,6 +74,7 @@ class RPC(Future):
             return None
         return ffi.string(payload_str[0]).decode("utf-8")
 
+    @interruptible
     def get(self):
         resp_str = self.get_str()
         if resp_str is None:

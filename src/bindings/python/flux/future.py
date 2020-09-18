@@ -12,7 +12,7 @@ import errno
 
 from typing import Dict
 
-from flux.util import check_future_error
+from flux.util import check_future_error, interruptible
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 
@@ -141,10 +141,12 @@ class Future(WrapperPimpl):
     def is_ready(self):
         return self.pimpl.is_ready()
 
+    @interruptible
     def wait_for(self, timeout=-1.0):
         self.pimpl.wait_for(timeout)
         return self
 
+    @interruptible
     def get(self):
         """
         Base Future.get() method. Does not return a result, just blocks
