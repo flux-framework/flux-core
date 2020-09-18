@@ -468,7 +468,21 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
                           __FUNCTION__, (uintmax_t)job->id);
                 goto nonfatal_error;
             }
-            break;
+        }
+        else if (!strcmp (name, "priority")) {
+            if (!context) {
+                flux_log (ctx->h, LOG_ERR, "%s: no priority context for %ju",
+                          __FUNCTION__, (uintmax_t)job->id);
+                goto nonfatal_error;
+            }
+
+            if (json_unpack (context, "{ s:i }",
+                             "priority", &job->priority) < 0) {
+                flux_log (ctx->h, LOG_ERR,
+                          "%s: priority context for %ju invalid",
+                          __FUNCTION__, (uintmax_t)job->id);
+                goto nonfatal_error;
+            }
         }
     }
 
