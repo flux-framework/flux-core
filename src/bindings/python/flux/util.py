@@ -17,6 +17,7 @@ import os
 import math
 import argparse
 import traceback
+import signal
 from datetime import timedelta
 from string import Formatter
 
@@ -51,6 +52,22 @@ def check_future_error(func):
             if errmsg is None:
                 six.reraise(*exception_tuple)
             raise EnvironmentError(error.errno, errmsg.decode("utf-8"))
+
+    return func_wrapper
+
+
+def interruptible(func):
+    """Make a method interruptible via Ctrl-C
+
+    Necessary for methods that may block when calling into the C API.
+    """
+
+    def func_wrapper(calling_obj, *args, **kwargs):
+        handler = signal.getsignal(signal.SIGINT)
+        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        retval = func(calling_obj, *args, **kwargs)
+        signal.signal(signal.SIGINT, handler)
+        return retval
 
     return func_wrapper
 

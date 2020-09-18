@@ -11,7 +11,7 @@ echo "# $0: flux session size will be ${SIZE}"
 
 for testscript in ${FLUX_SOURCE_DIR}/t/issues/*; do
     testname=`basename $testscript`
-    test_expect_success  $testname $testscript
+    test_expect_success  $testname "run_timeout 30 $testscript"
 done
 
 test_done

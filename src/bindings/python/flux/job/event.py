@@ -77,6 +77,8 @@ class JobEventWatchFuture(Future):
         """
         result = ffi.new("char *[1]")
         try:
+            #  Block until Future is ready:
+            self.wait_for()
             RAW.event_watch_get(self.pimpl, result)
         except OSError as exc:
             if exc.errno == errno.ENODATA:
