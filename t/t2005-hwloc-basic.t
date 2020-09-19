@@ -112,6 +112,17 @@ test_expect_success HAVE_JQ 'hwloc: reload xml with GPU resources' '
     $jq -e ".\"[0-1]\".cpuset == \"0-175\"" < sierra.out
 '
 
+#  Keep this test after 'reload sierra' above so we're processing
+#   known topology xml with GPUs from reload.
+#
+test_expect_success 'hwloc: flux-hwloc info reports expected GPU resources' '
+    cat <<-EOF > hwloc-info.expected3 &&
+	2 Machines, 88 Cores, 352 PUs, 8 GPUs
+	EOF
+    flux hwloc info > hwloc-info.out3 &&
+    test_cmp hwloc-info.expected3 hwloc-info.out3
+'
+
 test_expect_success 'hwloc: return an error code on an invalid DIR' '
     test_expect_code 1 flux hwloc reload nonexistence
 '
