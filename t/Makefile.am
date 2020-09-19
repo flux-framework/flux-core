@@ -148,6 +148,7 @@ TESTSCRIPTS = \
 	t2900-job-timelimits.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
+	t3002-pmi.t \
 	t4000-issues-test-driver.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
