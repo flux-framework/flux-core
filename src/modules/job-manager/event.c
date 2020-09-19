@@ -987,6 +987,13 @@ error:
     return NULL;
 }
 
+int event_listeners_count (struct event *event)
+{
+    if (event)
+        return zlist_size (event->listeners);
+    return -1;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

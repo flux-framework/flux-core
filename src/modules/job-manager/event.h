@@ -70,6 +70,8 @@ void event_listeners_disconnect_rpc (flux_t *h,
                                      const flux_msg_t *msg,
                                      void *arg);
 
+int event_listeners_count (struct event *event);
+
 #endif /* _FLUX_JOB_MANAGER_EVENT_H */
 
 /*
