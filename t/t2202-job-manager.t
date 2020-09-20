@@ -305,6 +305,11 @@ test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 	${RPC} job-manager.submit 71 </dev/null
 '
 
+test_expect_success HAVE_JQ 'job-manager stats works' '
+        flux module stats job-manager > stats.out &&
+        cat stats.out | $jq -e .events.listeners
+'
+
 test_expect_success 'job-manager: remove job-manager, job-info, job-ingest' '
 	flux module remove job-manager &&
 	flux module remove job-info &&
