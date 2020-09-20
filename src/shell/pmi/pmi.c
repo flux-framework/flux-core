@@ -15,7 +15,7 @@
  * libpmi/simple_server.c and libsubprocess socketpair channels.
  *
  * At startup this module is registered as a builtin shell plugin under
- * the name "pmi"via an entry in builtins.c builtins array.
+ * the name "pmi" via an entry in builtins.c builtins array.
  *
  * At shell "init", the plugin intiailizes a PMI object including the
  * pmi simple server and empty local kvs cache.
@@ -38,15 +38,6 @@
  * implemented with asynchronous continuation callbacks so that other tasks
  * and the shell's reactor remain live while the task awaits an answer.
  *
- * The PMI KVS supports a put / barrier / get pattern.  The barrier
- * distributes KVS data that was "put" so that it is available to "get".
- * A local hash captures key-value pairs as they are put.  If the entire
- * job runs under one shell, the barrier is a no-op, and the gets are
- * serviced only from the cache.  Otherwise, the barrier dumps the hash
- * into a Flux KVS txn and commits it with a flux_kvs_fence(), using
- * the number of shells as "nprocs".  Gets are serviced from the cache,
- * with fall-through to a flux_kvs_lookup().
- *
  * If shell->verbose is true (shell --verbose flag was provided), the
  * protocol engine emits client and server telemetry to stderr, and
  * shell_pmi_task_ready() logs read errors, EOF, and finalization to stderr
@@ -56,10 +47,6 @@
  * - PMI kvsname parameter is ignored
  * - 64-bit Flux job id's are assigned to integer-typed PMI appnum
  * - PMI publish, unpublish, lookup, spawn are not implemented
- * - Although multiple cycles of put / barrier / get are supported, the
- *   the barrier rewrites data from previous cycles to the Flux KVS.
- * - PMI_Abort() is implemented as log message + exit in the client code.
- *   It does not reach this module.
  * - Teardown of the subprocess channel is deferred until task completion,
  *   although client closes its end after PMI_Finalize().
  */
@@ -72,24 +59,27 @@
 #include <czmq.h>
 #include <assert.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/clique.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "builtins.h"
 #include "internal.h"
 #include "task.h"
-
-#define FQ_KVS_KEY_MAX (SIMPLE_KVS_KEY_MAX + 128)
+#include "pmi_exchange.h"
 
 struct shell_pmi {
     flux_shell_t *shell;
     struct pmi_simple_server *server;
-    zhashx_t *kvs;
-    zhashx_t *locals;
-    int cycle;      // count cycles of put / barrier / get
+    json_t *global; // already exchanged
+    json_t *pending;// pending to be exchanged
+    json_t *locals;  // never exchanged
+    struct pmi_exchange *exchange;
 };
 
+/* pmi_simple_ops->abort() signature */
 static void shell_pmi_abort (void *arg,
                              void *client,
                              int exit_code,
@@ -102,174 +92,232 @@ static void shell_pmi_abort (void *arg,
                msg ? msg : "");
 }
 
-static int shell_pmi_kvs_put (void *arg,
+static int put_dict (json_t *dict, const char *key, const char *val)
+{
+    json_t *o;
+
+    if (!(o = json_string (val)))
+        goto nomem;
+    if (json_object_set_new (dict, key, o) < 0) {
+        json_decref (o);
+        goto nomem;
+    }
+    return 0;
+nomem:
+    errno = ENOMEM;
+    return -1;
+}
+
+/**
+ ** ops for using native Flux KVS for PMI KVS
+ ** This is used if pmi.kvs=native option is provided.
+ **/
+
+static void native_lookup_continuation (flux_future_t *f, void *arg)
+{
+    struct shell_pmi *pmi = arg;
+    void *cli = flux_future_aux_get (f, "pmi_cli");
+    const char *val = NULL;
+
+    (void)flux_kvs_lookup_get (f, &val); // leave val=NULL on failure
+    pmi_simple_server_kvs_get_complete (pmi->server, cli, val);
+    flux_future_destroy (f);
+}
+
+static int native_lookup (struct shell_pmi *pmi, const char *key, void *cli)
+{
+    char *nkey;
+    flux_future_t *f;
+
+    if (asprintf (&nkey, "pmi.%s", key) < 0)
+        return -1;
+    if (!(f = flux_kvs_lookup (pmi->shell->h, NULL, 0, nkey)))
+        return -1;
+    if (flux_future_aux_set (f, "pmi_cli", cli, NULL) < 0)
+        goto error;
+    if (flux_future_then (f, -1, native_lookup_continuation, pmi) < 0)
+        goto error;
+    free (nkey);
+    return 0;
+error:
+    ERRNO_SAFE_WRAP (free, nkey);
+    flux_future_destroy (f);
+    return -1;
+}
+
+static void native_fence_continuation (flux_future_t *f, void *arg)
+{
+    struct shell_pmi *pmi = arg;
+    int rc = flux_future_get (f, NULL);
+    pmi_simple_server_barrier_complete (pmi->server, rc);
+
+    flux_future_destroy (f);
+    json_object_clear (pmi->pending);
+}
+
+static int native_fence (struct shell_pmi *pmi)
+{
+    flux_kvs_txn_t *txn;
+    const char *key;
+    json_t *val;
+    char *nkey;
+    int rc;
+    char name[64];
+    static int seq = 0;
+    uintmax_t id = (uintmax_t)pmi->shell->jobid;
+    int size = pmi->shell->info->shell_size;
+    flux_future_t *f = NULL;
+
+    if (!(txn = flux_kvs_txn_create ()))
+        return -1;
+    json_object_foreach (pmi->pending, key, val) {
+        if (asprintf (&nkey, "pmi.%s", key) < 0)
+            goto error;
+        rc = flux_kvs_txn_put (txn, 0, nkey, json_string_value (val));
+        ERRNO_SAFE_WRAP (free, nkey);
+        if (rc < 0)
+            goto error;
+    }
+    (void)snprintf (name, sizeof (name), "%juPMI%d", id, seq++);
+    if (!(f = flux_kvs_fence (pmi->shell->h, NULL, 0, name, size, txn)))
+        goto error;
+    if (flux_future_then (f, -1, native_fence_continuation, pmi) < 0)
+        goto error;
+    flux_kvs_txn_destroy (txn);
+    return 0;
+error:
+    flux_future_destroy (f);
+    flux_kvs_txn_destroy (txn);
+    return -1;
+}
+
+/* pmi_simple_ops->kvs_put() signature */
+static int native_kvs_put (void *arg,
+                           const char *kvsname,
+                           const char *key,
+                           const char *val)
+{
+    struct shell_pmi *pmi = arg;
+
+    return put_dict (pmi->pending, key, val);
+}
+
+/* pmi_simple_ops->barrier_enter() signature */
+static int native_barrier_enter (void *arg)
+{
+    struct shell_pmi *pmi = arg;
+
+    if (pmi->shell->info->shell_size == 1) {
+        pmi_simple_server_barrier_complete (pmi->server, 0);
+        return 0;
+    }
+    if (native_fence (pmi) < 0)
+        return -1; // PMI_FAIL
+    return 0;
+}
+
+/* pmi_simple_ops->kvs_get() signature */
+static int native_kvs_get (void *arg,
+                           void *cli,
+                           const char *kvsname,
+                           const char *key)
+{
+    struct shell_pmi *pmi = arg;
+    json_t *o;
+    const char *val = NULL;
+
+    if ((o = json_object_get (pmi->locals, key))
+            || (o = json_object_get (pmi->pending, key))) {
+        val = json_string_value (o);
+        pmi_simple_server_kvs_get_complete (pmi->server, cli, val);
+        return 0;
+    }
+    if (pmi->shell->info->shell_size > 1) {
+        if (native_lookup (pmi, key, cli) == 0)
+            return 0; // response deferred
+    }
+    return -1; // PMI_ERR_INVALID_KEY
+}
+
+/**
+ ** ops for using purpose-built dict exchange for PMI KVS
+ ** This is used if pmi.kvs=exchange option is provided.
+ **/
+
+static void exchange_cb (struct pmi_exchange *pex, void *arg)
+{
+    struct shell_pmi *pmi = arg;
+    int rc = -1;
+
+    if (pmi_exchange_has_error (pex)) {
+        shell_warn ("exchange failed");
+        goto done;
+    }
+    if (json_object_update (pmi->global, pmi_exchange_get_dict (pex)) < 0) {
+        shell_warn ("failed to update dict after successful exchange");
+        goto done;
+    }
+    json_object_clear (pmi->pending);
+    rc = 0;
+done:
+    pmi_simple_server_barrier_complete (pmi->server, rc);
+}
+
+/* pmi_simple_ops->kvs_get() signature */
+static int exchange_kvs_get (void *arg,
+                              void *cli,
+                              const char *kvsname,
+                              const char *key)
+{
+    struct shell_pmi *pmi = arg;
+    json_t *o;
+    const char *val = NULL;
+
+    if ((o = json_object_get (pmi->locals, key))
+            || (o = json_object_get (pmi->pending, key))
+            || (o = json_object_get (pmi->global, key))) {
+        val = json_string_value (o);
+        pmi_simple_server_kvs_get_complete (pmi->server, cli, val);
+        return 0;
+    }
+    return -1; // PMI_ERR_INVALID_KEY
+}
+
+/* pmi_simple_ops->barrier_enter() signature */
+static int exchange_barrier_enter (void *arg)
+{
+    struct shell_pmi *pmi = arg;
+
+    if (pmi->shell->info->shell_size == 1) {
+        pmi_simple_server_barrier_complete (pmi->server, 0);
+        return 0;
+    }
+    if (pmi_exchange (pmi->exchange,
+                      pmi->pending,
+                      exchange_cb,
+                      pmi) < 0) {
+        shell_warn ("pmi_exchange %s", flux_strerror (errno));
+        return -1; // PMI_FAIL
+    }
+    return 0;
+}
+
+/* pmi_simple_ops->kvs_put() signature */
+static int exchange_kvs_put (void *arg,
                               const char *kvsname,
                               const char *key,
                               const char *val)
 {
     struct shell_pmi *pmi = arg;
 
-    zhashx_update (pmi->kvs, key, (char *)val);
-    return 0;
+    return put_dict (pmi->pending, key, val);
 }
 
-static void pmi_kvs_put_local (struct shell_pmi *pmi,
-                               const char *key,
-                               const char *val)
-{
-    zhashx_update (pmi->kvs, key, (char *)val);
-    zhashx_update (pmi->locals, key, (void *) 0x1);
-}
+/**
+ ** end of KVS implementations
+ **/
 
-/* Handle kvs lookup response.
- */
-static void kvs_lookup_continuation (flux_future_t *f, void *arg)
-{
-    struct shell_pmi *pmi = arg;
-    void *cli = flux_future_aux_get (f, "flux::shell_pmi");
-    const char *val = NULL;
-
-    flux_kvs_lookup_get (f, &val); // val remains NULL on failure
-    pmi_simple_server_kvs_get_complete (pmi->server, cli, val);
-    flux_future_destroy (f);
-}
-
-/* Construct a PMI key in job's guest namespace.
- * Put it in a subdir named "pmi".
- */
-static int shell_pmi_kvs_key (char *buf,
-                              int bufsz,
-                              flux_jobid_t id,
-                              const char *key)
-{
-    char tmp[FQ_KVS_KEY_MAX];
-
-    if (snprintf (tmp, sizeof (tmp), "pmi.%s", key) >= sizeof (tmp))
-        return -1;
-    return flux_job_kvs_guest_key (buf, bufsz, id, tmp);
-}
-
-/* Lookup a key: first try the local hash.   If that fails and the
- * job spans multiple shells, do a KVS lookup in the job's private
- * KVS namespace and handle the response in kvs_lookup_continuation().
- */
-static int shell_pmi_kvs_get (void *arg,
-                              void *cli,
-                              const char *kvsname,
-                              const char *key)
-{
-    struct shell_pmi *pmi = arg;
-    flux_t *h = pmi->shell->h;
-    const char *val = NULL;
-
-    if ((val = zhashx_lookup (pmi->kvs, key))) {
-        pmi_simple_server_kvs_get_complete (pmi->server, cli, val);
-        return 0;
-    }
-    if (pmi->shell->info->shell_size > 1) {
-        char nkey[FQ_KVS_KEY_MAX];
-        flux_future_t *f = NULL;
-
-        if (shell_pmi_kvs_key (nkey,
-                               sizeof (nkey),
-                               pmi->shell->jobid,
-                               key) < 0) {
-            shell_log_errno ("shell_pmi_kvs_key");
-            goto out;
-        }
-        if (!(f = flux_kvs_lookup (h, NULL, 0, nkey))) {
-            shell_log_errno ("flux_kvs_lookup");
-            goto out;
-        }
-        if (flux_future_aux_set (f, "flux::shell_pmi", cli, NULL) < 0) {
-            shell_log_errno ("flux_future_aux_set");
-            flux_future_destroy (f);
-            goto out;
-        }
-        if (flux_future_then (f, -1., kvs_lookup_continuation, pmi) < 0) {
-            shell_log_errno ("flux_future_then");
-            flux_future_destroy (f);
-            goto out;
-        }
-        return 0; // response deferred
-    }
-out:
-    return -1; // cause PMI_KVS_Get() to fail with INVALID_KEY
-}
-
-static void kvs_fence_continuation (flux_future_t *f, void *arg)
-{
-    struct shell_pmi *pmi = arg;
-    int rc;
-
-    rc = flux_future_get (f, NULL);
-    pmi_simple_server_barrier_complete (pmi->server, rc);
-    flux_future_destroy (f);
-}
-
-static int shell_pmi_barrier_enter (void *arg)
-{
-    struct shell_pmi *pmi = arg;
-    flux_kvs_txn_t *txn = NULL;
-    const char *key;
-    const char *val;
-    char name[64];
-    int nprocs = pmi->shell->info->shell_size;
-    flux_future_t *f;
-    char nkey[FQ_KVS_KEY_MAX];
-
-    if (nprocs == 1) { // all local: no further sync needed
-        pmi_simple_server_barrier_complete (pmi->server, 0);
-        return 0;
-    }
-    snprintf (name, sizeof (name), "pmi.%ju.%d",
-             (uintmax_t)pmi->shell->jobid,
-             pmi->cycle++);
-    if (!(txn = flux_kvs_txn_create ())) {
-        shell_log_errno ("flux_kvs_txn_create");
-        goto error;
-    }
-    val = zhashx_first (pmi->kvs);
-    while (val) {
-        key = zhashx_cursor (pmi->kvs);
-        /* Special case:
-         * Keys in pmi->locals are not added to the KVS transaction
-         * because they were locally generated and need not be
-         * shared with the other shells.
-         */
-        if (zhashx_lookup (pmi->locals, key)) {
-            val = zhashx_next (pmi->kvs);
-            continue;
-        }
-        if (shell_pmi_kvs_key (nkey,
-                               sizeof (nkey),
-                               pmi->shell->jobid,
-                               key) < 0) {
-            shell_log_errno ("key buffer overflow");
-            goto error;
-        }
-        if (flux_kvs_txn_put (txn, 0, nkey, val) < 0) {
-            shell_log_errno ("flux_kvs_txn_put");
-            goto error;
-        }
-        val = zhashx_next (pmi->kvs);
-    }
-    if (!(f = flux_kvs_fence (pmi->shell->h, NULL, 0, name, nprocs, txn))) {
-        shell_log_errno ("flux_kvs_fence");
-        goto error;
-    }
-    if (flux_future_then (f, -1., kvs_fence_continuation, pmi) < 0) {
-        shell_log_errno ("flux_future_then");
-        flux_future_destroy (f);
-        goto error;
-    }
-    flux_kvs_txn_destroy (txn);
-    return 0;
-error:
-    flux_kvs_txn_destroy (txn);
-    return -1; // cause PMI_Barrier() to fail
-}
-
+/* pmi_simple_ops->response_send() signature */
 static int shell_pmi_response_send (void *client, const char *buf)
 {
     struct shell_task *task = client;
@@ -277,6 +325,7 @@ static int shell_pmi_response_send (void *client, const char *buf)
     return flux_subprocess_write (task->proc, "PMI_FD", buf, strlen (buf));
 }
 
+/* pmi_simple_ops->debug_trace() signature */
 static void shell_pmi_debug_trace (void *client, const char *line)
 {
     struct shell_task *task = client;
@@ -354,7 +403,7 @@ static int init_clique (struct shell_pmi *pmi)
         shell_log_errno ("pmi_process_mapping_encode");
         goto out;
     }
-    pmi_kvs_put_local (pmi, "PMI_process_mapping", val);
+    put_dict (pmi->locals, "PMI_process_mapping", val);
 out:
     free (blocks);
     return 0;
@@ -387,7 +436,7 @@ static int set_flux_instance_level (struct shell_pmi *pmi)
         shell_log_errno ("set_flux_instance_level: snprintf");
         goto out;
     }
-    pmi_kvs_put_local (pmi, "flux.instance-level", val);
+    put_dict (pmi->locals, "flux.instance-level", val);
     rc = 0;
 out:
     return rc;
@@ -398,40 +447,33 @@ static void pmi_destroy (struct shell_pmi *pmi)
     if (pmi) {
         int saved_errno = errno;
         pmi_simple_server_destroy (pmi->server);
-        zhashx_destroy (&pmi->kvs);
-        zhashx_destroy (&pmi->locals);
+        pmi_exchange_destroy (pmi->exchange);
+        json_decref (pmi->global);
+        json_decref (pmi->pending);
+        json_decref (pmi->locals);
         free (pmi);
         errno = saved_errno;
     }
 }
 
-// zhashx_duplicator_fn footprint
-static void *kvs_value_duplicator (const void *item)
-{
-    void *cpy = NULL;
-    if (item)
-        cpy = strdup (item);
-    return cpy;
-}
-
-// zhashx_destructor_fn footprint
-static void kvs_value_destructor (void **item)
-{
-    if (*item) {
-        free (*item);
-        *item = NULL;
-    }
-}
-
 static struct pmi_simple_ops shell_pmi_ops = {
-    .kvs_put        = shell_pmi_kvs_put,
-    .kvs_get        = shell_pmi_kvs_get,
-    .barrier_enter  = shell_pmi_barrier_enter,
     .response_send  = shell_pmi_response_send,
     .debug_trace    = shell_pmi_debug_trace,
     .abort          = shell_pmi_abort,
 };
 
+static int parse_args (flux_shell_t *shell, int *exchange_k, const char **kvs)
+{
+    if (flux_shell_getopt_unpack (shell,
+                                  "pmi",
+                                  "{s?s s?{s?i}}",
+                                  "kvs",
+                                  kvs,
+                                  "exchange",
+                                    "k", exchange_k) < 0)
+        return -1;
+    return 0;
+}
 
 static struct shell_pmi *pmi_create (flux_shell_t *shell)
 {
@@ -439,10 +481,34 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
     struct shell_info *info = shell->info;
     int flags = shell->verbose ? PMI_SIMPLE_SERVER_TRACE : 0;
     char kvsname[32];
+    const char *kvs = "native";
+    int exchange_k = 0; // 0=use default tree fanout
 
     if (!(pmi = calloc (1, sizeof (*pmi))))
         return NULL;
     pmi->shell = shell;
+
+    if (parse_args (shell, &exchange_k, &kvs) < 0)
+        goto error;
+    if (!strcmp (kvs, "native")) {
+        shell_pmi_ops.kvs_put = native_kvs_put;
+        shell_pmi_ops.kvs_get = native_kvs_get;
+        shell_pmi_ops.barrier_enter = native_barrier_enter;
+    }
+    else if (!strcmp (kvs, "exchange")) {
+        shell_pmi_ops.kvs_put = exchange_kvs_put;
+        shell_pmi_ops.kvs_get = exchange_kvs_get;
+        shell_pmi_ops.barrier_enter = exchange_barrier_enter;
+        if (!(pmi->exchange = pmi_exchange_create (shell, exchange_k)))
+            goto error;
+        if (shell->info->shell_rank == 0)
+            shell_warn ("using exchange kvs implementation");
+    }
+    else {
+        shell_log_error ("Unknown kvs implementation %s", kvs);
+        errno = EINVAL;
+        goto error;
+    }
 
     /* Use F58 representation of jobid for "kvsname", since the broker
      * will pull the kvsname and use it as the broker 'jobid' attribute.
@@ -462,13 +528,12 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
                                                   flags,
                                                   pmi)))
         goto error;
-    if (!(pmi->kvs = zhashx_new ())
-        || !(pmi->locals = zhashx_new ())) {
+    if (!(pmi->global = json_object ())
+        || !(pmi->pending = json_object ())
+        || !(pmi->locals = json_object ())) {
         errno = ENOMEM;
         goto error;
     }
-    zhashx_set_destructor (pmi->kvs, kvs_value_destructor);
-    zhashx_set_duplicator (pmi->kvs, kvs_value_duplicator);
     if (init_clique (pmi) < 0)
         goto error;
     if (!shell->standalone) {
