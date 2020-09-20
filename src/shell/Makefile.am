@@ -70,7 +70,7 @@ flux_shell_SOURCES = \
 	log.h \
 	events.c \
 	events.h \
-	pmi.c \
+	pmi/pmi.c \
 	input.c \
 	output.c \
 	svc.c \
