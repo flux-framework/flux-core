@@ -254,6 +254,8 @@ int main (int argc, char *argv[])
     struct sigaction old_sigact_term;
     flux_msg_handler_t **handlers = NULL;
     const flux_conf_t *conf;
+    double boot_elapsed_sec;
+    struct timespec boot_start_time;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -396,6 +398,7 @@ int main (int argc, char *argv[])
      * Default method is pmi.
      * If [bootstrap] is defined in configuration, use static configuration.
      */
+    monotime (&boot_start_time);
     if (flux_conf_unpack (conf, NULL, "{s:{}}", "bootstrap") == 0) {
         if (boot_config (ctx.h, ctx.overlay, ctx.attrs, ctx.tbon_k) < 0) {
             log_msg ("bootstrap failed");
@@ -403,17 +406,13 @@ int main (int argc, char *argv[])
         }
     }
     else { // PMI
-        double elapsed_sec;
-        struct timespec start_time;
-        monotime (&start_time);
         if (boot_pmi (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0) {
             log_msg ("bootstrap failed");
             goto cleanup;
         }
-        elapsed_sec = monotime_since (start_time) / 1000;
-        flux_log (ctx.h, LOG_INFO, "pmi: bootstrap time %.1fs", elapsed_sec);
-
     }
+    boot_elapsed_sec = monotime_since (boot_start_time) / 1000;
+
     ctx.rank = overlay_get_rank (ctx.overlay);
     ctx.size = overlay_get_size (ctx.overlay);
     snprintf (ctx.uuid, sizeof (ctx.uuid), "%"PRIu32, ctx.rank);
@@ -426,8 +425,12 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (ctx.verbose)
-        log_msg ("boot: rank=%d size=%d", ctx.rank, ctx.size);
+    if (ctx.verbose) {
+        log_msg ("boot: rank=%d size=%d time %.3fs",
+                  ctx.rank,
+                  ctx.size,
+                  boot_elapsed_sec);
+    }
 
     // Setup profiling
     setup_profiling (argv[0], ctx.rank);
