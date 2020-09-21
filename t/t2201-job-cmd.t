@@ -201,6 +201,10 @@ test_expect_success 'flux-job: priority fails with non-numeric priority' '
 	test_must_fail flux job priority ${validjob} foo
 '
 
+test_expect_success 'job-manager: flux job priority fails on invalid jobid' '
+	test_must_fail flux job priority 12345 31
+'
+
 test_expect_success 'flux-job: raise fails with bad FLUX_URI' '
 	! FLUX_URI=/wrong flux job raise ${validjob}
 '
