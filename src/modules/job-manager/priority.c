@@ -92,6 +92,11 @@ void priority_handle_request (flux_t *h,
         errno = EINVAL;
         goto error;
     }
+    if (job->has_resources) {
+        errstr = "priority cannot be changed once resources are allocated";
+        errno = EINVAL;
+        goto error;
+    }
     /* Post event, change job's queue position, and respond.
      */
     if (event_job_post_pack (ctx->event, job,
