@@ -30,8 +30,16 @@ $waitfile --timeout=10 --pattern="Added service" t3186.log
 
 log "Sending SIGINT to $pid"
 kill -INT $pid || die "Failed to kill PID $pid"
+
+while kill -0 $pid; do
+    log "PID $pid still running, trying again"
+    kill -INT $pid
+    sleep 0.25
+done
+
+log "Waiting for $pid to exit"
 wait $!
 STATUS=$?
-test $STATUS -eq 130 || die "process exited with $STATUS expected 130"
 
+test $STATUS -eq 130 || die "process exited with $STATUS expected 130"
 log "Python script exited with status $STATUS"
