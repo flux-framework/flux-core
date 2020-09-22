@@ -554,6 +554,15 @@ static int internal_hwloc_reload (optparse_t *p, int ac, char *av[])
 /*  flux-hwloc aggregate-load:
  */
 
+static const char *hwloc_hostname (hwloc_topology_t topo)
+{
+    int depth = hwloc_get_type_depth (topo, HWLOC_OBJ_MACHINE);
+    hwloc_obj_t obj = hwloc_get_obj_by_depth (topo, depth, 0);
+    if (obj)
+        return hwloc_obj_get_info_by_name(obj, "HostName");
+    else return NULL;
+}
+
 /*  Count supported GPU object in a hwloc topology object.
  *
  *  Currently only CUDA and OpenCL devices are counted.
@@ -622,6 +631,7 @@ static json_t *topo_tojson (hwloc_topology_t topology)
 {
     int nobj, i;
     char *ids = NULL;
+    const char *hostname = NULL;
     json_t *o = NULL;
     json_t *v = NULL;
     int depth = hwloc_topology_get_depth (topology);
@@ -655,6 +665,11 @@ static json_t *topo_tojson (hwloc_topology_t topology)
             || json_object_set_new (o, "cpuset", v) < 0)
             goto error;
         free (ids);
+    }
+    if ((hostname = hwloc_hostname (topology))) {
+        if (!(v = json_string (hostname))
+            || json_object_set_new (o, "hostname", v) < 0)
+            goto error;
     }
     return (o);
 error:
