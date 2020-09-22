@@ -60,5 +60,15 @@ test_expect_success 'issue3051: clean up' '
 	flux queue drain
 '
 
+#
+# Issue 3218 job-manager: segfault when changing priority of running job
+#
+
+test_expect_success 'issue3218: priority change on running job doesnt segfault' '
+        id=$(flux mini submit sleep 600) &&
+        flux job wait-event $id start &&
+        test_must_fail flux job priority $id 0 &&
+        flux job cancel $id
+'
 
 test_done
