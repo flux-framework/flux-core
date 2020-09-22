@@ -481,7 +481,7 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
     struct shell_info *info = shell->info;
     int flags = shell->verbose ? PMI_SIMPLE_SERVER_TRACE : 0;
     char kvsname[32];
-    const char *kvs = "native";
+    const char *kvs = "exchange";
     int exchange_k = 0; // 0=use default tree fanout
 
     if (!(pmi = calloc (1, sizeof (*pmi))))
@@ -494,6 +494,8 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
         shell_pmi_ops.kvs_put = native_kvs_put;
         shell_pmi_ops.kvs_get = native_kvs_get;
         shell_pmi_ops.barrier_enter = native_barrier_enter;
+        if (shell->info->shell_rank == 0)
+            shell_warn ("using native Flux kvs implementation");
     }
     else if (!strcmp (kvs, "exchange")) {
         shell_pmi_ops.kvs_put = exchange_kvs_put;
@@ -501,8 +503,6 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
         shell_pmi_ops.barrier_enter = exchange_barrier_enter;
         if (!(pmi->exchange = pmi_exchange_create (shell, exchange_k)))
             goto error;
-        if (shell->info->shell_rank == 0)
-            shell_warn ("using exchange kvs implementation");
     }
     else {
         shell_log_error ("Unknown kvs implementation %s", kvs);
