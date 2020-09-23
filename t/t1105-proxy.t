@@ -35,18 +35,6 @@ test_expect_success 'flux-proxy forwards getattr request' '
 	test "$ATTR_SIZE" = "$SIZE"
 '
 
-test_expect_success 'flux-proxy manages event redistribution' '
-	flux proxy $TEST_URI \
-	  "${EVENT_TRACE} -t 2 foobar foobar.exit \\
-       ${EVENT_TRACE} -t 2 foobar foobar.exit \\
-       flux event pub foobar.exit" &&
-	FLUX_URI=$TEST_URI flux dmesg | sed -e "s/[^ ]* //" >event.out &&
-	test $(egrep "connector-local.*debug\[0\]: subscribe foobar" event.out|wc -l) -eq 1 &&
-	test $(egrep "proxy.*debug\[0\]: subscribe foobar" event.out|wc -l) -eq 1 &&
-	test $(egrep "connector-local.*debug\[0\]: unsubscribe foobar" event.out|wc -l) -eq 1 &&
-	test $(egrep "proxy.*debug\[0\]: unsubscribe foobar" event.out|wc -l) -eq 1
-'
-
 test_expect_success 'flux-proxy permits dynamic service registration' "
         echo '{\"service\":\"fubar\"}' >service.add.in &&
         flux proxy $TEST_URI \
