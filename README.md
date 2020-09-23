@@ -59,8 +59,7 @@ python36-cffi     | python3-cffi      | >= 1.1            |
 python36-six      | python3-six       | >= 1.9            |
 python36-yaml     | python3-yaml      | >= 3.10.0         |
 python36-jsonschema | python3-jsonschema | >= 2.3.0       |
-asciidoc          | asciidoc          |                   | *2*
-asciidoctor       | asciidoctor       | >= 1.5.7          | *2*
+phthon3-sphinx    | python3-sphinx    |                   | *2*
 
 *Note 1 - Due to a packaging issue, Ubuntu lua-posix may need the
 following symlink (true for version 33.4.0-2):*
@@ -68,8 +67,7 @@ following symlink (true for version 33.4.0-2):*
 $ sudo ln -s posix_c.so /usr/lib/x86_64-linux-gnu/lua/5.1/posix.so
 ```
 
-*Note 2 - only needed if optional man pages are to be created.  Only one
-of asciidoc or asciidoctor is needed.  Asciidoc is used if both are installed.*
+*Note 2 - only needed if optional man pages are to be created.
 
 The following optional dependencies enable additional testing:
 
@@ -84,12 +82,12 @@ jq                | jq                |
 
 ##### Installing RedHat/CentOS Packages
 ```
-yum install autoconf automake libtool make libsodium-devel zeromq4-devel czmq-devel libuuid-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python36-devel python36-cffi python36-six python36-yaml python36-jsonschema asciidoc asciidoctor aspell aspell-en valgrind-devel mpich-devel jq
+yum install autoconf automake libtool make libsodium-devel zeromq4-devel czmq-devel libuuid-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python36-devel python36-cffi python36-six python36-yaml python36-jsonschema python3-sphinx aspell aspell-en valgrind-devel mpich-devel jq
 ```
 
 ##### Installing Ubuntu Packages
 ```
-apt install autoconf automake libtool make libsodium-dev libzmq3-dev libczmq-dev uuid-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python3-dev python3-cffi python3-six python3-yaml python3-jsonschema asciidoc asciidoctor aspell aspell-en valgrind libmpich-dev jq
+apt install autoconf automake libtool make libsodium-dev libzmq3-dev libczmq-dev uuid-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python3-dev python3-cffi python3-six python3-yaml python3-jsonschema python3-sphinx aspell aspell-en valgrind libmpich-dev jq
 ```
 
 ##### Building from Source
