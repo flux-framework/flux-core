@@ -311,7 +311,6 @@ CLEANFILES = \
 
 clean-local:
 	-rm -rf man
-	-rmdir man1 man3 man5 man7
 
 distclean-local:
 	-rm -rf doctrees
