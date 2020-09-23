@@ -170,8 +170,6 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    flux_log (h, LOG_DEBUG, "%s: added %d jobs", __FUNCTION__,
-                            (int)zlist_size (newjobs));
 
     /* Submitting user is being responded to with jobid's.
      * Now walk the list of new jobs and advance their state.

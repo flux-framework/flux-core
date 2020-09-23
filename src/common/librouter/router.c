@@ -214,10 +214,6 @@ static int broker_subscribe (const char *topic, void *arg)
 
     if (flux_event_subscribe (rtr->h, topic) < 0)
         return -1;
-
-    /* N.B. t/t1008-proxy.t looks for this log message */
-    flux_log (rtr->h, LOG_DEBUG, "subscribe %s", topic);
-
     return 0;
 }
 
@@ -227,10 +223,6 @@ static int broker_unsubscribe (const char *topic, void *arg)
 
     if (!rtr->mute && flux_event_unsubscribe (rtr->h, topic) < 0)
         return -1;
-
-    /* N.B. t/t1008-proxy.t looks for this log message */
-    flux_log (rtr->h, LOG_DEBUG, "unsubscribe %s", topic);
-
     return 0;
 }
 
