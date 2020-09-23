@@ -61,11 +61,7 @@ python36-yaml     | python3-yaml      | >= 3.10.0         |
 python36-jsonschema | python3-jsonschema | >= 2.3.0       |
 phthon3-sphinx    | python3-sphinx    |                   | *2*
 
-*Note 1 - Due to a packaging issue, Ubuntu lua-posix may need the
-following symlink (true for version 33.4.0-2):*
-```
-$ sudo ln -s posix_c.so /usr/lib/x86_64-linux-gnu/lua/5.1/posix.so
-```
+*Note 1 - Due to a long standing [packaging bug](https://bugs.launchpad.net/ubuntu/+source/lua-posix/+bug/1752082) in lua-posix-33.4.0-2 on Ubuntu bionic, you may wish to install lua-posix via luarocks on that distro.
 
 *Note 2 - only needed if optional man pages are to be created.
 
