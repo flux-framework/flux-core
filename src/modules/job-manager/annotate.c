@@ -152,6 +152,13 @@ void annotate_handle_request (flux_t *h,
         flux_log_error (h, "%s: event_batch_pub_annotations", __FUNCTION__);
         goto error;
     }
+    if (event_job_post_pack (ctx->event,
+                             job,
+                             "annotations",
+                             EVENT_JOB_POST_INFO_ONLY,
+                             "{s:O?}",
+                             "annotations", job->annotations) < 0)
+        goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;

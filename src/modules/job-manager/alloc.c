@@ -85,6 +85,12 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
                         flux_log_error (ctx->h,
                                         "%s: event_batch_pub_annotations",
                                         __FUNCTION__);
+                    if (event_job_post_pack (ctx->event, job, "annotations",
+                                             EVENT_JOB_POST_INFO_ONLY,
+                                             "{s:n}", "annotations") < 0)
+                        flux_log_error (ctx->h,
+                                        "%s: event_job_post_pack",
+                                        __FUNCTION__);
                 }
             }
             /* jobs with free request pending (much smaller window for this
@@ -229,6 +235,15 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                 flux_log_error (ctx->h,
                                 "%s: event_batch_pub_annotations: id=%ju",
                                 __FUNCTION__, (uintmax_t)id);
+            if (event_job_post_pack (ctx->event,
+                                     job,
+                                     "annotations",
+                                     EVENT_JOB_POST_INFO_ONLY,
+                                     "{s:O?}",
+                                     "annotations", job->annotations) < 0)
+                flux_log_error (ctx->h,
+                                "%s: event_job_post_pack: id=%ju",
+                                __FUNCTION__, (uintmax_t)id);
         }
         if (job->annotations) {
             if (event_job_post_pack (ctx->event, job, "alloc", 0,
@@ -252,6 +267,15 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (ctx->h,
                             "%s: event_batch_pub_annotations: id=%ju",
                             __FUNCTION__, (uintmax_t)id);
+        if (event_job_post_pack (ctx->event,
+                                 job,
+                                 "annotations",
+                                 EVENT_JOB_POST_INFO_ONLY,
+                                 "{s:O?}",
+                                 "annotations", job->annotations) < 0)
+            flux_log_error (ctx->h,
+                            "%s: event_job_post_pack: id=%ju",
+                            __FUNCTION__, (uintmax_t)id);
         break;
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
@@ -261,6 +285,12 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             if (event_batch_pub_annotations (ctx->event, job) < 0)
                 flux_log_error (ctx->h,
                                 "%s: event_batch_pub_annotations: id=%ju",
+                                __FUNCTION__, (uintmax_t)id);
+            if (event_job_post_pack (ctx->event, job, "annotations",
+                                     EVENT_JOB_POST_INFO_ONLY,
+                                     "{s:n}", "annotations") < 0)
+                flux_log_error (ctx->h,
+                                "%s: event_job_post_pack: id=%ju",
                                 __FUNCTION__, (uintmax_t)id);
         }
         if (event_job_post_pack (ctx->event, job, "exception", 0,
@@ -279,6 +309,12 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             if (event_batch_pub_annotations (ctx->event, job) < 0)
                 flux_log_error (ctx->h,
                                 "%s: event_batch_pub_annotations: id=%ju",
+                                __FUNCTION__, (uintmax_t)id);
+            if (event_job_post_pack (ctx->event, job, "annotations",
+                                     EVENT_JOB_POST_INFO_ONLY,
+                                     "{s:n}", "annotations") < 0)
+                flux_log_error (ctx->h,
+                                "%s: event_job_post_pack: id=%ju",
                                 __FUNCTION__, (uintmax_t)id);
         }
         if (event_job_action (ctx->event, job) < 0) {
