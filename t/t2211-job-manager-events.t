@@ -48,6 +48,18 @@ check_event_name() {
         return 1
 }
 
+check_event_annotation() {
+        name="$1"
+        filename=$2
+        key=$3
+        value=$4
+        if cat $filename | $jq -e ".entry.context.annotations.${key} == ${value}" | grep -q "true"
+        then
+            return 0
+        fi
+        return 1
+}
+
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with no filters shows all events' '
         before=`flux module stats --parse events.listeners job-manager`
         count=$((before + 1))
@@ -175,6 +187,39 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow & deny
         test_must_fail check_event_name release events6.out &&
         test_must_fail check_event_name free events6.out &&
         check_event_name clean events6.out &&
+        kill -s USR1 $pid &&
+        wait $pid &&
+        wait_events_listeners $before
+'
+
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events works with annotations' '
+        before=`flux module stats --parse events.listeners job-manager`
+        count=$((before + 1))
+        $jq -j -c -n "{allow:{annotations:1, clean:1}}" \
+          | $EVENT_STREAM > events7.out &
+        pid=$! &&
+        wait_events_listeners $count &&
+        flux queue stop &&
+        jobid=`flux job submit basic.json` &&
+        flux job annotate $jobid foo abcdefg &&
+        $waitfile --count=1 --timeout=5 --pattern="abcdefg" events7.out &&
+        flux job annotate $jobid foo ABCDEFG &&
+        $waitfile --count=1 --timeout=5 --pattern="ABCDEFG" events7.out &&
+        flux job annotate $jobid foo 1234567 &&
+        $waitfile --count=1 --timeout=5 --pattern="1234567" events7.out &&
+        flux queue start &&
+        $waitfile --count=1 --timeout=5 --pattern="clean" events7.out &&
+        test_must_fail check_event_name submit events7.out &&
+        test_must_fail check_event_name depend events7.out &&
+        test_must_fail check_event_name alloc events7.out &&
+        test_must_fail check_event_name start events7.out &&
+        test_must_fail check_event_name finish events7.out &&
+        test_must_fail check_event_name release events7.out &&
+        test_must_fail check_event_name free events7.out &&
+        check_event_annotation annotations events7.out user.foo \"abcdefg\" &&
+        check_event_annotation annotations events7.out user.foo \"ABCDEFG\" &&
+        check_event_annotation annotations events7.out user.foo 1234567 &&
+        check_event_name clean events7.out &&
         kill -s USR1 $pid &&
         wait $pid &&
         wait_events_listeners $before
