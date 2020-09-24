@@ -35,7 +35,14 @@ struct state_transition {
     double timestamp;
 };
 
+struct annotations_data {
+    double timestamp;
+    json_t *annotations;
+};
+
 static void process_next_state (struct info_ctx *ctx, struct job *job);
+
+static void annotations_data_destroy_wrapper (void **data);
 
 static void job_events_continuation (flux_future_t *f, void *arg);
 
@@ -109,12 +116,6 @@ static void job_id_destructor (void **item)
 {
     flux_jobid_t *idp = *((flux_jobid_t **)item);
     free (idp);
-}
-
-static void json_decref_wrapper (void **data)
-{
-    json_t **o = (json_t **)data;
-    json_decref (*o);
 }
 
 static void flux_msg_destroy_wrapper (void **data)
@@ -193,7 +194,8 @@ struct job_state_ctx *job_state_create (struct info_ctx *ctx)
     /* job id not stored in job struct, have to duplicate it */
     zhashx_set_key_duplicator (jsctx->early_annotations, job_id_duplicator);
     zhashx_set_key_destructor (jsctx->early_annotations, job_id_destructor);
-    zhashx_set_destructor (jsctx->early_annotations, json_decref_wrapper);
+    zhashx_set_destructor (jsctx->early_annotations,
+                           annotations_data_destroy_wrapper);
 
     if (!(jsctx->transitions = zlistx_new ()))
         goto error;
@@ -204,18 +206,14 @@ struct job_state_ctx *job_state_create (struct info_ctx *ctx)
         goto error;
     }
 
-    if (flux_event_subscribe (jsctx->h, "job-annotations") < 0) {
-        flux_log_error (jsctx->h, "flux_event_subscribe");
-        goto error;
-    }
-
     if (!(jsctx->events = flux_rpc_pack (jsctx->h,
                                          "job-manager.events",
                                          FLUX_NODEID_ANY,
                                          FLUX_RPC_STREAMING,
-                                         "{s:{s:i}}",
+                                         "{s:{s:i s:i}}",
                                          "allow",
-                                           "priority", 1))) {
+                                           "priority", 1,
+                                           "annotations", 1))) {
         flux_log_error (jsctx->h, "flux_rpc_pack");
         goto error;
     }
@@ -265,7 +263,6 @@ void job_state_destroy (void *data)
         zlistx_destroy (&jsctx->transitions);
         flux_future_destroy (jsctx->events);
         (void)flux_event_unsubscribe (jsctx->h, "job-state");
-        (void)flux_event_unsubscribe (jsctx->h, "job-annotations");
         free (jsctx);
     }
 }
@@ -1263,7 +1260,7 @@ static void update_jobs (struct info_ctx *ctx, json_t *transitions)
         }
 
         if (!(job = zhashx_lookup (jsctx->index, &id))) {
-            json_t *annotation;
+            struct annotations_data *ad;
             if (!(job = job_create (ctx, id))){
                 flux_log_error (jsctx->h, "%s: job_create", __FUNCTION__);
                 return;
@@ -1275,8 +1272,10 @@ static void update_jobs (struct info_ctx *ctx, json_t *transitions)
             }
             /* in rare case, annotation may have arrived before we
              * knew of this job */
-            if ((annotation = zhashx_lookup (jsctx->early_annotations, &id))) {
-                job->annotations = json_incref (annotation);
+            if ((ad = zhashx_lookup (jsctx->early_annotations, &id))) {
+                job->annotations_timestamp = ad->timestamp;
+                if (ad->annotations)
+                    job->annotations = json_incref (ad->annotations);
                 zhashx_delete (jsctx->early_annotations, &id);
             }
             /* job always starts off on processing list */
@@ -1325,106 +1324,6 @@ void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
 
         update_jobs (ctx, transitions);
     }
-
-    return;
-}
-
-static int parse_annotation (json_t *annotation, flux_jobid_t *id, json_t **aValue)
-{
-    json_t *o;
-
-    if (!json_is_array (annotation))
-        return -1;
-
-    if (!(o = json_array_get (annotation, 0))
-        || !json_is_integer (o))
-        return -1;
-
-    (*id) = json_integer_value (o);
-
-    if (!(o = json_array_get (annotation, 1))
-        || (!json_is_object (o) && !json_is_null (o)))
-        return -1;
-
-    (*aValue) = o;
-    return 0;
-}
-
-static void update_early_annotations (struct info_ctx *ctx,
-                                      struct job_state_ctx *jsctx,
-                                      flux_jobid_t id,
-                                      json_t *annotation)
-{
-    if (!zhashx_lookup (jsctx->early_annotations, &id)) {
-        if (!json_is_null (annotation)) {
-            if (zhashx_insert (jsctx->early_annotations,
-                               &id,
-                               json_incref (annotation)) < 0)
-                flux_log_error (ctx->h, "%s: zhashx_insert", __FUNCTION__);
-        }
-    }
-    else {
-        if (!json_is_null (annotation))
-            zhashx_update (jsctx->early_annotations,
-                           &id,
-                           json_incref (annotation));
-        else
-            zhashx_delete (jsctx->early_annotations, &id);
-    }
-}
-
-static void update_annotations (struct info_ctx *ctx, json_t *annotations)
-{
-    struct job_state_ctx *jsctx = ctx->jsctx;
-    size_t index;
-    json_t *value;
-
-    if (!json_is_array (annotations)) {
-        flux_log (ctx->h, LOG_ERR, "annotations event is not an array");
-        return;
-    }
-
-    json_array_foreach (annotations, index, value) {
-        struct job *job;
-        flux_jobid_t id;
-        json_t *aValue;
-
-        if (parse_annotation (value, &id, &aValue) < 0) {
-            flux_log (jsctx->h, LOG_ERR, "%s: annotation parse error",
-                      __FUNCTION__);
-            return;
-        }
-
-        if ((job = zhashx_lookup (jsctx->index, &id))) {
-            json_decref (job->annotations);
-            if (json_is_null (aValue))
-                job->annotations = NULL;
-            else
-                job->annotations = json_incref (aValue);
-        }
-        else {
-            /* annotation event may have arrived before job-state
-             * event indicating job existence, store off for later.
-             */
-            update_early_annotations (ctx, jsctx, id, aValue);
-        }
-    }
-}
-
-void job_annotations_cb (flux_t *h, flux_msg_handler_t *mh,
-                         const flux_msg_t *msg, void *arg)
-{
-    struct info_ctx *ctx = arg;
-    json_t *annotations;
-
-    if (flux_event_unpack (msg, NULL, "{s:o}",
-                           "annotations",
-                           &annotations) < 0) {
-        flux_log_error (h, "%s: flux_event_unpack", __FUNCTION__);
-        return;
-    }
-
-    update_annotations (ctx, annotations);
 
     return;
 }
@@ -1794,6 +1693,102 @@ static int job_events_priority (struct job_state_ctx *jsctx,
     return 0;
 }
 
+static struct annotations_data *annotations_data_create (void)
+{
+    struct annotations_data *ad = calloc (1, sizeof (*ad));
+    if (!ad)
+        return NULL;
+    return ad;
+}
+
+static void annotations_data_destroy (void *data)
+{
+    if (data) {
+        struct annotations_data *ad = data;
+        json_decref (ad->annotations);
+        free (ad);
+    }
+}
+
+static void annotations_data_destroy_wrapper (void **data)
+{
+    struct annotations_data **ad = (struct annotations_data **)data;
+    annotations_data_destroy (*ad);
+}
+
+static int update_early_annotations (struct job_state_ctx *jsctx,
+                                     flux_jobid_t id,
+                                     double timestamp,
+                                     json_t *annotations)
+{
+    struct annotations_data *ad = NULL;
+
+    if (!(ad = zhashx_lookup (jsctx->early_annotations, &id))) {
+        if (!(ad = annotations_data_create ())) {
+            flux_log_error (jsctx->h, "%s: annotations_data_create",
+                            __FUNCTION__);
+            goto error;
+        }
+        if (zhashx_insert (jsctx->early_annotations,
+                           &id,
+                           ad) < 0) {
+            flux_log_error (jsctx->h, "%s: zhashx_insert", __FUNCTION__);
+            goto error;
+        }
+    }
+    if (timestamp > ad->timestamp) {
+        json_decref (ad->annotations);
+        if (json_is_null (annotations))
+            ad->annotations = NULL;
+        else
+            ad->annotations = json_incref (annotations);
+        ad->timestamp = timestamp;
+    }
+
+    return 0;
+
+error:
+    annotations_data_destroy (ad);
+    return -1;
+}
+
+static int job_events_annotations (struct job_state_ctx *jsctx,
+                                   flux_jobid_t id,
+                                   double timestamp,
+                                   json_t *context)
+{
+    struct job *job;
+    json_t *annotations;
+
+    if (!context
+        || json_unpack (context, "{ s:o }", "annotations", &annotations) < 0) {
+        flux_log (jsctx->h, LOG_ERR,
+                  "%s: annotations event context invalid: %ju",
+                  __FUNCTION__, (uintmax_t)id);
+        return -1;
+    }
+
+    if ((job = zhashx_lookup (jsctx->index, &id))) {
+        if (timestamp > job->annotations_timestamp) {
+            json_decref (job->annotations);
+            if (json_is_null (annotations))
+                job->annotations = NULL;
+            else
+                job->annotations = json_incref (annotations);
+            job->annotations_timestamp = timestamp;
+        }
+    }
+    else {
+        /* annotation event may have arrived before job-state
+         * event indicating job existence, store off for later.
+         */
+        if (update_early_annotations (jsctx, id, timestamp, annotations) < 0)
+            return -1;
+    }
+
+    return 0;
+}
+
 static void job_events_continuation (flux_future_t *f, void *arg)
 {
     struct job_state_ctx *jsctx = arg;
@@ -1827,6 +1822,10 @@ static void job_events_continuation (flux_future_t *f, void *arg)
 
         if (!strcmp (name, "priority")) {
             if (job_events_priority (jsctx, id, timestamp, context) < 0)
+                goto error;
+        }
+        else if (!strcmp (name, "annotations")) {
+            if (job_events_annotations (jsctx, id, timestamp, context) < 0)
                 goto error;
         }
     }
