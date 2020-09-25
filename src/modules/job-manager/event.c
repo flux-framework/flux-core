@@ -66,7 +66,6 @@ struct event_batch {
     flux_kvs_txn_t *txn;
     flux_future_t *f;
     json_t *state_trans;
-    json_t *annotations;
     bool listener_response_available;
     zlist_t *responses; // responses deferred until batch complete
 };
@@ -231,14 +230,6 @@ void event_batch_destroy (struct event_batch *batch)
                                batch->state_trans);
             json_decref (batch->state_trans);
         }
-        if (batch->annotations) {
-            if (json_array_size (batch->annotations) > 0)
-                event_publish (batch->event,
-                               "job-annotations",
-                               "annotations",
-                               batch->annotations);
-            json_decref (batch->annotations);
-        }
         if (batch->listener_response_available)
            generate_listener_responses (batch->event);
         if (batch->responses) {
@@ -324,32 +315,6 @@ int event_batch_pub_state (struct event *event, struct job *job,
                          timestamp)))
         goto nomem;
     if (json_array_append_new (event->batch->state_trans, o)) {
-        json_decref (o);
-        goto nomem;
-    }
-    return 0;
-nomem:
-    errno = ENOMEM;
-error:
-    return -1;
-}
-
-int event_batch_pub_annotations (struct event *event, struct job *job)
-{
-    json_t *o;
-
-    /* do not check for job->annotations == NULL, all annotations
-     * being cleared is a possible change.
-     */
-    if (event_batch_start (event) < 0)
-        goto error;
-    if (!event->batch->annotations) {
-        if (!(event->batch->annotations = json_array ()))
-            goto nomem;
-    }
-    if (!(o = json_pack ("[I,O?]", job->id, job->annotations)))
-        goto nomem;
-    if (json_array_append_new (event->batch->annotations, o)) {
         json_decref (o);
         goto nomem;
     }
