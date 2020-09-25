@@ -39,10 +39,6 @@ int event_job_update (struct job *job, json_t *event);
 int event_batch_pub_state (struct event *event, struct job *job,
                            double timestamp);
 
-/* Add notification of job's annotation change for publication.
- */
-int event_batch_pub_annotations (struct event *event, struct job *job);
-
 /* Add notification of job event to send to listeners.
  */
 int event_batch_process_event_entry (struct event *event,

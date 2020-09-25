@@ -81,10 +81,6 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
                 job->alloc_queued = 1;
                 annotations_clear (job, &cleared);
                 if (cleared) {
-                    if (event_batch_pub_annotations (ctx->event, job) < 0)
-                        flux_log_error (ctx->h,
-                                        "%s: event_batch_pub_annotations",
-                                        __FUNCTION__);
                     if (event_job_post_pack (ctx->event, job, "annotations",
                                              EVENT_JOURNAL_ONLY,
                                              "{s:n}", "annotations") < 0)
@@ -231,10 +227,6 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         if (annotations_update (h, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%ju", (uintmax_t)id);
         if (annotations) {
-            if (event_batch_pub_annotations (ctx->event, job) < 0)
-                flux_log_error (ctx->h,
-                                "%s: event_batch_pub_annotations: id=%ju",
-                                __FUNCTION__, (uintmax_t)id);
             if (event_job_post_pack (ctx->event,
                                      job,
                                      "annotations",
@@ -263,10 +255,6 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         if (annotations_update (h, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%ju", (uintmax_t)id);
-        if (event_batch_pub_annotations (ctx->event, job) < 0)
-            flux_log_error (ctx->h,
-                            "%s: event_batch_pub_annotations: id=%ju",
-                            __FUNCTION__, (uintmax_t)id);
         if (event_job_post_pack (ctx->event,
                                  job,
                                  "annotations",
@@ -282,10 +270,6 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         job->alloc_pending = 0;
         annotations_clear (job, &cleared);
         if (cleared) {
-            if (event_batch_pub_annotations (ctx->event, job) < 0)
-                flux_log_error (ctx->h,
-                                "%s: event_batch_pub_annotations: id=%ju",
-                                __FUNCTION__, (uintmax_t)id);
             if (event_job_post_pack (ctx->event, job, "annotations",
                                      EVENT_JOURNAL_ONLY,
                                      "{s:n}", "annotations") < 0)
@@ -306,10 +290,6 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         job->alloc_pending = 0;
         annotations_clear (job, &cleared);
         if (cleared) {
-            if (event_batch_pub_annotations (ctx->event, job) < 0)
-                flux_log_error (ctx->h,
-                                "%s: event_batch_pub_annotations: id=%ju",
-                                __FUNCTION__, (uintmax_t)id);
             if (event_job_post_pack (ctx->event, job, "annotations",
                                      EVENT_JOURNAL_ONLY,
                                      "{s:n}", "annotations") < 0)
