@@ -49,6 +49,8 @@
 
 #include "src/common/libeventlog/eventlog.h"
 
+#define EVENTS_JOURNAL_MAXLEN 1000
+
 const double batch_timeout = 0.01;
 
 struct event {
@@ -59,6 +61,10 @@ struct event {
     zlist_t *pending;
     zlist_t *pub_futures;
     zlist_t *listeners;
+
+    /* events_journal holds most recent events for listeners */
+    zlist_t *events_journal;
+    int events_journal_maxlen;
 };
 
 struct event_batch {
@@ -582,6 +588,12 @@ static bool allow_deny_check (struct events_listener *el, const char *name)
     return add_entry;
 }
 
+static void json_decref_wrapper (void *data)
+{
+    json_t *o = (json_t *)data;
+    json_decref (o);
+}
+
 int event_batch_process_event_entry (struct event *event,
                                      struct job *job,
                                      const char *name,
@@ -594,13 +606,12 @@ int event_batch_process_event_entry (struct event *event,
     if (event_batch_start (event) < 0)
         goto error;
 
+    if (!(wrapped_entry = wrap_events_entry (job, entry)))
+        goto error;
+
     el = zlist_first (event->listeners);
     while (el) {
         if (allow_deny_check (el, name)) {
-            if (!wrapped_entry) {
-                if (!(wrapped_entry = wrap_events_entry (job, entry)))
-                    goto error;
-            }
             if (json_array_append (el->events, wrapped_entry) < 0)
                 goto nomem;
             event->batch->listener_response_available = true;
@@ -608,6 +619,16 @@ int event_batch_process_event_entry (struct event *event,
 
         el = zlist_next (event->listeners);
     }
+
+    if (zlist_size (event->events_journal) > event->events_journal_maxlen)
+        zlist_remove (event->events_journal, zlist_head (event->events_journal));
+    if (zlist_append (event->events_journal, json_incref (wrapped_entry)) < 0)
+        goto nomem;
+    zlist_freefn (event->events_journal,
+                  wrapped_entry,
+                  json_decref_wrapper,
+                  true);
+
     json_decref (wrapped_entry);
     return 0;
 
@@ -720,6 +741,7 @@ void events_handle_request (flux_t *h,
     const char *errstr = NULL;
     json_t *allow = NULL;
     json_t *deny = NULL;
+    json_t *wrapped_entry;
 
     if (flux_request_unpack (msg, NULL, "{s?o s?o}",
                              "allow", &allow,
@@ -753,8 +775,33 @@ void events_handle_request (flux_t *h,
     }
     zlist_freefn (event->listeners, el, events_listener_destroy, false);
 
+    if (event_batch_start (event) < 0)
+        goto error;
+
+    wrapped_entry = zlist_first (event->events_journal);
+    while (wrapped_entry) {
+        const char *name;
+
+        if (json_unpack (wrapped_entry,
+                         "{s:{s:s}}",
+                         "entry",
+                           "name", &name) < 0) {
+            flux_log (ctx->h, LOG_ERR, "invalid wrapped entry");
+            goto error;
+        }
+
+        if (allow_deny_check (el, name)) {
+            if (json_array_append (el->events, wrapped_entry) < 0)
+                goto nomem;
+            event->batch->listener_response_available = true;
+        }
+        wrapped_entry = zlist_next (event->events_journal);
+    }
+
     return;
 
+nomem:
+    errno = ENOMEM;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
@@ -896,6 +943,8 @@ void event_ctx_destroy (struct event *event)
             }
             zlist_destroy (&event->listeners);
         }
+        if (event->events_journal)
+            zlist_destroy (&event->events_journal);
         free (event);
         errno = saved_errno;
     }
@@ -920,6 +969,7 @@ static const struct flux_msg_handler_spec htab[] = {
 struct event *event_ctx_create (struct job_manager *ctx)
 {
     struct event *event;
+    flux_conf_error_t err;
 
     if (!(event = calloc (1, sizeof (*event))))
         return NULL;
@@ -938,6 +988,21 @@ struct event *event_ctx_create (struct job_manager *ctx)
         goto nomem;
     if (!(event->listeners = zlist_new ()))
         goto nomem;
+    if (!(event->events_journal = zlist_new ()))
+        goto nomem;
+    event->events_journal_maxlen = EVENTS_JOURNAL_MAXLEN;
+
+    if (flux_conf_unpack (flux_get_conf (ctx->h),
+                          &err,
+                          "{s?{s?i}}",
+                          "job-manager",
+                            "events_journal_maxlen",
+                            &event->events_journal_maxlen) < 0) {
+        flux_log (ctx->h, LOG_ERR,
+                  "error reading job-manager config: %s",
+                  err.errbuf);
+    }
+
     return event;
 nomem:
     errno = ENOMEM;
