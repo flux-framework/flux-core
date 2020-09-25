@@ -230,22 +230,15 @@ void job_state_destroy (void *data)
             }
             zlistx_destroy (&jsctx->futures);
         }
-        if (jsctx->early_annotations)
-            zhashx_destroy (&jsctx->early_annotations);
+        zhashx_destroy (&jsctx->early_annotations);
         /* Destroy index last, as it is the one that will actually
          * destroy the job objects */
-        if (jsctx->processing)
-            zlistx_destroy (&jsctx->processing);
-        if (jsctx->inactive)
-            zlistx_destroy (&jsctx->inactive);
-        if (jsctx->running)
-            zlistx_destroy (&jsctx->running);
-        if (jsctx->pending)
-            zlistx_destroy (&jsctx->pending);
-        if (jsctx->index)
-            zhashx_destroy (&jsctx->index);
-        if (jsctx->transitions)
-            zlistx_destroy (&jsctx->transitions);
+        zlistx_destroy (&jsctx->processing);
+        zlistx_destroy (&jsctx->inactive);
+        zlistx_destroy (&jsctx->running);
+        zlistx_destroy (&jsctx->pending);
+        zhashx_destroy (&jsctx->index);
+        zlistx_destroy (&jsctx->transitions);
         (void)flux_event_unsubscribe (jsctx->h, "job-state");
         free (jsctx);
     }
