@@ -128,6 +128,7 @@ void annotate_handle_request (flux_t *h,
     json_t *annotations = NULL;
     struct job *job;
     const char *errstr = NULL;
+    json_t *tmp = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:I s:o}",
                                         "id", &id,
@@ -145,19 +146,29 @@ void annotate_handle_request (flux_t *h,
     }
     if (annotations_update (ctx->h, job, annotations) < 0)
         goto error;
+    if (job->annotations) {
+        /* deep copy necessary for journal history, as
+         * job->annotations can be modified in future */
+        if (!(tmp = json_deep_copy (job->annotations)))
+            goto nomem;
+    }
     if (event_job_post_pack (ctx->event,
                              job,
                              "annotations",
                              EVENT_JOURNAL_ONLY,
                              "{s:O?}",
-                             "annotations", job->annotations) < 0)
+                             "annotations", tmp) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    json_decref (tmp);
     return;
+nomem:
+    errno = ENOMEM;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    json_decref (tmp);
 }
 
 void annotate_ctx_destroy (struct annotate *annotate)

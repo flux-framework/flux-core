@@ -49,6 +49,8 @@
 
 #include "src/common/libeventlog/eventlog.h"
 
+#define EVENTS_JOURNAL_MAXLEN 1000
+
 const double batch_timeout = 0.01;
 
 struct event {
@@ -59,6 +61,10 @@ struct event {
     zlist_t *pending;
     zlist_t *pub_futures;
     zlist_t *listeners;
+
+    /* events_journal holds most recent events for listeners */
+    zlist_t *events_journal;
+    int events_journal_maxlen;
 };
 
 struct event_batch {
@@ -565,6 +571,12 @@ static bool allow_deny_check (struct events_listener *el, const char *name)
     return add_entry;
 }
 
+static void json_decref_wrapper (void *data)
+{
+    json_t *o = (json_t *)data;
+    json_decref (o);
+}
+
 int event_batch_process_event_entry (struct event *event,
                                      flux_jobid_t id,
                                      int eventlog_seq,
@@ -575,15 +587,14 @@ int event_batch_process_event_entry (struct event *event,
     json_t *wrapped_entry = NULL;
     int saved_errno;
 
+    if (!(wrapped_entry = wrap_events_entry (id,
+                                             eventlog_seq,
+                                             entry)))
+        goto error;
+
     el = zlist_first (event->listeners);
     while (el) {
         if (allow_deny_check (el, name)) {
-            if (!wrapped_entry) {
-                if (!(wrapped_entry = wrap_events_entry (id,
-                                                         eventlog_seq,
-                                                         entry)))
-                    goto error;
-            }
             if (flux_respond_pack (event->ctx->h, el->request,
                                    "{s:[O]}", "events", wrapped_entry) < 0)
                 flux_log_error (event->ctx->h, "%s: flux_respond_pack",
@@ -592,9 +603,21 @@ int event_batch_process_event_entry (struct event *event,
 
         el = zlist_next (event->listeners);
     }
+
+    if (zlist_size (event->events_journal) > event->events_journal_maxlen)
+        zlist_remove (event->events_journal, zlist_head (event->events_journal));
+    if (zlist_append (event->events_journal, json_incref (wrapped_entry)) < 0)
+        goto nomem;
+    zlist_freefn (event->events_journal,
+                  wrapped_entry,
+                  json_decref_wrapper,
+                  true);
+
     json_decref (wrapped_entry);
     return 0;
 
+nomem:
+    errno = ENOMEM;
 error:
     saved_errno = errno;
     json_decref (wrapped_entry);
@@ -704,6 +727,8 @@ static void events_handle_request (flux_t *h,
     const char *errstr = NULL;
     json_t *allow = NULL;
     json_t *deny = NULL;
+    json_t *a = NULL;
+    json_t *wrapped_entry;
 
     if (flux_request_unpack (msg, NULL, "{s?o s?o}",
                              "allow", &allow,
@@ -737,12 +762,51 @@ static void events_handle_request (flux_t *h,
     }
     zlist_freefn (event->listeners, el, events_listener_destroy, true);
 
+    if (event_batch_start (event) < 0)
+        goto error;
+
+    wrapped_entry = zlist_first (event->events_journal);
+    while (wrapped_entry) {
+        const char *name;
+
+        if (json_unpack (wrapped_entry,
+                         "{s:{s:s}}",
+                         "entry",
+                           "name", &name) < 0) {
+            flux_log (ctx->h, LOG_ERR, "invalid wrapped entry");
+            goto error;
+        }
+
+        if (allow_deny_check (el, name)) {
+            if (!a) {
+                if (!(a = json_array ()))
+                    goto nomem;
+            }
+            if (json_array_append (a, wrapped_entry) < 0)
+                goto nomem;
+        }
+        wrapped_entry = zlist_next (event->events_journal);
+    }
+
+    if (a && json_array_size (a) > 0) {
+        if (flux_respond_pack (ctx->h, el->request,
+                               "{s:O}", "events", a) < 0) {
+            flux_log_error (ctx->h, "%s: flux_respond_pack",
+                            __FUNCTION__);
+            goto error;
+        }
+    }
+
+    json_decref (a);
     return;
 
+nomem:
+    errno = ENOMEM;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     events_listener_destroy (el);
+    json_decref (a);
 }
 
 static bool match_events_listener (struct events_listener *el,
@@ -880,6 +944,8 @@ void event_ctx_destroy (struct event *event)
             }
             zlist_destroy (&event->listeners);
         }
+        if (event->events_journal)
+            zlist_destroy (&event->events_journal);
         free (event);
         errno = saved_errno;
     }
@@ -904,6 +970,7 @@ static const struct flux_msg_handler_spec htab[] = {
 struct event *event_ctx_create (struct job_manager *ctx)
 {
     struct event *event;
+    flux_conf_error_t err;
 
     if (!(event = calloc (1, sizeof (*event))))
         return NULL;
@@ -922,6 +989,21 @@ struct event *event_ctx_create (struct job_manager *ctx)
         goto nomem;
     if (!(event->listeners = zlist_new ()))
         goto nomem;
+    if (!(event->events_journal = zlist_new ()))
+        goto nomem;
+    event->events_journal_maxlen = EVENTS_JOURNAL_MAXLEN;
+
+    if (flux_conf_unpack (flux_get_conf (ctx->h),
+                          &err,
+                          "{s?{s?i}}",
+                          "job-manager",
+                            "events_journal_maxlen",
+                            &event->events_journal_maxlen) < 0) {
+        flux_log (ctx->h, LOG_ERR,
+                  "error reading job-manager config: %s",
+                  err.errbuf);
+    }
+
     return event;
 nomem:
     errno = ENOMEM;
