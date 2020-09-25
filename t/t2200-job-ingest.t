@@ -82,10 +82,9 @@ test_expect_success 'job-ingest: job-ingest fails with bad validator path' '
 	test_must_fail flux module load job-ingest validator=/noexist
 '
 
-test_expect_success 'job-ingest: load job-ingest && job-info' '
+test_expect_success 'job-ingest: load job-ingest' '
 	ingest_module load \
-		validator=${BINDINGS_VALIDATOR} &&
-	flux module load job-info
+		validator=${BINDINGS_VALIDATOR}
 '
 
 test_expect_success HAVE_JQ 'job-ingest: dummy job-manager has expected max_jobid' '
@@ -124,9 +123,10 @@ test_expect_success 'job-ingest: job announced to job manager' '
 
 test_expect_success 'job-ingest: submit event logged with userid, priority' '
 	jobid=$(flux job submit --priority=11 basic.json) &&
-	flux job eventlog $jobid |grep submit >eventlog.out &&
-	grep -q priority=11 eventlog.out &&
-	grep -q userid=$(id -u) eventlog.out
+	kvspath=`flux job id --to=kvs ${jobid}` &&
+	flux kvs eventlog get ${kvspath}.eventlog |grep submit >eventlog.out &&
+	grep -q "\"priority\":11" eventlog.out &&
+	grep -q "\"userid\":$(id -u)" eventlog.out
 '
 
 test_expect_success 'job-ingest: instance owner can submit priority=31' '
@@ -217,7 +217,6 @@ test_expect_success 'job-ingest: validator unexpected exit is handled' '
 
 test_expect_success 'job-ingest: remove modules' '
 	flux module remove job-manager &&
-	flux module remove job-info &&
 	flux exec -r all flux module remove job-ingest
 '
 
