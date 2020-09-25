@@ -23,9 +23,9 @@ modload all kvs
 modload all kvs-watch
 
 modload all resource
-modload 0 job-info
 modload 0 cron sync=hb
 modload 0 job-manager
+modload 0 job-info
 
 modload all job-ingest
 modload 0 job-exec

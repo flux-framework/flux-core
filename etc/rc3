@@ -25,6 +25,7 @@ shopt -u nullglob
 modrm 0 sched-simple
 modrm all resource
 modrm 0 job-exec
+modrm 0 job-info
 modrm 0 job-manager
 modrm all job-ingest
 
@@ -32,7 +33,6 @@ modrm 0 cron
 modrm all aggregator
 modrm all barrier
 
-modrm 0 job-info
 modrm all kvs-watch
 modrm all kvs
 
