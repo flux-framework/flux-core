@@ -4,6 +4,17 @@ test_description='Test flux job manager events service'
 
 . $(dirname $0)/sharness.sh
 
+export FLUX_CONF_DIR=$(pwd)
+
+# set events_cache_maxlen to something more sensible in testing,
+# otherwise we'll be parsing 100s of entries regularly.  20 is a good
+# number, since it will always cover the prior two jobs that were
+# executed.
+cat >job-manager.toml <<EOF
+[job-manager]
+events_cache_maxlen = 20
+EOF
+
 test_under_flux 4
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
@@ -233,34 +244,122 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow & deny
         wait_events_listeners $before
 '
 
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events journaling works' '
+        jobid1=`flux job submit basic.json | flux job id`
+        jobid2=`flux job submit basic.json | flux job id`
+        flux job wait-event ${jobid1} clean
+        flux job wait-event ${jobid2} clean
+        before=`flux module stats --parse events.listeners job-manager`
+        count=$((before + 1))
+        $jq -j -c -n "{allow:{depend:1, clean:1}}" \
+          | $EVENT_STREAM > events7.out &
+        pid=$! &&
+        wait_events_listeners $count &&
+        jobid3=`flux job submit basic.json | flux job id` &&
+        wait_event_name ${jobid3} clean events7.out &&
+        test_must_fail check_event_name ${jobid1} submit events7.out &&
+        check_event_name ${jobid1} depend events7.out &&
+        test_must_fail check_event_name ${jobid1} alloc events7.out &&
+        test_must_fail check_event_name ${jobid1} start events7.out &&
+        test_must_fail check_event_name ${jobid1} finish events7.out &&
+        test_must_fail check_event_name ${jobid1} release events7.out &&
+        test_must_fail check_event_name ${jobid1} free events7.out &&
+        check_event_name ${jobid1} clean events7.out &&
+        test_must_fail check_event_name ${jobid2} submit events7.out &&
+        check_event_name ${jobid2} depend events7.out &&
+        test_must_fail check_event_name ${jobid2} alloc events7.out &&
+        test_must_fail check_event_name ${jobid2} start events7.out &&
+        test_must_fail check_event_name ${jobid2} finish events7.out &&
+        test_must_fail check_event_name ${jobid2} release events7.out &&
+        test_must_fail check_event_name ${jobid2} free events7.out &&
+        check_event_name ${jobid2} clean events7.out &&
+        test_must_fail check_event_name ${jobid3} submit events7.out &&
+        check_event_name ${jobid3} depend events7.out &&
+        test_must_fail check_event_name ${jobid3} alloc events7.out &&
+        test_must_fail check_event_name ${jobid3} start events7.out &&
+        test_must_fail check_event_name ${jobid3} finish events7.out &&
+        test_must_fail check_event_name ${jobid3} release events7.out &&
+        test_must_fail check_event_name ${jobid3} free events7.out &&
+        check_event_name ${jobid3} clean events7.out &&
+        kill -s USR1 $pid &&
+        wait $pid &&
+        wait_events_listeners $before
+'
+
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events works with annotations' '
         before=`flux module stats --parse events.listeners job-manager`
         count=$((before + 1))
         $jq -j -c -n "{allow:{annotations:1, clean:1}}" \
-          | $EVENT_STREAM > events7.out &
+          | $EVENT_STREAM > events8.out &
         pid=$! &&
         wait_events_listeners $count &&
         flux queue stop &&
         jobid=`flux job submit basic.json | flux job id` &&
+        echo ${jobid} > annotation_job1.id &&
         flux job annotate $jobid foo abcdefg &&
-        wait_event_annotation ${jobid} foo \"abcdefg\" events7.out &&
+        wait_event_annotation ${jobid} foo \"abcdefg\" events8.out &&
         flux job annotate $jobid foo ABCDEFG &&
-        wait_event_annotation ${jobid} foo \"ABCDEFG\" events7.out &&
+        wait_event_annotation ${jobid} foo \"ABCDEFG\" events8.out &&
         flux job annotate $jobid foo 1234567 &&
-        wait_event_annotation ${jobid} foo 1234567 events7.out &&
+        wait_event_annotation ${jobid} foo 1234567 events8.out &&
         flux queue start &&
-        wait_event_name ${jobid} clean events7.out &&
-        test_must_fail check_event_name ${jobid} submit events7.out &&
-        test_must_fail check_event_name ${jobid} depend events7.out &&
-        test_must_fail check_event_name ${jobid} alloc events7.out &&
-        test_must_fail check_event_name ${jobid} start events7.out &&
-        test_must_fail check_event_name ${jobid} finish events7.out &&
-        test_must_fail check_event_name ${jobid} release events7.out &&
-        test_must_fail check_event_name ${jobid} free events7.out &&
-        check_event_annotation ${jobid} foo \"abcdefg\" events7.out &&
-        check_event_annotation ${jobid} foo \"ABCDEFG\" events7.out &&
-        check_event_annotation ${jobid} foo 1234567 events7.out &&
-        check_event_name ${jobid} clean events7.out &&
+        wait_event_name ${jobid} clean events8.out &&
+        test_must_fail check_event_name ${jobid} submit events8.out &&
+        test_must_fail check_event_name ${jobid} depend events8.out &&
+        test_must_fail check_event_name ${jobid} alloc events8.out &&
+        test_must_fail check_event_name ${jobid} start events8.out &&
+        test_must_fail check_event_name ${jobid} finish events8.out &&
+        test_must_fail check_event_name ${jobid} release events8.out &&
+        test_must_fail check_event_name ${jobid} free events8.out &&
+        check_event_annotation ${jobid} foo \"abcdefg\" events8.out &&
+        check_event_annotation ${jobid} foo \"ABCDEFG\" events8.out &&
+        check_event_annotation ${jobid} foo 1234567 events8.out &&
+        check_event_name ${jobid} clean events8.out &&
+        kill -s USR1 $pid &&
+        wait $pid &&
+        wait_events_listeners $before
+'
+
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events journaling works with annotations' '
+        jobid1=`cat annotation_job1.id`
+        before=`flux module stats --parse events.listeners job-manager`
+        count=$((before + 1))
+        $jq -j -c -n "{allow:{annotations:1, clean:1}}" \
+          | $EVENT_STREAM > events9.out &
+        pid=$! &&
+        wait_events_listeners $count &&
+        flux queue stop &&
+        jobid2=`flux job submit basic.json | flux job id` &&
+        flux job annotate ${jobid2} bar hijklmnop &&
+        wait_event_annotation ${jobid2} bar \"hijklmnop\" events9.out &&
+        flux job annotate $jobid2 bar HIJKLMNOP &&
+        wait_event_annotation ${jobid2} bar \"HIJKLMNOP\" events9.out &&
+        flux job annotate $jobid2 bar 89012345 &&
+        wait_event_annotation ${jobid2} bar 89012345 events9.out &&
+        flux queue start &&
+        wait_event_name ${jobid2} clean events9.out &&
+        test_must_fail check_event_name ${jobid1} submit events9.out &&
+        test_must_fail check_event_name ${jobid1} depend events9.out &&
+        test_must_fail check_event_name ${jobid1} alloc events9.out &&
+        test_must_fail check_event_name ${jobid1} start events9.out &&
+        test_must_fail check_event_name ${jobid1} finish events9.out &&
+        test_must_fail check_event_name ${jobid1} release events9.out &&
+        test_must_fail check_event_name ${jobid1} free events9.out &&
+        check_event_annotation ${jobid1} foo \"abcdefg\" events9.out &&
+        check_event_annotation ${jobid1} foo \"ABCDEFG\" events9.out &&
+        check_event_annotation ${jobid1} foo 1234567 events9.out &&
+        check_event_name ${jobid1} clean events9.out &&
+        test_must_fail check_event_name ${jobid2} submit events9.out &&
+        test_must_fail check_event_name ${jobid2} depend events9.out &&
+        test_must_fail check_event_name ${jobid2} alloc events9.out &&
+        test_must_fail check_event_name ${jobid2} start events9.out &&
+        test_must_fail check_event_name ${jobid2} finish events9.out &&
+        test_must_fail check_event_name ${jobid2} release events9.out &&
+        test_must_fail check_event_name ${jobid2} free events9.out &&
+        check_event_annotation ${jobid2} bar \"hijklmnop\" events9.out &&
+        check_event_annotation ${jobid2} bar \"HIJKLMNOP\" events9.out &&
+        check_event_annotation ${jobid2} bar 89012345 events9.out &&
+        check_event_name ${jobid2} clean events9.out &&
         kill -s USR1 $pid &&
         wait $pid &&
         wait_events_listeners $before
