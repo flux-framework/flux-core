@@ -8,7 +8,6 @@ test_under_flux 4
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 EVENT_STREAM=${FLUX_BUILD_DIR}/t/job-manager/event_stream
-waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
 flux setattr log-stderr-level 1
 
@@ -38,14 +37,52 @@ test_expect_success 'wait for job-info to sync with job-manager' '
         wait_events_listeners 1
 '
 
-check_event_name() {
-        name="$1"
-        filename=$2
-        if cat $filename | $jq -e ".entry.name == \"${name}\"" | grep -q "true"
+check_event() {
+        jobid="$1"
+        key=$2
+        value=$3
+        filename=$4
+        if cat $filename \
+            | $jq -e ".id == ${jobid} and ${key} == ${value}" \
+            | grep -q "true"
         then
             return 0
         fi
         return 1
+}
+
+check_event_name() {
+        jobid="$1"
+        name=$2
+        filename=$3
+        check_event ${jobid} .entry.name \"${name}\" ${filename}
+}
+
+wait_event() {
+        jobid="$1"
+        key=$2
+        value=$3
+        filename=$4
+        i=0 &&
+        while [ $i -lt 50 ]
+        do
+            if cat $filename \
+                | $jq -e ".id == ${jobid} and ${key} == ${value}" \
+                | grep -q "true"
+            then
+                return 0
+            fi
+            sleep 0.1
+            i=$((i + 1))
+        done
+        return 1
+}
+
+wait_event_name() {
+        jobid="$1"
+        name=$2
+        filename=$3
+        wait_event ${jobid} .entry.name \"${name}\" ${filename}
 }
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with no filters shows all events' '
@@ -55,16 +92,16 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with no filters s
           | $EVENT_STREAM > events1.out &
         pid=$! &&
         wait_events_listeners $count &&
-        flux job submit basic.json &&
-        $waitfile --count=1 --timeout=5 --pattern="clean" events1.out &&
-        check_event_name submit events1.out &&
-        check_event_name depend events1.out &&
-        check_event_name alloc events1.out &&
-        check_event_name start events1.out &&
-        check_event_name finish events1.out &&
-        check_event_name release events1.out &&
-        check_event_name free events1.out &&
-        check_event_name clean events1.out &&
+        jobid=`flux job submit basic.json | flux job id` &&
+        wait_event_name ${jobid} clean events1.out &&
+        check_event_name ${jobid} submit events1.out &&
+        check_event_name ${jobid} depend events1.out &&
+        check_event_name ${jobid} alloc events1.out &&
+        check_event_name ${jobid} start events1.out &&
+        check_event_name ${jobid} finish events1.out &&
+        check_event_name ${jobid} release events1.out &&
+        check_event_name ${jobid} free events1.out &&
+        check_event_name ${jobid} clean events1.out &&
         kill -s USR1 $pid &&
         wait $pid &&
         wait_events_listeners $before
@@ -77,16 +114,16 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow works'
           | $EVENT_STREAM > events2.out &
         pid=$! &&
         wait_events_listeners $count &&
-        flux job submit basic.json &&
-        $waitfile --count=1 --timeout=5 --pattern="clean" events2.out &&
-        test_must_fail check_event_name submit events2.out &&
-        test_must_fail check_event_name depend events2.out &&
-        test_must_fail check_event_name alloc events2.out &&
-        test_must_fail check_event_name start events2.out &&
-        test_must_fail check_event_name finish events2.out &&
-        test_must_fail check_event_name release events2.out &&
-        test_must_fail check_event_name free events2.out &&
-        check_event_name clean events2.out &&
+        jobid=`flux job submit basic.json | flux job id` &&
+        wait_event_name ${jobid} clean events2.out &&
+        test_must_fail check_event_name ${jobid} submit events2.out &&
+        test_must_fail check_event_name ${jobid} depend events2.out &&
+        test_must_fail check_event_name ${jobid} alloc events2.out &&
+        test_must_fail check_event_name ${jobid} start events2.out &&
+        test_must_fail check_event_name ${jobid} finish events2.out &&
+        test_must_fail check_event_name ${jobid} release events2.out &&
+        test_must_fail check_event_name ${jobid} free events2.out &&
+        check_event_name ${jobid} clean events2.out &&
         kill -s USR1 $pid &&
         wait $pid &&
         wait_events_listeners $before
@@ -99,16 +136,16 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow works 
           | $EVENT_STREAM > events3.out &
         pid=$! &&
         wait_events_listeners $count &&
-        flux job submit basic.json &&
-        $waitfile --count=1 --timeout=5 --pattern="clean" events3.out &&
-        test_must_fail check_event_name submit events3.out &&
-        check_event_name depend events3.out &&
-        test_must_fail check_event_name alloc events3.out &&
-        test_must_fail check_event_name start events3.out &&
-        check_event_name finish events3.out &&
-        test_must_fail check_event_name release events3.out &&
-        test_must_fail check_event_name free events3.out &&
-        check_event_name clean events3.out &&
+        jobid=`flux job submit basic.json | flux job id` &&
+        wait_event_name ${jobid} clean events3.out &&
+        test_must_fail check_event_name ${jobid} submit events3.out &&
+        check_event_name ${jobid} depend events3.out &&
+        test_must_fail check_event_name ${jobid} alloc events3.out &&
+        test_must_fail check_event_name ${jobid} start events3.out &&
+        check_event_name ${jobid} finish events3.out &&
+        test_must_fail check_event_name ${jobid} release events3.out &&
+        test_must_fail check_event_name ${jobid} free events3.out &&
+        check_event_name ${jobid} clean events3.out &&
         kill -s USR1 $pid &&
         wait $pid &&
         wait_events_listeners $before
@@ -121,16 +158,16 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with deny works' 
           | $EVENT_STREAM > events4.out &
         pid=$! &&
         wait_events_listeners $count &&
-        flux job submit basic.json &&
-        $waitfile --count=1 --timeout=5 --pattern="clean" events4.out &&
-        check_event_name submit events4.out &&
-        check_event_name depend events4.out &&
-        check_event_name alloc events4.out &&
-        check_event_name start events4.out &&
-        test_must_fail check_event_name finish events4.out &&
-        check_event_name release events4.out &&
-        check_event_name free events4.out &&
-        check_event_name clean events4.out &&
+        jobid=`flux job submit basic.json | flux job id` &&
+        wait_event_name ${jobid} clean events4.out &&
+        check_event_name ${jobid} submit events4.out &&
+        check_event_name ${jobid} depend events4.out &&
+        check_event_name ${jobid} alloc events4.out &&
+        check_event_name ${jobid} start events4.out &&
+        test_must_fail check_event_name ${jobid} finish events4.out &&
+        check_event_name ${jobid} release events4.out &&
+        check_event_name ${jobid} free events4.out &&
+        check_event_name ${jobid} clean events4.out &&
         kill -s USR1 $pid &&
         wait $pid &&
         wait_events_listeners $before
@@ -143,16 +180,16 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with deny works (
           | $EVENT_STREAM > events5.out &
         pid=$! &&
         wait_events_listeners $count &&
-        flux job submit basic.json &&
-        $waitfile --count=1 --timeout=5 --pattern="clean" events5.out &&
-        check_event_name submit events5.out &&
-        test_must_fail check_event_name depend events5.out &&
-        check_event_name alloc events5.out &&
-        check_event_name start events5.out &&
-        test_must_fail check_event_name finish events5.out &&
-        test_must_fail check_event_name release events5.out &&
-        check_event_name free events5.out &&
-        check_event_name clean events5.out &&
+        jobid=`flux job submit basic.json | flux job id` &&
+        wait_event_name ${jobid} clean events5.out &&
+        check_event_name ${jobid} submit events5.out &&
+        test_must_fail check_event_name ${jobid} depend events5.out &&
+        check_event_name ${jobid} alloc events5.out &&
+        check_event_name ${jobid} start events5.out &&
+        test_must_fail check_event_name ${jobid} finish events5.out &&
+        test_must_fail check_event_name ${jobid} release events5.out &&
+        check_event_name ${jobid} free events5.out &&
+        check_event_name ${jobid} clean events5.out &&
         kill -s USR1 $pid &&
         wait $pid &&
         wait_events_listeners $before
@@ -165,16 +202,16 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow & deny
           | $EVENT_STREAM > events6.out &
         pid=$! &&
         wait_events_listeners $count &&
-        flux job submit basic.json &&
-        $waitfile --count=1 --timeout=5 --pattern="clean" events6.out &&
-        test_must_fail check_event_name submit events6.out &&
-        test_must_fail check_event_name depend events6.out &&
-        test_must_fail check_event_name alloc events6.out &&
-        test_must_fail check_event_name start events6.out &&
-        check_event_name finish events6.out &&
-        test_must_fail check_event_name release events6.out &&
-        test_must_fail check_event_name free events6.out &&
-        check_event_name clean events6.out &&
+        jobid=`flux job submit basic.json | flux job id` &&
+        wait_event_name ${jobid} clean events6.out &&
+        test_must_fail check_event_name ${jobid} submit events6.out &&
+        test_must_fail check_event_name ${jobid} depend events6.out &&
+        test_must_fail check_event_name ${jobid} alloc events6.out &&
+        test_must_fail check_event_name ${jobid} start events6.out &&
+        check_event_name ${jobid} finish events6.out &&
+        test_must_fail check_event_name ${jobid} release events6.out &&
+        test_must_fail check_event_name ${jobid} free events6.out &&
+        check_event_name ${jobid} clean events6.out &&
         kill -s USR1 $pid &&
         wait $pid &&
         wait_events_listeners $before
