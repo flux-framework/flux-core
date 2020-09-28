@@ -58,6 +58,9 @@ struct job_state_ctx {
      * processing later */
     bool pause;
     zlistx_t *transitions;
+
+    /* stream of job events from the job-manager */
+    flux_future_t *events;
 };
 
 struct job {
@@ -66,6 +69,7 @@ struct job {
     flux_jobid_t id;
     uint32_t userid;
     int priority;
+    double priority_timestamp;
     double t_submit;
     int flags;
     flux_job_state_t state;

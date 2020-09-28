@@ -19,6 +19,7 @@
 
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/fluid.h"
+#include "src/common/libutil/fsd.h"
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libidset/idset.h"
 
@@ -35,6 +36,8 @@ struct state_transition {
 };
 
 static void process_next_state (struct info_ctx *ctx, struct job *job);
+
+static void job_events_continuation (flux_future_t *f, void *arg);
 
 /* Compare items for sorting in list, priority first (higher priority
  * before lower priority), t_submit second (earlier submission time
@@ -204,6 +207,25 @@ struct job_state_ctx *job_state_create (flux_t *h)
         goto error;
     }
 
+    if (!(jsctx->events = flux_rpc_pack (jsctx->h,
+                                         "job-manager.events",
+                                         FLUX_NODEID_ANY,
+                                         FLUX_RPC_STREAMING,
+                                         "{s:{s:i}}",
+                                         "allow",
+                                           "priority", 1))) {
+        flux_log_error (jsctx->h, "flux_rpc_pack");
+        goto error;
+    }
+
+    if (flux_future_then (jsctx->events,
+                          -1,
+                          job_events_continuation,
+                          jsctx) < 0) {
+        flux_log_error (jsctx->h, "flux_future_then");
+        goto error;
+    }
+
     return jsctx;
 
 error:
@@ -230,23 +252,18 @@ void job_state_destroy (void *data)
             }
             zlistx_destroy (&jsctx->futures);
         }
-        if (jsctx->early_annotations)
-            zhashx_destroy (&jsctx->early_annotations);
+        zhashx_destroy (&jsctx->early_annotations);
         /* Destroy index last, as it is the one that will actually
          * destroy the job objects */
-        if (jsctx->processing)
-            zlistx_destroy (&jsctx->processing);
-        if (jsctx->inactive)
-            zlistx_destroy (&jsctx->inactive);
-        if (jsctx->running)
-            zlistx_destroy (&jsctx->running);
-        if (jsctx->pending)
-            zlistx_destroy (&jsctx->pending);
-        if (jsctx->index)
-            zhashx_destroy (&jsctx->index);
-        if (jsctx->transitions)
-            zlistx_destroy (&jsctx->transitions);
+        zlistx_destroy (&jsctx->processing);
+        zlistx_destroy (&jsctx->inactive);
+        zlistx_destroy (&jsctx->running);
+        zlistx_destroy (&jsctx->pending);
+        zhashx_destroy (&jsctx->index);
+        zlistx_destroy (&jsctx->transitions);
+        flux_future_destroy (jsctx->events);
         (void)flux_event_unsubscribe (jsctx->h, "job-state");
+        (void)flux_event_unsubscribe (jsctx->h, "job-annotations");
         free (jsctx);
     }
 }
@@ -282,8 +299,8 @@ static int *state_counter (struct info_ctx *ctx,
     else if (state == FLUX_JOB_INACTIVE)
         return &ctx->jsctx->inactive_count;
 
-    flux_log_error (ctx->h, "illegal state transition for job %ju: %d",
-                    (uintmax_t)job->id, state);
+    flux_log (ctx->h, LOG_ERR, "illegal state transition for job %ju: %d",
+              (uintmax_t)job->id, state);
     return NULL;
 }
 
@@ -461,8 +478,8 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
 
         if (!strcmp (name, "submit")) {
             if (!context) {
-                flux_log_error (ctx->h, "%s: no submit context for %ju",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: no submit context for %ju",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto nonfatal_error;
             }
 
@@ -470,11 +487,27 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
                              "priority", &job->priority,
                              "userid", &job->userid,
                              "flags", &job->flags) < 0) {
-                flux_log_error (ctx->h, "%s: submit context for %ju invalid",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: submit context for %ju invalid",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto nonfatal_error;
             }
-            break;
+            job->priority_timestamp = timestamp;
+        }
+        else if (!strcmp (name, "priority")) {
+            if (!context) {
+                flux_log (ctx->h, LOG_ERR, "%s: no priority context for %ju",
+                          __FUNCTION__, (uintmax_t)job->id);
+                goto nonfatal_error;
+            }
+
+            if (json_unpack (context, "{ s:i }",
+                             "priority", &job->priority) < 0) {
+                flux_log (ctx->h, LOG_ERR,
+                          "%s: priority context for %ju invalid",
+                          __FUNCTION__, (uintmax_t)job->id);
+                goto nonfatal_error;
+            }
+            job->priority_timestamp = timestamp;
         }
     }
 
@@ -1475,8 +1508,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
 
         if (!strcmp (name, "submit")) {
             if (!context) {
-                flux_log_error (ctx->h, "%s: no submit context for %ju",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: no submit context for %ju",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
 
@@ -1484,10 +1517,11 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                              "priority", &job->priority,
                              "userid", &job->userid,
                              "flags", &job->flags) < 0) {
-                flux_log_error (ctx->h, "%s: submit context for %ju invalid",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: submit context for %ju invalid",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
+            job->priority_timestamp = timestamp;
             update_job_state (ctx, job, FLUX_JOB_DEPEND, timestamp);
         }
         else if (!strcmp (name, "depend")) {
@@ -1495,29 +1529,32 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
         }
         else if (!strcmp (name, "priority")) {
             if (!context) {
-                flux_log_error (ctx->h, "%s: no priority context for %ju",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: no priority context for %ju",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
 
             if (json_unpack (context, "{ s:i }",
                                       "priority", &job->priority) < 0) {
-                flux_log_error (ctx->h, "%s: priority context for %ju invalid",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR,
+                          "%s: priority context for %ju invalid",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
+            job->priority_timestamp = timestamp;
         }
         else if (!strcmp (name, "exception")) {
             int severity;
             if (!context) {
-                flux_log_error (ctx->h, "%s: no exception context for %ju",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: no exception context for %ju",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
 
             if (json_unpack (context, "{ s:i }", "severity", &severity) < 0) {
-                flux_log_error (ctx->h, "%s: exception context for %ju invalid",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR,
+                          "%s: exception context for %ju invalid",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
             if (severity == 0)
@@ -1549,8 +1586,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
     }
 
     if (job->state == FLUX_JOB_NEW) {
-        flux_log_error (ctx->h, "%s: eventlog has no transition events",
-                        __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: eventlog has no transition events",
+                  __FUNCTION__);
         goto error;
     }
 
@@ -1717,6 +1754,91 @@ int job_state_init_from_kvs (struct info_ctx *ctx)
     zlistx_sort (ctx->jsctx->running);
     zlistx_sort (ctx->jsctx->inactive);
     return 0;
+}
+
+static int job_events_priority (struct job_state_ctx *jsctx,
+                                flux_jobid_t id,
+                                double timestamp,
+                                json_t *context)
+{
+    struct job *job;
+    int priority;
+
+    if (!context
+        || json_unpack (context, "{ s:i }", "priority", &priority) < 0
+        || (priority < FLUX_JOB_PRIORITY_MIN
+            || priority > FLUX_JOB_PRIORITY_MAX)) {
+        flux_log (jsctx->h, LOG_ERR, "%s: priority context invalid",
+                  __FUNCTION__);
+        return -1;
+    }
+
+    /* if we do not yet know about this job via the job state
+     * transitions, no need to update.  It'll be handled on
+     * initial reading of data from KVS
+     */
+    if ((job = zhashx_lookup (jsctx->index, &id))) {
+        if (job->priority_timestamp > 0.0
+            && job->priority_timestamp < timestamp) {
+            int orig_priority = job->priority;
+            job->priority = priority;
+            job->priority_timestamp = timestamp;
+
+            if (job->state & FLUX_JOB_PENDING
+                && job->priority != orig_priority)
+                zlistx_reorder (jsctx->pending,
+                                job->list_handle,
+                                search_direction (job));
+        }
+    }
+
+    return 0;
+}
+
+static void job_events_continuation (flux_future_t *f, void *arg)
+{
+    struct job_state_ctx *jsctx = arg;
+    size_t index;
+    json_t *value;
+    json_t *events;
+
+    if (flux_rpc_get_unpack (f, "{s:o}", "events", &events) < 0) {
+        flux_log_error (jsctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
+        goto error;
+    }
+
+    if (!json_is_array (events)) {
+        flux_log (jsctx->h, LOG_ERR, "%s: events EPROTO", __FUNCTION__);
+        goto error;
+    }
+
+    json_array_foreach (events, index, value) {
+        flux_jobid_t id;
+        json_t *entry;
+        const char *name;
+        double timestamp;
+        json_t *context = NULL;
+
+        if (json_unpack (value, "{s:I s:o}", "id", &id, "entry", &entry) < 0
+            || eventlog_entry_parse (entry, &timestamp, &name, &context) < 0) {
+            flux_log (jsctx->h, LOG_ERR, "%s: error parsing record",
+                      __FUNCTION__);
+            goto error;
+        }
+
+        if (!strcmp (name, "priority")) {
+            if (job_events_priority (jsctx, id, timestamp, context) < 0)
+                goto error;
+        }
+    }
+
+    flux_future_reset (f);
+    return;
+
+error:
+    /* future will be cleaned up in shutdown path */
+    flux_reactor_stop_error (flux_get_reactor (jsctx->h));
+    return;
 }
 
 /*

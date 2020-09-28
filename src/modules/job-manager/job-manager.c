@@ -52,6 +52,34 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+void disconnect_rpc (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
+{
+    wait_disconnect_rpc (h, mh, msg, arg);
+    event_listeners_disconnect_rpc (h, mh, msg, arg);
+}
+
+static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
+                      const flux_msg_t *msg, void *arg)
+{
+    struct job_manager *ctx = arg;
+    int events_listeners = event_listeners_count (ctx->event);
+    if (flux_respond_pack (h, msg, "{s:{s:i}}",
+                           "events",
+                             "listeners", events_listeners) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        goto error;
+    }
+
+    return;
+ error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -71,6 +99,19 @@ static const struct flux_msg_handler_spec htab[] = {
         getinfo_handle_request,
         FLUX_ROLE_USER
     },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.disconnect",
+        disconnect_rpc,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.stats.get",
+        stats_cb,
+        0
+    },
+
     FLUX_MSGHANDLER_TABLE_END,
 };
 

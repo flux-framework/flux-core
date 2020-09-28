@@ -238,9 +238,9 @@ test_expect_success 'job-manager: remove sched-dummy' '
         flux module remove sched-dummy
 '
 
-test_expect_success 'job-manager: remove job-manager, job-ingest' '
-        flux module remove job-manager &&
+test_expect_success 'job-manager: remove job-info, job-manager, job-ingest' '
         flux exec -r all flux module remove job-info &&
+        flux module remove job-manager &&
         flux exec -r all flux module remove job-ingest
 '
 

@@ -173,8 +173,11 @@ test_expect_success HAVE_JQ 'job-manager: save max_jobid' '
 	${RPC} job-manager.getinfo | jq .max_jobid >max2.exp
 '
 
+# job-info module depends on job-manager, unload and reload it too
 test_expect_success 'job-manager: reload the job manager' '
-	flux module reload job-manager
+	flux module remove job-info &&
+	flux module reload job-manager &&
+	flux module load job-info
 '
 
 test_expect_success 'job-manager: queue was successfully reconstructed' '
@@ -246,8 +249,11 @@ test_expect_success 'job-manager: no jobs in the queue' '
 	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
+# job-info module depends on job-manager, unload and reload it too
 test_expect_success 'job-manager: reload the job manager' '
-	flux module reload job-manager
+	flux module remove job-info &&
+	flux module reload job-manager &&
+	flux module load job-info
 '
 
 test_expect_success 'job-manager: still no jobs in the queue' '
@@ -305,9 +311,14 @@ test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 	${RPC} job-manager.submit 71 </dev/null
 '
 
-test_expect_success 'job-manager: remove job-manager, job-info, job-ingest' '
-	flux module remove job-manager &&
+test_expect_success HAVE_JQ 'job-manager stats works' '
+        flux module stats job-manager > stats.out &&
+        cat stats.out | $jq -e .events.listeners
+'
+
+test_expect_success 'job-manager: remove job-info, job-manager, job-ingest' '
 	flux module remove job-info &&
+	flux module remove job-manager &&
 	flux exec -r all flux module remove job-ingest
 '
 
