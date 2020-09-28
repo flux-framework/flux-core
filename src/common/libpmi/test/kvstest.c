@@ -141,7 +141,7 @@ int main(int argc, char *argv[])
                       rank > 0 ? rank - 1 : size - 1, i);
             e = PMI_KVS_Get (kvsname, key, val, val_len);
             if (e != PMI_SUCCESS)
-                log_msg_exit ("%d: PMI_IVS_Get: %s", rank, pmi_strerror (e));
+                log_msg_exit ("%d: PMI_KVS_Get: %s", rank, pmi_strerror (e));
             snprintf (val2, val_len, "sandwich.%d.%d",
                       rank > 0 ? rank - 1 : size - 1, i);
             if (strcmp (val, val2) != 0)

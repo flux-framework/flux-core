@@ -301,12 +301,6 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
         }
     }
 
-    result = broker_pmi_barrier (pmi);
-    if (result != PMI_SUCCESS) {
-        log_msg ("broker_pmi_barrier: %s", pmi_strerror (result));
-        goto error;
-    }
-
     result = broker_pmi_finalize (pmi);
     if (result != PMI_SUCCESS) {
         log_msg ("broker_pmi_finalize: %s", pmi_strerror (result));

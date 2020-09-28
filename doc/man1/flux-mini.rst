@@ -321,6 +321,14 @@ overridden in some cases:
 **verbose**
    Increase verbosity of the job shell log.
 
+**pmi.kvs=native**
+   Use the native Flux KVS instead of the PMI plugin's built-in key exchange
+   algorithm.
+
+**pmi.exchange.k=N**
+   Configure the PMI plugin's built-in key exchange algorithm to use a
+   virtual tree fanout of ``N`` for key gather/broadcast.  The default is 2.
+
 
 RESOURCES
 =========
