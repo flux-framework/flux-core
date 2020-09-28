@@ -275,8 +275,8 @@ static int *state_counter (struct info_ctx *ctx,
     else if (state == FLUX_JOB_INACTIVE)
         return &ctx->jsctx->inactive_count;
 
-    flux_log_error (ctx->h, "illegal state transition for job %ju: %d",
-                    (uintmax_t)job->id, state);
+    flux_log (ctx->h, LOG_ERR, "illegal state transition for job %ju: %d",
+              (uintmax_t)job->id, state);
     return NULL;
 }
 
@@ -454,8 +454,8 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
 
         if (!strcmp (name, "submit")) {
             if (!context) {
-                flux_log_error (ctx->h, "%s: no submit context for %ju",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: no submit context for %ju",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto nonfatal_error;
             }
 
@@ -463,8 +463,8 @@ static int eventlog_lookup_parse (struct info_ctx *ctx,
                              "priority", &job->priority,
                              "userid", &job->userid,
                              "flags", &job->flags) < 0) {
-                flux_log_error (ctx->h, "%s: submit context for %ju invalid",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: submit context for %ju invalid",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto nonfatal_error;
             }
             break;
@@ -1468,8 +1468,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
 
         if (!strcmp (name, "submit")) {
             if (!context) {
-                flux_log_error (ctx->h, "%s: no submit context for %ju",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: no submit context for %ju",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
 
@@ -1477,8 +1477,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                              "priority", &job->priority,
                              "userid", &job->userid,
                              "flags", &job->flags) < 0) {
-                flux_log_error (ctx->h, "%s: submit context for %ju invalid",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: submit context for %ju invalid",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
             update_job_state (ctx, job, FLUX_JOB_DEPEND, timestamp);
@@ -1488,29 +1488,31 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
         }
         else if (!strcmp (name, "priority")) {
             if (!context) {
-                flux_log_error (ctx->h, "%s: no priority context for %ju",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: no priority context for %ju",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
 
             if (json_unpack (context, "{ s:i }",
                                       "priority", &job->priority) < 0) {
-                flux_log_error (ctx->h, "%s: priority context for %ju invalid",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR,
+                          "%s: priority context for %ju invalid",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
         }
         else if (!strcmp (name, "exception")) {
             int severity;
             if (!context) {
-                flux_log_error (ctx->h, "%s: no exception context for %ju",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR, "%s: no exception context for %ju",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
 
             if (json_unpack (context, "{ s:i }", "severity", &severity) < 0) {
-                flux_log_error (ctx->h, "%s: exception context for %ju invalid",
-                                __FUNCTION__, (uintmax_t)job->id);
+                flux_log (ctx->h, LOG_ERR,
+                          "%s: exception context for %ju invalid",
+                          __FUNCTION__, (uintmax_t)job->id);
                 goto error;
             }
             if (severity == 0)
@@ -1542,8 +1544,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
     }
 
     if (job->state == FLUX_JOB_NEW) {
-        flux_log_error (ctx->h, "%s: eventlog has no transition events",
-                        __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: eventlog has no transition events",
+                  __FUNCTION__);
         goto error;
     }
 
