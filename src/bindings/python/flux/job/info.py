@@ -324,7 +324,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "username": "USER",
         "priority": "PRI",
         "state": "STATE",
-        "state_single": "ST",
+        "state_single": "S",
         "name": "NAME",
         "ntasks": "NTASKS",
         "nnodes": "NNODES",

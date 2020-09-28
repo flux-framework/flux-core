@@ -718,7 +718,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	username==USER
 	priority==PRI
 	state==STATE
-	state_single==ST
+	state_single==S
 	name==NAME
 	ntasks==NTASKS
 	nnodes==NNODES
