@@ -64,6 +64,10 @@ struct inout test_inputs[] = {
     { "3,2,4,5",       IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[2-5]" },
     { "",              IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, ""},
 
+    /* expected failures */
+    { "4.2",            0,          NULL },
+    { "x",              0,          NULL },
+
     { NULL, 0, NULL },
 };
 
@@ -84,20 +88,28 @@ void test_codec (void)
 
     for (ip = &test_inputs[0]; ip->in != NULL; ip++) {
         struct idset *idset;
-        char *s;
 
+        errno = 0;
         idset = idset_decode (ip->in);
-        ok (idset != NULL,
-            "idset_decode '%s' works", ip->in);
-        s = idset_encode (idset, ip->flags);
-        bool match = (s == NULL && ip->out == NULL)
-                  || (s && ip->out && !strcmp (s, ip->out));
-        ok (match == true,
-            "idset_encode flags=0x%x '%s' works",
-            ip->flags, ip->out ? ip->out : "NULL");
-        if (!match)
-            diag ("%s", s ? s : "NULL");
-        free (s);
+        if (ip->out == NULL) { // expected fail
+            ok (idset == NULL && errno == EINVAL,
+                "idset_encode flags=0x%x '%s' fails with EINVAL",
+                    ip->flags, ip->in);
+        }
+        else {
+            ok (idset != NULL,
+                "idset_decode '%s' works", ip->in);
+            if (idset != NULL) {
+                char *s = idset_encode (idset, ip->flags);
+                bool match = (s && !strcmp (s, ip->out));
+                ok (match == true,
+                    "idset_encode flags=0x%x '%s'->'%s' works",
+                    ip->flags, ip->in, ip->out);
+                if (!match)
+                    diag ("%s", s ? s : "NULL");
+                free (s);
+            }
+        }
         idset_destroy (idset);
     }
 }
