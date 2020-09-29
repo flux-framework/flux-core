@@ -18,9 +18,33 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 #include "idset.h"
 #include "idset_private.h"
+
+/* strtoul() with result parameter, assumed base=10.
+ * Fail if no digits, or leading non-digits.
+ * Returns 0 on success, -1 on failure.
+ */
+static int strtoul_check (const char *s, char **endptr, unsigned long *result)
+{
+    unsigned long n;
+    char *ep;
+
+    errno = 0;
+    n = strtoul (s, &ep, 10);
+    if (errno != 0)
+        return -1;
+    if (ep == s) // no digits
+        return -1;
+    if (!isdigit (*s))
+        return -1;
+    *result = n;
+    if (endptr)
+        *endptr = ep;
+    return 0;
+}
 
 static int parse_range (const char *s, unsigned int *hi, unsigned int *lo)
 {
@@ -28,14 +52,16 @@ static int parse_range (const char *s, unsigned int *hi, unsigned int *lo)
     unsigned int h, l;
     unsigned long n;
 
-    n = strtoul (s, &endptr, 10);
-    if (n >= UINT_MAX || endptr == s || (*endptr != '\0' && *endptr != '-'))
+    if (strtoul_check (s, &endptr, &n) < 0)
+        return -1;
+    if (*endptr != '\0' && *endptr != '-')
         return -1;
     h = l = n;
     if (*endptr == '-') {
         s = endptr + 1;
-        n = strtoul (s, &endptr, 10);
-        if (n >= UINT_MAX || endptr == s || *endptr != '\0')
+        if (strtoul_check (s, &endptr, &n) < 0)
+            return -1;
+        if (*endptr != '\0')
             return -1;
         h = n;
     }
