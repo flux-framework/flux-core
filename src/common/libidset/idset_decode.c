@@ -94,13 +94,17 @@ error:
 
 static char *trim_brackets (char *s)
 {
-    char *p = s;
-    if (*p == '[')
-        p++;
-    size_t len = strlen (p);
-    if (len > 0 && p[len - 1] == ']')
-        p[len - 1] = '\0';
-    return p;
+    int len = strlen (s);
+
+    if (len >= 2 && s[0] == '[' && s[len - 1] == ']') {
+        s[len - 1] = '\0';
+        s++;
+    }
+    if (strchr (s, '[') || strchr (s, ']')) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return s;
 }
 
 struct idset *idset_ndecode (const char *str, size_t size)
@@ -118,7 +122,8 @@ struct idset *idset_ndecode (const char *str, size_t size)
         return NULL;
     if (!(cpy = strndup (str, size)))
         goto error;
-    a1 = trim_brackets (cpy);
+    if (!(a1 = trim_brackets (cpy)))
+        goto error;
     saveptr = NULL;
     while ((tok = strtok_r (a1, ",", &saveptr))) {
         if (append_element (idset, tok) < 0)

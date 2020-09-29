@@ -69,6 +69,13 @@ struct inout test_inputs[] = {
     { "3,2",            0,          NULL },
     { "3-0",            0,          NULL },
     { "2,2,2,2",        0,          NULL },
+    { "[0",             0,          NULL },
+    { "0]",             0,          NULL },
+    { "[[0]]",          0,          NULL },
+    { "[[0,2]",         0,          NULL },
+    { "[0,2]]",         0,          NULL },
+    { "0,[2",           0,          NULL },
+    { "0]2",            0,          NULL },
 
     { NULL, 0, NULL },
 };
