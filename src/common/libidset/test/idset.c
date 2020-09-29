@@ -42,6 +42,7 @@ struct inout test_inputs[] = {
     { "[7-9]",          0,          "7,8,9" },
     { "[9-7]",          0,          "7,8,9" },
     { "[3,2,4,5]",      0,          "2,3,4,5" },
+    { "[0]",            0,          "0" },
     { "[]",             0,          ""},
 
     { "2",              IDSET_FLAG_RANGE,  "2" },
@@ -67,6 +68,8 @@ struct inout test_inputs[] = {
     /* expected failures */
     { "4.2",            0,          NULL },
     { "x",              0,          NULL },
+    { "01,2",           0,          NULL },
+    { "00",             0,          NULL },
 
     { NULL, 0, NULL },
 };

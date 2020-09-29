@@ -24,7 +24,7 @@
 #include "idset_private.h"
 
 /* strtoul() with result parameter, assumed base=10.
- * Fail if no digits, or leading non-digits.
+ * Fail if no digits, leading non-digits, or leading zero.
  * Returns 0 on success, -1 on failure.
  */
 static int strtoul_check (const char *s, char **endptr, unsigned long *result)
@@ -39,6 +39,8 @@ static int strtoul_check (const char *s, char **endptr, unsigned long *result)
     if (ep == s) // no digits
         return -1;
     if (!isdigit (*s))
+        return -1;
+    if (*s == '0' && ep - s > 1) // leading zero (RFC 22)
         return -1;
     *result = n;
     if (endptr)
