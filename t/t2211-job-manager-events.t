@@ -26,28 +26,6 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
-wait_events_listeners() {
-        num=$1
-        i=0
-        while [ "$(flux module stats --parse events.listeners job-manager 2> /dev/null)" != "$num" ] \
-              && [ $i -lt 50 ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
-        if [ "$i" -eq "50" ]
-        then
-            return 1
-        fi
-        return 0
-}
-
-# to avoid raciness in tests below, ensure job-info is synced to the
-# job-manager and won't be part of the events.listeners counts below
-test_expect_success 'wait for job-info to sync with job-manager' '
-        wait_events_listeners 1
-'
-
 check_event() {
         jobid="$1"
         key=$2
@@ -113,12 +91,9 @@ wait_event_annotation() {
 }
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with no filters shows all events' '
-        before=`flux module stats --parse events.listeners job-manager`
-        count=$((before + 1))
         $jq -j -c -n "{}" \
           | $EVENT_STREAM > events1.out &
         pid=$! &&
-        wait_events_listeners $count &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events1.out &&
         check_event_name ${jobid} submit events1.out &&
@@ -130,17 +105,13 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with no filters s
         check_event_name ${jobid} free events1.out &&
         check_event_name ${jobid} clean events1.out &&
         kill -s USR1 $pid &&
-        wait $pid &&
-        wait_events_listeners $before
+        wait $pid
 '
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow works' '
-        before=`flux module stats --parse events.listeners job-manager`
-        count=$((before + 1))
         $jq -j -c -n "{allow:{clean:1}}" \
           | $EVENT_STREAM > events2.out &
         pid=$! &&
-        wait_events_listeners $count &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events2.out &&
         test_must_fail check_event_name ${jobid} submit events2.out &&
@@ -152,17 +123,13 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow works'
         test_must_fail check_event_name ${jobid} free events2.out &&
         check_event_name ${jobid} clean events2.out &&
         kill -s USR1 $pid &&
-        wait $pid &&
-        wait_events_listeners $before
+        wait $pid
 '
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow works (multiple)' '
-        before=`flux module stats --parse events.listeners job-manager`
-        count=$((before + 1))
         $jq -j -c -n "{allow:{depend:1, finish:1, clean:1}}" \
           | $EVENT_STREAM > events3.out &
         pid=$! &&
-        wait_events_listeners $count &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events3.out &&
         test_must_fail check_event_name ${jobid} submit events3.out &&
@@ -174,17 +141,13 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow works 
         test_must_fail check_event_name ${jobid} free events3.out &&
         check_event_name ${jobid} clean events3.out &&
         kill -s USR1 $pid &&
-        wait $pid &&
-        wait_events_listeners $before
+        wait $pid
 '
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with deny works' '
-        before=`flux module stats --parse events.listeners job-manager`
-        count=$((before + 1))
         $jq -j -c -n "{deny:{finish:1}}" \
           | $EVENT_STREAM > events4.out &
         pid=$! &&
-        wait_events_listeners $count &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events4.out &&
         check_event_name ${jobid} submit events4.out &&
@@ -196,17 +159,13 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with deny works' 
         check_event_name ${jobid} free events4.out &&
         check_event_name ${jobid} clean events4.out &&
         kill -s USR1 $pid &&
-        wait $pid &&
-        wait_events_listeners $before
+        wait $pid
 '
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with deny works (multiple)' '
-        before=`flux module stats --parse events.listeners job-manager`
-        count=$((before + 1))
         $jq -j -c -n "{deny:{depend:1, finish:1, release:1}}" \
           | $EVENT_STREAM > events5.out &
         pid=$! &&
-        wait_events_listeners $count &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events5.out &&
         check_event_name ${jobid} submit events5.out &&
@@ -218,17 +177,13 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with deny works (
         check_event_name ${jobid} free events5.out &&
         check_event_name ${jobid} clean events5.out &&
         kill -s USR1 $pid &&
-        wait $pid &&
-        wait_events_listeners $before
+        wait $pid
 '
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow & deny works' '
-        before=`flux module stats --parse events.listeners job-manager`
-        count=$((before + 1))
         $jq -j -c -n "{allow:{depend:1, finish:1, clean:1}, deny:{depend:1}}" \
           | $EVENT_STREAM > events6.out &
         pid=$! &&
-        wait_events_listeners $count &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events6.out &&
         test_must_fail check_event_name ${jobid} submit events6.out &&
@@ -240,8 +195,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow & deny
         test_must_fail check_event_name ${jobid} free events6.out &&
         check_event_name ${jobid} clean events6.out &&
         kill -s USR1 $pid &&
-        wait $pid &&
-        wait_events_listeners $before
+        wait $pid
 '
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events journaling works' '
@@ -249,12 +203,9 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events journaling works'
         jobid2=`flux job submit basic.json | flux job id`
         flux job wait-event ${jobid1} clean
         flux job wait-event ${jobid2} clean
-        before=`flux module stats --parse events.listeners job-manager`
-        count=$((before + 1))
         $jq -j -c -n "{allow:{depend:1, clean:1}}" \
           | $EVENT_STREAM > events7.out &
         pid=$! &&
-        wait_events_listeners $count &&
         jobid3=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid3} clean events7.out &&
         test_must_fail check_event_name ${jobid1} submit events7.out &&
@@ -282,17 +233,13 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events journaling works'
         test_must_fail check_event_name ${jobid3} free events7.out &&
         check_event_name ${jobid3} clean events7.out &&
         kill -s USR1 $pid &&
-        wait $pid &&
-        wait_events_listeners $before
+        wait $pid
 '
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events works with annotations' '
-        before=`flux module stats --parse events.listeners job-manager`
-        count=$((before + 1))
         $jq -j -c -n "{allow:{annotations:1, clean:1}}" \
           | $EVENT_STREAM > events8.out &
         pid=$! &&
-        wait_events_listeners $count &&
         flux queue stop &&
         jobid=`flux job submit basic.json | flux job id` &&
         echo ${jobid} > annotation_job1.id &&
@@ -316,18 +263,14 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events works with annota
         check_event_annotation ${jobid} foo 1234567 events8.out &&
         check_event_name ${jobid} clean events8.out &&
         kill -s USR1 $pid &&
-        wait $pid &&
-        wait_events_listeners $before
+        wait $pid
 '
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events journaling works with annotations' '
         jobid1=`cat annotation_job1.id`
-        before=`flux module stats --parse events.listeners job-manager`
-        count=$((before + 1))
         $jq -j -c -n "{allow:{annotations:1, clean:1}}" \
           | $EVENT_STREAM > events9.out &
         pid=$! &&
-        wait_events_listeners $count &&
         flux queue stop &&
         jobid2=`flux job submit basic.json | flux job id` &&
         flux job annotate ${jobid2} bar hijklmnop &&
@@ -361,8 +304,7 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events journaling works 
         check_event_annotation ${jobid2} bar 89012345 events9.out &&
         check_event_name ${jobid2} clean events9.out &&
         kill -s USR1 $pid &&
-        wait $pid &&
-        wait_events_listeners $before
+        wait $pid
 '
 
 test_expect_success 'job-manager: events request fails with EPROTO on empty payload' '
