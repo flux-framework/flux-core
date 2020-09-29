@@ -29,40 +29,53 @@ struct inout {
 struct inout test_inputs[] = {
     { "2",              0,          "2" },
     { "7-9",            0,          "7,8,9" },
-    { "9-7",            0,          "7,8,9" },
     { "1,7-9",          0,          "1,7,8,9" },
     { "1,7-9,16",       0,          "1,7,8,9,16" },
     { "1,7-9,14,16",    0,          "1,7,8,9,14,16" },
     { "1-3,7-9,14,16",  0,          "1,2,3,7,8,9,14,16" },
-    { "3,2,4,5",        0,          "2,3,4,5" },
+    { "2,3,4,5",        0,          "2,3,4,5" },
     { "",               0,          ""},
     { "1048576",        0,          "1048576"},
 
     { "[2]",            0,          "2" },
     { "[7-9]",          0,          "7,8,9" },
-    { "[9-7]",          0,          "7,8,9" },
-    { "[3,2,4,5]",      0,          "2,3,4,5" },
+    { "[2,3,4,5]",      0,          "2,3,4,5" },
+    { "[0]",            0,          "0" },
     { "[]",             0,          ""},
 
     { "2",              IDSET_FLAG_RANGE,  "2" },
     { "7-9",            IDSET_FLAG_RANGE,  "7-9" },
-    { "9-7",            IDSET_FLAG_RANGE,  "7-9" },
     { "1,7-9",          IDSET_FLAG_RANGE,  "1,7-9" },
     { "1,7-9,16",       IDSET_FLAG_RANGE,  "1,7-9,16" },
     { "1,7-9,14,16",    IDSET_FLAG_RANGE,  "1,7-9,14,16" },
     { "1-3,7-9,14,16",  IDSET_FLAG_RANGE,  "1-3,7-9,14,16" },
-    { "3,2,4,5",        IDSET_FLAG_RANGE,  "2-5" },
+    { "2,3,4,5",        IDSET_FLAG_RANGE,  "2-5" },
     { "",               IDSET_FLAG_RANGE,  ""},
 
     { "2",             IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "2" },
     { "7-9",           IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[7-9]" },
-    { "9-7",           IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[7-9]" },
     { "1,7-9",         IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[1,7-9]" },
     { "1,7-9,16",      IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[1,7-9,16]" },
     { "1,7-9,14,16",   IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[1,7-9,14,16]" },
     { "1-3,7-9,14,16", IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[1-3,7-9,14,16]"},
-    { "3,2,4,5",       IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[2-5]" },
+    { "2,3,4,5",       IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, "[2-5]" },
     { "",              IDSET_FLAG_RANGE|IDSET_FLAG_BRACKETS, ""},
+
+    /* expected failures */
+    { "4.2",            0,          NULL },
+    { "x",              0,          NULL },
+    { "01,2",           0,          NULL },
+    { "00",             0,          NULL },
+    { "3,2",            0,          NULL },
+    { "3-0",            0,          NULL },
+    { "2,2,2,2",        0,          NULL },
+    { "[0",             0,          NULL },
+    { "0]",             0,          NULL },
+    { "[[0]]",          0,          NULL },
+    { "[[0,2]",         0,          NULL },
+    { "[0,2]]",         0,          NULL },
+    { "0,[2",           0,          NULL },
+    { "0]2",            0,          NULL },
 
     { NULL, 0, NULL },
 };
@@ -84,20 +97,28 @@ void test_codec (void)
 
     for (ip = &test_inputs[0]; ip->in != NULL; ip++) {
         struct idset *idset;
-        char *s;
 
+        errno = 0;
         idset = idset_decode (ip->in);
-        ok (idset != NULL,
-            "idset_decode '%s' works", ip->in);
-        s = idset_encode (idset, ip->flags);
-        bool match = (s == NULL && ip->out == NULL)
-                  || (s && ip->out && !strcmp (s, ip->out));
-        ok (match == true,
-            "idset_encode flags=0x%x '%s' works",
-            ip->flags, ip->out ? ip->out : "NULL");
-        if (!match)
-            diag ("%s", s ? s : "NULL");
-        free (s);
+        if (ip->out == NULL) { // expected fail
+            ok (idset == NULL && errno == EINVAL,
+                "idset_encode flags=0x%x '%s' fails with EINVAL",
+                    ip->flags, ip->in);
+        }
+        else {
+            ok (idset != NULL,
+                "idset_decode '%s' works", ip->in);
+            if (idset != NULL) {
+                char *s = idset_encode (idset, ip->flags);
+                bool match = (s && !strcmp (s, ip->out));
+                ok (match == true,
+                    "idset_encode flags=0x%x '%s'->'%s' works",
+                    ip->flags, ip->in, ip->out);
+                if (!match)
+                    diag ("%s", s ? s : "NULL");
+                free (s);
+            }
+        }
         idset_destroy (idset);
     }
 }

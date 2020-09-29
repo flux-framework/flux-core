@@ -18,9 +18,35 @@
 #include <stdio.h>
 #include <stdarg.h>
 #include <stdbool.h>
+#include <ctype.h>
 
 #include "idset.h"
 #include "idset_private.h"
+
+/* strtoul() with result parameter, assumed base=10.
+ * Fail if no digits, leading non-digits, or leading zero.
+ * Returns 0 on success, -1 on failure.
+ */
+static int strtoul_check (const char *s, char **endptr, unsigned long *result)
+{
+    unsigned long n;
+    char *ep;
+
+    errno = 0;
+    n = strtoul (s, &ep, 10);
+    if (errno != 0)
+        return -1;
+    if (ep == s) // no digits
+        return -1;
+    if (!isdigit (*s))
+        return -1;
+    if (*s == '0' && ep - s > 1) // leading zero (RFC 22)
+        return -1;
+    *result = n;
+    if (endptr)
+        *endptr = ep;
+    return 0;
+}
 
 static int parse_range (const char *s, unsigned int *hi, unsigned int *lo)
 {
@@ -28,37 +54,57 @@ static int parse_range (const char *s, unsigned int *hi, unsigned int *lo)
     unsigned int h, l;
     unsigned long n;
 
-    n = strtoul (s, &endptr, 10);
-    if (n >= UINT_MAX || endptr == s || (*endptr != '\0' && *endptr != '-'))
+    if (strtoul_check (s, &endptr, &n) < 0)
+        return -1;
+    if (*endptr != '\0' && *endptr != '-')
         return -1;
     h = l = n;
     if (*endptr == '-') {
         s = endptr + 1;
-        n = strtoul (s, &endptr, 10);
-        if (n >= UINT_MAX || endptr == s || *endptr != '\0')
+        if (strtoul_check (s, &endptr, &n) < 0)
+            return -1;
+        if (*endptr != '\0')
+            return -1;
+        if (n <= l)
             return -1;
         h = n;
     }
-    if (h >= l) {
-        *hi = h;
-        *lo = l;
-    }
-    else {
-        *hi = l;
-        *lo = h;
-    }
+    *hi = h;
+    *lo = l;
     return 0;
+}
+
+static int append_element (struct idset *idset, const char *s)
+{
+    unsigned int hi, lo;
+    unsigned int last = idset_last (idset);
+
+    if (parse_range (s, &hi, &lo) < 0)
+        goto inval;
+    if (last != IDSET_INVALID_ID && lo <= last)
+        goto inval;
+    if (idset_range_set (idset, lo, hi) < 0)
+        goto error;
+    return 0;
+inval:
+    errno = EINVAL;
+error:
+    return -1;
 }
 
 static char *trim_brackets (char *s)
 {
-    char *p = s;
-    if (*p == '[')
-        p++;
-    size_t len = strlen (p);
-    if (len > 0 && p[len - 1] == ']')
-        p[len - 1] = '\0';
-    return p;
+    int len = strlen (s);
+
+    if (len >= 2 && s[0] == '[' && s[len - 1] == ']') {
+        s[len - 1] = '\0';
+        s++;
+    }
+    if (strchr (s, '[') || strchr (s, ']')) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return s;
 }
 
 struct idset *idset_ndecode (const char *str, size_t size)
@@ -76,26 +122,16 @@ struct idset *idset_ndecode (const char *str, size_t size)
         return NULL;
     if (!(cpy = strndup (str, size)))
         goto error;
-    a1 = trim_brackets (cpy);
+    if (!(a1 = trim_brackets (cpy)))
+        goto error;
     saveptr = NULL;
     while ((tok = strtok_r (a1, ",", &saveptr))) {
-        unsigned int hi, lo, i;
-        if (parse_range (tok, &hi, &lo) < 0)
-            goto inval;
-        /* Count backwards so that idset_set() can grow the
-         * idset to the maximum size on the first access,
-         * rather than possibly doing it multiple times.
-         */
-        for (i = hi; i >= lo && i != UINT_MAX; i--) {
-            if (idset_set (idset, i) < 0)
-                goto error;
-        }
+        if (append_element (idset, tok) < 0)
+            goto error;
         a1 = NULL;
     }
     free (cpy);
     return idset;
-inval:
-    errno = EINVAL;
 error:
     saved_errno = errno;
     idset_destroy (idset);
@@ -106,7 +142,11 @@ error:
 
 struct idset *idset_decode (const char *str)
 {
-    return idset_ndecode (str, str ? strlen (str) : 0);
+    struct idset *idset;
+    idset = idset_ndecode (str, str ? strlen (str) : 0);
+    if (!idset)
+        fprintf (stderr, "# idset_decode %s failed\n", str ? str : "NULL");
+    return idset;
 }
 
 /*
