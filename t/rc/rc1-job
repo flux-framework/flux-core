@@ -1,9 +1,17 @@
 #!/bin/bash -e
 
+idset_from_count() {
+    if test $1 -eq 1; then
+        echo "0"
+    else
+        echo "0-$(($1 - 1))"
+    fi
+}
+
 set_fake_hwloc_by_rank() {
     cores=${1}
-    ranklist="0-$(($(flux getattr size) - 1))"
-    corelist="0-$((${cores} - 1))"
+    ranklist=$(idset_from_count $(flux getattr size))
+    corelist=$(idset_from_count ${cores})
     by_rank="{\"${ranklist}\":{\"Core\":${cores},\"coreids\":\"${corelist}\"}}"
     echo Setting fake by_rank="${by_rank}" >&2
     flux kvs put resource.hwloc.by_rank="${by_rank}"
