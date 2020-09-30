@@ -375,14 +375,10 @@ static int kvstxn_unroll (kvstxn_t *kt, int current_epoch, json_t *dir)
         }
         else if (treeobj_is_val (dir_entry)) {
             json_t *val_data;
-            const char *str;
 
             if (!(val_data = treeobj_get_data (dir_entry)))
                 return -1;
-            /* jansson >= 2.7 could use json_string_length() instead */
-            str = json_string_value (val_data);
-            assert (str);
-            if (strlen (str) > BLOBREF_MAX_STRING_SIZE) {
+            if (json_string_length (val_data) > BLOBREF_MAX_STRING_SIZE) {
                 if ((ret = store_cache (kt, current_epoch, val_data,
                                         true, ref, sizeof (ref), &entry)) < 0)
                     return -1;
