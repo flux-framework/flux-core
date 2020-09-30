@@ -675,6 +675,8 @@ int event_job_post_pack (struct event *event,
         return -1;
     if (event_batch_process_event_entry (event, job, name, entry) < 0)
         goto error;
+    if (EVENT_JOB_POST_INFO_ONLY & flags)
+        goto out;
     if (event_job_update (job, entry) < 0) // modifies job->state
         goto error;
     if (event_batch_commit_event (event, job, entry) < 0)
@@ -695,6 +697,7 @@ int event_job_post_pack (struct event *event,
     if (event_job_action (event, job) < 0)
         goto error;
 
+out:
     json_decref (entry);
     va_end (ap);
     return 0;
