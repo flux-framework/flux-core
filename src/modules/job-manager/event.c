@@ -387,7 +387,7 @@ int event_job_action (struct event *event, struct job *job)
         case FLUX_JOB_NEW:
             break;
         case FLUX_JOB_DEPEND:
-            if (event_job_post_pack (event, job, "depend", NULL) < 0)
+            if (event_job_post_pack (event, job, "depend", 0, NULL) < 0)
                 return -1;
             break;
         case FLUX_JOB_SCHED:
@@ -421,7 +421,7 @@ int event_job_action (struct event *event, struct job *job)
                                    && !job->start_pending
                                    && !job->has_resources) {
 
-                if (event_job_post_pack (event, job, "clean", NULL) < 0)
+                if (event_job_post_pack (event, job, "clean", 0, NULL) < 0)
                     return -1;
             }
             break;
@@ -658,6 +658,7 @@ error:
 int event_job_post_pack (struct event *event,
                          struct job *job,
                          const char *name,
+                         int flags,
                          const char *context_fmt,
                          ...)
 {

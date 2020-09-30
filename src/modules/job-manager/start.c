@@ -159,7 +159,7 @@ static void interface_teardown (struct start *start, char *s, int errnum)
             if (job->start_pending) {
                 if ((job->flags & FLUX_JOB_DEBUG))
                     (void)event_job_post_pack (ctx->event, job,
-                                               "debug.start-lost",
+                                               "debug.start-lost", 0,
                                                "{ s:s }", "note", s);
                 job->start_pending = 0;
             }
@@ -198,7 +198,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (!strcmp (type, "start")) {
-        if (event_job_post_pack (ctx->event, job, "start", NULL) < 0)
+        if (event_job_post_pack (ctx->event, job, "start", 0, NULL) < 0)
             goto error_post;
     }
     else if (!strcmp (type, "release")) {
@@ -212,7 +212,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         if (final) // final release is end-of-stream
             job->start_pending = 0;
-        if (event_job_post_pack (ctx->event, job, "release",
+        if (event_job_post_pack (ctx->event, job, "release", 0,
                                  "{ s:s s:b }",
                                  "ranks", idset,
                                  "final", final) < 0)
@@ -229,7 +229,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (h, "start: exception response: malformed data");
             goto error;
         }
-        if (event_job_post_pack (ctx->event, job, "exception",
+        if (event_job_post_pack (ctx->event, job, "exception", 0,
                                  "{ s:s s:i s:i s:s }",
                                  "type", xtype,
                                  "severity", xseverity,
@@ -244,7 +244,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
             flux_log_error (h, "start: finish response: malformed data");
             goto error;
         }
-        if (event_job_post_pack (ctx->event, job, "finish",
+        if (event_job_post_pack (ctx->event, job, "finish", 0,
                                  "{ s:i }", "status", status) < 0)
             goto error_post;
     }
@@ -283,7 +283,7 @@ int start_send_request (struct start *start, struct job *job)
         job->start_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
             (void)event_job_post_pack (ctx->event, job,
-                                       "debug.start-request", NULL);
+                                       "debug.start-request", 0, NULL);
     }
     return 0;
 error:

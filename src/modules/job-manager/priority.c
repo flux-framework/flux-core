@@ -101,7 +101,7 @@ void priority_handle_request (flux_t *h,
      */
     orig_priority = job->priority;
     if (event_job_post_pack (ctx->event, job,
-                             "priority",
+                             "priority", 0,
                              "{ s:i s:i }",
                              "userid", cred.userid,
                              "priority", priority) < 0)

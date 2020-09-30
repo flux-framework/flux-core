@@ -59,6 +59,7 @@ int event_batch_respond (struct event *event, const flux_msg_t *msg);
 int event_job_post_pack (struct event *event,
                          struct job *job,
                          const char *name,
+                         int flags,
                          const char *context_fmt,
                          ...);
 
