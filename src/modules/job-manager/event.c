@@ -158,12 +158,7 @@ void event_publish (struct event *event, const char *topic,
     struct job_manager *ctx = event->ctx;
     flux_future_t *f;
 
-    /* O? support in jansson 2.8 */
-    if (o)
-        f = flux_event_publish_pack (ctx->h, topic, 0, "{s:O}", key, o);
-    else
-        f = flux_event_publish_pack (ctx->h, topic, 0, "{s:n}", key);
-    if (!f) {
+    if (!(f = flux_event_publish_pack (ctx->h, topic, 0, "{s:O?}", key, o))) {
         flux_log_error (ctx->h, "%s: flux_event_publish_pack", __FUNCTION__);
         goto error;
     }
@@ -352,12 +347,7 @@ int event_batch_pub_annotations (struct event *event, struct job *job)
         if (!(event->batch->annotations = json_array ()))
             goto nomem;
     }
-    /* O? support in jansson 2.8 */
-    if (job->annotations)
-        o = json_pack ("[I,O]", job->id, job->annotations);
-    else
-        o = json_pack ("[I,n]", job->id);
-    if (!o)
+    if (!(o = json_pack ("[I,O?]", job->id, job->annotations)))
         goto nomem;
     if (json_array_append_new (event->batch->annotations, o)) {
         json_decref (o);
