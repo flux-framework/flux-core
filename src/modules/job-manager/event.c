@@ -673,11 +673,13 @@ int event_job_post_pack (struct event *event,
         goto error;
     if (!(entry = eventlog_entry_vpack (timestamp, name, context_fmt, ap)))
         return -1;
+    if (event_batch_process_event_entry (event, job, name, entry) < 0)
+        goto error;
+    if (EVENT_JOURNAL_ONLY & flags)
+        goto out;
     if (event_job_update (job, entry) < 0) // modifies job->state
         goto error;
     if (event_batch_commit_event (event, job, entry) < 0)
-        goto error;
-    if (event_batch_process_event_entry (event, job, name, entry) < 0)
         goto error;
     if (job->state != old_state) {
         if (event_batch_pub_state (event, job, timestamp) < 0)
@@ -695,6 +697,7 @@ int event_job_post_pack (struct event *event,
     if (event_job_action (event, job) < 0)
         goto error;
 
+out:
     json_decref (entry);
     va_end (ap);
     return 0;

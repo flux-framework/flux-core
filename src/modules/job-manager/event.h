@@ -18,6 +18,10 @@
 #include "job.h"
 #include "job-manager.h"
 
+enum job_manager_event_flags {
+    EVENT_JOURNAL_ONLY = 1,
+};
+
 /* Take any action for 'job' currently needed based on its internal state.
  * Returns 0 on success, -1 on failure with errno set.
  * This function is idempotent.
