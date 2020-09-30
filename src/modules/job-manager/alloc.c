@@ -127,7 +127,7 @@ static void free_response_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     job->free_pending = 0;
     ctx->alloc->free_pending_count--;
-    if (event_job_post_pack (ctx->event, job, "free", NULL) < 0)
+    if (event_job_post_pack (ctx->event, job, "free", 0, NULL) < 0)
         goto teardown;
     return;
 teardown:
@@ -231,13 +231,13 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                 __FUNCTION__, (uintmax_t)id);
         }
         if (job->annotations) {
-            if (event_job_post_pack (ctx->event, job, "alloc",
+            if (event_job_post_pack (ctx->event, job, "alloc", 0,
                                      "{ s:O }",
                                      "annotations", job->annotations) < 0)
                 goto teardown;
         }
         else {
-            if (event_job_post_pack (ctx->event, job, "alloc", NULL) < 0)
+            if (event_job_post_pack (ctx->event, job, "alloc", 0, NULL) < 0)
                 goto teardown;
         }
         break;
@@ -263,7 +263,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                 "%s: event_batch_pub_annotations: id=%ju",
                                 __FUNCTION__, (uintmax_t)id);
         }
-        if (event_job_post_pack (ctx->event, job, "exception",
+        if (event_job_post_pack (ctx->event, job, "exception", 0,
                                  "{ s:s s:i s:i s:s }",
                                  "type", "alloc",
                                  "severity", 0,
@@ -461,7 +461,7 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
         alloc->alloc_pending_count++;
         if ((job->flags & FLUX_JOB_DEBUG))
             (void)event_job_post_pack (ctx->event, job,
-                                       "debug.alloc-request", NULL);
+                                       "debug.alloc-request", 0, NULL);
 
     }
 }
@@ -476,7 +476,7 @@ int alloc_send_free_request (struct alloc *alloc, struct job *job)
         job->free_pending = 1;
         if ((job->flags & FLUX_JOB_DEBUG))
             (void)event_job_post_pack (alloc->ctx->event, job,
-                                       "debug.free-request", NULL);
+                                       "debug.free-request", 0, NULL);
         alloc->free_pending_count++;
     }
     return 0;
