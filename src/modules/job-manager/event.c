@@ -80,6 +80,24 @@ struct events_listener {
 static struct event_batch *event_batch_create (struct event *event);
 static void event_batch_destroy (struct event_batch *batch);
 
+static void send_listener_responses (struct job_manager *ctx,
+                                     zlist_t *listeners)
+{
+    struct events_listener *el;
+    el = zlist_first (listeners);
+    while (el) {
+        if (json_array_size (el->events) > 0) {
+            if (flux_respond_pack (ctx->h, el->request,
+                                   "{s:O}", "events", el->events) < 0)
+                flux_log_error (ctx->h, "%s: flux_respond_pack",
+                                __FUNCTION__);
+            else
+                json_array_clear (el->events);
+        }
+        el = zlist_next (listeners);
+    }
+}
+
 /* Batch commit has completed.
  * If there was a commit error, log it and stop the reactor.
  * Destroy 'batch'.
@@ -124,6 +142,21 @@ static void event_batch_commit (struct event *event)
 
     if (batch) {
         event->batch = NULL;
+        /* send listener responses now, do not wait on the KVS commit
+         * and send before any additional events can be added onto
+         * listeners via event_batch_process_event_entry()
+         *
+         * note that job-state events will be sent after the KVS
+         * commit, as we want to ensure anyone who receives a
+         * job-state transition event will be able to read the
+         * corresponding event in the KVS.  The event stream does not
+         * have such a requirement, since we're sending the listener
+         * the data.
+         */
+        if (batch->listener_response_available) {
+            send_listener_responses (ctx, event->listeners);
+            batch->listener_response_available = false;
+        }
         if (batch->txn) {
             if (!(batch->f = flux_kvs_commit (ctx->h, NULL, 0, batch->txn)))
                 goto error;
@@ -176,42 +209,10 @@ error:
     flux_reactor_stop_error (flux_get_reactor (ctx->h));
 }
 
-static void generate_listener_response (struct event *event,
-                                        struct events_listener *el)
-{
-    struct job_manager *ctx = event->ctx;
-    flux_msg_t *msg = NULL;
-    if (!(msg = flux_response_derive (el->request, 0))) {
-        flux_log_error (ctx->h, "%s: flux_response_derive",
-                        __FUNCTION__);
-        goto out;
-    }
-    if (flux_msg_pack (msg, "{s:O}", "events", el->events) < 0) {
-        flux_log_error (ctx->h, "%s: flux_msg_pack",
-                        __FUNCTION__);
-        goto out;
-    }
-    if (event_batch_respond (event, msg) < 0)
-        goto out;
-    json_array_clear (el->events);
-out:
-    flux_msg_decref (msg);
-}
-
-static void generate_listener_responses (struct event *event)
-{
-    struct events_listener *el;
-    el = zlist_first (event->listeners);
-    while (el) {
-        if (json_array_size (el->events) > 0)
-            generate_listener_response (event, el);
-        el = zlist_next (event->listeners);
-    }
-}
-
 /* Besides cleaning up, this function has the following side effects:
  * - publish state transition event (if any)
- * - respond to listeners of events (if any)
+ * - send listener responses (only under error scenarios, should be
+ *   sent in event_batch_commit()).
  * - respond to deferred responses (if any)
  */
 static void event_batch_destroy (struct event_batch *batch)
@@ -230,8 +231,11 @@ static void event_batch_destroy (struct event_batch *batch)
                                batch->state_trans);
             json_decref (batch->state_trans);
         }
+        /* under non-error scenarios, listener responses should be
+         * sent in event_batch_commit() */
         if (batch->listener_response_available)
-           generate_listener_responses (batch->event);
+            send_listener_responses (batch->event->ctx,
+                                     batch->event->listeners);
         if (batch->responses) {
             flux_msg_t *msg;
             flux_t *h = batch->event->ctx->h;
