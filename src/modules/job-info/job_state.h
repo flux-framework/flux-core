@@ -86,7 +86,6 @@ struct job {
     const char *exception_type;
     const char *exception_note;
     flux_job_result_t result;
-    double annotations_timestamp;
     json_t *annotations;
 
     /* cache of job information */
