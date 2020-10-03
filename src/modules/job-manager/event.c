@@ -79,6 +79,42 @@ struct events_listener {
 
 static struct event_batch *event_batch_create (struct event *event);
 static void event_batch_destroy (struct event_batch *batch);
+static int batch_respond (struct event_batch *batch, const flux_msg_t *msg);
+
+static void generate_listener_response (struct job_manager *ctx,
+                                        struct event_batch *batch,
+                                        struct events_listener *el)
+{
+    flux_msg_t *msg = NULL;
+    if (!(msg = flux_response_derive (el->request, 0))) {
+        flux_log_error (ctx->h, "%s: flux_response_derive",
+                        __FUNCTION__);
+        goto out;
+    }
+    if (flux_msg_pack (msg, "{s:O}", "events", el->events) < 0) {
+        flux_log_error (ctx->h, "%s: flux_msg_pack",
+                        __FUNCTION__);
+        goto out;
+    }
+    if (batch_respond (batch, msg) < 0)
+        goto out;
+    json_array_clear (el->events);
+out:
+    flux_msg_decref (msg);
+}
+
+static void generate_listener_responses (struct job_manager *ctx,
+                                         zlist_t *listeners,
+                                         struct event_batch *batch)
+{
+    struct events_listener *el;
+    el = zlist_first (listeners);
+    while (el) {
+        if (json_array_size (el->events) > 0)
+            generate_listener_response (ctx, batch, el);
+        el = zlist_next (listeners);
+    }
+}
 
 /* Batch commit has completed.
  * If there was a commit error, log it and stop the reactor.
@@ -124,6 +160,14 @@ static void event_batch_commit (struct event *event)
 
     if (batch) {
         event->batch = NULL;
+        /* generate listener responses now, before any additional
+         * events could be added onto listeners via
+         * event_batch_process_event_entry()
+         */
+        if (batch->listener_response_available) {
+            generate_listener_responses (ctx, event->listeners, batch);
+            batch->listener_response_available = false;
+        }
         if (batch->txn) {
             if (!(batch->f = flux_kvs_commit (ctx->h, NULL, 0, batch->txn)))
                 goto error;
@@ -176,43 +220,10 @@ error:
     flux_reactor_stop_error (flux_get_reactor (ctx->h));
 }
 
-static void generate_listener_response (struct event *event,
-                                        struct events_listener *el)
-{
-    struct job_manager *ctx = event->ctx;
-    flux_msg_t *msg = NULL;
-    if (!(msg = flux_response_derive (el->request, 0))) {
-        flux_log_error (ctx->h, "%s: flux_response_derive",
-                        __FUNCTION__);
-        goto out;
-    }
-    if (flux_msg_pack (msg, "{s:O}", "events", el->events) < 0) {
-        flux_log_error (ctx->h, "%s: flux_msg_pack",
-                        __FUNCTION__);
-        goto out;
-    }
-    if (event_batch_respond (event, msg) < 0)
-        goto out;
-    json_array_clear (el->events);
-out:
-    flux_msg_decref (msg);
-}
-
-static void generate_listener_responses (struct event *event)
-{
-    struct events_listener *el;
-    el = zlist_first (event->listeners);
-    while (el) {
-        if (json_array_size (el->events) > 0)
-            generate_listener_response (event, el);
-        el = zlist_next (event->listeners);
-    }
-}
-
 /* Besides cleaning up, this function has the following side effects:
  * - publish state transition event (if any)
- * - respond to listeners of events (if any)
- * - respond to deferred responses (if any)
+ * - respond to deferred responses (if any, may include listener
+ *   responses generated in event_batch_commit())
  */
 static void event_batch_destroy (struct event_batch *batch)
 {
@@ -230,8 +241,12 @@ static void event_batch_destroy (struct event_batch *batch)
                                batch->state_trans);
             json_decref (batch->state_trans);
         }
+        /* under non-error scenarios, listener responses should be
+         * generated in event_batch_commit() */
         if (batch->listener_response_available)
-           generate_listener_responses (batch->event);
+            generate_listener_responses (batch->event->ctx,
+                                         batch->event->listeners,
+                                         batch);
         if (batch->responses) {
             flux_msg_t *msg;
             flux_t *h = batch->event->ctx->h;
@@ -325,15 +340,13 @@ error:
     return -1;
 }
 
-int event_batch_respond (struct event *event, const flux_msg_t *msg)
+static int batch_respond (struct event_batch *batch, const flux_msg_t *msg)
 {
-    if (event_batch_start (event) < 0)
-        return -1;
-    if (!event->batch->responses) {
-        if (!(event->batch->responses = zlist_new ()))
+    if (!batch->responses) {
+        if (!(batch->responses = zlist_new ()))
             goto nomem;
     }
-    if (zlist_append (event->batch->responses,
+    if (zlist_append (batch->responses,
                       (void *)flux_msg_incref (msg)) < 0) {
         flux_msg_decref (msg);
         goto nomem;
@@ -342,6 +355,15 @@ int event_batch_respond (struct event *event, const flux_msg_t *msg)
 nomem:
     errno = ENOMEM;
     return -1;
+}
+
+int event_batch_respond (struct event *event, const flux_msg_t *msg)
+{
+    if (event_batch_start (event) < 0)
+        return -1;
+    if (batch_respond (event->batch, msg) < 0)
+        return -1;
+    return 0;
 }
 
 int event_job_action (struct event *event, struct job *job)
