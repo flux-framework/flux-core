@@ -74,7 +74,6 @@ struct events_listener {
     const flux_msg_t *request;
     json_t *allow;
     json_t *deny;
-    json_t *events;
 };
 
 static struct event_batch *event_batch_create (struct event *event);
@@ -124,6 +123,13 @@ static void event_batch_commit (struct event *event)
 
     if (batch) {
         event->batch = NULL;
+        /* note that job-state events will be sent after the KVS
+         * commit, as we want to ensure anyone who receives a
+         * job-state transition event will be able to read the
+         * corresponding event in the KVS.  The event stream does not
+         * have such a requirement, since we're sending the listener
+         * the data.
+         */
         if (batch->txn) {
             if (!(batch->f = flux_kvs_commit (ctx->h, NULL, 0, batch->txn)))
                 goto error;
@@ -176,42 +182,10 @@ error:
     flux_reactor_stop_error (flux_get_reactor (ctx->h));
 }
 
-static void generate_listener_response (struct event *event,
-                                        struct events_listener *el)
-{
-    struct job_manager *ctx = event->ctx;
-    flux_msg_t *msg = NULL;
-    if (!(msg = flux_response_derive (el->request, 0))) {
-        flux_log_error (ctx->h, "%s: flux_response_derive",
-                        __FUNCTION__);
-        goto out;
-    }
-    if (flux_msg_pack (msg, "{s:O}", "events", el->events) < 0) {
-        flux_log_error (ctx->h, "%s: flux_msg_pack",
-                        __FUNCTION__);
-        goto out;
-    }
-    if (event_batch_respond (event, msg) < 0)
-        goto out;
-    json_array_clear (el->events);
-out:
-    flux_msg_decref (msg);
-}
-
-static void generate_listener_responses (struct event *event)
-{
-    struct events_listener *el;
-    el = zlist_first (event->listeners);
-    while (el) {
-        if (json_array_size (el->events) > 0)
-            generate_listener_response (event, el);
-        el = zlist_next (event->listeners);
-    }
-}
-
 /* Besides cleaning up, this function has the following side effects:
  * - publish state transition event (if any)
- * - respond to listeners of events (if any)
+ * - send listener responses (only under error scenarios, should be
+ *   sent in event_batch_commit()).
  * - respond to deferred responses (if any)
  */
 static void event_batch_destroy (struct event_batch *batch)
@@ -230,8 +204,6 @@ static void event_batch_destroy (struct event_batch *batch)
                                batch->state_trans);
             json_decref (batch->state_trans);
         }
-        if (batch->listener_response_available)
-           generate_listener_responses (batch->event);
         if (batch->responses) {
             flux_msg_t *msg;
             flux_t *h = batch->event->ctx->h;
@@ -592,9 +564,6 @@ int event_batch_process_event_entry (struct event *event,
     json_t *wrapped_entry = NULL;
     int saved_errno;
 
-    if (event_batch_start (event) < 0)
-        goto error;
-
     el = zlist_first (event->listeners);
     while (el) {
         if (allow_deny_check (el, name)) {
@@ -602,9 +571,10 @@ int event_batch_process_event_entry (struct event *event,
                 if (!(wrapped_entry = wrap_events_entry (id, entry)))
                     goto error;
             }
-            if (json_array_append (el->events, wrapped_entry) < 0)
-                goto nomem;
-            event->batch->listener_response_available = true;
+            if (flux_respond_pack (event->ctx->h, el->request,
+                                   "{s:[O]}", "events", wrapped_entry) < 0)
+                flux_log_error (event->ctx->h, "%s: flux_respond_pack",
+                                __FUNCTION__);
         }
 
         el = zlist_next (event->listeners);
@@ -612,8 +582,6 @@ int event_batch_process_event_entry (struct event *event,
     json_decref (wrapped_entry);
     return 0;
 
-nomem:
-    errno = ENOMEM;
 error:
     saved_errno = errno;
     json_decref (wrapped_entry);
@@ -683,7 +651,6 @@ static void events_listener_destroy (void *data)
         flux_msg_decref (el->request);
         json_decref (el->allow);
         json_decref (el->deny);
-        json_decref (el->events);
         free (el);
         errno = saved_errno;
     }
@@ -700,10 +667,6 @@ static struct events_listener *events_listener_create (const flux_msg_t *msg,
     el->request = flux_msg_incref (msg);
     el->allow = json_incref (allow);
     el->deny = json_incref (deny);
-    if (!(el->events = json_array ())) {
-        errno = ENOMEM;
-        goto error;
-    }
     return el;
 error:
     events_listener_destroy (el);
