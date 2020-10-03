@@ -782,7 +782,7 @@ static void events_handle_request (flux_t *h,
         errno = ENOMEM;
         goto error;
     }
-    zlist_freefn (event->listeners, el, events_listener_destroy, false);
+    zlist_freefn (event->listeners, el, events_listener_destroy, true);
 
     return;
 
