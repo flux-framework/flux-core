@@ -133,7 +133,7 @@ void event_batch_commit (struct event *event)
             if (zlist_append (event->pending, batch) < 0)
                 goto nomem;
         }
-        else { // just publish events and be done
+        else { // just publish events & send responses and be done
             event_batch_destroy (batch);
         }
     }
