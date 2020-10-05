@@ -43,6 +43,7 @@ int event_batch_pub_state (struct event *event, struct job *job,
  */
 int event_batch_process_event_entry (struct event *event,
                                      flux_jobid_t id,
+                                     int eventlog_seq,
                                      const char *name,
                                      json_t *entry);
 

@@ -129,11 +129,17 @@ static int submit_post_event (struct event *event, struct job *job)
                                  "flags", job->flags);
     if (!entry)
         goto error;
+    /* call before eventlog_seq increment below */
+    if (event_batch_process_event_entry (event,
+                                         job->id,
+                                         job->eventlog_seq,
+                                         "submit",
+                                         entry) < 0)
+        goto error;
     if (event_job_update (job, entry) < 0) /* NEW -> DEPEND */
         goto error;
+    job->eventlog_seq++;
     if (event_batch_pub_state (event, job, job->t_submit) < 0)
-        goto error;
-    if (event_batch_process_event_entry (event, job->id, "submit", entry) < 0)
         goto error;
     if (event_job_action (event, job) < 0)
         goto error;

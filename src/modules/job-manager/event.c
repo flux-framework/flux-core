@@ -521,15 +521,25 @@ static int get_timestamp_now (double *timestamp)
     return 0;
 }
 
-/* wrap the eventlog entry in another object with the job id.  The job
- * id is necessary so listeners can determine which job the event is
- * associated with.
+/* wrap the eventlog entry in another object with the job id and
+ * eventlog_seq.
+ *
+ * The job id is necessary so listeners can determine which job the
+ * event is associated with.
+ *
+ * The eventlog sequence number is necessary so users can determine if the
+ * event is a duplicate if they are reading events from another source
+ * (i.e. they could be reading events from the job's eventlog in the
+ * KVS).
  */
-static json_t *wrap_events_entry (flux_jobid_t id, json_t *entry)
+static json_t *wrap_events_entry (flux_jobid_t id,
+                                  int eventlog_seq,
+                                  json_t *entry)
 {
     json_t *wrapped_entry;
-    if (!(wrapped_entry = json_pack ("{s:I s:O}",
+    if (!(wrapped_entry = json_pack ("{s:I s:i s:O}",
                                      "id", id,
+                                     "eventlog_seq", eventlog_seq,
                                      "entry", entry))) {
         errno = ENOMEM;
         return NULL;
@@ -557,6 +567,7 @@ static bool allow_deny_check (struct events_listener *el, const char *name)
 
 int event_batch_process_event_entry (struct event *event,
                                      flux_jobid_t id,
+                                     int eventlog_seq,
                                      const char *name,
                                      json_t *entry)
 {
@@ -568,7 +579,9 @@ int event_batch_process_event_entry (struct event *event,
     while (el) {
         if (allow_deny_check (el, name)) {
             if (!wrapped_entry) {
-                if (!(wrapped_entry = wrap_events_entry (id, entry)))
+                if (!(wrapped_entry = wrap_events_entry (id,
+                                                         eventlog_seq,
+                                                         entry)))
                     goto error;
             }
             if (flux_respond_pack (event->ctx->h, el->request,
@@ -601,18 +614,25 @@ int event_job_post_pack (struct event *event,
     int saved_errno;
     double timestamp;
     flux_job_state_t old_state = job->state;
+    int eventlog_seq = (flags & EVENT_JOURNAL_ONLY) ? -1 : job->eventlog_seq;
 
     va_start (ap, context_fmt);
     if (get_timestamp_now (&timestamp) < 0)
         goto error;
     if (!(entry = eventlog_entry_vpack (timestamp, name, context_fmt, ap)))
         return -1;
-    if (event_batch_process_event_entry (event, job->id, name, entry) < 0)
+    /* call before eventlog_seq increment below */
+    if (event_batch_process_event_entry (event,
+                                         job->id,
+                                         eventlog_seq,
+                                         name,
+                                         entry) < 0)
         goto error;
     if ((flags & EVENT_JOURNAL_ONLY))
         goto out;
     if (event_job_update (job, entry) < 0) // modifies job->state
         goto error;
+    job->eventlog_seq++;
     if (event_batch_commit_event (event, job, entry) < 0)
         goto error;
     if (job->state != old_state) {
