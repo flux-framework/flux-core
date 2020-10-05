@@ -147,16 +147,17 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
     return job;
 }
 
-struct job_state_ctx *job_state_create (flux_t *h)
+struct job_state_ctx *job_state_create (struct info_ctx *ctx)
 {
     struct job_state_ctx *jsctx = NULL;
     int saved_errno;
 
     if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
-        flux_log_error (h, "calloc");
+        flux_log_error (ctx->h, "calloc");
         return NULL;
     }
-    jsctx->h = h;
+    jsctx->h = ctx->h;
+    jsctx->ctx = ctx;
 
     /* Index is the primary data structure holding the job data
      * structures.  It is responsible for destruction.  Lists only
@@ -198,13 +199,13 @@ struct job_state_ctx *job_state_create (flux_t *h)
         goto error;
     zlistx_set_destructor (jsctx->transitions, flux_msg_destroy_wrapper);
 
-    if (flux_event_subscribe (h, "job-state") < 0) {
-        flux_log_error (h, "flux_event_subscribe");
+    if (flux_event_subscribe (jsctx->h, "job-state") < 0) {
+        flux_log_error (jsctx->h, "flux_event_subscribe");
         goto error;
     }
 
-    if (flux_event_subscribe (h, "job-annotations") < 0) {
-        flux_log_error (h, "flux_event_subscribe");
+    if (flux_event_subscribe (jsctx->h, "job-annotations") < 0) {
+        flux_log_error (jsctx->h, "flux_event_subscribe");
         goto error;
     }
 

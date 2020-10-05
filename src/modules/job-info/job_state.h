@@ -37,6 +37,7 @@
 
 struct job_state_ctx {
     flux_t *h;
+    struct info_ctx *ctx;
     zhashx_t *index;
     zlistx_t *pending;
     zlistx_t *running;
@@ -124,7 +125,7 @@ struct job {
     double t_inactive;
 };
 
-struct job_state_ctx *job_state_create (flux_t *h);
+struct job_state_ctx *job_state_create (struct info_ctx *ctx);
 
 void job_state_destroy (void *data);
 
