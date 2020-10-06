@@ -1569,7 +1569,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                               __FUNCTION__, (uintmax_t)job->id);
                     goto error;
                 }
-                job->annotations = json_incref (annotations);
+                if (!json_is_null (annotations))
+                    job->annotations = json_incref (annotations);
             }
 
             if (job->state == FLUX_JOB_SCHED)
