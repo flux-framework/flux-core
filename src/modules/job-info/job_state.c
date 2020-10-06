@@ -96,7 +96,7 @@ static void job_destroy_wrapper (void **data)
     job_destroy (*job);
 }
 
-void *job_id_duplicator (const void *item)
+static void *job_id_duplicator (const void *item)
 {
     flux_jobid_t *idp = calloc (1, sizeof (flux_jobid_t));
     if (!idp)
@@ -105,7 +105,7 @@ void *job_id_duplicator (const void *item)
     return idp;
 }
 
-void job_id_destructor (void **item)
+static void job_id_destructor (void **item)
 {
     flux_jobid_t *idp = *((flux_jobid_t **)item);
     free (idp);
@@ -117,7 +117,7 @@ static void json_decref_wrapper (void **data)
     json_decref (*o);
 }
 
-void flux_msg_destroy_wrapper (void **data)
+static void flux_msg_destroy_wrapper (void **data)
 {
     if (data) {
         flux_msg_t **ptr = (flux_msg_t **)data;
