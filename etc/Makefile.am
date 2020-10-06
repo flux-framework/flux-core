@@ -39,7 +39,8 @@ pkgconfig_DATA = flux-core.pc \
 	flux-pmi.pc \
 	flux-optparse.pc \
 	flux-idset.pc \
-	flux-schedutil.pc
+	flux-schedutil.pc \
+    flux-hostlist.pc
 endif
 
 noinst_SCRIPTS = \

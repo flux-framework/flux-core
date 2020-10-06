@@ -9,6 +9,9 @@ AM_LDFLAGS = \
 noinst_LTLIBRARIES = \
     libhostlist.la
 
+fluxinclude_HEADERS = \
+    hostlist.h
+
 libhostlist_la_SOURCES = \
     util.h \
     util.c \

@@ -55,7 +55,8 @@ libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 lib_LTLIBRARIES = libflux-core.la \
 	libflux-optparse.la \
 	libflux-idset.la \
-	libflux-schedutil.la
+	libflux-schedutil.la \
+	libflux-hostlist.la
 
 fluxlib_LTLIBRARIES = libpmi.la libpmi2.la
 
@@ -105,6 +106,15 @@ libflux_schedutil_la_LDFLAGS = \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
 
+libflux_hostlist_la_SOURCES =
+libflux_hostlist_la_LIBADD = \
+	$(builddir)/libhostlist/libhostlist.la
+libflux_hostlist_la_LDFLAGS = \
+    -Wl,--version-script=$(srcdir)/libflux-hostlist.map \
+	-version-info @LIBFLUX_HOSTLIST_VERSION_INFO@ \
+	-shared -export-dynamic --disable-static \
+	$(san_ld_zdef_flag)
+
 libpmi_la_SOURCES =
 libpmi_la_LIBADD = \
 	$(builddir)/libpmi/libpmi_client.la \
@@ -132,5 +142,6 @@ EXTRA_DIST = \
 	libflux-optparse.map \
 	libflux-idset.map \
 	libflux-schedutil.map \
+	libflux-hostlist.map \
 	libpmi.map \
 	libpmi2.map
