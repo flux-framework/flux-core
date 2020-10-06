@@ -1765,8 +1765,8 @@ static int job_events_priority (struct job_state_ctx *jsctx,
         || json_unpack (context, "{ s:i }", "priority", &priority) < 0
         || (priority < FLUX_JOB_PRIORITY_MIN
             || priority > FLUX_JOB_PRIORITY_MAX)) {
-        flux_log (jsctx->h, LOG_ERR, "%s: priority context invalid",
-                  __FUNCTION__);
+        flux_log (jsctx->h, LOG_ERR, "%s: priority context invalid: %ju",
+                  __FUNCTION__, (uintmax_t)id);
         return -1;
     }
 
