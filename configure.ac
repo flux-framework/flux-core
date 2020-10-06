@@ -483,6 +483,7 @@ AC_CONFIG_FILES( \
   src/common/libyuarel/Makefile \
   src/common/libdebugged/Makefile \
   src/common/libterminus/Makefile \
+  src/common/libhostlist/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
