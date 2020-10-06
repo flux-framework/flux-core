@@ -1184,7 +1184,7 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
                 }
             }
             else { /* st->state == FLUX_JOB_INACTIVE */
-                /* get eventlog to success=true|false */
+                /* get eventlog to success=true|false and exception info */
                 if (!(f = state_inactive_lookup (jsctx, job))) {
                     flux_log_error (jsctx->h, "%s: state_inactive_lookup",
                                     __FUNCTION__);
