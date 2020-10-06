@@ -136,6 +136,7 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
     job->state = FLUX_JOB_NEW;
     job->userid = FLUX_USERID_UNKNOWN;
     job->priority = -1;
+    job->result = FLUX_JOB_RESULT_FAILED;
 
     if (!(job->next_states = zlist_new ())) {
         errno = ENOMEM;
@@ -1052,7 +1053,6 @@ static int eventlog_inactive_finish (struct info_ctx *ctx,
                                      struct job *job)
 {
     /* Default result is failed, overridden below */
-    job->result = FLUX_JOB_RESULT_FAILED;
     if (job->success)
         job->result = FLUX_JOB_RESULT_COMPLETED;
     else if (job->exception_occurred) {
