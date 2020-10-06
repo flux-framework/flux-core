@@ -1049,8 +1049,8 @@ nonfatal_error:
 }
 
 /* calculate any remaining fields */
-static int eventlog_inactive_finish (struct info_ctx *ctx,
-                                     struct job *job)
+static void eventlog_inactive_complete (struct info_ctx *ctx,
+                                        struct job *job)
 {
     /* Default result is failed, overridden below */
     if (job->success)
@@ -1061,7 +1061,6 @@ static int eventlog_inactive_finish (struct info_ctx *ctx,
         else if (!strcmp (job->exception_type, "timeout"))
             job->result = FLUX_JOB_RESULT_TIMEOUT;
     }
-    return 0;
 }
 
 static void state_inactive_lookup_continuation (flux_future_t *f, void *arg)
@@ -1081,8 +1080,7 @@ static void state_inactive_lookup_continuation (flux_future_t *f, void *arg)
     if (eventlog_inactive_parse (ctx, job, s) < 0)
         goto out;
 
-    if (eventlog_inactive_finish (ctx, job) < 0)
-        goto out;
+    eventlog_inactive_complete (ctx, job);
 
     st = zlist_head (job->next_states);
     assert (st);
@@ -1670,8 +1668,7 @@ static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
         if (eventlog_inactive_parse (ctx, job, eventlog) < 0)
             goto done;
 
-        if (eventlog_inactive_finish (ctx, job) < 0)
-            goto done;
+        eventlog_inactive_complete (ctx, job);
     }
 
     if (zhashx_insert (ctx->jsctx->index, &job->id, job) < 0) {
