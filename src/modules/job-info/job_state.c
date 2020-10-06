@@ -97,21 +97,6 @@ static void job_destroy_wrapper (void **data)
     job_destroy (*job);
 }
 
-static void *job_id_duplicator (const void *item)
-{
-    flux_jobid_t *idp = calloc (1, sizeof (flux_jobid_t));
-    if (!idp)
-        return NULL;
-    *(idp) = *((flux_jobid_t *)item);
-    return idp;
-}
-
-static void job_id_destructor (void **item)
-{
-    flux_jobid_t *idp = *((flux_jobid_t **)item);
-    free (idp);
-}
-
 static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
 {
     struct job *job = NULL;
@@ -182,15 +167,6 @@ struct job_state_ctx *job_state_create (struct info_ctx *ctx)
     if (!(jsctx->futures = zlistx_new ()))
         goto error;
 
-    if (!(jsctx->early_annotations = job_hash_create ())) {
-        errno = ENOMEM;
-        goto error;
-    }
-    /* job id not stored in job struct, have to duplicate it */
-    zhashx_set_key_duplicator (jsctx->early_annotations, job_id_duplicator);
-    zhashx_set_key_destructor (jsctx->early_annotations, job_id_destructor);
-    zhashx_set_destructor (jsctx->early_annotations, json_decref_wrapper);
-
     if (!(jsctx->events_journal_backlog = zlistx_new ()))
         goto error;
     zlistx_set_destructor (jsctx->events_journal_backlog, json_decref_wrapper);
@@ -239,7 +215,6 @@ void job_state_destroy (void *data)
             }
             zlistx_destroy (&jsctx->futures);
         }
-        zhashx_destroy (&jsctx->early_annotations);
         /* Destroy index last, as it is the one that will actually
          * destroy the job objects */
         zlistx_destroy (&jsctx->processing);
@@ -1073,7 +1048,6 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                 errno = EPROTO;
                 goto error;
             }
-            job->priority_timestamp = timestamp;
             update_job_state (ctx, job, FLUX_JOB_DEPEND, timestamp);
         }
         else if (!strcmp (name, "depend")) {
@@ -1095,7 +1069,6 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                 errno = EPROTO;
                 goto error;
             }
-            job->priority_timestamp = timestamp;
         }
         else if (!strcmp (name, "exception")) {
             const char *type;
@@ -1450,7 +1423,6 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
 
     job->userid = userid;
     job->priority = priority;
-    job->priority_timestamp = timestamp;
 
     return job_transition_state (jsctx,
                                  job,
@@ -1501,10 +1473,10 @@ static int journal_finish_event (struct job_state_ctx *jsctx,
 static int journal_priority_event (struct job_state_ctx *jsctx,
                                    flux_jobid_t id,
                                    int eventlog_seq,
-                                   double timestamp,
                                    json_t *context)
 {
     struct job *job;
+    int orig_priority;
     int priority;
 
     if (!context
@@ -1517,26 +1489,25 @@ static int journal_priority_event (struct job_state_ctx *jsctx,
         return -1;
     }
 
-    /* if we do not yet know about this job via the job state
-     * transitions, no need to update.  It'll be handled on
-     * initial reading of data from KVS
-     */
-    if ((job = zhashx_lookup (jsctx->index, &id))) {
-        if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
-            return 0;
-
-        if (job->priority_timestamp > 0.0
-            && job->priority_timestamp < timestamp) {
-            int orig_priority = job->priority;
-            job->priority = priority;
-            job->priority_timestamp = timestamp;
-            if (job->state & FLUX_JOB_PENDING
-                && job->priority != orig_priority)
-                zlistx_reorder (jsctx->pending,
-                                job->list_handle,
-                                search_direction (job));
-        }
+    if (!(job = zhashx_lookup (jsctx->index, &id))) {
+        flux_log_error (jsctx->h, "%s: job %ju not in hash",
+                        __FUNCTION__, (uintmax_t)id);
+        /* do not return error, we consider it a non-fatal error */
+        return 0;
     }
+
+    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
+        return 0;
+
+    orig_priority = job->priority;
+    job->priority = priority;
+
+    if (job->state & FLUX_JOB_PENDING
+        && job->priority != orig_priority)
+        zlistx_reorder (jsctx->pending,
+                        job->list_handle,
+                        search_direction (job));
+
     return 0;
 }
 
@@ -1592,27 +1563,6 @@ static int journal_exception_event (struct job_state_ctx *jsctx,
     return 0;
 }
 
-static int update_early_annotations (struct job_state_ctx *jsctx,
-                                     flux_jobid_t id,
-                                     json_t *annotations)
-{
-    if (!zhashx_lookup (jsctx->early_annotations, &id)) {
-        if (zhashx_insert (jsctx->early_annotations,
-                           &id,
-                           json_incref (annotations)) < 0) {
-            flux_log_error (jsctx->h, "%s: zhashx_insert", __FUNCTION__);
-            errno = ENOMEM;
-            return -1;
-        }
-    }
-    else
-        zhashx_update (jsctx->early_annotations,
-                       &id,
-                       json_incref (annotations));
-
-    return 0;
-}
-
 static int journal_annotations_event (struct job_state_ctx *jsctx,
                                       flux_jobid_t id,
                                       json_t *context)
@@ -1629,20 +1579,18 @@ static int journal_annotations_event (struct job_state_ctx *jsctx,
         return -1;
     }
 
-    if ((job = zhashx_lookup (jsctx->index, &id))) {
-        json_decref (job->annotations);
-        if (json_is_null (annotations))
-            job->annotations = NULL;
-        else
-            job->annotations = json_incref (annotations);
+    if (!(job = zhashx_lookup (jsctx->index, &id))) {
+        flux_log_error (jsctx->h, "%s: job %ju not in hash",
+                        __FUNCTION__, (uintmax_t)id);
+        /* do not return error, we consider it a non-fatal error */
+        return 0;
     }
-    else {
-        /* annotation event may have arrived before job-state
-         * event indicating job existence, store off for later.
-         */
-        if (update_early_annotations (jsctx, id, annotations) < 0)
-            return -1;
-    }
+
+    json_decref (job->annotations);
+    if (json_is_null (annotations))
+        job->annotations = NULL;
+    else
+        job->annotations = json_incref (annotations);
 
     return 0;
 }
@@ -1713,7 +1661,6 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
         if (journal_priority_event (jsctx,
                                     id,
                                     eventlog_seq,
-                                    timestamp,
                                     context) < 0)
             return -1;
     }

@@ -52,9 +52,6 @@ struct job_state_ctx {
     int cleanup_count;
     int inactive_count;
 
-    /* annotations that arrived before job is known */
-    zhashx_t *early_annotations;
-
     /* debug/testing - if paused store job events journal on list for
      * processing later */
     bool pause;
@@ -70,7 +67,6 @@ struct job {
     flux_jobid_t id;
     uint32_t userid;
     int priority;
-    double priority_timestamp;
     double t_submit;
     int flags;
     flux_job_state_t state;
