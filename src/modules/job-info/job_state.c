@@ -35,6 +35,20 @@ struct state_transition {
     double timestamp;
 };
 
+static int submit_context_parse (flux_t *h,
+                                 struct job *job,
+                                 json_t *context);
+static int finish_context_parse (flux_t *h,
+                                 struct job *job,
+                                 json_t *context);
+static int priority_context_parse (flux_t *h,
+                                   struct job *job,
+                                   json_t *context);
+static int exception_context_parse (flux_t *h,
+                                    struct job *job,
+                                    json_t *context,
+                                    int *severityP);
+
 static void process_next_state (struct info_ctx *ctx, struct job *job);
 
 static int journal_process_events (struct job_state_ctx *jsctx, json_t *events);
@@ -1032,78 +1046,21 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
 
         job->eventlog_seq++;
         if (!strcmp (name, "submit")) {
-            if (!context) {
-                flux_log (ctx->h, LOG_ERR, "%s: no submit context for %ju",
-                          __FUNCTION__, (uintmax_t)job->id);
-                errno = EPROTO;
+            if (submit_context_parse (ctx->h, job, context) < 0)
                 goto error;
-            }
-
-            if (json_unpack (context, "{ s:i s:i s:i }",
-                             "priority", &job->priority,
-                             "userid", &job->userid,
-                             "flags", &job->flags) < 0) {
-                flux_log (ctx->h, LOG_ERR, "%s: submit context for %ju invalid",
-                          __FUNCTION__, (uintmax_t)job->id);
-                errno = EPROTO;
-                goto error;
-            }
             update_job_state (ctx, job, FLUX_JOB_DEPEND, timestamp);
         }
         else if (!strcmp (name, "depend")) {
             update_job_state (ctx, job, FLUX_JOB_SCHED, timestamp);
         }
         else if (!strcmp (name, "priority")) {
-            if (!context) {
-                flux_log (ctx->h, LOG_ERR, "%s: no priority context for %ju",
-                          __FUNCTION__, (uintmax_t)job->id);
-                errno = EPROTO;
+            if (priority_context_parse (ctx->h, job, context) < 0)
                 goto error;
-            }
-
-            if (json_unpack (context, "{ s:i }",
-                                      "priority", &job->priority) < 0) {
-                flux_log (ctx->h, LOG_ERR,
-                          "%s: priority context for %ju invalid",
-                          __FUNCTION__, (uintmax_t)job->id);
-                errno = EPROTO;
-                goto error;
-            }
         }
         else if (!strcmp (name, "exception")) {
-            const char *type;
             int severity;
-            const char *note = NULL;
-
-            if (!context) {
-                flux_log (ctx->h, LOG_ERR, "%s: no exception context for %ju",
-                          __FUNCTION__, (uintmax_t)job->id);
-                errno = EPROTO;
+            if (exception_context_parse (ctx->h, job, context, &severity) < 0)
                 goto error;
-            }
-
-            if (json_unpack (context,
-                             "{s:s s:i s?:s}",
-                             "type", &type,
-                             "severity", &severity,
-                             "note", &note) < 0) {
-                flux_log (ctx->h, LOG_ERR,
-                          "%s: exception context for %ju invalid",
-                          __FUNCTION__, (uintmax_t)job->id);
-                errno = EPROTO;
-                goto error;
-            }
-
-            if (!job->exception_occurred
-                || severity < job->exception_severity) {
-                job->exception_occurred = true;
-                job->exception_severity = severity;
-                job->exception_type = type;
-                job->exception_note = note;
-                json_decref (job->exception_context);
-                job->exception_context = json_incref (context);
-            }
-
             if (severity == 0)
                 update_job_state (ctx, job, FLUX_JOB_CLEANUP, timestamp);
         }
@@ -1126,26 +1083,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                 update_job_state (ctx, job, FLUX_JOB_RUN, timestamp);
         }
         else if (!strcmp (name, "finish")) {
-            int status;
-
-            if (!context) {
-                flux_log (ctx->h, LOG_ERR, "%s: no finish context for %ju",
-                          __FUNCTION__, (uintmax_t)job->id);
-                errno = EPROTO;
+            if (finish_context_parse (ctx->h, job, context) < 0)
                 goto error;
-            }
-
-            if (json_unpack (context, "{ s:i }", "status", &status) < 0) {
-                flux_log (ctx->h, LOG_ERR,
-                          "%s: finish context for %ju invalid",
-                          __FUNCTION__, (uintmax_t)job->id);
-                errno = EPROTO;
-                goto error;
-            }
-
-            if (!status)
-                job->success = true;
-
             if (job->state == FLUX_JOB_RUN)
                 update_job_state (ctx, job, FLUX_JOB_CLEANUP, timestamp);
         }
@@ -1376,13 +1315,10 @@ static int journal_advance_job (struct job_state_ctx *jsctx,
     return job_transition_state (jsctx, job, newstate, timestamp);
 }
 
-static int journal_submit_event (struct job_state_ctx *jsctx,
-                                 flux_jobid_t id,
-                                 int eventlog_seq,
-                                 double timestamp,
+static int submit_context_parse (flux_t *h,
+                                 struct job *job,
                                  json_t *context)
 {
-    struct job *job;
     int priority;
     int userid;
     int flags;
@@ -1393,11 +1329,24 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
                         "priority", &priority,
                         "userid", &userid,
                         "flags", &flags) < 0) {
-        flux_log (jsctx->h, LOG_ERR, "%s: submit context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)id);
+        flux_log (h, LOG_ERR, "%s: submit context invalid: %ju",
+                  __FUNCTION__, (uintmax_t)job->id);
         errno = EPROTO;
         return -1;
     }
+
+    job->userid = userid;
+    job->priority = priority;
+    return 0;
+}
+
+static int journal_submit_event (struct job_state_ctx *jsctx,
+                                 flux_jobid_t id,
+                                 int eventlog_seq,
+                                 double timestamp,
+                                 json_t *context)
+{
+    struct job *job;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
         if (!(job = job_create (jsctx->ctx, id))){
@@ -1421,13 +1370,37 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
 
-    job->userid = userid;
-    job->priority = priority;
+    if (submit_context_parse (jsctx->h, job, context) < 0)
+        return -1;
 
     return job_transition_state (jsctx,
                                  job,
                                  FLUX_JOB_DEPEND,
                                  timestamp);
+}
+
+static int finish_context_parse (flux_t *h,
+                                 struct job *job,
+                                 json_t *context)
+{
+    int status;
+
+    if (!context
+        || json_unpack (context, "{ s:i }", "status", &status) < 0) {
+        flux_log (h, LOG_ERR, "%s: finish context invalid: %ju",
+                  __FUNCTION__, (uintmax_t)job->id);
+        errno = EPROTO;
+        return -1;
+    }
+
+    /* There is no need to check for "exception" events for the
+     * "success" attribute.  "success" is always false unless the
+     * job completes ("finish") without error.
+     */
+    if (!status)
+        job->success = true;
+
+    return 0;
 }
 
 static int journal_finish_event (struct job_state_ctx *jsctx,
@@ -1437,15 +1410,6 @@ static int journal_finish_event (struct job_state_ctx *jsctx,
                                  json_t *context)
 {
     struct job *job;
-    int status;
-
-    if (!context
-        || json_unpack (context, "{ s:i }", "status", &status) < 0) {
-        flux_log (jsctx->h, LOG_ERR, "%s: finish context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)id);
-        errno = EPROTO;
-        return -1;
-    }
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
         flux_log_error (jsctx->h, "%s: job %ju not in hash",
@@ -1457,17 +1421,33 @@ static int journal_finish_event (struct job_state_ctx *jsctx,
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
 
-    /* There is no need to check for "exception" events for the
-     * "success" attribute.  "success" is always false unless the
-     * job completes ("finish") without error.
-     */
-    if (!status)
-        job->success = true;
+    if (finish_context_parse (jsctx->h, job, context) < 0)
+        return -1;
 
     return job_transition_state (jsctx,
                                  job,
                                  FLUX_JOB_CLEANUP,
                                  timestamp);
+}
+
+static int priority_context_parse (flux_t *h,
+                                   struct job *job,
+                                   json_t *context)
+{
+    int priority;
+
+    if (!context
+        || json_unpack (context, "{ s:i }", "priority", &priority) < 0
+        || (priority < FLUX_JOB_PRIORITY_MIN
+            || priority > FLUX_JOB_PRIORITY_MAX)) {
+        flux_log (h, LOG_ERR, "%s: priority context invalid: %ju",
+                  __FUNCTION__, (uintmax_t)job->id);
+        errno = EPROTO;
+        return -1;
+    }
+
+    job->priority = priority;
+    return 0;
 }
 
 static int journal_priority_event (struct job_state_ctx *jsctx,
@@ -1477,17 +1457,6 @@ static int journal_priority_event (struct job_state_ctx *jsctx,
 {
     struct job *job;
     int orig_priority;
-    int priority;
-
-    if (!context
-        || json_unpack (context, "{ s:i }", "priority", &priority) < 0
-        || (priority < FLUX_JOB_PRIORITY_MIN
-            || priority > FLUX_JOB_PRIORITY_MAX)) {
-        flux_log (jsctx->h, LOG_ERR, "%s: priority context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)id);
-        errno = EPROTO;
-        return -1;
-    }
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
         flux_log_error (jsctx->h, "%s: job %ju not in hash",
@@ -1500,7 +1469,9 @@ static int journal_priority_event (struct job_state_ctx *jsctx,
         return 0;
 
     orig_priority = job->priority;
-    job->priority = priority;
+
+    if (priority_context_parse (jsctx->h, job, context) < 0)
+        return -1;
 
     if (job->state & FLUX_JOB_PENDING
         && job->priority != orig_priority)
@@ -1511,13 +1482,11 @@ static int journal_priority_event (struct job_state_ctx *jsctx,
     return 0;
 }
 
-static int journal_exception_event (struct job_state_ctx *jsctx,
-                                    flux_jobid_t id,
-                                    int eventlog_seq,
-                                    double timestamp,
-                                    json_t *context)
+static int exception_context_parse (flux_t *h,
+                                    struct job *job,
+                                    json_t *context,
+                                    int *severityP)
 {
-    struct job *job;
     const char *type;
     int severity;
     const char *note = NULL;
@@ -1528,11 +1497,35 @@ static int journal_exception_event (struct job_state_ctx *jsctx,
                         "type", &type,
                         "severity", &severity,
                         "note", &note) < 0) {
-        flux_log (jsctx->h, LOG_ERR, "%s: exception context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)id);
+        flux_log (h, LOG_ERR, "%s: exception context invalid: %ju",
+                  __FUNCTION__, (uintmax_t)job->id);
         errno = EPROTO;
         return -1;
     }
+
+    if (!job->exception_occurred
+        || severity < job->exception_severity) {
+        job->exception_occurred = true;
+        job->exception_severity = severity;
+        job->exception_type = type;
+        job->exception_note = note;
+        json_decref (job->exception_context);
+        job->exception_context = json_incref (context);
+    }
+
+    if (severityP)
+        (*severityP) = severity;
+    return 0;
+}
+
+static int journal_exception_event (struct job_state_ctx *jsctx,
+                                    flux_jobid_t id,
+                                    int eventlog_seq,
+                                    double timestamp,
+                                    json_t *context)
+{
+    struct job *job;
+    int severity;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
         flux_log_error (jsctx->h, "%s: job %ju not in hash",
@@ -1544,15 +1537,8 @@ static int journal_exception_event (struct job_state_ctx *jsctx,
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
 
-    if (!job->exception_occurred
-        || severity < job->exception_severity) {
-        job->exception_occurred = true;
-        job->exception_severity = severity;
-        job->exception_type = type;
-        job->exception_note = note;
-        json_decref (job->exception_context);
-        job->exception_context = json_incref (context);
-    }
+    if (exception_context_parse (jsctx->h, job, context, &severity) < 0)
+        return -1;
 
     if (severity == 0)
         return job_transition_state (jsctx,
