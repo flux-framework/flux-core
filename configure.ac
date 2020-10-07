@@ -85,6 +85,12 @@ LIBFLUX_SCHEDUTIL_AGE=0
 LIBFLUX_SCHEDUTIL_VERSION_INFO=$LIBFLUX_SCHEDUTIL_CURRENT:$LIBFLUX_SCHEDUTIL_REVISION:$LIBFLUX_SCHEDUTIL_AGE
 AC_SUBST([LIBFLUX_SCHEDUTIL_VERSION_INFO])
 
+LIBFLUX_HOSTLIST_CURRENT=1
+LIBFLUX_HOSTLIST_REVISION=0
+LIBFLUX_HOSTLIST_AGE=0
+LIBFLUX_HOSTLIST_VERSION_INFO=$LIBFLUX_HOSTLIST_CURRENT:$LIBFLUX_HOSTLIST_REVISION:$LIBFLUX_HOSTLIST_AGE
+AC_SUBST([LIBFLUX_HOSTLIST_VERSION_INFO])
+
 ##
 # Checks for programs
 ##
@@ -483,6 +489,7 @@ AC_CONFIG_FILES( \
   src/common/libyuarel/Makefile \
   src/common/libdebugged/Makefile \
   src/common/libterminus/Makefile \
+  src/common/libhostlist/Makefile \
   src/bindings/Makefile \
   src/bindings/lua/Makefile \
   src/bindings/python/Makefile \
@@ -520,6 +527,7 @@ AC_CONFIG_FILES( \
   etc/flux-optparse.pc \
   etc/flux-idset.pc \
   etc/flux-schedutil.pc \
+  etc/flux-hostlist.pc \
   etc/flux.service \
   doc/Makefile \
   doc/test/Makefile \
