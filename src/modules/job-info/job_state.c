@@ -96,7 +96,7 @@ static void job_destroy_wrapper (void **data)
     job_destroy (*job);
 }
 
-void *job_id_duplicator (const void *item)
+static void *job_id_duplicator (const void *item)
 {
     flux_jobid_t *idp = calloc (1, sizeof (flux_jobid_t));
     if (!idp)
@@ -105,7 +105,7 @@ void *job_id_duplicator (const void *item)
     return idp;
 }
 
-void job_id_destructor (void **item)
+static void job_id_destructor (void **item)
 {
     flux_jobid_t *idp = *((flux_jobid_t **)item);
     free (idp);
@@ -117,7 +117,7 @@ static void json_decref_wrapper (void **data)
     json_decref (*o);
 }
 
-void flux_msg_destroy_wrapper (void **data)
+static void flux_msg_destroy_wrapper (void **data)
 {
     if (data) {
         flux_msg_t **ptr = (flux_msg_t **)data;
@@ -136,6 +136,7 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
     job->state = FLUX_JOB_NEW;
     job->userid = FLUX_USERID_UNKNOWN;
     job->priority = -1;
+    job->result = FLUX_JOB_RESULT_FAILED;
 
     if (!(job->next_states = zlist_new ())) {
         errno = ENOMEM;
@@ -146,16 +147,17 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
     return job;
 }
 
-struct job_state_ctx *job_state_create (flux_t *h)
+struct job_state_ctx *job_state_create (struct info_ctx *ctx)
 {
     struct job_state_ctx *jsctx = NULL;
     int saved_errno;
 
     if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
-        flux_log_error (h, "calloc");
+        flux_log_error (ctx->h, "calloc");
         return NULL;
     }
-    jsctx->h = h;
+    jsctx->h = ctx->h;
+    jsctx->ctx = ctx;
 
     /* Index is the primary data structure holding the job data
      * structures.  It is responsible for destruction.  Lists only
@@ -197,13 +199,13 @@ struct job_state_ctx *job_state_create (flux_t *h)
         goto error;
     zlistx_set_destructor (jsctx->transitions, flux_msg_destroy_wrapper);
 
-    if (flux_event_subscribe (h, "job-state") < 0) {
-        flux_log_error (h, "flux_event_subscribe");
+    if (flux_event_subscribe (jsctx->h, "job-state") < 0) {
+        flux_log_error (jsctx->h, "flux_event_subscribe");
         goto error;
     }
 
-    if (flux_event_subscribe (h, "job-annotations") < 0) {
-        flux_log_error (h, "flux_event_subscribe");
+    if (flux_event_subscribe (jsctx->h, "job-annotations") < 0) {
+        flux_log_error (jsctx->h, "flux_event_subscribe");
         goto error;
     }
 
@@ -1048,11 +1050,10 @@ nonfatal_error:
 }
 
 /* calculate any remaining fields */
-static int eventlog_inactive_finish (struct info_ctx *ctx,
-                                     struct job *job)
+static void eventlog_inactive_complete (struct info_ctx *ctx,
+                                        struct job *job)
 {
     /* Default result is failed, overridden below */
-    job->result = FLUX_JOB_RESULT_FAILED;
     if (job->success)
         job->result = FLUX_JOB_RESULT_COMPLETED;
     else if (job->exception_occurred) {
@@ -1061,7 +1062,6 @@ static int eventlog_inactive_finish (struct info_ctx *ctx,
         else if (!strcmp (job->exception_type, "timeout"))
             job->result = FLUX_JOB_RESULT_TIMEOUT;
     }
-    return 0;
 }
 
 static void state_inactive_lookup_continuation (flux_future_t *f, void *arg)
@@ -1081,8 +1081,7 @@ static void state_inactive_lookup_continuation (flux_future_t *f, void *arg)
     if (eventlog_inactive_parse (ctx, job, s) < 0)
         goto out;
 
-    if (eventlog_inactive_finish (ctx, job) < 0)
-        goto out;
+    eventlog_inactive_complete (ctx, job);
 
     st = zlist_head (job->next_states);
     assert (st);
@@ -1186,7 +1185,7 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
                 }
             }
             else { /* st->state == FLUX_JOB_INACTIVE */
-                /* get eventlog to success=true|false */
+                /* get eventlog to success=true|false and exception info */
                 if (!(f = state_inactive_lookup (jsctx, job))) {
                     flux_log_error (jsctx->h, "%s: state_inactive_lookup",
                                     __FUNCTION__);
@@ -1570,7 +1569,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                               __FUNCTION__, (uintmax_t)job->id);
                     goto error;
                 }
-                job->annotations = json_incref (annotations);
+                if (!json_is_null (annotations))
+                    job->annotations = json_incref (annotations);
             }
 
             if (job->state == FLUX_JOB_SCHED)
@@ -1670,8 +1670,7 @@ static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
         if (eventlog_inactive_parse (ctx, job, eventlog) < 0)
             goto done;
 
-        if (eventlog_inactive_finish (ctx, job) < 0)
-            goto done;
+        eventlog_inactive_complete (ctx, job);
     }
 
     if (zhashx_insert (ctx->jsctx->index, &job->id, job) < 0) {
@@ -1768,8 +1767,8 @@ static int job_events_priority (struct job_state_ctx *jsctx,
         || json_unpack (context, "{ s:i }", "priority", &priority) < 0
         || (priority < FLUX_JOB_PRIORITY_MIN
             || priority > FLUX_JOB_PRIORITY_MAX)) {
-        flux_log (jsctx->h, LOG_ERR, "%s: priority context invalid",
-                  __FUNCTION__);
+        flux_log (jsctx->h, LOG_ERR, "%s: priority context invalid: %ju",
+                  __FUNCTION__, (uintmax_t)id);
         return -1;
     }
 

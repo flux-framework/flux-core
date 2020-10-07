@@ -78,14 +78,14 @@ struct events_listener {
     json_t *events;
 };
 
-struct event_batch *event_batch_create (struct event *event);
-void event_batch_destroy (struct event_batch *batch);
+static struct event_batch *event_batch_create (struct event *event);
+static void event_batch_destroy (struct event_batch *batch);
 
 /* Batch commit has completed.
  * If there was a commit error, log it and stop the reactor.
  * Destroy 'batch'.
  */
-void commit_continuation (flux_future_t *f, void *arg)
+static void commit_continuation (flux_future_t *f, void *arg)
 {
     struct event_batch *batch = arg;
     struct event *event = batch->event;
@@ -103,7 +103,7 @@ void commit_continuation (flux_future_t *f, void *arg)
  * If there was a publish error, log it and stop the reactor.
  * Destroy 'f'.
  */
-void publish_continuation (flux_future_t *f, void *arg)
+static void publish_continuation (flux_future_t *f, void *arg)
 {
     struct event *event = arg;
     struct job_manager *ctx = event->ctx;
@@ -118,7 +118,7 @@ void publish_continuation (flux_future_t *f, void *arg)
 
 /* Close the current batch, if any, and commit it.
  */
-void event_batch_commit (struct event *event)
+static void event_batch_commit (struct event *event)
 {
     struct event_batch *batch = event->batch;
     struct job_manager *ctx = event->ctx;
@@ -133,7 +133,7 @@ void event_batch_commit (struct event *event)
             if (zlist_append (event->pending, batch) < 0)
                 goto nomem;
         }
-        else { // just publish events and be done
+        else { // just publish events & send responses and be done
             event_batch_destroy (batch);
         }
     }
@@ -146,7 +146,7 @@ error: // unlikely (e.g. ENOMEM)
     event_batch_destroy (batch);
 }
 
-void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+static void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     struct job_manager *ctx = arg;
     event_batch_commit (ctx->event);
@@ -215,7 +215,7 @@ static void generate_listener_responses (struct event *event)
  * - respond to listeners of events (if any)
  * - respond to deferred responses (if any)
  */
-void event_batch_destroy (struct event_batch *batch)
+static void event_batch_destroy (struct event_batch *batch)
 {
     if (batch) {
         int saved_errno = errno;
@@ -257,7 +257,7 @@ void event_batch_destroy (struct event_batch *batch)
     }
 }
 
-struct event_batch *event_batch_create (struct event *event)
+static struct event_batch *event_batch_create (struct event *event)
 {
     struct event_batch *batch;
 
@@ -270,7 +270,7 @@ struct event_batch *event_batch_create (struct event *event)
 /* Create a new "batch" if there is none.
  * No-op if batch already started.
  */
-int event_batch_start (struct event *event)
+static int event_batch_start (struct event *event)
 {
     if (!event->batch) {
         if (!(event->batch = event_batch_create (event)))
@@ -435,10 +435,10 @@ int event_job_action (struct event *event, struct job *job)
     return 0;
 }
 
-int event_submit_context_decode (json_t *context,
-                                 int *priority,
-                                 uint32_t *userid,
-                                 int *flags)
+static int event_submit_context_decode (json_t *context,
+                                        int *priority,
+                                        uint32_t *userid,
+                                        int *flags)
 {
     if (json_unpack (context, "{ s:i s:i s:i }",
                      "priority", priority,
@@ -451,8 +451,8 @@ int event_submit_context_decode (json_t *context,
     return 0;
 }
 
-int event_priority_context_decode (json_t *context,
-                                   int *priority)
+static int event_priority_context_decode (json_t *context,
+                                          int *priority)
 {
     if (json_unpack (context, "{ s:i }", "priority", priority) < 0) {
         errno = EPROTO;
@@ -462,8 +462,8 @@ int event_priority_context_decode (json_t *context,
     return 0;
 }
 
-int event_exception_context_decode (json_t *context,
-                                    int *severity)
+static int event_exception_context_decode (json_t *context,
+                                           int *severity)
 {
     if (json_unpack (context, "{ s:i }", "severity", severity) < 0) {
         errno = EPROTO;
@@ -473,8 +473,8 @@ int event_exception_context_decode (json_t *context,
     return 0;
 }
 
-int event_release_context_decode (json_t *context,
-                                  int *final)
+static int event_release_context_decode (json_t *context,
+                                         int *final)
 {
     *final = 0;
 
@@ -740,10 +740,10 @@ error:
     return NULL;
 }
 
-void events_handle_request (flux_t *h,
-                            flux_msg_handler_t *mh,
-                            const flux_msg_t *msg,
-                            void *arg)
+static void events_handle_request (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     struct job_manager *ctx = arg;
     struct event *event = ctx->event;
@@ -782,7 +782,7 @@ void events_handle_request (flux_t *h,
         errno = ENOMEM;
         goto error;
     }
-    zlist_freefn (event->listeners, el, events_listener_destroy, false);
+    zlist_freefn (event->listeners, el, events_listener_destroy, true);
 
     return;
 
@@ -809,8 +809,8 @@ static bool match_events_listener (struct events_listener *el,
     return found;
 }
 
-void events_cancel_request (flux_t *h, flux_msg_handler_t *mh,
-                            const flux_msg_t *msg, void *arg)
+static void events_cancel_request (flux_t *h, flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg, void *arg)
 {
     struct job_manager *ctx = arg;
     struct event *event = ctx->event;

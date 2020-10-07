@@ -225,7 +225,7 @@ static struct info_ctx *info_ctx_create (flux_t *h)
         goto error;
     if (!(ctx->guest_watchers = zlist_new ()))
         goto error;
-    if (!(ctx->jsctx = job_state_create (h)))
+    if (!(ctx->jsctx = job_state_create (ctx)))
         goto error;
     if (idsync_setup (ctx) < 0)
         goto error;
