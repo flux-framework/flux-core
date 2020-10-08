@@ -41,6 +41,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libeventlog/libeventlog.la \
 	$(builddir)/libioencode/libioencode.la \
 	$(builddir)/librouter/librouter.la \
+	$(builddir)/libhostlist/libhostlist.la \
 	$(JANSSON_LIBS) \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
