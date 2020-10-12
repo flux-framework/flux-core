@@ -114,7 +114,8 @@ static void disconnect_cb (flux_t *h,
 {
     struct resource_ctx *ctx = arg;
 
-    acquire_disconnect (ctx->acquire, msg);
+    if (ctx->acquire)
+        acquire_disconnect (ctx->acquire, msg);
 }
 
 static void resource_ctx_destroy (struct resource_ctx *ctx)
