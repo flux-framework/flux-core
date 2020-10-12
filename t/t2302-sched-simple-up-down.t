@@ -22,7 +22,7 @@ check_resource()
 	local name="$1"
 	local state="$2"
 	local expected="$3"
-	local result=$(flux resource list --state=$state -no {$name})
+	local result="$(flux resource list --state=$state -no {$name})"
 	echo "# check $name in $state is $expected (got $result)"
 	test "$result" = "$expected"
 }
