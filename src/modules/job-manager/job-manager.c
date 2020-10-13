@@ -28,6 +28,7 @@
 #include "drain.h"
 #include "wait.h"
 #include "annotate.h"
+#include "journal.h"
 
 #include "job-manager.h"
 
@@ -58,17 +59,17 @@ void disconnect_rpc (flux_t *h,
                      void *arg)
 {
     wait_disconnect_rpc (h, mh, msg, arg);
-    event_listeners_disconnect_rpc (h, mh, msg, arg);
+    journal_listeners_disconnect_rpc (h, mh, msg, arg);
 }
 
 static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct job_manager *ctx = arg;
-    int events_listeners = event_listeners_count (ctx->event);
+    int journal_listeners = journal_listeners_count (ctx->journal);
     if (flux_respond_pack (h, msg, "{s:{s:i}}",
                            "events",
-                             "listeners", events_listeners) < 0) {
+                             "listeners", journal_listeners) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -166,6 +167,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating annotate interface");
         goto done;
     }
+    if (!(ctx.journal = journal_ctx_create (&ctx))) {
+        flux_log_error (h, "error creating journal interface");
+        goto done;
+    }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
         flux_log_error (h, "flux_msghandler_add");
         goto done;
@@ -185,6 +190,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (ctx.handlers);
+    journal_ctx_destroy (ctx.journal);
     annotate_ctx_destroy (ctx.annotate);
     kill_ctx_destroy (ctx.kill);
     raise_ctx_destroy (ctx.raise);
