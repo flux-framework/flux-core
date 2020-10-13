@@ -108,7 +108,7 @@ TESTSCRIPTS = \
 	t2207-job-manager-wait.t \
 	t2208-queue-cmd.t \
 	t2210-job-manager-bugs.t \
-	t2211-job-manager-events.t \
+	t2211-job-manager-events-journal.t \
 	t2220-job-archive.t \
 	t2230-job-info-list.t \
 	t2231-job-info-lookup.t \
@@ -275,7 +275,7 @@ check_PROGRAMS = \
 	rexec/rexec_count_stdout \
 	rexec/rexec_getline \
 	job-manager/list-jobs \
-	job-manager/event_stream \
+	job-manager/events_journal_stream \
 	ingest/submitbench \
 	sched-simple/jj-reader \
 	shell/rcalc \
@@ -542,9 +542,9 @@ job_manager_list_jobs_CPPFLAGS = $(test_cppflags)
 job_manager_list_jobs_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
-job_manager_event_stream_SOURCES = job-manager/event_stream.c
-job_manager_event_stream_CPPFLAGS = $(test_cppflags)
-job_manager_event_stream_LDADD = \
+job_manager_events_journal_stream_SOURCES = job-manager/events_journal_stream.c
+job_manager_events_journal_stream_CPPFLAGS = $(test_cppflags)
+job_manager_events_journal_stream_LDADD = \
 	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 job_manager_sched_dummy_la_SOURCES = job-manager/sched-dummy.c

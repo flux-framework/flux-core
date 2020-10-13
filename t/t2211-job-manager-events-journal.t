@@ -1,24 +1,24 @@
 #!/bin/sh
 
-test_description='Test flux job manager events service'
+test_description='Test flux job manager journal service'
 
 . $(dirname $0)/sharness.sh
 
 export FLUX_CONF_DIR=$(pwd)
 
-# set events_journal_maxlen to something more sensible in testing,
-# otherwise we'll be parsing 100s of entries regularly.  50 is a good
-# number, since it will always cover the prior 4 jobs that were
+# set events_maxlen to something more sensible in testing,
+# otherwise we'll be parsing 100s of entries regularly.  20 is a good
+# number, since it will always cover the prior two jobs that were
 # executed.
 cat >job-manager.toml <<EOF
 [job-manager]
-events_journal_maxlen = 50
+events_maxlen = 50
 EOF
 
 test_under_flux 4
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
-EVENT_STREAM=${FLUX_BUILD_DIR}/t/job-manager/event_stream
+EVENTS_JOURNAL_STREAM=${FLUX_BUILD_DIR}/t/job-manager/events_journal_stream
 
 flux setattr log-stderr-level 1
 
@@ -90,9 +90,9 @@ wait_event_annotation() {
         wait_event ${jobid} .entry.context.annotations.user.${key} ${value} ${filename}
 }
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with no filters shows all events' '
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal w/ no filters shows all events' '
         $jq -j -c -n "{}" \
-          | $EVENT_STREAM > events1.out &
+          | $EVENTS_JOURNAL_STREAM > events1.out &
         pid=$! &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events1.out &&
@@ -108,9 +108,9 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with no filters s
         wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow works' '
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal allow works' '
         $jq -j -c -n "{allow:{clean:1}}" \
-          | $EVENT_STREAM > events2.out &
+          | $EVENTS_JOURNAL_STREAM > events2.out &
         pid=$! &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events2.out &&
@@ -126,9 +126,9 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow works'
         wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow works (multiple)' '
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal allow works (multiple)' '
         $jq -j -c -n "{allow:{depend:1, finish:1, clean:1}}" \
-          | $EVENT_STREAM > events3.out &
+          | $EVENTS_JOURNAL_STREAM > events3.out &
         pid=$! &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events3.out &&
@@ -144,9 +144,9 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow works 
         wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with deny works' '
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal deny works' '
         $jq -j -c -n "{deny:{finish:1}}" \
-          | $EVENT_STREAM > events4.out &
+          | $EVENTS_JOURNAL_STREAM > events4.out &
         pid=$! &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events4.out &&
@@ -162,9 +162,9 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with deny works' 
         wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with deny works (multiple)' '
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal deny works (multiple)' '
         $jq -j -c -n "{deny:{depend:1, finish:1, release:1}}" \
-          | $EVENT_STREAM > events5.out &
+          | $EVENTS_JOURNAL_STREAM > events5.out &
         pid=$! &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events5.out &&
@@ -180,9 +180,9 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with deny works (
         wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow & deny works' '
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal allow & deny works' '
         $jq -j -c -n "{allow:{depend:1, finish:1, clean:1}, deny:{depend:1}}" \
-          | $EVENT_STREAM > events6.out &
+          | $EVENTS_JOURNAL_STREAM > events6.out &
         pid=$! &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events6.out &&
@@ -198,13 +198,13 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow & deny
         wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events journaling works' '
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal contains older jobs' '
         jobid1=`flux job submit basic.json | flux job id`
         jobid2=`flux job submit basic.json | flux job id`
         flux job wait-event ${jobid1} clean
         flux job wait-event ${jobid2} clean
         $jq -j -c -n "{allow:{depend:1, clean:1}}" \
-          | $EVENT_STREAM > events7.out &
+          | $EVENTS_JOURNAL_STREAM > events7.out &
         pid=$! &&
         jobid3=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid3} clean events7.out &&
@@ -236,9 +236,9 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events journaling works'
         wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events works with annotations' '
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal works with annotations' '
         $jq -j -c -n "{allow:{annotations:1, clean:1}}" \
-          | $EVENT_STREAM > events8.out &
+          | $EVENTS_JOURNAL_STREAM > events8.out &
         pid=$! &&
         flux queue stop &&
         jobid=`flux job submit basic.json | flux job id` &&
@@ -266,10 +266,10 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events works with annota
         wait $pid
 '
 
-test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events journaling works with annotations' '
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events-journal works with annotations (older jobs)' '
         jobid1=`cat annotation_job1.id`
         $jq -j -c -n "{allow:{annotations:1, clean:1}}" \
-          | $EVENT_STREAM > events9.out &
+          | $EVENTS_JOURNAL_STREAM > events9.out &
         pid=$! &&
         flux queue stop &&
         jobid2=`flux job submit basic.json | flux job id` &&
@@ -324,7 +324,7 @@ check_event_name_eventlog_seq() {
 # annotations event below comes from sched-simple scheduler
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: eventlog seqs are correct' '
         $jq -j -c -n "{}" \
-          | $EVENT_STREAM > events9.out &
+          | $EVENTS_JOURNAL_STREAM > events9.out &
         pid=$! &&
         jobid=`flux job submit basic.json | flux job id` &&
         wait_event_name ${jobid} clean events9.out &&
@@ -340,24 +340,24 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: eventlog seqs are correc
         kill -s USR1 $pid &&
         wait $pid
 '
-test_expect_success 'job-manager: events request fails with EPROTO on empty payload' '
+test_expect_success 'job-manager: events-journal request fails with EPROTO on empty payload' '
         $RPC job-manager.events-journal 71 < /dev/null
 '
 
-test_expect_success HAVE_JQ 'job-manager: events request fails if not streaming RPC' '
+test_expect_success HAVE_JQ 'job-manager: events-journal request fails if not streaming RPC' '
         $jq -j -c -n "{}" > cc1.in &&
         test_must_fail $RPC job-manager.events-journal < cc1.in
 '
 
-test_expect_success HAVE_JQ 'job-manager: events request fails if allow not an object' '
+test_expect_success HAVE_JQ 'job-manager: events-journal request fails if allow not an object' '
         $jq -j -c -n "{allow:5}" > cc2.in &&
-        test_must_fail $EVENT_STREAM < cc2.in 2> cc2.err &&
+        test_must_fail $EVENTS_JOURNAL_STREAM < cc2.in 2> cc2.err &&
         grep "allow should be an object" cc2.err
 '
 
-test_expect_success HAVE_JQ 'job-manager: events request fails if deny not an object' '
+test_expect_success HAVE_JQ 'job-manager: events-journal request fails if deny not an object' '
         $jq -j -c -n "{deny:5}" > cc3.in &&
-        test_must_fail $EVENT_STREAM < cc3.in 2> cc3.err &&
+        test_must_fail $EVENTS_JOURNAL_STREAM < cc3.in 2> cc3.err &&
         grep "deny should be an object" cc3.err
 '
 

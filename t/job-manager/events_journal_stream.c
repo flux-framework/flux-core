@@ -45,7 +45,7 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_open");
 
     if (argc != 1) {
-        fprintf (stderr, "Usage: event_stream <payload\n");
+        fprintf (stderr, "Usage: events_journal_stream <payload\n");
         exit (1);
     }
 
