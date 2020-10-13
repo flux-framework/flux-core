@@ -207,7 +207,7 @@ struct job_state_ctx *job_state_create (struct info_ctx *ctx)
     }
 
     if (!(jsctx->events = flux_rpc_pack (jsctx->h,
-                                         "job-manager.events",
+                                         "job-manager.events-journal",
                                          FLUX_NODEID_ANY,
                                          FLUX_RPC_STREAMING,
                                          "{s:{s:i s:i}}",

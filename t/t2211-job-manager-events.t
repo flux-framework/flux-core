@@ -341,12 +341,12 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: eventlog seqs are correc
         wait $pid
 '
 test_expect_success 'job-manager: events request fails with EPROTO on empty payload' '
-        $RPC job-manager.events 71 < /dev/null
+        $RPC job-manager.events-journal 71 < /dev/null
 '
 
 test_expect_success HAVE_JQ 'job-manager: events request fails if not streaming RPC' '
         $jq -j -c -n "{}" > cc1.in &&
-        test_must_fail $RPC job-manager.events < cc1.in
+        test_must_fail $RPC job-manager.events-journal < cc1.in
 '
 
 test_expect_success HAVE_JQ 'job-manager: events request fails if allow not an object' '

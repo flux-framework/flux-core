@@ -379,13 +379,13 @@ void journal_ctx_destroy (struct journal *journal)
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
-        "job-manager.events",
+        "job-manager.events-journal",
         journal_handle_request,
         0
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "job-manager.events-cancel",
+        "job-manager.events-journal-cancel",
         journal_cancel_request,
         0
     },
