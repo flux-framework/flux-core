@@ -116,7 +116,7 @@ error:
  * We instead re-create the event and run it directly through
  * event_job_update() and event_job_action().
  */
-int submit_post_event (struct event *event, struct job *job)
+static int submit_post_event (struct event *event, struct job *job)
 {
     json_t *entry = NULL;
     int rv = -1;

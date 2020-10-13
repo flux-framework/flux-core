@@ -26,7 +26,6 @@ void submit_ctx_destroy (struct submit *submit);
 int submit_add_one_job (zhashx_t *active_jobs, zlist_t *newjobs, json_t *o);
 void submit_add_jobs_cleanup (zhashx_t *active_jobs, zlist_t *newjobs);
 zlist_t *submit_add_jobs (zhashx_t *active_jobs, json_t *jobs);
-int submit_post_event (struct event *event, struct job *job);
 
 #endif /* ! _FLUX_JOB_MANAGER_SUBMIT_H */
 
