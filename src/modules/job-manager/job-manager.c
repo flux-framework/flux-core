@@ -68,7 +68,7 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     struct job_manager *ctx = arg;
     int journal_listeners = journal_listeners_count (ctx->journal);
     if (flux_respond_pack (h, msg, "{s:{s:i}}",
-                           "events",
+                           "journal",
                              "listeners", journal_listeners) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
