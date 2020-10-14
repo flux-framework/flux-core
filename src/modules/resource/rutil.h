@@ -18,10 +18,6 @@
 int rutil_idset_sub (struct idset *ids1, const struct idset *ids2);
 int rutil_idset_add (struct idset *ids1, const struct idset *ids2);
 
-/* Same as above but ids2 is in string-encoded form.
- */
-int rutil_idset_decode_add (struct idset *ids1, const char *s);
-
 /* Compare 'old_set' to 'new_set'.
  * Create '*add' for ids in new_set but not in old_set (sets NULL if n/a).
  * Create '*sub' for ids in old_set but not in new_set (sets NULL if n/a).
@@ -38,6 +34,10 @@ struct idset *rutil_idset_from_resobj (const json_t *resobj);
 /* Clear any ranks from resource object keys that are present in 'ids'.
  */
 json_t *rutil_resobj_sub (const json_t *resobj, const struct idset *ids);
+
+/* Check whether id is a member of encoded idset
+ */
+bool rutil_idset_decode_test (const char *idset, unsigned long id);
 
 /* Set key=val in a json object, where val is the string
  * representation of 'ids', or the empty string if 'ids' is NULL.

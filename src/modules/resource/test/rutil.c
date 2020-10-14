@@ -136,27 +136,6 @@ void test_idset_add (void)
     idset_destroy (ids2);
 }
 
-void test_idset_decode_add (void)
-{
-    struct idset *ids1;
-
-    if (!(ids1 = idset_create (1024, 0)))
-        BAIL_OUT ("idset_create failed");
-
-    errno = 0;
-    ok (rutil_idset_decode_add (NULL, "0") < 0 && errno == EINVAL,
-        "rutil_idset_decode_add ids1=NULL fails with EINVAL");
-    errno = 0;
-    ok (rutil_idset_decode_add (ids1, NULL) < 0 && errno == EINVAL,
-        "rutil_idset_decode_add s=NULL fails with EINVAL");
-    ok (rutil_idset_decode_add (ids1, "0") == 0 && idset_count (ids1) == 1,
-        "rutil_idset_decode_add s=0 works");
-    ok (rutil_idset_decode_add (ids1, "1") == 0 && idset_count (ids1) == 2,
-        "rutil_idset_decode_add s=1 works");
-
-    idset_destroy (ids1);
-}
-
 void test_idset_diff (void)
 {
     struct idset *ids1;
@@ -364,6 +343,17 @@ void test_resobj_sub (void)
     json_decref (resobj1);
 }
 
+void test_idset_decode_test (void)
+{
+    ok (rutil_idset_decode_test (NULL, 0) == false,
+        "rutil_idset_decode_test idset=NULL returns false");
+    ok (rutil_idset_decode_test ("", 0) == false,
+        "rutil_idset_decode_test idset=\"\" id=0 returns false");
+    ok (rutil_idset_decode_test ("0", 0) == true,
+        "rutil_idset_decode_test idset=\"0\" id=0 returns true");
+    ok (rutil_idset_decode_test ("0", 1) == false,
+        "rutil_idset_decode_test idset=\"0\" id=1 returns false");
+}
 
 int main (int argc, char *argv[])
 {
@@ -372,11 +362,11 @@ int main (int argc, char *argv[])
     test_match_request_sender ();
     test_idset_sub ();
     test_idset_add ();
-    test_idset_decode_add ();
     test_idset_diff ();
     test_set_json_idset ();
     test_idset_from_resobj ();
     test_resobj_sub ();
+    test_idset_decode_test ();
 
     done_testing ();
     return (0);

@@ -57,18 +57,6 @@ int rutil_idset_add (struct idset *ids1, const struct idset *ids2)
     return 0;
 }
 
-int rutil_idset_decode_add (struct idset *ids1, const char *s)
-{
-    struct idset *ids2;
-    int rc;
-
-    if (!(ids2 = idset_decode (s)))
-        return -1;
-    rc = rutil_idset_add (ids1, ids2);
-    idset_destroy (ids2);
-    return rc;
-}
-
 int rutil_idset_diff (const struct idset *ids1,
                       const struct idset *ids2,
                       struct idset **addp,
@@ -213,6 +201,17 @@ error:
     return NULL;
 }
 
+bool rutil_idset_decode_test (const char *idset, unsigned long id)
+{
+    struct idset *ids;
+    bool result;
+
+    if (!(ids = idset_decode (idset)))
+        return false;
+    result = idset_test (ids, id);
+    idset_destroy (ids);
+    return result;
+}
 
 bool rutil_match_request_sender (const flux_msg_t *msg1,
                                  const flux_msg_t *msg2)
