@@ -15,7 +15,7 @@ flux kvs put resource.R="\$(flux R encode -r\$RANKS -c0-15)"
 flux kvs get resource.R
 
 flux module remove sched-simple
-flux module reload resource monitor-force-up
+flux module reload resource monitor-force-up noverify
 flux module load sched-simple
 
 flux dmesg | grep 'sched-simple.*ready'  | tail -1

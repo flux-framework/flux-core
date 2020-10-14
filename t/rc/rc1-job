@@ -42,7 +42,7 @@ if test $RANK -eq 0; then
     # Set fake resources for testing
     set_fake_resources ${TEST_UNDER_FLUX_CORES_PER_RANK:-2}
 fi
-modload all resource
+modload all resource noverify
 
 modload 0 job-exec
 

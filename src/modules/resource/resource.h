@@ -16,7 +16,7 @@ struct resource_ctx {
     flux_msg_handler_t **handlers;
     struct inventory *inventory;
     struct monitor *monitor;
-    struct discover *discover;
+    struct topo *topology;
     struct drain *drain;
     struct exclude *exclude;
     struct acquire *acquire;

@@ -48,7 +48,7 @@ test_expect_success 'sched-simple: load default resource.R' '
 '
 test_expect_success 'sched-simple: reload sched-simple' '
 	flux module unload sched-simple &&
-	flux module reload resource monitor-force-up &&
+	flux module reload resource monitor-force-up noverify &&
 	flux module load sched-simple &&
 	flux dmesg 2>&1 >reload.dmesg.log &&
 	grep "ready:.*rank\[0-1\]/core\[0-1\]" reload.dmesg.log &&
@@ -160,7 +160,7 @@ test_expect_success 'sched-simple: reload in first-fit mode' '
         flux module remove sched-simple &&
         flux module remove resource &&
 	flux kvs put resource.R="$(cat R.test.first_fit)" &&
-	flux module load resource monitor-force-up &&
+	flux module load resource monitor-force-up noverify &&
         flux module load sched-simple mode=first-fit &&
 	flux dmesg | grep "ready:.*rank0/core\[0-1\] rank1/core0"
 '

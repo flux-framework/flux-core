@@ -11,12 +11,9 @@
 #ifndef _FLUX_RESOURCE_MONITOR_H
 #define _FLUX_RESOURCE_MONITOR_H
 
-typedef void (*monitor_cb_f)(struct monitor *monitor, void *arg);
-
 struct monitor *monitor_create (struct resource_ctx *ctx,
                                 bool monitor_force_up);
 void monitor_destroy (struct monitor *monitor);
-void monitor_set_callback (struct monitor *monitor, monitor_cb_f cb, void *arg);
 
 const struct idset *monitor_get_down (struct monitor *monitor);
 const struct idset *monitor_get_up (struct monitor *monitor);

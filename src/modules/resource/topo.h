@@ -8,12 +8,16 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef HAVE_RESOURCE_HWLOC_H
-#define HAVE_RESOURCE_HWLOC_H 1
+#ifndef _FLUX_RESOURCE_TOPO_H
+#define _FLUX_RESOURCE_TOPO_H
 
-#include <hwloc.h>
+struct topo *topo_create (struct resource_ctx *ctx, bool no_verify);
+void topo_destroy (struct topo *topo);
 
-/* free result with hwloc_free_xmlbuffer() */
-char *xml_topology_get (hwloc_topology_t topo);
 
-#endif /* !HAVE_RESOURCE_HWLOC_H */
+#endif /* !_FLUX_RESOURCE_TOPO_H */
+
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */

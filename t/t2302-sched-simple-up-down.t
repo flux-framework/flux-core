@@ -45,7 +45,7 @@ test_expect_success 'sched-simple: load default resource.R' '
 '
 test_expect_success 'sched-simple: reload sched-simple' '
 	flux module unload sched-simple &&
-	flux module reload resource monitor-force-up &&
+	flux module reload resource monitor-force-up noverify &&
 	flux module load sched-simple &&
 	flux dmesg 2>&1 >reload.dmesg.log &&
 	test_debug "grep sched-simple reload.dmesg.log" &&

@@ -25,7 +25,7 @@
 #include "resource.h"
 #include "inventory.h"
 #include "reslog.h"
-#include "discover.h"
+#include "topo.h"
 #include "monitor.h"
 #include "drain.h"
 #include "exclude.h"
@@ -156,7 +156,7 @@ static void resource_ctx_destroy (struct resource_ctx *ctx)
         int saved_errno = errno;
         acquire_destroy (ctx->acquire);
         drain_destroy (ctx->drain);
-        discover_destroy (ctx->discover);
+        topo_destroy (ctx->topology);
         monitor_destroy (ctx->monitor);
         exclude_destroy (ctx->exclude);
         reslog_destroy (ctx->reslog);
@@ -193,7 +193,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-/* Post 'resource-init' event that summarizes the current discover, monitor,
+/* Post 'resource-init' event that summarizes the current monitor,
  * drain, and exclude state.  For replay purposes, all events prior to the
  * most recent 'resource-init' can be ignored.
  */
@@ -201,11 +201,7 @@ int post_restart_event (struct resource_ctx *ctx, int restart)
 {
     json_t *o;
 
-    if (!(o = json_pack ("{s:b s:b}",
-                         "restart",
-                         restart,
-                         "hwloc-discover",
-                         discover_get (ctx->discover) ? 1 : 0)))
+    if (!(o = json_pack ("{s:b}", "restart", restart)))
         goto nomem;
     if (rutil_set_json_idset (o, "online", monitor_get_up (ctx->monitor)) < 0)
         goto error;
@@ -293,7 +289,8 @@ error:
 int parse_args (flux_t *h,
                 int argc,
                 char **argv,
-                bool *monitor_force_up)
+                bool *monitor_force_up,
+                bool *noverify)
 {
     int i;
     for (i = 0; i < argc; i++) {
@@ -302,6 +299,8 @@ int parse_args (flux_t *h,
          */
         if (!strcmp (argv[i], "monitor-force-up"))
             *monitor_force_up = true;
+        else if (!strcmp (argv[i], "noverify"))
+            *noverify = true;
         else  {
             flux_log (h, LOG_ERR, "unknown option: %s", argv[i]);
             errno = EINVAL;
@@ -319,11 +318,12 @@ int mod_main (flux_t *h, int argc, char **argv)
     const char *exclude_idset;
     json_t *eventlog = NULL;
     bool monitor_force_up = false;
+    bool noverify = false;
     json_t *R_from_config;
 
     if (!(ctx = resource_ctx_create (h)))
         goto error;
-    if (parse_args (h, argc, argv, &monitor_force_up) < 0)
+    if (parse_args (h, argc, argv, &monitor_force_up, &noverify) < 0)
         goto error;
     if (flux_get_size (h, &ctx->size) < 0)
         goto error;
@@ -343,16 +343,16 @@ int mod_main (flux_t *h, int argc, char **argv)
             goto error;
         if (reload_eventlog (h, &eventlog) < 0)
             goto error;
+        if (!(ctx->drain = drain_create (ctx, eventlog)))
+            goto error;
     }
     if (!(ctx->inventory = inventory_create (ctx, R_from_config)))
+        goto error;
+    if (!(ctx->topology = topo_create (ctx, noverify)))
         goto error;
     if (!(ctx->monitor = monitor_create (ctx, monitor_force_up)))
         goto error;
     if (ctx->rank == 0) {
-        if (!(ctx->discover = discover_create (ctx))) // uses monitor
-            goto error;
-        if (!(ctx->drain = drain_create (ctx, eventlog)))
-            goto error;
         if (!(ctx->acquire = acquire_create (ctx)))
             goto error;
         if (!(ctx->exclude = exclude_create (ctx, exclude_idset)))

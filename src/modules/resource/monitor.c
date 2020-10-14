@@ -56,8 +56,6 @@ struct monitor {
 
     flux_msg_handler_t **handlers;
 
-    monitor_cb_f cb;
-    void *cb_arg;
     struct idset *down; // cached result of monitor_get_down()
 };
 
@@ -84,12 +82,6 @@ const struct idset *monitor_get_down (struct monitor *monitor)
             (void)idset_set (monitor->down, id);
     }
     return monitor->down;
-}
-
-void monitor_set_callback (struct monitor *monitor, monitor_cb_f cb, void *arg)
-{
-    monitor->cb = cb;
-    monitor->cb_arg = arg;
 }
 
 static void batch_destroy (struct batch *batch)
@@ -171,8 +163,6 @@ static int batch_timeout_leader (struct monitor *monitor)
             flux_log_error (h, "monitor-batch: error posting offline event");
             goto done;
         }
-        if (monitor->cb)
-            monitor->cb (monitor, monitor->cb_arg);
     }
     rc = 0;
 done:

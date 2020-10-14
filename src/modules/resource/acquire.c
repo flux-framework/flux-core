@@ -63,7 +63,6 @@
 #include "resource.h"
 #include "reslog.h"
 #include "inventory.h"
-#include "discover.h"
 #include "exclude.h"
 #include "drain.h"
 #include "acquire.h"

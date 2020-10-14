@@ -22,8 +22,8 @@ resource_la_SOURCES = \
 	resource.h \
 	monitor.c \
 	monitor.h \
-	discover.c \
-	discover.h \
+	topo.c \
+	topo.h \
 	drain.c \
 	drain.h \
 	exclude.c \
@@ -32,8 +32,6 @@ resource_la_SOURCES = \
 	reslog.h \
 	acquire.c \
 	acquire.h \
-	rhwloc.c \
-	rhwloc.h \
 	inventory.c \
 	inventory.h \
 	rutil.c \
