@@ -18,6 +18,7 @@ import math
 import argparse
 import traceback
 import signal
+import threading
 from datetime import timedelta
 from string import Formatter
 
@@ -63,10 +64,13 @@ def interruptible(func):
     """
 
     def func_wrapper(calling_obj, *args, **kwargs):
-        handler = signal.getsignal(signal.SIGINT)
-        signal.signal(signal.SIGINT, signal.SIG_DFL)
+        # python only allows `signal.signal` calls in the main thread
+        if threading.current_thread() is threading.main_thread():
+            handler = signal.getsignal(signal.SIGINT)
+            signal.signal(signal.SIGINT, signal.SIG_DFL)
         retval = func(calling_obj, *args, **kwargs)
-        signal.signal(signal.SIGINT, handler)
+        if threading.current_thread() is threading.main_thread():
+            signal.signal(signal.SIGINT, handler)
         return retval
 
     return func_wrapper
