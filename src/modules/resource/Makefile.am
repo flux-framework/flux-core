@@ -34,6 +34,8 @@ resource_la_SOURCES = \
 	acquire.h \
 	rhwloc.c \
 	rhwloc.h \
+	inventory.c \
+	inventory.h \
 	rutil.c \
 	rutil.h
 
@@ -53,7 +55,9 @@ test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libtap/libtap.la \
-        $(ZMQ_LIBS) $(LIBPTHREAD)
+        $(ZMQ_LIBS) \
+	$(HWLOC_LIBS) \
+	$(LIBPTHREAD)
 
 test_ldflags = \
         -no-install

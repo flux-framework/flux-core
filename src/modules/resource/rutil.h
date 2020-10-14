@@ -27,14 +27,6 @@ int rutil_idset_diff (const struct idset *old_set,
                       struct idset **add,
                       struct idset **sub);
 
-/* Compute an idset that combines all the valid ranks in a resource object.
- */
-struct idset *rutil_idset_from_resobj (const json_t *resobj);
-
-/* Clear any ranks from resource object keys that are present in 'ids'.
- */
-json_t *rutil_resobj_sub (const json_t *resobj, const struct idset *ids);
-
 /* Check whether id is a member of encoded idset
  */
 bool rutil_idset_decode_test (const char *idset, unsigned long id);

@@ -466,8 +466,8 @@ static int ss_acquire_resources (flux_t *h, struct simple_sched *ss)
 {
     int rc = -1;
     flux_future_t *f = NULL;
-    json_t *o;
-    char *by_rank = NULL;
+    json_t *R;
+    json_error_t e;
 
     if (!(f = flux_rpc (h, "resource.acquire",
                         NULL,
@@ -477,17 +477,13 @@ static int ss_acquire_resources (flux_t *h, struct simple_sched *ss)
         goto out;
     }
     ss->acquire_f = f;
-    if (flux_rpc_get_unpack (f, "{s:o}", "resources", &o) < 0) {
+    if (flux_rpc_get_unpack (f, "{s:o}", "resources", &R) < 0) {
         flux_log (h, LOG_ERR, "resource.acquire failed: %s",
                   future_strerror (f, errno));
         goto out;
     }
-    if (!(by_rank = json_dumps (o, JSON_COMPACT))) {
-        flux_log_error (h, "json_dumps (by_rank)");
-        goto out;
-    }
-    if (!(ss->rlist = rlist_from_hwloc_by_rank (by_rank, ss->sched_pus))) {
-        flux_log_error (h, "rank_list_create");
+    if (!(ss->rlist = rlist_from_json (R, &e))) {
+        flux_log_error (h, "rlist_from_json: %s", e.text);
         goto out;
     }
 
@@ -512,7 +508,6 @@ static int ss_acquire_resources (flux_t *h, struct simple_sched *ss)
     }
     rc = 0;
 out:
-    free (by_rank);
     return rc;
 }
 

@@ -8,15 +8,13 @@ idset_from_count() {
     fi
 }
 
-set_fake_hwloc_by_rank() {
+set_fake_resources() {
     cores=${1}
     ranklist=$(idset_from_count $(flux getattr size))
     corelist=$(idset_from_count ${cores})
-    by_rank="{\"${ranklist}\":{\"Core\":${cores},\"coreids\":\"${corelist}\"}}"
-    echo Setting fake by_rank="${by_rank}" >&2
-    flux kvs put resource.hwloc.by_rank="${by_rank}"
-    flux kvs eventlog append resource.eventlog \
-        hwloc-discover-finish "{\"loaded\":true}"
+    R=$(flux R encode -r${ranklist} -c${corelist})
+    echo Setting fake resource.R="$R" >&2
+    flux kvs put resource.R="$R"
 }
 
 RANK=$(flux getattr rank)
@@ -41,8 +39,8 @@ modload 0 job-info
 modload all barrier
 
 if test $RANK -eq 0; then
-    # Load a fake resource.hwloc.by_rank key for sched-simple
-    set_fake_hwloc_by_rank ${TEST_UNDER_FLUX_CORES_PER_RANK:-2}
+    # Set fake resources for testing
+    set_fake_resources ${TEST_UNDER_FLUX_CORES_PER_RANK:-2}
 fi
 modload all resource
 

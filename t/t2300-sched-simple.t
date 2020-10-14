@@ -10,8 +10,10 @@ test_under_flux 4 job
 
 query="flux resource list --state=free -no {rlist}"
 
-hwloc_by_rank='{"0-1": {"Core": 2, "cpuset":"0-3", "coreids":"0-1" }}'
-hwloc_by_rank_first_fit='{"0": {"Core": 2}, "1": {"Core": 1}}'
+flux R encode -r0-1 -c0-1 >R.test
+
+(flux R encode -r0 -c0-1 && flux R encode -r1 -c0) | flux R append \
+	>R.test.first_fit
 
 
 SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
@@ -40,9 +42,9 @@ test_expect_success 'sched-simple: reload ingest module with lax validator' '
 test_expect_success 'sched-simple: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
-test_expect_success 'sched-simple: load default by_rank' '
-	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank)" &&
-	flux kvs get resource.hwloc.by_rank
+test_expect_success 'sched-simple: load default resource.R' '
+	flux kvs put resource.R="$(cat R.test)" &&
+	flux kvs get resource.R
 '
 test_expect_success 'sched-simple: reload sched-simple' '
 	flux module unload sched-simple &&
@@ -157,7 +159,7 @@ test_expect_success 'sched-simple: PUs now treated as cores' '
 test_expect_success 'sched-simple: reload in first-fit mode' '
         flux module remove sched-simple &&
         flux module remove resource &&
-	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank_first_fit)" &&
+	flux kvs put resource.R="$(cat R.test.first_fit)" &&
 	flux module load resource monitor-force-up &&
         flux module load sched-simple mode=first-fit &&
 	flux dmesg | grep "ready:.*rank0/core\[0-1\] rank1/core0"

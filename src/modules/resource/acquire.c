@@ -38,15 +38,7 @@
  *
  * RESOURCE OBJECT
  *
- * The hwloc.by_rank object format is used as a placeholder until
- * design work on a proper format is completed.  by_rank is a JSON object
- * whose top-level keys are idsets, and values are objects containing a
- * a flat hwloc inventory, e.g.
- *  {"[0-3]": {"Package": 1, "Core": 2, "PU": 2, "cpuset": "0-1"}}
- *
- * N.B. A scheduler that needs more inventory/hierarchy information than
- * is present in the by_rank inventories MAY fetch resource.hwloc.xml.<rank>
- * for each execution target listed in an idset key.
+ * The Rv1 format described in RFC 20 is used.
  *
  * LIMITATIONS
  *
@@ -65,10 +57,12 @@
 #include <flux/core.h>
 
 #include "src/common/libidset/idset.h"
+#include "src/common/librlist/rlist.h"
 #include "src/common/libutil/errno_safe.h"
 
 #include "resource.h"
 #include "reslog.h"
+#include "inventory.h"
 #include "discover.h"
 #include "exclude.h"
 #include "drain.h"
@@ -121,26 +115,43 @@ static struct acquire_request *acquire_request_create (struct acquire *acquire,
  * This may be called from acquire_cb() or reslog_cb().
  */
 static int acquire_request_init (struct acquire_request *ar,
-                                 const json_t *resobj)
+                                 json_t *resobj)
 {
     struct resource_ctx *ctx = ar->acquire->ctx;
+    const struct idset *exclude = exclude_get (ctx->exclude);
+    json_error_t e;
+    struct rlist *rl;
 
-    if (resobj == NULL) {
+    if (resobj == NULL || !(rl = rlist_from_json (resobj, &e))) {
         errno = EINVAL;
         return -1;
     }
-    ar->resources = rutil_resobj_sub (resobj, exclude_get (ctx->exclude));
-    if (!ar->resources)
-        return -1;
-    if (!(ar->valid = rutil_idset_from_resobj (ar->resources)))
-        return -1;
-    if (!(ar->up = idset_copy (ar->valid)))
-        return -1;
+    if (exclude && idset_count (exclude) > 0) {
+        (void)rlist_remove_ranks (rl, (struct idset *)exclude);
+        if (!(ar->resources = rlist_to_R (rl))) {
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+    else {
+        if (!(ar->resources = json_copy (resobj)))
+            goto nomem;
+    }
+    if (!(ar->valid = rlist_ranks (rl))) // excluded ranks are not valid
+        goto nomem;
+    if (!(ar->up = idset_copy (ar->valid))) // and up omits excluded ranks
+        goto error;
     if (rutil_idset_sub (ar->up, drain_get (ctx->drain)) < 0)
-        return -1;
+        goto error;
     if (rutil_idset_sub (ar->up, monitor_get_down (ctx->monitor)) < 0)
-        return -1;
+        goto error;
+    rlist_destroy (rl);
     return 0;
+nomem:
+    errno = ENOMEM;
+error:
+    rlist_destroy (rl);
+    return -1;
 }
 
 /* reslog_cb() says 'name' event occurred.
@@ -237,7 +248,7 @@ static void acquire_cb (flux_t *h,
 {
     struct acquire *acquire = arg;
     const char *errmsg = NULL;
-    const json_t *resobj;
+    json_t *resobj;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
@@ -247,8 +258,8 @@ static void acquire_cb (flux_t *h,
     }
     if (!(acquire->request = acquire_request_create (acquire, msg)))
         goto error;
-    if (!(resobj = discover_get (acquire->ctx->discover)))
-        return; // defer response until discover event
+    if (!(resobj = inventory_get (acquire->ctx->inventory)))
+        return; // defer response until resource-define event
 
     if (acquire_request_init (acquire->request, resobj) < 0) {
         acquire_request_destroy (acquire->request);
@@ -314,16 +325,16 @@ static void reslog_cb (struct reslog *reslog, const char *name, void *arg)
     struct acquire *acquire = arg;
     struct resource_ctx *ctx = acquire->ctx;
     const char *errmsg = NULL;
-    const json_t *resobj;
+    json_t *resobj;
 
     flux_log (ctx->h, LOG_DEBUG, "%s: %s event posted", __func__, name);
 
     if (!acquire->request)
         return;
 
-    if (!strcmp (name, "hwloc-discover-finish")) {
+    if (!strcmp (name, "resource-define")) {
         if (acquire->request->response_count == 0) {
-            if (!(resobj = discover_get (ctx->discover))) {
+            if (!(resobj = inventory_get (ctx->inventory))) {
                 errmsg = "resource discovery failed or interrupted";
                 errno = ENOENT;
                 goto error;
@@ -366,6 +377,13 @@ error:
         flux_log_error (ctx->h, "error responding to acquire request");
     acquire_request_destroy (acquire->request);
     acquire->request = NULL;
+}
+
+int acquire_clients (struct acquire *acquire)
+{
+    if (acquire->request != NULL)
+        return 1;
+    return 0;
 }
 
 static const struct flux_msg_handler_spec htab[] = {

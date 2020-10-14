@@ -11,8 +11,7 @@
 #ifndef _FLUX_RESOURCE_DISCOVER_H
 #define _FLUX_RESOURCE_DISCOVER_H
 
-struct discover *discover_create (struct resource_ctx *ctx,
-                                  const json_t *events);
+struct discover *discover_create (struct resource_ctx *ctx);
 void discover_destroy (struct discover *discover);
 
 /* Notify this module of a change in exec target availability.

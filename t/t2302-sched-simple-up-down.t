@@ -10,9 +10,7 @@ test_under_flux 4 job
 
 query="flux resource list --state=free -no {rlist}"
 
-
-hwloc_by_rank='{"0-1": {"Core": 4, "cpuset": "0-3", "coreids": "0-3"}}'
-
+flux R encode -r0-1 -c0-3 >R.test
 
 SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
 JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
@@ -41,9 +39,9 @@ test_expect_success 'sched-simple: reload ingest module with lax validator' '
 		validator-args="--schema,${SCHEMA}" \
 		validator=${JSONSCHEMA_VALIDATOR}
 '
-test_expect_success 'sched-simple: load default by_rank' '
-	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank)" &&
-	flux kvs get resource.hwloc.by_rank
+test_expect_success 'sched-simple: load default resource.R' '
+	flux kvs put resource.R="$(cat R.test)" &&
+	flux kvs get resource.R
 '
 test_expect_success 'sched-simple: reload sched-simple' '
 	flux module unload sched-simple &&

@@ -23,6 +23,7 @@
 #include "src/common/libeventlog/eventlog.h"
 
 #include "resource.h"
+#include "inventory.h"
 #include "reslog.h"
 #include "discover.h"
 #include "monitor.h"
@@ -35,20 +36,28 @@
  *
  * exclude = "idset"
  *   Exclude specified broker rank(s) from scheduling
+ *
+ * path = "/path"
+ *   Set path to resource object
  */
 static int parse_config (struct resource_ctx *ctx,
                          const flux_conf_t *conf,
                          const char **excludep,
+                         json_t **R,
                          char *errbuf,
                          int errbufsize)
 {
     flux_conf_error_t error;
     const char *exclude  = NULL;
+    const char *path = NULL;
+    json_t *o = NULL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?:{s?:s !}}",
+                          "{s?:{s?:s s?:s !}}",
                           "resource",
+                            "path",
+                            &path,
                             "exclude",
                             &exclude) < 0) {
         (void)snprintf (errbuf,
@@ -57,7 +66,25 @@ static int parse_config (struct resource_ctx *ctx,
                         error.errbuf);
         return -1;
     }
+    if (path) {
+        json_error_t e;
+
+        if (!(o = json_load_file (path, 0, &e))) {
+            (void)snprintf (errbuf,
+                            errbufsize,
+                            "%s: %s on line %d",
+                            e.source,
+                            e.text,
+                            e.line);
+            return -1;
+        }
+        if (!R)
+            json_decref (o);
+    }
+
     *excludep = exclude;
+    if (R)
+        *R = o;
     return 0;
 }
 
@@ -80,20 +107,25 @@ static void config_reload_cb (flux_t *h,
 
     if (flux_conf_reload_decode (msg, &conf) < 0)
         goto error;
-    if (parse_config (ctx, conf, &exclude, errbuf, sizeof (errbuf)) < 0) {
+    if (parse_config (ctx, conf, &exclude, NULL, errbuf, sizeof (errbuf)) < 0) {
         errstr = errbuf;
         goto error;
     }
-    if (exclude_update (ctx->exclude, exclude, errbuf, sizeof (errbuf)) < 0) {
-        errstr = errbuf;
-        goto error;
+    if (ctx->rank == 0) {
+        if (exclude_update (ctx->exclude,
+                            exclude,
+                            errbuf,
+                            sizeof (errbuf)) < 0) {
+            errstr = errbuf;
+            goto error;
+        }
+        if (reslog_sync (ctx->reslog) < 0) {
+            errstr = "error posting to eventlog for reconfig";
+            goto error;
+        }
     }
     if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
         errstr = "error updating cached configuration";
-        goto error;
-    }
-    if (reslog_sync (ctx->reslog) < 0) {
-        errstr = "error posting to eventlog for reconfig";
         goto error;
     }
     if (flux_respond (h, msg, NULL) < 0)
@@ -128,6 +160,7 @@ static void resource_ctx_destroy (struct resource_ctx *ctx)
         monitor_destroy (ctx->monitor);
         exclude_destroy (ctx->exclude);
         reslog_destroy (ctx->reslog);
+        inventory_destroy (ctx->inventory);
         flux_msg_handler_delvec (ctx->handlers);
         free (ctx);
         errno = saved_errno;
@@ -286,6 +319,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     const char *exclude_idset;
     json_t *eventlog = NULL;
     bool monitor_force_up = false;
+    json_t *R_from_config;
 
     if (!(ctx = resource_ctx_create (h)))
         goto error;
@@ -295,27 +329,32 @@ int mod_main (flux_t *h, int argc, char **argv)
         goto error;
     if (flux_get_rank (h, &ctx->rank) < 0)
         goto error;
+    if (parse_config (ctx,
+                      flux_get_conf (h),
+                      &exclude_idset,
+                      &R_from_config,
+                      errbuf,
+                      sizeof (errbuf)) < 0) {
+        flux_log (h, LOG_ERR, "%s", errbuf);
+        goto error;
+    }
+    if (ctx->rank == 0) {
+        if (!(ctx->reslog = reslog_create (h)))
+            goto error;
+        if (reload_eventlog (h, &eventlog) < 0)
+            goto error;
+    }
+    if (!(ctx->inventory = inventory_create (ctx, R_from_config)))
+        goto error;
     if (!(ctx->monitor = monitor_create (ctx, monitor_force_up)))
         goto error;
     if (ctx->rank == 0) {
-        if (reload_eventlog (h, &eventlog) < 0)
-            goto error;
-        if (!(ctx->reslog = reslog_create (h)))
-            goto error;
-        if (!(ctx->discover = discover_create (ctx, eventlog))) // uses monitor
+        if (!(ctx->discover = discover_create (ctx))) // uses monitor
             goto error;
         if (!(ctx->drain = drain_create (ctx, eventlog)))
             goto error;
         if (!(ctx->acquire = acquire_create (ctx)))
             goto error;
-        if (parse_config (ctx,
-                          flux_get_conf (h),
-                          &exclude_idset,
-                          errbuf,
-                          sizeof (errbuf)) < 0) {
-            flux_log (h, LOG_ERR, "%s", errbuf);
-            goto error;
-        }
         if (!(ctx->exclude = exclude_create (ctx, exclude_idset)))
             goto error;
         if (post_restart_event (ctx, eventlog ? 1 : 0) < 0)

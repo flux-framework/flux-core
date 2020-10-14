@@ -23,12 +23,6 @@
 
 #include "src/modules/resource/rutil.h"
 
-const char *by_rank = \
-"{"\
-"\"0-3\": {\"Package\": 1, \"Core\": 2, \"PU\": 2, \"cpuset\": \"0-1\"}," \
-"\"4-31\": {\"Package\": 2, \"Core\": 4, \"PU\": 4, \"cpuset\": \"0-3\"}" \
-"}";
-
 void test_match_request_sender (void)
 {
     flux_msg_t *msg1, *msg2;
@@ -263,90 +257,6 @@ void test_set_json_idset (void)
     idset_destroy (ids);
 }
 
-void test_idset_from_resobj (void)
-{
-    json_t *resobj;
-    struct idset *ids;
-
-    if (!(resobj = json_loads (by_rank, 0, NULL)))
-        BAIL_OUT ("json_loads failed");
-
-    ids = rutil_idset_from_resobj (NULL);
-    ok (ids != NULL && idset_count (ids) == 0,
-        "rutil_idset_from_resobj NULL returns empty idset");
-    idset_destroy (ids);
-
-    ids = rutil_idset_from_resobj (resobj);
-    ok (ids != NULL && idset_count (ids) == 32,
-        "rutil_idset_from_resobj works");
-    idset_destroy (ids);
-
-    json_decref (resobj);
-}
-
-void test_resobj_sub (void)
-{
-    json_t *resobj1;
-    json_t *resobj2;
-    struct idset *ids1;
-    struct idset *ids2;
-    struct idset *ids;
-
-    if (!(resobj1 = json_loads (by_rank, 0, NULL)))
-        BAIL_OUT ("json_loads failed");
-    if (!(ids1 = rutil_idset_from_resobj (resobj1)))
-        BAIL_OUT ("rutil_idset_from_resobj failed");
-
-    if (!(ids = idset_create (1024, 0)))
-        BAIL_OUT ("idset_create failed");
-    if (idset_range_set (ids, 2, 5) < 0)
-        BAIL_OUT ("idset_range_set failed");
-
-    errno = 0;
-    ok (rutil_resobj_sub (NULL, NULL) == NULL && errno == EINVAL,
-        "rutil_resobj_sub resobj=NULL fails with EINVAL");
-
-    resobj2 = rutil_resobj_sub (resobj1, NULL);
-    ok (resobj2 != NULL && json_equal (resobj1, resobj2) == 1,
-        "rutil_resobj_sub ids=NULL returns unchanged resobj");
-    if (!(ids2 = rutil_idset_from_resobj (resobj2)))
-        BAIL_OUT ("rutil_idset_from_resobj failed");
-    ok (idset_equal (ids1, ids2) == true,
-        "new and old resobj have identical idset");
-    idset_destroy (ids2);
-    json_decref (resobj2);
-
-    resobj2 = rutil_resobj_sub (resobj1, ids);
-    ok (resobj2 != NULL && json_equal (resobj1, resobj2) == 0,
-        "rutil_resobj_sub ids=[2-5] returns different resobj");
-    if (!(ids2 = rutil_idset_from_resobj (resobj2)))
-        BAIL_OUT ("rutil_idset_from_resobj failed");
-    ok (idset_count (ids1) - idset_count (ids2) == 4,
-        "new and old resobj idset differ by 4 ids");
-    idset_destroy (ids2);
-    json_decref (resobj2);
-
-    /* Kill one whole key in the resobj */
-    if (idset_range_set (ids, 0, 3) < 0)
-        BAIL_OUT ("idset_range_set failed");
-    resobj2 = rutil_resobj_sub (resobj1, ids);
-    ok (resobj2 != NULL && json_object_size (resobj2) == 1,
-        "rutil_resobj_sub ids=[0-5] returns resobj with 1 key");
-    json_decref (resobj2);
-
-    /* Kill entire resobj */
-    if (idset_range_set (ids, 0, 31) < 0)
-        BAIL_OUT ("idset_range_set failed");
-    resobj2 = rutil_resobj_sub (resobj1, ids);
-    ok (resobj2 != NULL && json_object_size (resobj2) == 0,
-        "rutil_resobj_sub ids=[0-31] returns resobj with no keys");
-    json_decref (resobj2);
-
-    idset_destroy (ids);
-    idset_destroy (ids1);
-    json_decref (resobj1);
-}
-
 void test_idset_decode_test (void)
 {
     ok (rutil_idset_decode_test (NULL, 0) == false,
@@ -499,8 +409,6 @@ int main (int argc, char *argv[])
     test_idset_add ();
     test_idset_diff ();
     test_set_json_idset ();
-    test_idset_from_resobj ();
-    test_resobj_sub ();
     test_idset_decode_test ();
 
     test_read_file ();

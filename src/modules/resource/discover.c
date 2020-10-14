@@ -9,28 +9,6 @@
 \************************************************************/
 
 /* discover.c - dynamic resource discovery
- *
- * Populate resource.hwloc and provide access to resource.hwloc.by_rank
- * on demand.
- *
- * At initialization, the eventlog is replayed.  If events (or lack thereof)
- * indicate that resource.hwloc is not already populated, run
- * "flux hwloc reload".  Since that requires all ranks to be up, it is not run
- * until the monitor subsystem says they are.
- *
- * In addition, once resource.hwloc is populated, the 'resource.hwloc.by_rank'
- * object is looked up from the KVS and made available via discover_get().
-
- * For testing, resource discovery may be defeated by populating
- * resource.hwloc.by_rank with dummy resources and posting a fake
- * hwloc-discover-finish event to 'resource.eventlog' before loading
- * this module.
- *
- * Caveats:
- * - resource.by_rank is a stand-in for future Flux concrete resource object
- * - no support for statically configured resources yet
- * - no support for obtaining resources from enclosing instance
- * - all ranks have to be online before 'flux hwloc reload' can run
  */
 
 #if HAVE_CONFIG_H
@@ -41,18 +19,18 @@
 #include <flux/core.h>
 
 #include "src/common/libidset/idset.h"
+#include "src/common/librlist/rlist.h"
 #include "src/common/libeventlog/eventlog.h"
 
 #include "resource.h"
 #include "reslog.h"
 #include "discover.h"
 #include "monitor.h"
+#include "inventory.h"
 
 struct discover {
     struct resource_ctx *ctx;
     flux_subprocess_t *p;
-    bool ready;             // all broker ranks are online
-    bool loaded;            // resource.hwloc is populated
     flux_future_t *f;
     flux_msg_handler_t **handlers;
 };
@@ -75,11 +53,25 @@ const json_t *discover_get (struct discover *discover)
 static void lookup_hwloc_continuation (flux_future_t *f, void *arg)
 {
     struct discover *discover = arg;
-    struct resource_ctx *ctx = discover->ctx;
+    flux_t *h = discover->ctx->h;
+    const char *by_rank;
+    struct rlist *rl;
+    json_t *R;
 
-    if (flux_future_get (f, NULL) < 0)
-        flux_log_error (ctx->h, "hwloc.by_rank");
-    /* discover->f remains valid so by_rank can be accessed later */
+    if (flux_kvs_lookup_get (f, &by_rank) < 0) {
+        flux_log_error (h, "hwloc.by_rank");
+        return;
+    }
+    if (!(rl = rlist_from_hwloc_by_rank (by_rank, false))
+            || !(R = rlist_to_R (rl))) {
+        flux_log (h, LOG_ERR, "error converting from by_rank format");
+        rlist_destroy (rl);
+        return;
+    }
+    if (inventory_put (discover->ctx->inventory, R, NULL) < 0)
+        flux_log_error (h, "inventory_put");
+    json_decref (R);
+    rlist_destroy (rl);
 }
 
 static int lookup_hwloc (struct discover *discover)
@@ -102,9 +94,6 @@ static int lookup_hwloc (struct discover *discover)
     return 0;
 }
 
-/* Post the end time of flux hwloc reload (and success status).
- * This event is parsed by replay_eventlog() below.
- */
 static void hwloc_reload_completion (flux_subprocess_t *p)
 {
     struct discover *discover = flux_subprocess_aux_get (p, auxkey);
@@ -113,45 +102,32 @@ static void hwloc_reload_completion (flux_subprocess_t *p)
     int signal = 0;
     const char *cmd = "hwloc-reload";
 
-    if ((rc = flux_subprocess_exit_code (p)) == 0)
-        discover->loaded = true;
+    if ((rc = flux_subprocess_exit_code (p)) == 0) {
+        flux_log (ctx->h, LOG_DEBUG, "%s exited with rc=%d", cmd, rc);
+        if (lookup_hwloc (discover) < 0)
+            flux_log_error (ctx->h, "resource.hwloc.by_rank");
+    }
     else if (rc > 0)
         flux_log (ctx->h, LOG_ERR, "%s exited with rc=%d", cmd, rc);
     else if ((signal = flux_subprocess_signaled (p)) > 0)
         flux_log (ctx->h, LOG_ERR, "%s %s", cmd, strsignal (signal));
     else
         flux_log (ctx->h, LOG_ERR, "%s completed (not signal or exit)", cmd);
-    if (reslog_post_pack (ctx->reslog,
-                          NULL,
-                          "hwloc-discover-finish",
-                          "{s:b}",
-                          "loaded",
-                          discover->loaded ? 1 : 0) < 0)
-        flux_log_error (ctx->h, "posting hwloc-discover-finish event");
-    if (discover->loaded) {
-        if (lookup_hwloc (discover) < 0)
-            flux_log_error (ctx->h, "resource.hwloc.by_rank");
-    }
+
     flux_subprocess_destroy (p);
     discover->p = NULL;
 }
 
-/* Post the start time of flux hwloc reload (and pid) for debugging.
- */
 static void hwloc_reload_state_change (flux_subprocess_t *p,
                                        flux_subprocess_state_t state)
 {
     struct discover *discover = flux_subprocess_aux_get (p, auxkey);
 
     if (state == FLUX_SUBPROCESS_RUNNING) {
-        if (reslog_post_pack (discover->ctx->reslog,
-                              NULL,
-                              "hwloc-discover-start",
-                              "{s:i}",
-                              "pid",
-                              flux_subprocess_pid (discover->p)) < 0)
-            flux_log_error (discover->ctx->h,
-                            "posting hwloc-discover-start event");
+        flux_log (discover->ctx->h,
+                  LOG_DEBUG,
+                  "hwloc-reload started pid=%d",
+                  flux_subprocess_pid (discover->p));
     }
 }
 
@@ -184,65 +160,27 @@ error:
 }
 
 /* This is called when the idset of available brokers changes.
- * On not-ready to ready (all brokers up) transition, initiate hwloc
- * discover if not already done.
+ * Kick off flux hwloc reload if all brokers are up and we've not
+ * already done it.
  */
 static void monitor_cb (struct monitor *monitor, void *arg)
 {
     struct discover *discover = arg;
+    const struct idset *down;
 
-    if (!discover->ready) {
-        const struct idset *down = monitor_get_down (monitor);
-        if (!down || idset_count (down) == 0) {
-            discover->ready = true;
-            if (!discover->loaded)
-                if (hwloc_reload (discover) < 0) {
-                    flux_log_error (discover->ctx->h,
-                                    "error starting flux hwloc reload");
-                }
+    if (inventory_get (discover->ctx->inventory))
+        return;
+
+    if (!(down = monitor_get_down (monitor)) || idset_count (down) == 0) {
+        if (hwloc_reload (discover) < 0) {
+            flux_log_error (discover->ctx->h,
+                            "error starting flux hwloc reload");
         }
     }
-}
-
-/* If restarting with eventlog, scan it for events that indicate that
- * resource.hwloc is already populated.
- */
-static int replay_eventlog (struct discover *discover, const json_t *eventlog)
-{
-    size_t index;
-    json_t *entry;
-    const char *name;
-    json_t *context;
-    int loaded = 0;
-
-    if (eventlog) {
-        json_array_foreach (eventlog, index, entry) {
-            if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
-                return -1;
-            if (!strcmp (name, "resource-init")) {
-                if (json_unpack (context,
-                                 "{s:b}",
-                                 "hwloc-discover",
-                                 &loaded) < 0)
-                    return -1;
-            }
-            else if (!strcmp (name, "hwloc-discover-finish")) {
-                if (json_unpack (context,
-                                 "{s:b}",
-                                 "loaded",
-                                 &loaded) < 0)
-                    return -1;
-            }
-        }
-        discover->loaded = loaded;
-    }
-    return 0;
 }
 
 /* rank 0 broker entered SHUTDOWN state.  If resource discovery is
- * still in progress, ensure that:
- * - running "flux hwloc reload" is terminated
- * - hwloc-discover-finish is posted (loaded=false) to fail resource.acquire
+ * still in progress, ensure that it is terminated.
  */
 static void shutdown_cb (flux_t *h,
                          flux_msg_handler_t *mh,
@@ -256,16 +194,7 @@ static void shutdown_cb (flux_t *h,
         if (!f)
             flux_log_error (h, "Error killing flux hwloc reload subproc");
         flux_future_destroy (f);
-        /* hwloc_reload_completion() will post event */
-    }
-    else if (!discover->loaded) {
-        if (reslog_post_pack (discover->ctx->reslog,
-                              NULL,
-                              "hwloc-discover-finish",
-                              "{s:b}",
-                              "loaded",
-                              0) < 0)
-            flux_log_error (h, "Error posting hwloc-discover-finish");
+        /*  hwloc_reload_completion() will be called on completion */
     }
 }
 
@@ -287,8 +216,7 @@ void discover_destroy (struct discover *discover)
     }
 }
 
-struct discover *discover_create (struct resource_ctx *ctx,
-                                  const json_t *eventlog)
+struct discover *discover_create (struct resource_ctx *ctx)
 {
     struct discover *discover;
     const struct idset *down;
@@ -296,6 +224,10 @@ struct discover *discover_create (struct resource_ctx *ctx,
     if (!(discover = calloc (1, sizeof (*discover))))
         return NULL;
     discover->ctx = ctx;
+
+    if (inventory_get (ctx->inventory))
+        goto done;
+
     if (flux_msg_handler_addvec (ctx->h,
                                  htab,
                                  discover,
@@ -303,22 +235,14 @@ struct discover *discover_create (struct resource_ctx *ctx,
         goto error;
     if (flux_event_subscribe (ctx->h, "shutdown") < 0)
         goto error;
-    if (replay_eventlog (discover, eventlog) < 0)
-        goto error;
-    if (discover->loaded) {
-        if (lookup_hwloc (discover) < 0) {
-            flux_log_error (ctx->h, "resource.hwloc.by_rank");
-            goto error;
-        }
-    }
-    else if (!(down = monitor_get_down (ctx->monitor))
-                                            || idset_count (down) == 0) {
+    if (!(down = monitor_get_down (ctx->monitor)) || idset_count (down) == 0) {
         if (hwloc_reload (discover) < 0) {
             flux_log_error (ctx->h, "error starting flux hwloc reload");
             goto error;
         }
     }
     monitor_set_callback (ctx->monitor, monitor_cb, discover);
+done:
     return discover;
 error:
     discover_destroy (discover);

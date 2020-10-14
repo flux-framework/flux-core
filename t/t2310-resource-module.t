@@ -68,7 +68,9 @@ test_expect_success 'load resource module with bad option fails' '
 '
 
 test_expect_success 'load resource module' '
-	flux exec -r all flux module load resource
+	for rank in $(seq 0 $(($SIZE-1))); do \
+		flux exec -r $rank flux module load resource; \
+	done
 '
 
 test_expect_success HAVE_JQ 'resource.eventlog exists' '
@@ -97,15 +99,12 @@ test_expect_success HAVE_JQ 'exclude event was posted with expected idset' '
 	test "$(jq .idset <exclude.out)" = "\"0\""
 '
 
-test_expect_success HAVE_JQ 'wait until hwloc-discover-finish event is posted' '
-	wait_event 5 hwloc-discover-finish
+test_expect_success HAVE_JQ 'wait until resource-define event is posted' '
+	wait_event 5 resource-define
 '
 
-test_expect_success 'resource.hwloc is populated after hwloc-discover-finish' '
-	flux kvs get resource.hwloc.by_rank >/dev/null &&
-	seq 0 $(($SIZE-1)) | sort >hwloc_xml.exp &&
-	flux kvs ls -1 resource.hwloc.xml >hwloc_xml.out &&
-	test_cmp hwloc_xml.exp hwloc_xml.out
+test_expect_success 'resource.R is populated after resource-define' '
+	flux kvs get resource.R
 '
 
 test_expect_success HAVE_JQ 'drain works with no reason' '
@@ -218,7 +217,10 @@ test_expect_success 'reload config/module excluding rank 0' '
 
 test_expect_success HAVE_JQ 'acquire returns resources excluding rank 0' '
 	$RPC resource.acquire </dev/null >acquire2.out &&
-	jq -c -e -a .resources.\"1-$(($SIZE-1))\" acquire2.out
+	jq -e -r .resources.execution.R_lite[0].rank acquire2.out \
+		>acquire2_rank.out &&
+	echo "1-$(($SIZE-1))" >acquire2_rank.exp &&
+	test_cmp acquire2_rank.exp acquire2_rank.out
 '
 
 test_expect_success HAVE_JQ 'acquire returns up excluding rank 0' '

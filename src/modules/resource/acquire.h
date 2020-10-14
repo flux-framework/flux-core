@@ -15,6 +15,7 @@ struct acquire *acquire_create (struct resource_ctx *ctx);
 void acquire_destroy (struct acquire *acquire);
 
 void acquire_disconnect (struct acquire *acquire, const flux_msg_t *msg);
+int acquire_clients (struct acquire *acquire);
 
 #endif /* !_FLUX_RESOURCE_ACQUIRE_H */
 
