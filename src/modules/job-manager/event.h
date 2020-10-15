@@ -18,6 +18,10 @@
 #include "job.h"
 #include "job-manager.h"
 
+enum job_manager_event_flags {
+    EVENT_JOURNAL_ONLY = 1,
+};
+
 /* Take any action for 'job' currently needed based on its internal state.
  * Returns 0 on success, -1 on failure with errno set.
  * This function is idempotent.
@@ -34,10 +38,6 @@ int event_job_update (struct job *job, json_t *event);
  */
 int event_batch_pub_state (struct event *event, struct job *job,
                            double timestamp);
-
-/* Add notification of job's annotation change for publication.
- */
-int event_batch_pub_annotations (struct event *event, struct job *job);
 
 /* Add notification of job event to send to listeners.
  */
@@ -59,6 +59,7 @@ int event_batch_respond (struct event *event, const flux_msg_t *msg);
 int event_job_post_pack (struct event *event,
                          struct job *job,
                          const char *name,
+                         int flags,
                          const char *context_fmt,
                          ...);
 

@@ -106,11 +106,8 @@ int annotations_update (flux_t *h, struct job *job, json_t *annotations)
                                              annotations) < 0)
                 return -1;
             /* Special case: if user cleared all entries, assume we no
-             * longer need annotations object
-             *
-             * if cleared no need to call
-             * event_batch_pub_annotations(), should be handled by
-             * caller.
+             * longer need annotations object.  If cleared, caller
+             * will handle advertisement of the clear.
              */
             if (!json_object_size (job->annotations))
                 annotations_clear (job, NULL);
@@ -148,10 +145,13 @@ void annotate_handle_request (flux_t *h,
     }
     if (annotations_update (ctx->h, job, annotations) < 0)
         goto error;
-    if (event_batch_pub_annotations (ctx->event, job) < 0) {
-        flux_log_error (h, "%s: event_batch_pub_annotations", __FUNCTION__);
+    if (event_job_post_pack (ctx->event,
+                             job,
+                             "annotations",
+                             EVENT_JOURNAL_ONLY,
+                             "{s:O?}",
+                             "annotations", job->annotations) < 0)
         goto error;
-    }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;

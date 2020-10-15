@@ -58,6 +58,14 @@ check_event_name() {
         check_event ${jobid} .entry.name \"${name}\" ${filename}
 }
 
+check_event_annotation() {
+        jobid="$1"
+        key=$2
+        value=$3
+        filename=$4
+        check_event ${jobid} .entry.context.annotations.user.${key} ${value} ${filename}
+}
+
 wait_event() {
         jobid="$1"
         key=$2
@@ -83,6 +91,14 @@ wait_event_name() {
         name=$2
         filename=$3
         wait_event ${jobid} .entry.name \"${name}\" ${filename}
+}
+
+wait_event_annotation() {
+        jobid="$1"
+        key=$2
+        value=$3
+        filename=$4
+        wait_event ${jobid} .entry.context.annotations.user.${key} ${value} ${filename}
 }
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with no filters shows all events' '
@@ -212,6 +228,39 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events with allow & deny
         test_must_fail check_event_name ${jobid} release events6.out &&
         test_must_fail check_event_name ${jobid} free events6.out &&
         check_event_name ${jobid} clean events6.out &&
+        kill -s USR1 $pid &&
+        wait $pid &&
+        wait_events_listeners $before
+'
+
+test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: events works with annotations' '
+        before=`flux module stats --parse events.listeners job-manager`
+        count=$((before + 1))
+        $jq -j -c -n "{allow:{annotations:1, clean:1}}" \
+          | $EVENT_STREAM > events7.out &
+        pid=$! &&
+        wait_events_listeners $count &&
+        flux queue stop &&
+        jobid=`flux job submit basic.json | flux job id` &&
+        flux job annotate $jobid foo abcdefg &&
+        wait_event_annotation ${jobid} foo \"abcdefg\" events7.out &&
+        flux job annotate $jobid foo ABCDEFG &&
+        wait_event_annotation ${jobid} foo \"ABCDEFG\" events7.out &&
+        flux job annotate $jobid foo 1234567 &&
+        wait_event_annotation ${jobid} foo 1234567 events7.out &&
+        flux queue start &&
+        wait_event_name ${jobid} clean events7.out &&
+        test_must_fail check_event_name ${jobid} submit events7.out &&
+        test_must_fail check_event_name ${jobid} depend events7.out &&
+        test_must_fail check_event_name ${jobid} alloc events7.out &&
+        test_must_fail check_event_name ${jobid} start events7.out &&
+        test_must_fail check_event_name ${jobid} finish events7.out &&
+        test_must_fail check_event_name ${jobid} release events7.out &&
+        test_must_fail check_event_name ${jobid} free events7.out &&
+        check_event_annotation ${jobid} foo \"abcdefg\" events7.out &&
+        check_event_annotation ${jobid} foo \"ABCDEFG\" events7.out &&
+        check_event_annotation ${jobid} foo 1234567 events7.out &&
+        check_event_name ${jobid} clean events7.out &&
         kill -s USR1 $pid &&
         wait $pid &&
         wait_events_listeners $before

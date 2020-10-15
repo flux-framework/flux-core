@@ -66,7 +66,6 @@ struct event_batch {
     flux_kvs_txn_t *txn;
     flux_future_t *f;
     json_t *state_trans;
-    json_t *annotations;
     bool listener_response_available;
     zlist_t *responses; // responses deferred until batch complete
 };
@@ -231,14 +230,6 @@ static void event_batch_destroy (struct event_batch *batch)
                                batch->state_trans);
             json_decref (batch->state_trans);
         }
-        if (batch->annotations) {
-            if (json_array_size (batch->annotations) > 0)
-                event_publish (batch->event,
-                               "job-annotations",
-                               "annotations",
-                               batch->annotations);
-            json_decref (batch->annotations);
-        }
         if (batch->listener_response_available)
            generate_listener_responses (batch->event);
         if (batch->responses) {
@@ -334,32 +325,6 @@ error:
     return -1;
 }
 
-int event_batch_pub_annotations (struct event *event, struct job *job)
-{
-    json_t *o;
-
-    /* do not check for job->annotations == NULL, all annotations
-     * being cleared is a possible change.
-     */
-    if (event_batch_start (event) < 0)
-        goto error;
-    if (!event->batch->annotations) {
-        if (!(event->batch->annotations = json_array ()))
-            goto nomem;
-    }
-    if (!(o = json_pack ("[I,O?]", job->id, job->annotations)))
-        goto nomem;
-    if (json_array_append_new (event->batch->annotations, o)) {
-        json_decref (o);
-        goto nomem;
-    }
-    return 0;
-nomem:
-    errno = ENOMEM;
-error:
-    return -1;
-}
-
 int event_batch_respond (struct event *event, const flux_msg_t *msg)
 {
     if (event_batch_start (event) < 0)
@@ -387,7 +352,7 @@ int event_job_action (struct event *event, struct job *job)
         case FLUX_JOB_NEW:
             break;
         case FLUX_JOB_DEPEND:
-            if (event_job_post_pack (event, job, "depend", NULL) < 0)
+            if (event_job_post_pack (event, job, "depend", 0, NULL) < 0)
                 return -1;
             break;
         case FLUX_JOB_SCHED:
@@ -421,7 +386,7 @@ int event_job_action (struct event *event, struct job *job)
                                    && !job->start_pending
                                    && !job->has_resources) {
 
-                if (event_job_post_pack (event, job, "clean", NULL) < 0)
+                if (event_job_post_pack (event, job, "clean", 0, NULL) < 0)
                     return -1;
             }
             break;
@@ -658,6 +623,7 @@ error:
 int event_job_post_pack (struct event *event,
                          struct job *job,
                          const char *name,
+                         int flags,
                          const char *context_fmt,
                          ...)
 {
@@ -672,11 +638,13 @@ int event_job_post_pack (struct event *event,
         goto error;
     if (!(entry = eventlog_entry_vpack (timestamp, name, context_fmt, ap)))
         return -1;
+    if (event_batch_process_event_entry (event, job, name, entry) < 0)
+        goto error;
+    if (EVENT_JOURNAL_ONLY & flags)
+        goto out;
     if (event_job_update (job, entry) < 0) // modifies job->state
         goto error;
     if (event_batch_commit_event (event, job, entry) < 0)
-        goto error;
-    if (event_batch_process_event_entry (event, job, name, entry) < 0)
         goto error;
     if (job->state != old_state) {
         if (event_batch_pub_state (event, job, timestamp) < 0)
@@ -694,6 +662,7 @@ int event_job_post_pack (struct event *event,
     if (event_job_action (event, job) < 0)
         goto error;
 
+out:
     json_decref (entry);
     va_end (ap);
     return 0;
