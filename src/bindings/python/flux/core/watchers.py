@@ -104,8 +104,7 @@ class FDWatcher(Watcher):
 
 
 @ffi.def_extern()
-def signal_handler_wrapper(unused1, unused2, revents, opaque_handle):
-    del unused1, unused2  # unused arguments
+def signal_handler_wrapper(_unused1, _unused2, _unused3, opaque_handle):
     watcher = ffi.from_handle(opaque_handle)
     signal_int = raw.signal_watcher_get_signum(watcher.handle)
     watcher.callback(watcher.flux_handle, watcher, signal_int, watcher.args)

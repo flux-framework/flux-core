@@ -236,6 +236,7 @@ class JobInfoFormat(flux.util.OutputFormat):
     """
 
     class JobFormatter(string.Formatter):
+        # pylint: disable=too-many-branches
         def convert_field(self, value, conv):
             """
             Flux job-specific field conversions. Avoids the need
@@ -251,7 +252,7 @@ class JobInfoFormat(flux.util.OutputFormat):
                 try:
                     value = datetime.fromtimestamp(value)
                 except TypeError:
-                    if orig_value is "":
+                    if orig_value == "":
                         value = datetime.fromtimestamp(0.0)
                     else:
                         raise
@@ -260,7 +261,7 @@ class JobInfoFormat(flux.util.OutputFormat):
                 try:
                     value = datetime.fromtimestamp(value).strftime("%FT%T")
                 except TypeError:
-                    if orig_value is "":
+                    if orig_value == "":
                         value = ""
                     else:
                         raise
@@ -269,7 +270,7 @@ class JobInfoFormat(flux.util.OutputFormat):
                 try:
                     value = fsd(value)
                 except TypeError:
-                    if orig_value is "":
+                    if orig_value == "":
                         value = ""
                     else:
                         raise
@@ -281,7 +282,7 @@ class JobInfoFormat(flux.util.OutputFormat):
                         value = 1
                     value = str(timedelta(seconds=round(value)))
                 except TypeError:
-                    if orig_value is "":
+                    if orig_value == "":
                         value = ""
                     else:
                         raise
