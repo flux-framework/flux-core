@@ -12,12 +12,25 @@ import sys
 import logging
 import argparse
 import re
+import os.path
 from itertools import count, groupby
 import json
 
 import flux
 from flux.rpc import RPC
 from flux.memoized_property import memoized_property
+
+
+def reload(args):
+    """
+    Send a "reload" request to resource module
+    """
+    RPC(
+        flux.Flux(),
+        "resource.reload",
+        {"path": os.path.realpath(args.path), "xml": args.xml, "force": args.force},
+        nodeid=0,
+    ).get()
 
 
 def drain(args):
@@ -357,6 +370,26 @@ def main():
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
     )
     list_parser.set_defaults(func=list_handler)
+
+    reload_parser = subparsers.add_parser(
+        "reload", formatter_class=flux.util.help_formatter()
+    )
+    reload_parser.set_defaults(func=reload)
+    reload_parser.add_argument("path", help="path to R or hwloc <rank>.xml dir")
+    reload_parser.add_argument(
+        "-x",
+        "--xml",
+        action="store_true",
+        default=False,
+        help="interpret path as XML dir",
+    )
+    reload_parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        default=False,
+        help="allow resources to contain invalid ranks",
+    )
 
     args = parser.parse_args()
     args.func(args)
