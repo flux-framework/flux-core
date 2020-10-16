@@ -970,7 +970,7 @@ static void task_output_cb (struct shell_task *task,
     int len;
 
     data = flux_subprocess_getline (task->proc, stream, &len);
-    if (len < 0) {
+    if (!data) {
         shell_log_errno ("read %s task %d", stream, task->rank);
     }
     else if (len > 0) {
