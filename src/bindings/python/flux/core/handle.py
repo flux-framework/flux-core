@@ -188,7 +188,7 @@ class Flux(Wrapper):
 
         reactor_interrupted = False
 
-        def reactor_interrupt(handle, *args):
+        def reactor_interrupt(handle, *_args):
             #  ensure reactor_interrupted from enclosing scope:
             nonlocal reactor_interrupted
             reactor_interrupted = True

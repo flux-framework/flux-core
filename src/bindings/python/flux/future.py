@@ -16,8 +16,6 @@ from flux.util import check_future_error, interruptible
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 
-import flux.core.handle
-
 # Reference count dictionary to keep futures with a pending `then` callback
 # alive, even if there are no remaining references to the future in the user's
 # program scope. When a callback is first set on the future, add an entry to the
@@ -87,16 +85,18 @@ class Future(WrapperPimpl):
         return errmsg.decode("utf-8") if errmsg else None
 
     def get_flux(self):
+        # importing within a function to break a cyclic import
+        # pylint: disable=cyclic-import, import-outside-toplevel
+        import flux.core.handle
+
         try:
-            # pylint: disable=cyclic-import
             flux_handle = self.pimpl.get_flux()
         except OSError as exc:
             #  get_flux() throws OSError of EINVAL if !f->h, but this should
             #   a valid return (i.e. no flux handle set yet)
             if exc.errno == errno.EINVAL:
                 return None
-            else:
-                raise
+            raise
         if flux_handle == ffi.NULL:
             return None
         handle = flux.core.handle.Flux(handle=flux_handle)

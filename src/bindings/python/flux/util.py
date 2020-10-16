@@ -248,7 +248,7 @@ class OutputFormat:
         which will be made "safe" for use with string headings.
         """
         format_list = []
-        for (text, field, spec, conv) in self.format_list:
+        for (text, field, spec, _) in self.format_list:
             #  Remove number formatting on any spec:
             spec = re.sub(r"(0?\.)?(\d+)?[bcdoxXeEfFgGn%]$", r"\2", spec)
             #  Only keep fill, align, and min width of the result.
