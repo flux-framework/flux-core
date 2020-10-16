@@ -53,6 +53,17 @@ bool rutil_match_request_sender (const flux_msg_t *msg1,
                                  const flux_msg_t *msg2);
 
 
+/* Load data by path:
+ * - rutil_read_file() returns data as a NULL-terminated string.
+ * - rutil_load_file() parses data as a JSON object and returns it.
+ * - rutil_load_xml_dir() parses <rank>.xml files in path, and returns
+ *   a JSON object with ranks as keys and XML strings as values.
+ * On error put human readable error in errbuf and return NULL
+ */
+char *rutil_read_file (const char *path, char *errbuf, int errbufsize);
+json_t *rutil_load_file (const char *path, char *errbuf, int errbufsize);
+json_t *rutil_load_xml_dir (const char *path, char *errbuf, int errbufsize);
+
 #endif /* !_FLUX_RESOURCE_RUTIL_H */
 
 

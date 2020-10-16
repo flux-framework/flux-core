@@ -13,8 +13,12 @@
 #endif
 #include <jansson.h>
 #include <flux/core.h>
+#include <stdlib.h>
+#include <fcntl.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libutil/cleanup.h"
+#include "src/common/libutil/read_all.h"
 #include "src/common/libidset/idset.h"
 
 #include "src/modules/resource/rutil.h"
@@ -355,6 +359,137 @@ void test_idset_decode_test (void)
         "rutil_idset_decode_test idset=\"0\" id=1 returns false");
 }
 
+static char *create_tmp_file (const char *content)
+{
+    char *path;
+    char *tmpdir = getenv ("TMPDIR");
+    int fd = -1;
+
+    if (!tmpdir)
+        tmpdir = "/tmp";
+    if (asprintf (&path, "%s/rutil-test.XXXXXX", tmpdir) < 0)
+        BAIL_OUT ("error allocating buffer");
+    if ((fd = mkostemp (path, O_WRONLY)) < 0)
+        BAIL_OUT ("error creating temp file");
+
+    cleanup_push_string (cleanup_file, path);
+
+    if (write_all (fd, content, strlen (content)) < 0)
+        BAIL_OUT ("writing to creating temp file");
+    close (fd);
+    return path;
+}
+
+void test_read_file (void)
+{
+    char ebuf[128];
+    char *s;
+    char *tmp = create_tmp_file ("XXX");
+
+    errno = 0;
+    ebuf[0] = '\0';
+    s = rutil_read_file ("/noexist", ebuf, sizeof (ebuf));
+    ok (s == NULL && errno == ENOENT && strlen (ebuf) > 0,
+         "rutil_read_file path=/noexist fails with ENOENT and human error");
+    diag ("%s", ebuf);
+
+    s = rutil_read_file (tmp, ebuf, sizeof (ebuf));
+    ok (s != NULL && !strcmp (s, "XXX"),
+        "rutil_read_file works");
+    free (s);
+
+    free (tmp);
+}
+
+void test_load_file (void)
+{
+    char ebuf[128];
+    json_t *o;
+    char *good = create_tmp_file ("{\"foo\":42}");
+    char *bad = create_tmp_file ("XXX");
+
+    errno = 0;
+    ebuf[0] = '\0';
+    o = rutil_load_file ("/noexist", ebuf, sizeof (ebuf));
+    ok (o == NULL && errno == ENOENT && strlen (ebuf) > 0,
+         "rutil_load_file path=/noexist fails with ENOENT and human error");
+    diag ("%s", ebuf);
+
+    errno = 0;
+    ebuf[0] = '\0';
+    o = rutil_load_file (bad, ebuf, sizeof (ebuf));
+    ok (o == NULL && errno != 0 && strlen (ebuf) > 0,
+         "rutil_load_file with errno and human error on bad JSON");
+    diag ("%s", ebuf);
+
+    o = rutil_load_file (good, ebuf, sizeof (ebuf));
+    ok (o != NULL && json_object_get (o, "foo"),
+         "rutil_load_file with good JSON works");
+    json_decref (o);
+
+    free (good);
+    free (bad);
+}
+
+static char *create_tmp_xml_dir (int size)
+{
+    char *path;
+    char *tmpdir = getenv ("TMPDIR");
+    int i;
+
+    if (!tmpdir)
+        tmpdir = "/tmp";
+    if (asprintf (&path, "%s/rutil-test.XXXXXX", tmpdir) < 0)
+        BAIL_OUT ("error allocating buffer");
+    if (!mkdtemp (path))
+        BAIL_OUT ("failed to create tmp xmldir");
+
+    cleanup_push_string (cleanup_directory_recursive, path);
+
+    for (i = 0; i < size; i++) {
+        char fpath[1024];
+        int ffd;
+        snprintf (fpath, sizeof (fpath), "%s/%d.xml", path, i);
+        ffd = open (fpath, O_WRONLY | O_CREAT, 0644);
+        if (ffd < 0)
+            BAIL_OUT ("failed to create %s", fpath);
+        if (write_all (ffd, "\"foo\"",  5) < 0)
+            BAIL_OUT ("failed to write %s", fpath);
+        close (ffd);
+    }
+
+    return path;
+}
+
+void test_load_xml_dir (void)
+{
+    const int count = 8;
+    char *path = create_tmp_xml_dir (count);
+    char ebuf[128];
+    json_t *o;
+
+    errno = 0;
+    ebuf[0] = '\0';
+    o = rutil_load_xml_dir ("/noexist", ebuf, sizeof (ebuf));
+    ok (o == NULL && errno == ENOENT && strlen (ebuf) > 0,
+         "rutil_load_xml_dir path=/noexist fails with ENOENT and human error");
+    diag ("%s", ebuf);
+
+    o = rutil_load_xml_dir (path, ebuf, sizeof (ebuf));
+    ok (o != NULL,
+        "rutil_load_xml_dir works");
+    if (o) {
+        char *tmp = json_dumps (o, JSON_COMPACT);
+        diag ("%s", tmp);
+        free (tmp);
+    }
+    ok (json_object_size (o) == count,
+        "and contains the expected number of keys");
+    json_decref (o);
+
+    free (path);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -367,6 +502,10 @@ int main (int argc, char *argv[])
     test_idset_from_resobj ();
     test_resobj_sub ();
     test_idset_decode_test ();
+
+    test_read_file ();
+    test_load_file ();
+    test_load_xml_dir ();
 
     done_testing ();
     return (0);

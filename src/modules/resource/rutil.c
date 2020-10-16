@@ -13,11 +13,16 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <jansson.h>
 #include <flux/core.h>
 
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/dirwalk.h"
+#include "src/common/libutil/read_all.h"
 
 #include "rutil.h"
 
@@ -234,6 +239,139 @@ done:
     free (sender1);
     free (sender2);
     return match;
+}
+
+char *rutil_read_file (const char *path, char *errbuf, int errbufsize)
+{
+    int fd;
+    char *buf;
+
+    if ((fd = open (path, O_RDONLY)) < 0 || read_all (fd, (void **)&buf) < 0) {
+        snprintf (errbuf, errbufsize, "%s: %s", path, strerror (errno));
+        if (fd >= 0)
+            ERRNO_SAFE_WRAP (close, fd);
+        return NULL;
+    }
+    close (fd);
+    return buf;
+}
+
+json_t *rutil_load_file (const char *path, char *errbuf, int errbufsize)
+{
+    json_t *o;
+    json_error_t e;
+
+    if (!(o = json_load_file (path, 0, &e))) {
+        snprintf (errbuf, errbufsize, "%s:%d %s", e.source, e.line, e.text);
+        errno = EPROTO;
+        if (access (path, R_OK) < 0)
+            errno = ENOENT;
+        return NULL;
+    }
+    return o;
+}
+
+static int set_string (json_t *o, const char *key, const char *val)
+{
+    json_t *oval;
+
+    if (!(oval = json_string (val)))
+        goto nomem;
+    if (json_object_set_new (o, key, oval) < 0) {
+        json_decref (oval);
+        goto nomem;
+    }
+    return 0;
+nomem:
+    errno = ENOMEM;
+    return -1;
+}
+
+static const char *get_error (json_t *o)
+{
+    int saved_errno;
+    const char *s;
+    int rc;
+
+    saved_errno = errno;
+    rc = json_unpack (o, "{s:s}", "errstr", &s);
+    (void)json_object_del (o, "errstr");
+    errno = saved_errno;
+    if (rc < 0)
+        return NULL;
+    return s;
+}
+
+static void set_error (json_t *o, const char *errstr)
+{
+    (void)set_string (o, "errstr", errstr);
+}
+
+static int load_xml_file (dirwalk_t *d, void *arg)
+{
+    json_t *o = arg;
+    const char *name = dirwalk_name (d);
+    char *endptr;
+    int rank;
+    char *s;
+    char key[32];
+    char errbuf[256];
+
+    /* Only pay attention to files ending in "<rank<.xml"
+     */
+    if (dirwalk_isdir (d))
+        return 0;
+    errno = 0;
+    rank = strtol (name, &endptr, 10);
+    if (errno > 0 || strcmp (endptr, ".xml") != 0)
+        return 0;
+
+    /* Read the file and encode as JSON string, storing under rank key.
+     * On error, store human readable error string in object and stop iteration.
+     */
+    if (!(s = rutil_read_file (dirwalk_path (d), errbuf, sizeof (errbuf)))) {
+        dirwalk_stop (d, errno);
+        set_error (o, errbuf);
+        return 0;
+    }
+    snprintf (key, sizeof (key), "%d", rank);
+    if (set_string (o, key, s) < 0) {
+        dirwalk_stop (d, errno);
+        free (s);
+        return 0;
+    }
+    free (s);
+    return 0;
+}
+
+json_t *rutil_load_xml_dir (const char *path, char *errbuf, int errbufsize)
+{
+    json_t *o;
+
+    if (!(o = json_object ())) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    if (dirwalk (path, 0, load_xml_file, o) < 0) {
+        const char *errstr = get_error (o);
+        snprintf (errbuf,
+                  errbufsize,
+                  "%s: %s",
+                  path,
+                  errstr ? errstr : strerror (errno));
+        ERRNO_SAFE_WRAP (json_decref, o);
+        return NULL;
+    }
+    if (json_object_size (o) == 0) {
+        snprintf (errbuf,
+                  errbufsize,
+                  "%s: invalid directory: no XML input files found",
+                  path);
+        json_decref (o);
+        errno = EINVAL;
+        return NULL;
+    }
+    return o;
 }
 
 /*
