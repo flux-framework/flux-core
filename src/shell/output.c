@@ -90,6 +90,8 @@ struct shell_output {
     struct shell_output_type_file stdout_file;
     struct shell_output_type_file stderr_file;
     zhash_t *fds;
+    const char *stdout_buffer_type;
+    const char *stderr_buffer_type;
 };
 
 static const int shell_output_lwm = 100;
@@ -759,6 +761,43 @@ static int shell_output_check_alternate_output (struct shell_output *out)
     return 0;
 }
 
+static int parse_alternate_buffer_type (struct shell_output *out,
+                                        const char *stream,
+                                        const char **buffer_type_ptr)
+{
+    const char *buffer_type = NULL;
+
+    if (flux_shell_getopt_unpack (out->shell, "output",
+                                  "{s?:{s?:{s?:s}}}",
+                                  stream,
+                                  "buffer",
+                                  "type", &buffer_type) < 0)
+        return -1;
+
+    if (buffer_type) {
+        if (strcasecmp (buffer_type, "none")
+            && strcasecmp (buffer_type, "line"))
+            shell_log_error ("invalid buffer type specified: %s", buffer_type);
+        else
+            (*buffer_type_ptr) = buffer_type;
+    }
+
+    return 0;
+}
+
+static int shell_output_check_alternate_buffer_type (struct shell_output *out)
+{
+    if (parse_alternate_buffer_type (out,
+                                     "stdout",
+                                     &out->stdout_buffer_type) < 0)
+        return -1;
+    if (parse_alternate_buffer_type (out,
+                                     "stderr",
+                                     &out->stderr_buffer_type) < 0)
+        return -1;
+    return 0;
+}
+
 static struct shell_output_fd *shell_output_fd_create (int fd)
 {
     struct shell_output_fd *fdp = calloc (1, sizeof (*fdp));
@@ -910,8 +949,12 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
         out->stdout_type = FLUX_OUTPUT_TYPE_KVS;
         out->stderr_type = FLUX_OUTPUT_TYPE_KVS;
     }
+    out->stdout_buffer_type = "line";
+    out->stderr_buffer_type = "line";
 
     if (shell_output_check_alternate_output (out) < 0)
+        goto error;
+    if (shell_output_check_alternate_buffer_type (out) < 0)
         goto error;
 
     if (!(out->pending_writes = zlist_new ()))
@@ -961,9 +1004,27 @@ error:
     return NULL;
 }
 
-static void task_output_cb (struct shell_task *task,
-                            const char *stream,
-                            void *arg)
+static int task_setup_buffering (struct shell_task *task,
+                                 const char *stream,
+                                 const char *buffer_type)
+{
+    /* libsubprocess defaults to line buffering, so we only need to
+     * handle != line case */
+    if (!strcasecmp (buffer_type, "none")) {
+        char buf[64];
+        snprintf (buf, sizeof (buf), "%s_LINE_BUFFER", stream);
+        if (flux_cmd_setopt (task->cmd, buf, "false") < 0) {
+            shell_log_errno ("flux_cmd_setopt");
+            return -1;
+        }
+    }
+
+    return 0;
+}
+
+static void task_line_output_cb (struct shell_task *task,
+                                 const char *stream,
+                                 void *arg)
 {
     struct shell_output *out = arg;
     const char *data;
@@ -983,6 +1044,35 @@ static void task_output_cb (struct shell_task *task,
     }
 }
 
+static void task_none_output_cb (struct shell_task *task,
+                                 const char *stream,
+                                 void *arg)
+{
+    struct shell_output *out = arg;
+    const char *data;
+    int len;
+
+    data = flux_subprocess_read_line (task->proc, stream, &len);
+    if (!data) {
+        shell_log_errno ("read line %s task %d", stream, task->rank);
+    }
+    else if (!len) {
+        /* stderr is unbuffered */
+        if (!(data = flux_subprocess_read (task->proc, stream, -1, &len))) {
+            shell_log_errno ("read %s task %d", stream, task->rank);
+            return;
+        }
+    }
+    if (len > 0) {
+        if (shell_output_write (out, task->rank, stream, data, len, false) < 0)
+            shell_log_errno ("write %s task %d", stream, task->rank);
+    }
+    else if (flux_subprocess_read_stream_closed (task->proc, stream)) {
+        if (shell_output_write (out, task->rank, stream, NULL, 0, true) < 0)
+            shell_log_errno ("write eof %s task %d", stream, task->rank);
+    }
+}
+
 static int shell_output_task_init (flux_plugin_t *p,
                                    const char *topic,
                                    flux_plugin_arg_t *args,
@@ -991,18 +1081,32 @@ static int shell_output_task_init (flux_plugin_t *p,
     flux_shell_t *shell = flux_plugin_get_shell (p);
     struct shell_output *out = flux_plugin_aux_get (p, "builtin.output");
     flux_shell_task_t *task;
+    void (*output_cb)(struct shell_task *, const char *, void *);
 
     if (!shell || !out || !(task = flux_shell_current_task (shell)))
         return -1;
 
+    if (task_setup_buffering (task, "stdout", out->stdout_buffer_type) < 0)
+        return -1;
+    if (task_setup_buffering (task, "stderr", out->stderr_buffer_type) < 0)
+        return -1;
+
     if (output_type_requires_service (out->stdout_type)) {
+        if (!strcasecmp (out->stdout_buffer_type, "line"))
+            output_cb = task_line_output_cb;
+        else
+            output_cb = task_none_output_cb;
         if (flux_shell_task_channel_subscribe (task, "stdout",
-                                               task_output_cb, out) < 0)
+                                               output_cb, out) < 0)
             return -1;
     }
     if (output_type_requires_service (out->stderr_type)) {
+        if (!strcasecmp (out->stderr_buffer_type, "line"))
+            output_cb = task_line_output_cb;
+        else
+            output_cb = task_none_output_cb;
         if (flux_shell_task_channel_subscribe (task, "stderr",
-                                               task_output_cb, out) < 0)
+                                               output_cb, out) < 0)
             return -1;
     }
 
