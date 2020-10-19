@@ -950,7 +950,7 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
         out->stderr_type = FLUX_OUTPUT_TYPE_KVS;
     }
     out->stdout_buffer_type = "line";
-    out->stderr_buffer_type = "line";
+    out->stderr_buffer_type = "none";
 
     if (shell_output_check_alternate_output (out) < 0)
         goto error;
