@@ -134,9 +134,11 @@ test_expect_success 'job-shell: verify output of 1-task lptest job' '
 # output.
 #
 
-test_expect_success 'job-shell: verify output of 1-task lptest job on stderr' '
-        id=$(flux jobspec srun -n1 bash -c "${LPTEST} >&2" \
-		| flux job submit) &&
+test_expect_success HAVE_JQ 'job-shell: verify output of 1-task lptest job on stderr' '
+	flux jobspec srun -n1 bash -c "${LPTEST} >&2" \
+	    | $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
+	    > 1task_lptest.json &&
+	id=$(cat 1task_lptest.json | flux job submit) &&
 	flux job attach -l $id 2>lptest.err &&
         sed -i -e "/stdin EOF could not be sent/d" lptest.err &&
 	test_cmp lptest.exp lptest.err
@@ -147,9 +149,11 @@ test_expect_success 'job-shell: verify output of 4-task lptest job' '
 	sort -snk1 <lptest4_raw.out >lptest4.out &&
 	test_cmp lptest4.exp lptest4.out
 '
-test_expect_success 'job-shell: verify output of 4-task lptest job on stderr' '
-        id=$(flux jobspec srun -N4 bash -c "${LPTEST} 1>&2" \
-		| flux job submit) &&
+test_expect_success HAVE_JQ 'job-shell: verify output of 4-task lptest job on stderr' '
+	flux jobspec srun -N4 bash -c "${LPTEST} 1>&2" \
+	    | $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
+	    > 4task_lptest.json &&
+	id=$(cat 4task_lptest.json | flux job submit) &&
 	flux job attach -l $id 2>lptest4_raw.err &&
 	sort -snk1 <lptest4_raw.err >lptest4.err &&
         sed -i -e "/stdin EOF could not be sent/d" lptest4.err &&
