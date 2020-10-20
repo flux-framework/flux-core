@@ -2,6 +2,8 @@
 
 test_description='Test kvs eventlog get|append'
 
+. `dirname $0`/kvs/kvs-helper.sh
+
 . `dirname $0`/sharness.sh
 
 test_under_flux 4 kvs
@@ -53,8 +55,15 @@ test_expect_success NO_CHAIN_LINT 'flux kvs eventlog get --watch returns append 
 	test_cmp get_e.exp get_e.out
 '
 
-test_expect_success 'flux kvs eventlog append fails with invalid context' '
-	! flux kvs eventlog append test.c foo not_a_object
+test_expect_success NO_CHAIN_LINT 'flux kvs eventlog get --waitcreate works' '
+        test_must_fail flux kvs eventlog get --unformatted test.f &&
+	flux kvs eventlog get --unformatted --waitcreate test.f >get_f.out &
+	pid=$! &&
+        wait_watcherscount_nonzero primary &&
+	flux kvs eventlog append --timestamp=1 test.f foo "{\"data\":\"bar\"}" &&
+	echo "{\"timestamp\":1.0,\"name\":\"foo\",\"context\":{\"data\":\"bar\"}}" >get_f.exp
+	wait $pid &&
+	test_cmp get_f.exp get_f.out
 '
 
 test_expect_success 'flux kvs eventlog append and work on alternate namespaces' '
@@ -65,6 +74,86 @@ test_expect_success 'flux kvs eventlog append and work on alternate namespaces' 
         grep main get_f1.out &&
         flux kvs eventlog get --namespace=EVENTLOGTESTNS test.ns > get_f2.out &&
         grep guest get_f2.out
+'
+
+test_expect_success 'flux kvs eventlog wait-event detects eventlog with event' '
+	flux kvs eventlog append --timestamp=42 test.wait_event.a foo &&
+	flux kvs eventlog append --timestamp=43 test.wait_event.a bar &&
+        flux kvs eventlog wait-event --unformatted test.wait_event.a foo > wait_event_a1.out &&
+        grep foo wait_event_a1.out &&
+        test_must_fail grep bar wait_event_a1.out &&
+        flux kvs eventlog wait-event --unformatted test.wait_event.a bar > wait_event_a2.out &&
+        test_must_fail grep foo wait_event_a2.out &&
+        grep bar wait_event_a2.out
+'
+
+test_expect_success 'flux kvs eventlog wait-event outputs more events with -v' '
+	flux kvs eventlog append --timestamp=42 test.wait_event.b foo &&
+	flux kvs eventlog append --timestamp=43 test.wait_event.b bar &&
+        flux kvs eventlog wait-event --unformatted -v test.wait_event.b foo > wait_event_b1.out &&
+        grep foo wait_event_b1.out &&
+        test_must_fail grep bar wait_event_b1.out &&
+        flux kvs eventlog wait-event --unformatted -v test.wait_event.b bar > wait_event_b2.out &&
+        grep foo wait_event_b2.out &&
+        grep bar wait_event_b2.out
+'
+
+test_expect_success 'flux kvs eventlog wait-event doesnt output events with -q' '
+	flux kvs eventlog append --timestamp=42 test.wait_event.c foo &&
+	flux kvs eventlog append --timestamp=43 test.wait_event.c bar &&
+        flux kvs eventlog wait-event --unformatted -q test.wait_event.c foo > wait_event_c1.out &&
+        test_must_fail grep foo wait_event_c1.out &&
+        test_must_fail grep bar wait_event_c1.out &&
+        flux kvs eventlog wait-event --unformatted -q test.wait_event.c bar > wait_event_c2.out &&
+        test_must_fail grep foo wait_event_c2.out &&
+        test_must_fail grep bar wait_event_c2.out
+'
+
+test_expect_success 'flux kvs eventlog wait-event fails on eventlog without event' '
+	flux kvs eventlog append --timestamp=42 test.wait_event.d foo &&
+	flux kvs eventlog append --timestamp=43 test.wait_event.d bar &&
+        test_expect_code 137 run_timeout 0.1 flux kvs eventlog wait-event test.wait_event.d foobar
+'
+
+test_expect_success 'flux kvs eventlog wait-event fails on non-existent eventlog' '
+        test_must_fail flux kvs eventlog wait-event test.wait_event.e foo
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs eventlog wait-event --waitcreate works' '
+        test_must_fail flux kvs eventlog get --unformatted test.wait_event.f &&
+	flux kvs eventlog wait-event --waitcreate --unformatted test.wait_event.f foo >wait_event_f.out &
+	pid=$! &&
+        wait_watcherscount_nonzero primary &&
+	flux kvs eventlog append --timestamp=1 test.wait_event.f foo "{\"data\":\"bar\"}" &&
+	echo "{\"timestamp\":1.0,\"name\":\"foo\",\"context\":{\"data\":\"bar\"}}" >wait_event_f.exp
+	wait $pid &&
+	test_cmp wait_event_f.exp wait_event_f.out
+'
+
+test_expect_success NO_CHAIN_LINT 'flux kvs eventlog wait-event --timeout works' '
+	flux kvs eventlog append --timestamp=42 test.wait_event.g foo &&
+	flux kvs eventlog append --timestamp=43 test.wait_event.g bar &&
+	test_must_fail flux kvs eventlog wait-event --timeout=0.1 test.wait_event.g baz
+'
+
+#
+# corner case tests
+#
+
+test_expect_success 'flux kvs eventlog get fails on bad input' '
+	test_must_fail flux kvs eventlog get
+'
+
+test_expect_success 'flux kvs eventlog append fails on bad input' '
+	test_must_fail flux kvs eventlog append
+'
+
+test_expect_success 'flux kvs eventlog append fails with invalid context' '
+	test_must_fail flux kvs eventlog append test.bad.context foo not_a_object
+'
+
+test_expect_success 'flux kvs eventlog wait-event fails on bad input' '
+	test_must_fail flux kvs eventlog wait-event
 '
 
 test_done

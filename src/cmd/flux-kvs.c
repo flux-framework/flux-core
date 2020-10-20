@@ -1809,6 +1809,14 @@ struct eventlog_get_ctx {
     int count;
 };
 
+struct eventlog_wait_event_ctx {
+    optparse_t *p;
+    const char *key;
+    const char *wait_event;
+    bool got_event;
+    double timeout;
+};
+
 /* print event in raw form */
 void eventlog_unformatted_print (json_t *event)
 {
@@ -1846,6 +1854,14 @@ static void eventlog_prettyprint (json_t *event)
     fflush (stdout);
 }
 
+static void eventlog_print (optparse_t *p, json_t *event)
+{
+    if (optparse_hasopt (p, "unformatted"))
+        eventlog_unformatted_print (event);
+    else
+        eventlog_prettyprint (event);
+}
+
 void eventlog_get_continuation (flux_future_t *f, void *arg)
 {
     struct eventlog_get_ctx *ctx = arg;
@@ -1872,12 +1888,8 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
         log_err_exit ("eventlog_decode");
 
     json_array_foreach (a, index, value) {
-        if (ctx->maxcount == 0 || ctx->count < ctx->maxcount) {
-            if (optparse_hasopt (ctx->p, "unformatted"))
-                eventlog_unformatted_print (value);
-            else
-                eventlog_prettyprint (value);
-        }
+        if (ctx->maxcount == 0 || ctx->count < ctx->maxcount)
+            eventlog_print (ctx->p, value);
         if (ctx->maxcount > 0 && ++ctx->count == ctx->maxcount)
             limit_reached = true;
     }
@@ -1922,6 +1934,8 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
         flags |= FLUX_KVS_WATCH;
         flags |= FLUX_KVS_WATCH_APPEND;
     }
+    if (optparse_hasopt (p, "waitcreate"))
+        flags |= FLUX_KVS_WAITCREATE;
 
     ctx.p = p;
     ctx.count = 0;
@@ -1930,6 +1944,113 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
     if (!(f = flux_kvs_lookup (h, ns, flags, key)))
         log_err_exit ("flux_kvs_lookup");
     if (flux_future_then (f, -1., eventlog_get_continuation, &ctx) < 0)
+        log_err_exit ("flux_future_then");
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
+        log_err_exit ("flux_reactor_run");
+
+    return (0);
+}
+
+void eventlog_wait_event_continuation (flux_future_t *f, void *arg)
+{
+    struct eventlog_wait_event_ctx *ctx = arg;
+    const char *s;
+    json_t *a;
+    size_t index;
+    json_t *value;
+
+    if (flux_kvs_lookup_get (f, &s) < 0) {
+        if (errno == ENOENT) {
+            flux_future_destroy (f);
+            log_msg_exit ("eventlog path %s not found", ctx->key);
+        }
+        else if (errno == ETIMEDOUT) {
+            flux_future_destroy (f);
+            log_msg_exit ("wait-event timeout on event '%s'",
+                          ctx->wait_event);
+        }
+        else if (errno == ENODATA) {
+            flux_future_destroy (f);
+            if (!ctx->got_event)
+                log_msg_exit ("event '%s' never received",
+                              ctx->wait_event);
+            return;
+        }
+        else
+            log_err_exit ("flux_kvs_lookup_get");
+    }
+
+    if (!(a = eventlog_decode (s)))
+        log_err_exit ("eventlog_decode");
+
+    json_array_foreach (a, index, value) {
+        const char *name;
+
+        if (eventlog_entry_parse (value, NULL, &name, NULL) < 0)
+            log_err_exit ("eventlog_entry_parse");
+
+        if (!strcmp (name, ctx->wait_event)) {
+            if (!optparse_hasopt (ctx->p, "quiet"))
+                eventlog_print (ctx->p, value);
+            ctx->got_event = true;
+            break;
+        }
+        else if (optparse_hasopt (ctx->p, "verbose")) {
+            if (!ctx->got_event)
+                eventlog_print (ctx->p, value);
+        }
+    }
+
+    fflush (stdout);
+
+    if (ctx->got_event) {
+        if (flux_kvs_lookup_cancel (f) < 0)
+            log_err_exit ("flux_kvs_lookup_cancel");
+    }
+    flux_future_reset (f);
+
+    /* re-call to set timeout */
+    if (flux_future_then (f,
+                          ctx->timeout,
+                          eventlog_wait_event_continuation,
+                          arg) < 0)
+        log_err_exit ("flux_future_then");
+
+    json_decref (a);
+}
+
+int cmd_eventlog_wait_event (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h = optparse_get_data (p, "flux_handle");
+    const char *ns = NULL;
+    int optindex = optparse_option_index (p);
+    flux_future_t *f;
+    int flags = 0;
+    struct eventlog_wait_event_ctx ctx;
+
+    if (argc - optindex != 2) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    ns = optparse_get_str (p, "namespace", NULL);
+
+    ctx.p = p;
+    ctx.key = argv[optindex++];
+    ctx.wait_event = argv[optindex++];
+    ctx.got_event = false;
+    ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
+
+    flags |= FLUX_KVS_WATCH;
+    flags |= FLUX_KVS_WATCH_APPEND;
+    if (optparse_hasopt (p, "waitcreate"))
+        flags |= FLUX_KVS_WAITCREATE;
+
+    if (!(f = flux_kvs_lookup (h, ns, flags, ctx.key)))
+        log_err_exit ("flux_kvs_lookup");
+    if (flux_future_then (f,
+                          ctx.timeout,
+                          eventlog_wait_event_continuation,
+                          &ctx) < 0)
         log_err_exit ("flux_future_then");
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
@@ -1951,6 +2072,9 @@ static struct optparse_option eventlog_get_opts[] =  {
     { .name = "namespace", .key = 'N', .has_arg = 1,
       .usage = "Specify KVS namespace to use.",
     },
+    { .name = "waitcreate", .key = 'W', .has_arg = 0,
+      .usage = "Wait for creation to occur on watch",
+    },
     { .name = "watch", .key = 'w', .has_arg = 0,
       .usage = "Monitor eventlog",
     },
@@ -1959,6 +2083,28 @@ static struct optparse_option eventlog_get_opts[] =  {
     },
     { .name = "unformatted", .key = 'u', .has_arg = 0,
       .usage = "Show event in RFC 18 form",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option eventlog_wait_event_opts[] =  {
+    { .name = "namespace", .key = 'N', .has_arg = 1,
+      .usage = "Specify KVS namespace to use.",
+    },
+    { .name = "waitcreate", .key = 'W', .has_arg = 0,
+      .usage = "Wait for creation to occur on eventlog",
+    },
+    { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "DURATION",
+      .usage = "timeout after DURATION",
+    },
+    { .name = "unformatted", .key = 'u', .has_arg = 0,
+      .usage = "Show event in RFC 18 form",
+    },
+    { .name = "quiet", .key = 'q', .has_arg = 0,
+      .usage = "Do not output matched event",
+    },
+    { .name = "verbose", .key = 'v', .has_arg = 0,
+      .usage = "Output all events before matched event",
     },
     OPTPARSE_TABLE_END
 };
@@ -1972,11 +2118,18 @@ static struct optparse_subcommand eventlog_subcommands[] = {
       eventlog_append_opts,
     },
     { "get",
-      "[-N ns] [-u] [-w] [-c COUNT] key",
+      "[-N ns] [-u] [-W] [-w] [-c COUNT] key",
       "Get eventlog",
       cmd_eventlog_get,
       0,
       eventlog_get_opts,
+    },
+    { "wait-event",
+      "[-N ns] [-t seconds] [-u] [-W] [-q] [-v] key event",
+      "Wait for an event",
+      cmd_eventlog_wait_event,
+      0,
+      eventlog_wait_event_opts,
     },
     OPTPARSE_SUBCMD_END
 };

@@ -414,7 +414,7 @@ static struct optparse_subcommand subcommands[] = {
     },
     { "wait-event",
       "[-f text|json] [-T raw|iso|offset] [-t seconds] [-m key=val] "
-      "[-p path] id event",
+      "[-p path] [-q] [-v] id event",
       "Wait for an event ",
       cmd_wait_event,
       0,
@@ -2631,7 +2631,7 @@ void wait_event_continuation (flux_future_t *f, void *arg)
         }
         else if (errno == ETIMEDOUT) {
             flux_future_destroy (f);
-            log_msg_exit ("wait-event timeout on event '%s'\n",
+            log_msg_exit ("wait-event timeout on event '%s'",
                           ctx->wait_event);
         } else if (errno == ENODATA) {
             flux_future_destroy (f);
