@@ -42,7 +42,7 @@ int event_batch_pub_state (struct event *event, struct job *job,
 /* Add notification of job event to send to listeners.
  */
 int event_batch_process_event_entry (struct event *event,
-                                     struct job *job,
+                                     flux_jobid_t id,
                                      const char *name,
                                      json_t *entry);
 

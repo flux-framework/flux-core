@@ -552,11 +552,11 @@ static int get_timestamp_now (double *timestamp)
 /* we need to send the job id along with each eventlog entry, so wrap
  * the eventlog entry in another object with the job id
  */
-static json_t *wrap_events_entry (struct job *job, json_t *entry)
+static json_t *wrap_events_entry (flux_jobid_t id, json_t *entry)
 {
     json_t *wrapped_entry;
     if (!(wrapped_entry = json_pack ("{s:I s:O}",
-                                     "id", job->id,
+                                     "id", id,
                                      "entry", entry))) {
         errno = ENOMEM;
         return NULL;
@@ -583,7 +583,7 @@ static bool allow_deny_check (struct events_listener *el, const char *name)
 }
 
 int event_batch_process_event_entry (struct event *event,
-                                     struct job *job,
+                                     flux_jobid_t id,
                                      const char *name,
                                      json_t *entry)
 {
@@ -598,7 +598,7 @@ int event_batch_process_event_entry (struct event *event,
     while (el) {
         if (allow_deny_check (el, name)) {
             if (!wrapped_entry) {
-                if (!(wrapped_entry = wrap_events_entry (job, entry)))
+                if (!(wrapped_entry = wrap_events_entry (id, entry)))
                     goto error;
             }
             if (json_array_append (el->events, wrapped_entry) < 0)
@@ -638,7 +638,7 @@ int event_job_post_pack (struct event *event,
         goto error;
     if (!(entry = eventlog_entry_vpack (timestamp, name, context_fmt, ap)))
         return -1;
-    if (event_batch_process_event_entry (event, job, name, entry) < 0)
+    if (event_batch_process_event_entry (event, job->id, name, entry) < 0)
         goto error;
     if (EVENT_JOURNAL_ONLY & flags)
         goto out;
