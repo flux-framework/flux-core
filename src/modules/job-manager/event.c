@@ -549,8 +549,9 @@ static int get_timestamp_now (double *timestamp)
     return 0;
 }
 
-/* we need to send the job id along with each eventlog entry, so wrap
- * the eventlog entry in another object with the job id
+/* wrap the eventlog entry in another object with the job id.  The job
+ * id is necessary so listeners can determine which job the event is
+ * associated with.
  */
 static json_t *wrap_events_entry (flux_jobid_t id, json_t *entry)
 {
