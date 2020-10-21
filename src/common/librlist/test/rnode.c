@@ -38,12 +38,118 @@ static void rnode_alloc_and_check (struct rnode *n, int count, char *expected)
 
 static void rnode_avail_check (struct rnode *n, const char *expected)
 {
-    char *avail = idset_encode (n->avail, IDSET_FLAG_RANGE);
+    char *avail = idset_encode (n->cores->avail, IDSET_FLAG_RANGE);
     if (avail == NULL)
-        BAIL_OUT ("failed to encode n->avail");
+        BAIL_OUT ("failed to encode n->cores->avail");
     is (avail, expected,
         "rnode->avail is expected: %s", avail);
     free (avail);
+}
+
+static void test_diff ()
+{
+    struct rnode *a = rnode_create ("foo", 0, "0-3");
+    struct rnode *b = rnode_create ("foo", 0, "0-3");
+    struct rnode *c = rnode_create ("foo", 0, "0-1");
+    struct rnode *result = NULL;
+
+    if (!a || !b || !c)
+        BAIL_OUT ("rnode_create failed!");
+
+    result = rnode_diff (a, b);
+    ok (result != NULL,
+        "rnode_diff (a, b) worked");
+    ok (rnode_empty (result),
+        "result is empty");
+    rnode_destroy (result);
+
+    result = rnode_diff (a, c);
+    ok (result != NULL,
+        "rnode_diff (a, c) works");
+    ok (!rnode_empty (result),
+        "rnode is not empty");
+    ok (rnode_avail_total (result) == 2,
+        "result has two available resources");
+    rnode_avail_check (result, "2-3");
+    rnode_destroy (result);
+
+    rnode_destroy (a);
+    rnode_destroy (b);
+    rnode_destroy (c);
+}
+
+static void test_intersect ()
+{
+    struct rnode *a = rnode_create ("foo", 0, "0-1");
+    struct rnode *b = rnode_create ("foo", 0, "1-3");
+    struct rnode *c = rnode_create ("foo", 0, "2-3");
+    struct rnode *result = NULL;
+
+    if (!a || !b || !c)
+        BAIL_OUT ("rnode_create failed");
+
+    result = rnode_intersect (a, b);
+    ok (result != NULL,
+        "rnode_intersect (a, b) worked");
+    if (!result)
+        BAIL_OUT ("rnode_intersect failed: %s", strerror (errno));
+    ok (!rnode_empty (result),
+        "result is not empty");
+    ok (rnode_count_type (result, "core") == 1,
+        "result has 1 core");
+    rnode_destroy (result);
+
+    result = rnode_intersect (a, c);
+    ok (result != NULL,
+        "rnode_intersect (a, c) worked");
+    if (!result)
+        BAIL_OUT ("rnode_intersect failed: %s", strerror (errno));
+    ok (rnode_empty (result),
+        "result is empty");
+    rnode_destroy (result);
+
+    rnode_destroy (a);
+    rnode_destroy (b);
+    rnode_destroy (c);
+}
+
+static void test_add_child ()
+{
+    struct rnode_child *c;
+    struct rnode *a = rnode_create ("foo", 0, "0-3");
+
+    if (!a)
+        BAIL_OUT ("rnode_create failed");
+
+    ok (rnode_count (a) == 4,
+        "rnode_create worked");
+    ok (rnode_count_type (a, "gpu") == 0,
+        "rnode_count_type (gpu) == 0");
+
+    if (!(c = rnode_add_child (a, "gpu", "0")))
+        BAIL_OUT ("rnode_add_child failed");
+
+    is (c->name, "gpu",
+        "rnode_add_child (gpu) works");
+    ok (idset_count (c->ids) == 1 && idset_count (c->avail) == 1,
+        "child has correct idsets");
+    ok (rnode_count_type (a, "gpu") == 1,
+        "rnode_count_type (gpu) == 1");
+
+    if (!(c = rnode_add_child (a, "core", "4-7")))
+        BAIL_OUT ("rnode_add_child failed");
+
+    is (c->name, "core",
+        "rnode_add_child (core) works");
+    ok (rnode_count (a) == 8,
+        "core count is now 8");
+    ok (rnode_avail_total (a) == 9,
+        "total available reosurces is 9");
+
+    ok (rnode_add_child (a, "gpu", "0-1") == NULL && errno == EEXIST,
+        "rnode_add_child fails with EEXIST if ids already exist in set");
+
+    rnode_destroy (a);
 }
 
 int main (int ac, char *av[])
@@ -53,8 +159,10 @@ int main (int ac, char *av[])
 
     plan (NO_PLAN);
 
-    if (!(n = rnode_create (0, "0-3")))
+    if (!(n = rnode_create ("foo", 0, "0-3")))
         BAIL_OUT ("could not create an rnode object");
+    is (n->hostname, "foo",
+        "rnode is has hostname set");
     ok (n->up,
         "rnode is created in up state by default");
     n->up = false;
@@ -112,20 +220,22 @@ int main (int ac, char *av[])
 
     rnode_destroy (n);
 
-    n = rnode_create_count (1, 8);
+    n = rnode_create_count ("foo", 1, 8);
     if (n == NULL)
         BAIL_OUT ("rnode_create_count failed");
+    is (n->hostname, "foo",
+        "rnode_create_count set hostname correctly");
     ok (n->rank == 1, "rnode rank set correctly");
-    ok (n != NULL, "rnode_create_count");
     rnode_avail_check (n, "0-7");
     rnode_destroy (n);
 
     struct idset *idset = idset_decode ("0-3");
-    n = rnode_create_idset (3, idset);
+    n = rnode_create_idset ("foo", 3, idset);
     idset_destroy (idset);
     if (n == NULL)
         BAIL_OUT ("rnode_create_idset failed");
-    ok (n != NULL, "rnode_create_idset");
+    is (n->hostname, "foo",
+        "rnode hostname set correctly");
     ok (n->rank == 3, "rnode rank set correctly");
     rnode_avail_check (n, "0-3");
 
@@ -152,6 +262,10 @@ int main (int ac, char *av[])
 
     idset_destroy (alloc);
     rnode_destroy (n);
+
+    test_diff ();
+    test_intersect ();
+    test_add_child ();
     done_testing ();
 }
 

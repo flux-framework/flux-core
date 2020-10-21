@@ -57,6 +57,18 @@ struct rlist_test_entry test_2n_4c[] = {
       "",
       "rank[0-1]/core[0-3]",
       EINVAL, false },
+    { "Too many nodes returns error", NULL, NULL,
+      { 3, 4, 1 },
+      NULL,
+      "",
+      "rank[0-1]/core[0-3]",
+      EOVERFLOW, false },
+    { "nodes > slots returns error", NULL, NULL,
+      { 2, 1, 1 },
+      NULL,
+      "",
+      "rank[0-1]/core[0-3]",
+      EINVAL, false },
     { "invalid number of slots return error", NULL, NULL,
       { 0, 0, 1 },
       NULL,
@@ -186,27 +198,44 @@ struct rlist_test_entry test_1024n_4c[] = {
 };
 
 
-char *R_create (int ranks, int cores)
+char *R_create (const char *ranklist,
+                const char *corelist,
+                const char *gpus,
+                const char *nodelist)
 {
     char *retval;
-    char corelist[64];
-    char ranklist[64];
     json_t *o = NULL;
     json_t *R_lite = NULL;
 
-    if ((snprintf (corelist, sizeof (corelist)-1, "0-%d", cores-1) < 0)
-        || (snprintf (ranklist, sizeof (ranklist)-1, "0-%d", ranks -1) < 0))
-        goto err;
-
-    if (!(R_lite = json_pack ("{s:s,s:{s:s}}",
-                    "rank", ranklist,
-                    "children", "core", corelist)))
-        goto err;
-    if (!(o = json_pack ("{s:i, s:{s:[O]}}",
+    if (gpus) {
+        if (!(R_lite = json_pack ("{s:s,s:{s:s s:s}}",
+                        "rank", ranklist,
+                        "children",
+                          "core", corelist ? corelist : "",
+                          "gpu", gpus)))
+            goto err;
+    }
+    else {
+        if (!(R_lite = json_pack ("{s:s,s:{s:s}}",
+                        "rank", ranklist,
+                        "children", "core", corelist)))
+            goto err;
+    }
+    if (nodelist) {
+        if (!(o = json_pack ("{s:i, s:{s:[s], s:[O]}}",
+                   "version", 1,
+                   "execution",
+                     "nodelist", nodelist,
+                     "R_lite", R_lite)))
+            goto err;
+    }
+    else {
+        if (!(o = json_pack ("{s:i, s:{s:[O]}}",
                    "version", 1,
                    "execution", "R_lite", R_lite)))
-        goto err;
-    retval = json_dumps (o, JSON_COMPACT);
+            goto err;
+    }
+    retval = json_dumps (o, JSON_COMPACT|JSON_ENCODE_ANY);
     json_decref (o);
     json_decref (R_lite);
     return (retval);
@@ -254,12 +283,22 @@ static char * rlist_tostring (struct rlist *rl, bool allocated)
     return result;
 }
 
+static char *R_create_num (int ranks, int cores)
+{
+    char corelist[64];
+    char ranklist[64];
+    if ((snprintf (corelist, sizeof (corelist)-1, "0-%d", cores-1) < 0)
+        || (snprintf (ranklist, sizeof (ranklist)-1, "0-%d", ranks -1) < 0))
+        return NULL;
+    return R_create (ranklist, corelist, NULL, NULL);
+}
+
 void run_test_entries (struct rlist_test_entry tests[], int ranks, int cores)
 {
     struct rlist *rl = NULL;
     struct rlist *alloc = NULL;
     struct rlist_test_entry *e = NULL;
-    char *R = R_create (ranks, cores);
+    char *R = R_create_num (ranks, cores);
     if (R == NULL)
         BAIL_OUT ("R_create (ranks=%d, cores=%d) failed", ranks, cores);
     if (!(rl = rlist_from_R (R)))
@@ -285,6 +324,7 @@ void run_test_entries (struct rlist_test_entry tests[], int ranks, int cores)
                 is (result, e->result, "%s: %s", e->description, result);
                 if (e->allocated) {
                     char *s = rlist_tostring (rl, true);
+                    diag ("total=%d, avail=%d", rl->total, rl->avail);
                     is (s, e->allocated, "%s: alloc: %s", e->description, s);
                     free (s);
                 }
@@ -310,7 +350,7 @@ void run_test_entries (struct rlist_test_entry tests[], int ranks, int cores)
                 "marking ranks %s back up", e->down);
 
         char *s = rlist_dumps (rl);
-        // diag ("avail=%s", s);
+        diag ("avail=%s", s);
         free (s);
         e++;
     }
@@ -328,22 +368,25 @@ static void test_simple (void)
 
     ok (rl->total == 0 && rl->avail == 0,
         "rlist_create creates empty list");
-    ok (rlist_append_rank (rl, 0, "0-3") == 0,
-        "rlist_append_rank 0, 0-3");
+    ok (rlist_append_rank_cores (rl, "host", 0, "0-3") == 0,
+        "rlist_append_rank_cores 0, 0-3");
     ok (rl->total == 4 && rl->avail == 4,
         "rlist: avail and total == 4");
-    ok (rlist_append_rank (rl, 1, "0-3") == 0,
-        "rlist_append_rank 1, 0-3");
+    ok (rlist_append_rank_cores (rl, "host", 1, "0-3") == 0,
+        "rlist_append_rank_cores 1, 0-3");
     ok (rl->total == 8 && rl->avail == 8,
         "rlist: avail and total == 4");
     ok ((alloc = rlist_alloc (rl, NULL, 0, 8, 1)) != NULL,
         "rlist: alloc all cores works");
     ok (alloc->total == 8 && alloc->avail == 8,
-        "rlist: alloc: avail = 8, total == 8");
+        "rlist: alloc: got %d/%d (expected 8/8)",
+        alloc->avail, alloc->total);
     ok (rl->total == 8 && rl->avail == 0,
         "rlist: avail == 0, total == 8");
     ok ((copy = rlist_copy_empty (rl)) != NULL,
         "rlist: rlist_copy_empty");
+    if (!copy)
+        BAIL_OUT ("rlist_copy_empty failed!");
     ok (copy->total == 8 && copy->avail == 8,
         "rlist: copy: total = %d, avail = %d", copy->total, copy->avail);
 
@@ -619,6 +662,63 @@ static void test_by_rank_coreids (void)
     return;
 }
 
+const char by_rank_hostnames[] = "{\
+\"0\": {\
+    \"Package\": 1,\
+    \"Core\": 4,\
+    \"PU\": 8,\
+    \"cpuset\": \"0-7\",\
+    \"coreids\": \"0-3\",\
+    \"hostname\": \"foo\"\
+  },\
+\"1\": {\
+    \"Package\": 1,\
+    \"Core\": 2,\
+    \"PU\": 2,\
+    \"cpuset\": \"0-1\",\
+    \"coreids\": \"0-1\",\
+    \"hostname\": \"bar\"\
+  }\
+}";
+
+
+static void test_by_rank_hostnames (void)
+{
+    char *result;
+    struct rlist *rl;
+    json_t *R;
+    json_t *nodelist;
+    json_t *hosts;
+
+    rl = rlist_from_hwloc_by_rank (by_rank_hostnames, false);
+    if (rl == NULL)
+        BAIL_OUT ("unable to create rlist from by_rank_hostnames");
+    ok (rlist_nnodes (rl) == 2,
+        "coreids: created rlist with 3 nodes");
+    result = rlist_dumps (rl);
+    is (result,
+        "rank0/core[0-3] rank1/core[0-1]",
+        "coreids: rlist_dumps works");
+    free (result);
+
+    R = rlist_to_R (rl);
+    if (R == NULL)
+        BAIL_OUT ("unable to create R from by_rank_hostnames");
+    ok (json_unpack (R, "{s:{s:o}}", "execution", "nodelist", &nodelist) == 0,
+        "R has a execution.nodelist key");
+    ok (json_is_array (nodelist),
+        "nodelist is an array");
+
+    hosts = json_array_get (nodelist, 0);
+    is (json_string_value (hosts), "foo,bar",
+        "json string is \"foo,bar\"");
+
+    json_decref (R);
+    rlist_destroy (rl);
+    return;
+}
+
+
 
 static void test_dumps (void)
 {
@@ -636,24 +736,24 @@ static void test_dumps (void)
         "rlist_dumps: empty list returns empty string");
     free (result);
 
-    rlist_append_rank (rl, 0, "0-3");
+    rlist_append_rank_cores (rl, "host", 0, "0-3");
     result = rlist_dumps (rl);
     is (result, "rank0/core[0-3]",
         "rlist_dumps with one rank 4 cores gets expected result");
     free (result);
 
-    rlist_append_rank (rl, 1, "0-7");
+    rlist_append_rank_cores (rl, "host", 1, "0-7");
     result = rlist_dumps (rl);
     is (result, "rank0/core[0-3] rank1/core[0-7]",
         "rlist_dumps with two ranks gets expected result");
     free (result);
 
-    rlist_append_rank (rl, 1234567, "0-12345");
-    rlist_append_rank (rl, 1234568, "0-12346");
+    rlist_append_rank_cores (rl, "host", 1234567, "0-12345");
+    rlist_append_rank_cores (rl, "host", 1234568, "0-12346");
     result = rlist_dumps (rl);
     is (result, "rank0/core[0-3] rank1/core[0-7] "
                 "rank1234567/core[0-12345] rank1234568/core[0-12346]",
-        "rlist_dumps with long reuslt");
+        "rlist_dumps with long result");
     free (result);
     rlist_destroy (rl);
 }
@@ -662,7 +762,7 @@ static void test_updown ()
 {
     struct rlist *rl = NULL;
     struct rlist *rl2 = NULL;
-    char *R = R_create (4, 4);
+    char *R = R_create ("0-3", "0-3", NULL, "host[0-3]");
     rl = rlist_from_R (R);
     if (rl == NULL)
         BAIL_OUT ("rlist_from_R failed");
@@ -720,6 +820,728 @@ static void test_updown ()
     rlist_destroy (rl2);
 }
 
+struct append_test {
+    const char *ranksa;
+    const char *coresa;
+    const char *hostsa;
+
+    const char *ranksb;
+    const char *coresb;
+    const char *hostsb;
+
+    int total_cores;
+    int total_nodes;
+    const char *nodelist;
+};
+
+struct append_test append_tests[] = {
+    {
+        "1", "0-3", "foo15",
+        "0", "0-3", "foo16",
+        8,
+        2,
+        "foo[16,15]",
+    },
+    {
+        "0,2-3", "0-3", "foo[0,2-3]",
+        "1",     "0-3", "foo1",
+        16,
+        4,
+        "foo[0-3]",
+    },
+    {
+        "0", "0-3", "foo0",
+        "0", "4-7", "foo0",
+        8,
+        1,
+        "foo0",
+    },
+    {
+        "[0-1023]", "0-3", "foo[0-1023]",
+        "[1000-1024]",  "4-7", "foo[1000-1024]",
+        4196,
+        1025,
+        "foo[0-1024]",
+    },
+    { 0 },
+};
+
+void test_append (void)
+{
+    struct append_test *t = append_tests;
+
+    while (t && t->ranksa) {
+        struct rlist *rl = NULL;
+        struct rlist *rl2 = NULL;
+        struct hostlist *hl = NULL;
+        char *s1;
+        char *s2;
+        char *R1 = R_create (t->ranksa, t->coresa, NULL, t->hostsa);
+        char *R2 = R_create (t->ranksb, t->coresb, NULL, t->hostsb);
+
+        if (!R1 || !R2)
+            BAIL_OUT ("R_create() failed!");
+
+        rl = rlist_from_R (R1);
+        rl2 = rlist_from_R (R2);
+        if (!rl || !rl2)
+            BAIL_OUT ("rlist_from_R failed!");
+        free (R1);
+        free (R2);
+
+        s1 = rlist_dumps (rl);
+        s2 = rlist_dumps (rl2);
+
+
+        ok (rlist_append (rl, rl2) == 0,
+            "rlist_append: %s + %s", s1, s2);
+        rlist_destroy (rl2);
+        free (s1);
+        free (s2);
+
+        s1 = rlist_dumps (rl);
+        diag ("result = %s", s1);
+        free (s1);
+
+        ok (rl->total == t->total_cores,
+            "rlist_append: result has %d cores", rl->total);
+        ok (rlist_nnodes (rl) == t->total_nodes,
+            "rlist_append: result has %d nodes", rlist_nnodes (rl));
+
+        hl = rlist_nodelist (rl);
+        s1 = hostlist_encode (hl);
+        is (s1, t->nodelist,
+            "rlist_append: result has nodelist = %s", s1);
+        free (s1);
+        hostlist_destroy (hl);
+
+        json_t *R = rlist_to_R (rl);
+        R1 = json_dumps (R, JSON_COMPACT);
+        diag ("%s", R1);
+        json_decref (R);
+        free (R1);
+        rlist_destroy (rl);
+
+        t++;
+    }
+}
+
+struct remap_test {
+    const char *ranks;
+    const char *cores;
+    const char *gpus;
+    const char *hosts;
+
+    const char *result;
+};
+
+struct remap_test remap_tests[] = {
+    {
+        "1,7,9,53", "0-3", NULL, "foo[1,7,9,53]",
+        "rank[0-3]/core[0-3]",
+    },
+    {
+        "1,7,9,53", "1,5,7,9", "1,3", "foo[1,7,9,53]",
+        "rank[0-3]/core[0-3],gpu[1,3]",
+    },
+    { 0 },
+};
+
+void test_remap ()
+{
+    struct remap_test *t = remap_tests;
+
+    while (t && t->ranks) {
+        char *before;
+        char *after;
+        struct rlist *rl;
+        char *R = R_create (t->ranks, t->cores, t->gpus, t->hosts);
+        if (!R)
+            BAIL_OUT ("R_create failed");
+        if (!(rl = rlist_from_R (R)))
+            BAIL_OUT ("rlist_from_R failed");
+
+        before = rlist_dumps (rl);
+        ok (rlist_remap (rl) == 0,
+                "rlist_remap (%s)", before);
+        after = rlist_dumps (rl);
+        is (after, t->result,
+                "result = %s", after);
+
+        free (before);
+        free (after);
+        rlist_destroy (rl);
+        free (R);
+
+        t++;
+    }
+}
+
+struct remap_test assign_hosts_tests[] = {
+    {
+        "1,7,9,53", "0-3", NULL, "foo[1,7,9,53]",
+        "rank[0-3]/core[0-3]",
+    },
+    {
+        "1,7,9,53", "1,5,7,9", "1,3", "foo[1,7,9,53]",
+        "rank[0-3]/core[0-3],gpu[1,3]",
+    },
+    { 0 },
+};
+
+void test_assign_hosts ()
+{
+    struct remap_test *t = assign_hosts_tests;
+
+    while (t && t->ranks) {
+        char *hosts = NULL;
+        struct hostlist *hl;
+        struct rlist *rl;
+        char *R = R_create (t->ranks, t->cores, t->gpus, NULL);
+        if (!R)
+            BAIL_OUT ("R_create failed");
+        if (!(rl = rlist_from_R (R)))
+            BAIL_OUT ("rlist_from_R failed");
+
+        ok (rlist_assign_hosts (rl, t->hosts) == 0,
+            "rlist_assign_hosts (%s)", t->hosts);
+
+        if (!(hl = rlist_nodelist (rl)))
+            BAIL_OUT ("rlist_nodelist failed");
+        if (!(hosts = hostlist_encode (hl)))
+            BAIL_OUT ("hostlist_encode failed");
+
+        is (hosts, t->hosts,
+            "reassign hosts to %s worked", hosts);
+
+        free (hosts);
+        
+        hostlist_destroy (hl);
+        rlist_destroy (rl);
+        free (R);
+
+        t++;
+    }
+
+}
+
+
+void test_rerank ()
+{
+    struct hostlist *hl = NULL;
+    char *s = NULL;
+    struct rlist *rl = NULL;
+    char *R = R_create ("0-15", "0-3", NULL, "foo[0-15]");
+    if (!R)
+        BAIL_OUT ("R_create failed");
+    if (!(rl = rlist_from_R (R)))
+        BAIL_OUT ("rlist_from_R failed");
+
+    ok (rlist_rerank (rl, "foo[1-15]") < 0 && errno == ENOSPC,
+        "rlist_rerank with too few hosts returns ENOSPC");
+    ok (rlist_rerank (rl, "foo[0-16]") < 0 && errno == EOVERFLOW,
+        "rlist_rerank with too many hosts returns EOVERFLOW");
+    ok (rlist_rerank (rl, "foo[1-16]") < 0 && errno == ENOENT,
+        "rlist_rerank with invalid host returns ENOENT");
+    
+    if (!(hl = rlist_nodelist (rl)) || !(s = hostlist_encode (hl)))
+        BAIL_OUT ("rlist_nodelist/hostlist_encode failed!");
+    is (s, "foo[0-15]",
+        "before: hostlist is %s", s);
+    free (s);
+    hostlist_destroy (hl);
+
+    /* Swap rank 0 to rank 15 */
+    ok (rlist_rerank (rl, "foo[1-15,0]") == 0,
+        "rlist_rerank works");
+
+    if (!(hl = rlist_nodelist (rl)) || !(s = hostlist_encode (hl)))
+        BAIL_OUT ("rlist_nodelist/hostlist_encode failed!");
+    is (s, "foo[1-15,0]",
+        "after: hostlist is %s", s);
+    free (s);
+    hostlist_destroy (hl);
+
+    rlist_destroy (rl);
+    free (R);
+}
+
+struct op_test {
+    const char *ranksa;
+    const char *coresa;
+    const char *gpusa;
+    const char *hostsa;
+
+    const char *ranksb;
+    const char *coresb;
+    const char *gpusb;
+    const char *hostsb;
+
+    const char *result;
+};
+
+
+struct op_test diff_tests[] = {
+    {
+        "0", "0-3", NULL, "foo15",
+        "0", "0-3", NULL, "foo15",
+        "",
+    },
+    {
+        "0", "0-3", "0-1", "foo15",
+        "0", "0-3", "0-1", "foo15",
+        "",
+    },
+    {
+        "0", "0-3", NULL, "foo15",
+        "0", "0-1", NULL, "foo15",
+        "rank0/core[2-3]",
+    },
+    {
+        "0", "0-3", "0", "foo15",
+        "0", "0-3", NULL, "foo15",
+        "rank0/gpu0",
+    },
+    { 0 },
+};
+
+void test_diff ()
+{
+    struct op_test *t = diff_tests;
+
+    while (t && t->ranksa) {
+        struct rlist *rla = NULL;
+        struct rlist *rlb = NULL;
+        struct rlist *result;
+        char *a;
+        char *b;
+        char *s;
+        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa);
+        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb);
+
+        if (!Ra || !Rb)
+            BAIL_OUT ("R_create() failed!");
+
+        diag ("%s", Ra);
+
+        rla = rlist_from_R (Ra);
+        rlb = rlist_from_R (Rb);
+        if (!rla || !rlb)
+            BAIL_OUT ("rlist_from_R failed!");
+        free (Ra);
+        free (Rb);
+
+        a = rlist_dumps (rla);
+        b = rlist_dumps (rlb);
+
+        result = rlist_diff (rla, rlb);
+        if (!result)
+            BAIL_OUT ("rlist_diff (%s, %s) failed", a, b);
+
+        s = rlist_dumps (result);
+        is (s, t->result,
+            "rlist_diff: %s - %s = %s",
+            a, b, s);
+
+        free (a);
+        free (b);
+        free (s);
+        rlist_destroy (result);
+        rlist_destroy (rla);
+        rlist_destroy (rlb);
+
+        t++;
+    }
+}
+
+struct op_test union_tests[] = {
+    {
+        "0", "0-3", NULL, "foo15",
+        "0", "0-3", NULL, "foo15",
+        "rank0/core[0-3]",
+    },
+    {
+        "0", "0-3", "0-1", "foo15",
+        "1", "0-3", "0-1", "foo16",
+        "rank[0-1]/core[0-3],gpu[0-1]",
+    },
+    {
+        "0", "0-3", NULL, "foo15",
+        "0", NULL, "0", "foo15",
+        "rank0/core[0-3],gpu0",
+    },
+    { 0 },
+};
+
+
+void test_union ()
+{
+    struct op_test *t = union_tests;
+
+    while (t && t->ranksa) {
+        struct rlist *rla = NULL;
+        struct rlist *rlb = NULL;
+        struct rlist *result;
+        char *a;
+        char *b;
+        char *s;
+        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa);
+        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb);
+
+        if (!Ra || !Rb)
+            BAIL_OUT ("R_create() failed!");
+
+        rla = rlist_from_R (Ra);
+        rlb = rlist_from_R (Rb);
+        if (!rla || !rlb)
+            BAIL_OUT ("rlist_from_R failed!");
+        free (Ra);
+        free (Rb);
+
+        a = rlist_dumps (rla);
+        b = rlist_dumps (rlb);
+
+        result = rlist_union (rla, rlb);
+        if (!result)
+            BAIL_OUT ("rlist_union (%s, %s) failed", a, b);
+
+        s = rlist_dumps (result);
+        is (s, t->result,
+            "rlist_union: %s U %s = %s",
+            a, b, s);
+
+        free (a);
+        free (b);
+        free (s);
+        rlist_destroy (result);
+        rlist_destroy (rla);
+        rlist_destroy (rlb);
+
+        t++;
+    }
+
+}
+
+
+struct op_test intersect_tests[] = {
+    {
+        "0-10", "0-3", NULL, "foo[0-10]",
+        "9-15",   "1", NULL, "foo[9-15]",
+        "rank[9-10]/core1",
+    },
+    {
+        "0", "0-3", "0-1", "foo15",
+        "1", "0-3", "0-1", "foo16",
+        "",
+    },
+    { 0 },
+};
+
+
+void test_intersect ()
+{
+    struct op_test *t = intersect_tests;
+
+    while (t && t->ranksa) {
+        struct rlist *rla = NULL;
+        struct rlist *rlb = NULL;
+        struct rlist *result;
+        char *a;
+        char *b;
+        char *s;
+        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa);
+        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb);
+
+        if (!Ra || !Rb)
+            BAIL_OUT ("R_create() failed!");
+
+        rla = rlist_from_R (Ra);
+        rlb = rlist_from_R (Rb);
+        if (!rla || !rlb)
+            BAIL_OUT ("rlist_from_R failed!");
+        free (Ra);
+        free (Rb);
+
+        a = rlist_dumps (rla);
+        b = rlist_dumps (rlb);
+
+        result = rlist_intersect (rla, rlb);
+        if (!result)
+            BAIL_OUT ("rlist_intersect (%s, %s) failed", a, b);
+
+        s = rlist_dumps (result);
+        is (s, t->result,
+            "rlist_intersect: %s ∩ %s = %s",
+            a, b, s);
+
+        free (a);
+        free (b);
+        free (s);
+        rlist_destroy (result);
+        rlist_destroy (rla);
+        rlist_destroy (rlb);
+
+        t++;
+    }
+}
+
+void test_copy_ranks ()
+{
+    struct idset *ranks;
+    struct rlist *rl;
+    struct rlist *result;
+    char *s;
+    char *R = R_create ("0-5", "0-3", "0", "foo[0-5]");
+    if (!R)
+        BAIL_OUT ("R_create failed");
+    if (!(rl = rlist_from_R (R)))
+        BAIL_OUT ("rlist_from_R failed");
+    if (!(ranks = idset_decode ("1,3,5")))
+        BAIL_OUT ("idset_decode failed");
+
+    result = rlist_copy_ranks (rl, ranks);
+    if (!result)
+        BAIL_OUT ("rlist_copy_ranks failed");
+    ok (rlist_nnodes (result) == 3 && rlist_count (result, "core") == 12,
+        "rlist_copy_ranks worked");
+    s = rlist_dumps (result);
+    is (s, "rank[1,3,5]/core[0-3],gpu0",
+        "rlist_copy_ranks has expected result");
+    free (s);
+    rlist_destroy (result);
+    idset_destroy (ranks);
+
+    if (!(ranks = idset_decode ("5-9")))
+        BAIL_OUT ("idset_decode failed");
+    result = rlist_copy_ranks (rl, ranks);
+    if (!result)
+        BAIL_OUT ("rlist_copy_ranks failed");
+    ok (rlist_nnodes (result) == 1 && rlist_count (result, "core") == 4,
+        "rlist_copy_ranks worked");
+    s = rlist_dumps (result);
+    is (s, "rank5/core[0-3],gpu0",
+        "rlist_copy_ranks has expected result");
+    free (s);
+    rlist_destroy (result);
+    idset_destroy (ranks);
+
+    if (!(ranks = idset_decode ("9,20")))
+        BAIL_OUT ("idset_decode failed");
+    result = rlist_copy_ranks (rl, ranks);
+    if (!result)
+        BAIL_OUT ("rlist_copy_ranks failed");
+    ok (rlist_nnodes (result) == 0 && rlist_count (result, "core") == 0,
+        "rlist_copy_ranks worked");
+    s = rlist_dumps (result);
+    is (s, "",
+        "rlist_copy_ranks has expected result");
+    free (s);
+    rlist_destroy (result);
+    idset_destroy (ranks);
+    rlist_destroy (rl);
+    free (R);
+}
+
+void test_remove_ranks ()
+{
+    struct idset *ranks;
+    struct rlist *rl;
+    char *s;
+    char *R = R_create ("0-5", "0-3", "0", "foo[0-5]");
+    if (!R)
+        BAIL_OUT ("R_create failed");
+    if (!(rl = rlist_from_R (R)))
+        BAIL_OUT ("rlist_from_R failed");
+    if (!(ranks = idset_decode ("1,3,5")))
+        BAIL_OUT ("idset_decode failed");
+
+    ok (rlist_remove_ranks (rl, ranks) == idset_count (ranks),
+        "rlist_remove_ranks(1,3,5) works");
+
+    s = rlist_dumps (rl);
+    is (s, "rank[0,2,4]/core[0-3],gpu0",
+        "rlist_remove_ranks: %s", s);
+    free (s);
+    idset_destroy (ranks);
+    rlist_destroy (rl);
+
+    if (!(rl = rlist_from_R (R)))
+        BAIL_OUT ("rlist_from_R failed");
+    if (!(ranks = idset_decode ("5-9")))
+        BAIL_OUT ("idset_decode failed");
+    ok (rlist_remove_ranks (rl, ranks) == 1,
+        "rlist_remove_ranks (5-9)");
+    s = rlist_dumps (rl);
+    is (s, "rank[0-4]/core[0-3],gpu0",
+        "rlist_remove_ranks: %s", s);
+    free (s);
+    idset_destroy (ranks);
+    rlist_destroy (rl);
+
+    if (!(rl = rlist_from_R (R)))
+        BAIL_OUT ("rlist_from_R failed");
+    if (!(ranks = idset_decode ("9,20")))
+        BAIL_OUT ("idset_decode failed");
+    ok (rlist_remove_ranks (rl, ranks) == 0,
+        "rlist_remove_ranks (9,20) removed no ranks");
+    s = rlist_dumps (rl);
+    is (s, "rank[0-5]/core[0-3],gpu0",
+        "rlist_remove_ranks: %s", s);
+    free (s);
+
+    idset_destroy (ranks);
+    rlist_destroy (rl);
+    free (R);
+}
+
+
+struct verify_test {
+    const char *ranksa;
+    const char *coresa;
+    const char *gpusa;
+    const char *hostsa;
+
+    const char *ranksb;
+    const char *coresb;
+    const char *gpusb;
+    const char *hostsb;
+
+    int result;
+    const char *errmsg;
+};
+
+struct verify_test verify_tests[] = {
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "1",   "0-3", "0", "foo1",
+        0,
+        ""
+    },
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "1",   "0-3", "",  "foo1",
+        -1,
+        "rank 1 (foo1) missing resources: gpu0"
+    },
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "5",   "0-1", "0", "foo5",
+        -1,
+        "rank 5 (foo5) missing resources: core[2-3]"
+    },
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "5",   "0-3", "0", "foo7",
+        -1,
+        "rank 5 got hostname 'foo7', expected 'foo5'"
+    },
+    {
+        "0-5", "0-3", "0",   "foo[0-5]",
+        "0",   "0-7", "0-1", "foo0",
+        1,
+        "rank 0 (foo0) has extra resources: core[4-7],gpu1"
+    },
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "7",   "0-3", "0", "foo7",
+        -1,
+        "rank 7 not found in expected ranks"
+    },
+    {
+        "0-5", "0-3", "0", "foo[0-5]",
+        "0",   "0-3", "0",  NULL,
+         0,
+         "",
+
+    },
+    {
+        "0-5", "0-3", "0", NULL,
+        "0",   "0-3", "0", NULL,
+         0,
+         "",
+    },
+    {
+        "0-5", "0-3", "0", NULL,
+        "0",   "0-3", "0", "foo0",
+         0,
+         "",
+    },
+    { 0 },
+};
+
+void test_verify ()
+{
+    struct verify_test *t = verify_tests;
+
+    while (t && t->ranksa) {
+        int rc;
+        rlist_error_t error;
+        struct rlist *rla = NULL;
+        struct rlist *rlb = NULL;
+        char *a;
+        char *b;
+        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa);
+        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb);
+
+        if (!Ra || !Rb)
+            BAIL_OUT ("R_create() failed!");
+
+        rla = rlist_from_R (Ra);
+        rlb = rlist_from_R (Rb);
+        if (!rla || !rlb)
+            BAIL_OUT ("rlist_from_R failed!");
+        free (Ra);
+        free (Rb);
+
+        a = rlist_dumps (rla);
+        b = rlist_dumps (rlb);
+
+        rc = rlist_verify (&error, rla, rlb);
+        ok (rc == t->result,
+            "rlist_verify: %s in %s = %d", b, a, rc);
+        is (error.text, t->errmsg,
+            "Got expected message: '%s'", error.text);
+
+        free (a);
+        free (b);
+        rlist_destroy (rla);
+        rlist_destroy (rlb);
+
+        t++;
+    }
+}
+
+void test_timelimits ()
+{
+    struct rlist *rl;
+    json_t *o;
+    char *R = R_create ("0-1", "0-3", NULL, "foo[0-1]");
+
+    if (!R)
+        BAIL_OUT ("R_create failed");
+    if (!(rl = rlist_from_R (R)))
+        BAIL_OUT ("rlist_from_R failed");
+
+    rl->starttime = 1234.;
+    rl->expiration = 2345.;
+
+    /*  Encode to R and ensure starttime/expiration are preserved */
+    if(!(o = rlist_to_R (rl)))
+        BAIL_OUT ("rlist_to_R failed");
+
+    rlist_destroy (rl);
+    free (R);
+
+    if (!(rl = rlist_from_json (o, NULL)))
+        BAIL_OUT ("rlist_from_json failed");
+
+    ok (rl->starttime == 1234. && rl->expiration == 2345.,
+        "starttime and expiration preserved during encode/decode");
+
+    json_decref (o);
+    rlist_destroy (rl);
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -732,7 +1554,19 @@ int main (int ac, char *av[])
     test_issue2202 ();
     test_issue2473 ();
     test_by_rank_coreids ();
+    test_by_rank_hostnames ();
     test_updown ();
+    test_append ();
+    test_diff ();
+    test_union ();
+    test_intersect ();
+    test_copy_ranks ();
+    test_remove_ranks ();
+    test_verify ();
+    test_timelimits ();
+    test_remap ();
+    test_assign_hosts ();
+    test_rerank ();
 
     done_testing ();
 }

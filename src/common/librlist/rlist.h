@@ -18,12 +18,28 @@
 #include <jansson.h>
 #include <czmq.h>
 #include <flux/idset.h>
+#include <flux/hostlist.h>
+
+typedef struct {
+    char text[128];
+} rlist_error_t;
 
 /* A list of resource nodes */
 struct rlist {
     int total;
     int avail;
     zlistx_t *nodes;
+
+    /*  hash of resources to ignore on remap */
+    zhashx_t *noremap;
+
+    /*  Rv1 optional starttime, expiration:
+     */
+    double starttime;
+    double expiration;
+
+    /*  Opaque Rv1.scheduling key */
+    json_t *scheduling;
 };
 
 /*  Create an empty rlist object */
@@ -46,6 +62,35 @@ struct rlist *rlist_copy_down (const struct rlist *orig);
 /*  Create a copy of rl including only allocated resources */
 struct rlist *rlist_copy_allocated (const struct rlist *orig);
 
+/*  Create a copy of rl including only the ranks in 'ranks' idset */
+struct rlist *rlist_copy_ranks (const struct rlist *rl, struct idset *ranks);
+
+/*  Delete ranks in idset 'ranks' from rlist 'rl'
+ */
+int rlist_remove_ranks (struct rlist *rl, struct idset *ranks);
+
+/*  Re-map ranks and all resources (except those named in rl->noremap hash)
+ *   such that their IDs will be mapped 0 - count-1.
+ */
+int rlist_remap (struct rlist *rl);
+
+/*  Re-assign hostnames to rlist 'rl'. The number of hosts in the "hosts"
+ *   hostlist expression must match the size of rlist 'rl'.
+ */
+int rlist_assign_hosts (struct rlist *rl, const char *hosts);
+
+/*  Re-assign ranks based on the RFC29 hostlist 'hosts'. Ranks in 'rl'
+ *   will be remapped based on host order in 'hosts', i.e. the first
+ *   host will be rank 0, the next rank 1, and so on.
+ *
+ *  Returns 0 on success, and -1 with errno set for the following cases:
+ *   EOVERFLOW: the number of hostnames in 'hosts' is > nranks in 'rl'
+ *   ENOSPC:    the number of hostnames in 'hosts' is < nranks in 'rl'
+ *   ENOENT:    a hostname in 'hosts' was not found in 'rl'
+ *   ENOMEM:    out of memory
+ */
+int rlist_rerank (struct rlist *rl, const char *hosts);
+
 /*  Create an rlist object from resource.hwloc.by_rank JSON input
  *  If sched_pus is true, then rlist contains PUs not cores.
  */
@@ -54,17 +99,54 @@ struct rlist *rlist_from_hwloc_by_rank (const char *by_rank, bool sched_pus);
 /*  Destroy an rlist object */
 void rlist_destroy (struct rlist *rl);
 
-/*  Append a new resource node with rank==rank and idset string `ids`
+/*  Append a new resource node with hostname, rank, and core idset string
  */
-int rlist_append_rank (struct rlist *rl, unsigned int rank, const char *ids);
+int rlist_append_rank_cores (struct rlist *rl,
+                             const char *hostname,
+                             unsigned int rank,
+                             const char *core_ids);
 
-/*  Same as rlist_append_rank(), but `ids` is a struct idset
+/*  Add child resource 'ids' with name 'name' to rank 'rank' in resource
+ *   list 'rl'.
  */
-int rlist_append_idset (struct rlist *rl, int rank, struct idset *ids);
+int rlist_rank_add_child (struct rlist *rl,
+                          unsigned int rank,
+                          const char *name,
+                          const char *ids);
+
+/*  Append rlist 'rl2' to 'rl'
+ */
+int rlist_append (struct rlist *rl, const struct rlist *rl2);
+
+/*  Return the set difference of 'rlb' from 'rla'.
+ */
+struct rlist *rlist_diff (const struct rlist *rla, const struct rlist *rlb);
+
+/*  Return the union of 'rla' and 'rlb'
+ */
+struct rlist *rlist_union (const struct rlist *rla, const struct rlist *rlb);
+
+/*  Return the intersection of 'rla' and 'rlb'
+ */
+struct rlist *rlist_intersect (const struct rlist *rla,
+                              const struct rlist *rlb);
+
+struct rlist *rlist_get_rank (const struct rlist *rl, int rank);
 
 /*  Return number of resource nodes in resource list `rl`
  */
-size_t rlist_nnodes (struct rlist *rl);
+size_t rlist_nnodes (const struct rlist *rl);
+
+size_t rlist_count (const struct rlist *rl, const char *type);
+
+
+/*  Return a hostlist of rlist hostnames
+ */
+struct hostlist * rlist_nodelist (const struct rlist *rl);
+
+/*  Return an idset of rlist ranks
+ */
+struct idset * rlist_ranks (const struct rlist *rl);
 
 /*
  *  Serialize a resource list into v1 "R" format. This encodes only the
@@ -76,13 +158,35 @@ json_t * rlist_to_R (struct rlist *rl);
  *  Dump short form description of rlist `rl` as a single line string.
  *    Caller must free returned string.
  */
-char *rlist_dumps (struct rlist *rl);
+char *rlist_dumps (const struct rlist *rl);
 
 /*
  *  De-serialize a v1 "R" format string into a new resource list object.
  *  Returns a new resource list object on success, NULL on failure.
  */
 struct rlist *rlist_from_R (const char *R);
+
+/*  Like rlist_from_R(), but takes a json_t * argument.
+ */
+struct rlist *rlist_from_json (json_t *o, json_error_t *err);
+
+struct rlist *rlist_from_hwloc (int my_rank, const char *xml);
+
+/*  Verify resources in rlist 'actual' meet or exceed resources in
+ *   matching ranks of rlist 'expected'
+ *  Returns:
+ *
+ *    0: all resources in matching ranks of 'expected' are in 'actual'
+ *
+ *   -1: one or more resources in 'expected' do not appear in 'actual'
+ *        a human readable summary will be available in error.text if
+ *        error is non-NULL.
+ *
+ *    1: resources in 'actual' exceed those in 'expected'.
+ */
+int rlist_verify (rlist_error_t *error,
+                  const struct rlist *expected,
+                  const struct rlist *actual);
 
 /*  Attempt to allocate nslots of slot_size across optional nnodes
  *   from the resource list `rl` using algorithm `mode`.
