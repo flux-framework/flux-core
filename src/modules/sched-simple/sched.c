@@ -18,8 +18,8 @@
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libjob/job.h"
+#include "src/common/librlist/rlist.h"
 #include "libjj.h"
-#include "rlist.h"
 
 struct jobreq {
     void *handle;

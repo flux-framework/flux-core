@@ -22,7 +22,6 @@
 #include "src/common/libidset/idset.h"
 #include "rnode.h"
 #include "rlist.h"
-#include "libjj.h"
 
 void rlist_destroy (struct rlist *rl)
 {
