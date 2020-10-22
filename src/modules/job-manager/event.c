@@ -641,7 +641,7 @@ int event_job_post_pack (struct event *event,
         return -1;
     if (event_batch_process_event_entry (event, job->id, name, entry) < 0)
         goto error;
-    if (EVENT_JOURNAL_ONLY & flags)
+    if ((flags & EVENT_JOURNAL_ONLY))
         goto out;
     if (event_job_update (job, entry) < 0) // modifies job->state
         goto error;
