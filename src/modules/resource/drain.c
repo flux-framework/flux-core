@@ -133,12 +133,8 @@ static void drain_cb (flux_t *h,
                           "idset",
                           s,
                           "reason",
-                          reason ? reason : "unknown") < 0) {
-        int saved_errno = errno;
-        (void)rutil_idset_sub (drain->idset, idset); // restore orig.
-        errno = saved_errno;
+                          reason ? reason : "unknown") < 0)
         goto error;
-    }
     idset_destroy (idset);
     return;
 error:
