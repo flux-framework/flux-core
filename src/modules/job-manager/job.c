@@ -71,6 +71,7 @@ struct job *job_create_from_eventlog (flux_jobid_t id, const char *s)
     json_array_foreach (a, index, event) {
         if (event_job_update (job, event) < 0)
             goto error;
+        job->eventlog_seq++;
     }
 
     if (job->state == FLUX_JOB_NEW)

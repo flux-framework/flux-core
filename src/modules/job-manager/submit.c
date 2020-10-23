@@ -20,6 +20,7 @@
 #include "job.h"
 #include "alloc.h"
 #include "event.h"
+#include "journal.h"
 #include "wait.h"
 
 #include "submit.h"
@@ -116,7 +117,7 @@ error:
  * We instead re-create the event and run it directly through
  * event_job_update() and event_job_action().
  */
-int submit_post_event (struct event *event, struct job *job)
+static int submit_post_event (struct job_manager *ctx, struct job *job)
 {
     json_t *entry = NULL;
     int rv = -1;
@@ -129,13 +130,19 @@ int submit_post_event (struct event *event, struct job *job)
                                  "flags", job->flags);
     if (!entry)
         goto error;
+    /* call before eventlog_seq increment below */
+    if (journal_process_event (ctx->journal,
+                               job->id,
+                               job->eventlog_seq,
+                               "submit",
+                               entry) < 0)
+        goto error;
     if (event_job_update (job, entry) < 0) /* NEW -> DEPEND */
         goto error;
-    if (event_batch_pub_state (event, job, job->t_submit) < 0)
+    job->eventlog_seq++;
+    if (event_batch_pub_state (ctx->event, job, job->t_submit) < 0)
         goto error;
-    if (event_batch_process_event_entry (event, job, "submit", entry) < 0)
-        goto error;
-    if (event_job_action (event, job) < 0)
+    if (event_job_action (ctx->event, job) < 0)
         goto error;
     rv = 0;
  error:
@@ -178,7 +185,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
      * Side effect: update ctx->max_jobid.
      */
     while ((job = zlist_pop (newjobs))) {
-        if (submit_post_event (ctx->event, job) < 0)
+        if (submit_post_event (ctx, job) < 0)
             flux_log_error (h, "%s: submit_post_event id=%ju",
                             __FUNCTION__, (uintmax_t)job->id);
 

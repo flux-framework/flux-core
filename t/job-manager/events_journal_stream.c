@@ -27,7 +27,7 @@ void cancel_cb (int sig)
 {
     flux_future_t *f2;
     if (!(f2 = flux_rpc_pack (h,
-                              "job-manager.events-cancel",
+                              "job-manager.events-journal-cancel",
                               FLUX_NODEID_ANY,
                               FLUX_RPC_NORESPONSE,
                               "{s:i}",
@@ -45,7 +45,7 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_open");
 
     if (argc != 1) {
-        fprintf (stderr, "Usage: event_stream <payload\n");
+        fprintf (stderr, "Usage: events_journal_stream <payload\n");
         exit (1);
     }
 
@@ -55,7 +55,7 @@ int main (int argc, char *argv[])
         inlen++;    //  and read_all() ensures inbuf has one, not acct in inlen
 
     if (!(f = flux_rpc_raw (h,
-                            "job-manager.events",
+                            "job-manager.events-journal",
                             inbuf,
                             inlen,
                             FLUX_NODEID_ANY,
@@ -72,7 +72,8 @@ int main (int argc, char *argv[])
         if (flux_rpc_get_unpack (f, "{s:o}", "events", &events) < 0) {
             if (errno == ENODATA)
                 break;
-            log_msg_exit ("job-manager.events: %s", future_strerror (f, errno));
+            log_msg_exit ("job-manager.events-journal: %s",
+                          future_strerror (f, errno));
         }
         json_array_foreach (events, index, value) {
             char *s = json_dumps (value, 0);

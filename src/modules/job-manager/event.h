@@ -39,13 +39,6 @@ int event_job_update (struct job *job, json_t *event);
 int event_batch_pub_state (struct event *event, struct job *job,
                            double timestamp);
 
-/* Add notification of job event to send to listeners.
- */
-int event_batch_process_event_entry (struct event *event,
-                                     struct job *job,
-                                     const char *name,
-                                     json_t *entry);
-
 /* Add add response to batch, to be sent upon batch completion.
  */
 int event_batch_respond (struct event *event, const flux_msg_t *msg);
@@ -70,8 +63,6 @@ void event_listeners_disconnect_rpc (flux_t *h,
                                      flux_msg_handler_t *mh,
                                      const flux_msg_t *msg,
                                      void *arg);
-
-int event_listeners_count (struct event *event);
 
 #endif /* _FLUX_JOB_MANAGER_EVENT_H */
 

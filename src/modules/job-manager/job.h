@@ -22,6 +22,7 @@ struct job {
     int priority;
     double t_submit;
     int flags;
+    int eventlog_seq;           // eventlog count / sequence number
     flux_job_state_t state;
     json_t *end_event;      // event that caused transition to CLEANUP state
     const flux_msg_t *waiter; // flux_job_wait() request
