@@ -11,6 +11,7 @@ flux setattr log-stderr-level 1
 PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
+waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
 test_expect_success 'job-shell: execute across all ranks' '
         id=$(flux jobspec srun -N4 bash -c \
@@ -133,9 +134,11 @@ test_expect_success 'job-shell: verify output of 1-task lptest job' '
 # output.
 #
 
-test_expect_success 'job-shell: verify output of 1-task lptest job on stderr' '
-        id=$(flux jobspec srun -n1 bash -c "${LPTEST} >&2" \
-		| flux job submit) &&
+test_expect_success HAVE_JQ 'job-shell: verify output of 1-task lptest job on stderr' '
+	flux jobspec srun -n1 bash -c "${LPTEST} >&2" \
+	    | $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
+	    > 1task_lptest.json &&
+	id=$(cat 1task_lptest.json | flux job submit) &&
 	flux job attach -l $id 2>lptest.err &&
         sed -i -e "/stdin EOF could not be sent/d" lptest.err &&
 	test_cmp lptest.exp lptest.err
@@ -146,9 +149,11 @@ test_expect_success 'job-shell: verify output of 4-task lptest job' '
 	sort -snk1 <lptest4_raw.out >lptest4.out &&
 	test_cmp lptest4.exp lptest4.out
 '
-test_expect_success 'job-shell: verify output of 4-task lptest job on stderr' '
-        id=$(flux jobspec srun -N4 bash -c "${LPTEST} 1>&2" \
-		| flux job submit) &&
+test_expect_success HAVE_JQ 'job-shell: verify output of 4-task lptest job on stderr' '
+	flux jobspec srun -N4 bash -c "${LPTEST} 1>&2" \
+	    | $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
+	    > 4task_lptest.json &&
+	id=$(cat 4task_lptest.json | flux job submit) &&
 	flux job attach -l $id 2>lptest4_raw.err &&
 	sort -snk1 <lptest4_raw.err >lptest4.err &&
         sed -i -e "/stdin EOF could not be sent/d" lptest4.err &&
@@ -202,4 +207,69 @@ test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
 	grep "signal 199: Invalid argument" kill5.log &&
 	grep status=$((15+128<<8)) kill5.finish.out
 '
+test_expect_success NO_CHAIN_LINT 'job-shell: cover stdout unbuffered output' '
+	cat <<-EOF >stdout-unbuffered.sh &&
+	#!/bin/sh
+	printf abcd
+	sleep 60
+	EOF
+	chmod +x stdout-unbuffered.sh &&
+	id=$(flux mini submit \
+	     --setopt "output.stdout.buffer.type=\"none\"" \
+	     ./stdout-unbuffered.sh)
+	flux job attach $id > stdout-unbuffered.out &
+	$waitfile --count=1 --timeout=10 --pattern=abcd stdout-unbuffered.out &&
+	flux job cancel $id
+'
+test_expect_success NO_CHAIN_LINT 'job-shell: cover stderr unbuffered output' '
+	cat <<-EOF >stderr-unbuffered.sh &&
+	#!/bin/sh
+	printf efgh >&2
+	sleep 60
+	EOF
+	chmod +x stderr-unbuffered.sh &&
+	id=$(flux mini submit \
+	     --setopt "output.stderr.buffer.type=\"none\"" \
+	     ./stderr-unbuffered.sh)
+	flux job attach $id 1> stdout.out 2> stderr-unbuffered.out &
+	$waitfile --count=1 --timeout=10 --pattern=efgh stderr-unbuffered.out &&
+	flux job cancel $id
+'
+test_expect_success NO_CHAIN_LINT 'job-shell: cover stdout line output' '
+	cat <<-EOF >stdout-line.sh &&
+	#!/bin/sh
+	printf "ijkl\n"
+	sleep 60
+	EOF
+	chmod +x stdout-line.sh &&
+	id=$(flux mini submit \
+	     --setopt "output.stdout.buffer.type=\"line\"" \
+	     ./stdout-line.sh)
+	flux job attach $id > stdout-line.out &
+	$waitfile --count=1 --timeout=10 --pattern=ijkl stdout-line.out &&
+	flux job cancel $id
+'
+test_expect_success NO_CHAIN_LINT 'job-shell: cover stderr line output' '
+	cat <<-EOF >stderr-line.sh &&
+	#!/bin/sh
+	printf "mnop\n" >&2
+	sleep 60
+	EOF
+	chmod +x stderr-line.sh &&
+	id=$(flux mini submit \
+	     --setopt "output.stderr.buffer.type=\"line\"" \
+	     ./stderr-line.sh)
+	flux job attach $id 1> stdout.out 2> stderr-line.out &
+	$waitfile --count=1 --timeout=10 --pattern=mnop stderr-line.out &&
+	flux job cancel $id
+'
+test_expect_success 'job-shell: cover invalid buffer type' '
+	id=$(flux mini submit \
+	     --setopt "output.stderr.buffer.type=\"foobar\"" \
+	     hostname) &&
+	flux job wait-event $id clean &&
+	flux job attach $id 2> stderr-invalid-buffering.out &&
+	grep "invalid buffer type" stderr-invalid-buffering.out
+'
+
 test_done

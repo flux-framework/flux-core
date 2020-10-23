@@ -1361,6 +1361,7 @@ static void handle_output_data (struct attach_ctx *ctx, json_t *context)
         if (optparse_hasopt (ctx->p, "label-io"))
             fprintf (fp, "%s: ", rank);
         fwrite (data, len, 1, fp);
+        fflush (fp);
     }
     free (data);
 }
