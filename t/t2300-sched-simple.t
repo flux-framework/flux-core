@@ -42,13 +42,10 @@ test_expect_success 'sched-simple: reload ingest module with lax validator' '
 test_expect_success 'sched-simple: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
-test_expect_success 'sched-simple: load default resource.R' '
-	flux kvs put resource.R="$(cat R.test)" &&
-	flux kvs get resource.R
-'
-test_expect_success 'sched-simple: reload sched-simple' '
+
+test_expect_success 'sched-simple: reload sched-simple with default resource.R' '
 	flux module unload sched-simple &&
-	flux module reload resource monitor-force-up noverify &&
+	flux resource reload R.test &&
 	flux module load sched-simple &&
 	flux dmesg 2>&1 >reload.dmesg.log &&
 	grep "ready:.*rank\[0-1\]/core\[0-1\]" reload.dmesg.log &&
@@ -158,9 +155,7 @@ test_expect_success 'sched-simple: PUs now treated as cores' '
 '
 test_expect_success 'sched-simple: reload in first-fit mode' '
         flux module remove sched-simple &&
-        flux module remove resource &&
-	flux kvs put resource.R="$(cat R.test.first_fit)" &&
-	flux module load resource monitor-force-up noverify &&
+	flux resource reload R.test.first_fit &&
         flux module load sched-simple mode=first-fit &&
 	flux dmesg | grep "ready:.*rank0/core\[0-1\] rank1/core0"
 '

@@ -39,13 +39,10 @@ test_expect_success 'sched-simple: reload ingest module with lax validator' '
 		validator-args="--schema,${SCHEMA}" \
 		validator=${JSONSCHEMA_VALIDATOR}
 '
-test_expect_success 'sched-simple: load default resource.R' '
-	flux kvs put resource.R="$(cat R.test)" &&
-	flux kvs get resource.R
-'
-test_expect_success 'sched-simple: reload sched-simple' '
+
+test_expect_success 'sched-simple: reload sched-simple with default resource.R' '
 	flux module unload sched-simple &&
-	flux module reload resource monitor-force-up noverify &&
+	flux resource reload R.test &&
 	flux module load sched-simple &&
 	flux dmesg 2>&1 >reload.dmesg.log &&
 	test_debug "grep sched-simple reload.dmesg.log" &&
