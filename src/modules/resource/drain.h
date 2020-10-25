@@ -16,6 +16,11 @@ void drain_destroy (struct drain *drain);
 
 const struct idset *drain_get (struct drain *drain);
 
+/* Drain 'rank' for 'reason'.  Call this on rank 0 only, otherwise use
+ * resource.drain RPC.
+ */
+int drain_rank (struct drain *drain, uint32_t rank, const char *reason);
+
 #endif /* !_FLUX_RESOURCE_DRAIN_H */
 
 /*
