@@ -263,8 +263,10 @@ OTHER OPTIONS
    with priority in the range of 0 to 31 (default 16).
 
 **-v, --verbose**
-   *(run only)* Increase verbosity on stderr. For example, currently ``-v``
-   displays jobid, ``-vv`` displays job events, and ``-vvv`` displays exec events.
+   *(run,alloc)* Increase verbosity on stderr. For example, currently
+   ``flux mini run -v`` displays jobid, ``-vv`` displays job events, and
+   ``-vvv`` displays exec events. ``flux mini alloc -v`` forces the command
+   to print the submitted jobid on stderr.
    The specific output may change in the future.
 
 **-o, --setopt=KEY[=VAL]**
