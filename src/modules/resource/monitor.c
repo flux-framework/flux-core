@@ -26,6 +26,7 @@
 #endif
 #include <flux/core.h>
 #include <jansson.h>
+#include <czmq.h>
 
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/errno_safe.h"
@@ -54,12 +55,14 @@ struct monitor {
 
     struct idset *up;
 
+    zlist_t *waiters;
     flux_msg_handler_t **handlers;
 
     struct idset *down; // cached result of monitor_get_down()
 };
 
 static int monitor_reduce (flux_t *h, struct idset *up, struct idset *dn);
+static bool notify_waiters (struct monitor *monitor);
 
 const struct idset *monitor_get_up (struct monitor *monitor)
 {
@@ -163,6 +166,8 @@ static int batch_timeout_leader (struct monitor *monitor)
             flux_log_error (h, "monitor-batch: error posting offline event");
             goto done;
         }
+        while (notify_waiters (monitor))
+            ;
     }
     rc = 0;
 done:
@@ -280,6 +285,84 @@ done:
     return rc;
 }
 
+static bool notify_one_waiter (flux_t *h, int count, const flux_msg_t *msg)
+{
+    int up;
+
+    if (flux_request_unpack (msg, NULL, "{s:i}", "up", &up) < 0) {
+        if (flux_respond_error (h, msg, errno, NULL) < 0)
+            flux_log_error (h, "error responding to monitor-waitup request");
+        return true;
+    }
+    if (up == count) {
+        if (flux_respond (h, msg, NULL) < 0)
+            flux_log_error (h, "error responding to monitor-waitup request");
+        return true;
+    }
+    return false;
+}
+
+static bool notify_waiters (struct monitor *monitor)
+{
+    if (monitor->waiters) {
+        const flux_msg_t *msg = NULL;
+        int count = idset_count (monitor->up);
+
+        msg = zlist_first (monitor->waiters);
+        while (msg) {
+            if (notify_one_waiter (monitor->ctx->h, count, msg)) {
+                zlist_remove (monitor->waiters, (void *)msg);
+                flux_msg_decref (msg);
+                return true;
+            }
+            msg = zlist_next (monitor->waiters);
+        }
+    }
+    return false;
+}
+
+/* RPC to wait for some number of up ranks - useful in test
+ */
+static void waitup_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
+{
+    struct monitor *monitor = arg;
+    const char *errstr = NULL;
+    int up;
+
+    if (flux_request_unpack (msg, NULL, "{s:i}", "up", &up) < 0)
+        goto error;
+    if (monitor->ctx->rank != 0) {
+        errno = EPROTO;
+        errstr = "this RPC only works on rank 0";
+        goto error;
+    }
+    if (up > monitor->ctx->size || up < 0) {
+        errno = EPROTO;
+        errstr = "up value is out of range";
+    }
+    if (idset_count (monitor->up) != up) {
+        if (!monitor->waiters && !(monitor->waiters = zlist_new ()))
+            goto nomem;
+        if (zlist_append (monitor->waiters,
+                          (void *)flux_msg_incref (msg)) < 0) {
+            flux_msg_decref (msg);
+            goto nomem;
+        }
+        return; // response deferred
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to monitor-waitup request");
+    return;
+nomem:
+    errno = ENOMEM;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to monitor-waitup request");
+}
+
 /* Start reduction (again) when requested by rank 0.
  */
 static void reload_cb (flux_t *h,
@@ -310,6 +393,7 @@ static int publish_reload (flux_t *h)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,  "resource.monitor-waitup", waitup_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "resource.monitor-reduce", reduce_cb, 0 },
     { FLUX_MSGTYPE_EVENT,    "resource.monitor-reload", reload_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
@@ -322,6 +406,12 @@ void monitor_destroy (struct monitor *monitor)
         if (monitor->ctx->rank > 0) {
             if (monitor_reduce_self (monitor, false) < 0)
                 flux_log_error (monitor->ctx->h, "monitor-reduce failed");
+        }
+        if (monitor->waiters) {
+            const flux_msg_t *msg;
+            while ((msg = zlist_pop (monitor->waiters)))
+                flux_msg_decref (msg);
+            zlist_destroy (&monitor->waiters);
         }
         batch_destroy (monitor->batch);
         flux_watcher_destroy (monitor->batch_timer);
