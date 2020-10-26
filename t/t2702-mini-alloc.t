@@ -44,4 +44,9 @@ test_expect_success 'flux-mini alloc runs one broker per node by default' '
 	test_debug "cat multi.out" &&
 	grep "size  *2" multi.out
 '
+test_expect_success 'flux-mini alloc -v prints jobid on stderr' '
+	$runpty -o verbose.out flux mini alloc -n1 -v flux lsattr -v &&
+	test_debug "cat verbose.out" &&
+	grep "jobid: " verbose.out
+'
 test_done
