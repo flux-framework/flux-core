@@ -139,42 +139,19 @@ static struct simple_sched * simple_sched_create (void)
     return ss;
 }
 
-static int R_add_expiration (json_t *R, double now, double timelimit)
-{
-    int rc = -1;
-    json_t *exec = NULL;
-    json_t *o = NULL;
-    double starttime = now;
-    double expiration = now + timelimit;
-
-    if (!(exec = json_object_get (R, "execution"))
-        || (!(o = json_real (starttime)))
-        || json_object_set_new (exec, "starttime", o) < 0) {
-        json_decref (o);
-        goto out;
-    }
-    if (!(o = json_real (expiration))
-        || json_object_set_new (exec, "expiration", o) < 0) {
-        json_decref (o);
-        goto out;
-    }
-    rc = 0;
-out:
-    return rc;
-}
-
 static char *Rstring_create (struct rlist *l, double now, double timelimit)
 {
     char *s = NULL;
-    json_t *R = rlist_to_R (l);
-    if (R) {
-        if (timelimit > 0. &&  R_add_expiration (R, now, timelimit) < 0)
-            goto out;
+    json_t *R = NULL;
+    if (timelimit > 0.) {
+        l->starttime = now;
+        l->expiration = now + timelimit;
+    }
+    if ((R = rlist_to_R (l))) {
         s = json_dumps (R, JSON_COMPACT);
-out:
         json_decref (R);
     }
-    return (s);
+    return s;
 }
 
 static int try_alloc (flux_t *h, struct simple_sched *ss)
