@@ -1668,6 +1668,7 @@ static int job_events_priority (struct job_state_ctx *jsctx,
             || priority > FLUX_JOB_PRIORITY_MAX)) {
         flux_log (jsctx->h, LOG_ERR, "%s: priority context invalid: %ju",
                   __FUNCTION__, (uintmax_t)id);
+        errno = EPROTO;
         return -1;
     }
 
@@ -1765,6 +1766,7 @@ static int job_events_annotations (struct job_state_ctx *jsctx,
         flux_log (jsctx->h, LOG_ERR,
                   "%s: annotations event context invalid: %ju",
                   __FUNCTION__, (uintmax_t)id);
+        errno = EPROTO;
         return -1;
     }
 
@@ -1803,6 +1805,7 @@ static void job_events_continuation (flux_future_t *f, void *arg)
 
     if (!json_is_array (events)) {
         flux_log (jsctx->h, LOG_ERR, "%s: events EPROTO", __FUNCTION__);
+        errno = EPROTO;
         goto error;
     }
 
@@ -1817,6 +1820,7 @@ static void job_events_continuation (flux_future_t *f, void *arg)
             || eventlog_entry_parse (entry, &timestamp, &name, &context) < 0) {
             flux_log (jsctx->h, LOG_ERR, "%s: error parsing record",
                       __FUNCTION__);
+            errno = EPROTO;
             goto error;
         }
 
