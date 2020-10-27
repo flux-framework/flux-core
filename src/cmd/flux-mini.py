@@ -591,6 +591,13 @@ class AllocCmd(MiniCmd):
         super().__init__(exclude_io=True)
         add_batch_alloc_args(self.parser)
         self.parser.add_argument(
+            "-v",
+            "--verbose",
+            action="count",
+            default=0,
+            help="Increase verbosity on stderr (multiple use OK)",
+        )
+        self.parser.add_argument(
             "COMMAND",
             nargs=argparse.REMAINDER,
             help="Set the initial COMMAND of new Flux instance."
@@ -616,6 +623,13 @@ class AllocCmd(MiniCmd):
 
     def main(self, args):
         jobid = self.submit(args)
+
+        # Display job id on stderr if -v
+        # N.B. we must flush sys.stderr due to the fact that it is buffered
+        # when it points to a file, and os.execvp leaves it unflushed
+        if args.verbose > 0:
+            print("jobid:", jobid, file=sys.stderr)
+            sys.stderr.flush()
 
         # Build args for flux job attach
         attach_args = ["flux-job", "attach"]
