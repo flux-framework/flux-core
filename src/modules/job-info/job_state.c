@@ -1408,6 +1408,7 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
             if (!context) {
                 flux_log (ctx->h, LOG_ERR, "%s: no submit context for %ju",
                           __FUNCTION__, (uintmax_t)job->id);
+                errno = EPROTO;
                 goto error;
             }
 
@@ -1417,6 +1418,7 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                              "flags", &job->flags) < 0) {
                 flux_log (ctx->h, LOG_ERR, "%s: submit context for %ju invalid",
                           __FUNCTION__, (uintmax_t)job->id);
+                errno = EPROTO;
                 goto error;
             }
             job->priority_timestamp = timestamp;
@@ -1429,6 +1431,7 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
             if (!context) {
                 flux_log (ctx->h, LOG_ERR, "%s: no priority context for %ju",
                           __FUNCTION__, (uintmax_t)job->id);
+                errno = EPROTO;
                 goto error;
             }
 
@@ -1437,6 +1440,7 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                 flux_log (ctx->h, LOG_ERR,
                           "%s: priority context for %ju invalid",
                           __FUNCTION__, (uintmax_t)job->id);
+                errno = EPROTO;
                 goto error;
             }
             job->priority_timestamp = timestamp;
@@ -1446,6 +1450,7 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
             if (!context) {
                 flux_log (ctx->h, LOG_ERR, "%s: no exception context for %ju",
                           __FUNCTION__, (uintmax_t)job->id);
+                errno = EPROTO;
                 goto error;
             }
 
@@ -1453,6 +1458,7 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                 flux_log (ctx->h, LOG_ERR,
                           "%s: exception context for %ju invalid",
                           __FUNCTION__, (uintmax_t)job->id);
+                errno = EPROTO;
                 goto error;
             }
             if (severity == 0)
@@ -1466,6 +1472,7 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
                     flux_log (ctx->h, LOG_ERR,
                               "%s: alloc context for %ju invalid",
                               __FUNCTION__, (uintmax_t)job->id);
+                    errno = EPROTO;
                     goto error;
                 }
                 if (!json_is_null (annotations))
@@ -1487,6 +1494,7 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
     if (job->state == FLUX_JOB_NEW) {
         flux_log (ctx->h, LOG_ERR, "%s: eventlog has no transition events",
                   __FUNCTION__);
+        errno = EPROTO;
         goto error;
     }
 
