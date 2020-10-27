@@ -52,7 +52,6 @@ static int exception_context_parse (flux_t *h,
 static void process_next_state (struct info_ctx *ctx, struct job *job);
 
 static int journal_process_events (struct job_state_ctx *jsctx, json_t *events);
-static void job_events_journal_continuation (flux_future_t *f, void *arg);
 
 /* Compare items for sorting in list, priority first (higher priority
  * before lower priority), t_submit second (earlier submission time
@@ -139,106 +138,6 @@ static void json_decref_wrapper (void **data)
     if (data) {
         json_t **ptr = (json_t **)data;
         json_decref (*ptr);
-    }
-}
-
-struct job_state_ctx *job_state_create (struct info_ctx *ctx)
-{
-    struct job_state_ctx *jsctx = NULL;
-    int saved_errno;
-
-    if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
-        flux_log_error (ctx->h, "calloc");
-        return NULL;
-    }
-    jsctx->h = ctx->h;
-    jsctx->ctx = ctx;
-
-    /* Index is the primary data structure holding the job data
-     * structures.  It is responsible for destruction.  Lists only
-     * contain desired sort of jobs.
-     */
-
-    if (!(jsctx->index = job_hash_create ()))
-        goto error;
-    zhashx_set_destructor (jsctx->index, job_destroy_wrapper);
-
-    if (!(jsctx->pending = zlistx_new ()))
-        goto error;
-    zlistx_set_comparator (jsctx->pending, job_priority_cmp);
-
-    if (!(jsctx->running = zlistx_new ()))
-        goto error;
-    zlistx_set_comparator (jsctx->running, job_running_cmp);
-
-    if (!(jsctx->inactive = zlistx_new ()))
-        goto error;
-    zlistx_set_comparator (jsctx->inactive, job_inactive_cmp);
-
-    if (!(jsctx->processing = zlistx_new ()))
-        goto error;
-
-    if (!(jsctx->futures = zlistx_new ()))
-        goto error;
-
-    if (!(jsctx->events_journal_backlog = zlistx_new ()))
-        goto error;
-    zlistx_set_destructor (jsctx->events_journal_backlog, json_decref_wrapper);
-
-    /* no filters on events-journal, stream all events */
-    if (!(jsctx->events = flux_rpc_pack (jsctx->h,
-                                         "job-manager.events-journal",
-                                         FLUX_NODEID_ANY,
-                                         FLUX_RPC_STREAMING,
-                                         "{}"))) {
-        flux_log_error (jsctx->h, "flux_rpc_pack");
-        goto error;
-    }
-
-    if (flux_future_then (jsctx->events,
-                          -1,
-                          job_events_journal_continuation,
-                          jsctx) < 0) {
-        flux_log_error (jsctx->h, "flux_future_then");
-        goto error;
-    }
-
-    return jsctx;
-
-error:
-    saved_errno = errno;
-    job_state_destroy (jsctx);
-    errno = saved_errno;
-    return NULL;
-}
-
-void job_state_destroy (void *data)
-{
-    struct job_state_ctx *jsctx = data;
-    if (jsctx) {
-        /* Don't destroy processing until futures are complete */
-        if (jsctx->futures) {
-            flux_future_t *f;
-            f = zlistx_first (jsctx->futures);
-            while (f) {
-                if (flux_future_get (f, NULL) < 0)
-                    flux_log_error (jsctx->h, "%s: flux_future_get",
-                                    __FUNCTION__);
-                flux_future_destroy (f);
-                f = zlistx_next (jsctx->futures);
-            }
-            zlistx_destroy (&jsctx->futures);
-        }
-        /* Destroy index last, as it is the one that will actually
-         * destroy the job objects */
-        zlistx_destroy (&jsctx->processing);
-        zlistx_destroy (&jsctx->inactive);
-        zlistx_destroy (&jsctx->running);
-        zlistx_destroy (&jsctx->pending);
-        zhashx_destroy (&jsctx->index);
-        zlistx_destroy (&jsctx->events_journal_backlog);
-        flux_future_destroy (jsctx->events);
-        free (jsctx);
     }
 }
 
@@ -1726,6 +1625,106 @@ error:
     /* future will be cleaned up in shutdown path */
     flux_reactor_stop_error (flux_get_reactor (jsctx->h));
     return;
+}
+
+struct job_state_ctx *job_state_create (struct info_ctx *ctx)
+{
+    struct job_state_ctx *jsctx = NULL;
+    int saved_errno;
+
+    if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
+        flux_log_error (ctx->h, "calloc");
+        return NULL;
+    }
+    jsctx->h = ctx->h;
+    jsctx->ctx = ctx;
+
+    /* Index is the primary data structure holding the job data
+     * structures.  It is responsible for destruction.  Lists only
+     * contain desired sort of jobs.
+     */
+
+    if (!(jsctx->index = job_hash_create ()))
+        goto error;
+    zhashx_set_destructor (jsctx->index, job_destroy_wrapper);
+
+    if (!(jsctx->pending = zlistx_new ()))
+        goto error;
+    zlistx_set_comparator (jsctx->pending, job_priority_cmp);
+
+    if (!(jsctx->running = zlistx_new ()))
+        goto error;
+    zlistx_set_comparator (jsctx->running, job_running_cmp);
+
+    if (!(jsctx->inactive = zlistx_new ()))
+        goto error;
+    zlistx_set_comparator (jsctx->inactive, job_inactive_cmp);
+
+    if (!(jsctx->processing = zlistx_new ()))
+        goto error;
+
+    if (!(jsctx->futures = zlistx_new ()))
+        goto error;
+
+    if (!(jsctx->events_journal_backlog = zlistx_new ()))
+        goto error;
+    zlistx_set_destructor (jsctx->events_journal_backlog, json_decref_wrapper);
+
+    /* no filters on events-journal, stream all events */
+    if (!(jsctx->events = flux_rpc_pack (jsctx->h,
+                                         "job-manager.events-journal",
+                                         FLUX_NODEID_ANY,
+                                         FLUX_RPC_STREAMING,
+                                         "{}"))) {
+        flux_log_error (jsctx->h, "flux_rpc_pack");
+        goto error;
+    }
+
+    if (flux_future_then (jsctx->events,
+                          -1,
+                          job_events_journal_continuation,
+                          jsctx) < 0) {
+        flux_log_error (jsctx->h, "flux_future_then");
+        goto error;
+    }
+
+    return jsctx;
+
+error:
+    saved_errno = errno;
+    job_state_destroy (jsctx);
+    errno = saved_errno;
+    return NULL;
+}
+
+void job_state_destroy (void *data)
+{
+    struct job_state_ctx *jsctx = data;
+    if (jsctx) {
+        /* Don't destroy processing until futures are complete */
+        if (jsctx->futures) {
+            flux_future_t *f;
+            f = zlistx_first (jsctx->futures);
+            while (f) {
+                if (flux_future_get (f, NULL) < 0)
+                    flux_log_error (jsctx->h, "%s: flux_future_get",
+                                    __FUNCTION__);
+                flux_future_destroy (f);
+                f = zlistx_next (jsctx->futures);
+            }
+            zlistx_destroy (&jsctx->futures);
+        }
+        /* Destroy index last, as it is the one that will actually
+         * destroy the job objects */
+        zlistx_destroy (&jsctx->processing);
+        zlistx_destroy (&jsctx->inactive);
+        zlistx_destroy (&jsctx->running);
+        zlistx_destroy (&jsctx->pending);
+        zhashx_destroy (&jsctx->index);
+        zlistx_destroy (&jsctx->events_journal_backlog);
+        flux_future_destroy (jsctx->events);
+        free (jsctx);
+    }
 }
 
 /*
