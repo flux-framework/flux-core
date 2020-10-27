@@ -1078,29 +1078,6 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with i
         cat list_id_illegal_R.out | $jq -e ".id == ${jobid}"
 '
 
-# we make the eventlog invalid by overwriting it in the KVS before job-info will
-# look it up.  Note that b/c the eventlog is corrupted, the userid for the job
-# is never established.  So we have to set --user=all.
-test_expect_success HAVE_JQ 'flux job list works on job with illegal eventlog' '
-	${RPC} job-info.job-state-pause 0 </dev/null &&
-        jobid=`flux job submit hostname.json | flux job id` &&
-        fj_wait_event $jobid clean >/dev/null &&
-        jobkvspath=`flux job id --to kvs $jobid` &&
-        flux kvs put "${jobkvspath}.eventlog=foobar" &&
-	${RPC} job-info.job-state-unpause 0 </dev/null &&
-        i=0 &&
-        while ! flux job list --states=inactive --user=all | grep $jobid > /dev/null \
-               && [ $i -lt 5 ]
-        do
-                sleep 1
-                i=$((i + 1))
-        done &&
-        test "$i" -lt "5" &&
-        flux job list --states=inactive --user=all | grep $jobid > list_illegal_eventlog.out &&
-        cat list_illegal_eventlog.out | $jq -e ".priority == -1" &&
-        cat list_illegal_eventlog.out | $jq -e ".userid == 4294967295"
-'
-
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with illegal eventlog' '
 	${RPC} job-info.job-state-pause 0 </dev/null
         jobid=`flux job submit hostname.json | flux job id`

@@ -52,13 +52,10 @@ struct job_state_ctx {
     int cleanup_count;
     int inactive_count;
 
-    /* annotations that arrived before job is known */
-    zhashx_t *early_annotations;
-
-    /* debug/testing - if paused store job transitions on list for
+    /* debug/testing - if paused store job events journal on list for
      * processing later */
     bool pause;
-    zlistx_t *transitions;
+    zlistx_t *events_journal_backlog;
 
     /* stream of job events from the job-manager */
     flux_future_t *events;
@@ -70,7 +67,6 @@ struct job {
     flux_jobid_t id;
     uint32_t userid;
     int priority;
-    double priority_timestamp;
     double t_submit;
     int flags;
     flux_job_state_t state;
@@ -86,8 +82,8 @@ struct job {
     const char *exception_type;
     const char *exception_note;
     flux_job_result_t result;
-    double annotations_timestamp;
     json_t *annotations;
+    int eventlog_seq;           /* last event seq read */
 
     /* cache of job information */
     json_t *jobspec_job;
@@ -103,9 +99,12 @@ struct job {
      * priority, etc.
      *
      * Track which states we've seen via the states_mask.
+     *
+     * Track states seen via events stream in states_events_mask.
      */
     zlist_t *next_states;
     unsigned int states_mask;
+    unsigned int states_events_mask;
     void *list_handle;
 
     /* timestamp of when we enter the state
@@ -129,9 +128,6 @@ struct job {
 struct job_state_ctx *job_state_create (struct info_ctx *ctx);
 
 void job_state_destroy (void *data);
-
-void job_state_cb (flux_t *h, flux_msg_handler_t *mh,
-                   const flux_msg_t *msg, void *arg);
 
 void job_state_pause_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg);
