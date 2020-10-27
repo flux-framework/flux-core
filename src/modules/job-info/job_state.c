@@ -44,7 +44,7 @@ static void process_next_state (struct info_ctx *ctx, struct job *job);
 
 static void annotations_data_destroy_wrapper (void **data);
 
-static void job_events_continuation (flux_future_t *f, void *arg);
+static void job_events_journal_continuation (flux_future_t *f, void *arg);
 
 /* Compare items for sorting in list, priority first (higher priority
  * before lower priority), t_submit second (earlier submission time
@@ -220,7 +220,7 @@ struct job_state_ctx *job_state_create (struct info_ctx *ctx)
 
     if (flux_future_then (jsctx->events,
                           -1,
-                          job_events_continuation,
+                          job_events_journal_continuation,
                           jsctx) < 0) {
         flux_log_error (jsctx->h, "flux_future_then");
         goto error;
@@ -1662,10 +1662,10 @@ int job_state_init_from_kvs (struct info_ctx *ctx)
     return 0;
 }
 
-static int job_events_priority (struct job_state_ctx *jsctx,
-                                flux_jobid_t id,
-                                double timestamp,
-                                json_t *context)
+static int journal_priority_event (struct job_state_ctx *jsctx,
+                                   flux_jobid_t id,
+                                   double timestamp,
+                                   json_t *context)
 {
     struct job *job;
     int priority;
@@ -1761,10 +1761,10 @@ error:
     return -1;
 }
 
-static int job_events_annotations (struct job_state_ctx *jsctx,
-                                   flux_jobid_t id,
-                                   double timestamp,
-                                   json_t *context)
+static int journal_annotations_event (struct job_state_ctx *jsctx,
+                                      flux_jobid_t id,
+                                      double timestamp,
+                                      json_t *context)
 {
     struct job *job;
     json_t *annotations;
@@ -1799,7 +1799,7 @@ static int job_events_annotations (struct job_state_ctx *jsctx,
     return 0;
 }
 
-static void job_events_continuation (flux_future_t *f, void *arg)
+static void job_events_journal_continuation (flux_future_t *f, void *arg)
 {
     struct job_state_ctx *jsctx = arg;
     size_t index;
@@ -1833,11 +1833,11 @@ static void job_events_continuation (flux_future_t *f, void *arg)
         }
 
         if (!strcmp (name, "priority")) {
-            if (job_events_priority (jsctx, id, timestamp, context) < 0)
+            if (journal_priority_event (jsctx, id, timestamp, context) < 0)
                 goto error;
         }
         else if (!strcmp (name, "annotations")) {
-            if (job_events_annotations (jsctx, id, timestamp, context) < 0)
+            if (journal_annotations_event (jsctx, id, timestamp, context) < 0)
                 goto error;
         }
     }
