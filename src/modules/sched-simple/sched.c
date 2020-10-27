@@ -38,7 +38,6 @@ struct simple_sched {
 
     char *mode;             /* allocation mode */
     bool single;
-    bool sched_pus;         /* schedule PUs as cores */
     struct rlist *rlist;    /* list of resources */
     zlistx_t *queue;        /* job queue */
     schedutil_t *util_ctx;
@@ -564,9 +563,6 @@ static int process_args (flux_t *h, struct simple_sched *ss,
         }
         else if (strcmp ("unlimited", argv[i]) == 0) {
             ss->single = false;
-        }
-        else if (strcmp ("sched-PUs", argv[i]) == 0) {
-            ss->sched_pus = true;
         }
         else {
             flux_log_error (h, "Unknown module option: '%s'", argv[i]);
