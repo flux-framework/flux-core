@@ -13,6 +13,10 @@
 #ifndef FLUX_HOSTLIST_H
 #define FLUX_HOSTLIST_H
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 struct hostlist *hostlist_create (void);
 
 void hostlist_destroy (struct hostlist *hl);
@@ -134,5 +138,9 @@ const char * hostlist_current (struct hostlist *hl);
  *  or -1 on error.
  */
 int hostlist_remove_current (struct hostlist *hl);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_HOSTLIST_H */

@@ -15,12 +15,20 @@
 
 #include "init.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Send ready request to job-manager, selecting interface 'mode'
  * ("single", "unlimited", ...).  'queue_depth', if non-NULL,
  * is set to the number of jobs in SCHED state that have not yet requested
  * resources.  Returns 0 on success, -1 on failure with errno set.
  */
 int schedutil_ready (schedutil_t *util, const char *mode, int *queue_depth);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_SCHEDUTIL_READY_H */
 

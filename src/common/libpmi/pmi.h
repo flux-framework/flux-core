@@ -13,6 +13,10 @@
 #ifndef FLUX_PMI_H_INCLUDED
 #define FLUX_PMI_H_INCLUDED
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define PMI_SUCCESS                  0
 #define PMI_FAIL                    -1
 #define PMI_ERR_INIT                 1
@@ -93,6 +97,10 @@ int PMI_Args_to_keyval (int *argcp, char *((*argvp)[]),
                         PMI_keyval_t **keyvalp, int *size);
 int PMI_Free_keyvals (PMI_keyval_t keyvalp[], int size);
 int PMI_Get_options (char *str, int *length);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !FLUX_PMI_H_INCLUDED */
 

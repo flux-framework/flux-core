@@ -16,6 +16,10 @@
 
 #include "init.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum {
     FLUX_SCHED_ALLOC_SUCCESS  = 0,
     FLUX_SCHED_ALLOC_ANNOTATE = 1,
@@ -61,6 +65,10 @@ int schedutil_alloc_respond_success_pack (schedutil_t *util,
  * N.B. 'msg' is the alloc request, not the cancel request.
  */
 int schedutil_alloc_respond_cancel (schedutil_t *util, const flux_msg_t *msg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_SCHEDUTIL_ALLOC_H */
 

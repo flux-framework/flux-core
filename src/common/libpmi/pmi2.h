@@ -11,6 +11,10 @@
 #ifndef FLUX_PMI2_H_INCLUDED
 #define FLUX_PMI2_H_INCLUDED
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #define PMI2_SUCCESS                0
 #define PMI2_FAIL                   -1
 #define PMI2_ERR_INIT               1
@@ -97,7 +101,9 @@ int PMI2_Nameserv_lookup (const char service_name[],
 int PMI2_Nameserv_unpublish (const char service_name[],
                              const struct MPID_Info *info_ptr);
 
-
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !FLUX_PMI2_H_INCLUDED */
 

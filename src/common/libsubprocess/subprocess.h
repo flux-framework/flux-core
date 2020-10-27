@@ -15,6 +15,10 @@
 
 #include <flux/core.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /*
  *  flux_cmd_t: An object that defines a command to be run, either
  *   remotely or as a child of the current process. Includes cmdline
@@ -502,5 +506,9 @@ int flux_subprocess_aux_set (flux_subprocess_t *p,
  *   no such context exists, then NULL is returned.
  */
 void *flux_subprocess_aux_get (flux_subprocess_t *p, const char *name);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_CORE_SUBPROCESS_H */

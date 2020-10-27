@@ -13,6 +13,10 @@
 
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct flux_buffer flux_buffer_t;
 
 /* Create buffer.
@@ -126,5 +130,9 @@ int flux_buffer_read_to_fd (flux_buffer_t *fb, int fd, int len);
 int flux_buffer_write_from_fd (flux_buffer_t *fb, int fd, int len);
 
 /* FUTURE: append, prepend, printf, add_flux_buffer, etc. */
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_BUFFER_H */

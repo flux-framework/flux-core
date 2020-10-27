@@ -19,6 +19,10 @@
 #include <sys/param.h>
 #include <stdbool.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 enum idset_flags {
     IDSET_FLAG_AUTOGROW = 1, // allow idset size to automatically grow
     IDSET_FLAG_BRACKETS = 2, // encode non-singleton idset with brackets
@@ -118,6 +122,9 @@ typedef int (*idset_format_map_f)(const char *s, bool *stop, void *arg);
 
 int idset_format_map (const char *s, idset_format_map_f fun, void *arg);
 
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !FLUX_IDSET_H */
 

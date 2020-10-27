@@ -13,6 +13,10 @@
 
 #include <flux/core.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Callback for an alloc request.  jobspec is looked up as a convenience.
  * Decode msg with schedutil_alloc_request_decode().
  * 'msg' and 'jobspec' are only valid for hte duration of this call.
@@ -42,6 +46,10 @@ typedef void (schedutil_free_cb_f)(flux_t *h,
 typedef void (schedutil_cancel_cb_f)(flux_t *h,
                                      flux_jobid_t id,
                                      void *arg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_SCHEDUTIL_OPS_H */
 
