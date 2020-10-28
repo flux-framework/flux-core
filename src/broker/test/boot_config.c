@@ -294,7 +294,7 @@ void test_bad_host_bind (const char *dir)
     if (boot_config_parse (cf, &conf, &hosts) < 0)
         BAIL_OUT ("boot_config_parse unexpectedly failed");
     ok (boot_config_getbindbyrank (hosts, &conf, 0, uri, sizeof (uri)) < 0,
-        "boot_config_getbindbyrank failed on hoste entry wtih wrong bind type");
+        "boot_config_getbindbyrank failed on host entry with wrong bind type");
 
     json_decref (hosts);
 
