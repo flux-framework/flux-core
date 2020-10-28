@@ -248,7 +248,6 @@ MAN3_FILES_SECONDARY = \
 	man3/idset_destroy.3 \
 	man3/idset_decode.3 \
 	man3/idset_ndecode.3 \
-	man3/idset_format_map.3 \
 	man3/idset_set.3 \
 	man3/idset_clear.3 \
 	man3/idset_first.3 \

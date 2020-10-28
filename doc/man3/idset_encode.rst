@@ -22,14 +22,6 @@ SYNOPSIS
 
    struct idset *idset_ndecode (const char *s, size_t len);
 
-::
-
-   typedef int (*idset_format_map_f)(const char *s, bool *stop, void *arg);
-
-::
-
-   int idset_format_map (const char *s, idset_format_map_f fun, void *arg);
-
 
 USAGE
 =====
@@ -71,16 +63,6 @@ of valid input strings are:
 ``idset_ndecode()`` creates an idset from a sub-string *s* defined by
 length *len*.
 
-``idset_format_map()`` expands bracketed idset string(s) in *s*, calling
-a map function *fun()* for each expanded string. The map function should
-return 0 on success, or -1 on failure with errno set. Returning -1 causes
-``idset_format_map()`` to immediately return -1. The map function may may
-halt iteration without triggering an error by setting \*stop = true.
-
-This function recursively expands multiple bracketed idset strings from
-left to right, so for example, "r[0-1]n[0-1]" expands to "r0n0", "r0n1",
-\* "r1n0", "r1n1".
-
 
 FLAGS
 =====
@@ -103,9 +85,6 @@ be freed with ``idset_destroy(3)``. On error, NULL is returned with errno set.
 
 ``idset_encode()`` returns a string on success which must be freed
 with ``free()``. On error, NULL is returned with errno set.
-
-``idset_format_map()`` returns the number of times the map function was called
-(including the stopping one, if any), or -1 on failure with errno set.
 
 
 ERRORS
