@@ -15,6 +15,10 @@
 
 #include "ops.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 typedef struct schedutil_ctx schedutil_t;
 
 /* Create a handle for the schedutil conveinence library.
@@ -35,5 +39,9 @@ schedutil_t *schedutil_create (flux_t *h,
  * alloc).
  */
 void schedutil_destroy (schedutil_t* ctx);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_SCHEDUTIL_INIT_H */

@@ -15,6 +15,10 @@
 
 #include "init.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Callback for ingesting R + metadata for jobs that have resources
  * Return 0 on success, -1 on failure with errno set.
  * Failure of the callback aborts iteration and causes schedutil_hello()
@@ -34,6 +38,10 @@ typedef int (schedutil_hello_cb_f)(flux_t *h,
  * with 'arg'.
  */
 int schedutil_hello (schedutil_t *util, schedutil_hello_cb_f *cb, void *arg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_SCHEDUTIL_HELLO_H */
 

@@ -13,6 +13,10 @@
 
 #include <jansson.h>
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* convenience function to extract timestamp, name, and optional
  * context from an event entry */
 int eventlog_entry_parse (json_t *entry,
@@ -47,6 +51,10 @@ json_t *eventlog_entry_vpack (double timestamp,
                               va_list ap);
 
 char *eventlog_entry_encode (json_t *entry);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_EVENTLOG_H */
 

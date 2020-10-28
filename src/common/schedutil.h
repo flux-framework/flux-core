@@ -11,20 +11,12 @@
 #ifndef _FLUX_SCHEDUTIL_H
 #define _FLUX_SCHEDUTIL_H
 
-#ifdef __cplusplus
-extern "C" {
-#endif
-
 #include "schedutil/init.h"
 #include "schedutil/hello.h"
 #include "schedutil/ready.h"
 #include "schedutil/alloc.h"
 #include "schedutil/free.h"
 #include "schedutil/ops.h"
-
-#ifdef __cplusplus
-}
-#endif
 
 #endif /* !_FLUX_SCHEDUTIL_H */
 

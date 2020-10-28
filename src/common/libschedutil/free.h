@@ -15,6 +15,10 @@
 
 #include "init.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 /* Decode a free request.
  * Returns 0 on success, -1 on failure with errno set.
  */
@@ -23,6 +27,10 @@ int schedutil_free_request_decode (const flux_msg_t *msg, flux_jobid_t *id);
 /* Respond to a free request.
  */
 int schedutil_free_respond (schedutil_t *util, const flux_msg_t *msg);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif /* !_FLUX_SCHEDUTIL_FREE_H */
 
