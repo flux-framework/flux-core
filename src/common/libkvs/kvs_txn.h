@@ -11,11 +11,11 @@
 #ifndef _FLUX_CORE_KVS_TXN_H
 #define _FLUX_CORE_KVS_TXN_H
 
+#include <stdarg.h>
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-
-#include <stdarg.h>
 
 typedef struct flux_kvs_txn flux_kvs_txn_t;
 
