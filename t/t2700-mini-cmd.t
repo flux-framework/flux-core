@@ -18,7 +18,8 @@ test_expect_success 'reload sched-simple with sched-PUs' '
 	flux module reload -f sched-simple sched-PUs
 '
 
-test $(nproc) -gt 1 && test_set_prereq HAVE_MULTICORE
+test $(flux R encode --local | flux R decode --count core) -gt 1 \
+    && test_set_prereq HAVE_MULTICORE
 
 test_expect_success 'flux mini fails with usage message' '
 	test_must_fail flux mini 2>usage.err &&
