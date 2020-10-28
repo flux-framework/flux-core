@@ -248,7 +248,7 @@ void test_missing_info (const char *dir)
     flux_conf_decref (cf);
 }
 
-void test_bad_host_idset (const char *dir)
+void test_bad_host_hostlist (const char *dir)
 {
     char path[PATH_MAX + 1];
     flux_conf_t *cf;
@@ -257,7 +257,7 @@ void test_bad_host_idset (const char *dir)
     const char *input = \
 "[bootstrap]\n" \
 "hosts = [\n" \
-"  { host=\"foo[1-]\" },\n" \
+"  { host=\"foo[1-\" },\n" \
 "]\n";
 
     create_test_file (dir, "boot", path, sizeof (path), input);
@@ -445,7 +445,7 @@ int main (int argc, char **argv)
     test_overflow_bind (dir);
     test_overflow_connect (dir);
     test_bad_hosts_entry (dir);
-    test_bad_host_idset (dir);
+    test_bad_host_hostlist (dir);
     test_bad_host_bind (dir);
     test_no_hosts (dir);
     test_empty_hosts (dir);
