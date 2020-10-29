@@ -194,6 +194,14 @@ hello.hwm
    Set to 0 to disable the high water mark.
 
 
+CONFIG ATTRIBUTES
+=================
+
+config.hostlist
+   The rank-ordered hosts specified in the ``bootstrap`` section of
+   the Flux configuration.  Hosts are listed in RFC29 hostlist format.
+
+
 RESOURCES
 =========
 

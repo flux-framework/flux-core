@@ -235,6 +235,49 @@ int boot_config_parse (const flux_conf_t *cf,
     return 0;
 }
 
+int boot_config_attr (attr_t *attrs, json_t *hosts)
+{
+    struct hostlist *hl = NULL;
+    char *s = NULL;
+    size_t index;
+    json_t *value;
+    int rv = -1;
+
+    if (!hosts || json_array_size (hosts) == 0)
+        return 0;
+
+    if (!(hl = hostlist_create ()))
+        goto error;
+
+    json_array_foreach (hosts, index, value) {
+        const char *host;
+        if (json_unpack (value, "{s:s}", "host", &host) < 0) {
+            log_msg ("Internal error [bootstrap]: missing host field");
+            errno = EINVAL;
+            goto error;
+        }
+        if (hostlist_append (hl, host) < 0)
+            goto error;
+    }
+
+    if (!(s = hostlist_encode (hl)))
+        goto error;
+
+    if (attr_add (attrs,
+                  "config.hostlist",
+                  s,
+                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("attr_add config.hostlist %s", s);
+        goto error;
+    }
+
+    rv = 0;
+error:
+    hostlist_destroy (hl);
+    free (s);
+    return rv;
+}
+
 /* Find host 'name' in hosts array, and set 'rank' to its array index.
  * Return 0 on success, -1 on failure.
  */
@@ -380,6 +423,9 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k)
      */
     if (boot_config_parse (flux_get_conf (h), &conf, &hosts) < 0)
         return -1;
+
+    if (boot_config_attr (attrs, hosts) < 0)
+        goto error;
 
     /* If hosts array was specified, match hostname to determine rank,
      * and size is the length of the hosts array.  O/w rank=0, size=1.
