@@ -301,7 +301,7 @@ int rlist_remap (struct rlist *rl)
 {
     uint32_t rank = 0;
     struct rnode *n;
-    
+
     /*   Sort list by ascending rank, then rerank starting at 0
      */
     zlistx_set_comparator (rl->nodes, by_rank);
@@ -710,71 +710,6 @@ int rlist_append (struct rlist *rl, const struct rlist *rl2)
     return 0;
 }
 
-static int rlist_append_by_rank (struct rlist *rl,
-                                 const char *ranks,
-                                 json_t *e,
-                                 const char *name)
-{
-    int rc = -1;
-    unsigned int n;
-    unsigned int i;
-    const char *corelist = NULL;
-    const char *hostname = NULL;
-    struct rnode *node;
-    struct idset *ids = idset_decode (ranks);
-    json_error_t err;
-
-    if (!ids || json_unpack_ex (e, &err, 0, "{s:i s?s s?s}",
-                                "Core", &n,
-                                name, &corelist,
-                                "hostname", &hostname) < 0)
-        goto out;
-    i = idset_first (ids);
-    while (i != IDSET_INVALID_ID) {
-        if (corelist)
-            node = rnode_create (hostname, i, corelist);
-        else
-            node = rnode_create_count (hostname, i, n);
-        if (!node || rlist_add_rnode (rl, node) < 0) {
-            rnode_destroy (node);
-            goto out;
-        }
-        i = idset_next (ids, i);
-    }
-    rc = 0;
-out:
-    idset_destroy (ids);
-    return rc;
-}
-
-struct rlist *rlist_from_hwloc_by_rank (const char *by_rank, bool sched_pus)
-{
-    struct rlist *rl = NULL;
-    const char *key = NULL;
-    json_t *entry = NULL;
-
-    json_t *o = json_loads (by_rank, 0, NULL);
-    if (o == NULL)
-        return NULL;
-    if (!(rl = rlist_create ()))
-        goto err;
-
-    json_object_foreach (o, key, entry) {
-        if (rlist_append_by_rank (rl,
-                                  key,
-                                  entry,
-                                  sched_pus ? "cpuset" : "coreids") < 0)
-            goto err;
-    }
-    json_decref (o);
-
-    return (rl);
-err:
-    json_decref (o);
-    rlist_destroy (rl);
-    return NULL;
-}
-
 static int rlist_append_rank (struct rlist *rl,
                               const char *hostname,
                               unsigned int rank,
@@ -983,10 +918,14 @@ err:
 
 struct rlist *rlist_from_R (const char *s)
 {
+    json_error_t err;
     struct rlist *rl = NULL;
-    json_t *o = json_loads (s, 0, NULL);
+    json_t *o = json_loads (s, 0, &err);
     if (o)
-        rl = rlist_from_json (o, NULL);
+        rl = rlist_from_json (o, &err);
+    if (!rl)
+        fprintf (stderr, "line %d: col %d: pos %d: err=%s\n",
+                err.line, err.column, err.position, err.text);
     json_decref (o);
     return rl;
 }

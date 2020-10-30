@@ -91,11 +91,6 @@ int rlist_assign_hosts (struct rlist *rl, const char *hosts);
  */
 int rlist_rerank (struct rlist *rl, const char *hosts);
 
-/*  Create an rlist object from resource.hwloc.by_rank JSON input
- *  If sched_pus is true, then rlist contains PUs not cores.
- */
-struct rlist *rlist_from_hwloc_by_rank (const char *by_rank, bool sched_pus);
-
 /*  Destroy an rlist object */
 void rlist_destroy (struct rlist *rl);
 
