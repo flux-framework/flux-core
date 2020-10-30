@@ -57,61 +57,6 @@ int format_first (char *buf,
     return 0;
 }
 
-static int idset_format_map_ex (const char *s,
-                                size_t maxsize,
-                                idset_format_map_f fun,
-                                void *arg,
-                                bool *stop)
-
-{
-    const char *start, *end;
-    struct idset *idset = NULL;
-    char *buf = NULL;
-    int count = 0;
-    unsigned int id;
-    int n;
-
-    if (find_brackets (s, &start, &end) == 0) {
-        if (!(idset = idset_ndecode (start, end - start + 1)))
-            goto error;
-        if (!(buf = malloc (maxsize)))
-            goto error;
-        id = idset_first (idset);
-        while (id != IDSET_INVALID_ID) {
-            if (format_first (buf, maxsize, s, id) < 0)
-                goto error;
-            if ((n = idset_format_map_ex (buf, maxsize, fun, arg, stop)) < 0)
-                goto error;
-            count += n;
-            if (*stop)
-                break;
-            id = idset_next (idset, id);
-        }
-        free (buf);
-        idset_destroy (idset);
-    }
-    else {
-        if (fun && fun (s, stop, arg) < 0)
-            goto error;
-        count = 1;
-    }
-    return count;
-error:
-    ERRNO_SAFE_WRAP (free, buf);
-    idset_destroy (idset);
-    return -1;
-}
-
-int idset_format_map (const char *s, idset_format_map_f fun, void *arg)
-{
-    bool stop = false;
-    if (!s) {
-        errno = EINVAL;
-        return -1;
-    }
-    return idset_format_map_ex (s, 4096, fun, arg, &stop);
-}
-
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

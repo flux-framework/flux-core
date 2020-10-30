@@ -117,12 +117,19 @@ test_expect_success 'start size=2 instance with ipc://' '
 	    { host="fake1" }
 	]
 	EOT
-	start_broker conf8 fake0 flux getattr size >ipc.out &&
+	cat <<-EOF >attrdump.sh &&
+	#!/bin/sh
+	flux getattr size
+	flux getattr config.hostlist
+	EOF
+	chmod +x attrdump.sh &&
+	start_broker conf8 fake0 ./attrdump.sh >ipc.out &&
         F0=$! &&
 	start_broker conf8 fake1 &&
         F1=$! &&
 	wait $F0 $F1 &&
 	echo 2 >ipc.exp &&
+	echo "fake[0-1]" >> ipc.exp &&
 	test_cmp ipc.exp ipc.out
 '
 
@@ -136,7 +143,7 @@ test_expect_success 'start size=4 instance with tcp://' '
 	    { host="fake[2-3]" }
 	]
 	EOT
-	start_broker conf9 fake0 flux getattr size >tcp.out &&
+	start_broker conf9 fake0 ./attrdump.sh >tcp.out &&
         F0=$! &&
 	start_broker conf9 fake1 &&
         F1=$! &&
@@ -146,6 +153,7 @@ test_expect_success 'start size=4 instance with tcp://' '
         F3=$! &&
 	wait $F0 $F1 $F2 $F3 &&
 	echo 4 >tcp.exp &&
+	echo "fake[0-3]" >> tcp.exp &&
 	test_cmp tcp.exp tcp.out
 '
 

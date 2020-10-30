@@ -248,7 +248,7 @@ void test_missing_info (const char *dir)
     flux_conf_decref (cf);
 }
 
-void test_bad_host_idset (const char *dir)
+void test_bad_host_hostlist (const char *dir)
 {
     char path[PATH_MAX + 1];
     flux_conf_t *cf;
@@ -257,7 +257,7 @@ void test_bad_host_idset (const char *dir)
     const char *input = \
 "[bootstrap]\n" \
 "hosts = [\n" \
-"  { host=\"foo[1-]\" },\n" \
+"  { host=\"foo[1-\" },\n" \
 "]\n";
 
     create_test_file (dir, "boot", path, sizeof (path), input);
@@ -294,7 +294,7 @@ void test_bad_host_bind (const char *dir)
     if (boot_config_parse (cf, &conf, &hosts) < 0)
         BAIL_OUT ("boot_config_parse unexpectedly failed");
     ok (boot_config_getbindbyrank (hosts, &conf, 0, uri, sizeof (uri)) < 0,
-        "boot_config_getbindbyrank failed on hoste entry wtih wrong bind type");
+        "boot_config_getbindbyrank failed on host entry with wrong bind type");
 
     json_decref (hosts);
 
@@ -431,6 +431,76 @@ void test_format (void)
         "format: %%h substitution overflow detected");
 }
 
+void test_attr (const char *dir)
+{
+    char path[PATH_MAX + 1];
+    flux_conf_t *cf;
+    json_t *hosts = NULL;
+    struct boot_conf conf;
+    attr_t *attrs;
+    int rc;
+    const char *input = \
+"[bootstrap]\n" \
+"hosts = [\n" \
+"  { host = \"foo0\" },\n" \
+"  { host = \"foo4\" },\n" \
+"  { host = \"foo[1-5]\" },\n" \
+"  { host = \"foo14\" },\n" \
+"  { host = \"foo[6-9]\" },\n" \
+"]\n";
+    const char *val;
+    int flags;
+
+    create_test_file (dir, "boot", path, sizeof (path), input);
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
+
+    ok ((attrs = attr_create ()) != NULL,
+        "attr_create_works");
+    if (attrs == NULL)
+        BAIL_OUT ("cannot continue without attrs");
+
+    rc = boot_config_attr (attrs, NULL);
+    ok (rc == 0,
+        "boot_config_attr works NULL hosts");
+    errno = 0;
+    ok (attr_get (attrs, "config.hostlist", NULL, NULL) < 0
+        && errno == ENOENT,
+        "attr_get cannot find config.hostlist after NULL hosts");
+
+    hosts = json_array ();
+    if (hosts == NULL)
+        BAIL_OUT ("cannot continue without empty hosts array");
+    rc = boot_config_attr (attrs, hosts);
+    ok (rc == 0,
+        "boot_config_attr works empty hosts");
+    ok (attr_get (attrs, "config.hostlist", NULL, NULL) < 0
+        && errno == ENOENT,
+        "attr_get cannot find config.hostlist after hosts");
+    json_decref (hosts);
+    hosts = NULL;
+
+    rc = boot_config_parse (cf, &conf, &hosts);
+    ok (rc == 0,
+        "boot_conf_parse worked");
+    if (hosts == NULL)
+        BAIL_OUT ("cannot continue without hosts array");
+
+    rc = boot_config_attr (attrs, hosts);
+    ok (rc == 0,
+        "boot_config_attr works on input hosts");
+    ok (attr_get (attrs, "config.hostlist", &val, &flags) == 0
+        && !strcmp (val, "foo[0,4,1-5,14,6-9]")
+        && flags == FLUX_ATTRFLAG_IMMUTABLE,
+        "attr_get returns correct value and flags");
+
+    json_decref (hosts);
+
+    if (unlink (path) < 0)
+        BAIL_OUT ("could not cleanup test file %s", path);
+    flux_conf_decref (cf);
+}
+
 int main (int argc, char **argv)
 {
     char dir[PATH_MAX + 1];
@@ -445,12 +515,13 @@ int main (int argc, char **argv)
     test_overflow_bind (dir);
     test_overflow_connect (dir);
     test_bad_hosts_entry (dir);
-    test_bad_host_idset (dir);
+    test_bad_host_hostlist (dir);
     test_bad_host_bind (dir);
     test_no_hosts (dir);
     test_empty_hosts (dir);
     test_missing_info (dir);
     test_toml_mixed_array (dir);
+    test_attr (dir);
 
     if (rmdir (dir) < 0)
         BAIL_OUT ("could not cleanup test dir %s", dir);

@@ -302,7 +302,6 @@ man_pages = [
     ('man3/idset_encode','idset_encode', 'Convert idset to string and string to idset', [author], 3),
     ('man3/idset_encode','idset_decode', 'Convert idset to string and string to idset', [author], 3),
     ('man3/idset_encode','idset_ndecode', 'Convert idset to string and string to idset', [author], 3),
-    ('man3/idset_encode','idset_format_map', 'Convert idset to string and string to idset', [author], 3),
     ('man5/flux-config-bootstrap', 'flux-config-bootstrap', 'configure Flux instance bootstrap', [author], 5),
     ('man7/flux-broker-attributes', 'flux-broker-attributes', 'overview Flux broker attributes', [author], 7),
 ]

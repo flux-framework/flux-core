@@ -61,18 +61,10 @@ hosts
 COMPACT HOSTS
 =============
 
-Since it would be tedious to repeat host entries for every compute node in
-a large cluster, the ``hosts`` array may be abbreviated using bracketed
-"idset" notation in ``host`` keys.
-
-An idset is an unordered set of non-negative integers that may be expressed
-as a comma-separated list including hyphenated ranges. For example
-the set 0, 1, 2, 3, 4, 18, 20 may be represented as "0-4,18,20".
-
-A ``host`` key may include one or more bracketed idsets. For example,
-"foo[0-1023]" represents the hosts "foo0, foo1, …​, foo1023", or
-"rack[0-1]node[0-1]" represents the hosts "rack0node0, rack0node1,
-rack1node0, rack1node1".
+Since it would be tedious to repeat host entries for every compute
+node in a large cluster, the ``hosts`` array may be abbreviated using
+RFC29 hostlists.  For example, the list of hosts foo0, foo1, foo2,
+foo3, foo18, foo4, foo20 can be represented as "foo[0-3,18,4,20]".
 
 
 EXAMPLE
