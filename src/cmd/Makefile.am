@@ -83,7 +83,8 @@ fluxcmd_PROGRAMS = \
 	flux-start \
 	flux-job \
 	flux-queue \
-	flux-exec
+	flux-exec \
+	flux-R
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
@@ -104,6 +105,18 @@ flux_terminus_LDADD = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(ZMQ_LIBS) \
 	$(LIBUTIL)
+
+flux_R_LDADD = \
+	$(fluxcmd_ldadd) \
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(top_builddir)/src/common/libhostlist/libhostlist.la \
+	$(top_builddir)/src/common/libidset/libidset.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(ZMQ_LIBS) \
+	$(HWLOC_LIBS) \
+	$(JANSSON_LIBS) \
+	$(LIBUTIL)
+
 
 #
 # Automatically build list of flux(1) builtins from

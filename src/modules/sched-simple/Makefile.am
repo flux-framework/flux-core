@@ -22,11 +22,7 @@ libjj_la_SOURCES = \
 	libjj.c
 
 sched_simple_la_SOURCES = \
-	sched.c \
-	rnode.c \
-	rnode.h \
-	rlist.c \
-	rlist.h
+	sched.c
 
 sched_simple_la_LDFLAGS = \
 	$(fluxmod_ldflags) \
@@ -35,51 +31,10 @@ sched_simple_la_LDFLAGS = \
 sched_simple_la_LIBADD = \
 	$(fluxmod_libadd) \
 	libjj.la \
+	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libschedutil/libschedutil.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
-	$(ZMQ_LIBS)
-
-test_ldadd = \
-	$(top_builddir)/src/common/libtap/libtap.la \
-	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD) $(JANSSON_LIBS)
-
-test_cppflags = \
-	$(AM_CPPFLAGS)
-
-test_ldflags = \
-	-no-install
-
-TESTS = \
-	test_rnode.t \
-	test_rlist.t
-
-check_PROGRAMS = \
-	$(TESTS)
-
-test_rnode_t_SOURCES = \
-	rnode.c \
-	rnode.h \
-	test/rnode.c
-test_rnode_t_CPPFLAGS = \
-	$(test_cppflags)
-test_rnode_t_LDADD = \
-	$(test_ldadd)
-test_rnode_t_LDFLAGS = \
-	$(test_ldflags)
-
-test_rlist_t_SOURCES = \
-	rnode.c \
-	rnode.h \
-	rlist.c \
-	rlist.h \
-	test/rlist.c
-test_rlist_t_CPPFLAGS = \
-	$(test_cppflags)
-test_rlist_t_LDADD = \
-	$(test_ldadd)
-test_rlist_t_LDFLAGS = \
-	$(test_ldflags)
+	$(ZMQ_LIBS) \
+    $(HWLOC_LIBS)

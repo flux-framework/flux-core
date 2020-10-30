@@ -21,7 +21,8 @@ SUBDIRS = \
 	libdebugged \
 	libterminus \
 	libcontent \
-	libhostlist
+	libhostlist \
+	librlist
 
 AM_CFLAGS = $(WARNING_CFLAGS) $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS = $(CODE_COVERAGE_LIBS)
@@ -41,6 +42,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libeventlog/libeventlog.la \
 	$(builddir)/libioencode/libioencode.la \
 	$(builddir)/librouter/librouter.la \
+	$(builddir)/libhostlist/libhostlist.la \
 	$(JANSSON_LIBS) \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \

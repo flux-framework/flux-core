@@ -108,8 +108,8 @@ test_expect_success HAVE_JQ 'hwloc: reload xml with GPU resources' '
     flux hwloc reload --rank=all $sierra &&
     flux kvs get resource.hwloc.by_rank | $jq -S . > sierra.out &&
     test_debug "cat sierra.out" &&
-    $jq -e ".\"[0-1]\".Core == 44 and .\"[0-1]\".PU == 176" < sierra.out &&
-    $jq -e ".\"[0-1]\".cpuset == \"0-175\"" < sierra.out
+    $jq -e ".\"0\".Core == 44 and .\"0\".PU == 176" < sierra.out &&
+    $jq -e ".\"0\".cpuset == \"0-175\"" < sierra.out
 '
 
 #  Keep this test after 'reload sierra' above so we're processing

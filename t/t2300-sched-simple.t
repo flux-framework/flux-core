@@ -158,7 +158,7 @@ test_expect_success 'sched-simple: reload in first-fit mode' '
         flux module remove sched-simple &&
         flux module remove resource &&
 	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank_first_fit)" &&
-	flux module load resource &&
+	flux module load resource monitor-force-up &&
         flux module load sched-simple mode=first-fit &&
 	flux dmesg | grep "ready:.*rank0/core\[0-1\] rank1/core0"
 '
