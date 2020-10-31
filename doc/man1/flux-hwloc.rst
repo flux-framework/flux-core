@@ -11,21 +11,14 @@ SYNOPSIS
 
 **flux** **hwloc** **info** [*OPTIONS*]
 
-**flux** **hwloc** **lstopo** [*lstopo-OPTIONS*]
-
-**flux** **hwloc** **reload** [*OPTIONS*] [*DIR*]
-
 **flux** **hwloc** **topology** [*OPTIONS*]
 
 
 DESCRIPTION
 ===========
 
-The **flux-hwloc** utility provides a mechanism to collect
-system topology from each flux-broker using the Portable Hardware
-Locality (hwloc) library, and to query the resulting data
-stored in the Flux Key Value Store (KVS).
-
+The **flux-hwloc** utility queries hwloc(7) topology information for
+an instance by gathering XML from the core resource module.
 
 COMMANDS
 ========
@@ -39,23 +32,15 @@ are
    in the current instance. With *--ranks*, dump information for
    only the specified ranks. With *--local* dump local system information.
 
-**lstopo**
-   | Run ``lstopo(1)`` against the full hardware hierarchy configured in the
-     current Flux instance. Extra ``OPTIONS`` are passed along to the system
-     ``lstopo(1)``.
-   | By default, **flux hwloc lstopo** generates console output.
-     For graphical output, try: **flux hwloc lstopo --of graphical**.
-
-**reload** [*-r,--rank=NODESET*] [*-v,--verbose] ['DIR*]
-   Reload hwloc topology information, optionally loading hwloc XML files
-   from ``DIR/<rank>.xml`` files. With *--rank* only reload XML on specified
-   ranks. With *--verbose* this command runs with extra debugging and
-   timing information.
-
 **topology** [*-l,--local*\ \|\ *-r,--rank=NODESET*]
    Dump current aggregate topology XML for the current session to stdout.
    With *--rank* only dump aggregate topology for specified ranks. With
-   *--local* dump topology XML for the local system.
+   *--local* dump topology XML for the local system. With hwloc < 2.0,
+   this command will dump a custom topology with multiple machines when
+   the aggregate contains multiple ranks. This is not possible with hwloc
+   2.0 because multiple Machine objects in a topology is no longer supported,
+   and therefore the XML for each rank will be printed separately.
+    
 
 
 NODESET FORMAT
@@ -63,6 +48,38 @@ NODESET FORMAT
 
 .. include:: NODESET.rst
 
+
+EXAMPLES
+========
+
+When using HWLOC < 2.0 only, the output of ``flux hwloc topology``
+may be piped to other hwloc(7) commands such as ``lstopo(1)`` or
+``hwloc-info(1)``, e.g.
+
+::
+
+    $ flux hwloc topology | lstopo-no-graphics --if xml -i -
+    System (31GB total)
+      Machine L#0 (7976MB) + Package L#0
+        Core L#0 + PU L#0 (P#0)
+        Core L#1 + PU L#1 (P#1)
+        Core L#2 + PU L#2 (P#2)
+        Core L#3 + PU L#3 (P#3)
+      Machine L#1 (7976MB) + Package L#1
+        Core L#4 + PU L#4 (P#0)
+        Core L#5 + PU L#5 (P#1)
+        Core L#6 + PU L#6 (P#2)
+        Core L#7 + PU L#7 (P#3)
+      Machine L#2 (7976MB) + Package L#2
+        Core L#8 + PU L#8 (P#0)
+        Core L#9 + PU L#9 (P#1)
+        Core L#10 + PU L#10 (P#2)
+        Core L#11 + PU L#11 (P#3)
+      Machine L#3 (7976MB) + Package L#3
+        Core L#12 + PU L#12 (P#0)
+        Core L#13 + PU L#13 (P#1)
+        Core L#14 + PU L#14 (P#2)
+        Core L#15 + PU L#15 (P#3)
 
 RESOURCES
 =========
