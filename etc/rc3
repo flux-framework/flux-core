@@ -30,7 +30,6 @@ modrm 0 job-manager
 modrm all job-ingest
 
 modrm 0 cron
-modrm all aggregator
 modrm all barrier
 
 modrm all kvs-watch

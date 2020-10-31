@@ -481,7 +481,6 @@ AC_CONFIG_FILES( \
   src/common/liboptparse/Makefile \
   src/common/libidset/Makefile \
   src/common/libtomlc99/Makefile \
-  src/common/libaggregate/Makefile \
   src/common/libschedutil/Makefile \
   src/common/libeventlog/Makefile \
   src/common/libioencode/Makefile \
@@ -513,7 +512,6 @@ AC_CONFIG_FILES( \
   src/modules/content-s3/Makefile \
   src/modules/barrier/Makefile \
   src/modules/cron/Makefile \
-  src/modules/aggregator/Makefile \
   src/modules/job-ingest/Makefile \
   src/modules/job-manager/Makefile \
   src/modules/job-info/Makefile \

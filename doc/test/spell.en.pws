@@ -376,7 +376,6 @@ setbit
 rolemask
 userid
 selfpmi
-aggregator
 UTC
 addrole
 delrole

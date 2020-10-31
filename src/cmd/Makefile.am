@@ -72,7 +72,6 @@ dist_fluxcmd_SCRIPTS = \
 	flux-admin.py
 
 fluxcmd_PROGRAMS = \
-	flux-aggregate \
 	flux-terminus \
 	flux-ping \
 	flux-keygen \
