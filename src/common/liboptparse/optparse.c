@@ -736,7 +736,7 @@ optparse_t *optparse_create (const char *prog)
     p->option_width = 25;
     p->option_index = -1;
     p->posixly_correct = 1;
-    p->sorted = 1;
+    p->sorted = 0;
     
     /*
      *  Register -h, --help

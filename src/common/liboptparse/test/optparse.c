@@ -95,8 +95,8 @@ void test_usage_output (void)
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
   -h, --help             Display this message.\n\
-  -T, --test2=N          Enable a test option N.\n\
-  -t, --test             Enable a test option.\n",
+  -t, --test             Enable a test option.\n\
+  -T, --test2=N          Enable a test option N.\n",
         "Usage output as expected");
 
     // Add a hidden (undocumented) option
@@ -108,13 +108,13 @@ Usage: prog-foo [OPTIONS]\n\
             });
     e = optparse_add_option (p, &opt);
     ok (e == OPTPARSE_SUCCESS, "optparse_add_option. group 1.");
+
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
   -h, --help             Display this message.\n\
-  -T, --test2=N          Enable a test option N.\n\
-  -t, --test             Enable a test option.\n",
+  -t, --test             Enable a test option.\n\
+  -T, --test2=N          Enable a test option N.\n",
         "Usage output as expected");
-
 
     // Adjust left margin
     e = optparse_set (p, OPTPARSE_LEFT_MARGIN, 0);
@@ -123,8 +123,8 @@ Usage: prog-foo [OPTIONS]\n\
     usage_ok (p, "\
 Usage: prog-foo [OPTIONS]\n\
 -h, --help               Display this message.\n\
--T, --test2=N            Enable a test option N.\n\
--t, --test               Enable a test option.\n",
+-t, --test               Enable a test option.\n\
+-T, --test2=N            Enable a test option N.\n",
         "Usage output as expected w/ left margin");
 
     e = optparse_set (p, OPTPARSE_LEFT_MARGIN, 2);
@@ -263,12 +263,12 @@ This is some doc in header\n\
   -h, --help                  Display this message.\n\
   -T, --test2=N               Enable a test option N.\n\
 This is some doc for group 1\n\
-      --long-only             This option is long only\n\
   -A, --long-option=ARGINFO   Enable a long option with argument info ARGINFO.\n\
   -B, --option-B              This option has a very long description. It should\n\
                               be split across lines nicely.\n\
   -C, --option-C              ThisOptionHasAVeryLongWordInTheDescriptionThatSho-\n\
-                              uldBeBrokenAcrossLines.\n",
+                              uldBeBrokenAcrossLines.\n\
+      --long-only             This option is long only\n",
         "Usage output with long only option");
 
 
@@ -941,9 +941,9 @@ Usage: test one [OPTIONS]\n\
                       OPTPARSE_SUBCMD_HIDE, 0);
     ok (e == OPTPARSE_SUCCESS, "optparse_set (OPTPARSE_SUBCMD_HIDE, 0)");
     usage_ok (a, "\
-Usage: test hidden [OPTIONS]\n\
-   or: test one [OPTIONS]\n\
+Usage: test one [OPTIONS]\n\
    or: test two [OPTIONS]\n\
+   or: test hidden [OPTIONS]\n\
   -h, --help             Display this message.\n",
     "Unhidden subcommand now displayed in usage output");
 
