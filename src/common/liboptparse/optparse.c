@@ -240,14 +240,12 @@ static struct option_info *find_option_by_val (optparse_t *p, int val)
  *    If [end] is NULL, remove all options.
  */
 static void option_table_remove (optparse_t *p,
-        struct optparse_option const opts[],
-        const struct optparse_option *end)
+                                 struct optparse_option const opts[],
+                                 const struct optparse_option *end)
 {
     const struct optparse_option *o = opts;
-
-    while (o->usage || (end && o != end))
+    while (o->usage && o != end)
         optparse_remove_option (p, (o++)->name);
-
     return;
 }
 
