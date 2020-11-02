@@ -1165,6 +1165,11 @@ optparse_err_t optparse_get (optparse_t *p, int item, ...)
     case OPTPARSE_LEFT_MARGIN:
     case OPTPARSE_OPTION_CB:
     case OPTPARSE_OPTION_WIDTH:
+    case OPTPARSE_PRINT_SUBCMDS:
+    case OPTPARSE_SUBCMD_NOOPTS:
+    case OPTPARSE_SUBCMD_HIDE:
+    case OPTPARSE_POSIXLY_CORRECT:
+    case OPTPARSE_SORTED:
         e = OPTPARSE_NOT_IMPL;
         break;
 
