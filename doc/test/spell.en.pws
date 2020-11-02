@@ -100,6 +100,7 @@ hiWSLCPRzqFYHNubktbCQ
 hostname
 io
 jobid
+jobids
 knowlege
 libpmi
 lwj
@@ -491,6 +492,7 @@ hms
 username
 submitter's
 CANCELLED
+cancelled
 enqueue
 nslots
 alloc

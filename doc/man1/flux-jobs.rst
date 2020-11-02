@@ -25,11 +25,11 @@ OPTIONS
 
 **-a**
    List all jobs of the current user, including inactive jobs.
-   Equivalent to specifying *--state=pending,running,inactive*.
+   Equivalent to specifying *--filter=pending,running,inactive*.
 
 **-A**
    List all jobs from all users, including inactive jobs. Equivalent to
-   specifying *--state=pending,running,inactive --user=all*.
+   specifying *--filter=pending,running,inactive --user=all*.
 
 **-n, --suppress-header**
    For default output, do not output column headers.
@@ -232,6 +232,60 @@ The field names that can be specified are:
 
 **user**
    short hand for *annotations.user*
+
+
+EXAMPLES
+========
+
+The default output of flux-jobs(1) will list the pending and running
+jobs of the current user.  It is equivalent to:
+
+::
+
+    $ flux jobs --filter=pending,running
+
+To list all pending, running, and inactive jobs, of the current user,
+you can use *--filter* option or the *-a* option:
+
+::
+
+    $ flux jobs -a
+
+    OR
+
+    $ flux jobs --filter=pending,running,inactive
+
+To alter which user's jobs are listed, specify the user with *--user*:
+
+::
+
+    $ flux jobs --user=flux
+
+Jobs that have finished may be filtered further by specifying if they
+have completed, failed, or were cancelled.  For example, the following
+will list the jobs that have failed or were cancelled:
+
+::
+
+    $ flux jobs --filter=failed,cancelled
+
+The *--format* option can be used to alter the output format or output
+additional information.  For example, the following would output all
+jobids for the user in decimal form, and output any annotations the
+scheduler attached to each job:
+
+::
+
+   $ flux jobs -a --format="{id} {annotations.sched}"
+
+The following would output the job id and exception information, so a
+user can learn why a job failed.
+
+::
+
+   $ flux jobs --filter=failed --format="{id} {exception.type} {exception.note}"
+
+
 
 RESOURCES
 =========
