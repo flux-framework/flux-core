@@ -56,6 +56,9 @@ struct opt_parser {
     unsigned int   no_options:1;    /* Skip option processing for subcmd    */
     unsigned int   hidden:1;        /* If subcmd, skip in --help output     */
     unsigned int   posixly_correct:1; /* Value of GNU getopt posixly correct*/
+    unsigned int   sorted:1;        /* Options,subcmds are sorted in usage  */
+
+    int            seq;             /* If subcommand, insertion sequence    */
 
     zhash_t *      dhash;           /* Hash of ancillary data               */
 
@@ -71,6 +74,7 @@ struct option_info {
     struct optparse_option * p_opt;   /* Copy of program option structure  */
     zlist_t *               optargs;  /* If non-NULL, the option argument(s) */
     const char *            optarg;   /* Pointer to last element in optargs */
+    int                     seq;      /* Sequence in which option was addd  */
 
     unsigned int            found;    /* number of times we saw this option */
 
@@ -178,6 +182,29 @@ static int option_info_cmp (void *arg1, void *arg2)
     }
     return (o1->group - o2->group);
 }
+
+/* As above but preserve original sequence of options
+ */
+static int option_info_seq (void *arg1, void *arg2)
+{
+    const struct option_info *x = arg1;
+    const struct option_info *y = arg2;
+    const struct optparse_option *o1 = x->p_opt;
+    const struct optparse_option *o2 = y->p_opt;
+
+    if (o1->group == o2->group) {
+        if (x->isdoc && y->isdoc)
+            return (0);
+        else if (x->isdoc)
+            return (-1);
+        else if (y->isdoc)
+            return (1);
+        else
+            return x->seq - y->seq;
+    }
+    return (o1->group - o2->group);
+}
+
 
 /*
  *  Return option_info structure for option with [name]
@@ -530,9 +557,10 @@ static int optparse_print_options (optparse_t *p)
         return (0);
 
     /*
-     *  Sort option table by group then by name
+     *  Sort option table per sorted flag
      */
-    zlist_sort (p->option_list, option_info_cmp);
+    zlist_sort (p->option_list,
+                p->sorted ? option_info_cmp : option_info_seq);
 
     columns = get_term_columns();
     o = zlist_first (p->option_list);
@@ -547,24 +575,34 @@ static int optparse_print_options (optparse_t *p)
     return (0);
 }
 
-#if CZMQ_VERSION < CZMQ_MAKE_VERSION(3,0,1)
-static bool s_cmp (const char *s1, const char *s2)
+static int subcmd_name_cmp (void *s1, void *s2)
 {
-    return (strcmp (s1, s2) > 0);
+    const optparse_t *cmd1 = s1;
+    const optparse_t *cmd2 = s2;
+    return strcmp (cmd1->program_name, cmd2->program_name);
 }
-#else
-static int s_cmp (const char *s1, const char *s2)
+
+static int subcmd_seq_cmp (void *s1, void *s2)
 {
-    return strcmp (s1, s2);
+    const optparse_t *cmd1 = s1;
+    const optparse_t *cmd2 = s2;
+    return cmd1->seq - cmd2->seq;
 }
-#endif
 
 static zlist_t *subcmd_list_sorted (optparse_t *p)
 {
-    zlist_t *keys = zhash_keys (p->subcommands);
-    if (keys)
-        zlist_sort (keys, (zlist_compare_fn *) s_cmp);
-    return (keys);
+    optparse_t *cmd = NULL;
+    zlist_t *subcmds = zlist_new ();
+
+    cmd = zhash_first (p->subcommands);
+    while (cmd) {
+        zlist_append (subcmds, cmd);
+        cmd = zhash_next (p->subcommands);
+    }
+
+    zlist_sort (subcmds, p->sorted ? subcmd_name_cmp : subcmd_seq_cmp);
+
+    return (subcmds);
 }
 
 /*
@@ -574,9 +612,9 @@ static zlist_t *subcmd_list_sorted (optparse_t *p)
 static int print_usage_with_subcommands (optparse_t *parent)
 {
     int lines = 0;
-    const char *cmd;
     opt_log_f fp = parent->log_fn;
-    zlist_t *keys;
+    zlist_t *subcmds = NULL;
+    optparse_t *p = NULL;
     int nsubcmds = zhash_size (parent->subcommands);
     /*
      *  With subcommands, only print usage line for parent command
@@ -595,21 +633,20 @@ static int print_usage_with_subcommands (optparse_t *parent)
         return (1);
     }
 
-    if (!(keys = subcmd_list_sorted (parent)))
+    if (!(subcmds = subcmd_list_sorted (parent)))
         return (-1);
 
-    cmd = zlist_first (keys);
-    while (cmd) {
-        optparse_t *p = zhash_lookup (parent->subcommands, cmd);;
+    p = zlist_first (subcmds);
+    while (p) {
         if (!p->hidden) {
             (*fp) ("%5s: %s %s\n",
                     ++lines > 1 ? "or" : "Usage",
                     optparse_fullname (p),
                     p->usage ? p->usage : "[OPTIONS]");
         }
-        cmd = zlist_next (keys);
+        p = zlist_next (subcmds);
     }
-    zlist_destroy (&keys);
+    zlist_destroy (&subcmds);
     return (lines);
 }
 
@@ -699,7 +736,8 @@ optparse_t *optparse_create (const char *prog)
     p->option_width = 25;
     p->option_index = -1;
     p->posixly_correct = 1;
-
+    p->sorted = 1;
+    
     /*
      *  Register -h, --help
      */
@@ -725,6 +763,7 @@ optparse_t *optparse_add_subcommand (optparse_t *p,
     new = optparse_create (name);
     if (new == NULL)
         return (NULL);
+    new->seq = zhash_size (p->subcommands);
     zhash_update (p->subcommands, name, (void *) new);
     zhash_freefn (p->subcommands, name, optparse_child_destroy);
     zhash_update (new->dhash, "optparse::cb", cb);
@@ -968,6 +1007,8 @@ optparse_err_t optparse_add_option (optparse_t *p,
     if (!(c = option_info_create (o)))
         return OPTPARSE_NOMEM;
 
+    c->seq = zlist_size (p->option_list);
+
     if (zlist_append (p->option_list, c) < 0)
         return OPTPARSE_NOMEM;
     zlist_freefn (p->option_list,
@@ -1082,6 +1123,10 @@ optparse_err_t optparse_set (optparse_t *p, int item, ...)
     case OPTPARSE_POSIXLY_CORRECT:
         n = va_arg (vargs, int);
         p->posixly_correct = n;
+        break;
+    case OPTPARSE_SORTED:
+        n = va_arg (vargs, int);
+        p->sorted = n;
         break;
     default:
         e = OPTPARSE_BAD_ARG;
@@ -1448,16 +1493,10 @@ static void optparse_reset_one (optparse_t *p)
 
 void optparse_reset (optparse_t *p)
 {
-    zlist_t *cmds = NULL;
-
-    if ((cmds = subcmd_list_sorted (p))) {
-        const char *cmd = zlist_first (cmds);
-        while (cmd) {
-            optparse_t *o = zhash_lookup (p->subcommands, cmd);
-            optparse_reset_one (o);
-            cmd = zlist_next (cmds);
-        }
-        zlist_destroy (&cmds);
+    optparse_t *cmd = zhash_first (p->subcommands);
+    while (cmd) {
+        optparse_reset_one (cmd);
+        cmd = zhash_next (p->subcommands);
     }
     optparse_reset_one (p);
 }
