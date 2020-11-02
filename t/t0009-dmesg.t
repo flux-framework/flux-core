@@ -102,8 +102,5 @@ test_expect_success 'logged non-ascii characters handled ok' '
 test_expect_success 'dmesg request with empty payload fails with EPROTO(71)' '
 	${RPC} log.dmesg 71 </dev/null
 '
-test_expect_success 'clear request with empty payload fails with EPROTO(71)' '
-	${RPC} log.clear 71 </dev/null
-'
 
 test_done

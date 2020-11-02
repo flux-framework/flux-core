@@ -216,13 +216,12 @@ void flux_log_error (flux_t *h, const char *fmt, ...)
     va_end (ap);
 }
 
-static int dmesg_clear (flux_t *h, int seq)
+static int dmesg_clear (flux_t *h)
 {
     flux_future_t *f;
     int rc = -1;
 
-    if (!(f = flux_rpc_pack (h, "log.clear", FLUX_NODEID_ANY, 0,
-                             "{s:i}", "seq", seq)))
+    if (!(f = flux_rpc (h, "log.clear", NULL, FLUX_NODEID_ANY, 0)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
         goto done;
@@ -276,7 +275,7 @@ int flux_dmesg (flux_t *h, int flags, flux_log_f fun, void *arg)
         }
     }
     if ((flags & FLUX_DMESG_CLEAR)) {
-        if (dmesg_clear (h, seq) < 0)
+        if (dmesg_clear (h) < 0)
             goto done;
     }
     rc = 0;
