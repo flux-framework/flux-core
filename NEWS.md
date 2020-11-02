@@ -1,3 +1,42 @@
+flux-core version 0.21.0 - 2020-11-04
+-------------------------------------
+
+This release enables resources to be configured in advance when Flux is
+the native resource manager for a cluster, in lieu of dynamic discovery.
+For details, refer to the Flux Admin Guide:
+
+https://flux-framework.readthedocs.io/en/latest/adminguide.html
+
+### New features
+
+ * optparse: don't sort options/subcommands by default (#3298)
+ * flux-job: Output key options for job info (#3210)
+ * resource: load resources from config or R, and rework topo discovery (#3265)
+ * add internal librlist library and flux-R utility for R version 1 (#3276)
+ * job-info: use job manager journal to track job state (#3254)
+ * job-manager: support events journal (#3261)
+ * shell: support stdio buffering options (default stderr: unbuffered) (#3272)
+ * flux-kvs: Add 'flux kvs eventlog wait-event' subcommand (#3200)
+ * job-manager: send job annotations to journal instead of publishing (#3236)
+ * add hostlist library for encoding/decoding RFC29 hostlists (#3247)
+
+### Fixes
+
+ * broker: convert broker [bootstrap] config to use libhostlist (#3283)
+ * libflux: Add missing C++ header guards (#3280)
+ * cmd: display jobid with flux-mini alloc -v, --verbose (#3279)
+ * python: fix signal handler management in threads (#3266)
+ * rc1: fix local connector retries (#3301)
+
+### Cleanup
+
+ * remove flux-hwloc reload command and aggregator module (#3296)
+ * doc: add flux-jobs(1) examples (#3295)
+ * job-manager / job-info: misc cleanup (#3246)
+ * build: increase minimum version of jansson to 2.10 (#3240)
+ * ci: ensure pylint script fails when lint warnings are produced (#3269)
+
+
 flux-core version 0.20.0 - 2020-09-30
 -------------------------------------
 
