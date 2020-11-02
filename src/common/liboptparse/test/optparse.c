@@ -99,6 +99,18 @@ Usage: prog-foo [OPTIONS]\n\
   -T, --test2=N          Enable a test option N.\n",
         "Usage output as expected");
 
+    e = optparse_set (p, OPTPARSE_SORTED, 1);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (SORTED)");
+    usage_ok (p, "\
+Usage: prog-foo [OPTIONS]\n\
+  -h, --help             Display this message.\n\
+  -T, --test2=N          Enable a test option N.\n\
+  -t, --test             Enable a test option.\n",
+        "Usage output is now sorted as expected");
+
+    e = optparse_set (p, OPTPARSE_SORTED, 0);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (SORTED)");
+
     // Add a hidden (undocumented) option
     opt = ((struct optparse_option) {
             .name = "hidden", .key = 'H', .has_arg = 1,
@@ -780,6 +792,7 @@ void test_subcommand (void)
     int called = 0;
     int n;
     optparse_t *b;
+    optparse_t *c;
     optparse_t *a = optparse_create ("test");
 
     ok (a != NULL, "optparse_create");
@@ -797,14 +810,32 @@ void test_subcommand (void)
     optparse_set_data (b, "called", &called);
     ok (optparse_get_data (b, "called") == &called, "optparse_set_data ()");
 
+    c = optparse_add_subcommand (a, "three", subcmd_two);
+    ok (c != NULL, "optparse_add_subcommand");
+
     e = optparse_set (a, OPTPARSE_LOG_FN, output_f);
     ok (e == OPTPARSE_SUCCESS, "optparse_set (LOG_FN)");
 
     usage_ok (a, "\
 Usage: test one [OPTIONS]\n\
    or: test two [OPTIONS]\n\
+   or: test three [OPTIONS]\n\
   -h, --help             Display this message.\n",
         "Usage output as expected with subcommands");
+
+    // Set OPTPARSE_SORTED:
+    e = optparse_set (a, OPTPARSE_SORTED, 1);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (SORTED)");
+
+    usage_ok (a, "\
+Usage: test one [OPTIONS]\n\
+   or: test three [OPTIONS]\n\
+   or: test two [OPTIONS]\n\
+  -h, --help             Display this message.\n",
+        "Usage output as expected with sorted subcommands");
+
+    e = optparse_set (a, OPTPARSE_SORTED, 0);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (SORTED, 0)");
 
     // Set OPTPARSE_PRINT_SUBCMDS false:
     e = optparse_set (a, OPTPARSE_PRINT_SUBCMDS, 0);
@@ -831,8 +862,6 @@ Usage: test two [OPTIONS]...\n\
   -h, --help             Display this message.\n\
   -t, --test-opt=N       Test option with numeric argument N\n",
         "Usage output as expected with subcommands");
-
-
 
     char *av[] = { "test", "one", NULL };
     int ac = sizeof (av) / sizeof (av[0]) - 1;
@@ -919,6 +948,7 @@ Try `test two --help' for more information.\n",
 test: missing subcommand\n\
 Usage: test one [OPTIONS]\n\
    or: test two [OPTIONS]\n\
+   or: test three [OPTIONS]\n\
   -h, --help             Display this message.\n",
     "missing subcommand error message is expected");
 
@@ -933,6 +963,7 @@ Usage: test one [OPTIONS]\n\
     usage_ok (a, "\
 Usage: test one [OPTIONS]\n\
    or: test two [OPTIONS]\n\
+   or: test three [OPTIONS]\n\
   -h, --help             Display this message.\n",
     "Hidden subcommand doesn't appear in usage output");
 
@@ -943,6 +974,7 @@ Usage: test one [OPTIONS]\n\
     usage_ok (a, "\
 Usage: test one [OPTIONS]\n\
    or: test two [OPTIONS]\n\
+   or: test three [OPTIONS]\n\
    or: test hidden [OPTIONS]\n\
   -h, --help             Display this message.\n",
     "Unhidden subcommand now displayed in usage output");
@@ -954,6 +986,7 @@ Usage: test one [OPTIONS]\n\
     usage_ok (a, "\
 Usage: test one [OPTIONS]\n\
    or: test two [OPTIONS]\n\
+   or: test three [OPTIONS]\n\
   -h, --help             Display this message.\n",
     "Unhidden subcommand now displayed in usage output");
 
@@ -1144,24 +1177,117 @@ void test_non_option_arguments (void)
     optparse_destroy (p);
 }
 
+void test_add_option_table_failure ()
+{
+    optparse_err_t e;
+    struct optparse_option opts [] = {
+        { .name = "test",
+          .key  = 't',
+          .has_arg = 1,
+          .arginfo = "S",
+          .usage = "test option"
+        },
+        { .name = "test",
+          .key = 'x',
+          .has_arg = 0,
+          .usage = "test option with same name"
+        },
+        OPTPARSE_TABLE_END,
+    };
+    optparse_t *p = optparse_create ("invalid-table");
+    if (!p)
+        BAIL_OUT ("optparse_create");
+
+    e = optparse_set (p, OPTPARSE_LOG_FN, output_f);
+    ok (e == OPTPARSE_SUCCESS, "optparse_set (LOG_FN)");
+
+    e = optparse_add_option_table (p, opts);
+    ok (e == OPTPARSE_EEXIST,
+        "option table with duplicate name fails with EEXIST");
+
+    usage_ok (p, "\
+Usage: invalid-table [OPTIONS]...\n\
+  -h, --help             Display this message.\n",
+        "No table options registered after optparse_add_option_table failure");
+
+    optparse_destroy (p);
+}
+
+void test_reg_subcommands ()
+{
+    optparse_t *p;
+    struct optparse_option opts [] = {
+        { .name = "test",
+          .key  = 't',
+          .has_arg = 1,
+          .arginfo = "S",
+          .usage = "test option"
+        },
+        OPTPARSE_TABLE_END,
+    };
+    struct optparse_subcommand subcmds[] = {
+        { "sub1",
+          "[OPTIONS]...",
+          "Subcommand one",
+          subcmd,
+          0,
+          opts,
+        },
+        { "sub2",
+          "[OPTIONS]...",
+          "Subcommand two",
+          subcmd,
+          0,
+          NULL,
+        },
+        OPTPARSE_SUBCMD_END
+    };
+
+    p = optparse_create ("reg-subcmds-test");
+    if (!p)
+        BAIL_OUT ("optparse_create");
+    ok (optparse_reg_subcommands (p, subcmds) == OPTPARSE_SUCCESS,
+        "optparse_reg_subcommands works");
+
+    optparse_destroy (p);
+}
+
+static void test_optparse_get ()
+{
+    optparse_t *p = optparse_create ("test-get");
+    if (!p)
+        BAIL_OUT ("optparse_create");
+
+    for (optparse_item_t i = OPTPARSE_USAGE; i < OPTPARSE_ITEM_END; i++)
+        ok (optparse_get (p, i) == OPTPARSE_NOT_IMPL,
+            "optparse_get %d returns NOT IMPL", i);
+
+    ok (optparse_get (p, OPTPARSE_ITEM_END) == OPTPARSE_BAD_ARG,
+        "optparse_get of invalid item returns BAD_ARG");
+
+    optparse_destroy (p);
+}
 
 int main (int argc, char *argv[])
 {
 
-    plan (259);
+    plan (286);
 
     test_convenience_accessors (); /* 35 tests */
-    test_usage_output (); /* 42 tests */
+    test_usage_output (); /* 46 tests */
     test_option_cb ();  /* 16 tests */
     test_errors (); /* 9 tests */
     test_multiret (); /* 19 tests */
     test_data (); /* 8 tests */
-    test_subcommand (); /* 62 tests */
+    test_subcommand (); /* 67 tests */
     test_long_only (); /* 13 tests */
     test_optional_argument (); /* 9 tests */
     test_corner_case (); /* 3 tests */
     test_reset (); /* 9 tests */
     test_non_option_arguments (); /* 13 tests */
+    test_add_option_table_failure (); /* 4 tests */
+    test_reg_subcommands (); /* 1 test */
+    test_optparse_get (); /* 13 tests */
 
     done_testing ();
     return (0);
