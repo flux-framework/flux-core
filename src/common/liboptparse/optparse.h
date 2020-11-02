@@ -72,6 +72,7 @@ typedef enum {
     OPTPARSE_SUBCMD_HIDE,  /* Don't output this subcmd in --help output     */
     OPTPARSE_POSIXLY_CORRECT, /* Set POSIXLY_CORRECT value                  */
     OPTPARSE_SORTED,       /* Sort subcommands and options in help output   */
+    OPTPARSE_ITEM_END,
 } optparse_item_t;
 
 /*
