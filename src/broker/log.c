@@ -128,20 +128,6 @@ static void logbuf_trim (logbuf_t *logbuf, int size)
     }
 }
 
-static void logbuf_clear (logbuf_t *logbuf, int seq_index)
-{
-    struct logbuf_entry *e;
-
-    if (seq_index == -1)
-        logbuf_trim (logbuf, 0);
-    else {
-        while ((e = zlist_first (logbuf->buf)) && e->seq <= seq_index) {
-            e = zlist_pop (logbuf->buf);
-            logbuf_entry_destroy (e);
-        }
-    }
-}
-
 static int logbuf_get (logbuf_t *logbuf, int seq_index, int *seq,
                        const char **buf, int *len)
 {
@@ -599,15 +585,10 @@ static void clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;
-    int seq;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i }", "seq", &seq) < 0)
-        goto error;
-    logbuf_clear (logbuf, seq);
+    logbuf_trim (logbuf, 0);
     flux_respond (h, msg, NULL);
     return;
-error:
-    flux_respond_error (h, msg, errno, NULL);
 }
 
 static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
