@@ -231,18 +231,18 @@ done:
     return rc;
 }
 
-static flux_future_t *dmesg_rpc (flux_t *h, int seq, bool follow)
+static flux_future_t *dmesg_rpc (flux_t *h, bool follow)
 {
-    return flux_rpc_pack (h, "log.dmesg", FLUX_NODEID_ANY, 0,
-                          "{s:i s:b}", "seq", seq, "follow", follow);
+    return flux_rpc_pack (h, "log.dmesg", FLUX_NODEID_ANY, FLUX_RPC_STREAMING,
+                          "{s:b}", "follow", follow);
 }
 
-static int dmesg_rpc_get (flux_future_t *f, int *seq, flux_log_f fun, void *arg)
+static int dmesg_rpc_get (flux_future_t *f, flux_log_f fun, void *arg)
 {
     const char *buf;
     int rc = -1;
 
-    if (flux_rpc_get_unpack (f, "{s:i s:s}", "seq", seq, "buf", &buf) < 0)
+    if (flux_rpc_get_unpack (f, "{s:s}", "buf", &buf) < 0)
         goto done;
     fun (buf, strlen (buf), arg);
     rc = 0;
@@ -253,26 +253,26 @@ done:
 int flux_dmesg (flux_t *h, int flags, flux_log_f fun, void *arg)
 {
     int rc = -1;
-    int seq = -1;
     bool eof = false;
     bool follow = false;
 
     if (flags & FLUX_DMESG_FOLLOW)
         follow = true;
     if (fun) {
+        flux_future_t *f;
+        if (!(f = dmesg_rpc (h, follow)))
+            goto done;
         while (!eof) {
-            flux_future_t *f;
-            if (!(f = dmesg_rpc (h, seq, follow)))
-                goto done;
-            if (dmesg_rpc_get (f, &seq, fun, arg) < 0) {
-                if (errno != ENOENT) {
+            if (dmesg_rpc_get (f, fun, arg) < 0) {
+                if (errno != ENODATA) {
                     flux_future_destroy (f);
                     goto done;
                 }
                 eof = true;
             }
-            flux_future_destroy (f);
+            flux_future_reset (f);
         }
+        flux_future_destroy (f);
     }
     if ((flags & FLUX_DMESG_CLEAR)) {
         if (dmesg_clear (h) < 0)
