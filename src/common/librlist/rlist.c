@@ -1242,8 +1242,14 @@ static json_t *rlist_json_nodelist (struct rlist *rl)
 json_t *rlist_to_R (struct rlist *rl)
 {
     json_t *R = NULL;
-    json_t *R_lite = rlist_compressed (rl);
-    json_t *nodelist = rlist_json_nodelist (rl);
+    json_t *R_lite = NULL;
+    json_t *nodelist = NULL;
+
+    if (!rl)
+        return NULL;
+
+    R_lite = rlist_compressed (rl);
+    nodelist = rlist_json_nodelist (rl);
 
     if (!R_lite)
         goto fail;
