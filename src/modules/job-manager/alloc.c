@@ -50,6 +50,7 @@ struct alloc {
     flux_watcher_t *idle;
     unsigned int alloc_pending_count; // for mode=single, max of 1
     unsigned int free_pending_count;
+    char *sched_sender; // for disconnect
 };
 
 /* Initiate teardown.  Clear any alloc/free requests, and clear
@@ -98,6 +99,8 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
         alloc->ready = false;
         alloc->alloc_pending_count = 0;
         alloc->free_pending_count = 0;
+        free (alloc->sched_sender);
+        alloc->sched_sender = NULL;
         drain_check (alloc->ctx->drain);
     }
 }
@@ -366,6 +369,9 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *o = NULL;
     json_t *entry;
 
+    /* N.B. no "state" is set in struct alloc after a hello msg, so do
+     * not set ctx->alloc->sched_sender in here.  Do so only in the
+     * ready callback */
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     flux_log (h, LOG_DEBUG, "scheduler: hello");
@@ -420,6 +426,10 @@ static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
         ctx->alloc->mode = SCHED_UNLIMITED;
     else {
         errno = EPROTO;
+        goto error;
+    }
+    if (flux_msg_get_route_first (msg, &ctx->alloc->sched_sender) < 0) {
+        flux_log_error (h, "%s: flux_msg_get_route_first", __FUNCTION__);
         goto error;
     }
     ctx->alloc->ready = true;
@@ -671,6 +681,23 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+void alloc_disconnect_rpc (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct job_manager *ctx = arg;
+    struct alloc *alloc = ctx->alloc;
+
+    if (alloc->sched_sender) {
+        char *sender = NULL;
+        if (flux_msg_get_route_first (msg, &sender) == 0
+            && !strcmp (sender, alloc->sched_sender))
+            interface_teardown (ctx->alloc, "disconnect", 0);
+        free (sender);
+    }
+}
+
 void alloc_ctx_destroy (struct alloc *alloc)
 {
     if (alloc) {
@@ -681,6 +708,7 @@ void alloc_ctx_destroy (struct alloc *alloc)
         flux_watcher_destroy (alloc->idle);
         zlistx_destroy (&alloc->queue);
         free (alloc->disable_reason);
+        free (alloc->sched_sender);
         free (alloc);
         errno = saved_errno;
     }
