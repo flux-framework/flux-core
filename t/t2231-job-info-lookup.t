@@ -34,6 +34,26 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
 '
 
 #
+# job info lookup list w/o jobid & keys
+#
+
+test_expect_success 'flux job info fails without jobid' '
+        test_must_fail flux job info
+'
+
+test_expect_success 'flux job info listing of keys works' '
+        jobid=$(submit_job) &&
+        flux job info $jobid > list_keys.err 2>&1 &&
+        grep "^J" list_keys.err &&
+        grep "^R" list_keys.err &&
+        grep "^eventlog" list_keys.err &&
+        grep "^jobspec" list_keys.err &&
+        grep "^guest.exec.eventlog" list_keys.err &&
+        grep "^guest.input" list_keys.err &&
+        grep "^guest.output" list_keys.err
+'
+
+#
 # job info lookup tests
 #
 

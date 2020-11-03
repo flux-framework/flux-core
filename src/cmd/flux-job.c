@@ -2713,6 +2713,19 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
+void info_usage (void)
+{
+    fprintf (stderr,
+             "Missing lookup key(s), common keys:\n"
+             "J\n"
+             "R\n"
+             "eventlog\n"
+             "jobspec\n"
+             "guest.exec.eventlog\n"
+             "guest.input\n"
+             "guest.output\n");
+}
+
 struct info_ctx {
     flux_jobid_t id;
     json_t *keys;
@@ -2749,24 +2762,17 @@ void info_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-int cmd_info (optparse_t *p, int argc, char **argv)
+void info_lookup (flux_t *h,
+                  int argc,
+                  char **argv,
+                  int optindex,
+                  flux_jobid_t id)
 {
-    flux_t *h;
-    int optindex = optparse_option_index (p);
-    flux_future_t *f;
     const char *topic = "job-info.lookup";
+    flux_future_t *f;
     struct info_ctx ctx = {0};
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
-
-    if ((argc - optindex) < 2) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-
-    ctx.id = parse_jobid (argv[optindex++]);
-
+    ctx.id = id;
     if (!(ctx.keys = json_array ()))
         log_msg_exit ("json_array");
 
@@ -2791,6 +2797,29 @@ int cmd_info (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_reactor_run");
 
     json_decref (ctx.keys);
+}
+
+int cmd_info (optparse_t *p, int argc, char **argv)
+{
+    flux_t *h;
+    int optindex = optparse_option_index (p);
+    flux_jobid_t id;
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if ((argc - optindex) < 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+
+    id = parse_jobid (argv[optindex++]);
+
+    if (optindex == argc)
+        info_usage ();
+    else
+        info_lookup (h, argc, argv, optindex, id);
+
     flux_close (h);
     return (0);
 }
