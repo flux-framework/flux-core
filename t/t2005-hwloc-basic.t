@@ -9,6 +9,9 @@ test_description='Test basics of flux-hwloc subcommand
 SIZE=2
 test_under_flux ${SIZE} kvs
 
+HWLOC_VERSION=$(${SHARNESS_TEST_SRCDIR}/hwloc/hwloc-version)
+[ $HWLOC_VERSION -eq 1 ] && test_set_prereq HWLOC1
+
 HWLOC_DATADIR="${SHARNESS_TEST_SRCDIR}/hwloc-data"
 shared2=$(readlink -e ${HWLOC_DATADIR}/1N/shared/02-brokers)
 exclu2=$(readlink -e  ${HWLOC_DATADIR}/1N/nonoverlapping/02-brokers)
@@ -42,6 +45,10 @@ test_expect_success 'hwloc: ensure we have system lstopo output' '
     test 2 -eq \
          $(grep "<object type=\"Machine\" os_index=\"0\"" system.topology.out | \
            wc -l)
+'
+
+test_expect_success HAVE_LSTOPO,HWLOC1 'hwloc: flux hwloc topology can be piped' '
+	flux hwloc topology | $lstopo --if xml -i -
 '
 
 test_expect_success 'hwloc: reload non-overlapping set of a node ' '
@@ -89,6 +96,10 @@ test_expect_success 'hwloc: flux-hwloc info reports expected GPU resources' '
 	EOF
     flux hwloc info > hwloc-info.out3 &&
     test_cmp hwloc-info.expected3 hwloc-info.out3
+'
+
+test_expect_success 'hwloc: flux-hwloc --local option works' '
+    flux hwloc info --local | grep "1 Machine"
 '
 
 test_expect_success 'hwloc: remove resource module' '
