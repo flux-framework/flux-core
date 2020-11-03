@@ -159,21 +159,71 @@ static void flux_hwloc_xml (optparse_t *p, char ***xmlv, uint32_t *size)
         flux_hwloc_global_xml (p, xmlv, size);
 }
 
+#if HWLOC_API_VERSION >= 0x20000
+static void print_topologies (char **xmlv, int size)
+{
+    /*  hwloc 2.x dropped support for hwloc_custom,
+     *  so just dump the array of XML
+     */
+    for (int i = 0; i < size; i++)
+        puts (xmlv[i]);
+}
+#else
+static void print_topologies (char **xmlv, int size)
+{
+    hwloc_topology_t global = NULL;
+    char *xml = NULL;
+    int xmlsize = 0;
+
+    /*  Create custom topology for concatenating all global hwloc XML
+     */
+    if (hwloc_topology_init (&global) < 0)
+        log_err_exit ("hwloc_topology_init (global)");
+    hwloc_topology_set_custom (global);
+
+    /*  Iterate over all returned XML and insert results into global topo:
+     */
+    for (int i = 0; i < size; i++) {
+        hwloc_topology_t rank;
+
+        if (hwloc_topology_init (&rank) < 0)
+            log_err_exit ("hwloc_topology_init");
+        if (hwloc_topology_set_xmlbuffer (rank, xmlv[i], strlen (xmlv[i])) < 0
+            || hwloc_topology_load (rank)
+            || hwloc_custom_insert_topology (global,
+                                             hwloc_get_root_obj (global),
+                                             rank,
+                                             NULL) < 0)
+            log_err_exit ("failed to insert xml %d into global topology", i);
+
+        hwloc_topology_destroy (rank);
+    }
+
+    hwloc_topology_load (global);
+    if (hwloc_topology_export_xmlbuffer (global, &xml, &xmlsize) < 0)
+        log_err_exit ("hwloc_topology_export_xmlbuffer");
+
+    puts (xml);
+    hwloc_free_xmlbuffer (global, xml);
+    hwloc_topology_destroy (global);
+}
+#endif
+
 /*  flux-hwloc topology:
  */
-
 static int cmd_topology (optparse_t *p, int ac, char *av[])
 {
     char **xmlv = NULL;
-    char *xml = NULL;
-    uint32_t i = 0;
     uint32_t size = 0;
 
+    /*  Fetch XML array from resource module:
+     */
     flux_hwloc_xml (p, &xmlv, &size);
-    for (i = 0; i < size; i++) {
-        xml = xmlv[i];
-        puts (xml);
-    }
+
+    /*  Dump XML to stdout
+     */
+    print_topologies (xmlv, size);
+
     string_array_destroy (xmlv, size);
     return (0);
 }
