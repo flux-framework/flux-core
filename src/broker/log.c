@@ -45,7 +45,7 @@ typedef struct {
     zlist_t *buf;
     int ring_size;
     int seq;
-    zlist_t *sleepers;
+    zlist_t *followers;
 } logbuf_t;
 
 struct logbuf_entry {
@@ -54,46 +54,7 @@ struct logbuf_entry {
     int seq;
 };
 
-#define SLEEPER_MAGIC 0xe4e3e2e1
-struct sleeper {
-    int magic;
-    flux_t *h;
-    flux_msg_handler_t *mh;
-    flux_msg_handler_f fun;
-    flux_msg_t *msg;
-    void *arg;
-};
-
 void logbuf_destroy (logbuf_t *logbuf);
-
-static void sleeper_destroy (struct sleeper *s)
-{
-    if (s) {
-        assert (s->magic == SLEEPER_MAGIC);
-        flux_msg_destroy (s->msg);
-        s->magic =~ SLEEPER_MAGIC;
-        free (s);
-    }
-}
-
-static struct sleeper *sleeper_create (flux_msg_handler_f fun,
-                                       flux_t *h, flux_msg_handler_t *mh,
-                                       const flux_msg_t *msg, void *arg)
-{
-    struct sleeper *s = calloc (1, sizeof (*s));
-    if (!s)
-        return NULL;
-    s->magic = SLEEPER_MAGIC;
-    s->h = h;
-    s->mh = mh;
-    s->fun = fun;
-    s->arg = arg;
-    if (!(s->msg = flux_msg_copy (msg, true))) {
-        sleeper_destroy (s);
-        return NULL;
-    }
-    return s;
-}
 
 static void logbuf_entry_destroy (struct logbuf_entry *e)
 {
@@ -128,39 +89,21 @@ static void logbuf_trim (logbuf_t *logbuf, int size)
     }
 }
 
-static int logbuf_get (logbuf_t *logbuf, int seq_index, int *seq,
-                       const char **buf, int *len)
+static void flux_msg_decref_wrapper (void *data)
 {
-    struct logbuf_entry *e = zlist_first (logbuf->buf);
-
-    while (e && e->seq <= seq_index)
-        e = zlist_next (logbuf->buf);
-    if (!e) {
-        errno = ENOENT;
-        return -1;
-    }
-    if (seq)
-        *seq = e->seq;
-    if (buf)
-        *buf = e->buf;
-    if (len)
-        *len = e->len;
-    return 0;
+    const flux_msg_t *msg = data;
+    flux_msg_decref (msg);
 }
 
-static int logbuf_sleepon (logbuf_t *logbuf, flux_msg_handler_f fun, flux_t *h,
-                           flux_msg_handler_t *mh, const flux_msg_t *msg,
-                           void *arg)
+
+static int logbuf_follow (logbuf_t *logbuf, const flux_msg_t *msg)
 {
-    assert (logbuf->magic == LOGBUF_MAGIC);
-    struct sleeper *s = sleeper_create (fun, h, mh, msg, arg);
-    if (!s)
-        return -1;
-    if (zlist_append (logbuf->sleepers, s) < 0) {
-        sleeper_destroy (s);
+    flux_msg_t *msgp = (flux_msg_t *)flux_msg_incref (msg);
+    if (zlist_append (logbuf->followers, msgp) < 0) {
         errno = ENOMEM;
         return -1;
     }
+    zlist_freefn (logbuf->followers, msgp, flux_msg_decref_wrapper, true);
     return 0;
 }
 
@@ -168,7 +111,7 @@ static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
 {
     assert (logbuf->magic == LOGBUF_MAGIC);
     struct logbuf_entry *e;
-    struct sleeper *s;
+    const flux_msg_t *msg;
 
     if (logbuf->ring_size > 0) {
         logbuf_trim (logbuf, logbuf->ring_size - 1);
@@ -182,9 +125,11 @@ static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
             errno = ENOMEM;
             return -1;
         }
-        while ((s = zlist_pop (logbuf->sleepers))) {
-            s->fun (s->h, s->mh, s->msg, s->arg);
-            sleeper_destroy (s);
+        msg = zlist_first (logbuf->followers);
+        while (msg) {
+            (void )flux_respond_pack (logbuf->h, msg, "{ s:s# }",
+                                      "buf", e->buf, e->len);
+            msg = zlist_next (logbuf->followers);
         }
     }
     return 0;
@@ -208,7 +153,7 @@ static logbuf_t *logbuf_create (void)
         errno = ENOMEM;
         goto cleanup;
     }
-    if (!(logbuf->sleepers = zlist_new ())) {
+    if (!(logbuf->followers = zlist_new ())) {
         errno = ENOMEM;
         goto cleanup;
     }
@@ -226,11 +171,13 @@ void logbuf_destroy (logbuf_t *logbuf)
             logbuf_trim (logbuf, 0);
             zlist_destroy (&logbuf->buf);
         }
-        if (logbuf->sleepers) {
-            struct sleeper *s;
-            while ((s = zlist_pop (logbuf->sleepers)))
-                sleeper_destroy (s);
-            zlist_destroy (&logbuf->sleepers);
+        if (logbuf->followers) {
+            const flux_msg_t *msg;
+            while ((msg = zlist_pop (logbuf->followers))) {
+                (void) flux_respond_error (logbuf->h, msg, ENODATA, NULL);
+                flux_msg_decref (msg);
+            }
+            zlist_destroy (&logbuf->followers);
         }
         if (logbuf->f)
             (void)fclose (logbuf->f);
@@ -595,25 +542,33 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
                               const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;
-    const char *buf;
-    int len;
-    int seq, follow;
+    struct logbuf_entry *e;
+    int follow;
 
-    if (flux_request_unpack (msg, NULL, "{ s:i s:b }",
-                             "seq", &seq,
+    if (flux_request_unpack (msg, NULL, "{ s:b }",
                              "follow", &follow) < 0)
         goto error;
-    if (logbuf_get (logbuf, seq, &seq, &buf, &len) < 0) {
-        if (follow && errno == ENOENT) {
-            if (logbuf_sleepon (logbuf, dmesg_request_cb, h, mh, msg, arg) < 0)
-                goto error;
-            return; /* no reply */
-        }
+
+    if (!flux_msg_is_streaming (msg)) {
+        errno = EPROTO;
         goto error;
     }
-    flux_respond_pack (h, msg, "{ s:i s:s# }",
-                               "seq", seq,
-                               "buf", buf, len);
+
+    e = zlist_first (logbuf->buf);
+    while (e) {
+        if (flux_respond_pack (h, msg, "{ s:s# }",
+                               "buf", e->buf, e->len) < 0)
+            goto error;
+        e = zlist_next (logbuf->buf);
+    }
+
+    if (follow) {
+        if (logbuf_follow (logbuf, msg) < 0)
+            goto error;
+    }
+    else
+        (void) flux_respond_error (h, msg, ENODATA, NULL);
+
     return;
 
 error:
@@ -640,28 +595,25 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     logbuf_t *logbuf = arg;
     char *sender = NULL;
-    struct sleeper *s;
+    flux_msg_t *msgp;
     zlist_t *tmp = NULL;
 
     assert (logbuf->magic == LOGBUF_MAGIC);
     if (flux_msg_get_route_first (msg, &sender) < 0 || !sender)
         goto done;
-    s = zlist_first (logbuf->sleepers);
-    while (s) {
-        assert (s->magic == SLEEPER_MAGIC);
-        if (cmp_sender (s->msg, sender)) {
+    msgp = zlist_first (logbuf->followers);
+    while (msgp) {
+        if (cmp_sender (msgp, sender)) {
             if (!tmp && !(tmp = zlist_new ()))
                 goto done;
-            if (zlist_append (tmp, s) < 0)
+            if (zlist_append (tmp, msgp) < 0)
                 goto done;
         }
-        s = zlist_next (logbuf->sleepers);
+        msgp = zlist_next (logbuf->followers);
     }
     if (tmp) {
-        while ((s = zlist_pop (tmp))) {
-            zlist_remove (logbuf->sleepers, s);
-            sleeper_destroy (s);
-        }
+        while ((msgp = zlist_pop (tmp)))
+            zlist_remove (logbuf->followers, msgp);
     }
 done:
     free (sender);
