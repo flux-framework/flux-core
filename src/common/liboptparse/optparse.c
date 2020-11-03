@@ -50,12 +50,15 @@ struct opt_parser {
     int            left_margin;     /* Size of --help output left margin    */
     int            option_width;    /* Width of --help output for optiion   */
     int            current_group;   /* Current option group number          */
-    zlist_t *      option_list;     /* List of options for this program    */
+    zlist_t *      option_list;     /* List of options for this program     */
 
     unsigned int   skip_subcmds:1;  /* Do not Print subcommands in --help   */
     unsigned int   no_options:1;    /* Skip option processing for subcmd    */
     unsigned int   hidden:1;        /* If subcmd, skip in --help output     */
     unsigned int   posixly_correct:1; /* Value of GNU getopt posixly correct*/
+    unsigned int   sorted:1;        /* Options,subcmds are sorted in usage  */
+
+    int            seq;             /* If subcommand, insertion sequence    */
 
     zhash_t *      dhash;           /* Hash of ancillary data               */
 
@@ -70,7 +73,8 @@ struct opt_parser {
 struct option_info {
     struct optparse_option * p_opt;   /* Copy of program option structure  */
     zlist_t *               optargs;  /* If non-NULL, the option argument(s) */
-    const char *            optarg;   /* Pointer to last element in optargs  */
+    const char *            optarg;   /* Pointer to last element in optargs */
+    int                     seq;      /* Sequence in which option was addd  */
 
     unsigned int            found;    /* number of times we saw this option */
 
@@ -86,52 +90,36 @@ struct option_info {
 
 static void optparse_option_destroy (struct optparse_option *o)
 {
-    if (o == NULL)
-        return;
-    free ((void *)o->name);
-    free ((void *)o->arginfo);
-    free ((void *)o->usage);
-    free (o);
+    if (o) {
+        free ((void *)o->name);
+        free ((void *)o->arginfo);
+        free ((void *)o->usage);
+        free (o);
+    }
 }
 
 static struct optparse_option *
 optparse_option_dup (const struct optparse_option *src)
 {
-    struct optparse_option *o = malloc (sizeof (*o));
-    if (o != NULL) {
-        memset (o, 0, sizeof (*o));
-        if (src->name)
-            o->name =    strdup (src->name);
-        if (src->arginfo)
-            o->arginfo = strdup (src->arginfo);
-        if (src->usage)
-            o->usage =   strdup (src->usage);
-        o->key =     src->key;
-        o->group =   src->group;
-        o->has_arg = src->has_arg;
-        o->flags =   src->flags;
-        o->cb  =     src->cb;
-    }
-    return (o);
-}
+    struct optparse_option *o = calloc (1, sizeof (*o));
+    if (o == NULL)
+        return NULL;
+    if ((src->name && !(o->name = strdup (src->name)))
+        || (src->arginfo && !(o->arginfo = strdup (src->arginfo)))
+        || (src->usage && !(o->usage = strdup (src->usage))))
+        goto err;
 
-static struct option_info *option_info_create (const struct optparse_option *o)
-{
-    struct option_info *c = malloc (sizeof (*c));
-    if (c != NULL) {
-        memset (c, 0, sizeof (*c));
-        c->found = 0;
-        c->optargs = NULL;
-        c->optarg = NULL;
-        c->p_opt = optparse_option_dup (o);
-        if (!o->name)
-            c->isdoc = 1;
-        if (o->flags & OPTPARSE_OPT_AUTOSPLIT)
-            c->autosplit = 1;
-        if (o->flags & OPTPARSE_OPT_HIDDEN)
-            c->hidden = 1;
-    }
-    return (c);
+    o->key = src->key;
+    o->group = src->group;
+    o->has_arg = src->has_arg;
+    o->flags = src->flags;
+    o->cb = src->cb;
+
+    return (o);
+
+err:
+    optparse_option_destroy (o);
+    return NULL;
 }
 
 static void option_info_destroy (struct option_info *c)
@@ -141,6 +129,26 @@ static void option_info_destroy (struct option_info *c)
         zlist_destroy (&c->optargs);
     c->optarg = NULL;
     free (c);
+}
+
+static struct option_info *option_info_create (const struct optparse_option *o)
+{
+    struct option_info *c = calloc (1, sizeof (*c));
+    if (!c)
+        return NULL;
+
+    if (!(c->p_opt = optparse_option_dup (o)))
+        goto err;
+    if (!o->name)
+        c->isdoc = 1;
+    if (o->flags & OPTPARSE_OPT_AUTOSPLIT)
+        c->autosplit = 1;
+    if (o->flags & OPTPARSE_OPT_HIDDEN)
+        c->hidden = 1;
+    return (c);
+err:
+    option_info_destroy (c);
+    return NULL;
 }
 
 /*
@@ -174,6 +182,29 @@ static int option_info_cmp (void *arg1, void *arg2)
     }
     return (o1->group - o2->group);
 }
+
+/* As above but preserve original sequence of options
+ */
+static int option_info_seq (void *arg1, void *arg2)
+{
+    const struct option_info *x = arg1;
+    const struct option_info *y = arg2;
+    const struct optparse_option *o1 = x->p_opt;
+    const struct optparse_option *o2 = y->p_opt;
+
+    if (o1->group == o2->group) {
+        if (x->isdoc && y->isdoc)
+            return (0);
+        else if (x->isdoc)
+            return (-1);
+        else if (y->isdoc)
+            return (1);
+        else
+            return x->seq - y->seq;
+    }
+    return (o1->group - o2->group);
+}
+
 
 /*
  *  Return option_info structure for option with [name]
@@ -209,14 +240,12 @@ static struct option_info *find_option_by_val (optparse_t *p, int val)
  *    If [end] is NULL, remove all options.
  */
 static void option_table_remove (optparse_t *p,
-        struct optparse_option const opts[],
-        const struct optparse_option *end)
+                                 struct optparse_option const opts[],
+                                 const struct optparse_option *end)
 {
     const struct optparse_option *o = opts;
-
-    while (o->usage || (end && o != end))
+    while (o->usage && o != end)
         optparse_remove_option (p, (o++)->name);
-
     return;
 }
 
@@ -234,13 +263,15 @@ static optparse_err_t optparse_set_log_fn (optparse_t *p, opt_log_f fn)
     return (0);
 }
 
-static optparse_err_t optparse_set_fatalerr_fn (optparse_t *p, opt_fatalerr_f fn)
+static optparse_err_t optparse_set_fatalerr_fn (optparse_t *p,
+                                                opt_fatalerr_f fn)
 {
     p->fatalerr_fn = fn;
     return (0);
 }
 
-static optparse_err_t optparse_set_fatalerr_handle (optparse_t *p, void *handle)
+static optparse_err_t optparse_set_fatalerr_handle (optparse_t *p,
+                                                    void *handle)
 {
     p->fatalerr_handle = handle;
     return (0);
@@ -352,34 +383,34 @@ static int opt_init (struct option *opt, struct optparse_option *o)
 /*
  *  Find next eligible place to split a line.
  */
-static char *find_word_boundary(char *str, char *from, char **next)
+static char *find_word_boundary (char *str, char *from, char **next)
 {
-        char *p = from;
+    char *p = from;
 
-        /*
-         * Back up past any non-whitespace if we are pointing in
-         *  the middle of a word.
-         */
-        while ((p != str) && !isspace ((int)*p))
-                --p;
+    /*
+     * Back up past any non-whitespace if we are pointing in
+     *  the middle of a word.
+     */
+    while ((p != str) && !isspace ((int)*p))
+        --p;
 
-        /*
-         * Next holds next word boundary
-         */
-        *next = p+1;
+    /*
+     * Next holds next word boundary
+     */
+    *next = p+1;
 
-        /*
-         * Now move back to the end of the previous word
-         */
-        while ((p != str) && isspace ((int)*p))
-                --p;
+    /*
+     * Now move back to the end of the previous word
+     */
+    while ((p != str) && isspace ((int)*p))
+        --p;
 
-        if (p == str) {
-                *next = str;
-                return (NULL);
-        }
+    if (p == str) {
+        *next = str;
+        return (NULL);
+    }
 
-        return (p+1);
+    return (p+1);
 }
 
 
@@ -524,9 +555,10 @@ static int optparse_print_options (optparse_t *p)
         return (0);
 
     /*
-     *  Sort option table by group then by name
+     *  Sort option table per sorted flag
      */
-    zlist_sort (p->option_list, option_info_cmp);
+    zlist_sort (p->option_list,
+                p->sorted ? option_info_cmp : option_info_seq);
 
     columns = get_term_columns();
     o = zlist_first (p->option_list);
@@ -541,24 +573,34 @@ static int optparse_print_options (optparse_t *p)
     return (0);
 }
 
-#if CZMQ_VERSION < CZMQ_MAKE_VERSION(3,0,1)
-static bool s_cmp (const char *s1, const char *s2)
+static int subcmd_name_cmp (void *s1, void *s2)
 {
-    return (strcmp (s1, s2) > 0);
+    const optparse_t *cmd1 = s1;
+    const optparse_t *cmd2 = s2;
+    return strcmp (cmd1->program_name, cmd2->program_name);
 }
-#else
-static int s_cmp (const char *s1, const char *s2)
+
+static int subcmd_seq_cmp (void *s1, void *s2)
 {
-    return strcmp (s1, s2);
+    const optparse_t *cmd1 = s1;
+    const optparse_t *cmd2 = s2;
+    return cmd1->seq - cmd2->seq;
 }
-#endif
 
 static zlist_t *subcmd_list_sorted (optparse_t *p)
 {
-    zlist_t *keys = zhash_keys (p->subcommands);
-    if (keys)
-        zlist_sort (keys, (zlist_compare_fn *) s_cmp);
-    return (keys);
+    optparse_t *cmd = NULL;
+    zlist_t *subcmds = zlist_new ();
+
+    cmd = zhash_first (p->subcommands);
+    while (cmd) {
+        zlist_append (subcmds, cmd);
+        cmd = zhash_next (p->subcommands);
+    }
+
+    zlist_sort (subcmds, p->sorted ? subcmd_name_cmp : subcmd_seq_cmp);
+
+    return (subcmds);
 }
 
 /*
@@ -568,9 +610,9 @@ static zlist_t *subcmd_list_sorted (optparse_t *p)
 static int print_usage_with_subcommands (optparse_t *parent)
 {
     int lines = 0;
-    const char *cmd;
     opt_log_f fp = parent->log_fn;
-    zlist_t *keys;
+    zlist_t *subcmds = NULL;
+    optparse_t *p = NULL;
     int nsubcmds = zhash_size (parent->subcommands);
     /*
      *  With subcommands, only print usage line for parent command
@@ -589,21 +631,20 @@ static int print_usage_with_subcommands (optparse_t *parent)
         return (1);
     }
 
-    if (!(keys = subcmd_list_sorted (parent)))
+    if (!(subcmds = subcmd_list_sorted (parent)))
         return (-1);
 
-    cmd = zlist_first (keys);
-    while (cmd) {
-        optparse_t *p = zhash_lookup (parent->subcommands, cmd);;
+    p = zlist_first (subcmds);
+    while (p) {
         if (!p->hidden) {
             (*fp) ("%5s: %s %s\n",
                     ++lines > 1 ? "or" : "Usage",
                     optparse_fullname (p),
                     p->usage ? p->usage : "[OPTIONS]");
         }
-        cmd = zlist_next (keys);
+        p = zlist_next (subcmds);
     }
-    zlist_destroy (&keys);
+    zlist_destroy (&subcmds);
     return (lines);
 }
 
@@ -670,18 +711,14 @@ optparse_t *optparse_create (const char *prog)
         .cb    = (optparse_cb_f) display_help,
     };
 
-    struct opt_parser *p = malloc (sizeof (*p));
+    struct opt_parser *p = calloc (1, sizeof (*p));
     if (!p)
         return NULL;
-
-    memset (p, 0, sizeof (*p));
 
     if (!(p->program_name = strdup (prog))) {
         free (p);
         return NULL;
     }
-    p->usage = NULL;
-    p->parent = NULL;
     p->option_list = zlist_new ();
     p->dhash = zhash_new ();
     p->subcommands = zhash_new ();
@@ -697,12 +734,14 @@ optparse_t *optparse_create (const char *prog)
     p->option_width = 25;
     p->option_index = -1;
     p->posixly_correct = 1;
-
+    p->sorted = 0;
+    
     /*
      *  Register -h, --help
      */
     if (optparse_add_option (p, &help) != OPTPARSE_SUCCESS) {
-        fprintf (stderr, "failed to register --help option: %s\n", strerror (errno));
+        fprintf (stderr, "failed to register --help option: %s\n",
+                 strerror (errno));
         optparse_destroy (p);
         return (NULL);
     }
@@ -722,6 +761,7 @@ optparse_t *optparse_add_subcommand (optparse_t *p,
     new = optparse_create (name);
     if (new == NULL)
         return (NULL);
+    new->seq = zhash_size (p->subcommands);
     zhash_update (p->subcommands, name, (void *) new);
     zhash_freefn (p->subcommands, name, optparse_child_destroy);
     zhash_update (new->dhash, "optparse::cb", cb);
@@ -952,7 +992,7 @@ int optparse_getopt_iterator_reset (optparse_t *p, const char *name)
 }
 
 optparse_err_t optparse_add_option (optparse_t *p,
-        const struct optparse_option *o)
+                                    const struct optparse_option *o)
 {
     struct option_info *c;
 
@@ -964,6 +1004,8 @@ optparse_err_t optparse_add_option (optparse_t *p,
 
     if (!(c = option_info_create (o)))
         return OPTPARSE_NOMEM;
+
+    c->seq = zlist_size (p->option_list);
 
     if (zlist_append (p->option_list, c) < 0)
         return OPTPARSE_NOMEM;
@@ -990,7 +1032,7 @@ optparse_err_t optparse_remove_option (optparse_t *p, const char *name)
 }
 
 optparse_err_t optparse_add_option_table (optparse_t *p,
-        struct optparse_option const opts[])
+                                          struct optparse_option const opts[])
 {
     optparse_err_t rc = OPTPARSE_SUCCESS;
     const struct optparse_option *o = opts;
@@ -1080,6 +1122,10 @@ optparse_err_t optparse_set (optparse_t *p, int item, ...)
         n = va_arg (vargs, int);
         p->posixly_correct = n;
         break;
+    case OPTPARSE_SORTED:
+        n = va_arg (vargs, int);
+        p->sorted = n;
+        break;
     default:
         e = OPTPARSE_BAD_ARG;
     }
@@ -1119,6 +1165,11 @@ optparse_err_t optparse_get (optparse_t *p, int item, ...)
     case OPTPARSE_LEFT_MARGIN:
     case OPTPARSE_OPTION_CB:
     case OPTPARSE_OPTION_WIDTH:
+    case OPTPARSE_PRINT_SUBCMDS:
+    case OPTPARSE_SUBCMD_NOOPTS:
+    case OPTPARSE_SUBCMD_HIDE:
+    case OPTPARSE_POSIXLY_CORRECT:
+    case OPTPARSE_SORTED:
         e = OPTPARSE_NOT_IMPL;
         break;
 
@@ -1141,7 +1192,7 @@ void *optparse_get_data (optparse_t *p, const char *s)
 
 static char * optstring_create ()
 {
-    char *optstring = malloc (4);
+    char *optstring = calloc (4, 1);
     if (optstring == NULL)
         return (NULL);
     optstring[0] = '\0';
@@ -1192,7 +1243,7 @@ static struct option * option_table_create (optparse_t *p, char **sp)
     int j;
 
     n = zlist_size (p->option_list);
-    opts = malloc ((n + 1) * sizeof (struct option));
+    opts = calloc ((n + 1), sizeof (struct option));
     if (opts == NULL)
         return (NULL);
 
@@ -1261,8 +1312,10 @@ static void opt_append_optarg (optparse_t *p, struct option_info *opt, const cha
         opt->optargs = zlist_new ();
     if (opt->autosplit) {
         if (opt_append_sep (opt, optarg) < 0)
-            optparse_fatalmsg (p, 1, "%s: append '%s': %s\n", p->program_name,
-                               optarg, strerror (errno));
+            optparse_fatalmsg (p, 1, "%s: append '%s': %s\n",
+                               p->program_name,
+                               optarg,
+                               strerror (errno));
         return;
     }
     if ((s = strdup (optarg)) == NULL)
@@ -1295,6 +1348,9 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
     char *optstring = NULL;
     struct option *optz = option_table_create (p, &optstring);
 
+    if (!optz)
+        return -1;
+
     fullname = optparse_fullname (p);
 
     /* Initialize getopt internal state data:
@@ -1312,7 +1368,8 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
             else
                 (*p->log_fn) ("%s: unrecognized option '%s'\n",
                               fullname, argv[d.optind-1]);
-            (*p->log_fn) ("Try `%s --help' for more information.\n", fullname);
+            (*p->log_fn) ("Try `%s --help' for more information.\n",
+                          fullname);
             d.optind = -1;
             break;
         }
@@ -1330,7 +1387,8 @@ int optparse_parse_args (optparse_t *p, int argc, char *argv[])
         /* Reset li for next iteration */
         li = -1;
         if (opt == NULL) {
-            (*p->log_fn) ("ugh, didn't find option associated with char %c\n", c);
+            (*p->log_fn) ("ugh, didn't find option associated with char %c\n",
+                          c);
             continue;
         }
 
@@ -1402,7 +1460,6 @@ int optparse_fatal_usage (optparse_t *p, int code, const char *fmt, ...)
     return (*p->fatalerr_fn) (p->fatalerr_handle, code);
 }
 
-
 int optparse_option_index (optparse_t *p)
 {
     return (p->option_index);
@@ -1439,16 +1496,10 @@ static void optparse_reset_one (optparse_t *p)
 
 void optparse_reset (optparse_t *p)
 {
-    zlist_t *cmds = NULL;
-
-    if ((cmds = subcmd_list_sorted (p))) {
-        const char *cmd = zlist_first (cmds);
-        while (cmd) {
-            optparse_t *o = zhash_lookup (p->subcommands, cmd);
-            optparse_reset_one (o);
-            cmd = zlist_next (cmds);
-        }
-        zlist_destroy (&cmds);
+    optparse_t *cmd = zhash_first (p->subcommands);
+    while (cmd) {
+        optparse_reset_one (cmd);
+        cmd = zhash_next (p->subcommands);
     }
     optparse_reset_one (p);
 }
