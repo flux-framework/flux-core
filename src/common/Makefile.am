@@ -13,7 +13,6 @@ SUBDIRS = \
 	libidset \
 	libtomlc99 \
 	libsubprocess \
-	libaggregate \
 	libschedutil \
 	libeventlog \
 	libioencode \

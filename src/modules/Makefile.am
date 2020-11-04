@@ -6,7 +6,6 @@ SUBDIRS = \
  content-sqlite \
  content-files \
  cron \
- aggregator \
  job-ingest \
  job-manager \
  job-info \

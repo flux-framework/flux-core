@@ -98,7 +98,6 @@ TESTSCRIPTS = \
 	t2007-caliper.t \
 	t2008-althash.t \
 	t2010-kvs-snapshot-restore.t \
-	t2100-aggregate.t \
 	t2200-job-ingest.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \

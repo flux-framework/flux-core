@@ -26,15 +26,11 @@ test_debug '
     echo ${HWLOC_VERSION}
 '
 
-test_expect_success 'hwloc: load aggregator module' '
-    flux exec -r all flux module load aggregator
+test_expect_success 'hwloc: load resource module' '
+    flux exec -r all flux module load resource
 '
-test_expect_success 'hwloc: load hwloc xml' '
-    flux hwloc reload -v
-'
-
 test_expect_success 'hwloc: loading v1.11 xml works' '
-    flux hwloc reload $hwloc1_11 &&
+    flux resource reload --xml $hwloc1_11 &&
     cat <<-EOF > hwloc-info.expected3 &&
 	1 Machine, 48 Cores, 96 PUs
 	EOF
@@ -43,7 +39,7 @@ test_expect_success 'hwloc: loading v1.11 xml works' '
 '
 
 test_expect_success HWLOC2 'hwloc: loading v2.1 xml works' '
-    flux hwloc reload $hwloc2_1 &&
+    flux resource reload --xml $hwloc2_1 &&
     cat <<-EOF > hwloc-info.expected4 &&
 	1 Machine, 48 Cores, 96 PUs
 	EOF
@@ -52,7 +48,7 @@ test_expect_success HWLOC2 'hwloc: loading v2.1 xml works' '
 '
 
 test_expect_success 'hwloc: loading xml converted to v1 works' '
-    flux hwloc reload $hwloc2to1 &&
+    flux resource reload --xml $hwloc2to1 &&
     cat <<-EOF > hwloc-info.expected5 &&
 	1 Machine, 48 Cores, 96 PUs
 	EOF
@@ -60,8 +56,8 @@ test_expect_success 'hwloc: loading xml converted to v1 works' '
     test_cmp hwloc-info.expected5 hwloc-info.out5
 '
 
-test_expect_success 'hwloc: unload aggregator' '
-    flux exec -r all flux module remove aggregator
+test_expect_success 'hwloc: unload resource' '
+    flux exec -r all flux module remove resource
 '
 
 test_done

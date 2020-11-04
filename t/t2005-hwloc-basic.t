@@ -1,15 +1,16 @@
 #!/bin/sh
 #set -x
 
-test_description='Test basics of flux-hwloc reload subcommand
-
-Ensure flux-hwloc reload subcommand works
+test_description='Test basics of flux-hwloc subcommand
 '
 
 . `dirname $0`/sharness.sh
 
 SIZE=2
 test_under_flux ${SIZE} kvs
+
+HWLOC_VERSION=$(${SHARNESS_TEST_SRCDIR}/hwloc/hwloc-version)
+[ $HWLOC_VERSION -eq 1 ] && test_set_prereq HWLOC1
 
 HWLOC_DATADIR="${SHARNESS_TEST_SRCDIR}/hwloc-data"
 shared2=$(readlink -e ${HWLOC_DATADIR}/1N/shared/02-brokers)
@@ -22,11 +23,10 @@ test_debug '
     echo ${sierra}
 '
 
-test_expect_success 'hwloc: load aggregator module' '
-    flux exec -r all flux module load aggregator
-'
-test_expect_success 'hwloc: load hwloc xml' '
-    flux hwloc reload -v
+test_expect_success 'hwloc: load resource module' '
+    for i in $(seq 0 $((SIZE-1))); do
+        flux exec -r $i flux module load resource
+    done
 '
 
 #  Set path to lstopo or lstopo-no-graphics command:
@@ -47,24 +47,12 @@ test_expect_success 'hwloc: ensure we have system lstopo output' '
            wc -l)
 '
 
-test_expect_success 'hwloc: each rank reloads a non-overlapping set of a node ' '
-    flux hwloc reload $exclu2
+test_expect_success HAVE_LSTOPO,HWLOC1 'hwloc: flux hwloc topology can be piped' '
+	flux hwloc topology | $lstopo --if xml -i -
 '
 
-test_expect_success HAVE_JQ 'hwloc: internal aggregate-load cmd works' '
-    flux exec -r all \
-        flux hwloc aggregate-load --key=foo --unpack=bar --print-result | \
-	$jq -S . >aggregate.out &&
-    test_debug "flux kvs get bar" &&
-    $jq -e ".count == 2" < aggregate.out &&
-    $jq -e ".entries[\"0\"].cpuset == \"0-7\"" < aggregate.out &&
-    $jq -e ".entries[\"1\"].cpuset == \"8-15\"" < aggregate.out
-'
-
-test_expect_success HAVE_JQ 'hwloc: by_rank aggregate key exists after reload' '
-    flux kvs get resource.hwloc.by_rank | $jq -S . >  by_rank.out &&
-    $jq -e ".\"0\".cpuset == \"0-7\"" < by_rank.out &&
-    $jq -e ".\"1\".cpuset == \"8-15\"" < by_rank.out
+test_expect_success 'hwloc: reload non-overlapping set of a node ' '
+    flux resource reload --xml $exclu2
 '
 
 #  Keep this test after 'reload exclu2' above so we're processing
@@ -86,8 +74,8 @@ test_expect_success 'hwloc: flux-hwloc info -r works' '
     test_cmp hwloc-info-r.expected hwloc-info-r.out
 '
 
-test_expect_success 'hwloc: every rank reloads the same xml of a node' '
-    flux hwloc reload $shared2 &&
+test_expect_success 'hwloc: reload the same xml of a node' '
+    flux resource reload --xml $shared2 &&
     cat <<-EOF > hwloc-info.expected2 &&
 	2 Machines, 32 Cores, 32 PUs
 	EOF
@@ -95,21 +83,8 @@ test_expect_success 'hwloc: every rank reloads the same xml of a node' '
     test_cmp hwloc-info.expected2 hwloc-info.out2
 '
 
-test_expect_success HAVE_JQ 'hwloc: only one rank reloads an xml file' '
-    flux hwloc reload --rank="[0]" $exclu2 &&
-    flux kvs get resource.hwloc.by_rank | $jq -S . > mixed.out &&
-    $jq -e ".\"0\".cpuset == \"0-7\"" < mixed.out &&
-    $jq -e ".\"0\".Core == 8" < mixed.out &&
-    $jq -e ".\"1\".cpuset == \"0-15\"" < mixed.out &&
-    $jq -e ".\"1\".Core == 16" < mixed.out
-'
-
 test_expect_success HAVE_JQ 'hwloc: reload xml with GPU resources' '
-    flux hwloc reload --rank=all $sierra &&
-    flux kvs get resource.hwloc.by_rank | $jq -S . > sierra.out &&
-    test_debug "cat sierra.out" &&
-    $jq -e ".\"0\".Core == 44 and .\"0\".PU == 176" < sierra.out &&
-    $jq -e ".\"0\".cpuset == \"0-175\"" < sierra.out
+    flux resource reload --xml $sierra
 '
 
 #  Keep this test after 'reload sierra' above so we're processing
@@ -123,33 +98,11 @@ test_expect_success 'hwloc: flux-hwloc info reports expected GPU resources' '
     test_cmp hwloc-info.expected3 hwloc-info.out3
 '
 
-test_expect_success 'hwloc: return an error code on an invalid DIR' '
-    test_expect_code 1 flux hwloc reload nonexistence
+test_expect_success 'hwloc: flux-hwloc --local option works' '
+    flux hwloc info --local | grep "1 Machine"
 '
 
-test_expect_success 'hwloc: return an error code on valid DIR, invalid files' '
-    test_expect_code 1 flux hwloc reload /
+test_expect_success 'hwloc: remove resource module' '
+    flux exec -r all flux module remove resource
 '
-
-test_expect_success 'hwloc: reload with invalid rank fails' '
-    test_expect_code 1 flux hwloc reload -r $(invalid_rank) &&
-    test_expect_code 1 flux hwloc reload -r "0-$(invalid_rank)" &&
-    test_expect_code 1 flux hwloc reload -r foo
-'
-
-sanitize_hwloc_xml() {
-    sed 's/pci_link_speed=".*"//g' $1
-}
-test_expect_success 'hwloc: reload with no args reloads system topology' '
-    flux hwloc reload &&
-    flux hwloc topology > system.out4 &&
-    sanitize_hwloc_xml system.topology.out >system.topology.sanitized &&
-    sanitize_hwloc_xml system.out4 > system.sanitized.4 &&
-    test_cmp system.topology.sanitized system.sanitized.4
-'
-
-test_expect_success 'hwloc: unload aggregator' '
-    flux exec -r all flux module remove aggregator
-'
-
 test_done

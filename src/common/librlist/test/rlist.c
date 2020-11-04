@@ -395,70 +395,79 @@ static void test_simple (void)
     rlist_destroy (copy);
 }
 
-const char by_rank_issue2202[] = "{\
-  \"0\": {\
-    \"Package\": 1,\
-    \"Core\": 1,\
-    \"PU\": 1,\
-    \"cpuset\": \"0\"\
-  },\
-  \"1\": {\
-    \"Package\": 1,\
-    \"Core\": 1,\
-    \"PU\": 1,\
-    \"cpuset\": \"1\"\
-  },\
-  \"2\": {\
-    \"Package\": 1,\
-    \"Core\": 1,\
-    \"PU\": 1,\
-    \"cpuset\": \"2\"\
-  },\
-  \"3\": {\
-    \"Package\": 1,\
-    \"Core\": 1,\
-    \"PU\": 1,\
-    \"cpuset\": \"3\"\
-  }\
+const char R_issue2202[] = "{\n\
+  \"version\": 1,\n\
+  \"execution\": {\n\
+    \"R_lite\": [\n\
+      {\n\
+        \"rank\": \"0\",\n\
+        \"children\": {\n\
+          \"core\": \"0\"\n\
+        }\n\
+      },\n\
+      {\n\
+        \"rank\": \"1\",\n\
+        \"children\": {\n\
+          \"core\": \"1\"\n\
+        }\n\
+      },\n\
+      {\n\
+        \"rank\": \"2\",\n\
+        \"children\": {\n\
+          \"core\": \"2\"\n\
+        }\n\
+      },\n\
+      {\n\
+        \"rank\": \"3\",\n\
+        \"children\": {\n\
+          \"core\": \"3\"\n\
+        }\n\
+      }\n\
+    ]\n\
+  }\n\
 }";
 
-const char by_rank_issue2202b[] = "{\
-\"0\": {\
-    \"Package\": 1,\
-    \"Core\": 2,\
-    \"PU\": 2,\
-    \"cpuset\": \"0-1\"\
-  },\
-  \"1\": {\
-    \"Package\": 1,\
-    \"Core\": 2,\
-    \"PU\": 2,\
-    \"cpuset\": \"0,2\"\
-  },\
-  \"2\": {\
-    \"Package\": 1,\
-    \"Core\": 2,\
-    \"PU\": 2,\
-    \"cpuset\": \"0,3\"\
-  },\
-  \"3\": {\
-    \"Package\": 1,\
-    \"Core\": 2,\
-    \"PU\": 2,\
-    \"cpuset\": \"3-4\"\
-  }\
+const char R_issue2202b[] = "{\
+  \"version\": 1,\n\
+  \"execution\": {\n\
+    \"R_lite\": [\n\
+      {\n\
+        \"rank\": \"0\",\n\
+        \"children\": {\n\
+          \"core\": \"0-1\"\n\
+        }\n\
+      },\n\
+      {\n\
+        \"rank\": \"1\",\n\
+        \"children\": {\n\
+          \"core\": \"0,2\"\n\
+        }\n\
+      },\n\
+      {\n\
+        \"rank\": \"2\",\n\
+        \"children\": {\n\
+          \"core\": \"0,3\"\n\
+        }\n\
+      },\n\
+      {\n\
+        \"rank\": \"3\",\n\
+        \"children\": {\n\
+          \"core\": \"3-4\"\n\
+        }\n\
+      }\n\
+    ]\n\
+  }\n\
 }";
-
 
 static void test_issue2202 (void)
 {
     char *result = NULL;
     struct rlist *a = NULL;
 
-    struct rlist *rl = rlist_from_hwloc_by_rank (by_rank_issue2202, true);
-    ok (rl != NULL, "issue2202: rlist_from_by_rank");
+    struct rlist *rl = rlist_from_R (R_issue2202);
     if (!rl)
-        BAIL_OUT ("unable to create rlist from by_rank_issue2202");
+        BAIL_OUT ("unable to create rlist from R_issue2202");
+    ok (rl != NULL, "issue2202: rlist_from_R");
 
     result = rlist_dumps (rl);
     is (result,
@@ -492,11 +501,11 @@ static void test_issue2202 (void)
 
     /*  Part B:  test with multiple cores per rank, same cpuset size
      */
-    rl = rlist_from_hwloc_by_rank (by_rank_issue2202b, true);
-    ok (rl != NULL, "issue2202: rlist_from_hwloc_by_rank");
+    rl = rlist_from_R (R_issue2202b);
     if (!rl)
-        BAIL_OUT ("unable to create rlist from by_rank_issue2202b");
+        BAIL_OUT ("unable to create rlist from R_issue2202b");
 
+    ok (rl != NULL, "issue2202: rlist_from_R");
     result = rlist_dumps (rl);
     is (result,
         "rank0/core[0-1] rank1/core[0,2] rank2/core[0,3] rank3/core[3-4]",
@@ -527,19 +536,24 @@ static void test_issue2202 (void)
     rlist_destroy (rl);
 }
 
-const char by_rank_issue2473[] = "{\
-\"0\": {\
-    \"Package\": 1,\
-    \"Core\": 4,\
-    \"PU\": 4,\
-    \"cpuset\": \"0-3\"\
-  },\
-\"1-2\": {\
-    \"Package\": 1,\
-    \"Core\": 2,\
-    \"PU\": 2,\
-    \"cpuset\": \"0-1\"\
-  }\
+const char R_issue2473[] = "{\
+  \"version\": 1,\n\
+  \"execution\": {\n\
+    \"R_lite\": [\n\
+      {\n\
+        \"rank\": \"0\",\n\
+        \"children\": {\n\
+          \"core\": \"0-3\"\n\
+        }\n\
+      },\n\
+      {\n\
+        \"rank\": \"1-2\",\n\
+        \"children\": {\n\
+          \"core\": \"0-1\"\n\
+        }\n\
+      }\n\
+    ]\n\
+  }\n\
 }";
 
 static void test_issue2473 (void)
@@ -548,10 +562,10 @@ static void test_issue2473 (void)
     struct rlist *rl;
     struct rlist *a, *a2;
 
-    rl = rlist_from_hwloc_by_rank (by_rank_issue2473, true);
-    ok (rl != NULL, "issue2473: add_hwloc_by_rank");
+    rl = rlist_from_R (R_issue2473);
     if (rl == NULL)
-        BAIL_OUT ("unable to create rlist from by_rank_issue2473");
+        BAIL_OUT ("unable to create rlist from R_issue2473");
+    ok (rl != NULL, "issue2473: rlist_from_R");
 
     ok (rlist_nnodes (rl) == 3,
         "issue2473: created rlist with 3 nodes");
@@ -620,105 +634,6 @@ static void test_issue2473 (void)
 
     rlist_destroy (rl);
 }
-
-
-const char by_rank_coreids[] = "{\
-\"0\": {\
-    \"Package\": 1,\
-    \"Core\": 4,\
-    \"PU\": 8,\
-    \"cpuset\": \"0-7\",\
-    \"coreids\": \"0-3\"\
-  },\
-\"1-2\": {\
-    \"Package\": 1,\
-    \"Core\": 2,\
-    \"PU\": 2,\
-    \"cpuset\": \"0-1\",\
-    \"coreids\": \"0-1\"\
-  }\
-}";
-
-
-static void test_by_rank_coreids (void)
-{
-    char *result;
-    struct rlist *rl;
-
-    rl = rlist_from_hwloc_by_rank (by_rank_coreids, false);
-    ok (rl != NULL, "by_rank_coreids: rlist_hwloc_by_rank");
-    if (rl == NULL)
-        BAIL_OUT ("unable to create rlist from by_rank_coreids");
-    ok (rl->total == 8,
-        "coreids: rlist contains only cores");
-    ok (rlist_nnodes (rl) == 3,
-        "coreids: created rlist with 3 nodes");
-    result = rlist_dumps (rl);
-    is (result,
-        "rank0/core[0-3] rank[1-2]/core[0-1]",
-        "coreids: rlist_dumps works");
-    free (result);
-    rlist_destroy (rl);
-    return;
-}
-
-const char by_rank_hostnames[] = "{\
-\"0\": {\
-    \"Package\": 1,\
-    \"Core\": 4,\
-    \"PU\": 8,\
-    \"cpuset\": \"0-7\",\
-    \"coreids\": \"0-3\",\
-    \"hostname\": \"foo\"\
-  },\
-\"1\": {\
-    \"Package\": 1,\
-    \"Core\": 2,\
-    \"PU\": 2,\
-    \"cpuset\": \"0-1\",\
-    \"coreids\": \"0-1\",\
-    \"hostname\": \"bar\"\
-  }\
-}";
-
-
-static void test_by_rank_hostnames (void)
-{
-    char *result;
-    struct rlist *rl;
-    json_t *R;
-    json_t *nodelist;
-    json_t *hosts;
-
-    rl = rlist_from_hwloc_by_rank (by_rank_hostnames, false);
-    if (rl == NULL)
-        BAIL_OUT ("unable to create rlist from by_rank_hostnames");
-    ok (rlist_nnodes (rl) == 2,
-        "coreids: created rlist with 3 nodes");
-    result = rlist_dumps (rl);
-    is (result,
-        "rank0/core[0-3] rank1/core[0-1]",
-        "coreids: rlist_dumps works");
-    free (result);
-
-    R = rlist_to_R (rl);
-    if (R == NULL)
-        BAIL_OUT ("unable to create R from by_rank_hostnames");
-    ok (json_unpack (R, "{s:{s:o}}", "execution", "nodelist", &nodelist) == 0,
-        "R has a execution.nodelist key");
-    ok (json_is_array (nodelist),
-        "nodelist is an array");
-
-    hosts = json_array_get (nodelist, 0);
-    is (json_string_value (hosts), "foo,bar",
-        "json string is \"foo,bar\"");
-
-    json_decref (R);
-    rlist_destroy (rl);
-    return;
-}
-
-
 
 static void test_dumps (void)
 {
@@ -1553,8 +1468,6 @@ int main (int ac, char *av[])
     run_test_entries (test_1024n_4c, 1024, 4);
     test_issue2202 ();
     test_issue2473 ();
-    test_by_rank_coreids ();
-    test_by_rank_hostnames ();
     test_updown ();
     test_append ();
     test_diff ();

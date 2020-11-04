@@ -17,7 +17,6 @@ modload() {
 
 modload all barrier
 modload 0 ${content_backing}
-modload all aggregator
 
 modload all kvs
 modload all kvs-watch

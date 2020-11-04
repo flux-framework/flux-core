@@ -7,7 +7,6 @@
 /flux-start
 /flux-exec
 /flux-event
-/flux-aggregate
 /flux-queue
 /flux-job
 /flux-terminus

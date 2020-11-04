@@ -17,7 +17,7 @@ AM_CPPFLAGS = \
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
-	$(top_builddir)/src/common/libaggregate/libaggregate.la \
+	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
@@ -72,7 +72,6 @@ dist_fluxcmd_SCRIPTS = \
 	flux-admin.py
 
 fluxcmd_PROGRAMS = \
-	flux-aggregate \
 	flux-terminus \
 	flux-ping \
 	flux-keygen \
