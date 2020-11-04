@@ -1,7 +1,7 @@
 #!/bin/bash -e
 
 # Allow connector-local more time to start listening on socket
-FLUX_LOCAL_CONNECTOR_RETRY_COUNT=40 RANK=$(flux getattr rank)
+RANK=$(FLUX_LOCAL_CONNECTOR_RETRY_COUNT=30 flux getattr rank)
 
 if ! content_backing=$(flux getattr content.backing-module 2>/dev/null); then
     content_backing=content-sqlite
