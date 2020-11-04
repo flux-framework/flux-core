@@ -10,8 +10,10 @@ test_under_flux 4 job
 
 query="flux resource list --state=free -no {rlist}"
 
-hwloc_by_rank='{"0-1": {"Core": 2, "cpuset":"0-3", "coreids":"0-1" }}'
-hwloc_by_rank_first_fit='{"0": {"Core": 2}, "1": {"Core": 1}}'
+flux R encode -r0-1 -c0-1 >R.test
+
+(flux R encode -r0 -c0-1 && flux R encode -r1 -c0) | flux R append \
+	>R.test.first_fit
 
 
 SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
@@ -40,13 +42,10 @@ test_expect_success 'sched-simple: reload ingest module with lax validator' '
 test_expect_success 'sched-simple: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
-test_expect_success 'sched-simple: load default by_rank' '
-	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank)" &&
-	flux kvs get resource.hwloc.by_rank
-'
-test_expect_success 'sched-simple: reload sched-simple' '
+
+test_expect_success 'sched-simple: reload sched-simple with default resource.R' '
 	flux module unload sched-simple &&
-	flux module reload resource monitor-force-up &&
+	flux resource reload R.test &&
 	flux module load sched-simple &&
 	flux dmesg 2>&1 >reload.dmesg.log &&
 	grep "ready:.*rank\[0-1\]/core\[0-1\]" reload.dmesg.log &&
@@ -147,18 +146,9 @@ test_expect_success 'sched-simple: cancel remaining jobs' '
 	flux job cancel $(cat job9.id) &&
 	flux job wait-event --timeout=5.0 $(cat job9.id) free
 '
-test_expect_success 'sched-simple: reload with sched-PUs option' '
-	flux module reload -f sched-simple sched-PUs
-'
-test_expect_success 'sched-simple: PUs now treated as cores' '
-	test_debug "flux resource list -v" &&
-	test "$($query)" = "rank[0-1]/core[0-3]"
-'
 test_expect_success 'sched-simple: reload in first-fit mode' '
         flux module remove sched-simple &&
-        flux module remove resource &&
-	flux kvs put resource.hwloc.by_rank="$(echo $hwloc_by_rank_first_fit)" &&
-	flux module load resource monitor-force-up &&
+	flux resource reload R.test.first_fit &&
         flux module load sched-simple mode=first-fit &&
 	flux dmesg | grep "ready:.*rank0/core\[0-1\] rank1/core0"
 '

@@ -11,11 +11,11 @@ cat <<EOF >test.sh
 RC=0
 RANKS="[0-\$((\$(flux getattr size)-1))]"
 
-flux kvs put resource.hwloc.by_rank="{\"\$RANKS\": {\"Package\": 1, \"Core\": 16, \"PU\": 16, \"cpuset\": \"0-15\"}}"
-
-flux kvs get resource.hwloc.by_rank
+flux kvs put resource.R="\$(flux R encode -r\$RANKS -c0-15)"
+flux kvs get resource.R
 
 flux module remove sched-simple
+flux module reload resource monitor-force-up noverify
 flux module load sched-simple
 
 flux dmesg | grep 'sched-simple.*ready'  | tail -1

@@ -28,7 +28,9 @@ libidset_la_LDFLAGS = \
 
 TESTS = test_idset.t
 
-check_PROGRAMS = $(TESTS)
+check_PROGRAMS = \
+	$(TESTS) \
+	test_idsetutil
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
@@ -37,6 +39,14 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_idset_t_SOURCES = test/idset.c
 test_idset_t_CPPFLAGS = $(AM_CPPFLAGS)
 test_idset_t_LDADD = \
+	$(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/libidset/libidset.la \
+	$(top_builddir)/src/common/libutil/libutil.la \
+	$(ZMQ_LIBS)
+
+test_idsetutil_SOURCES = test/idsetutil.c
+test_idsetutil_CPPFLAGS = $(AM_CPPFLAGS)
+test_idsetutil_LDADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
 	$(top_builddir)/src/common/libutil/libutil.la \

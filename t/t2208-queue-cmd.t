@@ -9,11 +9,6 @@ flux setattr log-stderr-level 1
 
 LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 
-test_expect_success 'flux-queue: reload sched-simple with sched-PUs' '
-	flux module reload -f sched-simple sched-PUs &&
-	flux resource list -v
-'
-
 test_expect_success 'flux-queue: unknown sub-command fails with usage message' '
 	test_must_fail flux queue wrongsubcmd 2>usage.out &&
 	grep Usage: usage.out

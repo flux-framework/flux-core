@@ -8,17 +8,15 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_RESOURCE_MONITOR_H
-#define _FLUX_RESOURCE_MONITOR_H
+#ifndef _FLUX_RESOURCE_TOPO_H
+#define _FLUX_RESOURCE_TOPO_H
 
-struct monitor *monitor_create (struct resource_ctx *ctx,
-                                bool monitor_force_up);
-void monitor_destroy (struct monitor *monitor);
+struct topo *topo_create (struct resource_ctx *ctx, bool no_verify);
+void topo_destroy (struct topo *topo);
 
-const struct idset *monitor_get_down (struct monitor *monitor);
-const struct idset *monitor_get_up (struct monitor *monitor);
 
-#endif /* !_FLUX_RESOURCE_MONITOR_H */
+#endif /* !_FLUX_RESOURCE_TOPO_H */
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

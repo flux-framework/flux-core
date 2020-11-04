@@ -64,7 +64,7 @@ test_expect_success 'flux-mini batch: submit a series of jobs' '
 	id1=$(flux mini batch --flags=waitable -n1 batch-script.sh) &&
 	id2=$(flux mini batch --flags=waitable -n4 batch-script.sh) &&
 	id3=$(flux mini batch --flags=waitable -N2 -n4 batch-script.sh) &&
-	flux job wait --all
+	run_timeout 60 flux job wait --all
 '
 test_expect_success 'flux-mini batch: job results are expected' '
 	test_debug "grep . flux-*.out" &&
@@ -74,7 +74,7 @@ test_expect_success 'flux-mini batch: job results are expected' '
 '
 test_expect_success 'flux-mini batch: --output=kvs directs output to kvs' '
 	id=$(flux mini batch -n1 --flags=waitable --output=kvs batch-script.sh) &&
-	flux job attach $id > kvs-output.log 2>&1 &&
+	run_timeout 60 flux job attach $id > kvs-output.log 2>&1 &&
 	test_debug "cat kvs-output.log" &&
 	grep "size=1 nodes=1" kvs-output.log
 '
@@ -83,10 +83,10 @@ test_expect_success 'flux-mini batch: --broker-opts works' '
 	     --broker-opts=-v batch-script.sh) &&
 	id2=$(flux mini batch -n1 --flags=waitable \
 	     --broker-opts=-v,-H5 batch-script.sh) &&
-	flux job wait $id &&
+	run_timeout 60 flux job wait $id &&
 	test_debug "cat flux-${id}.out" &&
 	grep "boot: rank=0 size=1" flux-${id}.out &&
-	flux job wait $id2 &&
+	run_timeout 60 flux job wait $id2 &&
 	grep "boot: rank=0 size=1" flux-${id2}.out &&
 	grep "heartbeat: T=5.0s" flux-${id2}.out
 '

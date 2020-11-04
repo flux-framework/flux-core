@@ -11,16 +11,6 @@ export FLUX_PYCLI_LOGLEVEL=10
 
 flux setattr log-stderr-level 1
 
-#  Reload sched-simple with PU scheduling so we can treat single-core
-#  system with many threads per core as MULTICORE
-#
-test_expect_success 'reload sched-simple with sched-PUs' '
-	flux module reload -f sched-simple sched-PUs
-'
-
-test $(flux R encode --local | flux R decode --count core) -gt 1 \
-    && test_set_prereq HAVE_MULTICORE
-
 test_expect_success 'flux mini fails with usage message' '
 	test_must_fail flux mini 2>usage.err &&
 	grep -i usage: usage.err

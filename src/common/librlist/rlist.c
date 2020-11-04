@@ -950,8 +950,14 @@ struct rlist *rlist_from_json (json_t *o, json_error_t *errp)
                           "starttime", &starttime,
                           "expiration", &expiration) < 0)
         goto err;
-    if (version != 1)
+    if (version != 1) {
+        if (errp)
+            snprintf (errp->text,
+                      sizeof (errp->text),
+                      "invalid version=%d",
+                      version);
         goto err;
+    }
     if (!(rl = rlist_create ()))
         goto err;
 
@@ -1236,8 +1242,14 @@ static json_t *rlist_json_nodelist (struct rlist *rl)
 json_t *rlist_to_R (struct rlist *rl)
 {
     json_t *R = NULL;
-    json_t *R_lite = rlist_compressed (rl);
-    json_t *nodelist = rlist_json_nodelist (rl);
+    json_t *R_lite = NULL;
+    json_t *nodelist = NULL;
+
+    if (!rl)
+        return NULL;
+
+    R_lite = rlist_compressed (rl);
+    nodelist = rlist_json_nodelist (rl);
 
     if (!R_lite)
         goto fail;

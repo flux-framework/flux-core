@@ -13,17 +13,15 @@
 #endif
 #include <jansson.h>
 #include <flux/core.h>
+#include <stdlib.h>
+#include <fcntl.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libutil/cleanup.h"
+#include "src/common/libutil/read_all.h"
 #include "src/common/libidset/idset.h"
 
 #include "src/modules/resource/rutil.h"
-
-const char *by_rank = \
-"{"\
-"\"0-3\": {\"Package\": 1, \"Core\": 2, \"PU\": 2, \"cpuset\": \"0-1\"}," \
-"\"4-31\": {\"Package\": 2, \"Core\": 4, \"PU\": 4, \"cpuset\": \"0-3\"}" \
-"}";
 
 void test_match_request_sender (void)
 {
@@ -134,27 +132,6 @@ void test_idset_add (void)
 
     idset_destroy (ids1);
     idset_destroy (ids2);
-}
-
-void test_idset_decode_add (void)
-{
-    struct idset *ids1;
-
-    if (!(ids1 = idset_create (1024, 0)))
-        BAIL_OUT ("idset_create failed");
-
-    errno = 0;
-    ok (rutil_idset_decode_add (NULL, "0") < 0 && errno == EINVAL,
-        "rutil_idset_decode_add ids1=NULL fails with EINVAL");
-    errno = 0;
-    ok (rutil_idset_decode_add (ids1, NULL) < 0 && errno == EINVAL,
-        "rutil_idset_decode_add s=NULL fails with EINVAL");
-    ok (rutil_idset_decode_add (ids1, "0") == 0 && idset_count (ids1) == 1,
-        "rutil_idset_decode_add s=0 works");
-    ok (rutil_idset_decode_add (ids1, "1") == 0 && idset_count (ids1) == 2,
-        "rutil_idset_decode_add s=1 works");
-
-    idset_destroy (ids1);
 }
 
 void test_idset_diff (void)
@@ -280,90 +257,148 @@ void test_set_json_idset (void)
     idset_destroy (ids);
 }
 
-void test_idset_from_resobj (void)
+void test_idset_decode_test (void)
 {
-    json_t *resobj;
-    struct idset *ids;
-
-    if (!(resobj = json_loads (by_rank, 0, NULL)))
-        BAIL_OUT ("json_loads failed");
-
-    ids = rutil_idset_from_resobj (NULL);
-    ok (ids != NULL && idset_count (ids) == 0,
-        "rutil_idset_from_resobj NULL returns empty idset");
-    idset_destroy (ids);
-
-    ids = rutil_idset_from_resobj (resobj);
-    ok (ids != NULL && idset_count (ids) == 32,
-        "rutil_idset_from_resobj works");
-    idset_destroy (ids);
-
-    json_decref (resobj);
+    ok (rutil_idset_decode_test (NULL, 0) == false,
+        "rutil_idset_decode_test idset=NULL returns false");
+    ok (rutil_idset_decode_test ("", 0) == false,
+        "rutil_idset_decode_test idset=\"\" id=0 returns false");
+    ok (rutil_idset_decode_test ("0", 0) == true,
+        "rutil_idset_decode_test idset=\"0\" id=0 returns true");
+    ok (rutil_idset_decode_test ("0", 1) == false,
+        "rutil_idset_decode_test idset=\"0\" id=1 returns false");
 }
 
-void test_resobj_sub (void)
+static char *create_tmp_file (const char *content)
 {
-    json_t *resobj1;
-    json_t *resobj2;
-    struct idset *ids1;
-    struct idset *ids2;
-    struct idset *ids;
+    char *path;
+    char *tmpdir = getenv ("TMPDIR");
+    int fd = -1;
 
-    if (!(resobj1 = json_loads (by_rank, 0, NULL)))
-        BAIL_OUT ("json_loads failed");
-    if (!(ids1 = rutil_idset_from_resobj (resobj1)))
-        BAIL_OUT ("rutil_idset_from_resobj failed");
+    if (!tmpdir)
+        tmpdir = "/tmp";
+    if (asprintf (&path, "%s/rutil-test.XXXXXX", tmpdir) < 0)
+        BAIL_OUT ("error allocating buffer");
+    if ((fd = mkostemp (path, O_WRONLY)) < 0)
+        BAIL_OUT ("error creating temp file");
 
-    if (!(ids = idset_create (1024, 0)))
-        BAIL_OUT ("idset_create failed");
-    if (idset_range_set (ids, 2, 5) < 0)
-        BAIL_OUT ("idset_range_set failed");
+    cleanup_push_string (cleanup_file, path);
+
+    if (write_all (fd, content, strlen (content)) < 0)
+        BAIL_OUT ("writing to creating temp file");
+    close (fd);
+    return path;
+}
+
+void test_read_file (void)
+{
+    char ebuf[128];
+    char *s;
+    char *tmp = create_tmp_file ("XXX");
 
     errno = 0;
-    ok (rutil_resobj_sub (NULL, NULL) == NULL && errno == EINVAL,
-        "rutil_resobj_sub resobj=NULL fails with EINVAL");
+    ebuf[0] = '\0';
+    s = rutil_read_file ("/noexist", ebuf, sizeof (ebuf));
+    ok (s == NULL && errno == ENOENT && strlen (ebuf) > 0,
+         "rutil_read_file path=/noexist fails with ENOENT and human error");
+    diag ("%s", ebuf);
 
-    resobj2 = rutil_resobj_sub (resobj1, NULL);
-    ok (resobj2 != NULL && json_equal (resobj1, resobj2) == 1,
-        "rutil_resobj_sub ids=NULL returns unchanged resobj");
-    if (!(ids2 = rutil_idset_from_resobj (resobj2)))
-        BAIL_OUT ("rutil_idset_from_resobj failed");
-    ok (idset_equal (ids1, ids2) == true,
-        "new and old resobj have identical idset");
-    idset_destroy (ids2);
-    json_decref (resobj2);
+    s = rutil_read_file (tmp, ebuf, sizeof (ebuf));
+    ok (s != NULL && !strcmp (s, "XXX"),
+        "rutil_read_file works");
+    free (s);
 
-    resobj2 = rutil_resobj_sub (resobj1, ids);
-    ok (resobj2 != NULL && json_equal (resobj1, resobj2) == 0,
-        "rutil_resobj_sub ids=[2-5] returns different resobj");
-    if (!(ids2 = rutil_idset_from_resobj (resobj2)))
-        BAIL_OUT ("rutil_idset_from_resobj failed");
-    ok (idset_count (ids1) - idset_count (ids2) == 4,
-        "new and old resobj idset differ by 4 ids");
-    idset_destroy (ids2);
-    json_decref (resobj2);
-
-    /* Kill one whole key in the resobj */
-    if (idset_range_set (ids, 0, 3) < 0)
-        BAIL_OUT ("idset_range_set failed");
-    resobj2 = rutil_resobj_sub (resobj1, ids);
-    ok (resobj2 != NULL && json_object_size (resobj2) == 1,
-        "rutil_resobj_sub ids=[0-5] returns resobj with 1 key");
-    json_decref (resobj2);
-
-    /* Kill entire resobj */
-    if (idset_range_set (ids, 0, 31) < 0)
-        BAIL_OUT ("idset_range_set failed");
-    resobj2 = rutil_resobj_sub (resobj1, ids);
-    ok (resobj2 != NULL && json_object_size (resobj2) == 0,
-        "rutil_resobj_sub ids=[0-31] returns resobj with no keys");
-    json_decref (resobj2);
-
-    idset_destroy (ids);
-    idset_destroy (ids1);
-    json_decref (resobj1);
+    free (tmp);
 }
 
+void test_load_file (void)
+{
+    char ebuf[128];
+    json_t *o;
+    char *good = create_tmp_file ("{\"foo\":42}");
+    char *bad = create_tmp_file ("XXX");
+
+    errno = 0;
+    ebuf[0] = '\0';
+    o = rutil_load_file ("/noexist", ebuf, sizeof (ebuf));
+    ok (o == NULL && errno == ENOENT && strlen (ebuf) > 0,
+         "rutil_load_file path=/noexist fails with ENOENT and human error");
+    diag ("%s", ebuf);
+
+    errno = 0;
+    ebuf[0] = '\0';
+    o = rutil_load_file (bad, ebuf, sizeof (ebuf));
+    ok (o == NULL && errno != 0 && strlen (ebuf) > 0,
+         "rutil_load_file with errno and human error on bad JSON");
+    diag ("%s", ebuf);
+
+    o = rutil_load_file (good, ebuf, sizeof (ebuf));
+    ok (o != NULL && json_object_get (o, "foo"),
+         "rutil_load_file with good JSON works");
+    json_decref (o);
+
+    free (good);
+    free (bad);
+}
+
+static char *create_tmp_xml_dir (int size)
+{
+    char *path;
+    char *tmpdir = getenv ("TMPDIR");
+    int i;
+
+    if (!tmpdir)
+        tmpdir = "/tmp";
+    if (asprintf (&path, "%s/rutil-test.XXXXXX", tmpdir) < 0)
+        BAIL_OUT ("error allocating buffer");
+    if (!mkdtemp (path))
+        BAIL_OUT ("failed to create tmp xmldir");
+
+    cleanup_push_string (cleanup_directory_recursive, path);
+
+    for (i = 0; i < size; i++) {
+        char fpath[1024];
+        int ffd;
+        snprintf (fpath, sizeof (fpath), "%s/%d.xml", path, i);
+        ffd = open (fpath, O_WRONLY | O_CREAT, 0644);
+        if (ffd < 0)
+            BAIL_OUT ("failed to create %s", fpath);
+        if (write_all (ffd, "\"foo\"",  5) < 0)
+            BAIL_OUT ("failed to write %s", fpath);
+        close (ffd);
+    }
+
+    return path;
+}
+
+void test_load_xml_dir (void)
+{
+    const int count = 8;
+    char *path = create_tmp_xml_dir (count);
+    char ebuf[128];
+    json_t *o;
+
+    errno = 0;
+    ebuf[0] = '\0';
+    o = rutil_load_xml_dir ("/noexist", ebuf, sizeof (ebuf));
+    ok (o == NULL && errno == ENOENT && strlen (ebuf) > 0,
+         "rutil_load_xml_dir path=/noexist fails with ENOENT and human error");
+    diag ("%s", ebuf);
+
+    o = rutil_load_xml_dir (path, ebuf, sizeof (ebuf));
+    ok (o != NULL,
+        "rutil_load_xml_dir works");
+    if (o) {
+        char *tmp = json_dumps (o, JSON_COMPACT);
+        diag ("%s", tmp);
+        free (tmp);
+    }
+    ok (json_object_size (o) == count,
+        "and contains the expected number of keys");
+    json_decref (o);
+
+    free (path);
+}
 
 int main (int argc, char *argv[])
 {
@@ -372,11 +407,13 @@ int main (int argc, char *argv[])
     test_match_request_sender ();
     test_idset_sub ();
     test_idset_add ();
-    test_idset_decode_add ();
     test_idset_diff ();
     test_set_json_idset ();
-    test_idset_from_resobj ();
-    test_resobj_sub ();
+    test_idset_decode_test ();
+
+    test_read_file ();
+    test_load_file ();
+    test_load_xml_dir ();
 
     done_testing ();
     return (0);

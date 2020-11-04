@@ -133,18 +133,40 @@ static void drain_cb (flux_t *h,
                           "idset",
                           s,
                           "reason",
-                          reason ? reason : "unknown") < 0) {
-        int saved_errno = errno;
-        (void)rutil_idset_sub (drain->idset, idset); // restore orig.
-        errno = saved_errno;
+                          reason ? reason : "unknown") < 0)
         goto error;
-    }
     idset_destroy (idset);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to undrain request");
     idset_destroy (idset);
+}
+
+int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
+{
+    char rankstr[16];
+
+    snprintf (rankstr, sizeof (rankstr), "%ju", (uintmax_t)rank);
+
+    if (rank >= drain->ctx->size) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (idset_set (drain->idset, rank) < 0)
+        return -1;
+    if (reslog_post_pack (drain->ctx->reslog,
+                          NULL,
+                          "drain",
+                          "{s:s s:s}",
+                          "idset",
+                          rankstr,
+                          "reason",
+                          reason ? reason : "unknown") < 0)
+        return -1;
+    if (reslog_sync (drain->ctx->reslog) < 0)
+        return -1;
+    return 0;
 }
 
 /* Un-drain a set of ranked execution targets.

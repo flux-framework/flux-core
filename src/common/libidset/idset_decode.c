@@ -142,11 +142,7 @@ error:
 
 struct idset *idset_decode (const char *str)
 {
-    struct idset *idset;
-    idset = idset_ndecode (str, str ? strlen (str) : 0);
-    if (!idset)
-        fprintf (stderr, "# idset_decode %s failed\n", str ? str : "NULL");
-    return idset;
+    return idset_ndecode (str, str ? strlen (str) : 0);
 }
 
 /*

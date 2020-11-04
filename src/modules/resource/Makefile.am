@@ -9,7 +9,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS) \
+	$(HWLOC_CFLAGS)
 
 #
 # Comms module
@@ -21,8 +22,8 @@ resource_la_SOURCES = \
 	resource.h \
 	monitor.c \
 	monitor.h \
-	discover.c \
-	discover.h \
+	topo.c \
+	topo.h \
 	drain.c \
 	drain.h \
 	exclude.c \
@@ -31,22 +32,30 @@ resource_la_SOURCES = \
 	reslog.h \
 	acquire.c \
 	acquire.h \
+	inventory.c \
+	inventory.h \
 	rutil.c \
 	rutil.h
 
 resource_la_LDFLAGS = $(fluxmod_ldflags) -module
-resource_la_LIBADD = $(fluxmod_libadd) \
-		    $(top_builddir)/src/common/libflux-internal.la \
-		    $(top_builddir)/src/common/libflux-core.la \
-		    $(ZMQ_LIBS)
+resource_la_LIBADD = \
+	$(fluxmod_libadd) \
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(ZMQ_LIBS) \
+	$(HWLOC_LIBS)
 
 TESTS = test_rutil.t
 
 test_ldadd = \
+        $(top_builddir)/src/common/librlist/librlist.la \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libtap/libtap.la \
-        $(ZMQ_LIBS) $(LIBPTHREAD)
+        $(ZMQ_LIBS) \
+	$(HWLOC_LIBS) \
+	$(LIBPTHREAD)
 
 test_ldflags = \
         -no-install
