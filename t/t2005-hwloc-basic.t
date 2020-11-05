@@ -29,9 +29,9 @@ test_expect_success 'hwloc: load resource module' '
     done
 '
 
-#  Set path to lstopo or lstopo-no-graphics command:
+#  Set path to lstopo-no-graphics command to avoid launching a gui:
 #
-lstopo=$(which lstopo 2>/dev/null || which lstopo-no-graphics 2>/dev/null)
+lstopo=$(which lstopo-no-graphics 2>/dev/null)
 test -n "$lstopo" && test_set_prereq HAVE_LSTOPO
 
 invalid_rank() {
