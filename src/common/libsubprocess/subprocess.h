@@ -446,7 +446,8 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signo);
 
 /*
  *  Add/remove a reference to subprocess object `p`. The subprocess object
- *   is destroyed once the last reference is removed.
+ *   is destroyed once the last reference is removed.  These calls
+ *   silently do nothing if called within a hook.
  */
 void flux_subprocess_ref (flux_subprocess_t *p);
 void flux_subprocess_unref (flux_subprocess_t *p);

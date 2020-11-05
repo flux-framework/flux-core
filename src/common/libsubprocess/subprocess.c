@@ -1154,13 +1154,18 @@ flux_future_t *flux_subprocess_kill (flux_subprocess_t *p, int signum)
 
 void flux_subprocess_ref (flux_subprocess_t *p)
 {
-    if (p && p->magic == SUBPROCESS_MAGIC)
+    if (p && p->magic == SUBPROCESS_MAGIC) {
+        if (p->local && p->in_hook)
+            return;
         p->refcount++;
+    }
 }
 
 void flux_subprocess_unref (flux_subprocess_t *p)
 {
     if (p && p->magic == SUBPROCESS_MAGIC) {
+        if (p->local && p->in_hook)
+            return;
         if (--p->refcount == 0)
             subprocess_free (p);
     }
