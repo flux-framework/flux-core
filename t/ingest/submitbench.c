@@ -103,6 +103,7 @@ struct submitbench_ctx {
     int jobspecsz;
     const char *J;
     int priority;
+    uint32_t owner;
 };
 
 /* Read entire file 'name' ("-" for stdin).  Exit program on error.
@@ -181,10 +182,14 @@ void submitbench_check (flux_reactor_t *r, flux_watcher_t *w,
         flux_future_t *f;
 #if HAVE_FLUX_SECURITY
         if (ctx->sec) {
+            const char *mech = ctx->sign_type;
+
+            if (mech == NULL && getuid () == ctx->owner)
+                mech = "none";
             if (!ctx->J || !optparse_hasopt (ctx->p, "reuse-signature")) {
                 if (!(ctx->J = flux_sign_wrap (ctx->sec, ctx->jobspec,
                                                ctx->jobspecsz,
-                                               ctx->sign_type, 0)))
+                                               mech, 0)))
                     log_err_exit ("flux_sign_wrap: %s",
                                   flux_security_last_error (ctx->sec));
             }
@@ -235,6 +240,7 @@ int cmd_submitbench (optparse_t *p, int argc, char **argv)
             log_err_exit ("security config %s", flux_security_last_error (ctx.sec));
         ctx.sign_type = optparse_get_str (p, "sign-type", NULL);
     }
+
 #endif
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -244,6 +250,14 @@ int cmd_submitbench (optparse_t *p, int argc, char **argv)
     ctx.totcount = optparse_get_int (p, "repeat", 1);
     ctx.jobspecsz = read_jobspec (argv[optindex++], &ctx.jobspec);
     ctx.priority = optparse_get_int (p, "priority", FLUX_JOB_PRIORITY_DEFAULT);
+
+    const char *tmp;
+    if (!(tmp = flux_attr_get (ctx.h, "security.owner")))
+        log_err_exit ("getattr security.owner");
+    errno = 0;
+    ctx.owner = strtoul (tmp, NULL, 10);
+    if (errno != 0)
+        log_err_exit ("getattr security.owner conversion to uint32");
 
     /* Prep/check/idle watchers perform flow control, keeping
      * at most ctx.max_queue_depth RPCs outstanding.

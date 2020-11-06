@@ -112,7 +112,7 @@ static int create_runat_phases (broker_ctx_t *ctx);
 
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg);
 
-static void init_attrs (attr_t *attrs, pid_t pid);
+static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred);
 
 static const struct flux_handle_ops broker_handle_ops;
 
@@ -288,7 +288,7 @@ int main (int argc, char *argv[])
     ctx.heartbeat_rate = 2;
     ctx.sec_typemask = ZSECURITY_TYPE_CURVE;
 
-    init_attrs (ctx.attrs, getpid ());
+    init_attrs (ctx.attrs, getpid (), &ctx.cred);
 
     parse_command_line_arguments (argc, argv, &ctx);
 
@@ -700,7 +700,7 @@ static void init_attrs_shell_paths (attr_t *attrs)
         log_err_exit ("attr_add conf.shell_initrc");
 }
 
-static void init_attrs (attr_t *attrs, pid_t pid)
+static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
 {
     /* Initialize config attrs from environment set up by flux(1)
      */
@@ -715,6 +715,11 @@ static void init_attrs (attr_t *attrs, pid_t pid)
     if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING,
                                             FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_add version");
+
+    char tmp[32];
+    snprintf (tmp, sizeof (tmp), "%ju", (uintmax_t)cred->userid);
+    if (attr_add (attrs, "security.owner", tmp, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        log_err_exit ("attr_add owner");
 }
 
 static void set_proctitle (uint32_t rank)

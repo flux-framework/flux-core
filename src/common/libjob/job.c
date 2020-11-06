@@ -67,6 +67,22 @@ error:
     flux_security_destroy (sec);
     return NULL;
 }
+
+static int attr_get_u32 (flux_t *h, const char *name, uint32_t *val)
+{
+    const char *s;
+    uint32_t v;
+
+    if (!(s = flux_attr_get (h, name)))
+        return -1;
+    errno = 0;
+    v = strtoul (s, NULL, 10);
+    if (errno != 0)
+        return -1;
+    *val = v;
+    return 0;
+}
+
 #endif
 
 flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int priority,
@@ -84,9 +100,23 @@ flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int priority,
     if (!(flags & FLUX_JOB_PRE_SIGNED)) {
 #if HAVE_FLUX_SECURITY
         flux_security_t *sec;
+        const char *mech = NULL;
+        uint32_t owner;
+
+        /* Security note:
+         * Instance owner jobs do not need a cryptographic signature since
+         * they do not require the IMP to be executed.  Force the signing
+         * mechanism to 'none' if the 'security.owner' broker attribute
+         * == getuid() to side-step the requirement that the munge daemon
+         * is running for single user instances compiled --with-flux-security,
+         * as described in flux-framework/flux-core#3305.
+         */
+        if (attr_get_u32 (h, "security.owner", &owner) == 0
+                && getuid () == owner)
+            mech = "none";
         if (!(sec = get_security_ctx (h, &f)))
             return f;
-        if (!(J = flux_sign_wrap (sec, jobspec, strlen (jobspec), NULL, 0)))
+        if (!(J = flux_sign_wrap (sec, jobspec, strlen (jobspec), mech, 0)))
             return get_security_error (sec);
 #else
         if (!(s = sign_none_wrap (jobspec, strlen (jobspec), getuid ())))
