@@ -118,7 +118,7 @@ static int gpubind_init (flux_plugin_t *p,
      *  jobs which are not assigned any GPUs do not use GPUs which
      *  happen to be available on the current node.
      */
-    flux_shell_setenvf (shell, 0, "CUDA_VISIBLE_DEVICES", "%d", -1);
+    flux_shell_setenvf (shell, 1, "CUDA_VISIBLE_DEVICES", "%d", -1);
 
     if (get_shell_gpus (shell, &ntasks, &gpus) < 0)
         return -1;
