@@ -58,6 +58,9 @@ void disconnect_rpc (flux_t *h,
                      const flux_msg_t *msg,
                      void *arg)
 {
+    /* disconnects occur once per client, there is no way to know
+     * which services a client used, so we must check all services for
+     * cleanup */
     wait_disconnect_rpc (h, mh, msg, arg);
     journal_listeners_disconnect_rpc (h, mh, msg, arg);
 }
