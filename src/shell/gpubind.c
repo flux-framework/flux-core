@@ -80,7 +80,7 @@ static int gpubind_task_init (flux_plugin_t *p,
         idset_set (ids, id);
         idset_clear (gpus, id);
     }
-    s = idset_encode (ids, IDSET_FLAG_RANGE);
+    s = idset_encode (ids, 0);
     plugin_task_setenv (p, "CUDA_VISIBLE_DEVICES", s);
     free (s);
     idset_destroy (ids);
