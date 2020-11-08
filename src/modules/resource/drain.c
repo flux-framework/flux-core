@@ -40,6 +40,7 @@
 #include "exclude.h"
 #include "drain.h"
 #include "rutil.h"
+#include "inventory.h"
 
 struct drain {
     struct resource_ctx *ctx;
@@ -65,10 +66,9 @@ static struct idset *drain_idset_decode (struct drain *drain,
     struct idset *idset;
     unsigned int id;
 
-    if (!(idset = idset_decode (ranks))) {
-        (void)snprintf (errbuf, errbufsize, "failed to decode idset");
+    if (!(idset = inventory_targets_to_ranks (drain->ctx->inventory,
+                                              ranks, errbuf, errbufsize)))
         return NULL;
-    }
     if (idset_count (idset) == 0) {
         (void)snprintf (errbuf, errbufsize, "idset is empty");
         errno = EINVAL;
@@ -110,6 +110,7 @@ static void drain_cb (flux_t *h,
     const char *reason = NULL;
     struct idset *idset = NULL;
     const char *errstr = NULL;
+    char *idstr = NULL;
     char errbuf[256];
 
     if (flux_request_unpack (msg,
@@ -126,20 +127,24 @@ static void drain_cb (flux_t *h,
     }
     if (rutil_idset_add (drain->idset, idset) < 0)
         goto error;
+    if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE)))
+        goto error;
     if (reslog_post_pack (drain->ctx->reslog,
                           msg,
                           "drain",
                           "{s:s s:s}",
                           "idset",
-                          s,
+                          idstr,
                           "reason",
                           reason ? reason : "unknown") < 0)
         goto error;
+    free (idstr);
     idset_destroy (idset);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to undrain request");
+    free (idstr);
     idset_destroy (idset);
 }
 
@@ -181,6 +186,7 @@ static void undrain_cb (flux_t *h,
     const char *s;
     struct idset *idset = NULL;
     unsigned int id;
+    char *idstr = NULL;
     const char *errstr = NULL;
     char errbuf[256];
 
@@ -206,22 +212,26 @@ static void undrain_cb (flux_t *h,
     }
     if (rutil_idset_sub (drain->idset, idset) < 0)
         goto error;
+    if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE)))
+        goto error;
     if (reslog_post_pack (drain->ctx->reslog,
                           msg,
                           "undrain",
                           "{s:s}",
                           "idset",
-                          s) < 0) {
+                          idstr) < 0) {
         int saved_errno = errno;
         (void)rutil_idset_add (drain->idset, idset); // restore orig.
         errno = saved_errno;
         goto error;
     }
+    free (idstr);
     idset_destroy (idset);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to undrain request");
+    free (idstr);
     idset_destroy (idset);
 }
 
