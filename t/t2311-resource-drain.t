@@ -81,11 +81,6 @@ test_expect_success 'undrain fails if rank not drained' '
         grep "rank 1 not drained" undrain_not.err
 '
 
-test_expect_success 'drain fails if idset is malformed' '
-        test_must_fail flux resource drain xxzz 2>drain_badset.err &&
-        grep "failed to decode idset" drain_badset.err
-'
-
 test_expect_success 'drain fails if idset is empty' '
         test_must_fail flux resource drain "" 2>drain_empty.err &&
         grep "idset is empty" drain_empty.err
