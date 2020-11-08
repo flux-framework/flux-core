@@ -27,13 +27,13 @@ load_resource () {
 }
 
 get_hwloc () {
-        flux python -c "import flux; print(flux.Flux().rpc(\"resource.get-xml\",nodeid=$1).get_str())"
+	flux python -c "import flux; print(flux.Flux().rpc(\"resource.get-xml\",nodeid=$1).get_str())"
 }
 get_topo() {
-        flux python -c "import flux; print(flux.Flux().rpc(\"resource.topo-get\",nodeid=$1).get_str())"
+	flux python -c "import flux; print(flux.Flux().rpc(\"resource.topo-get\",nodeid=$1).get_str())"
 }
 res_reload() {
-        flux python -c "import flux; print(flux.Flux().rpc(\"resource.reload\",nodeid=$1).get())"
+	flux python -c "import flux; print(flux.Flux().rpc(\"resource.reload\",nodeid=$1).get())"
 }
 
 test_expect_success 'load resource module with bad option fails' '
