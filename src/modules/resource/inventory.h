@@ -40,6 +40,18 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method);
 
 int inventory_put_xml (struct inventory *inv, json_t *xml);
 
+/* Return a set of ranks for a string of "targets". The 'targets' argument
+ * may be an RFC22 encoded idset or RFC29 hostlist. If an idset, the
+ * decoded idset is returned, if a hostlist, then the set of ranks
+ * corresponding to the hostnames in 'targets' is returned.
+ *
+ * On error, a textual error string will be returned in errbuf
+ */
+struct idset *inventory_targets_to_ranks (struct inventory *inv,
+                                          const char *targets,
+                                          char *errbuf,
+                                          int errsize);
+
 #endif /* !_FLUX_RESOURCE_INVENTORY_H */
 
 

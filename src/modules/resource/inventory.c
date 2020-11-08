@@ -272,6 +272,35 @@ const char *inventory_get_method (struct inventory *inv)
     return inv->method;
 }
 
+struct idset *inventory_targets_to_ranks (struct inventory *inv,
+                                          const char *targets,
+                                          char *errbuf,
+                                          int errsize)
+{
+    struct idset *ids;
+
+    if (!inv->R) {
+        errno = ENOENT;
+        return NULL;
+    }
+    if (!(ids = idset_decode (targets))) {
+        /*  Not a valid idset, maybe an RFC29 Hostlist
+         */
+        rlist_error_t err;
+        struct rlist *rl = rlist_from_json (inv->R, NULL);
+        ids = rlist_hosts_to_ranks (rl, targets, &err);
+        rlist_destroy (rl);
+        if (!ids) {
+            (void) snprintf (errbuf, errsize,
+                             "invalid targets: %s",
+                             err.text);
+            errno = EINVAL;
+            return NULL;
+        }
+    }
+    return ids;
+}
+
 static int convert_R_conf (flux_t *h, json_t *conf_R, json_t **Rp)
 {
     json_error_t e;
