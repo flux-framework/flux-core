@@ -8,6 +8,11 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* CAUTION: logging errors with `flux_log()` here could result in
+ * deadlock.  Errors that need to be seen should be logged to stderr
+ * instead.
+ */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
