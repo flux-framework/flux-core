@@ -35,20 +35,20 @@ def reload(args):
 
 def drain(args):
     """
-    Send a drain request to resource module for args.idset
+    Send a drain request to resource module for args.targets
     """
     RPC(
         flux.Flux(),
         "resource.drain",
-        {"idset": args.idset, "reason": " ".join(args.reason)},
+        {"targets": args.targets, "reason": " ".join(args.reason)},
     ).get()
 
 
 def undrain(args):
     """
-    Send an "undrain" request to resource module for args.idset
+    Send an "undrain" request to resource module for args.targets
     """
-    RPC(flux.Flux(), "resource.undrain", {"idset": args.idset}).get()
+    RPC(flux.Flux(), "resource.undrain", {"targets": args.targets}).get()
 
 
 def idset_strip(idset):
@@ -331,14 +331,18 @@ def main():
     drain_parser = subparsers.add_parser(
         "drain", formatter_class=flux.util.help_formatter()
     )
-    drain_parser.add_argument("idset", help="IDSET to drain")
+    drain_parser.add_argument(
+        "targets", help="List of targets to drain (IDSET or HOSTLIST)"
+    )
     drain_parser.add_argument("reason", help="Reason", nargs=argparse.REMAINDER)
     drain_parser.set_defaults(func=drain)
 
     undrain_parser = subparsers.add_parser(
         "undrain", formatter_class=flux.util.help_formatter()
     )
-    undrain_parser.add_argument("idset", help="IDSET to resume")
+    undrain_parser.add_argument(
+        "targets", help="List of targets to resume (IDSET or HOSTLIST)"
+    )
     undrain_parser.set_defaults(func=undrain)
 
     list_parser = subparsers.add_parser(

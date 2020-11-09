@@ -71,7 +71,7 @@ static int drain_self (struct topo *topo, const char *reason)
                                  0,
                                  0,
                                  "{s:s s:s}",
-                                 "idset",
+                                 "targets",
                                  rankstr,
                                  "reason",
                                  reason)))

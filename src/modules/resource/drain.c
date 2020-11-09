@@ -116,7 +116,7 @@ static void drain_cb (flux_t *h,
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:s s?:s}",
-                             "idset",
+                             "targets",
                              &s,
                              "reason",
                              &reason) < 0)
@@ -193,7 +193,7 @@ static void undrain_cb (flux_t *h,
     if (flux_request_unpack (msg,
                              NULL,
                              "{s:s}",
-                             "idset",
+                             "targets",
                              &s) < 0)
         goto error;
     if (!(idset = drain_idset_decode (drain, s, errbuf, sizeof (errbuf)))) {
