@@ -91,4 +91,14 @@ test_expect_success 'drain fails if idset is out of range' '
 	grep "idset is out of range" drain_range.err
 '
 
+# Note: in test, drain `hostname` will drain all ranks since all ranks
+#  are running on the same host
+#
+test_expect_success 'un/drain works with hostnames' '
+	flux resource drain $(hostname) &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq $SIZE &&
+	flux resource undrain $(hostname) &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq 0
+'
+
 test_done
