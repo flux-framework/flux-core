@@ -5,7 +5,7 @@ test_description='Test resource module with system instance config'
 . `dirname $0`/sharness.sh
 
 test_expect_success 'create test R with unlikely core count' '
-	flux R encode -r0-1 -c0-36 >R.test
+	flux R encode -r0-1 -c0-1048 >R.test
 '
 
 test_expect_success 'create config file pointing to test R' '

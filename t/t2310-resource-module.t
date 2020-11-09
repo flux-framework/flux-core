@@ -179,7 +179,7 @@ test_expect_success 'one rank was was drained' '
 # Since jq is used in the first bit, HAVE_JQ is required in other bits too
 test_expect_success HAVE_JQ 'change expected cores in resource.R' "
 	flux kvs get resource.R &&
-	jq '.execution.R_lite[0].children.core = \"0-48\"' R.orig >R.Mcore &&
+	jq '.execution.R_lite[0].children.core = \"0-1048\"' R.orig >R.Mcore &&
 	flux resource reload R.Mcore
 "
 test_expect_success HAVE_JQ 'reload resource module' '
