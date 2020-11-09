@@ -1,23 +1,48 @@
 AM_CPPFLAGS = \
-	$(WARNING_CFLAGS) -Wno-missing-field-initializers \
+	$(WARNING_CFLAGS) \
+	-Wno-missing-field-initializers \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) $(LIBUUID_CFLAGS) $(PYTHON_CPPFLAGS) \
+	$(ZMQ_CFLAGS) \
+	$(LIBUUID_CFLAGS) \
+	$(PYTHON_CPPFLAGS) \
 	$(CODE_COVERAGE_CFLAGS)
 
 AM_LDFLAGS = \
-	-avoid-version -module $(san_ld_zdef_flag) \
+	-avoid-version \
+	-module \
+	$(san_ld_zdef_flag) \
 	-Wl,-rpath,$(PYTHON_PREFIX)/lib \
 	$(CODE_COVERAGE_LIBS)
 
-common_libs = $(top_builddir)/src/common/libflux-core.la \
-	      $(top_builddir)/src/common/libflux-internal.la \
-	      $(top_builddir)/src/common/libdebugged/libdebugged.la \
-	      $(ZMQ_LIBS) $(LIBUUID_LIBS) \
-	      $(PYTHON_LDFLAGS)
+common_libs = \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libdebugged/libdebugged.la \
+	$(ZMQ_LIBS) $(LIBUUID_LIBS) \
+	$(PYTHON_LDFLAGS)
 
-PREPROC_FLAGS=-E  '-D__attribute__(...)='
+PREPROC_FLAGS = \
+	-E '-D__attribute__(...)='
+
+BUILT_SOURCES = \
+	_core.c \
+	_core_preproc.h
+
+fluxpyso_LTLIBRARIES = \
+	_core.la
+fluxpyso_PYTHON = \
+	__init__.py
+
+nodist_fluxbindinginclude_HEADERS = \
+	_core_preproc.h
+
+EXTRA_DIST = \
+	_core_build.py \
+	_security_build.py \
+	make_clean_header.py
+
 _core.c: $(srcdir)/_core_build.py _core_preproc.h
 	$(PYTHON) $^
 
@@ -34,21 +59,25 @@ _core_preproc.h: _core_clean.h
 	$(CC) $(PREPROC_FLAGS) _core_clean.h\
 	  | sed -e '/^# [0-9]*.*/d' > $@
 
-BUILT_SOURCES= _core.c _core_preproc.h
-fluxpyso_LTLIBRARIES = _core.la
-fluxpyso_PYTHON = __init__.py
-
-nodist_fluxbindinginclude_HEADERS = _core_preproc.h
-
 dist__core_la_SOURCES = callbacks.h
 nodist__core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
 
-EXTRA_DIST=_core_build.py make_clean_header.py
-
 if HAVE_FLUX_SECURITY
-BUILT_SOURCES += _security.c _security_preproc.h
-fluxpyso_LTLIBRARIES += _security.la
+
+BUILT_SOURCES += \
+	_security.c\
+	_security_preproc.h
+
+fluxpyso_LTLIBRARIES += \
+	_security.la
+
+nodist_fluxbindinginclude_HEADERS +=\
+	_security_preproc.h
+
+nodist__security_la_SOURCES = \
+	_security.c
+
 _security.c: $(srcdir)/_security_build.py _security_preproc.h
 	$(PYTHON) $^
 _security_clean.h: Makefile
@@ -60,11 +89,12 @@ _security_preproc.h: _security_clean.h
 	$(CC) $(PREPROC_FLAGS) _security_clean.h \
 	  | sed -e '/^# [0-9]*.*/d' > $@
 
-EXTRA_DIST+=_security_build.py
-nodist_fluxbindinginclude_HEADERS += _security_preproc.h
-nodist__security_la_SOURCES = _security.c
-_security_la_CPPFLAGS = $(AM_CPPFLAGS) $(FLUX_SECURITY_CFLAGS)
-_security_la_LIBADD = $(common_libs) $(FLUX_SECURITY_LIBS)
+_security_la_CPPFLAGS = \
+	$(AM_CPPFLAGS) \
+	$(FLUX_SECURITY_CFLAGS)
+_security_la_LIBADD = \
+	$(common_libs) \
+	$(FLUX_SECURITY_LIBS)
 endif
 
 .PHONY: lib-copy
