@@ -66,6 +66,12 @@ test_expect_success 'flux-shell: CUDA_VISIBLE_DEVICES=-1 set by default' '
     test_debug "cat default-gpubind.out" &&
     grep "^-1" default-gpubind.out
 '
+test_expect_success 'flux-shell: CUDA_VISIBLE_DEVICES=-1 works with existing value' '
+    CUDA_VISIBLE_DEVICES=0,1 \
+       flux mini run printenv CUDA_VISIBLE_DEVICES >override-gpubind.out 2>&1 &&
+    test_debug "cat override-gpubind.out" &&
+    grep "^-1" override-gpubind.out
+'
 #  GPU affinity tests use standalone shell since simple-sched doesnt
 #   schedule GPUs.
 #
@@ -106,8 +112,8 @@ test_expect_success 'flux-shell: gpu-affinity=per-task' '
 	flux mini run -N1 -n2 --dry-run -o gpu-affinity=per-task \
 		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
 	cat >${name}.expected <<-EOF  &&
-	0: 0-1
-	1: 2-3
+	0: 0,1
+	1: 2,3
 	EOF
 	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
 		> ${name}.out 2>${name}.err &&
