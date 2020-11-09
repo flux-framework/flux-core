@@ -14,18 +14,18 @@ test_under_flux $SIZE
 # Usage: waitup N
 #   where N is a count of online ranks
 waitup () {
-        run_timeout 5 flux python -c "import flux; print(flux.Flux().rpc(\"resource.monitor-waitup\",{\"up\":$1}).get())"
+    run_timeout 5 flux python -c "import flux; print(flux.Flux().rpc(\"resource.monitor-waitup\",{\"up\":$1}).get())"
 }
 waitdown () {
-        waitup $(($SIZE-$1))
+    waitup $(($SIZE-$1))
 }
 
 has_resource_event () {
-        flux kvs eventlog get resource.eventlog | awk '{ print $2 }' | grep $1
+    flux kvs eventlog get resource.eventlog | awk '{ print $2 }' | grep $1
 }
 
 test_expect_success 'wait for monitor to declare all nodes are up' '
-        waitdown 0
+    waitdown 0
 '
 test_expect_success 'reconfigure with rank 0 exclusion' '
 	cat >resource.toml <<-EOT &&
@@ -65,6 +65,16 @@ test_expect_success 'reconfig with out of range exclude idset fails' '
 	exclude = "0-$SIZE"
 	EOT
 	test_must_fail flux config reload
+'
+
+test_expect_success 'reconfig with hostnames in exclude set works' '
+	cat >resource.toml <<-EOT &&
+	[resource]
+	exclude = "$(hostname)"
+	EOT
+	flux config reload &&
+	test_debug "flux dmesg | grep resource" &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq ${SIZE}
 '
 
 test_expect_success 'reconfig with no exclude idset' '

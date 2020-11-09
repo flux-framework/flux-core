@@ -10,10 +10,10 @@ test_under_flux $SIZE
 # Usage: waitup N
 #   where N is a count of online ranks
 waitup () {
-        run_timeout 5 flux python -c "import flux; print(flux.Flux().rpc(\"resource.monitor-waitup\",{\"up\":$1}).get())"
+	run_timeout 5 flux python -c "import flux; print(flux.Flux().rpc(\"resource.monitor-waitup\",{\"up\":$1}).get())"
 }
 waitdown () {
-        waitup $(($SIZE-$1))
+	waitup $(($SIZE-$1))
 }
 
 has_resource_event () {
@@ -77,23 +77,28 @@ test_expect_success 'resource.eventlog has one undrain event' '
 '
 
 test_expect_success 'undrain fails if rank not drained' '
-        test_must_fail flux resource undrain 1 2>undrain_not.err &&
-        grep "rank 1 not drained" undrain_not.err
-'
-
-test_expect_success 'drain fails if idset is malformed' '
-        test_must_fail flux resource drain xxzz 2>drain_badset.err &&
-        grep "failed to decode idset" drain_badset.err
+	test_must_fail flux resource undrain 1 2>undrain_not.err &&
+	grep "rank 1 not drained" undrain_not.err
 '
 
 test_expect_success 'drain fails if idset is empty' '
-        test_must_fail flux resource drain "" 2>drain_empty.err &&
-        grep "idset is empty" drain_empty.err
+	test_must_fail flux resource drain "" 2>drain_empty.err &&
+	grep "idset is empty" drain_empty.err
 '
 
 test_expect_success 'drain fails if idset is out of range' '
-        test_must_fail flux resource drain "0-$SIZE" 2>drain_range.err &&
-        grep "idset is out of range" drain_range.err
+	test_must_fail flux resource drain "0-$SIZE" 2>drain_range.err &&
+	grep "idset is out of range" drain_range.err
+'
+
+# Note: in test, drain `hostname` will drain all ranks since all ranks
+#  are running on the same host
+#
+test_expect_success 'un/drain works with hostnames' '
+	flux resource drain $(hostname) &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq $SIZE &&
+	flux resource undrain $(hostname) &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq 0
 '
 
 test_done

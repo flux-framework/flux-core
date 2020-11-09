@@ -56,4 +56,49 @@ test_expect_success 'missing ranks in R are drained' '
 	grep "draining: rank 2 not found in expected ranks" missing/logfile
 '
 
+test_expect_success 'ranks can be excluded by configuration' '
+	name=excluded &&
+	mkdir $name &&
+	flux R encode -r 0-1 --local > ${name}/R &&
+	cat >${name}/resource.toml <<-EOF &&
+	[resource]
+	path = "$(pwd)/${name}/R"
+	exclude = "0"
+	EOF
+	flux start -s 2 \
+		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		flux resource list -s up -no {nnodes} > ${name}/nnodes &&
+	test "$(cat ${name}/nnodes)" = "1"
+'
+
+test_expect_success 'invalid exclude ranks cause instance failure' '
+	name=bad-exclude &&
+	mkdir $name &&
+	flux R encode -r 0-1 --local > ${name}/R &&
+	cat >${name}/resource.toml <<-EOF &&
+	[resource]
+	path = "$(pwd)/${name}/R"
+	exclude = "0-4"
+	EOF
+	test_must_fail flux start -s 2 \
+		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		flux resource list -s up -no {nnodes} > ${name}/nnodes &&
+    grep "out of range" ${name}/logfile
+'
+
+test_expect_success 'invalid exclude hosts cause instance failure' '
+	name=bad-host-exclude &&
+	mkdir $name &&
+	flux R encode -r 0-1 --local > ${name}/R &&
+	cat >${name}/resource.toml <<-EOF &&
+	[resource]
+	path = "$(pwd)/${name}/R"
+	exclude = "nosuchhost"
+	EOF
+	test_must_fail flux start -s 2 \
+		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		flux resource list -s up -no {nnodes} > ${name}/nnodes &&
+    grep "nosuchhost: Invalid argument" ${name}/logfile
+'
+
 test_done

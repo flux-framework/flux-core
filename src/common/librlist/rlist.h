@@ -143,6 +143,23 @@ struct hostlist * rlist_nodelist (const struct rlist *rl);
  */
 struct idset * rlist_ranks (const struct rlist *rl);
 
+
+/*  Return an idset of ranks corresponding to 'hosts' (a string encoded
+ *   in RFC29 hostlist format)
+ *
+ *  Multiple ranks may be returned per host in 'hosts' if ranks
+ *   share hostnames (e.g. multiple broker ranks per node)
+ *
+ *  Order of 'hosts' is ignored since the return type is an idset.
+ *
+ *  Returns success only if all hosts have one or more ranks in rlist.
+ *
+ *  Returns NULL on failure with error text in err if err is non-NULL.
+ */
+struct idset * rlist_hosts_to_ranks (const struct rlist *rl,
+                                     const char *hosts,
+                                     rlist_error_t *err);
+
 /*
  *  Serialize a resource list into v1 "R" format. This encodes only the
  *   "available" ids in each resource node into execution.R_lite

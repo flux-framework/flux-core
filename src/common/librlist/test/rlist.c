@@ -1457,6 +1457,87 @@ void test_timelimits ()
     rlist_destroy (rl);
 }
 
+struct hosts_to_ranks_test {
+    const char *input;
+    const char *ranks;
+    const char *hosts;
+    const char *result;
+    const char *error;
+};
+
+static struct hosts_to_ranks_test hosts_to_ranks_tests[] = {
+   { "foo[0-10]",
+     "0-10",
+     "foo[9-11]",
+     NULL,
+     "invalid hosts: foo11",
+    },
+    { "foo[0-10]",
+      "0-10",
+      "foo[a-b]",
+      NULL,
+      "Hostlist cannot be decoded",
+    },
+    { "foo[0-10]",
+      "0-10",
+      "foo[1,7]",
+      "1,7",
+      NULL,
+    },
+    { "foo10,foo[0-4],foo11,foo[5-9]",
+      "0-11",
+      "foo[1,9,4]",
+      "2,5,11",
+      NULL,
+    },
+    { "foo,foo,foo,foo",
+      "0-3",
+      "foo",
+      "0-3",
+      NULL,
+    },
+    { 0 },
+};
+
+void test_hosts_to_ranks (void)
+{
+    rlist_error_t err;
+    struct hosts_to_ranks_test *t = hosts_to_ranks_tests;
+
+    ok (rlist_hosts_to_ranks (NULL, NULL, &err) == NULL,
+        "rlist_hosts_to_ranks returns NULL with NULL args");
+    is (err.text, "An expected argument was NULL",
+        "got expected error: %s", err.text);
+
+    while (t && t->input) {
+        char *R = NULL;
+        struct rlist *rl = NULL;
+        struct idset *ids = NULL;
+
+        if (!(R = R_create (t->ranks, "0-1", NULL, t->input)))
+            BAIL_OUT ("R_create");
+        if (!(rl = rlist_from_R (R)))
+            BAIL_OUT ("rlist_from_R");
+        ids = rlist_hosts_to_ranks (rl, t->hosts, &err);
+        if (t->result) {
+            char *s = idset_encode (ids, IDSET_FLAG_RANGE);
+            is (s, t->result,
+                "rlist_hosts_to_ranks (rl, %s) = %s",
+                t->hosts, s);
+            free (s);
+        }
+        else {
+            is (err.text, t->error,
+                "to_ranks (rl, %s) got expected error: %s",
+                t->hosts, err.text);
+        }
+        idset_destroy (ids);
+        rlist_destroy (rl);
+        free (R);
+        t++;
+    }
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -1480,6 +1561,7 @@ int main (int ac, char *av[])
     test_remap ();
     test_assign_hosts ();
     test_rerank ();
+    test_hosts_to_ranks ();
 
     done_testing ();
 }

@@ -34,8 +34,8 @@
 
 /* Parse [resource] table.
  *
- * exclude = "idset"
- *   Exclude specified broker rank(s) from scheduling
+ * exclude = "targets"
+ *   Exclude specified broker rank(s) or hosts from scheduling
  *
  * path = "/path"
  *   Set path to resource object

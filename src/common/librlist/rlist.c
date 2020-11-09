@@ -317,7 +317,7 @@ int rlist_remap (struct rlist *rl)
     return 0;
 }
 
-struct rnode * rlist_find_host (struct rlist *rl, const char *host)
+struct rnode * rlist_find_host (const struct rlist *rl, const char *host)
 {
     struct rnode *n = zlistx_first (rl->nodes);
     while (n) {
@@ -1164,6 +1164,97 @@ struct hostlist *rlist_nodelist (const struct rlist *rl)
     return hl;
 fail:
     hostlist_destroy (hl);
+    return NULL;
+}
+
+static int rlist_idset_set_by_host (const struct rlist *rl,
+                                    struct idset *ids,
+                                    const char *host)
+{
+    int count = 0;
+    struct rnode *n = zlistx_first (rl->nodes);
+    while (n) {
+        if (n->hostname && strcmp (n->hostname, host) == 0) {
+            if (idset_set (ids, n->rank) < 0)
+                return -1;
+            count++;
+        }
+        n = zlistx_next (rl->nodes);
+    }
+    return count;
+}
+
+static void errsprintf (rlist_error_t *errp, const char *fmt, ...)
+{
+    va_list ap;
+    if (errp) {
+        int saved_errno = errno;
+        va_start (ap, fmt);
+        (void) vsnprintf (errp->text, sizeof (errp->text), fmt, ap);
+        va_end (ap);
+        errno = saved_errno;
+    }
+}
+
+struct idset *rlist_hosts_to_ranks (const struct rlist *rl,
+                                    const char *hosts,
+                                    rlist_error_t *errp)
+{
+    const char *host;
+    struct idset *ids = NULL;
+    struct hostlist *hl = NULL;
+    struct hostlist *missing = NULL;
+
+    if (errp)
+        memset (errp->text, 0, sizeof (errp->text));
+
+    if (rl == NULL || hosts == NULL) {
+        errsprintf (errp, "An expected argument was NULL");
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(hl = hostlist_decode (hosts))) {
+        errsprintf (errp, "Hostlist cannot be decoded");
+        goto fail;
+    }
+    if (!(ids = idset_create (0, IDSET_FLAG_AUTOGROW))) {
+        errsprintf (errp, "idset_create: %s", strerror (errno));
+        goto fail;
+    }
+    if (!(missing = hostlist_create ())) {
+        errsprintf (errp, "hostlist_create: %s", strerror (errno));
+        goto fail;
+    }
+    host = hostlist_first (hl);
+    while (host) {
+        int count = rlist_idset_set_by_host (rl, ids, host);
+        if (count < 0) {
+            errsprintf (errp,
+                        "error adding host %s to idset: %s",
+                        host,
+                        strerror (errno));
+            goto fail;
+        } else if (!count && hostlist_append (missing, host) < 0) {
+            errsprintf (errp,
+                        "failed to append missing host '%s'",
+                        host);
+            goto fail;
+        }
+        host = hostlist_next (hl);
+    }
+    if (hostlist_count (missing)) {
+        char *s = hostlist_encode (missing);
+        errsprintf (errp, "invalid hosts: %s", s ? s : "");
+        free (s);
+        goto fail;
+    }
+    hostlist_destroy (hl);
+    hostlist_destroy (missing);
+    return ids;
+fail:
+    hostlist_destroy (hl);
+    hostlist_destroy (missing);
+    idset_destroy (ids);
     return NULL;
 }
 

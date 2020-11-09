@@ -24,14 +24,14 @@ acquire_stream() {
 # Usage: waitup N
 #   where N is a count of online ranks
 waitup () {
-        run_timeout 5 flux python -c "import flux; print(flux.Flux().rpc(\"resource.monitor-waitup\",{\"up\":$1}).get())"
+	run_timeout 5 flux python -c "import flux; print(flux.Flux().rpc(\"resource.monitor-waitup\",{\"up\":$1}).get())"
 }
 waitdown () {
-        waitup $(($SIZE-$1))
+	waitup $(($SIZE-$1))
 }
 
 test_expect_success 'wait for monitor to declare all ranks are up' '
-        waitdown 0
+	waitdown 0
 '
 
 test_expect_success HAVE_JQ 'unload scheduler' '

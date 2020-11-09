@@ -29,6 +29,7 @@
 #include "reslog.h"
 #include "exclude.h"
 #include "rutil.h"
+#include "inventory.h"
 
 struct exclude {
     struct resource_ctx *ctx;
@@ -63,10 +64,11 @@ int exclude_update (struct exclude *exclude,
     struct idset *del;
 
     if (s) {
-        if (!(idset = idset_decode (s))) {
-            snprintf (errbuf, errbufsize, "error decoding exclusion idset");
+        if (!(idset = inventory_targets_to_ranks (exclude->ctx->inventory,
+                                                  s,
+                                                  errbuf,
+                                                  errbufsize)))
             return -1;
-        }
         if (idset_last (idset) >= exclude->ctx->size) {
             snprintf (errbuf, errbufsize, "exclusion idset is out of range");
             idset_destroy (idset);
@@ -129,10 +131,15 @@ struct exclude *exclude_create (struct resource_ctx *ctx,
         return NULL;
     exclude->ctx = ctx;
     if (exclude_idset) {
-        if (!(exclude->idset = idset_decode (exclude_idset))) {
+        char errbuf [128];
+        if (!(exclude->idset = inventory_targets_to_ranks (ctx->inventory,
+                                                           exclude_idset,
+                                                           errbuf,
+                                                           sizeof (errbuf)))) {
             flux_log_error (ctx->h,
-                            "error decoding exclude set %s",
-                            exclude_idset);
+                            "error decoding exclude set %s: %s",
+                            exclude_idset,
+                            errbuf);
             goto error;
         }
         if (idset_last (exclude->idset) >= exclude->ctx->size) {
