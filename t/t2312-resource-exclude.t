@@ -67,6 +67,16 @@ test_expect_success 'reconfig with out of range exclude idset fails' '
 	test_must_fail flux config reload
 '
 
+test_expect_success 'reconfig with hostnames in exclude set works' '
+	cat >resource.toml <<-EOT &&
+	[resource]
+	exclude = "$(hostname)"
+	EOT
+	flux config reload &&
+	test_debug "flux dmesg | grep resource" &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq ${SIZE}
+'
+
 test_expect_success 'reconfig with no exclude idset' '
 	cat >resource.toml <<-EOT &&
 	[resource]
