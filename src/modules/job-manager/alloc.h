@@ -52,6 +52,11 @@ struct job *alloc_queue_next (struct alloc *alloc);
  */
 void alloc_queue_reorder (struct alloc *alloc, struct job *job);
 
+void alloc_disconnect_rpc (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg);
+
 #endif /* ! _FLUX_JOB_MANAGER_ALLOC_H */
 
 /*
