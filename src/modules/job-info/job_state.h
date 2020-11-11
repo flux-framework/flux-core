@@ -74,6 +74,7 @@ struct job {
     int ntasks;
     int nnodes;
     char *ranks;
+    char *nodelist;
     double expiration;
     bool success;
     bool exception_occurred;

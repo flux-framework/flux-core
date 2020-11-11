@@ -31,6 +31,7 @@ VALID_ATTRS = [
     "ntasks",
     "nnodes",
     "ranks",
+    "nodelist",
     "success",
     "exception_occurred",
     "exception_type",

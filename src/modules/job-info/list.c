@@ -568,9 +568,10 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *attrs[] = { "userid", "priority", "t_submit", "t_depend",
                             "t_sched", "t_run", "t_cleanup", "t_inactive",
                             "state", "name", "ntasks", "nnodes", "ranks",
-                            "success", "exception_occurred", "exception_type",
-                            "exception_severity", "exception_note", "result",
-                            "expiration", "annotations", NULL };
+                            "nodelist", "success", "exception_occurred",
+                            "exception_type", "exception_severity",
+                            "exception_note", "result", "expiration",
+                            "annotations", NULL };
     json_t *a = NULL;
     int i;
 

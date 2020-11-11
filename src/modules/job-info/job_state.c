@@ -100,6 +100,7 @@ static void job_destroy (void *data)
         json_decref (job->jobspec_cmd);
         json_decref (job->R);
         free (job->ranks);
+        free (job->nodelist);
         zlist_destroy (&job->next_states);
         free (job);
     }
@@ -605,6 +606,7 @@ static int R_lookup_parse (struct info_ctx *ctx,
 {
     struct rlist *rl = NULL;
     struct idset *idset = NULL;
+    struct hostlist *hl = NULL;
     json_error_t error;
     int flags = IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE;
     int saved_errno, rc = -1;
@@ -630,11 +632,23 @@ static int R_lookup_parse (struct info_ctx *ctx,
     if (!(job->ranks = idset_encode (idset, flags)))
         goto nonfatal_error;
 
+    /* reading nodelist from R directly would avoid the creation /
+     * destruction of a hostlist.  However, we get a hostlist to
+     * ensure that the nodelist we return to users is consistently
+     * formatted.
+     */
+    if (!(hl = rlist_nodelist (rl)))
+        goto nonfatal_error;
+
+    if (!(job->nodelist = hostlist_encode (hl)))
+        goto nonfatal_error;
+
     /* nonfatal error - invalid R, but we'll continue on.  job listing
      * will get initialized data */
 nonfatal_error:
     rc = 0;
     saved_errno = errno;
+    hostlist_destroy (hl);
     idset_destroy (idset);
     rlist_destroy (rl);
     errno = saved_errno;
