@@ -24,7 +24,8 @@ nobase_fluxpy_PYTHON = \
 	job/info.py \
 	job/submit.py \
 	job/wait.py \
-	job/_wrapper.py
+	job/_wrapper.py \
+	hostlist.py
 
 if HAVE_FLUX_SECURITY
 nobase_fluxpy_PYTHON += security.py

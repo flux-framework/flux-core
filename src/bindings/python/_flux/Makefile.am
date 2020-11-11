@@ -28,19 +28,25 @@ PREPROC_FLAGS = \
 
 BUILT_SOURCES = \
 	_core.c \
-	_core_preproc.h
+	_core_preproc.h \
+	_hostlist.c \
+	_hostlist_preproc.h
 
 fluxpyso_LTLIBRARIES = \
-	_core.la
+	_core.la \
+	_hostlist.la
+
 fluxpyso_PYTHON = \
 	__init__.py
 
 nodist_fluxbindinginclude_HEADERS = \
-	_core_preproc.h
+	_core_preproc.h \
+	_hostlist_preproc.h
 
 EXTRA_DIST = \
 	_core_build.py \
 	_security_build.py \
+	_hostlist_build.py \
 	make_clean_header.py
 
 _core.c: $(srcdir)/_core_build.py _core_preproc.h
@@ -59,9 +65,25 @@ _core_preproc.h: _core_clean.h
 	$(CC) $(PREPROC_FLAGS) _core_clean.h\
 	  | sed -e '/^# [0-9]*.*/d' > $@
 
+_hostlist.c: $(srcdir)/_hostlist_build.py _hostlist_preproc.h
+	$(PYTHON) $^
+
+_hostlist_clean.h: Makefile
+	$(PYTHON) $(srcdir)/make_clean_header.py \
+	  --path $(top_srcdir)/src/common/libhostlist \
+	  --output $@ \
+	  hostlist.h
+
+_hostlist_preproc.h: _hostlist_clean.h
+	$(CC) $(PREPROC_FLAGS) $< \
+	  | sed -e '/^# [0-9]*.*/d' > $@
+
 dist__core_la_SOURCES = callbacks.h
 nodist__core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
+
+nodist__hostlist_la_SOURCES = _hostlist.c
+_hostlist_la_LIBADD = $(common_libs)
 
 if HAVE_FLUX_SECURITY
 
