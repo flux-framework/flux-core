@@ -62,6 +62,7 @@ def fetch_jobs_flux(args, fields):
         "ntasks": ("ntasks",),
         "nnodes": ("nnodes",),
         "ranks": ("ranks",),
+        "nodelist": ("nodelist",),
         "success": ("success",),
         "exception.occurred": ("exception_occurred",),
         "exception.severity": ("exception_severity",),

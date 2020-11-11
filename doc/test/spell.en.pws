@@ -434,6 +434,7 @@ resizing
 HOSTLIST
 hostlist
 hostlists
+nodelist
 hostnames
 unfulfills
 MSGFLAG

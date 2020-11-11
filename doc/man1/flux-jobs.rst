@@ -170,6 +170,9 @@ The field names that can be specified are:
 **ranks**
    job ranks (if job ran / is running), empty string otherwise
 
+**nodelist**
+   job nodelist (if job ran / is running), empty string otherwise
+
 **state**
    job state (DEPEND, SCHED, RUN, CLEANUP, INACTIVE)
 
