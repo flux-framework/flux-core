@@ -912,7 +912,6 @@ struct rlist *rlist_from_json (json_t *o, json_error_t *errp)
     return (rl);
 err:
     rlist_destroy (rl);
-    json_decref (o);
     return (NULL);
 }
 
