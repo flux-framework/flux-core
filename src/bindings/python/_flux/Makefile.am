@@ -30,23 +30,28 @@ BUILT_SOURCES = \
 	_core.c \
 	_core_preproc.h \
 	_hostlist.c \
-	_hostlist_preproc.h
+	_hostlist_preproc.h \
+	_idset.c \
+	_idset_preproc.h
 
 fluxpyso_LTLIBRARIES = \
 	_core.la \
-	_hostlist.la
+	_hostlist.la \
+	_idset.la
 
 fluxpyso_PYTHON = \
 	__init__.py
 
 nodist_fluxbindinginclude_HEADERS = \
 	_core_preproc.h \
-	_hostlist_preproc.h
+	_hostlist_preproc.h \
+	_idset_preproc.h
 
 EXTRA_DIST = \
 	_core_build.py \
 	_security_build.py \
 	_hostlist_build.py \
+	_idset_build.py \
 	make_clean_header.py
 
 _core.c: $(srcdir)/_core_build.py _core_preproc.h
@@ -78,12 +83,29 @@ _hostlist_preproc.h: _hostlist_clean.h
 	$(CC) $(PREPROC_FLAGS) $< \
 	  | sed -e '/^# [0-9]*.*/d' > $@
 
+_idset.c: $(srcdir)/_idset_build.py _idset_preproc.h
+	$(PYTHON) $^
+
+_idset_clean.h: Makefile
+	$(PYTHON) $(srcdir)/make_clean_header.py \
+	  --path $(top_srcdir)/src/common/libidset \
+	  --output $@ \
+	  idset.h
+
+_idset_preproc.h: _idset_clean.h
+	$(CC) $(PREPROC_FLAGS) $< \
+	  | sed -e '/^# [0-9]*.*/d' > $@
+
+
 dist__core_la_SOURCES = callbacks.h
 nodist__core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
 
 nodist__hostlist_la_SOURCES = _hostlist.c
 _hostlist_la_LIBADD = $(common_libs)
+
+nodist__idset_la_SOURCES = _idset.c
+_idset_la_LIBADD = $(common_libs)
 
 if HAVE_FLUX_SECURITY
 
