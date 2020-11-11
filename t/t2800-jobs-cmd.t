@@ -461,6 +461,32 @@ test_expect_success 'flux-jobs --format={ranks},{ranks:h} works' '
 	test "$(sort -n ranksC.out | head -1)" = ",-"
 '
 
+test_expect_success 'flux-jobs --format={nodelist},{nodelist:h} works' '
+	flux jobs --filter=pending -no "{nodelist},{nodelist:h}" > nodelistP.out &&
+	for i in `seq 1 $(state_count sched)`; do
+		echo ",-" >> nodelistP.exp
+	done &&
+	test_cmp nodelistP.out nodelistP.exp &&
+	flux jobs --filter=running -no "{nodelist},{nodelist:h}" > nodelistR.out &&
+	for id in $(state_ids run); do
+		nodes=`flux job info ${id} R | flux R decode --nodelist`
+		echo "${nodes},${nodes}" >> nodelistR.exp
+	done &&
+	test_debug "cat nodelistR.out" &&
+	test_cmp nodelistR.out nodelistR.exp &&
+	flux jobs -no "{nodelist},{nodelist:h}" $(state_ids completed) > nodelistI.out &&
+	for id in $(state_ids completed); do
+		nodes=`flux job info ${id} R | flux R decode --nodelist`
+		echo "${nodes},${nodes}" >> nodelistI.exp
+	done &&
+	test_debug "cat nodelistI.out" &&
+	test_cmp nodelistI.out nodelistI.exp &&
+	flux jobs -no "{nodelist},{nodelist:h}" $(state_ids cancelled) > nodelistC.out &&
+	test_debug "cat nodelistC.out" &&
+	echo ",-" > nodelistC.exp &&
+	test_cmp nodelistC.out nodelistC.exp
+'
+
 # test just make sure numbers are zero or non-zero given state of job
 test_expect_success 'flux-jobs --format={t_depend/sched} works' '
 	flux jobs -ano "{t_submit},{t_depend},{t_sched}" >t_SDS.out &&
@@ -723,6 +749,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	ntasks==NTASKS
 	nnodes==NNODES
 	ranks==RANKS
+	nodelist==NODELIST
 	success==SUCCESS
 	exception.occurred==EXCEPTION-OCCURRED
 	exception.severity==EXCEPTION-SEVERITY
@@ -969,8 +996,8 @@ test_expect_success HAVE_JQ 'flux jobs works on job with illegal R' '
                 i=$((i + 1))
         done &&
         test "$i" -lt "5" &&
-        flux jobs -no "{ranks},{nnodes}" $jobid > list_illegal_R.out &&
-        echo ",0" > list_illegal_R.exp &&
+        flux jobs -no "{ranks},{nnodes},{nodelist}" $jobid > list_illegal_R.out &&
+        echo ",0," > list_illegal_R.exp &&
         test_cmp list_illegal_R.out list_illegal_R.exp
 '
 
