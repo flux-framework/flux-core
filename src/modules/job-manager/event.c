@@ -378,8 +378,8 @@ static int event_submit_context_decode (json_t *context,
     return 0;
 }
 
-static int event_priority_context_decode (json_t *context,
-                                          int *priority)
+static int event_admin_priority_context_decode (json_t *context,
+                                                int *priority)
 {
     if (json_unpack (context, "{ s:i }", "priority", priority) < 0) {
         errno = EPROTO;
@@ -442,8 +442,8 @@ int event_job_update (struct job *job, json_t *event)
             goto inval;
         job->state = FLUX_JOB_SCHED;
     }
-    else if (!strcmp (name, "priority")) {
-        if (event_priority_context_decode (context, &job->priority) < 0)
+    else if (!strcmp (name, "admin-priority")) {
+        if (event_admin_priority_context_decode (context, &job->priority) < 0)
             goto error;
     }
     else if (!strcmp (name, "exception")) {

@@ -63,7 +63,7 @@ const char *test_input[] = {
     /* 1 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
-    "{\"timestamp\":42.3,\"name\":\"priority\","
+    "{\"timestamp\":42.3,\"name\":\"admin-priority\","
      "\"context\":{\"userid\":42,\"priority\":1}}\n",
 
     /* 2 */

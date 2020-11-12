@@ -156,9 +156,9 @@ test_expect_success 'job-manager: flux job priority sets last job priority=31' '
 
 test_expect_success 'job-manager: priority was updated in KVS' '
 	jobid=$(tail -1 <list10_ids.out) &&
-        flux job wait-event --timeout=5.0 ${jobid} priority &&
+        flux job wait-event --timeout=5.0 ${jobid} admin-priority &&
 	flux job eventlog $jobid \
-		| cut -d" " -f2- | grep ^priority >pri.out &&
+		| cut -d" " -f2- | grep ^admin-priority >pri.out &&
 	grep -q priority=31 pri.out
 '
 
