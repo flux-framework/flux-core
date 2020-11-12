@@ -221,9 +221,13 @@ static struct optparse_option attach_opts[] =  {
       .usage = "Label output by rank",
     },
     { .name = "verbose", .key = 'v', .has_arg = 0,
-      .usage = "Increase verbosity" },
+      .usage = "Increase verbosity",
+    },
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Suppress warnings written to stderr from flux-job",
+    },
+    { .name = "read-only", .key = 'r', .has_arg = 0,
+      .usage = "Disable reading stdin and capturing signals",
     },
     { .name = "debug", .has_arg = 0,
       .usage = "Enable parallel debugger to attach to a running job",
@@ -1280,6 +1284,7 @@ struct attach_ctx {
     flux_t *h;
     int exit_code;
     flux_jobid_t id;
+    bool readonly;
     const char *jobid;
     flux_future_t *eventlog_f;
     flux_future_t *exec_eventlog_f;
@@ -1767,6 +1772,10 @@ static void finish_mpir_interface ()
 static void attach_setup_stdin (struct attach_ctx *ctx)
 {
     flux_watcher_t *w;
+
+    if (ctx->readonly)
+        return;
+
     /* flux_buffer_read_watcher_create() requires O_NONBLOCK on
      * stdin */
 
@@ -1909,6 +1918,8 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
          *   to process normal stdio. (This may be because the job is
          *   already complete).
          */
+        if (pty_service && ctx->readonly)
+            log_msg_exit ("Cannot connect to pty in readonly mode");
         if (!pty_service || attach_pty (ctx, pty_service) < 0) {
             attach_setup_stdin (ctx);
             attach_output_start (ctx);
@@ -2062,6 +2073,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     ctx.jobid = argv[optindex++];
     ctx.id = parse_jobid (ctx.jobid);
     ctx.p = p;
+    ctx.readonly = optparse_hasopt (p, "read-only");
 
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -2110,17 +2122,19 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     signal (SIGTTIN, SIG_IGN);
     signal (SIGTTOU, SIG_IGN);
 
-    ctx.sigint_w = flux_signal_watcher_create (r,
-                                               SIGINT,
-                                               attach_signal_cb,
-                                               &ctx);
-    ctx.sigtstp_w = flux_signal_watcher_create (r,
-                                                SIGTSTP,
-                                                attach_signal_cb,
-                                                &ctx);
-    if (!ctx.sigint_w || !ctx.sigtstp_w)
-        log_err_exit ("flux_signal_watcher_create");
-    flux_watcher_start (ctx.sigint_w);
+    if (!ctx.readonly) {
+        ctx.sigint_w = flux_signal_watcher_create (r,
+                                                   SIGINT,
+                                                   attach_signal_cb,
+                                                   &ctx);
+        ctx.sigtstp_w = flux_signal_watcher_create (r,
+                                                    SIGTSTP,
+                                                    attach_signal_cb,
+                                                    &ctx);
+        if (!ctx.sigint_w || !ctx.sigtstp_w)
+            log_err_exit ("flux_signal_watcher_create");
+        flux_watcher_start (ctx.sigint_w);
+    }
 
     if (flux_reactor_run (r, 0) < 0)
         log_err_exit ("flux_reactor_run");

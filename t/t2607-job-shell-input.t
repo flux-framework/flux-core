@@ -122,14 +122,21 @@ test_expect_success 'flux-shell: task completed, try to pipe into stdin' '
         test_must_fail flux job attach $id < input_stdin_file 2> pipe7B.err
 '
 
+test_expect_success 'flux-shell: task completed, try to pipe into stdin, no error if read only' '
+        ${LPTEST} 79 500 > big_dataset &&
+        id=$(flux mini submit -n1 cat big_dataset) &&
+        flux job wait-event $id clean 2> pipe8A.err &&
+        flux job attach --read-only $id < input_stdin_file 2> pipe8B.err
+'
+
 test_expect_success NO_CHAIN_LINT 'flux-shell: pipe to stdin twice, second fails' '
         id=$(flux mini submit -n1 sleep 60)
-        flux job attach $id < input_stdin_file 2> pipe8A.err &
+        flux job attach $id < input_stdin_file 2> pipe9A.err &
         pid=$!
-        flux job wait-event -p guest.exec.eventlog $id shell.init 2> pipe8B.err &&
-        flux job wait-event -p guest.input -m eof=true $id data 2> pipe8C.err &&
-        test_must_fail flux job attach $id < input_stdin_file 2> pipe8D.err &&
-        flux job cancel $id 2> pipe8E.err &&
+        flux job wait-event -p guest.exec.eventlog $id shell.init 2> pipe9B.err &&
+        flux job wait-event -p guest.input -m eof=true $id data 2> pipe9C.err &&
+        test_must_fail flux job attach $id < input_stdin_file 2> pipe9D.err &&
+        flux job cancel $id 2> pipe9E.err &&
         test_expect_code 143 wait $pid
 '
 
