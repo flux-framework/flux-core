@@ -1,4 +1,5 @@
 from cffi import FFI
+from pathlib import Path
 
 ffi = FFI()
 
@@ -25,3 +26,5 @@ with open("_hostlist_preproc.h") as h:
 ffi.cdef(cdefs)
 if __name__ == "__main__":
     ffi.emit_c_code("_hostlist.c")
+    # Ensure target mtime is updated, emit_c_code() may not do it
+    Path("_hostlist.c").touch()

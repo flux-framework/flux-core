@@ -1,3 +1,4 @@
+from pathlib import Path
 from cffi import FFI
 
 ffi = FFI()
@@ -26,3 +27,5 @@ with open("_idset_preproc.h") as h:
 ffi.cdef(cdefs)
 if __name__ == "__main__":
     ffi.emit_c_code("_idset.c")
+    # Ensure target mtime is updated
+    Path("_idset.c").touch()

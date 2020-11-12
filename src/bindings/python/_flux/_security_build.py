@@ -1,3 +1,4 @@
+from pathlib import Path
 from cffi import FFI
 
 ffi = FFI()
@@ -30,3 +31,5 @@ with open("_security_preproc.h") as h:
 ffi.cdef(cdefs)
 if __name__ == "__main__":
     ffi.emit_c_code("_security.c")
+    # ensure target mtime is updated
+    Path("_security.c").touch()
