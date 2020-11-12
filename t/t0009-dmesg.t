@@ -5,6 +5,7 @@ test_description='Test broker log ring buffer'
 . `dirname $0`/sharness.sh
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 
 test_under_flux 4 minimal
 
@@ -50,6 +51,15 @@ test_expect_success 'flux dmesg -c prints and clears' '
 	flux dmesg -c | grep -q hello_dmesg_pc &&
 	! flux dmesg | grep -q hello_dmesg_pc
 '
+test_expect_success NO_CHAIN_LINT 'flux dmesg -f works' '
+	flux logger hello_last &&
+	flux dmesg -f > dmesg.out &
+	pid=$! &&
+	$waitfile -t 20 -p hello_last dmesg.out &&
+	flux logger hello_follow &&
+	$waitfile -t 20 -p hello_follow dmesg.out &&
+	kill $pid
+'
 test_expect_success 'ring buffer wraps over old entries' '
 	OLD_RINGSIZE=`flux getattr log-ring-size` &&
 	flux setattr log-ring-size 2 &&
@@ -91,9 +101,6 @@ test_expect_success 'logged non-ascii characters handled ok' '
 '
 test_expect_success 'dmesg request with empty payload fails with EPROTO(71)' '
 	${RPC} log.dmesg 71 </dev/null
-'
-test_expect_success 'clear request with empty payload fails with EPROTO(71)' '
-	${RPC} log.clear 71 </dev/null
 '
 
 test_done
