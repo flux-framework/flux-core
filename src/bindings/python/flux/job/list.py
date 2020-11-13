@@ -158,6 +158,7 @@ class JobList:
 
     STATES = {
         "depend": flux.constants.FLUX_JOB_DEPEND,
+        "priority": flux.constants.FLUX_JOB_PRIORITY,
         "sched": flux.constants.FLUX_JOB_SCHED,
         "run": flux.constants.FLUX_JOB_RUN,
         "cleanup": flux.constants.FLUX_JOB_CLEANUP,
