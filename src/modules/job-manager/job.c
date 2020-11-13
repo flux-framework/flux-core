@@ -49,7 +49,7 @@ struct job *job_create (void)
         return NULL;
     job->refcount = 1;
     job->userid = FLUX_USERID_UNKNOWN;
-    job->priority = FLUX_JOB_PRIORITY_DEFAULT;
+    job->priority = FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
     job->state = FLUX_JOB_NEW;
     return job;
 }

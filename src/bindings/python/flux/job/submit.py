@@ -25,7 +25,7 @@ class SubmitFuture(Future):
 def submit_async(
     flux_handle,
     jobspec,
-    priority=lib.FLUX_JOB_PRIORITY_DEFAULT,
+    priority=lib.FLUX_JOB_ADMIN_PRIORITY_DEFAULT,
     waitable=False,
     debug=False,
     pre_signed=False,
@@ -92,7 +92,7 @@ def submit_get_id(future):
 def submit(
     flux_handle,
     jobspec,
-    priority=lib.FLUX_JOB_PRIORITY_DEFAULT,
+    priority=lib.FLUX_JOB_ADMIN_PRIORITY_DEFAULT,
     waitable=False,
     debug=False,
     pre_signed=False,

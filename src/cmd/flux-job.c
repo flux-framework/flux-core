@@ -1256,7 +1256,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     assert (((char *)jobspec)[jobspecsz] == '\0');
     if (jobspecsz == 0)
         log_msg_exit ("required jobspec is empty");
-    priority = optparse_get_int (p, "priority", FLUX_JOB_PRIORITY_DEFAULT);
+    priority = optparse_get_int (p, "priority", FLUX_JOB_ADMIN_PRIORITY_DEFAULT);
 
 #if HAVE_FLUX_SECURITY
     if (sec) {

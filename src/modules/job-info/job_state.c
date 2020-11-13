@@ -151,7 +151,7 @@ static void json_decref_wrapper (void **data)
  */
 static bool search_direction (struct job *job)
 {
-    if (job->priority > FLUX_JOB_PRIORITY_DEFAULT)
+    if (job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT)
         return true;
     else
         return false;
@@ -1287,8 +1287,8 @@ static int admin_priority_context_parse (flux_t *h,
 
     if (!context
         || json_unpack (context, "{ s:i }", "priority", &priority) < 0
-        || (priority < FLUX_JOB_PRIORITY_MIN
-            || priority > FLUX_JOB_PRIORITY_MAX)) {
+        || (priority < FLUX_JOB_ADMIN_PRIORITY_MIN
+            || priority > FLUX_JOB_ADMIN_PRIORITY_MAX)) {
         flux_log (h, LOG_ERR, "%s: priority context invalid: %ju",
                   __FUNCTION__, (uintmax_t)job->id);
         errno = EPROTO;

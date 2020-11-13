@@ -25,10 +25,10 @@ enum job_submit_flags {
     FLUX_JOB_WAITABLE = 4,      // flux_job_wait() will be used on this job
 };
 
-enum job_priority {
-    FLUX_JOB_PRIORITY_MIN = 0,
-    FLUX_JOB_PRIORITY_DEFAULT = 16,
-    FLUX_JOB_PRIORITY_MAX = 31,
+enum job_admin_priority {
+    FLUX_JOB_ADMIN_PRIORITY_MIN = 0,
+    FLUX_JOB_ADMIN_PRIORITY_DEFAULT = 16,
+    FLUX_JOB_ADMIN_PRIORITY_MAX = 31,
 };
 
 enum {

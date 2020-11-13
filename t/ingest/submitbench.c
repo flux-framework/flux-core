@@ -249,7 +249,7 @@ int cmd_submitbench (optparse_t *p, int argc, char **argv)
     ctx.max_queue_depth = optparse_get_int (p, "fanout", 256);
     ctx.totcount = optparse_get_int (p, "repeat", 1);
     ctx.jobspecsz = read_jobspec (argv[optindex++], &ctx.jobspec);
-    ctx.priority = optparse_get_int (p, "priority", FLUX_JOB_PRIORITY_DEFAULT);
+    ctx.priority = optparse_get_int (p, "priority", FLUX_JOB_ADMIN_PRIORITY_DEFAULT);
 
     const char *tmp;
     if (!(tmp = flux_attr_get (ctx.h, "security.owner")))

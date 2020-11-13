@@ -71,8 +71,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
              * so they will automatically send alloc again.
              */
             if (job->alloc_pending) {
-                bool fwd = job->priority > FLUX_JOB_PRIORITY_DEFAULT ? true
-                                                                     : false;
+                bool fwd = job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
                 bool cleared = false;
 
                 assert (job->handle == NULL);
@@ -530,7 +529,7 @@ int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
 {
     assert (job->state == FLUX_JOB_SCHED);
     if (!job->alloc_queued && !job->alloc_pending) {
-        bool fwd = job->priority > FLUX_JOB_PRIORITY_DEFAULT ? true : false;
+        bool fwd = job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
         assert (job->handle == NULL);
         if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
             return -1;
@@ -573,7 +572,7 @@ struct job *alloc_queue_next (struct alloc *alloc)
 /* called from priority_handle_request() */
 void alloc_queue_reorder (struct alloc *alloc, struct job *job)
 {
-    bool fwd = job->priority > FLUX_JOB_PRIORITY_DEFAULT ? true : false;
+    bool fwd = job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
 
     zlistx_reorder (alloc->queue, job->handle, fwd);
 }
