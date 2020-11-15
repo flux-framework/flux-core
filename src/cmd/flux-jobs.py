@@ -62,6 +62,7 @@ def fetch_jobs_flux(args, fields):
         "ntasks": ("ntasks",),
         "nnodes": ("nnodes",),
         "ranks": ("ranks",),
+        "nodelist": ("nodelist",),
         "success": ("success",),
         "exception.occurred": ("exception_occurred",),
         "exception.severity": ("exception_severity",),
@@ -284,7 +285,7 @@ def main():
         fmt = (
             "{id.f58:>12} {username:<8.8} {name:<10.10} {status_abbrev:>2.2} "
             "{ntasks:>6} {nnodes:>6h} {runtime!F:>8h} "
-            "{ranks:h}"
+            "{nodelist:h}"
         )
     try:
         formatter = JobInfoFormat(fmt)

@@ -39,4 +39,6 @@ job_info_la_LIBADD = $(fluxmod_libadd) \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
-	$(ZMQ_LIBS)
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(ZMQ_LIBS) \
+	$(HWLOC_LIBS)

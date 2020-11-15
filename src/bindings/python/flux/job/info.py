@@ -107,6 +107,7 @@ class JobInfo:
         "expiration": 0.0,
         "nnodes": "",
         "ranks": "",
+        "nodelist": "",
         "success": "",
         "result": "",
     }
@@ -332,6 +333,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "expiration": "EXPIRATION",
         "t_remaining": "T_REMAINING",
         "ranks": "RANKS",
+        "nodelist": "NODELIST",
         "success": "SUCCESS",
         "result": "RESULT",
         "result_abbrev": "RS",

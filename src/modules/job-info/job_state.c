@@ -21,6 +21,7 @@
 #include "src/common/libutil/fluid.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libjob/job_hash.h"
+#include "src/common/librlist/rlist.h"
 #include "src/common/libidset/idset.h"
 
 #include "job_state.h"
@@ -99,6 +100,7 @@ static void job_destroy (void *data)
         json_decref (job->jobspec_cmd);
         json_decref (job->R);
         free (job->ranks);
+        free (job->nodelist);
         zlist_destroy (&job->next_states);
         free (job);
     }
@@ -598,73 +600,16 @@ static flux_future_t *state_depend_lookup (struct job_state_ctx *jsctx,
     return NULL;
 }
 
-static int idset_add_set (struct idset *set, struct idset *new)
-{
-    unsigned int i = idset_first (new);
-    while (i != IDSET_INVALID_ID) {
-        if (idset_test (set, i)) {
-            errno = EEXIST;
-            return -1;
-        }
-        if (idset_set (set, i) < 0)
-            return -1;
-        i = idset_next (new, i);
-    }
-    return 0;
-}
-
-static int idset_set_string (struct idset *idset, const char *ids)
-{
-    int rc;
-    struct idset *new = idset_decode (ids);
-    if (!new)
-        return -1;
-    rc = idset_add_set (idset, new);
-    idset_destroy (new);
-    return rc;
-}
-
-static int parse_rlite (struct info_ctx *ctx,
-                        struct job *job,
-                        const json_t *R_lite)
-{
-    struct idset *idset = NULL;
-    size_t index;
-    json_t *value;
-    int saved_errno, rc = -1;
-    int flags = IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE;
-
-    if (!(idset = idset_create (0, IDSET_FLAG_AUTOGROW)))
-        return -1;
-    json_array_foreach (R_lite, index, value) {
-        const char *ranks = NULL;
-        if ((json_unpack_ex (value, NULL, 0, "{s:s}", "rank", &ranks) < 0)
-            || (idset_set_string (idset, ranks) < 0))
-            goto nonfatal_err;
-    }
-
-    job->nnodes = idset_count (idset);
-    if (!(job->ranks = idset_encode (idset, flags)))
-        goto nonfatal_err;
-
-    /* nonfatal error - invalid rlite, but we'll continue on.  job
-     * listing will get initialized data */
-nonfatal_err:
-    rc = 0;
-    saved_errno = errno;
-    idset_destroy (idset);
-    errno = saved_errno;
-    return rc;
-}
-
 static int R_lookup_parse (struct info_ctx *ctx,
                            struct job *job,
                            const char *s)
 {
+    struct rlist *rl = NULL;
+    struct idset *idset = NULL;
+    struct hostlist *hl = NULL;
     json_error_t error;
-    json_t *R_lite = NULL;
-    int version;
-    int rc = -1;
+    int flags = IDSET_FLAG_BRACKETS | IDSET_FLAG_RANGE;
+    int saved_errno, rc = -1;
 
     if (!(job->R = json_loads (s, 0, &error))) {
         flux_log (ctx->h, LOG_ERR,
@@ -673,35 +618,40 @@ static int R_lookup_parse (struct info_ctx *ctx,
         goto nonfatal_error;
     }
 
-    if (json_unpack_ex (job->R, &error, 0,
-                        "{s:i s:{s?F s:o}}",
-                        "version", &version,
-                        "execution",
-                        "expiration", &job->expiration,
-                        "R_lite", &R_lite) < 0) {
-        flux_log (ctx->h, LOG_ERR,
-                  "%s: job %ju invalid R: %s",
-                  __FUNCTION__, (uintmax_t)job->id, error.text);
+    if (!(rl = rlist_from_json (job->R, &error))) {
+        flux_log_error (ctx->h, "rlist_from_json: %s", error.text);
         goto nonfatal_error;
-    }
-    if (version != 1) {
-        flux_log (ctx->h, LOG_ERR,
-                  "%s: job %ju invalid R version: %d",
-                  __FUNCTION__, (uintmax_t)job->id, version);
-        goto nonfatal_error;
-    }
-    if (parse_rlite (ctx, job, R_lite) < 0) {
-        flux_log (ctx->h, LOG_ERR,
-                  "%s: job %ju parse_rlite: %s",
-                  __FUNCTION__, (uintmax_t)job->id, strerror (errno));
-        goto error;
     }
 
-    /* nonfatal error - invalid rlite, but we'll continue on.  job
-     * listing will get initialized data */
+    job->expiration = rl->expiration;
+
+    if (!(idset = rlist_ranks (rl)))
+        goto nonfatal_error;
+
+    job->nnodes = idset_count (idset);
+    if (!(job->ranks = idset_encode (idset, flags)))
+        goto nonfatal_error;
+
+    /* reading nodelist from R directly would avoid the creation /
+     * destruction of a hostlist.  However, we get a hostlist to
+     * ensure that the nodelist we return to users is consistently
+     * formatted.
+     */
+    if (!(hl = rlist_nodelist (rl)))
+        goto nonfatal_error;
+
+    if (!(job->nodelist = hostlist_encode (hl)))
+        goto nonfatal_error;
+
+    /* nonfatal error - invalid R, but we'll continue on.  job listing
+     * will get initialized data */
 nonfatal_error:
     rc = 0;
-error:
+    saved_errno = errno;
+    hostlist_destroy (hl);
+    idset_destroy (idset);
+    rlist_destroy (rl);
+    errno = saved_errno;
     return rc;
 }
 
