@@ -42,9 +42,9 @@ static int submit_context_parse (flux_t *h,
 static int finish_context_parse (flux_t *h,
                                  struct job *job,
                                  json_t *context);
-static int priority_context_parse (flux_t *h,
-                                   struct job *job,
-                                   json_t *context);
+static int admin_priority_context_parse (flux_t *h,
+                                         struct job *job,
+                                         json_t *context);
 static int exception_context_parse (flux_t *h,
                                     struct job *job,
                                     json_t *context,
@@ -151,7 +151,7 @@ static void json_decref_wrapper (void **data)
  */
 static bool search_direction (struct job *job)
 {
-    if (job->priority > FLUX_JOB_PRIORITY_DEFAULT)
+    if (job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT)
         return true;
     else
         return false;
@@ -902,8 +902,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
         else if (!strcmp (name, "depend")) {
             update_job_state (ctx, job, FLUX_JOB_SCHED, timestamp);
         }
-        else if (!strcmp (name, "priority")) {
-            if (priority_context_parse (ctx->h, job, context) < 0)
+        else if (!strcmp (name, "admin-priority")) {
+            if (admin_priority_context_parse (ctx->h, job, context) < 0)
                 goto error;
         }
         else if (!strcmp (name, "exception")) {
@@ -1279,16 +1279,16 @@ static int journal_finish_event (struct job_state_ctx *jsctx,
                                  timestamp);
 }
 
-static int priority_context_parse (flux_t *h,
-                                   struct job *job,
-                                   json_t *context)
+static int admin_priority_context_parse (flux_t *h,
+                                         struct job *job,
+                                         json_t *context)
 {
     int priority;
 
     if (!context
         || json_unpack (context, "{ s:i }", "priority", &priority) < 0
-        || (priority < FLUX_JOB_PRIORITY_MIN
-            || priority > FLUX_JOB_PRIORITY_MAX)) {
+        || (priority < FLUX_JOB_ADMIN_PRIORITY_MIN
+            || priority > FLUX_JOB_ADMIN_PRIORITY_MAX)) {
         flux_log (h, LOG_ERR, "%s: priority context invalid: %ju",
                   __FUNCTION__, (uintmax_t)job->id);
         errno = EPROTO;
@@ -1299,10 +1299,10 @@ static int priority_context_parse (flux_t *h,
     return 0;
 }
 
-static int journal_priority_event (struct job_state_ctx *jsctx,
-                                   flux_jobid_t id,
-                                   int eventlog_seq,
-                                   json_t *context)
+static int journal_admin_priority_event (struct job_state_ctx *jsctx,
+                                         flux_jobid_t id,
+                                         int eventlog_seq,
+                                         json_t *context)
 {
     struct job *job;
     int orig_priority;
@@ -1319,7 +1319,7 @@ static int journal_priority_event (struct job_state_ctx *jsctx,
 
     orig_priority = job->priority;
 
-    if (priority_context_parse (jsctx->h, job, context) < 0)
+    if (admin_priority_context_parse (jsctx->h, job, context) < 0)
         return -1;
 
     if (job->state & FLUX_JOB_PENDING
@@ -1492,11 +1492,11 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
                                  timestamp) < 0)
             return -1;
     }
-    else if (!strcmp (name, "priority")) {
-        if (journal_priority_event (jsctx,
-                                    id,
-                                    eventlog_seq,
-                                    context) < 0)
+    else if (!strcmp (name, "admin-priority")) {
+        if (journal_admin_priority_event (jsctx,
+                                          id,
+                                          eventlog_seq,
+                                          context) < 0)
             return -1;
     }
     else if (!strcmp (name, "exception")) {

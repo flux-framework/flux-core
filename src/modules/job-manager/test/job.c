@@ -27,7 +27,7 @@ void test_create (void)
     ok (job->refcount == 1,
         "job_create set refcount to 1");
     ok (job->id == 0
-        && job->priority == FLUX_JOB_PRIORITY_DEFAULT
+        && job->priority == FLUX_JOB_ADMIN_PRIORITY_DEFAULT
         && job->state == FLUX_JOB_NEW
         && job->userid == FLUX_USERID_UNKNOWN
         && job->t_submit == 0
@@ -63,7 +63,7 @@ const char *test_input[] = {
     /* 1 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
-    "{\"timestamp\":42.3,\"name\":\"priority\","
+    "{\"timestamp\":42.3,\"name\":\"admin-priority\","
      "\"context\":{\"userid\":42,\"priority\":1}}\n",
 
     /* 2 */

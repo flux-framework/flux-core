@@ -276,6 +276,7 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
 {
     struct simple_sched *ss = arg;
     struct jobreq *job;
+    bool search_dir;
 
     if (ss->single && zlistx_size (ss->queue) > 0) {
         flux_log (h, LOG_ERR, "alloc received before previous one handled");
@@ -298,9 +299,10 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
                             (uintmax_t) job->id, job->jj.nnodes,
                             job->jj.nslots, job->jj.slot_size,
                             job->jj.duration);
+    search_dir = job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
     job->handle = zlistx_insert (ss->queue,
                                  job,
-                                 job->priority > FLUX_JOB_PRIORITY_DEFAULT);
+                                 search_dir);
     flux_watcher_start (ss->prep);
     return;
 err:

@@ -514,19 +514,19 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     /* Validate requested job priority.
      */
-    if (job->priority < FLUX_JOB_PRIORITY_MIN
-            || job->priority > FLUX_JOB_PRIORITY_MAX) {
+    if (job->priority < FLUX_JOB_ADMIN_PRIORITY_MIN
+            || job->priority > FLUX_JOB_ADMIN_PRIORITY_MAX) {
         snprintf (errbuf, sizeof (errbuf), "priority range is [%d:%d]",
-                  FLUX_JOB_PRIORITY_MIN, FLUX_JOB_PRIORITY_MAX);
+                  FLUX_JOB_ADMIN_PRIORITY_MIN, FLUX_JOB_ADMIN_PRIORITY_MAX);
         errmsg = errbuf;
         errno = EINVAL;
         goto error;
     }
     if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
-           && job->priority > FLUX_JOB_PRIORITY_DEFAULT) {
+           && job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT) {
         snprintf (errbuf, sizeof (errbuf),
                   "only the instance owner can submit with priority >%d",
-                  FLUX_JOB_PRIORITY_DEFAULT);
+                  FLUX_JOB_ADMIN_PRIORITY_DEFAULT);
         errmsg = errbuf;
         errno = EINVAL;
         goto error;
