@@ -131,6 +131,7 @@ static void drain_cb (flux_t *h,
         goto error;
     if (reslog_post_pack (drain->ctx->reslog,
                           msg,
+                          0.,
                           "drain",
                           "{s:s s:s}",
                           "idset",
@@ -162,6 +163,7 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
         return -1;
     if (reslog_post_pack (drain->ctx->reslog,
                           NULL,
+                          0.,
                           "drain",
                           "{s:s s:s}",
                           "idset",
@@ -216,6 +218,7 @@ static void undrain_cb (flux_t *h,
         goto error;
     if (reslog_post_pack (drain->ctx->reslog,
                           msg,
+                          0.,
                           "undrain",
                           "{s:s}",
                           "idset",

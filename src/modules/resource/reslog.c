@@ -114,6 +114,7 @@ int reslog_sync (struct reslog *reslog)
 
 int reslog_post_pack (struct reslog *reslog,
                       const flux_msg_t *request,
+                      double timestamp,
                       const char *name,
                       const char *fmt,
                       ...)
@@ -126,7 +127,7 @@ int reslog_post_pack (struct reslog *reslog,
     struct event_info *info;
 
     va_start (ap, fmt);
-    event = eventlog_entry_vpack (0., name, fmt, ap);
+    event = eventlog_entry_vpack (timestamp, name, fmt, ap);
     va_end (ap);
 
     if (!event)

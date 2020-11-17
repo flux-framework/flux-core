@@ -211,6 +211,7 @@ int post_restart_event (struct resource_ctx *ctx, int restart)
         goto error;
     if (reslog_post_pack (ctx->reslog,
                           NULL,
+                          0.,
                           "resource-init",
                           "O",
                           o) < 0)

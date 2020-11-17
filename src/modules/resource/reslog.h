@@ -27,6 +27,7 @@ void reslog_destroy (struct reslog *reslog);
  */
 int reslog_post_pack (struct reslog *reslog,
                       const flux_msg_t *request,
+                      double timestamp,
                       const char *name,
                       const char *fmt,
                       ...);

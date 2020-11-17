@@ -137,6 +137,7 @@ static int inventory_put_finalize (struct inventory *inv)
     }
     if (reslog_post_pack (inv->ctx->reslog,
                           NULL,
+                          0.,
                           "resource-define",
                           "{s:s}",
                           "method",
