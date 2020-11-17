@@ -173,7 +173,7 @@ test_expect_success 'submit jobs for job list testing' '
         wait_states
 '
 
-# Note: "running" = "run" & "cleanup", we also test just "run" state
+# Note: "running" = "run" | "cleanup", we also test just "run" state
 # since we happen to know all these jobs are in the "run" state given
 # checks above
 
@@ -250,7 +250,7 @@ test_expect_success HAVE_JQ 'flux job list only completed jobs' '
         test_cmp completed.ids list_result_completed.out
 '
 
-# Note: "pending" = "depend" & "sched", we also test just "sched"
+# Note: "pending" = "depend" | "sched", we also test just "sched"
 # state since we happen to know all these jobs are in the "sched"
 # state given checks above
 
@@ -295,7 +295,7 @@ test_expect_success HAVE_JQ 'flux job list no jobs in depend state' '
         test $count -eq 0
 '
 
-# Note: "active" = "pending" & "running", i.e. depend, sched, run, cleanup
+# Note: "active" = "pending" | "running", i.e. depend, sched, run, cleanup
 test_expect_success HAVE_JQ 'flux job list active jobs in correct order' '
         flux job list -s active | jq .id > list_active1.out &&
         flux job list -s depend,sched,run,cleanup | jq .id > list_active2.out &&

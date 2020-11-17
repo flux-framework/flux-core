@@ -174,8 +174,8 @@ test_expect_success 'flux-jobs -a and -A works' '
 	test $count -eq $nall
 '
 
-# Recall pending = depend & sched, running = run & cleanup,
-#  active = pending & running
+# Recall pending = depend | sched, running = run | cleanup,
+#  active = pending | running
 test_expect_success 'flux-jobs --filter works (job states)' '
 	count=`flux jobs --suppress-header --filter=depend | wc -l` &&
 	test $count -eq 0 &&
