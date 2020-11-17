@@ -125,24 +125,24 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit) set state=DEPEND");
     job_decref (job);
 
-    /* 1 - submit + priority */
+    /* 1 - submit + admin-priority */
     job = job_create_from_eventlog (3, test_input[1]);
     if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+pri) failed");
+        BAIL_OUT ("job_create_from_eventlog log=(submit+admin-pri) failed");
     ok (job->id == 3,
-        "job_create_from_eventlog log=(submit+pri) set id from param");
+        "job_create_from_eventlog log=(submit+admin-pri) set id from param");
     ok (job->userid == 66,
-        "job_create_from_eventlog log=(submit+pri) set userid from submit");
+        "job_create_from_eventlog log=(submit+admin-pri) set userid from submit");
     ok (job->priority == 1,
-        "job_create_from_eventlog log=(submit+pri) set priority from priority");
+        "job_create_from_eventlog log=(submit+admin-pri) set priority from priority");
     ok (job->t_submit == 42.2,
-        "job_create_from_eventlog log=(submit+pri) set t_submit from submit");
+        "job_create_from_eventlog log=(submit+admin-pri) set t_submit from submit");
     ok (!job->alloc_pending
         && !job->free_pending
         && !job->has_resources,
-        "job_create_from_eventlog log=(submit+pri) set no internal flags");
+        "job_create_from_eventlog log=(submit+admin-pri) set no internal flags");
     ok (job->state == FLUX_JOB_DEPEND,
-        "job_create_from_eventlog log=(submit+pri) set state=DEPEND");
+        "job_create_from_eventlog log=(submit+admin-pri) set state=DEPEND");
     job_decref (job);
 
     /* 2 - submit + exception severity 0 */
