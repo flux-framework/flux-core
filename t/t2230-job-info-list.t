@@ -351,6 +351,7 @@ test_expect_success HAVE_JQ 'flux job list all jobs works' '
 
 test_expect_success HAVE_JQ 'job stats lists jobs in correct state (mix)' '
         flux job stats | jq -e ".job_states.depend == 0" &&
+        flux job stats | jq -e ".job_states.priority == 0" &&
         flux job stats | jq -e ".job_states.sched == $(state_count pending)" &&
         flux job stats | jq -e ".job_states.run == $(state_count running)" &&
         flux job stats | jq -e ".job_states.cleanup == 0" &&
@@ -393,6 +394,7 @@ test_expect_success HAVE_JQ 'job-info: list successfully reconstructed' '
 
 test_expect_success HAVE_JQ 'job stats lists jobs in correct state (all inactive)' '
         flux job stats | jq -e ".job_states.depend == 0" &&
+        flux job stats | jq -e ".job_states.priority == 0" &&
         flux job stats | jq -e ".job_states.sched == 0" &&
         flux job stats | jq -e ".job_states.run == 0" &&
         flux job stats | jq -e ".job_states.cleanup == 0" &&
