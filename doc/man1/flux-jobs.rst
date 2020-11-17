@@ -206,6 +206,9 @@ The field names that can be specified are:
 **t_depend**
    time job entered depend state
 
+**t_priority**
+   time job entered priority state
+
 **t_sched**
    time job entered sched state
 

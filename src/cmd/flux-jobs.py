@@ -72,6 +72,7 @@ def fetch_jobs_flux(args, fields):
         "result_abbrev": ("result",),
         "t_submit": ("t_submit",),
         "t_depend": ("t_depend",),
+        "t_priority": ("t_priority",),
         "t_sched": ("t_sched",),
         "t_run": ("t_run",),
         "t_cleanup": ("t_cleanup",),

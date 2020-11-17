@@ -100,6 +100,7 @@ class JobInfo:
     #  Default values for job properties.
     defaults = {
         "t_depend": 0.0,
+        "t_priority": 0.0,
         "t_sched": 0.0,
         "t_run": 0.0,
         "t_cleanup": 0.0,
@@ -339,6 +340,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "result_abbrev": "RS",
         "t_submit": "T_SUBMIT",
         "t_depend": "T_DEPEND",
+        "t_priority": "T_PRIORITY",
         "t_sched": "T_SCHED",
         "t_run": "T_RUN",
         "t_cleanup": "T_CLEANUP",
