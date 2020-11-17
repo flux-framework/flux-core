@@ -317,6 +317,8 @@ int event_job_action (struct event *event, struct job *job)
             if (event_job_post_pack (event, job, "depend", 0, NULL) < 0)
                 return -1;
             break;
+        case FLUX_JOB_PRIORITY:
+            break;
         case FLUX_JOB_SCHED:
             if (alloc_enqueue_alloc_request (ctx->alloc, job) < 0)
                 return -1;

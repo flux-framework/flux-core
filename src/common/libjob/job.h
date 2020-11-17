@@ -38,18 +38,20 @@ enum {
 typedef enum {
     FLUX_JOB_NEW                    = 1,
     FLUX_JOB_DEPEND                 = 2,
-    FLUX_JOB_SCHED                  = 4,
-    FLUX_JOB_RUN                    = 8,
-    FLUX_JOB_CLEANUP                = 16,
-    FLUX_JOB_INACTIVE               = 32,   // captive end state
+    FLUX_JOB_PRIORITY               = 4,
+    FLUX_JOB_SCHED                  = 8,
+    FLUX_JOB_RUN                    = 16,
+    FLUX_JOB_CLEANUP                = 32,
+    FLUX_JOB_INACTIVE               = 64,   // captive end state
 } flux_job_state_t;
 
 /* Virtual states, for convenience.
  */
 enum {
-    FLUX_JOB_PENDING    = 6,    // (FLUX_JOB_DEPEND | FLUX_JOB_SCHED)
-    FLUX_JOB_RUNNING    = 24,   // (FLUX_JOB_RUN | FLUX_JOB_CLEANUP)
-    FLUX_JOB_ACTIVE     = 30,   // (FLUX_JOB_PENDING | FLUX_JOB_RUNNING)
+    FLUX_JOB_PENDING    = 14,   // (FLUX_JOB_DEPEND | FLUX_JOB_PRIORITY
+                                //  | FLUX_JOB_SCHED)
+    FLUX_JOB_RUNNING    = 48,   // (FLUX_JOB_RUN | FLUX_JOB_CLEANUP)
+    FLUX_JOB_ACTIVE     = 62,   // (FLUX_JOB_PENDING | FLUX_JOB_RUNNING)
 };
 
 /* Result of a job

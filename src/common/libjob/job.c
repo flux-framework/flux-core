@@ -516,6 +516,8 @@ const char *flux_job_statetostr (flux_job_state_t state, bool single_char)
             return single_char ? "N" : "NEW";
         case FLUX_JOB_DEPEND:
             return single_char ? "D" : "DEPEND";
+        case FLUX_JOB_PRIORITY:
+            return single_char ? "P" : "PRIORITY";
         case FLUX_JOB_SCHED:
             return single_char ? "S" : "SCHED";
         case FLUX_JOB_RUN:
@@ -536,6 +538,8 @@ int flux_job_strtostate (const char *s, flux_job_state_t *state)
         *state = FLUX_JOB_NEW;
     else if (!strcasecmp (s, "D") || !strcasecmp (s, "DEPEND"))
         *state = FLUX_JOB_DEPEND;
+    else if (!strcasecmp (s, "P") || !strcasecmp (s, "PRIORITY"))
+        *state = FLUX_JOB_PRIORITY;
     else if (!strcasecmp (s, "S") || !strcasecmp (s, "SCHED"))
         *state = FLUX_JOB_SCHED;
     else if (!strcasecmp (s, "R") || !strcasecmp (s, "RUN"))
