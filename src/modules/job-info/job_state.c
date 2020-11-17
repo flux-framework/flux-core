@@ -165,6 +165,8 @@ static int *state_counter (struct info_ctx *ctx,
         return NULL;
     else if (state == FLUX_JOB_DEPEND)
         return &ctx->jsctx->depend_count;
+    else if (state == FLUX_JOB_PRIORITY)
+        return &ctx->jsctx->priority_count;
     else if (state == FLUX_JOB_SCHED)
         return &ctx->jsctx->sched_count;
     else if (state == FLUX_JOB_RUN)

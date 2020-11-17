@@ -47,6 +47,7 @@ struct job_state_ctx {
 
     /* count current jobs in what states */
     int depend_count;
+    int priority_count;
     int sched_count;
     int run_count;
     int cleanup_count;
