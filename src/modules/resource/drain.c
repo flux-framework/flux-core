@@ -222,12 +222,8 @@ static void undrain_cb (flux_t *h,
                           "undrain",
                           "{s:s}",
                           "idset",
-                          idstr) < 0) {
-        int saved_errno = errno;
-        (void)rutil_idset_add (drain->idset, idset); // restore orig.
-        errno = saved_errno;
+                          idstr) < 0)
         goto error;
-    }
     free (idstr);
     idset_destroy (idset);
     return;
