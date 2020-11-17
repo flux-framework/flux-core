@@ -200,12 +200,15 @@ static const struct flux_msg_handler_spec htab[] = {
 int post_restart_event (struct resource_ctx *ctx, int restart)
 {
     json_t *o;
+    json_t *drain;
 
-    if (!(o = json_pack ("{s:b}", "restart", restart)))
-        goto nomem;
-    if (rutil_set_json_idset (o, "online", monitor_get_up (ctx->monitor)) < 0)
+    if (!(drain = drain_get_info (ctx->drain)))
         goto error;
-    if (rutil_set_json_idset (o, "drain", drain_get (ctx->drain)) < 0)
+    if (!(o = json_pack ("{s:b s:o}", "restart", restart, "drain", drain))) {
+        json_decref (drain);
+        goto nomem;
+    }
+    if (rutil_set_json_idset (o, "online", monitor_get_up (ctx->monitor)) < 0)
         goto error;
     if (rutil_set_json_idset (o, "exclude", exclude_get (ctx->exclude)) < 0)
         goto error;
