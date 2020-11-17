@@ -1033,8 +1033,8 @@ static const char *list_attrs =
     "\"name\",\"ntasks\",\"nnodes\",\"ranks\",\"nodelist\",\"expiration\"," \
     "\"success\",\"exception_occurred\",\"exception_severity\"," \
     "\"exception_type\",\"exception_note\",\"result\","  \
-    "\"t_depend\",\"t_sched\",\"t_run\",\"t_cleanup\",\"t_inactive\"," \
-    "\"annotations\"]";
+    "\"t_depend\",\"t_priority\",\"t_sched\",\"t_run\",\"t_cleanup\"," \
+    "\"t_inactive\"," "\"annotations\"]";
 
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
