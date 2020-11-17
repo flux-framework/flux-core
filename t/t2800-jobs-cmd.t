@@ -174,10 +174,12 @@ test_expect_success 'flux-jobs -a and -A works' '
 	test $count -eq $nall
 '
 
-# Recall pending = depend | sched, running = run | cleanup,
+# Recall pending = depend | priority | sched, running = run | cleanup,
 #  active = pending | running
 test_expect_success 'flux-jobs --filter works (job states)' '
 	count=`flux jobs --suppress-header --filter=depend | wc -l` &&
+	test $count -eq 0 &&
+	count=`flux jobs --suppress-header --filter=priority | wc -l` &&
 	test $count -eq 0 &&
 	count=`flux jobs --suppress-header --filter=sched | wc -l` &&
 	test $count -eq $(state_count sched) &&
@@ -197,7 +199,7 @@ test_expect_success 'flux-jobs --filter works (job states)' '
 	test $count -eq $(state_count sched run) &&
 	count=`flux jobs --suppress-header --filter=active | wc -l` &&
 	test $count -eq $(state_count active) &&
-	count=`flux jobs --suppress-header --filter=depend,sched,run,cleanup | wc -l` &&
+	count=`flux jobs --suppress-header --filter=depend,priority,sched,run,cleanup | wc -l` &&
 	test $count -eq $(state_count active) &&
 	count=`flux jobs --suppress-header --filter=pending,inactive | wc -l` &&
 	test $count -eq $(state_count sched inactive) &&
@@ -211,7 +213,7 @@ test_expect_success 'flux-jobs --filter works (job states)' '
 	test $count -eq $(state_count all) &&
 	count=`flux jobs --suppress-header --filter=active,inactive | wc -l` &&
 	test $count -eq $(state_count active inactive) &&
-	count=`flux jobs --suppress-header --filter=depend,cleanup | wc -l` &&
+	count=`flux jobs --suppress-header --filter=depend,priority,cleanup | wc -l` &&
 	test $count -eq 0
 '
 

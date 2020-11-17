@@ -256,7 +256,7 @@ test_expect_success HAVE_JQ 'flux job list only completed jobs' '
 
 test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
         flux job list -s pending | jq .id > list_pending1.out &&
-        flux job list -s depend,sched | jq .id > list_pending2.out &&
+        flux job list -s depend,priority,sched | jq .id > list_pending2.out &&
         flux job list -s sched | jq .id > list_pending3.out &&
         test_cmp list_pending1.out pending.ids &&
         test_cmp list_pending2.out pending.ids &&
@@ -275,7 +275,7 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
 0
 EOT
         flux job list -s pending | jq .priority > list_priority1.out &&
-        flux job list -s depend,sched | jq .priority > list_priority2.out &&
+        flux job list -s depend,priority,sched | jq .priority > list_priority2.out &&
         flux job list -s sched | jq .priority > list_priority3.out &&
         test_cmp list_priority1.out list_priority.exp &&
         test_cmp list_priority2.out list_priority.exp &&
@@ -299,7 +299,7 @@ test_expect_success HAVE_JQ 'flux job list no jobs in depend state' '
 # sched, run, cleanup
 test_expect_success HAVE_JQ 'flux job list active jobs in correct order' '
         flux job list -s active | jq .id > list_active1.out &&
-        flux job list -s depend,sched,run,cleanup | jq .id > list_active2.out &&
+        flux job list -s depend,priority,sched,run,cleanup | jq .id > list_active2.out &&
         flux job list -s sched,run | jq .id > list_active3.out &&
         test_cmp list_active1.out active.ids &&
         test_cmp list_active2.out active.ids &&
