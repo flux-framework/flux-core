@@ -194,6 +194,8 @@ static void update_job_state (struct info_ctx *ctx,
     job->state = new_state;
     if (job->state == FLUX_JOB_DEPEND)
         job->t_submit = timestamp;
+    else if (job->state == FLUX_JOB_PRIORITY)
+        job->t_priority = timestamp;
     else if (job->state == FLUX_JOB_SCHED)
         job->t_sched = timestamp;
     else if (job->state == FLUX_JOB_RUN)

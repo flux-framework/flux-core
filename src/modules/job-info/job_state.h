@@ -122,6 +122,7 @@ struct job {
      */
     // t_depend is identical to t_submit above, use that
     // double t_depend;
+    double t_priority;
     double t_sched;
     double t_run;
     double t_cleanup;

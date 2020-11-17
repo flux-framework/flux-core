@@ -79,6 +79,11 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
                 continue;
             val = json_real (job->t_submit);
         }
+        else if (!strcmp (attr, "t_priority")) {
+            if (!(job->states_mask & FLUX_JOB_PRIORITY))
+                continue;
+            val = json_real (job->t_priority);
+        }
         else if (!strcmp (attr, "t_sched")) {
             if (!(job->states_mask & FLUX_JOB_SCHED))
                 continue;

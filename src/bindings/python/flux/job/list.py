@@ -22,6 +22,7 @@ VALID_ATTRS = [
     "priority",
     "t_submit",
     "t_depend",
+    "t_priority",
     "t_sched",
     "t_run",
     "t_cleanup",
