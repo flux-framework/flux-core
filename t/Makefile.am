@@ -173,6 +173,8 @@ TESTSCRIPTS = \
 	python/t0010-job.py \
 	python/t0012-futures.py \
 	python/t0013-job-list-inactive.py \
+	python/t0020-hostlist.py \
+	python/t0021-idset.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY

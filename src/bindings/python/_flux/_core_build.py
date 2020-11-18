@@ -1,3 +1,4 @@
+from pathlib import Path
 from cffi import FFI
 
 ffi = FFI()
@@ -36,3 +37,5 @@ with open("_core_preproc.h") as h:
 ffi.cdef(cdefs)
 if __name__ == "__main__":
     ffi.emit_c_code("_core.c")
+    # ensure mtime of target is updated
+    Path("_core.c").touch()
