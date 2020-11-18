@@ -207,7 +207,6 @@ static int exec_init (struct jobinfo *job)
         goto err;
     }
     if (job->multiuser) {
-        flux_cmd_setopt (cmd, "stdin_BUFSIZE", "8192");
         if (flux_cmd_argv_append (cmd, flux_imp_path) < 0
             || flux_cmd_argv_append (cmd, "exec") < 0) {
             flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
