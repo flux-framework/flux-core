@@ -120,8 +120,12 @@ static void start_cb (struct bulk_exec *exec, void *arg)
             jobinfo_fatal_error (job, errno, "Failed to get input to IMP");
             goto out;
         }
-        bulk_exec_write (exec, "stdin", input, strlen (input));
-        bulk_exec_close (exec, "stdin");
+        if (bulk_exec_write (exec, "stdin", input, strlen (input)) < 0)
+            jobinfo_fatal_error (job,
+                                 errno,
+                                 "Failed to write %ld bytes input to IMP",
+                                 strlen (input));
+        (void) bulk_exec_close (exec, "stdin");
 out:
         json_decref (o);
         free (input);
