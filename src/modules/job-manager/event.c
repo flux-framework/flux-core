@@ -318,6 +318,17 @@ int event_job_action (struct event *event, struct job *job)
                 return -1;
             break;
         case FLUX_JOB_PRIORITY:
+            /* N.B. Priority will be set via a priority plugin call in
+             * the future. For the time being, we pass the
+             * administrative priority set via submit.
+             */
+            if (event_job_post_pack (event,
+                                     job,
+                                     "priority",
+                                     0,
+                                     "{ s:i }",
+                                     "priority", job->priority) < 0)
+                return -1;
             break;
         case FLUX_JOB_SCHED:
             if (alloc_enqueue_alloc_request (ctx->alloc, job) < 0)
@@ -373,6 +384,19 @@ static int event_submit_context_decode (json_t *context,
                      "priority", priority,
                      "userid", userid,
                      "flags", flags) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    return 0;
+}
+
+static int event_priority_context_decode (json_t *context,
+                                          int *priority)
+{
+    /* N.B. eventually this will be the queue priority, but is the
+     * same of the admin priority at the moment */
+    if (json_unpack (context, "{ s:i }", "priority", priority) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -442,6 +466,13 @@ int event_job_update (struct job *job, json_t *event)
     if (!strcmp (name, "depend")) {
         if (job->state != FLUX_JOB_DEPEND)
             goto inval;
+        job->state = FLUX_JOB_PRIORITY;
+    }
+    else if (!strcmp (name, "priority")) {
+        if (job->state != FLUX_JOB_PRIORITY)
+            goto inval;
+        if (event_priority_context_decode (context, &job->priority) < 0)
+            goto error;
         job->state = FLUX_JOB_SCHED;
     }
     else if (!strcmp (name, "admin-priority")) {

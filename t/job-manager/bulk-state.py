@@ -20,7 +20,7 @@ from flux import job
 from flux.job import JobspecV1
 import sys
 
-expected_states = ["NEW", "DEPEND", "SCHED", "RUN", "CLEANUP", "INACTIVE"]
+expected_states = ["NEW", "DEPEND", "PRIORITY", "SCHED", "RUN", "CLEANUP", "INACTIVE"]
 
 # Return True if all jobs in the jobs dictionary have reached 'INACTIVE' state
 def all_inactive(jobs):

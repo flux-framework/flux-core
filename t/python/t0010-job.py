@@ -232,7 +232,7 @@ class TestJob(unittest.TestCase):
         future.then(cb, myarg)
         rc = self.fh.reactor_run()
         self.assertGreaterEqual(rc, 0)
-        self.assertEqual(len(events), 8)
+        self.assertEqual(len(events), 9)
         self.assertEqual(events[0], "submit")
         self.assertEqual(events[-1], "clean")
 
@@ -283,7 +283,7 @@ class TestJob(unittest.TestCase):
             self.assertIs(type(event.name), str)
             self.assertIs(type(event.context), dict)
             events.append(event.name)
-        self.assertEqual(len(events), 8)
+        self.assertEqual(len(events), 9)
 
     def test_20_005_job_event_watch_with_cancel(self):
         jobid = job.submit(

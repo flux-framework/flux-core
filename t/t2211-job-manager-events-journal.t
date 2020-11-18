@@ -330,13 +330,14 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'job-manager: eventlog seqs are correc
         wait_event_name ${jobid} clean events9.out &&
         check_event_name_eventlog_seq ${jobid} 0 submit events9.out &&
         check_event_name_eventlog_seq ${jobid} 1 depend events9.out &&
+        check_event_name_eventlog_seq ${jobid} 2 priority events9.out &&
         check_event_name_eventlog_seq ${jobid} -1 annotations events9.out &&
-        check_event_name_eventlog_seq ${jobid} 2 alloc events9.out &&
-        check_event_name_eventlog_seq ${jobid} 3 start events9.out &&
-        check_event_name_eventlog_seq ${jobid} 4 finish events9.out &&
-        check_event_name_eventlog_seq ${jobid} 5 release events9.out &&
-        check_event_name_eventlog_seq ${jobid} 6 free events9.out &&
-        check_event_name_eventlog_seq ${jobid} 7 clean events9.out &&
+        check_event_name_eventlog_seq ${jobid} 3 alloc events9.out &&
+        check_event_name_eventlog_seq ${jobid} 4 start events9.out &&
+        check_event_name_eventlog_seq ${jobid} 5 finish events9.out &&
+        check_event_name_eventlog_seq ${jobid} 6 release events9.out &&
+        check_event_name_eventlog_seq ${jobid} 7 free events9.out &&
+        check_event_name_eventlog_seq ${jobid} 8 clean events9.out &&
         kill -s USR1 $pid &&
         wait $pid
 '
