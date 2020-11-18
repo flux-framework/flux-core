@@ -63,17 +63,22 @@ test_expect_success 'reload resource module to simulate instance restart' '
 	flux module load sched-simple
 '
 
-test_expect_success 'three nodes are still drained' '
-	test $(flux resource list -n -s down -o {nnodes}) -eq 3
+test_expect_success 'undrain one node' '
+	flux resource undrain 3 &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq 2
 '
 
-test_expect_success 'undrain works' '
-	flux resource undrain 1-3 &&
+test_expect_success 'two nodes are still drained' '
+	test $(flux resource list -n -s down -o {nnodes}) -eq 2
+'
+
+test_expect_success 'undrain remaining nodes' '
+	flux resource undrain 1-2 &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
 '
 
-test_expect_success 'resource.eventlog has one undrain event' '
-	test $(has_resource_event undrain | wc -l) -eq 1
+test_expect_success 'resource.eventlog has two undrain events' '
+	test $(has_resource_event undrain | wc -l) -eq 2
 '
 
 test_expect_success 'undrain fails if rank not drained' '
