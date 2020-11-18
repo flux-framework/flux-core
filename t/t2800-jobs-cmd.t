@@ -490,13 +490,15 @@ test_expect_success 'flux-jobs --format={nodelist},{nodelist:h} works' '
 '
 
 # test just make sure numbers are zero or non-zero given state of job
-test_expect_success 'flux-jobs --format={t_submit/depend/sched} works' '
+test_expect_success 'flux-jobs --format={t_submit/depend/priority/sched} works' '
 	flux jobs -ano "{t_submit},{t_depend},{t_sched}" >t_SDS.out &&
 	count=`cut -d, -f1 t_SDS.out | grep -v "^0.0$" | wc -l` &&
 	test $count -eq $(state_count all) &&
 	count=`cut -d, -f2 t_SDS.out | grep -v "^0.0$" | wc -l` &&
 	test $count -eq $(state_count all) &&
 	count=`cut -d, -f3 t_SDS.out | grep -v "^0.0$" | wc -l` &&
+	test $count -eq $(state_count all) &&
+	count=`cut -d, -f4 t_SDS.out | grep -v "^0.0$" | wc -l` &&
 	test $count -eq $(state_count all)
 '
 test_expect_success 'flux-jobs --format={t_run} works' '
@@ -761,6 +763,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	result_abbrev==RS
 	t_submit==T_SUBMIT
 	t_depend==T_DEPEND
+	t_priority==T_PRIORITY
 	t_sched==T_SCHED
 	t_run==T_RUN
 	t_cleanup==T_CLEANUP
