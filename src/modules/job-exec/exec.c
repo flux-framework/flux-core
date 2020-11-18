@@ -100,8 +100,10 @@ static const char *jobspec_get_cwd (json_t *jobspec)
 
 static const char *job_get_cwd (struct jobinfo *job)
 {
-    const char *cwd = jobspec_get_cwd (job->jobspec);
-    if (!cwd)
+    const char *cwd;
+    if (job->multiuser)
+        cwd = "/";
+    else if (!(cwd = jobspec_get_cwd (job->jobspec)))
         cwd = default_cwd;
     return (cwd);
 }
