@@ -373,7 +373,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     return 0;
 error:
     resource_ctx_destroy (ctx);
-    json_decref (eventlog);
+    ERRNO_SAFE_WRAP (json_decref, eventlog);
     return -1;
 }
 
