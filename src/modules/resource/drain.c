@@ -10,13 +10,12 @@
 
 /* drain.c - handle drain/undrain requests
  *
- * Drained execution targets should be excluded from scheduling,
+ * Drained execution targets should be temporarily excluded from scheduling,
  * but may be used for determining job request satisfiability.
  *
  * Handle RPCs from front-end commands.
  * - if a node in undrain target is not drained, request fails
  * - if a node in drain target is already drained, request succeeds
- * - if a node in drain/undrain target is "excluded", request fails
  *
  * Post events for each drain/undrain action.  Drain state is sticky
  * across module reload / instance restart.  The state is reacquired
@@ -64,7 +63,6 @@ static struct idset *drain_idset_decode (struct drain *drain,
                                          int errbufsize)
 {
     struct idset *idset;
-    unsigned int id;
 
     if (!(idset = inventory_targets_to_ranks (drain->ctx->inventory,
                                               ranks, errbuf, errbufsize)))
@@ -78,18 +76,6 @@ static struct idset *drain_idset_decode (struct drain *drain,
         (void)snprintf (errbuf, errbufsize, "idset is out of range");
         errno = EINVAL;
         goto error;
-    }
-    id = idset_first (idset);
-    while (id != IDSET_INVALID_ID) {
-        if (exclude_test (drain->ctx->exclude, id)) {
-            (void)snprintf (errbuf,
-                            errbufsize,
-                            "%u is excluded by configuration",
-                            id);
-            errno = EINVAL;
-            goto error;
-        }
-        id = idset_next (idset, id);
     }
     return idset;
 error:

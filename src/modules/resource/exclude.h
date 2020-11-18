@@ -19,8 +19,6 @@ int exclude_update (struct exclude *exclude,
                     char *errbuf,
                     int errbufsize);
 
-bool exclude_test (struct exclude *exclude, unsigned int rank);
-
 const struct idset *exclude_get (struct exclude *exclude);
 
 #endif /* !_FLUX_RESOURCE_EXCLUDE_H */

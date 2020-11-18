@@ -36,16 +36,6 @@ struct exclude {
     struct idset *idset;
 };
 
-/* Check whether 'id' is excluded.
- * Used by drain.c to catch someone trying to drain/undrain an excluded rank.
- */
-bool exclude_test (struct exclude *exclude, unsigned int id)
-{
-    if (!exclude->idset || !idset_test (exclude->idset, id))
-        return false;
-    return true;
-}
-
 const struct idset *exclude_get (struct exclude *exclude)
 {
     return exclude->idset;
