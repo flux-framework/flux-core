@@ -71,6 +71,6 @@ for rank in range(1, size):
     resource_load(rank)
 
 # Ensure waitup can now complete
-log.info("waiting 5s for waitup RPC to complete")
-future.wait_for(5)
+log.info("waiting 30s for waitup RPC to complete")
+future.wait_for(30)
 log.info("done")
