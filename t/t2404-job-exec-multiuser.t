@@ -49,7 +49,21 @@ test_expect_success HAVE_JQ 'job-exec: job as guest tries to run IMP' '
 	jq -e ".userid == 42" < ${id}.json &&
 	flux dmesg | grep "test-imp: Running.*$(flux job id ${id})"
 '
-
+test_expect_success HAVE_JQ 'job-exec: large jobspec does not get truncated' '
+	( FAKE_USERID=42 &&
+	  for i in `seq 0 2048`; do export ENV${i}=xxxxxyyyyyyyyyzzzzzzz; done &&
+	  flux jobspec srun -n1 id -u | \
+	    flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
+	  id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
+	  flux job submit --flags=signed job.signed) &&
+	  flux job attach ${id} &&
+	  actual=imp-$(flux job id $id).input &&
+	  test_debug "echo expecting J of size $(wc -c < job.signed)B" &&
+	  test_debug "echo input to IMP was $(wc -c < $actual)B" &&
+	  jq -j .J ${actual} > J.input &&
+	  test_cmp job.signed J.input
+    )
+'
 test_expect_success HAVE_JQ 'job-exec: kill multiuser job uses the IMP' '
 	FAKE_USERID=42 &&
 	flux mini run --dry-run -n2 -N2 sleep 1000 | \

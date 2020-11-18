@@ -3,6 +3,8 @@ cmd=$1
 case "$cmd" in
     exec)
         shift; 
+        #  Copy IMP's input to a file so tests can check result:
+        cat - >imp-$(flux job id $2).input
         printf "test-imp: Running $* \n" >&2
         exec "$@" ;;
     kill)
