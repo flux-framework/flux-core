@@ -47,7 +47,7 @@ struct job *job_create (void);
 struct job *job_create_from_eventlog (flux_jobid_t id, const char *eventlog);
 
 /* Helpers for maintaining czmq containers of 'struct job'.
- * The comparator sorts by (1) priority, then (2) t_submit.
+ * The comparator sorts by (1) priority, then (2) jobid.
  */
 void job_destructor (void **item);
 void *job_duplicator (const void *item);
