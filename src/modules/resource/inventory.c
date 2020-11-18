@@ -159,28 +159,43 @@ static void inventory_put_continuation (flux_future_t *f, void *arg)
     (void)inventory_put_finalize (inv);
 }
 
-/* Convert rank-indexed object to fixed size array, which should be easier for
- * end users to handle.  Any unpopulated array slots are set to JSON null.
+static int xml_to_fixed_array_map (unsigned int id, json_t *val, void *arg)
+{
+    json_t *array = arg;
+
+    if (id >= json_array_size (array)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (json_array_set (array, id, val) < 0) {
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+/* Convert object with idset keys to fixed size array, which should be easier
+ * for end users to handle.  Any unpopulated array slots are set to JSON null.
  */
-static json_t *xml_to_fixed_array (json_t *xml, int size)
+static json_t *xml_to_fixed_array (json_t *xml, uint32_t size)
 {
     json_t *array;
     int i;
 
     if (!(array = json_array ()))
-        return NULL;
+        goto nomem;
     for (i = 0; i < size; i++) {
-        char key[16];
-        json_t *val;
-
-        snprintf (key, sizeof (key), "%d", i);
-        val = json_object_get (xml, key);
-        if (json_array_append (array, val ? val : json_null ()) < 0) {
-            json_decref (array);
-            return NULL;
-        }
+        if (json_array_append (array, json_null ()) < 0)
+            goto nomem;
     }
+    if (rutil_idkey_map (xml, xml_to_fixed_array_map, array) < 0)
+        goto error;
     return array;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, array);
+    return NULL;
 };
 
 int inventory_put_xml (struct inventory *inv, json_t *xml)
@@ -196,14 +211,21 @@ int inventory_put_xml (struct inventory *inv, json_t *xml)
         errno = EEXIST;
         return -1;
     }
-    if (!(inv->xml = xml_to_fixed_array (xml, inv->ctx->size))) {
-        errno = ENOMEM;
-        return -1;
-    }
-    while ((msg = zlist_pop (inv->waiters))) {
-        if (flux_respond_pack (h, msg, "{s:O}", "xml", inv->xml) < 0)
-            flux_log_error (h, "error responding to resource.get-xml");
-        flux_msg_decref (msg);
+    flux_log (inv->ctx->h, LOG_DEBUG, "xml %d ranks in %zu objects",
+              rutil_idkey_count (xml), json_object_size (xml));
+    inv->xml = json_incref (xml);
+
+    if (zlist_size (inv->waiters) > 0) {
+        json_t *array;
+
+        if (!(array = xml_to_fixed_array (inv->xml, inv->ctx->size)))
+            return -1;
+        while ((msg = zlist_pop (inv->waiters))) {
+            if (flux_respond_pack (h, msg, "{s:O}", "xml", array) < 0)
+                flux_log_error (h, "error responding to resource.get-xml");
+            flux_msg_decref (msg);
+        }
+        json_decref (array);
     }
     return 0;
 }
@@ -458,6 +480,7 @@ static void resource_get_xml (flux_t *h,
 {
     struct inventory *inv = arg;
     const char *errstr = NULL;
+    json_t *array = NULL;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
@@ -474,8 +497,11 @@ static void resource_get_xml (flux_t *h,
         }
         return; // response deferred
     }
-    if (flux_respond_pack (h, msg, "{s:O}", "xml", inv->xml) < 0)
+    if (!(array = xml_to_fixed_array (inv->xml, inv->ctx->size)))
+        goto error;
+    if (flux_respond_pack (h, msg, "{s:O}", "xml", array) < 0)
         flux_log_error (h, "error responding to resource.get-xml");
+    json_decref (array);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
