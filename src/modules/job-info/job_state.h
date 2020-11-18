@@ -113,6 +113,7 @@ struct job {
      * associated eventlog entries when restarting
      *
      * depend - "submit"
+     * priority - "priority"
      * sched - "depend"
      * run - "alloc"
      * cleanup - "finish" or "exception" w/ severity == 0

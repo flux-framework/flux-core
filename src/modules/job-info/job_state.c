@@ -214,6 +214,7 @@ static void job_insert_list (struct job_state_ctx *jsctx,
     /* Note: comparator is set for running & inactive lists, but the
      * sort calls are not called on zlistx_add_start() */
     if (newstate == FLUX_JOB_DEPEND
+        || newstate == FLUX_JOB_PRIORITY
         || newstate == FLUX_JOB_SCHED) {
         if (!(job->list_handle = zlistx_insert (jsctx->pending,
                                                 job,
@@ -256,6 +257,7 @@ static zlistx_t *get_list (struct job_state_ctx *jsctx, flux_job_state_t state)
     if (state == FLUX_JOB_NEW)
         return jsctx->processing;
     else if (state == FLUX_JOB_DEPEND
+             || state == FLUX_JOB_PRIORITY
              || state == FLUX_JOB_SCHED)
         return jsctx->pending;
     else if (state == FLUX_JOB_RUN
@@ -804,6 +806,7 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
             break;
         }
         else {
+            /* FLUX_JOB_PRIORITY */
             /* FLUX_JOB_SCHED */
             /* FLUX_JOB_CLEANUP */
             /* FLUX_JOB_INACTIVE */
@@ -900,6 +903,9 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
             update_job_state (ctx, job, FLUX_JOB_DEPEND, timestamp);
         }
         else if (!strcmp (name, "depend")) {
+            update_job_state (ctx, job, FLUX_JOB_PRIORITY, timestamp);
+        }
+        else if (!strcmp (name, "priority")) {
             update_job_state (ctx, job, FLUX_JOB_SCHED, timestamp);
         }
         else if (!strcmp (name, "admin-priority")) {
@@ -1459,6 +1465,14 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
             return -1;
     }
     else if (!strcmp (name, "depend")) {
+        if (journal_advance_job (jsctx,
+                                 id,
+                                 FLUX_JOB_PRIORITY,
+                                 eventlog_seq,
+                                 timestamp) < 0)
+            return -1;
+    }
+    else if (!strcmp (name, "priority")) {
         if (journal_advance_job (jsctx,
                                  id,
                                  FLUX_JOB_SCHED,
