@@ -1687,8 +1687,11 @@ static void valid_or_exit_for_debug (struct attach_ctx *ctx)
 
     flux_future_destroy (f);
 
-    if (state != FLUX_JOB_NEW && state != FLUX_JOB_DEPEND
-        && state != FLUX_JOB_SCHED && state != FLUX_JOB_RUN) {
+    if (state != FLUX_JOB_NEW
+        && state != FLUX_JOB_DEPEND
+        && state != FLUX_JOB_PRIORITY
+        && state != FLUX_JOB_SCHED
+        && state != FLUX_JOB_RUN) {
         log_msg_exit ("cannot debug job that isn't running");
     }
 
