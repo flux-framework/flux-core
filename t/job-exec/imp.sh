@@ -1,5 +1,10 @@
 #!/bin/bash
 cmd=$1
+
+# Test requirement, make sure we change back to sharness trash directory,
+#  multiuser jobs do not cause IMP to chdir to cwd of job:
+cd $SHARNESS_TRASH_DIRECTORY
+
 case "$cmd" in
     exec)
         shift; 
