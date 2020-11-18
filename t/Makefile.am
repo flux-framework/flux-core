@@ -329,9 +329,9 @@ dist_check_DATA = \
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
+	$(top_builddir)/src/common/libflux-core.la \
 	$(ZMQ_LIBS) $(LIBPTHREAD)
 
 test_cppflags = \
