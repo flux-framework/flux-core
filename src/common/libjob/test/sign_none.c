@@ -40,6 +40,7 @@ void simple (void)
     ok (rc == 0 && userid == 1000
         && payloadsz == 4 && memcmp (payload, "foo", 4) == 0,
         "sign_none_unwrap works");
+    free (payload);
 
     free (s);
 }
@@ -92,6 +93,7 @@ void decode_good (void)
     ok (rc == 0 && userid == 1000
         && payloadsz == 4 && memcmp (payload, "foo", 4) == 0,
         "dummy encode 1 decodes as expected");
+    free (payload);
 
     userid = 0;
     payload = NULL;
@@ -100,6 +102,7 @@ void decode_good (void)
     rc = sign_none_unwrap (good2, &payload, &payloadsz, &userid);
     ok (rc == 0 && userid == 1000 && payloadsz == 0,
         "dummy encode 2 decodes as expected");
+    free (payload);
 
     userid = 1;
     payload = NULL;
@@ -108,6 +111,7 @@ void decode_good (void)
     rc = sign_none_unwrap (good3, &payload, &payloadsz, &userid);
     ok (rc == 0 && userid == 0 && payloadsz == 1 && *(char *)payload == '\0',
         "dummy encode 3 decodes as expected");
+    free (payload);
 
     free (good1);
     free (good2);
