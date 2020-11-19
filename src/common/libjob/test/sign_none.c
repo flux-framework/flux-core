@@ -13,6 +13,9 @@
 #endif
 
 #include <flux/core.h>
+#if HAVE_FLUX_SECURITY
+#include <flux/security/sign.h>
+#endif
 #include <sodium.h>
 
 #include "src/common/libtap/tap.h"
@@ -336,6 +339,82 @@ void badarg (void)
 
 }
 
+#if HAVE_FLUX_SECURITY
+void interop_sign_core (void)
+{
+    flux_security_t *sec;
+    const char *mech_type;
+    int64_t userid;
+    const void *payload;
+    int payloadsz;
+    char *s;
+    int rc;
+
+    if (!(sec = flux_security_create (0)))
+        BAIL_OUT ("error creating flux-security context");
+    if (flux_security_configure (sec, NULL) < 0)
+        BAIL_OUT ("error configuring flux-security");
+
+    s = sign_none_wrap ("foo", 4, 1000);
+    if (!s)
+        BAIL_OUT ("sign_none_wrap returned NULL");
+
+    userid = 0;
+    payload = NULL;
+    payloadsz = 0;
+    rc = flux_sign_unwrap_anymech (sec,
+                                   s,
+                                   &payload,
+                                   &payloadsz,
+                                   &mech_type,
+                                   &userid,
+                                   FLUX_SIGN_NOVERIFY);
+    if (rc < 0)
+        diag ("unwrap: %s", flux_security_last_error (sec));
+    ok (rc == 0
+        && userid == 1000
+        && !strcmp (mech_type, "none")
+        && payloadsz == 4
+        && memcmp (payload, "foo", 4) == 0,
+        "flux-security can unwrap envelope from flux-core internal signer");
+
+    free (s);
+    flux_security_destroy (sec);
+}
+
+void interop_sign_security (void)
+{
+    flux_security_t *sec;
+    uint32_t userid;
+    void *payload;
+    int payloadsz;
+    const char *s;
+    int rc;
+
+    if (!(sec = flux_security_create (0)))
+        BAIL_OUT ("error creating flux-security context");
+    if (flux_security_configure (sec, NULL) < 0)
+        BAIL_OUT ("error configuring flux-security");
+
+    s = flux_sign_wrap_as (sec, 1000, "foo", 4, "none", 0);
+    if (!s) {
+        BAIL_OUT ("flux_sign_wrap_as returned NULL: %s",
+                  flux_security_last_error (sec));
+    }
+
+    userid = 0;
+    payload = NULL;
+    payloadsz = 0;
+    rc = sign_none_unwrap (s, &payload, &payloadsz, &userid);
+    ok (rc == 0 && userid == 1000
+        && payloadsz == 4 && memcmp (payload, "foo", 4) == 0,
+        "flux-core can unwrap envelope from flux-security signer");
+    free (payload);
+
+    flux_security_destroy (sec);
+}
+#endif
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -345,6 +424,10 @@ int main (int argc, char *argv[])
     decode_bad_header ();
     decode_bad_other ();
     badarg ();
+#if HAVE_FLUX_SECURITY
+    interop_sign_core ();
+    interop_sign_security ();
+#endif
 
     done_testing ();
     return 0;
