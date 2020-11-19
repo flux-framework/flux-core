@@ -47,8 +47,6 @@ test_expect_success 'sched-simple: reload sched-simple with default resource.R' 
 	flux module unload sched-simple &&
 	flux resource reload R.test &&
 	flux module load sched-simple &&
-	flux dmesg 2>&1 >reload.dmesg.log &&
-	grep "ready:.*rank\[0-1\]/core\[0-1\]" reload.dmesg.log &&
 	test_debug "echo result=\"$($query)\"" &&
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
@@ -150,7 +148,8 @@ test_expect_success 'sched-simple: reload in first-fit mode' '
         flux module remove sched-simple &&
 	flux resource reload R.test.first_fit &&
         flux module load sched-simple mode=first-fit &&
-	flux dmesg | grep "ready:.*rank0/core\[0-1\] rank1/core0"
+	test_debug "echo result=\"$($query)\"" &&
+	test "$($query)" = "rank0/core[0-1] rank1/core0"
 '
 test_expect_success 'sched-simple: submit 3 more jobs' '
 	flux job submit basic.json >job11.id &&
@@ -170,7 +169,7 @@ test_expect_success 'sched-simple: check allocations for running jobs' '
 '
 test_expect_success 'sched-simple: reload with outstanding allocations' '
 	flux module reload sched-simple &&
-	flux dmesg | grep "hello: alloc rank0/core0" &&
+	test_debug "echo result=\"$($query)\"" &&
 	test "$($query)" = ""
 '
 test_expect_success 'sched-simple: verify three jobs are active' '
