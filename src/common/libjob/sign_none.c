@@ -51,7 +51,7 @@ int header_decode (const char *src, int srclen, uint32_t *useridp)
             val_version = val;
         else if (!strcmp (key, "userid"))
             val_userid = val;
-        else if (!strcmp (key, "mech"))
+        else if (!strcmp (key, "mechanism"))
             val_mech = val;
         else
             goto error_inval;
@@ -84,7 +84,7 @@ static char *header_encode (uint32_t userid)
     int dstlen;
     int i;
 
-    srclen = snprintf (src, sizeof (src), "version:i1:userid:i%lu:mech:snone:",
+    srclen = snprintf (src, sizeof (src), "version:i1:userid:i%lu:mechanism:snone:",
                        (unsigned long)userid);
     assert (srclen < sizeof (src));
     for (i = 0; i < srclen; i++) {
