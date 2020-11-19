@@ -50,7 +50,7 @@ struct job *job_create (void)
     job->refcount = 1;
     job->userid = FLUX_USERID_UNKNOWN;
     job->priority = FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
-    job->state = FLUX_JOB_NEW;
+    job->state = FLUX_JOB_STATE_NEW;
     return job;
 }
 
@@ -74,7 +74,7 @@ struct job *job_create_from_eventlog (flux_jobid_t id, const char *s)
         job->eventlog_seq++;
     }
 
-    if (job->state == FLUX_JOB_NEW)
+    if (job->state == FLUX_JOB_STATE_NEW)
         goto inval;
 
     json_decref (a);

@@ -583,11 +583,11 @@ int parse_arg_states (optparse_t *p, const char *optname)
         if (flux_job_strtostate (arg, &state) == 0)
             state_mask |= state;
         else if (!strcasecmp (arg, "pending"))
-            state_mask |= FLUX_JOB_PENDING;
+            state_mask |= FLUX_JOB_STATE_PENDING;
         else if (!strcasecmp (arg, "running"))
-            state_mask |= FLUX_JOB_RUNNING;
+            state_mask |= FLUX_JOB_STATE_RUNNING;
         else if (!strcasecmp (arg, "active"))
-            state_mask |= FLUX_JOB_ACTIVE;
+            state_mask |= FLUX_JOB_STATE_ACTIVE;
         else
             log_msg_exit ("error parsing --%s: %s is unknown", optname, arg);
     }
@@ -747,11 +747,11 @@ int cmd_raiseall (optparse_t *p, int argc, char **argv)
         note = parse_arg_message (argv + optindex, "message");
     if (optparse_hasopt (p, "states")) {
         state_mask = parse_arg_states (p, "states");
-        if ((state_mask & FLUX_JOB_INACTIVE))
+        if ((state_mask & FLUX_JOB_STATE_INACTIVE))
             log_msg_exit ("Exceptions cannot be raised on inactive jobs");
     }
     else
-        state_mask = FLUX_JOB_ACTIVE;
+        state_mask = FLUX_JOB_STATE_ACTIVE;
     if (optparse_hasopt (p, "user"))
         userid = parse_arg_userid (p, "user");
     else
@@ -996,11 +996,11 @@ int cmd_cancelall (optparse_t *p, int argc, char **argv)
         note = parse_arg_message (argv + optindex, "message");
     if (optparse_hasopt (p, "states")) {
         state_mask = parse_arg_states (p, "states");
-        if ((state_mask & FLUX_JOB_INACTIVE))
+        if ((state_mask & FLUX_JOB_STATE_INACTIVE))
             log_msg_exit ("Inactive jobs cannot be cancelled");
     }
     else
-        state_mask = FLUX_JOB_ACTIVE;
+        state_mask = FLUX_JOB_STATE_ACTIVE;
     if (optparse_hasopt (p, "user"))
         userid = parse_arg_userid (p, "user");
     else
@@ -1056,11 +1056,11 @@ int cmd_list (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
 
     if (optparse_hasopt (p, "all-user") || optparse_hasopt (p, "all"))
-        states = FLUX_JOB_ACTIVE | FLUX_JOB_INACTIVE;
+        states = FLUX_JOB_STATE_ACTIVE | FLUX_JOB_STATE_INACTIVE;
     else if (optparse_hasopt (p, "states"))
         states = parse_arg_states (p, "states");
     else
-        states = FLUX_JOB_PENDING | FLUX_JOB_RUNNING;
+        states = FLUX_JOB_STATE_PENDING | FLUX_JOB_STATE_RUNNING;
 
     if (optparse_hasopt (p, "all"))
         userid = FLUX_USERID_UNKNOWN;
@@ -1677,7 +1677,7 @@ static void valid_or_exit_for_debug (struct attach_ctx *ctx)
 {
     flux_future_t *f = NULL;
     char *attrs = "[\"state\"]";
-    flux_job_state_t state = FLUX_JOB_INACTIVE;
+    flux_job_state_t state = FLUX_JOB_STATE_INACTIVE;
 
     if (!(f = flux_job_list_id (ctx->h, ctx->id, attrs)))
         log_err_exit ("flux_job_list_id");
@@ -1687,11 +1687,11 @@ static void valid_or_exit_for_debug (struct attach_ctx *ctx)
 
     flux_future_destroy (f);
 
-    if (state != FLUX_JOB_NEW
-        && state != FLUX_JOB_DEPEND
-        && state != FLUX_JOB_PRIORITY
-        && state != FLUX_JOB_SCHED
-        && state != FLUX_JOB_RUN) {
+    if (state != FLUX_JOB_STATE_NEW
+        && state != FLUX_JOB_STATE_DEPEND
+        && state != FLUX_JOB_STATE_PRIORITY
+        && state != FLUX_JOB_STATE_SCHED
+        && state != FLUX_JOB_STATE_RUN) {
         log_msg_exit ("cannot debug job that isn't running");
     }
 

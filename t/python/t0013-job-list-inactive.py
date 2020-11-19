@@ -65,7 +65,7 @@ class TestJob(unittest.TestCase):
         waiting = 0  # number of seconds we have been waiting
         while True:
             rpc_handle = flux.job.job_list(
-                self.fh, 0, self.attrs, states=flux.constants.FLUX_JOB_INACTIVE
+                self.fh, 0, self.attrs, states=flux.constants.FLUX_JOB_STATE_INACTIVE
             )
             jobs = self.getJobs(rpc_handle)
             if len(jobs) >= jobs_list_length:
@@ -138,7 +138,7 @@ class TestJob(unittest.TestCase):
     # flux job list-inactive with the most recent timestamp should return len(0)
     def test_05_most_recent_inactive(self):
         rpc_handle = flux.job.job_list(
-            self.fh, 1, ["t_inactive"], states=flux.constants.FLUX_JOB_INACTIVE
+            self.fh, 1, ["t_inactive"], states=flux.constants.FLUX_JOB_STATE_INACTIVE
         )
 
         jobs = self.getJobs(rpc_handle)
@@ -154,7 +154,7 @@ class TestJob(unittest.TestCase):
     # flux job list-inactive with second to most recent timestamp
     def test_06_second_most_recent_timestamp(self):
         rpc_handle = flux.job.job_list(
-            self.fh, 2, ["t_inactive"], states=flux.constants.FLUX_JOB_INACTIVE
+            self.fh, 2, ["t_inactive"], states=flux.constants.FLUX_JOB_STATE_INACTIVE
         )
 
         jobs = self.getJobs(rpc_handle)
@@ -171,7 +171,7 @@ class TestJob(unittest.TestCase):
     # flux job list-inactive with oldest timestamp
     def test_07_oldest_timestamp(self):
         rpc_handle = flux.job.job_list(
-            self.fh, 5, ["t_inactive"], states=flux.constants.FLUX_JOB_INACTIVE
+            self.fh, 5, ["t_inactive"], states=flux.constants.FLUX_JOB_STATE_INACTIVE
         )
 
         jobs = self.getJobs(rpc_handle)
@@ -187,7 +187,7 @@ class TestJob(unittest.TestCase):
     # flux job list-inactive with middle timestamp #1
     def test_08_middle_timestamp_1(self):
         rpc_handle = flux.job.job_list(
-            self.fh, 20, ["t_inactive"], states=flux.constants.FLUX_JOB_INACTIVE
+            self.fh, 20, ["t_inactive"], states=flux.constants.FLUX_JOB_STATE_INACTIVE
         )
 
         jobs = self.getJobs(rpc_handle)
@@ -203,7 +203,7 @@ class TestJob(unittest.TestCase):
     # flux job list-inactive with middle timestamp #2
     def test_09_middle_timestamp_2(self):
         rpc_handle = flux.job.job_list(
-            self.fh, 20, ["t_inactive"], states=flux.constants.FLUX_JOB_INACTIVE
+            self.fh, 20, ["t_inactive"], states=flux.constants.FLUX_JOB_STATE_INACTIVE
         )
 
         jobs = self.getJobs(rpc_handle)

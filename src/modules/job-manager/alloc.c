@@ -442,9 +442,9 @@ static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
     job = zhashx_first (ctx->active_jobs);
     while (job) {
         /* N.B. first/next are NOT deletion safe but event_job_action()
-         * won't call zhashx_delete() for jobs in FLUX_JOB_CLEANUP state.
+         * won't call zhashx_delete() for jobs in FLUX_JOB_STATE_CLEANUP state.
          */
-        if (job->state == FLUX_JOB_CLEANUP && job->has_resources) {
+        if (job->state == FLUX_JOB_STATE_CLEANUP && job->has_resources) {
             if (event_job_action (ctx->event, job) < 0)
                 flux_log_error (h, "%s: event_job_action", __FUNCTION__);
         }
@@ -508,10 +508,10 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
 }
 
-/* called from event_job_action() FLUX_JOB_CLEANUP */
+/* called from event_job_action() FLUX_JOB_STATE_CLEANUP */
 int alloc_send_free_request (struct alloc *alloc, struct job *job)
 {
-    assert (job->state == FLUX_JOB_CLEANUP);
+    assert (job->state == FLUX_JOB_STATE_CLEANUP);
     if (!job->free_pending && alloc->ready) {
         if (free_request (alloc, job) < 0)
             return -1;
@@ -524,10 +524,10 @@ int alloc_send_free_request (struct alloc *alloc, struct job *job)
     return 0;
 }
 
-/* called from event_job_action() FLUX_JOB_SCHED */
+/* called from event_job_action() FLUX_JOB_STATE_SCHED */
 int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
 {
-    assert (job->state == FLUX_JOB_SCHED);
+    assert (job->state == FLUX_JOB_STATE_SCHED);
     if (!job->alloc_queued && !job->alloc_pending) {
         bool fwd = job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
         assert (job->handle == NULL);
@@ -538,7 +538,7 @@ int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
     return 0;
 }
 
-/* called from event_job_action() FLUX_JOB_CLEANUP */
+/* called from event_job_action() FLUX_JOB_STATE_CLEANUP */
 void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job)
 {
     if (job->alloc_queued) {
@@ -548,7 +548,7 @@ void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job)
     }
 }
 
-/* called from event_job_action() FLUX_JOB_CLEANUP */
+/* called from event_job_action() FLUX_JOB_STATE_CLEANUP */
 int alloc_cancel_alloc_request (struct alloc *alloc, struct job *job)
 {
     if (job->alloc_pending) {

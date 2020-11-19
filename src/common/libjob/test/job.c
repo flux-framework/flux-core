@@ -231,13 +231,13 @@ struct ss {
 };
 
 struct ss sstab[] = {
-    { FLUX_JOB_NEW,      "N", "NEW" },
-    { FLUX_JOB_DEPEND,   "D", "DEPEND" },
-    { FLUX_JOB_PRIORITY, "P", "PRIORITY" },
-    { FLUX_JOB_SCHED,    "S", "SCHED" },
-    { FLUX_JOB_RUN,      "R", "RUN" },
-    { FLUX_JOB_CLEANUP,  "C", "CLEANUP" },
-    { FLUX_JOB_INACTIVE, "I", "INACTIVE" },
+    { FLUX_JOB_STATE_NEW,      "N", "NEW" },
+    { FLUX_JOB_STATE_DEPEND,   "D", "DEPEND" },
+    { FLUX_JOB_STATE_PRIORITY, "P", "PRIORITY" },
+    { FLUX_JOB_STATE_SCHED,    "S", "SCHED" },
+    { FLUX_JOB_STATE_RUN,      "R", "RUN" },
+    { FLUX_JOB_STATE_CLEANUP,  "C", "CLEANUP" },
+    { FLUX_JOB_STATE_INACTIVE, "I", "INACTIVE" },
     { -1, NULL, NULL },
 };
 

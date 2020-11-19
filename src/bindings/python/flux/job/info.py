@@ -33,11 +33,11 @@ def resulttostr(resultid, singlechar=False):
 
 
 def statustostr(stateid, resultid, abbrev=False):
-    if stateid & flux.constants.FLUX_JOB_PENDING:
+    if stateid & flux.constants.FLUX_JOB_STATE_PENDING:
         statusstr = "PD" if abbrev else "PENDING"
-    elif stateid & flux.constants.FLUX_JOB_RUNNING:
+    elif stateid & flux.constants.FLUX_JOB_STATE_RUNNING:
         statusstr = "R" if abbrev else "RUNNING"
-    else:  # flux.constants.FLUX_JOB_INACTIVE
+    else:  # flux.constants.FLUX_JOB_STATE_INACTIVE
         statusstr = resulttostr(resultid, abbrev)
     return statusstr
 

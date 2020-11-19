@@ -222,9 +222,9 @@ flux_future_t *flux_job_list (flux_t *h,
 {
     flux_future_t *f;
     json_t *o = NULL;
-    int valid_states = (FLUX_JOB_PENDING
-                        | FLUX_JOB_RUNNING
-                        | FLUX_JOB_INACTIVE);
+    int valid_states = (FLUX_JOB_STATE_PENDING
+                        | FLUX_JOB_STATE_RUNNING
+                        | FLUX_JOB_STATE_INACTIVE);
     int saved_errno;
 
     if (!h || max_entries < 0 || !json_str
@@ -512,19 +512,19 @@ int flux_job_event_watch_cancel (flux_future_t *f)
 const char *flux_job_statetostr (flux_job_state_t state, bool single_char)
 {
     switch (state) {
-        case FLUX_JOB_NEW:
+        case FLUX_JOB_STATE_NEW:
             return single_char ? "N" : "NEW";
-        case FLUX_JOB_DEPEND:
+        case FLUX_JOB_STATE_DEPEND:
             return single_char ? "D" : "DEPEND";
-        case FLUX_JOB_PRIORITY:
+        case FLUX_JOB_STATE_PRIORITY:
             return single_char ? "P" : "PRIORITY";
-        case FLUX_JOB_SCHED:
+        case FLUX_JOB_STATE_SCHED:
             return single_char ? "S" : "SCHED";
-        case FLUX_JOB_RUN:
+        case FLUX_JOB_STATE_RUN:
             return single_char ? "R" : "RUN";
-        case FLUX_JOB_CLEANUP:
+        case FLUX_JOB_STATE_CLEANUP:
             return single_char ? "C" : "CLEANUP";
-        case FLUX_JOB_INACTIVE:
+        case FLUX_JOB_STATE_INACTIVE:
             return single_char ? "I" : "INACTIVE";
     }
     return single_char ? "?" : "(unknown)";
@@ -535,19 +535,19 @@ int flux_job_strtostate (const char *s, flux_job_state_t *state)
     if (!s || !state)
         goto inval;
     if (!strcasecmp (s, "N") || !strcasecmp (s, "NEW"))
-        *state = FLUX_JOB_NEW;
+        *state = FLUX_JOB_STATE_NEW;
     else if (!strcasecmp (s, "D") || !strcasecmp (s, "DEPEND"))
-        *state = FLUX_JOB_DEPEND;
+        *state = FLUX_JOB_STATE_DEPEND;
     else if (!strcasecmp (s, "P") || !strcasecmp (s, "PRIORITY"))
-        *state = FLUX_JOB_PRIORITY;
+        *state = FLUX_JOB_STATE_PRIORITY;
     else if (!strcasecmp (s, "S") || !strcasecmp (s, "SCHED"))
-        *state = FLUX_JOB_SCHED;
+        *state = FLUX_JOB_STATE_SCHED;
     else if (!strcasecmp (s, "R") || !strcasecmp (s, "RUN"))
-        *state = FLUX_JOB_RUN;
+        *state = FLUX_JOB_STATE_RUN;
     else if (!strcasecmp (s, "C") || !strcasecmp (s, "CLEANUP"))
-        *state = FLUX_JOB_CLEANUP;
+        *state = FLUX_JOB_STATE_CLEANUP;
     else if (!strcasecmp (s, "I") || !strcasecmp (s, "INACTIVE"))
-        *state = FLUX_JOB_INACTIVE;
+        *state = FLUX_JOB_STATE_INACTIVE;
     else
         goto inval;
 

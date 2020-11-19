@@ -28,7 +28,7 @@ void test_create (void)
         "job_create set refcount to 1");
     ok (job->id == 0
         && job->priority == FLUX_JOB_ADMIN_PRIORITY_DEFAULT
-        && job->state == FLUX_JOB_NEW
+        && job->state == FLUX_JOB_STATE_NEW
         && job->userid == FLUX_USERID_UNKNOWN
         && job->t_submit == 0
         && job->flags == 0,
@@ -132,7 +132,7 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit) set priority from submit");
     ok (job->t_submit == 42.2,
         "job_create_from_eventlog log=(submit) set t_submit from submit");
-    ok (job->state == FLUX_JOB_DEPEND,
+    ok (job->state == FLUX_JOB_STATE_DEPEND,
         "job_create_from_eventlog log=(submit) set state=DEPEND");
     job_decref (job);
 
@@ -152,7 +152,7 @@ void test_create_from_eventlog (void)
         && !job->free_pending
         && !job->has_resources,
         "job_create_from_eventlog log=(submit+admin-pri) set no internal flags");
-    ok (job->state == FLUX_JOB_DEPEND,
+    ok (job->state == FLUX_JOB_STATE_DEPEND,
         "job_create_from_eventlog log=(submit+admin-pri) set state=DEPEND");
     job_decref (job);
 
@@ -172,7 +172,7 @@ void test_create_from_eventlog (void)
         && !job->free_pending
         && !job->has_resources,
         "job_create_from_eventlog log=(submit+depend+priority) set no internal flags");
-    ok (job->state == FLUX_JOB_SCHED,
+    ok (job->state == FLUX_JOB_STATE_SCHED,
         "job_create_from_eventlog log=(submit+depend+priority) set state=SCHED");
     job_decref (job);
 
@@ -190,7 +190,7 @@ void test_create_from_eventlog (void)
         && !job->free_pending
         && !job->has_resources,
         "job_create_from_eventlog log=(submit+ex0) set no internal flags");
-    ok (job->state == FLUX_JOB_CLEANUP,
+    ok (job->state == FLUX_JOB_STATE_CLEANUP,
         "job_create_from_eventlog log=(submit+ex0) set state=CLEANUP");
     job_decref (job);
 
@@ -198,7 +198,7 @@ void test_create_from_eventlog (void)
     job = job_create_from_eventlog (3, test_input[4]);
     if (job == NULL)
         BAIL_OUT ("job_create_from_eventlog log=(submit+ex1) failed");
-    ok (job->state == FLUX_JOB_DEPEND,
+    ok (job->state == FLUX_JOB_STATE_DEPEND,
         "job_create_from_eventlog log=(submit+ex1) set state=DEPEND");
     ok (!job->alloc_pending
         && !job->free_pending
@@ -214,7 +214,7 @@ void test_create_from_eventlog (void)
         && !job->free_pending
         && job->has_resources,
         "job_create_from_eventlog log=(submit+depend+priority+alloc) set has_resources flag");
-    ok (job->state == FLUX_JOB_RUN,
+    ok (job->state == FLUX_JOB_STATE_RUN,
         "job_create_from_eventlog log=(submit+depend+priority+alloc) set state=RUN");
     job_decref (job);
 
@@ -232,7 +232,7 @@ void test_create_from_eventlog (void)
         && !job->free_pending
         && !job->has_resources,
         "job_create_from_eventlog log=(submit+depend+priority+alloc+ex0+free) set no internal flags");
-    ok (job->state == FLUX_JOB_CLEANUP,
+    ok (job->state == FLUX_JOB_STATE_CLEANUP,
         "job_create_from_eventlog log=(submit+depend+priority+alloc+ex0+free) set state=CLEANUP");
     job_decref (job);
 

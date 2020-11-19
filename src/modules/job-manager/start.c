@@ -129,7 +129,7 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
      */
     job = zhashx_first (ctx->active_jobs);
     while (job) {
-        if (job->state == FLUX_JOB_RUN) {
+        if (job->state == FLUX_JOB_STATE_RUN) {
             if (event_job_action (ctx->event, job) < 0)
                 flux_log_error (h, "%s: event_job_action id=%ju", __FUNCTION__,
                                 (uintmax_t)job->id);
@@ -269,7 +269,7 @@ int start_send_request (struct start *start, struct job *job)
     struct job_manager *ctx = start->ctx;
     flux_msg_t *msg;
 
-    assert (job->state == FLUX_JOB_RUN);
+    assert (job->state == FLUX_JOB_STATE_RUN);
     if (!job->start_pending && start->topic != NULL) {
         if (!(msg = flux_request_encode (start->topic, NULL)))
             return -1;
