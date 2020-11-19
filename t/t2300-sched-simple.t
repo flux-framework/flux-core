@@ -186,9 +186,19 @@ test_expect_success 'sched-simple: there are no outstanding sched requests' '
 	grep "0 alloc requests pending to scheduler" queue_status.out &&
 	grep "0 free requests pending to scheduler" queue_status.out
 '
+# flux dmesg can be racy as flux module load of sched-simple can return
+# before sched-simple is initialized, so we'll loop up to 10 times
+# if needed
 test_expect_success 'sched-simple: reload in unlimited mode' '
 	flux module load sched-simple unlimited &&
-	flux dmesg | grep "scheduler: ready unlimited"
+	i=0 &&
+	while !	flux dmesg | grep "scheduler: ready unlimited" && \
+	      [ $i -lt 10 ]
+	do
+	    sleep 1
+	    i=$((i + 1))
+	done &&
+	test "$i" -lt "10"
 '
 test_expect_success 'sched-simple: submit 3 more jobs' '
 	flux job submit basic.json >job11.id &&
