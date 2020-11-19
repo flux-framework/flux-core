@@ -542,7 +542,7 @@ AC_OUTPUT
 
 AS_IF([test "x$enable_docs" != "xno"], [
   if test "x$sphinx" = "xfalse"; then
-    AC_MSG_WARN([Sphinx not found. Manual pages will not be generated.])
+    AC_MSG_WARN([Python Sphinx not found. Manual pages will not be generated.])
   fi
 ])
 
