@@ -46,7 +46,6 @@ libflux_internal_la_LIBADD = \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(LIBPTHREAD) \
-	$(LIBUTIL) \
 	$(LIBDL) \
 	$(LIBRT) \
 	$(FLUX_SECURITY_LIBS) \

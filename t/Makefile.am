@@ -345,17 +345,17 @@ shmem_backtoback_t_LDADD = $(test_ldadd) $(LIBDL)
 loop_logstderr_SOURCES = loop/logstderr.c
 loop_logstderr_CPPFLAGS = $(test_cppflags)
 loop_logstderr_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 loop_issue2337_SOURCES = loop/issue2337.c
 loop_issue2337_CPPFLAGS = $(test_cppflags)
 loop_issue2337_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 loop_issue2711_SOURCES = loop/issue2711.c
 loop_issue2711_CPPFLAGS = $(test_cppflags)
 loop_issue2711_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 mpi_hello_SOURCES = mpi/hello.c
 mpi_hello_CPPFLAGS = $(MPI_CFLAGS)
@@ -364,148 +364,148 @@ mpi_hello_LDADD = $(MPI_CLDFLAGS) $(LIBRT)
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)
 kvs_torture_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_dtree_SOURCES = kvs/dtree.c
 kvs_dtree_CPPFLAGS = $(test_cppflags)
 kvs_dtree_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_blobref_SOURCES = kvs/blobref.c
 kvs_blobref_CPPFLAGS = $(test_cppflags)
 kvs_blobref_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_commit_SOURCES = kvs/commit.c
 kvs_commit_CPPFLAGS = $(test_cppflags)
 kvs_commit_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_fence_api_SOURCES = kvs/fence_api.c
 kvs_fence_api_CPPFLAGS = $(test_cppflags)
 kvs_fence_api_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_transactionmerge_SOURCES = kvs/transactionmerge.c
 kvs_transactionmerge_CPPFLAGS = $(test_cppflags)
 kvs_transactionmerge_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_fence_namespace_remove_SOURCES = kvs/fence_namespace_remove.c
 kvs_fence_namespace_remove_CPPFLAGS = $(test_cppflags)
 kvs_fence_namespace_remove_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_fence_invalid_SOURCES = kvs/fence_invalid.c
 kvs_fence_invalid_CPPFLAGS = $(test_cppflags)
 kvs_fence_invalid_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_lookup_invalid_SOURCES = kvs/lookup_invalid.c
 kvs_lookup_invalid_CPPFLAGS = $(test_cppflags)
 kvs_lookup_invalid_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_commit_order_SOURCES = kvs/commit_order.c
 kvs_commit_order_CPPFLAGS = $(test_cppflags)
 kvs_commit_order_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_watch_disconnect_SOURCES = kvs/watch_disconnect.c
 kvs_watch_disconnect_CPPFLAGS = $(test_cppflags)
 kvs_watch_disconnect_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_hashtest_SOURCES = kvs/hashtest.c
 kvs_hashtest_CPPFLAGS = $(test_cppflags) $(SQLITE_CFLAGS)
 kvs_hashtest_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL) $(LIBJUDY) $(SQLITE_LIBS)
+	$(test_ldadd) $(LIBDL) $(LIBJUDY) $(SQLITE_LIBS)
 
 kvs_issue1760_SOURCES = kvs/issue1760.c
 kvs_issue1760_CPPFLAGS = $(test_cppflags)
 kvs_issue1760_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_issue1876_SOURCES = kvs/issue1876.c
 kvs_issue1876_CPPFLAGS = $(test_cppflags)
 kvs_issue1876_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_waitcreate_cancel_SOURCES = kvs/waitcreate_cancel.c
 kvs_waitcreate_cancel_CPPFLAGS = $(test_cppflags)
 kvs_waitcreate_cancel_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_setrootevents_SOURCES = kvs/setrootevents.c
 kvs_setrootevents_CPPFLAGS = $(test_cppflags)
 kvs_setrootevents_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 kvs_checkpoint_SOURCES = kvs/checkpoint.c
 kvs_checkpoint_CPPFLAGS = $(test_cppflags)
 kvs_checkpoint_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 request_treq_SOURCES = request/treq.c
 request_treq_CPPFLAGS = $(test_cppflags)
 request_treq_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 request_rpc_SOURCES = request/rpc.c
 request_rpc_CPPFLAGS = $(test_cppflags)
 request_rpc_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 request_rpc_stream_SOURCES = request/rpc_stream.c
 request_rpc_stream_CPPFLAGS = $(test_cppflags)
 request_rpc_stream_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 module_parent_la_SOURCES = module/parent.c
 module_parent_la_CPPFLAGS = $(test_cppflags)
 module_parent_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 module_parent_la_LIBADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 module_child_la_SOURCES = module/child.c
 module_child_la_CPPFLAGS = $(test_cppflags)
 module_child_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 module_child_la_LIBADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 module_running_la_SOURCES = module/running.c
 module_running_la_CPPFLAGS = $(test_cppflags)
 module_running_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 module_running_la_LIBADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 barrier_tbarrier_SOURCES = barrier/tbarrier.c
 barrier_tbarrier_CPPFLAGS = $(test_cppflags)
 barrier_tbarrier_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 request_req_la_SOURCES = request/req.c
 request_req_la_CPPFLAGS = $(test_cppflags)
 request_req_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowher
 request_req_la_LIBADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 shell_rcalc_SOURCES = shell/rcalc.c
 shell_rcalc_CPPFLAGS = $(test_cppflags)
 shell_rcalc_LDADD = \
 	$(top_builddir)/src/shell/libshell.la \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 shell_lptest_SOURCES = shell/lptest.c
 shell_lptest_CPPFLAGS = $(test_cppflags)
 shell_lptest_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 shell_mpir_SOURCES = shell/mpir.c
 shell_mpir_CPPFLAGS = $(test_cppflags)
 shell_mpir_LDADD = \
 	$(top_builddir)/src/shell/libmpir.la \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 debug_stall_SOURCES = debug/stall.c
 debug_stall_CPPFLAGS = $(test_cppflags)
@@ -513,61 +513,61 @@ debug_stall_CPPFLAGS = $(test_cppflags)
 reactor_reactorcat_SOURCES = reactor/reactorcat.c
 reactor_reactorcat_CPPFLAGS = $(test_cppflags)
 reactor_reactorcat_LDADD = \
-	 $(test_ldadd) $(LIBDL) $(LIBUTIL)
+	 $(test_ldadd) $(LIBDL)
 
 rexec_rexec_SOURCES = rexec/rexec.c
 rexec_rexec_CPPFLAGS = $(test_cppflags)
 rexec_rexec_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 rexec_rexec_ps_SOURCES = rexec/rexec_ps.c
 rexec_rexec_ps_CPPFLAGS = $(test_cppflags)
 rexec_rexec_ps_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 rexec_rexec_count_stdout_SOURCES = rexec/rexec_count_stdout.c
 rexec_rexec_count_stdout_CPPFLAGS = $(test_cppflags)
 rexec_rexec_count_stdout_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 rexec_rexec_getline_SOURCES = rexec/rexec_getline.c
 rexec_rexec_getline_CPPFLAGS = $(test_cppflags)
 rexec_rexec_getline_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 ingest_job_manager_dummy_la_SOURCES = ingest/job-manager-dummy.c
 ingest_job_manager_dummy_la_CPPFLAGS = $(test_cppflags)
 ingest_job_manager_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 ingest_job_manager_dummy_la_LIBADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 ingest_submitbench_SOURCES = ingest/submitbench.c
 ingest_submitbench_CPPFLAGS = $(test_cppflags)
 ingest_submitbench_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 job_manager_list_jobs_SOURCES = job-manager/list-jobs.c
 job_manager_list_jobs_CPPFLAGS = $(test_cppflags)
 job_manager_list_jobs_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 job_manager_events_journal_stream_SOURCES = job-manager/events_journal_stream.c
 job_manager_events_journal_stream_CPPFLAGS = $(test_cppflags)
 job_manager_events_journal_stream_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 job_manager_sched_dummy_la_SOURCES = job-manager/sched-dummy.c
 job_manager_sched_dummy_la_CPPFLAGS = $(test_cppflags)
 job_manager_sched_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 job_manager_sched_dummy_la_LIBADD = \
 	$(top_builddir)/src/common/libschedutil/libschedutil.la \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 disconnect_watcher_la_SOURCES = disconnect/watcher.c
 disconnect_watcher_la_CPPFLAGS = $(test_cppflags)
 disconnect_watcher_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 disconnect_watcher_la_LIBADD = \
-	$(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL)
 
 sched_simple_jj_reader_SOURCES = sched-simple/jj-reader.c
 sched_simple_jj_reader_CPPFLAGS = $(test_cppflags)

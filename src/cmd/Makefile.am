@@ -87,23 +87,20 @@ fluxcmd_PROGRAMS = \
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
-	$(top_builddir)/src/common/libpmi/libpmi_server.la \
-	$(LIBUTIL)
+	$(top_builddir)/src/common/libpmi/libpmi_server.la
 
 flux_job_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(top_builddir)/src/shell/libmpir.la \
 	$(top_builddir)/src/common/libdebugged/libdebugged.la \
-	$(top_builddir)/src/common/libterminus/libterminus.la \
-	$(LIBUTIL)
+	$(top_builddir)/src/common/libterminus/libterminus.la
 
 flux_terminus_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(top_builddir)/src/common/libterminus/libterminus.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(ZMQ_LIBS) \
-	$(LIBUTIL)
+	$(ZMQ_LIBS)
 
 flux_R_LDADD = \
 	$(fluxcmd_ldadd) \
@@ -113,8 +110,7 @@ flux_R_LDADD = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(ZMQ_LIBS) \
 	$(HWLOC_LIBS) \
-	$(JANSSON_LIBS) \
-	$(LIBUTIL)
+	$(JANSSON_LIBS)
 
 
 #

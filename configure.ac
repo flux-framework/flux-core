@@ -195,7 +195,6 @@ AC_CHECK_FUNCS( \
   uselocale \
 )
 X_AC_CHECK_PTHREADS
-X_AC_CHECK_COND_LIB(util, forkpty)
 X_AC_CHECK_COND_LIB(rt, clock_gettime)
 X_AC_CHECK_COND_LIB(dl, dlerror)
 X_AC_MALLOC
@@ -316,7 +315,7 @@ AS_IF([test "x$enable_pylint" = "xyes"], [
 ])
 AM_CONDITIONAL([ENABLE_PYLINT], [test "x$PYLINT" = "xpylint"])
 
-AX_PROG_LUA([5.1],[5.4])
+AX_PROG_LUA([5.1],[5.5])
 AX_LUA_HEADERS
 AX_LUA_LIBS
 X_AC_ZEROMQ
@@ -543,7 +542,7 @@ AC_OUTPUT
 
 AS_IF([test "x$enable_docs" != "xno"], [
   if test "x$sphinx" = "xfalse"; then
-    AC_MSG_WARN([Sphinx not found. Manual pages will not be generated.])
+    AC_MSG_WARN([Python Sphinx not found. Manual pages will not be generated.])
   fi
 ])
 
