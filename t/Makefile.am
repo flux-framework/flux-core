@@ -6,10 +6,10 @@ AM_LDFLAGS = \
 	$(CODE_COVERAGE_LIBS)
 
 AM_CPPFLAGS = \
-        -I$(top_srcdir) \
+	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-        $(ZMQ_CFLAGS)
+	$(ZMQ_CFLAGS)
 
 #  Always set LUA_PATH such that builddir/?.lua is first so that the
 #   build version of fluxometer.lua is found.
@@ -27,11 +27,11 @@ AM_TESTS_ENVIRONMENT = \
 
 TEST_EXTENSIONS = .t .py
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
-        $(top_srcdir)/config/tap-driver.sh
+	$(top_srcdir)/config/tap-driver.sh
 PY_LOG_DRIVER = $(PYTHON) $(top_srcdir)/config/tap-driver.py
 
 lua_SCRIPTS = \
-        fluxometer.lua
+	fluxometer.lua
 
 install-data-local:
 	$(INSTALL) -m644 fluxometer/conf.lua.installed \
@@ -328,15 +328,15 @@ dist_check_DATA = \
 	valgrind/valgrind.supp
 
 test_ldadd = \
-        $(top_builddir)/src/common/libflux-internal.la \
-        $(top_builddir)/src/common/libflux-core.la \
-        $(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
-        $(ZMQ_LIBS) $(LIBPTHREAD)
+	$(top_builddir)/src/common/libflux-core.la \
+	$(ZMQ_LIBS) $(LIBPTHREAD)
 
 test_cppflags = \
-        -I$(top_srcdir)/src/common/libtap \
-        $(AM_CPPFLAGS)
+	-I$(top_srcdir)/src/common/libtap \
+	$(AM_CPPFLAGS)
 
 shmem_backtoback_t_SOURCES = shmem/backtoback.c
 shmem_backtoback_t_CPPFLAGS = $(test_cppflags)
@@ -493,19 +493,19 @@ request_req_la_LIBADD = \
 shell_rcalc_SOURCES = shell/rcalc.c
 shell_rcalc_CPPFLAGS = $(test_cppflags)
 shell_rcalc_LDADD = \
-        $(top_builddir)/src/shell/libshell.la \
-        $(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(top_builddir)/src/shell/libshell.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 shell_lptest_SOURCES = shell/lptest.c
 shell_lptest_CPPFLAGS = $(test_cppflags)
 shell_lptest_LDADD = \
-        $(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 shell_mpir_SOURCES = shell/mpir.c
 shell_mpir_CPPFLAGS = $(test_cppflags)
 shell_mpir_LDADD = \
 	$(top_builddir)/src/shell/libmpir.la \
-        $(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 debug_stall_SOURCES = debug/stall.c
 debug_stall_CPPFLAGS = $(test_cppflags)
@@ -539,7 +539,7 @@ ingest_job_manager_dummy_la_SOURCES = ingest/job-manager-dummy.c
 ingest_job_manager_dummy_la_CPPFLAGS = $(test_cppflags)
 ingest_job_manager_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 ingest_job_manager_dummy_la_LIBADD = \
-        $(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 ingest_submitbench_SOURCES = ingest/submitbench.c
 ingest_submitbench_CPPFLAGS = $(test_cppflags)
@@ -560,14 +560,14 @@ job_manager_sched_dummy_la_SOURCES = job-manager/sched-dummy.c
 job_manager_sched_dummy_la_CPPFLAGS = $(test_cppflags)
 job_manager_sched_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 job_manager_sched_dummy_la_LIBADD = \
-        $(top_builddir)/src/common/libschedutil/libschedutil.la \
-        $(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(top_builddir)/src/common/libschedutil/libschedutil.la \
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 disconnect_watcher_la_SOURCES = disconnect/watcher.c
 disconnect_watcher_la_CPPFLAGS = $(test_cppflags)
 disconnect_watcher_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 disconnect_watcher_la_LIBADD = \
-        $(test_ldadd) $(LIBDL) $(LIBUTIL)
+	$(test_ldadd) $(LIBDL) $(LIBUTIL)
 
 sched_simple_jj_reader_SOURCES = sched-simple/jj-reader.c
 sched_simple_jj_reader_CPPFLAGS = $(test_cppflags)
@@ -588,34 +588,34 @@ shell_plugins_invalid_args_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_invalid_args_la_LDFLAGS = -module -rpath /nowhere
 shell_plugins_invalid_args_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
-        $(top_builddir)/src/common/libflux-core.la
+	$(top_builddir)/src/common/libflux-core.la
 
 shell_plugins_getopt_la_SOURCES = shell/plugins/getopt.c
 shell_plugins_getopt_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_getopt_la_LDFLAGS = -module -rpath /nowhere
 shell_plugins_getopt_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
-        $(top_builddir)/src/common/libflux-core.la
+	$(top_builddir)/src/common/libflux-core.la
 
 shell_plugins_setopt_la_SOURCES = shell/plugins/setopt.c
 shell_plugins_setopt_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_setopt_la_LDFLAGS = -module -rpath /nowhere
 shell_plugins_setopt_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
-        $(top_builddir)/src/common/libflux-core.la
+	$(top_builddir)/src/common/libflux-core.la
 
 shell_plugins_log_la_SOURCES = shell/plugins/log.c
 shell_plugins_log_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_log_la_LDFLAGS = -module -rpath /nowhere
 shell_plugins_log_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
-        $(top_builddir)/src/common/libflux-core.la
+	$(top_builddir)/src/common/libflux-core.la
 
 shell_plugins_test_event_la_SOURCES = shell/plugins/test-event.c
 shell_plugins_test_event_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_test_event_la_LDFLAGS = -module -rpath /nowhere
 shell_plugins_test_event_la_LIBADD = \
-        $(top_builddir)/src/common/libflux-core.la
+	$(top_builddir)/src/common/libflux-core.la
 
 hwloc_hwloc_convert_SOURCES = hwloc/hwloc-convert.c
 hwloc_hwloc_convert_CPPFLAGS = $(HWLOC_CFLAGS) $(test_cppflags)

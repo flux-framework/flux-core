@@ -100,8 +100,10 @@ static const char *jobspec_get_cwd (json_t *jobspec)
 
 static const char *job_get_cwd (struct jobinfo *job)
 {
-    const char *cwd = jobspec_get_cwd (job->jobspec);
-    if (!cwd)
+    const char *cwd;
+    if (job->multiuser)
+        cwd = "/";
+    else if (!(cwd = jobspec_get_cwd (job->jobspec)))
         cwd = default_cwd;
     return (cwd);
 }
@@ -120,8 +122,12 @@ static void start_cb (struct bulk_exec *exec, void *arg)
             jobinfo_fatal_error (job, errno, "Failed to get input to IMP");
             goto out;
         }
-        bulk_exec_write (exec, "stdin", input, strlen (input));
-        bulk_exec_close (exec, "stdin");
+        if (bulk_exec_write (exec, "stdin", input, strlen (input)) < 0)
+            jobinfo_fatal_error (job,
+                                 errno,
+                                 "Failed to write %ld bytes input to IMP",
+                                 strlen (input));
+        (void) bulk_exec_close (exec, "stdin");
 out:
         json_decref (o);
         free (input);
@@ -207,7 +213,6 @@ static int exec_init (struct jobinfo *job)
         goto err;
     }
     if (job->multiuser) {
-        flux_cmd_setopt (cmd, "stdin_BUFSIZE", "8192");
         if (flux_cmd_argv_append (cmd, flux_imp_path) < 0
             || flux_cmd_argv_append (cmd, "exec") < 0) {
             flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
