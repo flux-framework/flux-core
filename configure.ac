@@ -315,7 +315,7 @@ AS_IF([test "x$enable_pylint" = "xyes"], [
 ])
 AM_CONDITIONAL([ENABLE_PYLINT], [test "x$PYLINT" = "xpylint"])
 
-AX_PROG_LUA([5.1],[5.4])
+AX_PROG_LUA([5.1],[5.5])
 AX_LUA_HEADERS
 AX_LUA_LIBS
 X_AC_ZEROMQ
