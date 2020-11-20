@@ -366,10 +366,9 @@ static void status_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *alloc = NULL;
     json_t *down = NULL;
 
-    if (ss->rlist == NULL) {
-        flux_respond_error (h, msg, EAGAIN, "sched-simple not initialized");
-        return;
-    }
+    /* N.B. no need to check if ss->rlist is set.  The reactor is not
+     * run until after synchronous initialization in
+     * simple_sched_init() is complete. */
 
     /*  Create list of all resources
      */
