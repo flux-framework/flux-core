@@ -54,7 +54,7 @@ static int dmesg_rpc_get (flux_future_t *f, flux_log_f fun, void *arg)
     const char *buf;
     int rc = -1;
 
-    if (flux_rpc_get_unpack (f, "{s:s}", "buf", &buf) < 0)
+    if (flux_rpc_get (f, &buf) < 0)
         goto done;
     fun (buf, strlen (buf), arg);
     rc = 0;

@@ -56,7 +56,6 @@ typedef struct {
 
 struct logbuf_entry {
     char *buf;
-    int len;
     int seq;
 };
 
@@ -71,17 +70,21 @@ static void logbuf_entry_destroy (struct logbuf_entry *e)
     }
 }
 
+/* Create a logbuf entry from RFC 5424 formatted buf.
+ * Since buf may not have a terminating \0, add one so that it can be
+ * treated as a string when returned in a log.dmesg response.
+ */
 static struct logbuf_entry *logbuf_entry_create (const char *buf, int len)
 {
     struct logbuf_entry *e = calloc (1, sizeof (*e));
     if (!e)
         return NULL;
-    if (!(e->buf = calloc (1, len))) {
+    if (!(e->buf = malloc (len + 1))) {
         free (e);
         return NULL;
     }
     memcpy (e->buf, buf, len);
-    e->len = len;
+    e->buf[len] = '\0';
     return e;
 }
 
@@ -137,9 +140,8 @@ static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
         }
         msg = zlist_first (logbuf->followers);
         while (msg) {
-            if (flux_respond_pack (logbuf->h, msg, "{ s:s# }",
-                                   "buf", e->buf, e->len) < 0)
-                log_err ("%s: flux_respond_pack", __FUNCTION__);
+            if (flux_respond (logbuf->h, msg, e->buf) < 0)
+                log_err ("error responding to log.dmesg request");
             msg = zlist_next (logbuf->followers);
         }
     }
@@ -567,9 +569,8 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     e = zlist_first (logbuf->buf);
     while (e) {
-        if (flux_respond_pack (h, msg, "{ s:s# }",
-                               "buf", e->buf, e->len) < 0) {
-            log_err ("%s: flux_respond_pack", __FUNCTION__);
+        if (flux_respond (h, msg, e->buf) < 0) {
+            log_err ("error responding to log.dmesg request");
             goto error;
         }
         e = zlist_next (logbuf->buf);
@@ -580,14 +581,15 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
     }
     else {
-        if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
-            log_err ("%s: flux_respond_error", __FUNCTION__);
+        errno = ENODATA;
+        goto error;
     }
 
     return;
 
 error:
-    flux_respond_error (h, msg, errno, NULL);
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        log_err ("error responding to log.dmesg request");
 }
 
 static int cmp_sender (const flux_msg_t *msg, const char *uuid)
