@@ -10,7 +10,7 @@ INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"
 INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
 
 # test initrc files need to be able to find fluxometer.lua:
-export LUA_PATH="$(lua -e 'print(package.path)');${SHARNESS_TEST_DIRECTORY}/?.lua"
+export LUA_PATH="${SHARNESS_TEST_DIRECTORY}/?.lua;$(lua -e 'print(package.path)')"
 
 test_expect_success 'flux-shell: initrc: conf.shell_* attributes are set' '
 	flux broker flux getattr conf.shell_initrc &&
