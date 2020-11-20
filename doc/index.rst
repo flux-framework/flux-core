@@ -3,20 +3,21 @@
    You can adapt this file completely to your liking, but it should at least
    contain the root `toctree` directive.
 
-Welcome to flux-core's documentation!
-=====================================
+Documentation for flux-core
+===========================
 
 .. toctree::
    :maxdepth: 2
    :caption: Contents:
 
 
-Man Pages
-=========
+.. _man-pages:
+
+flux-core Manual Pages
+======================
 
 .. toctree::
    :maxdepth: 2
-   :caption: Manual pages
 
    man1/index
    man3/index
