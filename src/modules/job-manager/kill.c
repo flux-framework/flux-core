@@ -90,7 +90,7 @@ void kill_handle_request (flux_t *h,
         errstr = "guests may only send signals to their own jobs";
         goto error;
     }
-    if (job->state != FLUX_JOB_RUN) {
+    if (job->state != FLUX_JOB_STATE_RUN) {
         errstr = "job is not running";
         errno = EINVAL;
         goto error;
@@ -155,7 +155,7 @@ void killall_handle_request (flux_t *h,
     }
     job = zhashx_first (ctx->active_jobs);
     while (job) {
-        if (job->state != FLUX_JOB_RUN)
+        if (job->state != FLUX_JOB_STATE_RUN)
             goto next;
         if (userid != FLUX_USERID_UNKNOWN && userid != job->userid)
             goto next;

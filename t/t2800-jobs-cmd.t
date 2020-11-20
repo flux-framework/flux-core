@@ -174,10 +174,12 @@ test_expect_success 'flux-jobs -a and -A works' '
 	test $count -eq $nall
 '
 
-# Recall pending = depend & sched, running = run & cleanup,
-#  active = pending & running
+# Recall pending = depend | priority | sched, running = run | cleanup,
+#  active = pending | running
 test_expect_success 'flux-jobs --filter works (job states)' '
 	count=`flux jobs --suppress-header --filter=depend | wc -l` &&
+	test $count -eq 0 &&
+	count=`flux jobs --suppress-header --filter=priority | wc -l` &&
 	test $count -eq 0 &&
 	count=`flux jobs --suppress-header --filter=sched | wc -l` &&
 	test $count -eq $(state_count sched) &&
@@ -197,7 +199,7 @@ test_expect_success 'flux-jobs --filter works (job states)' '
 	test $count -eq $(state_count sched run) &&
 	count=`flux jobs --suppress-header --filter=active | wc -l` &&
 	test $count -eq $(state_count active) &&
-	count=`flux jobs --suppress-header --filter=depend,sched,run,cleanup | wc -l` &&
+	count=`flux jobs --suppress-header --filter=depend,priority,sched,run,cleanup | wc -l` &&
 	test $count -eq $(state_count active) &&
 	count=`flux jobs --suppress-header --filter=pending,inactive | wc -l` &&
 	test $count -eq $(state_count sched inactive) &&
@@ -211,7 +213,7 @@ test_expect_success 'flux-jobs --filter works (job states)' '
 	test $count -eq $(state_count all) &&
 	count=`flux jobs --suppress-header --filter=active,inactive | wc -l` &&
 	test $count -eq $(state_count active inactive) &&
-	count=`flux jobs --suppress-header --filter=depend,cleanup | wc -l` &&
+	count=`flux jobs --suppress-header --filter=depend,priority,cleanup | wc -l` &&
 	test $count -eq 0
 '
 
@@ -488,13 +490,15 @@ test_expect_success 'flux-jobs --format={nodelist},{nodelist:h} works' '
 '
 
 # test just make sure numbers are zero or non-zero given state of job
-test_expect_success 'flux-jobs --format={t_depend/sched} works' '
+test_expect_success 'flux-jobs --format={t_submit/depend/priority/sched} works' '
 	flux jobs -ano "{t_submit},{t_depend},{t_sched}" >t_SDS.out &&
 	count=`cut -d, -f1 t_SDS.out | grep -v "^0.0$" | wc -l` &&
 	test $count -eq $(state_count all) &&
 	count=`cut -d, -f2 t_SDS.out | grep -v "^0.0$" | wc -l` &&
 	test $count -eq $(state_count all) &&
 	count=`cut -d, -f3 t_SDS.out | grep -v "^0.0$" | wc -l` &&
+	test $count -eq $(state_count all) &&
+	count=`cut -d, -f4 t_SDS.out | grep -v "^0.0$" | wc -l` &&
 	test $count -eq $(state_count all)
 '
 test_expect_success 'flux-jobs --format={t_run} works' '
@@ -759,6 +763,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	result_abbrev==RS
 	t_submit==T_SUBMIT
 	t_depend==T_DEPEND
+	t_priority==T_PRIORITY
 	t_sched==T_SCHED
 	t_run==T_RUN
 	t_cleanup==T_CLEANUP

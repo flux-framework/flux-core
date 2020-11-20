@@ -36,20 +36,24 @@ enum {
 };
 
 typedef enum {
-    FLUX_JOB_NEW                    = 1,
-    FLUX_JOB_DEPEND                 = 2,
-    FLUX_JOB_SCHED                  = 4,
-    FLUX_JOB_RUN                    = 8,
-    FLUX_JOB_CLEANUP                = 16,
-    FLUX_JOB_INACTIVE               = 32,   // captive end state
+    FLUX_JOB_STATE_NEW                    = 1,
+    FLUX_JOB_STATE_DEPEND                 = 2,
+    FLUX_JOB_STATE_PRIORITY               = 4,
+    FLUX_JOB_STATE_SCHED                  = 8,
+    FLUX_JOB_STATE_RUN                    = 16,
+    FLUX_JOB_STATE_CLEANUP                = 32,
+    FLUX_JOB_STATE_INACTIVE               = 64,   // captive end state
 } flux_job_state_t;
 
 /* Virtual states, for convenience.
  */
 enum {
-    FLUX_JOB_PENDING    = 6,    // (FLUX_JOB_DEPEND | FLUX_JOB_SCHED)
-    FLUX_JOB_RUNNING    = 24,   // (FLUX_JOB_RUN | FLUX_JOB_CLEANUP)
-    FLUX_JOB_ACTIVE     = 30,   // (FLUX_JOB_PENDING | FLUX_JOB_RUNNING)
+    /* FLUX_JOB_STATE_DEPEND | FLUX_JOB_STATE_PRIORITY | FLUX_JOB_STATE_SCHED */
+    FLUX_JOB_STATE_PENDING    = 14,
+    /* FLUX_JOB_STATE_RUN | FLUX_JOB_STATE_CLEANUP */
+    FLUX_JOB_STATE_RUNNING    = 48,
+    /* FLUX_JOB_STATE_PENDING | FLUX_JOB_STATE_RUNNING */
+    FLUX_JOB_STATE_ACTIVE     = 62,
 };
 
 /* Result of a job

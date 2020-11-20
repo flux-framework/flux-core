@@ -47,6 +47,7 @@ struct job_state_ctx {
 
     /* count current jobs in what states */
     int depend_count;
+    int priority_count;
     int sched_count;
     int run_count;
     int cleanup_count;
@@ -113,6 +114,7 @@ struct job {
      * associated eventlog entries when restarting
      *
      * depend - "submit"
+     * priority - "priority"
      * sched - "depend"
      * run - "alloc"
      * cleanup - "finish" or "exception" w/ severity == 0
@@ -120,6 +122,7 @@ struct job {
      */
     // t_depend is identical to t_submit above, use that
     // double t_depend;
+    double t_priority;
     double t_sched;
     double t_run;
     double t_cleanup;

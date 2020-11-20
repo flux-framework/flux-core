@@ -311,21 +311,34 @@ int event_job_action (struct event *event, struct job *job)
     struct job_manager *ctx = event->ctx;
 
     switch (job->state) {
-        case FLUX_JOB_NEW:
+        case FLUX_JOB_STATE_NEW:
             break;
-        case FLUX_JOB_DEPEND:
+        case FLUX_JOB_STATE_DEPEND:
             if (event_job_post_pack (event, job, "depend", 0, NULL) < 0)
                 return -1;
             break;
-        case FLUX_JOB_SCHED:
+        case FLUX_JOB_STATE_PRIORITY:
+            /* N.B. Priority will be set via a priority plugin call in
+             * the future. For the time being, we pass the
+             * administrative priority set via submit.
+             */
+            if (event_job_post_pack (event,
+                                     job,
+                                     "priority",
+                                     0,
+                                     "{ s:i }",
+                                     "priority", job->priority) < 0)
+                return -1;
+            break;
+        case FLUX_JOB_STATE_SCHED:
             if (alloc_enqueue_alloc_request (ctx->alloc, job) < 0)
                 return -1;
             break;
-        case FLUX_JOB_RUN:
+        case FLUX_JOB_STATE_RUN:
             if (start_send_request (ctx->start, job) < 0)
                 return -1;
             break;
-        case FLUX_JOB_CLEANUP:
+        case FLUX_JOB_STATE_CLEANUP:
             if (job->alloc_pending)
                 alloc_cancel_alloc_request (ctx->alloc, job);
             if (job->alloc_queued)
@@ -352,7 +365,7 @@ int event_job_action (struct event *event, struct job *job)
                     return -1;
             }
             break;
-        case FLUX_JOB_INACTIVE:
+        case FLUX_JOB_STATE_INACTIVE:
             if ((job->flags & FLUX_JOB_WAITABLE))
                 wait_notify_inactive (ctx->wait, job);
             zhashx_delete (ctx->active_jobs, &job->id);
@@ -371,6 +384,19 @@ static int event_submit_context_decode (json_t *context,
                      "priority", priority,
                      "userid", userid,
                      "flags", flags) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    return 0;
+}
+
+static int event_priority_context_decode (json_t *context,
+                                          int *priority)
+{
+    /* N.B. eventually this will be the queue priority, but is the
+     * same of the admin priority at the moment */
+    if (json_unpack (context, "{ s:i }", "priority", priority) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -427,7 +453,7 @@ int event_job_update (struct job *job, json_t *event)
         goto error;
 
     if (!strcmp (name, "submit")) {
-        if (job->state != FLUX_JOB_NEW)
+        if (job->state != FLUX_JOB_STATE_NEW)
             goto inval;
         job->t_submit = timestamp;
         if (event_submit_context_decode (context,
@@ -435,12 +461,19 @@ int event_job_update (struct job *job, json_t *event)
                                          &job->userid,
                                          &job->flags) < 0)
             goto error;
-        job->state = FLUX_JOB_DEPEND;
+        job->state = FLUX_JOB_STATE_DEPEND;
     }
     if (!strcmp (name, "depend")) {
-        if (job->state != FLUX_JOB_DEPEND)
+        if (job->state != FLUX_JOB_STATE_DEPEND)
             goto inval;
-        job->state = FLUX_JOB_SCHED;
+        job->state = FLUX_JOB_STATE_PRIORITY;
+    }
+    else if (!strcmp (name, "priority")) {
+        if (job->state != FLUX_JOB_STATE_PRIORITY)
+            goto inval;
+        if (event_priority_context_decode (context, &job->priority) < 0)
+            goto error;
+        job->state = FLUX_JOB_STATE_SCHED;
     }
     else if (!strcmp (name, "admin-priority")) {
         if (event_admin_priority_context_decode (context, &job->priority) < 0)
@@ -448,7 +481,8 @@ int event_job_update (struct job *job, json_t *event)
     }
     else if (!strcmp (name, "exception")) {
         int severity;
-        if (job->state == FLUX_JOB_NEW || job->state == FLUX_JOB_INACTIVE)
+        if (job->state == FLUX_JOB_STATE_NEW
+            || job->state == FLUX_JOB_STATE_INACTIVE)
             goto inval;
         if (event_exception_context_decode (context, &severity) < 0)
             goto error;
@@ -456,44 +490,47 @@ int event_job_update (struct job *job, json_t *event)
             if ((job->flags & FLUX_JOB_WAITABLE) && !job->end_event)
                 job->end_event = json_incref (event);
 
-            job->state = FLUX_JOB_CLEANUP;
+            job->state = FLUX_JOB_STATE_CLEANUP;
         }
     }
     else if (!strcmp (name, "alloc")) {
-        if (job->state != FLUX_JOB_SCHED && job->state != FLUX_JOB_CLEANUP)
+        if (job->state != FLUX_JOB_STATE_SCHED
+            && job->state != FLUX_JOB_STATE_CLEANUP)
             goto inval;
         job->has_resources = 1;
-        if (job->state == FLUX_JOB_SCHED)
-            job->state = FLUX_JOB_RUN;
+        if (job->state == FLUX_JOB_STATE_SCHED)
+            job->state = FLUX_JOB_STATE_RUN;
     }
     else if (!strcmp (name, "free")) {
-        if (job->state != FLUX_JOB_CLEANUP)
+        if (job->state != FLUX_JOB_STATE_CLEANUP)
             goto inval;
         job->has_resources = 0;
     }
     else if (!strcmp (name, "finish")) {
-        if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
+        if (job->state != FLUX_JOB_STATE_RUN
+            && job->state != FLUX_JOB_STATE_CLEANUP)
             goto inval;
-        if (job->state == FLUX_JOB_RUN) {
+        if (job->state == FLUX_JOB_STATE_RUN) {
             if ((job->flags & FLUX_JOB_WAITABLE) && !job->end_event)
                 job->end_event = json_incref (event);
 
-            job->state = FLUX_JOB_CLEANUP;
+            job->state = FLUX_JOB_STATE_CLEANUP;
         }
     }
     else if (!strcmp (name, "release")) {
         int final;
-        if (job->state != FLUX_JOB_RUN && job->state != FLUX_JOB_CLEANUP)
+        if (job->state != FLUX_JOB_STATE_RUN
+            && job->state != FLUX_JOB_STATE_CLEANUP)
             goto inval;
         if (event_release_context_decode (context, &final) < 0)
             goto error;
-        if (final && job->state == FLUX_JOB_RUN)
+        if (final && job->state == FLUX_JOB_STATE_RUN)
             goto inval;
     }
     else if (!strcmp (name, "clean")) {
-        if (job->state != FLUX_JOB_CLEANUP)
+        if (job->state != FLUX_JOB_STATE_CLEANUP)
             goto inval;
-        job->state = FLUX_JOB_INACTIVE;
+        job->state = FLUX_JOB_STATE_INACTIVE;
     }
     return 0;
 inval:
@@ -552,9 +589,11 @@ int event_job_post_pack (struct event *event,
     /* Keep track of running job count.
      * If queue reaches idle state, event_job_action() triggers any waiters.
      */
-    if ((job->state & FLUX_JOB_RUNNING) && !(old_state & FLUX_JOB_RUNNING))
+    if ((job->state & FLUX_JOB_STATE_RUNNING)
+        && !(old_state & FLUX_JOB_STATE_RUNNING))
         event->ctx->running_jobs++;
-    else if (!(job->state & FLUX_JOB_RUNNING) && (old_state & FLUX_JOB_RUNNING))
+    else if (!(job->state & FLUX_JOB_STATE_RUNNING)
+             && (old_state & FLUX_JOB_STATE_RUNNING))
         event->ctx->running_jobs--;
 
     if (event_job_action (event, job) < 0)

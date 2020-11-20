@@ -38,7 +38,7 @@ bool job_filter (struct job *job, uint32_t userid, int states, int results)
         return false;
     if (userid != FLUX_USERID_UNKNOWN && job->userid != userid)
         return false;
-    if (job->state & FLUX_JOB_INACTIVE
+    if (job->state & FLUX_JOB_STATE_INACTIVE
         && !(job->result & results))
         return false;
     return true;
@@ -106,7 +106,7 @@ json_t *get_jobs (struct info_ctx *ctx,
     /* We return jobs in the following order, pending, running,
      * inactive */
 
-    if (states & FLUX_JOB_PENDING) {
+    if (states & FLUX_JOB_STATE_PENDING) {
         if ((ret = get_jobs_from_list (jobs,
                                        errp,
                                        ctx->jsctx->pending,
@@ -118,7 +118,7 @@ json_t *get_jobs (struct info_ctx *ctx,
             goto error;
     }
 
-    if (states & FLUX_JOB_RUNNING) {
+    if (states & FLUX_JOB_STATE_RUNNING) {
         if (!ret) {
             if ((ret = get_jobs_from_list (jobs,
                                            errp,
@@ -132,7 +132,7 @@ json_t *get_jobs (struct info_ctx *ctx,
         }
     }
 
-    if (states & FLUX_JOB_INACTIVE) {
+    if (states & FLUX_JOB_STATE_INACTIVE) {
         if (!ret) {
             if ((ret = get_jobs_from_list (jobs,
                                            errp,
@@ -191,9 +191,9 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     /* If user sets no states, assume they want all information */
     if (!states)
-        states = (FLUX_JOB_PENDING
-                  | FLUX_JOB_RUNNING
-                  | FLUX_JOB_INACTIVE);
+        states = (FLUX_JOB_STATE_PENDING
+                  | FLUX_JOB_STATE_RUNNING
+                  | FLUX_JOB_STATE_INACTIVE);
 
     /* If user sets no results, assume they want all information */
     if (!results)
@@ -377,7 +377,7 @@ void check_id_valid_continuation (flux_future_t *f, void *arg)
          * lookup was done */
         struct job *job;
         if (!(job = zhashx_lookup (ctx->jsctx->index, &isd->id))
-            || job->state == FLUX_JOB_NEW) {
+            || job->state == FLUX_JOB_STATE_NEW) {
             /* Must wait for job-info to see state change */
             if (wait_id_valid (ctx, isd) < 0)
                 flux_log_error (ctx->h, "%s: wait_id_valid", __FUNCTION__);
@@ -481,7 +481,7 @@ json_t *get_job_by_id (struct info_ctx *ctx,
         return NULL;
     }
 
-    if (job->state == FLUX_JOB_NEW) {
+    if (job->state == FLUX_JOB_STATE_NEW) {
         if (stall) {
             struct idsync_data *isd;
             if (!(isd = idsync_data_create (ctx, id, msg, attrs, NULL))) {
@@ -566,9 +566,9 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
     const char *attrs[] = { "userid", "priority", "t_submit", "t_depend",
-                            "t_sched", "t_run", "t_cleanup", "t_inactive",
-                            "state", "name", "ntasks", "nnodes", "ranks",
-                            "nodelist", "success", "exception_occurred",
+                            "t_sched", "t_priority", "t_run", "t_cleanup",
+                            "t_inactive", "state", "name", "ntasks", "nnodes",
+                            "ranks", "nodelist", "success", "exception_occurred",
                             "exception_type", "exception_severity",
                             "exception_note", "result", "expiration",
                             "annotations", NULL };

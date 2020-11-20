@@ -75,27 +75,32 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
         }
         else if (!strcmp (attr, "t_submit")
                  || !strcmp (attr, "t_depend")) {
-            if (!(job->states_mask & FLUX_JOB_DEPEND))
+            if (!(job->states_mask & FLUX_JOB_STATE_DEPEND))
                 continue;
             val = json_real (job->t_submit);
         }
+        else if (!strcmp (attr, "t_priority")) {
+            if (!(job->states_mask & FLUX_JOB_STATE_PRIORITY))
+                continue;
+            val = json_real (job->t_priority);
+        }
         else if (!strcmp (attr, "t_sched")) {
-            if (!(job->states_mask & FLUX_JOB_SCHED))
+            if (!(job->states_mask & FLUX_JOB_STATE_SCHED))
                 continue;
             val = json_real (job->t_sched);
         }
         else if (!strcmp (attr, "t_run")) {
-            if (!(job->states_mask & FLUX_JOB_RUN))
+            if (!(job->states_mask & FLUX_JOB_STATE_RUN))
                 continue;
             val = json_real (job->t_run);
         }
         else if (!strcmp (attr, "t_cleanup")) {
-            if (!(job->states_mask & FLUX_JOB_CLEANUP))
+            if (!(job->states_mask & FLUX_JOB_STATE_CLEANUP))
                 continue;
             val = json_real (job->t_cleanup);
         }
         else if (!strcmp (attr, "t_inactive")) {
-            if (!(job->states_mask & FLUX_JOB_INACTIVE))
+            if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE))
                 continue;
             val = json_real (job->t_inactive);
         }
@@ -113,12 +118,12 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
             val = json_integer (job->ntasks);
         }
         else if (!strcmp (attr, "nnodes")) {
-            if (!(job->states_mask & FLUX_JOB_RUN))
+            if (!(job->states_mask & FLUX_JOB_STATE_RUN))
                 continue;
             val = json_integer (job->nnodes);
         }
         else if (!strcmp (attr, "ranks")) {
-            if (!(job->states_mask & FLUX_JOB_RUN))
+            if (!(job->states_mask & FLUX_JOB_STATE_RUN))
                 continue;
             /* potentially NULL if R invalid */
             if (job->ranks)
@@ -127,7 +132,7 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
                 val = json_string ("");
         }
         else if (!strcmp (attr, "nodelist")) {
-            if (!(job->states_mask & FLUX_JOB_RUN))
+            if (!(job->states_mask & FLUX_JOB_STATE_RUN))
                 continue;
             /* potentially NULL if R invalid */
             if (job->nodelist)
@@ -136,40 +141,40 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
                 val = json_string ("");
         }
         else if (!strcmp (attr, "expiration")) {
-            if (!(job->states_mask & FLUX_JOB_RUN))
+            if (!(job->states_mask & FLUX_JOB_STATE_RUN))
                 continue;
             val = json_real (job->expiration);
         }
         else if (!strcmp (attr, "success")) {
-            if (!(job->states_mask & FLUX_JOB_INACTIVE))
+            if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE))
                 continue;
             val = json_boolean (job->success);
         }
         else if (!strcmp (attr, "exception_occurred")) {
-            if (!(job->states_mask & FLUX_JOB_INACTIVE))
+            if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE))
                 continue;
             val = json_boolean (job->exception_occurred);
         }
         else if (!strcmp (attr, "exception_severity")) {
-            if (!(job->states_mask & FLUX_JOB_INACTIVE)
+            if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE)
                 || !job->exception_occurred)
                 continue;
             val = json_integer (job->exception_severity);
         }
         else if (!strcmp (attr, "exception_type")) {
-            if (!(job->states_mask & FLUX_JOB_INACTIVE)
+            if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE)
                 || !job->exception_occurred)
                 continue;
             val = json_string (job->exception_type);
         }
         else if (!strcmp (attr, "exception_note")) {
-            if (!(job->states_mask & FLUX_JOB_INACTIVE)
+            if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE)
                 || !job->exception_occurred)
                 continue;
             val = json_string (job->exception_note);
         }
         else if (!strcmp (attr, "result")) {
-            if (!(job->states_mask & FLUX_JOB_INACTIVE))
+            if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE))
                 continue;
             val = json_integer (job->result);
         }

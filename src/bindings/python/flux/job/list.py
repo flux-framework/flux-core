@@ -22,6 +22,7 @@ VALID_ATTRS = [
     "priority",
     "t_submit",
     "t_depend",
+    "t_priority",
     "t_sched",
     "t_run",
     "t_cleanup",
@@ -157,14 +158,15 @@ class JobList:
     # pylint: disable=too-many-instance-attributes
 
     STATES = {
-        "depend": flux.constants.FLUX_JOB_DEPEND,
-        "sched": flux.constants.FLUX_JOB_SCHED,
-        "run": flux.constants.FLUX_JOB_RUN,
-        "cleanup": flux.constants.FLUX_JOB_CLEANUP,
-        "inactive": flux.constants.FLUX_JOB_INACTIVE,
-        "pending": flux.constants.FLUX_JOB_PENDING,
-        "running": flux.constants.FLUX_JOB_RUNNING,
-        "active": flux.constants.FLUX_JOB_ACTIVE,
+        "depend": flux.constants.FLUX_JOB_STATE_DEPEND,
+        "priority": flux.constants.FLUX_JOB_STATE_PRIORITY,
+        "sched": flux.constants.FLUX_JOB_STATE_SCHED,
+        "run": flux.constants.FLUX_JOB_STATE_RUN,
+        "cleanup": flux.constants.FLUX_JOB_STATE_CLEANUP,
+        "inactive": flux.constants.FLUX_JOB_STATE_INACTIVE,
+        "pending": flux.constants.FLUX_JOB_STATE_PENDING,
+        "running": flux.constants.FLUX_JOB_STATE_RUNNING,
+        "active": flux.constants.FLUX_JOB_STATE_ACTIVE,
     }
     RESULTS = {
         "completed": flux.constants.FLUX_JOB_RESULT_COMPLETED,

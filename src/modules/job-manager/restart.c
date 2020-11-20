@@ -205,7 +205,7 @@ int restart_from_kvs (struct job_manager *ctx)
      */
     job = zhashx_first (ctx->active_jobs);
     while (job) {
-        if ((job->state & FLUX_JOB_RUNNING) != 0)
+        if ((job->state & FLUX_JOB_STATE_RUNNING) != 0)
             ctx->running_jobs++;
         job = zhashx_next (ctx->active_jobs);
     }

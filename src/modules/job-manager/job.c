@@ -50,7 +50,7 @@ struct job *job_create (void)
     job->refcount = 1;
     job->userid = FLUX_USERID_UNKNOWN;
     job->priority = FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
-    job->state = FLUX_JOB_NEW;
+    job->state = FLUX_JOB_STATE_NEW;
     return job;
 }
 
@@ -74,7 +74,7 @@ struct job *job_create_from_eventlog (flux_jobid_t id, const char *s)
         job->eventlog_seq++;
     }
 
-    if (job->state == FLUX_JOB_NEW)
+    if (job->state == FLUX_JOB_STATE_NEW)
         goto inval;
 
     json_decref (a);
@@ -108,7 +108,7 @@ void *job_duplicator (const void *item)
     return job_incref ((struct job *)item);
 }
 
-/* Compare jobs, ordering by (1) priority, (2) t_submit.
+/* Compare jobs, ordering by (1) priority, (2) job id.
  * N.B. zlistx_comparator_fn signature
  */
 int job_comparator (const void *a1, const void *a2)
@@ -118,7 +118,7 @@ int job_comparator (const void *a1, const void *a2)
     int rc;
 
     if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
-        rc = NUMCMP (j1->t_submit, j2->t_submit);
+        rc = NUMCMP (j1->id, j2->id);
     return rc;
 }
 
