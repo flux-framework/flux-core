@@ -25,6 +25,7 @@
 #include "log.h"
 
 typedef enum { MODE_LEADER, MODE_LOCAL } stderr_mode_t;
+typedef enum { LOG_NO_TIMESTAMP=1 } log_flags_t;
 
 /* See descriptions in flux-broker-attributes(7) */
 static const int default_ring_size = 1024;
@@ -424,27 +425,32 @@ static int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
     return 0;
 }
 
-/* Log a message to stderr without timestamp.
- * This assumes a timestamp is added externally, e.g. by the systemd journal.
+/* Log a message to 'fp', if non-NULL.
+ * Set flags to LOG_NO_TIMESTAMP to suppress timestamp.
  */
-static void log_stderr (const char *buf, int len)
+static void log_fp (FILE *fp, int flags, const char *buf, int len)
 {
     struct stdlog_header hdr;
     const char *msg;
     int msglen, severity;
     uint32_t nodeid;
 
-    if (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) < 0)
-        fprintf (stderr, "%.*s\n", len, buf);
-    else {
-        nodeid = strtoul (hdr.hostname, NULL, 10);
-        severity = STDLOG_SEVERITY (hdr.pri);
-        fprintf (stderr, "%s.%s[%" PRIu32 "]: %.*s\n",
-                 hdr.appname,
-                 stdlog_severity_to_string (severity),
-                 nodeid,
-                 msglen, msg);
+    if (fp) {
+        if (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) < 0)
+            fprintf (fp, "%.*s\n", len, buf);
+        else {
+            nodeid = strtoul (hdr.hostname, NULL, 10);
+            severity = STDLOG_SEVERITY (hdr.pri);
+            fprintf (fp, "%s%s%s.%s[%" PRIu32 "]: %.*s\n",
+                     (flags & LOG_NO_TIMESTAMP) ? "" : hdr.timestamp,
+                     (flags & LOG_NO_TIMESTAMP) ? "" : " ",
+                     hdr.appname,
+                     stdlog_severity_to_string (severity),
+                     nodeid,
+                     msglen, msg);
+        }
     }
+    fflush (fp);
 }
 
 static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
@@ -470,16 +476,16 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
         if (severity <= logbuf->critical_level
                     || (severity <= logbuf->stderr_level
                     && logbuf->stderr_mode == MODE_LOCAL)) {
+            int flags = 0;
             if (logbuf->stderr_mode == MODE_LOCAL)
-                log_stderr (buf, len);
-            else
-                flux_log_fprint (buf, len, stderr);
+                flags |= LOG_NO_TIMESTAMP; // avoid dup in syslog journal
+            log_fp (stderr, flags, buf, len);
             logged_stderr = true;
         }
     }
     if (severity <= logbuf->forward_level) {
         if (logbuf->rank == 0) {
-            flux_log_fprint (buf, len, logbuf->f);
+            log_fp (logbuf->f, 0, buf, len);
         } else {
             if (logbuf_forward (logbuf, buf, len) < 0)
                 rc = -1;
@@ -488,7 +494,7 @@ static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
     if (!logged_stderr && severity <= logbuf->stderr_level
                        && logbuf->stderr_mode == MODE_LEADER
                        && logbuf->rank == 0) {
-            flux_log_fprint (buf, len, stderr);
+            log_fp (stderr, 0, buf, len);
     }
     return rc;
 }
