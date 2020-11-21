@@ -62,21 +62,6 @@ void flux_log_error (flux_t *h, const char *fmt, ...)
  */
 void flux_log_set_redirect (flux_t *h, flux_log_f fun, void *arg);
 
-
-/* Manipulate the broker's ring buffer.
- */
-enum {
-    FLUX_DMESG_CLEAR = 1,
-    FLUX_DMESG_FOLLOW = 2,
-};
-
-int flux_dmesg (flux_t *h, int flags, flux_log_f fun, void *arg);
-
-/* flux_log_f callback that prints a log message to a FILE stream
- * passed in as 'arg'.
- */
-void flux_log_fprint (const char *buf, int len, void *arg);
-
 /* Convert errno to string.
  * Flux errno space includes POSIX errno + zeromq errors.
  */
