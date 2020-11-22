@@ -11,14 +11,15 @@ IMAGE=bionic
 FLUX_SECURITY_VERSION=0.4.0
 JOBS=2
 MOUNT_HOME_ARGS="--volume=$HOME:/home/$USER -e HOME"
+POISON=t
 
 #
 declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only"
-declare -r short_opts="hqIdi:S:j:t:D:"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison"
+declare -r short_opts="hqIdi:S:j:t:D:P"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
 Build docker image for travis builds, then run tests inside the new\n\
@@ -37,6 +38,7 @@ Options:\n\
  -S, --flux-security-version=N Install flux-security vers N (default=$FLUX_SECURITY_VERSION)\n
  -j, --jobs=N                  Value for make -j (default=$JOBS)\n
  -d, --distcheck               Run 'make distcheck' instead of 'make check'\n\
+ -P, --no-poison               Do not install poison libflux and flux(1)\n\
  -D, --build-directory=DIRNAME Name of a subdir to build in, will be made\n\
  -I, --interactive             Instead of running travis build, run docker\n\
                                 image with interactive shell.\n\
@@ -67,6 +69,7 @@ while true; do
       --no-cache)                  NO_CACHE="--no-cache";      shift   ;;
       --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
       --install-only)              INSTALL_ONLY=t;             shift   ;;
+      -P|--no-poison)              POISON=0;                   shift   ;;
       -t|--tag)                    TAG="$2";                   shift 2 ;;
       --)                          shift; break;                       ;;
       *)                           die "Invalid option '$1'\n$usage"   ;;
@@ -113,6 +116,7 @@ if [[ -n "$MOUNT_HOME_ARGS" ]]; then
 fi
 echo "mounting $TOP as /usr/src"
 
+export POISON
 export JOBS
 export DISTCHECK
 export BUILD_DIR
@@ -157,6 +161,7 @@ else
         -e TEST_CHECK_PREREQS \
         -e PYTHON_VERSION \
         -e PRELOAD \
+        -e POISON \
         -e ASAN_OPTIONS \
         -e BUILD_DIR \
         -e S3_ACCESS_KEY_ID \

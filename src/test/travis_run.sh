@@ -14,6 +14,7 @@
 #  CPPCHECK      Run cppcheck if set to "t"
 #  DISTCHECK     Run `make distcheck` if set
 #  PRELOAD       Set as LD_PRELOAD for make and tests
+#  POISON        Install poison libflux and flux(1) in image
 #  chain_lint    Run sharness with --chain-lint if chain_lint=t
 #
 #  And, obviously, some crucial variables that configure itself cares about:
@@ -160,6 +161,13 @@ fi
 
 travis_fold "configure"  "/usr/src/configure ${ARGS}..." /usr/src/configure ${ARGS}
 travis_fold "make_clean" "make clean..." make clean
+
+env
+if test "$POISON" = "t"; then
+  echo "Installing poison libflux..."
+  travis_fold "poison_libflux" "Installing poison libflux..." \
+    bash src/test/docker/poison-libflux.sh
+fi
 
 if test "$DISTCHECK" != "t"; then
   echo running: ${MAKECMDS}

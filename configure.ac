@@ -532,6 +532,7 @@ AC_CONFIG_FILES( \
   t/Makefile \
   t/fluxometer/conf.lua \
   t/fluxometer/conf.lua.installed \
+  src/test/docker/poison-libflux.sh
 )
 
 AC_CONFIG_LINKS([ \
