@@ -69,7 +69,7 @@ local function reladate (t)
     end
 
     if (diff < 90) then
-        return fmt ("%d seconds ago", diff)
+        return fmt ("%d seconds ago", math.floor(diff + 0.5))
     end
 
     -- Convert to minutes:
