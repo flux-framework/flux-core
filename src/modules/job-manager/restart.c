@@ -138,9 +138,25 @@ static int restart_map_cb (struct job *job, void *arg)
         return -1;
     if ((job->flags & FLUX_JOB_WAITABLE))
         wait_notify_active (ctx->wait, job);
-    if (event_job_action (ctx->event, job) < 0) {
-        flux_log_error (ctx->h, "%s: event_job_action id=%ju",
-                        __FUNCTION__, (uintmax_t)job->id);
+    if (job->state == FLUX_JOB_STATE_SCHED) {
+       /* The flux-restart event is posted to jobs in SCHED state to
+        * transition back to PRIORITY so that the queue priority can
+        * be re-established.
+        */
+        if (event_job_post_pack (ctx->event,
+                                 job,
+                                 "flux-restart",
+                                 0,
+                                 NULL) < 0) {
+            flux_log_error (ctx->h, "%s: event_job_post_pack id=%ju",
+                            __FUNCTION__, (uintmax_t)job->id);
+        }
+    }
+    else {
+        if (event_job_action (ctx->event, job) < 0) {
+            flux_log_error (ctx->h, "%s: event_job_action id=%ju",
+                            __FUNCTION__, (uintmax_t)job->id);
+        }
     }
     return 0;
 }

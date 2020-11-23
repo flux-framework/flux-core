@@ -210,6 +210,21 @@ static void update_job_state (struct info_ctx *ctx,
         (*increment)++;
 }
 
+static void revert_job_state (struct info_ctx *ctx,
+                              struct job *job,
+                              double timestamp)
+{
+    /* The flux-restart event is currently only posted to jobs in
+     * SCHED state since that is the only state transition defined
+     * for the event in RFC21.  In the future, other transitions
+     * may be defined.
+     */
+    if (job->state == FLUX_JOB_STATE_SCHED) {
+        job->states_mask &= ~(job->state);
+        update_job_state (ctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
+    }
+}
+
 static void job_insert_list (struct job_state_ctx *jsctx,
                              struct job *job,
                              flux_job_state_t newstate)
@@ -949,6 +964,9 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
         else if (!strcmp (name, "clean")) {
             update_job_state (ctx, job, FLUX_JOB_STATE_INACTIVE, timestamp);
         }
+        else if (!strcmp (name, "flux-restart")) {
+            revert_job_state (ctx, job, timestamp);
+        }
     }
 
     if (job->state == FLUX_JOB_STATE_NEW) {
@@ -1171,6 +1189,40 @@ static int journal_advance_job (struct job_state_ctx *jsctx,
         return 0;
 
     return job_transition_state (jsctx, job, newstate, timestamp);
+}
+
+static int journal_revert_job (struct job_state_ctx *jsctx,
+                               flux_jobid_t id,
+                               int eventlog_seq,
+                               double timestamp)
+{
+    struct job *job;
+
+    if (!(job = zhashx_lookup (jsctx->index, &id))) {
+        flux_log_error (jsctx->h, "%s: job %ju not in hash",
+                        __FUNCTION__, (uintmax_t)id);
+        /* do not return error, we consider it a non-fatal error */
+        return 0;
+    }
+
+    /* The flux-restart event is currently only posted to jobs in
+     * SCHED state since that is the only state transition defined
+     * for the event in RFC21.  In the future, other transitions
+     * may be defined.
+     */
+    if (job->state == FLUX_JOB_STATE_SCHED) {
+        job->states_mask &= ~(job->state);
+
+        if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
+            return 0;
+
+        return job_transition_state (jsctx,
+                                     job,
+                                     FLUX_JOB_STATE_PRIORITY,
+                                     timestamp);
+    }
+
+    return 0;
 }
 
 static int submit_context_parse (flux_t *h,
@@ -1526,6 +1578,13 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
     }
     else if (!strcmp (name, "annotations")) {
         if (journal_annotations_event (jsctx, id, context) < 0)
+            return -1;
+    }
+    else if (!strcmp (name, "flux-restart")) {
+        if (journal_revert_job (jsctx,
+                                id,
+                                eventlog_seq,
+                                timestamp) < 0)
             return -1;
     }
     else {

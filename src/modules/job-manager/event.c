@@ -320,7 +320,8 @@ int event_job_action (struct event *event, struct job *job)
         case FLUX_JOB_STATE_PRIORITY:
             /* N.B. Priority will be set via a priority plugin call in
              * the future. For the time being, we pass the
-             * administrative priority set via submit.
+             * administrative priority set via submit or
+             * administrative change.
              */
             if (event_job_post_pack (event,
                                      job,
@@ -531,6 +532,15 @@ int event_job_update (struct job *job, json_t *event)
         if (job->state != FLUX_JOB_STATE_CLEANUP)
             goto inval;
         job->state = FLUX_JOB_STATE_INACTIVE;
+    }
+    else if (!strcmp (name, "flux-restart")) {
+        /* The flux-restart event is currently only posted to jobs in
+         * SCHED state since that is the only state transition defined
+         * for the event in RFC21.  In the future, other transitions
+         * may be defined.
+         */
+        if (job->state == FLUX_JOB_STATE_SCHED)
+            job->state = FLUX_JOB_STATE_PRIORITY;
     }
     return 0;
 inval:
