@@ -1,0 +1,89 @@
+#!/bin/bash
+#
+#  Build a "poison" libflux-core.so to install in system path.
+#
+#  This will hopefully ensure no flux-core internal tests try to
+#   load the system libflux-core.so
+#
+
+WORKDIR=$(mktemp -d)
+printf " Changing working directory to $WORKDIR\n"
+cd $WORKDIR || exit 1
+
+cleanup() {
+    rm -rf $WORKDIR
+    printf " Cleaning up...\n"
+}
+trap cleanup EXIT
+
+LIBDIR=@X_LIBDIR@
+BINDIR=@X_BINDIR@
+
+#  Install poison flux(1) executable in PATH
+#
+printf " Installing poison flux binary to ${BINDIR}/flux\n"
+cat >flux.sh <<EOF
+#!/bin/sh
+echo "Error: system flux executable run during test!" >&2
+EOF
+install -m 0755 flux.sh ${BINDIR}/flux
+
+
+#  Create poison dso:
+cat >poison.c <<EOF
+#include <stdio.h>
+#include <stdlib.h>
+
+void __attribute__((constructor)) poison (void)
+{
+    fprintf (stderr, "error: program loaded system %s\n", LIBNAME);
+    exit (1);
+}
+EOF
+
+CORE_VERSION=@LIBFLUX_CORE_VERSION_INFO@
+IDSET_VERSION=@LIBFLUX_IDSET_VERSION_INFO@
+HOSTLIST_VERSION=@LIBFLUX_HOSTLIST_VERSION_INFO@
+SCHEDUTIL_VERSION=@LIBFLUX_SCHEDUTIL_VERSION_INFO@
+OPTPARSE_VERSION=@LIBFLUX_OPTPARSE_VERSION_INFO@
+
+get_current() {
+    name=${1^^}_VERSION
+    echo ${!name} | cut -d: -f1
+}
+get_revision() {
+    name=${1^^}_VERSION
+    echo ${!name} | cut -d: -f2
+}
+get_age() {
+    name=${1^^}_VERSION
+    echo ${!name} | cut -d: -f3
+}
+
+printf " Installing poison flux libs in ${LIBDIR}\n"
+for lib in core idset optparse schedutil hostlist; do
+
+    #  Compile:
+    printf " BUILD    poison libflux-${lib}.so\n"
+    cc -D LIBNAME=\"libflux-${lib}\" -fPIC -shared -o libflux-${lib}.so poison.c
+
+    #  Install:
+    printf " INSTALL  poison libflux-${lib}.so to ${LIBDIR}\n"
+    install -m 0755 libflux-${lib}.so ${LIBDIR}
+
+    #  Create version links
+    #  N.B. This is very linux specific -- we may need a different way to
+    #   do this in the future.
+    #
+    current=$(get_current $lib)
+    revision=$(get_revision $lib)
+    age=$(get_age $lib)
+    major=$((current - age))
+    suffix=$major.$age.$revision
+
+    printf " LINK     ${LIBDIR}/libflux-${lib}.so.${major}\n"
+    ln -sf ${LIBDIR}/libflux-${lib}.so ${LIBDIR}/libflux-${lib}.so.${suffix}
+    ln -sf ${LIBDIR}/libflux-${lib}.so ${LIBDIR}/libflux-${lib}.so.${major}
+
+done
+
