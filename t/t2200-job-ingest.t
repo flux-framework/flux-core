@@ -150,11 +150,11 @@ test_expect_success 'job-ingest: invalid jobs rejected' '
 	test_invalid ${JOBSPEC}/invalid/*
 '
 
-test_expect_success 'job-ingest: submit job 100 times' '
+test_expect_success NO_ASAN 'job-ingest: submit job 100 times' '
 	${SUBMITBENCH} -r 100 use_case_2.6.json
 '
 
-test_expect_success 'job-ingest: submit job 100 times, reuse signature' '
+test_expect_success NO_ASAN 'job-ingest: submit job 100 times, reuse signature' '
 	${SUBMITBENCH} ${SUBMITBENCH_OPT_R} -r 100 use_case_2.6.json
 '
 
