@@ -82,6 +82,72 @@ class TestHandle(unittest.TestCase):
         self.assertGreaterEqual(ret, 0, msg="Reactor exited with {}".format(ret))
         self.assertTrue(cb_ran[0], msg="Callback did not run successfully")
 
+    def test_03_future_then_varargs(self):
+        cb_ran = [False]
+
+        def then_cb(future, one, two, three):
+            cb_ran[0] = True
+            try:
+                self.assertEqual(one, "one")
+                self.assertEqual(two, "two")
+                self.assertEqual(three, "three")
+            finally:
+                future.get_handle().reactor_stop()
+
+        self.f.rpc("cmb.ping").then(then_cb, "one", "two", "three")
+        gc.collect(2)
+        ret = self.f.reactor_run()
+        self.assertGreaterEqual(ret, 0, msg="Reactor exited with < 0")
+        self.assertTrue(cb_ran[0], msg="Callback did not run successfully")
+
+    def test_03_future_then_noargs(self):
+        cb_ran = [False]
+
+        def then_cb(future):
+            cb_ran[0] = True
+            future.get_handle().reactor_stop()
+
+        self.f.rpc("cmb.ping").then(then_cb)
+        gc.collect(2)
+        ret = self.f.reactor_run()
+        self.assertGreaterEqual(ret, 0, msg="Reactor exited with < 0")
+        self.assertTrue(cb_ran[0], msg="Callback did not run successfully")
+
+    def test_03_future_then_default_args(self):
+        cb_ran = [False]
+
+        def then_cb(future, args=None):
+            cb_ran[0] = True
+            try:
+                self.assertIsNone(args)
+            finally:
+                future.get_handle().reactor_stop()
+
+        self.f.rpc("cmb.ping").then(then_cb)
+        gc.collect(2)
+        ret = self.f.reactor_run()
+        self.assertGreaterEqual(ret, 0, msg="Reactor exited with < 0")
+        self.assertTrue(cb_ran[0], msg="Callback did not run successfully")
+
+    def test_03_future_then_kwargs(self):
+        cb_ran = [False]
+
+        def then_cb(future, val1=None, val2=None, val3="default"):
+            cb_ran[0] = True
+            try:
+                self.assertTrue(val1)
+                self.assertTrue(val2)
+                # val3 gets default value
+                self.assertEqual(val3, "default")
+            finally:
+                future.get_handle().reactor_stop()
+
+        self.f.rpc("cmb.ping").then(then_cb, val2=True, val1=True)
+        gc.collect(2)
+        ret = self.f.reactor_run()
+        self.assertGreaterEqual(ret, 0, msg="Reactor exited with < 0")
+        self.assertTrue(cb_ran[0], msg="Callback did not run successfully")
+
     def test_04_double_future_then(self):
         """Register two 'then' cbs and ensure it throws an exception"""
         with self.assertRaises(EnvironmentError) as cm:

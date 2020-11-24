@@ -31,7 +31,7 @@ def continuation_callback(c_future, opaque_handle):
     try:
         py_future: "Future" = ffi.from_handle(opaque_handle)
         assert c_future == py_future.pimpl.handle
-        py_future.then_cb(py_future, py_future.then_arg)
+        py_future.then_cb(py_future, *py_future.then_args, **py_future.then_kwargs)
     finally:
         _THEN_HANDLES[py_future] -= 1
         if _THEN_HANDLES[py_future] <= 0:
@@ -74,7 +74,8 @@ class Future(WrapperPimpl):
             pimpl_t = self.InnerWrapper
         self.pimpl = pimpl_t(handle=future_handle, prefixes=prefixes)
         self.then_cb = None
-        self.then_arg = None
+        self.then_args = []
+        self.then_kwargs = {}
         self.cb_handle = None
 
     def error_string(self):
@@ -108,7 +109,7 @@ class Future(WrapperPimpl):
     def get_reactor(self):
         return self.pimpl.get_reactor()
 
-    def then(self, callback, arg=None, timeout=-1.0):
+    def then(self, callback, *args, timeout=-1.0, **kwargs):
         if self in _THEN_HANDLES:
             raise EnvironmentError(
                 errno.EEXIST, "then callback already exists for this future"
@@ -117,7 +118,8 @@ class Future(WrapperPimpl):
             raise ValueError("Callback cannot be None")
 
         self.then_cb = callback
-        self.then_arg = arg
+        self.then_args = args
+        self.then_kwargs = kwargs
         self.cb_handle = ffi.new_handle(self)
         self.pimpl.then(timeout, lib.continuation_callback, self.cb_handle)
 
