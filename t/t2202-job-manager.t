@@ -185,6 +185,21 @@ test_expect_success 'job-manager: queue was successfully reconstructed' '
 	test_cmp list10_reordered.out list_reload.out
 '
 
+check_eventlog_restart_events() {
+	for jobid in $(cut -f1 <list_reload.out); do
+		if ! flux job wait-event -t 20 -c 1 ${jobid} flux-restart \
+		   || ! flux job wait-event -t 20 -c 2 ${jobid} priority
+		then
+			return 1
+		fi
+	done
+	return 0
+}
+
+test_expect_success 'job-manager: eventlog indicates restart & priority event' '
+	check_eventlog_restart_events
+'
+
 test_expect_success HAVE_JQ 'job-manager: max_jobid has not changed' '
 	${RPC} job-manager.getinfo | jq .max_jobid >max2.out &&
 	test_cmp max2.exp max2.out

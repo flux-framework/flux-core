@@ -832,6 +832,46 @@ test_expect_success HAVE_JQ 'verify nnodes/ranks/nodelist preserved across resta
 '
 
 #
+# job-info can handle flux-restart events
+#
+# TODO: presently job-info depends on job-manager journal, so it is
+# not possible to test the reload of the job-manager that doesn't also
+# reload job-info.
+#
+
+wait_jobid() {
+        local jobid="$1"
+        local i=0
+        while ! flux job list --states=sched | grep $jobid > /dev/null \
+               && [ $i -lt 50 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ "$i" -eq "50" ]
+        then
+            return 1
+        fi
+        return 0
+}
+
+# to ensure jobs are still in PENDING state, stop queue before
+# reloading job-info & job-manager.  reload job-exec & sched-simple
+# after wait_jobid, b/c we do not want the job to be accidentally
+# executed.
+test_expect_success 'job-info parses flux-restart events' '
+        flux queue stop &&
+        jobid=`flux job submit hostname.json | flux job id` &&
+        fj_wait_event $jobid priority &&
+        flux module unload job-info &&
+        flux module reload job-manager &&
+        flux module load job-info &&
+        wait_jobid $jobid &&
+        flux module reload job-exec &&
+        flux module reload sched-simple
+'
+
+#
 # job list special cases
 #
 
