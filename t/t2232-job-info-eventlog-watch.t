@@ -256,6 +256,46 @@ test_expect_success 'flux job wait-event -p times out on no event (live job)' '
         flux job cancel $jobid
 '
 
+test_expect_success 'flux job wait-event --count=0 errors' '
+        test_must_fail fj_wait_event --count=0 1234 foobar 2> count.err &&
+        grep "count must be" count.err
+'
+
+test_expect_success 'flux job wait-event --count=1 works' '
+        jobid=$(submit_job) &&
+        fj_wait_event --count=1 ${jobid} clean
+'
+
+test_expect_success 'flux job wait-event --count=2 works' '
+        jobid=$(submit_job_wait) &&
+        kvsdir=$(flux job id --to=kvs $jobid) &&
+	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
+        test_must_fail flux job wait-event --timeout=0.2 --count=2 ${jobid} foobar &&
+	flux kvs eventlog append ${kvsdir}.eventlog foobar &&
+        fj_wait_event --count=2 ${jobid} foobar &&
+        flux job cancel $jobid
+'
+
+test_expect_success 'flux job wait-event --count=2 and context match works' '
+        jobid=$(submit_job_wait) &&
+        kvsdir=$(flux job id --to=kvs $jobid) &&
+	flux kvs eventlog append ${kvsdir}.eventlog foobar "{\"foo\":\"bar\"}" &&
+        test_must_fail flux job wait-event --timeout=0.2 --count=2 --match-context="foo=\"bar\"" ${jobid} foobar &&
+	flux kvs eventlog append ${kvsdir}.eventlog foobar "{\"foo\":\"bar\"}" &&
+        fj_wait_event --count=2 --match-context="foo=\"bar\"" ${jobid} foobar &&
+        flux job cancel $jobid
+'
+
+test_expect_success 'flux job wait-event --count=2 and invalid context match fails' '
+        jobid=$(submit_job_wait) &&
+        kvsdir=$(flux job id --to=kvs $jobid) &&
+	flux kvs eventlog append ${kvsdir}.eventlog foobar "{\"foo\":\"bar\"}" &&
+        test_must_fail flux job wait-event --timeout=0.2 --count=2 --match-context="foo=\"dar\"" ${jobid} foobar &&
+	flux kvs eventlog append ${kvsdir}.eventlog foobar "{\"foo\":\"bar\"}" &&
+        test_must_fail flux job wait-event --timeout=0.2 --count=2 --match-context="foo=\"dar\"" ${jobid} foobar &&
+        flux job cancel $jobid
+'
+
 # In order to test watching a guest event log that does not yet exist,
 # we will start a job that will take up all resources.  Then start
 # another job, which we will watch and know it hasn't started running
