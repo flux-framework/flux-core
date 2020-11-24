@@ -230,6 +230,7 @@ dist_check_SCRIPTS = \
 	scripts/tssh \
 	scripts/sign-as.py \
 	scripts/runpty.py \
+	scripts/dmesg-grep.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
 	kvs/kvs-helper.sh \
