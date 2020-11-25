@@ -1003,6 +1003,30 @@ test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with
 	test_cmp ${name}.expected ${name}.out
 '
 
+#
+# stress test
+#
+
+wait_jobs_finish() {
+        local i=0
+        while ([ "$(flux job list | wc -l)" != "0" ]) \
+              && [ $i -lt 1000 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ "$i" -eq "1000" ]
+        then
+            return 1
+        fi
+        return 0
+}
+
+test_expect_success LONGTEST 'stress job-info.list-id' '
+        flux python ${FLUX_SOURCE_DIR}/t/job-info/list-id.py 500 &&
+        wait_jobs_finish
+'
+
 # invalid job data tests
 #
 # to avoid potential racyness, wait up to 5 seconds for job to appear
@@ -1014,6 +1038,10 @@ test_expect_success HAVE_JQ 'list-inactive request with invalid input fails with
 # is invalid in these tests and how job-info parses the invalid data.
 # Different parsing errors could have some fields initialized but
 # others not.
+#
+# note that these tests should be done last, as the introduction of
+# invalid job data into the KVS could affect tests above.
+#
 
 # Following tests use invalid jobspecs, must load a more permissive validator
 
@@ -1132,27 +1160,4 @@ test_expect_success HAVE_JQ 'flux job list works on racy annotations' '
         cat list_racy_annotation.out | $jq -e ".annotations"
 '
 
-#
-# stress test
-#
-
-wait_jobs_finish() {
-        local i=0
-        while ([ "$(flux job list | wc -l)" != "0" ]) \
-              && [ $i -lt 1000 ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
-        if [ "$i" -eq "1000" ]
-        then
-            return 1
-        fi
-        return 0
-}
-
-test_expect_success LONGTEST 'stress job-info.list-id' '
-        flux python ${FLUX_SOURCE_DIR}/t/job-info/list-id.py 500 &&
-        wait_jobs_finish
-'
 test_done
