@@ -944,6 +944,13 @@ test_expect_success 'cleanup job listing jobs ' '
         done
 '
 
+#
+# invalid job data tests
+#
+# note that these tests should be done last, as the introduction of
+# invalid job data into the KVS could affect tests above.
+#
+
 # Following tests use invalid jobspecs, must load a more permissive validator
 
 ingest_module ()
