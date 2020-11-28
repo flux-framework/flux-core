@@ -143,7 +143,7 @@ static int gpubind_init (flux_plugin_t *p,
             return shell_log_errno ("gpubind: flux_plugin_add_handler");
     }
     else {
-        char *ids = idset_encode (gpus, IDSET_FLAG_RANGE);
+        char *ids = idset_encode (gpus, 0);
         flux_shell_setenvf (shell, 1, "CUDA_VISIBLE_DEVICES", "%s", ids);
         free (ids);
     }
