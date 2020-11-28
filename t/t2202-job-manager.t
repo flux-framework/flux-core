@@ -107,17 +107,17 @@ test_expect_success 'job-manager: queue contains 3 jobs' '
 	test $(wc -l <list3.out) -eq 3
 '
 
-test_expect_success 'job-manager: queue is sorted in urgency order' '
-	cat >list3_urgency.exp <<-EOT &&
+test_expect_success 'job-manager: queue is sorted in priority order' '
+	cat >list3_priority.exp <<-EOT &&
 	31
 	16
 	0
 	EOT
-	cut -f4 <list3.out >list3_urgency.out &&
-	test_cmp list3_urgency.exp list3_urgency.out
+	cut -f4 <list3.out >list3_priority.out &&
+	test_cmp list3_priority.exp list3_priority.out
 '
 
-test_expect_success 'job-manager: list-jobs --count shows highest urgency jobs' '
+test_expect_success 'job-manager: list-jobs --count shows highest priority jobs' '
 	cat >list3_lim2.exp <<-EOT &&
 	31
 	16

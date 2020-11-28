@@ -108,8 +108,12 @@ void urgency_handle_request (flux_t *h,
                              "userid", cred.userid,
                              "urgency", urgency) < 0)
         goto error;
-    if (urgency != orig_urgency)
+    /* N.B. once priority plugin work developed, should recall with
+     * new urgency, but for now priority is set to urgency */
+    if (urgency != orig_urgency) {
+        job->priority = urgency;
         alloc_queue_reorder (ctx->alloc, job);
+    }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;

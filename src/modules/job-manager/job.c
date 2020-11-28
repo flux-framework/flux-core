@@ -129,7 +129,7 @@ void *job_duplicator (const void *item)
     return job_incref ((struct job *)item);
 }
 
-/* Compare jobs, ordering by (1) urgency, (2) job id.
+/* Compare jobs, ordering by (1) priority, (2) job id.
  * N.B. zlistx_comparator_fn signature
  */
 int job_comparator (const void *a1, const void *a2)
@@ -138,7 +138,7 @@ int job_comparator (const void *a1, const void *a2)
     const struct job *j2 = a2;
     int rc;
 
-    if ((rc = (-1)*NUMCMP (j1->urgency, j2->urgency)) == 0)
+    if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
         rc = NUMCMP (j1->id, j2->id);
     return rc;
 }
