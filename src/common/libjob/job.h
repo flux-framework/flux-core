@@ -31,6 +31,11 @@ enum job_urgency {
     FLUX_JOB_URGENCY_MAX = 31,
 };
 
+enum job_queue_priority {
+    FLUX_JOB_PRIORITY_MIN = 0,
+    FLUX_JOB_PRIORITY_MAX = 4294967295,
+};
+
 enum {
     FLUX_JOBID_ANY = 0xFFFFFFFFFFFFFFFF, // ~(uint64_t)0
 };
