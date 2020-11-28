@@ -66,26 +66,26 @@ const char *test_input[] = {
     "{\"timestamp\":42.3,\"name\":\"admin-priority\","
      "\"context\":{\"userid\":42,\"priority\":1}}\n",
 
-    /* 3 */
+    /* 2 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
      "\"context\":{\"priority\":1}}\n",
 
-    /* 4 */
+    /* 3 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
     "{\"timestamp\":42.3,\"name\":\"exception\","
      "\"context\":{\"type\":\"cancel\",\"severity\":0,\"userid\":42}}\n",
 
-    /* 5 */
+    /* 4 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
     "{\"timestamp\":42.3,\"name\":\"exception\","
      "\"context\":{\"type\":\"meep\",\"severity\":1,\"userid\":42}}\n",
 
-    /* 6 */
+    /* 5 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
@@ -93,10 +93,10 @@ const char *test_input[] = {
      "\"context\":{\"priority\":100}}\n"
     "{\"timestamp\":42.5,\"name\":\"alloc\"}\n",
 
-    /* 7 */
+    /* 6 */
     "{\"timestamp\":42.3,\"name\":\"alloc\"}\n",
 
-    /* 8 */
+    /* 7 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
