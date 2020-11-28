@@ -45,7 +45,7 @@ int list_append_job (json_t *jobs, struct job *job)
                          "userid",
                          job->userid,
                          "priority",
-                         job->priority,
+                         job->admin_priority,
                          "t_submit",
                          job->t_submit,
                          "state",

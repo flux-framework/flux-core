@@ -71,7 +71,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
              * so they will automatically send alloc again.
              */
             if (job->alloc_pending) {
-                bool fwd = job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
+                bool fwd = job->queue_priority > FLUX_JOB_QUEUE_PRIORITY_DEFAULT;
                 bool cleared = false;
 
                 assert (job->handle == NULL);
@@ -344,7 +344,7 @@ int alloc_request (struct alloc *alloc, struct job *job)
         return -1;
     if (flux_msg_pack (msg, "{s:I s:i s:i s:f}",
                             "id", job->id,
-                            "priority", job->priority,
+                            "priority", job->queue_priority,
                             "userid", job->userid,
                             "t_submit", job->t_submit) < 0)
         goto error;
@@ -381,7 +381,7 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
         if (job->has_resources) {
             if (!(entry = json_pack ("{s:I s:i s:i s:f}",
                                      "id", job->id,
-                                     "priority", job->priority,
+                                     "priority", job->queue_priority,
                                      "userid", job->userid,
                                      "t_submit", job->t_submit)))
                 goto nomem;
@@ -529,7 +529,7 @@ int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
 {
     assert (job->state == FLUX_JOB_STATE_SCHED);
     if (!job->alloc_queued && !job->alloc_pending) {
-        bool fwd = job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
+        bool fwd = job->queue_priority > FLUX_JOB_QUEUE_PRIORITY_DEFAULT;
         assert (job->handle == NULL);
         if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
             return -1;
@@ -572,7 +572,7 @@ struct job *alloc_queue_next (struct alloc *alloc)
 /* called from priority_handle_request() */
 void alloc_queue_reorder (struct alloc *alloc, struct job *job)
 {
-    bool fwd = job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
+    bool fwd = job->queue_priority > FLUX_JOB_QUEUE_PRIORITY_DEFAULT;
 
     zlistx_reorder (alloc->queue, job->handle, fwd);
 }

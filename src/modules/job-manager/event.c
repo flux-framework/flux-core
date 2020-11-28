@@ -328,7 +328,7 @@ int event_job_action (struct event *event, struct job *job)
                                      "priority",
                                      0,
                                      "{ s:i }",
-                                     "priority", job->priority) < 0)
+                                     "priority", job->admin_priority) < 0)
                 return -1;
             break;
         case FLUX_JOB_STATE_SCHED:
@@ -458,7 +458,7 @@ int event_job_update (struct job *job, json_t *event)
             goto inval;
         job->t_submit = timestamp;
         if (event_submit_context_decode (context,
-                                         &job->priority,
+                                         &job->admin_priority,
                                          &job->userid,
                                          &job->flags) < 0)
             goto error;
@@ -472,12 +472,13 @@ int event_job_update (struct job *job, json_t *event)
     else if (!strcmp (name, "priority")) {
         if (job->state != FLUX_JOB_STATE_PRIORITY)
             goto inval;
-        if (event_priority_context_decode (context, &job->priority) < 0)
+        if (event_priority_context_decode (context, &job->queue_priority) < 0)
             goto error;
         job->state = FLUX_JOB_STATE_SCHED;
     }
     else if (!strcmp (name, "admin-priority")) {
-        if (event_admin_priority_context_decode (context, &job->priority) < 0)
+        if (event_admin_priority_context_decode (context,
+                                                 &job->admin_priority) < 0)
             goto error;
     }
     else if (!strcmp (name, "exception")) {
