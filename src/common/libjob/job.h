@@ -31,6 +31,12 @@ enum job_admin_priority {
     FLUX_JOB_ADMIN_PRIORITY_MAX = 31,
 };
 
+enum job_queue_priority {
+    FLUX_JOB_QUEUE_PRIORITY_MIN = 0,
+    FLUX_JOB_QUEUE_PRIORITY_DEFAULT = FLUX_JOB_ADMIN_PRIORITY_DEFAULT,
+    FLUX_JOB_QUEUE_PRIORITY_MAX = 4294967295,
+};
+
 enum {
     FLUX_JOBID_ANY = 0xFFFFFFFFFFFFFFFF, // ~(uint64_t)0
 };
