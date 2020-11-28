@@ -27,7 +27,8 @@ void test_create (void)
     ok (job->refcount == 1,
         "job_create set refcount to 1");
     ok (job->id == 0
-        && job->priority == FLUX_JOB_ADMIN_PRIORITY_DEFAULT
+        && job->admin_priority == FLUX_JOB_ADMIN_PRIORITY_DEFAULT
+        && job->queue_priority == FLUX_JOB_QUEUE_PRIORITY_DEFAULT
         && job->state == FLUX_JOB_STATE_NEW
         && job->userid == FLUX_USERID_UNKNOWN
         && job->t_submit == 0
@@ -128,8 +129,10 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit) set userid from submit");
     ok (job->flags == 42,
         "job_create_from_eventlog log=(submit) set flags from submit");
-    ok (job->priority == 16,
-        "job_create_from_eventlog log=(submit) set priority from submit");
+    ok (job->admin_priority == 16,
+        "job_create_from_eventlog log=(submit) set admin priority from submit");
+    ok (job->queue_priority == FLUX_JOB_QUEUE_PRIORITY_DEFAULT,
+        "job_create_from_eventlog log=(submit) queue priority is default");
     ok (job->t_submit == 42.2,
         "job_create_from_eventlog log=(submit) set t_submit from submit");
     ok (job->state == FLUX_JOB_STATE_DEPEND,
@@ -144,8 +147,11 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit+admin-pri) set id from param");
     ok (job->userid == 66,
         "job_create_from_eventlog log=(submit+admin-pri) set userid from submit");
-    ok (job->priority == 1,
-        "job_create_from_eventlog log=(submit+admin-pri) set priority from priority");
+    ok (job->admin_priority == 1,
+        "job_create_from_eventlog log=(submit+admin-pri) set "
+        "admin priority from admin-priority");
+    ok (job->queue_priority == FLUX_JOB_QUEUE_PRIORITY_DEFAULT,
+        "job_create_from_eventlog log=(submit+admin-pri) queue priority is default");
     ok (job->t_submit == 42.2,
         "job_create_from_eventlog log=(submit+admin-pri) set t_submit from submit");
     ok (!job->alloc_pending
@@ -164,8 +170,12 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit+depend+priority) set id from param");
     ok (job->userid == 66,
         "job_create_from_eventlog log=(submit+depend+priority) set userid from submit");
-    ok (job->priority == 1,
-        "job_create_from_eventlog log=(submit+depend+priority) set priority from priority");
+    ok (job->admin_priority == 16,
+        "job_create_from_eventlog log=(submit+depend+priority) set "
+        "admin priority from submit");
+    ok (job->queue_priority == 1,
+        "job_create_from_eventlog log=(submit+depend+priority) set "
+        "queue priority from priority");
     ok (job->t_submit == 42.2,
         "job_create_from_eventlog log=(submit+depend+priority) set t_submit from submit");
     ok (!job->alloc_pending
@@ -182,8 +192,8 @@ void test_create_from_eventlog (void)
         BAIL_OUT ("job_create_from_eventlog log=(submit+ex0) failed");
     ok (job->userid == 66,
         "job_create_from_eventlog log=(submit+ex0) set userid from submit");
-    ok (job->priority == 16,
-        "job_create_from_eventlog log=(submit+ex0) set priority from submit");
+    ok (job->admin_priority == 16,
+        "job_create_from_eventlog log=(submit+ex0) set admin priority from submit");
     ok (job->t_submit == 42.2,
         "job_create_from_eventlog log=(submit+ex0) set t_submit from submit");
     ok (!job->alloc_pending

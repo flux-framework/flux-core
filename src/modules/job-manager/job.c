@@ -49,7 +49,8 @@ struct job *job_create (void)
         return NULL;
     job->refcount = 1;
     job->userid = FLUX_USERID_UNKNOWN;
-    job->priority = FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
+    job->admin_priority = FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
+    job->queue_priority = FLUX_JOB_QUEUE_PRIORITY_DEFAULT;
     job->state = FLUX_JOB_STATE_NEW;
     return job;
 }
@@ -117,7 +118,7 @@ int job_comparator (const void *a1, const void *a2)
     const struct job *j2 = a2;
     int rc;
 
-    if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
+    if ((rc = (-1)*NUMCMP (j1->queue_priority, j2->queue_priority)) == 0)
         rc = NUMCMP (j1->id, j2->id);
     return rc;
 }

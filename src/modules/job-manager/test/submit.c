@@ -43,7 +43,7 @@ void single_job_check (zhashx_t *active_jobs)
         "hash contains one job");
     ok ((job = zlist_head (newjobs)) != NULL,
         "newjobs contains one job");
-    ok (job->id == 1 && job->priority == 10 && job->userid == 42
+    ok (job->id == 1 && job->admin_priority == 10 && job->userid == 42
         && job->t_submit == 1.0 && job->flags == 0,
         "struct job was properly decoded");
 
