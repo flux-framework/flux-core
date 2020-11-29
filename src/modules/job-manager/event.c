@@ -416,6 +416,17 @@ static int event_admin_priority_context_decode (json_t *context,
     return 0;
 }
 
+static int event_priority_update_context_decode (json_t *context,
+                                                 int *priority)
+{
+    if (json_unpack (context, "{ s:i }", "priority", priority) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+
+    return 0;
+}
+
 static int event_exception_context_decode (json_t *context,
                                            int *severity)
 {
@@ -479,6 +490,11 @@ int event_job_update (struct job *job, json_t *event)
     else if (!strcmp (name, "admin-priority")) {
         if (event_admin_priority_context_decode (context,
                                                  &job->admin_priority) < 0)
+            goto error;
+    }
+    else if (!strcmp (name, "priority-update")) {
+        if (event_priority_update_context_decode (context,
+                                                  &job->queue_priority) < 0)
             goto error;
     }
     else if (!strcmp (name, "exception")) {

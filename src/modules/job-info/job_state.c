@@ -48,6 +48,9 @@ static int finish_context_parse (flux_t *h,
 static int admin_priority_context_parse (flux_t *h,
                                          struct job *job,
                                          json_t *context);
+static int priority_update_context_parse (flux_t *h,
+                                          struct job *job,
+                                          json_t *context);
 static int exception_context_parse (flux_t *h,
                                     struct job *job,
                                     json_t *context,
@@ -936,6 +939,10 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
             if (admin_priority_context_parse (ctx->h, job, context) < 0)
                 goto error;
         }
+        else if (!strcmp (name, "priority-update")) {
+            if (priority_update_context_parse (ctx->h, job, context) < 0)
+                goto error;
+        }
         else if (!strcmp (name, "exception")) {
             int severity;
             if (exception_context_parse (ctx->h, job, context, &severity) < 0)
@@ -1419,6 +1426,49 @@ static int journal_admin_priority_event (struct job_state_ctx *jsctx,
                                          json_t *context)
 {
     struct job *job;
+
+    if (!(job = zhashx_lookup (jsctx->index, &id))) {
+        flux_log_error (jsctx->h, "%s: job %ju not in hash",
+                        __FUNCTION__, (uintmax_t)id);
+        /* do not return error, we consider it a non-fatal error */
+        return 0;
+    }
+
+    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
+        return 0;
+
+    if (admin_priority_context_parse (jsctx->h, job, context) < 0)
+        return -1;
+
+    return 0;
+}
+
+static int priority_update_context_parse (flux_t *h,
+                                         struct job *job,
+                                         json_t *context)
+{
+    int priority;
+
+    if (!context
+        || json_unpack (context, "{ s:i }", "priority", &priority) < 0
+        || (priority < FLUX_JOB_QUEUE_PRIORITY_MIN
+            || priority > FLUX_JOB_QUEUE_PRIORITY_MAX)) {
+        flux_log (h, LOG_ERR, "%s: admin-priority context invalid: %ju",
+                  __FUNCTION__, (uintmax_t)job->id);
+        errno = EPROTO;
+        return -1;
+    }
+
+    job->queue_priority = priority;
+    return 0;
+}
+
+static int journal_priority_update_event (struct job_state_ctx *jsctx,
+                                          flux_jobid_t id,
+                                          int eventlog_seq,
+                                          json_t *context)
+{
+    struct job *job;
     int orig_priority;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
@@ -1431,13 +1481,13 @@ static int journal_admin_priority_event (struct job_state_ctx *jsctx,
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
 
-    orig_priority = job->admin_priority;
+    orig_priority = job->queue_priority;
 
-    if (admin_priority_context_parse (jsctx->h, job, context) < 0)
+    if (priority_update_context_parse (jsctx->h, job, context) < 0)
         return -1;
 
     if (job->state & FLUX_JOB_STATE_PENDING
-        && job->admin_priority != orig_priority)
+        && job->queue_priority != orig_priority)
         zlistx_reorder (jsctx->pending,
                         job->list_handle,
                         search_direction (job));
@@ -1619,6 +1669,13 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
                                           id,
                                           eventlog_seq,
                                           context) < 0)
+            return -1;
+    }
+    else if (!strcmp (name, "priority-update")) {
+        if (journal_priority_update_event (jsctx,
+                                           id,
+                                           eventlog_seq,
+                                           context) < 0)
             return -1;
     }
     else if (!strcmp (name, "exception")) {
