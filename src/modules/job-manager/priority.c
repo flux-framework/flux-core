@@ -113,6 +113,12 @@ void priority_handle_request (flux_t *h,
      * admin_priority */
     if (admin_priority != orig_admin_priority) {
         job->queue_priority = admin_priority;
+        if (event_job_post_pack (ctx->event, job,
+                                 "priority-update",
+                                 0,
+                                 "{ s:i }",
+                                 "priority", job->queue_priority) < 0)
+            goto error;
         alloc_queue_reorder (ctx->alloc, job);
     }
     if (flux_respond (h, msg, NULL) < 0)
