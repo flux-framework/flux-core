@@ -39,6 +39,9 @@ struct state_transition {
 static int submit_context_parse (flux_t *h,
                                  struct job *job,
                                  json_t *context);
+static int priority_context_parse (flux_t *h,
+                                   struct job *job,
+                                   json_t *context);
 static int finish_context_parse (flux_t *h,
                                  struct job *job,
                                  json_t *context);
@@ -63,7 +66,7 @@ static int job_priority_cmp (const void *a1, const void *a2)
     const struct job *j2 = a2;
     int rc;
 
-    if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
+    if ((rc = (-1)*NUMCMP (j1->queue_priority, j2->queue_priority)) == 0)
         rc = NUMCMP (j1->id, j2->id);
     return rc;
 }
@@ -121,7 +124,8 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
     job->id = id;
     job->state = FLUX_JOB_STATE_NEW;
     job->userid = FLUX_USERID_UNKNOWN;
-    job->priority = -1;
+    job->admin_priority = -1;
+    job->queue_priority = -1;
     job->result = FLUX_JOB_RESULT_FAILED;
     job->eventlog_seq = -1;
 
@@ -150,7 +154,7 @@ static void json_decref_wrapper (void **data)
  */
 static bool search_direction (struct job *job)
 {
-    if (job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT)
+    if (job->queue_priority > FLUX_JOB_QUEUE_PRIORITY_DEFAULT)
         return true;
     else
         return false;
@@ -924,6 +928,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
             update_job_state (ctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
         }
         else if (!strcmp (name, "priority")) {
+            if (priority_context_parse (ctx->h, job, context) < 0)
+                goto error;
             update_job_state (ctx, job, FLUX_JOB_STATE_SCHED, timestamp);
         }
         else if (!strcmp (name, "admin-priority")) {
@@ -1246,7 +1252,7 @@ static int submit_context_parse (flux_t *h,
     }
 
     job->userid = userid;
-    job->priority = priority;
+    job->admin_priority = priority;
     return 0;
 }
 
@@ -1286,6 +1292,53 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
     return job_transition_state (jsctx,
                                  job,
                                  FLUX_JOB_STATE_DEPEND,
+                                 timestamp);
+}
+
+static int priority_context_parse (flux_t *h,
+                                   struct job *job,
+                                   json_t *context)
+{
+    int priority;
+
+    if (!context
+        || json_unpack (context, "{ s:i }", "priority", &priority) < 0
+        || (priority < FLUX_JOB_QUEUE_PRIORITY_MIN
+            || priority > FLUX_JOB_QUEUE_PRIORITY_MAX)) {
+        flux_log (h, LOG_ERR, "%s: priority context invalid: %ju",
+                  __FUNCTION__, (uintmax_t)job->id);
+        errno = EPROTO;
+        return -1;
+    }
+
+    job->queue_priority = priority;
+    return 0;
+}
+
+static int journal_priority_event (struct job_state_ctx *jsctx,
+                                   flux_jobid_t id,
+                                   int eventlog_seq,
+                                   double timestamp,
+                                   json_t *context)
+{
+    struct job *job;
+
+    if (!(job = zhashx_lookup (jsctx->index, &id))) {
+        flux_log_error (jsctx->h, "%s: job %ju not in hash",
+                        __FUNCTION__, (uintmax_t)id);
+        /* do not return error, we consider it a non-fatal error */
+        return 0;
+    }
+
+    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
+        return 0;
+
+    if (priority_context_parse (jsctx->h, job, context) < 0)
+        return -1;
+
+    return job_transition_state (jsctx,
+                                 job,
+                                 FLUX_JOB_STATE_SCHED,
                                  timestamp);
 }
 
@@ -1356,7 +1409,7 @@ static int admin_priority_context_parse (flux_t *h,
         return -1;
     }
 
-    job->priority = priority;
+    job->admin_priority = priority;
     return 0;
 }
 
@@ -1378,13 +1431,13 @@ static int journal_admin_priority_event (struct job_state_ctx *jsctx,
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
 
-    orig_priority = job->priority;
+    orig_priority = job->admin_priority;
 
     if (admin_priority_context_parse (jsctx->h, job, context) < 0)
         return -1;
 
     if (job->state & FLUX_JOB_STATE_PENDING
-        && job->priority != orig_priority)
+        && job->admin_priority != orig_priority)
         zlistx_reorder (jsctx->pending,
                         job->list_handle,
                         search_direction (job));
@@ -1528,11 +1581,11 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
             return -1;
     }
     else if (!strcmp (name, "priority")) {
-        if (journal_advance_job (jsctx,
-                                 id,
-                                 FLUX_JOB_STATE_SCHED,
-                                 eventlog_seq,
-                                 timestamp) < 0)
+        if (journal_priority_event (jsctx,
+                                    id,
+                                    eventlog_seq,
+                                    timestamp,
+                                    context) < 0)
             return -1;
     }
     else if (!strcmp (name, "alloc")) {
