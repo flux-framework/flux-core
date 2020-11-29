@@ -2,9 +2,19 @@ pull_request_rules:
   - name: rebase and merge when passing all checks
     conditions:
       - base=master
-      - status-success=Travis CI - Pull Request
       - status-success="validate commits"
       - status-success="flux-sched check"
+      - status-success="python format"
+      - status-success="python lint"
+      - status-success="mypy"
+      - status-success="bionic"
+      - status-success="bionic - gcc8,content-s3,distcheck"
+      - status-success="bionic - py3.7,clang-6.0"
+      - status-success="bionic - test-install"
+      - status-success="focal - py3.8"
+      - status-success="centos7"
+      - status-success="centos8 - py3.7"
+      - status-success="coverage"
       - status-success="address-sanitizer check"
       - label="merge-when-passing"
       - label!="work-in-progress"
