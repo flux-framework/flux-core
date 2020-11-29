@@ -1350,7 +1350,7 @@ static int admin_priority_context_parse (flux_t *h,
         || json_unpack (context, "{ s:i }", "priority", &priority) < 0
         || (priority < FLUX_JOB_ADMIN_PRIORITY_MIN
             || priority > FLUX_JOB_ADMIN_PRIORITY_MAX)) {
-        flux_log (h, LOG_ERR, "%s: priority context invalid: %ju",
+        flux_log (h, LOG_ERR, "%s: admin-priority context invalid: %ju",
                   __FUNCTION__, (uintmax_t)job->id);
         errno = EPROTO;
         return -1;
