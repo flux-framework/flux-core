@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  Build flux-core "travis" docker image and run tests, exporting
+#  Build flux-core "checks" docker image and run tests, exporting
 #   important environment variables to the docker environment.
 #
 #  Arguments here are passed directly to ./configure
@@ -22,7 +22,7 @@ declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:
 declare -r short_opts="hqIdi:S:j:t:D:P"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
-Build docker image for travis builds, then run tests inside the new\n\
+Build docker image for CI builds, then run tests inside the new\n\
 container as the current user and group.\n\
 \n\
 Uses the current git repo for the build.\n\
@@ -40,7 +40,7 @@ Options:\n\
  -d, --distcheck               Run 'make distcheck' instead of 'make check'\n\
  -P, --no-poison               Do not install poison libflux and flux(1)\n\
  -D, --build-directory=DIRNAME Name of a subdir to build in, will be made\n\
- -I, --interactive             Instead of running travis build, run docker\n\
+ -I, --interactive             Instead of running ci build, run docker\n\
                                 image with interactive shell.\n\
 "
 
@@ -94,9 +94,9 @@ fi
 
 CONFIGURE_ARGS="$@"
 
-. ${TOP}/src/test/travis-lib.sh
+. ${TOP}/src/test/checks-lib.sh
 
-travis_fold "docker_build" \
+checks_group \
   "Building image $IMAGE for user $USER $(id -u) group=$(id -g)" \
   docker build \
     ${NO_CACHE} \
@@ -107,8 +107,8 @@ travis_fold "docker_build" \
     --build-arg UID=$(id -u) \
     --build-arg GID=$(id -g) \
     --build-arg FLUX_SECURITY_VERSION=$FLUX_SECURITY_VERSION \
-    -t travis-builder:${IMAGE} \
-    $TOP/src/test/docker/travis \
+    -t checks-builder:${IMAGE} \
+    $TOP/src/test/docker/checks \
     || die "docker build failed"
 
 if [[ -n "$MOUNT_HOME_ARGS" ]]; then
@@ -126,7 +126,7 @@ if [[ "$INSTALL_ONLY" == "t" ]]; then
     docker run --rm \
         --workdir=/usr/src \
         --volume=$TOP:/usr/src \
-        travis-builder:${IMAGE} \
+        checks-builder:${IMAGE} \
         sh -c "./autogen.sh &&
                ./configure --prefix=/usr --sysconfdir=/etc \
                 --with-systemdsystemunitdir=/etc/systemd/system \
@@ -174,8 +174,8 @@ else
         --tty \
         ${INTERACTIVE:+--interactive} \
         --network=host \
-        travis-builder:${IMAGE} \
-        ${INTERACTIVE:-./src/test/travis_run.sh ${CONFIGURE_ARGS}} \
+        checks-builder:${IMAGE} \
+        ${INTERACTIVE:-./src/test/checks_run.sh ${CONFIGURE_ARGS}} \
     || die "docker run failed"
 fi
 
@@ -186,7 +186,7 @@ if test -n "$TAG"; then
 	--workdir=/usr/src/${BUILD_DIR} \
         --volume=$TOP:/usr/src \
         --user="root" \
-	travis-builder:${IMAGE} \
+	checks-builder:${IMAGE} \
 	sh -c "make install && \
                su -c 'flux keygen' fluxuser && \
                userdel $USER" \
