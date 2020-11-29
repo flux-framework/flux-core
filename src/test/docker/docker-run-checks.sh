@@ -96,8 +96,7 @@ CONFIGURE_ARGS="$@"
 
 . ${TOP}/src/test/checks-lib.sh
 
-checks_group \
-  "Building image $IMAGE for user $USER $(id -u) group=$(id -g)" \
+checks_group "Building image $IMAGE for user $USER $(id -u) group=$(id -g)" \
   docker build \
     ${NO_CACHE} \
     ${QUIET} \
@@ -156,7 +155,7 @@ else
         -e chain_lint \
         -e JOBS \
         -e USER \
-        -e TRAVIS \
+        -e CI \
         -e TAP_DRIVER_QUIET \
         -e TEST_CHECK_PREREQS \
         -e FLUX_TEST_TIMEOUT \

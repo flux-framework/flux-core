@@ -11,23 +11,23 @@
 #
 if test "$CI" = "true"; then
   checks_group_start() {
-    printf "::group::%s\n" $1
+    printf "::group::%s\n" "$1"
   }
   checks_group_end() {
     printf "::endgroup::\n"
   }
 else
-  checks_group_start() { return 0; }
-  checks_group_end()   { return 0; }
+  checks_group_start() { echo "$@"; }
+  checks_group_end()   { echo "$@"; }
 fi
 
 #
 #  Usage: checks_group DESC COMMANDS...
 #
 checks_group() {
-    local DESC=$1
+    local DESC="$1"
     shift 1
-    checks_group_start "$NAME"
+    checks_group_start "$DESC"
     eval "$@"
     rc=$?
     checks_group_end

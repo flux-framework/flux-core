@@ -172,8 +172,6 @@ if test "$POISON" = "t"; then
 fi
 
 if test "$DISTCHECK" != "t"; then
-  echo running: ${MAKECMDS}
   checks_group "${MAKECMDS}" eval ${MAKECMDS}
 fi
-echo running: ${CHECKCMDS}
 checks_group "${CHECKCMDS}" eval ${CHECKCMDS}

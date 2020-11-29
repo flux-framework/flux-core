@@ -1,0 +1,29 @@
+on: [ push, pull_request ]
+jobs:
+  check-asan:
+    name: address-sanitizer check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+    - uses: actions/checkout@v2
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+    - run: git fetch --tags
+    - name: docker-run-checks with ASan
+      timeout-minutes: 40
+      env:
+        CC: gcc-8
+        CXX: g++-8
+        PRELOAD: /usr/lib/gcc/x86_64-linux-gnu/8/libasan.so
+        ASAN_OPTIONS: detect_leaks=0,start_deactivated=true
+        FLUX_TEST_TIMEOUT: 300
+        TAP_DRIVER_QUIET: t
+      run: >
+        src/test/docker/docker-run-checks.sh --image=bionic -j2 --
+        --with-flux-security --enable-sanitizer=address
+
+    - name: after failure
+      if: failure() || cancelled()
+      run: src/test/checks-annotate.sh
+
