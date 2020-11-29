@@ -18,8 +18,8 @@ declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison"
-declare -r short_opts="hqIdi:S:j:t:D:P"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck"
+declare -r short_opts="hqIdi:S:j:t:D:Pr"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
 Build docker image for CI builds, then run tests inside the new\n\
@@ -38,6 +38,7 @@ Options:\n\
  -S, --flux-security-version=N Install flux-security vers N (default=$FLUX_SECURITY_VERSION)\n
  -j, --jobs=N                  Value for make -j (default=$JOBS)\n
  -d, --distcheck               Run 'make distcheck' instead of 'make check'\n\
+ -r, --recheck                 Run 'make recheck' after failure\n\
  -P, --no-poison               Do not install poison libflux and flux(1)\n\
  -D, --build-directory=DIRNAME Name of a subdir to build in, will be made\n\
  -I, --interactive             Instead of running ci build, run docker\n\
@@ -65,6 +66,7 @@ while true; do
       -j|--jobs)                   JOBS="$2";                  shift 2 ;;
       -I|--interactive)            INTERACTIVE="/bin/bash";    shift   ;;
       -d|--distcheck)              DISTCHECK=t;                shift   ;;
+      -r|--recheck)                RECHECK=t;                  shift   ;;
       -D|--build-directory)        BUILD_DIR="$2";             shift 2 ;;
       --no-cache)                  NO_CACHE="--no-cache";      shift   ;;
       --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
@@ -76,7 +78,6 @@ while true; do
     esac
 done
 
-
 TOP=$(git rev-parse --show-toplevel 2>&1) \
     || die "not inside flux-core git repository!"
 which docker >/dev/null \
@@ -84,6 +85,7 @@ which docker >/dev/null \
 
 # distcheck incompatible with some configure args
 if test "$DISTCHECK" = "t"; then
+    test "$RECHECK" = "t" && die "--recheck not allowed with --distcheck"
     for arg in "$@"; do
         case $arg in
           --sysconfdir=*|systemdsystemunitdir=*)
@@ -152,6 +154,7 @@ else
         -e TEST_INSTALL \
         -e CPPCHECK \
         -e DISTCHECK \
+        -e RECHECK \
         -e chain_lint \
         -e JOBS \
         -e USER \

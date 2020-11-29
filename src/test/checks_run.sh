@@ -13,6 +13,7 @@
 #  TEST_INSTALL  Run `make check` against installed flux-core
 #  CPPCHECK      Run cppcheck if set to "t"
 #  DISTCHECK     Run `make distcheck` if set
+#  RECHECK       Run `make recheck` if `make check` fails the first time
 #  PRELOAD       Set as LD_PRELOAD for make and tests
 #  POISON        Install poison libflux and flux(1) in image
 #  chain_lint    Run sharness with --chain-lint if chain_lint=t
@@ -175,3 +176,22 @@ if test "$DISTCHECK" != "t"; then
   checks_group "${MAKECMDS}" eval ${MAKECMDS}
 fi
 checks_group "${CHECKCMDS}" eval ${CHECKCMDS}
+RC=$?
+
+if test "$DISTCHECK" != "t" -a $RC -ne 0; then
+  #
+  # `make recheck` is not recursive, only perform it if at least some tests
+  #   under ./t were run (and presumably failed)
+  #
+  if test -s t/t0001-basic.trs; then
+    cd t
+    printf "::warning::make check failed, trying recheck in ./t\n"
+    checks_group "make recheck" ${MAKE} -j ${JOBS} recheck
+    RC=$?
+    cd
+   else
+      printf "::warning::recheck requested but no tests in ./t were run\n"
+   fi
+fi
+
+exit $RC
