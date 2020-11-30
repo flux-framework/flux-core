@@ -152,7 +152,7 @@ test_expect_success 'submit jobs for job list testing' '
         wait_states
 '
 
-# Note: "running" = "run" & "cleanup", we also test just "run" state
+# Note: "running" = "run" | "cleanup", we also test just "run" state
 # since we happen to know all these jobs are in the "run" state given
 # checks above
 
@@ -166,7 +166,7 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
         test_cmp list_inactive.out inactive.ids
 '
 
-# Note: "pending" = "depend" & "sched", we also test just "sched"
+# Note: "pending" = "depend" | "sched", we also test just "sched"
 # state since we happen to know all these jobs are in the "sched"
 # state given checks above
 
