@@ -190,6 +190,21 @@ EOT
         test_cmp list_urgency.out list_urgency.exp
 '
 
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
+        cat >list_priority.exp <<-EOT &&
+31
+31
+20
+20
+16
+16
+0
+0
+EOT
+        flux job list -s pending | jq .priority > list_priority.out &&
+        test_cmp list_priority.out list_priority.exp
+'
+
 test_expect_success HAVE_JQ 'change a job urgency' '
         jobid=`head -n 1 pending.ids` &&
         flux job urgency ${jobid} 1
@@ -225,6 +240,21 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct urgency' '
 EOT
         flux job list -s pending | jq .urgency > list_urgency_after.out &&
         test_cmp list_urgency_after.out list_urgency_after.exp
+'
+
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
+        cat >list_priority_after.exp <<-EOT &&
+31
+20
+20
+16
+16
+1
+0
+0
+EOT
+        flux job list -s pending | jq .priority > list_priority_after.out &&
+        test_cmp list_priority_after.out list_priority_after.exp
 '
 
 test_expect_success 'cleanup job listing jobs ' '

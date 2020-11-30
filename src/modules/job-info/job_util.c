@@ -73,6 +73,11 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
         else if (!strcmp (attr, "urgency")) {
             val = json_integer (job->urgency);
         }
+        else if (!strcmp (attr, "priority")) {
+            if (!(job->states_mask & FLUX_JOB_STATE_SCHED))
+                continue;
+            val = json_integer (job->priority);
+        }
         else if (!strcmp (attr, "t_submit")
                  || !strcmp (attr, "t_depend")) {
             if (!(job->states_mask & FLUX_JOB_STATE_DEPEND))

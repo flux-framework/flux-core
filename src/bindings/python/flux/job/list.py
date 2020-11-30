@@ -20,6 +20,7 @@ from flux.rpc import RPC
 VALID_ATTRS = [
     "userid",
     "urgency",
+    "priority",
     "t_submit",
     "t_depend",
     "t_run",

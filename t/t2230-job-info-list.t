@@ -281,6 +281,25 @@ EOT
         test_cmp list_urgency3.out list_urgency.exp
 '
 
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
+        cat >list_priority.exp <<-EOT &&
+31
+31
+20
+20
+16
+16
+0
+0
+EOT
+        flux job list -s pending | jq .priority > list_priority1.out &&
+        flux job list -s depend,priority,sched | jq .priority > list_priority2.out &&
+        flux job list -s sched | jq .priority > list_priority3.out &&
+        test_cmp list_priority1.out list_priority.exp &&
+        test_cmp list_priority2.out list_priority.exp &&
+        test_cmp list_priority3.out list_priority.exp
+'
+
 test_expect_success HAVE_JQ 'flux job list pending jobs with correct state' '
         for count in `seq 1 8`; do \
             echo "8" >> list_state_S.exp; \
@@ -883,6 +902,7 @@ test_expect_success 'list count / max_entries works' '
 ALL_ATTRIBUTES="\
 userid \
 urgency \
+priority \
 t_submit \
 t_depend \
 t_run \
