@@ -64,7 +64,7 @@ test_expect_success HAVE_JQ 'job-exec: large jobspec does not get truncated' '
 	  test_cmp job.signed J.input
     )
 '
-test_expect_success HAVE_JQ 'job-exec: kill multiuser job uses the IMP' '
+test_expect_success HAVE_JQ,NO_ASAN 'job-exec: kill multiuser job uses the IMP' '
 	FAKE_USERID=42 &&
 	flux mini run --dry-run -n2 -N2 sleep 1000 | \
 	    flux python ${SIGN_AS} ${FAKE_USERID} > sleep-job.signed &&

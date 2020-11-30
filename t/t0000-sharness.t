@@ -48,6 +48,8 @@ run_sub_test_lib_test () {
 	opt="$4"             # optionally call the script with extra option(s)
 	mkdir "$name" &&
 	(
+		unset debug &&
+		unset verbose &&
 		cd "$name" &&
 		cat >".$name.t" <<-EOF &&
 		#!/bin/sh
@@ -71,6 +73,8 @@ run_sub_test_lib_test () {
 check_sub_test_lib_test () {
 	name="$1" # stdin is the expected output from the test
 	(
+		unset verbose &&
+		unset debug &&
 		cd "$name" &&
 		! test -s err &&
 		sed -e 's/^> //' -e 's/Z$//' >expect &&
@@ -333,6 +337,8 @@ test_expect_success 'tests can be run from an alternate directory' '
 	  unset SHARNESS_TEST_DIRECTORY SHARNESS_TEST_SRCDIR &&
 	  # unset HARNESS_ACTIVE so we get a test-results dir
 	  unset HARNESS_ACTIVE &&
+	  unset debug &&
+	  unset verbose &&
 	  chmod +x test.t &&
 	  mkdir test-rundir &&
 	  cd test-rundir &&
@@ -405,6 +411,8 @@ test_expect_success 'loading sharness extensions works' '
 	# a sharness.d/ directory with a test extension function:
 	mkdir extensions &&
 	(
+		unset verbose &&
+		unset debug &&
 		cd extensions &&
 		mkdir sharness.d &&
 		cat >sharness.d/test.sh <<-EOF &&
@@ -439,6 +447,8 @@ test_expect_success 'empty sharness.d directory does not cause failure' '
 	# an empty sharness.d/ directory
 	mkdir nil-extensions &&
 	(
+		unset debug &&
+		unset verbose &&
 		cd nil-extensions &&
 		mkdir sharness.d  &&
 		ln -sf $SHARNESS_TEST_SRCDIR/sharness.sh . &&

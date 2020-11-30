@@ -60,13 +60,13 @@ test_expect_success 'flux-mini batch fails for file without she-bang' '
 	EOF
 	test_expect_code 1 flux mini batch -n1 invalid-script.sh
 '
-test_expect_success 'flux-mini batch: submit a series of jobs' '
+test_expect_success NO_ASAN 'flux-mini batch: submit a series of jobs' '
 	id1=$(flux mini batch --flags=waitable -n1 batch-script.sh) &&
 	id2=$(flux mini batch --flags=waitable -n4 batch-script.sh) &&
 	id3=$(flux mini batch --flags=waitable -N2 -n4 batch-script.sh) &&
-	run_timeout 60 flux job wait --all
+	run_timeout 60 flux job wait --verbose --all
 '
-test_expect_success 'flux-mini batch: job results are expected' '
+test_expect_success NO_ASAN 'flux-mini batch: job results are expected' '
 	test_debug "grep . flux-*.out" &&
 	grep "size=1 nodes=1" flux-${id1}.out &&
 	grep "size=1 nodes=1" flux-${id2}.out &&

@@ -1,6 +1,6 @@
 #!/bin/bash
 #
-#  Build flux-core "travis" docker image and run tests, exporting
+#  Build flux-core "checks" docker image and run tests, exporting
 #   important environment variables to the docker environment.
 #
 #  Arguments here are passed directly to ./configure
@@ -18,11 +18,11 @@ declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison"
-declare -r short_opts="hqIdi:S:j:t:D:P"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck"
+declare -r short_opts="hqIdi:S:j:t:D:Pr"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
-Build docker image for travis builds, then run tests inside the new\n\
+Build docker image for CI builds, then run tests inside the new\n\
 container as the current user and group.\n\
 \n\
 Uses the current git repo for the build.\n\
@@ -38,9 +38,10 @@ Options:\n\
  -S, --flux-security-version=N Install flux-security vers N (default=$FLUX_SECURITY_VERSION)\n
  -j, --jobs=N                  Value for make -j (default=$JOBS)\n
  -d, --distcheck               Run 'make distcheck' instead of 'make check'\n\
+ -r, --recheck                 Run 'make recheck' after failure\n\
  -P, --no-poison               Do not install poison libflux and flux(1)\n\
  -D, --build-directory=DIRNAME Name of a subdir to build in, will be made\n\
- -I, --interactive             Instead of running travis build, run docker\n\
+ -I, --interactive             Instead of running ci build, run docker\n\
                                 image with interactive shell.\n\
 "
 
@@ -65,6 +66,7 @@ while true; do
       -j|--jobs)                   JOBS="$2";                  shift 2 ;;
       -I|--interactive)            INTERACTIVE="/bin/bash";    shift   ;;
       -d|--distcheck)              DISTCHECK=t;                shift   ;;
+      -r|--recheck)                RECHECK=t;                  shift   ;;
       -D|--build-directory)        BUILD_DIR="$2";             shift 2 ;;
       --no-cache)                  NO_CACHE="--no-cache";      shift   ;;
       --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
@@ -76,7 +78,6 @@ while true; do
     esac
 done
 
-
 TOP=$(git rev-parse --show-toplevel 2>&1) \
     || die "not inside flux-core git repository!"
 which docker >/dev/null \
@@ -84,6 +85,7 @@ which docker >/dev/null \
 
 # distcheck incompatible with some configure args
 if test "$DISTCHECK" = "t"; then
+    test "$RECHECK" = "t" && die "--recheck not allowed with --distcheck"
     for arg in "$@"; do
         case $arg in
           --sysconfdir=*|systemdsystemunitdir=*)
@@ -94,10 +96,9 @@ fi
 
 CONFIGURE_ARGS="$@"
 
-. ${TOP}/src/test/travis-lib.sh
+. ${TOP}/src/test/checks-lib.sh
 
-travis_fold "docker_build" \
-  "Building image $IMAGE for user $USER $(id -u) group=$(id -g)" \
+checks_group "Building image $IMAGE for user $USER $(id -u) group=$(id -g)" \
   docker build \
     ${NO_CACHE} \
     ${QUIET} \
@@ -107,8 +108,8 @@ travis_fold "docker_build" \
     --build-arg UID=$(id -u) \
     --build-arg GID=$(id -g) \
     --build-arg FLUX_SECURITY_VERSION=$FLUX_SECURITY_VERSION \
-    -t travis-builder:${IMAGE} \
-    $TOP/src/test/docker/travis \
+    -t checks-builder:${IMAGE} \
+    $TOP/src/test/docker/checks \
     || die "docker build failed"
 
 if [[ -n "$MOUNT_HOME_ARGS" ]]; then
@@ -126,7 +127,7 @@ if [[ "$INSTALL_ONLY" == "t" ]]; then
     docker run --rm \
         --workdir=/usr/src \
         --volume=$TOP:/usr/src \
-        travis-builder:${IMAGE} \
+        checks-builder:${IMAGE} \
         sh -c "./autogen.sh &&
                ./configure --prefix=/usr --sysconfdir=/etc \
                 --with-systemdsystemunitdir=/etc/systemd/system \
@@ -153,12 +154,15 @@ else
         -e TEST_INSTALL \
         -e CPPCHECK \
         -e DISTCHECK \
+        -e RECHECK \
         -e chain_lint \
         -e JOBS \
         -e USER \
-        -e TRAVIS \
+        -e CI \
         -e TAP_DRIVER_QUIET \
         -e TEST_CHECK_PREREQS \
+        -e FLUX_TEST_TIMEOUT \
+        -e FLUX_TEST_SIZE_MAX \
         -e PYTHON_VERSION \
         -e PRELOAD \
         -e POISON \
@@ -172,8 +176,8 @@ else
         --tty \
         ${INTERACTIVE:+--interactive} \
         --network=host \
-        travis-builder:${IMAGE} \
-        ${INTERACTIVE:-./src/test/travis_run.sh ${CONFIGURE_ARGS}} \
+        checks-builder:${IMAGE} \
+        ${INTERACTIVE:-./src/test/checks_run.sh ${CONFIGURE_ARGS}} \
     || die "docker run failed"
 fi
 
@@ -184,7 +188,7 @@ if test -n "$TAG"; then
 	--workdir=/usr/src/${BUILD_DIR} \
         --volume=$TOP:/usr/src \
         --user="root" \
-	travis-builder:${IMAGE} \
+	checks-builder:${IMAGE} \
 	sh -c "make install && \
                su -c 'flux keygen' fluxuser && \
                userdel $USER" \

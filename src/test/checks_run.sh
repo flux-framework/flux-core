@@ -2,7 +2,7 @@
 #
 #  Test runner script meant to be executed inside of a docker container
 #
-#  Usage: travis_run.sh [OPTIONS...]
+#  Usage: checks_run.sh [OPTIONS...]
 #
 #  Where OPTIONS are passed directly to ./configure
 #
@@ -13,6 +13,7 @@
 #  TEST_INSTALL  Run `make check` against installed flux-core
 #  CPPCHECK      Run cppcheck if set to "t"
 #  DISTCHECK     Run `make distcheck` if set
+#  RECHECK       Run `make recheck` if `make check` fails the first time
 #  PRELOAD       Set as LD_PRELOAD for make and tests
 #  POISON        Install poison libflux and flux(1) in image
 #  chain_lint    Run sharness with --chain-lint if chain_lint=t
@@ -36,8 +37,8 @@ else
   fi
 fi
 
-# source travis_fold and travis_time functions:
-. src/test/travis-lib.sh
+# source check_group and check_time functions:
+. src/test/checks-lib.sh
 
 ARGS="$@"
 JOBS=${JOBS:-2}
@@ -48,8 +49,10 @@ CHECKCMDS="${MAKE} -j ${JOBS} ${DISTCHECK:+dist}check"
 export LD_LIBRARY_PATH="/usr/lib/x86_64-linux-gnu/faketime"
 
 # Force git to update the shallow clone and include tags so git-describe works
-travis_fold "git_fetch_tags" "git fetch --unshallow --tags" \
+checks_group "git fetch tags" "git fetch --unshallow --tags" \
  git fetch --unshallow --tags || true
+
+checks_group_start "build setup"
 ulimit -c unlimited
 
 # Manually update ccache symlinks (XXX: Is this really necessary?)
@@ -65,7 +68,7 @@ if echo "$CC" | grep -q "clang"; then
     CCACHE_CPP=1
 fi
 
-# Ensure travis builds libev such that libfaketime will work:
+# Ensure ci builds libev such that libfaketime will work:
 # (force libev to *not* use syscall interface for clock_gettime())
 export CPPFLAGS="$CPPFLAGS -DEV_USE_CLOCK_SYSCALL=0 -DEV_USE_MONOTONIC=1"
 
@@ -128,7 +131,7 @@ if test -n "$PRELOAD" ; then
   CHECKCMDS="/usr/bin/env 'LD_PRELOAD=$PRELOAD' ${CHECKCMDS}"
 fi
 
-# Travis has limited resources, even though number of processors might
+# CI has limited resources, even though number of processors might
 #  might appear to be large. Limit session size for testing to 5 to avoid
 #  spurious timeouts.
 export FLUX_TEST_SIZE_MAX=5
@@ -152,26 +155,43 @@ fi
 echo "Starting MUNGE"
 sudo /sbin/runuser -u munge /usr/sbin/munged
 
-travis_fold "autogen.sh" "./autogen.sh..." ./autogen.sh
+checks_group_end # Setup
+
+checks_group "autogen.sh" ./autogen.sh
 
 if test -n "$BUILD_DIR" ; then
   mkdir -p "$BUILD_DIR"
   cd "$BUILD_DIR"
 fi
 
-travis_fold "configure"  "/usr/src/configure ${ARGS}..." /usr/src/configure ${ARGS}
-travis_fold "make_clean" "make clean..." make clean
+checks_group "configure ${ARGS}"  /usr/src/configure ${ARGS}
+checks_group "make clean..." make clean
 
-env
 if test "$POISON" = "t"; then
-  echo "Installing poison libflux..."
-  travis_fold "poison_libflux" "Installing poison libflux..." \
+  checks_group "Installing poison libflux..." \
     bash src/test/docker/poison-libflux.sh
 fi
 
 if test "$DISTCHECK" != "t"; then
-  echo running: ${MAKECMDS}
-  travis_fold "build" "${MAKECMDS}" eval ${MAKECMDS}
+  checks_group "${MAKECMDS}" eval ${MAKECMDS}
 fi
-echo running: ${CHECKCMDS}
-travis_fold "check" "${CHECKCMDS}" eval ${CHECKCMDS}
+checks_group "${CHECKCMDS}" eval ${CHECKCMDS}
+RC=$?
+
+if test "$DISTCHECK" != "t" -a $RC -ne 0; then
+  #
+  # `make recheck` is not recursive, only perform it if at least some tests
+  #   under ./t were run (and presumably failed)
+  #
+  if test -s t/t0001-basic.trs; then
+    cd t
+    printf "::warning::make check failed, trying recheck in ./t\n"
+    checks_group "make recheck" ${MAKE} -j ${JOBS} recheck
+    RC=$?
+    cd
+   else
+      printf "::warning::recheck requested but no tests in ./t were run\n"
+   fi
+fi
+
+exit $RC

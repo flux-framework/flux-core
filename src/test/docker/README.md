@@ -2,9 +2,9 @@
 
 The Dockerfiles, resulting docker images, and `docker-run-checks.sh`
 script contained herein are used as part of the strategy for CI testing
-of Flux Framework projects under [Travis CI](https://travis-ci.org).
+of Flux Framework projects.
 
-Docker is used under Travis to speed up deployment of an
+Docker is used under CI to speed up deployment of an
 environment with correct build dependencies and to keep a docker
 image deployed at `fluxrm/flux-core` DockerHub with latest master build
 (`fluxrm/flux-core:latest`) and tagged builds (`fluxrm/flux-core:v<tag>`),
@@ -21,14 +21,14 @@ include the base dependencies required to build flux-core. These images
 are updated manually by flux-core maintainers, but the Dockerfiles should
 be kept up to date for a single point of management.
 
-#### The travis build Dockerfile
+#### The "checks" build Dockerfile
 
-A secondary Dockerfile exists under `./travis/Dockerfile` which is used
+A secondary Dockerfile exists under `./checks/Dockerfile` which is used
 to customize the `fluxrm/testenv` before building. Without this secondary
 `docker build` stage, there would be no way for PRs on GitHub to add
 new dependencies for users that are not core maintainers (or the "base"
 images would need to be completely rebuilt on each CI run). For now,
-`flux-security` is also built manually within the `travis/Dockerfile`
+`flux-security` is also built manually within the `checks/Dockerfile`
 because it is assumed that package will be rapidly changing, and it
 would not make sense to be constantly updating the base `fluxrm/testenv`
 Docker images.
@@ -36,7 +36,7 @@ Docker images.
 #### Adding a new dependency
 
 When constructing a PR that adds new dependency, the dependency should
-be added (for both CentOS and Ubuntu) in `travis/Dockerfile`. This will
+be added (for both CentOS and Ubuntu) in `checks/Dockerfile`. This will
 result in a temporary docker image being created during testing of the
 PR with the dependency installed.
 
@@ -48,7 +48,7 @@ pushed to DockerHub at `fluxrm/testenv:bionic` and
 script still runs against the new `testenv` images, e.g.:
 
 ```
-$ for i in bionic centos7; do
+$ for i in bionic centos7 focal centos8; do
     make clean &&
     docker build --no-cache -t fluxrm/testenv:$i src/test/docker/$i &&
     src/test/docker/docker-run-checks.sh -j 4 --image=$i &&

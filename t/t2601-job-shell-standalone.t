@@ -5,7 +5,7 @@ test_description='Test flux-shell in --standalone mode'
 . `dirname $0`/sharness.sh
 
 #  Run flux-shell under flux command to get correct paths
-FLUX_SHELL="flux ${FLUX_BUILD_DIR}/src/shell/flux-shell"
+FLUX_SHELL="run_timeout 30 flux ${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
 PMI_INFO=${FLUX_BUILD_DIR}/src/common/libpmi/test_pmi_info
 KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
@@ -146,7 +146,7 @@ test_expect_success 'flux-shell: shell PMI KVS works' '
 	${FLUX_SHELL} -v -s -r 0 -j j8kvs -R R8 52 \
 		>kvstest.out 2>kvstest.err
 '
-test_expect_success 'flux-shell: shell can launch flux' '
+test_expect_success NO_ASAN 'flux-shell: shell can launch flux' '
 	flux jobspec srun -N1 -n8 flux start flux getattr size >j8flux &&
 	${FLUX_SHELL} -v -s -r 0 -j j8flux -R R8 39 \
 		>flux.out 2>flux.err &&

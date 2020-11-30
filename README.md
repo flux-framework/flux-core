@@ -1,4 +1,4 @@
-[![Build Status](https://travis-ci.com/flux-framework/flux-core.svg?branch=master)](https://travis-ci.com/flux-framework/flux-core)
+[![github ci](https://github.com/flux-framework/flux-core/workflows/.github/workflows/main.yml/badge.svg)](https://github.com/flux-framework/flux-core/actions?query=workflow%3A.github%2Fworkflows%2Fmain.yml)
 [![codecov](https://codecov.io/gh/flux-framework/flux-core/branch/master/graph/badge.svg)](https://codecov.io/gh/flux-framework/flux-core)
 
 _NOTE: The interfaces of flux-core are being actively developed
