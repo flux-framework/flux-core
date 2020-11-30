@@ -152,3 +152,31 @@ jobs:
       if: success() && matrix.docker_tag
       env: ${{matrix.env}}
       run: src/test/docker-deploy.sh
+
+    #   Prepare, create and deploy release on tag:
+    - name: prep release
+      id: prep_release
+      if: success() && matrix.create_release
+      env: ${{matrix.env}}
+      run: echo "::set-output name=tarball::flux-core*.tar.gz"
+
+    - name: create release
+      id: create_release
+      if: success() && matrix.create_release
+      env: ${{matrix.env}}
+      uses: actions/create-release@v1
+      with:
+        tag_name: ${{ matrix.tag }}
+        release_name: flux-core ${{ matrix.tag }}
+        prerelease: true
+        body: |
+          View [Release Notes](https://github.com/${{ github.repository }}/blob/${{ matrix.tag }}/NEWS.md) for flux-core ${{ matrix.tag }}
+
+    - name: upload tarball
+      id: upload-tarball
+      if: success() && matrix.create_release
+      uses: actions/upload-release-asset@v1
+      with:
+        upload_url: ${{ steps.create_release.outputs.upload_url }}
+        asset_path: ${{ steps.prep_release.outputs.tarball }}
+        asset_name: ${{ steps.prep_release.outputs.tarball }}
