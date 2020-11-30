@@ -369,6 +369,23 @@ test_expect_success 'flux-jobs --format={userid},{username} works' '
 	test_cmp user.out user.exp
 '
 
+test_expect_success 'flux-jobs --format={priority} works' '
+	flux jobs --suppress-header -a --format="{priority}" > priority.out &&
+	echo 30 > priority.exp &&
+	echo 25 >> priority.exp &&
+	echo 20 >> priority.exp &&
+	echo 15 >> priority.exp &&
+	echo 10 >> priority.exp &&
+	echo 5 >> priority.exp &&
+	for i in `seq 1 $(state_count run)`; do
+		echo "16" >> priority.exp
+	done &&
+	for i in `seq 1 $(state_count inactive)`; do
+		echo "16" >> priority.exp
+	done &&
+	test_cmp priority.out priority.exp
+'
+
 test_expect_success 'flux-jobs --format={state},{state_single} works' '
 	flux jobs --filter=pending -c1 -no "{state},{state_single}" > stateP.out &&
 	test "$(cat stateP.out)" = "SCHED,S" &&
