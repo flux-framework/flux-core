@@ -87,8 +87,8 @@ test_expect_success 'flux-shell: gpu-affinity works by default' '
 	flux mini run -N1 -n2 --dry-run \
 		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
 	cat >${name}.expected <<-EOF  &&
-	0: 0-3
-	1: 0-3
+	0: 0,1,2,3
+	1: 0,1,2,3
 	EOF
 	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 &&
 	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
@@ -100,8 +100,8 @@ test_expect_success 'flux-shell: gpu-affinity=on' '
 	flux mini run -N1 -n2 --dry-run -o gpu-affinity=on \
 		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
 	cat >${name}.expected <<-EOF  &&
-	0: 0-3
-	1: 0-3
+	0: 0,1,2,3
+	1: 0,1,2,3
 	EOF
 	${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 | sort -k1,1n \
 		> ${name}.out 2>${name}.err &&
