@@ -369,19 +369,19 @@ test_expect_success 'flux-jobs --format={userid},{username} works' '
 	test_cmp user.out user.exp
 '
 
-test_expect_success 'flux-jobs --format={priority} works' '
-	flux jobs --suppress-header -a --format="{priority}" > priority.out &&
-	echo 30 > priority.exp &&
-	echo 25 >> priority.exp &&
-	echo 20 >> priority.exp &&
-	echo 15 >> priority.exp &&
-	echo 10 >> priority.exp &&
-	echo 5 >> priority.exp &&
+test_expect_success 'flux-jobs --format={admin_priority},{queue_priority} works' '
+	flux jobs --suppress-header -a --format="{admin_priority},{queue_priority}" > priority.out &&
+	echo 30,30 > priority.exp &&
+	echo 25,25 >> priority.exp &&
+	echo 20,20 >> priority.exp &&
+	echo 15,15 >> priority.exp &&
+	echo 10,10 >> priority.exp &&
+	echo 5,5 >> priority.exp &&
 	for i in `seq 1 $(state_count run)`; do
-		echo "16" >> priority.exp
+		echo "16,16" >> priority.exp
 	done &&
 	for i in `seq 1 $(state_count inactive)`; do
-		echo "16" >> priority.exp
+		echo "16,16" >> priority.exp
 	done &&
 	test_cmp priority.out priority.exp
 '
@@ -763,7 +763,8 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	id.words==JOBID
 	userid==UID
 	username==USER
-	priority==PRI
+	admin_priority==PRI
+	queue_priority==QPRI
 	state==STATE
 	state_single==S
 	name==NAME
