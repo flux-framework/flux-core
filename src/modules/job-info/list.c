@@ -565,13 +565,13 @@ int list_attrs_append (json_t *a, const char *attr)
 void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
-    const char *attrs[] = { "userid", "priority", "t_submit", "t_depend",
-                            "t_sched", "t_priority", "t_run", "t_cleanup",
-                            "t_inactive", "state", "name", "ntasks", "nnodes",
-                            "ranks", "nodelist", "success", "exception_occurred",
-                            "exception_type", "exception_severity",
-                            "exception_note", "result", "expiration",
-                            "annotations", NULL };
+    const char *attrs[] = { "userid", "admin_priority", "queue_priority",
+                            "t_submit", "t_depend", "t_sched", "t_priority",
+                            "t_run", "t_cleanup", "t_inactive", "state", "name",
+                            "ntasks", "nnodes", "ranks", "nodelist", "success",
+                            "exception_occurred", "exception_type",
+                            "exception_severity", "exception_note", "result",
+                            "expiration", "annotations", NULL };
     json_t *a = NULL;
     int i;
 

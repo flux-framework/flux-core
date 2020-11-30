@@ -263,8 +263,8 @@ test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
         test_cmp list_pending3.out pending.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
-        cat >list_priority.exp <<-EOT &&
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct admin_priority' '
+        cat >list_admin_priority.exp <<-EOT &&
 31
 31
 20
@@ -274,12 +274,31 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
 0
 0
 EOT
-        flux job list -s pending | jq .priority > list_priority1.out &&
-        flux job list -s depend,priority,sched | jq .priority > list_priority2.out &&
-        flux job list -s sched | jq .priority > list_priority3.out &&
-        test_cmp list_priority1.out list_priority.exp &&
-        test_cmp list_priority2.out list_priority.exp &&
-        test_cmp list_priority3.out list_priority.exp
+        flux job list -s pending | jq .admin_priority > list_admin_priority1.out &&
+        flux job list -s depend,priority,sched | jq .admin_priority > list_admin_priority2.out &&
+        flux job list -s sched | jq .admin_priority > list_admin_priority3.out &&
+        test_cmp list_admin_priority1.out list_admin_priority.exp &&
+        test_cmp list_admin_priority2.out list_admin_priority.exp &&
+        test_cmp list_admin_priority3.out list_admin_priority.exp
+'
+
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct queue_priority' '
+        cat >list_queue_priority.exp <<-EOT &&
+31
+31
+20
+20
+16
+16
+0
+0
+EOT
+        flux job list -s pending | jq .queue_priority > list_queue_priority1.out &&
+        flux job list -s depend,priority,sched | jq .queue_priority > list_queue_priority2.out &&
+        flux job list -s sched | jq .queue_priority > list_queue_priority3.out &&
+        test_cmp list_queue_priority1.out list_queue_priority.exp &&
+        test_cmp list_queue_priority2.out list_queue_priority.exp &&
+        test_cmp list_queue_priority3.out list_queue_priority.exp
 '
 
 test_expect_success HAVE_JQ 'flux job list pending jobs with correct state' '
@@ -887,7 +906,8 @@ test_expect_success 'list count / max_entries works' '
 
 ALL_ATTRIBUTES="\
 userid \
-priority \
+admin_priority \
+queue_priority \
 t_submit \
 t_depend \
 t_priority \

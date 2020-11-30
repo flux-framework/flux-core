@@ -176,8 +176,8 @@ test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
         test_cmp list_pending.out pending.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
-        cat >list_priority.exp <<-EOT &&
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct admin_priority' '
+        cat >list_admin_priority.exp <<-EOT &&
 31
 31
 20
@@ -187,8 +187,23 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
 0
 0
 EOT
-        flux job list -s pending | jq .priority > list_priority.out &&
-        test_cmp list_priority.out list_priority.exp
+        flux job list -s pending | jq .admin_priority > list_admin_priority.out &&
+        test_cmp list_admin_priority.out list_admin_priority.exp
+'
+
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct queue_priority' '
+        cat >list_queue_priority.exp <<-EOT &&
+31
+31
+20
+20
+16
+16
+0
+0
+EOT
+        flux job list -s pending | jq .queue_priority > list_queue_priority.out &&
+        test_cmp list_queue_priority.out list_queue_priority.exp
 '
 
 test_expect_success HAVE_JQ 'change a job priority' '
@@ -213,8 +228,8 @@ test_expect_success HAVE_JQ 'wait for job-info to see job priority change' '
         test_cmp list_pending_after.out pending_after.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
-        cat >list_priority_after.exp <<-EOT &&
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct admin_priority' '
+        cat >list_admin_priority_after.exp <<-EOT &&
 31
 20
 20
@@ -224,8 +239,23 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
 0
 0
 EOT
-        flux job list -s pending | jq .priority > list_priority_after.out &&
-        test_cmp list_priority_after.out list_priority_after.exp
+        flux job list -s pending | jq .admin_priority > list_admin_priority_after.out &&
+        test_cmp list_admin_priority_after.out list_admin_priority_after.exp
+'
+
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct queue_priority' '
+        cat >list_queue_priority_after.exp <<-EOT &&
+31
+20
+20
+16
+16
+1
+0
+0
+EOT
+        flux job list -s pending | jq .queue_priority > list_queue_priority_after.out &&
+        test_cmp list_queue_priority_after.out list_queue_priority_after.exp
 '
 
 test_expect_success 'cleanup job listing jobs ' '

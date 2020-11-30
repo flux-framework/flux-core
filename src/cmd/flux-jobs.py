@@ -55,7 +55,7 @@ def fetch_jobs_flux(args, fields):
         "id.dothex": (),
         "userid": ("userid",),
         "username": ("userid",),
-        "priority": ("priority",),
+        "priority": ("admin_priority",),
         "state": ("state",),
         "state_single": ("state",),
         "name": ("name",),

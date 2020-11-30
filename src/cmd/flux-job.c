@@ -1032,7 +1032,7 @@ int cmd_cancelall (optparse_t *p, int argc, char **argv)
 }
 
 static const char *list_attrs =
-    "[\"userid\",\"priority\",\"t_submit\",\"state\","          \
+    "[\"userid\",\"admin_priority\",\"queue_priority\",\"t_submit\",\"state\"," \
     "\"name\",\"ntasks\",\"nnodes\",\"ranks\",\"nodelist\",\"expiration\"," \
     "\"success\",\"exception_occurred\",\"exception_severity\"," \
     "\"exception_type\",\"exception_note\",\"result\","  \
