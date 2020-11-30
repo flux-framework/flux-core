@@ -152,6 +152,9 @@ The field names that can be specified are:
 **urgency**
    job urgency
 
+**priority**
+   job priority
+
 **status**
    job status (PENDING, RUNNING, COMPLETED, FAILED, or CANCELLED)
 
