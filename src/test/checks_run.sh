@@ -178,7 +178,7 @@ fi
 checks_group "${CHECKCMDS}" eval ${CHECKCMDS}
 RC=$?
 
-if test "$DISTCHECK" != "t" -a $RC -ne 0; then
+if test "$RECHECK" = "t" -a $RC -ne 0; then
   #
   # `make recheck` is not recursive, only perform it if at least some tests
   #   under ./t were run (and presumably failed)
