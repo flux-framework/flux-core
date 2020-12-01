@@ -53,8 +53,7 @@ wait_jobid_state() {
 #   - we desire pending jobs sorted in priority order, so we need to
 #   create the sorted list for comparison later.
 # - job ids are stored in files in the order we expect them to be listed
-#   - pending jobs - by priority (highest first), submission time
-#                    (earlier first)
+#   - pending jobs - by priority (highest first), job id (smaller first)
 #   - running jobs - by start time (most recent first)
 #   - inactive jobs - by completion time (most recent first)
 #
