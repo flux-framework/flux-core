@@ -72,6 +72,7 @@ class BuildMatrix:
         docker_tag=False,
         test_s3=False,
         coverage=False,
+        recheck=True,
     ):
         """Add a build to the matrix.include array"""
 
@@ -80,6 +81,10 @@ class BuildMatrix:
 
         # The command to run:
         command = f"{docker_run_checks} -j{jobs} --image={image}"
+
+        # Add --recheck option if requested
+        if recheck and "DISTCHECK" not in env:
+            command += " --recheck"
 
         if docker_tag:
             #  Only export docker_tag if this is main branch or a tag:
