@@ -20,7 +20,7 @@
  * store jobs in three different lists.
  *
  * - pending - these are jobs that have not yet in the RUN state, they
- *   are sorted based on job priority (highest first), then job
+ *   are sorted based on job urgency (highest first), then job
  *   submission time (earlier submission time first).
  * - running - these are jobs that have transitioned to the RUN state.
  *   They are sorted by initial run start time (later run start
@@ -67,7 +67,7 @@ struct job {
 
     flux_jobid_t id;
     uint32_t userid;
-    int priority;
+    int urgency;
     double t_submit;
     int flags;
     flux_job_state_t state;
@@ -98,7 +98,7 @@ struct job {
      * associated to that state.  For example, when the 'depend' state
      * has been seen, we don't immediately place it on the `pending`
      * list.  We wait until we've retrieved data such as userid,
-     * priority, etc.
+     * urgency, etc.
      *
      * Track which states we've seen via the states_mask.
      *

@@ -89,7 +89,7 @@ int main (int argc, char *argv[])
 
     json_array_foreach (jobs, index, value) {
         flux_jobid_t id;
-        int priority;
+        int urgency;
         uint32_t userid;
         double t_submit;
         char timestr[80];
@@ -99,7 +99,7 @@ int main (int argc, char *argv[])
 
         if (json_unpack (value, "{s:I s:i s:i s:f s:i s?:o}",
                                 "id", &id,
-                                "priority", &priority,
+                                "urgency", &urgency,
                                 "userid", &userid,
                                 "t_submit", &t_submit,
                                 "state", &state,
@@ -113,7 +113,7 @@ int main (int argc, char *argv[])
                 (uintmax_t)id,
                 flux_job_statetostr (state, true),
                 (unsigned long)userid,
-                priority,
+                urgency,
                 timestr,
                 annotations_str ? "\t" : "",
                 annotations_str ? annotations_str : "");

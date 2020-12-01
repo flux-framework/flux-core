@@ -325,7 +325,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "id.dothex": "JOBID",
         "userid": "UID",
         "username": "USER",
-        "priority": "PRI",
+        "urgency": "URG",
         "state": "STATE",
         "state_single": "S",
         "name": "NAME",

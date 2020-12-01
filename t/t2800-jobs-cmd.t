@@ -19,7 +19,7 @@ JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/valida
 # - the last job submissions are intended to get a create a set of
 #   pending jobs, because jobs from the second loop have taken all resources
 # - job ids are stored in files in the order we expect them to be listed
-#   - pending jobs - by priority (highest first), job id (smaller first)
+#   - pending jobs - by urgency (highest first), job id (smaller first)
 #   - running jobs - by start time (most recent first)
 #   - inactive jobs - by completion time (most recent first)
 #
@@ -112,11 +112,11 @@ test_expect_success 'submit jobs for job list testing' '
 	done &&
 	tac runids > run.ids &&
 	#
-	#  Submit a set of jobs with non-default priorities
+	#  Submit a set of jobs with non-default urgencies
 	#  N.B. Use `flux job submit` for efficiency
 	#
-	for p in 30 25 20 15 10 5; do
-		flux job submit --priority=$p sleep600.json >> sched.ids
+	for u in 30 25 20 15 10 5; do
+		flux job submit --urgency=$u sleep600.json >> sched.ids
 	done &&
 	listjobs > active.ids &&
 	#
@@ -369,21 +369,21 @@ test_expect_success 'flux-jobs --format={userid},{username} works' '
 	test_cmp user.out user.exp
 '
 
-test_expect_success 'flux-jobs --format={priority} works' '
-	flux jobs --suppress-header -a --format="{priority}" > priority.out &&
-	echo 30 > priority.exp &&
-	echo 25 >> priority.exp &&
-	echo 20 >> priority.exp &&
-	echo 15 >> priority.exp &&
-	echo 10 >> priority.exp &&
-	echo 5 >> priority.exp &&
+test_expect_success 'flux-jobs --format={urgency} works' '
+	flux jobs --suppress-header -a --format="{urgency}" > urgency.out &&
+	echo 30 > urgency.exp &&
+	echo 25 >> urgency.exp &&
+	echo 20 >> urgency.exp &&
+	echo 15 >> urgency.exp &&
+	echo 10 >> urgency.exp &&
+	echo 5 >> urgency.exp &&
 	for i in `seq 1 $(state_count run)`; do
-		echo "16" >> priority.exp
+		echo "16" >> urgency.exp
 	done &&
 	for i in `seq 1 $(state_count inactive)`; do
-		echo "16" >> priority.exp
+		echo "16" >> urgency.exp
 	done &&
-	test_cmp priority.out priority.exp
+	test_cmp urgency.out urgency.exp
 '
 
 test_expect_success 'flux-jobs --format={state},{state_single} works' '
@@ -763,7 +763,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	id.words==JOBID
 	userid==UID
 	username==USER
-	priority==PRI
+	urgency==URG
 	state==STATE
 	state_single==S
 	name==NAME

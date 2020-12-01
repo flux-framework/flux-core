@@ -42,9 +42,9 @@ static int submit_context_parse (flux_t *h,
 static int finish_context_parse (flux_t *h,
                                  struct job *job,
                                  json_t *context);
-static int admin_priority_context_parse (flux_t *h,
-                                         struct job *job,
-                                         json_t *context);
+static int urgency_context_parse (flux_t *h,
+                                  struct job *job,
+                                  json_t *context);
 static int exception_context_parse (flux_t *h,
                                     struct job *job,
                                     json_t *context,
@@ -54,16 +54,16 @@ static void process_next_state (struct info_ctx *ctx, struct job *job);
 
 static int journal_process_events (struct job_state_ctx *jsctx, json_t *events);
 
-/* Compare items for sorting in list, priority first (higher priority
- * before lower priority), job id second N.B. zlistx_comparator_fn signature
+/* Compare items for sorting in list, urgency first (higher urgency
+ * before lower urgency), job id second N.B. zlistx_comparator_fn signature
  */
-static int job_priority_cmp (const void *a1, const void *a2)
+static int job_urgency_cmp (const void *a1, const void *a2)
 {
     const struct job *j1 = a1;
     const struct job *j2 = a2;
     int rc;
 
-    if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
+    if ((rc = (-1)*NUMCMP (j1->urgency, j2->urgency)) == 0)
         rc = NUMCMP (j1->id, j2->id);
     return rc;
 }
@@ -121,7 +121,7 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
     job->id = id;
     job->state = FLUX_JOB_STATE_NEW;
     job->userid = FLUX_USERID_UNKNOWN;
-    job->priority = -1;
+    job->urgency = -1;
     job->result = FLUX_JOB_RESULT_FAILED;
     job->eventlog_seq = -1;
 
@@ -144,13 +144,13 @@ static void json_decref_wrapper (void **data)
 
 /* zlistx_insert() and zlistx_reorder() take a 'low_value' parameter
  * which indicates which end of the list to search from.
- * false=search begins at tail (lowest priority, youngest)
- * true=search begins at head (highest priority, oldest)
- * Attempt to minimize search distance based on job priority.
+ * false=search begins at tail (lowest urgency, youngest)
+ * true=search begins at head (highest urgency, oldest)
+ * Attempt to minimize search distance based on job urgency.
  */
 static bool search_direction (struct job *job)
 {
-    if (job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT)
+    if (job->urgency > FLUX_JOB_URGENCY_DEFAULT)
         return true;
     else
         return false;
@@ -926,8 +926,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
         else if (!strcmp (name, "priority")) {
             update_job_state (ctx, job, FLUX_JOB_STATE_SCHED, timestamp);
         }
-        else if (!strcmp (name, "admin-priority")) {
-            if (admin_priority_context_parse (ctx->h, job, context) < 0)
+        else if (!strcmp (name, "urgency")) {
+            if (urgency_context_parse (ctx->h, job, context) < 0)
                 goto error;
         }
         else if (!strcmp (name, "exception")) {
@@ -1229,14 +1229,14 @@ static int submit_context_parse (flux_t *h,
                                  struct job *job,
                                  json_t *context)
 {
-    int priority;
+    int urgency;
     int userid;
     int flags;
 
     if (!context
         || json_unpack (context,
                         "{ s:i s:i s:i }",
-                        "priority", &priority,
+                        "urgency", &urgency,
                         "userid", &userid,
                         "flags", &flags) < 0) {
         flux_log (h, LOG_ERR, "%s: submit context invalid: %ju",
@@ -1246,7 +1246,7 @@ static int submit_context_parse (flux_t *h,
     }
 
     job->userid = userid;
-    job->priority = priority;
+    job->urgency = urgency;
     return 0;
 }
 
@@ -1340,33 +1340,33 @@ static int journal_finish_event (struct job_state_ctx *jsctx,
                                  timestamp);
 }
 
-static int admin_priority_context_parse (flux_t *h,
-                                         struct job *job,
-                                         json_t *context)
+static int urgency_context_parse (flux_t *h,
+                                  struct job *job,
+                                  json_t *context)
 {
-    int priority;
+    int urgency;
 
     if (!context
-        || json_unpack (context, "{ s:i }", "priority", &priority) < 0
-        || (priority < FLUX_JOB_ADMIN_PRIORITY_MIN
-            || priority > FLUX_JOB_ADMIN_PRIORITY_MAX)) {
-        flux_log (h, LOG_ERR, "%s: admin-priority context invalid: %ju",
+        || json_unpack (context, "{ s:i }", "urgency", &urgency) < 0
+        || (urgency < FLUX_JOB_URGENCY_MIN
+            || urgency > FLUX_JOB_URGENCY_MAX)) {
+        flux_log (h, LOG_ERR, "%s: urgency context invalid: %ju",
                   __FUNCTION__, (uintmax_t)job->id);
         errno = EPROTO;
         return -1;
     }
 
-    job->priority = priority;
+    job->urgency = urgency;
     return 0;
 }
 
-static int journal_admin_priority_event (struct job_state_ctx *jsctx,
-                                         flux_jobid_t id,
-                                         int eventlog_seq,
-                                         json_t *context)
+static int journal_urgency_event (struct job_state_ctx *jsctx,
+                                  flux_jobid_t id,
+                                  int eventlog_seq,
+                                  json_t *context)
 {
     struct job *job;
-    int orig_priority;
+    int orig_urgency;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
         flux_log_error (jsctx->h, "%s: job %ju not in hash",
@@ -1378,13 +1378,13 @@ static int journal_admin_priority_event (struct job_state_ctx *jsctx,
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
 
-    orig_priority = job->priority;
+    orig_urgency = job->urgency;
 
-    if (admin_priority_context_parse (jsctx->h, job, context) < 0)
+    if (urgency_context_parse (jsctx->h, job, context) < 0)
         return -1;
 
     if (job->state & FLUX_JOB_STATE_PENDING
-        && job->priority != orig_priority)
+        && job->urgency != orig_urgency)
         zlistx_reorder (jsctx->pending,
                         job->list_handle,
                         search_direction (job));
@@ -1561,11 +1561,11 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
                                  timestamp) < 0)
             return -1;
     }
-    else if (!strcmp (name, "admin-priority")) {
-        if (journal_admin_priority_event (jsctx,
-                                          id,
-                                          eventlog_seq,
-                                          context) < 0)
+    else if (!strcmp (name, "urgency")) {
+        if (journal_urgency_event (jsctx,
+                                   id,
+                                   eventlog_seq,
+                                   context) < 0)
             return -1;
     }
     else if (!strcmp (name, "exception")) {
@@ -1676,7 +1676,7 @@ struct job_state_ctx *job_state_create (struct info_ctx *ctx)
 
     if (!(jsctx->pending = zlistx_new ()))
         goto error;
-    zlistx_set_comparator (jsctx->pending, job_priority_cmp);
+    zlistx_set_comparator (jsctx->pending, job_urgency_cmp);
 
     if (!(jsctx->running = zlistx_new ()))
         goto error;

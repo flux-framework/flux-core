@@ -180,11 +180,11 @@ void check_corner_case (void)
     ok (flux_job_raise (h, 0, NULL, 0, NULL) == NULL && errno == EINVAL,
         "flux_job_raise type=NULL fails with EINVAL");
 
-    /* flux_job_set_priority */
+    /* flux_job_set_urgency */
 
     errno = 0;
-    ok (flux_job_set_priority (NULL, 0, 0) == NULL && errno == EINVAL,
-        "flux_job_set_priority h=NULL fails with EINVAL");
+    ok (flux_job_set_urgency (NULL, 0, 0) == NULL && errno == EINVAL,
+        "flux_job_set_urgency h=NULL fails with EINVAL");
 
     /* flux_job_kvs_key */
 

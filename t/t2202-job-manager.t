@@ -58,10 +58,10 @@ test_expect_success 'job-manager: queue lists job with correct userid' '
 	test_cmp list1_userid.exp list1_userid.out
 '
 
-test_expect_success 'job-manager: queue list job with correct priority' '
-	echo 16 >list1_priority.exp &&
-	cut -f4 <list1.out >list1_priority.out &&
-	test_cmp list1_priority.exp list1_priority.out
+test_expect_success 'job-manager: queue list job with correct urgency' '
+	echo 16 >list1_urgency.exp &&
+	cut -f4 <list1.out >list1_urgency.out &&
+	test_cmp list1_urgency.exp list1_urgency.out
 '
 
 test_expect_success 'job-manager: raise non-fatal exception on job' '
@@ -96,10 +96,10 @@ test_expect_success 'job-manager: queue contains 0 jobs' '
 	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
-test_expect_success 'job-manager: submit jobs with priority=min,default,max' '
-	flux job submit -p0  basic.json | flux job id >submit_min.out &&
+test_expect_success 'job-manager: submit jobs with urgency=min,default,max' '
+	flux job submit -u0  basic.json | flux job id >submit_min.out &&
 	flux job submit      basic.json | flux job id >submit_def.out &&
-	flux job submit -p31 basic.json | flux job id >submit_max.out
+	flux job submit -u31 basic.json | flux job id >submit_max.out
 '
 
 test_expect_success 'job-manager: queue contains 3 jobs' '
@@ -107,17 +107,17 @@ test_expect_success 'job-manager: queue contains 3 jobs' '
 	test $(wc -l <list3.out) -eq 3
 '
 
-test_expect_success 'job-manager: queue is sorted in priority order' '
-	cat >list3_pri.exp <<-EOT &&
+test_expect_success 'job-manager: queue is sorted in urgency order' '
+	cat >list3_urgency.exp <<-EOT &&
 	31
 	16
 	0
 	EOT
-	cut -f4 <list3.out >list3_pri.out &&
-	test_cmp list3_pri.exp list3_pri.out
+	cut -f4 <list3.out >list3_urgency.out &&
+	test_cmp list3_urgency.exp list3_urgency.out
 '
 
-test_expect_success 'job-manager: list-jobs --count shows highest priority jobs' '
+test_expect_success 'job-manager: list-jobs --count shows highest urgency jobs' '
 	cat >list3_lim2.exp <<-EOT &&
 	31
 	16
@@ -136,7 +136,7 @@ test_expect_success 'job-manager: queue contains 0 jobs' '
        test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
-test_expect_success 'job-manager: submit 10 jobs of equal priority' '
+test_expect_success 'job-manager: submit 10 jobs of equal urgency' '
 	rm -f submit10.out &&
 	for i in $(seq 1 10); do \
 	    flux job submit basic.json | flux job id >>submit10.out; \
@@ -149,17 +149,17 @@ test_expect_success 'job-manager: jobs are listed in submit order' '
 	test_cmp submit10.out list10_ids.out
 '
 
-test_expect_success 'job-manager: flux job priority sets last job priority=31' '
+test_expect_success 'job-manager: flux job urgency sets last job urgency=31' '
 	lastid=$(tail -1 <list10_ids.out) &&
-	flux job priority ${lastid} 31
+	flux job urgency ${lastid} 31
 '
 
-test_expect_success 'job-manager: priority was updated in KVS' '
+test_expect_success 'job-manager: urgency was updated in KVS' '
 	jobid=$(tail -1 <list10_ids.out) &&
-        flux job wait-event --timeout=5.0 ${jobid} admin-priority &&
+        flux job wait-event --timeout=5.0 ${jobid} urgency &&
 	flux job eventlog $jobid \
-		| cut -d" " -f2- | grep ^admin-priority >pri.out &&
-	grep -q priority=31 pri.out
+		| cut -d" " -f2- | grep ^urgency >urgency.out &&
+	grep -q urgency=31 urgency.out
 '
 
 test_expect_success 'job-manager: that job is now the first job' '
@@ -212,43 +212,43 @@ test_expect_success 'job-manager: cancel jobs' '
 	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
-test_expect_success 'job-manager: flux job priority fails on invalid priority' '
+test_expect_success 'job-manager: flux job urgency fails on invalid urgency' '
 	jobid=$(flux job submit basic.json) &&
-	flux job priority ${jobid} 31 &&
-	test_must_fail flux job priority ${jobid} -1 &&
-	test_must_fail flux job priority ${jobid} 32 &&
+	flux job urgency ${jobid} 31 &&
+	test_must_fail flux job urgency ${jobid} -1 &&
+	test_must_fail flux job urgency ${jobid} 32 &&
 	flux job cancel ${jobid}
 '
 
-test_expect_success 'job-manager: guest can reduce priority from default' '
+test_expect_success 'job-manager: guest can reduce urgency from default' '
 	jobid=$(flux job submit  basic.json) &&
-	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 5 &&
+	FLUX_HANDLE_ROLEMASK=0x2 flux job urgency ${jobid} 5 &&
 	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest can increase to default' '
-	jobid=$(flux job submit -p 0 basic.json) &&
-	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 16 &&
+	jobid=$(flux job submit -u 0 basic.json) &&
+	FLUX_HANDLE_ROLEMASK=0x2 flux job urgency ${jobid} 16 &&
 	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest cannot increase past default' '
 	jobid=$(flux job submit basic.json) &&
-	! FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 17 &&
+	! FLUX_HANDLE_ROLEMASK=0x2 flux job urgency ${jobid} 17 &&
 	flux job cancel ${jobid}
 '
 
 test_expect_success 'job-manager: guest can decrease from from >default' '
-	jobid=$(flux job submit -p 31 basic.json) &&
-	FLUX_HANDLE_ROLEMASK=0x2 flux job priority ${jobid} 17 &&
+	jobid=$(flux job submit -u 31 basic.json) &&
+	FLUX_HANDLE_ROLEMASK=0x2 flux job urgency ${jobid} 17 &&
 	flux job cancel ${jobid}
 '
 
-test_expect_success 'job-manager: guest cannot set priority of others jobs' '
+test_expect_success 'job-manager: guest cannot set urgency of others jobs' '
 	jobid=$(flux job submit basic.json) &&
 	newid=$(($(id -u)+1)) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 FLUX_HANDLE_USERID=${newid} \
-		flux job priority ${jobid} 0 &&
+		flux job urgency ${jobid} 0 &&
 	flux job cancel ${jobid}
 '
 
@@ -313,8 +313,8 @@ test_expect_success 'list request with empty payload fails with EPROTO(71)' '
 test_expect_success 'raise request with empty payload fails with EPROTO(71)' '
 	${RPC} job-manager.raise 71 </dev/null
 '
-test_expect_success 'priority request with empty payload fails with EPROTO(71)' '
-	${RPC} job-manager.priority 71 </dev/null
+test_expect_success 'urgency request with empty payload fails with EPROTO(71)' '
+	${RPC} job-manager.urgency 71 </dev/null
 '
 test_expect_success 'sched-ready request with empty payload fails with EPROTO(71)' '
 	${RPC} job-manager.sched-ready 71 </dev/null

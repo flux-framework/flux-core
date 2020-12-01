@@ -32,7 +32,7 @@ void single_job_check (zhashx_t *active_jobs)
     /* good job */
     if (!(job1 = json_pack ("{s:I s:i s:i s:f s:i s:{}}",
                             "id", 1,
-                            "priority", 10,
+                            "urgency", 10,
                             "userid", 42,
                             "t_submit", 1.0,
                             "flags", 0,
@@ -44,7 +44,7 @@ void single_job_check (zhashx_t *active_jobs)
         "hash contains one job");
     ok ((job = zlist_head (newjobs)) != NULL,
         "newjobs contains one job");
-    ok (job->id == 1 && job->priority == 10 && job->userid == 42
+    ok (job->id == 1 && job->urgency == 10 && job->userid == 42
         && job->t_submit == 1.0 && job->flags == 0,
         "struct job was properly decoded");
 
@@ -83,13 +83,13 @@ void multi_job_check (zhashx_t *active_jobs)
     if (!(jobs = json_pack ("[{s:I s:i s:i s:f s:i s:{}},"
                              "{s:I s:i s:i s:f s:i s:{}}]",
                             "id", 1,
-                            "priority", 10,
+                            "urgency", 10,
                             "userid", 42,
                             "t_submit", 1.0,
                             "flags", 0,
                             "jobspec",
                             "id", 2,
-                            "priority", 11,
+                            "urgency", 11,
                             "userid", 43,
                             "t_submit", 1.1,
                             "flags", 1,

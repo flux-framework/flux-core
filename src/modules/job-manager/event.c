@@ -320,8 +320,7 @@ int event_job_action (struct event *event, struct job *job)
         case FLUX_JOB_STATE_PRIORITY:
             /* N.B. Priority will be set via a priority plugin call in
              * the future. For the time being, we pass the
-             * administrative priority set via submit or
-             * administrative change.
+             * urgency set via submit or urgency change.
              *
              * In the event we have re-entered this state from the
              * SCHED state, dequeue the job first.
@@ -332,7 +331,7 @@ int event_job_action (struct event *event, struct job *job)
                                      "priority",
                                      0,
                                      "{ s:i }",
-                                     "priority", job->priority) < 0)
+                                     "priority", job->urgency) < 0)
                 return -1;
             break;
         case FLUX_JOB_STATE_SCHED:
@@ -381,12 +380,12 @@ int event_job_action (struct event *event, struct job *job)
 }
 
 static int event_submit_context_decode (json_t *context,
-                                        int *priority,
+                                        int *urgency,
                                         uint32_t *userid,
                                         int *flags)
 {
     if (json_unpack (context, "{ s:i s:i s:i }",
-                     "priority", priority,
+                     "urgency", urgency,
                      "userid", userid,
                      "flags", flags) < 0) {
         errno = EPROTO;
@@ -399,8 +398,8 @@ static int event_submit_context_decode (json_t *context,
 static int event_priority_context_decode (json_t *context,
                                           int *priority)
 {
-    /* N.B. eventually this will be the queue priority, but is the
-     * same of the admin priority at the moment */
+    /* N.B. eventually this will be the priority, but is the
+     * same of the urgency at the moment */
     if (json_unpack (context, "{ s:i }", "priority", priority) < 0) {
         errno = EPROTO;
         return -1;
@@ -409,10 +408,10 @@ static int event_priority_context_decode (json_t *context,
     return 0;
 }
 
-static int event_admin_priority_context_decode (json_t *context,
-                                                int *priority)
+static int event_urgency_context_decode (json_t *context,
+                                         int *urgency)
 {
-    if (json_unpack (context, "{ s:i }", "priority", priority) < 0) {
+    if (json_unpack (context, "{ s:i }", "urgency", urgency) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -462,7 +461,7 @@ int event_job_update (struct job *job, json_t *event)
             goto inval;
         job->t_submit = timestamp;
         if (event_submit_context_decode (context,
-                                         &job->priority,
+                                         &job->urgency,
                                          &job->userid,
                                          &job->flags) < 0)
             goto error;
@@ -476,12 +475,12 @@ int event_job_update (struct job *job, json_t *event)
     else if (!strcmp (name, "priority")) {
         if (job->state != FLUX_JOB_STATE_PRIORITY)
             goto inval;
-        if (event_priority_context_decode (context, &job->priority) < 0)
+        if (event_priority_context_decode (context, &job->urgency) < 0)
             goto error;
         job->state = FLUX_JOB_STATE_SCHED;
     }
-    else if (!strcmp (name, "admin-priority")) {
-        if (event_admin_priority_context_decode (context, &job->priority) < 0)
+    else if (!strcmp (name, "urgency")) {
+        if (event_urgency_context_decode (context, &job->urgency) < 0)
             goto error;
     }
     else if (!strcmp (name, "exception")) {

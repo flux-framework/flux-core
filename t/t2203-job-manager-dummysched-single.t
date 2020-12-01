@@ -144,7 +144,7 @@ test_expect_success 'job-manager: hello handshake found jobs 1 3' '
         grep id=$(flux job id < job3.id) hello.dmesg
 '
 
-test_expect_success 'job-manager: hello handshake priority is default' '
+test_expect_success 'job-manager: hello handshake priority is default urgency' '
         grep priority=16 hello.dmesg
 '
 

@@ -8,16 +8,16 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* priority - adjust job priority
+/* urgency - adjust job urgency
  *
  * Purpose:
- *   Support flux job priority command for adjusting job priority
- *   after submission.  Guests can reduce their jobs' priority, or increase
- *   up to the default priority.
+ *   Support flux job urgency command for adjusting job urgency
+ *   after submission.  Guests can reduce their jobs' urgency, or increase
+ *   up to the default urgency.
  *
  * Input:
  * - job id
- * - new priority
+ * - new urgency
  *
  * Output:
  * - n/a
@@ -36,30 +36,30 @@
 #include "alloc.h"
 #include "job-manager.h"
 
-#include "priority.h"
+#include "urgency.h"
 
 #define MAXOF(a,b)   ((a)>(b)?(a):(b))
 
-void priority_handle_request (flux_t *h,
-                              flux_msg_handler_t *mh,
-                              const flux_msg_t *msg,
-                              void *arg)
+void urgency_handle_request (flux_t *h,
+                             flux_msg_handler_t *mh,
+                             const flux_msg_t *msg,
+                             void *arg)
 {
     struct job_manager *ctx = arg;
     struct flux_msg_cred cred;
     flux_jobid_t id;
     struct job *job;
-    int priority, orig_priority;
+    int urgency, orig_urgency;
     const char *errstr = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:I s:i}",
                                         "id", &id,
-                                        "priority", &priority) < 0
+                                        "urgency", &urgency) < 0
                     || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
-    if (priority < FLUX_JOB_ADMIN_PRIORITY_MIN
-        || priority > FLUX_JOB_ADMIN_PRIORITY_MAX) {
-        errstr = "priority value is out of range";
+    if (urgency < FLUX_JOB_URGENCY_MIN
+        || urgency > FLUX_JOB_URGENCY_MAX) {
+        errstr = "urgency value is out of range";
         errno = EINVAL;
         goto error;
     }
@@ -74,41 +74,41 @@ void priority_handle_request (flux_t *h,
         errstr = "guests can only reprioritize their own jobs";
         goto error;
     }
-    /* Security: guests can only reduce priority, or increase up to default.
+    /* Security: guests can only reduce urgency, or increase up to default.
      */
     if (!(cred.rolemask & FLUX_ROLE_OWNER)
-            && priority > MAXOF (FLUX_JOB_ADMIN_PRIORITY_DEFAULT,
-                                 job->priority)) {
-        errstr = "guests can only adjust priority <= default";
+            && urgency > MAXOF (FLUX_JOB_URGENCY_DEFAULT,
+                                job->urgency)) {
+        errstr = "guests can only adjust urgency <= default";
         errno = EPERM;
         goto error;
     }
-    /* RFC 27 does not yet handle priority changes after alloc request
+    /* RFC 27 does not yet handle urgency changes after alloc request
      * has been sent to the scheduler.  Also, alloc_queue_reorder() will
      * segfault if job->handle is NULL, which is the case if the job is
      * no longer in alloc->queue.
      */
     if (job->alloc_pending) {
         errstr = "job has made an alloc request to scheduler, "
-                 "priority cannot be changed";
+                 "urgency cannot be changed";
         errno = EINVAL;
         goto error;
     }
     if (job->has_resources) {
-        errstr = "priority cannot be changed once resources are allocated";
+        errstr = "urgency cannot be changed once resources are allocated";
         errno = EINVAL;
         goto error;
     }
     /* Post event, change job's queue position, and respond.
      */
-    orig_priority = job->priority;
+    orig_urgency = job->urgency;
     if (event_job_post_pack (ctx->event, job,
-                             "admin-priority", 0,
+                             "urgency", 0,
                              "{ s:i s:i }",
                              "userid", cred.userid,
-                             "priority", priority) < 0)
+                             "urgency", urgency) < 0)
         goto error;
-    if (priority != orig_priority)
+    if (urgency != orig_urgency)
         alloc_queue_reorder (ctx->alloc, job);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);

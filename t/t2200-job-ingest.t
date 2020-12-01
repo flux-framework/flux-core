@@ -114,32 +114,32 @@ test_expect_success 'job-ingest: jobspec stored accurately in KVS' '
 '
 
 test_expect_success 'job-ingest: job announced to job manager' '
-	jobid=$(flux job submit --priority=10 basic.json | flux job id) &&
+	jobid=$(flux job submit --urgency=10 basic.json | flux job id) &&
 	flux kvs eventlog get ${DUMMY_EVENTLOG} \
 		| grep "\"id\":${jobid}" >jobman.out &&
-	grep -q "\"priority\":10" jobman.out &&
+	grep -q "\"urgency\":10" jobman.out &&
 	grep -q "\"userid\":$(id -u)" jobman.out
 '
 
-test_expect_success 'job-ingest: submit event logged with userid, priority' '
-	jobid=$(flux job submit --priority=11 basic.json) &&
+test_expect_success 'job-ingest: submit event logged with userid, urgency' '
+	jobid=$(flux job submit --urgency=11 basic.json) &&
 	kvspath=`flux job id --to=kvs ${jobid}` &&
 	flux kvs eventlog get ${kvspath}.eventlog |grep submit >eventlog.out &&
-	grep -q "\"priority\":11" eventlog.out &&
+	grep -q "\"urgency\":11" eventlog.out &&
 	grep -q "\"userid\":$(id -u)" eventlog.out
 '
 
-test_expect_success 'job-ingest: instance owner can submit priority=31' '
-	flux job submit --priority=31 basic.json
+test_expect_success 'job-ingest: instance owner can submit urgency=31' '
+	flux job submit --urgency=31 basic.json
 '
 
-test_expect_success 'job-ingest: priority range is enforced' '
-	test_must_fail flux job submit --priority=32 basic.json &&
-	test_must_fail flux job submit --priority="-1" basic.json
+test_expect_success 'job-ingest: urgency range is enforced' '
+	test_must_fail flux job submit --urgency=32 basic.json &&
+	test_must_fail flux job submit --urgency="-1" basic.json
 '
 
-test_expect_success 'job-ingest: guest cannot submit priority=17' '
-	! FLUX_HANDLE_ROLEMASK=0x2 flux job submit --priority=17 basic.json
+test_expect_success 'job-ingest: guest cannot submit urgency=17' '
+	! FLUX_HANDLE_ROLEMASK=0x2 flux job submit --urgency=17 basic.json
 '
 
 test_expect_success 'job-ingest: valid jobspecs accepted' '

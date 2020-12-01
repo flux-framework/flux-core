@@ -19,7 +19,7 @@
 struct job {
     flux_jobid_t id;
     uint32_t userid;
-    int priority;
+    int urgency;
     double t_submit;
     int flags;
     json_t *jobspec_redacted;
@@ -50,7 +50,7 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
                                       const char *jobspec);
 
 /* Helpers for maintaining czmq containers of 'struct job'.
- * The comparator sorts by (1) priority, then (2) jobid.
+ * The comparator sorts by (1) urgency, then (2) jobid.
  */
 void job_destructor (void **item);
 void *job_duplicator (const void *item);

@@ -81,7 +81,7 @@ int cmd_raise (optparse_t *p, int argc, char **argv);
 int cmd_raiseall (optparse_t *p, int argc, char **argv);
 int cmd_kill (optparse_t *p, int argc, char **argv);
 int cmd_killall (optparse_t *p, int argc, char **argv);
-int cmd_priority (optparse_t *p, int argc, char **argv);
+int cmd_urgency (optparse_t *p, int argc, char **argv);
 int cmd_eventlog (optparse_t *p, int argc, char **argv);
 int cmd_wait_event (optparse_t *p, int argc, char **argv);
 int cmd_info (optparse_t *p, int argc, char **argv);
@@ -192,8 +192,8 @@ static struct optparse_option killall_opts[] = {
 };
 
 static struct optparse_option submit_opts[] =  {
-    { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
-      .usage = "Set job priority (0-31, default=16)",
+    { .name = "urgency", .key = 'u', .has_arg = 1, .arginfo = "N",
+      .usage = "Set job urgency (0-31, default=16)",
     },
     { .name = "flags", .key = 'f', .has_arg = 1,
       .flags = OPTPARSE_OPT_AUTOSPLIT,
@@ -335,10 +335,10 @@ static struct optparse_subcommand subcommands[] = {
       0,
       NULL,
     },
-    { "priority",
-      "[OPTIONS] id priority",
-      "Set job priority",
-      cmd_priority,
+    { "urgency",
+      "[OPTIONS] id urgency",
+      "Set job urgency",
+      cmd_urgency,
       0,
       NULL,
     },
@@ -622,12 +622,12 @@ uint32_t parse_arg_userid (optparse_t *p, const char *optname)
     return userid;
 }
 
-int cmd_priority (optparse_t *p, int argc, char **argv)
+int cmd_urgency (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
     flux_t *h;
     flux_future_t *f;
-    int priority;
+    int urgency;
     flux_jobid_t id;
     const char *jobid = NULL;
 
@@ -640,10 +640,10 @@ int cmd_priority (optparse_t *p, int argc, char **argv)
 
     jobid = argv[optindex++];
     id = parse_jobid (jobid);
-    priority = parse_arg_unsigned (argv[optindex++], "priority");
+    urgency = parse_arg_unsigned (argv[optindex++], "urgency");
 
-    if (!(f = flux_job_set_priority (h, id, priority)))
-        log_err_exit ("flux_job_set_priority");
+    if (!(f = flux_job_set_urgency (h, id, urgency)))
+        log_err_exit ("flux_job_set_urgency");
     if (flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("%s: %s", jobid, future_strerror (f, errno));
     flux_future_destroy (f);
@@ -1032,7 +1032,7 @@ int cmd_cancelall (optparse_t *p, int argc, char **argv)
 }
 
 static const char *list_attrs =
-    "[\"userid\",\"priority\",\"t_submit\",\"state\","          \
+    "[\"userid\",\"urgency\",\"t_submit\",\"state\","          \
     "\"name\",\"ntasks\",\"nnodes\",\"ranks\",\"nodelist\",\"expiration\"," \
     "\"success\",\"exception_occurred\",\"exception_severity\"," \
     "\"exception_type\",\"exception_note\",\"result\","  \
@@ -1214,7 +1214,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     void *jobspec;
     int jobspecsz;
     const char *J = NULL;
-    int priority;
+    int urgency;
     int optindex = optparse_option_index (p);
     flux_future_t *f;
     flux_jobid_t id;
@@ -1259,7 +1259,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     assert (((char *)jobspec)[jobspecsz] == '\0');
     if (jobspecsz == 0)
         log_msg_exit ("required jobspec is empty");
-    priority = optparse_get_int (p, "priority", FLUX_JOB_ADMIN_PRIORITY_DEFAULT);
+    urgency = optparse_get_int (p, "urgency", FLUX_JOB_URGENCY_DEFAULT);
 
 #if HAVE_FLUX_SECURITY
     if (sec) {
@@ -1268,7 +1268,7 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
         flags |= FLUX_JOB_PRE_SIGNED;
     }
 #endif
-    if (!(f = flux_job_submit (h, J ? J : jobspec, priority, flags)))
+    if (!(f = flux_job_submit (h, J ? J : jobspec, urgency, flags)))
         log_err_exit ("flux_job_submit");
     if (flux_job_submit_get_id (f, &id) < 0) {
         log_msg_exit ("%s", future_strerror (f, errno));

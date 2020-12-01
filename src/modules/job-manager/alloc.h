@@ -48,7 +48,7 @@ int alloc_send_free_request (struct alloc *alloc, struct job *job);
 struct job *alloc_queue_first (struct alloc *alloc);
 struct job *alloc_queue_next (struct alloc *alloc);
 
-/* Reorder job in scheduler queue, e.g. after priority change.
+/* Reorder job in scheduler queue, e.g. after urgency change.
  */
 void alloc_queue_reorder (struct alloc *alloc, struct job *job);
 
