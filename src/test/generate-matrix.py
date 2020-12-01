@@ -45,9 +45,9 @@ class BuildMatrix:
                 tag += f"-{self.tag}"
             env["DOCKER_TAG"] = tag
             command += f" --tag={tag}"
-            return True
+            return True, command
 
-        return False
+        return False, command
 
     def env_add_s3(self, args, env):
         """Add necessary environment and args to test content-s3 module"""
@@ -88,7 +88,7 @@ class BuildMatrix:
 
         if docker_tag:
             #  Only export docker_tag if this is main branch or a tag:
-            docker_tag = self.create_docker_tag(image, env, command)
+            docker_tag, command = self.create_docker_tag(image, env, command)
 
         if test_s3:
             args = self.env_add_s3(args, env)
