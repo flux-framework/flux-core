@@ -108,6 +108,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix: ${{fromJson(needs.generate-matrix.outputs.matrix)}}
+      fail-fast: false
     name: ${{matrix.name}}
     steps:
     - uses: actions/checkout@v2
@@ -133,11 +134,7 @@ jobs:
 
     - name: docker-run-checks
       env: ${{matrix.env}}
-      run: |
-        src/test/docker/docker-run-checks.sh -j ${{matrix.jobs}} \
-         --image=${{matrix.image}} \
-         ${DOCKER_TAG:+--tag=${DOCKER_TAG}} -- \
-         --enable-docs ${{matrix.args}}
+      run: ${{matrix.command}}
 
     - name: annotate errors
       if: failure() || cancelled()
