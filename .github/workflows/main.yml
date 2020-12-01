@@ -91,6 +91,7 @@ jobs:
         fetch-depth: 0
     - id: set-matrix
       run: echo "::set-output name=matrix::$(src/test/generate-matrix.py)"
+    - run: src/test/generate-matrix.py | jq -S .
     - run: echo "::set-output name=GITHUB_BRANCH::${GITHUB_REF#refs/heads}"
     - run: echo "::set-output name=GITHUB_TAG::${GITHUB_REF#refs/tags}"
     - run: echo "::set-output name=EVENT_NAME::${{github.event_name}}"
@@ -108,6 +109,7 @@ jobs:
     timeout-minutes: 30
     strategy:
       matrix: ${{fromJson(needs.generate-matrix.outputs.matrix)}}
+      fail-fast: false
     name: ${{matrix.name}}
     steps:
     - uses: actions/checkout@v2
@@ -133,11 +135,7 @@ jobs:
 
     - name: docker-run-checks
       env: ${{matrix.env}}
-      run: |
-        src/test/docker/docker-run-checks.sh -j ${{matrix.jobs}} \
-         --image=${{matrix.image}} \
-         ${DOCKER_TAG:+--tag=${DOCKER_TAG}} -- \
-         --enable-docs ${{matrix.args}}
+      run: ${{matrix.command}}
 
     - name: annotate errors
       if: failure() || cancelled()

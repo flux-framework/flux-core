@@ -13,7 +13,13 @@ AM_CPPFLAGS = \
 
 noinst_SCRIPTS = \
 	relnotes.sh \
-	sched-bench.sh
+	backtrace-all.sh \
+	checks-annotate.sh \
+	checks-lib.sh \
+	checks_run.sh \
+	cppcheck.sh \
+	docker-deploy.sh \
+	generate-matrix.py
 
 LDADD = $(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \

@@ -7,6 +7,8 @@ import json
 import os
 import re
 
+docker_run_checks = "src/test/docker/docker-run-checks.sh"
+
 default_args = (
     "--prefix=/usr"
     " --sysconfdir=/etc"
@@ -35,14 +37,16 @@ class BuildMatrix:
             if match:
                 self.tag = match.group(1)
 
-    def create_docker_tag(self, image, env):
+    def create_docker_tag(self, image, env, command):
         """Create docker tag string if this is master branch or a tag"""
         if self.branch == "master" or self.tag:
             tag = f"{DOCKER_REPO}:{image}"
             if self.tag:
                 tag += f"-{self.tag}"
             env["DOCKER_TAG"] = tag
+            command += f" --tag={tag}"
             return True
+
         return False
 
     def env_add_s3(self, args, env):
@@ -68,14 +72,27 @@ class BuildMatrix:
         docker_tag=False,
         test_s3=False,
         coverage=False,
+        recheck=True,
     ):
         """Add a build to the matrix.include array"""
+
+        # Extra environment to add to this command:
         env = env or {}
+
+        # The command to run:
+        command = f"{docker_run_checks} -j{jobs} --image={image}"
+
+        # Add --recheck option if requested
+        if recheck and "DISTCHECK" not in env:
+            command += " --recheck"
+
         if docker_tag:
             #  Only export docker_tag if this is main branch or a tag:
-            docker_tag = self.create_docker_tag(image, env)
+            docker_tag = self.create_docker_tag(image, env, command)
+
         if test_s3:
             args = self.env_add_s3(args, env)
+
         if coverage:
             env["COVERAGE"] = "t"
 
@@ -83,12 +100,13 @@ class BuildMatrix:
         if self.tag and "DISTCHECK" in env:
             create_release = True
 
+        command += f" -- --enable-docs {args}"
+
         self.matrix.append(
             {
                 "name": name,
                 "env": env,
-                "args": args,
-                "jobs": jobs,
+                "command": command,
                 "image": image,
                 "tag": self.tag,
                 "branch": self.branch,

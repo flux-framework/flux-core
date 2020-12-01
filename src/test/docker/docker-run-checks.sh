@@ -120,6 +120,7 @@ echo "mounting $TOP as /usr/src"
 export POISON
 export JOBS
 export DISTCHECK
+export RECHECK
 export BUILD_DIR
 export chain_lint
 
