@@ -5,7 +5,7 @@
 log() { echo "docker-deploy: $@" >&2; }
 die() { log "$@"; exit 1; }
 
-if test "$GITHUB_REPO" != "flux-framework/flux-core"; then
+if test "$GITHUB_REPOSITORY" != "flux-framework/flux-core"; then
     log "not in flux-framework/flux-core repo, exiting..."
     exit 0
 fi
