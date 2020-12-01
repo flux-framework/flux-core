@@ -12,8 +12,7 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS)
 
 noinst_SCRIPTS = \
-	relnotes.sh \
-	sched-bench.sh
+	relnotes.sh
 
 LDADD = $(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
