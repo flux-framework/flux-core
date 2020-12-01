@@ -91,6 +91,7 @@ jobs:
         fetch-depth: 0
     - id: set-matrix
       run: echo "::set-output name=matrix::$(src/test/generate-matrix.py)"
+    - run: src/test/generate-matrix.py | jq -S .
     - run: echo "::set-output name=GITHUB_BRANCH::${GITHUB_REF#refs/heads}"
     - run: echo "::set-output name=GITHUB_TAG::${GITHUB_REF#refs/tags}"
     - run: echo "::set-output name=EVENT_NAME::${{github.event_name}}"
