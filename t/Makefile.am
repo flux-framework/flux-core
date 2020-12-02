@@ -109,6 +109,7 @@ TESTSCRIPTS = \
 	t2208-queue-cmd.t \
 	t2210-job-manager-bugs.t \
 	t2211-job-manager-events-journal.t \
+	t2212-job-manager-jobspec.t \
 	t2220-job-archive.t \
 	t2230-job-info-list.t \
 	t2231-job-info-lookup.t \
