@@ -384,10 +384,8 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (create_rundir (ctx.attrs) < 0) {
-        log_err ("create_rundir");
+    if (create_rundir (ctx.attrs) < 0)
         goto cleanup;
-    }
 
     /* Set & create broker.rundir *after* overlay initialization,
      * when broker rank is determined.
@@ -849,16 +847,24 @@ static int create_rundir (attr_t *attrs)
      */
     if (attr_get (attrs, "rundir", &run_dir, NULL) < 0) {
         const char *tmpdir = getenv ("TMPDIR");
-        if (asprintf (&dir, "%s/flux-XXXXXX", tmpdir ? tmpdir : "/tmp") < 0)
+        if (asprintf (&dir, "%s/flux-XXXXXX", tmpdir ? tmpdir : "/tmp") < 0) {
+            log_err ("out of memory");
             goto done;
-        if (!(run_dir = mkdtemp (dir)))
+        }
+        if (!(run_dir = mkdtemp (dir))) {
+            log_err ("cannot create directory in %s", tmpdir);
             goto done;
-        if (attr_add (attrs, "rundir", run_dir, 0) < 0)
+        }
+        if (attr_add (attrs, "rundir", run_dir, 0) < 0) {
+            log_err ("error setting rundir broker attribute");
             goto done;
+        }
     }
     else if (mkdir (run_dir, 0700) < 0) {
-        if (errno != EEXIST)
+        if (errno != EEXIST) {
+            log_err ("error creating rundir %s ", run_dir);
             goto done;
+        }
         /* Do not cleanup directory if we did not create it here
          */
         do_cleanup = false;
@@ -866,13 +872,17 @@ static int create_rundir (attr_t *attrs)
 
     /*  Ensure created or existing directory is writeable:
      */
-    if (stat (run_dir, &sb) < 0)
+    if (stat (run_dir, &sb) < 0) {
+        log_err ("cannot stat rundir %s ", run_dir);
         goto done;
+    }
     if (!S_ISDIR (sb.st_mode)) {
         errno = ENOTDIR;
+        log_err ("rundir %s ", run_dir);
         goto done;
     }
     if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
+        log_msg ("rundir %s does not have owner=rwx permissions", run_dir);
         errno = EPERM;
         goto done;
     }
@@ -880,8 +890,10 @@ static int create_rundir (attr_t *attrs)
     /*  rundir is now fixed, so make the attribute immutable, and
      *   schedule the dir for cleanup at exit if we created it here.
      */
-    if (attr_set_flags (attrs, "rundir", FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_set_flags (attrs, "rundir", FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("error setting rundir broker attribute flags");
         goto done;
+    }
     if (do_cleanup)
         cleanup_push_string (cleanup_directory_recursive, run_dir);
     rc = 0;

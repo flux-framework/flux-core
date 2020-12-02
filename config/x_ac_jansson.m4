@@ -13,6 +13,12 @@ AC_DEFUN([X_AC_JANSSON], [
         AC_MSG_ERROR([json_int_t must be 64 bits for flux to be built])
     ])
 
+    AX_COMPILE_CHECK_SIZEOF(int)
+
+    AS_VAR_IF([ac_cv_sizeof_int],[2],[
+        AC_MSG_ERROR([flux cannot be built on a system with 16 bit ints])
+    ])
+
     LIBS="$ac_save_LIBS"
     CFLAGS="$ac_save_CFLAGS"
   ]

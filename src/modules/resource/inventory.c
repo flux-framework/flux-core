@@ -694,6 +694,8 @@ static void resource_reload (flux_t *h,
     if (inv->R) {
         json_decref (inv->R);
         inv->R = NULL;
+        free (inv->method);
+        inv->method = NULL;
     }
     if (inventory_put (inv, resobj, "reload") < 0)
         goto error;
