@@ -271,5 +271,9 @@ test_expect_success 'job-shell: cover invalid buffer type' '
 	flux job attach $id 2> stderr-invalid-buffering.out &&
 	grep "invalid buffer type" stderr-invalid-buffering.out
 '
+test_expect_success 'job-shell: creates missing TMPDIR by default' '
+    TMPDIR=$(pwd)/mytmpdir flux mini run true &&
+    test -d mytmpdir
+'
 
 test_done

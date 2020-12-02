@@ -24,7 +24,8 @@ dist_shelllua_SCRIPTS = \
 	lua.d/mvapich.lua \
 	lua.d/intel_mpi.lua \
 	lua.d/openmpi.lua \
-	lua.d/spectrum.lua
+	lua.d/spectrum.lua \
+	lua.d/tmpdir.lua
 
 noinst_LTLIBRARIES = \
 	libshell.la \
