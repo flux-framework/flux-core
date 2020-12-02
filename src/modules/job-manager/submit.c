@@ -43,12 +43,13 @@ int submit_add_one_job (zhashx_t *active_jobs, zlist_t *newjobs, json_t *o)
 
     if (!(job = job_create ()))
         return -1;
-    if (json_unpack (o, "{s:I s:i s:i s:f s:i}",
+    if (json_unpack (o, "{s:I s:i s:i s:f s:i s:O}",
                         "id", &job->id,
                         "priority", &job->priority,
                         "userid", &job->userid,
                         "t_submit", &job->t_submit,
-                        "flags", &job->flags) < 0) {
+                        "flags", &job->flags,
+                        "jobspec", &job->jobspec_redacted) < 0) {
         errno = EPROTO;
         job_decref (job);
         return -1;
