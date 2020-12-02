@@ -12,13 +12,14 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS)
 
 noinst_LTLIBRARIES = libeventlog.la
-fluxinclude_HEADERS = eventlog.h
-libeventlog_la_SOURCES = eventlog.c
+libeventlog_la_SOURCES = \
+	eventlog.h \
+	eventlog.c
 
 libeventlog_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 libeventlog_la_LDFLAGS = \
-	-avoid-version -module -shared -export-dynamic \
+	-avoid-version \
 	$(AM_LDFLAGS)
 
 
