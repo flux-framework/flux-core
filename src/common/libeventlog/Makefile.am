@@ -14,14 +14,15 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = libeventlog.la
 libeventlog_la_SOURCES = \
 	eventlog.h \
-	eventlog.c
+	eventlog.c \
+	eventlogger.h \
+	eventlogger.c
 
 libeventlog_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 libeventlog_la_LDFLAGS = \
 	-avoid-version \
 	$(AM_LDFLAGS)
-
 
 TESTS = test_eventlog.t
 

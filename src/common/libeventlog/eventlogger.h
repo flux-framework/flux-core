@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef FLUX_SHELL_EVENTLOGGER_H
-#define FLUX_SHELL_EVENTLOGGER_H
+#ifndef HAVE_FLUX_EVENTLOGGER_H
+#define HAVE_FLUX_EVENTLOGGER_H
 
 #include <flux/core.h>
 #include <jansson.h>
@@ -66,4 +66,4 @@ int eventlogger_flush (struct eventlogger *ev);
 }
 #endif
 
-#endif /* !FLUX_SHELL_EVENTLOGGER_H */
+#endif /* !HAVE_FLUX_EVENTLOGGER_H */

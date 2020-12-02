@@ -37,10 +37,11 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 
+#include "src/common/libeventlog/eventlogger.h"
+
 #include "info.h"
 #include "internal.h"
 #include "builtins.h"
-#include "eventlogger.h"
 
 struct evlog {
     int sync_mode;

@@ -15,7 +15,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "src/common/libeventlog/eventlog.h"
+#include "eventlog.h"
 #include "eventlogger.h"
 
 struct eventlog_batch {
