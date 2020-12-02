@@ -103,6 +103,7 @@ struct job {
 
     char *jobspec;      // jobspec, not \0 terminated (unwrapped from signed)
     int jobspecsz;      // jobspec string length
+    json_t *jobspec_obj;
 
     struct job_ingest_ctx *ctx;
 };
@@ -124,6 +125,8 @@ static void job_clean (struct job *job)
     if (job) {
         free (job->jobspec);
         job->jobspec = NULL;
+        json_decref (job->jobspec_obj);
+        job->jobspec_obj = NULL;
     }
 }
 
@@ -133,6 +136,7 @@ static void job_destroy (struct job *job)
         int saved_errno = errno;
         free (job->jobspec);
         flux_msg_decref (job->msg);
+        json_decref (job->jobspec_obj);
         free (job);
         errno = saved_errno;
     }
@@ -498,6 +502,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     int64_t userid_signer;
     const char *mech_type;
     flux_future_t *f = NULL;
+    json_error_t e;
 
     if (ctx->shutdown) {
         errno = ENOSYS;
@@ -589,10 +594,22 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPERM;
         goto error;
     }
+    /* Decode jobspec, returning detailed parse errors to the user.
+     * N.B. fails if jobspec was submitted as YAML.
+     */
+    if (!(job->jobspec_obj = json_loadb (job->jobspec,
+                                         job->jobspecsz,
+                                         0,
+                                         &e))) {
+        snprintf (errbuf, sizeof (errbuf), "jobspec: invalid JSON: %s", e.text);
+        errmsg = errbuf;
+        errno = EINVAL;
+        goto error;
+    }
     /* Validate jobspec asynchronously.
      * Continue submission process in validate_continuation().
      */
-    if (!(f = validate_jobspec (ctx->validate, job->jobspec, job->jobspecsz)))
+    if (!(f = validate_jobspec (ctx->validate, job->jobspec_obj)))
         goto error;
     if (flux_future_then (f, -1., validate_continuation, job) < 0)
         goto error;

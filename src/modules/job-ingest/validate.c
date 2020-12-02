@@ -36,6 +36,8 @@
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/errno_safe.h"
+
 #include "validate.h"
 #include "worker.h"
 
@@ -200,43 +202,27 @@ struct worker *select_best_worker (struct validate *v)
     return best;
 }
 
-flux_future_t *validate_jobspec (struct validate *v, const char *buf, int len)
+/* Re-encode jobspec in compact form to eliminate any white space (esp \n),
+ * then pass it to least busy validation worker, returning a future.
+ */
+flux_future_t *validate_jobspec (struct validate *v, json_t *jobspec)
 {
     flux_future_t *f;
-    json_t *o;
-    json_error_t error;
     char *s;
-    int saved_errno;
     struct worker *w;
 
-    /* Make sure jobspec decodes as JSON (no YAML allowed here).
-     * Capture any JSON parsing errors by returning them in a future.
-     * Then re-encode in compact form to eliminate any white space (esp \n).
-     */
-    if (!(o = json_loadb (buf, len, 0, &error))) {
-        char errbuf[256];
-        if (!(f = flux_future_create (NULL, NULL)))
-            return NULL;
-        flux_future_set_flux (f, v->h);
-        (void)snprintf (errbuf, sizeof (errbuf),
-                       "jobspec: invalid JSON: %s", error.text);
-        flux_future_fulfill_error (f, EINVAL, errbuf);
-        return f;
-    }
-    if (!(s = json_dumps (o, JSON_COMPACT)))
+    if (!(s = json_dumps (jobspec, JSON_COMPACT))) {
+        errno = ENOMEM;
         goto error;
+    }
     w = select_best_worker (v);
     assert (w != NULL);
     if (!(f = worker_request (w, s)))
         goto error;
     free (s);
-    json_decref (o);
     return f;
 error:
-    saved_errno = errno;
-    free (s);
-    json_decref (o);
-    errno = saved_errno;
+    ERRNO_SAFE_WRAP (free, s);
     return NULL;
 }
 
