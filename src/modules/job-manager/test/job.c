@@ -145,7 +145,7 @@ void test_create_from_eventlog (void)
     ok (job->userid == 66,
         "job_create_from_eventlog log=(submit+admin-pri) set userid from submit");
     ok (job->priority == 1,
-        "job_create_from_eventlog log=(submit+admin-pri) set priority from priority");
+        "job_create_from_eventlog log=(submit+admin-pri) set priority from admin-priority");
     ok (job->t_submit == 42.2,
         "job_create_from_eventlog log=(submit+admin-pri) set t_submit from submit");
     ok (!job->alloc_pending
