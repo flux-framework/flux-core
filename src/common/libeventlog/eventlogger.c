@@ -89,7 +89,7 @@ static void eventlog_batch_error (struct eventlog_batch *batch, int errnum)
         return;
     entry = zlist_first (batch->entries);
     while (entry) {
-        (*ev->ops.err) (ev, errnum, entry);
+        (*ev->ops.err) (ev, ev->arg, errnum, entry);
         entry = zlist_next (batch->entries);
     }
 }

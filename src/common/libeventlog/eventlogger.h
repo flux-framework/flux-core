@@ -22,6 +22,7 @@ struct eventlogger;
 
 typedef void (*eventlogger_state_f) (struct eventlogger *ev, void *arg);
 typedef void (*eventlogger_err_f) (struct eventlogger *ev,
+                                   void *arg,
                                    int err,
                                    json_t *entry);
 

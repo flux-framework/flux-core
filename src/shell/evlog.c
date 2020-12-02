@@ -95,7 +95,10 @@ static void evlog_unref (struct eventlogger *ev, void *arg)
     flux_shell_remove_completion_ref (evlog->shell, "eventlogger.txn");
 }
 
-static void evlog_error (struct eventlogger *ev, int errnum, json_t *entry)
+static void evlog_error (struct eventlogger *ev,
+                         void *arg,
+                         int errnum,
+                         json_t *entry)
 {
     const char *msg;
     if (json_unpack (entry, "{s:{s:s}}",
