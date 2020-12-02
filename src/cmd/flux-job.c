@@ -1692,7 +1692,7 @@ static void valid_or_exit_for_debug (struct attach_ctx *ctx)
         && state != FLUX_JOB_STATE_PRIORITY
         && state != FLUX_JOB_STATE_SCHED
         && state != FLUX_JOB_STATE_RUN) {
-        log_msg_exit ("cannot debug job that isn't running");
+        log_msg_exit ("cannot debug job that has finished running");
     }
 
     return;
