@@ -29,6 +29,7 @@
 #include "wait.h"
 #include "annotate.h"
 #include "journal.h"
+#include "getattr.h"
 
 #include "job-manager.h"
 
@@ -96,6 +97,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "job-manager.priority",
         priority_handle_request,
+        FLUX_ROLE_USER
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.getattr",
+        getattr_handle_request,
         FLUX_ROLE_USER
     },
     {
