@@ -17,8 +17,8 @@
  * real work. Execution is simulated by setting a timer for the duration
  * specified in either the jobspec system.duration attribute or a test
  * duration in system.exec.test.run_duration.  The module can optionally
- * simulate an epilog/cleanup stage, and/or mock exceptions during run
- * or initialization. See TEST CONFIGURATION below.
+ * simulate mock exceptions during run or initialization.
+ * See TEST CONFIGURATION below.
  *
  * OPERATION
  *
@@ -48,17 +48,12 @@
  *
  * As tasks/job shells exit, the exec implementation should call
  * jobinfo_tasks_complete(), which emits a "complete" event to the exec
- * eventlog, sends a "finish" response to the job-manager, emits a
- * "cleanup.start" event in the exec eventlog, and finally invokes
- * the exec implementation's "cleanup" method on the completed ranks.
- * (NB: currently a subset of ranks is not supported)
+ * eventlog, sends a "finish" response to the job-manager.
  *
  * JOB FINALIZATION:
  *
- * Once cleanup tasks have completed, the exec implementation should call
- * jobinfo_cleanup_complete(), which emits "cleanup.finish" to the exec
- * eventlog, and then calls jobinfo_finalize, which performs the following
- * tasks:
+ * jobinfo_finalize() is called after the "finish" event, which performs
+ * the following tasks:
  *
  *  - terminating "done" event is posted to the exec.eventlog
  *  - the guest namespace, now quiesced, is copied to the primary namespace
@@ -74,7 +69,6 @@
  *
  * {
  *   "run_duration":s,      - alternate/override attributes.system.duration
- *   "cleanup_duration":s   - enable a fake job epilog and set its duration
  *   "wait_status":i        - report this value as status in the "finish" resp
  *   "mock_exception":s     - mock an exception during this phase of job
  *                             execution (currently "init" and "run")
@@ -499,93 +493,6 @@ error:
     return NULL;
 }
 
-static void cleanup_complete_cb (flux_future_t *f, void *arg)
-{
-    struct jobinfo *job = arg;
-    if (flux_future_get (f, NULL) < 0)
-        flux_log_error (job->h, "cleanup_complete_cb: event_pack");
-    flux_future_destroy (f);
-
-    /* XXX: when cleanup ranks are tracked, only finalize once all
-     *  involved ranks have completed cleanup. For now though, only
-     *  one cleanup_complete call is expected.
-     */
-    if (jobinfo_finalize (job) < 0) {
-        flux_log_error (job->h, "cleanup_complete_cb: jobinfo_finalize");
-        jobinfo_decref (job);
-    }
-}
-
-/* Notify job-exec that any "cleanup" tasks including epilog have
- *  completed on ranks with return code `rc`.
- *
- * XXX: ranks ignored for now
- */
-void jobinfo_cleanup_complete (struct jobinfo *job,
-                               const struct idset *ranks,
-                               int rc)
-{
-    flux_future_t *f = NULL;
-
-    /*  XXX: It isn't clear what to do if a cleanup task fails.
-     *   For now, log the return code from the cleanup composite
-     *   future and errno if rc < 0 for informational purposes,
-     *   but do not generate an exception.
-     */
-    if (rc < 0)
-        f = jobinfo_emit_event_pack (job, "cleanup.finish",
-                                     "{ s:s s:i s:s }",
-                                     "ranks", "all",
-                                     "rc", rc,
-                                     "note", strerror (errno));
-    else
-        f = jobinfo_emit_event_pack (job, "cleanup.finish",
-                                     "{ s:s s:i }",
-                                     "ranks", "all",
-                                     "rc", rc);
-   if (flux_future_then (f, -1., cleanup_complete_cb, job) < 0) {
-        jobinfo_respond_error (job, errno, "cleanup complete error");
-        flux_future_destroy (f);
-    }
-}
-
-static void jobinfo_start_cleanup_cb (flux_future_t *f, void *arg)
-{
-    struct jobinfo *job = arg;
-
-    /*  Log error if cleanup.start event failed */
-    if (flux_future_get (f, NULL) < 0)
-        flux_log_error (job->h, "jobinfo_emit_event (cleanup.start)");
-    flux_future_destroy (f);
-
-    if ((*job->impl->cleanup) (job, NULL) < 0)
-        flux_log_error (job->h, "%s: cleanup()", job->impl->name);
-}
-
-/*  Initiate cleanup on ranks in idset, if necessary */
-static void jobinfo_start_cleanup (struct jobinfo *job,
-                                   const struct idset *idset)
-{
-    flux_future_t *f = NULL;
-
-    /* XXX: idset ignored for now */
-
-    if (!(f = jobinfo_emit_event_pack (job, "cleanup.start",
-                                            "{ s:s }",
-                                            "ranks", "all"))) {
-        flux_log_error (job->h, "jobinfo_emit_event_pack");
-        goto error;
-    }
-    if (flux_future_then (f, -1., jobinfo_start_cleanup_cb, job) < 0) {
-        flux_log_error (job->h, "flux_future_then");
-        goto error;
-    }
-    return;
-error:
-    jobinfo_respond_error (job, errno, "cleanup start error");
-    flux_future_destroy (f);
-}
-
 /* Notify job-exec that shells on ranks are complete.
  * XXX: currently assumes ranks equivalent to "all"
  */
@@ -602,8 +509,10 @@ void jobinfo_tasks_complete (struct jobinfo *job,
      */
     jobinfo_complete (job, ranks);
 
-    /* Start cleanup tasks on completed ranks */
-    jobinfo_start_cleanup (job, ranks);
+    if (jobinfo_finalize (job) < 0) {
+        flux_log_error (job->h, "tasks_complete: jobinfo_finalize");
+        jobinfo_decref (job);
+    }
 }
 
 
@@ -629,8 +538,7 @@ static void namespace_move_cb (flux_future_t *f, void *arg)
 /*
  *  All job shells have exited or we've hit an exception:
  *   start finalization steps:
- *   1. Ensure all cleanup tasks have completed
- *   2. Move namespace into primary namespace, emitting final event to log
+ *   1. Move namespace into primary namespace, emitting final event to log
  */
 static int jobinfo_finalize (struct jobinfo *job)
 {
