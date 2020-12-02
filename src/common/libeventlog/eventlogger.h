@@ -11,6 +11,7 @@
 #ifndef HAVE_FLUX_EVENTLOGGER_H
 #define HAVE_FLUX_EVENTLOGGER_H
 
+#include <stdarg.h>
 #include <flux/core.h>
 #include <jansson.h>
 
@@ -58,6 +59,19 @@ int eventlogger_append_entry (struct eventlogger *ev,
                               int flags,
                               const char *path,
                               json_t *entry);
+
+int eventlogger_append_vpack (struct eventlogger *ev,
+                              int flags,
+                              const char *path,
+                              const char *name,
+                              const char *fmt,
+                              va_list ap);
+
+int eventlogger_append_pack (struct eventlogger *ev,
+                             int flags,
+                             const char *path,
+                             const char *name,
+                             const char *fmt, ...);
 
 int eventlogger_set_commit_timeout (struct eventlogger *ev, double timeout);
 

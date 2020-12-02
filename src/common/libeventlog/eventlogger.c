@@ -263,6 +263,37 @@ out:
     return rc;
 }
 
+int eventlogger_append_vpack (struct eventlogger *ev,
+                              int flags,
+                              const char *path,
+                              const char *name,
+                              const char *fmt,
+                              va_list ap)
+{
+    int rc;
+    json_t *entry = NULL;
+
+    if (!(entry = eventlog_entry_vpack (0., name, fmt, ap)))
+        return -1;
+    rc = eventlogger_append_entry (ev, flags, path, entry);
+    json_decref (entry);
+    return rc;
+}
+
+int eventlogger_append_pack (struct eventlogger *ev,
+                             int flags,
+                             const char *path,
+                             const char *name,
+                             const char *fmt, ...)
+{
+    int rc = -1;
+    va_list ap;
+    va_start (ap, fmt);
+    rc = eventlogger_append_vpack (ev, flags, path, name, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
 int eventlogger_flush (struct eventlogger *ev)
 {
     int rc = -1;
