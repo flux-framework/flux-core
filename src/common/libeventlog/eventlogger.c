@@ -28,6 +28,7 @@ struct eventlog_batch {
 struct eventlogger {
     int refcount;
     flux_t *h;
+    char *ns;
     double batch_timeout;
     double commit_timeout;
     zlist_t *pending;
@@ -35,6 +36,20 @@ struct eventlogger {
     struct eventlogger_ops ops;
     void *arg;
 };
+
+int eventlogger_setns (struct eventlogger *ev, const char *ns)
+{
+    char *s = NULL;
+    if (!ev || !ns) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(s = strdup (ns)))
+        return -1;
+    free (ev->ns);
+    ev->ns = s;
+    return 0;
+}
 
 int eventlogger_set_commit_timeout (struct eventlogger *ev, double timeout)
 {
@@ -127,7 +142,7 @@ static flux_future_t *eventlogger_commit_batch (struct eventlogger *ev,
          *   that will be fulfilled on return from that function.
          */
         flux_watcher_stop (batch->timer);
-        if (!(fc = flux_kvs_commit (ev->h, NULL, flags, batch->txn)))
+        if (!(fc = flux_kvs_commit (ev->h, ev->ns, flags, batch->txn)))
             return NULL;
         if (!(f = flux_future_and_then (fc, commit_cb, batch)))
             flux_future_destroy (fc);
@@ -190,6 +205,7 @@ static struct eventlog_batch * eventlog_batch_create (struct eventlogger *ev)
 void eventlogger_destroy (struct eventlogger *ev)
 {
     if (ev) {
+        free (ev->ns);
         if (ev->pending)
             zlist_destroy (&ev->pending);
         free (ev);

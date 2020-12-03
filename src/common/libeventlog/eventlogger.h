@@ -47,6 +47,10 @@ struct eventlogger *eventlogger_create (flux_t *h,
                                         struct eventlogger_ops *ops,
                                         void *arg);
 
+/*  Set eventlogger namespace
+ */
+int eventlogger_setns (struct eventlogger *ev, const char *ns);
+
 void eventlogger_destroy (struct eventlogger *ev);
 
 int eventlogger_append (struct eventlogger *ev,
