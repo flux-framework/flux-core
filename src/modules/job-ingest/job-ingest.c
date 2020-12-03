@@ -103,6 +103,9 @@ struct job {
 
     char *jobspec;      // jobspec, not \0 terminated (unwrapped from signed)
     int jobspecsz;      // jobspec string length
+    json_t *jobspec_obj;// jobspec in object form
+                        //   N.B. after obj validation, environment is dropped
+                        //   to reduce size, since job-manager doesn't need it
 
     struct job_ingest_ctx *ctx;
 };
@@ -124,7 +127,34 @@ static void job_clean (struct job *job)
     if (job) {
         free (job->jobspec);
         job->jobspec = NULL;
+        json_decref (job->jobspec_obj);
+        job->jobspec_obj = NULL;
     }
+}
+
+/* Follow path (NULL terminated array of keys) through multiple JSON
+ * object levels, and delete the final path component.
+ */
+void delete_json_path (json_t *o, const char *path[])
+{
+    if (o && path && path[0]) {
+        if (path[1])
+            delete_json_path (json_object_get (o, path[0]), &path[1]);
+        else
+            json_object_del (o, path[0]);
+    }
+}
+
+/* Drop bulky environment portion of jobspec in object prior to
+ * including it in job-manager.submit request, where it will be cached
+ * for optional use in priority calculation.
+ * The full jobspec is commited to the KVS for use by other subsystems.
+ */
+static void job_redact_jobspec (struct job *job)
+{
+    const char *path[] = { "attributes", "system", "environment", NULL };
+
+    delete_json_path (job->jobspec_obj, path);
 }
 
 static void job_destroy (struct job *job)
@@ -133,6 +163,7 @@ static void job_destroy (struct job *job)
         int saved_errno = errno;
         free (job->jobspec);
         flux_msg_decref (job->msg);
+        json_decref (job->jobspec_obj);
         free (job);
         errno = saved_errno;
     }
@@ -413,12 +444,14 @@ static int batch_add_job (struct batch *batch, struct job *job)
     /* get created timestamp in eventlog entry for job */
     if (eventlog_entry_parse (entry, &t, NULL, NULL) < 0)
         goto error;
-    if (!(jobentry = json_pack ("{s:I s:i s:i s:f s:i}",
+    job_redact_jobspec (job);
+    if (!(jobentry = json_pack ("{s:I s:i s:i s:f s:i, s:O}",
                                 "id", job->id,
                                 "userid", job->cred.userid,
                                 "priority", job->priority,
                                 "t_submit", t,
-                                "flags", job->flags)))
+                                "flags", job->flags,
+                                "jobspec", job->jobspec_obj)))
         goto nomem;
     if (json_array_append_new (batch->joblist, jobentry) < 0) {
         json_decref (jobentry);
@@ -498,6 +531,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     int64_t userid_signer;
     const char *mech_type;
     flux_future_t *f = NULL;
+    json_error_t e;
 
     if (ctx->shutdown) {
         errno = ENOSYS;
@@ -589,10 +623,22 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPERM;
         goto error;
     }
+    /* Decode jobspec, returning detailed parse errors to the user.
+     * N.B. fails if jobspec was submitted as YAML.
+     */
+    if (!(job->jobspec_obj = json_loadb (job->jobspec,
+                                         job->jobspecsz,
+                                         0,
+                                         &e))) {
+        snprintf (errbuf, sizeof (errbuf), "jobspec: invalid JSON: %s", e.text);
+        errmsg = errbuf;
+        errno = EINVAL;
+        goto error;
+    }
     /* Validate jobspec asynchronously.
      * Continue submission process in validate_continuation().
      */
-    if (!(f = validate_jobspec (ctx->validate, job->jobspec, job->jobspecsz)))
+    if (!(f = validate_jobspec (ctx->validate, job->jobspec_obj)))
         goto error;
     if (flux_future_then (f, -1., validate_continuation, job) < 0)
         goto error;

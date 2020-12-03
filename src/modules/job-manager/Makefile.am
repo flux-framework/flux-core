@@ -43,7 +43,9 @@ job_manager_la_SOURCES = \
 	annotate.h \
 	annotate.c \
 	journal.h \
-	journal.c
+	journal.c \
+	getattr.h \
+	getattr.c
 
 job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_manager_la_LIBADD = $(fluxmod_libadd) \

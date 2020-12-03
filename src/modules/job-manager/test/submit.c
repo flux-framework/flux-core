@@ -30,12 +30,13 @@ void single_job_check (zhashx_t *active_jobs)
         BAIL_OUT ("zlist_new() failed");
 
     /* good job */
-    if (!(job1 = json_pack ("{s:I s:i s:i s:f s:i}",
+    if (!(job1 = json_pack ("{s:I s:i s:i s:f s:i s:{}}",
                             "id", 1,
                             "priority", 10,
                             "userid", 42,
                             "t_submit", 1.0,
-                            "flags", 0)))
+                            "flags", 0,
+                            "jobspec")))
         BAIL_OUT ("json_pack() failed");
     ok (submit_add_one_job (active_jobs, newjobs, job1) == 0,
         "submit_add_one_job works");
@@ -79,18 +80,20 @@ void multi_job_check (zhashx_t *active_jobs)
 
     ok (zhashx_size (active_jobs) == 0,
         "hash is initially empty");
-    if (!(jobs = json_pack ("[{s:I s:i s:i s:f s:i},"
-                             "{s:I s:i s:i s:f s:i}]",
+    if (!(jobs = json_pack ("[{s:I s:i s:i s:f s:i s:{}},"
+                             "{s:I s:i s:i s:f s:i s:{}}]",
                             "id", 1,
                             "priority", 10,
                             "userid", 42,
                             "t_submit", 1.0,
                             "flags", 0,
+                            "jobspec",
                             "id", 2,
                             "priority", 11,
                             "userid", 43,
                             "t_submit", 1.1,
-                            "flags", 1)))
+                            "flags", 1,
+                            "jobspec")))
         BAIL_OUT ("json_pack() failed");
 
     newjobs = submit_add_jobs (active_jobs, jobs);

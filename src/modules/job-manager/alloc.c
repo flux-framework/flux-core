@@ -342,11 +342,12 @@ int alloc_request (struct alloc *alloc, struct job *job)
 
     if (!(msg = flux_request_encode ("sched.alloc", NULL)))
         return -1;
-    if (flux_msg_pack (msg, "{s:I s:i s:i s:f}",
+    if (flux_msg_pack (msg, "{s:I s:i s:i s:f s:O}",
                             "id", job->id,
                             "priority", job->priority,
                             "userid", job->userid,
-                            "t_submit", job->t_submit) < 0)
+                            "t_submit", job->t_submit,
+                            "jobspec", job->jobspec_redacted) < 0)
         goto error;
     if (flux_send (alloc->ctx->h, msg, 0) < 0)
         goto error;
