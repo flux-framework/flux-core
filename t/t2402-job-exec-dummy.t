@@ -34,11 +34,11 @@ test_expect_success 'job-exec: execute dummy job shell across all ranks' '
 	test $(flux kvs get ${kvsdir}.test1.2) = 2 &&
 	test $(flux kvs get ${kvsdir}.test1.3) = 3
 '
-test_expect_success 'job-exec: job shell output sent to flux log' '
+test_expect_success 'job-exec: job shell output available in flux-job attach' '
 	id=$(flux jobspec srun -n 1 "echo Hello from job \$JOBID" \
 	     | flux job submit) &&
-	flux job wait-event $id clean &&
-	flux dmesg | grep "Hello from job $(flux job id $id)"
+	flux job attach -vEX $id &&
+	flux job attach $id 2>&1 | grep "dummy.sh.*Hello from job"
 '
 test_expect_success 'job-exec: job shell failure recorded' '
 	id=$(flux jobspec srun -N4  "test \$JOB_SHELL_RANK = 0 && exit 1" \
@@ -75,10 +75,9 @@ test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
 		--namespace=$(flux job namespace $id) \
 		trap-ready &&
 	flux job cancel $id &&
-	sleep 0.2 &&
-	flux dmesg | grep $(flux job id $id) &&
-	flux job wait-event -vt 5 $id clean &&
-	flux dmesg | grep "trap-sigterm got SIGTERM" &&
+	(flux job attach -vEX $id >kill.output 2>&1 || true) &&
+	test_debug "cat kill.output" &&
+	grep "trap-sigterm got SIGTERM" kill.output &&
 	flux module reload job-exec
 '
 test_expect_success 'job-exec: invalid job shell generates exception' '
