@@ -76,6 +76,8 @@ struct jobinfo {
 
     int                   wait_status;
 
+    struct eventlogger *  ev;           /* event batcher */
+
     double                kill_timeout; /* grace time between sigterm,kill */
     flux_watcher_t       *kill_timer;
     flux_watcher_t       *expiration_timer;

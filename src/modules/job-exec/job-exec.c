@@ -92,6 +92,7 @@
 
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
 #include "job-exec.h"
@@ -122,6 +123,7 @@ void jobinfo_decref (struct jobinfo *job)
 {
     if (job && (--job->refcount == 0)) {
         int saved_errno = errno;
+        eventlogger_destroy (job->ev);
         flux_watcher_destroy (job->kill_timer);
         flux_watcher_destroy (job->expiration_timer);
         zhashx_delete (job->ctx->jobs, &job->id);
@@ -200,34 +202,15 @@ static flux_future_t * jobinfo_emit_event_pack (struct jobinfo *job,
     return f;
 }
 
-static void emit_event_continuation (flux_future_t *f, void *arg)
-{
-    struct jobinfo *job = arg;
-    if (flux_future_get (f, NULL) < 0)
-        flux_log_error (job->ctx->h, "%ju: emit_event", job->id);
-    flux_future_destroy (f);
-    jobinfo_decref (job);
-}
-
 static int jobinfo_emit_event_vpack_nowait (struct jobinfo *job,
                                             const char *name,
                                             const char *fmt,
                                             va_list ap)
 {
-    flux_future_t *f = jobinfo_emit_event_vpack (job, name, fmt, ap);
-    if (f == NULL)
-        return -1;
-    jobinfo_incref (job);
-    if (flux_future_then (f, -1., emit_event_continuation, job) < 0) {
-        flux_log_error (job->ctx->h, "jobinfo_emit_event");
-        goto error;
-    }
-    return 0;
-error:
-    jobinfo_decref (job);
-    flux_future_destroy (f);
-    return -1;
-
+    return eventlogger_append_vpack (job->ev,
+                                     0,
+                                     "exec.eventlog",
+                                     name, fmt, ap);
 }
 
 /*
@@ -477,7 +460,15 @@ static flux_future_t * namespace_move (struct jobinfo *job)
     flux_future_t *f = NULL;
     flux_future_t *fnext = NULL;
 
-    if (!(f = jobinfo_emit_event_pack (job, "done", NULL))) {
+    if (jobinfo_emit_event_pack_nowait (job, "done", NULL) < 0)
+        flux_log_error (h, "emit_event");
+    /*
+     *  Ensure the final eventlog entry ("done", from above), is committed
+     *   to then eventlog before performing the next steps. This ensures
+     *   the eventlog is quiesced before the namspace is moved and becomes
+     *   read-only.
+     */
+    if (!(f = eventlogger_commit (job->ev))) {
         flux_log_error (h, "namespace_move: jobinfo_emit_event");
         goto error;
     }
@@ -854,13 +845,40 @@ err:
     return NULL;
 }
 
+static void evlog_err (struct eventlogger *ev, void *arg, int err, json_t *e)
+{
+    struct jobinfo *job = arg;
+    char *s = json_dumps (e, JSON_COMPACT);
+    flux_log_error (job->h,
+                    "eventlog error: job=%ju: entry=%s",
+                    (uintmax_t) job->id,
+                    s);
+    free (s);
+}
+
+static void evlog_busy (struct eventlogger *ev, void *arg)
+{
+    jobinfo_incref ((struct jobinfo *) arg);
+}
+
+static void evlog_idle (struct eventlogger *ev, void *arg)
+{
+    jobinfo_decref ((struct jobinfo *) arg);
+}
+
 static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
 {
+    struct eventlogger_ops ev_ops = {
+        .err = evlog_err,
+        .busy = evlog_busy,
+        .idle = evlog_idle
+    };
     flux_future_t *f = NULL;
     struct jobinfo *job;
 
     if (!(job = jobinfo_new ()))
         return -1;
+
 
     /* Copy flux handle for each job to allow implementation access.
      * (This could also be done with an accessor, but choose the simpler
@@ -894,6 +912,15 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
         flux_log_error (ctx->h, "job_ns_create");
         return -1;
     }
+    job->ev = eventlogger_create (job->h, 0.01, &ev_ops, job);
+    if (!job->ev || eventlogger_setns (job->ev, job->ns) < 0) {
+        flux_log_error (job->h,
+                        "eventlogger_create/setns for job %ju failed",
+                        (uintmax_t) job->id);
+        jobinfo_decref (job);
+        return -1;
+    }
+
     if (zhashx_insert (ctx->jobs, &job->id, job) < 0) {
         flux_log_error (ctx->h, "zhashx_insert");
         jobinfo_fatal_error (job, errno, "failed to hash job");
