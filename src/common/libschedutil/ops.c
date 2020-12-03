@@ -20,73 +20,34 @@
 #include "init.h"
 #include "ops.h"
 
-static void alloc_continuation (flux_future_t *f, void *arg)
-{
-    schedutil_t *util = arg;
-
-    /* An enqueued alloc request is ready. Process the pending alloc
-     * queue in order until the first unfulfilled future is found. This
-     * ensures the scheduler does not get alloc requests out-of-order,
-     * even if kvs lookups return in a different order than initiated.
-     */
-    while ((f = schedutil_peek_alloc (util)) && flux_future_is_ready (f)) {
-        const flux_msg_t *msg = flux_future_aux_get (f, "schedutil::msg");
-        const char *jobspec;
-
-        if (flux_kvs_lookup_get (f, &jobspec) < 0) {
-            flux_log_error (util->h, "sched.alloc lookup R");
-            if (flux_respond_error (util->h, msg, errno, NULL) < 0)
-                flux_log_error (util->h, "sched.alloc respond_error");
-            return;
-        }
-        if (schedutil_dequeue_alloc (util) < 0)
-            flux_log_error (util->h, "failed to dequeue alloc request");
-
-        util->alloc_cb (util->h, msg, jobspec, util->cb_arg);
-        flux_future_destroy (f);
-    }
-}
-
 static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     schedutil_t *util = arg;
     flux_jobid_t id;
-    char key[64];
-    flux_future_t *f;
+    json_t *o;
+    char *jobspec;
 
     if (util == NULL) {
         errno = EINVAL;
         goto error;
     }
 
-    if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:o}",
+                             "id",
+                             &id,
+                             "jobspec",
+                             &o) < 0)
         goto error;
-    if (flux_job_kvs_key (key, sizeof (key), id, "jobspec") < 0) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
-        goto error;
-    if (flux_future_aux_set (f,
-                             "schedutil::msg",
-                             (void *)flux_msg_incref (msg),
-                             (flux_free_f)flux_msg_decref) < 0) {
-        flux_msg_decref (msg);
-        goto error_future;
-    }
-    if (!schedutil_hang_responses (util)) {
-        if (flux_future_then (f, -1, alloc_continuation, util) < 0)
-            goto error_future;
-    }
-    // else: intentionally do not register a continuation to force a permanent
-    // outstanding request for testing
-    if (schedutil_enqueue_alloc (util, f) < 0)
-        flux_log_error (h, "sched.alloc unable to enqueue alloc request");
-
+    if (!(jobspec = json_dumps (o, JSON_COMPACT)))
+        goto nomem;
+    util->alloc_cb (h, msg, jobspec, util->cb_arg);
+    free (jobspec);
     return;
-error_future:
-    flux_future_destroy (f);
+nomem:
+    errno = ENOMEM;
 error:
     flux_log_error (h, "sched.alloc");
     if (flux_respond_error (h, msg, errno, NULL) < 0)
