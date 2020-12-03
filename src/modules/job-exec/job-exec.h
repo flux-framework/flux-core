@@ -114,6 +114,15 @@ void jobinfo_tasks_complete (struct jobinfo *job,
 void jobinfo_fatal_error (struct jobinfo *job, int errnum,
                           const char *fmt, ...);
 
+/* Append a log output message to exec.eventlog for job
+ */
+void jobinfo_log_output (struct jobinfo *job,
+                         int rank,
+                         const char *component,
+                         const char *stream,
+                         const char *data,
+                         int len);
+
 #endif /* !HAVE_JOB_EXEC_EXEC_H */
 
 /* vi: ts=4 sw=4 expandtab

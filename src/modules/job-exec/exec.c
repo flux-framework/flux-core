@@ -146,10 +146,17 @@ static void complete_cb (struct bulk_exec *exec, void *arg)
 static void output_cb (struct bulk_exec *exec, flux_subprocess_t *p,
                        const char *stream,
                        const char *data,
-                       int data_len,
+                       int len,
                        void *arg)
 {
     struct jobinfo *job = arg;
+    const char *cmd = flux_cmd_arg (flux_subprocess_get_cmd (p), 0);
+    jobinfo_log_output (job,
+                        flux_subprocess_rank (p),
+                        basename (cmd),
+                        stream,
+                        data,
+                        len);
     flux_log (job->h, LOG_INFO, "%ju: %d: %s: %s",
                       (uintmax_t) job->id,
                       flux_subprocess_rank (p),

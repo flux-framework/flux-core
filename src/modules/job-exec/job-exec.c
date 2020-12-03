@@ -413,6 +413,32 @@ void jobinfo_fatal_error (struct jobinfo *job, int errnum,
     errno = saved_errno;
 }
 
+void jobinfo_log_output (struct jobinfo *job,
+                         int rank,
+                         const char *component,
+                         const char *stream,
+                         const char *data,
+                         int len)
+{
+    char buf[16];
+    if (len == 0 || !data || !stream)
+        return;
+    if (snprintf (buf, sizeof (buf), "%d", rank) >= sizeof (buf))
+        flux_log_error (job->h, "jobinfo_log_output: snprintf");
+    if (eventlogger_append_pack (job->ev, 0,
+                                 "exec.eventlog",
+                                 "log",
+                                 "{ s:s, s:s s:s s:s# }",
+                                 "component", component,
+                                 "stream", stream,
+                                 "rank", buf,
+                                 "data", data, len) < 0)
+        flux_log_error (job->h,
+                        "evenlog_append failed: %ju: message=%s",
+                        (uintmax_t) job->id,
+                        data);
+}
+
 static void namespace_delete (flux_future_t *f, void *arg)
 {
     struct jobinfo *job = arg;
