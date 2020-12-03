@@ -67,7 +67,6 @@ db_check_entries() {
             && grep -q "userid = " query.out \
             && grep -q "ranks = " query.out \
             && grep -q "t_submit = " query.out \
-            && grep -q "t_sched = " query.out \
             && grep -q "t_run = " query.out \
             && grep -q "t_cleanup = " query.out \
             && grep -q "t_inactive = " query.out \
@@ -88,7 +87,6 @@ get_db_values() {
         userid=`grep "userid = " query.out | awk '{print \$3}'`
         ranks=`grep "ranks = " query.out | awk '{print \$3}'`
         t_submit=`grep "t_submit = " query.out | awk '{print \$3}'`
-        t_sched=`grep "t_sched = " query.out | awk '{print \$3}'`
         t_run=`grep "t_run = " query.out | awk '{print \$3}'`
         t_cleanup=`grep "t_cleanup = " query.out | awk '{print \$3}'`
         t_inactive=`grep "t_inactive = " query.out | awk '{print \$3}'`
@@ -104,7 +102,6 @@ db_check_values_run() {
         if [ -z "$userid" ] \
             || [ -z "$ranks" ] \
             || [ "$t_submit" == "0.0" ] \
-            || [ "$t_sched" == "0.0" ] \
             || [ "$t_run" == "0.0" ] \
             || [ "$t_cleanup" == "0.0" ] \
             || [ "$t_inactive" == "0.0" ] \
@@ -124,7 +121,6 @@ db_check_values_no_run() {
         if [ -z "$userid" ] \
             || [ -n "$ranks" ] \
             || [ "$t_submit" == "0.0" ] \
-            || [ "$t_sched" == "0.0" ] \
             || [ "$t_run" != "0.0" ] \
             || [ "$t_cleanup" == "0.0" ] \
             || [ "$t_inactive" == "0.0" ] \

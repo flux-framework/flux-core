@@ -566,8 +566,8 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
     const char *attrs[] = { "userid", "urgency", "t_submit", "t_depend",
-                            "t_sched", "t_priority", "t_run", "t_cleanup",
-                            "t_inactive", "state", "name", "ntasks", "nnodes",
+                            "t_run", "t_cleanup", "t_inactive",
+                            "state", "name", "ntasks", "nnodes",
                             "ranks", "nodelist", "success", "exception_occurred",
                             "exception_type", "exception_severity",
                             "exception_note", "result", "expiration",
