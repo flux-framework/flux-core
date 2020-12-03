@@ -19,7 +19,7 @@ JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/valida
 # - the last job submissions are intended to get a create a set of
 #   pending jobs, because jobs from the second loop have taken all resources
 # - job ids are stored in files in the order we expect them to be listed
-#   - pending jobs - by priority (highest first)
+#   - pending jobs - by priority (highest first), job id (smaller first)
 #   - running jobs - by start time (most recent first)
 #   - inactive jobs - by completion time (most recent first)
 #
@@ -367,6 +367,23 @@ test_expect_success 'flux-jobs --format={userid},{username} works' '
 		echo "${id},${name}" >> user.exp
 	done &&
 	test_cmp user.out user.exp
+'
+
+test_expect_success 'flux-jobs --format={priority} works' '
+	flux jobs --suppress-header -a --format="{priority}" > priority.out &&
+	echo 30 > priority.exp &&
+	echo 25 >> priority.exp &&
+	echo 20 >> priority.exp &&
+	echo 15 >> priority.exp &&
+	echo 10 >> priority.exp &&
+	echo 5 >> priority.exp &&
+	for i in `seq 1 $(state_count run)`; do
+		echo "16" >> priority.exp
+	done &&
+	for i in `seq 1 $(state_count inactive)`; do
+		echo "16" >> priority.exp
+	done &&
+	test_cmp priority.out priority.exp
 '
 
 test_expect_success 'flux-jobs --format={state},{state_single} works' '

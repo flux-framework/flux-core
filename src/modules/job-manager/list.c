@@ -93,7 +93,7 @@ void list_handle_request (flux_t *h,
         goto error;
     }
     /* First list jobs in SCHED (S) state
-     * (priority, then t_submit order).
+     * (priority, then job id order).
      */
     job = alloc_queue_first (ctx->alloc);
     while (job && (max_entries == 0 || json_array_size (jobs) < max_entries)) {

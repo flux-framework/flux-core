@@ -70,7 +70,7 @@ static int jobreq_cmp (const void *x, const void *y)
     int rc;
 
     if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
-        rc = NUMCMP (j1->t_submit, j2->t_submit);
+        rc = NUMCMP (j1->id, j2->id);
     return rc;
 }
 
