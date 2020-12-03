@@ -45,7 +45,9 @@ struct job *job_incref (struct job *job);
 
 struct job *job_create (void);
 
-struct job *job_create_from_eventlog (flux_jobid_t id, const char *eventlog);
+struct job *job_create_from_eventlog (flux_jobid_t id,
+                                      const char *eventlog,
+                                      const char *jobspec);
 
 /* Helpers for maintaining czmq containers of 'struct job'.
  * The comparator sorts by (1) priority, then (2) jobid.

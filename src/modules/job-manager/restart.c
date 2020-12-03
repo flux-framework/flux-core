@@ -42,14 +42,35 @@ int restart_count_char (const char *s, char c)
     return count;
 }
 
+static struct job *lookup_job (flux_t *h, flux_jobid_t id)
+{
+    flux_future_t *f1 = NULL;
+    flux_future_t *f2 = NULL;
+    char k1[64], k2[64];
+    const char *eventlog, *jobspec;
+    struct job *job = NULL;
+
+    if (flux_job_kvs_key (k1, sizeof (k1), id, "eventlog") < 0
+        || flux_job_kvs_key (k2, sizeof (k2), id, "jobspec") < 0)
+        return NULL;
+    if (!(f1 = flux_kvs_lookup (h, NULL, 0, k1))
+        || !(f2 = flux_kvs_lookup (h, NULL, 0, k2)))
+        goto done;
+    if (flux_kvs_lookup_get (f1, &eventlog) < 0
+            || flux_kvs_lookup_get (f2, &jobspec) < 0)
+        goto done;
+    job = job_create_from_eventlog (id, eventlog, jobspec);
+done:
+    flux_future_destroy (f1);
+    flux_future_destroy (f2);
+    return job;
+}
+
 static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
                                restart_map_f cb, void *arg)
 {
     flux_jobid_t id;
-    flux_future_t *f;
-    const char *eventlog;
     struct job *job = NULL;
-    char path[64];
     int rc = -1;
 
     if (strlen (key) <= dirskip) {
@@ -58,21 +79,12 @@ static int depthfirst_map_one (flux_t *h, const char *key, int dirskip,
     }
     if (fluid_decode (key + dirskip + 1, &id, FLUID_STRING_DOTHEX) < 0)
         return -1;
-    if (flux_job_kvs_key (path, sizeof (path), id, "eventlog") < 0) {
-        errno = EINVAL;
+    if (!(job = lookup_job (h, id)))
         return -1;
-    }
-    if (!(f = flux_kvs_lookup (h, NULL, 0, path)))
-        goto done;
-    if (flux_kvs_lookup_get (f, &eventlog) < 0)
-        goto done;
-    if (!(job = job_create_from_eventlog (id, eventlog)))
-        goto done;
     if (cb (job, arg) < 0)
         goto done;
     rc = 1;
 done:
-    flux_future_destroy (f);
     job_decref (job);
     return rc;
 }
