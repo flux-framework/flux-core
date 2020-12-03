@@ -117,7 +117,6 @@ TESTSCRIPTS = \
 	t2233-job-info-security.t \
 	t2234-job-info-list-update.t \
 	t2300-sched-simple.t \
-	t2301-schedutil-outstanding-requests.t \
 	t2302-sched-simple-up-down.t \
 	t2310-resource-module.t \
 	t2311-resource-drain.t \
@@ -250,7 +249,6 @@ dist_check_SCRIPTS = \
 	job-info/list-rpc.py \
 	job-info/jobspec-permissive.jsonschema \
 	job-archive/query.py \
-	schedutil/req_and_unload.py \
 	ingest/fake-validate.sh \
 	ingest/bad-validate.sh
 

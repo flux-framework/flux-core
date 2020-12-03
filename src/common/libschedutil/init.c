@@ -17,15 +17,14 @@
 #include "init.h"
 #include "schedutil_private.h"
 
-/* flux module debug --setbit 0x8000 sched
- * flux module debug --clearbit 0x8000 sched
- */
-enum module_debug_flags {
-    /* alloc and free responses received while this is set
-     * will never get a response
-     */
-    DEBUG_HANG_RESPONSES = 0x8000, // 16th bit
-};
+/* destroy future - zlistx_dsetructor_t footprint */
+static void future_destructor (void **item)
+{
+    if (*item) {
+        flux_future_destroy (*item);
+        *item = NULL;
+    }
+}
 
 
 schedutil_t *schedutil_create (flux_t *h,
@@ -51,6 +50,7 @@ schedutil_t *schedutil_create (flux_t *h,
     if (!(util->outstanding_futures = zlistx_new ())
         || !(util->alloc_queue = zlistx_new ()))
         goto error;
+    zlistx_set_destructor (util->outstanding_futures, future_destructor);
     if (schedutil_ops_register (util) < 0)
         goto error;
 
@@ -61,49 +61,16 @@ error:
     return NULL;
 }
 
-static void respond_to_outstanding_msgs (schedutil_t *util)
-{
-    int rc = 0;
-    flux_future_t *fut;
-    flux_msg_t *msg;
-    for (fut = zlistx_first (util->outstanding_futures);
-         fut;
-         fut = zlistx_next (util->outstanding_futures))
-        {
-            msg = flux_future_aux_get (fut, "schedutil::msg");
-            rc = flux_respond_error (util->h,
-                                     msg,
-                                     ENOSYS,
-                                     "automatic ENOSYS response "
-                                     "from schedutil");
-            if (rc != 0) {
-                flux_log (util->h,
-                          LOG_ERR,
-                          "schedutil: error in responding to "
-                          "outstanding messages");
-            }
-            flux_future_destroy (fut);
-        }
-    zlistx_purge (util->outstanding_futures);
-}
-
 void schedutil_destroy (schedutil_t *util)
 {
     if (util) {
         int saved_errno = errno;
-        respond_to_outstanding_msgs (util);
         zlistx_destroy (&util->outstanding_futures);
         zlistx_destroy (&util->alloc_queue);
         schedutil_ops_unregister (util);
         free (util);
         errno = saved_errno;
     }
-    return;
-}
-
-bool schedutil_hang_responses (const schedutil_t *util)
-{
-    return flux_module_debug_test (util->h, DEBUG_HANG_RESPONSES, false);
 }
 
 int schedutil_add_outstanding_future (schedutil_t *util, flux_future_t *fut)
