@@ -77,6 +77,8 @@ int eventlogger_set_commit_timeout (struct eventlogger *ev, double timeout);
 
 int eventlogger_flush (struct eventlogger *ev);
 
+flux_future_t *eventlogger_commit (struct eventlogger *ev);
+
 #ifdef __cplusplus
 }
 #endif
