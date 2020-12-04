@@ -35,11 +35,18 @@ struct endpoint {
     flux_watcher_t *w;
 };
 
+struct child {
+    int lastseen;
+    unsigned long rank;
+    char uuid[16];
+    bool connected;
+};
+
+
 struct overlay {
     zsecurity_t *sec;             /* security context (MT-safe) */
     bool sec_initialized;
     flux_t *h;
-    zhash_t *children;          /* child_t - by uuid */
     flux_msg_handler_t **handlers;
     int epoch;
 
@@ -49,6 +56,9 @@ struct overlay {
     int tbon_level;
     int tbon_maxlevel;
     int tbon_descendants;
+
+    struct child *children;
+    int child_count;
 
     struct endpoint *parent;    /* DEALER - requests to parent */
     overlay_sock_cb_f parent_cb;
@@ -71,9 +81,12 @@ struct overlay {
     int idle_warning;
 };
 
-typedef struct {
-    int lastseen;
-} child_t;
+/* Convenience iterator for ov->children
+ */
+#define foreach_overlay_child(ov, child) \
+    for ((child) = &(ov)->children[0]; \
+            (child) - &(ov)->children[0] < (ov)->child_count; \
+            (child)++)
 
 static void endpoint_destroy (struct endpoint *ep)
 {
@@ -104,6 +117,31 @@ void overlay_set_init_callback (struct overlay *ov,
     ov->init_arg = arg;
 }
 
+/* Allocate children array based on static tree topology, and return size.
+ */
+static int alloc_children (uint32_t rank,
+                           uint32_t size,
+                           int k,
+                           struct child **chp)
+{
+    struct child *ch = NULL;
+    int count;
+    int i;
+
+    for (count = 0; kary_childof (k, size, rank, count) != KARY_NONE; count++)
+        ;
+    if (count > 0) {
+        if (!(ch = calloc (count, sizeof (*ch))))
+            return -1;
+        for (i = 0; i < count; i++) {
+            ch[i].rank = kary_childof (k, size, rank, i);
+            snprintf (ch[i].uuid, sizeof (ch[i].uuid), "%lu", ch[i].rank);
+        }
+    }
+    *chp = ch;
+    return count;
+}
+
 int overlay_init (struct overlay *overlay,
                   uint32_t size,
                   uint32_t rank,
@@ -115,6 +153,11 @@ int overlay_init (struct overlay *overlay,
     overlay->tbon_level = kary_levelof (tbon_k, rank);
     overlay->tbon_maxlevel = kary_levelof (tbon_k, size - 1);
     overlay->tbon_descendants = kary_sum_descendants (tbon_k, size, rank);
+    if ((overlay->child_count = alloc_children (rank,
+                                                size,
+                                                tbon_k,
+                                                &overlay->children)) < 0)
+        return -1;
     if (overlay->init_cb)
         return (*overlay->init_cb) (overlay, overlay->init_arg);
     return 0;
@@ -142,29 +185,36 @@ void overlay_set_idle_warning (struct overlay *ov, int heartbeats)
 
 void overlay_log_idle_children (struct overlay *ov)
 {
-    const char *uuid;
-    child_t *child;
+    struct child *child;
     int idle;
 
     if (ov->idle_warning > 0) {
-        FOREACH_ZHASH (ov->children, uuid, child) {
-            idle = ov->epoch - child->lastseen;
-            if (idle >= ov->idle_warning)
-                flux_log (ov->h, LOG_CRIT, "child %s idle for %d heartbeats",
-                          uuid, idle);
+        foreach_overlay_child (ov, child) {
+            if (child->connected) {
+                idle = ov->epoch - child->lastseen;
+                if (idle >= ov->idle_warning) {
+                    flux_log (ov->h,
+                              LOG_CRIT,
+                              "child %lu idle for %d heartbeats",
+                              child->rank,
+                              idle);
+                }
+            }
         }
     }
 }
 
 void overlay_checkin_child (struct overlay *ov, const char *uuid)
 {
-    child_t *child  = zhash_lookup (ov->children, uuid);
-    if (!child) {
-        child = xzmalloc (sizeof (*child));
-        zhash_update (ov->children, uuid, child);
-        zhash_freefn (ov->children, uuid, (zhash_free_fn *)free);
+    struct child *child;
+
+    foreach_overlay_child (ov, child) {
+        if (!strcmp (uuid, child->uuid)) {
+            child->lastseen = ov->epoch;
+            child->connected = true;
+            break;
+        }
     }
-    child->lastseen = ov->epoch;
 }
 
 int overlay_set_parent (struct overlay *ov, const char *fmt, ...)
@@ -280,7 +330,7 @@ done:
 
 static int overlay_mcast_child_one (void *zsock,
                                     const flux_msg_t *msg,
-                                    const char *uuid)
+                                    struct child *child)
 {
     flux_msg_t *cpy;
     int rc = -1;
@@ -289,7 +339,7 @@ static int overlay_mcast_child_one (void *zsock,
         return -1;
     if (flux_msg_enable_route (cpy) < 0)
         goto done;
-    if (flux_msg_push_route (cpy, uuid) < 0)
+    if (flux_msg_push_route (cpy, child->uuid) < 0)
         goto done;
     if (flux_msg_sendzsock_ex (zsock, cpy, true) < 0) {
         if (errno != EHOSTUNREACH) // a child has disconnected - not an error
@@ -303,15 +353,20 @@ done:
 
 int overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
 {
-    const char *uuid;
-    child_t *child;
+    struct child *child;
     int first_errno;
     int failures = 0;
 
-    if (!ov->child || !ov->child->zs || !ov->children)
+    if (!ov->child || !ov->child->zs)
         return 0;
-    FOREACH_ZHASH (ov->children, uuid, child) {
-        if (overlay_mcast_child_one (ov->child->zs, msg, uuid) < 0) {
+    foreach_overlay_child (ov, child) {
+        if (!child->connected)
+            continue;
+        if (overlay_mcast_child_one (ov->child->zs, msg, child) < 0) {
+            if (errno == EHOSTUNREACH) {
+                child->connected = false;
+                continue;
+            }
             if (failures == 0)
                 first_errno = errno;
             failures++;
@@ -587,17 +642,16 @@ static json_t *lspeer_object_create (struct overlay *ov)
 {
     json_t *o = NULL;
     json_t *child_o;
-    const char *uuid;
-    child_t *child;
+    struct child *child;
 
     if (!(o = json_object ()))
         goto nomem;
-    FOREACH_ZHASH (ov->children, uuid, child) {
+    foreach_overlay_child (ov, child) {
         if (!(child_o = json_pack ("{s:i}",
                                    "idle",
                                    ov->epoch - child->lastseen)))
             goto nomem;
-        if (json_object_set_new (o, uuid, child_o) < 0) {
+        if (json_object_set_new (o, child->uuid, child_o) < 0) {
             json_decref (child_o);
             goto nomem;
         }
@@ -646,7 +700,7 @@ void overlay_destroy (struct overlay *ov)
         flux_msg_handler_delvec (ov->handlers);
         endpoint_destroy (ov->parent);
         endpoint_destroy (ov->child);
-        zhash_destroy (&ov->children);
+        free (ov->children);
         free (ov);
         errno = saved_errno;
     }
@@ -667,10 +721,6 @@ struct overlay *overlay_create (flux_t *h, int sec_typemask, const char *keydir)
     ov->rank = FLUX_NODEID_ANY;
     ov->parent_lastsent = -1;
     ov->h = h;
-    if (!(ov->children = zhash_new ())) {
-        errno = ENOMEM;
-        goto error;
-    }
     if (!(ov->sec = zsecurity_create (sec_typemask, keydir)))
         goto error;
 
