@@ -91,4 +91,12 @@ test_expect_success 'job-exec: R with invalid expiration raises exception' '
 test_expect_success 'start request with empty payload fails with EPROTO(71)' '
 	${RPC} job-exec.start 71 </dev/null
 '
+test_expect_success 'job-exec: invalid testexec conf generates exception' '
+	jobid=$(flux mini submit \
+	    --setattr=system.exec.test.run_duration=0.01 hostname) &&
+	flux job wait-event -t 5 ${jobid} exception > except.invalid.out &&
+	grep "type=\"exec\"" except.invalid.out &&
+	flux job wait-event -qt 5 ${jobid} clean &&
+	flux job eventlog ${jobid}
+'
 test_done
