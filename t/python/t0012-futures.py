@@ -158,13 +158,13 @@ class TestHandle(unittest.TestCase):
 
     def test_05_future_error_string(self):
         with self.assertRaises(EnvironmentError) as cm:
-            payload = {"J": "", "priority": -1000, "flags": 0}
+            payload = {"J": "", "urgency": -1000, "flags": 0}
             future = self.f.rpc("job-ingest.submit", payload=payload)
             future.get()
         self.assertEqual(cm.exception.errno, errno.EINVAL)
         # Ensure that the result of flux_future_error_string propagated up
         self.assertEqual(cm.exception.strerror, future.error_string())
-        self.assertRegexpMatches(cm.exception.strerror, "priority range is .*")
+        self.assertRegexpMatches(cm.exception.strerror, "urgency range is .*")
 
     def test_06_blocking_methods(self):
         future = Future(self.f.future_create(ffi.NULL, ffi.NULL))

@@ -256,11 +256,11 @@ with the job exit status.
 OTHER OPTIONS
 =============
 
-**--priority=N**
-   Specify job priority, which affects queue order. Numerically higher priority
+**--urgency=N**
+   Specify job urgency, which affects queue order. Numerically higher urgency
    jobs are considered by the scheduler first. Guests may submit jobs with
-   priority in the range of 0 to 16, while instance owners may submit jobs
-   with priority in the range of 0 to 31 (default 16).
+   urgency in the range of 0 to 16, while instance owners may submit jobs
+   with urgency in the range of 0 to 31 (default 16).
 
 **-v, --verbose**
    *(run,alloc)* Increase verbosity on stderr. For example, currently

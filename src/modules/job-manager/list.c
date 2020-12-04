@@ -44,8 +44,8 @@ int list_append_job (json_t *jobs, struct job *job)
                          job->id,
                          "userid",
                          job->userid,
-                         "priority",
-                         job->priority,
+                         "urgency",
+                         job->urgency,
                          "t_submit",
                          job->t_submit,
                          "state",
@@ -93,7 +93,7 @@ void list_handle_request (flux_t *h,
         goto error;
     }
     /* First list jobs in SCHED (S) state
-     * (priority, then job id order).
+     * (urgency, then job id order).
      */
     job = alloc_queue_first (ctx->alloc);
     while (job && (max_entries == 0 || json_array_size (jobs) < max_entries)) {

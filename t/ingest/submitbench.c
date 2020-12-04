@@ -40,8 +40,8 @@ static struct optparse_option opts[] =  {
     { .name = "fanout", .key = 'f', .has_arg = 1, .arginfo = "N",
       .usage = "Run at most N RPCs in parallel",
     },
-    { .name = "priority", .key = 'p', .has_arg = 1, .arginfo = "N",
-      .usage = "Set job priority (0-31, default=16)",
+    { .name = "urgency", .key = 'u', .has_arg = 1, .arginfo = "N",
+      .usage = "Set job urgency (0-31, default=16)",
     },
     { .name = "flags", .key = 'F', .has_arg = 3,
       .flags = OPTPARSE_OPT_AUTOSPLIT,
@@ -102,7 +102,7 @@ struct submitbench_ctx {
     void *jobspec;
     int jobspecsz;
     const char *J;
-    int priority;
+    int urgency;
     uint32_t owner;
 };
 
@@ -197,7 +197,7 @@ void submitbench_check (flux_reactor_t *r, flux_watcher_t *w,
         }
 #endif
         if (!(f = flux_job_submit (ctx->h, ctx->J ? ctx->J : ctx->jobspec,
-                                   ctx->priority, flags)))
+                                   ctx->urgency, flags)))
             log_err_exit ("flux_job_submit");
         if (flux_future_then (f, -1., submitbench_continuation, ctx) < 0)
             log_err_exit ("flux_future_then");
@@ -249,7 +249,7 @@ int cmd_submitbench (optparse_t *p, int argc, char **argv)
     ctx.max_queue_depth = optparse_get_int (p, "fanout", 256);
     ctx.totcount = optparse_get_int (p, "repeat", 1);
     ctx.jobspecsz = read_jobspec (argv[optindex++], &ctx.jobspec);
-    ctx.priority = optparse_get_int (p, "priority", FLUX_JOB_ADMIN_PRIORITY_DEFAULT);
+    ctx.urgency = optparse_get_int (p, "urgency", FLUX_JOB_URGENCY_DEFAULT);
 
     const char *tmp;
     if (!(tmp = flux_attr_get (ctx.h, "security.owner")))

@@ -27,12 +27,12 @@ void test_create (void)
     ok (job->refcount == 1,
         "job_create set refcount to 1");
     ok (job->id == 0
-        && job->priority == FLUX_JOB_ADMIN_PRIORITY_DEFAULT
+        && job->urgency == FLUX_JOB_URGENCY_DEFAULT
         && job->state == FLUX_JOB_STATE_NEW
         && job->userid == FLUX_USERID_UNKNOWN
         && job->t_submit == 0
         && job->flags == 0,
-        "job_create set id, priority, userid, and t_submit to expected values");
+        "job_create set id, urgency, userid, and t_submit to expected values");
     ok (!job->alloc_pending
         && !job->free_pending
         && !job->has_resources,
@@ -58,36 +58,36 @@ void test_create (void)
 const char *test_input[] = {
     /* 0 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n",
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n",
 
     /* 1 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
-    "{\"timestamp\":42.3,\"name\":\"admin-priority\","
-     "\"context\":{\"userid\":42,\"priority\":1}}\n",
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.3,\"name\":\"urgency\","
+     "\"context\":{\"userid\":42,\"urgency\":1}}\n",
 
     /* 2 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
      "\"context\":{\"priority\":1}}\n",
 
     /* 3 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
     "{\"timestamp\":42.3,\"name\":\"exception\","
      "\"context\":{\"type\":\"cancel\",\"severity\":0,\"userid\":42}}\n",
 
     /* 4 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
     "{\"timestamp\":42.3,\"name\":\"exception\","
      "\"context\":{\"type\":\"meep\",\"severity\":1,\"userid\":42}}\n",
 
     /* 5 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
      "\"context\":{\"priority\":100}}\n"
@@ -98,7 +98,7 @@ const char *test_input[] = {
 
     /* 7 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"priority\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
      "\"context\":{\"priority\":100}}\n"
@@ -128,32 +128,32 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit) set userid from submit");
     ok (job->flags == 42,
         "job_create_from_eventlog log=(submit) set flags from submit");
-    ok (job->priority == 16,
-        "job_create_from_eventlog log=(submit) set priority from submit");
+    ok (job->urgency == 16,
+        "job_create_from_eventlog log=(submit) set urgency from submit");
     ok (job->t_submit == 42.2,
         "job_create_from_eventlog log=(submit) set t_submit from submit");
     ok (job->state == FLUX_JOB_STATE_DEPEND,
         "job_create_from_eventlog log=(submit) set state=DEPEND");
     job_decref (job);
 
-    /* 1 - submit + admin-priority */
+    /* 1 - submit + urgency */
     job = job_create_from_eventlog (3, test_input[1], "{}");
     if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+admin-pri) failed");
+        BAIL_OUT ("job_create_from_eventlog log=(submit+urgency) failed");
     ok (job->id == 3,
-        "job_create_from_eventlog log=(submit+admin-pri) set id from param");
+        "job_create_from_eventlog log=(submit+urgency) set id from param");
     ok (job->userid == 66,
-        "job_create_from_eventlog log=(submit+admin-pri) set userid from submit");
-    ok (job->priority == 1,
-        "job_create_from_eventlog log=(submit+admin-pri) set priority from admin-priority");
+        "job_create_from_eventlog log=(submit+urgency) set userid from submit");
+    ok (job->urgency == 1,
+        "job_create_from_eventlog log=(submit+urgency) set urgency from urgency");
     ok (job->t_submit == 42.2,
-        "job_create_from_eventlog log=(submit+admin-pri) set t_submit from submit");
+        "job_create_from_eventlog log=(submit+urgency) set t_submit from submit");
     ok (!job->alloc_pending
         && !job->free_pending
         && !job->has_resources,
-        "job_create_from_eventlog log=(submit+admin-pri) set no internal flags");
+        "job_create_from_eventlog log=(submit+urgency) set no internal flags");
     ok (job->state == FLUX_JOB_STATE_DEPEND,
-        "job_create_from_eventlog log=(submit+admin-pri) set state=DEPEND");
+        "job_create_from_eventlog log=(submit+urgency) set state=DEPEND");
     job_decref (job);
 
     /* 2 - submit + depend + priority */
@@ -164,7 +164,7 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit+depend+priority) set id from param");
     ok (job->userid == 66,
         "job_create_from_eventlog log=(submit+depend+priority) set userid from submit");
-    ok (job->priority == 1,
+    ok (job->urgency == 1,
         "job_create_from_eventlog log=(submit+depend+priority) set priority from priority");
     ok (job->t_submit == 42.2,
         "job_create_from_eventlog log=(submit+depend+priority) set t_submit from submit");
@@ -182,8 +182,8 @@ void test_create_from_eventlog (void)
         BAIL_OUT ("job_create_from_eventlog log=(submit+ex0) failed");
     ok (job->userid == 66,
         "job_create_from_eventlog log=(submit+ex0) set userid from submit");
-    ok (job->priority == 16,
-        "job_create_from_eventlog log=(submit+ex0) set priority from submit");
+    ok (job->urgency == 16,
+        "job_create_from_eventlog log=(submit+ex0) set urgency from submit");
     ok (job->t_submit == 42.2,
         "job_create_from_eventlog log=(submit+ex0) set t_submit from submit");
     ok (!job->alloc_pending

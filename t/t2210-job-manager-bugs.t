@@ -37,7 +37,7 @@ test_expect_success 'issue2664: cancel job 1 and drain (cleanup)' '
 '
 
 #
-# Issue 3051 job-manager: segfault on priority change with pending alloc
+# Issue 3051 job-manager: segfault on urgency change with pending alloc
 #
 
 test_expect_success 'issue3051: submit full system job' '
@@ -48,8 +48,8 @@ test_expect_success 'issue3051: submit one more job and wait for alloc' '
 	flux mini submit --flags=debug /bin/true >issue3051.job2 &&
 	flux job wait-event -t 5 $(cat issue3051.job2) debug.alloc-request
 '
-test_expect_success 'issue3051: cannot reprioritize job with pending alloc' '
-	test_must_fail flux job priority $(cat issue3051.job2) 0 2>issue3051.err
+test_expect_success 'issue3051: cannot change urgency of job with pending alloc' '
+	test_must_fail flux job urgency $(cat issue3051.job2) 0 2>issue3051.err
 '
 test_expect_success 'issue3051: human message is reasonable' '
 	grep alloc issue3051.err
@@ -61,13 +61,13 @@ test_expect_success 'issue3051: clean up' '
 '
 
 #
-# Issue 3218 job-manager: segfault when changing priority of running job
+# Issue 3218 job-manager: segfault when changing urgency of running job
 #
 
-test_expect_success 'issue3218: priority change on running job doesnt segfault' '
+test_expect_success 'issue3218: urgency change on running job doesnt segfault' '
         id=$(flux mini submit sleep 600) &&
         flux job wait-event $id start &&
-        test_must_fail flux job priority $id 0 &&
+        test_must_fail flux job urgency $id 0 &&
         flux job cancel $id
 '
 

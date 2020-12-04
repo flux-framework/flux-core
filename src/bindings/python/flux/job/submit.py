@@ -25,7 +25,7 @@ class SubmitFuture(Future):
 def submit_async(
     flux_handle,
     jobspec,
-    priority=lib.FLUX_JOB_ADMIN_PRIORITY_DEFAULT,
+    urgency=lib.FLUX_JOB_URGENCY_DEFAULT,
     waitable=False,
     debug=False,
     pre_signed=False,
@@ -39,10 +39,10 @@ def submit_async(
     :type flux_handle: Flux
     :param jobspec: jobspec defining the job request
     :type jobspec: Jobspec or its string encoding
-    :param priority: job priority 0 (lowest) through 31 (highest)
+    :param urgency: job urgency 0 (lowest) through 31 (highest)
         (default is 16).  Priorities 0 through 15 are restricted to
         the instance owner.
-    :type priority: int
+    :type urgency: int
     :param waitable: allow result to be fetched with job.wait()
         (default is False).  Waitable=True is restricted to the
         instance owner.
@@ -64,7 +64,7 @@ def submit_async(
         flags |= constants.FLUX_JOB_DEBUG
     if pre_signed:
         flags |= constants.FLUX_JOB_PRE_SIGNED
-    future_handle = RAW.submit(flux_handle, jobspec, priority, flags)
+    future_handle = RAW.submit(flux_handle, jobspec, urgency, flags)
     return SubmitFuture(future_handle)
 
 
@@ -92,7 +92,7 @@ def submit_get_id(future):
 def submit(
     flux_handle,
     jobspec,
-    priority=lib.FLUX_JOB_ADMIN_PRIORITY_DEFAULT,
+    urgency=lib.FLUX_JOB_URGENCY_DEFAULT,
     waitable=False,
     debug=False,
     pre_signed=False,
@@ -105,10 +105,10 @@ def submit(
     :type flux_handle: Flux
     :param jobspec: jobspec defining the job request
     :type jobspec: Jobspec or its string encoding
-    :param priority: job priority 0 (lowest) through 31 (highest)
+    :param urgency: job urgency 0 (lowest) through 31 (highest)
         (default is 16).  Priorities 0 through 15 are restricted to
         the instance owner.
-    :type priority: int
+    :type urgency: int
     :param waitable: allow result to be fetched with job.wait()
         (default is False).  Waitable=true is restricted to the
         instance owner.
@@ -122,5 +122,5 @@ def submit(
     :returns: job ID
     :rtype: int
     """
-    future = submit_async(flux_handle, jobspec, priority, waitable, debug, pre_signed)
+    future = submit_async(flux_handle, jobspec, urgency, waitable, debug, pre_signed)
     return future.get_id()

@@ -85,7 +85,7 @@ static int attr_get_u32 (flux_t *h, const char *name, uint32_t *val)
 
 #endif
 
-flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int priority,
+flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int urgency,
                                 int flags)
 {
     flux_future_t *f = NULL;
@@ -131,7 +131,7 @@ flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int priority,
     if (!(f = flux_rpc_pack (h, "job-ingest.submit", FLUX_NODEID_ANY, 0,
                              "{s:s s:i s:i}",
                              "J", J,
-                             "priority", priority,
+                             "urgency", urgency,
                              "flags", flags)))
         goto error;
     return f;
@@ -357,7 +357,7 @@ flux_future_t *flux_job_kill (flux_t *h, flux_jobid_t id, int signum)
                              "signum", signum);
 }
 
-flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority)
+flux_future_t *flux_job_set_urgency (flux_t *h, flux_jobid_t id, int urgency)
 {
     flux_future_t *f;
 
@@ -365,10 +365,10 @@ flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority)
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-manager.priority", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h, "job-manager.urgency", FLUX_NODEID_ANY, 0,
                              "{s:I s:i}",
                              "id", id,
-                             "priority", priority)))
+                             "urgency", urgency)))
         return NULL;
     return f;
 }

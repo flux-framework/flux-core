@@ -21,7 +21,7 @@
 #include "raise.h"
 #include "kill.h"
 #include "list.h"
-#include "priority.h"
+#include "urgency.h"
 #include "alloc.h"
 #include "start.h"
 #include "event.h"
@@ -95,8 +95,8 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "job-manager.priority",
-        priority_handle_request,
+        "job-manager.urgency",
+        urgency_handle_request,
         FLUX_ROLE_USER
     },
     {

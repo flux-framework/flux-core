@@ -185,24 +185,24 @@ test_expect_success 'flux-job: id fails on bad words input' '
 	test_must_fail flux job id bad-words
 '
 
-test_expect_success 'flux-job: priority fails with bad FLUX_URI' '
-	! FLUX_URI=/wrong flux job priority ${validjob} 0
+test_expect_success 'flux-job: urgency fails with bad FLUX_URI' '
+	! FLUX_URI=/wrong flux job urgency ${validjob} 0
 '
 
-test_expect_success 'flux-job: priority fails with non-numeric jobid' '
-	test_must_fail flux job priority foo 0
+test_expect_success 'flux-job: urgency fails with non-numeric jobid' '
+	test_must_fail flux job urgency foo 0
 '
 
-test_expect_success 'flux-job: priority fails with wrong number of arguments' '
-	test_must_fail flux job priority ${validjob}
+test_expect_success 'flux-job: urgency fails with wrong number of arguments' '
+	test_must_fail flux job urgency ${validjob}
 '
 
-test_expect_success 'flux-job: priority fails with non-numeric priority' '
-	test_must_fail flux job priority ${validjob} foo
+test_expect_success 'flux-job: urgency fails with non-numeric urgency' '
+	test_must_fail flux job urgency ${validjob} foo
 '
 
-test_expect_success 'job-manager: flux job priority fails on invalid jobid' '
-	test_must_fail flux job priority 12345 31
+test_expect_success 'job-manager: flux job urgency fails on invalid jobid' '
+	test_must_fail flux job urgency 12345 31
 '
 
 test_expect_success 'flux-job: raise fails with bad FLUX_URI' '

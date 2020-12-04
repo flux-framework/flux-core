@@ -47,10 +47,10 @@ wait_jobid_state() {
 # - the second loop of job submissions are intended to eat up all resources
 # - the last job submissions are intended to get a create a set of
 #   pending jobs, because jobs from the second loop have taken all resources
-#   - we desire pending jobs sorted in priority order, so we need to
+#   - we desire pending jobs sorted in urgency order, so we need to
 #   create the sorted list for comparison later.
 # - job ids are stored in files in the order we expect them to be listed
-#   - pending jobs - by priority (highest first), job id (smaller first)
+#   - pending jobs - by urgency (highest first), job id (smaller first)
 #   - running jobs - by start time (most recent first)
 #   - inactive jobs - by completion time (most recent first)
 #
@@ -123,16 +123,16 @@ test_expect_success 'submit jobs for job list testing' '
         done &&
         tac runningids | flux job id > running.ids &&
         #
-        #  Submit a set of jobs with misc priorities
+        #  Submit a set of jobs with misc urgencies
         #
-        id1=$(flux job submit -p20 hostname.json) &&
+        id1=$(flux job submit -u20 hostname.json) &&
         id2=$(flux job submit      hostname.json) &&
-        id3=$(flux job submit -p31 hostname.json) &&
-        id4=$(flux job submit -p0  hostname.json) &&
-        id5=$(flux job submit -p20 hostname.json) &&
+        id3=$(flux job submit -u31 hostname.json) &&
+        id4=$(flux job submit -u0  hostname.json) &&
+        id5=$(flux job submit -u20 hostname.json) &&
         id6=$(flux job submit      hostname.json) &&
-        id7=$(flux job submit -p31 hostname.json) &&
-        id8=$(flux job submit -p0  hostname.json) &&
+        id7=$(flux job submit -u31 hostname.json) &&
+        id8=$(flux job submit -u0  hostname.json) &&
         flux job id $id3 > pending.ids &&
         flux job id $id7 >> pending.ids &&
         flux job id $id1 >> pending.ids &&
@@ -170,13 +170,13 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
 # state since we happen to know all these jobs are in the "sched"
 # state given checks above
 
-test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
+test_expect_success HAVE_JQ 'flux job list pending jobs in urgency order' '
         flux job list -s pending | jq .id > list_pending.out &&
         test_cmp list_pending.out pending.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
-        cat >list_priority.exp <<-EOT &&
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct urgency' '
+        cat >list_urgency.exp <<-EOT &&
 31
 31
 20
@@ -186,16 +186,16 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
 0
 0
 EOT
-        flux job list -s pending | jq .priority > list_priority.out &&
-        test_cmp list_priority.out list_priority.exp
+        flux job list -s pending | jq .urgency > list_urgency.out &&
+        test_cmp list_urgency.out list_urgency.exp
 '
 
-test_expect_success HAVE_JQ 'change a job priority' '
+test_expect_success HAVE_JQ 'change a job urgency' '
         jobid=`head -n 1 pending.ids` &&
-        flux job priority ${jobid} 1
+        flux job urgency ${jobid} 1
 '
 
-test_expect_success HAVE_JQ 'wait for job-info to see job priority change' '
+test_expect_success HAVE_JQ 'wait for job-info to see job urgency change' '
         jobidhead=`head -n 6 pending.ids | tail -n 5 > pending_after.ids` &&
         jobidchange=`head -n 1 pending.ids >> pending_after.ids` &&
         jobidend=`tail -n2 pending.ids >> pending_after.ids` &&
@@ -212,8 +212,8 @@ test_expect_success HAVE_JQ 'wait for job-info to see job priority change' '
         test_cmp list_pending_after.out pending_after.ids
 '
 
-test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
-        cat >list_priority_after.exp <<-EOT &&
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct urgency' '
+        cat >list_urgency_after.exp <<-EOT &&
 31
 20
 20
@@ -223,8 +223,8 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
 0
 0
 EOT
-        flux job list -s pending | jq .priority > list_priority_after.out &&
-        test_cmp list_priority_after.out list_priority_after.exp
+        flux job list -s pending | jq .urgency > list_urgency_after.out &&
+        test_cmp list_urgency_after.out list_urgency_after.exp
 '
 
 test_expect_success 'cleanup job listing jobs ' '

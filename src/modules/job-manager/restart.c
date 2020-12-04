@@ -214,7 +214,7 @@ int restart_from_kvs (struct job_manager *ctx)
         return -1;
     flux_log (ctx->h, LOG_INFO, "restart: %d jobs", count);
     /* Post flux-restart to any jobs in SCHED state, so they may
-     * transition back to PRIORITY and re-obtain the queue priority.
+     * transition back to PRIORITY and re-obtain the priority.
      *
      * Initialize the count of "running" jobs
      */

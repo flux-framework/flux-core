@@ -45,7 +45,7 @@ int submit_add_one_job (zhashx_t *active_jobs, zlist_t *newjobs, json_t *o)
         return -1;
     if (json_unpack (o, "{s:I s:i s:i s:f s:i s:O}",
                         "id", &job->id,
-                        "priority", &job->priority,
+                        "urgency", &job->urgency,
                         "userid", &job->userid,
                         "t_submit", &job->t_submit,
                         "flags", &job->flags,
@@ -127,7 +127,7 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
                                  "submit",
                                  "{ s:i s:i s:i }",
                                  "userid", job->userid,
-                                 "priority", job->priority,
+                                 "urgency", job->urgency,
                                  "flags", job->flags);
     if (!entry)
         goto error;

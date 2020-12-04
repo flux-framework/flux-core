@@ -149,8 +149,8 @@ The field names that can be specified are:
 **username**
    job submitter's username
 
-**priority**
-   job priority
+**urgency**
+   job urgency
 
 **status**
    job status (PENDING, RUNNING, COMPLETED, FAILED, or CANCELLED)

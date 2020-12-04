@@ -165,8 +165,8 @@ class MiniCmd:
             help="Time limit in Flux standard duration, e.g. 2d, 1.5h",
         )
         parser.add_argument(
-            "--priority",
-            help="Set job priority (0-31, default=16)",
+            "--urgency",
+            help="Set job urgency (0-31, default=16)",
             type=int,
             metavar="N",
             default=16,
@@ -351,7 +351,7 @@ class MiniCmd:
         jobid = job.submit(
             flux_handle,
             jobspec.dumps(),
-            priority=args.priority,
+            urgency=args.urgency,
             waitable=arg_waitable,
             debug=arg_debug,
         )

@@ -25,10 +25,10 @@ enum job_submit_flags {
     FLUX_JOB_WAITABLE = 4,      // flux_job_wait() will be used on this job
 };
 
-enum job_admin_priority {
-    FLUX_JOB_ADMIN_PRIORITY_MIN = 0,
-    FLUX_JOB_ADMIN_PRIORITY_DEFAULT = 16,
-    FLUX_JOB_ADMIN_PRIORITY_MAX = 31,
+enum job_urgency {
+    FLUX_JOB_URGENCY_MIN = 0,
+    FLUX_JOB_URGENCY_DEFAULT = 16,
+    FLUX_JOB_URGENCY_MAX = 31,
 };
 
 enum {
@@ -93,12 +93,12 @@ int flux_job_strtoresult (const char *s, flux_job_result_t *result);
 
 /* Submit a job to the system.
  * 'jobspec' should be RFC 14 jobspec.
- * 'priority' should be a value from 0 to 31 (16 if not instance owner).
+ * 'urgency' should be a value from 0 to 31 (16 if not instance owner).
  * 'flags' should be 0 for now.
  * The system assigns a jobid and returns it in the response.
  */
 flux_future_t *flux_job_submit (flux_t *h, const char *jobspec,
-                                int priority, int flags);
+                                int urgency, int flags);
 
 /* Parse jobid from response to flux_job_submit() request.
  * Returns 0 on success, -1 on failure with errno set - and an extended
@@ -170,9 +170,9 @@ flux_future_t *flux_job_cancel (flux_t *h, flux_jobid_t id, const char *reason);
  */
 flux_future_t *flux_job_kill (flux_t *h, flux_jobid_t id, int signum);
 
-/* Change job priority.
+/* Change job urgency.
  */
-flux_future_t *flux_job_set_priority (flux_t *h, flux_jobid_t id, int priority);
+flux_future_t *flux_job_set_urgency (flux_t *h, flux_jobid_t id, int urgency);
 
 /* Write KVS path to 'key' relative to job directory for job 'id'.
  * If key=NULL, write the job directory.

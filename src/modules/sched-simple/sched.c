@@ -299,7 +299,7 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
                             (uintmax_t) job->id, job->jj.nnodes,
                             job->jj.nslots, job->jj.slot_size,
                             job->jj.duration);
-    search_dir = job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT;
+    search_dir = job->priority > FLUX_JOB_URGENCY_DEFAULT;
     job->handle = zlistx_insert (ss->queue,
                                  job,
                                  search_dir);

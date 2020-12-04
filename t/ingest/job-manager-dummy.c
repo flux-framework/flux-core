@@ -45,7 +45,7 @@ static void commit_continuation (flux_future_t *f, void *arg)
  */
 static char *create_eventlog_entry (json_t *job)
 {
-    int priority;
+    int urgency;
     flux_jobid_t id;
     uint32_t userid;
     double t_submit;
@@ -55,12 +55,12 @@ static char *create_eventlog_entry (json_t *job)
 
     if (json_unpack (job, "{s:I s:i s:i s:f}", "id", &id,
                                                "userid", &userid,
-                                               "priority", &priority,
+                                               "urgency", &urgency,
                                                "t_submit", &t_submit) < 0)
         goto error_inval;
     if (!(entry = eventlog_entry_pack (0., "submit", "{ s:I s:i s:i s:f }",
                                        "id", id,
-                                       "priority", priority,
+                                       "urgency", urgency,
                                        "userid", userid,
                                        "t_submit", t_submit)))
         goto error;

@@ -38,8 +38,8 @@ job_manager_la_SOURCES = \
 	start.c \
 	list.h \
 	list.c \
-	priority.h \
-	priority.c \
+	urgency.h \
+	urgency.c \
 	annotate.h \
 	annotate.c \
 	journal.h \

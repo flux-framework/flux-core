@@ -98,7 +98,7 @@ struct job {
     const flux_msg_t *msg; // submit request message
     const char *J;      // signed jobspec
     struct flux_msg_cred cred;    // submitting user's creds
-    int priority;       // requested job priority
+    int urgency;        // requested job urgency
     int flags;          // submit flags
 
     char *jobspec;      // jobspec, not \0 terminated (unwrapped from signed)
@@ -179,7 +179,7 @@ static struct job *job_create (const flux_msg_t *msg,
     job->msg = flux_msg_incref (msg);
     if (flux_request_unpack (job->msg, NULL, "{s:s s:i s:i}",
                              "J", &job->J,
-                             "priority", &job->priority,
+                             "urgency", &job->urgency,
                              "flags", &job->flags) < 0)
         goto error;
     if (flux_msg_get_cred (job->msg, &job->cred) < 0)
@@ -431,7 +431,7 @@ static int batch_add_job (struct batch *batch, struct job *job)
     entry = eventlog_entry_pack (0., "submit",
                                  "{ s:i s:i s:i }",
                                  "userid", job->cred.userid,
-                                 "priority", job->priority,
+                                 "urgency", job->urgency,
                                  "flags", job->flags);
     if (!entry)
         goto error;
@@ -448,7 +448,7 @@ static int batch_add_job (struct batch *batch, struct job *job)
     if (!(jobentry = json_pack ("{s:I s:i s:i s:f s:i, s:O}",
                                 "id", job->id,
                                 "userid", job->cred.userid,
-                                "priority", job->priority,
+                                "urgency", job->urgency,
                                 "t_submit", t,
                                 "flags", job->flags,
                                 "jobspec", job->jobspec_obj)))
@@ -546,21 +546,21 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
      */
     if (valid_flags (job->flags) < 0)
         goto error;
-    /* Validate requested job priority.
+    /* Validate requested job urgency.
      */
-    if (job->priority < FLUX_JOB_ADMIN_PRIORITY_MIN
-            || job->priority > FLUX_JOB_ADMIN_PRIORITY_MAX) {
-        snprintf (errbuf, sizeof (errbuf), "priority range is [%d:%d]",
-                  FLUX_JOB_ADMIN_PRIORITY_MIN, FLUX_JOB_ADMIN_PRIORITY_MAX);
+    if (job->urgency < FLUX_JOB_URGENCY_MIN
+            || job->urgency > FLUX_JOB_URGENCY_MAX) {
+        snprintf (errbuf, sizeof (errbuf), "urgency range is [%d:%d]",
+                  FLUX_JOB_URGENCY_MIN, FLUX_JOB_URGENCY_MAX);
         errmsg = errbuf;
         errno = EINVAL;
         goto error;
     }
     if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
-           && job->priority > FLUX_JOB_ADMIN_PRIORITY_DEFAULT) {
+           && job->urgency > FLUX_JOB_URGENCY_DEFAULT) {
         snprintf (errbuf, sizeof (errbuf),
-                  "only the instance owner can submit with priority >%d",
-                  FLUX_JOB_ADMIN_PRIORITY_DEFAULT);
+                  "only the instance owner can submit with urgency >%d",
+                  FLUX_JOB_URGENCY_DEFAULT);
         errmsg = errbuf;
         errno = EINVAL;
         goto error;
