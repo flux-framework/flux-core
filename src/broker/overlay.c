@@ -69,9 +69,6 @@ struct overlay {
     overlay_sock_cb_f child_cb;
     void *child_arg;
 
-    zsock_t *child_monitor_sock;
-    flux_watcher_t *child_monitor_w;
-    int child_peer_count;
     overlay_monitor_cb_f child_monitor_cb;
     void *child_monitor_arg;
 
@@ -87,6 +84,12 @@ struct overlay {
     for ((child) = &(ov)->children[0]; \
             (child) - &(ov)->children[0] < (ov)->child_count; \
             (child)++)
+
+static void overlay_monitor_notify (struct overlay *ov)
+{
+    if (ov->child_monitor_cb)
+        ov->child_monitor_cb (ov, ov->child_monitor_arg);
+}
 
 static void endpoint_destroy (struct endpoint *ep)
 {
@@ -175,7 +178,14 @@ uint32_t overlay_get_size (struct overlay *ov)
 
 int overlay_get_child_peer_count (struct overlay *ov)
 {
-    return ov->child_peer_count;
+    struct child *child;
+    int count = 0;
+
+    foreach_overlay_child (ov, child) {
+        if (child->connected)
+            count++;
+    }
+    return count;
 }
 
 void overlay_set_idle_warning (struct overlay *ov, int heartbeats)
@@ -211,7 +221,10 @@ void overlay_checkin_child (struct overlay *ov, const char *uuid)
     foreach_overlay_child (ov, child) {
         if (!strcmp (uuid, child->uuid)) {
             child->lastseen = ov->epoch;
-            child->connected = true;
+            if (!child->connected) {
+                child->connected = true;
+                overlay_monitor_notify (ov);
+            }
             break;
         }
     }
@@ -341,10 +354,8 @@ static int overlay_mcast_child_one (void *zsock,
         goto done;
     if (flux_msg_push_route (cpy, child->uuid) < 0)
         goto done;
-    if (flux_msg_sendzsock_ex (zsock, cpy, true) < 0) {
-        if (errno != EHOSTUNREACH) // a child has disconnected - not an error
-            goto done;
-    }
+    if (flux_msg_sendzsock_ex (zsock, cpy, true) < 0)
+        goto done;
     rc = 0;
 done:
     flux_msg_destroy (cpy);
@@ -356,6 +367,7 @@ int overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
     struct child *child;
     int first_errno;
     int failures = 0;
+    int disconnects = 0;
 
     if (!ov->child || !ov->child->zs)
         return 0;
@@ -365,6 +377,7 @@ int overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
         if (overlay_mcast_child_one (ov->child->zs, msg, child) < 0) {
             if (errno == EHOSTUNREACH) {
                 child->connected = false;
+                disconnects++;
                 continue;
             }
             if (failures == 0)
@@ -372,74 +385,13 @@ int overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
             failures++;
         }
     }
+    if (disconnects)
+        overlay_monitor_notify (ov);
+
     if (failures > 0) {
         errno = first_errno;
         return -1;
     }
-    return 0;
-}
-
-/* Handle notification of peer connect/disconnect on child monitor socket.
- * Maintain ov->child_peer_count, accessed via overlay_get_child_peer_count().
- * Call a callback, if any, when the count changes.
- * N.B. Assumes monitor protocol in libzmq >= 4.0 (assured by build system)
- */
-static void child_monitor_cb (flux_reactor_t *r,
-                              flux_watcher_t *w,
-                              int revents,
-                              void *arg)
-{
-    struct overlay *ov = arg;
-    zframe_t *zf;
-    uint16_t event;
-
-    if (!(zf = zframe_recv (ov->child_monitor_sock)))
-        return; // spurious wakeup?
-    event = *(uint16_t *)zframe_data (zf);
-    zframe_destroy (&zf);
-
-    if (!(zf = zframe_recv (ov->child_monitor_sock))) {
-        log_msg ("zmq_socket_monitor: expected frame 2!");
-        return;
-    }
-    zframe_destroy (&zf);
-    if (event & ZMQ_EVENT_ACCEPTED)
-        ov->child_peer_count++;
-    if (event & ZMQ_EVENT_DISCONNECTED)
-        ov->child_peer_count--;
-    if (ov->child_monitor_cb)
-        ov->child_monitor_cb (ov, ov->child_monitor_arg);
-}
-
-/* Monitor child socket.
- * This creates a new socket that receives control messages when downstream
- * peers connect/disconnect.  Set up a watcher to capture these messages and
- * maintain a connected peer count.
- */
-static int child_monitor_init (struct overlay *ov, struct endpoint *ep)
-{
-    const char *uri = "inproc://monitor-child";
-    flux_reactor_t *r = flux_get_reactor (ov->h);
-
-    if (zmq_socket_monitor (zsock_resolve (ep->zs),
-                            uri,
-                            ZMQ_EVENT_ACCEPTED | ZMQ_EVENT_DISCONNECTED) < 0) {
-        log_err ("zmq_socket_monitor");
-        return -1;
-    }
-    if (!(ov->child_monitor_sock = zsock_new_pair (uri))) {
-        log_err ("zsock_new_pair");
-        return -1;
-    }
-    if (!(ov->child_monitor_w = flux_zmq_watcher_create (r,
-                                                         ov->child_monitor_sock,
-                                                         FLUX_POLLIN,
-                                                         child_monitor_cb,
-                                                         ov))) {
-        log_err ("flux_zmq_watcher_create");
-        return -1;
-    }
-    flux_watcher_start (ov->child_monitor_w);
     return 0;
 }
 
@@ -460,8 +412,6 @@ static int bind_child (struct overlay *ov, struct endpoint *ep)
         log_err ("zsock_new_router");
         return -1;
     }
-    if (child_monitor_init (ov, ep) < 0)
-        return -1;
     zsock_set_router_mandatory (ep->zs, 1);
     if (zsecurity_ssockinit (ov->sec, ep->zs) < 0) {
         log_msg ("zsecurity_ssockinit: %s", zsecurity_errstr (ov->sec));
@@ -693,9 +643,6 @@ void overlay_destroy (struct overlay *ov)
             zsecurity_destroy (ov->sec);
         if (ov->h)
             (void)flux_event_unsubscribe (ov->h, "hb");
-
-        flux_watcher_destroy (ov->child_monitor_w);
-        zsock_destroy (&ov->child_monitor_sock);
 
         flux_msg_handler_delvec (ov->handlers);
         endpoint_destroy (ov->parent);
