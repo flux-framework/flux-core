@@ -1488,6 +1488,7 @@ static void child_cb (struct overlay *ov, void *sock, void *arg)
     int type;
     char *uuid = NULL;
     flux_msg_t *msg = flux_msg_recvzsock (sock);
+    int status = KEEPALIVE_STATUS_NORMAL;
 
     if (!msg)
         goto done;
@@ -1495,9 +1496,13 @@ static void child_cb (struct overlay *ov, void *sock, void *arg)
         goto done;
     if (flux_msg_get_route_last (msg, &uuid) < 0)
         goto done;
-    overlay_checkin_child (ctx->overlay, uuid);
+    if (type != FLUX_MSGTYPE_KEEPALIVE)
+        overlay_keepalive_child (ctx->overlay, uuid, status);
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
+            if (flux_keepalive_decode (msg, NULL, &status) < 0)
+                goto done;
+            overlay_keepalive_child (ctx->overlay, uuid, status);
             break;
         case FLUX_MSGTYPE_REQUEST:
             broker_request_sendmsg (ctx, msg);

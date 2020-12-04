@@ -14,6 +14,11 @@
 #include "attr.h"
 #include "src/common/libutil/zsecurity.h"
 
+enum {
+    KEEPALIVE_STATUS_NORMAL = 0,
+    KEEPALIVE_STATUS_DISCONNECT = 1,
+};
+
 struct overlay;
 
 typedef void (*overlay_sock_cb_f)(struct overlay *ov, void *sock, void *arg);
@@ -67,8 +72,9 @@ int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
 void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg);
 
 /* Call when message is received from child 'uuid'.
+ * If message was a keepalive, update 'status', otherwise set to zero.
  */
-void overlay_checkin_child (struct overlay *ov, const char *uuid);
+void overlay_keepalive_child (struct overlay *ov, const char *uuid, int status);
 
 /* Register callback that will be called each time a child connects/disconnects.
  * Use overlay_get_child_peer_count() to access the actual count.

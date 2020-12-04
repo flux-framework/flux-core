@@ -214,19 +214,32 @@ void overlay_log_idle_children (struct overlay *ov)
     }
 }
 
-void overlay_checkin_child (struct overlay *ov, const char *uuid)
+static struct child *child_lookup (struct overlay *ov, const char *uuid)
 {
     struct child *child;
 
     foreach_overlay_child (ov, child) {
-        if (!strcmp (uuid, child->uuid)) {
-            child->lastseen = ov->epoch;
-            if (!child->connected) {
-                child->connected = true;
-                overlay_monitor_notify (ov);
-            }
-            break;
-        }
+        if (!strcmp (uuid, child->uuid))
+            return child;
+    }
+    return NULL;
+}
+
+void overlay_keepalive_child (struct overlay *ov, const char *uuid, int status)
+{
+    struct child *child = child_lookup (ov, uuid);
+
+    if (child) {
+        bool prev_value = child->connected;
+
+        if (status == KEEPALIVE_STATUS_NORMAL)
+            child->connected = true;
+        else // status == KEEPALIVE_STATUS_DISCONNECT
+            child->connected = false;
+        child->lastseen = ov->epoch;
+
+        if (child->connected != prev_value)
+            overlay_monitor_notify (ov);
     }
 }
 
@@ -265,15 +278,14 @@ done:
     return rc;
 }
 
-static int overlay_keepalive_parent (struct overlay *ov)
+static int overlay_keepalive_parent (struct overlay *ov, int status)
 {
-    int idle = ov->epoch - ov->parent_lastsent;
     flux_msg_t *msg = NULL;
     int rc = -1;
 
-    if (!ov->parent || !ov->parent->zs || idle <= 1)
+    if (!ov->parent || !ov->parent->zs)
         return 0;
-    if (!(msg = flux_keepalive_encode (0, 0)))
+    if (!(msg = flux_keepalive_encode (0, status)))
         goto done;
     if (flux_msg_enable_route (msg) < 0)
         goto done;
@@ -292,7 +304,9 @@ static void heartbeat_cb (flux_t *h,
 
     if (flux_heartbeat_decode (msg, &ov->epoch) < 0)
         return;
-    overlay_keepalive_parent (ov);
+
+    if (ov->epoch - ov->parent_lastsent > 1)
+        overlay_keepalive_parent (ov, KEEPALIVE_STATUS_NORMAL);
     overlay_log_idle_children (ov);
 }
 
@@ -637,6 +651,7 @@ void overlay_destroy (struct overlay *ov)
             (void)flux_event_unsubscribe (ov->h, "hb");
 
         flux_msg_handler_delvec (ov->handlers);
+        overlay_keepalive_parent (ov, KEEPALIVE_STATUS_DISCONNECT);
         endpoint_destroy (ov->parent);
         endpoint_destroy (ov->child);
         free (ov->children);
