@@ -47,7 +47,7 @@ test_expect_success HAVE_JQ 'job-exec: job as guest tries to run IMP' '
 	flux job attach ${id} &&
 	flux job list-ids ${id} > ${id}.json &&
 	jq -e ".userid == 42" < ${id}.json &&
-	flux dmesg | grep "test-imp: Running.*$(flux job id ${id})"
+	flux job attach ${id} 2>&1 | grep "test-imp: Running.*$(flux job id ${id})"
 '
 test_expect_success HAVE_JQ 'job-exec: large jobspec does not get truncated' '
 	( FAKE_USERID=42 &&

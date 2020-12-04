@@ -37,10 +37,11 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 
+#include "src/common/libeventlog/eventlogger.h"
+
 #include "info.h"
 #include "internal.h"
 #include "builtins.h"
-#include "eventlogger.h"
 
 struct evlog {
     int sync_mode;
@@ -94,7 +95,10 @@ static void evlog_unref (struct eventlogger *ev, void *arg)
     flux_shell_remove_completion_ref (evlog->shell, "eventlogger.txn");
 }
 
-static void evlog_error (struct eventlogger *ev, int errnum, json_t *entry)
+static void evlog_error (struct eventlogger *ev,
+                         void *arg,
+                         int errnum,
+                         json_t *entry)
 {
     const char *msg;
     if (json_unpack (entry, "{s:{s:s}}",

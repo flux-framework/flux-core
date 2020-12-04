@@ -146,14 +146,17 @@ static void complete_cb (struct bulk_exec *exec, void *arg)
 static void output_cb (struct bulk_exec *exec, flux_subprocess_t *p,
                        const char *stream,
                        const char *data,
-                       int data_len,
+                       int len,
                        void *arg)
 {
     struct jobinfo *job = arg;
-    flux_log (job->h, LOG_INFO, "%ju: %d: %s: %s",
-                      (uintmax_t) job->id,
-                      flux_subprocess_rank (p),
-                      stream, data);
+    const char *cmd = flux_cmd_arg (flux_subprocess_get_cmd (p), 0);
+    jobinfo_log_output (job,
+                        flux_subprocess_rank (p),
+                        basename (cmd),
+                        stream,
+                        data,
+                        len);
 }
 
 static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
@@ -327,13 +330,6 @@ static int exec_cancel (struct jobinfo *job)
     return bulk_exec_cancel (exec);
 }
 
-static int exec_cleanup (struct jobinfo *job, const struct idset *idset)
-{
-    /* No epilog supported */
-    jobinfo_cleanup_complete (job, idset, 0);
-    return 0;
-}
-
 static void exec_exit (struct jobinfo *job)
 {
     struct bulk_exec *exec = job->data;
@@ -399,7 +395,6 @@ struct exec_implementation bulkexec = {
     .start =    exec_start,
     .kill =     exec_kill,
     .cancel =   exec_cancel,
-    .cleanup =  exec_cleanup
 };
 
 /* vi: ts=4 sw=4 expandtab

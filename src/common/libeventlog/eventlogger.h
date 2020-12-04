@@ -8,9 +8,10 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef FLUX_SHELL_EVENTLOGGER_H
-#define FLUX_SHELL_EVENTLOGGER_H
+#ifndef HAVE_FLUX_EVENTLOGGER_H
+#define HAVE_FLUX_EVENTLOGGER_H
 
+#include <stdarg.h>
 #include <flux/core.h>
 #include <jansson.h>
 
@@ -22,6 +23,7 @@ struct eventlogger;
 
 typedef void (*eventlogger_state_f) (struct eventlogger *ev, void *arg);
 typedef void (*eventlogger_err_f) (struct eventlogger *ev,
+                                   void *arg,
                                    int err,
                                    json_t *entry);
 
@@ -45,6 +47,10 @@ struct eventlogger *eventlogger_create (flux_t *h,
                                         struct eventlogger_ops *ops,
                                         void *arg);
 
+/*  Set eventlogger namespace
+ */
+int eventlogger_setns (struct eventlogger *ev, const char *ns);
+
 void eventlogger_destroy (struct eventlogger *ev);
 
 int eventlogger_append (struct eventlogger *ev,
@@ -58,12 +64,27 @@ int eventlogger_append_entry (struct eventlogger *ev,
                               const char *path,
                               json_t *entry);
 
+int eventlogger_append_vpack (struct eventlogger *ev,
+                              int flags,
+                              const char *path,
+                              const char *name,
+                              const char *fmt,
+                              va_list ap);
+
+int eventlogger_append_pack (struct eventlogger *ev,
+                             int flags,
+                             const char *path,
+                             const char *name,
+                             const char *fmt, ...);
+
 int eventlogger_set_commit_timeout (struct eventlogger *ev, double timeout);
 
 int eventlogger_flush (struct eventlogger *ev);
+
+flux_future_t *eventlogger_commit (struct eventlogger *ev);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* !FLUX_SHELL_EVENTLOGGER_H */
+#endif /* !HAVE_FLUX_EVENTLOGGER_H */

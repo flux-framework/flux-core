@@ -21,7 +21,7 @@
 
 #include <flux/shell.h>
 
-#include "eventlogger.h"
+#include "src/common/libeventlog/eventlogger.h"
 
 struct shell_eventlogger {
     flux_shell_t *shell;

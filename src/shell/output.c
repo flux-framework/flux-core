@@ -50,13 +50,13 @@
 
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libioencode/ioencode.h"
 
 #include "task.h"
 #include "svc.h"
 #include "internal.h"
 #include "builtins.h"
-#include "eventlogger.h"
 #include "log.h"
 #include "mustache.h"
 

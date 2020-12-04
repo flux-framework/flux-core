@@ -4,7 +4,6 @@
 #
 #  Uses GH Workflow commands for GH Actions
 #
-
 error() {
     printf "::error::$@\n"
 }
@@ -16,7 +15,7 @@ catfile() {
     fi
 }
 catfile_error() {
-    error "Found $1\n"
+    error "Found $1"
     catfile $1
 }
 annotate_test_log() {
@@ -78,6 +77,8 @@ rm $logfile
 #  Find and emit all *.asan.* files from test:
 #
 export -f catfile_error
+export -f catfile
+export -f error
 find . -name *.asan.* | xargs -i bash -c 'catfile_error {}'
 
 
@@ -88,7 +89,7 @@ ls -1 t/*.t | sort >/tmp/expected
 ls -1 t/*.trs | sed 's/rs$//' | sort >/tmp/actual
 comm -23 /tmp/expected /tmp/actual > missing
 if test -s missing; then
-    error "Detected $(wc -l missing) missing tests:\n"
+    error "Detected $(wc -l missing) missing tests:"
     for f in $(cat missing); do
         printf "$f\n"
         file=${f//.t}

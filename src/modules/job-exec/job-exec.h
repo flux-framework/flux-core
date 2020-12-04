@@ -42,7 +42,6 @@ struct jobinfo;
  *
  *   - cancel:  cancel any pending work (i.e. shells yet to be executed)
  *
- *   - cleanup: Initiate any cleanup (epilog) on ranks.
  */
 struct exec_implementation {
     const char *name;
@@ -52,7 +51,6 @@ struct exec_implementation {
     int  (*start)   (struct jobinfo *job);
     int  (*kill)    (struct jobinfo *job, int signum);
     int  (*cancel)  (struct jobinfo *job);
-    int  (*cleanup) (struct jobinfo *job, const struct idset *ranks);
 };
 
 /*  Exec job information */
@@ -77,6 +75,8 @@ struct jobinfo {
     uint8_t               finalizing:1;  /* in process of cleanup */
 
     int                   wait_status;
+
+    struct eventlogger *  ev;           /* event batcher */
 
     double                kill_timeout; /* grace time between sigterm,kill */
     flux_watcher_t       *kill_timer;
@@ -109,18 +109,19 @@ void jobinfo_tasks_complete (struct jobinfo *job,
                              const struct idset *ranks,
                              int wait_status);
 
-/* Notify job-exec that ranks in idset `ranks` have finished epilog,
- *  and resources can be released
- */
-void jobinfo_cleanup_complete (struct jobinfo *job,
-                               const struct idset *ranks,
-                               int rc);
-
-
-/* Notify job-exec of fatal error. Triggers kill/cleanup.
+/* Notify job-exec of fatal error. Triggers kill/finalize.
  */
 void jobinfo_fatal_error (struct jobinfo *job, int errnum,
                           const char *fmt, ...);
+
+/* Append a log output message to exec.eventlog for job
+ */
+void jobinfo_log_output (struct jobinfo *job,
+                         int rank,
+                         const char *component,
+                         const char *stream,
+                         const char *data,
+                         int len);
 
 #endif /* !HAVE_JOB_EXEC_EXEC_H */
 

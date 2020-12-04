@@ -1877,6 +1877,35 @@ static int attach_pty (struct attach_ctx *ctx, const char *pty_service)
     return 0;
 }
 
+void handle_exec_log_msg (struct attach_ctx *ctx, double ts, json_t *context)
+{
+    const char *rank = NULL;
+    const char *stream = NULL;
+    const char *component = NULL;
+    const char *data = NULL;
+    size_t len = 0;
+    json_error_t err;
+
+    if (json_unpack_ex (context, &err, 0,
+                        "{s:s s:s s:s s:s%}",
+                        "rank", &rank,
+                        "component", &component,
+                        "stream", &stream,
+                        "data", &data, &len) < 0) {
+        log_msg ("exec.log event malformed: %s", err.text);
+        return;
+    }
+    if (!optparse_hasopt (ctx->p, "quiet")) {
+        fprintf (stderr,
+                 "%.3fs: %s[%s]: %s: ",
+                 ts - ctx->timestamp_zero,
+                 component,
+                 rank,
+                 stream);
+    }
+    fwrite (data, len, 1, stderr);
+}
+
 /* Handle an event in the guest.exec eventlog.
  * This is a stream of responses, one response per event, terminated with
  * an ENODATA error response (or another error if something went wrong).
@@ -1937,6 +1966,9 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
         if (MPIR_being_debugged)
             finish_mpir_interface ();
     }
+    else if (!strcmp (name, "log")) {
+        handle_exec_log_msg (ctx, timestamp, context);
+    }
 
     /*  If job is complete, and we haven't started watching
      *   output eventlog, then start now in case shell.init event
@@ -1945,7 +1977,8 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     if (!strcmp (name, "complete") && !ctx->output_f)
         attach_output_start (ctx);
 
-    if (optparse_hasopt (ctx->p, "show-exec")) {
+    if (optparse_hasopt (ctx->p, "show-exec")
+        && strcmp (name, "log") != 0) {
         print_eventlog_entry (stderr,
                               "exec",
                               timestamp - ctx->timestamp_zero,

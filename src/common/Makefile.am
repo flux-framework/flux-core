@@ -68,10 +68,10 @@ libflux_core_la_LIBADD = \
 	$(builddir)/libsubprocess/libsubprocess.la \
 	libflux-internal.la
 libflux_core_la_LDFLAGS = \
-        -Wl,--version-script=$(srcdir)/libflux-core.map \
+	-Wl,--version-script=$(srcdir)/libflux-core.map \
 	-version-info @LIBFLUX_CORE_VERSION_INFO@ \
-        -shared -export-dynamic --disable-static \
-        $(san_ld_zdef_flag)
+	-shared -export-dynamic --disable-static \
+	$(san_ld_zdef_flag)
 
 libflux_optparse_la_SOURCES =
 libflux_optparse_la_LIBADD = \
@@ -80,7 +80,7 @@ libflux_optparse_la_LIBADD = \
 	$(builddir)/libutil/fsd.lo \
 	$(ZMQ_LIBS) $(LIBUUID_LIBS) $(LIBPTHREAD)
 libflux_optparse_la_LDFLAGS = \
-        -Wl,--version-script=$(srcdir)/libflux-optparse.map \
+	-Wl,--version-script=$(srcdir)/libflux-optparse.map \
 	-version-info @LIBFLUX_OPTPARSE_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
@@ -90,7 +90,7 @@ libflux_idset_la_LIBADD = \
 	$(builddir)/libidset/libidset.la \
 	$(builddir)/libutil/veb.lo
 libflux_idset_la_LDFLAGS = \
-        -Wl,--version-script=$(srcdir)/libflux-idset.map \
+	-Wl,--version-script=$(srcdir)/libflux-idset.map \
 	-version-info @LIBFLUX_IDSET_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
@@ -101,7 +101,7 @@ libflux_schedutil_la_LIBADD = \
 	libflux-core.la \
 	$(JANSSON_LIBS)
 libflux_schedutil_la_LDFLAGS = \
-        -Wl,--version-script=$(srcdir)/libflux-schedutil.map \
+	-Wl,--version-script=$(srcdir)/libflux-schedutil.map \
 	-version-info @LIBFLUX_SCHEDUTIL_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
@@ -110,7 +110,7 @@ libflux_hostlist_la_SOURCES =
 libflux_hostlist_la_LIBADD = \
 	$(builddir)/libhostlist/libhostlist.la
 libflux_hostlist_la_LDFLAGS = \
-    -Wl,--version-script=$(srcdir)/libflux-hostlist.map \
+	-Wl,--version-script=$(srcdir)/libflux-hostlist.map \
 	-version-info @LIBFLUX_HOSTLIST_VERSION_INFO@ \
 	-shared -export-dynamic --disable-static \
 	$(san_ld_zdef_flag)
@@ -120,7 +120,7 @@ libpmi_la_LIBADD = \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libutil/aux.lo
 libpmi_la_LDFLAGS = \
-        -Wl,--version-script=$(srcdir)/libpmi.map \
+	-Wl,--version-script=$(srcdir)/libpmi.map \
 	-version-info 0:0:0 \
 	-Wl,--defsym=flux_pmi_library=1 \
 	-shared -export-dynamic --disable-static \
@@ -131,7 +131,7 @@ libpmi2_la_LIBADD = \
 	$(builddir)/libpmi/libpmi_client.la \
 	$(builddir)/libutil/aux.lo
 libpmi2_la_LDFLAGS = \
-        -Wl,--version-script=$(srcdir)/libpmi2.map \
+	-Wl,--version-script=$(srcdir)/libpmi2.map \
 	-version-info 0:0:0 \
 	-Wl,--defsym=flux_pmi_library=1 \
 	-shared -export-dynamic --disable-static \
