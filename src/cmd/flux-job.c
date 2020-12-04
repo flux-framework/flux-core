@@ -287,6 +287,9 @@ static struct optparse_option wait_event_opts[] =  {
     { .name = "match-context", .key = 'm', .has_arg = 1, .arginfo = "KEY=VAL",
       .usage = "match key=val in context",
     },
+    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "COUNT",
+      .usage = "required number of matches (default 1)",
+    },
     { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Do not output matched event",
     },
@@ -417,7 +420,7 @@ static struct optparse_subcommand subcommands[] = {
       eventlog_opts
     },
     { "wait-event",
-      "[-f text|json] [-T raw|iso|offset] [-t seconds] [-m key=val] "
+      "[-f text|json] [-T raw|iso|offset] [-t seconds] [-m key=val] [-c <num>] "
       "[-p path] [-q] [-v] id event",
       "Wait for an event ",
       cmd_wait_event,
@@ -2578,6 +2581,8 @@ struct wait_event_ctx {
     struct entry_format e;
     char *context_key;
     char *context_value;
+    int count;
+    int match_count;
 };
 
 bool wait_event_test_context (struct wait_event_ctx *ctx, json_t *context)
@@ -2630,7 +2635,9 @@ bool wait_event_test (struct wait_event_ctx *ctx, json_t *event)
             match = true;
     }
 
-    return match;
+    if (match && (++ctx->match_count) == ctx->count)
+        return true;
+    return false;
 }
 
 void wait_event_continuation (flux_future_t *f, void *arg)
@@ -2717,6 +2724,9 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
             log_msg_exit ("must specify a context test as key=value");
         *ctx.context_value++ = '\0';
     }
+    ctx.count = optparse_get_int (p, "count", 1);
+    if (ctx.count <= 0)
+        log_msg_exit ("count must be > 0");
 
     if (!(f = flux_job_event_watch (h, ctx.id, ctx.path, 0)))
         log_err_exit ("flux_job_event_watch");

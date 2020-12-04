@@ -539,7 +539,9 @@ int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
     return 0;
 }
 
-/* called from event_job_action() FLUX_JOB_STATE_CLEANUP */
+/* called from event_job_action() FLUX_JOB_STATE_CLEANUP
+ * or transition from FLUX_JOB_STATE_SCHED back to FLUX_JOB_STATE_PRIORITY.
+ */
 void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job)
 {
     if (job->alloc_queued) {

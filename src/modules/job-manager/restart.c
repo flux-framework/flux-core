@@ -213,11 +213,24 @@ int restart_from_kvs (struct job_manager *ctx)
     if (count < 0)
         return -1;
     flux_log (ctx->h, LOG_INFO, "restart: %d jobs", count);
-    /* Initialize the count of "running" jobs
+    /* Post flux-restart to any jobs in SCHED state, so they may
+     * transition back to PRIORITY and re-obtain the queue priority.
+     *
+     * Initialize the count of "running" jobs
      */
     job = zhashx_first (ctx->active_jobs);
     while (job) {
-        if ((job->state & FLUX_JOB_STATE_RUNNING) != 0)
+        if (job->state == FLUX_JOB_STATE_SCHED) {
+            if (event_job_post_pack (ctx->event,
+                                     job,
+                                     "flux-restart",
+                                     0,
+                                     NULL) < 0) {
+                flux_log_error (ctx->h, "%s: event_job_post_pack id=%ju",
+                                __FUNCTION__, (uintmax_t)job->id);
+            }
+        }
+        else if ((job->state & FLUX_JOB_STATE_RUNNING) != 0)
             ctx->running_jobs++;
         job = zhashx_next (ctx->active_jobs);
     }
