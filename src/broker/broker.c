@@ -370,6 +370,7 @@ int main (int argc, char *argv[])
     }
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
+    overlay_set_idle_warning (ctx.overlay, 5);
 
     /* Arrange for the publisher to route event messages.
      * handle_event - local subscribers (ctx.h)

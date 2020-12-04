@@ -653,7 +653,7 @@ void overlay_destroy (struct overlay *ov)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,  "heartbeat", heartbeat_cb, 0 },
+    { FLUX_MSGTYPE_EVENT,  "hb", heartbeat_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "overlay.lspeer", lspeer_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
