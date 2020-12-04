@@ -377,7 +377,6 @@ static void jobinfo_fatal_verror (struct jobinfo *job, int errnum,
         msg [msglen-2] = '+';
         msg [msglen-1] = '\0';
     }
-    jobinfo_emit_event_pack_nowait (job, "exception", "{ s:s }", "note", msg);
     /* If exception_in_progress set, then no need to respond with another
      *  exception back to job manager. O/w, DO respond to job-manager
      *  and set exception-in-progress.
