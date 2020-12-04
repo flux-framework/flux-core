@@ -31,8 +31,13 @@
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
 
 /* REVERT - flag indicates state transition is a revert, avoid certain
- * checks, clear certain bitmasks on revert */
+ * checks, clear certain bitmasks on revert
+ *
+ * CONDITIONAL - flag indicates state transition is dependent on
+ * current state.
+ */
 #define STATE_TRANSITION_FLAG_REVERT 0x1
+#define STATE_TRANSITION_FLAG_CONDITIONAL 0x2
 
 struct state_transition {
     flux_job_state_t state;
@@ -782,7 +787,8 @@ static int add_state_transition (struct job *job,
     struct state_transition *st = NULL;
     int saved_errno;
 
-    if (!(flags & STATE_TRANSITION_FLAG_REVERT)
+    if (!((flags & STATE_TRANSITION_FLAG_REVERT)
+          || (flags & STATE_TRANSITION_FLAG_CONDITIONAL))
         && (newstate & job->states_events_mask))
         return 0;
 
@@ -818,14 +824,21 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
     while ((st = zlist_head (job->next_states))
            && !st->processed) {
 
-        /* only revert if the current state is what is expected */
         if ((st->flags & STATE_TRANSITION_FLAG_REVERT)) {
+            /* only revert if the current state is what is expected */
             if (job->state == st->expected_state) {
                 job->states_mask &= ~job->state;
                 job->states_mask &= ~st->state;
                 update_job_state_and_list (ctx, job, st->state, st->timestamp);
             }
             else {
+                zlist_remove (job->next_states, st);
+                continue;
+            }
+        }
+        else if ((st->flags & STATE_TRANSITION_FLAG_CONDITIONAL)) {
+            /* if current state isn't what we expected, move on */
+            if (job->state != st->expected_state) {
                 zlist_remove (job->next_states, st);
                 continue;
             }
@@ -962,7 +975,8 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
         else if (!strcmp (name, "priority")) {
             if (priority_context_parse (ctx->h, job, context) < 0)
                 goto error;
-            update_job_state (ctx, job, FLUX_JOB_STATE_SCHED, timestamp);
+            if (job->state == FLUX_JOB_STATE_PRIORITY)
+                update_job_state (ctx, job, FLUX_JOB_STATE_SCHED, timestamp);
         }
         else if (!strcmp (name, "urgency")) {
             if (urgency_context_parse (ctx->h, job, context) < 0)
@@ -1356,6 +1370,7 @@ static int journal_priority_event (struct job_state_ctx *jsctx,
                                    json_t *context)
 {
     struct job *job;
+    unsigned int orig_priority;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
         flux_log_error (jsctx->h, "%s: job %ju not in hash",
@@ -1367,15 +1382,23 @@ static int journal_priority_event (struct job_state_ctx *jsctx,
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
 
+    orig_priority = job->priority;
+
     if (priority_context_parse (jsctx->h, job, context) < 0)
         return -1;
+
+    if (job->state & FLUX_JOB_STATE_PENDING
+        && job->priority != orig_priority)
+        zlistx_reorder (jsctx->pending,
+                        job->list_handle,
+                        search_direction (job));
 
     return job_transition_state (jsctx,
                                  job,
                                  FLUX_JOB_STATE_SCHED,
                                  timestamp,
-                                 0,
-                                 0);
+                                 STATE_TRANSITION_FLAG_CONDITIONAL,
+                                 FLUX_JOB_STATE_PRIORITY);
 }
 
 static int finish_context_parse (flux_t *h,
@@ -1457,7 +1480,6 @@ static int journal_urgency_event (struct job_state_ctx *jsctx,
                                   json_t *context)
 {
     struct job *job;
-    int orig_urgency;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
         flux_log_error (jsctx->h, "%s: job %ju not in hash",
@@ -1469,17 +1491,8 @@ static int journal_urgency_event (struct job_state_ctx *jsctx,
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
 
-    orig_urgency = job->urgency;
-
     if (urgency_context_parse (jsctx->h, job, context) < 0)
         return -1;
-
-    if (job->state & FLUX_JOB_STATE_PENDING
-        && job->urgency != orig_urgency)
-        zlistx_reorder (jsctx->pending,
-                        job->list_handle,
-                        search_direction (job));
-
     return 0;
 }
 

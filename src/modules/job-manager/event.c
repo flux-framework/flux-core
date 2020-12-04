@@ -473,7 +473,8 @@ int event_job_update (struct job *job, json_t *event)
         job->state = FLUX_JOB_STATE_PRIORITY;
     }
     else if (!strcmp (name, "priority")) {
-        if (job->state != FLUX_JOB_STATE_PRIORITY)
+        if (job->state != FLUX_JOB_STATE_PRIORITY
+            && job->state != FLUX_JOB_STATE_SCHED)
             goto inval;
         if (event_priority_context_decode (context, &job->priority) < 0)
             goto error;

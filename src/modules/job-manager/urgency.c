@@ -112,6 +112,12 @@ void urgency_handle_request (flux_t *h,
      * new urgency, but for now priority is set to urgency */
     if (urgency != orig_urgency) {
         job->priority = urgency;
+        if (event_job_post_pack (ctx->event, job,
+                                 "priority",
+                                 0,
+                                 "{ s:i }",
+                                 "priority", job->priority) < 0)
+            goto error;
         alloc_queue_reorder (ctx->alloc, job);
     }
     if (flux_respond (h, msg, NULL) < 0)
