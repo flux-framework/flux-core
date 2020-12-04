@@ -273,9 +273,10 @@ int start_send_request (struct start *start, struct job *job)
     if (!job->start_pending && start->topic != NULL) {
         if (!(msg = flux_request_encode (start->topic, NULL)))
             return -1;
-        if (flux_msg_pack (msg, "{s:I s:i}",
+        if (flux_msg_pack (msg, "{s:I s:i s:O}",
                                 "id", job->id,
-                                "userid", job->userid) < 0)
+                                "userid", job->userid,
+                                "jobspec", job->jobspec_redacted) < 0)
             goto error;
         if (flux_send (ctx->h, msg, 0) < 0)
             goto error;
