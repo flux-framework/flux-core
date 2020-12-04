@@ -362,15 +362,13 @@ done:
     return rc;
 }
 
-int overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
+void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
 {
     struct child *child;
-    int first_errno;
-    int failures = 0;
     int disconnects = 0;
 
     if (!ov->child || !ov->child->zs)
-        return 0;
+        return;
     foreach_overlay_child (ov, child) {
         if (!child->connected)
             continue;
@@ -378,21 +376,15 @@ int overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
             if (errno == EHOSTUNREACH) {
                 child->connected = false;
                 disconnects++;
-                continue;
             }
-            if (failures == 0)
-                first_errno = errno;
-            failures++;
+            else
+                flux_log_error (ov->h,
+                                "mcast error to child rank %lu",
+                                child->rank);
         }
     }
     if (disconnects)
         overlay_monitor_notify (ov);
-
-    if (failures > 0) {
-        errno = first_errno;
-        return -1;
-    }
-    return 0;
 }
 
 static void child_cb (flux_reactor_t *r, flux_watcher_t *w,

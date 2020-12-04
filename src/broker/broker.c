@@ -1557,8 +1557,7 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 
     /* Forward to this rank's children.
      */
-    if (overlay_mcast_child (ctx->overlay, msg) < 0)
-        flux_log_error (ctx->h, "%s: overlay_mcast_child", __FUNCTION__);
+    overlay_mcast_child (ctx->overlay, msg);
 
     /* Internal services may install message handlers for events.
      */

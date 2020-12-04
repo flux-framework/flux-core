@@ -64,7 +64,7 @@ int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
 /* We can "multicast" events to all child peers using mcast_child().
  * It walks the 'children' hash, finding peers and routeing them a copy of msg.
  */
-int overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg);
+void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg);
 
 /* Call when message is received from child 'uuid'.
  */
