@@ -51,6 +51,20 @@ test_expect_success HAVE_JQ 'redacted jobspec does not contain environment' '
 	test_must_fail jq -e .attributes.system.environment <redacted.json
 '
 
+test_expect_success 'reload job manager and dependent modules' '
+	flux module remove sched-simple &&
+	flux module remove job-info &&
+	flux module reload job-manager &&
+	flux module load job-info &&
+	flux module load sched-simple
+'
+
+test_expect_success HAVE_JQ 'pending job still exists with same jobspec' '
+	job_manager_getattr $(cat jobid) jobspec >getattr2.json &&
+	jq -e .jobspec <getattr2.json >redacted2.json &&
+	test_cmp redacted.json redacted2.json
+'
+
 test_expect_success 'restart the queue' '
 	flux queue start
 '

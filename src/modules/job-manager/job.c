@@ -55,18 +55,38 @@ struct job *job_create (void)
     return job;
 }
 
-struct job *job_create_from_eventlog (flux_jobid_t id, const char *s)
+/* Follow path (NULL terminated array of keys) through multiple JSON
+ * object levels, and delete the final path component.
+ */
+void delete_json_path (json_t *o, const char *path[])
+{
+    if (o && path && path[0]) {
+        if (path[1])
+            delete_json_path (json_object_get (o, path[0]), &path[1]);
+        else
+            json_object_del (o, path[0]);
+    }
+}
+
+struct job *job_create_from_eventlog (flux_jobid_t id,
+                                      const char *eventlog,
+                                      const char *jobspec)
 {
     struct job *job;
     json_t *a = NULL;
     size_t index;
     json_t *event;
+    const char *envpath[] = { "attributes", "system", "environment", NULL };
 
     if (!(job = job_create ()))
         return NULL;
     job->id = id;
 
-    if (!(a = eventlog_decode (s)))
+    if (!(job->jobspec_redacted = json_loads (jobspec, 0, NULL)))
+        goto inval;
+    delete_json_path (job->jobspec_redacted, envpath);
+
+    if (!(a = eventlog_decode (eventlog)))
         goto error;
 
     json_array_foreach (a, index, event) {
