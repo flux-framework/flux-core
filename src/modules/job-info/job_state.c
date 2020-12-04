@@ -30,10 +30,16 @@
 
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
 
+/* REVERT - flag indicates state transition is a revert, avoid certain
+ * checks, clear certain bitmasks on revert */
+#define STATE_TRANSITION_FLAG_REVERT 0x1
+
 struct state_transition {
     flux_job_state_t state;
     bool processed;
     double timestamp;
+    int flags;
+    flux_job_state_t expected_state;
 };
 
 static int submit_context_parse (flux_t *h,
@@ -754,12 +760,15 @@ static void state_transition_destroy (void *data)
 
 static int add_state_transition (struct job *job,
                                  flux_job_state_t newstate,
-                                 double timestamp)
+                                 double timestamp,
+                                 int flags,
+                                 flux_job_state_t expected_state)
 {
     struct state_transition *st = NULL;
     int saved_errno;
 
-    if (newstate & job->states_events_mask)
+    if (!(flags & STATE_TRANSITION_FLAG_REVERT)
+        && (newstate & job->states_events_mask))
         return 0;
 
     if (!(st = calloc (1, sizeof (*st))))
@@ -767,6 +776,8 @@ static int add_state_transition (struct job *job,
     st->state = newstate;
     st->processed = false;
     st->timestamp = timestamp;
+    st->flags = flags;
+    st->expected_state = expected_state;
 
     if (zlist_append (job->next_states, st) < 0) {
         errno = ENOMEM;
@@ -791,6 +802,20 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
 
     while ((st = zlist_head (job->next_states))
            && !st->processed) {
+
+        /* only revert if the current state is what is expected */
+        if ((st->flags & STATE_TRANSITION_FLAG_REVERT)) {
+            if (job->state == st->expected_state) {
+                job->states_mask &= ~job->state;
+                job->states_mask &= ~st->state;
+                update_job_state_and_list (ctx, job, st->state, st->timestamp);
+            }
+            else {
+                zlist_remove (job->next_states, st);
+                continue;
+            }
+        }
+
         if (st->state == FLUX_JOB_STATE_DEPEND
             || st->state == FLUX_JOB_STATE_RUN) {
             flux_future_t *f = NULL;
@@ -1155,9 +1180,15 @@ static int job_update_eventlog_seq (struct job_state_ctx *jsctx,
 static int job_transition_state (struct job_state_ctx *jsctx,
                                  struct job *job,
                                  flux_job_state_t newstate,
-                                 double timestamp)
+                                 double timestamp,
+                                 int flags,
+                                 flux_job_state_t expected_state)
 {
-    if (add_state_transition (job, newstate, timestamp) < 0) {
+    if (add_state_transition (job,
+                              newstate,
+                              timestamp,
+                              flags,
+                              expected_state) < 0) {
         flux_log_error (jsctx->h, "%s: add_state_transition",
                         __FUNCTION__);
         return -1;
@@ -1184,7 +1215,7 @@ static int journal_advance_job (struct job_state_ctx *jsctx,
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
 
-    return job_transition_state (jsctx, job, newstate, timestamp);
+    return job_transition_state (jsctx, job, newstate, timestamp, 0, 0);
 }
 
 static int journal_revert_job (struct job_state_ctx *jsctx,
@@ -1206,19 +1237,15 @@ static int journal_revert_job (struct job_state_ctx *jsctx,
      * for the event in RFC21.  In the future, other transitions
      * may be defined.
      */
-    if (job->state == FLUX_JOB_STATE_SCHED) {
-        job->states_mask &= ~(job->state);
+    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
+        return 0;
 
-        if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
-            return 0;
-
-        return job_transition_state (jsctx,
-                                     job,
-                                     FLUX_JOB_STATE_PRIORITY,
-                                     timestamp);
-    }
-
-    return 0;
+    return job_transition_state (jsctx,
+                                 job,
+                                 FLUX_JOB_STATE_PRIORITY,
+                                 timestamp,
+                                 STATE_TRANSITION_FLAG_REVERT,
+                                 FLUX_JOB_STATE_SCHED);
 }
 
 static int submit_context_parse (flux_t *h,
@@ -1282,7 +1309,9 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
     return job_transition_state (jsctx,
                                  job,
                                  FLUX_JOB_STATE_DEPEND,
-                                 timestamp);
+                                 timestamp,
+                                 0,
+                                 0);
 }
 
 static int finish_context_parse (flux_t *h,
@@ -1333,7 +1362,9 @@ static int journal_finish_event (struct job_state_ctx *jsctx,
     return job_transition_state (jsctx,
                                  job,
                                  FLUX_JOB_STATE_CLEANUP,
-                                 timestamp);
+                                 timestamp,
+                                 0,
+                                 0);
 }
 
 static int urgency_context_parse (flux_t *h,
@@ -1450,7 +1481,9 @@ static int journal_exception_event (struct job_state_ctx *jsctx,
         return job_transition_state (jsctx,
                                      job,
                                      FLUX_JOB_STATE_CLEANUP,
-                                     timestamp);
+                                     timestamp,
+                                     0,
+                                     0);
 
     return 0;
 }
