@@ -157,10 +157,6 @@ static void output_cb (struct bulk_exec *exec, flux_subprocess_t *p,
                         stream,
                         data,
                         len);
-    flux_log (job->h, LOG_INFO, "%ju: %d: %s: %s",
-                      (uintmax_t) job->id,
-                      flux_subprocess_rank (p),
-                      stream, data);
 }
 
 static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
