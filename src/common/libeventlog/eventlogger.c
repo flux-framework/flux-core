@@ -37,6 +37,23 @@ struct eventlogger {
     void *arg;
 };
 
+static void eventlogger_decref (struct eventlogger *ev)
+{
+    if (ev && --ev->refcount == 0) {
+        free (ev->ns);
+        if (ev->pending) {
+            assert (zlist_size (ev->pending) == 0);
+            zlist_destroy (&ev->pending);
+        }
+        free (ev);
+    }
+}
+
+static void eventlogger_incref (struct eventlogger *ev)
+{
+    ev->refcount++;
+}
+
 int eventlogger_setns (struct eventlogger *ev, const char *ns)
 {
     char *s = NULL;
@@ -66,8 +83,8 @@ static void eventlog_batch_destroy (struct eventlog_batch *batch)
     if (batch) {
         if (batch->entries)
             zlist_destroy (&batch->entries);
-        flux_kvs_txn_destroy (batch->txn);
         flux_watcher_destroy (batch->timer);
+        flux_kvs_txn_destroy (batch->txn);
         free (batch);
     }
 }
@@ -75,9 +92,16 @@ static void eventlog_batch_destroy (struct eventlog_batch *batch)
 static void eventlogger_batch_complete (struct eventlog_batch *batch)
 {
     struct eventlogger *ev = batch->ev;
+
+    /*  zlist_remove destroys batch */
     zlist_remove (ev->pending, batch);
-    if (--ev->refcount == 0 && ev->ops.idle)
-        (*ev->ops.idle) (ev, ev->arg);
+
+    /*  If no more batches on list, notify idle */
+    if (zlist_size (ev->pending) == 0) {
+        if (ev->ops.idle)
+            (*ev->ops.idle) (ev, ev->arg);
+        eventlogger_decref (ev);
+    }
 }
 
 static int eventlogger_batch_start (struct eventlogger *ev,
@@ -90,9 +114,12 @@ static int eventlogger_batch_start (struct eventlogger *ev,
                   (zlist_free_fn *) eventlog_batch_destroy,
                   true);
 
-    /*  If refcount just increased to 1, notify that eventlogger is busy */
-    if (++ev->refcount == 1 && ev->ops.busy)
-        (*ev->ops.busy) (ev, ev->arg);
+    /*  If we were idle before, now notify that eventlogger is busy */
+    if (zlist_size (ev->pending) == 1) {
+        if (ev->ops.busy)
+            (*ev->ops.busy) (ev, ev->arg);
+        eventlogger_incref (ev);
+    }
     return 0;
 }
 
@@ -204,12 +231,7 @@ static struct eventlog_batch * eventlog_batch_create (struct eventlogger *ev)
 
 void eventlogger_destroy (struct eventlogger *ev)
 {
-    if (ev) {
-        free (ev->ns);
-        if (ev->pending)
-            zlist_destroy (&ev->pending);
-        free (ev);
-    }
+    eventlogger_decref (ev);
 }
 
 struct eventlogger *eventlogger_create (flux_t *h,
@@ -230,6 +252,7 @@ struct eventlogger *eventlogger_create (flux_t *h,
         ev->current = NULL;
         ev->ops = *ops;
         ev->arg = arg;
+        ev->refcount = 1;
     }
     return ev;
 }
