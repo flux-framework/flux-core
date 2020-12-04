@@ -130,6 +130,7 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size);
  * Returns 0 on success, -1 on failure with errno set.
  */
 int flux_msg_sendzsock (void *dest, const flux_msg_t *msg);
+int flux_msg_sendzsock_ex (void *dest, const flux_msg_t *msg, bool nonblock);
 
 /* Receive a message from zeromq socket.
  * Returns message on success, NULL on failure with errno set.

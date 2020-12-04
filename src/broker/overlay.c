@@ -273,7 +273,7 @@ int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
         errno = EINVAL;
         goto done;
     }
-    rc = flux_msg_sendzsock (ov->child->zs, msg);
+    rc = flux_msg_sendzsock_ex (ov->child->zs, msg, true);
 done:
     return rc;
 }
@@ -291,7 +291,7 @@ static int overlay_mcast_child_one (void *zsock,
         goto done;
     if (flux_msg_push_route (cpy, uuid) < 0)
         goto done;
-    if (flux_msg_sendzsock (zsock, cpy) < 0) {
+    if (flux_msg_sendzsock_ex (zsock, cpy, true) < 0) {
         if (errno != EHOSTUNREACH) // a child has disconnected - not an error
             goto done;
     }

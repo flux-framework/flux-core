@@ -1576,7 +1576,7 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
     zframe_fprint (proto, prefix, f);
 }
 
-int flux_msg_sendzsock (void *sock, const flux_msg_t *msg)
+int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)
 {
     int rc = -1;
 
@@ -1590,6 +1590,9 @@ int flux_msg_sendzsock (void *sock, const flux_msg_t *msg)
     zframe_t *zf = zmsg_first (msg->zmsg);
     size_t count = 0;
 
+    if (nonblock)
+        flags |= ZFRAME_DONTWAIT;
+
     while (zf) {
         if (++count == zmsg_size (msg->zmsg))
             flags &= ~ZFRAME_MORE;
@@ -1600,6 +1603,11 @@ int flux_msg_sendzsock (void *sock, const flux_msg_t *msg)
     rc = 0;
 done:
     return rc;
+}
+
+int flux_msg_sendzsock (void *sock, const flux_msg_t *msg)
+{
+    return flux_msg_sendzsock_ex (sock, msg, false);
 }
 
 flux_msg_t *flux_msg_recvzsock (void *sock)
