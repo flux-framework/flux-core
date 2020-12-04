@@ -710,7 +710,6 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
 {
     json_error_t error;
     const char *R = NULL;
-    const char *jobspec = NULL;
     struct jobinfo *job = arg;
 
     if (flux_future_get (flux_future_get_child (f, "ns"), NULL) < 0) {
@@ -724,11 +723,6 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
      */
     if (job->exception_in_progress)
         goto done;
-
-    if (!(jobspec = jobinfo_kvs_lookup_get (f, "jobspec"))) {
-        jobinfo_fatal_error (job, errno, "unable to fetch jobspec");
-        goto done;
-    }
     if (!(R = jobinfo_kvs_lookup_get (f, "R"))) {
         jobinfo_fatal_error (job, errno, "job does not have allocation");
         goto done;
@@ -745,10 +739,6 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
             jobinfo_fatal_error (job, errno, "reading J: %s", error.text);
             goto done;
         }
-    }
-    if (!(job->jobspec = json_loads (jobspec, 0, &error))) {
-        jobinfo_fatal_error (job, errno, "reading jobspec: %s", error.text);
-        goto done;
     }
     if (jobinfo_load_implementation (job) < 0) {
         jobinfo_fatal_error (job, errno, "failed to initialize implementation");
@@ -850,9 +840,6 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
     if (!(f_kvs = flux_jobid_kvs_lookup (h, job->id, 0, "R"))
         || flux_future_push (f, "R", f_kvs) < 0)
         goto err;
-    if (!(f_kvs = flux_jobid_kvs_lookup (h, job->id, 0, "jobspec"))
-        || flux_future_push (f, "jobspec", f_kvs) < 0)
-        goto err;
     if (job->multiuser
         && (!(f_kvs = flux_jobid_kvs_lookup (h, job->id, 0, "J"))
         || flux_future_push (f, "J", f_kvs) < 0)) {
@@ -916,9 +903,10 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
 
     job->ctx = ctx;
 
-    if (flux_request_unpack (job->req, NULL, "{s:I, s:i}",
+    if (flux_request_unpack (job->req, NULL, "{s:I s:i s:O}",
                                              "id", &job->id,
-                                             "userid", &job->userid) < 0) {
+                                             "userid", &job->userid,
+                                             "jobspec", &job->jobspec) < 0) {
         flux_log_error (ctx->h, "start: flux_request_unpack");
         jobinfo_decref (job);
         return -1;
