@@ -40,6 +40,7 @@ struct child {
     unsigned long rank;
     char uuid[16];
     bool connected;
+    bool idle;
 };
 
 
@@ -202,12 +203,25 @@ void overlay_log_idle_children (struct overlay *ov)
         foreach_overlay_child (ov, child) {
             if (child->connected) {
                 idle = ov->epoch - child->lastseen;
+
                 if (idle >= ov->idle_warning) {
-                    flux_log (ov->h,
-                              LOG_CRIT,
-                              "child %lu idle for %d heartbeats",
-                              child->rank,
-                              idle);
+                    if (!child->idle) {
+                        flux_log (ov->h,
+                                  LOG_ERR,
+                                  "child %lu idle for %d heartbeats",
+                                  child->rank,
+                                  idle);
+                        child->idle = true;
+                    }
+                }
+                else {
+                    if (child->idle) {
+                        flux_log (ov->h,
+                                  LOG_ERR,
+                                  "child %lu no longer idle",
+                                  child->rank);
+                        child->idle = false;
+                    }
                 }
             }
         }
