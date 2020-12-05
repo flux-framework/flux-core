@@ -370,6 +370,7 @@ int main (int argc, char *argv[])
     }
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
+    overlay_set_idle_warning (ctx.overlay, 5);
 
     /* Arrange for the publisher to route event messages.
      * handle_event - local subscribers (ctx.h)
@@ -1487,6 +1488,7 @@ static void child_cb (struct overlay *ov, void *sock, void *arg)
     int type;
     char *uuid = NULL;
     flux_msg_t *msg = flux_msg_recvzsock (sock);
+    int status = KEEPALIVE_STATUS_NORMAL;
 
     if (!msg)
         goto done;
@@ -1494,9 +1496,13 @@ static void child_cb (struct overlay *ov, void *sock, void *arg)
         goto done;
     if (flux_msg_get_route_last (msg, &uuid) < 0)
         goto done;
-    overlay_checkin_child (ctx->overlay, uuid);
+    if (type != FLUX_MSGTYPE_KEEPALIVE)
+        overlay_keepalive_child (ctx->overlay, uuid, status);
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
+            if (flux_keepalive_decode (msg, NULL, &status) < 0)
+                goto done;
+            overlay_keepalive_child (ctx->overlay, uuid, status);
             break;
         case FLUX_MSGTYPE_REQUEST:
             broker_request_sendmsg (ctx, msg);
@@ -1556,8 +1562,7 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 
     /* Forward to this rank's children.
      */
-    if (overlay_mcast_child (ctx->overlay, msg) < 0)
-        flux_log_error (ctx->h, "%s: overlay_mcast_child", __FUNCTION__);
+    overlay_mcast_child (ctx->overlay, msg);
 
     /* Internal services may install message handlers for events.
      */

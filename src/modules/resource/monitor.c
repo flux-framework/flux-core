@@ -143,7 +143,7 @@ static int batch_timeout_leader (struct monitor *monitor)
     if (idset_count (b->down) > 0) {
         if (!(offline = idset_encode (b->down, IDSET_FLAG_RANGE)))
             goto done;
-        flux_log (h, LOG_DEBUG, "monitor-batch: down %s", online);
+        flux_log (h, LOG_DEBUG, "monitor-batch: down %s", offline);
         if (rutil_idset_sub (monitor->up, b->down) < 0)
             goto done;
     }
