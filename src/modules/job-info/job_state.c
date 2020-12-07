@@ -1687,6 +1687,12 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
             return -1;
     }
     else if (!strcmp (name, "flux-restart")) {
+        /* Presently, job-info depends on job-manager.events-journal
+         * service.  So if job-manager reloads, job-info must be
+         * reloaded, making the probability of reaching this
+         * `flux-restart` path very low.  Code added for completeness
+         * and in case dependency removed in the future.
+         */
         if (journal_revert_job (jsctx,
                                 id,
                                 eventlog_seq,
