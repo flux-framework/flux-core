@@ -584,9 +584,7 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job i
         fj_wait_event $jobid clean >/dev/null &&
         wait_jobid_state $jobid inactive &&
         obj=$(flux job list -s inactive | grep $jobid) &&
-        echo $obj | jq -e ".t_depend < .t_priority" &&
-        echo $obj | jq -e ".t_priority < .t_sched" &&
-        echo $obj | jq -e ".t_sched < .t_run" &&
+        echo $obj | jq -e ".t_depend < .t_run" &&
         echo $obj | jq -e ".t_run < .t_cleanup" &&
         echo $obj | jq -e ".t_cleanup < .t_inactive"
 '
@@ -597,9 +595,7 @@ test_expect_success HAVE_JQ 'flux job list job state timing outputs valid (job r
         fj_wait_event $jobid start >/dev/null &&
         wait_jobid_state $jobid running &&
         obj=$(flux job list -s running | grep $jobid) &&
-        echo $obj | jq -e ".t_depend < .t_priority" &&
-        echo $obj | jq -e ".t_priority < .t_sched" &&
-        echo $obj | jq -e ".t_sched < .t_run" &&
+        echo $obj | jq -e ".t_depend < .t_run" &&
         echo $obj | jq -e ".t_cleanup == null" &&
         echo $obj | jq -e ".t_inactive == null" &&
         flux job cancel $jobid &&
@@ -889,8 +885,6 @@ userid \
 urgency \
 t_submit \
 t_depend \
-t_priority \
-t_sched \
 t_run \
 t_cleanup \
 t_inactive \

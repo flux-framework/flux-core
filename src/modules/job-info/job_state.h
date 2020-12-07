@@ -114,16 +114,14 @@ struct job {
      * associated eventlog entries when restarting
      *
      * depend - "submit"
-     * priority - "priority"
-     * sched - "depend"
+     * priority - "priority" (not saved, can be entered multiple times)
+     * sched - "depend" (not saved, can be entered multiple times)
      * run - "alloc"
      * cleanup - "finish" or "exception" w/ severity == 0
      * inactive - "clean"
      */
     // t_depend is identical to t_submit above, use that
     // double t_depend;
-    double t_priority;
-    double t_sched;
     double t_run;
     double t_cleanup;
     double t_inactive;

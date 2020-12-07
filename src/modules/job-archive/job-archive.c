@@ -38,7 +38,6 @@ const char *sql_create_table = "CREATE TABLE if not exists jobs("
                                "  userid INT,"
                                "  ranks TEXT,"
                                "  t_submit REAL,"
-                               "  t_sched REAL,"
                                "  t_run REAL,"
                                "  t_cleanup REAL,"
                                "  t_inactive REAL,"
@@ -51,10 +50,10 @@ const char *sql_store =                               \
     "INSERT INTO jobs"                                \
     "("                                               \
     "  id,userid,ranks,"                              \
-    "  t_submit,t_sched,t_run,t_cleanup,t_inactive,"  \
+    "  t_submit,t_run,t_cleanup,t_inactive,"          \
     "  eventlog,jobspec,R"                            \
     ") values ("                                      \
-    "  ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11"  \
+    "  ?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10"       \
     ")";
 
 const char *sql_since = "SELECT MAX(t_inactive) FROM jobs;";
@@ -260,7 +259,6 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
     uint32_t userid;
     const char *ranks = NULL;
     double t_submit = 0.0;
-    double t_sched = 0.0;
     double t_run = 0.0;
     double t_cleanup = 0.0;
     double t_inactive = 0.0;
@@ -282,12 +280,11 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
         goto out;
     }
 
-    if (json_unpack (job, "{s:I s:i s?:s s:f s?:f s?:f s?:f s:f}",
+    if (json_unpack (job, "{s:I s:i s?:s s:f s?:f s?:f s:f}",
                      "id", &id,
                      "userid", &userid,
                      "ranks", &ranks,
                      "t_submit", &t_submit,
-                     "t_sched", &t_sched,
                      "t_run", &t_run,
                      "t_cleanup", &t_cleanup,
                      "t_inactive", &t_inactive) < 0) {
@@ -326,30 +323,24 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
     }
     if (sqlite3_bind_double (ctx->store_stmt,
                              5,
-                             t_sched) != SQLITE_OK) {
-        log_sqlite_error (ctx, "store: binding t_sched");
-        goto out;
-    }
-    if (sqlite3_bind_double (ctx->store_stmt,
-                             6,
                              t_run) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding t_run");
         goto out;
     }
     if (sqlite3_bind_double (ctx->store_stmt,
-                             7,
+                             6,
                              t_cleanup) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding t_cleanup");
         goto out;
     }
     if (sqlite3_bind_double (ctx->store_stmt,
-                             8,
+                             7,
                              t_inactive) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding t_inactive");
         goto out;
     }
     if (sqlite3_bind_text (ctx->store_stmt,
-                           9,
+                           8,
                            eventlog,
                            strlen (eventlog),
                            SQLITE_STATIC) != SQLITE_OK) {
@@ -357,7 +348,7 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
         goto out;
     }
     if (sqlite3_bind_text (ctx->store_stmt,
-                           10,
+                           9,
                            jobspec,
                            strlen (jobspec),
                            SQLITE_STATIC) != SQLITE_OK) {
@@ -365,7 +356,7 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
         goto out;
     }
     if (sqlite3_bind_text (ctx->store_stmt,
-                           11,
+                           10,
                            R ? R: "",
                            R ? strlen (R) : 0,
                            SQLITE_STATIC) != SQLITE_OK) {
@@ -495,7 +486,7 @@ void job_archive_cb (flux_reactor_t *r,
                      void *arg)
 {
     struct job_archive_ctx *ctx = arg;
-    char *attrs = "[\"userid\", \"ranks\", \"t_submit\", \"t_sched\", " \
+    char *attrs = "[\"userid\", \"ranks\", \"t_submit\", " \
                    "\"t_run\", \"t_cleanup\", \"t_inactive\"]";
     flux_future_t *f;
 

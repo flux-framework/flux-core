@@ -22,8 +22,6 @@ VALID_ATTRS = [
     "urgency",
     "t_submit",
     "t_depend",
-    "t_priority",
-    "t_sched",
     "t_run",
     "t_cleanup",
     "t_inactive",
