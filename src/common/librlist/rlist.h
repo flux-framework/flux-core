@@ -164,6 +164,13 @@ struct idset * rlist_hosts_to_ranks (const struct rlist *rl,
  */
 json_t * rlist_to_R (struct rlist *rl);
 
+
+/*
+ *  Encode resource list into v1 "R" string format.
+ *  Identical to `R = rlist_to_R (rl); return json_dumps (R, 0);`.
+ */
+char *rlist_encode (struct rlist *rl);
+
 /*
  *  Dump short form description of rlist `rl` as a single line string.
  *    Caller must free returned string.

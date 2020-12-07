@@ -1304,6 +1304,19 @@ fail:
     return NULL;
 }
 
+char *rlist_encode (struct rlist *rl)
+{
+    json_t *o;
+    char *R;
+    if (!rl)
+        return NULL;
+    if (!(o = rlist_to_R (rl)))
+        return NULL;
+    R = json_dumps (o, 0);
+    json_decref (o);
+    return R;
+}
+
 static int by_rank (const void *item1, const void *item2)
 {
     const struct rnode *x = item1;
