@@ -1,0 +1,110 @@
+###############################################################
+# Copyright 2020 Lawrence Livermore National Security, LLC
+# (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+#
+# This file is part of the Flux resource manager framework.
+# For details, see https://github.com/flux-framework.
+#
+# SPDX-License-Identifier: LGPL-3.0
+###############################################################
+
+import json
+import socket
+from collections import Mapping
+
+from _flux._rlist import ffi, lib
+from flux.wrapper import Wrapper, WrapperPimpl
+
+from flux.hostlist import Hostlist
+from flux.idset import IDset
+
+
+class Rlist(WrapperPimpl):
+    version = 1
+
+    class InnerWrapper(Wrapper):
+        def __init__(self, rstring=None, handle=None):
+
+            if handle is None:
+                if rstring is None:
+                    handle = lib.rlist_create()
+                else:
+                    if isinstance(rstring, Mapping):
+                        rstring = json.dumps(rstring)
+                    handle = lib.rlist_from_R(rstring.encode("utf-8"))
+            if handle == ffi.NULL:
+                raise ValueError(f"Rlist: invalid argument")
+            super().__init__(
+                ffi,
+                lib,
+                match=ffi.typeof("struct rlist *"),
+                prefixes=["rlist_"],
+                destructor=lib.rlist_destroy,
+                handle=handle,
+            )
+
+    def __init__(self, rstring=None, handle=None):
+        super().__init__()
+        self.pimpl = self.InnerWrapper(rstring, handle)
+
+    def dumps(self):
+        val = lib.rlist_dumps(self.handle)
+        result = ffi.string(val).decode("utf-8")
+        lib.free(val)
+        return result
+
+    def encode(self):
+        val = lib.rlist_encode(self.handle)
+        result = ffi.string(val).decode("utf-8")
+        lib.free(val)
+        return result
+
+    def nodelist(self):
+        return Hostlist(handle=self.pimpl.nodelist())
+
+    def ranks(self, hosts=None):
+        if hosts is None:
+            return IDset(handle=self.pimpl.ranks())
+        return IDset(handle=self.pimpl.hosts_to_ranks(hosts))
+
+    def nnodes(self):
+        return self.pimpl.nnodes()
+
+    def count(self, name):
+        return self.pimpl.count(name)
+
+    def remap(self):
+        self.pimpl.remap()
+        return self
+
+    def append(self, arg):
+        self.pimpl.append(arg)
+        return self
+
+    def copy(self):
+        return Rlist(handle=self.pimpl.copy_empty())
+
+    def union(self, arg):
+        return Rlist(handle=self.pimpl.union(arg))
+
+    def intersect(self, arg):
+        return Rlist(handle=self.pimpl.intersect(arg))
+
+    def diff(self, arg):
+        return Rlist(handle=self.pimpl.diff(arg))
+
+    def add_rank(self, rank, hostname=None, cores="0"):
+        if hostname is None:
+            hostname = socket.gethostname()
+        self.pimpl.append_rank_cores(hostname, rank, cores)
+        return self
+
+    def remove_ranks(self, ranks):
+        if not isinstance(ranks, IDset):
+            ranks = IDset(str(ranks))
+        self.pimpl.remove_ranks(ranks)
+        return self
+
+    def add_child(self, rank, name, ids):
+        self.pimpl.rank_add_child(rank, name, ids)
+        return self
