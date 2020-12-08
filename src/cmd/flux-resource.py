@@ -103,6 +103,7 @@ def list_handler(args):
         "ncores": "NCORES",
         "ngpus": "NGPUS",
         "ranks": "RANKS",
+        "nodelist": "NODELIST",
         "rlist": "LIST",
     }
 
@@ -112,9 +113,10 @@ def list_handler(args):
             LOGGER.error("Invalid resource state %s specified", state)
             sys.exit(1)
 
-    fmt = "{state:>10} {nnodes:>6} {ncores:>8} {ngpus:>8}"
     if args.verbose:
-        fmt += " {rlist}"
+        fmt = "{state:>10} {nnodes:>6} {ncores:>8} {ngpus:>8} {rlist}"
+    else:
+        fmt = "{state:>10} {nnodes:>6} {ncores:>8} {ngpus:>8} {nodelist}"
     if args.format:
         fmt = args.format
 
