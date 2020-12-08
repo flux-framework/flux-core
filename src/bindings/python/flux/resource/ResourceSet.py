@@ -1,0 +1,182 @@
+###############################################################
+# Copyright 2020 Lawrence Livermore National Security, LLC
+# (c.f. AUTHORS, NOTICE.LLNS, COPYING)
+#
+# This file is part of the Flux resource manager framework.
+# For details, see https://github.com/flux-framework.
+#
+# SPDX-License-Identifier: LGPL-3.0
+###############################################################
+
+import json
+from collections import Mapping
+
+from flux.idset import IDset
+from flux.resource import Rlist
+from flux.resource.ResourceSetImplementation import ResourceSetImplementation
+
+
+class ResourceSet:
+    def __init__(self, arg=None, version=1):
+        """
+        ResourceSet object constructor.
+
+        :param arg: Argument from which to construct a ResourceSet. `arg`
+                    may be a serialized R string, a decoded Mapping of
+                    an R string, or a valid ResourceSet implementation
+                    (an instance of ResourceSetImplementation)
+
+        :param version: R specification version
+
+        :raises TypeError: A ResourceSet cannot be instantiated from arg
+        :raises ValueError: Invalid R version, or invalid R encoding
+        :raises KeyError: arg was a dict without a 'version' key
+        :raises json.decoder.JSONDecodeError: `arg` is an Invalid JSON string
+
+        All parameters are optional. ResourceSet() will initialize an
+        empty, version 1 ResourceSet object.
+        """
+        self._state = None
+
+        if isinstance(arg, ResourceSetImplementation):
+            #  If argument is a resource set implementation, instantiate
+            #   from that and return immediately
+            self.impl = arg
+            self.version = arg.version
+            return
+
+        if isinstance(arg, str):
+            #  If arg is a string, assume an encoded R representation.
+            #  decode to a mapping:
+            arg = json.loads(arg)
+
+        if isinstance(arg, Mapping):
+            #  If argument is a mapping, grab version field for later use
+            version = arg["version"]
+        elif arg is not None:
+            # arg must be ResourceSetImplementation, Mapping, string or None:
+            tstr = type(arg)
+            raise TypeError(f"ResourceSet cannot be instantiated from {tstr}")
+
+        #  Instantiate implementation from version
+        #  note: only version 1 supported for now
+        if version == 1:
+            self.version = 1
+            self.impl = Rlist(arg)
+        else:
+            raise ValueError(f"R version {version} not supported")
+
+    def __str__(self):
+        return self.dumps()
+
+    def __and__(self, arg):
+        """Return the set intersection of two ResourceSets"""
+        return self.intersect(arg)
+
+    def __sub__(self, arg):
+        """Return the difference of two ResourceSets"""
+        return self.diff(arg)
+
+    def __or__(self, arg):
+        """Return the union of two ResourceSets"""
+        return self.union(arg)
+
+    def dumps(self):
+        """Return a short-form, human-readable string of a ResourceSet object"""
+        return self.impl.dumps()
+
+    def encode(self):
+        """Encode a ResourceSet object to its serialized string representation"""
+        return self.impl.encode()
+
+    def count(self, name):
+        """
+        Return a count of resource objects within a ResourceSet
+
+        :param name: The name of the object to count, e.g. "core"
+        """
+        return self.impl.count(name)
+
+    def append(self, *args):
+        """Append a ResourceSet to another"""
+        for arg in args:
+            if not isinstance(arg, ResourceSet):
+                arg = ResourceSet(arg, version=self.version)
+            self.impl.append(arg.impl)
+        return self
+
+    def copy(self):
+        """Return a copy of a ResourceSet"""
+        return ResourceSet(self.impl.copy())
+
+    def _run_op(self, method, *args):
+        result = self.copy()
+        for arg in args:
+            if not isinstance(arg, ResourceSet):
+                arg = ResourceSet(arg, version=self.version)
+            impl = getattr(result.impl, method)(arg.impl)
+            result = ResourceSet(impl)
+        return result
+
+    def union(self, *args):
+        return self._run_op("union", *args)
+
+    def diff(self, *args):
+        return self._run_op("diff", *args)
+
+    def intersect(self, *args):
+        return self._run_op("intersect", *args)
+
+    def remove_ranks(self, ranks):
+        """
+        Remove the rank or ranks specified from the ResourceSet
+        :param ranks: A flux.idset.IDset object, or number or string which
+                      can be converted into an IDset, containing the ranks
+                      to remove
+        """
+        if not isinstance(ranks, IDset):
+            ranks = IDset(str(ranks))
+        self.impl.remove_ranks(ranks)
+        return self
+
+    @property
+    def nodelist(self):
+        """
+        Return a flux.hostlist.Hostlist containing the list of hosts in
+        this ResourceSet
+        """
+        return self.impl.nodelist()
+
+    @property
+    def state(self):
+        """An optional state associated with this ResourceSet (e.g. "up")"""
+        return self._state
+
+    @state.setter
+    def state(self, value):
+        """Set an optional state for this ResourceSet"""
+        self._state = value
+
+    @property
+    def ranks(self):
+        """
+        Return a flux.idset.IDset containing the set of ranks in this
+        ResourceSet
+        """
+        return self.impl.ranks()
+
+    @property
+    def nnodes(self):
+        return self.impl.nnodes()
+
+    @property
+    def ncores(self):
+        return self.impl.count("core")
+
+    @property
+    def ngpus(self):
+        return self.impl.count("gpu")
+
+    @property
+    def rlist(self):
+        return self.impl.dumps()

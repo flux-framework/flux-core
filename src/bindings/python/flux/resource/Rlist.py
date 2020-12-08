@@ -15,10 +15,12 @@ from collections import Mapping
 from _flux._rlist import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl
 
+from flux.resource.ResourceSetImplementation import ResourceSetImplementation
 from flux.hostlist import Hostlist
 from flux.idset import IDset
 
 
+@ResourceSetImplementation.register
 class Rlist(WrapperPimpl):
     version = 1
 
