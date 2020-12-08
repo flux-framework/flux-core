@@ -13,8 +13,11 @@ import logging
 import argparse
 import os.path
 import json
+from datetime import datetime
 
 import flux
+from flux.idset import IDset
+from flux.hostlist import Hostlist
 from flux.resource import ResourceSet
 from flux.rpc import RPC
 from flux.memoized_property import memoized_property
@@ -48,6 +51,207 @@ def undrain(args):
     Send an "undrain" request to resource module for args.targets
     """
     RPC(flux.Flux(), "resource.undrain", {"targets": args.targets}).get()
+
+
+class StatusLine:
+    """Information specific to a given flux resource status line"""
+
+    def __init__(self, state, ranks, hosts, reason=None, timestamp=None):
+        self.state = state
+        self.hostlist = hosts
+        self.rank_idset = ranks
+        if reason is None:
+            reason = ""
+        self.reason = reason
+        if timestamp:
+            self.timestamp = datetime.fromtimestamp(timestamp).strftime("%FT%T")
+        else:
+            self.timestamp = None
+
+    def update(self, ranks, hosts):
+        self.rank_idset.add(ranks)
+        self.hostlist.append(hosts)
+        self.hostlist.sort()
+
+    @property
+    def nodelist(self):
+        return str(self.hostlist)
+
+    @property
+    def ranks(self):
+        return str(self.rank_idset)
+
+    @property
+    def nnodes(self):
+        return len(self.hostlist)
+
+
+class ResourceStatus:
+    """Container for resource.status RPC response"""
+
+    # pylint: disable=too-many-instance-attributes
+
+    def __init__(self, rset=None):
+        self.rset = ResourceSet(rset)
+        self.nodelist = self.rset.nodelist
+        self.all = self.rset.ranks
+        self.statuslines = []
+        self.bystate = {}
+        self.idsets = {}
+
+    def __iter__(self):
+        for line in self.statuslines:
+            yield line
+
+    @property
+    def avail(self):
+        avail = self.all.copy()
+        avail.subtract(self.idsets["offline"])
+        avail.subtract(self.idsets["drain"])
+        avail.subtract(self.idsets["exclude"])
+        return avail
+
+    def _idset_update(self, state, idset):
+        if state not in self.idsets:
+            self.idsets[state] = IDset()
+        self.idsets[state].add(idset)
+
+    def find(self, state, reason=""):
+        try:
+            return self.bystate[f"{state}:{reason}"]
+        except KeyError:
+            return None
+
+    def append(self, state, ranks="", reason=None):
+        #
+        # If an existing status line has matching state and reason
+        #  update instead of appending a new output line:
+        #  (mainly useful for "drain" when reasons are not displayed)
+        #
+        hosts = Hostlist([self.nodelist[i] for i in ranks])
+        rstatus = self.find(state, reason)
+        if rstatus:
+            rstatus.update(ranks, hosts)
+        else:
+            line = StatusLine(state, ranks, hosts, reason)
+            self.bystate[f"{state}:{reason}"] = line
+            self.statuslines.append(line)
+
+        self._idset_update(state, ranks)
+
+    @classmethod
+    def from_status_response(cls, resp, fmt):
+
+        #  Return empty ResourceStatus object if resp not set:
+        #  (mainly used for testing)
+        if not resp:
+            return cls()
+
+        if isinstance(resp, str):
+            resp = json.loads(resp)
+
+        rstat = cls(resp["R"])
+
+        #  Append a line for listing all ranks/hosts
+        rstat.append("all", rstat.all)
+
+        #  "online", "offline", "exclude" keys contain idsets
+        #    specifying the set of ranks in that state:
+        #
+        for state in ["online", "offline", "exclude"]:
+            rstat.append(state, IDset(resp[state]))
+
+        #  "drain" key contains a dict of idsets with timestamp,reason
+        #
+        drained = 0
+        for ranks, entry in resp["drain"].items():
+            #  Only include reason if it will be displayed in format
+            reason = ""
+            if "reason" in fmt:
+                reason = entry["reason"]
+            rstat.append("drain", IDset(ranks), reason)
+            drained = drained + 1
+
+        #  If no drained nodes, append an empty StatusLine
+        if drained == 0:
+            rstat.append("drain")
+
+        #  "avail" is computed from above
+        rstat.append("avail", rstat.avail)
+
+        return rstat
+
+
+def status_help(args, valid_states, headings):
+    if args.states == "help":
+        LOGGER.info("valid states: %s", ",".join(valid_states))
+    if args.format == "help":
+        LOGGER.info("valid formats: %s", ",".join(headings.keys()))
+    sys.exit(0)
+
+
+def status_get_state_list(args, valid_states, default_states):
+    #  Get list of states from command, or a default:
+    if args.states:
+        states = args.states
+    else:
+        states = default_states
+
+    #  Warn if listed state is not valid
+    states = states.split(",")
+    for state in states:
+        if state not in valid_states:
+            LOGGER.error("Invalid resource state %s specified", state)
+            LOGGER.info("valid states: %s", ",".join(valid_states))
+            sys.exit(1)
+
+    return states
+
+
+def status(args):
+    valid_states = ["all", "online", "avail", "offline", "exclude", "drain"]
+    default_states = "avail,offline,exclude,drain"
+    headings = {
+        "state": "STATUS",
+        "nnodes": "NNODES",
+        "ranks": "RANKS",
+        "nodelist": "NODELIST",
+        "reason": "REASON",
+    }
+
+    #  Emit list of valid states or formats if requested
+    if "help" in [args.states, args.format]:
+        status_help(args, valid_states, headings)
+
+    #  Get state list from args or defaults:
+    states = status_get_state_list(args, valid_states, default_states)
+
+    #  Include reason field only with -vv
+    if args.verbose >= 2:
+        fmt = "{state:>10} {nnodes:>6} {ranks:<15} {reason:<25} {nodelist}"
+    else:
+        fmt = "{state:>10} {nnodes:>6} {ranks:<15} {nodelist}"
+    if args.format:
+        fmt = args.format
+
+    #  Get payload from stdin or from resource.status RPC:
+    if args.from_stdin:
+        resp = sys.stdin.read()
+    else:
+        resp = RPC(flux.Flux(), "resource.status").get()
+
+    rstat = ResourceStatus.from_status_response(resp, fmt)
+
+    formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
+    if not args.no_header:
+        print(formatter.header())
+    for line in sorted(rstat, key=lambda x: valid_states.index(x.state)):
+        if line.state not in states:
+            continue
+        #  Skip empty lines unless --verbose or --states
+        if line.nnodes == 0 and args.states is None and not args.verbose:
+            continue
+        print(formatter.format(line))
 
 
 class SchedResourceList:
@@ -161,6 +365,35 @@ def main():
         "targets", help="List of targets to resume (IDSET or HOSTLIST)"
     )
     undrain_parser.set_defaults(func=undrain)
+
+    status_parser = subparsers.add_parser(
+        "status", formatter_class=flux.util.help_formatter()
+    )
+    status_parser.add_argument(
+        "-v",
+        "--verbose",
+        action="count",
+        default=0,
+        help="Include reason if available",
+    )
+    status_parser.add_argument(
+        "-o",
+        "--format",
+        help="Specify output format using Python's string format syntax",
+    )
+    status_parser.add_argument(
+        "-s",
+        "--states",
+        metavar="STATE,...",
+        help="Output resources in given states",
+    )
+    status_parser.add_argument(
+        "-n", "--no-header", action="store_true", help="Suppress header output"
+    )
+    status_parser.add_argument(
+        "--from-stdin", action="store_true", help=argparse.SUPPRESS
+    )
+    status_parser.set_defaults(func=status)
 
     list_parser = subparsers.add_parser(
         "list", formatter_class=flux.util.help_formatter()
