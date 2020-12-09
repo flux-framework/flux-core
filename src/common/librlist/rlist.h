@@ -126,8 +126,6 @@ struct rlist *rlist_union (const struct rlist *rla, const struct rlist *rlb);
 struct rlist *rlist_intersect (const struct rlist *rla,
                               const struct rlist *rlb);
 
-struct rlist *rlist_get_rank (const struct rlist *rl, int rank);
-
 /*  Return number of resource nodes in resource list `rl`
  */
 size_t rlist_nnodes (const struct rlist *rl);
