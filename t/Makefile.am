@@ -207,7 +207,7 @@ EXTRA_DIST= \
 	flux-jobs/tests \
 	scripts/run_timeout.py \
 	jobspec \
-	resource-status \
+	flux-resource \
 	resource/get-xml-test.py \
 	resource/waitup.py
 
