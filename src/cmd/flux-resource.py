@@ -37,8 +37,13 @@ def reload(args):
 
 def drain(args):
     """
-    Send a drain request to resource module for args.targets
+    Send a drain request to resource module for args.targets, if args.targets
+    not specified, then list currently drained targets
     """
+    if args.targets is None:
+        drain_list()
+        return
+
     RPC(
         flux.Flux(),
         "resource.drain",
@@ -84,6 +89,36 @@ class StatusLine:
     @property
     def nnodes(self):
         return len(self.hostlist)
+
+
+def drain_list():
+    headings = {
+        "timestamp": "TIMESTAMP",
+        "ranks": "RANK",
+        "reason": "REASON",
+        "nodelist": "NODELIST",
+    }
+    resp = RPC(flux.Flux(), "resource.status").get()
+    rset = ResourceSet(resp["R"])
+    nodelist = rset.nodelist
+
+    lines = []
+    for ranks, entry in resp["drain"].items():
+        ranks = IDset(ranks)
+        line = StatusLine(
+            "drain",
+            ranks,
+            Hostlist([nodelist[i] for i in ranks]),
+            entry["reason"],
+            entry["timestamp"],
+        )
+        lines.append(line)
+
+    fmt = "{timestamp:<20} {ranks:<8} {reason:<30} {nodelist}"
+    formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
+    print(formatter.header())
+    for line in lines:
+        print(formatter.format(line))
 
 
 class ResourceStatus:
@@ -353,7 +388,7 @@ def main():
         "drain", formatter_class=flux.util.help_formatter()
     )
     drain_parser.add_argument(
-        "targets", help="List of targets to drain (IDSET or HOSTLIST)"
+        "targets", nargs="?", help="List of targets to drain (IDSET or HOSTLIST)"
     )
     drain_parser.add_argument("reason", help="Reason", nargs=argparse.REMAINDER)
     drain_parser.set_defaults(func=drain)
