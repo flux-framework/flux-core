@@ -922,9 +922,6 @@ struct rlist *rlist_from_R (const char *s)
     json_t *o = json_loads (s, 0, &err);
     if (o)
         rl = rlist_from_json (o, &err);
-    if (!rl)
-        fprintf (stderr, "line %d: col %d: pos %d: err=%s\n",
-                err.line, err.column, err.position, err.text);
     json_decref (o);
     return rl;
 }
@@ -1302,6 +1299,19 @@ fail:
     json_decref (R);
     json_decref (nodelist);
     return NULL;
+}
+
+char *rlist_encode (struct rlist *rl)
+{
+    json_t *o;
+    char *R;
+    if (!rl)
+        return NULL;
+    if (!(o = rlist_to_R (rl)))
+        return NULL;
+    R = json_dumps (o, 0);
+    json_decref (o);
+    return R;
 }
 
 static int by_rank (const void *item1, const void *item2)

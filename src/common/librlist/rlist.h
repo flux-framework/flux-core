@@ -126,8 +126,6 @@ struct rlist *rlist_union (const struct rlist *rla, const struct rlist *rlb);
 struct rlist *rlist_intersect (const struct rlist *rla,
                               const struct rlist *rlb);
 
-struct rlist *rlist_get_rank (const struct rlist *rl, int rank);
-
 /*  Return number of resource nodes in resource list `rl`
  */
 size_t rlist_nnodes (const struct rlist *rl);
@@ -165,6 +163,13 @@ struct idset * rlist_hosts_to_ranks (const struct rlist *rl,
  *   "available" ids in each resource node into execution.R_lite
  */
 json_t * rlist_to_R (struct rlist *rl);
+
+
+/*
+ *  Encode resource list into v1 "R" string format.
+ *  Identical to `R = rlist_to_R (rl); return json_dumps (R, 0);`.
+ */
+char *rlist_encode (struct rlist *rl);
 
 /*
  *  Dump short form description of rlist `rl` as a single line string.

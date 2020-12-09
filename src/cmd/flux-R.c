@@ -270,13 +270,7 @@ static struct hostlist *hostlist_from_option (optparse_t *p,
 
 static void rlist_puts (struct rlist *rl)
 {
-    json_t *o;
-    char *R;
-    if (!(o = rlist_to_R (rl)))
-        log_err_exit ("rlist_to_R");
-    if (!(R = json_dumps (o, 0)))
-        log_err_exit ("json_dumps");
-    json_decref (o);
+    char *R = rlist_encode (rl);
     puts (R);
     free (R);
 }

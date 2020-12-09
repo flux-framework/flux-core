@@ -25,6 +25,10 @@ nobase_fluxpy_PYTHON = \
 	job/submit.py \
 	job/wait.py \
 	job/_wrapper.py \
+	resource/Rlist.py \
+	resource/__init__.py \
+	resource/ResourceSetImplementation.py \
+	resource/ResourceSet.py \
 	hostlist.py \
 	idset.py
 

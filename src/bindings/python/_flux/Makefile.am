@@ -29,7 +29,8 @@ PREPROC_FLAGS = \
 fluxpyso_LTLIBRARIES = \
 	_core.la \
 	_hostlist.la \
-	_idset.la
+	_idset.la \
+	_rlist.la
 
 fluxpyso_PYTHON = \
 	__init__.py
@@ -37,13 +38,15 @@ fluxpyso_PYTHON = \
 nodist_fluxbindinginclude_HEADERS = \
 	_core_preproc.h \
 	_hostlist_preproc.h \
-	_idset_preproc.h
+	_idset_preproc.h \
+	_rlist_preproc.h
 
 EXTRA_DIST = \
 	_core_build.py \
 	_security_build.py \
 	_hostlist_build.py \
 	_idset_build.py \
+	_rlist_build.py \
 	make_clean_header.py
 
 STDERR_DEVNULL = $(stderr_devnull_$(V))
@@ -94,6 +97,22 @@ _idset_preproc.h: _idset_clean.h
 	  | sed -e '/^# [0-9]*.*/d' > $@
 
 
+_rlist.c: $(srcdir)/_rlist_build.py _rlist_preproc.h
+	$(AM_V_GEN)$(PYTHON) $^ $(STDERR_DEVNULL)
+
+_rlist_clean.h: Makefile
+	$(AM_V_GEN)$(PYTHON) $(srcdir)/make_clean_header.py \
+	  --path $(top_srcdir)/src/common/librlist \
+	  --search $(top_builddir)/config \
+	  --search /usr/include \
+	  --output $@ \
+	  rlist.h
+
+_rlist_preproc.h: _rlist_clean.h
+	$(AM_V_GEN)$(CC) $(PREPROC_FLAGS) $< \
+	  | sed -e '/^# [0-9]*.*/d' > $@
+
+
 dist__core_la_SOURCES = callbacks.h
 nodist__core_la_SOURCES = _core.c
 _core_la_LIBADD = $(common_libs)
@@ -103,6 +122,12 @@ _hostlist_la_LIBADD = $(common_libs)
 
 nodist__idset_la_SOURCES = _idset.c
 _idset_la_LIBADD = $(common_libs)
+
+nodist__rlist_la_SOURCES = _rlist.c
+_rlist_la_LIBADD = \
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(HWLOC_LIBS) \
+	$(common_libs)
 
 if HAVE_FLUX_SECURITY
 
