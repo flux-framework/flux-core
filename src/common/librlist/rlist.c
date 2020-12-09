@@ -922,9 +922,6 @@ struct rlist *rlist_from_R (const char *s)
     json_t *o = json_loads (s, 0, &err);
     if (o)
         rl = rlist_from_json (o, &err);
-    if (!rl)
-        fprintf (stderr, "line %d: col %d: pos %d: err=%s\n",
-                err.line, err.column, err.position, err.text);
     json_decref (o);
     return rl;
 }
