@@ -54,6 +54,30 @@ struct alloc {
     char *sched_sender; // for disconnect
 };
 
+static void requeue_pending (struct alloc *alloc, struct job *job)
+{
+    struct job_manager *ctx = alloc->ctx;
+    bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
+    bool cleared = false;
+
+    assert (job->alloc_pending);
+    assert (job->handle == NULL);
+    if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
+        flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
+    job->alloc_pending = 0;
+    job->alloc_queued = 1;
+    alloc->pending_job = NULL;
+    annotations_sched_clear (job, &cleared);
+    if (cleared) {
+        if (event_job_post_pack (ctx->event, job, "annotations",
+                                 EVENT_JOURNAL_ONLY,
+                                 "{s:n}", "annotations") < 0)
+            flux_log_error (ctx->h,
+                            "%s: event_job_post_pack",
+                            __FUNCTION__);
+    }
+}
+
 /* Initiate teardown.  Clear any alloc/free requests, and clear
  * the alloc->ready flag to stop prep/check from allocating.
  */
@@ -71,26 +95,8 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
             /* jobs with alloc request pending need to go back in the queue
              * so they will automatically send alloc again.
              */
-            if (job->alloc_pending) {
-                bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
-                bool cleared = false;
-
-                assert (job->handle == NULL);
-                if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
-                    flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
-                job->alloc_pending = 0;
-                job->alloc_queued = 1;
-                alloc->pending_job = NULL;
-                annotations_sched_clear (job, &cleared);
-                if (cleared) {
-                    if (event_job_post_pack (ctx->event, job, "annotations",
-                                             EVENT_JOURNAL_ONLY,
-                                             "{s:n}", "annotations") < 0)
-                        flux_log_error (ctx->h,
-                                        "%s: event_job_post_pack",
-                                        __FUNCTION__);
-                }
-            }
+            if (job->alloc_pending)
+                requeue_pending (alloc, job);
             /* jobs with free request pending (much smaller window for this
              * to be true) need to be picked up again after 'ready'.
              */
@@ -308,13 +314,13 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         break;
     case FLUX_SCHED_ALLOC_CANCEL:
         alloc->alloc_pending_count--;
-        job->alloc_pending = 0;
         if (alloc->mode == SCHED_SINGLE)
             alloc->pending_job = NULL;
         if (job->state == FLUX_JOB_STATE_SCHED)
-            annotations_sched_clear (job, &cleared);
+            requeue_pending (alloc, job);
         else
             annotations_clear (job, &cleared);
+        job->alloc_pending = 0;
         if (cleared) {
             if (event_job_post_pack (ctx->event, job, "annotations",
                                      EVENT_JOURNAL_ONLY,
@@ -564,7 +570,9 @@ void alloc_dequeue_alloc_request (struct alloc *alloc, struct job *job)
     }
 }
 
-/* called from event_job_action() FLUX_JOB_STATE_CLEANUP */
+/* called from event_job_action() FLUX_JOB_STATE_CLEANUP
+ * or alloc_queue_recalc_pending() if queue order has changed.
+ */
 int alloc_cancel_alloc_request (struct alloc *alloc, struct job *job)
 {
     if (job->alloc_pending) {
@@ -591,6 +599,23 @@ void alloc_queue_reorder (struct alloc *alloc, struct job *job)
     bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
 
     zlistx_reorder (alloc->queue, job->handle, fwd);
+}
+
+/* called if highest priority job may have changed */
+int alloc_queue_recalc_pending (struct alloc *alloc) {
+    struct job *head = zlistx_first (alloc->queue);
+    if (alloc->mode == SCHED_SINGLE
+        && alloc->pending_job
+        && head) {
+        if (job_comparator (head, alloc->pending_job) < 0) {
+            if (alloc_cancel_alloc_request (alloc, alloc->pending_job) < 0) {
+                flux_log_error (alloc->ctx->h, "%s: alloc_cancel_alloc_request",
+                                __FUNCTION__);
+                return -1;
+            }
+        }
+    }
+    return 0;
 }
 
 int alloc_pending_count (struct alloc *alloc)

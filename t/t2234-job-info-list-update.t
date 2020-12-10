@@ -206,13 +206,14 @@ EOT
 '
 
 test_expect_success HAVE_JQ 'change a job urgency' '
-        jobid=`head -n 1 pending.ids` &&
+        jobid=`head -n 3 pending.ids | tail -n 1` &&
         flux job urgency ${jobid} 1
 '
 
 test_expect_success HAVE_JQ 'wait for job-info to see job urgency change' '
-        jobidhead=`head -n 6 pending.ids | tail -n 5 > pending_after.ids` &&
-        jobidchange=`head -n 1 pending.ids >> pending_after.ids` &&
+        jobidhead=`head -n 2 pending.ids > pending_after.ids` &&
+        jobidhead=`head -n 6 pending.ids | tail -n 3 >> pending_after.ids` &&
+        jobidchange=`head -n 3 pending.ids | tail -n 1 >> pending_after.ids` &&
         jobidend=`tail -n2 pending.ids >> pending_after.ids` &&
         i=0 &&
         while flux job list -s pending | jq .id > list_pending_after.out && \
@@ -230,7 +231,7 @@ test_expect_success HAVE_JQ 'wait for job-info to see job urgency change' '
 test_expect_success HAVE_JQ 'flux job list pending jobs with correct urgency' '
         cat >list_urgency_after.exp <<-EOT &&
 31
-20
+31
 20
 16
 16
@@ -245,7 +246,7 @@ EOT
 test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
         cat >list_priority_after.exp <<-EOT &&
 31
-20
+31
 20
 16
 16
