@@ -85,6 +85,17 @@ test_expect_success 'resource.eventlog has two undrain events' '
 	test $(has_resource_event undrain | wc -l) -eq 2
 '
 
+test_expect_success 'reload resource module to simulate instance restart' '
+	flux module remove sched-simple &&
+	flux module reload resource &&
+	waitdown 0 &&
+	flux module load sched-simple
+'
+
+test_expect_success 'no nodes remain drained after restart' '
+	test $(flux resource status -s drain -no {nnodes}) -eq 0
+'
+
 test_expect_success 'undrain fails if rank not drained' '
 	test_must_fail flux resource undrain 1 2>undrain_not.err &&
 	grep "rank 1 not drained" undrain_not.err
