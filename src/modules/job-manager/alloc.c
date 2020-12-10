@@ -50,6 +50,7 @@ struct alloc {
     flux_watcher_t *idle;
     unsigned int alloc_pending_count; // for mode=single, max of 1
     unsigned int free_pending_count;
+    struct job *pending_job; // for mode=single
     char *sched_sender; // for disconnect
 };
 
@@ -79,6 +80,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
                     flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
                 job->alloc_pending = 0;
                 job->alloc_queued = 1;
+                alloc->pending_job = NULL;
                 annotations_clear (job, &cleared);
                 if (cleared) {
                     if (event_job_post_pack (ctx->event, job, "annotations",
@@ -219,6 +221,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_SUCCESS:
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
+        if (alloc->mode == SCHED_SINGLE)
+            alloc->pending_job = NULL;
         if (job->has_resources) {
             flux_log (h,
                       LOG_ERR,
@@ -283,6 +287,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
+        if (alloc->mode == SCHED_SINGLE)
+            alloc->pending_job = NULL;
         annotations_clear (job, &cleared);
         if (cleared) {
             if (event_job_post_pack (ctx->event, job, "annotations",
@@ -303,6 +309,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_CANCEL:
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
+        if (alloc->mode == SCHED_SINGLE)
+            alloc->pending_job = NULL;
         annotations_clear (job, &cleared);
         if (cleared) {
             if (event_job_post_pack (ctx->event, job, "annotations",
@@ -502,6 +510,8 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
         job->alloc_pending = 1;
         job->alloc_queued = 0;
         alloc->alloc_pending_count++;
+        if (alloc->mode == SCHED_SINGLE)
+            alloc->pending_job = job;
         if ((job->flags & FLUX_JOB_DEBUG))
             (void)event_job_post_pack (ctx->event, job,
                                        "debug.alloc-request", 0, NULL);
