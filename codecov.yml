@@ -11,8 +11,8 @@ coverage:
  - ".*/common/libev/.*"
  - ".*/common/libtomlc99/.*"
  - ".*/common/liboptparse/getopt*"
- - ".*/bindings/python/.*.c"
  - ".*/common/libminilzo/.*"
+ - "src/bindings/python/_flux"
  - "/usr/include/.*"
  - "/usr/lib/.*"
 
