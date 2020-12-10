@@ -110,4 +110,11 @@ test_expect_success 'un/drain works with hostnames' '
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
 '
 
+test_expect_success 'drain with no args lists currently drained targets' '
+	flux resource drain 0 happy happy, joy joy &&
+	flux resource drain > drain.out &&
+	test_debug "cat drain.out" &&
+	grep "happy happy, joy joy" drain.out
+'
+
 test_done
