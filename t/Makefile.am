@@ -125,6 +125,7 @@ TESTSCRIPTS = \
 	t2314-resource-monitor.t \
 	t2315-resource-system.t \
 	t2350-resource-list.t \
+	t2351-resource-status-input.t \
 	t2400-job-exec-test.t \
 	t2401-job-exec-hello.t \
 	t2402-job-exec-dummy.t \

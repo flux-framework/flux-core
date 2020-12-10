@@ -30,12 +30,14 @@ test_expect_success 'drain works with no reason' '
 '
 
 test_expect_success 'resource.eventlog has one drain event' '
-	test $(has_resource_event drain | wc -l) -eq 1
+	test $(has_resource_event drain | wc -l) -eq 1 &&
+	test $(flux resource status -s drain -no {ranks}) = "1"
 '
 
 test_expect_success 'reason can be added after node is drained' '
 	flux resource drain 1 test_reason_01 &&
-	test $(flux resource list -n -s down -o {nnodes}) -eq 1
+	test $(flux resource list -n -s down -o {nnodes}) -eq 1 &&
+	test $(flux resource status -s drain -no {nnodes}) -eq 1
 '
 
 test_expect_success 'resource.eventlog has two drain events' '
@@ -44,7 +46,8 @@ test_expect_success 'resource.eventlog has two drain events' '
 
 test_expect_success 'reason can be updated after node is drained' '
 	flux resource drain 1 test_reason_01 &&
-	test $(flux resource list -n -s down -o {nnodes}) -eq 1
+	test $(flux resource list -n -s down -o {nnodes}) -eq 1 &&
+	test $(flux resource status -s drain -no {reason}) = "test_reason_01"
 '
 
 test_expect_success 'resource.eventlog has three drain events' '
@@ -53,7 +56,8 @@ test_expect_success 'resource.eventlog has three drain events' '
 
 test_expect_success 'drain works with idset' '
 	flux resource drain 2-3 &&
-	test $(flux resource list -n -s down -o {nnodes}) -eq 3
+	test $(flux resource list -n -s down -o {nnodes}) -eq 3 &&
+	test $(flux resource status -s drain -no {ranks}) = "1-3"
 '
 
 test_expect_success 'reload resource module to simulate instance restart' '
