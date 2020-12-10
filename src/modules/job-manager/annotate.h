@@ -17,6 +17,7 @@
 #include "job-manager.h"
 
 void annotations_clear (struct job *job, bool *cleared);
+void annotations_sched_clear (struct job *job, bool *cleared);
 int annotations_update (flux_t *h, struct job *job, json_t *annotations);
 
 struct annotate *annotate_ctx_create (struct job_manager *ctx);

@@ -81,7 +81,7 @@ static void interface_teardown (struct alloc *alloc, char *s, int errnum)
                 job->alloc_pending = 0;
                 job->alloc_queued = 1;
                 alloc->pending_job = NULL;
-                annotations_clear (job, &cleared);
+                annotations_sched_clear (job, &cleared);
                 if (cleared) {
                     if (event_job_post_pack (ctx->event, job, "annotations",
                                              EVENT_JOURNAL_ONLY,
@@ -311,7 +311,10 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         job->alloc_pending = 0;
         if (alloc->mode == SCHED_SINGLE)
             alloc->pending_job = NULL;
-        annotations_clear (job, &cleared);
+        if (job->state == FLUX_JOB_STATE_SCHED)
+            annotations_sched_clear (job, &cleared);
+        else
+            annotations_clear (job, &cleared);
         if (cleared) {
             if (event_job_post_pack (ctx->event, job, "annotations",
                                      EVENT_JOURNAL_ONLY,

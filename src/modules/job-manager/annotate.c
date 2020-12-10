@@ -46,6 +46,16 @@ void annotations_clear (struct job *job, bool *cleared)
     }
 }
 
+void annotations_sched_clear (struct job *job, bool *cleared)
+{
+    if (job->annotations) {
+        if (json_object_del (job->annotations, "sched") == 0) {
+            if (cleared)
+                (*cleared) = true;
+        }
+    }
+}
+
 /* we want to delete items set to 'null', so this is not the same
  * as json_object_update_recursive() in jansson 2.13.1
  */
