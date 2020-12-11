@@ -107,6 +107,7 @@ TESTSCRIPTS = \
 	t2206-job-manager-bulk-state.t \
 	t2207-job-manager-wait.t \
 	t2208-queue-cmd.t \
+	t2209-job-manager-job-urgency-change.t \
 	t2210-job-manager-bugs.t \
 	t2211-job-manager-events-journal.t \
 	t2212-job-manager-jobspec.t \
