@@ -10,7 +10,7 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 #  format ever changes
 FORMAT="{state:>10} {nnodes:>6} {ncores:>8} {ngpus:>8}"
 
-for input in ${SHARNESS_TEST_SRCDIR}/resource-status/*.json; do
+for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
     name=$(basename ${input%%.json})
     test_expect_success "flux-resource list input check: $name" '
         base=${input%%.json} &&

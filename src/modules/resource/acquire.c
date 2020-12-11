@@ -120,6 +120,7 @@ static int acquire_request_init (struct acquire_request *ar,
     const struct idset *exclude = exclude_get (ctx->exclude);
     json_error_t e;
     struct rlist *rl;
+    struct idset *drain = NULL;
 
     if (resobj == NULL || !(rl = rlist_from_json (resobj, &e))) {
         errno = EINVAL;
@@ -140,16 +141,20 @@ static int acquire_request_init (struct acquire_request *ar,
         goto nomem;
     if (!(ar->up = idset_copy (ar->valid))) // and up omits excluded ranks
         goto error;
-    if (rutil_idset_sub (ar->up, drain_get (ctx->drain)) < 0)
+    if (!(drain = drain_get (ctx->drain)))
+        goto error;
+    if (rutil_idset_sub (ar->up, drain) < 0)
         goto error;
     if (rutil_idset_sub (ar->up, monitor_get_down (ctx->monitor)) < 0)
         goto error;
     rlist_destroy (rl);
+    idset_destroy (drain);
     return 0;
 nomem:
     errno = ENOMEM;
 error:
     rlist_destroy (rl);
+    idset_destroy (drain);
     return -1;
 }
 
@@ -165,10 +170,13 @@ static int acquire_request_update (struct acquire_request *ar,
 {
     struct resource_ctx *ctx = ar->acquire->ctx;
     struct idset *new_up;
+    struct idset *drain = NULL;
 
     if (!(new_up = idset_copy (ar->valid)))
         return -1;
-    if (rutil_idset_sub (new_up, drain_get (ctx->drain)) < 0)
+    if (!(drain = drain_get (ctx->drain)))
+        goto error;
+    if (rutil_idset_sub (new_up, drain) < 0)
         goto error;
     if (rutil_idset_sub (new_up, monitor_get_down (ctx->monitor)) < 0)
         goto error;
@@ -178,9 +186,11 @@ static int acquire_request_update (struct acquire_request *ar,
         goto error;
     idset_destroy (ar->up);
     ar->up = new_up;
+    idset_destroy (drain);
     return 0;
 error:
     idset_destroy (new_up);
+    idset_destroy (drain);
     return -1;
 }
 

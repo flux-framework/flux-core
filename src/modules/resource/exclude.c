@@ -36,16 +36,6 @@ struct exclude {
     struct idset *idset;
 };
 
-/* Check whether 'id' is excluded.
- * Used by drain.c to catch someone trying to drain/undrain an excluded rank.
- */
-bool exclude_test (struct exclude *exclude, unsigned int id)
-{
-    if (!exclude->idset || !idset_test (exclude->idset, id))
-        return false;
-    return true;
-}
-
 const struct idset *exclude_get (struct exclude *exclude)
 {
     return exclude->idset;
@@ -85,6 +75,7 @@ int exclude_update (struct exclude *exclude,
         char *add_s = idset_encode (add, IDSET_FLAG_RANGE);
         if (!add_s || reslog_post_pack (exclude->ctx->reslog,
                                         NULL,
+                                        0.,
                                         "exclude",
                                         "{s:s}",
                                         "idset",
@@ -98,6 +89,7 @@ int exclude_update (struct exclude *exclude,
         char *del_s = idset_encode (del, IDSET_FLAG_RANGE);
         if (!del_s || reslog_post_pack (exclude->ctx->reslog,
                                         NULL,
+                                        0.,
                                         "unexclude",
                                         "{s:s}",
                                         "idset",

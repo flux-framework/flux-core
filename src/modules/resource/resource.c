@@ -150,6 +150,47 @@ static void disconnect_cb (flux_t *h,
         acquire_disconnect (ctx->acquire, msg);
 }
 
+static void status_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
+{
+    struct resource_ctx *ctx = arg;
+    const struct idset *online = monitor_get_up (ctx->monitor);
+    const struct idset *offline = monitor_get_down (ctx->monitor);
+    const struct idset *exclude = exclude_get (ctx->exclude);
+    json_t *drain;
+    const json_t *R;
+    json_t *o = NULL;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!(R = inventory_get (ctx->inventory)))
+        goto error;
+    if (!(drain = drain_get_info (ctx->drain)))
+        goto error;
+    if (!(o = json_pack ("{s:O s:o}", "R", R, "drain", drain))) {
+        json_decref (drain);
+        errno = ENOMEM;
+        goto error;
+    }
+    if (rutil_set_json_idset (o, "online", online) < 0)
+        goto error;
+    if (rutil_set_json_idset (o, "offline", offline) < 0)
+        goto error;
+    if (rutil_set_json_idset (o, "exclude", exclude) < 0)
+        goto error;
+    if (flux_respond_pack (h, msg, "o", o) < 0) {
+        flux_log_error (h, "error responding to resource.status request");
+        json_decref (o);
+    }
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to resource.status request");
+    json_decref (o);
+}
+
 static void resource_ctx_destroy (struct resource_ctx *ctx)
 {
     if (ctx) {
@@ -186,6 +227,12 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         .typemask = FLUX_MSGTYPE_REQUEST,
+        .topic_glob = "resource.status",
+        .cb = status_cb,
+        .rolemask = 0
+    },
+    {
+        .typemask = FLUX_MSGTYPE_REQUEST,
         .topic_glob = "resource.disconnect",
         .cb = disconnect_cb,
         .rolemask = 0
@@ -200,17 +247,21 @@ static const struct flux_msg_handler_spec htab[] = {
 int post_restart_event (struct resource_ctx *ctx, int restart)
 {
     json_t *o;
+    json_t *drain;
 
-    if (!(o = json_pack ("{s:b}", "restart", restart)))
+    if (!(drain = drain_get_info (ctx->drain)))
+        return -1;
+    if (!(o = json_pack ("{s:b s:o}", "restart", restart, "drain", drain))) {
+        json_decref (drain);
         goto nomem;
+    }
     if (rutil_set_json_idset (o, "online", monitor_get_up (ctx->monitor)) < 0)
-        goto error;
-    if (rutil_set_json_idset (o, "drain", drain_get (ctx->drain)) < 0)
         goto error;
     if (rutil_set_json_idset (o, "exclude", exclude_get (ctx->exclude)) < 0)
         goto error;
     if (reslog_post_pack (ctx->reslog,
                           NULL,
+                          0.,
                           "resource-init",
                           "O",
                           o) < 0)
@@ -373,7 +424,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     return 0;
 error:
     resource_ctx_destroy (ctx);
-    json_decref (eventlog);
+    ERRNO_SAFE_WRAP (json_decref, eventlog);
     return -1;
 }
 

@@ -289,4 +289,9 @@ class OutputFormat:
         """
         format object with internal format
         """
-        return self.get_format().format(obj)
+        try:
+            retval = self.get_format().format(obj)
+        except KeyError as exc:
+            typestr = type(obj)
+            raise KeyError(f"Invalid format field {exc} for {typestr}")
+        return retval

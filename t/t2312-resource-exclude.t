@@ -39,6 +39,20 @@ test_expect_success 'flux resource list shows one node down' '
 	test $(flux resource list -n -s down -o {nnodes}) -eq 1
 '
 
+test_expect_success 'flux resource status shows one node excluded' '
+	test $(flux resource status -s exclude -no {nnodes}) -eq 1 &&
+	test $(flux resource status -s exclude -no {ranks}) = "0"
+'
+
+test_expect_success 'flux resource status shows all nodes online' '
+	test $(flux resource status -s online -no {nnodes}) -eq ${SIZE}
+'
+
+test_expect_success 'flux resource status shows correct nodes avail' '
+	NAVAIL=$((SIZE-1)) &&
+	test $(flux resource status -s avail -no {nnodes}) -eq $NAVAIL
+'
+
 test_expect_success 'but monitor still says all nodes are up' '
 	waitdown 0
 '
@@ -86,6 +100,10 @@ test_expect_success 'reconfig with no exclude idset' '
 
 test_expect_success 'flux resource list shows zero nodes down' '
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
+'
+
+test_expect_success 'flux resource status shows zero nodes excluded' '
+	test $(flux resource status -s exclude -no {nnodes}) -eq 0
 '
 
 test_expect_success 'unexclude event was posted' '

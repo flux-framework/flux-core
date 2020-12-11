@@ -10,28 +10,26 @@
 
 /* drain.c - handle drain/undrain requests
  *
- * Drained execution targets should be excluded from scheduling,
+ * Drained execution targets should be temporarily excluded from scheduling,
  * but may be used for determining job request satisfiability.
  *
  * Handle RPCs from front-end commands.
  * - if a node in undrain target is not drained, request fails
  * - if a node in drain target is already drained, request succeeds
- * - if a node in drain/undrain target is "excluded", request fails
  *
  * Post events for each drain/undrain action.  Drain state is sticky
  * across module reload / instance restart.  The state is reacquired
  * by replaying the eventlog.
- *
- * N.B. the 'reason' for drain is recorded in the eventlog but is not
- * part of the in-memory state here.
  */
 
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <time.h>
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 
@@ -42,15 +40,115 @@
 #include "rutil.h"
 #include "inventory.h"
 
+struct draininfo {
+    bool drained;
+    double timestamp;
+    char *reason;
+};
+
 struct drain {
     struct resource_ctx *ctx;
-    struct idset *idset;
+    struct draininfo *info; // rank-indexed array [0:size-1]
     flux_msg_handler_t **handlers;
 };
 
-const struct idset *drain_get (struct drain *drain)
+static int get_timestamp_now (double *timestamp)
 {
-    return drain->idset;
+    struct timespec ts;
+    if (clock_gettime (CLOCK_REALTIME, &ts) < 0)
+        return -1;
+    *timestamp = (1E-9 * ts.tv_nsec) + ts.tv_sec;
+    return 0;
+}
+
+static int update_draininfo_rank (struct drain *drain,
+                                  unsigned int rank,
+                                  bool drained,
+                                  double timestamp,
+                                  const char *reason)
+{
+    char *cpy = NULL;
+
+    if (rank >= drain->ctx->size) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (reason && !(cpy = strdup (reason)))
+        return -1;
+    free (drain->info[rank].reason);
+    drain->info[rank].reason = cpy;
+    drain->info[rank].drained = drained;
+    drain->info[rank].timestamp = timestamp;
+    return 0;
+}
+
+static int update_draininfo_idset (struct drain *drain,
+                                   struct idset *idset,
+                                   bool drained,
+                                   double timestamp,
+                                   const char *reason)
+{
+    unsigned int rank;
+
+    rank = idset_first (idset);
+    while (rank != IDSET_INVALID_ID) {
+        if (update_draininfo_rank (drain, rank, drained, timestamp, reason) < 0)
+            return -1;
+        rank = idset_next (idset, rank);
+    }
+    return 0;
+}
+
+
+json_t *drain_get_info (struct drain *drain)
+{
+    json_t *o;
+    unsigned int rank;
+
+    if (!(o = json_object ()))
+        goto nomem;
+    for (rank = 0; rank < drain->ctx->size; rank++) {
+        if (drain->info[rank].drained) {
+            char *reason = drain->info[rank].reason;
+            json_t *val;
+            if (!(val = json_pack ("{s:f s:s}",
+                                   "timestamp",
+                                   drain->info[rank].timestamp,
+                                   "reason",
+                                   reason ? reason : "")))
+                goto nomem;
+            if (rutil_idkey_insert_id (o, rank, val) < 0) {
+                ERRNO_SAFE_WRAP (json_decref, val);
+                goto error;
+            }
+            json_decref (val);
+        }
+    }
+    return o;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return NULL;
+}
+
+struct idset *drain_get (struct drain *drain)
+{
+    unsigned int rank;
+    struct idset *ids;
+
+    if (!(ids = idset_create (drain->ctx->size, 0)))
+        return NULL;
+    for (rank = 0; rank < drain->ctx->size; rank++) {
+        if (drain->info[rank].drained) {
+            if (idset_set (ids, rank) < 0) {
+                idset_destroy (ids);
+                return NULL;
+            }
+        }
+    }
+    return ids;
+
 }
 
 /* Decode string-encoded idset from drain/undrain request.
@@ -64,7 +162,6 @@ static struct idset *drain_idset_decode (struct drain *drain,
                                          int errbufsize)
 {
     struct idset *idset;
-    unsigned int id;
 
     if (!(idset = inventory_targets_to_ranks (drain->ctx->inventory,
                                               ranks, errbuf, errbufsize)))
@@ -79,18 +176,6 @@ static struct idset *drain_idset_decode (struct drain *drain,
         errno = EINVAL;
         goto error;
     }
-    id = idset_first (idset);
-    while (id != IDSET_INVALID_ID) {
-        if (exclude_test (drain->ctx->exclude, id)) {
-            (void)snprintf (errbuf,
-                            errbufsize,
-                            "%u is excluded by configuration",
-                            id);
-            errno = EINVAL;
-            goto error;
-        }
-        id = idset_next (idset, id);
-    }
     return idset;
 error:
     idset_destroy (idset);
@@ -98,7 +183,6 @@ error:
 }
 
 /* Drain a set of ranked execution targets.
- * If a reason was provided it is recorded in the eventlog (only).
  */
 static void drain_cb (flux_t *h,
                       flux_msg_handler_t *mh,
@@ -112,6 +196,7 @@ static void drain_cb (flux_t *h,
     const char *errstr = NULL;
     char *idstr = NULL;
     char errbuf[256];
+    double timestamp;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -125,12 +210,15 @@ static void drain_cb (flux_t *h,
         errstr = errbuf;
         goto error;
     }
-    if (rutil_idset_add (drain->idset, idset) < 0)
+    if (get_timestamp_now (&timestamp) < 0)
+        goto error;
+    if (update_draininfo_idset (drain, idset, true, timestamp, reason) < 0)
         goto error;
     if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE)))
         goto error;
     if (reslog_post_pack (drain->ctx->reslog,
                           msg,
+                          timestamp,
                           "drain",
                           "{s:s s:s}",
                           "idset",
@@ -151,23 +239,28 @@ error:
 int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
 {
     char rankstr[16];
-
-    snprintf (rankstr, sizeof (rankstr), "%ju", (uintmax_t)rank);
+    double timestamp;
 
     if (rank >= drain->ctx->size) {
         errno = EINVAL;
         return -1;
     }
-    if (idset_set (drain->idset, rank) < 0)
+    if (!reason)
+        reason = "unknown";
+    if (get_timestamp_now (&timestamp) < 0)
         return -1;
+    if (update_draininfo_rank (drain, rank, true, timestamp, reason) < 0)
+        return -1;
+    snprintf (rankstr, sizeof (rankstr), "%ju", (uintmax_t)rank);
     if (reslog_post_pack (drain->ctx->reslog,
                           NULL,
+                          timestamp,
                           "drain",
                           "{s:s s:s}",
                           "idset",
                           rankstr,
                           "reason",
-                          reason ? reason : "unknown") < 0)
+                          reason) < 0)
         return -1;
     if (reslog_sync (drain->ctx->reslog) < 0)
         return -1;
@@ -202,7 +295,7 @@ static void undrain_cb (flux_t *h,
     }
     id = idset_first (idset);
     while (id != IDSET_INVALID_ID) {
-        if (!idset_test (drain->idset, id)) {
+        if (!drain->info[id].drained) {
             (void)snprintf (errbuf, sizeof (errbuf), "rank %u not drained", id);
             errno = EINVAL;
             errstr = errbuf;
@@ -210,21 +303,18 @@ static void undrain_cb (flux_t *h,
         }
         id = idset_next (idset, id);
     }
-    if (rutil_idset_sub (drain->idset, idset) < 0)
+    if (update_draininfo_idset (drain, idset, false, 0., NULL) < 0)
         goto error;
     if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE)))
         goto error;
     if (reslog_post_pack (drain->ctx->reslog,
                           msg,
+                          0.,
                           "undrain",
                           "{s:s}",
                           "idset",
-                          idstr) < 0) {
-        int saved_errno = errno;
-        (void)rutil_idset_add (drain->idset, idset); // restore orig.
-        errno = saved_errno;
+                          idstr) < 0)
         goto error;
-    }
     free (idstr);
     idset_destroy (idset);
     return;
@@ -233,6 +323,35 @@ error:
         flux_log_error (h, "error responding to undrain request");
     free (idstr);
     idset_destroy (idset);
+}
+
+static int replay_map (unsigned int id, json_t *val, void *arg)
+{
+    struct drain *drain = arg;
+    const char *reason;
+    double timestamp;
+    char *cpy;
+
+    if (id >= drain->ctx->size) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (json_unpack (val,
+                     "{s:f s:s}",
+                     "timestamp",
+                     &timestamp,
+                     "reason",
+                     &reason) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(cpy = strdup (reason))) // in this object, reason="" if unset
+        return -1;
+    free (drain->info[id].reason);
+    drain->info[id].reason = cpy;
+    drain->info[id].timestamp = timestamp;
+    drain->info[id].drained = true;
+    return 0;
 }
 
 /* Recover drained idset from eventlog.
@@ -244,30 +363,41 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
 
     if (eventlog) {
         json_array_foreach (eventlog, index, entry) {
+            double timestamp;
             const char *name;
             json_t *context;
             const char *s;
+            const char *reason = NULL;
+            json_t *draininfo = NULL;
             struct idset *idset;
 
-            if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
+            if (eventlog_entry_parse (entry, &timestamp, &name, &context) < 0)
                 return -1;
             if (!strcmp (name, "resource-init")) {
-                if (json_unpack (context, "{s:s}", "drain", &s) < 0) {
+                if (json_unpack (context, "{s:o}", "drain", &draininfo) < 0) {
                     errno = EPROTO;
                     return -1;
                 }
-                idset_destroy (drain->idset);
-                if (!(drain->idset = idset_decode (s)))
+                if (rutil_idkey_map (draininfo, replay_map, drain) < 0)
                     return -1;
             }
             else if (!strcmp (name, "drain")) {
-                if (json_unpack (context, "{s:s}", "idset", &s) < 0) {
+                if (json_unpack (context,
+                                 "{s:s s:s}",
+                                 "idset",
+                                 &s,
+                                 "reason",
+                                 &reason) < 0) {
                     errno = EPROTO;
                     return -1;
                 }
                 if (!(idset = idset_decode (s)))
                     return -1;
-                if (rutil_idset_add (drain->idset, idset) < 0) {
+                if (update_draininfo_idset (drain,
+                                            idset,
+                                            true,
+                                            timestamp,
+                                            reason) < 0) {
                     idset_destroy (idset);
                     return -1;
                 }
@@ -280,7 +410,11 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                 }
                 if (!(idset = idset_decode (s)))
                     return -1;
-                if (rutil_idset_sub (drain->idset, idset) < 0) {
+                if (update_draininfo_idset (drain,
+                                            idset,
+                                            false,
+                                            timestamp,
+                                            NULL) < 0) {
                     idset_destroy (idset);
                     return -1;
                 }
@@ -301,8 +435,13 @@ void drain_destroy (struct drain *drain)
 {
     if (drain) {
         int saved_errno = errno;
-        idset_destroy (drain->idset);
         flux_msg_handler_delvec (drain->handlers);
+        if (drain->info) {
+            unsigned int rank;
+            for (rank = 0; rank < drain->ctx->size; rank++)
+                free (drain->info[rank].reason);
+            free (drain->info);
+        }
         free (drain);
         errno = saved_errno;
     }
@@ -315,7 +454,7 @@ struct drain *drain_create (struct resource_ctx *ctx, const json_t *eventlog)
     if (!(drain = calloc (1, sizeof (*drain))))
         return NULL;
     drain->ctx = ctx;
-    if (!(drain->idset = idset_create (ctx->size, 0)))
+    if (!(drain->info = calloc (ctx->size, sizeof (drain->info[0]))))
         goto error;
     if (replay_eventlog (drain, eventlog) < 0) {
         flux_log_error (ctx->h, "problem replaying eventlog drain state");

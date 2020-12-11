@@ -30,12 +30,14 @@ test_expect_success 'drain works with no reason' '
 '
 
 test_expect_success 'resource.eventlog has one drain event' '
-	test $(has_resource_event drain | wc -l) -eq 1
+	test $(has_resource_event drain | wc -l) -eq 1 &&
+	test $(flux resource status -s drain -no {ranks}) = "1"
 '
 
 test_expect_success 'reason can be added after node is drained' '
 	flux resource drain 1 test_reason_01 &&
-	test $(flux resource list -n -s down -o {nnodes}) -eq 1
+	test $(flux resource list -n -s down -o {nnodes}) -eq 1 &&
+	test $(flux resource status -s drain -no {nnodes}) -eq 1
 '
 
 test_expect_success 'resource.eventlog has two drain events' '
@@ -44,7 +46,8 @@ test_expect_success 'resource.eventlog has two drain events' '
 
 test_expect_success 'reason can be updated after node is drained' '
 	flux resource drain 1 test_reason_01 &&
-	test $(flux resource list -n -s down -o {nnodes}) -eq 1
+	test $(flux resource list -n -s down -o {nnodes}) -eq 1 &&
+	test $(flux resource status -s drain -no {reason}) = "test_reason_01"
 '
 
 test_expect_success 'resource.eventlog has three drain events' '
@@ -53,7 +56,8 @@ test_expect_success 'resource.eventlog has three drain events' '
 
 test_expect_success 'drain works with idset' '
 	flux resource drain 2-3 &&
-	test $(flux resource list -n -s down -o {nnodes}) -eq 3
+	test $(flux resource list -n -s down -o {nnodes}) -eq 3 &&
+	test $(flux resource status -s drain -no {ranks}) = "1-3"
 '
 
 test_expect_success 'reload resource module to simulate instance restart' '
@@ -63,17 +67,33 @@ test_expect_success 'reload resource module to simulate instance restart' '
 	flux module load sched-simple
 '
 
-test_expect_success 'three nodes are still drained' '
-	test $(flux resource list -n -s down -o {nnodes}) -eq 3
+test_expect_success 'undrain one node' '
+	flux resource undrain 3 &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq 2
 '
 
-test_expect_success 'undrain works' '
-	flux resource undrain 1-3 &&
+test_expect_success 'two nodes are still drained' '
+	test $(flux resource list -n -s down -o {nnodes}) -eq 2
+'
+
+test_expect_success 'undrain remaining nodes' '
+	flux resource undrain 1-2 &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
 '
 
-test_expect_success 'resource.eventlog has one undrain event' '
-	test $(has_resource_event undrain | wc -l) -eq 1
+test_expect_success 'resource.eventlog has two undrain events' '
+	test $(has_resource_event undrain | wc -l) -eq 2
+'
+
+test_expect_success 'reload resource module to simulate instance restart' '
+	flux module remove sched-simple &&
+	flux module reload resource &&
+	waitdown 0 &&
+	flux module load sched-simple
+'
+
+test_expect_success 'no nodes remain drained after restart' '
+	test $(flux resource status -s drain -no {nnodes}) -eq 0
 '
 
 test_expect_success 'undrain fails if rank not drained' '
@@ -99,6 +119,13 @@ test_expect_success 'un/drain works with hostnames' '
 	test $(flux resource list -n -s down -o {nnodes}) -eq $SIZE &&
 	flux resource undrain $(hostname) &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
+'
+
+test_expect_success 'drain with no args lists currently drained targets' '
+	flux resource drain 0 happy happy, joy joy &&
+	flux resource drain > drain.out &&
+	test_debug "cat drain.out" &&
+	grep "happy happy, joy joy" drain.out
 '
 
 test_done

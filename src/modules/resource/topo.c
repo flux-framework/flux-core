@@ -42,7 +42,7 @@ struct reduction {
     int descendants;    // number of TBON descendants
     struct rlist *rl;   // resources: self + descendants
     json_t *xml;        // xml object: self + descendants
-};                      //   keys are single ranks, no dedup possible
+};
 
 struct topo {
     struct resource_ctx *ctx;
@@ -204,8 +204,8 @@ static void topo_reduce_cb (flux_t *h,
             errno = ENOMEM;
             goto error;
         }
-        if (json_object_update (topo->reduce.xml, xml) < 0)
-            goto nomem;
+        if (rutil_idkey_merge (topo->reduce.xml, xml) < 0)
+            goto error;
 
         topo->reduce.count += count;
 
@@ -216,12 +216,24 @@ static void topo_reduce_cb (flux_t *h,
     }
     rlist_destroy (rl);
     return;
-nomem:
-    errno = ENOMEM;
 error:
     flux_log_error (h, "resource.topo-reduce");
     flux_reactor_stop_error (flux_get_reactor (h));
     rlist_destroy (rl);
+}
+
+static int idkey_insert_id_string (json_t *obj, unsigned int id, const char *s)
+{
+    json_t *o;
+    int rc;
+
+    if (!(o = json_string (s))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    rc = rutil_idkey_insert_id (obj, id, o);
+    ERRNO_SAFE_WRAP (json_decref, o);
+    return rc;
 }
 
 /* Set up for reduction of distributed topo->r_local to inventory.
@@ -233,7 +245,6 @@ error:
 static int topo_reduce (struct topo *topo)
 {
     const char *val;
-    char rankstr[32];
 
     if (!(val = flux_attr_get (topo->ctx->h, "tbon.descendants")))
         return -1;
@@ -243,9 +254,12 @@ static int topo_reduce (struct topo *topo)
         return -1;
 
     topo->reduce.count = 1;
-    snprintf (rankstr, sizeof (rankstr), "%d", (int)topo->ctx->rank);
-    if (!(topo->reduce.xml = json_pack ("{s:s}", rankstr, topo->xml)))
+    if (!(topo->reduce.xml = json_object ()))
         goto nomem;
+    if (idkey_insert_id_string (topo->reduce.xml,
+                                topo->ctx->rank,
+                                topo->xml) < 0)
+        goto error;
     if (!(topo->reduce.rl = rlist_copy_empty (topo->r_local)))
         goto nomem;
 
@@ -256,6 +270,7 @@ static int topo_reduce (struct topo *topo)
     return 0;
 nomem:
     errno = ENOMEM;
+error:
     return -1;
 }
 

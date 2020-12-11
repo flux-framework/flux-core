@@ -1,0 +1,24 @@
+{
+  "R": {
+    "execution": {
+      "R_lite": [
+        {
+          "children": {
+            "core": "0-3"
+          },
+          "rank": "0-3"
+        }
+      ],
+      "expiration": 0,
+      "nodelist": [
+        "foo[1-4]"
+      ],
+      "starttime": 0
+    },
+    "version": 1
+  },
+  "drain": {},
+  "exclude": "",
+  "offline": "",
+  "online": "0-3"
+}

@@ -150,6 +150,7 @@ static int batch_timeout_leader (struct monitor *monitor)
     if (!idset_equal (monitor->up, cpy)) {
         if (online && reslog_post_pack (monitor->ctx->reslog,
                                        NULL,
+                                       0.,
                                        "online",
                                        "{s:s}",
                                        "idset",
@@ -159,6 +160,7 @@ static int batch_timeout_leader (struct monitor *monitor)
         }
         if (offline && reslog_post_pack (monitor->ctx->reslog,
                                          NULL,
+                                         0.,
                                          "offline",
                                          "{s:s}",
                                          "idset",
