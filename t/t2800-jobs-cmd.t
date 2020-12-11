@@ -639,6 +639,26 @@ test_expect_success 'flux-jobs --format={status},{status_abbrev} works' '
 	test $count -eq $(state_count completed)
 '
 
+test_expect_success 'flux-jobs --format={waitstatus},{returncode}' '
+	FORMAT="{waitstatus:h},{returncode:h}" &&
+	flux jobs --filter=pending,running -no "$FORMAT" > returncodePR.out &&
+	flux jobs --filter=inactive -no "$FORMAT" > returncodeI.out &&
+	test_debug "echo active:; cat returncodePR.out" &&
+	test_debug "echo inactive:; cat returncodeI.out" &&
+	countPR=$(grep -c "^-,-$" returncodePR.out) &&
+	test_debug "echo active got $countPR, want $(state_count sched run)" &&
+	test $countPR -eq $(state_count sched run) &&
+	count=$(grep -c "^32512,127$" returncodeI.out) &&
+	test_debug "echo exit 127 got $count, want $(state_count failed)" &&
+	test $count -eq $(state_count failed) &&
+	count=$(grep -c "^0,0$" returncodeI.out) &&
+	test_debug "echo complete got $count, want $(state_count completed)" &&
+	test $count -eq $(state_count completed) &&
+	count=$(grep -c "^-,-128$" returncodeI.out) &&
+	test_debug "echo cancelled got $count, want $(state_count cancelled)" &&
+	test $count -eq $(state_count cancelled)
+'
+
 test_expect_success 'flux-jobs --format={expiration},{t_remaining} works' '
 	expiration=$(flux jobs -f running -c1 -no "{expiration:.0f}") &&
 	t_remaining=$(flux jobs -f running -c1 -no "{t_remaining:.0f}") &&
@@ -807,6 +827,8 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	sched.foobar==SCHED.FOOBAR
 	user==USER
 	user.foobar==USER.FOOBAR
+	waitstatus==WSTATUS
+	returncode==RC
 	EOF
 	sed "s/\(.*\)==.*/\1=={\1}/" headers.expected > headers.fmt &&
 	flux jobs --from-stdin --format="$(cat headers.fmt)" \
