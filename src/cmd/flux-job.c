@@ -1035,7 +1035,7 @@ static const char *list_attrs =
     "[\"userid\",\"urgency\",\"priority\",\"t_submit\",\"state\"," \
     "\"name\",\"ntasks\",\"nnodes\",\"ranks\",\"nodelist\",\"expiration\"," \
     "\"success\",\"exception_occurred\",\"exception_severity\"," \
-    "\"exception_type\",\"exception_note\",\"result\","  \
+    "\"exception_type\",\"exception_note\",\"result\",\"waitstatus\","  \
     "\"t_depend\",\"t_run\",\"t_cleanup\"," \
     "\"t_inactive\"," "\"annotations\"]";
 
