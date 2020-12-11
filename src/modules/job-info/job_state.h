@@ -78,6 +78,7 @@ struct job {
     char *ranks;
     char *nodelist;
     double expiration;
+    int wait_status;
     bool success;
     bool exception_occurred;
     json_t *exception_context;
