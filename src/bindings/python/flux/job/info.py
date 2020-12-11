@@ -8,6 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import os
 import time
 import pwd
 import json
@@ -109,6 +110,7 @@ class JobInfo:
         "nodelist": "",
         "success": "",
         "result": "",
+        "waitstatus": "",
     }
 
     def __init__(self, info_resp):
@@ -209,6 +211,26 @@ class JobInfo:
     @memoized_property
     def status_abbrev(self):
         return statustostr(self.state_id, self.result_id, True)
+
+    @memoized_property
+    def returncode(self):
+        """
+        The job return code if the job has exited, or an empty string
+        if the job is still active. The return code of a job is the
+        highest job shell exit code, or the negative signal number if the
+        job shell was terminated by a signal. For jobs that were cancelled
+        before the RUN state, the return code will be set to -128.
+        """
+        status = self.waitstatus
+        code = ""
+        if not isinstance(status, int):
+            if self.result_id == flux.constants.FLUX_JOB_RESULT_CANCELLED:
+                code = -128
+        elif os.WIFSIGNALED(status):
+            code = -os.WTERMSIG(status)
+        elif os.WIFEXITED(status):
+            code = os.WEXITSTATUS(status)
+        return code
 
 
 def fsd(secs):
@@ -345,6 +367,8 @@ class JobInfoFormat(flux.util.OutputFormat):
         "runtime": "RUNTIME",
         "status": "STATUS",
         "status_abbrev": "ST",
+        "waitstatus": "WSTATUS",
+        "returncode": "RC",
         "exception.occurred": "EXCEPTION-OCCURRED",
         "exception.severity": "EXCEPTION-SEVERITY",
         "exception.type": "EXCEPTION-TYPE",
