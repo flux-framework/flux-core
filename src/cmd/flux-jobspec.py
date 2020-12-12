@@ -261,7 +261,7 @@ def main():
     if args.format == "yaml":
         out = yaml.dump(jobspec)
     else:
-        out = json.dumps(jobspec)
+        out = json.dumps(jobspec, ensure_ascii=False)
     print(out)
 
 
