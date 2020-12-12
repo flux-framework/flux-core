@@ -120,9 +120,11 @@ test_expect_success 'flux-shell: gpu-affinity=per-task' '
 	test_cmp ${name}.expected ${name}.out
 '
 test_expect_success 'flux-shell: gpu-affinity=off' '
-	name=gpu-off &&
-	flux mini run -N1 -n2 --dry-run -o gpu-affinity=off \
-		printenv CUDA_VISIBLE_DEVICES > j.${name} &&
+	name=gpu-off && (
+	  unset CUDA_VISIBLE_DEVICES &&
+	  flux mini run -N1 -n2 --dry-run -o gpu-affinity=off \
+		printenv CUDA_VISIBLE_DEVICES > j.${name}
+	) &&
 	cat >${name}.expected <<-EOF  &&
 	EOF
 	test_expect_code 1  ${FLUX_SHELL} -s -v -r 0 -j j.${name} -R R.gpu 0 \
