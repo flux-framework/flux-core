@@ -14,6 +14,7 @@ import json
 import errno
 
 import collections.abc as abc
+from typing import Any, Mapping
 
 from _flux._core import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl
@@ -104,7 +105,7 @@ def put_symlink(flux_handle, key, target):
     return RAW.flux_kvs_txn_symlink(flux_handle.aux_txn, 0, key, None, target)
 
 
-def commit(flux_handle, flags=0):
+def commit(flux_handle, flags: int = 0) -> int:
     if flux_handle.aux_txn is None:
         return -1
     future = RAW.flux_kvs_commit(flux_handle, None, flags, flux_handle.aux_txn)
@@ -162,7 +163,7 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
             )
         self.pimpl = self.InnerWrapper(flux_handle, path, handle)
 
-    def commit(self, flags=0):
+    def commit(self, flags=0) -> int:
         return commit(self.fhdl, flags)
 
     def key_at(self, key):
@@ -215,14 +216,14 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
     def __len__(self):
         return self.pimpl.get_size()
 
-    def fill(self, contents):
-        """
-        Populate this directory with keys specified by contents, which must
-        conform to the Mapping interface
+    def fill(self, contents: Mapping[str, Any]):
+        """Populate this directory with keys specified by contents
 
-        :param contents: A dict of keys and values to be created in the
-        directory or None, sub-directories can be created by using `dir.file`
-        syntax, sub-dicts will be stored as json values in a single key
+        Args:
+            contents: A dict of keys and values to be created in the directory
+              or None, sub-directories can be created by using ``dir.file``
+              syntax, sub-dicts will be stored as json values in a single key
+
         """
 
         if contents is None:
@@ -234,15 +235,15 @@ class KVSDir(WrapperPimpl, abc.MutableMapping):
         finally:
             self.commit()
 
-    def mkdir(self, key, contents=None):
-        """
-        Create a new sub-directory, optionally pre-populated with the contents
-        of `files` as would be done with `fill(contents)`
+    def mkdir(self, key: str, contents: Mapping[str, Any] = None):
+        """Create a new sub-directory, optionally pre-populated with the
+        contents of ``files`` as would be done with ``fill(contents)``
 
-        :param key: Key of the directory to be created
-        :param contents: A dict of keys and values to be created in the
-          directory or None, sub-directories can be created by using `dir.file`
-          syntax, sub-dicts will be stored as json values in a single key
+        Args:
+            key: Key of the directory to be created
+            contents: A dict of keys and values to be created in the directory
+              or None, sub-directories can be created by using `dir.file`
+              syntax, sub-dicts will be stored as json values in a single key
         """
 
         put_mkdir(self.fhdl, key)
