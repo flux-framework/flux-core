@@ -20,10 +20,8 @@
 # add these directories to sys.path here. If the directory is relative to the
 # documentation root, use os.path.abspath to make it absolute, like shown here.
 #
-# import os
-# import sys
-# sys.path.insert(0, os.path.abspath('.'))
-
+import os
+import sys
 
 # -- Project information -----------------------------------------------------
 
@@ -46,10 +44,51 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 master_doc = 'index'
 source_suffix = '.rst'
 
+extensions = ['sphinx.ext.napoleon']
+
 # Disable "smartquotes" to avoid things such as turning long-options
 #  "--" into en-dash in html output, which won't make much sense for
 #  manpages.
 smartquotes = False
+
+# -- Setup for Sphinx API Docs -----------------------------------------------
+
+# Workaround since sphinx does not automatically run apidoc before a build
+# Copied from https://github.com/readthedocs/readthedocs.org/issues/1139
+
+script_dir = os.path.normpath(os.path.dirname(__file__))
+py_bindings_dir = os.path.normpath(os.path.join(script_dir, "../src/bindings/python/"))
+
+# Make sure that the python bindings are in PYTHONPATH for autodoc
+sys.path.insert(0, py_bindings_dir)
+
+# run api doc
+def run_apidoc(_):
+    # Move import inside so that `gen-cmdhelp.py` can exec this file in LGTM.com
+    # without sphinx installed
+    # pylint: disable=import-outside-toplevel
+    from sphinx.ext.apidoc import main
+
+    try:
+        # Check if running under `make`
+        build_dir = os.path.normpath(os.environ.get('SPHINX_BUILDDIR'))
+    except:
+        build_dir = script_dir
+    output_path = os.path.join(build_dir, 'python')
+    exclusions = [os.path.join(py_bindings_dir, 'setup.py'),]
+    main(['-e', '-f', '-M', '-o', output_path, py_bindings_dir] + exclusions)
+
+# launch setup
+def setup(app):
+    app.connect('builder-inited', run_apidoc)
+
+# ReadTheDocs runs sphinx without first building Flux, so the cffi modules in
+# `_flux` will not exist, causing import errors.  Mock the imports to prevent
+# these errors.
+
+autodoc_mock_imports = ["_flux", "flux.constants"]
+
+napoleon_google_docstring = True
 
 # -- Options for HTML output -------------------------------------------------
 

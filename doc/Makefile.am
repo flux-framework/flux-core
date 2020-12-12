@@ -290,7 +290,9 @@ stderr_devnull_ =  $(stderr_devnull_$(AM_DEFAULT_VERBOSITY))
 stderr_devnull_0 = >/dev/null 2>&1
 
 $(MAN_FILES): conf.py $(RST_FILES)
-	$(sphinx_verbose)$(PYTHON) -m sphinx -M man $(srcdir) ./ $(STDERR_DEVNULL)
+	$(sphinx_verbose) \
+	SPHINX_BUILDDIR=$(abs_builddir) $(PYTHON) \
+		-m sphinx -M man $(srcdir) ./ $(STDERR_DEVNULL)
 	@echo "  MV        manpages"; \
 	for sec in 1 3 5 7; do \
 	  $(MKDIR_P) man$$sec && \
@@ -309,7 +311,7 @@ CLEANFILES = \
 	$(MAN_FILES)
 
 clean-local:
-	-rm -rf man
+	-rm -rf man python
 
 distclean-local:
 	-rm -rf doctrees
