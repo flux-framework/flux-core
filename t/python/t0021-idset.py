@@ -10,6 +10,7 @@
 ###############################################################
 
 import unittest
+import subflux
 from pycotap import TAPTestRunner
 import flux.idset as idset
 

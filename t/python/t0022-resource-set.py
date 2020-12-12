@@ -11,6 +11,7 @@
 
 import json
 import unittest
+import subflux
 from pycotap import TAPTestRunner
 from flux.resource import ResourceSet, Rlist
 from flux.idset import IDset
