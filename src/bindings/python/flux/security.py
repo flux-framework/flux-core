@@ -55,7 +55,7 @@ class SecurityContext(WrapperPimpl):
 
     def sign_wrap_as(self, userid, payload, mech_type=ffi.NULL, flags=0):
         if isinstance(payload, six.text_type):
-            payload = payload.encode("utf-8")
+            payload = payload.encode("utf-8", errors="surrogateescape")
         elif not isinstance(payload, six.binary_type):
             errstr = "payload must be a text or binary type, not {}"
             raise TypeError(errstr.format(type(payload)))
