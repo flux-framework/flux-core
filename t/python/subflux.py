@@ -27,6 +27,8 @@ builddir = os.path.abspath(
 )
 flux_exe = os.path.join(builddir, "src", "cmd", "flux")
 
+sys.path.append(script_dir + "/tap")
+
 
 def is_exe(fpath):
     return os.path.isfile(fpath) and os.access(fpath, os.X_OK)
