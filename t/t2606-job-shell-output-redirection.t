@@ -301,6 +301,7 @@ test_expect_success 'job-shell: job attach exits cleanly if no kvs output (2-tas
         grep stderr:baz err26 &&
         ! test -s out26.attach &&
         sed -i -e "/stdin EOF could not be sent/d" err26.attach &&
+        sed -i -e "/affinity/d" err26.attach &&
         ! test -s err26.attach
 '
 
