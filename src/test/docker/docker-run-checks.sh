@@ -18,7 +18,7 @@ declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,inception"
 declare -r short_opts="hqIdi:S:j:t:D:Pr"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
@@ -32,6 +32,7 @@ Options:\n\
      --no-cache                Disable docker caching\n\
      --no-home                 Skip mounting the host home directory\n\
      --install-only            Skip make check, only make install\n\
+     --inception               Run tests as flux jobs\n\
  -q, --quiet                   Add --quiet to docker-build\n\
  -t, --tag=TAG                 If checks succeed, tag image as NAME\n\
  -i, --image=NAME              Use base docker image NAME (default=$IMAGE)\n\
@@ -71,6 +72,7 @@ while true; do
       --no-cache)                  NO_CACHE="--no-cache";      shift   ;;
       --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
       --install-only)              INSTALL_ONLY=t;             shift   ;;
+      --inception)                 INCEPTION=t;                shift   ;;
       -P|--no-poison)              POISON=0;                   shift   ;;
       -t|--tag)                    TAG="$2";                   shift 2 ;;
       --)                          shift; break;                       ;;
@@ -118,6 +120,7 @@ fi
 echo "mounting $TOP as /usr/src"
 
 export POISON
+export INCEPTION
 export JOBS
 export DISTCHECK
 export RECHECK
@@ -167,6 +170,7 @@ else
         -e PYTHON_VERSION \
         -e PRELOAD \
         -e POISON \
+        -e INCEPTION \
         -e ASAN_OPTIONS \
         -e BUILD_DIR \
         -e S3_ACCESS_KEY_ID \
