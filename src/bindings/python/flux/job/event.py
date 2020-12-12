@@ -109,7 +109,7 @@ def event_watch_async(flux_handle, jobid, eventlog="eventlog"):
     :param flux_handle: handle for Flux broker from flux.Flux()
     :type flux_handle: Flux
     :param jobid: the job ID on which to watch events
-    :param name: The event name or glob pattern for which to wait (default: *)
+    :param name: The event name or glob pattern for which to wait (default: \\*)
     :param eventlog: eventlog path in job kvs directory (default: eventlog)
     :returns: a JobEventWatchFuture object
     :rtype: JobEventWatchFuture
@@ -123,14 +123,15 @@ def event_watch(flux_handle, jobid, eventlog="eventlog"):
     """Python generator to watch all events for a job
 
     Synchronously watch events a job eventlog via a simple generator.
-    Use as:
-        for event in job.event_watch(flux_handle, jobid):
-            # do something with event...
+
+    Example:
+        >>> for event in job.event_watch(flux_handle, jobid):
+        ...     # do something with event
 
     :param flux_handle: handle for Flux broker from flux.Flux()
     :type flux_handle: Flux
     :param jobid: the job ID on which to watch events
-    :param name: The event name or glob pattern for which to wait (default: *)
+    :param name: The event name or glob pattern for which to wait (default: \\*)
     :param eventlog: eventlog path in job kvs directory (default: eventlog)
     """
     watcher = event_watch_async(flux_handle, jobid, eventlog)

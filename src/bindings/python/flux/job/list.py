@@ -143,8 +143,6 @@ class JobList:
     users. Other filter parameters can be passed to the constructor or
     the ``set_user()`` and ``add_filter()`` methods.
 
-    Constructor arguments:
-    ======================
     :flux_handle: A Flux handle obtained from flux.Flux()
     :attrs: Optional list of job attributes to fetch. (default is all attrs)
     :filters: List of strings defining the results or states to filter. E.g.,

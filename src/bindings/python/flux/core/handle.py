@@ -26,8 +26,10 @@ class Flux(Wrapper):
     """
     The general Flux handle class, create one of these to connect to the
     nearest enclosing flux instance
-    >>> flux.Flux() #doctest: +ELLIPSIS
-    <flux.core.Flux object at 0x...>
+
+    Example:
+        >>> flux.Flux()
+        <flux.core.Flux object at 0x...>
     """
 
     def __init__(self, url=ffi.NULL, flags=0, handle=None):
