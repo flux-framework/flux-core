@@ -11,10 +11,15 @@
 ###############################################################
 
 import os
+import sys
 import unittest
 from tempfile import NamedTemporaryFile
 
-from flux.security import SecurityContext
+try:
+    from flux.security import SecurityContext
+except:
+    print("1..0 # skip flux.security module not available")
+    sys.exit(0)
 
 
 def __flux_size():
