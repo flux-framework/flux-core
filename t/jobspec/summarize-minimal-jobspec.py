@@ -11,7 +11,8 @@ import yaml
 
 def load_jobspec(stream, prefix=""):
     try:
-        jobspec = yaml.safe_load(stream)
+        data = stream.read().encode("utf-8")
+        jobspec = yaml.safe_load(data)
         return jobspec
     except (yaml.YAMLError) as e:
         print("{}{}".format(prefix, e.problem))
@@ -56,7 +57,7 @@ def main():
 
     if args.jobspec:
         try:
-            with open(args.jobspec, "r") as fd:
+            with open(args.jobspec, "r", encoding="utf-8") as fd:
                 jobspec = yaml.safe_load(fd)
         except (OSError, IOError) as e:
             print("{}{}".format(args.jobspec, e.strerror))
