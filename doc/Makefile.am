@@ -285,6 +285,12 @@ sphinx_verbose = $(sphinx_verbose_$(V))
 sphinx_verbose_ = $(sphinx_verbose_$(AM_DEFAULT_VERBOSITY))
 sphinx_verbose_0 = @echo "  BUILD     manpages";
 
+sphinx_verbose_flags = $(sphinx_verbose_flags_$(V))
+sphinx_verbose_flags_ = $(sphinx_verbose_flags_$(AM_DEFAULT_VERBOSITY))
+sphinx_verbose_flags_0 =
+sphinx_verbose_flags_1 = -v
+sphinx_verbose_flags_2 = -vv
+
 STDERR_DEVNULL = $(stderr_devnull_$(V))
 stderr_devnull_ =  $(stderr_devnull_$(AM_DEFAULT_VERBOSITY))
 stderr_devnull_0 = >/dev/null 2>&1
@@ -292,7 +298,8 @@ stderr_devnull_0 = >/dev/null 2>&1
 $(MAN_FILES): conf.py $(RST_FILES)
 	$(sphinx_verbose) \
 	SPHINX_BUILDDIR=$(abs_builddir) $(PYTHON) \
-		-m sphinx -M man $(srcdir) ./ $(STDERR_DEVNULL)
+		-m sphinx $(sphinx_verbose_flags) -b man $(srcdir) ./man \
+		$(STDERR_DEVNULL)
 	@echo "  MV        manpages"; \
 	for sec in 1 3 5 7; do \
 	  $(MKDIR_P) man$$sec && \
