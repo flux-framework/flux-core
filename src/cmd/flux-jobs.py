@@ -56,6 +56,7 @@ def fetch_jobs_flux(args, fields):
         "userid": ("userid",),
         "username": ("userid",),
         "urgency": ("urgency",),
+        "priority": ("priority",),
         "state": ("state",),
         "state_single": ("state",),
         "name": ("name",),

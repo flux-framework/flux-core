@@ -369,21 +369,21 @@ test_expect_success 'flux-jobs --format={userid},{username} works' '
 	test_cmp user.out user.exp
 '
 
-test_expect_success 'flux-jobs --format={urgency} works' '
-	flux jobs --suppress-header -a --format="{urgency}" > urgency.out &&
-	echo 30 > urgency.exp &&
-	echo 25 >> urgency.exp &&
-	echo 20 >> urgency.exp &&
-	echo 15 >> urgency.exp &&
-	echo 10 >> urgency.exp &&
-	echo 5 >> urgency.exp &&
+test_expect_success 'flux-jobs --format={urgency},{priority} works' '
+	flux jobs --suppress-header -a --format="{urgency},{priority}" > urgency_priority.out &&
+	echo 30,30 > urgency_priority.exp &&
+	echo 25,25 >> urgency_priority.exp &&
+	echo 20,20 >> urgency_priority.exp &&
+	echo 15,15 >> urgency_priority.exp &&
+	echo 10,10 >> urgency_priority.exp &&
+	echo 5,5 >> urgency_priority.exp &&
 	for i in `seq 1 $(state_count run)`; do
-		echo "16" >> urgency.exp
+		echo "16,16" >> urgency_priority.exp
 	done &&
 	for i in `seq 1 $(state_count inactive)`; do
-		echo "16" >> urgency.exp
+		echo "16,16" >> urgency_priority.exp
 	done &&
-	test_cmp urgency.out urgency.exp
+	test_cmp urgency_priority.out urgency_priority.exp
 '
 
 test_expect_success 'flux-jobs --format={state},{state_single} works' '
@@ -760,6 +760,7 @@ test_expect_success 'flux-jobs: header included with all custom formats' '
 	userid==UID
 	username==USER
 	urgency==URG
+	priority==PRI
 	state==STATE
 	state_single==S
 	name==NAME
