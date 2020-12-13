@@ -337,6 +337,8 @@ int event_job_action (struct event *event, struct job *job)
         case FLUX_JOB_STATE_SCHED:
             if (alloc_enqueue_alloc_request (ctx->alloc, job) < 0)
                 return -1;
+            if (alloc_queue_recalc_pending (ctx->alloc) < 0)
+                return -1;
             break;
         case FLUX_JOB_STATE_RUN:
             if (start_send_request (ctx->start, job) < 0)

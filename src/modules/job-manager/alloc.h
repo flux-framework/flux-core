@@ -52,6 +52,9 @@ struct job *alloc_queue_next (struct alloc *alloc);
  */
 void alloc_queue_reorder (struct alloc *alloc, struct job *job);
 
+/* Recalculate pending job, e.g. after urgency change */
+int alloc_queue_recalc_pending (struct alloc *alloc);
+
 void alloc_disconnect_rpc (flux_t *h,
                            flux_msg_handler_t *mh,
                            const flux_msg_t *msg,
