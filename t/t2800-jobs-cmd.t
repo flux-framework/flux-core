@@ -19,7 +19,7 @@ JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/valida
 # - the last job submissions are intended to get a create a set of
 #   pending jobs, because jobs from the second loop have taken all resources
 # - job ids are stored in files in the order we expect them to be listed
-#   - pending jobs - by urgency (highest first), job id (smaller first)
+#   - pending jobs - by priority (highest first), job id (smaller first)
 #   - running jobs - by start time (most recent first)
 #   - inactive jobs - by completion time (most recent first)
 #

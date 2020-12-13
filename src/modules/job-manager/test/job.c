@@ -164,7 +164,9 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit+depend+priority) set id from param");
     ok (job->userid == 66,
         "job_create_from_eventlog log=(submit+depend+priority) set userid from submit");
-    ok (job->urgency == 1,
+    ok (job->urgency == 16,
+        "job_create_from_eventlog log=(submit+depend+priority) set urgency from submit");
+    ok (job->priority == 1,
         "job_create_from_eventlog log=(submit+depend+priority) set priority from priority");
     ok (job->t_submit == 42.2,
         "job_create_from_eventlog log=(submit+depend+priority) set t_submit from submit");

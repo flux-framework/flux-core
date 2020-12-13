@@ -50,10 +50,10 @@ wait_jobid_state() {
 # - the second loop of job submissions are intended to eat up all resources
 # - the last job submissions are intended to get a create a set of
 #   pending jobs, because jobs from the second loop have taken all resources
-#   - we desire pending jobs sorted in urgency order, so we need to
+#   - we desire pending jobs sorted in priority order, so we need to
 #   create the sorted list for comparison later.
 # - job ids are stored in files in the order we expect them to be listed
-#   - pending jobs - by urgency (highest first), job id (smaller first)
+#   - pending jobs - by priority (highest first), job id (smaller first)
 #   - running jobs - by start time (most recent first)
 #   - inactive jobs - by completion time (most recent first)
 #
@@ -253,7 +253,7 @@ test_expect_success HAVE_JQ 'flux job list only completed jobs' '
 # state since we happen to know all these jobs are in the "sched"
 # state given checks above
 
-test_expect_success HAVE_JQ 'flux job list pending jobs in urgency order' '
+test_expect_success HAVE_JQ 'flux job list pending jobs in priority order' '
         flux job list -s pending | jq .id > list_pending1.out &&
         flux job list -s depend,priority,sched | jq .id > list_pending2.out &&
         flux job list -s sched | jq .id > list_pending3.out &&

@@ -30,15 +30,29 @@
 
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
 
+/* REVERT - flag indicates state transition is a revert, avoid certain
+ * checks, clear certain bitmasks on revert
+ *
+ * CONDITIONAL - flag indicates state transition is dependent on
+ * current state.
+ */
+#define STATE_TRANSITION_FLAG_REVERT 0x1
+#define STATE_TRANSITION_FLAG_CONDITIONAL 0x2
+
 struct state_transition {
     flux_job_state_t state;
     bool processed;
     double timestamp;
+    int flags;
+    flux_job_state_t expected_state;
 };
 
 static int submit_context_parse (flux_t *h,
                                  struct job *job,
                                  json_t *context);
+static int priority_context_parse (flux_t *h,
+                                   struct job *job,
+                                   json_t *context);
 static int finish_context_parse (flux_t *h,
                                  struct job *job,
                                  json_t *context);
@@ -54,8 +68,8 @@ static void process_next_state (struct info_ctx *ctx, struct job *job);
 
 static int journal_process_events (struct job_state_ctx *jsctx, json_t *events);
 
-/* Compare items for sorting in list, urgency first (higher urgency
- * before lower urgency), job id second N.B. zlistx_comparator_fn signature
+/* Compare items for sorting in list, priority first (higher priority
+ * before lower priority), job id second N.B. zlistx_comparator_fn signature
  */
 static int job_urgency_cmp (const void *a1, const void *a2)
 {
@@ -63,7 +77,7 @@ static int job_urgency_cmp (const void *a1, const void *a2)
     const struct job *j2 = a2;
     int rc;
 
-    if ((rc = (-1)*NUMCMP (j1->urgency, j2->urgency)) == 0)
+    if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
         rc = NUMCMP (j1->id, j2->id);
     return rc;
 }
@@ -122,6 +136,9 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
     job->state = FLUX_JOB_STATE_NEW;
     job->userid = FLUX_USERID_UNKNOWN;
     job->urgency = -1;
+    /* pending jobs that are not yet assigned a priority shall be
+     * listed after those who do, so we set the job priority to MIN */
+    job->priority = FLUX_JOB_PRIORITY_MIN;
     job->result = FLUX_JOB_RESULT_FAILED;
     job->eventlog_seq = -1;
 
@@ -150,7 +167,7 @@ static void json_decref_wrapper (void **data)
  */
 static bool search_direction (struct job *job)
 {
-    if (job->urgency > FLUX_JOB_URGENCY_DEFAULT)
+    if (job->priority > (FLUX_JOB_PRIORITY_MAX / 2))
         return true;
     else
         return false;
@@ -297,8 +314,17 @@ static void update_job_state_and_list (struct info_ctx *ctx,
      */
     update_job_state (ctx, job, newstate, timestamp);
 
+    /* when FLUX_JOB_STATE_SCHED is reached, the queue priority has
+     * been determined, meaning we can now sort the job on the pending
+     * list amongst jobs with queue priorities
+     */
     if (oldlist != newlist)
         job_change_list (jsctx, job, oldlist, newstate);
+    else if (oldlist == jsctx->pending
+             && newstate == FLUX_JOB_STATE_SCHED)
+        zlistx_reorder (jsctx->pending,
+                        job->list_handle,
+                        search_direction (job));
 }
 
 static void list_id_respond (struct info_ctx *ctx,
@@ -754,12 +780,16 @@ static void state_transition_destroy (void *data)
 
 static int add_state_transition (struct job *job,
                                  flux_job_state_t newstate,
-                                 double timestamp)
+                                 double timestamp,
+                                 int flags,
+                                 flux_job_state_t expected_state)
 {
     struct state_transition *st = NULL;
     int saved_errno;
 
-    if (newstate & job->states_events_mask)
+    if (!((flags & STATE_TRANSITION_FLAG_REVERT)
+          || (flags & STATE_TRANSITION_FLAG_CONDITIONAL))
+        && (newstate & job->states_events_mask))
         return 0;
 
     if (!(st = calloc (1, sizeof (*st))))
@@ -767,6 +797,8 @@ static int add_state_transition (struct job *job,
     st->state = newstate;
     st->processed = false;
     st->timestamp = timestamp;
+    st->flags = flags;
+    st->expected_state = expected_state;
 
     if (zlist_append (job->next_states, st) < 0) {
         errno = ENOMEM;
@@ -791,6 +823,27 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
 
     while ((st = zlist_head (job->next_states))
            && !st->processed) {
+
+        if ((st->flags & STATE_TRANSITION_FLAG_REVERT)) {
+            /* only revert if the current state is what is expected */
+            if (job->state == st->expected_state) {
+                job->states_mask &= ~job->state;
+                job->states_mask &= ~st->state;
+                update_job_state_and_list (ctx, job, st->state, st->timestamp);
+            }
+            else {
+                zlist_remove (job->next_states, st);
+                continue;
+            }
+        }
+        else if ((st->flags & STATE_TRANSITION_FLAG_CONDITIONAL)) {
+            /* if current state isn't what we expected, move on */
+            if (job->state != st->expected_state) {
+                zlist_remove (job->next_states, st);
+                continue;
+            }
+        }
+
         if (st->state == FLUX_JOB_STATE_DEPEND
             || st->state == FLUX_JOB_STATE_RUN) {
             flux_future_t *f = NULL;
@@ -920,7 +973,10 @@ static struct job *eventlog_restart_parse (struct info_ctx *ctx,
             update_job_state (ctx, job, FLUX_JOB_STATE_PRIORITY, timestamp);
         }
         else if (!strcmp (name, "priority")) {
-            update_job_state (ctx, job, FLUX_JOB_STATE_SCHED, timestamp);
+            if (priority_context_parse (ctx->h, job, context) < 0)
+                goto error;
+            if (job->state == FLUX_JOB_STATE_PRIORITY)
+                update_job_state (ctx, job, FLUX_JOB_STATE_SCHED, timestamp);
         }
         else if (!strcmp (name, "urgency")) {
             if (urgency_context_parse (ctx->h, job, context) < 0)
@@ -1155,9 +1211,15 @@ static int job_update_eventlog_seq (struct job_state_ctx *jsctx,
 static int job_transition_state (struct job_state_ctx *jsctx,
                                  struct job *job,
                                  flux_job_state_t newstate,
-                                 double timestamp)
+                                 double timestamp,
+                                 int flags,
+                                 flux_job_state_t expected_state)
 {
-    if (add_state_transition (job, newstate, timestamp) < 0) {
+    if (add_state_transition (job,
+                              newstate,
+                              timestamp,
+                              flags,
+                              expected_state) < 0) {
         flux_log_error (jsctx->h, "%s: add_state_transition",
                         __FUNCTION__);
         return -1;
@@ -1184,7 +1246,7 @@ static int journal_advance_job (struct job_state_ctx *jsctx,
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
 
-    return job_transition_state (jsctx, job, newstate, timestamp);
+    return job_transition_state (jsctx, job, newstate, timestamp, 0, 0);
 }
 
 static int journal_revert_job (struct job_state_ctx *jsctx,
@@ -1206,19 +1268,15 @@ static int journal_revert_job (struct job_state_ctx *jsctx,
      * for the event in RFC21.  In the future, other transitions
      * may be defined.
      */
-    if (job->state == FLUX_JOB_STATE_SCHED) {
-        job->states_mask &= ~(job->state);
+    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
+        return 0;
 
-        if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
-            return 0;
-
-        return job_transition_state (jsctx,
-                                     job,
-                                     FLUX_JOB_STATE_PRIORITY,
-                                     timestamp);
-    }
-
-    return 0;
+    return job_transition_state (jsctx,
+                                 job,
+                                 FLUX_JOB_STATE_PRIORITY,
+                                 timestamp,
+                                 STATE_TRANSITION_FLAG_REVERT,
+                                 FLUX_JOB_STATE_SCHED);
 }
 
 static int submit_context_parse (flux_t *h,
@@ -1282,7 +1340,65 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
     return job_transition_state (jsctx,
                                  job,
                                  FLUX_JOB_STATE_DEPEND,
-                                 timestamp);
+                                 timestamp,
+                                 0,
+                                 0);
+}
+
+static int priority_context_parse (flux_t *h,
+                                   struct job *job,
+                                   json_t *context)
+{
+    unsigned int priority;
+
+    if (!context
+        || json_unpack (context, "{ s:i }", "priority", &priority) < 0) {
+        flux_log (h, LOG_ERR, "%s: priority context invalid: %ju",
+                  __FUNCTION__, (uintmax_t)job->id);
+        errno = EPROTO;
+        return -1;
+    }
+
+    job->priority = priority;
+    return 0;
+}
+
+static int journal_priority_event (struct job_state_ctx *jsctx,
+                                   flux_jobid_t id,
+                                   int eventlog_seq,
+                                   double timestamp,
+                                   json_t *context)
+{
+    struct job *job;
+    unsigned int orig_priority;
+
+    if (!(job = zhashx_lookup (jsctx->index, &id))) {
+        flux_log_error (jsctx->h, "%s: job %ju not in hash",
+                        __FUNCTION__, (uintmax_t)id);
+        /* do not return error, we consider it a non-fatal error */
+        return 0;
+    }
+
+    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
+        return 0;
+
+    orig_priority = job->priority;
+
+    if (priority_context_parse (jsctx->h, job, context) < 0)
+        return -1;
+
+    if (job->state & FLUX_JOB_STATE_PENDING
+        && job->priority != orig_priority)
+        zlistx_reorder (jsctx->pending,
+                        job->list_handle,
+                        search_direction (job));
+
+    return job_transition_state (jsctx,
+                                 job,
+                                 FLUX_JOB_STATE_SCHED,
+                                 timestamp,
+                                 STATE_TRANSITION_FLAG_CONDITIONAL,
+                                 FLUX_JOB_STATE_PRIORITY);
 }
 
 static int finish_context_parse (flux_t *h,
@@ -1333,7 +1449,9 @@ static int journal_finish_event (struct job_state_ctx *jsctx,
     return job_transition_state (jsctx,
                                  job,
                                  FLUX_JOB_STATE_CLEANUP,
-                                 timestamp);
+                                 timestamp,
+                                 0,
+                                 0);
 }
 
 static int urgency_context_parse (flux_t *h,
@@ -1362,7 +1480,6 @@ static int journal_urgency_event (struct job_state_ctx *jsctx,
                                   json_t *context)
 {
     struct job *job;
-    int orig_urgency;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
         flux_log_error (jsctx->h, "%s: job %ju not in hash",
@@ -1374,17 +1491,8 @@ static int journal_urgency_event (struct job_state_ctx *jsctx,
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
 
-    orig_urgency = job->urgency;
-
     if (urgency_context_parse (jsctx->h, job, context) < 0)
         return -1;
-
-    if (job->state & FLUX_JOB_STATE_PENDING
-        && job->urgency != orig_urgency)
-        zlistx_reorder (jsctx->pending,
-                        job->list_handle,
-                        search_direction (job));
-
     return 0;
 }
 
@@ -1450,7 +1558,9 @@ static int journal_exception_event (struct job_state_ctx *jsctx,
         return job_transition_state (jsctx,
                                      job,
                                      FLUX_JOB_STATE_CLEANUP,
-                                     timestamp);
+                                     timestamp,
+                                     0,
+                                     0);
 
     return 0;
 }
@@ -1524,11 +1634,11 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
             return -1;
     }
     else if (!strcmp (name, "priority")) {
-        if (journal_advance_job (jsctx,
-                                 id,
-                                 FLUX_JOB_STATE_SCHED,
-                                 eventlog_seq,
-                                 timestamp) < 0)
+        if (journal_priority_event (jsctx,
+                                    id,
+                                    eventlog_seq,
+                                    timestamp,
+                                    context) < 0)
             return -1;
     }
     else if (!strcmp (name, "alloc")) {
@@ -1577,6 +1687,12 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
             return -1;
     }
     else if (!strcmp (name, "flux-restart")) {
+        /* Presently, job-info depends on job-manager.events-journal
+         * service.  So if job-manager reloads, job-info must be
+         * reloaded, making the probability of reaching this
+         * `flux-restart` path very low.  Code added for completeness
+         * and in case dependency removed in the future.
+         */
         if (journal_revert_job (jsctx,
                                 id,
                                 eventlog_seq,

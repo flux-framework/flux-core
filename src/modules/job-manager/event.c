@@ -396,11 +396,11 @@ static int event_submit_context_decode (json_t *context,
 }
 
 static int event_priority_context_decode (json_t *context,
-                                          int *priority)
+                                          unsigned int *priority)
 {
     /* N.B. eventually this will be the priority, but is the
      * same of the urgency at the moment */
-    if (json_unpack (context, "{ s:i }", "priority", priority) < 0) {
+    if (json_unpack (context, "{ s:i }", "priority", (int *)priority) < 0) {
         errno = EPROTO;
         return -1;
     }
@@ -473,9 +473,10 @@ int event_job_update (struct job *job, json_t *event)
         job->state = FLUX_JOB_STATE_PRIORITY;
     }
     else if (!strcmp (name, "priority")) {
-        if (job->state != FLUX_JOB_STATE_PRIORITY)
+        if (job->state != FLUX_JOB_STATE_PRIORITY
+            && job->state != FLUX_JOB_STATE_SCHED)
             goto inval;
-        if (event_priority_context_decode (context, &job->urgency) < 0)
+        if (event_priority_context_decode (context, &job->priority) < 0)
             goto error;
         job->state = FLUX_JOB_STATE_SCHED;
     }
