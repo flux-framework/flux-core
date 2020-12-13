@@ -45,3 +45,8 @@ check-local: all
 if ENABLE_PYLINT
 	$(top_srcdir)/scripts/pylint
 endif
+
+check-prep: all
+	cd src && $(MAKE) check
+	cd doc && $(MAKE) check
+	cd t && $(MAKE) check-prep

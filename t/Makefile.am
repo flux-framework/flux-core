@@ -317,6 +317,9 @@ check_LTLIBRARIES = \
 	shell/plugins/log.la \
 	shell/plugins/test-event.la
 
+check-prep:
+	$(MAKE) $(check_PROGRAMS) $(check_LTLIBRARIES)
+
 dist_check_DATA = \
 	hwloc-data/sierra2/0.xml \
 	hwloc-data/sierra2/1.xml \

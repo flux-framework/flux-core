@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 ###############################################################
 # Copyright 2014 Lawrence Livermore National Security, LLC
@@ -26,6 +26,8 @@ builddir = os.path.abspath(
     os.path.join(os.environ["builddir"] if "builddir" in os.environ else "", "..")
 )
 flux_exe = os.path.join(builddir, "src", "cmd", "flux")
+
+sys.path.append(script_dir + "/tap")
 
 
 def is_exe(fpath):

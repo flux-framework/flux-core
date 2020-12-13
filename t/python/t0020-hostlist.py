@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 ###############################################################
 # Copyright 2020 Lawrence Livermore National Security, LLC
 # (c.f. AUTHORS, NOTICE.LLNS, COPYING)
@@ -10,6 +10,7 @@
 ###############################################################
 
 import unittest
+import subflux
 from pycotap import TAPTestRunner
 import flux.hostlist as hostlist
 

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 ###############################################################
 # Copyright 2020 Lawrence Livermore National Security, LLC
 # (c.f. AUTHORS, NOTICE.LLNS, COPYING)
@@ -11,6 +11,7 @@
 
 import json
 import unittest
+import subflux
 from pycotap import TAPTestRunner
 from flux.resource import ResourceSet, Rlist
 from flux.idset import IDset

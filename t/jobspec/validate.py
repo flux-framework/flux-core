@@ -11,7 +11,8 @@ import jsonschema
 def validate_input(jobspec_stream, schema, label=""):
     errors = 0
     try:
-        data = yaml.safe_load(jobspec_stream)
+        raw = jobspec_stream.read().encode("utf-8", errors="surrogateescape")
+        data = yaml.safe_load(raw)
         jsonschema.validate(data, schema)
     except (yaml.YAMLError) as e:
         print("{}: {}".format(label, e.problem))
@@ -30,7 +31,7 @@ def validate_input(jobspec_stream, schema, label=""):
 def validate_inputfile(infile, schema):
     errors = 0
     try:
-        with open(infile) as fd:
+        with open(infile, encoding="utf-8", errors="surrogateescape") as fd:
             errors += validate_input(fd, schema, label=infile)
     except (OSError, IOError) as e:
         print("{}: {}".format(infile, e.strerror))

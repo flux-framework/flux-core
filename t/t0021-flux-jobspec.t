@@ -178,7 +178,7 @@ test_expect_success HAVE_JQ 'current working directory encoded in jobspec' '
 '
 
 test_expect_success HAVE_JQ 'current environment encoded in jobspec' '
-    flux python -c "import os,json; print (json.dumps(dict(os.environ)))" | \
+    flux python -c "import os,json; print (json.dumps(dict(os.environ), ensure_ascii=False))" | \
         jq -S . >environ.expected &&
     flux jobspec srun hostname | \
         jq -S -e ".attributes.system.environment" > environ.output &&
@@ -218,7 +218,7 @@ test_expect_success HAVE_JQ 'jobspec srun --export=VAR,VAR2,... works' '
 
 test_expect_success HAVE_JQ 'jobspec srun --export=ALL,VAR=val works' '
     FLOOP=boop \
-      flux python -c "import os,json; print (json.dumps(dict(os.environ)))" | \
+      flux python -c "import os,json; print (json.dumps(dict(os.environ), ensure_ascii=False))" | \
         jq -S . >floop.expected &&
     flux jobspec srun --export=ALL,FLOOP=boop hostname | \
         jq -S ".attributes.system.environment" > floop.output &&

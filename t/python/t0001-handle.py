@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 ###############################################################
 # Copyright 2014 Lawrence Livermore National Security, LLC
@@ -10,14 +10,12 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from __future__ import print_function
-
 import unittest
 import syslog
 import six
 
 import flux
-from subflux import rerun_under_flux
+from subflux import rerun_under_flux, script_dir
 
 
 def __flux_size():

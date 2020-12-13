@@ -48,9 +48,13 @@ if __name__ == "__main__":
 
     rows = cursor.fetchall()
 
+    #  make print below safe to handle utf-8
+    utf8out = open(1, "w", encoding="utf-8", closefd=False)
+
     for row in rows:
         for key in row.keys():
-            print(key + " = " + str(row[key]))
+            val = row[key]
+            print(f"{key} = {val}", file=utf8out)
 
     con.close()
     sys.exit(0)

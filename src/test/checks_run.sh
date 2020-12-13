@@ -16,6 +16,7 @@
 #  RECHECK       Run `make recheck` if `make check` fails the first time
 #  PRELOAD       Set as LD_PRELOAD for make and tests
 #  POISON        Install poison libflux and flux(1) in image
+#  INCEPTION     Run tests under a flux instance with prove(1)
 #  chain_lint    Run sharness with --chain-lint if chain_lint=t
 #
 #  And, obviously, some crucial variables that configure itself cares about:
@@ -125,6 +126,12 @@ elif test "$TEST_INSTALL" = "t"; then
     CHECKCMDS="sudo make install && \
               /usr/bin/flux keygen --force && \
               FLUX_TEST_INSTALLED_PATH=/usr/bin ${MAKE} -j $JOBS check"
+
+# Run checks under prove(1):
+elif test "$INCEPTION" = "t"; then
+	CHECKCMDS="make -j ${JOBS} check-prep && \
+	           cd t && ../src/cmd/flux start -s1 ./prove-under-flux.sh && \
+	           cd .."
 fi
 
 if test -n "$PRELOAD" ; then
@@ -175,7 +182,7 @@ fi
 if test "$DISTCHECK" != "t"; then
   checks_group "${MAKECMDS}" eval ${MAKECMDS}
 fi
-checks_group "${CHECKCMDS}" eval ${CHECKCMDS}
+checks_group "${CHECKCMDS}" eval "${CHECKCMDS}"
 RC=$?
 
 if test "$RECHECK" = "t" -a $RC -ne 0; then

@@ -73,6 +73,7 @@ class BuildMatrix:
         test_s3=False,
         coverage=False,
         recheck=True,
+        command_args="",
     ):
         """Add a build to the matrix.include array"""
 
@@ -80,7 +81,7 @@ class BuildMatrix:
         env = env or {}
 
         # The command to run:
-        command = f"{docker_run_checks} -j{jobs} --image={image}"
+        command = f"{docker_run_checks} -j{jobs} --image={image} {command_args}"
 
         # Add --recheck option if requested
         if recheck and "DISTCHECK" not in env:
@@ -187,6 +188,13 @@ matrix.add_build(
     image="centos8",
     env=dict(PYTHON_VERSION="3.6"),
     docker_tag=True,
+)
+
+# inception
+matrix.add_build(
+    name="inception",
+    image="bionic",
+    command_args="--inception",
 )
 
 print(matrix)
