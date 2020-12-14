@@ -191,6 +191,21 @@ The field names that can be specified are:
 **success**
    True of False if job completed successfully, empty string otherwise
 
+**waitstatus**
+   The raw status of the job as returned by ``waitpid(2)`` if the job
+   exited, otherwise an empty string. Note: *waitstatus* is the maximum
+   wait status returned by all job shells in a job, which may not necessarily
+   indicate the highest *task* wait status. (The job shell exits with the
+   maximum task exit status, unless a task died due to a signal, in which
+   case the shell exits with 128+signo)
+
+**returncode**
+   The job return code if the job has exited, or an empty string if the
+   job is still active. The return code of a job is the highest job shell
+   exit code, or negative signal number if the job shell was terminated by
+   a signal. If the job was cancelled before it started, then the returncode
+   is set to the special value -128.
+
 **exception.occurred**
    True of False if job had an exception, empty string otherwise
 
