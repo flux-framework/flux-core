@@ -174,40 +174,13 @@ static bool search_direction (struct job *job)
         return false;
 }
 
-static int *state_counter (struct info_ctx *ctx,
-                           struct job *job,
-                           flux_job_state_t state)
-{
-    if (state == FLUX_JOB_STATE_NEW)
-        return NULL;
-    else if (state == FLUX_JOB_STATE_DEPEND)
-        return &ctx->jsctx->depend_count;
-    else if (state == FLUX_JOB_STATE_PRIORITY)
-        return &ctx->jsctx->priority_count;
-    else if (state == FLUX_JOB_STATE_SCHED)
-        return &ctx->jsctx->sched_count;
-    else if (state == FLUX_JOB_STATE_RUN)
-        return &ctx->jsctx->run_count;
-    else if (state == FLUX_JOB_STATE_CLEANUP)
-        return &ctx->jsctx->cleanup_count;
-    else if (state == FLUX_JOB_STATE_INACTIVE)
-        return &ctx->jsctx->inactive_count;
-
-    flux_log (ctx->h, LOG_ERR, "illegal state transition for job %ju: %d",
-              (uintmax_t)job->id, state);
-    return NULL;
-}
-
 static void update_job_state (struct info_ctx *ctx,
                               struct job *job,
                               flux_job_state_t new_state,
                               double timestamp)
 {
-    int *decrement;
-    int *increment;
+    job_stats_update (&ctx->jsctx->stats, job, new_state);
 
-    decrement = state_counter (ctx, job, job->state);
-    increment = state_counter (ctx, job, new_state);
     job->state = new_state;
     if (job->state == FLUX_JOB_STATE_DEPEND)
         job->t_submit = timestamp;
@@ -218,10 +191,6 @@ static void update_job_state (struct info_ctx *ctx,
     else if (job->state == FLUX_JOB_STATE_INACTIVE)
         job->t_inactive = timestamp;
     job->states_mask |= job->state;
-    if (decrement)
-        (*decrement)--;
-    if (increment)
-        (*increment)++;
 }
 
 static void revert_job_state (struct info_ctx *ctx,
