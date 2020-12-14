@@ -136,6 +136,7 @@ static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
     job->state = FLUX_JOB_STATE_NEW;
     job->userid = FLUX_USERID_UNKNOWN;
     job->urgency = -1;
+    job->wait_status = -1;
     /* pending jobs that are not yet assigned a priority shall be
      * listed after those who do, so we set the job priority to MIN */
     job->priority = FLUX_JOB_PRIORITY_MIN;
@@ -1405,10 +1406,10 @@ static int finish_context_parse (flux_t *h,
                                  struct job *job,
                                  json_t *context)
 {
-    int status;
-
     if (!context
-        || json_unpack (context, "{ s:i }", "status", &status) < 0) {
+        || json_unpack (context,
+                        "{ s:i }",
+                        "status", &job->wait_status) < 0) {
         flux_log (h, LOG_ERR, "%s: finish context invalid: %ju",
                   __FUNCTION__, (uintmax_t)job->id);
         errno = EPROTO;
@@ -1419,7 +1420,7 @@ static int finish_context_parse (flux_t *h,
      * "success" attribute.  "success" is always false unless the
      * job completes ("finish") without error.
      */
-    if (!status)
+    if (!job->wait_status)
         job->success = true;
 
     return 0;

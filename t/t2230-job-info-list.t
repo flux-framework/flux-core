@@ -921,7 +921,8 @@ exception_severity \
 exception_note \
 result \
 expiration \
-annotations
+annotations \
+waitstatus
 "
 
 test_expect_success HAVE_JQ 'list request with empty attrs works' '

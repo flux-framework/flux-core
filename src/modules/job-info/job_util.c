@@ -140,6 +140,11 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
                 continue;
             val = json_real (job->expiration);
         }
+        else if (!strcmp (attr, "waitstatus")) {
+            if (job->wait_status < 0)
+                continue;
+            val = json_integer (job->wait_status);
+        }
         else if (!strcmp (attr, "success")) {
             if (!(job->states_mask & FLUX_JOB_STATE_INACTIVE))
                 continue;
