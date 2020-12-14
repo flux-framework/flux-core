@@ -76,7 +76,8 @@ TESTS = test_heartbeat.t \
 	test_liblist.t \
 	test_pmiutil.t \
 	test_boot_config.t \
-	test_runat.t
+	test_runat.t \
+	test_overlay.t
 
 test_ldadd = \
 	$(builddir)/libbroker.la \
@@ -134,3 +135,8 @@ test_runat_t_SOURCES = test/runat.c
 test_runat_t_CPPFLAGS = $(test_cppflags)
 test_runat_t_LDADD = $(test_ldadd)
 test_runat_t_LDFLAGS = $(test_ldflags)
+
+test_overlay_t_SOURCES = test/overlay.c
+test_overlay_t_CPPFLAGS = $(test_cppflags)
+test_overlay_t_LDADD = $(test_ldadd)
+test_overlay_t_LDFLAGS = $(test_ldflags)
