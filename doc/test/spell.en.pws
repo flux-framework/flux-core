@@ -521,3 +521,5 @@ regex
 encodings
 dec
 subkey
+waitstatus
+returncode
