@@ -111,7 +111,10 @@ void urgency_handle_request (flux_t *h,
     /* N.B. once priority plugin work developed, should recall with
      * new urgency, but for now priority is set to urgency */
     if (urgency != orig_urgency) {
-        job->priority = urgency;
+        if (urgency == FLUX_JOB_URGENCY_HOLD)
+            job->priority = FLUX_JOB_PRIORITY_MIN;
+        else
+            job->priority = urgency;
         if (event_job_post_pack (ctx->event, job,
                                  "priority",
                                  0,

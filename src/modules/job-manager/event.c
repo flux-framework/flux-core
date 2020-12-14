@@ -309,6 +309,7 @@ nomem:
 int event_job_action (struct event *event, struct job *job)
 {
     struct job_manager *ctx = event->ctx;
+    unsigned int priority;
 
     switch (job->state) {
         case FLUX_JOB_STATE_NEW:
@@ -326,12 +327,16 @@ int event_job_action (struct event *event, struct job *job)
              * SCHED state, dequeue the job first.
              */
             alloc_dequeue_alloc_request (ctx->alloc, job);
+            if (job->urgency == FLUX_JOB_URGENCY_HOLD)
+                priority = FLUX_JOB_PRIORITY_MIN;
+            else
+                priority = job->urgency;
             if (event_job_post_pack (event,
                                      job,
                                      "priority",
                                      0,
                                      "{ s:i }",
-                                     "priority", job->urgency) < 0)
+                                     "priority", priority) < 0)
                 return -1;
             break;
         case FLUX_JOB_STATE_SCHED:
