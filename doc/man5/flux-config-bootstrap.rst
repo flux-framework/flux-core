@@ -29,6 +29,11 @@ expected to bootstrap from an identical config file.
 KEYWORDS
 ========
 
+curve_cert
+   (optional) Path to a CURVE certificate generated with flux-keygen(1).
+   The certificate should be identical on all broker ranks.
+   It is required for instance sizes > 1.
+
 default_port
    (optional) The value is an integer port number that is substituted
    for the token ``%p`` in the other keys.

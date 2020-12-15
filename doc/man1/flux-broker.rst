@@ -63,10 +63,6 @@ OPTIONS
    Override the compiled-in module search path (colon-separated).
    The default is to search install paths.
 
-**-s, --security**\ =\ *MODE*
-   Set the security mode. The mode may be *none*, *plain*, or *curve*
-   (default: curve). See flux-keygen(1) for more information.
-
 
 RESOURCES
 =========

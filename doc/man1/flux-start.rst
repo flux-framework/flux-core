@@ -24,9 +24,6 @@ purposes.)
 A failure of the initial program (such as non-zero exit code)
 causes flux-start to exit with a non-zero exit code.
 
-Note: in order to launch a Flux instance, you must have generated
-long-term CURVE keys using flux-keygen(1).
-
 
 OPTIONS
 =======
@@ -99,4 +96,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux-broker(1) flux-keygen(1)
+flux-broker(1)
