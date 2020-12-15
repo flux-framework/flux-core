@@ -223,6 +223,7 @@ dist_check_SCRIPTS = \
 	issues/t2284-initial-program-format-chars.sh \
 	issues/t2686-shell-input-race.sh \
 	issues/t3186-python-future-get-sigint.sh \
+	issues/t3415-job-shell-segfault-on-null.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
