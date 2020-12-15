@@ -53,7 +53,6 @@ intree_conf_cppflags = \
 	-DINTREE_SHELL_PLUGINPATH=\"$(abs_top_builddir)/src/shell/plugins\" \
 	-DINTREE_SHELL_INITRC=\"$(abs_top_srcdir)/src/shell/initrc.lua\" \
 	-DINTREE_CMDHELP_PATTERN=\"${abs_top_builddir}/etc/flux/help.d/*.json\" \
-	-DINTREE_KEYDIR=\"${abs_top_builddir}/etc/flux\" \
 	-DINTREE_NO_DOCS_PATH=\"${abs_top_builddir}/etc/flux/.nodocs\" \
 	-DINTREE_BINDIR=\"${abs_top_builddir}/src/cmd\" \
 	-DINTREE_JOBSPEC_VALIDATE_PATH=\"${abs_top_srcdir}/src/modules/job-ingest/validators/validate-jobspec.py\" \

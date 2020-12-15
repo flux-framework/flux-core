@@ -201,10 +201,6 @@ int main (int argc, char *argv[])
     environment_push (env, "FLUX_MODULE_PATH",
                       getenv ("FLUX_MODULE_PATH_PREPEND"));
 
-    /* Set FLUX_SEC_DIRECTORY, possibly to $HOME/.flux.
-     */
-    setup_keydir (env, flags);
-
     if (getenv ("FLUX_URI"))
         environment_from_env (env, "FLUX_URI", "", 0); /* pass-thru */
 
@@ -270,26 +266,6 @@ void setup_path (struct environment *env, const char *argv0)
     }
     else
         log_msg_exit ("Unable to determine flux executable dir");
-}
-
-void setup_keydir (struct environment *env, int flags)
-{
-    const char *dir = getenv ("FLUX_SEC_DIRECTORY");
-    char *new_dir = NULL;
-
-    if (!dir)
-        dir = flux_conf_builtin_get ("keydir", flags);
-    if (!dir) {
-        struct passwd *pw = getpwuid (getuid ());
-        if (!pw)
-            log_msg_exit ("Who are you!?!");
-        dir = new_dir = xasprintf ("%s/.flux", pw->pw_dir);
-    }
-    if (!dir)
-        log_msg_exit ("Could not determine keydir");
-    environment_set (env, "FLUX_SEC_DIRECTORY", dir, 0);
-    if (new_dir)
-        free (new_dir);
 }
 
 /* Check for a flux-<command>.py in dir and execute it under the configured

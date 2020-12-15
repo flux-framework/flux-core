@@ -29,12 +29,31 @@ test_expect_success 'run_timeout fails if exec fails' '
 test_expect_success 'we can find a flux binary' '
 	flux --help >/dev/null
 '
+test_expect_success 'flux-keygen path argument is optional' '
+	flux keygen
+'
 test_expect_success 'flux-keygen works' '
-	umask 077 && tmpkeydir=`mktemp -d` &&
-	flux keygen --secdir $tmpkeydir --force &&
-	rm -rf $tmpkeydir
+	flux keygen cert &&
+	test -f cert
+'
+test_expect_success 'flux-keygen generated cert with u=rw access' '
+	echo '-rw-------' >cert-access.exp &&
+	stat --format=%A cert >cert-access.out &&
+	test_cmp cert-access.exp cert-access.out
 '
 
+test_expect_success 'flux-keygen overwrites existing cert' '
+	test -f cert &&
+	cp cert cert.bak &&
+	flux keygen cert
+'
+test_expect_success 'flux-keygen generated a cert with different keys' '
+	diff cert.bak cert | grep secret-key
+'
+
+test_expect_success 'flux-keygen fails with unknown arg' '
+	test_must_fail flux keygen --force boguskey
+'
 test_expect_success 'flux-python command runs a python that finds flux' '
 	flux python -c "import flux"
 '
