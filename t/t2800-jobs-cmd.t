@@ -371,7 +371,7 @@ test_expect_success 'flux-jobs --format={userid},{username} works' '
 
 test_expect_success 'flux-jobs --format={urgency},{priority} works' '
 	flux jobs --suppress-header -a --format="{urgency},{priority}" > urgency_priority.out &&
-	echo 31,31 > urgency_priority.exp &&
+	echo 31,4294967295 > urgency_priority.exp &&
 	echo 25,25 >> urgency_priority.exp &&
 	echo 20,20 >> urgency_priority.exp &&
 	echo 15,15 >> urgency_priority.exp &&

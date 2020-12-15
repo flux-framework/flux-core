@@ -116,7 +116,7 @@ test_expect_success 'job-manager: queue contains 3 jobs' '
 
 test_expect_success HAVE_JQ 'job-manager: queue is sorted in priority order' '
 	cat >list3_priority.exp <<-EOT &&
-	31
+	4294967295
 	16
 	0
 	EOT
@@ -126,7 +126,7 @@ test_expect_success HAVE_JQ 'job-manager: queue is sorted in priority order' '
 
 test_expect_success HAVE_JQ 'job-manager: list-jobs --count shows highest priority jobs' '
 	cat >list3_lim2.exp <<-EOT &&
-	31
+	4294967295
 	16
 	EOT
 	${LIST_JOBS} -c 2 | $jq .priority >list3_lim2.out &&

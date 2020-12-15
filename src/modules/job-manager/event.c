@@ -329,6 +329,8 @@ int event_job_action (struct event *event, struct job *job)
             alloc_dequeue_alloc_request (ctx->alloc, job);
             if (job->urgency == FLUX_JOB_URGENCY_HOLD)
                 priority = FLUX_JOB_PRIORITY_MIN;
+            else if (job->urgency == FLUX_JOB_URGENCY_EXPEDITE)
+                priority = FLUX_JOB_PRIORITY_MAX;
             else
                 priority = job->urgency;
             /* We pack priority with I instead of i to avoid issue of

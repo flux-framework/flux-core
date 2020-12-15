@@ -113,6 +113,8 @@ void urgency_handle_request (flux_t *h,
     if (urgency != orig_urgency) {
         if (urgency == FLUX_JOB_URGENCY_HOLD)
             job->priority = FLUX_JOB_PRIORITY_MIN;
+        else if (urgency == FLUX_JOB_URGENCY_EXPEDITE)
+            job->priority = FLUX_JOB_PRIORITY_MAX;
         else
             job->priority = urgency;
         /* We pack priority with I instead of i to avoid issue of
