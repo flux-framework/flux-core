@@ -19,6 +19,7 @@ import flux.constants
 import flux.util
 from flux.job import JobInfo, JobInfoFormat, JobList
 from flux.job import JobID
+from flux.job.stats import JobStats
 
 LOGGER = logging.getLogger("flux-jobs")
 
@@ -239,6 +240,16 @@ def parse_args():
         help="Colorize output; WHEN can be 'never', 'always', or 'auto' (default)",
     )
     parser.add_argument(
+        "--stats", action="store_true", help="Print job statistics before header"
+    )
+    parser.add_argument(
+        "--stats-only",
+        action="store_true",
+        help="Print job statistics only and exit. Exits with non-zero status "
+        "if there are no active jobs. Allows usage like: "
+        "'while flux jobs --stats-only; do sleep 1; done'",
+    )
+    parser.add_argument(
         "jobids",
         metavar="JOBID",
         type=JobID,
@@ -293,6 +304,15 @@ def main():
         formatter = JobInfoFormat(fmt)
     except ValueError as err:
         raise ValueError("Error in user format: " + str(err))
+
+    if args.stats or args.stats_only:
+        stats = JobStats(flux.Flux()).update_sync()
+        print(
+            f"{stats.running} running, {stats.successful} completed, "
+            f"{stats.failed} failed, {stats.pending} pending"
+        )
+        if args.stats_only:
+            sys.exit(0 if stats.active else 1)
 
     jobs = fetch_jobs(args, formatter.fields)
 
