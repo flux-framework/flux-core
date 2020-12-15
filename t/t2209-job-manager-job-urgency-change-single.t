@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test flux job manager service urgency change to job'
+test_description='Test flux job manager urgency change to job (mode=single)'
 
 . `dirname $0`/job-manager/sched-helper.sh
 
