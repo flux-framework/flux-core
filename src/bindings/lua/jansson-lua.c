@@ -61,7 +61,7 @@ int json_object_to_lua (lua_State *L, json_t *o)
             lua_pushboolean (L, 0);
             break;
         case JSON_NULL:
-            /* XXX: crap. */
+            lua_pushnil (L);
             break;
         }
         return (1);
