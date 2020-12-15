@@ -24,6 +24,12 @@ flux-core Manual Pages
    man5/index
    man7/index
 
+flux-core Python Bindings
+=========================
+
+.. toctree::
+
+   python/modules
 
 Indices and tables
 ==================

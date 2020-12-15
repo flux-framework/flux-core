@@ -130,6 +130,7 @@ class ResourceSet:
     def remove_ranks(self, ranks):
         """
         Remove the rank or ranks specified from the ResourceSet
+
         :param ranks: A flux.idset.IDset object, or number or string which
                       can be converted into an IDset, containing the ranks
                       to remove

@@ -460,15 +460,15 @@ class Jobspec(object):
         top-level resource. `count` is the number of that resource including the
         multiplicative effects of the `with` clause in ancestor resources.  For
         example, the following resource section, will yield a count of 2 for the
-        `slot` and a count of 8 for the `core` resource.
+        `slot` and a count of 8 for the `core` resource:
 
-        ```yaml
-        - type: slot
-          count: 2
-          with:
-            - type: core
-              count: 4
-        ```
+        .. code-block:: yaml
+
+            - type: slot
+              count: 2
+              with:
+                - type: core
+                  count: 4
         """
 
         def walk_helper(res_list, parent, count):
@@ -487,29 +487,30 @@ class Jobspec(object):
         Compute the counts of each resource type in the jobspec
 
         The following jobspec would return
-        `{ "slot": 12, "core": 18, "memory": 242 }`
+        ``{ "slot": 12, "core": 18, "memory": 242 }``
 
-        ```yaml
-        - type: slot
-          count: 2
-          with:
-            - type: core
-              count: 4
-            - type: memory
-              count: 1
-              unit: GB
-        - type: slot
-          count: 10
-          with:
-            - type: core
-              count: 1
-            - type: memory
-              count: 24
-              unit: GB
-        ```
+        .. code-block:: yaml
 
-        Note: the current implementation ignores the `unit` label and assumes
-        they are consist across resources
+            - type: slot
+              count: 2
+              with:
+                - type: core
+                  count: 4
+                - type: memory
+                  count: 1
+                  unit: GB
+            - type: slot
+              count: 10
+              with:
+                - type: core
+                  count: 1
+                - type: memory
+                  count: 24
+                  unit: GB
+
+        Note:
+            the current implementation ignores the `unit` label and assumes
+            they are consist across resources
         """
         count_dict = collections.defaultdict(lambda: 0)
         for _, resource, count in self.resource_walk():
