@@ -50,6 +50,9 @@ void annotations_sched_clear (struct job *job, bool *cleared)
 {
     if (job->annotations) {
         if (json_object_del (job->annotations, "sched") == 0) {
+            /* Special case if annotations are now empty */
+            if (!json_object_size (job->annotations))
+                annotations_clear (job, NULL);
             if (cleared)
                 (*cleared) = true;
         }
