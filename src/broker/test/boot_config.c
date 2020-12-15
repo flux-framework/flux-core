@@ -67,6 +67,7 @@ void test_parse (const char *dir)
 "default_port = 42\n" \
 "default_bind = \"tcp://en0:%p\"\n" \
 "default_connect = \"tcp://x%h:%p\"\n" \
+"curve_cert = \"foo\"\n" \
 "hosts = [\n" \
 "  { host = \"foo0\" },\n" \
 "  { host = \"foo[1-62]\" },\n" \
@@ -334,7 +335,7 @@ void test_toml_mixed_array (const char *dir)
     flux_conf_decref (cf);
 }
 
-void test_no_hosts (const char *dir)
+void test_empty (const char *dir)
 {
     char path[PATH_MAX + 1];
     json_t *hosts;
@@ -349,7 +350,7 @@ void test_no_hosts (const char *dir)
 
     hosts = (json_t *)(uintptr_t)1;
     ok (boot_config_parse (cf, &conf, &hosts) == 0 && hosts == NULL,
-        "boot_config_parse works with missing hosts array");
+        "boot_config_parse works with empty bootstrap stanza");
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
@@ -366,7 +367,7 @@ void test_empty_hosts (const char *dir)
     const char *input = \
 "[bootstrap]\n" \
 "hosts = [\n" \
-"]\n";
+"]\n" \
 ;
 
     create_test_file (dir, "boot", path, sizeof (path), input);
@@ -441,6 +442,7 @@ void test_attr (const char *dir)
     int rc;
     const char *input = \
 "[bootstrap]\n" \
+"curve_cert = \"foo\"\n" \
 "hosts = [\n" \
 "  { host = \"foo0\" },\n" \
 "  { host = \"foo4\" },\n" \
@@ -501,6 +503,30 @@ void test_attr (const char *dir)
     flux_conf_decref (cf);
 }
 
+void test_curve_cert (const char *dir)
+{
+    char path[PATH_MAX + 1];
+    json_t *hosts;
+    flux_conf_t *cf;
+    struct boot_conf conf;
+    const char *input = \
+"[bootstrap]\n" \
+"curve_cert = \"meep\"\n";
+
+    create_test_file (dir, "boot", path, sizeof (path), input);
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
+
+    ok (boot_config_parse (cf, &conf, &hosts) == 0 && hosts == NULL,
+        "boot_config_parse works with curve_cert");
+    ok (conf.curve_cert != NULL && !strcmp (conf.curve_cert, "meep"),
+        "and curve_cert has expected value");
+
+    if (unlink (path) < 0)
+        BAIL_OUT ("could not cleanup test file %s", path);
+
+}
+
 int main (int argc, char **argv)
 {
     char dir[PATH_MAX + 1];
@@ -517,11 +543,12 @@ int main (int argc, char **argv)
     test_bad_hosts_entry (dir);
     test_bad_host_hostlist (dir);
     test_bad_host_bind (dir);
-    test_no_hosts (dir);
+    test_empty (dir);
     test_empty_hosts (dir);
     test_missing_info (dir);
     test_toml_mixed_array (dir);
     test_attr (dir);
+    test_curve_cert (dir);
 
     if (rmdir (dir) < 0)
         BAIL_OUT ("could not cleanup test dir %s", dir);

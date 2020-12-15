@@ -179,14 +179,15 @@ static int set_instance_level_attr (struct pmi_handle *pmi,
 
 int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
 {
-    int parent_rank;
-    const char *child_uri;
+    int rank;
     char key[64];
     char val[1024];
     const char *tbonendpoint = NULL;
     struct pmi_handle *pmi;
     struct pmi_params pmi_params;
     int result;
+    char *uri;
+    int i;
 
     memset (&pmi_params, 0, sizeof (pmi_params));
     if (!(pmi = broker_pmi_create ())) {
@@ -210,6 +211,11 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
     if (overlay_init (overlay, pmi_params.size, pmi_params.rank, tbon_k) < 0)
         goto error;
 
+    /* A size=1 instance has no peers, so skip the PMI exchange.
+     */
+    if (pmi_params.size == 1)
+        goto done;
+
     /* If there are to be downstream peers, then bind to socket and share the
      * concretized URI with other ranks via PMI KVS key=cmbd.<rank>.uri.
      * N.B. there are no downstream peers if the 0th child of this rank
@@ -227,35 +233,12 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
             log_msg ("update_endpoint_attr failed");
             goto error;
         }
-        if (overlay_set_child (overlay, tbonendpoint) < 0) {
-            log_err ("overlay_set_child");
+        if (overlay_bind (overlay, tbonendpoint) < 0) {
+            log_err ("overlay_bind failed");
             goto error;
         }
-        if (overlay_bind (overlay) < 0) {
-            log_err ("overlay_bind failed");   /* function is idempotent */
-            goto error;
-        }
-        if (!(child_uri = overlay_get_child (overlay))) {
-            log_msg ("overlay_get_child returned NULL");
-            goto error;
-        }
-        if (snprintf (key, sizeof (key),
-                      "cmbd.%d.uri", pmi_params.rank) >= sizeof (key)) {
-            log_msg ("pmi key string overflow");
-            goto error;
-        }
-        if (snprintf (val, sizeof (val), "%s", child_uri) >= sizeof (val)) {
-            log_msg ("pmi val string overflow");
-            goto error;
-        }
-        result = broker_pmi_kvs_put (pmi, pmi_params.kvsname, key, val);
-        if (result != PMI_SUCCESS) {
-            log_msg ("broker_pmi_kvs_put: %s", pmi_strerror (result));
-            goto error;
-        }
-        result = broker_pmi_kvs_commit (pmi, pmi_params.kvsname);
-        if (result != PMI_SUCCESS) {
-            log_msg ("broker_pmi_kvs_commit: %s", pmi_strerror (result));
+        if (!(uri = (char *)overlay_get_bind_uri (overlay))) {
+            log_msg ("overlay_get_bind_uri returned NULL");
             goto error;
         }
     }
@@ -268,10 +251,100 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
             log_err ("setattr tbon.endpoint");
             goto error;
         }
+        uri = NULL;
     }
 
-    /* The PMI barrier (which is implicitly over 'size' ranks) ensures that
-     * all KVS puts are complete before any PMI gets.
+    /* Each broker writes a "business card" consisting of (currently):
+     * pubkey[,URI].  The URI and separator are omitted if broker is
+     * a leaf in the TBON and won't be creating its own endpoint.
+     */
+    if (snprintf (key, sizeof (key), "%d", pmi_params.rank) >= sizeof (key)) {
+        log_msg ("pmi key string overflow");
+        goto error;
+    }
+    if (snprintf (val,
+                  sizeof (val),
+                  "%s%s%s",
+                  overlay_cert_pubkey (overlay),
+                  uri ? "," : "",
+                  uri ? uri : "") >= sizeof (val)) {
+        log_msg ("pmi val string overflow");
+        goto error;
+    }
+    result = broker_pmi_kvs_put (pmi, pmi_params.kvsname, key, val);
+    if (result != PMI_SUCCESS) {
+        log_msg ("broker_pmi_kvs_put: %s", pmi_strerror (result));
+        goto error;
+    }
+    result = broker_pmi_kvs_commit (pmi, pmi_params.kvsname);
+    if (result != PMI_SUCCESS) {
+        log_msg ("broker_pmi_kvs_commit: %s", pmi_strerror (result));
+        goto error;
+    }
+    result = broker_pmi_barrier (pmi);
+    if (result != PMI_SUCCESS) {
+        log_msg ("broker_pmi_barrier: %s", pmi_strerror (result));
+        goto error;
+    }
+
+    /* Fetch the business card of parent and inform overlay of URI
+     * and public key.
+     */
+    if (pmi_params.rank > 0) {
+        rank = kary_parentof (tbon_k, pmi_params.rank);
+        if (snprintf (key, sizeof (key), "%d", rank) >= sizeof (key)) {
+            log_msg ("pmi key string overflow");
+            goto error;
+        }
+        result = broker_pmi_kvs_get (pmi, pmi_params.kvsname,
+                                     key, val, sizeof (val));
+        if (result != PMI_SUCCESS) {
+            log_msg ("broker_pmi_kvs_get %s: %s", key, pmi_strerror (result));
+            goto error;
+        }
+        if ((uri = strchr (val, ',')))
+            *uri++ = '\0';
+        if (!uri) {
+            log_msg ("rank %d business card has no URI", rank);
+            goto error;
+        }
+        if (overlay_set_parent_uri (overlay, uri) < 0) {
+            log_err ("overlay_set_parent_uri");
+            goto error;
+        }
+        if (overlay_set_parent_pubkey (overlay, val) < 0) {
+            log_err ("overlay_set_parent_pubkey");
+            goto error;
+        }
+    }
+
+    /* Fetch the business card of children and inform overlay of public keys.
+     */
+    for (i = 0; i < tbon_k; i++) {
+        rank = kary_childof (tbon_k, pmi_params.size, pmi_params.rank, i);
+        if (rank == KARY_NONE)
+            break;
+        if (snprintf (key, sizeof (key), "%d", rank) >= sizeof (key)) {
+            log_msg ("pmi key string overflow");
+            goto error;
+        }
+        result = broker_pmi_kvs_get (pmi, pmi_params.kvsname,
+                                     key, val, sizeof (val));
+
+        if (result != PMI_SUCCESS) {
+            log_msg ("broker_pmi_kvs_get %s: %s", key, pmi_strerror (result));
+            goto error;
+        }
+        if ((uri = strchr (val, ',')))
+            *uri++ = '\0';
+        if (overlay_authorize (overlay, key, val) < 0) {
+            log_err ("overlay_authorize %s=%s", key, val);
+            goto error;
+        }
+    }
+
+    /* One more barrier before allowing connects to commence.
+     * Need to ensure that all clients are "allowed".
      */
     result = broker_pmi_barrier (pmi);
     if (result != PMI_SUCCESS) {
@@ -279,28 +352,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
         goto error;
     }
 
-    /* If there is to be an upstream peer, fetch its URI from PMI KVS.
-     * N.B. only rank 0 has no upstream peer.
-     */
-    if (pmi_params.rank > 0) {
-        parent_rank = kary_parentof (tbon_k, pmi_params.rank);
-        if (snprintf (key, sizeof (key),
-                      "cmbd.%d.uri", parent_rank) >= sizeof (key)) {
-            log_msg ("pmi key string overflow");
-            goto error;
-        }
-        result = broker_pmi_kvs_get (pmi, pmi_params.kvsname,
-                                     key, val, sizeof (val));
-        if (result != PMI_SUCCESS) {
-            log_msg ("broker_pmi_kvs_get: %s", pmi_strerror (result));
-            goto error;
-        }
-        if (overlay_set_parent (overlay, "%s", val) < 0) {
-            log_err ("overlay_set_parent");
-            goto error;
-        }
-    }
-
+done:
     result = broker_pmi_finalize (pmi);
     if (result != PMI_SUCCESS) {
         log_msg ("broker_pmi_finalize: %s", pmi_strerror (result));

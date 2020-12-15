@@ -33,7 +33,6 @@ struct broker {
     struct brokercfg *config;
     const char *config_path;
     double heartbeat_rate;
-    int sec_typemask;
     zlist_t *subscriptions;     /* subscripts for internal services */
     struct content_cache *cache;
     struct publisher *publisher;
