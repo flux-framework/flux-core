@@ -28,6 +28,7 @@ import flux.kvs
 from flux import job
 from flux.job import Jobspec, JobspecV1, ffi
 from flux.job.list import VALID_ATTRS
+from flux.job.stats import JobStats
 from flux.future import Future
 
 
@@ -433,6 +434,45 @@ class TestJob(unittest.TestCase):
     def test_25_job_list_attrs(self):
         valid_attrs = self.fh.rpc("job-info.list-attrs", "{}").get()["attrs"]
         self.assertEqual(set(valid_attrs), set(VALID_ATTRS))
+
+    def test_30_job_stats_sync(self):
+        stats = JobStats(self.fh)
+
+        # stats are uninitialized at first:
+        self.assertEqual(stats.active, -1)
+        self.assertEqual(stats.inactive, -1)
+
+        # synchronous update
+        stats.update_sync()
+        self.assertGreater(stats.inactive, 0)
+
+    def test_31_job_stats_async(self):
+        called = [False]
+
+        def cb(stats, mykw=None):
+            called[0] = True
+            self.assertGreater(stats.inactive, 0)
+            self.assertEqual(mykw, "mykw")
+
+        stats = JobStats(self.fh)
+
+        # stats are uninitialized at first:
+        self.assertEqual(stats.active, -1)
+        self.assertEqual(stats.inactive, -1)
+
+        # asynchronous update, no callback
+        stats.update()
+        self.assertEqual(stats.active, -1)
+        self.assertEqual(stats.inactive, -1)
+
+        self.fh.reactor_run()
+        self.assertGreater(stats.inactive, 0)
+        self.assertFalse(called[0])
+
+        # asynchronous update, with callback
+        stats.update(callback=cb, mykw="mykw")
+        self.fh.reactor_run()
+        self.assertTrue(called[0])
 
 
 if __name__ == "__main__":
