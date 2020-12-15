@@ -971,6 +971,28 @@ for d in ${ISSUES_DIR}/*; do
 done
 
 
+# job stats
+test_expect_success 'flux-jobs --stats works' '
+	flux jobs --stats -a >stats.output &&
+	test_debug "cat stats.output" &&
+	fail=$(state_count failed cancelled) &&
+	run=$(state_count run) &&
+	inactive=$(state_count inactive) &&
+	active=$(state_count active) &&
+	comp=$((inactive - fail)) &&
+	pend=$((active - run)) &&
+	cat <<-EOF >stats.expected &&
+	${run} running, ${comp} completed, ${fail} failed, ${pend} pending
+	EOF
+	head -1 stats.output > stats.actual &&
+	test_cmp stats.expected stats.actual
+'
+
+test_expect_success 'flux-jobs --stats-only works' '
+	flux jobs --stats-only > stats-only.output &&
+	test_cmp stats.expected stats-only.output
+'
+
 test_expect_success 'cleanup job listing jobs ' '
         for jobid in `cat active.ids`; do \
             flux job cancel $jobid; \
