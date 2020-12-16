@@ -20,7 +20,7 @@
  * - new urgency
  *
  * Output:
- * - n/a
+ * - old urgency
  *
  * Caveats:
  * - Need to handle case where job has already made request for resources.
@@ -137,8 +137,10 @@ void urgency_handle_request (flux_t *h,
                 goto error;
         }
     }
-    if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    if (flux_respond_pack (h, msg, "{s:i}", "old_urgency", orig_urgency) < 0) {
+        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
+        goto error;
+    }
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
