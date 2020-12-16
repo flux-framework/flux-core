@@ -149,6 +149,7 @@ class MiniCmd:
     """
 
     def __init__(self, **kwargs):
+        self.flux_handle = None
         self.parser = self.create_parser(kwargs)
 
     @staticmethod
@@ -275,7 +276,7 @@ class MiniCmd:
         raise NotImplementedError()
 
     # pylint: disable=too-many-branches,too-many-statements
-    def submit(self, args):
+    def submit_async(self, args):
         """
         Submit job, constructing jobspec from args.
         Returns jobid.
@@ -347,15 +348,19 @@ class MiniCmd:
             print(jobspec.dumps(), file=sys.stdout)
             sys.exit(0)
 
-        flux_handle = flux.Flux()
-        jobid = job.submit(
-            flux_handle,
+        if not self.flux_handle:
+            self.flux_handle = flux.Flux()
+
+        return job.submit_async(
+            self.flux_handle,
             jobspec.dumps(),
             urgency=args.urgency,
             waitable=arg_waitable,
             debug=arg_debug,
         )
-        return JobID(jobid)
+
+    def submit(self, args):
+        return JobID(self.submit_async(args).get_id())
 
     def get_parser(self):
         return self.parser
