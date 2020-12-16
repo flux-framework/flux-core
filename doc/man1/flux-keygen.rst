@@ -8,46 +8,26 @@ flux-keygen(1)
 SYNOPSIS
 ========
 
-**flux** **keygen** [*--force*] [*--plain*]
+**flux** **keygen** *PATH*
 
 
 DESCRIPTION
 ===========
 
-flux-keygen(1) generates long-term keys for Flux security.
-Keys are written to files in *$HOME/.flux*.
+flux-keygen(1) generates a long-term CURVE certificate used to secure
+the overlay network of a Flux system instance.
 
-Flux comms sessions implement cryptographic privacy and data integrity
-when data is sent over a network. Point to point ZeroMQ TCP connections
+The Flux overlay network implements cryptographic privacy and data integrity
+when data is sent over a network.  Point to point ZeroMQ TCP connections
 are protected with the CURVE security mechanism built into ZeroMQ
 version 4, based on curve25519 and a CurveCP-like protocol.
 
-It is possible to start a Flux comms session with security
-disabled or using the toy PLAIN ZeroMQ security mechanism.
-This is intended for testing performance overhead of security only.
-By default, **flux-keygen** generates both CURVE and PLAIN keys.
-PLAIN keys are merely RFC 4122 uuids stored in the clear that are
-used as passwords.
+All brokers participating in the system instance must use the same
+certificate.  The certificate is part of the bootstrap configuration.
 
-All instances of Flux message brokers launched in a comms session
-need to access your keys, therefore we assume that your *$HOME/.flux*
-directory is globally accessible. Of course if keys are being transferred
-in the clear across public networks to make this happen, you have
-the same sort of problem as you might have with ssh private keys stored
-in your home directory.
-
-The Flux security design is not yet complete, and these measures
-are probably not the final ones.
-
-
-OPTIONS
-=======
-
-**-f, --force**
-   Generate new keys, even if they already exist.
-
-**-p, --plain**
-   Generate PLAIN key.
+Flux instances that bootstrap with PMI do not require a configured certificate.
+In that case, each broker self-generates a unique certificate and the
+public keys are exchanged with PMI.
 
 
 RESOURCES

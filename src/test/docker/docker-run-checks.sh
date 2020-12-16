@@ -195,7 +195,6 @@ if test -n "$TAG"; then
         --user="root" \
 	checks-builder:${IMAGE} \
 	sh -c "make install && \
-               su -c 'flux keygen' fluxuser && \
                userdel $USER" \
 	|| (docker rm tmp.$$; die "docker run of 'make install' failed")
     docker commit \

@@ -182,8 +182,9 @@ int boot_config_parse (const flux_conf_t *cf,
     memset (conf, 0, sizeof (*conf));
     if (flux_conf_unpack (cf,
                           &error,
-                          "{s:{s?:i s?:s s?:s s?:o}}",
+                          "{s:{s?s s?i s?s s?s s?o}}",
                           "bootstrap",
+                            "curve_cert", &conf->curve_cert,
                             "default_port", &conf->default_port,
                             "default_bind", &default_bind,
                             "default_connect", &default_connect,
@@ -229,6 +230,14 @@ int boot_config_parse (const flux_conf_t *cf,
             if (!(hosts = boot_config_expand_hosts (conf->hosts)))
                 return -1;
         }
+    }
+
+    /* Fail early if size > 1 and there is no CURVE certificate configured.
+     */
+    if (json_array_size (conf->hosts) > 1 && !conf->curve_cert) {
+        log_msg ("Config file error [bootstrap] %s",
+                 "curve_cert is required for size > 1");
+        return -1;
     }
 
     *hostsp = hosts;
@@ -450,9 +459,14 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k)
     }
 
     /* Tell overlay network this broker's rank, size, and branching factor.
+     * If a curve certificate was provided, load it.
      */
     if (overlay_init (overlay, size, rank, tbon_k) < 0)
         goto error;
+    if (conf.curve_cert) {
+        if (overlay_cert_load (overlay, conf.curve_cert) < 0)
+            goto error; // prints error
+    }
 
     /* If broker has "downstream" peers, determine the URI to bind to
      * from the config and tell overlay.  Also, set the tbon.endpoint
@@ -471,12 +485,14 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k)
                                        bind_uri,
                                        sizeof (bind_uri)) < 0)
             goto error;
-        if (overlay_set_child (overlay, bind_uri) < 0) {
-            log_err ("overlay_set_child %s", bind_uri);
+        if (overlay_bind (overlay, bind_uri) < 0) {
+            log_err ("overlay_bind");
             goto error;
         }
-        if (overlay_bind (overlay) < 0) { /* idempotent */
-            log_err ("overlay_bind");
+        if (overlay_authorize (overlay,
+                               overlay_cert_name (overlay),
+                               overlay_cert_pubkey (overlay)) < 0) {
+            log_err ("overlay_authorize");
             goto error;
         }
         if (boot_config_geturibyrank (hosts,
@@ -513,8 +529,13 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k)
                                       parent_uri,
                                       sizeof (parent_uri)) < 0)
             goto error;
-        if (overlay_set_parent (overlay, parent_uri) < 0) {
-            log_err ("overlay_set_parent %s", parent_uri);
+        if (overlay_set_parent_uri (overlay, parent_uri) < 0) {
+            log_err ("overlay_set_parent_uri %s", parent_uri);
+            goto error;
+        }
+        if (overlay_set_parent_pubkey (overlay,
+                                       overlay_cert_pubkey (overlay)) < 0) {
+            log_err ("overlay_set_parent_pubkey self");
             goto error;
         }
     }

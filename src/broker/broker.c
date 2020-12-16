@@ -52,7 +52,6 @@
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/kary.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libutil/zsecurity.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libutil/fsd.h"
@@ -85,8 +84,8 @@ static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
                                             const flux_msg_t *msg);
 
-static void parent_cb (struct overlay *ov, void *sock, void *arg);
-static void child_cb (struct overlay *ov, void *sock, void *arg);
+static void parent_cb (struct overlay *ov, void *arg);
+static void child_cb (struct overlay *ov, void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -116,10 +115,9 @@ static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "+vs:X:k:H:g:S:c:"
+#define OPTIONS "+vX:k:H:g:S:c:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
-    {"security",        required_argument,  0, 's'},
     {"module-path",     required_argument,  0, 'X'},
     {"k-ary",           required_argument,  0, 'k'},
     {"heartrate",       required_argument,  0, 'H'},
@@ -135,7 +133,6 @@ static void usage (void)
 "Usage: flux-broker OPTIONS [initial-command ...]\n"
 " -v,--verbose                 Be annoyingly verbose\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
-" -s,--security=plain|curve|none    Select security mode (default: curve)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -S,--setattr ATTR=VAL        Set broker attribute\n"
@@ -152,19 +149,6 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
 
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
-        case 's':   /* --security=MODE */
-            if (!strcmp (optarg, "none")) {
-                ctx->sec_typemask = 0;
-            } else if (!strcmp (optarg, "plain")) {
-                ctx->sec_typemask |= ZSECURITY_TYPE_PLAIN;
-                ctx->sec_typemask &= ~ZSECURITY_TYPE_CURVE;
-            } else if (!strcmp (optarg, "curve")) {
-                ctx->sec_typemask |= ZSECURITY_TYPE_CURVE;
-                ctx->sec_typemask &= ~ZSECURITY_TYPE_PLAIN;
-            } else {
-                log_msg_exit ("--security arg must be none|plain|curve");
-            }
-            break;
         case 'v':   /* --verbose */
             ctx->verbose = true;
             break;
@@ -286,7 +270,6 @@ int main (int argc, char *argv[])
      * on the broker's internal handle. */
     ctx.cred.rolemask = FLUX_ROLE_OWNER;
     ctx.heartbeat_rate = 2;
-    ctx.sec_typemask = ZSECURITY_TYPE_CURVE;
 
     init_attrs (ctx.attrs, getpid (), &ctx.cred);
 
@@ -354,17 +337,7 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* The first call to overlay_bind() or overlay_connect() calls
-     * zsecurity_comms_init().  Delay calling zsecurity_comms_init()
-     * so that we can defer creating the libzmq work thread until we
-     * are ready to communicate.
-     */
-    const char *keydir;
-    if (attr_get (ctx.attrs, "security.keydir", &keydir, NULL) < 0) {
-        log_err ("getattr security.keydir");
-        goto cleanup;
-    }
-    if (!(ctx.overlay = overlay_create (ctx.h, ctx.sec_typemask, keydir))) {
+    if (!(ctx.overlay = overlay_create (ctx.h))) {
         log_err ("overlay_create");
         goto cleanup;
     }
@@ -458,8 +431,8 @@ int main (int argc, char *argv[])
     }
 
     if (ctx.verbose) {
-        const char *parent = overlay_get_parent (ctx.overlay);
-        const char *child = overlay_get_child (ctx.overlay);
+        const char *parent = overlay_get_parent_uri (ctx.overlay);
+        const char *child = overlay_get_bind_uri (ctx.overlay);
         log_msg ("parent: %s", parent ? parent : "none");
         log_msg ("child: %s", child ? child : "none");
     }
@@ -632,7 +605,6 @@ static struct attrmap attrmap[] = {
     { "FLUX_CONNECTOR_PATH",    "conf.connector_path",      1, 0 },
     { "FLUX_MODULE_PATH",       "conf.module_path",         1, 0 },
     { "FLUX_PMI_LIBRARY_PATH",  "conf.pmi_library_path",    1, 0 },
-    { "FLUX_SEC_DIRECTORY",     "security.keydir",          1, 0 },
 
     { "FLUX_URI",               "parent-uri",               0, 1 },
     { "FLUX_KVS_NAMESPACE",     "parent-kvs-namespace",     0, 1 },
@@ -1482,12 +1454,12 @@ static void broker_remove_services (flux_msg_handler_t *handlers[])
 
 /* Handle requests from overlay peers.
  */
-static void child_cb (struct overlay *ov, void *sock, void *arg)
+static void child_cb (struct overlay *ov, void *arg)
 {
     broker_ctx_t *ctx = arg;
     int type;
     char *uuid = NULL;
-    flux_msg_t *msg = flux_msg_recvzsock (sock);
+    flux_msg_t *msg = overlay_recvmsg_child (ctx->overlay);
     int status = KEEPALIVE_STATUS_NORMAL;
 
     if (!msg)
@@ -1580,12 +1552,12 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     return module_event_mcast (ctx->modhash, msg);
 }
 
-/* Handle messages from one or more parents.
+/* Handle messages from parent.
  */
-static void parent_cb (struct overlay *ov, void *sock, void *arg)
+static void parent_cb (struct overlay *ov, void *arg)
 {
     broker_ctx_t *ctx = arg;
-    flux_msg_t *msg = flux_msg_recvzsock (sock);
+    flux_msg_t *msg = overlay_recvmsg_parent (ctx->overlay);
     int type;
 
     if (!msg)

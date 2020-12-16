@@ -12,7 +12,6 @@
 #define _BROKER_OVERLAY_H
 
 #include "attr.h"
-#include "src/common/libutil/zsecurity.h"
 
 enum {
     KEEPALIVE_STATUS_NORMAL = 0,
@@ -21,13 +20,11 @@ enum {
 
 struct overlay;
 
-typedef void (*overlay_sock_cb_f)(struct overlay *ov, void *sock, void *arg);
+typedef void (*overlay_sock_cb_f)(struct overlay *ov, void *arg);
 typedef int (*overlay_init_cb_f)(struct overlay *ov, void *arg);
 typedef void (*overlay_monitor_cb_f)(struct overlay *ov, void *arg);
 
-struct overlay *overlay_create (flux_t *h,
-                                int sec_typemask,
-                                const char *keydir);
+struct overlay *overlay_create (flux_t *h);
 void overlay_destroy (struct overlay *ov);
 
 /* Set a callback triggered during overlay_init()
@@ -44,6 +41,17 @@ int overlay_init (struct overlay *ov,
                   int tbon_k);
 void overlay_set_idle_warning (struct overlay *ov, int heartbeats);
 
+
+/* CURVE key management
+ * If downstream peers, call overlay_authorize() with public key of each peer.
+ */
+int overlay_cert_load (struct overlay *ov, const char *path);
+const char *overlay_cert_pubkey (struct overlay *ov);
+const char *overlay_cert_name (struct overlay *ov);
+int overlay_authorize (struct overlay *ov,
+                       const char *name,
+                       const char *pubkey);
+
 /* Accessors
  */
 uint32_t overlay_get_rank (struct overlay *ov);
@@ -52,20 +60,24 @@ int overlay_get_child_peer_count (struct overlay *ov);
 
 /* All ranks but rank 0 connect to a parent to form the main TBON.
  */
-int overlay_set_parent (struct overlay *ov, const char *fmt, ...);
-const char *overlay_get_parent (struct overlay *ov);
+int overlay_set_parent_uri (struct overlay *ov, const char *uri);
+int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey);
+const char *overlay_get_parent_uri (struct overlay *ov);
 void overlay_set_parent_cb (struct overlay *ov,
                             overlay_sock_cb_f cb,
                             void *arg);
 int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
+flux_msg_t *overlay_recvmsg_parent (struct overlay *ov);
 
 /* The child is where other ranks connect to send requests.
  * This is the ROUTER side of parent sockets described above.
  */
-int overlay_set_child (struct overlay *ov, const char *fmt, ...);
-const char *overlay_get_child (struct overlay *ov);
+int overlay_bind (struct overlay *ov, const char *uri);
+const char *overlay_get_bind_uri (struct overlay *ov);
 void overlay_set_child_cb (struct overlay *ov, overlay_sock_cb_f cb, void *arg);
 int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
+flux_msg_t *overlay_recvmsg_child (struct overlay *ov);
+
 /* We can "multicast" events to all child peers using mcast_child().
  * It walks the 'children' hash, finding peers and routeing them a copy of msg.
  */
@@ -83,11 +95,8 @@ void overlay_set_monitor_cb (struct overlay *ov,
                              overlay_monitor_cb_f cb,
                              void *arg);
 
-/* Establish connections.
- * These functions are idempotent as the bind may need to be called
- * early to resolve wildcard addresses (e.g. during PMI endpoint exchange).
+/* Establish communication with parent.
  */
-int overlay_bind (struct overlay *ov);
 int overlay_connect (struct overlay *ov);
 
 /* Add attributes to 'attrs' to reveal information about the overlay network.

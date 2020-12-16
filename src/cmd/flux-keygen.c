@@ -11,67 +11,64 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <getopt.h>
+#include <unistd.h>
 #include <flux/core.h>
+#include <czmq.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/zsecurity.h"
 
-
-#define OPTIONS "hfpd:"
-static const struct option longopts[] = {
-    {"help",       no_argument,        0, 'h'},
-    {"force",      no_argument,        0, 'f'},
-    {"plain",      no_argument,        0, 'p'},
-    {"secdir",     required_argument,  0, 'd'},
-    { 0, 0, 0, 0 },
-};
 
 void usage (void)
 {
     fprintf (stderr,
-"Usage: flux-keygen [--secdir DIR] [--force] [--plain]\n"
+"Usage: flux-keygen PATH\n"
 );
     exit (1);
 }
 
+static char * ctime_iso8601_now (char *buf, size_t sz)
+{
+    struct tm tm;
+    time_t now = time (NULL);
+
+    memset (buf, 0, sz);
+
+    if (!localtime_r (&now, &tm))
+        return (NULL);
+    strftime (buf, sz, "%FT%T", &tm);
+
+    return (buf);
+}
+
 int main (int argc, char *argv[])
 {
-    int ch;
-    zsecurity_t *sec;
-    int typemask = ZSECURITY_TYPE_CURVE | ZSECURITY_VERBOSE;
-    const char *secdir = getenv ("FLUX_SEC_DIRECTORY");
+    zcert_t *cert;
+    char buf[64];
+    char *path = NULL;
 
     log_init ("flux-keygen");
 
-    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
-        switch (ch) {
-            case 'h': /* --help */
-                usage ();
-                break;
-            case 'f': /* --force */
-                typemask |= ZSECURITY_KEYGEN_FORCE;
-                break;
-            case 'p': /* --plain */
-                typemask |= ZSECURITY_TYPE_PLAIN;
-                typemask &= ~ZSECURITY_TYPE_CURVE;
-                break;
-            case 'd': /* --secdir */
-                secdir = optarg;
-                break;
-            default:
-                usage ();
-                break;
-        }
-    }
-    if (optind < argc)
+    if (argc == 1)
+        log_msg ("WARNING: add PATH argument to save generated certificate");
+    else if (argc == 2 && *argv[1] != '-')
+        path = argv[1];
+    else
         usage ();
 
-     if (!(sec = zsecurity_create (typemask, secdir)))
-        log_err_exit ("zsecurity_create");
-    if (zsecurity_keygen (sec) < 0)
-        log_msg_exit ("%s", zsecurity_errstr (sec));
-    zsecurity_destroy (sec);
+    if (!(cert = zcert_new ()))
+        log_msg_exit ("zcert_new: %s", zmq_strerror (errno));
+
+    if (gethostname (buf, sizeof (buf)) < 0)
+        log_err_exit ("gethostname");
+    zcert_set_meta (cert, "hostname", "%s", buf);
+    zcert_set_meta (cert, "name", "%s", buf); // used in overlay logging
+    zcert_set_meta (cert, "time", "%s", ctime_iso8601_now (buf, sizeof (buf)));
+    zcert_set_meta (cert, "userid", "%d", getuid ());
+
+    if (path && zcert_save_secret (cert, path) < 0)
+        log_msg_exit ("zcert_save_secret %s: %s", path, strerror (errno));
+
+    zcert_destroy (&cert);
 
     log_fini ();
 

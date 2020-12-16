@@ -27,6 +27,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k);
 #define MAX_URI 2048
 
 struct boot_conf {
+    const char *curve_cert;
     int default_port;
     char default_bind[MAX_URI + 1];
     char default_connect[MAX_URI + 1];

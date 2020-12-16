@@ -47,6 +47,9 @@ test_expect_success 'broker fails with invalid TOML' '
 #
 # [bootstrap] tests
 #
+test_expect_success 'generate curve certficate for configuration' '
+	flux keygen testcert
+'
 
 test_expect_success '[bootstrap] config with bad hosts array' '
 	mkdir conf3 &&
@@ -112,6 +115,7 @@ test_expect_success 'start size=2 instance with ipc://' '
 	mkdir conf8 &&
 	cat <<-EOT >conf8/bootstrap.toml &&
 	[bootstrap]
+	curve_cert = "testcert"
 	hosts = [
 	    { host="fake0", bind="ipc:///tmp/test-ipc2-0", connect="ipc:///tmp/test-ipc2-0" },
 	    { host="fake1" }
@@ -137,6 +141,7 @@ test_expect_success 'start size=4 instance with tcp://' '
 	mkdir conf9 &&
 	cat <<-EOT >conf9/bootstrap.toml &&
 	[bootstrap]
+	curve_cert = "testcert"
 	hosts = [
 	    { host="fake0", bind="tcp://127.0.0.1:5080", connect="tcp://127.0.0.1:5080" },
 	    { host="fake1", bind="tcp://127.0.0.1:5081", connect="tcp://127.0.0.1:5081" },
@@ -157,5 +162,60 @@ test_expect_success 'start size=4 instance with tcp://' '
 	test_cmp tcp.exp tcp.out
 '
 
+test_expect_success '[bootstrap] curve_cert is required for size > 1' '
+	mkdir conf10 &&
+	cat <<-EOT >conf10/bootstrap.toml &&
+	[bootstrap]
+	default_bind = "ipc://@flux-testipc-1-0"
+	default_connect = "ipc://@flux-testipc-1-0"
+	hosts = [
+	    { host = "foo1" },
+	    { host = "foo2" }
+	]
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf10 /bin/true
+'
+
+test_expect_success '[bootstrap] curve_cert must exist' '
+	mkdir conf11 &&
+	cat <<-EOT >conf11/bootstrap.toml &&
+	[bootstrap]
+	curve_cert = "conf11/cert"
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf11 /bin/true
+'
+
+test_expect_success '[bootstrap] curve_cert file must contain valid cert' '
+	mkdir conf12 &&
+	flux keygen conf12/cert &&
+	sed --in-place -e "s/key/nerp/g" conf12/cert &&
+	cat <<-EOT >conf12/bootstrap.toml &&
+	[bootstrap]
+	curve_cert = "conf12/cert"
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf12 /bin/true
+'
+
+test_expect_success '[bootstrap] curve_cert file must be mode g-r' '
+	mkdir conf13 &&
+	flux keygen conf13/cert &&
+	chmod g+r conf13/cert &&
+	cat <<-EOT >conf13/bootstrap.toml &&
+	[bootstrap]
+	curve_cert = "conf13/cert"
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf13 /bin/true
+'
+
+test_expect_success '[bootstrap] curve_cert file must be mode o-r' '
+	mkdir conf14 &&
+	flux keygen conf14/cert &&
+	chmod o+r conf14/cert &&
+	cat <<-EOT >conf14/bootstrap.toml &&
+	[bootstrap]
+	curve_cert = "conf14/cert"
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf14 /bin/true
+'
 
 test_done

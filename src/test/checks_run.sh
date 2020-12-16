@@ -124,7 +124,6 @@ if test "$COVERAGE" = "t"; then
 elif test "$TEST_INSTALL" = "t"; then
     ARGS="$ARGS --prefix=/usr --sysconfdir=/etc"
     CHECKCMDS="sudo make install && \
-              /usr/bin/flux keygen --force && \
               FLUX_TEST_INSTALLED_PATH=/usr/bin ${MAKE} -j $JOBS check"
 
 # Run checks under prove(1):
