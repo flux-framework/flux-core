@@ -86,7 +86,7 @@ def setup(app):
 # `_flux` will not exist, causing import errors.  Mock the imports to prevent
 # these errors.
 
-autodoc_mock_imports = ["_flux", "flux.constants"]
+autodoc_mock_imports = ["_flux", "flux.constants", "yaml"]
 
 napoleon_google_docstring = True
 
