@@ -366,11 +366,9 @@ class MiniCmd:
         return self.parser
 
 
-class SubmitCmd(MiniCmd):
+class SubmitBaseCmd(MiniCmd):
     """
-    SubmitCmd submits a job, displays the jobid on stdout, and returns.
-
-    Usage: flux mini submit [OPTIONS] cmd ...
+    SubmitBaseCmd is an abstract class with shared code for job submission
     """
 
     def __init__(self):
@@ -401,9 +399,6 @@ class SubmitCmd(MiniCmd):
             metavar="N",
             help="Number of GPUs to allocate per task",
         )
-        self.parser.add_argument(
-            "command", nargs=argparse.REMAINDER, help="Job command and arguments"
-        )
 
     def init_jobspec(self, args):
         if not args.command:
@@ -417,12 +412,26 @@ class SubmitCmd(MiniCmd):
             num_nodes=args.nodes,
         )
 
+
+class SubmitCmd(SubmitBaseCmd):
+    """
+    SubmitCmd submits a job, displays the jobid on stdout, and returns.
+
+    Usage: flux mini submit [OPTIONS] cmd ...
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.parser.add_argument(
+            "command", nargs=argparse.REMAINDER, help="Job command and arguments"
+        )
+
     def main(self, args):
         jobid = self.submit(args)
         print(jobid, file=sys.stdout)
 
 
-class RunCmd(SubmitCmd):
+class RunCmd(SubmitBaseCmd):
     """
     RunCmd is identical to SubmitCmd, except it attaches the the job
     after submission.  Some additional options are added to modify the
@@ -439,6 +448,9 @@ class RunCmd(SubmitCmd):
             action="count",
             default=0,
             help="Increase verbosity on stderr (multiple use OK)",
+        )
+        self.parser.add_argument(
+            "command", nargs=argparse.REMAINDER, help="Job command and arguments"
         )
 
     def main(self, args):
