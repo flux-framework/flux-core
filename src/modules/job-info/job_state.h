@@ -15,6 +15,7 @@
 #include <jansson.h>
 
 #include "info.h"
+#include "stats.h"
 
 /* To handle the common case of user queries on job state, we will
  * store jobs in three different lists.
@@ -45,13 +46,8 @@ struct job_state_ctx {
     zlistx_t *processing;
     zlistx_t *futures;
 
-    /* count current jobs in what states */
-    int depend_count;
-    int priority_count;
-    int sched_count;
-    int run_count;
-    int cleanup_count;
-    int inactive_count;
+    /*  Job statistics: */
+    struct job_stats stats;
 
     /* debug/testing - if paused store job events journal on list for
      * processing later */

@@ -53,6 +53,24 @@ OPTIONS
    Control output coloring. WHEN can be *never*, *always*, or *auto*.
    Defaults to *auto*.
 
+**--stats**
+   Output a summary of global job statistics before the header.
+   May be useful in conjunction with utilities like ``watch(1)``, e.g.::
+
+      $ watch -n 2 flux jobs --stats -f running -c 25
+
+   will display a summary of global statistics along with the top 25
+   running jobs, updated every 2 seconds.
+
+**--stats-only**
+   Output a summary of global job statistics and exit.
+   ``flux jobs`` will exit with non-zero exit status with ``--stats-only``
+   if there are no active jobs. This allows the following loop to work::
+
+       $ while flux jobs --stats-only; do sleep 2; done
+
+   All other options are ignored when ``--stats-only`` is used. 
+
 
 JOB STATUS
 ==========

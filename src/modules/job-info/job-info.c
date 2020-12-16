@@ -79,24 +79,13 @@ static void job_stats_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     struct info_ctx *ctx = arg;
-    int total = ctx->jsctx->depend_count + ctx->jsctx->sched_count +
-        ctx->jsctx->run_count + ctx->jsctx->cleanup_count +
-        ctx->jsctx->inactive_count;
-    if (flux_respond_pack (h,
-                           msg,
-                           "{s:{s:i s:i s:i s:i s:i s:i s:i}}",
-                           "job_states",
-                           "depend", ctx->jsctx->depend_count,
-                           "priority", ctx->jsctx->priority_count,
-                           "sched", ctx->jsctx->sched_count,
-                           "run", ctx->jsctx->run_count,
-                           "cleanup", ctx->jsctx->cleanup_count,
-                           "inactive", ctx->jsctx->inactive_count,
-                           "total", total) < 0) {
+    json_t *o = job_stats_encode (&ctx->jsctx->stats);
+    if (o == NULL)
+        goto error;
+    if (flux_respond_pack (h, msg, "o", o) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
-
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)

@@ -50,6 +50,8 @@ typedef enum {
     FLUX_JOB_STATE_INACTIVE               = 64,   // captive end state
 } flux_job_state_t;
 
+#define FLUX_JOB_NR_STATES 7
+
 /* Virtual states, for convenience.
  */
 enum {

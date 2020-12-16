@@ -31,7 +31,9 @@ job_info_la_SOURCES = \
 	job_util.h \
 	job_util.c \
 	idsync.h \
-	idsync.c
+	idsync.c \
+	stats.h \
+	stats.c
 
 job_info_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_info_la_LIBADD = $(fluxmod_libadd) \
