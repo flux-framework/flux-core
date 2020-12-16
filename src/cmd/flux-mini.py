@@ -16,6 +16,8 @@ import argparse
 import json
 import fnmatch
 import re
+import random
+import itertools
 from itertools import chain
 from string import Template
 from collections import ChainMap
@@ -25,6 +27,8 @@ from flux import job
 from flux.job import JobspecV1, JobID
 from flux import util
 from flux import debugged
+from flux.idset import IDset
+from flux.progress import ProgressBar
 
 
 def filter_dict(env, pattern, reverseMatch=True):
@@ -150,6 +154,8 @@ class MiniCmd:
 
     def __init__(self, **kwargs):
         self.flux_handle = None
+        self.exitcode = 0
+        self.progress = None
         self.parser = self.create_parser(kwargs)
 
     @staticmethod
@@ -168,9 +174,8 @@ class MiniCmd:
         parser.add_argument(
             "--urgency",
             help="Set job urgency (0-31, default=16)",
-            type=int,
             metavar="N",
-            default=16,
+            default="16",
         )
         parser.add_argument(
             "--job-name",
@@ -276,10 +281,9 @@ class MiniCmd:
         raise NotImplementedError()
 
     # pylint: disable=too-many-branches,too-many-statements
-    def submit_async(self, args):
+    def jobspec_create(self, args):
         """
-        Submit job, constructing jobspec from args.
-        Returns jobid.
+        Create a jobspec from args and return it to caller
         """
         jobspec = self.init_jobspec(args)
         jobspec.cwd = os.getcwd()
@@ -332,6 +336,20 @@ class MiniCmd:
                     val = tmp[1]
                 jobspec.setattr(key, val)
 
+        return jobspec
+
+    def submit_async(self, args, jobspec=None):
+        """
+        Submit job, constructing jobspec from args unless jobspec is not None.
+        Returns a SubmitFuture.
+        """
+        if jobspec is None:
+            jobspec = self.jobspec_create(args)
+
+        if args.dry_run:
+            print(jobspec.dumps(), file=sys.stdout)
+            sys.exit(0)
+
         arg_debug = False
         arg_waitable = False
         if args.flags is not None:
@@ -344,23 +362,19 @@ class MiniCmd:
                     else:
                         raise ValueError("--flags: Unknown flag " + flag)
 
-        if args.dry_run:
-            print(jobspec.dumps(), file=sys.stdout)
-            sys.exit(0)
-
         if not self.flux_handle:
             self.flux_handle = flux.Flux()
 
         return job.submit_async(
             self.flux_handle,
             jobspec.dumps(),
-            urgency=args.urgency,
+            urgency=int(args.urgency),
             waitable=arg_waitable,
             debug=arg_debug,
         )
 
-    def submit(self, args):
-        return JobID(self.submit_async(args).get_id())
+    def submit(self, args, jobspec=None):
+        return JobID(self.submit_async(args, jobspec).get_id())
 
     def get_parser(self):
         return self.parser
@@ -374,20 +388,18 @@ class SubmitBaseCmd(MiniCmd):
     def __init__(self):
         super().__init__()
         self.parser.add_argument(
-            "-N", "--nodes", type=int, metavar="N", help="Number of nodes to allocate"
+            "-N", "--nodes", metavar="N", help="Number of nodes to allocate"
         )
         self.parser.add_argument(
             "-n",
             "--ntasks",
-            type=int,
             metavar="N",
-            default=1,
+            default="1",
             help="Number of tasks to start",
         )
         self.parser.add_argument(
             "-c",
             "--cores-per-task",
-            type=int,
             metavar="N",
             default=1,
             help="Number of cores to allocate per task",
@@ -395,14 +407,33 @@ class SubmitBaseCmd(MiniCmd):
         self.parser.add_argument(
             "-g",
             "--gpus-per-task",
-            type=int,
             metavar="N",
             help="Number of GPUs to allocate per task",
+        )
+        self.parser.add_argument(
+            "-v",
+            "--verbose",
+            action="count",
+            default=0,
+            help="Increase verbosity on stderr (multiple use OK)",
         )
 
     def init_jobspec(self, args):
         if not args.command:
             raise ValueError("job command and arguments are missing")
+
+        #  Ensure integer args are converted to int() here.
+        #  This is done because we do not use type=int in argparse in order
+        #   to allow these options to be mutable for bulksubmit:
+        #
+        for arg in ["ntasks", "nodes", "cores_per_task", "gpus_per_task"]:
+            value = getattr(args, arg)
+            if value:
+                try:
+                    setattr(args, arg, int(value))
+                except ValueError:
+                    opt = arg.replace("_", "-")
+                    raise ValueError(f"--{opt}: invalid int value '{value}'")
 
         return JobspecV1.from_command(
             args.command,
@@ -412,8 +443,316 @@ class SubmitBaseCmd(MiniCmd):
             num_nodes=args.nodes,
         )
 
+    def run_and_exit(self):
+        self.flux_handle.reactor_run()
+        sys.exit(self.exitcode)
 
-class SubmitCmd(SubmitBaseCmd):
+
+class SubmitBulkCmd(SubmitBaseCmd):
+    """
+    SubmitBulkCmd adds options for submitting copies of jobs,
+    watching progress of submission, and waiting for job completion
+    to the SubmitBaseCmd class
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.parser.add_argument(
+            "-q",
+            "--quiet",
+            action="store_true",
+            help="Do not print jobid to stdout on submission",
+        )
+        self.parser.add_argument(
+            "--cc",
+            metavar="IDSET",
+            default=None,
+            help="Replicate job for each ID in IDSET. "
+            "(FLUX_JOB_CC=ID will be set for each job submitted)",
+        )
+        self.parser.add_argument(
+            "--bcc",
+            metavar="IDSET",
+            default=None,
+            help="Like --cc, but FLUX_JOB_CC is not set",
+        )
+        self.parser.add_argument(
+            "--wait",
+            action="store_true",
+            help="Wait for all jobs to complete after submission",
+        )
+        self.parser.add_argument(
+            "--watch",
+            action="store_true",
+            help="Watch all job output (implies --wait)",
+        )
+        self.parser.add_argument(
+            "--progress",
+            action="store_true",
+            help="Show progress of job submission or completion (with --wait)",
+        )
+        self.parser.add_argument(
+            "--jps",
+            action="store_true",
+            help="With --progress, show job throughput",
+        )
+
+    @staticmethod
+    def output_watch_cb(future, args, jobid, label):
+        """Handle events in the guest.output eventlog"""
+        event = future.get_event()
+        if event and event.name == "data":
+            if "stream" in event.context and "data" in event.context:
+                stream = event.context["stream"]
+                data = event.context["data"]
+                rank = event.context["rank"]
+                if args.label_io:
+                    getattr(sys, stream).write(f"{jobid}: {rank}: {data}")
+                else:
+                    getattr(sys, stream).write(data)
+
+    def exec_watch_cb(self, future, args, jobid, label=""):
+        """Handle events in the guest.exec.eventlog"""
+        event = future.get_event()
+        if event and event.name == "shell.init":
+            #  Once the shell.init event is posted, then it is safe to
+            #   begin watching the output eventlog:
+            #
+            job.event_watch_async(
+                self.flux_handle, jobid, eventlog="guest.output"
+            ).then(self.output_watch_cb, args, jobid, label)
+
+            #  Events from this eventlog are no longer needed
+            future.cancel()
+
+    @staticmethod
+    def status_to_exitcode(status):
+        """Calculate exitcode from job status"""
+        if os.WIFEXITED(status):
+            status = os.WEXITSTATUS(status)
+        elif os.WIFSIGNALED(status):
+            status = 127 + os.WTERMSIG(status)
+        return status
+
+    def event_watch_cb(self, future, args, jobinfo, label=""):
+        """Handle events in the main job eventlog"""
+        jobid = jobinfo["id"]
+        event = future.get_event()
+        self.progress_update(jobinfo, event=event)
+        if event is None:
+            return
+        if event.name == "exception":
+            #
+            #  Handle an exception: update global exitcode and print
+            #   an error:
+            if jobinfo["state"] == "submit":
+                #
+                #  If job was still pending then this job failed
+                #   to execute. Treat it as failure with exitcode = 1
+                #
+                jobinfo["state"] = "failed"
+                if self.exitcode == 0:
+                    self.exitcode = 1
+
+            #  Print a human readable error:
+            exception_type = event.context["type"]
+            note = event.context["note"]
+            print(
+                f"{jobid}: exception: type={exception_type} note={note}",
+                file=sys.stderr,
+            )
+        elif event.name == "start" and args.watch:
+            #
+            #  Watch the exec eventlog if the --watch option was provided:
+            #
+            jobinfo["state"] = "running"
+            job.event_watch_async(
+                self.flux_handle, jobid, eventlog="guest.exec.eventlog"
+            ).then(self.exec_watch_cb, args, jobid, label)
+        elif event.name == "finish":
+            #
+            #  Collect exit status and adust self.exitcode if necesary:
+            #
+            jobinfo["state"] = "done"
+            status = self.status_to_exitcode(event.context["status"])
+            if args.verbose:
+                print(f"{jobid}: complete: status={status}", file=sys.stderr)
+            if status > self.exitcode:
+                self.exitcode = status
+
+    def submit_cb(self, future, args, label=""):
+        try:
+            jobid = JobID(future.get_id())
+            if not args.quiet:
+                print(jobid)
+        except OSError as exc:
+            print(f"{label}{exc}", file=sys.stderr)
+            self.exitcode = 1
+            self.progress_update(submit_failed=True)
+            return
+
+        if args.wait or args.watch:
+            #
+            #  If the user requested to wait for or watch all jobs
+            #   then start watching the main eventlog.
+            #
+            #  Carry along a bit of state for each job so that exceptions
+            #   before the job is running can be handled properly
+            #
+            jobinfo = {"id": jobid, "state": "submit"}
+            fut = job.event_watch_async(self.flux_handle, jobid)
+            fut.then(self.event_watch_cb, args, jobinfo, label)
+            self.progress_update(jobinfo, submit=True)
+        elif self.progress:
+            #  Update progress of submission only
+            self.progress.update(jps=self.jobs_per_sec())
+
+    def jobs_per_sec(self):
+        return (self.progress.count + 1) / self.progress.elapsed
+
+    def progress_start(self, args, total):
+        """
+        Initialize progress bar if one was requested
+        """
+        if not args.progress or self.progress:
+            # progress bar not requested or already started
+            return
+        if not sys.stdout.isatty():
+            LOGGER.warning("stdout is not a tty. Ignoring --progress option")
+
+        before = (
+            "PD:{pending:<{width}} R:{running:<{width}} "
+            "CD:{complete:<{width}} F:{fail:<{width}} "
+        )
+        if not (args.wait or args.watch):
+            before = "Submitting {total} jobs: "
+        after = "{percent:5.1f}% {elapsed.dt}"
+        if args.jps:
+            after = "{percent:5.1f}% {jps:4.1f} job/s"
+        self.progress = ProgressBar(
+            timer=False,
+            total=total,
+            width=len(str(total)),
+            before=before,
+            after=after,
+            pending=0,
+            running=0,
+            complete=0,
+            fail=0,
+            jps=0,
+        ).start()
+
+    def progress_update(
+        self, jobinfo=None, submit=False, submit_failed=False, event=None
+    ):
+        """
+        Update progress bar if one was requested
+        """
+        if not self.progress:
+            return
+
+        if not self.progress.timer:
+            #  Start a timer to update progress bar without other events
+            #  (we have to do it here since a flux handle does not exist
+            #   in progress_start). We use 250ms to make the progress bar
+            #   more fluid.
+            timer = self.flux_handle.timer_watcher_create(
+                0, lambda *x: self.progress.redraw(), repeat=0.25
+            ).start()
+            self.progress.update(advance=0, timer=timer)
+
+            #  Don't let this timer watcher contribute to the reactor's
+            #   "active" reference count:
+            self.flux_handle.reactor_decref()
+
+        if submit:
+            self.progress.update(
+                advance=0,
+                pending=self.progress.pending + 1,
+            )
+        elif submit_failed:
+            self.progress.update(
+                advance=1,
+                pending=self.progress.pending - 1,
+                fail=self.progress.fail + 1,
+                jps=self.jobs_per_sec(),
+            )
+        elif event is None:
+            self.progress.update(jps=self.jobs_per_sec())
+        elif event.name == "start":
+            self.progress.update(
+                advance=0,
+                pending=self.progress.pending - 1,
+                running=self.progress.running + 1,
+            )
+        elif event.name == "exception" and event.context["severity"] == 0:
+            #
+            #  Exceptions only need to be specially handled in the
+            #   pending state. If the job is running and gets an exception
+            #   then a finish event will be posted and handled below:
+            #
+            if jobinfo["state"] == "submit":
+                self.progress.update(
+                    advance=0,
+                    pending=self.progress.pending - 1,
+                    fail=self.progress.fail + 1,
+                )
+        elif event.name == "finish":
+            if event.context["status"] == 0:
+                self.progress.update(
+                    advance=0,
+                    running=self.progress.running - 1,
+                    complete=self.progress.complete + 1,
+                )
+            else:
+                self.progress.update(
+                    advance=0,
+                    running=self.progress.running - 1,
+                    fail=self.progress.fail + 1,
+                )
+
+    @staticmethod
+    def cc_list(args):
+        """
+        Return a list of values representing job copies given by --cc/--bcc
+        """
+        cclist = [""]
+        if args.cc and args.bcc:
+            raise ValueError("specify only one of --cc or --bcc")
+        if args.cc:
+            cclist = IDset(args.cc)
+        elif args.bcc:
+            cclist = IDset(args.bcc)
+        return cclist
+
+    def submit_async_with_cc(self, args, cclist=None):
+        """
+        Asynchronously submit jobs, optionally submitting a copy of
+        each job for each member of a cc-list. If the cclist is not
+        passed in to the method, then one is created from either
+        --cc or --bcc options.
+        """
+        if not cclist:
+            cclist = self.cc_list(args)
+        label = ""
+        jobspec = self.jobspec_create(args)
+
+        if args.progress:
+            self.progress_start(args, len(cclist))
+
+        for i in cclist:
+            if args.cc or args.bcc:
+                label = f"cc={i}: "
+                if not args.bcc:
+                    jobspec.environment["FLUX_JOB_CC"] = str(i)
+            self.submit_async(args, jobspec).then(self.submit_cb, args, label)
+
+    def main(self, args):
+        self.submit_async_with_cc(args)
+        self.run_and_exit()
+
+
+class SubmitCmd(SubmitBulkCmd):
     """
     SubmitCmd submits a job, displays the jobid on stdout, and returns.
 
@@ -426,9 +765,322 @@ class SubmitCmd(SubmitBaseCmd):
             "command", nargs=argparse.REMAINDER, help="Job command and arguments"
         )
 
+
+class BulkSubmitCmd(SubmitBulkCmd):
+    """
+    BulkSubmitCmd is like xargs for job submission. It takes a series of
+    inputs on stdin (or the cmdline separated by :::), and substitutes them
+    into the initial arguments, e.g::
+
+       $ echo 1 2 3 | flux mini bulksubmit echo {}
+
+    """
+
+    def __init__(self):
+        super().__init__()
+        self.parser.add_argument(
+            "--shuffle",
+            action="store_true",
+            help="Shuffle list of commands before submission",
+        )
+        self.parser.add_argument(
+            "--define",
+            action="append",
+            type=lambda kv: kv.split("="),
+            dest="methods",
+            default=[],
+            help="Define a named method for transforming any input, "
+            "accessible via e.g. '{0.NAME}'. (local variable 'x' "
+            "will contain the input string to be transformed)",
+            metavar="NAME=CODE",
+        )
+        self.parser.add_argument(
+            "command",
+            nargs=argparse.REMAINDER,
+            help="Job command and iniital arguments",
+        )
+
+    class Xcmd:
+        """Represent a Flux job with mutable command and option args"""
+
+        # dict of mutable argparse args. The values are used in
+        #  the string representation of an Xcmd object.
+        mutable_args = {
+            "ntasks": "-n",
+            "nodes": "-N",
+            "cores_per_task": "-c",
+            "gpus_per_task": "-g",
+            "time_limit": "-t",
+            "env": "--env=",
+            "env_file": "--env-file=",
+            "urgency": "--urgency=",
+            "setopt": "-o ",
+            "setattr": "--setattr=",
+            "job_name": "--job-name=",
+            "input": "--input=",
+            "output": "--output=",
+            "error": "--error=",
+            "cc": "--cc=",
+            "bcc": "--bcc=",
+        }
+
+        class Xinput:
+            """A string class with convenient attributes for formatting args
+
+            This class represents a string with special attributes specific
+            for use on the bulksubmit command line, e.g.::
+
+                {0.%}    : the argument without filename extension
+                {0./}    : the argument basename
+                {0.//}   : the argument dirname
+                {0./%}   : the basename without filename extension
+                {0.name} : the result of dynamically assigned method "name"
+
+            """
+
+            def __init__(self, arg, methods):
+                self.methods = methods
+                self.string = arg
+
+            def __str__(self):
+                return self.string
+
+            def __getattr__(self, attr):
+                if attr == "%":
+                    return os.path.splitext(self.string)[0]
+                if attr == "/":
+                    return os.path.basename(self.string)
+                if attr == "//":
+                    return os.path.dirname(self.string)
+                if attr == "/%":
+                    return os.path.basename(os.path.splitext(self.string)[0])
+                if attr in self.methods:
+                    #  Note: combine list return values with the special
+                    #   sentinel ::list::: so they can be split up again
+                    #   after .format() converts them to strings. This allows
+                    #   user-provided methods to return lists as well as
+                    #   single values, where each list element can become
+                    #   a new argument in a command
+                    #
+                    # pylint: disable=eval-used
+                    result = eval(self.methods[attr], globals(), dict(x=self.string))
+                    if isinstance(result, list):
+                        return "::list::".join(result)
+                    return result
+                raise ValueError(f"Unknown input string method '.{attr}'")
+
+        def __init__(self, args, inputs, **kwargs):
+            """Initialize and Xcmd (eXtensible Command) object
+
+            Given BulkSubmit `args` and `inputs`, substitute all inputs
+            in command and applicable options using string.format().
+
+            """
+            #  Convert all inputs to Xinputs so special attributes are
+            #   available during .format() processing:
+            #
+            inputs = [self.Xinput(x, args.methods) for x in inputs]
+
+            #  Format each argument in args.command, splitting on the
+            #   special "::list::" sentinel to handle the case where
+            #   custom input methods return a list (See Xinput.__getattr__)
+            #
+            self.command = []
+            for arg in args.command:
+                try:
+                    result = arg.format(*inputs, **kwargs).split("::list::")
+                except IndexError:
+                    LOGGER.error(
+                        "Invalid replacement string in command args: '%s'", arg
+                    )
+                    sys.exit(1)
+                if result:
+                    self.command.extend(result)
+
+            #  Format all supported mutable options defined in `mutable_args`
+            #  Note: only list and string options are supported.
+            #
+            self.modified = {}
+            for attr in self.mutable_args:
+                val = getattr(args, attr)
+                try:
+                    if isinstance(val, str):
+                        setattr(self, attr, val.format(*inputs, **kwargs))
+                    elif isinstance(val, list):
+                        setattr(self, attr, [x.format(*inputs, **kwargs) for x in val])
+                    else:
+                        setattr(self, attr, val)
+                except IndexError:
+                    LOGGER.error(
+                        "Invalid replacement string in %s: '%s'",
+                        self.mutable_args[attr],
+                        val,
+                    )
+                    sys.exit(1)
+
+                #  For better verbose and dry-run output, capture mutable
+                #   args that were actually changed:
+                if val != getattr(self, attr):
+                    self.modified[attr] = True
+
+        def apply(self, args):
+            """
+            Apply the command and options in this Xcmd object to the
+            argparse Namespace `args`:
+            """
+            args.command = self.command
+            for attr in self.mutable_args:
+                setattr(args, attr, getattr(self, attr))
+
+        def __str__(self):
+            """String representation of an Xcmd for debugging output"""
+            result = []
+            for attr in self.mutable_args:
+                value = getattr(self, attr)
+                if attr in self.modified and value:
+                    opt = self.mutable_args[attr]
+                    result.append(f"{opt}{value}")
+            result.extend(self.command)
+            return " ".join(result)
+
+    @staticmethod
+    def split_before(iterable, pred):
+        """
+        Like more_itertools.split_before, but if predicate returns
+        True on first element, then return an empty list
+        """
+        buf = []
+        for item in iter(iterable):
+            if pred(item):
+                yield buf
+                buf = []
+            buf.append(item)
+        yield buf
+
+    def split_command_inputs(self, command, sep=None, delim=":::"):
+        """Generate a list of inputs from command list
+
+        Splits the command list on the input delimiter ``delim``,
+        and returns 3 lists:
+
+            - the initial command list (everything before the first delim)
+            - a list of normal "input lists"
+            - a list of "linked" input lists, (delim + "+")
+
+        Special case delimiter values are handled here,
+        e.g. ":::+" and ::::".
+
+        """
+        links = []
+
+        #  Split command array into commands and inputs on ":::":
+        command, *input_lists = self.split_before(
+            command, lambda x: x.startswith(delim)
+        )
+
+        #  Remove ':::' separators from each input, allowing GNU parallel
+        #   like alternate separators e.g. '::::' and ':::+':
+        #
+        for i, lst in enumerate(input_lists):
+            first = lst.pop(0)
+            if first == delim:
+                #  Normal input
+                continue
+            if first == delim + ":":
+                #
+                #  Read input from file
+                if len(lst) > 1:
+                    raise ValueError("Multiple args not allowed after ::::")
+                if lst[0] == "-":
+                    input_lists[i] = sys.stdin.read().split(sep)
+                else:
+                    with open(lst[0]) as filep:
+                        input_lists[i] = filep.read().split(sep)
+            if first in (delim + "+", delim + ":+"):
+                #
+                #  "Link" input to previous, similar to GNU parallel:
+                #  Clear list so this entry can be removed below after
+                #   iteration is complete:
+                links.append({"index": i, "list": lst.copy()})
+                lst.clear()
+
+        #  Remove empty lists (which are now links)
+        input_lists = [lst for lst in input_lists if lst]
+
+        return command, input_lists, links
+
+    def create_commands(self, args):
+        """Create bulksubmit commands list"""
+        sep = None
+
+        #  Ensure any provided methods can compile
+        args.methods = {
+            name: compile(code, name, "eval")
+            for name, code in dict(args.methods).items()
+        }
+
+        #  Split command into command template and input lists + links:
+        args.command, input_list, links = self.split_command_inputs(
+            args.command, sep, delim=":::"
+        )
+
+        #  If no command provided then the default is "{}"
+        if not args.command:
+            args.command = ["{}"]
+
+        #  If no inputs on commandline, read from stdin:
+        if not input_list:
+            input_list = [sys.stdin.read().split(sep)]
+
+        #  Take the product of all inputs in input_list
+        inputs = [list(x) for x in list(itertools.product(*input_list))]
+
+        #  Now cycle over linked inputs and insert them in result:
+        for link in links:
+            cycle = itertools.cycle(link["list"])
+            for lst in inputs:
+                lst.insert(link["index"], next(cycle))
+
+        #  For each set of generated input lists, append a command
+        #   to run. Keep a sequence counter so that {seq} can be used
+        #   in the format expansion.
+        return [self.Xcmd(args, inp, seq=i) for i, inp in enumerate(inputs)]
+
     def main(self, args):
-        jobid = self.submit(args)
-        print(jobid, file=sys.stdout)
+        if not args.command:
+            args.command = ["{}"]
+
+        #  Create one "command" to be run for each combination of
+        #   "inputs" on stdin or the command line:
+        #
+        commands = self.create_commands(args)
+
+        if args.shuffle:
+            random.shuffle(commands)
+
+        #  Calculate total number of commands for use with progress:
+        total = 0
+        for xcmd in commands:
+            xcmd.apply(args)
+            total += len(self.cc_list(args))
+
+        #  Initialize progress bar if requested:
+        if args.progress:
+            if not args.dry_run:
+                self.progress_start(args, total)
+            else:
+                print(f"flux-mini: submitting a total of {total} jobs")
+
+        #  Loop through commands and asynchronously submit them:
+        for xcmd in commands:
+            if args.verbose or args.dry_run:
+                print(f"flux-mini: submit {xcmd}")
+            xcmd.apply(args)
+            if not args.dry_run:
+                self.submit_async_with_cc(args)
+
+        if not args.dry_run:
+            self.run_and_exit()
 
 
 class RunCmd(SubmitBaseCmd):
@@ -442,13 +1094,6 @@ class RunCmd(SubmitBaseCmd):
 
     def __init__(self):
         super().__init__()
-        self.parser.add_argument(
-            "-v",
-            "--verbose",
-            action="count",
-            default=0,
-            help="Increase verbosity on stderr (multiple use OK)",
-        )
         self.parser.add_argument(
             "command", nargs=argparse.REMAINDER, help="Job command and arguments"
         )
@@ -695,6 +1340,24 @@ def main():
         formatter_class=flux.util.help_formatter(),
     )
     mini_submit_parser_sub.set_defaults(func=submit.main)
+
+    # bulksubmit
+    bulksubmit = BulkSubmitCmd()
+    description = """
+    Submit a series of commands given on the commandline. This is useful
+    with shell globs, e.g. `flux mini bulksubmit *.sh`, and will allow
+    jobs to be submitted much faster than calling flux-mini submit in a
+    loop.
+    """
+    bulksubmit_parser_sub = subparsers.add_parser(
+        "bulksubmit",
+        parents=[bulksubmit.get_parser()],
+        help="enqueue jobs in bulk",
+        usage="flux mini bulksubmit [OPTIONS...] COMMAND [COMMANDS...]",
+        description=description,
+        formatter_class=flux.util.help_formatter(),
+    )
+    bulksubmit_parser_sub.set_defaults(func=bulksubmit.main)
 
     # batch
     batch = BatchCmd()
