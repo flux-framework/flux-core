@@ -64,6 +64,12 @@ test_expect_success 'job-manager: queue list job with correct urgency' '
 	test_cmp list1_urgency.exp list1_urgency.out
 '
 
+test_expect_success 'job-manager: queue list job with correct priority' '
+	echo 16 >list1_priority.exp &&
+	cut -f5 <list1.out >list1_priority.out &&
+	test_cmp list1_priority.exp list1_priority.out
+'
+
 test_expect_success 'job-manager: raise non-fatal exception on job' '
 	jobid=$(cat list1_jobid.out) &&
 	flux job raise --severity=1 --type=testing ${jobid} Mumble grumble &&
@@ -113,7 +119,7 @@ test_expect_success 'job-manager: queue is sorted in priority order' '
 	16
 	0
 	EOT
-	cut -f4 <list3.out >list3_priority.out &&
+	cut -f5 <list3.out >list3_priority.out &&
 	test_cmp list3_priority.exp list3_priority.out
 '
 
@@ -122,7 +128,7 @@ test_expect_success 'job-manager: list-jobs --count shows highest priority jobs'
 	31
 	16
 	EOT
-	${LIST_JOBS} -c 2 | cut -f4 >list3_lim2.out &&
+	${LIST_JOBS} -c 2 | cut -f5 >list3_lim2.out &&
 	test_cmp list3_lim2.exp list3_lim2.out
 '
 

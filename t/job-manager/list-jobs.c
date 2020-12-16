@@ -90,6 +90,7 @@ int main (int argc, char *argv[])
     json_array_foreach (jobs, index, value) {
         flux_jobid_t id;
         int urgency;
+        unsigned int priority;
         uint32_t userid;
         double t_submit;
         char timestr[80];
@@ -97,9 +98,10 @@ int main (int argc, char *argv[])
         json_t *annotations = NULL;
         char *annotations_str = NULL;
 
-        if (json_unpack (value, "{s:I s:i s:i s:f s:i s?:o}",
+        if (json_unpack (value, "{s:I s:i s:i s:i s:f s:i s?:o}",
                                 "id", &id,
                                 "urgency", &urgency,
+                                "priority", &priority,
                                 "userid", &userid,
                                 "t_submit", &t_submit,
                                 "state", &state,
@@ -109,11 +111,12 @@ int main (int argc, char *argv[])
             log_err_exit ("time conversion error");
         if (annotations)
             annotations_str = json_dumps (annotations, 0);
-        printf ("%ju\t%s\t%lu\t%d\t%s%s%s\n",
+        printf ("%ju\t%s\t%lu\t%d\t%u\t%s%s%s\n",
                 (uintmax_t)id,
                 flux_job_statetostr (state, true),
                 (unsigned long)userid,
                 urgency,
+                priority,
                 timestr,
                 annotations_str ? "\t" : "",
                 annotations_str ? annotations_str : "");
