@@ -239,6 +239,23 @@ test_expect_success 'job-manager: flux job urgency fails on invalid urgency' '
 	flux job cancel ${jobid}
 '
 
+test_expect_success HAVE_JQ 'job-manager: flux job urgency special args work' '
+	jobid=$(flux job submit basic.json | flux job id) &&
+	flux job urgency ${jobid} hold &&
+	${LIST_JOBS} > list_hold.out &&
+	test $(cat list_hold.out | grep ${jobid} | $jq .urgency) -eq 0 &&
+	test $(cat list_hold.out | grep ${jobid} | $jq .priority) -eq 0 &&
+	flux job urgency ${jobid} expedite &&
+	${LIST_JOBS} > list_expedite.out &&
+	test $(cat list_expedite.out | grep ${jobid} | $jq .urgency) -eq 31 &&
+	test $(cat list_expedite.out | grep ${jobid} | $jq .priority) -eq 4294967295 &&
+	flux job urgency ${jobid} default &&
+	${LIST_JOBS} > list_default.out &&
+	test $(cat list_default.out | grep ${jobid} | $jq .urgency) -eq 16 &&
+	test $(cat list_default.out | grep ${jobid} | $jq .priority) -eq 16 &&
+	flux job cancel ${jobid}
+'
+
 test_expect_success 'job-manager: guest can reduce urgency from default' '
 	jobid=$(flux job submit  basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job urgency ${jobid} 5 &&
