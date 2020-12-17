@@ -193,7 +193,7 @@ static struct optparse_option killall_opts[] = {
 
 static struct optparse_option submit_opts[] =  {
     { .name = "urgency", .key = 'u', .has_arg = 1, .arginfo = "N",
-      .usage = "Set job urgency (0-31, default=16)",
+      .usage = "Set job urgency (0-31), hold=0, default=16, expedite=31",
     },
     { .name = "flags", .key = 'f', .has_arg = 1,
       .flags = OPTPARSE_OPT_AUTOSPLIT,
@@ -337,7 +337,7 @@ static struct optparse_subcommand subcommands[] = {
     },
     { "urgency",
       "[OPTIONS] id urgency",
-      "Set job urgency",
+      "Set job urgency (0-31, HOLD, EXPEDITE, DEFAULT)",
       cmd_urgency,
       0,
       NULL,
@@ -630,6 +630,7 @@ int cmd_urgency (optparse_t *p, int argc, char **argv)
     int urgency;
     flux_jobid_t id;
     const char *jobid = NULL;
+    const char *urgencystr = NULL;
 
     if (optindex != argc - 2) {
         optparse_print_usage (p);
@@ -640,7 +641,15 @@ int cmd_urgency (optparse_t *p, int argc, char **argv)
 
     jobid = argv[optindex++];
     id = parse_jobid (jobid);
-    urgency = parse_arg_unsigned (argv[optindex++], "urgency");
+    urgencystr = argv[optindex++];
+    if (!strcasecmp (urgencystr, "hold"))
+        urgency = FLUX_JOB_URGENCY_HOLD;
+    else if (!strcasecmp (urgencystr, "expedite"))
+        urgency = FLUX_JOB_URGENCY_EXPEDITE;
+    else if (!strcasecmp (urgencystr, "default"))
+        urgency = FLUX_JOB_URGENCY_DEFAULT;
+    else
+        urgency = parse_arg_unsigned (urgencystr, "urgency");
 
     if (!(f = flux_job_set_urgency (h, id, urgency)))
         log_err_exit ("flux_job_set_urgency");
