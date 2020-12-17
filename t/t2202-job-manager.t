@@ -256,6 +256,15 @@ test_expect_success HAVE_JQ 'job-manager: flux job urgency special args work' '
 	flux job cancel ${jobid}
 '
 
+test_expect_success 'job-manager: flux job urgency -v work' '
+	jobid=$(flux job submit basic.json | flux job id) &&
+	flux job urgency -v ${jobid} 10 2>&1 | grep "16" &&
+	flux job urgency -v ${jobid} hold 2>&1 | grep "10" &&
+	flux job urgency -v ${jobid} expedite 2>&1 | grep "held" &&
+	flux job urgency -v ${jobid} 10 2>&1 | grep "expedited" &&
+	flux job cancel ${jobid}
+'
+
 test_expect_success 'job-manager: guest can reduce urgency from default' '
 	jobid=$(flux job submit  basic.json) &&
 	FLUX_HANDLE_ROLEMASK=0x2 flux job urgency ${jobid} 5 &&
