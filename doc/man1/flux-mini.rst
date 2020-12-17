@@ -10,6 +10,8 @@ SYNOPSIS
 
 **flux** **mini** **submit** [OPTIONS] [*--ntasks=N*] COMMAND...
 
+**flux** **mini** **bulksubmit** [OPTIONS] [*--ntasks=N*] COMMAND...
+
 **flux** **mini** **run** [OPTIONS] [*--ntasks=N*] COMMAND...
 
 **flux** **mini** **batch** [OPTIONS] *--nslots=N* SCRIPT...
@@ -33,6 +35,11 @@ Job ID on standard output.
 
 The **run** and **alloc** commands do the same interactively, blocking until
 the job has completed.
+
+The **bulksubmit** command enqueues one job each for a set of inputs read
+on either stdin, or given on the command line. The inputs are optionally
+substituted in ``COMMAND`` and/or many submission options. See more in the
+:ref:`bulksubmit` section below.
 
 For **flux-mini batch**, the SCRIPT given on the command line is assumed
 to be a file name, unless the *--wrap* option used, and the script
@@ -263,9 +270,9 @@ OTHER OPTIONS
    with urgency in the range of 0 to 31 (default 16).
 
 **-v, --verbose**
-   *(run,alloc)* Increase verbosity on stderr. For example, currently
-   ``flux mini run -v`` displays jobid, ``-vv`` displays job events, and
-   ``-vvv`` displays exec events. ``flux mini alloc -v`` forces the command
+   *(run,alloc,submit,bulksubmit)* Increase verbosity on stderr. For example,
+   currently ``flux mini run -v`` displays jobid, ``-vv`` displays job events,
+   and ``-vvv`` displays exec events. ``flux mini alloc -v`` forces the command
    to print the submitted jobid on stderr.
    The specific output may change in the future.
 
@@ -281,7 +288,10 @@ OTHER OPTIONS
    is interpreted as a string.
 
 **--dry-run**
-   Don't actually submit the job. Just emit jobspec on stdout and exit.
+   Don't actually submit job. Just emit jobspec on stdout and exit for
+   ``run``, ``submit``, ``alloc``, and ``batch``. For ``bulksubmit``,
+   emit a line of output including relevant options for each job which
+   would have been submitted,
 
 **--debug**
    Enable job debug events, primarily for debugging Flux itself.
@@ -296,6 +306,136 @@ OTHER OPTIONS
    a shell script, by prefixing with ``#!/bin/sh``. If no COMMAND is present,
    then a SCRIPT is read on stdin and wrapped in a /bin/sh script.
 
+**--cc=IDSET**
+   *(submit,bulksubmit)* Replicate the job for each ``id`` in ``IDSET``.
+   ``FLUX_JOB_CC=id`` will be set in the environment of each submitted job
+   to allow the job to alter its execution based on the submission index.
+   (e.g. for reading from a different input file).
+
+**--bcc=IDSET**
+   *(submit,bulksubmit)* Identical to ``--cc``, but do not set
+   ``FLUX_JOB_CC`` in each job. All jobs will be identical copies.
+
+**--wait**
+   *(submit,bulksubmit)* Wait on completion of all jobs before exiting.
+
+**--watch**
+   *(submit,bulksubmit)* Display output from all jobs. Implies ``--wait``.
+
+**--progress**
+   *(submit,bulksubmit)* With ``--wait``, display a progress bar showing
+   the progress of job completion. Without ``--wait``, the progress bar
+   will show progress of job submission.
+
+**--jps**
+   *(submit,bulksubmit)* With ``--progress``, display throughput statistics
+   (jobs/s) in the progress bar.
+
+**--define=NAME=CODE**
+   *(bulksubmit)* Define a named method that will be made available as an
+   attribute during command and option replacement. The string being
+   processed is available as ``x``. For example::
+
+   $ seq 1 8 | flux mini bulksubmit --define=pow="2**int(x)" -n {.pow} ...
+
+**--shuffle**
+   *(bulksubmit)* Shuffle the list of commands before submission.
+
+
+.. _bulksubmit:
+
+BULKSUBMIT
+==========
+
+The ``bulksubmit`` utility allows rapid bulk submission of jobs using
+an interface similar to GNU parallel or ``xargs``. The command takes
+inputs on stdin or the command line (separated by ``:::``), and submits
+the supplied command template and options as one job per input combination.
+
+The replacement is done using Python's ``string.format()``, which is
+supplied a list of inputs on each iteration. Therefore, in the common case
+of a single input list, ``{}`` will work as the substitution string, e.g.::
+
+    $ seq 1 4 | flux mini bulksubmit echo {}
+    flux-mini: submit echo 1
+    flux-mini: submit echo 2
+    flux-mini: submit echo 3
+    flux-mini: submit echo 4
+
+With ``--dry-run`` ``bulksubmit`` will print the args and command which
+would have been submitted, but will not perform any job submission.
+
+The ``bulksubmit`` command can also take input lists on the command line.
+The inputs are separated from each other and the command  with the special
+delimiter ``:::``::
+
+    $ flux mini bulksubmit echo {} ::: 1 2 3 4
+    flux-mini: submit echo 1
+    flux-mini: submit echo 2
+    flux-mini: submit echo 3
+    flux-mini: submit echo 4
+
+Multiple inputs are combined, in which case each input is passed as a
+positional parameter to the underlying ``format()``, so should be accessed
+by index::
+
+    $ flux mini bulksubmit --dry-run echo {1} {0} ::: 1 2 ::: 3 4
+    flux-mini: submit echo 3 1
+    flux-mini: submit echo 4 1
+    flux-mini: submit echo 3 2
+    flux-mini: submit echo 4 2
+
+If the generation of all combinations of an  input list with other inputs is not
+desired, the special input delimited ``:::+`` may be used to "link" the input,
+so that only one argument from this source will be used per other input,
+e.g.::
+
+    $ flux mini bulksubmit --dry-run echo {0} {1} ::: 1 2 :::+ 3 4
+    flux-mini: submit 1 3
+    flux-mini: submit 2 4
+
+The linked input will be cycled through if it is shorter than other inputs.
+
+An input list can be read from a file with ``::::``::
+
+    $ seq 0 3 >inputs
+    $ flux mini bulksubmit --dry-run :::: inputs
+    flux-mini: submit 0
+    flux-mini: submit 1
+    flux-mini: submit 2
+    flux-mini: submit 3
+
+If the filename is ``-`` then ``stdin`` will be used. This is useful
+for including ``stdin`` when reading other inputs.
+
+The delimiter ``::::+`` indicates that the next file is to be linked to
+the inputs instead of combined with them, as with ``:::+``.
+
+There are several predefined attributes for input substitution.
+These include:
+
+ - ``{.%}`` returns the input string with any extension removed.
+ - ``{./}`` returns the basename of the input string.
+ - ``{./%}`` returns the basename of the input string with any
+   extension removed.
+ - ``{.//}`` returns the dirname of the input string
+ - ``{seq}`` returns the input sequence number (0 origin).
+
+Note that besides ``{seq}``, these attributes can also take the input
+index, e.g. ``{0.%}`` or ``{1.//}``, when multiple inputs are used.
+
+Additional attributes may be defined with the ``--define`` option, e.g.::
+
+    $ flux mini bulksubmit --dry-run --define=p2='2**int(x)' -n {.p2} hostname \
+       ::: $(seq 0 4)
+    flux-mini: submit -n1 hostname
+    flux-mini: submit -n2 hostname
+    flux-mini: submit -n4 hostname
+    flux-mini: submit -n8 hostname
+    flux-mini: submit -n16 hostname
+
+The input string being indexed is passed to defined attributes via the
+local ``x`` as seen above.
 
 SHELL OPTIONS
 =============
