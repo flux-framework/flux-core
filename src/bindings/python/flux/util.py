@@ -40,7 +40,6 @@ def check_future_error(func):
         try:
             return func(calling_obj, *args, **kwargs)
         except EnvironmentError as error:
-            exception_tuple = sys.exc_info()
             try:
                 future = (
                     calling_obj.handle
@@ -49,10 +48,10 @@ def check_future_error(func):
                 )
                 errmsg = raw.flux_future_error_string(future)
             except EnvironmentError:
-                six.reraise(*exception_tuple)
+                raise error from None
             if errmsg is None:
-                six.reraise(*exception_tuple)
-            raise EnvironmentError(error.errno, errmsg.decode("utf-8"))
+                raise error from None
+            raise EnvironmentError(error.errno, errmsg.decode("utf-8")) from None
 
     return func_wrapper
 
