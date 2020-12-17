@@ -9,7 +9,7 @@ jobs:
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
-    - run: git fetch --tags
+    - run: git fetch --tags || true
     - name: docker-run-checks with ASan
       timeout-minutes: 40
       env:
