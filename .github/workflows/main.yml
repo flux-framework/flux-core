@@ -178,3 +178,4 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.prep_release.outputs.tarball }}
         asset_name: ${{ steps.prep_release.outputs.tarball }}
+        asset_content_type: "application/gzip"
