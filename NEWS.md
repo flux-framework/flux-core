@@ -1,3 +1,68 @@
+flux-core version 0.22.0 - 2020-12-16
+-------------------------------------
+
+This release resolves an issue introduced in 0.20.0 where Flux would
+occasionally hang during tear-down on RHEL/CentOS 7.  This release
+should be suitable for use with production workflows on those systems.
+
+System instance development and testing at < 256 node scale is on-going.
+The system limitations of this release are documented in the Flux Admin
+Guide:
+
+https://flux-framework.readthedocs.io/en/latest/adminguide.html
+
+### New features
+
+ * flux-keygen is no longer necessary before starting Flux (#3409)
+ * Add waitstatus and returncode JobID class and flux-jobs (#3414)
+ * New `flux resource status` command (#3351)
+ * Rename "administrative priority" to "urgency" (#3394)
+ * Prepare for fair share priority plugin (#3371, #3339, #3350, #3402,
+   #3405, #3404, #3410)
+ * job-manager: cache jobspec for scheduler, exec (#3393, #3396, #3399)
+ * python: add bindings for libflux-idset,hostlist (#3341)
+ * resource: support hostnames for drain and exclude (#3318)
+ * flux-jobs: Support nodelist in flux-jobs output (#3332)
+ * flux-jobs: add flux-jobs --stats,--stats-only options (#3419)
+ * flux-job: Add flux job attach --read-only option (#3320)
+ * python: add ResourceSet python class (#3406)
+ * python: allow future.then() variable and keyword args in callbacks (#3366)
+
+### Fixes
+
+ * Fix job shell segfault when jobspec contains JSON null (#3421)
+ * job-manager: Fix annotation clear corner case #3418
+ * broker: fix intermittent hang during instance tear-down on Centos7 (#3398)
+ * job-exec: log early shell/imp errors (#3397)
+ * shell: ensure TMPDIR exists for all jobs (#3389)
+ * misc cleanups & fixups (#3392)
+ * small fixes: resource memory leak, improve errors, check int size (#3388)
+ * affinity: use comma separated list format for `CUDA_VISIBLE_DEVICES` (#3376)
+ * libjob: repair interoperability with flux-security (#3356)
+ * job-exec: fixes for multiuser mode (#3353)
+ * shell: fix issues with `CUDA_VISIBLE_DEVICES` value (#3317)
+ * job-manager: handle scheduler disconnect (#3304)
+ * libjob: always sign owner jobs with the 'none' signing mechanism (#3306)
+ * libsubprocess: do not allow ref/unref in hooks (#3303)
+
+### Cleanup/Testing
+
+ * doc: autogenerate python binding docs with Sphinx (#3412)
+ * testsuite: support level N inception of flux testsuite (#3413)
+ * github: fix missing docker tag in matrix builds (#3387)
+ * github: fixes for workflow scripts (#3383)
+ * ci: move from Travis-CI to GitHub Workflows (#3379)
+ * docs: add explicit link to man pages section (#3365)
+ * testsuite: replace loop in t2300-sched-simple.t with helper (#3367)
+ * docker: install poison flux-core libs, cmds before build and test (#3369)
+ * libflux: drop `flux_dmesg()` from public API (#3362)
+ * testsuite: fix shed-simple test races (#3358)
+ * build: allow Lua 5.4, drop -lutil, and improve sphinx warning (#3357)
+ * testsuite: increase resource.monitor-waitup timeout (#3348)
+ * broker: update log.dmesg to use rpc streaming (#3307)
+ * testsuite: fix core idsets in resource module tests (#3314)
+ * t/t2205-hwloc-basic: only use lstopo-no-graphics (#3309)
+
 flux-core version 0.21.0 - 2020-11-04
 -------------------------------------
 
