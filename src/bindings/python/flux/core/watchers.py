@@ -52,7 +52,12 @@ class Watcher(object):
 def timeout_handler_wrapper(unused1, unused2, revents, opaque_handle):
     del unused1, unused2  # unused arguments
     watcher = ffi.from_handle(opaque_handle)
-    watcher.callback(watcher.flux_handle, watcher, revents, watcher.args)
+    try:
+        watcher.callback(watcher.flux_handle, watcher, revents, watcher.args)
+    # pylint: disable=broad-except
+    except Exception as exc:
+        type(watcher.flux_handle).set_exception(exc)
+        watcher.flux_handle.reactor_stop_error()
 
 
 class TimerWatcher(Watcher):
@@ -79,8 +84,13 @@ class TimerWatcher(Watcher):
 def fd_handler_wrapper(unused1, unused2, revents, opaque_handle):
     del unused1, unused2  # unused arguments
     watcher = ffi.from_handle(opaque_handle)
-    fd_int = raw.fd_watcher_get_fd(watcher.handle)
-    watcher.callback(watcher.flux_handle, watcher, fd_int, revents, watcher.args)
+    try:
+        fd_int = raw.fd_watcher_get_fd(watcher.handle)
+        watcher.callback(watcher.flux_handle, watcher, fd_int, revents, watcher.args)
+    # pylint: disable=broad-except
+    except Exception as exc:
+        type(watcher.flux_handle).set_exception(exc)
+        watcher.flux_handle.reactor_stop_error()
 
 
 class FDWatcher(Watcher):
@@ -106,8 +116,13 @@ class FDWatcher(Watcher):
 @ffi.def_extern()
 def signal_handler_wrapper(_unused1, _unused2, _unused3, opaque_handle):
     watcher = ffi.from_handle(opaque_handle)
-    signal_int = raw.signal_watcher_get_signum(watcher.handle)
-    watcher.callback(watcher.flux_handle, watcher, signal_int, watcher.args)
+    try:
+        signal_int = raw.signal_watcher_get_signum(watcher.handle)
+        watcher.callback(watcher.flux_handle, watcher, signal_int, watcher.args)
+    # pylint: disable=broad-except
+    except Exception as exc:
+        type(watcher.flux_handle).set_exception(exc)
+        watcher.flux_handle.reactor_stop_error()
 
 
 class SignalWatcher(Watcher):

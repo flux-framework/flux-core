@@ -122,12 +122,17 @@ class Message(WrapperPimpl):
 def message_handler_wrapper(unused1, unused2, msg_handle, opaque_handle):
     del unused1, unused2  # unused arguments
     watcher = ffi.from_handle(opaque_handle)
-    watcher.callback(
-        watcher.flux_handle,
-        watcher,
-        Message(handle=msg_handle, destruct=False),
-        watcher.args,
-    )
+    try:
+        watcher.callback(
+            watcher.flux_handle,
+            watcher,
+            Message(handle=msg_handle, destruct=False),
+            watcher.args,
+        )
+    # pylint: disable=broad-except
+    except Exception as exc:
+        type(watcher.flux_handle).set_exception(exc)
+        watcher.flux_handle.reactor_stop_error()
 
 
 class MessageWatcher(Watcher):
