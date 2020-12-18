@@ -24,6 +24,7 @@ from flux.core.watchers import SignalWatcher
 from _flux._core import ffi, lib
 
 
+# pylint: disable=too-many-public-methods
 class Flux(Wrapper):
     """
     The general Flux handle class, create one of these to connect to the

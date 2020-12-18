@@ -58,18 +58,26 @@ def check_future_error(func):
 
 
 def interruptible(func):
-    """Make a method interruptible via Ctrl-C
+    """Make a Future method interruptible via Ctrl-C
 
-    Necessary for methods that may block when calling into the C API.
+    Necessary for Future methods that may block when calling into the C API.
     """
 
-    def func_wrapper(calling_obj, *args, **kwargs):
+    def func_wrapper(future, *args, **kwargs):
         # python only allows `signal.signal` calls in the main thread
-        if threading.current_thread() is threading.main_thread():
+        # only activate if the process is not in the Flux reactor
+        active = False
+        flux_handle = future.get_flux()
+        if (
+            threading.current_thread() is threading.main_thread()
+            and flux_handle is not None
+            and not flux_handle.reactor_running()
+        ):
             handler = signal.getsignal(signal.SIGINT)
             signal.signal(signal.SIGINT, signal.SIG_DFL)
-        retval = func(calling_obj, *args, **kwargs)
-        if threading.current_thread() is threading.main_thread():
+            active = True
+        retval = func(future, *args, **kwargs)
+        if active:
             signal.signal(signal.SIGINT, handler)
         return retval
 
