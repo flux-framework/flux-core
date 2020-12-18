@@ -73,7 +73,7 @@ class TestTimer(unittest.TestCase):
     def test_msg_watcher_unicode(self):
         with self.f.msg_watcher_create(
             lambda handle, x, y, z: handle.fatal_error("cb should not run"),
-            topic_glob=u"foo.*",
+            topic_glob="foo.*",
         ) as mw:
             self.assertIsNotNone(mw)
 
