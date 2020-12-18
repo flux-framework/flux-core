@@ -92,7 +92,7 @@ class TestHandle(unittest.TestCase):
                 self.assertEqual(two, "two")
                 self.assertEqual(three, "three")
             finally:
-                future.get_handle().reactor_stop()
+                future.get_flux().reactor_stop()
 
         self.f.rpc("cmb.ping").then(then_cb, "one", "two", "three")
         gc.collect(2)
@@ -105,7 +105,7 @@ class TestHandle(unittest.TestCase):
 
         def then_cb(future):
             cb_ran[0] = True
-            future.get_handle().reactor_stop()
+            future.get_flux().reactor_stop()
 
         self.f.rpc("cmb.ping").then(then_cb)
         gc.collect(2)
@@ -121,7 +121,7 @@ class TestHandle(unittest.TestCase):
             try:
                 self.assertIsNone(args)
             finally:
-                future.get_handle().reactor_stop()
+                future.get_flux().reactor_stop()
 
         self.f.rpc("cmb.ping").then(then_cb)
         gc.collect(2)
@@ -140,7 +140,7 @@ class TestHandle(unittest.TestCase):
                 # val3 gets default value
                 self.assertEqual(val3, "default")
             finally:
-                future.get_handle().reactor_stop()
+                future.get_flux().reactor_stop()
 
         self.f.rpc("cmb.ping").then(then_cb, val2=True, val1=True)
         gc.collect(2)
@@ -152,8 +152,8 @@ class TestHandle(unittest.TestCase):
         """Register two 'then' cbs and ensure it throws an exception"""
         with self.assertRaises(EnvironmentError) as cm:
             rpc = self.f.rpc(b"cmb.ping")
-            rpc.then(lambda x, y: None)
-            rpc.then(lambda x, y: None)
+            rpc.then(lambda x: None)
+            rpc.then(lambda x: None)
         self.assertEqual(cm.exception.errno, errno.EEXIST)
 
     def test_05_future_error_string(self):
