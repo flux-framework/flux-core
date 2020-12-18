@@ -68,7 +68,7 @@ jobs:
       with:
         ref: ${{ github.event.pull_request.head.sha }}
         fetch-depth: 0
-    - run: git fetch --tags
+    - run: git fetch --tags || true
     - run: >
         src/test/docker/docker-run-checks.sh --install-only
         --tag=fluxrm/flux-core:bionic
@@ -178,3 +178,4 @@ jobs:
         upload_url: ${{ steps.create_release.outputs.upload_url }}
         asset_path: ${{ steps.prep_release.outputs.tarball }}
         asset_name: ${{ steps.prep_release.outputs.tarball }}
+        asset_content_type: "application/gzip"
