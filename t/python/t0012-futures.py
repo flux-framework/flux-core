@@ -82,6 +82,14 @@ class TestHandle(unittest.TestCase):
         self.assertGreaterEqual(ret, 0, msg="Reactor exited with {}".format(ret))
         self.assertTrue(cb_ran[0], msg="Callback did not run successfully")
 
+    def test_03_future_then_exception(self):
+        def then_cb(future):
+            raise RuntimeError("this is a test")
+
+        self.f.rpc("cmb.ping", self.ping_payload).then(then_cb)
+        with self.assertRaises(RuntimeError) as cm:
+            rc = self.f.reactor_run()
+
     def test_03_future_then_varargs(self):
         cb_ran = [False]
 
