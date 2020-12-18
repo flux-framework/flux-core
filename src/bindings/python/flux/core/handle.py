@@ -9,6 +9,8 @@
 ###############################################################
 
 import signal
+import threading
+from contextlib import contextmanager
 import six
 
 from flux.wrapper import Wrapper
@@ -32,6 +34,12 @@ class Flux(Wrapper):
         <flux.core.Flux object at 0x...>
     """
 
+    #  Thread local storage to hold a reactor_running boolean, indicating
+    #  when the current thread is running under a Flux reactor.
+    #
+    tls = threading.local()
+    tls.reactor_depth = 0
+
     def __init__(self, url=ffi.NULL, flags=0, handle=None):
         super(Flux, self).__init__(
             ffi,
@@ -52,6 +60,27 @@ class Flux(Wrapper):
                 )
 
         self.aux_txn = None
+
+    @classmethod
+    def reactor_running(cls):
+        """Return True if this thread is running the Flux reactor"""
+        return cls.tls.reactor_depth > 0
+
+    @classmethod
+    def reactor_enter(cls):
+        cls.tls.reactor_depth += 1
+
+    @classmethod
+    def reactor_exit(cls):
+        cls.tls.reactor_depth -= 1
+
+    @contextmanager
+    def in_reactor(self):
+        self.reactor_enter()
+        try:
+            yield
+        finally:
+            self.reactor_exit()
 
     # pylint: disable=no-self-use
     def close(self):
@@ -185,6 +214,7 @@ class Flux(Wrapper):
         if it is provided. Sets a signal watcher for SIGINT to return
         from the reactor on Ctrl-C, and raise KeyboardInterrupt.
         """
+        rc = 0
         if reactor is None:
             reactor = self.get_reactor()
 
@@ -197,9 +227,17 @@ class Flux(Wrapper):
             handle.reactor_stop(reactor)
 
         with self.signal_watcher_create(signal.SIGINT, reactor_interrupt):
-            self.reactor_active_decref(reactor)
-            rc = self.flux_reactor_run(reactor, flags)
-            self.reactor_active_incref(reactor)
+            with self.in_reactor():
+                # This signal watcher should not take a reference on reactor
+                #  o/w the reactor may not exit as expected when all other
+                #  active watchers and msghandlers are complete.
+                #
+                self.reactor_active_decref(reactor)
+                rc = self.flux_reactor_run(reactor, flags)
+                #  Re-establish signal watcher reference so reactor refcount
+                #   doesn't underflow when signal watcher is destroyed
+                #
+                self.reactor_active_incref(reactor)
             if reactor_interrupted:
                 raise KeyboardInterrupt
 
