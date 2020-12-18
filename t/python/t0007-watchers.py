@@ -62,6 +62,14 @@ class TestTimer(unittest.TestCase):
             self.assertEqual(ret, 0, msg="Reactor exit")
             self.assertTrue(timer_ran[0], msg="Timer did not run successfully")
 
+    def test_timer_callback_exception(self):
+        def cb(x, y, z, w):
+            raise RuntimeError("this is a test")
+
+        with self.f.timer_watcher_create(0.01, cb) as timer:
+            with self.assertRaises(RuntimeError) as cm:
+                self.f.reactor_run()
+
     def test_msg_watcher_unicode(self):
         with self.f.msg_watcher_create(
             lambda handle, x, y, z: handle.fatal_error("cb should not run"),
@@ -134,6 +142,22 @@ class TestSignal(unittest.TestCase):
             rc = self.f.reactor_run()
             self.assertTrue(rc >= 0, msg="reactor exit")
             self.assertTrue(cb_called[0], "Signal Watcher Called")
+
+    def test_signal_watcher_exception(self):
+        def signal_cb(handle, watcher, signum, args):
+            raise RuntimeError(f"got signal {signum}")
+
+        def raise_signal(handle, watcher, revents, args):
+            os.kill(os.getpid(), signal.SIGUSR2)
+
+        #  Create new Flux handle to avoid potential stale state in
+        #  self.f handle. (makes test unreliable)
+        h = flux.Flux()
+        with h.signal_watcher_create(signal.SIGUSR2, signal_cb) as watcher:
+            h.timer_watcher_create(0.05, raise_signal).start()
+            with self.assertRaises(RuntimeError):
+                rc = h.reactor_run()
+                self.assertTrue(rc < 0)
 
 
 if __name__ == "__main__":
