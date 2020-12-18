@@ -70,11 +70,11 @@ export FLUX_PYCLI_LOGLEVEL=10
 
 listjobs() {
 	${FLUX_BUILD_DIR}/t/job-manager/list-jobs \
-	    | awk '{print $1}' \
+	    | $jq .id \
 	    | flux job id --to=f58
 }
 
-test_expect_success 'submit jobs for job list testing' '
+test_expect_success HAVE_JQ 'submit jobs for job list testing' '
 	#  Create `hostname` and `sleep 600` jobspec
 	#
 	flux mini submit --dry-run hostname >hostname.json &&

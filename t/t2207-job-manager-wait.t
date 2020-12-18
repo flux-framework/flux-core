@@ -35,13 +35,13 @@ test_expect_success "wait works on inactive,waitable job" '
 	flux job wait ${JOBID}
 '
 
-test_expect_success "waitable inactive jobs are listed as zombies" '
+test_expect_success HAVE_JQ "waitable inactive jobs are listed as zombies" '
 	JOBID=$(flux mini submit --flags waitable /bin/true) &&
 	echo ${JOBID} >id1.out &&
 	flux job wait-event ${JOBID} clean &&
 	${list_jobs} >list1.out &&
 	test $(wc -l <list1.out) -eq 1 &&
-	test "$(cut -f2 <list1.out)" = "I"
+	test "$($jq .state <list1.out)" = "64"
 '
 
 test_expect_success "zombies go away after they are waited for" '

@@ -10,10 +10,15 @@ JMGR_JOB_LIST=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 # if job is not found by list-jobs, but the clean event exists
 # in the job's eventlog, return state as inactive
 #
+# use flux-jobs --from-stdin to convert state numeric value to string
+# value.
+#
 # arg1 - jobid
 _jmgr_get_state() {
         local id=$(flux job id $1)
-        local state=$(${JMGR_JOB_LIST} | awk '$1 == "'${id}'" { print $2; }')
+        local state=$(${JMGR_JOB_LIST} \
+                      | grep ${id} \
+                      | flux jobs -n --from-stdin -o "{state_single}")
         test -z "$state" \
                 && flux job wait-event --timeout=5 ${id} clean >/dev/null \
                 && state=I
@@ -43,7 +48,7 @@ jmgr_check_state() {
 _jmgr_get_annotation() {
         local id=$(flux job id $1)
         local key=$2
-        local note="$(${JMGR_JOB_LIST} | grep ${id} | cut -f 7- | jq ."${key}")"
+        local note="$(${JMGR_JOB_LIST} | grep ${id} | jq .annotations | jq ."${key}")"
         echo $note
 }
 
@@ -77,7 +82,7 @@ jmgr_check_annotation() {
 jmgr_check_annotation_exists() {
         local id=$(flux job id $1)
         local key=$2
-        ${JMGR_JOB_LIST} | grep ${id} | cut -f 7- | jq -e ."${key}" > /dev/null
+        ${JMGR_JOB_LIST} | grep ${id} | jq .annotations | jq -e ."${key}" > /dev/null
 }
 
 # verify that job contains no annotations through job manager
@@ -85,7 +90,7 @@ jmgr_check_annotation_exists() {
 # arg1 - jobid
 jmgr_check_no_annotations() {
         local id=$(flux job id $1)
-        test -z "$(${JMGR_JOB_LIST} | grep ${id} | cut -f 7-)" && return 0
+        test ${JMGR_JOB_LIST} | grep ${id} | jq -e .annotations && return 0
         return 1
 }
 

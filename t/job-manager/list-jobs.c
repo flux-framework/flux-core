@@ -31,21 +31,6 @@ static struct optparse_option list_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
-/* convert floating point timestamp (UNIX epoch, UTC) to ISO 8601 string,
- * with second precision
- */
-static int iso_timestr (double timestamp, char *buf, size_t size)
-{
-    time_t sec = timestamp;
-    struct tm tm;
-
-    if (!gmtime_r (&sec, &tm))
-        return -1;
-    if (strftime (buf, size, "%FT%TZ", &tm) == 0)
-        return -1;
-    return 0;
-}
-
 int main (int argc, char *argv[])
 {
     flux_t *h;
@@ -88,39 +73,8 @@ int main (int argc, char *argv[])
         log_err_exit ("flux_rpc_get_unpack");
 
     json_array_foreach (jobs, index, value) {
-        flux_jobid_t id;
-        int urgency;
-        unsigned int priority;
-        uint32_t userid;
-        double t_submit;
-        char timestr[80];
-        flux_job_state_t state;
-        json_t *annotations = NULL;
-        char *annotations_str = NULL;
-
-        if (json_unpack (value, "{s:I s:i s:i s:i s:f s:i s?:o}",
-                                "id", &id,
-                                "urgency", &urgency,
-                                "priority", &priority,
-                                "userid", &userid,
-                                "t_submit", &t_submit,
-                                "state", &state,
-                                "annotations", &annotations) < 0)
-            log_msg_exit ("error parsing job data");
-        if (iso_timestr (t_submit, timestr, sizeof (timestr)) < 0)
-            log_err_exit ("time conversion error");
-        if (annotations)
-            annotations_str = json_dumps (annotations, 0);
-        printf ("%ju\t%s\t%lu\t%d\t%u\t%s%s%s\n",
-                (uintmax_t)id,
-                flux_job_statetostr (state, true),
-                (unsigned long)userid,
-                urgency,
-                priority,
-                timestr,
-                annotations_str ? "\t" : "",
-                annotations_str ? annotations_str : "");
-        free (annotations_str);
+        json_dumpf (value, stdout, JSON_COMPACT);
+        printf ("\n");
     }
 
     flux_future_destroy (f);

@@ -31,7 +31,7 @@ test_expect_success 'job-manager: submit 5 jobs' '
         flux job submit --flags=debug basic.json >job5.id
 '
 
-test_expect_success 'job-manager: job state SSSSS (no scheduler)' '
+test_expect_success HAVE_JQ 'job-manager: job state SSSSS (no scheduler)' '
         jmgr_check_state $(cat job1.id) S &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) S &&
@@ -51,7 +51,7 @@ test_expect_success 'job-manager: load sched-dummy --cores=2' '
         flux module load ${SCHED_DUMMY} --cores=2
 '
 
-test_expect_success 'job-manager: job state RRSSS' '
+test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
         jmgr_check_state $(cat job1.id) R &&
         jmgr_check_state $(cat job2.id) R &&
         jmgr_check_state $(cat job3.id) S &&
@@ -91,7 +91,7 @@ test_expect_success 'job-manager: cancel 2' '
         flux job cancel $(cat job2.id)
 '
 
-test_expect_success 'job-manager: job state RIRSS' '
+test_expect_success HAVE_JQ 'job-manager: job state RIRSS' '
         jmgr_check_state $(cat job1.id) R &&
         jmgr_check_state $(cat job2.id) I &&
         jmgr_check_state $(cat job3.id) R &&
@@ -152,7 +152,7 @@ test_expect_success 'job-manager: hello handshake userid is expected' '
         grep userid=$(id -u) hello.dmesg
 '
 
-test_expect_success 'job-manager: job state RIRRR' '
+test_expect_success HAVE_JQ 'job-manager: job state RIRRR' '
         jmgr_check_state $(cat job1.id) R &&
         jmgr_check_state $(cat job2.id) I &&
         jmgr_check_state $(cat job3.id) R &&
@@ -188,7 +188,7 @@ test_expect_success 'job-manager: cancel 1' '
         flux job cancel $(cat job1.id)
 '
 
-test_expect_success 'job-manager: job state IIRRR' '
+test_expect_success HAVE_JQ 'job-manager: job state IIRRR' '
         jmgr_check_state $(cat job1.id) I &&
         jmgr_check_state $(cat job2.id) I &&
         jmgr_check_state $(cat job3.id) R &&
@@ -202,7 +202,7 @@ test_expect_success 'job-manager: cancel all jobs' '
         flux job cancel $(cat job5.id)
 '
 
-test_expect_success 'job-manager: job state IIIII' '
+test_expect_success HAVE_JQ 'job-manager: job state IIIII' '
         jmgr_check_state $(cat job1.id) I &&
         jmgr_check_state $(cat job2.id) I &&
         jmgr_check_state $(cat job3.id) I &&
