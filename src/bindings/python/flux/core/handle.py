@@ -40,6 +40,7 @@ class Flux(Wrapper):
     #
     tls = threading.local()
     tls.reactor_depth = 0
+    tls.exception = None
 
     def __init__(self, url=ffi.NULL, flags=0, handle=None):
         super(Flux, self).__init__(
@@ -82,6 +83,41 @@ class Flux(Wrapper):
             yield
         finally:
             self.reactor_exit()
+
+    @classmethod
+    def set_exception(cls, exception):
+        """Set a global, per-thread exception for Flux
+
+        This class method allows Python callbacks called from the Flux
+        reactor to set a global exception which can be re-thrown after
+        the return to Python (when reactor_run() returns). This is
+        implemented as a class attribute since the Flux handle object
+        which is available in a Python callback from C will be a
+        different instantiation than the Flux handle object which
+        started the reactor (with the same underlying flux_t however)
+
+        Args:
+            exception (Exception): A reference to the exception thrown.
+
+        Returns:
+            Exception: The previously set exception, or None
+        """
+        prev = cls.tls.exception
+        cls.tls.exception = exception
+        return prev
+
+    @classmethod
+    def raise_if_exception(cls):
+        """Re-raise any class global exception if set
+
+        If a global exception is currently set for the Flux handle class,
+        re-raise it and reset the exception state to None.
+
+        The exception is raised ``from None`` to preserve the original
+        stack trace.
+        """
+        if cls.tls.exception is not None:
+            raise cls.set_exception(None) from None
 
     # pylint: disable=no-self-use
     def close(self):
@@ -241,6 +277,8 @@ class Flux(Wrapper):
                 self.reactor_active_incref(reactor)
             if reactor_interrupted:
                 raise KeyboardInterrupt
+            if rc < 0:
+                Flux.raise_if_exception()
 
         # If rc > 0, we need to subtract our added SIGINT watcher, which
         # will now be destroyed since it has left scope
