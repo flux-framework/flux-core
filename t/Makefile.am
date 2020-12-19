@@ -225,6 +225,7 @@ dist_check_SCRIPTS = \
 	issues/t3186-python-future-get-sigint.sh \
 	issues/t3415-job-shell-segfault-on-null.sh \
 	issues/t3432-python-sigint.sh \
+	issues/t3429-python-future-ref.py \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
