@@ -160,6 +160,52 @@ class TestSignal(unittest.TestCase):
                 self.assertTrue(rc < 0)
 
 
+class TestFdWatcher(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        self.f = flux.Flux()
+
+    def test_fd_watcher(self):
+        def fd_cb(handle, watcher, fd, revents, _args):
+            reader = os.fdopen(fd)
+            self.assertEqual(reader.read(), "a")
+            handle.reactor_stop()
+
+        def timer_cb(handle, watcher, revents, _args):
+            handle.reactor_stop_error()
+
+        tw = self.f.timer_watcher_create(5, timer_cb)
+        tw.start()
+
+        fdr, fdw = os.pipe()
+        os.set_blocking(fdr, False)
+        writer = os.fdopen(fdw, "w")
+        with self.f.fd_watcher_create(fdr, fd_cb) as fdw:
+            writer.write("a")
+            writer.flush()
+            rc = self.f.reactor_run()
+            self.assertTrue(rc >= 0)
+
+    def test_fd_watcher_exception(self):
+        def fd_cb(handle, watcher, fd, revents, _args):
+            raise RuntimeError
+
+        def timer_cb(handle, watcher, revents, _args):
+            handle.reactor_stop()
+
+        tw = self.f.timer_watcher_create(5, timer_cb)
+        tw.start()
+
+        fdr, fdw = os.pipe()
+        writer = os.fdopen(fdw, "w")
+        with self.f.fd_watcher_create(fdr, fd_cb) as fdw:
+            with self.assertRaises(RuntimeError):
+                writer.write("a")
+                writer.flush()
+                rc = self.f.reactor_run()
+                self.assertTrue(rc < 0)
+
+
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
         from pycotap import TAPTestRunner
