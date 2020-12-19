@@ -21,6 +21,8 @@ from flux.core.inner import raw
 from flux.message import MessageWatcher
 from flux.core.watchers import TimerWatcher
 from flux.core.watchers import SignalWatcher
+from flux.core.watchers import FDWatcher
+from flux.constants import FLUX_POLLIN, FLUX_POLLOUT, FLUX_POLLERR
 from _flux._core import ffi, lib
 
 
@@ -233,6 +235,11 @@ class Flux(Wrapper):
 
     def signal_watcher_create(self, signum, callback, args=None):
         return SignalWatcher(self, signum, callback, args)
+
+    def fd_watcher_create(self, fd_int, callback, events=None, args=None):
+        if events is None:
+            events = FLUX_POLLIN | FLUX_POLLOUT | FLUX_POLLERR
+        return FDWatcher(self, fd_int, events, callback, args=args)
 
     def barrier(self, name, nprocs):
         self.flux_barrier(name, nprocs)
