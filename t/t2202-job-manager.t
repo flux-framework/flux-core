@@ -11,6 +11,7 @@ flux setattr log-stderr-level 1
 DRAIN_CANCEL="flux python ${FLUX_SOURCE_DIR}/t/job-manager/drain-cancel.py"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
+JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 
 test_expect_success 'job-manager: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
@@ -47,8 +48,8 @@ test_expect_success HAVE_JQ 'job-manager: queue lists job with correct jobid' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: queue lists job with state=N' '
-	echo "8" >list1_state.exp &&
-	$jq .state <list1.out >list1_state.out &&
+	echo "SCHED" >list1_state.exp &&
+	$jq .state <list1.out | ${JOB_CONV} statetostr >list1_state.out &&
 	test_cmp list1_state.exp list1_state.out
 '
 

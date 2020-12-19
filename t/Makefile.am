@@ -248,6 +248,7 @@ dist_check_SCRIPTS = \
 	job-manager/submit-sliding-window.py \
 	job-manager/wait-interrupted.py \
 	job-manager/sched-helper.sh \
+	job-manager/job-conv.py \
 	job-attach/outputsleep.sh \
 	job-exec/dummy.sh \
 	job-exec/imp.sh \

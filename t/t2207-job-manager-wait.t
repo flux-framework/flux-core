@@ -11,6 +11,7 @@ SUBMIT_WAIT="flux python ${FLUX_SOURCE_DIR}/t/job-manager/submit-wait.py"
 SUBMIT_WAITANY="flux python ${FLUX_SOURCE_DIR}/t/job-manager/submit-waitany.py"
 SUBMIT_SW="flux python ${FLUX_SOURCE_DIR}/t/job-manager/submit-sliding-window.py"
 SUBMIT_INTER="flux python ${FLUX_SOURCE_DIR}/t/job-manager/wait-interrupted.py"
+JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 
 flux setattr log-stderr-level 1
 
@@ -41,7 +42,7 @@ test_expect_success HAVE_JQ "waitable inactive jobs are listed as zombies" '
 	flux job wait-event ${JOBID} clean &&
 	${list_jobs} >list1.out &&
 	test $(wc -l <list1.out) -eq 1 &&
-	test "$($jq .state <list1.out)" = "64"
+	test "$($jq .state <list1.out | ${JOB_CONV} statetostr)" = "INACTIVE"
 '
 
 test_expect_success "zombies go away after they are waited for" '

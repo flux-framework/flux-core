@@ -4,13 +4,14 @@
 # job-manager sched helper functions
 
 JMGR_JOB_LIST=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
+JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 
 # internal function to get job state via job manager
 #
 # if job is not found by list-jobs, but the clean event exists
 # in the job's eventlog, return state as inactive
 #
-# use flux-jobs --from-stdin to convert state numeric value to string
+# use job-conf tool to convert state numeric value to string
 # value.
 #
 # arg1 - jobid
@@ -18,7 +19,8 @@ _jmgr_get_state() {
         local id=$(flux job id $1)
         local state=$(${JMGR_JOB_LIST} \
                       | grep ${id} \
-                      | flux jobs -n --from-stdin -o "{state_single}")
+                      | jq .state \
+                      | ${JOB_CONV} statetostr -s)
         test -z "$state" \
                 && flux job wait-event --timeout=5 ${id} clean >/dev/null \
                 && state=I
