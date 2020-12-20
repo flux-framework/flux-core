@@ -9,6 +9,7 @@
 #  The script is otherwise influenced by the following environment variables:
 #
 #  JOBS=N        Argument for make's -j option, default=2
+#  PROJECT       Flux project, e.g. flux-core
 #  COVERAGE      Run with --enable-code-coverage, `make check-code-coverage`
 #  TEST_INSTALL  Run `make check` against installed flux-core
 #  CPPCHECK      Run cppcheck if set to "t"
@@ -69,14 +70,16 @@ if echo "$CC" | grep -q "clang"; then
     CCACHE_CPP=1
 fi
 
-# Ensure ci builds libev such that libfaketime will work:
-# (force libev to *not* use syscall interface for clock_gettime())
-export CPPFLAGS="$CPPFLAGS -DEV_USE_CLOCK_SYSCALL=0 -DEV_USE_MONOTONIC=1"
+if test "$PROJECT" = "flux-core"; then
+  # Ensure ci builds libev such that libfaketime will work:
+  # (force libev to *not* use syscall interface for clock_gettime())
+  export CPPFLAGS="$CPPFLAGS -DEV_USE_CLOCK_SYSCALL=0 -DEV_USE_MONOTONIC=1"
 
-# Ensure we always use internal <flux/core.h> by placing a dummy file
-#  in the same path as ZMQ_FLAGS:
-sudo sh -c "mkdir -p /usr/include/flux \
+  # Ensure we always use internal <flux/core.h> by placing a dummy file
+  #  in the same path as ZMQ_FLAGS:
+  sudo sh -c "mkdir -p /usr/include/flux \
     && echo '#error Non-build-tree flux/core.h!' > /usr/include/flux/core.h"
+fi
 
 # Enable coverage for $CC-coverage build
 # We can't use distcheck here, it doesn't play well with coverage testing:
@@ -173,7 +176,7 @@ fi
 checks_group "configure ${ARGS}"  /usr/src/configure ${ARGS}
 checks_group "make clean..." make clean
 
-if test "$POISON" = "t"; then
+if test "$POISON" = "t" -a test "$PROJECT" = "flux-core"; then
   checks_group "Installing poison libflux..." \
     bash src/test/docker/poison-libflux.sh
 fi
