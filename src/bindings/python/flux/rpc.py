@@ -74,7 +74,6 @@ class RPC(Future):
             return None
         return ffi.string(payload_str[0]).decode("utf-8")
 
-    @interruptible
     def get(self):
         resp_str = self.get_str()
         if resp_str is None:

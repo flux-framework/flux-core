@@ -9,6 +9,8 @@
 ###############################################################
 
 import signal
+import threading
+from contextlib import contextmanager
 import six
 
 from flux.wrapper import Wrapper
@@ -19,9 +21,12 @@ from flux.core.inner import raw
 from flux.message import MessageWatcher
 from flux.core.watchers import TimerWatcher
 from flux.core.watchers import SignalWatcher
+from flux.core.watchers import FDWatcher
+from flux.constants import FLUX_POLLIN, FLUX_POLLOUT, FLUX_POLLERR
 from _flux._core import ffi, lib
 
 
+# pylint: disable=too-many-public-methods
 class Flux(Wrapper):
     """
     The general Flux handle class, create one of these to connect to the
@@ -31,6 +36,13 @@ class Flux(Wrapper):
         >>> flux.Flux()
         <flux.core.Flux object at 0x...>
     """
+
+    #  Thread local storage to hold a reactor_running boolean, indicating
+    #  when the current thread is running under a Flux reactor.
+    #
+    tls = threading.local()
+    tls.reactor_depth = 0
+    tls.exception = None
 
     def __init__(self, url=ffi.NULL, flags=0, handle=None):
         super(Flux, self).__init__(
@@ -52,6 +64,62 @@ class Flux(Wrapper):
                 )
 
         self.aux_txn = None
+
+    @classmethod
+    def reactor_running(cls):
+        """Return True if this thread is running the Flux reactor"""
+        return cls.tls.reactor_depth > 0
+
+    @classmethod
+    def reactor_enter(cls):
+        cls.tls.reactor_depth += 1
+
+    @classmethod
+    def reactor_exit(cls):
+        cls.tls.reactor_depth -= 1
+
+    @contextmanager
+    def in_reactor(self):
+        self.reactor_enter()
+        try:
+            yield
+        finally:
+            self.reactor_exit()
+
+    @classmethod
+    def set_exception(cls, exception):
+        """Set a global, per-thread exception for Flux
+
+        This class method allows Python callbacks called from the Flux
+        reactor to set a global exception which can be re-thrown after
+        the return to Python (when reactor_run() returns). This is
+        implemented as a class attribute since the Flux handle object
+        which is available in a Python callback from C will be a
+        different instantiation than the Flux handle object which
+        started the reactor (with the same underlying flux_t however)
+
+        Args:
+            exception (Exception): A reference to the exception thrown.
+
+        Returns:
+            Exception: The previously set exception, or None
+        """
+        prev = cls.tls.exception
+        cls.tls.exception = exception
+        return prev
+
+    @classmethod
+    def raise_if_exception(cls):
+        """Re-raise any class global exception if set
+
+        If a global exception is currently set for the Flux handle class,
+        re-raise it and reset the exception state to None.
+
+        The exception is raised ``from None`` to preserve the original
+        stack trace.
+        """
+        if cls.tls.exception is not None:
+            raise cls.set_exception(None) from None
 
     # pylint: disable=no-self-use
     def close(self):
@@ -168,6 +236,11 @@ class Flux(Wrapper):
     def signal_watcher_create(self, signum, callback, args=None):
         return SignalWatcher(self, signum, callback, args)
 
+    def fd_watcher_create(self, fd_int, callback, events=None, args=None):
+        if events is None:
+            events = FLUX_POLLIN | FLUX_POLLOUT | FLUX_POLLERR
+        return FDWatcher(self, fd_int, events, callback, args=args)
+
     def barrier(self, name, nprocs):
         self.flux_barrier(name, nprocs)
 
@@ -185,6 +258,7 @@ class Flux(Wrapper):
         if it is provided. Sets a signal watcher for SIGINT to return
         from the reactor on Ctrl-C, and raise KeyboardInterrupt.
         """
+        rc = 0
         if reactor is None:
             reactor = self.get_reactor()
 
@@ -197,11 +271,21 @@ class Flux(Wrapper):
             handle.reactor_stop(reactor)
 
         with self.signal_watcher_create(signal.SIGINT, reactor_interrupt):
-            self.reactor_active_decref(reactor)
-            rc = self.flux_reactor_run(reactor, flags)
-            self.reactor_active_incref(reactor)
+            with self.in_reactor():
+                # This signal watcher should not take a reference on reactor
+                #  o/w the reactor may not exit as expected when all other
+                #  active watchers and msghandlers are complete.
+                #
+                self.reactor_active_decref(reactor)
+                rc = self.flux_reactor_run(reactor, flags)
+                #  Re-establish signal watcher reference so reactor refcount
+                #   doesn't underflow when signal watcher is destroyed
+                #
+                self.reactor_active_incref(reactor)
             if reactor_interrupted:
                 raise KeyboardInterrupt
+            if rc < 0:
+                Flux.raise_if_exception()
 
         # If rc > 0, we need to subtract our added SIGINT watcher, which
         # will now be destroyed since it has left scope

@@ -32,6 +32,17 @@ def continuation_callback(c_future, opaque_handle):
         py_future: "Future" = ffi.from_handle(opaque_handle)
         assert c_future == py_future.pimpl.handle
         py_future.then_cb(py_future, *py_future.then_args, **py_future.then_kwargs)
+    # pylint: disable=broad-except
+    except Exception as exc:
+        #
+        # Uncaught exceptions stop reactor with error.
+        # Setting the exception in the global Flux handle class will cause
+        #  the handle to re-throw the exception after leaving the reactor:
+        #
+        flux_handle = py_future.get_flux()
+        type(flux_handle).set_exception(exc)
+        flux_handle.reactor_stop_error()
+
     finally:
         _THEN_HANDLES[py_future] -= 1
         if _THEN_HANDLES[py_future] <= 0:
