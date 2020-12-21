@@ -173,7 +173,8 @@ if test -n "$BUILD_DIR" ; then
   cd "$BUILD_DIR"
 fi
 
-checks_group "configure ${ARGS}"  /usr/src/configure ${ARGS}
+checks_group "configure ${ARGS}"  /usr/src/configure ${ARGS} \
+	|| (printf "::error::configure failed\n"; cat config.log; exit 1)
 checks_group "make clean..." make clean
 
 if test "$POISON" = "t" -a test "$PROJECT" = "flux-core"; then
@@ -182,7 +183,8 @@ if test "$POISON" = "t" -a test "$PROJECT" = "flux-core"; then
 fi
 
 if test "$DISTCHECK" != "t"; then
-  checks_group "${MAKECMDS}" eval ${MAKECMDS}
+  checks_group "${MAKECMDS}" eval ${MAKECMDS} \
+	|| (printf "::error::${MAKECMDS} failed\n"; exit 1)
 fi
 checks_group "${CHECKCMDS}" eval "${CHECKCMDS}"
 RC=$?
@@ -192,7 +194,7 @@ if test "$RECHECK" = "t" -a $RC -ne 0; then
   # `make recheck` is not recursive, only perform it if at least some tests
   #   under ./t were run (and presumably failed)
   #
-  if test -s t/t0001-basic.trs; then
+  if test -s t/t0000-sharness.trs; then
     cd t
     printf "::warning::make check failed, trying recheck in ./t\n"
     checks_group "make recheck" ${MAKE} -j ${JOBS} recheck
