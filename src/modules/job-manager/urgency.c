@@ -115,10 +115,12 @@ void urgency_handle_request (flux_t *h,
             job->priority = FLUX_JOB_PRIORITY_MIN;
         else
             job->priority = urgency;
+        /* We pack priority with I instead of i to avoid issue of
+         * signed vs unsigned int */
         if (event_job_post_pack (ctx->event, job,
                                  "priority",
                                  0,
-                                 "{ s:i }",
+                                 "{ s:I }",
                                  "priority", job->priority) < 0)
             goto error;
         alloc_queue_reorder (ctx->alloc, job);

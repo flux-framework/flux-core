@@ -359,9 +359,9 @@ int alloc_request (struct alloc *alloc, struct job *job)
 
     if (!(msg = flux_request_encode ("sched.alloc", NULL)))
         return -1;
-    if (flux_msg_pack (msg, "{s:I s:i s:i s:f s:O}",
+    if (flux_msg_pack (msg, "{s:I s:I s:i s:f s:O}",
                             "id", job->id,
-                            "priority", job->priority,
+                            "priority", (json_int_t)job->priority,
                             "userid", job->userid,
                             "t_submit", job->t_submit,
                             "jobspec", job->jobspec_redacted) < 0)
@@ -397,7 +397,7 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     job = zhashx_first (ctx->active_jobs);
     while (job) {
         if (job->has_resources) {
-            if (!(entry = json_pack ("{s:I s:i s:i s:f}",
+            if (!(entry = json_pack ("{s:I s:I s:i s:f}",
                                      "id", job->id,
                                      "priority", job->priority,
                                      "userid", job->userid,

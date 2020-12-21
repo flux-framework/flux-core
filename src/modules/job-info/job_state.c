@@ -1319,17 +1319,15 @@ static int priority_context_parse (flux_t *h,
                                    struct job *job,
                                    json_t *context)
 {
-    unsigned int priority;
-
     if (!context
-        || json_unpack (context, "{ s:i }", "priority", &priority) < 0) {
+        || json_unpack (context,
+                        "{ s:I }",
+                        "priority", (json_int_t *)&job->priority) < 0) {
         flux_log (h, LOG_ERR, "%s: priority context invalid: %ju",
                   __FUNCTION__, (uintmax_t)job->id);
         errno = EPROTO;
         return -1;
     }
-
-    job->priority = priority;
     return 0;
 }
 
@@ -1340,7 +1338,7 @@ static int journal_priority_event (struct job_state_ctx *jsctx,
                                    json_t *context)
 {
     struct job *job;
-    unsigned int orig_priority;
+    int64_t orig_priority;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
         flux_log_error (jsctx->h, "%s: job %ju not in hash",
