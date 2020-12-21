@@ -11,6 +11,7 @@ flux setattr log-stderr-level 1
 DRAIN_CANCEL="flux python ${FLUX_SOURCE_DIR}/t/job-manager/drain-cancel.py"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
+JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 
 test_expect_success 'job-manager: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
@@ -41,27 +42,33 @@ test_expect_success 'job-manager: queue contains 1 job' '
 	test $(wc -l <list1.out) -eq 1
 '
 
-test_expect_success 'job-manager: queue lists job with correct jobid' '
-	cut -f1 <list1.out >list1_jobid.out &&
+test_expect_success HAVE_JQ 'job-manager: queue lists job with correct jobid' '
+	$jq .id <list1.out >list1_jobid.out &&
 	test_cmp submit1.out list1_jobid.out
 '
 
-test_expect_success 'job-manager: queue lists job with state=N' '
-	echo "S" >list1_state.exp &&
-	cut -f2 <list1.out >list1_state.out &&
+test_expect_success HAVE_JQ 'job-manager: queue lists job with state=N' '
+	echo "SCHED" >list1_state.exp &&
+	$jq .state <list1.out | ${JOB_CONV} statetostr >list1_state.out &&
 	test_cmp list1_state.exp list1_state.out
 '
 
-test_expect_success 'job-manager: queue lists job with correct userid' '
+test_expect_success HAVE_JQ 'job-manager: queue lists job with correct userid' '
 	id -u >list1_userid.exp &&
-	cut -f3 <list1.out >list1_userid.out &&
+	$jq .userid <list1.out >list1_userid.out &&
 	test_cmp list1_userid.exp list1_userid.out
 '
 
-test_expect_success 'job-manager: queue list job with correct urgency' '
+test_expect_success HAVE_JQ 'job-manager: queue list job with correct urgency' '
 	echo 16 >list1_urgency.exp &&
-	cut -f4 <list1.out >list1_urgency.out &&
+	$jq .urgency <list1.out >list1_urgency.out &&
 	test_cmp list1_urgency.exp list1_urgency.out
+'
+
+test_expect_success HAVE_JQ 'job-manager: queue list job with correct priority' '
+	echo 16 >list1_priority.exp &&
+	$jq .priority <list1.out >list1_priority.out &&
+	test_cmp list1_priority.exp list1_priority.out
 '
 
 test_expect_success 'job-manager: raise non-fatal exception on job' '
@@ -107,27 +114,27 @@ test_expect_success 'job-manager: queue contains 3 jobs' '
 	test $(wc -l <list3.out) -eq 3
 '
 
-test_expect_success 'job-manager: queue is sorted in priority order' '
+test_expect_success HAVE_JQ 'job-manager: queue is sorted in priority order' '
 	cat >list3_priority.exp <<-EOT &&
 	31
 	16
 	0
 	EOT
-	cut -f4 <list3.out >list3_priority.out &&
+	$jq .priority <list3.out >list3_priority.out &&
 	test_cmp list3_priority.exp list3_priority.out
 '
 
-test_expect_success 'job-manager: list-jobs --count shows highest priority jobs' '
+test_expect_success HAVE_JQ 'job-manager: list-jobs --count shows highest priority jobs' '
 	cat >list3_lim2.exp <<-EOT &&
 	31
 	16
 	EOT
-	${LIST_JOBS} -c 2 | cut -f4 >list3_lim2.out &&
+	${LIST_JOBS} -c 2 | $jq .priority >list3_lim2.out &&
 	test_cmp list3_lim2.exp list3_lim2.out
 '
 
-test_expect_success 'job-manager: cancel jobs' '
-	for jobid in $(cut -f1 <list3.out); do \
+test_expect_success HAVE_JQ 'job-manager: cancel jobs' '
+	for jobid in $($jq .id <list3.out); do \
 		flux job cancel ${jobid}; \
 	done
 '
@@ -143,9 +150,9 @@ test_expect_success 'job-manager: submit 10 jobs of equal urgency' '
 	done
 '
 
-test_expect_success 'job-manager: jobs are listed in submit order' '
+test_expect_success HAVE_JQ 'job-manager: jobs are listed in submit order' '
 	${LIST_JOBS} >list10.out &&
-	cut -f1 <list10.out >list10_ids.out &&
+	$jq .id <list10.out >list10_ids.out &&
 	test_cmp submit10.out list10_ids.out
 '
 
@@ -162,9 +169,9 @@ test_expect_success 'job-manager: urgency was updated in KVS' '
 	grep -q urgency=31 urgency.out
 '
 
-test_expect_success 'job-manager: that job is now the first job' '
+test_expect_success HAVE_JQ 'job-manager: that job is now the first job' '
 	${LIST_JOBS} >list10_reordered.out &&
-	firstid=$(cut -f1 <list10_reordered.out | head -1) &&
+	firstid=$($jq .id <list10_reordered.out | head -1) &&
 	lastid=$(tail -1 <list10_ids.out) &&
 	test "${lastid}" -eq "${firstid}"
 '
@@ -186,7 +193,7 @@ test_expect_success 'job-manager: queue was successfully reconstructed' '
 '
 
 check_eventlog_restart_events() {
-	for jobid in $(cut -f1 <list_reload.out); do
+	for jobid in $($jq .id <list_reload.out); do
 		if ! flux job wait-event -t 20 -c 1 ${jobid} flux-restart \
 		   || ! flux job wait-event -t 20 -c 2 ${jobid} priority
 		then
@@ -196,7 +203,7 @@ check_eventlog_restart_events() {
 	return 0
 }
 
-test_expect_success 'job-manager: eventlog indicates restart & priority event' '
+test_expect_success HAVE_JQ 'job-manager: eventlog indicates restart & priority event' '
 	check_eventlog_restart_events
 '
 
@@ -205,8 +212,8 @@ test_expect_success HAVE_JQ 'job-manager: max_jobid has not changed' '
 	test_cmp max2.exp max2.out
 '
 
-test_expect_success 'job-manager: cancel jobs' '
-	for jobid in $(cut -f1 <list_reload.out); do \
+test_expect_success HAVE_JQ 'job-manager: cancel jobs' '
+	for jobid in $($jq .id <list_reload.out); do \
 		flux job cancel ${jobid}; \
 	done &&
 	test $(${LIST_JOBS} | wc -l) -eq 0
@@ -302,8 +309,8 @@ test_expect_success 'job-manager: there is still one job in the queue' '
 	test $(wc -l <list.out) -eq 1
 '
 
-test_expect_success 'job-manager: drain unblocks when last job is canceled' '
-	jobid=$(cut -f1 <list.out) &&
+test_expect_success HAVE_JQ 'job-manager: drain unblocks when last job is canceled' '
+	jobid=$($jq .id <list.out) &&
 	run_timeout 5 ${DRAIN_CANCEL} ${jobid}
 '
 

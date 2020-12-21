@@ -70,11 +70,11 @@ export FLUX_PYCLI_LOGLEVEL=10
 
 listjobs() {
 	${FLUX_BUILD_DIR}/t/job-manager/list-jobs \
-	    | awk '{print $1}' \
+	    | $jq .id \
 	    | flux job id --to=f58
 }
 
-test_expect_success 'submit jobs for job list testing' '
+test_expect_success HAVE_JQ 'submit jobs for job list testing' '
 	#  Create `hostname` and `sleep 600` jobspec
 	#
 	flux mini submit --dry-run hostname >hostname.json &&
@@ -115,7 +115,7 @@ test_expect_success 'submit jobs for job list testing' '
 	#  Submit a set of jobs with non-default urgencies
 	#  N.B. Use `flux job submit` for efficiency
 	#
-	for u in 30 25 20 15 10 5; do
+	for u in 31 25 20 15 10 5; do
 		flux job submit --urgency=$u sleep600.json >> sched.ids
 	done &&
 	listjobs > active.ids &&
@@ -371,7 +371,7 @@ test_expect_success 'flux-jobs --format={userid},{username} works' '
 
 test_expect_success 'flux-jobs --format={urgency},{priority} works' '
 	flux jobs --suppress-header -a --format="{urgency},{priority}" > urgency_priority.out &&
-	echo 30,30 > urgency_priority.exp &&
+	echo 31,31 > urgency_priority.exp &&
 	echo 25,25 >> urgency_priority.exp &&
 	echo 20,20 >> urgency_priority.exp &&
 	echo 15,15 >> urgency_priority.exp &&

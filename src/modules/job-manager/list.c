@@ -39,13 +39,15 @@ int list_append_job (json_t *jobs, struct job *job)
 {
     json_t *o;
 
-    if (!(o = json_pack ("{s:I s:i s:i s:f s:i}",
+    if (!(o = json_pack ("{s:I s:i s:i s:i s:f s:i}",
                          "id",
                          job->id,
                          "userid",
                          job->userid,
                          "urgency",
                          job->urgency,
+                         "priority",
+                         job->priority,
                          "t_submit",
                          job->t_submit,
                          "state",

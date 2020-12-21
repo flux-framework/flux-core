@@ -30,7 +30,7 @@ test_expect_success 'job-manager: submit 4 jobs' '
         flux job submit --flags=debug basic.json >job4.id
 '
 
-test_expect_success 'job-manager: job state SSSS (no scheduler)' '
+test_expect_success HAVE_JQ 'job-manager: job state SSSS (no scheduler)' '
         jmgr_check_state $(cat job1.id) S &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) S &&
@@ -48,7 +48,7 @@ test_expect_success 'job-manager: load sched-dummy --cores=2' '
         flux module load ${SCHED_DUMMY} --cores=2
 '
 
-test_expect_success 'job-manager: job state RRSS' '
+test_expect_success HAVE_JQ 'job-manager: job state RRSS' '
         jmgr_check_state $(cat job1.id) R &&
         jmgr_check_state $(cat job2.id) R &&
         jmgr_check_state $(cat job3.id) S &&
@@ -92,7 +92,7 @@ test_expect_success 'job-manager: cancel 2' '
         flux job cancel $(cat job2.id)
 '
 
-test_expect_success 'job-manager: job state RISR (job 4 runs instead of 3)' '
+test_expect_success HAVE_JQ 'job-manager: job state RISR (job 4 runs instead of 3)' '
         jmgr_check_state $(cat job1.id) R &&
         jmgr_check_state $(cat job2.id) I &&
         jmgr_check_state $(cat job3.id) S &&
@@ -112,7 +112,7 @@ test_expect_success 'job-manager: submit high urgency job' '
         flux job submit --flags=debug --urgency=20 basic.json >job5.id
 '
 
-test_expect_success 'job-manager: job state RISRS' '
+test_expect_success HAVE_JQ 'job-manager: job state RISRS' '
         jmgr_check_state $(cat job1.id) R &&
         jmgr_check_state $(cat job2.id) I &&
         jmgr_check_state $(cat job3.id) S &&
@@ -133,7 +133,7 @@ test_expect_success 'job-manager: cancel 1' '
         flux job cancel $(cat job1.id)
 '
 
-test_expect_success 'job-manager: job state IISRR (job 5 runs instead of 3)' '
+test_expect_success HAVE_JQ 'job-manager: job state IISRR (job 5 runs instead of 3)' '
         jmgr_check_state $(cat job1.id) I &&
         jmgr_check_state $(cat job2.id) I &&
         jmgr_check_state $(cat job3.id) S &&

@@ -46,8 +46,8 @@ int main (int argc, char *argv[])
         "array[0] id=1");
     if (id != 1)
         diag ("id=%d", (int)id);
-    ok (json_object_size (el) == 5,
-        "array[1] size=5");
+    ok (json_object_size (el) == 6,
+        "array[1] size=6");
 
     json_decref (jobs);
     job_decref (job);

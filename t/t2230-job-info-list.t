@@ -10,6 +10,7 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-info/list-rpc.py"
 PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-info/jobspec-permissive.jsonschema
 JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
+JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 
 if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
@@ -187,11 +188,11 @@ test_expect_success HAVE_JQ 'flux job list running jobs in started order' '
 
 test_expect_success HAVE_JQ 'flux job list running jobs with correct state' '
         for count in `seq 1 8`; do \
-            echo "16" >> list_state_R.exp; \
+            echo "RUN" >> list_state_R.exp; \
         done &&
-        flux job list -s running | jq .state > list_state_R1.out &&
-        flux job list -s run,cleanup | jq .state > list_state_R2.out &&
-        flux job list -s run | jq .state > list_state_R3.out &&
+        flux job list -s running | jq .state | ${JOB_CONV} statetostr > list_state_R1.out &&
+        flux job list -s run,cleanup | jq .state | ${JOB_CONV} statetostr > list_state_R2.out &&
+        flux job list -s run | jq .state | ${JOB_CONV} statetostr > list_state_R3.out &&
         test_cmp list_state_R1.out list_state_R.exp &&
         test_cmp list_state_R2.out list_state_R.exp &&
         test_cmp list_state_R3.out list_state_R.exp
@@ -209,42 +210,48 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
 
 test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
         for count in `seq 1 6`; do \
-            echo "64" >> list_state_I.exp; \
+            echo "INACTIVE" >> list_state_I.exp; \
         done &&
-        flux job list -s inactive | jq .state > list_state_I.out &&
+        flux job list -s inactive | jq .state | ${JOB_CONV} statetostr > list_state_I.out &&
         test_cmp list_state_I.out list_state_I.exp
 '
 
 test_expect_success HAVE_JQ 'flux job list inactive jobs results are correct' '
-        flux job list -s inactive | jq .result > list_result_I.out &&
-        echo "4" >> list_result_I.exp &&
-        echo "2" >> list_result_I.exp &&
+        flux job list -s inactive | jq .result | ${JOB_CONV} resulttostr > list_result_I.out &&
+        echo "CANCELLED" >> list_result_I.exp &&
+        echo "FAILED" >> list_result_I.exp &&
         for count in `seq 1 4`; do \
-            echo "1" >> list_result_I.exp; \
+            echo "COMPLETED" >> list_result_I.exp; \
         done &&
         test_cmp list_result_I.out list_result_I.exp
 '
 
-# Hard code state/results values for these tests, as we did not add a results
+# Hard code results values for these tests, as we did not add a results
 # option to flux_job_list() or the flux-job command.
 
 test_expect_success HAVE_JQ 'flux job list only cancelled jobs' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:64, results:4, attrs:[]}" \
+        state=`${JOB_CONV} strtostate INACTIVE` &&
+        result=`${JOB_CONV} strtoresult CANCELLED` &&
+        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
           | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_cancelled.out &&
         test_cmp cancelled.ids list_result_cancelled.out
 '
 
 test_expect_success HAVE_JQ 'flux job list only failed jobs' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:64, results:2, attrs:[]}" \
+        state=`${JOB_CONV} strtostate INACTIVE` &&
+        result=`${JOB_CONV} strtoresult FAILED` &&
+        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
           | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_failed.out &&
         test_cmp failed.ids list_result_failed.out
 '
 
 test_expect_success HAVE_JQ 'flux job list only completed jobs' '
         id=$(id -u) &&
-        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:64, results:1, attrs:[]}" \
+        state=`${JOB_CONV} strtostate INACTIVE` &&
+        result=`${JOB_CONV} strtoresult COMPLETED` &&
+        $jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
           | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_completed.out &&
         test_cmp completed.ids list_result_completed.out
 '
@@ -302,9 +309,9 @@ EOT
 
 test_expect_success HAVE_JQ 'flux job list pending jobs with correct state' '
         for count in `seq 1 8`; do \
-            echo "8" >> list_state_S.exp; \
+            echo "SCHED" >> list_state_S.exp; \
         done &&
-        flux job list -s sched | jq .state > list_state_S.out &&
+        flux job list -s sched | jq .state | ${JOB_CONV} statetostr > list_state_S.out &&
         test_cmp list_state_S.out list_state_S.exp
 '
 
