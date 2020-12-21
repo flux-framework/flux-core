@@ -1,4 +1,5 @@
 on: [ push, pull_request ]
+name: asan
 jobs:
   check-asan:
     name: address-sanitizer check
