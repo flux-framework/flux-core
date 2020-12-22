@@ -1,17 +1,23 @@
 #!/bin/bash
 #
-#  Build flux-core "checks" docker image and run tests, exporting
+#  Build flux "checks" docker image and run tests, exporting
 #   important environment variables to the docker environment.
 #
 #  Arguments here are passed directly to ./configure
 #
 #
 # option Defaults:
+PROJECT=flux-core
+BASE_DOCKER_REPO=fluxrm/testenv
+
 IMAGE=bionic
-FLUX_SECURITY_VERSION=0.4.0
 JOBS=2
 MOUNT_HOME_ARGS="--volume=$HOME:/home/$USER -e HOME"
-POISON=t
+
+if test "$PROJECT" = "flux-core"; then
+  FLUX_SECURITY_VERSION=0.4.0
+  POISON=t
+fi
 
 #
 declare -r prog=${0##*/}
@@ -81,7 +87,7 @@ while true; do
 done
 
 TOP=$(git rev-parse --show-toplevel 2>&1) \
-    || die "not inside flux-core git repository!"
+    || die "not inside $PROJECT git repository!"
 which docker >/dev/null \
     || die "unable to find a docker binary"
 
@@ -100,18 +106,28 @@ CONFIGURE_ARGS="$@"
 
 . ${TOP}/src/test/checks-lib.sh
 
+#  NOTE: BASE_IMAGE, IMAGESRC, FLUX_SECURITY_VERSION are ignored
+#   unless in flux-core repo
+#
+BUILD_IMAGE=checks-builder:${IMAGE}
+if test "$PROJECT" = "flux-core"; then
+    DOCKERFILE=$TOP/src/test/docker/checks
+else
+    DOCKERFILE=$TOP/src/test/docker/$IMAGE
+fi
+
 checks_group "Building image $IMAGE for user $USER $(id -u) group=$(id -g)" \
   docker build \
     ${NO_CACHE} \
     ${QUIET} \
     --build-arg BASE_IMAGE=$IMAGE \
-    --build-arg IMAGESRC="fluxrm/testenv:$IMAGE" \
+    --build-arg IMAGESRC="$BASE_DOCKER_REPO:$IMAGE" \
     --build-arg USER=$USER \
     --build-arg UID=$(id -u) \
     --build-arg GID=$(id -g) \
     --build-arg FLUX_SECURITY_VERSION=$FLUX_SECURITY_VERSION \
-    -t checks-builder:${IMAGE} \
-    $TOP/src/test/docker/checks \
+    -t ${BUILD_IMAGE} \
+    ${DOCKERFILE} \
     || die "docker build failed"
 
 if [[ -n "$MOUNT_HOME_ARGS" ]]; then
@@ -119,6 +135,7 @@ if [[ -n "$MOUNT_HOME_ARGS" ]]; then
 fi
 echo "mounting $TOP as /usr/src"
 
+export PROJECT
 export POISON
 export INCEPTION
 export JOBS
@@ -131,14 +148,14 @@ if [[ "$INSTALL_ONLY" == "t" ]]; then
     docker run --rm \
         --workdir=/usr/src \
         --volume=$TOP:/usr/src \
-        checks-builder:${IMAGE} \
+        ${BUILD_IMAGE} \
         sh -c "./autogen.sh &&
                ./configure --prefix=/usr --sysconfdir=/etc \
                 --with-systemdsystemunitdir=/etc/systemd/system \
                 --localstatedir=/var \
                 --with-flux-security \
                 --enable-caliper &&
-               make clean && 
+               make clean &&
                make -j${JOBS}" \
     || (docker rm tmp.$$; die "docker run of 'make install' failed")
 else
@@ -162,6 +179,7 @@ else
         -e chain_lint \
         -e JOBS \
         -e USER \
+	-e PROJECT \
         -e CI \
         -e TAP_DRIVER_QUIET \
         -e TEST_CHECK_PREREQS \
@@ -181,7 +199,7 @@ else
         --tty \
         ${INTERACTIVE:+--interactive} \
         --network=host \
-        checks-builder:${IMAGE} \
+        ${BUILD_IMAGE} \
         ${INTERACTIVE:-./src/test/checks_run.sh ${CONFIGURE_ARGS}} \
     || die "docker run failed"
 fi
@@ -193,7 +211,7 @@ if test -n "$TAG"; then
 	--workdir=/usr/src/${BUILD_DIR} \
         --volume=$TOP:/usr/src \
         --user="root" \
-	checks-builder:${IMAGE} \
+	${BUILD_IMAGE} \
 	sh -c "make install && \
                userdel $USER" \
 	|| (docker rm tmp.$$; die "docker run of 'make install' failed")
