@@ -113,6 +113,7 @@ TESTSCRIPTS = \
 	t2212-job-manager-jobspec.t \
 	t2220-job-archive.t \
 	t2213-job-manager-hold-single.t \
+	t2214-job-manager-hold-unlimited.t \
 	t2230-job-info-list.t \
 	t2231-job-info-lookup.t \
 	t2232-job-info-eventlog-watch.t \
