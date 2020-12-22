@@ -133,6 +133,12 @@ test_expect_success HAVE_JQ 'job-manager: list-jobs --count shows highest priori
 	test_cmp list3_lim2.exp list3_lim2.out
 '
 
+test_expect_success HAVE_JQ 'job-manager: priority listed as priority=4294967295 in KVS' '
+	jobid=$(head -n 1 list3.out | $jq .id) &&
+        flux job wait-event --timeout=5.0 ${jobid} priority &&
+	flux job eventlog $jobid | grep priority=4294967295
+'
+
 test_expect_success HAVE_JQ 'job-manager: cancel jobs' '
 	for jobid in $($jq .id <list3.out); do \
 		flux job cancel ${jobid}; \
@@ -167,6 +173,12 @@ test_expect_success 'job-manager: urgency was updated in KVS' '
 	flux job eventlog $jobid \
 		| cut -d" " -f2- | grep ^urgency >urgency.out &&
 	grep -q urgency=31 urgency.out
+'
+
+test_expect_success 'job-manager: priority was updated in KVS' '
+	jobid=$(tail -1 <list10_ids.out) &&
+        flux job wait-event --timeout=5.0 -c 2 ${jobid} priority &&
+	flux job eventlog $jobid | grep ^priority | tail -n 1 | priority=4294967295
 '
 
 test_expect_success HAVE_JQ 'job-manager: that job is now the first job' '
