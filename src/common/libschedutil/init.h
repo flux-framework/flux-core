@@ -21,7 +21,7 @@ extern "C" {
 
 typedef struct schedutil_ctx schedutil_t;
 
-/* Create a handle for the schedutil conveinence library.
+/* Create a handle for the schedutil convenience library.
  *
  * Used to track outstanding futures and register callbacks relevant for
  * schedulers and simulators.
@@ -33,7 +33,7 @@ schedutil_t *schedutil_create (flux_t *h,
                                schedutil_cancel_cb_f *cancel_cb,
                                void *cb_arg);
 
-/* Destory the handle for the schedutil conveinence library.
+/* Destroy the handle for the schedutil convenience library.
  *
  * Will automatically respond ENOSYS to any outstanding messages (e.g., free,
  * alloc).
