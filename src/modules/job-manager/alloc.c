@@ -63,7 +63,7 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
     assert (job->alloc_pending);
     assert (job->handle == NULL);
     if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
-        flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "failed to enqueue job for scheduling");
     job->alloc_pending = 0;
     job->alloc_queued = 1;
     alloc->pending_job = NULL;
