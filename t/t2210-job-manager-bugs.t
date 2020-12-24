@@ -49,7 +49,7 @@ test_expect_success 'issue3051: submit one more job and wait for alloc' '
 	flux job wait-event -t 5 $(cat issue3051.job2) debug.alloc-request
 '
 test_expect_success 'issue3051: cannot change urgency of job with pending alloc' '
-	test_must_fail flux job urgency $(cat issue3051.job2) 0 2>issue3051.err
+	test_must_fail flux job urgency $(cat issue3051.job2) 1 2>issue3051.err
 '
 test_expect_success 'issue3051: human message is reasonable' '
 	grep alloc issue3051.err

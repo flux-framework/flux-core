@@ -87,8 +87,10 @@ void urgency_handle_request (flux_t *h,
      * has been sent to the scheduler.  Also, alloc_queue_reorder() will
      * segfault if job->handle is NULL, which is the case if the job is
      * no longer in alloc->queue.
+     *
+     * Exception if urgency == 0, pending job will be cancelled.
      */
-    if (job->alloc_pending) {
+    if (job->alloc_pending && urgency != FLUX_JOB_URGENCY_HOLD) {
         errstr = "job has made an alloc request to scheduler, "
                  "urgency cannot be changed";
         errno = EINVAL;
@@ -125,9 +127,15 @@ void urgency_handle_request (flux_t *h,
                                  "{ s:I }",
                                  "priority", job->priority) < 0)
             goto error;
-        alloc_queue_reorder (ctx->alloc, job);
-        if (alloc_queue_recalc_pending (ctx->alloc) < 0)
-            goto error;
+        if (job->alloc_queued) {
+            alloc_queue_reorder (ctx->alloc, job);
+            if (alloc_queue_recalc_pending (ctx->alloc) < 0)
+                goto error;
+        }
+        else if (job->alloc_pending && urgency == FLUX_JOB_URGENCY_HOLD) {
+            if (alloc_cancel_alloc_request (ctx->alloc, job) < 0)
+                goto error;
+        }
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
