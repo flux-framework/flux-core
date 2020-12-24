@@ -221,6 +221,9 @@ void cancel_cb (flux_t *h, flux_jobid_t id, void *arg)
         }
         job = zlist_next (sc->jobs);
     }
+
+    /* called to regenerate annotations */
+    try_alloc (sc);
 }
 
 void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
