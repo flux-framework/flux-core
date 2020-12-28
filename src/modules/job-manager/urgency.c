@@ -21,9 +21,6 @@
  *
  * Output:
  * - old urgency
- *
- * Caveats:
- * - Need to handle case where job has already made request for resources.
  */
 
 #if HAVE_CONFIG_H
@@ -39,6 +36,26 @@
 #include "urgency.h"
 
 #define MAXOF(a,b)   ((a)>(b)?(a):(b))
+
+static int reprioritize (struct job_manager *ctx, struct job *job)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_rpc_pack (ctx->h,
+                             "sched.prioritize",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_NORESPONSE,
+                             "{s:[[I,I]]}",
+                             "jobs",
+                             job->id,
+                             job->priority))) {
+        flux_log_error (ctx->h, "sending sched.prioritize id=%ju",
+                        (uintmax_t)job->id);
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
+}
 
 void urgency_handle_request (flux_t *h,
                              flux_msg_handler_t *mh,
@@ -83,19 +100,6 @@ void urgency_handle_request (flux_t *h,
         errno = EPERM;
         goto error;
     }
-    /* RFC 27 does not yet handle urgency changes after alloc request
-     * has been sent to the scheduler.  Also, alloc_queue_reorder() will
-     * segfault if job->handle is NULL, which is the case if the job is
-     * no longer in alloc->queue.
-     *
-     * Exception if urgency == 0, pending job will be cancelled.
-     */
-    if (job->alloc_pending && urgency != FLUX_JOB_URGENCY_HOLD) {
-        errstr = "job has made an alloc request to scheduler, "
-                 "urgency cannot be changed";
-        errno = EINVAL;
-        goto error;
-    }
     if (job->has_resources) {
         errstr = "urgency cannot be changed once resources are allocated";
         errno = EINVAL;
@@ -132,9 +136,15 @@ void urgency_handle_request (flux_t *h,
             if (alloc_queue_recalc_pending (ctx->alloc) < 0)
                 goto error;
         }
-        else if (job->alloc_pending && urgency == FLUX_JOB_URGENCY_HOLD) {
-            if (alloc_cancel_alloc_request (ctx->alloc, job) < 0)
-                goto error;
+        else if (job->alloc_pending) {
+            if (urgency == FLUX_JOB_URGENCY_HOLD) {
+                if (alloc_cancel_alloc_request (ctx->alloc, job) < 0)
+                    goto error;
+            }
+            else {
+                if (reprioritize (ctx, job) < 0)
+                    goto error;
+            }
         }
     }
     if (flux_respond_pack (h, msg, "{s:i}", "old_urgency", orig_urgency) < 0) {
