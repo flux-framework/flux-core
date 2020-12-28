@@ -54,6 +54,7 @@ struct sched_ctx {
     const char *mode;
     flux_watcher_t *prep;
     zlistx_t *jobs;
+    flux_msg_handler_t **handlers;
 };
 
 static void job_destroy (void *data)
@@ -88,6 +89,19 @@ static int job_cmp (const void *x, const void *y)
     if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
         rc = NUMCMP (j1->id, j2->id);
     return rc;
+}
+
+static struct job *
+job_find (struct sched_ctx *sc, flux_jobid_t id)
+{
+    struct job *job;
+    job = zlistx_first (sc->jobs);
+    while (job) {
+        if (job->id == id)
+            return job;
+        job = zlistx_next (sc->jobs);
+    }
+    return NULL;
 }
 
 /* Create job struct from sched.alloc request.
@@ -223,6 +237,41 @@ void try_alloc (struct sched_ctx *sc)
     return;
 }
 
+void prioritize_cb (flux_t *h, flux_msg_handler_t *mh,
+                    const flux_msg_t *msg, void *arg)
+{
+    struct sched_ctx *sc = arg;
+    json_t *jobs;
+    size_t index;
+    json_t *arr;
+
+    if (flux_request_unpack (msg, NULL, "{s:o}", "jobs", &jobs) < 0)
+        goto proto_error;
+
+    json_array_foreach (jobs, index, arr) {
+        flux_jobid_t id;
+        int64_t priority;
+        struct job *job;
+
+        if (json_unpack (arr, "[I,I]", &id, &priority) < 0)
+            goto proto_error;
+
+        if ((job = job_find (sc, id))) {
+            job->priority = priority;
+            zlistx_reorder (sc->jobs, job->handle, true);
+            break;
+        }
+    }
+
+    /* called to regenerate annotations */
+    try_alloc (sc);
+    return;
+
+proto_error:
+    flux_log (h, LOG_ERR, "malformed sched.reprioritize request");
+    return;
+}
+
 void cancel_cb (flux_t *h, flux_jobid_t id, void *arg)
 {
     struct sched_ctx *sc = arg;
@@ -234,15 +283,11 @@ void cancel_cb (flux_t *h, flux_jobid_t id, void *arg)
     if (!strcmp (sc->mode, "single") && job->id != id)
         return;
 
-    while (job) {
-        if (job->id == id) {
-            if (schedutil_alloc_respond_cancel (sc->schedutil_ctx,
-                                                job->msg) < 0)
-                flux_log_error (h, "%s: alloc_respond_cancel", __FUNCTION__);
-            zlistx_delete (sc->jobs, job->handle);
-            break;
-        }
-        job = zlistx_next (sc->jobs);
+    if ((job = job_find (sc, id))) {
+        if (schedutil_alloc_respond_cancel (sc->schedutil_ctx,
+                                            job->msg) < 0)
+            flux_log_error (h, "%s: alloc_respond_cancel", __FUNCTION__);
+        zlistx_delete (sc->jobs, job->handle);
     }
 
     /* called to regenerate annotations */
@@ -353,6 +398,11 @@ error:
     return NULL;
 }
 
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "sched.prioritize", prioritize_cb, 0},
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
 void sched_destroy (struct sched_ctx *sc)
 {
     if (sc) {
@@ -370,6 +420,7 @@ void sched_destroy (struct sched_ctx *sc)
             job = zlistx_next (sc->jobs);
         }
         zlistx_destroy (&sc->jobs);
+        flux_msg_handler_delvec (sc->handlers);
         free (sc);
         errno = saved_errno;
     }
@@ -408,6 +459,13 @@ struct sched_ctx *sched_create (flux_t *h, int argc, char **argv)
     }
     zlistx_set_comparator (sc->jobs, job_cmp);
     zlistx_set_destructor (sc->jobs, job_destructor);
+
+    /* N.B. schedutil_create() registers the "sched" service  name */
+    if (flux_msg_handler_addvec (h, htab, sc, &sc->handlers) < 0) {
+        flux_log_error (h, "flux_msg_handler_addvec");
+        goto error;
+    }
+
     return sc;
 error:
     sched_destroy (sc);
