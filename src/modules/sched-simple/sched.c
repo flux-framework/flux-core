@@ -330,6 +330,44 @@ static void cancel_cb (flux_t *h,
     }
 }
 
+/* Job manager indicates there is a priority change to a job.  If a
+ * matching job found in queue, update the priority and reorder queue
+ * as necessary.
+ */
+void prioritize_cb (flux_t *h, flux_msg_handler_t *mh,
+                    const flux_msg_t *msg, void *arg)
+{
+    struct simple_sched *ss = arg;
+    json_t *jobs;
+    size_t index;
+    json_t *arr;
+
+    if (flux_request_unpack (msg, NULL, "{s:o}", "jobs", &jobs) < 0)
+        goto proto_error;
+
+    json_array_foreach (jobs, index, arr) {
+        flux_jobid_t id;
+        int64_t priority;
+        struct jobreq *job;
+
+        if (json_unpack (arr, "[I,I]", &id, &priority) < 0)
+            goto proto_error;
+
+        job = jobreq_find (ss, id);
+
+        if (job) {
+            job->priority = priority;
+            zlistx_reorder (ss->queue, job->handle, true);
+        }
+     }
+
+    return;
+
+proto_error:
+    flux_log (h, LOG_ERR, "malformed sched.reprioritize request");
+    return;
+}
+
 static int hello_cb (flux_t *h,
                      flux_jobid_t id,
                      int priority,
@@ -575,6 +613,7 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "*.resource-status", status_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "sched.prioritize", prioritize_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -621,6 +660,9 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     if (simple_sched_init (h, ss) < 0)
         goto done;
+    /* N.B. simple_sched_init() calls schedutil_create(),
+     * which registers the "sched" service  name
+     */
     if (flux_msg_handler_addvec (h, htab, ss, &handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_add");
         goto done;
