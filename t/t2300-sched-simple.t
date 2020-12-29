@@ -132,7 +132,7 @@ test_expect_success 'sched-simple: check allocations for running jobs' '
 	EOF
 	test_cmp best-fit-allocs.expected best-fit-allocs.out
 '
-test_expect_success 'sched-simple: cancel pending job' '
+test_expect_success 'sched-simple: cancel pending & running job' '
 	id=$(cat job10.id) &&
 	flux job cancel $id &&
 	flux job wait-event --timeout=5.0 $id exception &&
