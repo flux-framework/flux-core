@@ -192,20 +192,20 @@ test_expect_success 'sched-simple: reload in unlimited mode' '
     $dmesg_grep -t 10 "scheduler: ready unlimited"
 '
 test_expect_success 'sched-simple: submit 3 more jobs' '
-	flux job submit basic.json >job11.id &&
-	flux job submit basic.json >job12.id &&
-	flux job submit basic.json >job13.id &&
-	flux job wait-event --timeout=5.0 $(cat job13.id) alloc
+	flux job submit basic.json >job14.id &&
+	flux job submit basic.json >job15.id &&
+	flux job submit basic.json >job16.id &&
+	flux job wait-event --timeout=5.0 $(cat job16.id) alloc
 '
 test_expect_success 'sched-simple: check allocations for running jobs' '
-	list_R $(cat job11.id job12.id job13.id ) \
-		 > single-allocs.out &&
-	cat <<-EOF >first-fit-allocs.expected &&
+	list_R $(cat job14.id job15.id job16.id ) \
+		 > unlimited-allocs.out &&
+	cat <<-EOF >unlimited-allocs.expected &&
 	annotations={"sched":{"resource_summary":"rank0/core0"}}
 	annotations={"sched":{"resource_summary":"rank0/core1"}}
 	annotations={"sched":{"resource_summary":"rank1/core0"}}
 	EOF
-	test_cmp first-fit-allocs.expected first-fit-allocs.out
+	test_cmp unlimited-allocs.expected unlimited-allocs.out
 '
 test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux module remove sched-simple &&
