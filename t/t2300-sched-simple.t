@@ -189,7 +189,7 @@ test_expect_success 'sched-simple: there are no outstanding sched requests' '
 '
 test_expect_success 'sched-simple: reload in unlimited mode' '
 	flux module load sched-simple unlimited &&
-    $dmesg_grep -t 10 "scheduler: ready unlimited"
+	$dmesg_grep -t 10 "scheduler: ready unlimited"
 '
 test_expect_success 'sched-simple: submit 3 more jobs' '
 	flux job submit basic.json >job14.id &&
