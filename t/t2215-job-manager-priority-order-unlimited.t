@@ -94,6 +94,51 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs (SSRRI)' '
         jmgr_check_no_annotations $(cat job5.id)
 '
 
+test_expect_success 'job-manager: increase urgency job 2' '
+        flux job urgency $(cat job2.id) 20
+'
+
+test_expect_success HAVE_JQ 'job-manager: job state SSRRI' '
+        jmgr_check_state $(cat job1.id) S &&
+        jmgr_check_state $(cat job2.id) S &&
+        jmgr_check_state $(cat job3.id) R &&
+        jmgr_check_state $(cat job4.id) R &&
+        jmgr_check_state $(cat job5.id) I
+'
+
+test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSRRI)' '
+        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "1" &&
+        jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job2.id) "sched.jobs_ahead" "0" &&
+        jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
+        jmgr_check_annotation $(cat job4.id) "sched.resource_summary" "\"1core\"" &&
+        jmgr_check_no_annotations $(cat job5.id)
+'
+
+test_expect_success 'job-manager: cancel 4' '
+        flux job cancel $(cat job4.id)
+'
+
+test_expect_success HAVE_JQ 'job-manager: job state SRRII' '
+        jmgr_check_state $(cat job1.id) S &&
+        jmgr_check_state $(cat job2.id) R &&
+        jmgr_check_state $(cat job3.id) R &&
+        jmgr_check_state $(cat job4.id) I &&
+        jmgr_check_state $(cat job5.id) I
+'
+
+test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSRRI)' '
+        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "0" &&
+        jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
+        test_must_fail jmgr_check_annotation_exists $(cat job2.id) "sched.reason_pending" &&
+        test_must_fail jmgr_check_annotation_exists $(cat job2.id) "sched.jobs_ahead" &&
+        jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
+        jmgr_check_no_annotations $(cat job4.id) &&
+        jmgr_check_no_annotations $(cat job5.id)
+'
+
 # cancel non-running jobs first, to ensure they are not accidentally run when
 # running jobs free resources.
 test_expect_success 'job-manager: cancel all jobs' '
