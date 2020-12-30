@@ -1871,7 +1871,7 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
     json_t *value;
     bool limit_reached = false;
 
-    /* Handle cancelled lookup (FLUX_KVS_WATCH flag only).
+    /* Handle canceled lookup (FLUX_KVS_WATCH flag only).
      * Destroy the future and return (reactor will then terminate).
      * Errors other than ENODATA are handled by the flux_kvs_lookup_get().
      */

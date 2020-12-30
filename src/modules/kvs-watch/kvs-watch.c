@@ -26,7 +26,7 @@ struct watcher {
     const flux_msg_t *request;  // request message
     struct flux_msg_cred cred;  // request cred
     int rootseq;                // last root sequence number sent
-    bool cancelled;             // true if watcher has been cancelled
+    bool canceled;              // true if watcher has been canceled
     bool mute;                  // true if response should be suppressed
     bool responded;             // true if watcher has responded atleast once
     bool initial_rpc_sent;      // flag is initial watch rpc sent
@@ -615,7 +615,7 @@ static void watcher_respond (struct ns_monitor *nsm, struct watcher *w)
      */
     if (w->finished)
         goto finished;
-    if (w->cancelled) {
+    if (w->canceled) {
         errno = ENODATA;
         goto error_respond;
     }
@@ -719,7 +719,7 @@ static void watcher_cancel (struct ns_monitor *nsm, struct watcher *w,
     if (flux_msg_get_route_first (w->request, &s) < 0)
         return;
     if (!strcmp (sender, s)) {
-        w->cancelled = true;
+        w->canceled = true;
         w->mute = mute;
         watcher_respond (nsm, w);
     }
@@ -883,7 +883,7 @@ static void namespace_getroot_continuation (flux_future_t *f, void *arg)
     uint32_t owner;
     struct commit *commit;
 
-    /* small racy chance watcher cancelled before getroot completes */
+    /* small racy chance watcher canceled before getroot completes */
     if (zlist_size (nsm->watchers) == 0) {
         zhash_delete (nsm->ctx->namespaces, nsm->ns_name);
         return;
@@ -998,7 +998,7 @@ error:
 /* kvs-watch.cancel request
  * The user called flux_kvs_lookup_cancel() which expects no response.
  * The enclosed matchtag and the cancel sender are used to find the
- * watcher that is to be cancelled.  The watcher will receive an ENODATA
+ * watcher that is to be canceled.  The watcher will receive an ENODATA
  * response message.
  */
 static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -1022,7 +1022,7 @@ static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
 
 /* kvs-watch.disconnect request
  * This is sent automatically upon local connector disconnect.
- * The disconnect sender is used to find any watchers to be cancelled.
+ * The disconnect sender is used to find any watchers to be canceled.
  */
 static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)

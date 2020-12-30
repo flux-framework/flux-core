@@ -269,7 +269,7 @@ def color_setup(args, job):
                 sys.stdout.write("\033[01;32m")
             elif job.result == "FAILED":
                 sys.stdout.write("\033[01;31m")
-            elif job.result == "CANCELLED":
+            elif job.result == "CANCELED":
                 sys.stdout.write("\033[37m")
             elif job.result == "TIMEOUT":
                 sys.stdout.write("\033[01;31m")

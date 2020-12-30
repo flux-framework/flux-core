@@ -25,7 +25,7 @@ class JobStats:
         active: Total number of active jobs (all states but INACTIVE)
         failed: Total number of jobs that did not exit with zero status
         successful: Total number of jobs completed with zero exit code
-        cancelled: Total number of jobs that were cancelled
+        canceled: Total number of jobs that were canceled
         timeout: Total number of jobs that timed out
         pending: Sum of "depend", "priority", and "sched"
         running: Sum of "run" and "cleanup"
@@ -44,7 +44,7 @@ class JobStats:
             "cleanup",
             "inactive",
             "failed",
-            "cancelled",
+            "canceled",
             "timeout",
             "pending",
             "running",
@@ -57,7 +57,7 @@ class JobStats:
         resp = rpc.get()
         for state, count in resp["job_states"].items():
             setattr(self, state, count)
-        for state in ["failed", "timeout", "cancelled"]:
+        for state in ["failed", "timeout", "canceled"]:
             setattr(self, state, resp[state])
 
         #  Compute some stats for convenience:

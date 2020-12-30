@@ -59,7 +59,7 @@ wait_jobid_state() {
 
 # Return the expected jobids list in a given state:
 #   "all", "pending", "running", "inactive", "active",
-#   "completed", "cancelled", "failed"
+#   "completed", "canceled", "failed"
 #
 state_ids() {
     for f in "$@"; do

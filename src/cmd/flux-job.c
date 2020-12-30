@@ -1000,7 +1000,7 @@ int cmd_cancelall (optparse_t *p, int argc, char **argv)
     if (optparse_hasopt (p, "states")) {
         state_mask = parse_arg_states (p, "states");
         if ((state_mask & FLUX_JOB_STATE_INACTIVE))
-            log_msg_exit ("Inactive jobs cannot be cancelled");
+            log_msg_exit ("Inactive jobs cannot be canceled");
     }
     else
         state_mask = FLUX_JOB_STATE_ACTIVE;

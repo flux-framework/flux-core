@@ -169,7 +169,7 @@ class JobList:
     RESULTS = {
         "completed": flux.constants.FLUX_JOB_RESULT_COMPLETED,
         "failed": flux.constants.FLUX_JOB_RESULT_FAILED,
-        "cancelled": flux.constants.FLUX_JOB_RESULT_CANCELLED,
+        "canceled": flux.constants.FLUX_JOB_RESULT_CANCELED,
         "timeout": flux.constants.FLUX_JOB_RESULT_TIMEOUT,
     }
 

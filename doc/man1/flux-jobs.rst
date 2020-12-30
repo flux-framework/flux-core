@@ -84,12 +84,12 @@ alias for RUN,CLEANUP; "active", an alias for "pending,running".
 
 After a job has finished and is in the INACTIVE state, it can be
 marked with one of three possible results: COMPLETED, FAILED,
-CANCELLED. Under the *result_abbrev* field name, these are
+CANCELED. Under the *result_abbrev* field name, these are
 abbreviated as CD, F, and CA respectively.
 
 The job status is a user friendly mix of both, a job is always in one
 of the following five statuses: PENDING, RUNNING, COMPLETED, FAILED,
-or CANCELLED. Under the *status_abbrev* field name, these are
+or CANCELED. Under the *status_abbrev* field name, these are
 abbreviated as P, R, CD, F, and CA respectively.
 
 
@@ -174,7 +174,7 @@ The field names that can be specified are:
    job priority
 
 **status**
-   job status (PENDING, RUNNING, COMPLETED, FAILED, or CANCELLED)
+   job status (PENDING, RUNNING, COMPLETED, FAILED, or CANCELED)
 
 **status_abbrev**
    status but in a max 2 character abbreviation
@@ -201,7 +201,7 @@ The field names that can be specified are:
    job state as a single character
 
 **result**
-   job result if job is inactive (COMPLETED, FAILED, CANCELLED), empty string otherwise
+   job result if job is inactive (COMPLETED, FAILED, CANCELED), empty string otherwise
 
 **result_abbrev**
    result but in a max 2 character abbreviation
@@ -221,7 +221,7 @@ The field names that can be specified are:
    The job return code if the job has exited, or an empty string if the
    job is still active. The return code of a job is the highest job shell
    exit code, or negative signal number if the job shell was terminated by
-   a signal. If the job was cancelled before it started, then the returncode
+   a signal. If the job was canceled before it started, then the returncode
    is set to the special value -128.
 
 **exception.occurred**
@@ -298,12 +298,12 @@ To alter which user's jobs are listed, specify the user with *--user*:
     $ flux jobs --user=flux
 
 Jobs that have finished may be filtered further by specifying if they
-have completed, failed, or were cancelled.  For example, the following
-will list the jobs that have failed or were cancelled:
+have completed, failed, or were canceled.  For example, the following
+will list the jobs that have failed or were canceled:
 
 ::
 
-    $ flux jobs --filter=failed,cancelled
+    $ flux jobs --filter=failed,canceled
 
 The *--format* option can be used to alter the output format or output
 additional information.  For example, the following would output all

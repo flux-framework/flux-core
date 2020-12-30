@@ -218,13 +218,13 @@ class JobInfo:
         The job return code if the job has exited, or an empty string
         if the job is still active. The return code of a job is the
         highest job shell exit code, or the negative signal number if the
-        job shell was terminated by a signal. For jobs that were cancelled
+        job shell was terminated by a signal. For jobs that were canceled
         before the RUN state, the return code will be set to -128.
         """
         status = self.waitstatus
         code = ""
         if not isinstance(status, int):
-            if self.result_id == flux.constants.FLUX_JOB_RESULT_CANCELLED:
+            if self.result_id == flux.constants.FLUX_JOB_RESULT_CANCELED:
                 code = -128
         elif os.WIFSIGNALED(status):
             code = -os.WTERMSIG(status)
