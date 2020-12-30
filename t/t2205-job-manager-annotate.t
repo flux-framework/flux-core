@@ -300,7 +300,7 @@ test_expect_success HAVE_JQ 'job-manager: no annotations in job-info (IIIII)' '
 '
 
 # compared to above, note that job ids that ran retain annotations
-# note that user annotation on job4 is removed, as job was cancelled
+# note that user annotation on job4 is removed, as job was canceled
 test_expect_success HAVE_JQ 'job-manager: no annotations in job-info (IIIII)' '
         fjobs_check_annotation $(cat job1.id) "annotations.user.mykey" "bozo" &&
         fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "1core" &&

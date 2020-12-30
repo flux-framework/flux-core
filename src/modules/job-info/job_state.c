@@ -735,7 +735,7 @@ static void eventlog_inactive_complete (struct info_ctx *ctx,
         job->result = FLUX_JOB_RESULT_COMPLETED;
     else if (job->exception_occurred) {
         if (!strcmp (job->exception_type, "cancel"))
-            job->result = FLUX_JOB_RESULT_CANCELLED;
+            job->result = FLUX_JOB_RESULT_CANCELED;
         else if (!strcmp (job->exception_type, "timeout"))
             job->result = FLUX_JOB_RESULT_TIMEOUT;
     }

@@ -61,7 +61,7 @@ void job_stats_update (struct job_stats *stats,
         stats->failed++;
         if (job->exception_occurred) {
             if (strcmp (job->exception_type, "cancel") == 0)
-                stats->cancelled++;
+                stats->canceled++;
             else if (strcmp (job->exception_type, "timeout") == 0)
                 stats->timeout++;
         }
@@ -110,6 +110,6 @@ json_t * job_stats_encode (struct job_stats *stats)
     return json_pack ("{ s:o s:i s:i s:i }",
                       "job_states", states,
                       "failed", stats->failed,
-                      "cancelled", stats->cancelled,
+                      "canceled", stats->canceled,
                       "timeout", stats->timeout);
 }

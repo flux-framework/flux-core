@@ -63,7 +63,7 @@ wait_jobid_state() {
 
 # Return the expected jobids list in a given state:
 #   "all", "pending", "running", "inactive", "active",
-#   "completed", "cancelled", "failed"
+#   "completed", "canceled", "failed"
 #
 state_ids() {
     for f in "$@"; do
@@ -158,12 +158,12 @@ test_expect_success 'submit jobs for job list testing' '
         #
         #  Submit a job and cancel it
         #
-        jobid=`flux mini submit cancelledjob` &&
+        jobid=`flux mini submit canceledjob` &&
         flux job wait-event $jobid depend &&
         flux job cancel $jobid &&
         flux job wait-event $jobid clean &&
         flux job id $jobid >> inactiveids &&
-        flux job id $jobid > cancelled.ids &&
+        flux job id $jobid > canceled.ids &&
         tac inactiveids | flux job id > inactive.ids &&
         cat active.ids > all.ids &&
         cat inactive.ids >> all.ids &&
@@ -218,7 +218,7 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
 
 test_expect_success HAVE_JQ 'flux job list inactive jobs results are correct' '
         flux job list -s inactive | jq .result | ${JOB_CONV} resulttostr > list_result_I.out &&
-        echo "CANCELLED" >> list_result_I.exp &&
+        echo "CANCELED" >> list_result_I.exp &&
         echo "FAILED" >> list_result_I.exp &&
         for count in `seq 1 4`; do \
             echo "COMPLETED" >> list_result_I.exp; \
@@ -229,13 +229,13 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs results are correct' '
 # Hard code results values for these tests, as we did not add a results
 # option to flux_job_list() or the flux-job command.
 
-test_expect_success HAVE_JQ 'flux job list only cancelled jobs' '
+test_expect_success HAVE_JQ 'flux job list only canceled jobs' '
         id=$(id -u) &&
         state=`${JOB_CONV} strtostate INACTIVE` &&
-        result=`${JOB_CONV} strtoresult CANCELLED` &&
+        result=`${JOB_CONV} strtoresult CANCELED` &&
         $jq -j -c -n  "{max_entries:1000, userid:${id}, states:${state}, results:${result}, attrs:[]}" \
-          | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_cancelled.out &&
-        test_cmp cancelled.ids list_result_cancelled.out
+          | $RPC job-info.list | $jq .jobs | $jq -c '.[]' | $jq .id > list_result_canceled.out &&
+        test_cmp canceled.ids list_result_canceled.out
 '
 
 test_expect_success HAVE_JQ 'flux job list only failed jobs' '

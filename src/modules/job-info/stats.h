@@ -18,7 +18,7 @@ struct job_stats {
     unsigned int total;
     unsigned int failed;
     unsigned int timeout;
-    unsigned int cancelled;
+    unsigned int canceled;
 };
 
 /* Forward declaration of struct job to avoid circular header file
