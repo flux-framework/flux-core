@@ -1032,6 +1032,12 @@ static void shell_task_exec (flux_shell_task_t *task, void *arg)
 {
     flux_shell_t *shell = arg;
     shell->current_task->in_pre_exec = true;
+
+    /*  Set stdout to unbuffered so that any output from task.exec plugins
+     *   is not lost at exec(2).
+     */
+    (void) setvbuf (stdout, NULL, _IONBF, 0);
+
     if (plugstack_call (shell->plugstack, "task.exec", NULL) < 0)
         shell_log_errno ("task.exec plugin(s) failed");
 #if CODE_COVERAGE_ENABLED
