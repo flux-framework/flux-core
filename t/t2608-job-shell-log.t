@@ -244,7 +244,7 @@ test_expect_success 'flux-shell: fatal error in task.fork works' '
 
 '
 test_expect_success 'flux-shell: fatal error in task.exec works' '
-	site=task.fork &&
+	site=task.exec &&
 	test_when_finished "test_debug \"dump_job_output_eventlog $site\"" &&
 	test_must_fail_or_be_terminated \
 		flux mini run -v -n2 -N2 \
