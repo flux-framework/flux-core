@@ -244,7 +244,7 @@ test_expect_success 'flux-shell: fatal error in task.fork works' '
 
 '
 test_expect_success 'flux-shell: fatal error in task.exec works' '
-	site=task.fork &&
+	site=task.exec &&
 	test_when_finished "test_debug \"dump_job_output_eventlog $site\"" &&
 	test_must_fail_or_be_terminated \
 		flux mini run -v -n2 -N2 \
@@ -258,5 +258,25 @@ test_expect_success 'flux-shell: fatal error in task.exec works' '
 	    grep "flux-shell\[1\]: FATAL: log: log-fatal-error requested!" \
 		fatal-${site}.out &&
 	dump_job_output_eventlog $site | grep log-fatal-error
+'
+test_expect_success 'flux-shell: stdout/err from task.exec works' '
+	cat <<-EOF >task.exec.print.lua &&
+	plugin.register {
+	  name = "stdout-test",
+	    handlers = {
+	    {
+	      topic = "task.exec",
+	      fn = function ()
+	        io.stderr:write("this is stderr\n")
+	        io.stdout:write("this is stdout\n")
+	      end
+	    }
+	  }
+	}
+	EOF
+	flux mini run -o initrc=task.exec.print.lua hostname \
+	  >print.out 2>print.err &&
+	grep "^this is stderr" print.err &&
+	grep "^this is stdout" print.out
 '
 test_done
