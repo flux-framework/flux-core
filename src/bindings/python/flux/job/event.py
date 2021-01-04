@@ -100,8 +100,7 @@ class JobEventWatchFuture(Future):
 def event_watch_async(flux_handle, jobid, eventlog="eventlog"):
     """Asynchronously get eventlog updates for a job
 
-    Asynchronously watch the events of a job eventlog, optionally only
-    returning events that match a glob pattern.
+    Asynchronously watch the events of a job eventlog.
 
     Returns a JobEventWatchFuture. Call .get_event() from the then
     callback to get the currently returned event from the Future object.
@@ -109,7 +108,6 @@ def event_watch_async(flux_handle, jobid, eventlog="eventlog"):
     :param flux_handle: handle for Flux broker from flux.Flux()
     :type flux_handle: Flux
     :param jobid: the job ID on which to watch events
-    :param name: The event name or glob pattern for which to wait (default: \\*)
     :param eventlog: eventlog path in job kvs directory (default: eventlog)
     :returns: a JobEventWatchFuture object
     :rtype: JobEventWatchFuture
@@ -131,7 +129,6 @@ def event_watch(flux_handle, jobid, eventlog="eventlog"):
     :param flux_handle: handle for Flux broker from flux.Flux()
     :type flux_handle: Flux
     :param jobid: the job ID on which to watch events
-    :param name: The event name or glob pattern for which to wait (default: \\*)
     :param eventlog: eventlog path in job kvs directory (default: eventlog)
     """
     watcher = event_watch_async(flux_handle, jobid, eventlog)
