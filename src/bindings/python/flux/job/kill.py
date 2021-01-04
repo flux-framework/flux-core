@@ -55,7 +55,7 @@ def cancel_async(flux_handle, jobid, reason=None):
     return Future(RAW.cancel(flux_handle, int(jobid), reason))
 
 
-def cancel(flux_handle, jobid, signum=None):
+def cancel(flux_handle, jobid, reason=None):
     """Cancel a pending or or running job
 
     :param flux_handle: handle for Flux broker from flux.Flux()
@@ -63,4 +63,4 @@ def cancel(flux_handle, jobid, signum=None):
     :param jobid: the job ID of the job to cancel
 
     """
-    return cancel_async(flux_handle, jobid, signum).get()
+    return cancel_async(flux_handle, jobid, reason).get()
