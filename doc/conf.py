@@ -44,7 +44,10 @@ exclude_patterns = ['_build', 'Thumbs.db', '.DS_Store']
 master_doc = 'index'
 source_suffix = '.rst'
 
-extensions = ['sphinx.ext.napoleon']
+extensions = [
+    'sphinx.ext.intersphinx',
+    'sphinx.ext.napoleon'
+]
 
 # Disable "smartquotes" to avoid things such as turning long-options
 #  "--" into en-dash in html output, which won't make much sense for
@@ -344,3 +347,16 @@ man_pages = [
     ('man5/flux-config-bootstrap', 'flux-config-bootstrap', 'configure Flux instance bootstrap', [author], 5),
     ('man7/flux-broker-attributes', 'flux-broker-attributes', 'overview Flux broker attributes', [author], 7),
 ]
+
+# -- Options for Intersphinx -------------------------------------------------
+
+intersphinx_mapping = {
+    "rfc": (
+        "https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/",
+        None,
+    ),
+    "workflow-examples": (
+        "https://flux-framework.readthedocs.io/projects/flux-workflow-examples/en/latest/",
+        None,
+    ),
+}

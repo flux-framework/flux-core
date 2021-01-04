@@ -105,6 +105,11 @@ def event_watch_async(flux_handle, jobid, eventlog="eventlog"):
     Returns a JobEventWatchFuture. Call .get_event() from the then
     callback to get the currently returned event from the Future object.
 
+    .. seealso::
+
+       :doc:`rfc:spec_21`
+          Documentation for the events in the main eventlog
+
     :param flux_handle: handle for Flux broker from flux.Flux()
     :type flux_handle: Flux
     :param jobid: the job ID on which to watch events
@@ -125,6 +130,11 @@ def event_watch(flux_handle, jobid, eventlog="eventlog"):
     Example:
         >>> for event in job.event_watch(flux_handle, jobid):
         ...     # do something with event
+
+    .. seealso::
+
+       :doc:`rfc:spec_21`
+          Documentation for the events in the main eventlog
 
     :param flux_handle: handle for Flux broker from flux.Flux()
     :type flux_handle: Flux
@@ -156,6 +166,11 @@ def event_wait(flux_handle, jobid, name, eventlog="eventlog", raiseJobException=
     Wait synchronously for an eventlog entry named "name" and
     return the entry to caller, raises OSError with ENODATA if
     event never occurred
+
+    .. seealso::
+
+       :doc:`rfc:spec_21`
+          Documentation for the events in the main eventlog
 
     :param flux_handle: handle for Flux broker from flux.Flux()
     :type flux_handle: Flux
