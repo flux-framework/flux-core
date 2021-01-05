@@ -25,3 +25,4 @@ from flux.job.event import (
     JobException,
 )
 from flux.core.inner import ffi
+from flux.job.workflow import Job
