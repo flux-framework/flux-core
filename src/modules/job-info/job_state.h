@@ -64,7 +64,7 @@ struct job {
     flux_jobid_t id;
     uint32_t userid;
     int urgency;
-    unsigned int priority;
+    int64_t priority;
     double t_submit;
     int flags;
     flux_job_state_t state;

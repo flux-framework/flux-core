@@ -127,6 +127,13 @@ static struct optparse_option list_inactive_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option urgency_opts[] =  {
+    { .name = "verbose", .key = 'v', .has_arg = 0,
+      .usage = "Output old urgency value on success",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option cancelall_opts[] =  {
     { .name = "user", .key = 'u', .has_arg = 1, .arginfo = "USER",
       .usage = "Set target user or 'all' (instance owner only)",
@@ -193,7 +200,7 @@ static struct optparse_option killall_opts[] = {
 
 static struct optparse_option submit_opts[] =  {
     { .name = "urgency", .key = 'u', .has_arg = 1, .arginfo = "N",
-      .usage = "Set job urgency (0-31, default=16)",
+      .usage = "Set job urgency (0-31), hold=0, default=16, expedite=31",
     },
     { .name = "flags", .key = 'f', .has_arg = 1,
       .flags = OPTPARSE_OPT_AUTOSPLIT,
@@ -337,10 +344,10 @@ static struct optparse_subcommand subcommands[] = {
     },
     { "urgency",
       "[OPTIONS] id urgency",
-      "Set job urgency",
+      "Set job urgency (0-31, HOLD, EXPEDITE, DEFAULT)",
       cmd_urgency,
       0,
-      NULL,
+      urgency_opts,
     },
     { "cancel",
       "[OPTIONS] id [message ...]",
@@ -627,9 +634,10 @@ int cmd_urgency (optparse_t *p, int argc, char **argv)
     int optindex = optparse_option_index (p);
     flux_t *h;
     flux_future_t *f;
-    int urgency;
+    int urgency, old_urgency;
     flux_jobid_t id;
     const char *jobid = NULL;
+    const char *urgencystr = NULL;
 
     if (optindex != argc - 2) {
         optparse_print_usage (p);
@@ -640,12 +648,28 @@ int cmd_urgency (optparse_t *p, int argc, char **argv)
 
     jobid = argv[optindex++];
     id = parse_jobid (jobid);
-    urgency = parse_arg_unsigned (argv[optindex++], "urgency");
+    urgencystr = argv[optindex++];
+    if (!strcasecmp (urgencystr, "hold"))
+        urgency = FLUX_JOB_URGENCY_HOLD;
+    else if (!strcasecmp (urgencystr, "expedite"))
+        urgency = FLUX_JOB_URGENCY_EXPEDITE;
+    else if (!strcasecmp (urgencystr, "default"))
+        urgency = FLUX_JOB_URGENCY_DEFAULT;
+    else
+        urgency = parse_arg_unsigned (urgencystr, "urgency");
 
     if (!(f = flux_job_set_urgency (h, id, urgency)))
         log_err_exit ("flux_job_set_urgency");
-    if (flux_rpc_get (f, NULL) < 0)
+    if (flux_rpc_get_unpack (f, "{s:i}", "old_urgency", &old_urgency) < 0)
         log_msg_exit ("%s: %s", jobid, future_strerror (f, errno));
+    if (optparse_hasopt (p, "verbose")) {
+        if (old_urgency == FLUX_JOB_URGENCY_HOLD)
+            fprintf (stderr, "old urgency: job held\n");
+        else if (old_urgency == FLUX_JOB_URGENCY_EXPEDITE)
+            fprintf (stderr, "old urgency: job expedited\n");
+        else
+            fprintf (stderr, "old urgency: %d\n", old_urgency);
+    }
     flux_future_destroy (f);
     flux_close (h);
     return 0;

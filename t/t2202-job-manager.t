@@ -116,7 +116,7 @@ test_expect_success 'job-manager: queue contains 3 jobs' '
 
 test_expect_success HAVE_JQ 'job-manager: queue is sorted in priority order' '
 	cat >list3_priority.exp <<-EOT &&
-	31
+	4294967295
 	16
 	0
 	EOT
@@ -126,11 +126,17 @@ test_expect_success HAVE_JQ 'job-manager: queue is sorted in priority order' '
 
 test_expect_success HAVE_JQ 'job-manager: list-jobs --count shows highest priority jobs' '
 	cat >list3_lim2.exp <<-EOT &&
-	31
+	4294967295
 	16
 	EOT
 	${LIST_JOBS} -c 2 | $jq .priority >list3_lim2.out &&
 	test_cmp list3_lim2.exp list3_lim2.out
+'
+
+test_expect_success HAVE_JQ 'job-manager: priority listed as priority=4294967295 in KVS' '
+	jobid=$(head -n 1 list3.out | $jq .id) &&
+        flux job wait-event --timeout=5.0 ${jobid} priority &&
+	flux job eventlog $jobid | grep priority=4294967295
 '
 
 test_expect_success HAVE_JQ 'job-manager: cancel jobs' '
@@ -167,6 +173,12 @@ test_expect_success 'job-manager: urgency was updated in KVS' '
 	flux job eventlog $jobid \
 		| cut -d" " -f2- | grep ^urgency >urgency.out &&
 	grep -q urgency=31 urgency.out
+'
+
+test_expect_success 'job-manager: priority was updated in KVS' '
+	jobid=$(tail -1 <list10_ids.out) &&
+        flux job wait-event --timeout=5.0 -c 2 ${jobid} priority &&
+	flux job eventlog $jobid | grep ^priority | tail -n 1 | priority=4294967295
 '
 
 test_expect_success HAVE_JQ 'job-manager: that job is now the first job' '
@@ -224,6 +236,32 @@ test_expect_success 'job-manager: flux job urgency fails on invalid urgency' '
 	flux job urgency ${jobid} 31 &&
 	test_must_fail flux job urgency ${jobid} -1 &&
 	test_must_fail flux job urgency ${jobid} 32 &&
+	flux job cancel ${jobid}
+'
+
+test_expect_success HAVE_JQ 'job-manager: flux job urgency special args work' '
+	jobid=$(flux job submit basic.json | flux job id) &&
+	flux job urgency ${jobid} hold &&
+	${LIST_JOBS} > list_hold.out &&
+	test $(cat list_hold.out | grep ${jobid} | $jq .urgency) -eq 0 &&
+	test $(cat list_hold.out | grep ${jobid} | $jq .priority) -eq 0 &&
+	flux job urgency ${jobid} expedite &&
+	${LIST_JOBS} > list_expedite.out &&
+	test $(cat list_expedite.out | grep ${jobid} | $jq .urgency) -eq 31 &&
+	test $(cat list_expedite.out | grep ${jobid} | $jq .priority) -eq 4294967295 &&
+	flux job urgency ${jobid} default &&
+	${LIST_JOBS} > list_default.out &&
+	test $(cat list_default.out | grep ${jobid} | $jq .urgency) -eq 16 &&
+	test $(cat list_default.out | grep ${jobid} | $jq .priority) -eq 16 &&
+	flux job cancel ${jobid}
+'
+
+test_expect_success 'job-manager: flux job urgency -v work' '
+	jobid=$(flux job submit basic.json | flux job id) &&
+	flux job urgency -v ${jobid} 10 2>&1 | grep "16" &&
+	flux job urgency -v ${jobid} hold 2>&1 | grep "10" &&
+	flux job urgency -v ${jobid} expedite 2>&1 | grep "held" &&
+	flux job urgency -v ${jobid} 10 2>&1 | grep "expedited" &&
 	flux job cancel ${jobid}
 '
 

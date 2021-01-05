@@ -309,6 +309,7 @@ nomem:
 int event_job_action (struct event *event, struct job *job)
 {
     struct job_manager *ctx = event->ctx;
+    int64_t priority;
 
     switch (job->state) {
         case FLUX_JOB_STATE_NEW:
@@ -326,12 +327,20 @@ int event_job_action (struct event *event, struct job *job)
              * SCHED state, dequeue the job first.
              */
             alloc_dequeue_alloc_request (ctx->alloc, job);
+            if (job->urgency == FLUX_JOB_URGENCY_HOLD)
+                priority = FLUX_JOB_PRIORITY_MIN;
+            else if (job->urgency == FLUX_JOB_URGENCY_EXPEDITE)
+                priority = FLUX_JOB_PRIORITY_MAX;
+            else
+                priority = job->urgency;
+            /* We pack priority with I instead of i to avoid issue of
+             * signed vs unsigned int */
             if (event_job_post_pack (event,
                                      job,
                                      "priority",
                                      0,
-                                     "{ s:i }",
-                                     "priority", job->urgency) < 0)
+                                     "{ s:I }",
+                                     "priority", priority) < 0)
                 return -1;
             break;
         case FLUX_JOB_STATE_SCHED:
@@ -398,15 +407,14 @@ static int event_submit_context_decode (json_t *context,
 }
 
 static int event_priority_context_decode (json_t *context,
-                                          unsigned int *priority)
+                                          int64_t *priority)
 {
     /* N.B. eventually this will be the priority, but is the
      * same of the urgency at the moment */
-    if (json_unpack (context, "{ s:i }", "priority", (int *)priority) < 0) {
+    if (json_unpack (context, "{ s:I }", "priority", priority) < 0) {
         errno = EPROTO;
         return -1;
     }
-
     return 0;
 }
 

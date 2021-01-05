@@ -290,8 +290,8 @@ EOT
 
 test_expect_success HAVE_JQ 'flux job list pending jobs with correct priority' '
         cat >list_priority.exp <<-EOT &&
-31
-31
+4294967295
+4294967295
 20
 20
 16

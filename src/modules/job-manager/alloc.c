@@ -63,7 +63,7 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
     assert (job->alloc_pending);
     assert (job->handle == NULL);
     if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
-        flux_log_error (ctx->h, "%s: queue_insert", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "failed to enqueue job for scheduling");
     job->alloc_pending = 0;
     job->alloc_queued = 1;
     alloc->pending_job = NULL;
@@ -359,9 +359,9 @@ int alloc_request (struct alloc *alloc, struct job *job)
 
     if (!(msg = flux_request_encode ("sched.alloc", NULL)))
         return -1;
-    if (flux_msg_pack (msg, "{s:I s:i s:i s:f s:O}",
+    if (flux_msg_pack (msg, "{s:I s:I s:i s:f s:O}",
                             "id", job->id,
-                            "priority", job->priority,
+                            "priority", (json_int_t)job->priority,
                             "userid", job->userid,
                             "t_submit", job->t_submit,
                             "jobspec", job->jobspec_redacted) < 0)
@@ -397,7 +397,7 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     job = zhashx_first (ctx->active_jobs);
     while (job) {
         if (job->has_resources) {
-            if (!(entry = json_pack ("{s:I s:i s:i s:f}",
+            if (!(entry = json_pack ("{s:I s:I s:i s:f}",
                                      "id", job->id,
                                      "priority", job->priority,
                                      "userid", job->userid,
@@ -483,12 +483,18 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     struct job_manager *ctx = arg;
     struct alloc *alloc = ctx->alloc;
+    struct job *job;
 
     if (!alloc->ready || alloc->disable)
         return;
     if (alloc->mode == SCHED_SINGLE && alloc->alloc_pending_count > 0)
         return;
-    if (zlistx_first (alloc->queue))
+   /* The queue is sorted from highest to lowest priority, so if the
+    * first job has urgency=HOLD (priority=MIN), all other jobs must have
+    * the same priority, and no alloc requests can be sent.
+    */
+    if ((job = zlistx_first (alloc->queue))
+        && job->urgency != FLUX_JOB_URGENCY_HOLD)
         flux_watcher_start (alloc->idle);
 }
 
@@ -508,7 +514,12 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
         return;
     if (alloc->mode == SCHED_SINGLE && alloc->alloc_pending_count > 0)
         return;
-    if ((job = zlistx_first (alloc->queue))) {
+   /* The queue is sorted from highest to lowest priority, so if the
+    * first job has urgency=HOLD (priority=MIN), all other jobs must have
+    * the same priority, and no alloc requests can be sent.
+    */
+    if ((job = zlistx_first (alloc->queue))
+        && job->urgency != FLUX_JOB_URGENCY_HOLD) {
         if (alloc_request (alloc, job) < 0) {
             flux_log_error (ctx->h, "alloc_request fatal error");
             flux_reactor_stop_error (flux_get_reactor (ctx->h));
@@ -548,7 +559,9 @@ int alloc_send_free_request (struct alloc *alloc, struct job *job)
 int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
 {
     assert (job->state == FLUX_JOB_STATE_SCHED);
-    if (!job->alloc_queued && !job->alloc_pending) {
+    if (!job->alloc_queued
+        && !job->alloc_pending
+        && job->urgency != FLUX_JOB_URGENCY_HOLD) {
         bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
         assert (job->handle == NULL);
         if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))

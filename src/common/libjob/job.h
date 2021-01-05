@@ -27,8 +27,10 @@ enum job_submit_flags {
 
 enum job_urgency {
     FLUX_JOB_URGENCY_MIN = 0,
+    FLUX_JOB_URGENCY_HOLD = FLUX_JOB_URGENCY_MIN,
     FLUX_JOB_URGENCY_DEFAULT = 16,
     FLUX_JOB_URGENCY_MAX = 31,
+    FLUX_JOB_URGENCY_EXPEDITE = FLUX_JOB_URGENCY_MAX,
 };
 
 enum job_queue_priority {

@@ -75,15 +75,17 @@ int schedutil_hello (schedutil_t *util, schedutil_hello_cb_f *cb, void *arg)
         int priority;
         uint32_t userid;
         double t_submit;
+        json_int_t tmp;
 
-        if (json_unpack (entry, "{s:I s:i s:i s:f}",
+        if (json_unpack (entry, "{s:I s:I s:i s:f}",
                                 "id", &id,
-                                "priority", &priority,
+                                "priority", &tmp,
                                 "userid", &userid,
                                 "t_submit", &t_submit) < 0) {
             errno = EPROTO;
             goto error;
         }
+        priority = tmp;
         if (schedutil_hello_job (util->h,
                                  id,
                                  priority,
