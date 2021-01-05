@@ -120,7 +120,7 @@ void urgency_handle_request (flux_t *h,
             goto error;
         alloc_queue_reorder (ctx->alloc, job);
         if (alloc_queue_recalc_pending (ctx->alloc) < 0)
-            flux_log_error (h, "%s: alloc_queue_recalc_pending", __FUNCTION__);
+            goto error;
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
