@@ -32,7 +32,7 @@ struct jobreq {
     void *handle;
     const flux_msg_t *msg;
     uint32_t uid;
-    int priority;
+    unsigned int priority;
     double t_submit;
     flux_jobid_t id;
     struct jj_counts jj;
@@ -414,7 +414,7 @@ proto_error:
 
 static int hello_cb (flux_t *h,
                      flux_jobid_t id,
-                     int priority,
+                     unsigned int priority,
                      uint32_t userid,
                      double t_submit,
                      const char *R,
@@ -426,7 +426,7 @@ static int hello_cb (flux_t *h,
     struct rlist *alloc;
 
     flux_log (h, LOG_DEBUG,
-              "hello: id=%ju priority=%d userid=%u t_submit=%0.1f",
+              "hello: id=%ju priority=%u userid=%u t_submit=%0.1f",
               (uintmax_t)id,
               priority,
               (unsigned int)userid,

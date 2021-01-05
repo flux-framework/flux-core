@@ -32,7 +32,7 @@ enum {
  */
 int schedutil_alloc_request_decode (const flux_msg_t *msg,
                                     flux_jobid_t *id,
-                                    int *priority,
+                                    unsigned int *priority,
                                     uint32_t *userid,
                                     double *t_submit);
 

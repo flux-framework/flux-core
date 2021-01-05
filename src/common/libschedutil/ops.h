@@ -27,7 +27,7 @@ struct schedutil_ops {
      */
     int (*hello)(flux_t *h,
                  flux_jobid_t id,
-                 int priority,
+                 unsigned int priority,
                  uint32_t userid,
                  double t_submit,
                  const char *R,

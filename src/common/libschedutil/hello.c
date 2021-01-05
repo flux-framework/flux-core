@@ -20,7 +20,7 @@
 
 static int schedutil_hello_job (schedutil_t *util,
                                 flux_jobid_t id,
-                                int priority,
+                                unsigned int priority,
                                 uint32_t userid,
                                 double t_submit)
 {
@@ -72,7 +72,7 @@ int schedutil_hello (schedutil_t *util)
         goto error;
     json_array_foreach (jobs, index, entry) {
         flux_jobid_t id;
-        int priority;
+        unsigned int priority;
         uint32_t userid;
         double t_submit;
         json_int_t tmp;
