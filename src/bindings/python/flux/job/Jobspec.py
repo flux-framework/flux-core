@@ -41,7 +41,7 @@ def _convert_jobspec_arg_to_string(jobspec):
         raise EnvironmentError(errno.EINVAL, "jobspec must not be None/NULL")
     elif not isinstance(jobspec, six.binary_type):
         raise TypeError(
-            "jobpsec must be a Jobspec or string (either binary or unicode)"
+            "jobspec must be a Jobspec or string (either binary or unicode)"
         )
     return jobspec
 
