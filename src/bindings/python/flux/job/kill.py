@@ -43,12 +43,13 @@ def kill(flux_handle, jobid, signum=None):
 def cancel_async(flux_handle, jobid, reason=None):
     """Cancel a pending or or running job asynchronously
 
-    :param flux_handle: handle for Flux broker from flux.Flux()
-    :type flux_handle: Flux
-    :param jobid: the job ID of the job to cancel
-    :returns: a Future
-    :rtype: Future
+    Arguments:
+        flux_handle: handle for Flux broker from flux.Flux()
+        jobid: the job ID of the job to cancel
+        reason: the textual reason associated with the cancelation
 
+    Returns:
+        Future: a future fulfilled when the cancelation completes
     """
     if not reason:
         reason = ffi.NULL
@@ -58,9 +59,9 @@ def cancel_async(flux_handle, jobid, reason=None):
 def cancel(flux_handle, jobid, reason=None):
     """Cancel a pending or or running job
 
-    :param flux_handle: handle for Flux broker from flux.Flux()
-    :type flux_handle: Flux
-    :param jobid: the job ID of the job to cancel
-
+    Arguments:
+        flux_handle: handle for Flux broker from flux.Flux()
+        jobid: the job ID of the job to cancel
+        reason: the textual reason associated with the cancelation
     """
     return cancel_async(flux_handle, jobid, reason).get()
