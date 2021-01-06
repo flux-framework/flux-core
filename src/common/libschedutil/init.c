@@ -39,7 +39,7 @@ schedutil_t *schedutil_create (flux_t *h,
         errno = EINVAL;
         return NULL;
     }
-    if (!(util = calloc(1, sizeof(*util))))
+    if (!(util = calloc (1, sizeof (*util))))
         return NULL;
 
     util->h = h;
