@@ -379,8 +379,16 @@ static int hello_cb (flux_t *h,
     char *s;
     int rc = -1;
     struct simple_sched *ss = arg;
+    struct rlist *alloc;
 
-    struct rlist *alloc = rlist_from_R (R);
+    flux_log (h, LOG_DEBUG,
+              "hello: id=%ju priority=%d userid=%u t_submit=%0.1f",
+              (uintmax_t)id,
+              priority,
+              (unsigned int)userid,
+              t_submit);
+
+    alloc = rlist_from_R (R);
     if (!alloc) {
         flux_log_error (h, "hello: R=%s", R);
         return -1;
