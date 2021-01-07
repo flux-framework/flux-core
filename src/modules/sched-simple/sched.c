@@ -25,6 +25,7 @@
 // e.g. flux module debug --clearbit 0x1 sched-simple
 enum module_debug_flags {
     DEBUG_FAIL_ALLOC = 1, // while set, alloc requests fail
+    DEBUG_ANNOTATE_REASON_PENDING = 2, // add reason_pending annotation
 };
 
 struct jobreq {
@@ -206,8 +207,11 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     if (schedutil_alloc_respond_success_pack (ss->util_ctx,
                                               job->msg,
                                               R,
-                                              "{ s:{s:s} }",
-                                              "sched", "resource_summary", s) < 0)
+                                              "{ s:{s:s s:n s:n} }",
+                                              "sched",
+                                              "resource_summary", s,
+                                              "reason_pending",
+                                              "jobs_ahead") < 0)
         flux_log_error (h, "schedutil_alloc_respond_success_pack");
 
     flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t) job->id, s);
@@ -219,6 +223,28 @@ out:
     free (R);
     free (s);
     return rc;
+}
+
+static void annotate_reason_pending (struct simple_sched *ss)
+{
+    int jobs_ahead = 0;
+
+    if (!flux_module_debug_test (ss->h, DEBUG_ANNOTATE_REASON_PENDING, false))
+        return;
+
+    struct jobreq *job = zlistx_first (ss->queue);
+    while (job) {
+        if (schedutil_alloc_respond_annotate_pack (ss->util_ctx,
+                                                   job->msg,
+                                                   "{ s:{s:s s:i} }",
+                                                   "sched",
+                                                   "reason_pending",
+                                                     "insufficient resources",
+                                                   "jobs_ahead",
+                                                     jobs_ahead++) < 0)
+            flux_log_error (ss->h, "schedutil_alloc_respond_annotate_pack");
+        job = zlistx_next (ss->queue);
+    }
 }
 
 static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -244,6 +270,7 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
      *  watcher, i.e. block. O/w, retry on next loop.
      */
     if (try_alloc (ss->h, ss) < 0 && errno == ENOSPC) {
+        annotate_reason_pending (ss);
         flux_watcher_stop (ss->prep);
         flux_watcher_stop (ss->check);
     }
@@ -340,6 +367,8 @@ static void cancel_cb (flux_t *h,
             return;
         }
         zlistx_delete (ss->queue, job->handle);
+        if (!ss->single)
+            annotate_reason_pending (ss);
     }
 }
 
@@ -374,6 +403,8 @@ void prioritize_cb (flux_t *h, flux_msg_handler_t *mh,
         }
     }
 
+    if (!ss->single)
+        annotate_reason_pending (ss);
     return;
 
 proto_error:
