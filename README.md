@@ -11,7 +11,7 @@ See also our [Online Documentation](https://flux-framework.readthedocs.io).
 
 flux-core implements the communication layer and lowest level
 services and interfaces for the Flux resource manager framework.
-It consists of a distributed message broker, plug-in _comms modules_
+It consists of a distributed message broker, broker plug-in modules
 that implement various distributed services, and an API and set
 of utilities to utilize these services.
 
@@ -138,7 +138,7 @@ Usage: flux [OPTIONS] COMMAND ARGS
   -v, --verbose          Be verbose about environment and command search
 
 Common commands from flux-core:
-   broker             Invoke Flux comms message broker daemon
+   broker             Invoke Flux message broker daemon
    content            Access instance content storage
    cron               Schedule tasks on timers and events
    dmesg              manipulate broker log ring buffer

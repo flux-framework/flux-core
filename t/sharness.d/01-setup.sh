@@ -7,7 +7,6 @@
 #
 unset FLUX_CONFIG
 unset FLUX_MODULE_PATH
-unset FLUX_CMBD_PATH
 
 #
 #  FLUX_BUILD_DIR and FLUX_SOURCE_DIR are set to build and source paths

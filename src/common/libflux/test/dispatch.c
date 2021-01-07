@@ -133,7 +133,7 @@ void test_fastpath (flux_t *h)
 }
 
 /* Verify that a non-glob request handler overrides earlier-registered one.
- * "Built-in" methods like "ping" should be overrideable in comms modules.
+ * "Built-in" methods like "ping" should be overrideable.
  */
 void test_method_override (flux_t *h)
 {

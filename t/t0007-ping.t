@@ -37,15 +37,15 @@ test_expect_success 'ping: 1K 10K byte echo requests (batched)' '
 '
 
 test_expect_success 'ping --rank 1 works' '
-	run_timeout 15 flux ping --rank 1 --count 10 --interval 0 cmb
+	run_timeout 15 flux ping --rank 1 --count 10 --interval 0 broker
 '
 
 test_expect_success 'ping 1 works' '
 	run_timeout 15 flux ping --count 10 --interval 0 1
 '
 
-test_expect_success 'ping 1!cmb works' '
-	run_timeout 15 flux ping --count 10 --interval 0 "1!cmb"
+test_expect_success 'ping 1!broker works' '
+	run_timeout 15 flux ping --count 10 --interval 0 "1!broker"
 '
 
 test_expect_success 'ping fails on invalid rank (specified as target)' '
@@ -54,7 +54,7 @@ test_expect_success 'ping fails on invalid rank (specified as target)' '
 '
 
 test_expect_success 'ping fails on invalid rank (specified in option)' '
-	test_must_fail run_timeout 15 flux ping --count 1 --rank $(invalid_rank) cmb 2>stderr &&
+	test_must_fail run_timeout 15 flux ping --count 1 --rank $(invalid_rank) broker 2>stderr &&
 	grep -q "No route to host" stderr
 '
 
@@ -64,44 +64,44 @@ test_expect_success 'ping fails on invalid target' '
 '
 
 test_expect_success 'ping output format for "any" rank is correct (default)' '
-	run_timeout 15 flux ping --count 1 cmb 1>stdout &&
-        grep -q "^cmb.ping" stdout &&
+	run_timeout 15 flux ping --count 1 broker 1>stdout &&
+        grep -q "^broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 1)' '
-	run_timeout 15 flux ping --count 1 --rank any cmb 1>stdout &&
-        grep -q "^cmb.ping" stdout &&
+	run_timeout 15 flux ping --count 1 --rank any broker 1>stdout &&
+        grep -q "^broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 2)' '
-	run_timeout 15 flux ping --count 1 any!cmb 1>stdout &&
-        grep -q "^cmb.ping" stdout &&
+	run_timeout 15 flux ping --count 1 any!broker 1>stdout &&
+        grep -q "^broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for "any" rank is correct (format 3)' '
 	run_timeout 15 flux ping --count 1 any 1>stdout &&
-        grep -q "^cmb.ping" stdout &&
+        grep -q "^broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for specific rank is correct (format 1)' '
-	run_timeout 15 flux ping --count 1 --rank 0 cmb 1>stdout &&
-        grep -q "^0!cmb.ping" stdout &&
+	run_timeout 15 flux ping --count 1 --rank 0 broker 1>stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for specific rank is correct (format 2)' '
-	run_timeout 15 flux ping --count 1 0!cmb 1>stdout &&
-        grep -q "^0!cmb.ping" stdout &&
+	run_timeout 15 flux ping --count 1 0!broker 1>stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping output format for specific rank is correct (format 3)' '
 	run_timeout 15 flux ping --count 1 0 1>stdout &&
-        grep -q "^0!cmb.ping" stdout &&
+        grep -q "^0!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
@@ -110,25 +110,25 @@ test_expect_success 'ping output format for specific rank is correct (format 3)'
 # rank 1 should work
 
 test_expect_success 'ping with "upstream" fails on rank 0' '
-        test_must_fail run_timeout 15 flux exec -n --rank 0 flux ping --count 1 --rank upstream cmb 2>stderr &&
+        test_must_fail run_timeout 15 flux exec -n --rank 0 flux ping --count 1 --rank upstream broker 2>stderr &&
 	grep -q "No route to host" stderr
 '
 
 test_expect_success 'ping with "upstream" works (format 1)' '
-        run_timeout 15 flux exec -n --rank 1 flux ping --count 1 --rank upstream cmb 1>stdout &&
-        grep -q "^upstream!cmb.ping" stdout &&
+        run_timeout 15 flux exec -n --rank 1 flux ping --count 1 --rank upstream broker 1>stdout &&
+        grep -q "^upstream!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping with "upstream" works (format 2)' '
-        run_timeout 15 flux exec -n --rank 1 flux ping --count 1 upstream!cmb 1>stdout &&
-        grep -q "^upstream!cmb.ping" stdout &&
+        run_timeout 15 flux exec -n --rank 1 flux ping --count 1 upstream!broker 1>stdout &&
+        grep -q "^upstream!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
 test_expect_success 'ping with "upstream" works (format 3)' '
         run_timeout 15 flux exec -n --rank 1 flux ping --count 1 upstream 1>stdout &&
-        grep -q "^upstream!cmb.ping" stdout &&
+        grep -q "^upstream!broker.ping" stdout &&
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 

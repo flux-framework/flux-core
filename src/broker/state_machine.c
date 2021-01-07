@@ -252,7 +252,7 @@ static void rmmod_continuation (flux_future_t *f, void *arg)
     struct state_machine *s = arg;
 
     if (flux_rpc_get (f, NULL) < 0)
-        flux_log_error (s->ctx->h, "cmb.rmmod connector-local");
+        flux_log_error (s->ctx->h, "broker.rmmod connector-local");
     flux_reactor_stop (flux_get_reactor (s->ctx->h));
     flux_future_destroy (f);
 }
@@ -264,14 +264,14 @@ static void action_exit (struct state_machine *s)
     flux_future_t *f;
 
     if (!(f = flux_rpc_pack (s->ctx->h,
-                             "cmb.rmmod",
+                             "broker.rmmod",
                              FLUX_NODEID_ANY,
                              0,
                              "{s:s}",
                              "name",
                              "connector-local"))
             || flux_future_then (f, -1, rmmod_continuation, s) < 0) {
-        flux_log_error (s->ctx->h, "error sending cmb.rmmod connector-local");
+        flux_log_error (s->ctx->h, "error sending broker.rmmod connector-local");
         flux_future_destroy (f);
         flux_reactor_stop (flux_get_reactor (s->ctx->h));
     }

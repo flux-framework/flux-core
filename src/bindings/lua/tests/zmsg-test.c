@@ -24,7 +24,7 @@
 #include "lutil.h"
 
 
-flux_msg_t *l_cmb_zmsg_encode (lua_State *L)
+flux_msg_t *l_broker_zmsg_encode (lua_State *L)
 {
 	const char *tag = lua_tostring (L, 1);
     char *json_str = NULL;
@@ -54,11 +54,11 @@ static int l_zi_resp_cb (lua_State *L,
     return lua_push_zmsg_info (L, zmsg_info_create (msg, FLUX_MSGTYPE_RESPONSE));
 }
 
-static int l_cmb_zmsg_create_type (lua_State *L, int type)
+static int l_broker_zmsg_create_type (lua_State *L, int type)
 {
     struct zmsg_info *zi;
 	flux_msg_t **msg = malloc (sizeof (*msg));
-	if ((*msg = l_cmb_zmsg_encode (L)) == NULL) {
+	if ((*msg = l_broker_zmsg_encode (L)) == NULL) {
         free (msg);
         return luaL_error (L, "Failed to encode zmsg");
     }
@@ -68,15 +68,15 @@ static int l_cmb_zmsg_create_type (lua_State *L, int type)
 	return lua_push_zmsg_info (L, zi);
 }
 
-static int l_cmb_zmsg_create_response (lua_State *L)
+static int l_broker_zmsg_create_response (lua_State *L)
 {
-    return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_RESPONSE);
+    return l_broker_zmsg_create_type (L, FLUX_MSGTYPE_RESPONSE);
 }
 
 /*
  *  Send new-API-style response with errnum.
  */
-static int l_cmb_zmsg_create_response_with_error (lua_State *L)
+static int l_broker_zmsg_create_response_with_error (lua_State *L)
 {
     struct zmsg_info *zi;
     int errnum;
@@ -104,21 +104,21 @@ static int l_cmb_zmsg_create_response_with_error (lua_State *L)
     return lua_push_zmsg_info (L, zi);
 }
 
-static int l_cmb_zmsg_create_request (lua_State *L)
+static int l_broker_zmsg_create_request (lua_State *L)
 {
-    return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_REQUEST);
+    return l_broker_zmsg_create_type (L, FLUX_MSGTYPE_REQUEST);
 }
 
-static int l_cmb_zmsg_create_event (lua_State *L)
+static int l_broker_zmsg_create_event (lua_State *L)
 {
-    return l_cmb_zmsg_create_type (L, FLUX_MSGTYPE_EVENT);
+    return l_broker_zmsg_create_type (L, FLUX_MSGTYPE_EVENT);
 }
 
 static const struct luaL_Reg zmsg_info_test_functions [] = {
-	{ "req",       l_cmb_zmsg_create_request   },
-	{ "resp",      l_cmb_zmsg_create_response  },
-	{ "resp_err",  l_cmb_zmsg_create_response_with_error },
-	{ "event",     l_cmb_zmsg_create_event     },
+	{ "req",       l_broker_zmsg_create_request   },
+	{ "resp",      l_broker_zmsg_create_response  },
+	{ "resp_err",  l_broker_zmsg_create_response_with_error },
+	{ "event",     l_broker_zmsg_create_event     },
 	{ NULL,        NULL              }
 };
 

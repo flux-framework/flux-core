@@ -18,7 +18,7 @@ extern "C" {
 #endif
 
 /* Execute a barrier across 'nprocs' processes.
- * The 'name' must be unique across the comms session, or
+ * The 'name' must be unique across the Flux instance, or
  * if running in a Flux/slurm job, may be NULL.
  */
 flux_future_t *flux_barrier (flux_t *h, const char *name, int nprocs);

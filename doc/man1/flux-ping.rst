@@ -20,7 +20,7 @@ essentially an echo of the request, with the route taken to the service
 added by the service. This route is displayed in the output and can
 give insight into how various addresses are routed.
 
-*target* may be the name of a comms module service, e.g. "kvs".
+*target* may be the name of a Flux service, e.g. "kvs".
 flux-ping(1) will send a request to "kvs.ping". As a shorthand,
 *target* can include a rank prefix delimited by an exclamation point.
 "flux ping 4!kvs" is equivalent to "flux ping --rank 4 kvs" (see --rank
@@ -28,9 +28,9 @@ option below). Don't forget to quote the exclamation point if it is
 interpreted by your shell.
 
 As a shorthand, *target* may also simply be a rank by itself
-indicating that the broker on that rank or ranks, rather than a comms
-module, is to be pinged. "flux ping 1" is equivalent to
-"flux ping --rank 1 cmb".
+indicating that the broker on that rank or ranks, rather than a Flux
+service, is to be pinged. "flux ping 1" is equivalent to
+"flux ping --rank 1 broker".
 
 
 OPTIONS
@@ -75,7 +75,7 @@ One can ping a service by name, e.g.
    kvs.ping pad=0 seq=1 time=0.686 ms (0EB02!A3368!0!382A6)
    ...
 
-This tells you that the local "kvs" comms module is alive and the
+This tells you that the local "kvs" service is alive and the
 round-trip latency is a bit over half a millisecond. The route hops are:
 
 ::

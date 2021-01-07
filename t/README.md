@@ -140,7 +140,7 @@ After copyright notices, etc, the test script should assign
 to the variable `test_description`, like this:
 
 ```
-test_description='Test basic commands functionality under a comms instance
+test_description='Test basic commands functionality under a Flux instance
 
 Ensure the very basics of flux commands work.
 This suite verifies functionality that may be assumed working by
@@ -183,7 +183,7 @@ following extra functions:
 
 ```
   test_under_flux <size> : 
-	Re-invokes the test library under a flux comms instance of
+	Re-invokes the test library under a flux instance of
 	size <size>. If size is not given a default of 1 is used.
 	This function essentially invokes
 	

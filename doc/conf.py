@@ -114,7 +114,7 @@ html_theme = 'sphinx_rtd_theme'
 # - Author (use [author])
 # - Manual section
 man_pages = [
-    ('man1/flux-broker', 'flux-broker', 'Flux comms message broker daemon', [author], 1),
+    ('man1/flux-broker', 'flux-broker', 'Flux message broker daemon', [author], 1),
     ('man1/flux-content', 'flux-content', 'access content service', [author], 1),
     ('man1/flux-cron', 'flux-cron', 'Cron-like utility for Flux', [author], 1),
     ('man1/flux-dmesg', 'flux-dmesg', 'access broker ring buffer', [author], 1),
@@ -193,8 +193,8 @@ man_pages = [
     ('man3/flux_future_wait_all_create', 'flux_future_next_child', 'functions for future composition', [author], 3),
     ('man3/flux_future_wait_all_create', 'flux_future_get_child', 'functions for future composition', [author], 3),
     ('man3/flux_future_wait_all_create', 'flux_future_wait_all_create', 'functions for future composition', [author], 3),
-    ('man3/flux_get_rank', 'flux_get_size', 'query Flux broker comms info', [author], 3),
-    ('man3/flux_get_rank', 'flux_get_rank', 'query Flux broker comms info', [author], 3),
+    ('man3/flux_get_rank', 'flux_get_size', 'query Flux broker info', [author], 3),
+    ('man3/flux_get_rank', 'flux_get_rank', 'query Flux broker info', [author], 3),
     ('man3/flux_get_reactor', 'flux_set_reactor', 'get/set reactor associated with broker handle', [author], 3),
     ('man3/flux_get_reactor', 'flux_get_reactor', 'get/set reactor associated with broker handle', [author], 3),
     ('man3/flux_handle_watcher_create', 'flux_handle_watcher_get_flux', 'create broker handle watcher', [author], 3),

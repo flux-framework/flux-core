@@ -230,7 +230,7 @@ int parse_nodeid (const char *s, uint32_t *np)
 /* Parse 's' to obtain the ping topic string and (optionally) nodeid.
  * If nodeid is non-NULL, then try to parse a nodeid from 's'
  * looking for nodeid!service expressions (including nodeid=any and upstream),
- * or just a number in which case the service is assumed to be "cmb".
+ * or just a number in which case the service is assumed to be "broker".
  */
 void parse_service (const char *s, uint32_t *nodeid, char **topic)
 {
@@ -244,7 +244,7 @@ void parse_service (const char *s, uint32_t *nodeid, char **topic)
         if ((service = strchr (cpy, '!')))
             *service++ = '\0';
         else
-            service = "cmb";
+            service = "broker";
         if (!strcmp (cpy, "any"))
             *nodeid = FLUX_NODEID_ANY;
         else if (!strcmp (cpy, "upstream"))

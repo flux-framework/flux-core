@@ -64,7 +64,7 @@ check_module_list() {
 }
 
 #
-#  Reinvoke a test file under a flux comms instance
+#  Reinvoke a test file under a flux instance
 #
 #  Usage: test_under_flux <size>
 #

@@ -299,7 +299,7 @@ flux_msg_t *module_recvmsg (module_t *p)
      * and are "authenticated" as the instance owner.
      * Allow modules so endowed to change the userid/rolemask on messages when
      * sending on behalf of other users.  This is necessary for connectors
-     * implemented as comms modules.
+     * implemented as DSOs.
      */
     assert ((p->cred.rolemask & FLUX_ROLE_OWNER));
     if (flux_msg_get_cred (msg, &cred) < 0)

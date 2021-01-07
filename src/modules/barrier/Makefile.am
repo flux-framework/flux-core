@@ -11,9 +11,6 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS)
 
-#
-# Comms module
-#
 fluxmod_LTLIBRARIES = barrier.la
 
 barrier_la_SOURCES = barrier.c

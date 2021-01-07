@@ -12,9 +12,6 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS) \
 	$(HWLOC_CFLAGS)
 
-#
-# Comms module
-#
 fluxmod_LTLIBRARIES = resource.la
 
 resource_la_SOURCES = \

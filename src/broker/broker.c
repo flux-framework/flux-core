@@ -475,11 +475,11 @@ int main (int argc, char *argv[])
         log_err ("exec_initialize");
         goto cleanup;
     }
-    if (ping_initialize (ctx.h, "cmb", ctx.uuid) < 0) {
+    if (ping_initialize (ctx.h, "broker", ctx.uuid) < 0) {
         log_err ("ping_initialize");
         goto cleanup;
     }
-    if (rusage_initialize (ctx.h, "cmb") < 0) {
+    if (rusage_initialize (ctx.h, "broker") < 0) {
         log_err ("rusage_initialize");
         goto cleanup;
     }
@@ -489,7 +489,7 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Initialize comms module infrastructure.
+    /* Initialize module infrastructure.
      */
     if (ctx.verbose)
         log_msg ("initializing modules");
@@ -946,7 +946,7 @@ static int mod_svc_cb (const flux_msg_t *msg, void *arg)
 
 /* If a dlerror/dlsym error occurs during modfind/modname,
  * log it here.  Such messages can be helpful in diagnosing
- * dynamic binding problems for comms modules.
+ * dynamic binding problems for modules.
  */
 static void module_dlerror (const char *errmsg, void *arg)
 {
@@ -1067,13 +1067,13 @@ static int broker_handle_signals (broker_ctx_t *ctx)
  ** Built-in services
  **/
 
-/* Unload a comms module by name, asynchronously.
+/* Unload a module by name, asynchronously.
  * Message format is defined by RFC 5.
  * N.B. unload_module_byname() handles response, unless it fails early
  * and returns -1.
  */
-static void cmb_rmmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void broker_rmmod_cb (flux_t *h, flux_msg_handler_t *mh,
+                             const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *name;
@@ -1088,12 +1088,12 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-/* Load a comms module by name, asynchronously.
+/* Load a module by name, asynchronously.
  * Message format is defined by RFC 5.
  * N.B. load_module_bypath() handles response, unless it returns -1.
  */
-static void cmb_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                           const flux_msg_t *msg, void *arg)
+static void broker_insmod_cb (flux_t *h, flux_msg_handler_t *mh,
+                              const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
     const char *path;
@@ -1129,11 +1129,11 @@ error:
     free (argz);
 }
 
-/* Load a comms module by name.
+/* Load a module by name.
  * Message format is defined by RFC 5.
  */
-static void cmb_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void broker_lsmod_cb (flux_t *h, flux_msg_handler_t *mh,
+                             const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
     json_t *mods = NULL;
@@ -1155,8 +1155,8 @@ error:
 void __gcov_flush (void);
 #endif
 
-static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void broker_panic_cb (flux_t *h, flux_msg_handler_t *mh,
+                             const flux_msg_t *msg, void *arg)
 {
     const char *reason;
     int flags; // reserved
@@ -1164,7 +1164,7 @@ static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_unpack (msg, NULL, "{s:s s:i}",
                              "reason", &reason,
                              "flags", &flags) < 0) {
-        flux_log_error (h, "malformed cmb.panic request");
+        flux_log_error (h, "malformed broker.panic request");
         return;
     }
     fprintf (stderr, "PANIC: %s\n", reason);
@@ -1175,7 +1175,7 @@ static void cmb_panic_cb (flux_t *h, flux_msg_handler_t *mh,
     /*NOTREACHED*/
 }
 
-static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
+static void broker_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                                const flux_msg_t *msg, void *arg)
 {
     char *sender = NULL;
@@ -1187,7 +1187,7 @@ static void cmb_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
     /* no response */
 }
 
-static void cmb_sub_cb (flux_t *h, flux_msg_handler_t *mh,
+static void broker_sub_cb (flux_t *h, flux_msg_handler_t *mh,
                         const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -1214,7 +1214,7 @@ error:
     free (uuid);
 }
 
-static void cmb_unsub_cb (flux_t *h, flux_msg_handler_t *mh,
+static void broker_unsub_cb (flux_t *h, flux_msg_handler_t *mh,
                           const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -1340,44 +1340,44 @@ error:
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
-        "cmb.rmmod",
-        cmb_rmmod_cb,
+        "broker.rmmod",
+        broker_rmmod_cb,
         0
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "cmb.insmod",
-        cmb_insmod_cb,
+        "broker.insmod",
+        broker_insmod_cb,
         0
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "cmb.lsmod",
-        cmb_lsmod_cb,
+        "broker.lsmod",
+        broker_lsmod_cb,
         0
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "cmb.panic",
-        cmb_panic_cb,
+        "broker.panic",
+        broker_panic_cb,
         0
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "cmb.disconnect",
-        cmb_disconnect_cb,
+        "broker.disconnect",
+        broker_disconnect_cb,
         0
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "cmb.sub",
-        cmb_sub_cb,
+        "broker.sub",
+        broker_sub_cb,
         0
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "cmb.unsub",
-        cmb_unsub_cb,
+        "broker.unsub",
+        broker_unsub_cb,
         0
     },
     {
@@ -1401,7 +1401,7 @@ struct internal_service {
 };
 
 static struct internal_service services[] = {
-    { "cmb",                NULL }, // kind of a catch-all, slowly deprecating
+    { "broker",             NULL }, // kind of a catch-all, slowly deprecating
     { "log",                NULL },
     { "content",            NULL },
     { "attr",               NULL },
@@ -1416,7 +1416,7 @@ static struct internal_service services[] = {
 };
 
 /* Register builtin services (sharing ctx->h and broker thread).
- * Register message handlers for some cmb services.  Others are registered
+ * Register message handlers for some broker services.  Others are registered
  * in their own initialization functions.
  */
 static flux_msg_handler_t **broker_add_services (broker_ctx_t *ctx)
@@ -1597,7 +1597,7 @@ void disconnect_send_cb (const flux_msg_t *msg, void *arg)
     broker_request_sendmsg (ctx, msg);
 }
 
-/* Handle messages on the service socket of a comms module.
+/* Handle messages on the service socket of a module.
  */
 static void module_cb (module_t *p, void *arg)
 {
@@ -1886,7 +1886,7 @@ static bool is_my_parent (broker_ctx_t *ctx, uint32_t rank)
 /* Route a response message, determining next hop from route stack.
  * If there is no next hop, routing is complete to broker-resident service.
  * If the next hop is a rank, route up or down the TBON.
- * If not a rank, look up a comms module by uuid.
+ * If not a rank, look up a module by uuid.
  */
 static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {

@@ -54,7 +54,7 @@ test_expect_success 'flux-proxy cannot register service with method (EINVAL)' "
 "
 
 test_expect_success 'flux-proxy cannot shadow a broker service (EEXIST)' "
-	echo '{\"service\":\"cmb\"}' >service4.add.in &&
+	echo '{\"service\":\"broker\"}' >service4.add.in &&
         flux proxy $TEST_URI \
 	  $RPC service.add 17 <service4.add.in
 "

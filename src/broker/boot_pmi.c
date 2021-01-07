@@ -216,8 +216,8 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
     if (pmi_params.size == 1)
         goto done;
 
-    /* If there are to be downstream peers, then bind to socket and share the
-     * concretized URI with other ranks via PMI KVS key=cmbd.<rank>.uri.
+    /* If there are to be downstream peers, then bind to socket and extract
+     * the concretized URI for sharing with other ranks.
      * N.B. there are no downstream peers if the 0th child of this rank
      * in k-ary tree does not exist.
      */

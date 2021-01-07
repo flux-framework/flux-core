@@ -36,12 +36,12 @@ class TestHandle(unittest.TestCase):
         self.ping_payload = {"seq": 1, "pad": "stuff"}
 
     def test_01_rpc_get(self):
-        future = self.f.rpc("cmb.ping", self.ping_payload)
+        future = self.f.rpc("broker.ping", self.ping_payload)
         resp_payload = future.get()
         self.assertDictContainsSubset(self.ping_payload, resp_payload)
 
     def test_02_get_flux(self):
-        future = self.f.rpc("cmb.ping", self.ping_payload)
+        future = self.f.rpc("broker.ping", self.ping_payload)
         future.get_flux()
         # force a full garbage collection pass to test that the handle is not destructed
         gc.collect(2)
@@ -49,7 +49,7 @@ class TestHandle(unittest.TestCase):
         self.assertDictContainsSubset(self.ping_payload, resp_payload)
 
     def test_02_future_wait_for(self):
-        future = self.f.rpc("cmb.ping", self.ping_payload)
+        future = self.f.rpc("broker.ping", self.ping_payload)
         try:
             future.wait_for(5)
             resp_payload = future.get()
@@ -75,7 +75,9 @@ class TestHandle(unittest.TestCase):
                 # ensure that reactor is always stopped, avoiding a hung test
                 flux_handle.reactor_stop(reactor)
 
-        self.f.rpc(b"cmb.ping", self.ping_payload).then(then_cb, arg=self.ping_payload)
+        self.f.rpc(b"broker.ping", self.ping_payload).then(
+            then_cb, arg=self.ping_payload
+        )
         # force a full garbage collection pass to test that our anonymous RPC doesn't disappear
         gc.collect(2)
         ret = self.f.reactor_run()
@@ -86,7 +88,7 @@ class TestHandle(unittest.TestCase):
         def then_cb(future):
             raise RuntimeError("this is a test")
 
-        self.f.rpc("cmb.ping", self.ping_payload).then(then_cb)
+        self.f.rpc("broker.ping", self.ping_payload).then(then_cb)
         with self.assertRaises(RuntimeError) as cm:
             rc = self.f.reactor_run()
 
@@ -102,7 +104,7 @@ class TestHandle(unittest.TestCase):
             finally:
                 future.get_flux().reactor_stop()
 
-        self.f.rpc("cmb.ping").then(then_cb, "one", "two", "three")
+        self.f.rpc("broker.ping").then(then_cb, "one", "two", "three")
         gc.collect(2)
         ret = self.f.reactor_run()
         self.assertGreaterEqual(ret, 0, msg="Reactor exited with < 0")
@@ -115,7 +117,7 @@ class TestHandle(unittest.TestCase):
             cb_ran[0] = True
             future.get_flux().reactor_stop()
 
-        self.f.rpc("cmb.ping").then(then_cb)
+        self.f.rpc("broker.ping").then(then_cb)
         gc.collect(2)
         ret = self.f.reactor_run()
         self.assertGreaterEqual(ret, 0, msg="Reactor exited with < 0")
@@ -131,7 +133,7 @@ class TestHandle(unittest.TestCase):
             finally:
                 future.get_flux().reactor_stop()
 
-        self.f.rpc("cmb.ping").then(then_cb)
+        self.f.rpc("broker.ping").then(then_cb)
         gc.collect(2)
         ret = self.f.reactor_run()
         self.assertGreaterEqual(ret, 0, msg="Reactor exited with < 0")
@@ -150,7 +152,7 @@ class TestHandle(unittest.TestCase):
             finally:
                 future.get_flux().reactor_stop()
 
-        self.f.rpc("cmb.ping").then(then_cb, val2=True, val1=True)
+        self.f.rpc("broker.ping").then(then_cb, val2=True, val1=True)
         gc.collect(2)
         ret = self.f.reactor_run()
         self.assertGreaterEqual(ret, 0, msg="Reactor exited with < 0")
@@ -159,7 +161,7 @@ class TestHandle(unittest.TestCase):
     def test_04_double_future_then(self):
         """Register two 'then' cbs and ensure it throws an exception"""
         with self.assertRaises(EnvironmentError) as cm:
-            rpc = self.f.rpc(b"cmb.ping")
+            rpc = self.f.rpc(b"broker.ping")
             rpc.then(lambda x: None)
             rpc.then(lambda x: None)
         self.assertEqual(cm.exception.errno, errno.EEXIST)

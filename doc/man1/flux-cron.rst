@@ -17,7 +17,7 @@ DESCRIPTION
 The Flux cron service offers an interface for executing commands on
 triggers such as a time interval or Flux events. The service is
 implemented as a Flux extension module which, when loaded, manages
-a set of cron entries and uses the built-in *cmb.exec* service to run
+a set of cron entries and uses the built-in *broker.exec* service to run
 a command associated with the entry each time the defined trigger is
 reached. As with *flux-exec(1)*, these tasks run as direct children
 of the flux-broker and run outside of the control of any loaded
@@ -227,14 +227,14 @@ executing tasks optionally killed if the *--kill* option is provided.
 TASK EXECUTION
 ==============
 
-As related above, cron entry commands are executed via the *cmb.exec*
+As related above, cron entry commands are executed via the *broker.exec*
 service, which is a low level execution service offered outside of any
 scheduler control, described in more detail in the *flux-exec(1)* man
 page.
 
 Standard output and error from tasks executed by the cron service are
 logged and may be viewed with *flux-dmesg(1)*. If a cron task exits
-with non-zero status, or fails to launch under the *cmb.exec* service,
+with non-zero status, or fails to launch under the *broker.exec* service,
 a message is logged and the failure is added to the failure stats.
 On task failure, the cron job is stopped if *stop-on-failure* is set, and
 the current failure count exceeds the configured value. By default,
