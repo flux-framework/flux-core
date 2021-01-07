@@ -60,11 +60,11 @@ test_expect_success HAVE_JQ 'job-manager: job state SSSRR' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate jobs (RRSSS)' '
-        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "1" &&
-        jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.jobs_ahead" "2" &&
-        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
         jmgr_check_annotation $(cat job4.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"1core\""
@@ -83,9 +83,9 @@ test_expect_success HAVE_JQ 'job-manager: job state SSRRI' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate jobs (SSRRI)' '
-        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "0" &&
-        jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.jobs_ahead" "1" &&
         jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
         test_must_fail jmgr_check_annotation_exists $(cat job3.id) "sched.reason_pending" &&
@@ -107,9 +107,9 @@ test_expect_success HAVE_JQ 'job-manager: job state SSRRI' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSRRI)' '
-        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "1" &&
-        jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.jobs_ahead" "0" &&
         jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.resource_summary" "\"1core\"" &&
@@ -129,7 +129,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SRRII' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSRRI)' '
-        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "0" &&
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
         test_must_fail jmgr_check_annotation_exists $(cat job2.id) "sched.reason_pending" &&

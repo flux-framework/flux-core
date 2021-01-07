@@ -62,10 +62,10 @@ test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
 test_expect_success HAVE_JQ 'job-manager: job annotations correct (RRSSS)' '
         jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
-        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
         jmgr_check_no_annotations $(cat job4.id) &&
-        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job5.id) "sched.jobs_ahead" "1"
 '
 
@@ -86,7 +86,7 @@ test_expect_success HAVE_JQ 'job-manager: job annotations updated (RRSSS)' '
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_no_annotations $(cat job3.id) &&
         jmgr_check_no_annotations $(cat job4.id) &&
-        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job5.id) "sched.jobs_ahead" "0"
 '
 
@@ -147,7 +147,7 @@ test_expect_success HAVE_JQ 'job-manager: job annotations updated (IIRSR)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
-        jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.jobs_ahead" "0" &&
         jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"1core\""
 '

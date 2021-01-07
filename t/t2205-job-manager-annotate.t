@@ -109,12 +109,12 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs (RRSSS)' '
         jmgr_check_annotation $(cat job2.id) "user.mykey" "\"bar\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
-        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
         jmgr_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
-        jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.jobs_ahead" "1" &&
-        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job5.id) "sched.jobs_ahead" "2"
 '
 
@@ -124,12 +124,12 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-info (RRSSS)' '
         jinfo_check_annotation $(cat job2.id) "user.mykey" "\"bar\"" &&
         jinfo_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
         jinfo_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
-        jinfo_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores\"" &&
+        jinfo_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jinfo_check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
         jinfo_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
-        jinfo_check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores\"" &&
+        jinfo_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jinfo_check_annotation $(cat job4.id) "sched.jobs_ahead" "1" &&
-        jinfo_check_annotation $(cat job5.id) "sched.reason_pending" "\"no cores\"" &&
+        jinfo_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jinfo_check_annotation $(cat job5.id) "sched.jobs_ahead" "2"
 '
 
@@ -139,12 +139,12 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs in flux-jobs (RRSSS)' '
         fjobs_check_annotation $(cat job2.id) "annotations.user.mykey" "bar" &&
         fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "1core" &&
         fjobs_check_annotation $(cat job3.id) "annotations.user.mykey.baz" "42" &&
-        fjobs_check_annotation $(cat job3.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job3.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.jobs_ahead" "0" &&
         fjobs_check_annotation $(cat job4.id) "annotations.user.mykey" "doh" &&
-        fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job4.id) "annotations.sched.jobs_ahead" "1" &&
-        fjobs_check_annotation $(cat job5.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job5.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job5.id) "annotations.sched.jobs_ahead" "2"
 '
 
@@ -162,12 +162,12 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs (RRSSS)' '
         test_must_fail jmgr_check_annotation_exists $(cat job2.id) "user.mykey" &&
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
-        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
         jmgr_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
-        jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.jobs_ahead" "1" &&
-        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job5.id) "sched.jobs_ahead" "2"
 '
 
@@ -177,12 +177,12 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-info (RRSSS)' '
         test_must_fail jinfo_check_annotation_exists $(cat job2.id) "user.mykey" &&
         jinfo_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
         jinfo_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
-        jinfo_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores\"" &&
+        jinfo_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jinfo_check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
         jinfo_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
-        jinfo_check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores\"" &&
+        jinfo_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jinfo_check_annotation $(cat job4.id) "sched.jobs_ahead" "1" &&
-        jinfo_check_annotation $(cat job5.id) "sched.reason_pending" "\"no cores\"" &&
+        jinfo_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jinfo_check_annotation $(cat job5.id) "sched.jobs_ahead" "2"
 '
 
@@ -192,12 +192,12 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs in flux-jobs (RRSSS)' '
         test_must_fail fjobs_check_annotation_exists $(cat job2.id) "annotations.user.mykey" &&
         fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "1core" &&
         fjobs_check_annotation $(cat job3.id) "annotations.user.mykey.baz" "42" &&
-        fjobs_check_annotation $(cat job3.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job3.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.jobs_ahead" "0" &&
         fjobs_check_annotation $(cat job4.id) "annotations.user.mykey" "doh" &&
-        fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job4.id) "annotations.sched.jobs_ahead" "1" &&
-        fjobs_check_annotation $(cat job5.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job5.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job5.id) "annotations.sched.jobs_ahead" "2"
 '
 
@@ -222,9 +222,9 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs (RIRSS)' '
         test_must_fail jmgr_check_annotation_exists $(cat job3.id) "sched.reason_pending" &&
         test_must_fail jmgr_check_annotation_exists $(cat job3.id) "sched.jobs_ahead" &&
         jmgr_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
-        jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.jobs_ahead" "0" &&
-        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"no cores\"" &&
+        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job5.id) "sched.jobs_ahead" "1"
 '
 
@@ -240,9 +240,9 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-info (RIRSS)' '
         test_must_fail jinfo_check_annotation_exists $(cat job3.id) "sched.reason_pending" &&
         test_must_fail jinfo_check_annotation_exists $(cat job3.id) "sched.jobs_ahead" &&
         jinfo_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
-        jinfo_check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores\"" &&
+        jinfo_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jinfo_check_annotation $(cat job4.id) "sched.jobs_ahead" "0" &&
-        jinfo_check_annotation $(cat job5.id) "sched.reason_pending" "\"no cores\"" &&
+        jinfo_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jinfo_check_annotation $(cat job5.id) "sched.jobs_ahead" "1"
 '
 
@@ -258,9 +258,9 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs in flux-jobs (RIRSS)' '
         test_must_fail fjobs_check_annotation_exists $(cat job3.id) "annotations.sched.reason_pending" &&
         test_must_fail fjobs_check_annotation_exists $(cat job3.id) "annotations.sched.jobs_ahead" &&
         fjobs_check_annotation $(cat job4.id) "annotations.user.mykey" "doh" &&
-        fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job4.id) "annotations.sched.jobs_ahead" "0" &&
-        fjobs_check_annotation $(cat job5.id) "annotations.sched.reason_pending" "no cores" &&
+        fjobs_check_annotation $(cat job5.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job5.id) "annotations.sched.jobs_ahead" "1"
 '
 

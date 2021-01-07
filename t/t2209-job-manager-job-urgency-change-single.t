@@ -58,7 +58,7 @@ test_expect_success HAVE_JQ 'job-manager: job state RRSS' '
 test_expect_success HAVE_JQ 'job-manager: annotate job id 3 (RRSS)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
-        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores available\"" &&
+        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_no_annotations $(cat job4.id)
 '
 
@@ -71,7 +71,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations in job id 3-4 (RRSS)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_annotation $(cat job3.id) "user.mykey" "\"foo\"" &&
-        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores available\"" &&
+        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job4.id) "user.mykey" "\"bar\""
 '
 
@@ -85,7 +85,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations in job id 3-4 updated (RRS
         jmgr_check_annotation $(cat job3.id) "user.mykey" "\"foo\"" &&
         test_must_fail jmgr_check_annotation_exists $(cat job3.id) "sched.reason_pending" &&
         jmgr_check_annotation $(cat job4.id) "user.mykey" "\"bar\"" &&
-        jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"no cores available\""
+        jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\""
 '
 
 test_expect_success 'job-manager: cancel 2' '
@@ -103,7 +103,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations in job id 3-4 updated (RIS
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_annotation $(cat job3.id) "user.mykey" "\"foo\"" &&
-        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores available\"" &&
+        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job4.id) "user.mykey" "\"bar\"" &&
         test_must_fail jmgr_check_annotation_exists $(cat job4.id) "sched.reason_pending"
 '
@@ -126,7 +126,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations in job id 3-5 updated (RIS
         jmgr_check_annotation $(cat job3.id) "user.mykey" "\"foo\"" &&
         test_must_fail jmgr_check_annotation_exists $(cat job3.id) "sched.reason_pending" &&
         jmgr_check_annotation $(cat job4.id) "user.mykey" "\"bar\"" &&
-        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"no cores available\""
+        jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\""
 '
 
 test_expect_success 'job-manager: cancel 1' '
@@ -145,7 +145,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations in job id 3-5 updated (IIS
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_annotation $(cat job3.id) "user.mykey" "\"foo\"" &&
-        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores available\"" &&
+        jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job4.id) "user.mykey" "\"bar\"" &&
         jmgr_check_no_annotations $(cat job5.id)
 '

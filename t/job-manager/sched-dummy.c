@@ -157,7 +157,7 @@ static void respond_annotate_single (struct sched_ctx *sc,
                                                job->msg,
                                                "{ s:{s:s} }",
                                                "sched", "reason_pending",
-                                               "no cores available") < 0)
+                                               "insufficient resources") < 0)
         flux_log_error (sc->h, "schedutil_alloc_respond_annotate_pack");
 }
 
@@ -179,7 +179,7 @@ static void respond_annotate_unlimited (struct sched_ctx *sc,
                                                    "{ s:{s:s s:i} }",
                                                    "sched",
                                                    "reason_pending",
-                                                   "no cores",
+                                                   "insufficient resources",
                                                    "jobs_ahead",
                                                    jobs_ahead_count) < 0)
             flux_log_error (sc->h, "schedutil_alloc_respond_annotate_pack");
