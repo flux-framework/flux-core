@@ -570,6 +570,27 @@ void alloc_queue_reorder (struct alloc *alloc, struct job *job)
     zlistx_reorder (alloc->queue, job->handle, fwd);
 }
 
+int alloc_queue_reprioritize (struct alloc *alloc)
+{
+    struct job *job;
+    zlistx_sort (alloc->queue);
+
+    /*  N.B.: zlistx_sort() invalidates all list handles since
+     *   the sort swaps contents of nodes, not the nodes themselves.
+     *   Therefore, job handles into the list must be re-acquired here:
+     */
+    job = zlistx_first (alloc->queue);
+    while (job) {
+        job->handle = zlistx_cursor (alloc->queue);
+        job = zlistx_next (alloc->queue);
+    }
+
+    if (alloc->mode == SCHED_SINGLE)
+        return alloc_queue_recalc_pending (alloc);
+    else
+        return 0;
+}
+
 /* called if highest priority job may have changed */
 int alloc_queue_recalc_pending (struct alloc *alloc) {
     struct job *head = zlistx_first (alloc->queue);

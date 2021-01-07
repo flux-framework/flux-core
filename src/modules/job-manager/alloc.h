@@ -52,6 +52,11 @@ struct job *alloc_queue_next (struct alloc *alloc);
  */
 void alloc_queue_reorder (struct alloc *alloc, struct job *job);
 
+/* Re-sort alloc queue.
+ * Recalculate pending jobs if necessary
+ */
+int alloc_queue_reprioritize (struct alloc *alloc);
+
 /* Recalculate pending job, e.g. after urgency change */
 int alloc_queue_recalc_pending (struct alloc *alloc);
 
