@@ -6,9 +6,7 @@ test_description='Test flux job manager job hold (unlimited mode)'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 kvs
-
-SCHED_DUMMY=${FLUX_BUILD_DIR}/t/job-manager/.libs/sched-dummy.so
+test_under_flux 4 job
 
 flux setattr log-stderr-level 1
 
@@ -16,11 +14,12 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
-test_expect_success 'job-manager: load job modules' '
-        flux module load job-manager &&
-        flux module load job-ingest &&
-        flux exec -r all -x 0 flux module load job-ingest &&
-        flux exec -r all flux module load job-info
+test_expect_success 'unload job-exec module to prevent job execution' '
+        flux module remove job-exec
+'
+
+test_expect_success 'job-manager: initially run without scheduler' '
+        flux module unload sched-simple
 '
 
 test_expect_success 'job-manager: submit 5 jobs (job 4 held)' '
@@ -47,8 +46,15 @@ test_expect_success HAVE_JQ 'job-manager: no annotations (SSSSS)' '
         jmgr_check_no_annotations $(cat job5.id)
 '
 
-test_expect_success 'job-manager: load sched-dummy --cores=2' '
-        flux module load ${SCHED_DUMMY} --cores=2 --mode=unlimited
+# --setbit 0x2 enables creation of reason_pending field
+# flux queue stop/start to ensure not raciness with setting up debug bits
+test_expect_success 'job-manager: load sched-simple w/ 2 cores' '
+        flux R encode -r0 -c0-1 >R.test &&
+        flux resource reload R.test &&
+        flux queue stop &&
+        flux module load sched-simple unlimited &&
+        flux module debug --setbit 0x2 sched-simple &&
+        flux queue start
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
@@ -60,8 +66,8 @@ test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: job annotations correct (RRSSS)' '
-        jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
-        jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
+        jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
+        jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
         jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
         jmgr_check_no_annotations $(cat job4.id) &&
@@ -82,8 +88,8 @@ test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: job annotations updated (RRSSS)' '
-        jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
-        jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
+        jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
+        jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
         jmgr_check_no_annotations $(cat job3.id) &&
         jmgr_check_no_annotations $(cat job4.id) &&
         jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
@@ -108,7 +114,7 @@ test_expect_success HAVE_JQ 'job-manager: job annotations updated (IISSR)' '
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_no_annotations $(cat job3.id) &&
         jmgr_check_no_annotations $(cat job4.id) &&
-        jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"1core\""
+        jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"rank0/core0\""
 '
 
 test_expect_success 'job-manager: remove hold on job 3' '
@@ -126,9 +132,9 @@ test_expect_success HAVE_JQ 'job-manager: job state IISSR' '
 test_expect_success HAVE_JQ 'job-manager: job annotations updated (IIRSR)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
-        jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
+        jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
         jmgr_check_no_annotations $(cat job4.id) &&
-        jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"1core\""
+        jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"rank0/core0\""
 '
 
 test_expect_success 'job-manager: remove hold on job 4' '
@@ -146,10 +152,10 @@ test_expect_success HAVE_JQ 'job-manager: job state IIRSR' '
 test_expect_success HAVE_JQ 'job-manager: job annotations updated (IIRSR)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
-        jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
+        jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.jobs_ahead" "0" &&
-        jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"1core\""
+        jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"rank0/core0\""
 '
 
 test_expect_success 'job-manager: cancel job 3' '
@@ -168,23 +174,13 @@ test_expect_success HAVE_JQ 'job-manager: job annotations updated (IISRR)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_no_annotations $(cat job3.id) &&
-        jmgr_check_annotation $(cat job4.id) "sched.resource_summary" "\"1core\"" &&
-        jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"1core\""
+        jmgr_check_annotation $(cat job4.id) "sched.resource_summary" "\"rank0/core1\"" &&
+        jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"rank0/core0\""
 '
 
 test_expect_success 'job-manager: cancel all jobs' '
         flux job cancel $(cat job4.id) &&
         flux job cancel $(cat job5.id)
-'
-
-test_expect_success 'job-manager: remove sched-dummy' '
-        flux module remove sched-dummy
-'
-
-test_expect_success 'job-manager: remove job modules' '
-        flux exec -r all flux module remove job-info &&
-        flux module remove job-manager &&
-        flux exec -r all flux module remove job-ingest
 '
 
 test_done
