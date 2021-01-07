@@ -242,7 +242,7 @@ static int try_free (flux_t *h, struct simple_sched *ss, const char *R)
     char *r = NULL;
     struct rlist *alloc = rlist_from_R (R);
     if (!alloc) {
-        flux_log_error (h, "hello: unable to parse R=%s", R);
+        flux_log_error (h, "free: unable to parse R=%s", R);
         return -1;
     }
     r = rlist_dumps (alloc);
