@@ -92,8 +92,11 @@ jmgr_check_annotation_exists() {
 # arg1 - jobid
 jmgr_check_no_annotations() {
         local id=$(flux job id $1)
-        test ${JMGR_JOB_LIST} | grep ${id} | jq -e .annotations && return 0
-        return 1
+        if ${JMGR_JOB_LIST} | grep ${id} > /dev/null
+        then
+            ${JMGR_JOB_LIST} | grep ${id} | jq -e .annotations > /dev/null && return 1
+        fi
+        return 0
 }
 
 # internal function to get job annotation key value via flux job list
