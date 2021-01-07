@@ -29,7 +29,7 @@ struct cron_task {
 
     int                   rank;   /* rank on which task is being run        */
     pid_t                 pid;    /* remote process id                      */
-    char *                state;  /* state string returned by cmb.exec      */
+    char *                state;  /* state string returned by broker.exec   */
 
     double               timeout;
     flux_watcher_t *   timeout_w;

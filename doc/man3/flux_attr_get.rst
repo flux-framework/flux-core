@@ -24,7 +24,7 @@ DESCRIPTION
 
 Flux broker attributes are both a simple, general-purpose key-value
 store with scope limited to the local broker rank, and a method for the
-broker to export information needed by Flux comms modules and utilities.
+broker to export information needed by Flux services and utilities.
 
 ``flux_attr_get()`` retrieves the value of the attribute *name*.
 

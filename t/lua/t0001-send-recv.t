@@ -17,7 +17,7 @@ is (err, nil, "error is nil")
 --
 
 local packet = { seq = "1", pad = "xxxxxx" }
-local matchtag, err = f:send ("cmb.ping", packet)
+local matchtag, err = f:send ("broker.ping", packet)
 isnt (rc, 0, "send: rc is not 0")
 is (err, nil, "send: err is nil")
 
@@ -25,27 +25,27 @@ is (err, nil, "send: err is nil")
 local msg, tag = f:recv ()
 is (msg.seq, "1", "recv: got expected ping sequence")
 is (msg.pad, "xxxxxx", "recv: got expected ping pad")
-is (tag, "cmb.ping", "recv: got expected tag on ping response")
+is (tag, "broker.ping", "recv: got expected tag on ping response")
 
 for k,v in pairs(msg) do note ("msg."..k.."="..v) end
 
 --
 --  Test f:send() with rank argument
 --
-local rc, err = f:send ("cmb.ping", packet, 0)
+local rc, err = f:send ("broker.ping", packet, 0)
 isnt (rc, 0, "send to rank 0: rc is not nil or zero")
 is (err, nil, "send to rank 0: err is nil")
 
 local msg, tag = f:recv ()
 is (msg.seq, "1", "recv: got expected ping sequence")
 is (msg.pad, "xxxxxx", "recv: got expected ping pad")
-is (tag, "cmb.ping", "recv: got expected tag on ping response")
+is (tag, "broker.ping", "recv: got expected tag on ping response")
 
 
 ---
 ---  Test send with recvmsg()
 ---
-local matchtag, err = f:send ("cmb.ping", packet, 1)
+local matchtag, err = f:send ("broker.ping", packet, 1)
 isnt (rc, 0, "send to rank 1: rc is not nil or zero")
 isnt (rc, nil, "send to rank 1: rc is not nil or zero")
 is (err, nil, "send to rank 1: err is nil")
@@ -56,7 +56,7 @@ is (msg.matchtag, matchtag, "recvmsg: matchtag matches (".. matchtag..")")
 is (msg.errnum, 0, "recvmsg: message errnum is 0")
 is (msg.data.seq, "1", "recv: got expected ping sequence")
 is (msg.data.pad, "xxxxxx", "recv: got expected ping pad")
-is (msg.tag, "cmb.ping", "recv: got expected tag on ping response")
+is (msg.tag, "broker.ping", "recv: got expected tag on ping response")
 
 
 f, err = flux.new ("loop://")

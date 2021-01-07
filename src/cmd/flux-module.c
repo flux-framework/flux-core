@@ -277,7 +277,7 @@ char *getservice (const char *modname)
         char *p = strrchr (service, '.');
         *p = '\0';
     } else
-        service = xstrdup ("cmb");
+        service = xstrdup ("broker");
     return service;
 }
 
@@ -523,7 +523,7 @@ void lsmod_print_list (FILE *f, json_t *o)
  */
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
-    char *service = "cmb";
+    char *service = "broker";
     char *topic;
     flux_future_t *f;
     flux_t *h;
@@ -613,7 +613,7 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
-    service = n < argc ? argv[n++] : "cmb";
+    service = n < argc ? argv[n++] : "broker";
     nodeid = FLUX_NODEID_ANY;
 
     if (!(h = flux_open (NULL, 0)))

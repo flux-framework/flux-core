@@ -20,7 +20,7 @@ is (f.arity, 2, "session arity is 2")
 --  Use 'ping' packet to test rpc
 --
 local packet = { seq = "1", pad = "xxxxxx" }
-local msg, err = f:rpc ("cmb.ping", packet)
+local msg, err = f:rpc ("broker.ping", packet)
 type_ok (msg, 'table', "rpc: return type is table")
 is (err, nil, "rpc: err is nil")
 is (msg.seq, "1", "recv: got expected ping sequence")
@@ -30,7 +30,7 @@ is (msg.pad, "xxxxxx", "recv: got expected ping pad")
 --  Send invalid 'ping' packet to test response
 --
 local packet = { 1, 2, 3 }  -- Force encoding to be 'array'
-local msg, err = f:rpc ("cmb.ping", packet)
+local msg, err = f:rpc ("broker.ping", packet)
 is (msg, nil, "rpc: invalid packet: nil response indicates error")
 is (err, "Invalid argument", "rpc: invalid packet: err is 'Invalid argument'")
 
@@ -38,7 +38,7 @@ is (err, "Invalid argument", "rpc: invalid packet: err is 'Invalid argument'")
 -- 'ping' to specfic rank
 --
 local packet = { seq = "1", pad = "xxxxxx" }
-local msg, err = f:rpc ("cmb.ping", packet, 1)
+local msg, err = f:rpc ("broker.ping", packet, 1)
 type_ok (msg, 'table', "rpc: return type is table")
 is (err, nil, "rpc: err is nil")
 is (msg.seq, "1", "recv: got expected ping sequence")
@@ -50,7 +50,7 @@ is (msg.errnum, nil, "recv: errnum is zero")
 --
 note ("ping to non-existent rank")
 local packet = { seq = "1", pad = "xxxxxx" }
-local msg, err = f:rpc ("cmb.ping", packet, 99)
+local msg, err = f:rpc ("broker.ping", packet, 99)
 is (msg, nil, "rpc: nil return indicates error")
 is (err, "No route to host", "rpc: err is 'No route to host'")
 

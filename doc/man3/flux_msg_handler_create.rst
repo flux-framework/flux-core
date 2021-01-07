@@ -84,13 +84,16 @@ stopping it.
 CAVEATS
 =======
 
-FLUX_MSGTYPE_EVENT messages are received on the handle only as
-requested by ``flux_event_subscribe(3)``.
+Although it is possible to register a message handler in a given `flux_t`
+handle for any topic string, ``flux-broker(1)`` does not automatically route
+matching requests or events to the handle.
 
-``flux-broker(1)`` only routes FLUX_MSGTYPE_REQUEST messages to comms
-modules according to their registered service name, which is the same as
-the module name. Other handle instances such as those on the local connector
-cannot yet receive requests.
+Requests are only routed if the handle has registered a matching service
+with ``flux_service_register(3)``, or for broker modules only, the service
+matches the module name.
+
+Events are only routed if the topic matches a subscription registered
+with ``flux_event_subscribe(3)``.
 
 
 RETURN VALUE

@@ -17,10 +17,10 @@ DESCRIPTION
 ===========
 
 ``flux_get_rank()`` and ``flux_get_size()`` ask the
-Flux broker for its rank in the comms session, and the size of the comms
-session.
+Flux broker for its rank in the Flux instance, and the size of the Flux
+instance.
 
-Session ranks are numbered 0 through size - 1.
+Ranks are numbered 0 through size - 1.
 
 
 RETURN VALUE

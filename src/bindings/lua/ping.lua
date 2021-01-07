@@ -11,7 +11,7 @@
 -------------------------------------------------------------
 
  --
- -- ping.lua: Example script implementing cmb 'ping' client using
+ -- ping.lua: Example script implementing broker 'ping' client using
  --  Lua bindings for Flux.
  --
 local sleep = require 'flux.posix'.sleep

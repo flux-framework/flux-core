@@ -22,7 +22,7 @@
 #include "zmsg-lua.h"
 
 /*
- *  cmb ZMSG lua binding
+ *  broker ZMSG lua binding
  */
 
 struct zmsg_info {

@@ -374,7 +374,7 @@ test_expect_success 'reactor: reactorcat example program works' '
 test_expect_success 'create panic script' '
 	cat >panic.sh <<-EOT &&
 	#!/bin/sh
-	echo "{\"reason\":\"fubar\", \"flags\":0}" | $RPC cmb.panic
+	echo "{\"reason\":\"fubar\", \"flags\":0}" | $RPC broker.panic
 	exit 0
 	EOT
 	chmod +x panic.sh

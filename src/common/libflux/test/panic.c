@@ -41,7 +41,7 @@ int main (int argc, char *argv[])
     ok (flux_request_unpack (msg, &topic, "{s:s s:i}",
                              "reason", &reason, "flags", &flags) == 0,
         "flux_request_unpack worked on panic request");
-    ok (topic != NULL && !strcmp (topic, "cmb.panic"),
+    ok (topic != NULL && !strcmp (topic, "broker.panic"),
         "topic string is correct");
     ok (!strcmp (reason, "fubar"),
         "reason is correct");

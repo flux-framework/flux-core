@@ -42,7 +42,7 @@ class TestWrapper(unittest.TestCase):
     def test_null_handle_exception(self):
         f = flux.Flux()
         payload = {"seq": 1, "pad": "stuff"}
-        future = f.rpc("cmb.ping", payload)
+        future = f.rpc("broker.ping", payload)
         resp = future.get()
         future.pimpl.handle = None
         with six.assertRaisesRegex(

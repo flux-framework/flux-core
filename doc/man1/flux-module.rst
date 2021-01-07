@@ -121,7 +121,7 @@ SHA1 hash) module loaded by a service.
    the module .so file.
 
 **Idle**
-   Idle times are defined for flux-broker(1) comms modules as the number of
+   Idle times are defined for flux-broker(1) modules as the number of
    heartbeats since the module last sent a request or response message.
    The idle time may be defined differently for other services, or have no
    meaning.

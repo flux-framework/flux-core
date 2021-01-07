@@ -11,9 +11,6 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS)
 
-#
-# Comms module
-#
 fluxmod_LTLIBRARIES = cron.la
 
 cron_la_SOURCES = \

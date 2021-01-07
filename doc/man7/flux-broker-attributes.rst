@@ -20,7 +20,7 @@ rank
    The rank of the local broker.
 
 size
-   The number of ranks in the comms session.
+   The number of broker ranks in the flux instance
 
 rundir
    A global, shared temporary directory available for scratch storage

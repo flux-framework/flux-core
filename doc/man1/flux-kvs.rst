@@ -24,7 +24,7 @@ hierarchical, using "." as a path separator, analogous to "/"
 separated UNIX file paths. A single "." represents the root directory
 of the KVS.
 
-The KVS is distributed among the ranks of a comms session. Rank 0
+The KVS is distributed among the broker ranks of a Flux instance. Rank 0
 is the leader, and other ranks are caching followers. All writes are flushed
 to the leader during a commit operation. Data is stored in a hash tree
 such that every commit results in a new root hash. Each new root hash
@@ -154,8 +154,8 @@ COMMANDS
 
 **dropcache** [--all]
    Tell the local KVS to drop any cache it is holding. If *--all* is
-   specified, send an event across the comms session instructing all KVS
-   instances to drop their caches.
+   specified, send an event across the Flux instance instructing all KVS
+   modules to drop their caches.
 
 **version** [-N ns]
    Display the current KVS version, an integer value. The version starts

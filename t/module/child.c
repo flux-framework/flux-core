@@ -24,7 +24,7 @@ int mod_main (void *ctx, int argc, char *argv[])
     return 0;
 }
 
-/* This dso extends a comms module named "parent".
+/* This dso extends a module named "parent".
  */
 MOD_NAME ("parent.child");
 

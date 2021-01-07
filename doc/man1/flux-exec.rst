@@ -13,7 +13,7 @@ DESCRIPTION
 ===========
 
 flux-exec(1) runs commands across one or more flux-broker ranks using
-the *cmb.exec* service. The commands are executed as direct children
+the *broker.exec* service. The commands are executed as direct children
 of the broker, and the broker handles buffering stdout and stderr and
 sends the output back to flux-exec(1) which copies output to its own
 stdout and stderr.

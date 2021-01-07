@@ -56,7 +56,7 @@ Sub-command search path
         [getenv FLUX_EXEC_PATH]
 
 setenv FLUX_MODULE_PATH
-   Set up broker comms module search path according to:
+   Set up broker module search path according to:
 
    ::
 

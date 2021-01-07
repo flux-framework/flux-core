@@ -73,7 +73,7 @@ test_expect_success 'ssh:// cannot register a service with method (EINVAL)' "
 
 test_expect_success 'ssh:// cannot shadow a broker service (EEXIST)' "
 	FLUX_URI=ssh://localhost$TEST_SOCKDIR FLUX_SSH=$TEST_SSH \
-	  echo '{\"service\":\"cmb\"}' >service4.add.in &&
+	  echo '{\"service\":\"broker\"}' >service4.add.in &&
 	  $RPC service.add 17 <service4.add.in
 "
 

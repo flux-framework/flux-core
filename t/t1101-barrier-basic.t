@@ -3,7 +3,7 @@
 
 test_description='Test basic barrier usage in flux session
 
-Verify basic barrier operations against a running flux comms session.
+Verify basic barrier operations against a running flux instance.
 This test script verifies operation of barriers and should be run
 before other tests that depend on barriers.
 '
