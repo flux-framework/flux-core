@@ -16,7 +16,7 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
-test_expect_success 'job-manager: load job-ingest, job-manager' '
+test_expect_success 'job-manager: load job modules' '
         flux module load job-manager &&
         flux module load job-ingest &&
         flux exec -r all -x 0 flux module load job-ingest &&
@@ -59,7 +59,7 @@ test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
         jmgr_check_state $(cat job5.id) S
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate job id 3 (RRSSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs (RRSSS)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores available\"" &&
@@ -67,7 +67,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 3 (RRSSS)' '
         jmgr_check_no_annotations $(cat job5.id)
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate job id 3 in job-info (RRSSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-info (RRSSS)' '
         jinfo_check_no_annotations $(cat job1.id) &&
         jinfo_check_no_annotations $(cat job2.id) &&
         jinfo_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores available\"" &&
@@ -75,7 +75,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 3 in job-info (RRSSS)'
         jinfo_check_no_annotations $(cat job5.id)
 '
 
-test_expect_success 'job-manager: annotate job id 3 in flux-jobs (RRSSS)' '
+test_expect_success 'job-manager: annotate jobs in flux-jobs (RRSSS)' '
         fjobs_check_no_annotations $(cat job1.id) &&
         fjobs_check_no_annotations $(cat job2.id) &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.reason_pending" "no cores available" &&
@@ -99,7 +99,7 @@ test_expect_success HAVE_JQ 'job-manager: job state RIRSS' '
         jmgr_check_state $(cat job5.id) S
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate job id 4 (RIRSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs (RIRSS)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_no_annotations $(cat job3.id) &&
@@ -107,7 +107,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 4 (RIRSS)' '
         jmgr_check_no_annotations $(cat job5.id)
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate job id 4 in job-info (RIRSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-info (RIRSS)' '
         jinfo_check_no_annotations $(cat job1.id) &&
         jinfo_check_no_annotations $(cat job2.id) &&
         jinfo_check_no_annotations $(cat job3.id) &&
@@ -115,7 +115,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 4 in job-info (RIRSS)'
         jinfo_check_no_annotations $(cat job5.id)
 '
 
-test_expect_success 'job-manager: annotate job id 4 in flux jobs (RRSSS)' '
+test_expect_success 'job-manager: annotate jobs in flux jobs (RIRSS)' '
         fjobs_check_no_annotations $(cat job1.id) &&
         fjobs_check_no_annotations $(cat job2.id) &&
         fjobs_check_no_annotations $(cat job3.id) &&
@@ -247,7 +247,7 @@ test_expect_success 'job-manager: remove sched-dummy' '
         flux module remove sched-dummy
 '
 
-test_expect_success 'job-manager: remove job-manager, job-ingest' '
+test_expect_success 'job-manager: remove job modules' '
         flux module remove job-info &&
         flux module remove job-manager &&
         flux exec -r all flux module remove job-ingest

@@ -16,7 +16,7 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
-test_expect_success 'job-manager: load job-ingest, job-manager' '
+test_expect_success 'job-manager: load job modules' '
         flux module load job-manager &&
         flux module load job-ingest &&
         flux exec -r all -x 0 flux module load job-ingest &&
@@ -181,7 +181,7 @@ test_expect_success 'job-manager: remove sched-dummy' '
         flux module remove sched-dummy
 '
 
-test_expect_success 'job-manager: remove job-info, job-manager, job-ingest' '
+test_expect_success 'job-manager: remove job modules' '
         flux exec -r all flux module remove job-info &&
         flux module remove job-manager &&
         flux exec -r all flux module remove job-ingest

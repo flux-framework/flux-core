@@ -16,7 +16,7 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
-test_expect_success 'job-manager: load job-ingest, job-manager' '
+test_expect_success 'job-manager: load job modules' '
         flux module load job-manager &&
         flux module load job-ingest &&
         flux exec -r all -x 0 flux module load job-ingest &&
@@ -59,7 +59,7 @@ test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
         jmgr_check_state $(cat job5.id) S
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate job id 3-5 (RRSSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs (RRSSS)' '
         jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores\"" &&
@@ -70,7 +70,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 3-5 (RRSSS)' '
         jmgr_check_annotation $(cat job5.id) "sched.jobs_ahead" "2"
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate job id 3-5 in job-info (RRSSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs job-info (RRSSS)' '
         jinfo_check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
         jinfo_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
         jinfo_check_annotation $(cat job3.id) "sched.reason_pending" "\"no cores\"" &&
@@ -81,7 +81,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 3-5 in job-info (RRSSS
         jinfo_check_annotation $(cat job5.id) "sched.jobs_ahead" "2"
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate job id 3-5 in flux-jobs (RRSSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs in flux-jobs (RRSSS)' '
         fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "1core" &&
         fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "1core" &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.reason_pending" "no cores" &&
@@ -104,7 +104,7 @@ test_expect_success HAVE_JQ 'job-manager: job state RIRSS' '
         jmgr_check_state $(cat job5.id) S
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 (RIRSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs (RIRSS)' '
         jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
@@ -118,7 +118,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 (RIRSS)' '
 
 # compared to above, note that job id #2 retains annotations, it is
 # cached in job-info
-test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 in job-info (RIRSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-info (RIRSS)' '
         jinfo_check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
         jinfo_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
         jinfo_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
@@ -132,7 +132,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 in job-info (RIRSS
 
 # compared to above, note that job id #2 retains annotations, it is
 # cached in job-info
-test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 in flux-jobs (RIRSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs in flux-jobs (RIRSS)' '
         fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "1core" &&
         fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "1core" &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.resource_summary" "1core" &&
@@ -156,7 +156,7 @@ test_expect_success HAVE_JQ 'job-manager: job state RIRSI' '
         jmgr_check_state $(cat job5.id) I
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate job id 4 (RIRSI)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs (RIRSI)' '
         jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
@@ -169,7 +169,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 4 (RIRSI)' '
 
 # compared to above, note that job id #2 retains annotations, it is
 # cached in job-info
-test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 in job-info (RIRSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-info (RIRSS)' '
         jinfo_check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
         jinfo_check_annotation $(cat job2.id) "sched.resource_summary" "\"1core\"" &&
         jinfo_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
@@ -182,7 +182,7 @@ test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 in job-info (RIRSS
 
 # compared to above, note that job id #2 retains annotations, it is
 # cached in job-info
-test_expect_success HAVE_JQ 'job-manager: annotate job id 4-5 in flux jobs (RIRSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs in flux jobs (RIRSS)' '
         fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "1core" &&
         fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "1core" &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.resource_summary" "1core" &&
@@ -238,7 +238,7 @@ test_expect_success 'job-manager: remove sched-dummy' '
         flux module remove sched-dummy
 '
 
-test_expect_success 'job-manager: remove job-info, job-manager, job-ingest' '
+test_expect_success 'job-manager: remove job modules' '
         flux exec -r all flux module remove job-info &&
         flux module remove job-manager &&
         flux exec -r all flux module remove job-ingest

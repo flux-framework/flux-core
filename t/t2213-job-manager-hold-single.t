@@ -16,7 +16,7 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
-test_expect_success 'job-manager: load job-ingest, job-manager' '
+test_expect_success 'job-manager: load job modules' '
         flux module load job-manager &&
         flux module load job-ingest &&
         flux exec -r all -x 0 flux module load job-ingest &&
@@ -51,7 +51,7 @@ test_expect_success 'job-manager: load sched-dummy --cores=1' '
         flux module load ${SCHED_DUMMY} --cores=1
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state RSSS' '
+test_expect_success HAVE_JQ 'job-manager: job state RSSSS' '
         jmgr_check_state $(cat job1.id) R &&
         jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) S &&
@@ -164,7 +164,7 @@ test_expect_success 'job-manager: remove sched-dummy' '
         flux module remove sched-dummy
 '
 
-test_expect_success 'job-manager: remove job-manager, job-ingest' '
+test_expect_success 'job-manager: remove job modules' '
         flux module remove job-info &&
         flux module remove job-manager &&
         flux exec -r all flux module remove job-ingest
