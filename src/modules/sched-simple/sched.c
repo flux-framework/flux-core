@@ -21,6 +21,12 @@
 #include "src/common/librlist/rlist.h"
 #include "libjj.h"
 
+// e.g. flux module debug --setbit 0x1 sched-simple
+// e.g. flux module debug --clearbit 0x1 sched-simple
+enum module_debug_flags {
+    DEBUG_FAIL_ALLOC = 1, // while set, alloc requests fail
+};
+
 struct jobreq {
     void *handle;
     const flux_msg_t *msg;
@@ -162,12 +168,17 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     char *R = NULL;
     struct jobreq *job = zlistx_first (ss->queue);
     double now = flux_reactor_now (flux_get_reactor (h));
+    bool fail_alloc = flux_module_debug_test (h, DEBUG_FAIL_ALLOC, false);
 
     if (!job)
         return -1;
+
     jj = &job->jj;
-    alloc = rlist_alloc (ss->rlist, ss->mode,
-                         jj->nnodes, jj->nslots, jj->slot_size);
+    if (!fail_alloc) {
+        errno = 0;
+        alloc = rlist_alloc (ss->rlist, ss->mode,
+                             jj->nnodes, jj->nslots, jj->slot_size);
+    }
     if (!alloc || !(R = Rstring_create (alloc, now, jj->duration))) {
         const char *note = "unable to allocate provided jobspec";
         if (alloc != NULL) {
@@ -182,6 +193,8 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
             return rc;
         else if (errno == EOVERFLOW)
             note = "unsatisfiable request";
+        else if (fail_alloc)
+            note = "DEBUG_FAIL_ALLOC";
         if (schedutil_alloc_respond_deny (ss->util_ctx,
                                           job->msg,
                                           note) < 0)
