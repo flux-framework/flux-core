@@ -17,6 +17,13 @@
 extern "C" {
 #endif
 
+enum {
+    FLUX_PLUGIN_RTLD_LAZY =      1,  /* Lazy function binding                */
+    FLUX_PLUGIN_RTLD_NOW =       2,  /* Immediate function binding           */
+    FLUX_PLUGIN_RTLD_GLOBAL =    4,  /* Load with RTLD_GLOBAL                */
+    FLUX_PLUGIN_RTLD_DEEPBIND =  8,  /* Load with RTLD_DEEPBIND if available */
+};
+
 typedef struct flux_plugin flux_plugin_t;
 typedef struct flux_plugin_arg flux_plugin_arg_t;
 
@@ -37,6 +44,11 @@ struct flux_plugin_handler {
  */
 flux_plugin_t * flux_plugin_create (void);
 void flux_plugin_destroy (flux_plugin_t *p);
+
+/*  Get and set plugin flags. Flags currently only apply to load_dso()
+ */
+int flux_plugin_get_flags (flux_plugin_t *p);
+int flux_plugin_set_flags (flux_plugin_t *p, int flags);
 
 /*  Returns the last error from a plugin. Only valid if
  *   the last call returned an error.

@@ -33,6 +33,7 @@ struct flux_plugin {
     struct aux_item *aux;
     void *dso;
     zlistx_t *handlers;
+    int flags;
     char last_error [128];
 };
 
@@ -149,8 +150,37 @@ flux_plugin_t *flux_plugin_create (void)
         flux_plugin_destroy (p);
         return NULL;
     }
+    p->flags = FLUX_PLUGIN_RTLD_LAZY;
     zlistx_set_destructor (p->handlers, handler_free);
     return p;
+}
+
+static int flags_invalid (int flags)
+{
+    const int valid_flags =
+        FLUX_PLUGIN_RTLD_LAZY
+        | FLUX_PLUGIN_RTLD_NOW
+        | FLUX_PLUGIN_RTLD_GLOBAL
+        | FLUX_PLUGIN_RTLD_DEEPBIND;
+    return (flags & ~valid_flags);
+}
+
+int flux_plugin_set_flags (flux_plugin_t *p, int flags)
+{
+    if (!p || flags_invalid (flags)) {
+        errno = EINVAL;
+        return -1;
+    }
+    p->flags = flags;
+    return 0;
+}
+
+int flux_plugin_get_flags (flux_plugin_t *p)
+{
+    if (p) {
+        return p->flags;
+    }
+    return 0;
 }
 
 int flux_plugin_set_name (flux_plugin_t *p, const char *name)
@@ -192,6 +222,22 @@ const char *flux_plugin_strerror (flux_plugin_t *p)
     return p->last_error;
 }
 
+static int open_flags (flux_plugin_t *p)
+{
+    int flags = 0;
+    if ((p->flags & FLUX_PLUGIN_RTLD_LAZY))
+        flags |= RTLD_LAZY;
+    if ((p->flags & FLUX_PLUGIN_RTLD_NOW))
+        flags |= RTLD_NOW;
+    if ((p->flags & FLUX_PLUGIN_RTLD_GLOBAL))
+        flags |= RTLD_GLOBAL;
+    else
+        flags |= RTLD_LOCAL;
+    if ((p->flags & FLUX_PLUGIN_RTLD_DEEPBIND))
+        flags |= FLUX_DEEPBIND;
+    return flags;
+}
+
 int flux_plugin_load_dso (flux_plugin_t *p, const char *path)
 {
     flux_plugin_init_f init;
@@ -201,7 +247,7 @@ int flux_plugin_load_dso (flux_plugin_t *p, const char *path)
     if (access (path, R_OK) < 0)
         return plugin_seterror (p, errno, "%s: %s", path, strerror (errno));
     dlerror ();
-    if (!(p->dso = dlopen (path, RTLD_LAZY|RTLD_LOCAL|FLUX_DEEPBIND)))
+    if (!(p->dso = dlopen (path, open_flags (p))))
         return plugin_seterror (p, errno, "dlopen: %s", dlerror ());
 
     free (p->path);
