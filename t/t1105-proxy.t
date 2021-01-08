@@ -68,4 +68,17 @@ test_expect_success 'flux-proxy fails with unknown URI path (ENOENT)' '
 	grep "No such file or directory" badpath.err
 '
 
+test_expect_success 'flux-proxy forwards LD_LIBRARY_PATH' '
+	cat >proxinator.sh <<-EOF &&
+	#!/bin/sh
+	echo ssh "\$@" > proxinator.log
+	EOF
+	chmod +x proxinator.sh &&
+	(export LD_LIBRARY_PATH=/foo &&
+		export FLUX_SSH=./proxinator.sh &&
+		test_must_fail flux proxy ssh://hostname/baz/local) &&
+	test_debug "cat ./proxinator.log" &&
+	grep -E "ssh.* LD_LIBRARY_PATH=[^ ]*:?/foo .*/flux relay" ./proxinator.log
+'
+
 test_done
