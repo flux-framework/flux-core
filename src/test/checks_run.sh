@@ -177,7 +177,7 @@ checks_group "configure ${ARGS}"  /usr/src/configure ${ARGS} \
 	|| (printf "::error::configure failed\n"; cat config.log; exit 1)
 checks_group "make clean..." make clean
 
-if test "$POISON" = "t" -a test "$PROJECT" = "flux-core"; then
+if test "$POISON" = "t" -a "$PROJECT" = "flux-core"; then
   checks_group "Installing poison libflux..." \
     bash src/test/docker/poison-libflux.sh
 fi
