@@ -101,8 +101,8 @@ TESTSCRIPTS = \
 	t2200-job-ingest.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
-	t2203-job-manager-dummysched-single.t \
-	t2204-job-manager-dummysched-unlimited.t \
+	t2203-job-manager-single.t \
+	t2204-job-manager-unlimited.t \
 	t2205-job-manager-annotate.t \
 	t2206-job-manager-bulk-state.t \
 	t2207-job-manager-wait.t \
