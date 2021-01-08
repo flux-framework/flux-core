@@ -60,7 +60,7 @@ test_expect_success HAVE_JQ 'job-manager: job state RSSSS' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotations job 3 pending, job 2 held (RSSS)' '
-        jmgr_check_no_annotations $(cat job1.id) &&
+        jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_no_annotations $(cat job4.id) &&
@@ -86,7 +86,7 @@ test_expect_success HAVE_JQ 'job-manager: job state ISRSS (job 3 run, job 2 held
 test_expect_success HAVE_JQ 'job-manager: annotations job 5 pending (job 2/4 held)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
-        jmgr_check_no_annotations $(cat job3.id) &&
+        jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_no_annotations $(cat job4.id) &&
         jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\""
 '
@@ -98,7 +98,7 @@ test_expect_success 'job-manager: job 4 release (higher urgency)' '
 test_expect_success HAVE_JQ 'job-manager: annotations job 4 pending' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
-        jmgr_check_no_annotations $(cat job3.id) &&
+        jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_no_annotations $(cat job5.id)
 '
@@ -119,7 +119,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations job 5 pending (job 2 held)
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_no_annotations $(cat job3.id) &&
-        jmgr_check_no_annotations $(cat job4.id) &&
+        jmgr_check_annotation $(cat job4.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\""
 '
 
@@ -140,7 +140,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations no job pending (job 2 held
         jmgr_check_no_annotations $(cat job2.id) &&
         jmgr_check_no_annotations $(cat job3.id) &&
         jmgr_check_no_annotations $(cat job4.id) &&
-        jmgr_check_no_annotations $(cat job5.id)
+        jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"1core\""
 '
 
 test_expect_success 'job-manager: job 2 release' '
@@ -152,7 +152,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations job 2 pending' '
         jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_no_annotations $(cat job3.id) &&
         jmgr_check_no_annotations $(cat job4.id) &&
-        jmgr_check_no_annotations $(cat job5.id)
+        jmgr_check_annotation $(cat job5.id) "sched.resource_summary" "\"1core\""
 '
 
 test_expect_success 'job-manager: cancel remaining jobs' '

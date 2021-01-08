@@ -131,8 +131,10 @@ static void respond_success_single (struct sched_ctx *sc,
     if (schedutil_alloc_respond_success_pack (sc->schedutil_ctx,
                                               job->msg,
                                               "1core",
-                                              "{ s:{s:n} }",
-                                              "sched", "reason_pending") < 0)
+                                              "{ s:{s:s s:n} }",
+                                              "sched",
+                                              "resource_summary", "1core",
+                                              "reason_pending") < 0)
         flux_log_error (sc->h, "schedutil_alloc_respond_success_pack");
 }
 
