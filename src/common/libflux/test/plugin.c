@@ -69,6 +69,13 @@ void test_invalid_args ()
     ok (flux_plugin_get_name (NULL) == NULL && errno == EINVAL,
         "flux_plugin_get_name (NULL) returns EINVAL");
 
+    ok (flux_plugin_get_flags (NULL) == 0,
+        "flux_plugin_get_flags (NULL) returns 0");
+    ok (flux_plugin_set_flags (NULL, 0) < 0 && errno == EINVAL,
+        "flux_plugin_set_flags (NULL, 0) returns EINVAL");
+    ok (flux_plugin_set_flags (p, 1024) < 0 && errno == EINVAL,
+        "flux_plugin_set_flags with invalid flags returns EINVAL");
+
     ok (flux_plugin_set_conf (NULL, NULL) < 0 && errno == EINVAL,
         "flux_plugin_set_conf (NULL, NULL) returns EINVAL");
     ok (flux_plugin_set_conf (p, NULL) < 0 && errno == EINVAL,
@@ -440,6 +447,23 @@ void test_load ()
     flux_plugin_destroy (p);
 }
 
+void test_load_rtld_now ()
+{
+    flux_plugin_t *p = flux_plugin_create ();
+    if (!p)
+        BAIL_OUT ("flux_plugin_create");
+
+    ok (flux_plugin_set_flags (p, FLUX_PLUGIN_RTLD_NOW) == 0,
+        "flux_plugin_set_flags (p, RTLD_NOW) == 0");
+    ok (flux_plugin_load_dso (p, "test/.libs/plugin_bar.so") < 0,
+        "load of plugin with invalid symbol fails immediately");
+    like (flux_plugin_strerror (p), "^dlopen: .*: undefined symbol",
+        "got expected error message: %s", flux_plugin_strerror (p));
+
+    flux_plugin_destroy (p);
+}
+
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -448,6 +472,7 @@ int main (int argc, char *argv[])
     test_basic ();
     test_register ();
     test_load ();
+    test_load_rtld_now ();
     done_testing();
     return (0);
 }

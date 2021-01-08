@@ -179,7 +179,8 @@ test_cppflags = \
 check_LTLIBRARIES = \
 	test/module_fake1.la \
 	test/module_fake2.la \
-	test/plugin_foo.la
+	test/plugin_foo.la \
+	test/plugin_bar.la
 
 
 check_PROGRAMS = $(TESTS)
@@ -294,3 +295,8 @@ test_plugin_foo_la_SOURCES = test/plugin_foo.c
 test_plugin_foo_la_CPPFLAGS = $(test_cppflags)
 test_plugin_foo_la_LDFLAGS = -module -rpath /nowhere
 test_plugin_foo_la_LIBADD = $(test_ldadd) $(LIBDL)
+
+test_plugin_bar_la_SOURCES = test/plugin_bar.c
+test_plugin_bar_la_CPPFLAGS = $(test_cppflags)
+test_plugin_bar_la_LDFLAGS = -module -rpath /nowhere
+test_plugin_bar_la_LIBADD = $(test_ldadd) $(LIBDL)
