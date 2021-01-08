@@ -315,7 +315,6 @@ check_LTLIBRARIES = \
 	module/running.la \
 	request/req.la \
 	ingest/job-manager-dummy.la \
-	job-manager/sched-dummy.la \
 	disconnect/watcher.la \
 	shell/plugins/dummy.la \
 	shell/plugins/conftest.la \
@@ -567,13 +566,6 @@ job_manager_list_jobs_LDADD = \
 job_manager_events_journal_stream_SOURCES = job-manager/events_journal_stream.c
 job_manager_events_journal_stream_CPPFLAGS = $(test_cppflags)
 job_manager_events_journal_stream_LDADD = \
-	$(test_ldadd) $(LIBDL)
-
-job_manager_sched_dummy_la_SOURCES = job-manager/sched-dummy.c
-job_manager_sched_dummy_la_CPPFLAGS = $(test_cppflags)
-job_manager_sched_dummy_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
-job_manager_sched_dummy_la_LIBADD = \
-	$(top_builddir)/src/common/libschedutil/libschedutil.la \
 	$(test_ldadd) $(LIBDL)
 
 disconnect_watcher_la_SOURCES = disconnect/watcher.c
