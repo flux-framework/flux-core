@@ -88,8 +88,8 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs (SSRRI)' '
         jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"no cores\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.jobs_ahead" "1" &&
         jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"1core\"" &&
-        test_must_fail jmgr_check_annotation_exists $(cat job4.id) "sched.reason_pending" &&
-        test_must_fail jmgr_check_annotation_exists $(cat job4.id) "sched.jobs_ahead" &&
+        test_must_fail jmgr_check_annotation_exists $(cat job3.id) "sched.reason_pending" &&
+        test_must_fail jmgr_check_annotation_exists $(cat job3.id) "sched.jobs_ahead" &&
         jmgr_check_annotation $(cat job4.id) "sched.resource_summary" "\"1core\"" &&
         jmgr_check_no_annotations $(cat job5.id)
 '
