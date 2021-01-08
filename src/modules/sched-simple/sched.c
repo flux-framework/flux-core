@@ -359,7 +359,7 @@ void prioritize_cb (flux_t *h, flux_msg_handler_t *mh,
             job->priority = priority;
             zlistx_reorder (ss->queue, job->handle, true);
         }
-     }
+    }
 
     return;
 
