@@ -63,7 +63,11 @@ libjob_manager_la_SOURCES = \
 fluxinclude_HEADERS = \
 	jobtap.h
 
-job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module
+job_manager_la_LDFLAGS = \
+	$(fluxlib_ldflags) \
+	-export-symbols-regex \
+	'^(flux_jobtap.*|mod_name|mod_service|mod_main)$$' \
+	-module
 job_manager_la_LIBADD = \
 	libjob-manager.la \
 	$(fluxmod_libadd) \
