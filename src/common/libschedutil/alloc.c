@@ -18,24 +18,6 @@
 #include "init.h"
 #include "alloc.h"
 
-int schedutil_alloc_request_decode (const flux_msg_t *msg,
-                                    flux_jobid_t *id,
-                                    unsigned int *priority,
-                                    uint32_t *userid,
-                                    double *t_submit)
-{
-    json_int_t tmp;
-    int rc;
-    rc = flux_request_unpack (msg, NULL, "{s:I s:I s:i s:f}",
-                                         "id", id,
-                                         "priority", &tmp,
-                                         "userid", userid,
-                                         "t_submit", t_submit);
-    if (!rc && priority)
-        (*priority) = tmp;
-    return rc;
-}
-
 static int schedutil_alloc_respond (flux_t *h, const flux_msg_t *msg,
                                     int type, const char *note,
                                     json_t *annotations)

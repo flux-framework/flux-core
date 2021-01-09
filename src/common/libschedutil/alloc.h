@@ -27,15 +27,6 @@ enum {
     FLUX_SCHED_ALLOC_CANCEL   = 3,
 };
 
-/* Decode an alloc request message.
- * Return 0 on success, -1 on error with errno set.
- */
-int schedutil_alloc_request_decode (const flux_msg_t *msg,
-                                    flux_jobid_t *id,
-                                    unsigned int *priority,
-                                    uint32_t *userid,
-                                    double *t_submit);
-
 /* Respond to alloc request message - update annotation.
  * A job's annotation may be updated any number of times before alloc request
  * is finally terminated with alloc_respond_deny() or alloc_respond_success().

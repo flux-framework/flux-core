@@ -101,11 +101,12 @@ jobreq_create (const flux_msg_t *msg, const char *jobspec)
 
     if (job == NULL)
         return NULL;
-    if (schedutil_alloc_request_decode (msg,
-                                        &job->id,
-                                        &job->priority,
-                                        &job->uid,
-                                        &job->t_submit) < 0)
+
+    if (flux_msg_unpack (msg, "{s:I s:i s:i s:f}",
+                         "id", &job->id,
+                         "priority", &job->priority,
+                         "userid", &job->uid,
+                         "t_submit", &job->t_submit) < 0)
         goto err;
     job->msg = flux_msg_incref (msg);
     if (libjj_get_counts (jobspec, &job->jj) < 0)

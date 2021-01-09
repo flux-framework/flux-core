@@ -34,10 +34,10 @@ struct schedutil_ops {
                  void *arg);
 
     /* Callback for an alloc request.  jobspec is looked up as a
-     * convenience.  Decode msg with schedutil_alloc_request_decode().
-     * 'msg' and 'jobspec' are only valid for the duration of this
-     * call.  You should either respond to the request immediately
-     * (see alloc.h), or cache this information for later response.
+     * convenience.  'msg' and 'jobspec' are only valid for the
+     * duration of this call.  You should either respond to the
+     * request immediately (see alloc.h), or cache this information
+     * for later response.
      */
     void (*alloc)(flux_t *h,
                   const flux_msg_t *msg,
@@ -45,10 +45,9 @@ struct schedutil_ops {
                   void *arg);
 
     /* Callback for a free request.  R is looked up as a convenience.
-     * Decode msg with schedutil_free_request_decode().  'msg' and 'R'
-     * are only valid for the duration of this call.  You should
-     * either respond to the request immediately (see free.h), or
-     * cache this information for later response.
+     * 'msg' and 'R' are only valid for the duration of this call.
+     * You should either respond to the request immediately (see
+     * free.h), or cache this information for later response.
      */
     void (*free)(flux_t *h,
                  const flux_msg_t *msg,
