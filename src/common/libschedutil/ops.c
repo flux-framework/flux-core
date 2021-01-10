@@ -27,10 +27,7 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *o;
     char *jobspec;
 
-    if (util == NULL) {
-        errno = EINVAL;
-        goto error;
-    }
+    assert (util);
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -56,6 +53,8 @@ static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     schedutil_t *util = arg;
     flux_jobid_t id;
+
+    assert (util);
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0) {
         flux_log_error (h, "sched.cancel");
@@ -94,6 +93,8 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_jobid_t id;
     flux_future_t *f;
     char key[64];
+
+    assert (util);
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         goto error;
