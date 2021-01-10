@@ -357,13 +357,19 @@ err:
  * and "dequeue" it.
  */
 static void cancel_cb (flux_t *h,
-                       flux_jobid_t id,
+                       const flux_msg_t *msg,
                        void *arg)
 {
     struct simple_sched *ss = arg;
-    struct jobreq *job = jobreq_find (ss, id);
+    flux_jobid_t id;
+    struct jobreq *job;
 
-    if (job) {
+    if (flux_msg_unpack (msg, "{s:I}", "id", &id) < 0) {
+        flux_log_error (h, "invalid sched.cancel request");
+        return;
+    }
+
+    if ((job = jobreq_find (ss, id))) {
         if (schedutil_alloc_respond_cancel (ss->util_ctx, job->msg) < 0) {
             flux_log_error (h, "alloc_respond_cancel");
             return;

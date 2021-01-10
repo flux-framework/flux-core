@@ -34,15 +34,10 @@ static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     schedutil_t *util = arg;
-    flux_jobid_t id;
 
     assert (util);
 
-    if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0) {
-        flux_log_error (h, "sched.cancel");
-        return;
-    }
-    util->ops->cancel (h, id, util->cb_arg);
+    util->ops->cancel (h, msg, util->cb_arg);
 }
 
 static void free_continuation (flux_future_t *f, void *arg)

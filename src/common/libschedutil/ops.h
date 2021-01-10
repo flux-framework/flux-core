@@ -58,7 +58,7 @@ struct schedutil_ops {
      * and dequeue.
      */
     void (*cancel)(flux_t *h,
-                   flux_jobid_t id,
+                   const flux_msg_t *msg,
                    void *arg);
 };
 
