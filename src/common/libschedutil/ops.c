@@ -24,7 +24,6 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     schedutil_t *util = arg;
-    flux_jobid_t id;
     json_t *o;
     char *jobspec;
 
@@ -35,9 +34,7 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:I s:o}",
-                             "id",
-                             &id,
+                             "{s:o}",
                              "jobspec",
                              &o) < 0)
         goto error;
