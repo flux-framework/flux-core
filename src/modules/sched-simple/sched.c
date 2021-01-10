@@ -95,21 +95,23 @@ jobreq_find (struct simple_sched *ss, flux_jobid_t id)
 }
 
 static struct jobreq *
-jobreq_create (const flux_msg_t *msg, const char *jobspec)
+jobreq_create (const flux_msg_t *msg)
 {
     struct jobreq *job = calloc (1, sizeof (*job));
+    json_t *jobspec;
 
     if (job == NULL)
         return NULL;
 
-    if (flux_msg_unpack (msg, "{s:I s:i s:i s:f}",
+    if (flux_msg_unpack (msg, "{s:I s:i s:i s:f s:o}",
                          "id", &job->id,
                          "priority", &job->priority,
                          "userid", &job->uid,
-                         "t_submit", &job->t_submit) < 0)
+                         "t_submit", &job->t_submit,
+                         "jobspec", &jobspec) < 0)
         goto err;
     job->msg = flux_msg_incref (msg);
-    if (libjj_get_counts (jobspec, &job->jj) < 0)
+    if (libjj_get_counts_json (jobspec, &job->jj) < 0)
         job->errnum = errno;
     return job;
 err:
@@ -312,8 +314,7 @@ void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
     flux_watcher_start (ss->prep);
 }
 
-static void alloc_cb (flux_t *h, const flux_msg_t *msg,
-                      const char *jobspec, void *arg)
+static void alloc_cb (flux_t *h, const flux_msg_t *msg, void *arg)
 {
     struct simple_sched *ss = arg;
     struct jobreq *job;
@@ -324,7 +325,7 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
         errno = EINVAL;
         goto err;
     }
-    if (!(job = jobreq_create (msg, jobspec))) {
+    if (!(job = jobreq_create (msg))) {
         flux_log_error (h, "alloc: jobreq_create");
         goto err;
     }

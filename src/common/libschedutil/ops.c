@@ -24,28 +24,10 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     schedutil_t *util = arg;
-    json_t *o;
-    char *jobspec;
 
     assert (util);
 
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s:o}",
-                             "jobspec",
-                             &o) < 0)
-        goto error;
-    if (!(jobspec = json_dumps (o, JSON_COMPACT)))
-        goto nomem;
-    util->ops->alloc (h, msg, jobspec, util->cb_arg);
-    free (jobspec);
-    return;
-nomem:
-    errno = ENOMEM;
-error:
-    flux_log_error (h, "sched.alloc");
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "sched.alloc respond_error");
+    util->ops->alloc (h, msg, util->cb_arg);
 }
 
 static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,

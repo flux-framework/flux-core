@@ -33,15 +33,13 @@ struct schedutil_ops {
                  const char *R,
                  void *arg);
 
-    /* Callback for an alloc request.  jobspec is looked up as a
-     * convenience.  'msg' and 'jobspec' are only valid for the
+    /* Callback for an alloc request.  'msg' is only valid for the
      * duration of this call.  You should either respond to the
      * request immediately (see alloc.h), or cache this information
      * for later response.
      */
     void (*alloc)(flux_t *h,
                   const flux_msg_t *msg,
-                  const char *jobspec,
                   void *arg);
 
     /* Callback for a free request.  R is looked up as a convenience.
