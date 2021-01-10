@@ -79,11 +79,26 @@ static int jj_read_level (json_t *o, int level, struct jj_counts *jj)
 
 int libjj_get_counts (const char *spec, struct jj_counts *jj)
 {
-    int saved_errno;
+    json_t *o = NULL;
+    json_error_t error;
     int rc = -1;
+
+    if ((o = json_loads (spec, 0, &error)) == NULL) {
+        snprintf (jj->error, sizeof (jj->error) - 1,
+                  "JSON load: %s", error.text);
+        errno = EINVAL;
+        return -1;
+    }
+
+    rc = libjj_get_counts_json (o, jj);
+    json_decref (o);
+    return rc;
+}
+
+int libjj_get_counts_json (json_t *jobspec, struct jj_counts *jj)
+{
     int version;
     json_t *resources = NULL;
-    json_t *o = NULL;
     json_error_t error;
 
     if (!jj) {
@@ -92,60 +107,48 @@ int libjj_get_counts (const char *spec, struct jj_counts *jj)
     }
     memset (jj, 0, sizeof (*jj));
 
-    if ((o = json_loads (spec, 0, &error)) == NULL) {
-        snprintf (jj->error, sizeof (jj->error) - 1,
-                  "JSON load: %s", error.text);
-        errno = EINVAL;
-        return -1;
-    }
-    if (json_unpack_ex (o, &error, 0, "{s:i s:o}",
+    if (json_unpack_ex (jobspec, &error, 0, "{s:i s:o}",
                         "version", &version,
                         "resources", &resources) < 0) {
         snprintf (jj->error, sizeof (jj->error) - 1,
                   "at top level: %s", error.text);
         errno = EINVAL;
-        goto err;
+        return -1;
     }
-    if (json_unpack_ex (o, &error, 0, "{s:{s?{s?F}}}",
+    if (json_unpack_ex (jobspec, &error, 0, "{s:{s?{s?F}}}",
                         "attributes",
                           "system",
                             "duration", &jj->duration) < 0) {
         snprintf (jj->error, sizeof (jj->error) - 1,
                   "at top level: getting duration: %s", error.text);
         errno = EINVAL;
-        goto err;
+        return -1;
     }
     if (version != 1) {
         snprintf (jj->error, sizeof (jj->error) - 1,
                  "Invalid version: expected 1, got %d", version);
         errno = EINVAL;
-        goto err;
+        return -1;
     }
     if (jj_read_level (resources, 0, jj) < 0)
-        goto err;
+        return -1;
 
     if (jj->nslots <= 0) {
         snprintf (jj->error, sizeof (jj->error) - 1,
                  "Unable to determine slot count");
         errno = EINVAL;
-        goto err;
+        return -1;
     }
     if (jj->slot_size <= 0) {
         snprintf (jj->error, sizeof (jj->error) - 1,
                  "Unable to determine slot size");
         errno = EINVAL;
-        goto err;
+        return -1;
     }
     if (jj->nnodes)
         jj->nslots *= jj->nnodes;
-    rc = 0;
-err:
-    saved_errno = errno;
-    json_decref (o);
-    errno = saved_errno;
-    return rc;
+    return 0;
 }
-
 
 /* vi: ts=4 sw=4 expandtab
  */
