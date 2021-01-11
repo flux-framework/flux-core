@@ -376,50 +376,43 @@ error:
 }
 
 /* sched-hello:
- * Scheduler obtains a list of jobs that have resources allocated.
+ * Scheduler obtains jobs that have resources allocated.
  */
 static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct job_manager *ctx = arg;
     struct job *job;
-    json_t *o = NULL;
-    json_t *entry;
 
     /* N.B. no "state" is set in struct alloc after a hello msg, so do
      * not set ctx->alloc->sched_sender in here.  Do so only in the
      * ready callback */
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
+    if (!flux_msg_is_streaming (msg)) {
+        errno = EPROTO;
+        goto error;
+    }
     flux_log (h, LOG_DEBUG, "scheduler: hello");
-    if (!(o = json_array ()))
-        goto nomem;
     job = zhashx_first (ctx->active_jobs);
     while (job) {
         if (job->has_resources) {
-            if (!(entry = json_pack ("{s:I s:I s:i s:f}",
-                                     "id", job->id,
-                                     "priority", job->priority,
-                                     "userid", job->userid,
-                                     "t_submit", job->t_submit)))
-                goto nomem;
-            if (json_array_append_new (o, entry) < 0) {
-                json_decref (entry);
-                goto nomem;
-            }
+            if (flux_respond_pack (h, msg,
+                                   "{s:I s:I s:i s:f}",
+                                   "id", job->id,
+                                   "priority", job->priority,
+                                   "userid", job->userid,
+                                   "t_submit", job->t_submit) < 0)
+                goto error;
         }
         job = zhashx_next (ctx->active_jobs);
     }
-    if (flux_respond_pack (h, msg, "{s:O}", "alloc", o) < 0)
-        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-    json_decref (o);
+    if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     return;
-nomem:
-    errno = ENOMEM;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-    json_decref (o);
 }
 
 /* sched-ready:

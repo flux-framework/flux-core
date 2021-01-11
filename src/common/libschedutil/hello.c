@@ -56,9 +56,6 @@ error:
 int schedutil_hello (schedutil_t *util)
 {
     flux_future_t *f;
-    json_t *jobs;
-    json_t *entry;
-    size_t index;
     int rc = -1;
 
     if (!util || !util->ops->hello) {
@@ -66,23 +63,21 @@ int schedutil_hello (schedutil_t *util)
         return -1;
     }
     if (!(f = flux_rpc (util->h, "job-manager.sched-hello",
-                        NULL, FLUX_NODEID_ANY, 0)))
+                        NULL, FLUX_NODEID_ANY, FLUX_RPC_STREAMING)))
         return -1;
-    if (flux_rpc_get_unpack (f, "{s:o}", "alloc", &jobs) < 0)
-        goto error;
-    json_array_foreach (jobs, index, entry) {
+    while (1) {
         flux_jobid_t id;
         unsigned int priority;
         uint32_t userid;
         double t_submit;
         json_int_t tmp;
-
-        if (json_unpack (entry, "{s:I s:I s:i s:f}",
-                                "id", &id,
-                                "priority", &tmp,
-                                "userid", &userid,
-                                "t_submit", &t_submit) < 0) {
-            errno = EPROTO;
+        if (flux_rpc_get_unpack (f, "{s:I s:I s:i s:f}",
+                                     "id", &id,
+                                     "priority", &tmp,
+                                     "userid", &userid,
+                                     "t_submit", &t_submit) < 0) {
+            if (errno == ENODATA)
+                break;
             goto error;
         }
         priority = tmp;
@@ -92,6 +87,7 @@ int schedutil_hello (schedutil_t *util)
                                  userid,
                                  t_submit) < 0)
             goto error;
+        flux_future_reset (f);
     }
     rc = 0;
 error:
