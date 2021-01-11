@@ -23,5 +23,10 @@ from flux.job.event import (
     JobEventWatchFuture,
     EventLogEvent,
     JobException,
+    MAIN_EVENTS,
+)
+from flux.job.executor import (
+    FluxExecutor,
+    FluxExecutorFuture,
 )
 from flux.core.inner import ffi

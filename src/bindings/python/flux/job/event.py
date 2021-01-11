@@ -15,6 +15,27 @@ from flux.job._wrapper import _RAW as RAW
 from _flux._core import ffi
 
 
+# Names of events that may appear in the main eventlog (i.e. ``eventlog="eventlog"``)
+# See Flux RFC 21 for documentation on each event.
+MAIN_EVENTS = frozenset(
+    {
+        "submit",
+        "depend",
+        "priority",
+        "flux-restart",
+        "urgency",
+        "alloc",
+        "free",
+        "start",
+        "release",
+        "finish",
+        "clean",
+        "debug",
+        "exception",
+    }
+)
+
+
 class EventLogEvent:
     """
     wrapper class for a single KVS EventLog entry
@@ -149,10 +170,21 @@ def event_watch(flux_handle, jobid, eventlog="eventlog"):
 
 
 class JobException(Exception):
+    """Represents an 'exception' event occurring to a job.
+
+    Instances expose a few public attributes.
+
+    :var timestamp: the timestamp of the 'exception' event.
+    :var type: A string identifying the type of job exception.
+    :var note: Brief human-readable explanation of the exception.
+    :var severity: the severity of the exception. Exceptions with a severity
+        of 0 are fatal to the job; any other severity is non-fatal.
+    """
+
     def __init__(self, event):
         self.timestamp = event.timestamp
         self.type = event.context["type"]
-        self.note = event.context["note"]
+        self.note = event.context.get("note", "no explanation given")
         self.severity = event.context["severity"]
         super().__init__(self)
 
