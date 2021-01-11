@@ -421,10 +421,7 @@ proto_error:
 }
 
 static int hello_cb (flux_t *h,
-                     flux_jobid_t id,
-                     unsigned int priority,
-                     uint32_t userid,
-                     double t_submit,
+                     const flux_msg_t *msg,
                      const char *R,
                      void *arg)
 {
@@ -432,6 +429,19 @@ static int hello_cb (flux_t *h,
     int rc = -1;
     struct simple_sched *ss = arg;
     struct rlist *alloc;
+    flux_jobid_t id;
+    unsigned int priority;
+    uint32_t userid;
+    double t_submit;
+
+    if (flux_msg_unpack (msg, "{s:I s:i s:i s:f}",
+                         "id", &id,
+                         "priority", &priority,
+                         "userid", &userid,
+                         "t_submit", &t_submit) < 0) {
+        flux_log_error (h, "hello: invalid hello payload");
+        return -1;
+    }
 
     flux_log (h, LOG_DEBUG,
               "hello: id=%ju priority=%u userid=%u t_submit=%0.1f",

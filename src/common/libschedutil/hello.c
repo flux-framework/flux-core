@@ -19,28 +19,25 @@
 #include "hello.h"
 
 static int schedutil_hello_job (schedutil_t *util,
-                                flux_jobid_t id,
-                                unsigned int priority,
-                                uint32_t userid,
-                                double t_submit)
+                                const flux_msg_t *msg)
 {
     char key[64];
-    flux_future_t *f;
+    flux_future_t *f = NULL;
     const char *R;
+    flux_jobid_t id;
 
+    if (flux_msg_unpack (msg, "{s:I}", "id", &id) < 0)
+        goto error;
     if (flux_job_kvs_key (key, sizeof (key), id, "R") < 0) {
         errno = EPROTO;
-        return -1;
+        goto error;
     }
     if (!(f = flux_kvs_lookup (util->h, NULL, 0, key)))
-        return -1;
+        goto error;
     if (flux_kvs_lookup_get (f, &R) < 0)
         goto error;
     if (util->ops->hello (util->h,
-                          id,
-                          priority,
-                          userid,
-                          t_submit,
+                          msg,
                           R,
                           util->cb_arg) < 0)
         goto error;
@@ -66,26 +63,13 @@ int schedutil_hello (schedutil_t *util)
                         NULL, FLUX_NODEID_ANY, FLUX_RPC_STREAMING)))
         return -1;
     while (1) {
-        flux_jobid_t id;
-        unsigned int priority;
-        uint32_t userid;
-        double t_submit;
-        json_int_t tmp;
-        if (flux_rpc_get_unpack (f, "{s:I s:I s:i s:f}",
-                                     "id", &id,
-                                     "priority", &tmp,
-                                     "userid", &userid,
-                                     "t_submit", &t_submit) < 0) {
+        const flux_msg_t *msg;
+        if (flux_future_get (f, (const void **)&msg) < 0) {
             if (errno == ENODATA)
                 break;
             goto error;
         }
-        priority = tmp;
-        if (schedutil_hello_job (util,
-                                 id,
-                                 priority,
-                                 userid,
-                                 t_submit) < 0)
+        if (schedutil_hello_job (util, msg) < 0)
             goto error;
         flux_future_reset (f);
     }

@@ -26,10 +26,7 @@ struct schedutil_ops {
      * Return 0 on success, -1 on failure with errno set.
      */
     int (*hello)(flux_t *h,
-                 flux_jobid_t id,
-                 unsigned int priority,
-                 uint32_t userid,
-                 double t_submit,
+                 const flux_msg_t *msg,
                  const char *R,
                  void *arg);
 
