@@ -60,6 +60,7 @@ int schedutil_hello (schedutil_t *util, schedutil_hello_cb_f *cb, void *arg)
     json_t *jobs;
     json_t *entry;
     size_t index;
+    int rc = -1;
 
     if (!util || !cb) {
         errno = EINVAL;
@@ -95,11 +96,10 @@ int schedutil_hello (schedutil_t *util, schedutil_hello_cb_f *cb, void *arg)
                                  arg) < 0)
             goto error;
     }
-    flux_future_destroy (f);
-    return 0;
+    rc = 0;
 error:
     flux_future_destroy (f);
-    return -1;
+    return rc;
 }
 
 /*
