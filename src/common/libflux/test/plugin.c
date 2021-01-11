@@ -314,7 +314,7 @@ void test_basic ()
     b = 4;
     ok (flux_plugin_arg_pack (args, 0, "{s:i s:i}", "a", a, "b", b) == 0,
         "flux_plugin_arg_pack works");
-    ok (flux_plugin_call (p, "op.add", args) == 0,
+    ok (flux_plugin_call (p, "op.add", args) >= 0,
         "flux_plugin_call op.add works");
 
     ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
@@ -326,7 +326,7 @@ void test_basic ()
     a = 2;
     ok (flux_plugin_arg_pack (args, 0, "{s:i s:i}", "a", a, "b", b) == 0,
         "flux_plugin_arg_pack works");
-    ok (flux_plugin_call (p, "op.multiply", args) == 0,
+    ok (flux_plugin_call (p, "op.multiply", args) >= 0,
         "callback with topic op.multiply worked");
     ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
                                 "{s:i}", "a", &a) == 0,
@@ -361,7 +361,7 @@ void test_register ()
 
     ok (flux_plugin_register (p, "test_register", tab) == 0,
         "flux_plugin_register 2 handlers works");
-    ok (flux_plugin_call (p, "foo.test", args) == 0,
+    ok (flux_plugin_call (p, "foo.test", args) >= 0,
         "flux_plugin_call foo.test worked");
     ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
                                 "{s:s s:s}",
@@ -373,7 +373,7 @@ void test_register ()
     is (data, foodata,
         "flux_plugin_call passed correct void *data to foo()");
 
-    ok (flux_plugin_call (p, "fallthru", args) == 0,
+    ok (flux_plugin_call (p, "fallthru", args) >= 0,
         "flux_plugin_call fallthru worked");
     ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
                                 "{s:s s:s}",
@@ -420,7 +420,7 @@ void test_load ()
     flux_plugin_arg_t *args = flux_plugin_arg_create ();
     if (!args)
         BAIL_OUT ("flux_plugin_arg_create failed");
-    ok (flux_plugin_call (p, "test.foo", args) == 0,
+    ok (flux_plugin_call (p, "test.foo", args) >= 0,
         "flux_plugin_call (test.foo) success");
     ok (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_OUT,
@@ -435,7 +435,7 @@ void test_load ()
         "flux_plugin_arg_out works");
     diag ("out = %s", out);
     free (out);
-    ok (flux_plugin_call (p, "test.bar", args) == 0,
+    ok (flux_plugin_call (p, "test.bar", args) >= 0,
         "flux_plugin_call (test.bar) success");
     ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
                                 "{s:s}", "result", &result) == 0,
