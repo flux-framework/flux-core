@@ -543,11 +543,12 @@ int flux_plugin_call (flux_plugin_t *p, const char *string,
     plugin_error_clear (p);
     if (!p || !string)
         return plugin_seterror (p, EINVAL, NULL);
-    h = match_handler (p, string);
-    if (!h)
+    if (!(h = match_handler (p, string)))
         return 0;
     assert (h->cb);
-    return (*h->cb) (p, string, args, h->data);
+    if ((*h->cb) (p, string, args, h->data) < 0)
+        return -1;
+    return 1;
 }
 
 

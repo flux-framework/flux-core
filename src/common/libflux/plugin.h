@@ -161,6 +161,10 @@ int flux_plugin_arg_vunpack (flux_plugin_arg_t *args, int flags,
 
 /*  Call first plugin callback matching 'name', passing optional plugin
  *   arguments in 'args'.
+ *
+ *  Returns 0 if no callback was found for `name`, -1 if callback was
+ *   called with return value < 0, and 1 if callback was called with
+ *   return value >= 0.
  */
 int flux_plugin_call (flux_plugin_t *p, const char *name,
                       flux_plugin_arg_t *args);
