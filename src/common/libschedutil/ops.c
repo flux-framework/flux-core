@@ -102,10 +102,22 @@ error:
         flux_log_error (h, "sched.free respond_error");
 }
 
+static void prioritize_cb (flux_t *h, flux_msg_handler_t *mh,
+                           const flux_msg_t *msg, void *arg)
+{
+    schedutil_t *util = arg;
+
+    assert (util);
+
+    if (util->ops->prioritize)
+        util->ops->prioritize (h, msg, util->cb_arg);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "sched.alloc", alloc_cb, 0},
     { FLUX_MSGTYPE_REQUEST,  "sched.cancel", cancel_cb, 0},
     { FLUX_MSGTYPE_REQUEST,  "sched.free", free_cb, 0},
+    { FLUX_MSGTYPE_REQUEST,  "sched.prioritize", prioritize_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

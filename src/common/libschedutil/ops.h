@@ -57,6 +57,14 @@ struct schedutil_ops {
     void (*cancel)(flux_t *h,
                    const flux_msg_t *msg,
                    void *arg);
+
+    /* The job manager wants to change the priority one or more jobs.
+     * This callback is not required and can be set to NULL if the
+     * caller wishes to ignore these messages.
+     */
+    void (*prioritize)(flux_t *h,
+                       const flux_msg_t *msg,
+                       void *arg);
 };
 
 #ifdef __cplusplus

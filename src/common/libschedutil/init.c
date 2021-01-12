@@ -33,6 +33,7 @@ schedutil_t *schedutil_create (flux_t *h,
 {
     schedutil_t *util;
 
+    /* ops->prioritize is optional */
     if (!h
         || !ops
         || !ops->alloc
