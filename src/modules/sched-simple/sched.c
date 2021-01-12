@@ -384,8 +384,9 @@ static void cancel_cb (flux_t *h,
  * matching job found in queue, update the priority and reorder queue
  * as necessary.
  */
-void prioritize_cb (flux_t *h, flux_msg_handler_t *mh,
-                    const flux_msg_t *msg, void *arg)
+static void prioritize_cb (flux_t *h,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     struct simple_sched *ss = arg;
     json_t *jobs;
@@ -683,7 +684,6 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "*.resource-status", status_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "sched.prioritize", prioritize_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -692,6 +692,7 @@ static const struct schedutil_ops ops = {
     .alloc = alloc_cb,
     .free = free_cb,
     .cancel = cancel_cb,
+    .prioritize = prioritize_cb,
 };
 
 int mod_main (flux_t *h, int argc, char **argv)
