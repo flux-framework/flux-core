@@ -21,6 +21,7 @@ struct schedutil_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
     const struct schedutil_ops *ops;
+    int flags;
     void *cb_arg;
     zlistx_t *outstanding_futures;
 };

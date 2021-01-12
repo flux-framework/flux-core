@@ -28,6 +28,7 @@ typedef struct schedutil_ctx schedutil_t;
  * Return NULL on error.
  */
 schedutil_t *schedutil_create (flux_t *h,
+                               int flags,
                                const struct schedutil_ops *ops,
                                void *arg);
 

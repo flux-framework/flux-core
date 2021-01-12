@@ -28,6 +28,7 @@ static void future_destructor (void **item)
 
 
 schedutil_t *schedutil_create (flux_t *h,
+                               int flags,
                                const struct schedutil_ops *ops,
                                void *arg)
 {
@@ -47,6 +48,7 @@ schedutil_t *schedutil_create (flux_t *h,
 
     util->h = h;
     util->ops = ops;
+    util->flags = flags;
     util->cb_arg = arg;
     if (!(util->outstanding_futures = zlistx_new ()))
         goto error;
