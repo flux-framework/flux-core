@@ -32,13 +32,15 @@ run_program() {
 }
 
 test_expect_success "mpi hello singleton" '
-	run_program 5 1 1 ${FLUX_BUILD_DIR}/t/mpi/hello >single.$OPTS
+	run_program 15 1 1 ${FLUX_BUILD_DIR}/t/mpi/hello >single.out &&
+	test_debug "cat single.out"
 '
 
 test_expect_success "mpi hello all ranks" '
-	run_program 5 ${SIZE} ${SIZE} ${FLUX_BUILD_DIR}/t/mpi/hello \
-		| tee allranks.$OPTS \
-		&& grep -q "There are ${SIZE} tasks" allranks.$OPTS
+	run_program 15 ${SIZE} ${SIZE} ${FLUX_BUILD_DIR}/t/mpi/hello \
+		> allranks.out &&
+		test_debug "cat allranks.out" &&
+		grep -q "There are ${SIZE} tasks" allranks.out
 '
 
 test_done

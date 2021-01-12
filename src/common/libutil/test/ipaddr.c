@@ -24,8 +24,9 @@ int main(int argc, char** argv)
 
     plan (NO_PLAN);
 
+    memset (errstr, 0, sizeof (errstr));
     ok (ipaddr_getprimary (host, sizeof (host), errstr, sizeof (errstr)) == 0,
-        "ipaddr_getprimary works");
+        "ipaddr_getprimary works: errstr=%s", errstr);
     diag ("primary: %s", host);
 
     ok (ipaddr_getall (&addrs, &addrs_len, errstr, sizeof (errstr)) == 0,
