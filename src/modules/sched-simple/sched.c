@@ -45,6 +45,7 @@ struct simple_sched {
 
     char *mode;             /* allocation mode */
     bool single;
+    int schedutil_flags;
     struct rlist *rlist;    /* list of resources */
     zlistx_t *queue;        /* job queue */
     schedutil_t *util_ctx;
@@ -301,6 +302,13 @@ static int try_free (flux_t *h, struct simple_sched *ss, const char *R)
 void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
 {
     struct simple_sched *ss = arg;
+
+    if (!R) {
+        flux_log (h, LOG_ERR, "free: R is NULL");
+        if (flux_respond_error (h, msg, EINVAL, NULL) < 0)
+            flux_log_error (h, "free_cb: flux_respond_error");
+        return;
+    }
 
     if (try_free (h, ss, R) < 0) {
         if (flux_respond_error (h, msg, errno, NULL) < 0)
@@ -662,6 +670,14 @@ static char * get_alloc_mode (flux_t *h, const char *mode)
     return NULL;
 }
 
+static struct schedutil_ops ops = {
+    .hello = hello_cb,
+    .alloc = alloc_cb,
+    .free = free_cb,
+    .cancel = cancel_cb,
+    .prioritize = prioritize_cb,
+};
+
 static int process_args (flux_t *h, struct simple_sched *ss,
                          int argc, char *argv[])
 {
@@ -674,6 +690,9 @@ static int process_args (flux_t *h, struct simple_sched *ss,
         else if (strcmp ("unlimited", argv[i]) == 0) {
             ss->single = false;
         }
+        else if (strcmp ("test-free-nolookup", argv[i]) == 0) {
+            ss->schedutil_flags |= SCHEDUTIL_FREE_NOLOOKUP;
+        }
         else {
             flux_log_error (h, "Unknown module option: '%s'", argv[i]);
             return -1;
@@ -685,14 +704,6 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "*.resource-status", status_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
-};
-
-static const struct schedutil_ops ops = {
-    .hello = hello_cb,
-    .alloc = alloc_cb,
-    .free = free_cb,
-    .cancel = cancel_cb,
-    .prioritize = prioritize_cb,
 };
 
 int mod_main (flux_t *h, int argc, char **argv)
@@ -710,7 +721,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (process_args (h, ss, argc, argv) < 0)
         return -1;
 
-    ss->util_ctx = schedutil_create (h, 0, &ops, ss);
+    ss->util_ctx = schedutil_create (h, ss->schedutil_flags, &ops, ss);
     if (ss->util_ctx == NULL) {
         flux_log_error (h, "schedutil_create");
         goto done;
