@@ -43,6 +43,12 @@ struct schedutil_ops {
      * 'msg' and 'R' are only valid for the duration of this call.
      * You should either respond to the request immediately (see
      * free.h), or cache this information for later response.
+     *
+     * If R is unneeded, it is recommended that the
+     * SCHEDUTIL_FREE_NOLOOKUP flag be set in schedutil_create().  By
+     * setting this flag, R will not be looked up, saving a KVS lookup
+     * on every invocation of this callback.  R will be set to NULL
+     * instead.
      */
     void (*free)(flux_t *h,
                  const flux_msg_t *msg,

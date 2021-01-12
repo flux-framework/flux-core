@@ -21,6 +21,10 @@ extern "C" {
 
 typedef struct schedutil_ctx schedutil_t;
 
+enum schedutil_flags {
+    SCHEDUTIL_FREE_NOLOOKUP = 1, // ops->free() will be called with R=NULL
+};
+
 /* Create a handle for the schedutil convenience library.
  *
  * Used to track outstanding futures and register callbacks relevant for

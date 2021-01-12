@@ -73,6 +73,11 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
 
     assert (util);
 
+    if (util->flags & SCHEDUTIL_FREE_NOLOOKUP) {
+        util->ops->free (h, msg, NULL, util->cb_arg);
+        return;
+    }
+
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         goto error;
     if (flux_job_kvs_key (key, sizeof (key), id, "R") < 0) {
