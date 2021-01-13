@@ -55,6 +55,11 @@ class Flux(Wrapper):
             destructor=raw.flux_close,
         )
 
+        # Ensure reactor_depth is initialized for this thread
+        if "reactor_depth" not in self.tls.__dict__:
+            self.tls.reactor_depth = 0
+            self.tls.exception = None
+
         if handle is None:
             try:
                 self.handle = raw.flux_open(url, flags)
