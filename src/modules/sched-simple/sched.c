@@ -21,6 +21,13 @@
 #include "src/common/librlist/rlist.h"
 #include "libjj.h"
 
+// e.g. flux module debug --setbit 0x1 sched-simple
+// e.g. flux module debug --clearbit 0x1 sched-simple
+enum module_debug_flags {
+    DEBUG_FAIL_ALLOC = 1, // while set, alloc requests fail
+    DEBUG_ANNOTATE_REASON_PENDING = 2, // add reason_pending annotation
+};
+
 struct jobreq {
     void *handle;
     const flux_msg_t *msg;
@@ -162,12 +169,17 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     char *R = NULL;
     struct jobreq *job = zlistx_first (ss->queue);
     double now = flux_reactor_now (flux_get_reactor (h));
+    bool fail_alloc = flux_module_debug_test (h, DEBUG_FAIL_ALLOC, false);
 
     if (!job)
         return -1;
+
     jj = &job->jj;
-    alloc = rlist_alloc (ss->rlist, ss->mode,
-                         jj->nnodes, jj->nslots, jj->slot_size);
+    if (!fail_alloc) {
+        errno = 0;
+        alloc = rlist_alloc (ss->rlist, ss->mode,
+                             jj->nnodes, jj->nslots, jj->slot_size);
+    }
     if (!alloc || !(R = Rstring_create (alloc, now, jj->duration))) {
         const char *note = "unable to allocate provided jobspec";
         if (alloc != NULL) {
@@ -182,6 +194,8 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
             return rc;
         else if (errno == EOVERFLOW)
             note = "unsatisfiable request";
+        else if (fail_alloc)
+            note = "DEBUG_FAIL_ALLOC";
         if (schedutil_alloc_respond_deny (ss->util_ctx,
                                           job->msg,
                                           note) < 0)
@@ -193,8 +207,11 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     if (schedutil_alloc_respond_success_pack (ss->util_ctx,
                                               job->msg,
                                               R,
-                                              "{ s:{s:s} }",
-                                              "sched", "resource_summary", s) < 0)
+                                              "{ s:{s:s s:n s:n} }",
+                                              "sched",
+                                              "resource_summary", s,
+                                              "reason_pending",
+                                              "jobs_ahead") < 0)
         flux_log_error (h, "schedutil_alloc_respond_success_pack");
 
     flux_log (h, LOG_DEBUG, "alloc: %ju: %s", (uintmax_t) job->id, s);
@@ -206,6 +223,28 @@ out:
     free (R);
     free (s);
     return rc;
+}
+
+static void annotate_reason_pending (struct simple_sched *ss)
+{
+    int jobs_ahead = 0;
+
+    if (!flux_module_debug_test (ss->h, DEBUG_ANNOTATE_REASON_PENDING, false))
+        return;
+
+    struct jobreq *job = zlistx_first (ss->queue);
+    while (job) {
+        if (schedutil_alloc_respond_annotate_pack (ss->util_ctx,
+                                                   job->msg,
+                                                   "{ s:{s:s s:i} }",
+                                                   "sched",
+                                                   "reason_pending",
+                                                     "insufficient resources",
+                                                   "jobs_ahead",
+                                                     jobs_ahead++) < 0)
+            flux_log_error (ss->h, "schedutil_alloc_respond_annotate_pack");
+        job = zlistx_next (ss->queue);
+    }
 }
 
 static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -231,6 +270,7 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
      *  watcher, i.e. block. O/w, retry on next loop.
      */
     if (try_alloc (ss->h, ss) < 0 && errno == ENOSPC) {
+        annotate_reason_pending (ss);
         flux_watcher_stop (ss->prep);
         flux_watcher_stop (ss->check);
     }
@@ -242,7 +282,7 @@ static int try_free (flux_t *h, struct simple_sched *ss, const char *R)
     char *r = NULL;
     struct rlist *alloc = rlist_from_R (R);
     if (!alloc) {
-        flux_log_error (h, "hello: unable to parse R=%s", R);
+        flux_log_error (h, "free: unable to parse R=%s", R);
         return -1;
     }
     r = rlist_dumps (alloc);
@@ -327,6 +367,8 @@ static void cancel_cb (flux_t *h,
             return;
         }
         zlistx_delete (ss->queue, job->handle);
+        if (!ss->single)
+            annotate_reason_pending (ss);
     }
 }
 
@@ -359,8 +401,10 @@ void prioritize_cb (flux_t *h, flux_msg_handler_t *mh,
             job->priority = priority;
             zlistx_reorder (ss->queue, job->handle, true);
         }
-     }
+    }
 
+    if (!ss->single)
+        annotate_reason_pending (ss);
     return;
 
 proto_error:
@@ -379,8 +423,16 @@ static int hello_cb (flux_t *h,
     char *s;
     int rc = -1;
     struct simple_sched *ss = arg;
+    struct rlist *alloc;
 
-    struct rlist *alloc = rlist_from_R (R);
+    flux_log (h, LOG_DEBUG,
+              "hello: id=%ju priority=%d userid=%u t_submit=%0.1f",
+              (uintmax_t)id,
+              priority,
+              (unsigned int)userid,
+              t_submit);
+
+    alloc = rlist_from_R (R);
     if (!alloc) {
         flux_log_error (h, "hello: R=%s", R);
         return -1;
