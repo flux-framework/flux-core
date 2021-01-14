@@ -201,6 +201,16 @@ X_AC_MALLOC
 AC_CHECK_LIB(m, floor)
 
 
+AC_ARG_WITH([python],
+  [AS_HELP_STRING([--without-python],
+    [build Flux without python (mainly useful for building a libflux.so for external bindings) @<:@default=with@:>@])],
+  [],
+  [with_python=with])
+AM_CONDITIONAL([WITH_PYTHON], [test "x$with_python" != "xno"])
+
+AC_ARG_ENABLE([docs],
+	      AS_HELP_STRING([--disable-docs], [disable building docs]))
+
 #  Edit PATH to remove $PWD/src/cmd so that AM_PATH_PYTHON doesn't find
 #  flux python script (thus creating a link to itself.) This needs to be
 #  done *before* AX_PYTHON_DEVEL.
@@ -215,55 +225,53 @@ if test "X$PYTHON_VERSION" = "X" ; then
   fi
 fi
 
-# Do not let AX_PYTHON_DEVEL set PYTHON_SITE_PKG
-saved_PYTHON_SITE_PKG=$PYTHON_SITE_PKG
-AX_PYTHON_DEVEL([>='3.6'])
-PYTHON_SITE_PKG=$saved_PYTHON_SITE_PKG
+AM_COND_IF([WITH_PYTHON], [
 
-AM_PATH_PYTHON([$ac_python_version])
-if test "X$PYTHON" = "X"; then
-  AC_MSG_ERROR([could not find python])
-fi
-if test "X$PYTHON" = "X"; then
-  AC_MSG_ERROR([could not find python])
-fi
-#  Restore original PATH:
-export PATH=${saved_PATH}
+  # Do not let AX_PYTHON_DEVEL set PYTHON_SITE_PKG
+  saved_PYTHON_SITE_PKG=$PYTHON_SITE_PKG
+  AX_PYTHON_DEVEL([>='3.6'])
+  PYTHON_SITE_PKG=$saved_PYTHON_SITE_PKG
 
-# Flag for PYTHON_LDFLAGS workaround below.
-if test -n "$PYTHON_LDFLAGS"; then
-  ac_python_ldflags_set_by_user=true
-fi
+  AM_PATH_PYTHON([$ac_python_version])
+  if test "X$PYTHON" = "X"; then
+      AC_MSG_ERROR([could not find python])
+  fi
+  #  Restore original PATH:
+  export PATH=${saved_PATH}
 
-AM_CHECK_PYMOD(cffi,
-               [cffi.__version_info__ >= (1,1)],
-               ,
-               [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
-               )
-AM_CHECK_PYMOD(six,
-               [StrictVersion(six.__version__) >= StrictVersion('1.9.0')],
-               ,
-               [AC_MSG_ERROR([could not find python module six, version 1.9.0+ required])]
-               )
-AM_CHECK_PYMOD(yaml,
-               [StrictVersion(yaml.__version__) >= StrictVersion ('3.10.0')],
-               ,
-               [AC_MSG_ERROR([could not find python module yaml, version 3.10+ required])]
-               )
-AM_CHECK_PYMOD(jsonschema,
-               [StrictVersion(jsonschema.__version__) >= StrictVersion ('2.3.0')],
-               ,
-               [AC_MSG_ERROR([could not find python module jsonschema, version 2.3.0+ required])]
-               )
+  # Flag for PYTHON_LDFLAGS workaround below.
+  if test -n "$PYTHON_LDFLAGS"; then
+    ac_python_ldflags_set_by_user=true
+  fi
 
-AC_ARG_ENABLE([docs],
-	      AS_HELP_STRING([--disable-docs], [disable building docs]))
-AS_IF([test "x$enable_docs" != "xno"], [
-            AM_CHECK_PYMOD(sphinx,
-                           [StrictVersion(sphinx.__version__) >= StrictVersion ('1.6.7')],
-                           [sphinx=true],
-                           [sphinx=false; AC_MSG_WARN([could not find sphinx to generate docs, version 1.6.7+ required])]
-                           )
+  AM_CHECK_PYMOD(cffi,
+                 [cffi.__version_info__ >= (1,1)],
+                 ,
+                 [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
+                 )
+  AM_CHECK_PYMOD(six,
+                 [StrictVersion(six.__version__) >= StrictVersion('1.9.0')],
+                 ,
+                 [AC_MSG_ERROR([could not find python module six, version 1.9.0+ required])]
+                 )
+  AM_CHECK_PYMOD(yaml,
+                 [StrictVersion(yaml.__version__) >= StrictVersion ('3.10.0')],
+                 ,
+                 [AC_MSG_ERROR([could not find python module yaml, version 3.10+ required])]
+                 )
+  AM_CHECK_PYMOD(jsonschema,
+                 [StrictVersion(jsonschema.__version__) >= StrictVersion ('2.3.0')],
+                 ,
+                 [AC_MSG_ERROR([could not find python module jsonschema, version 2.3.0+ required])]
+                 )
+
+  AS_IF([test "x$enable_docs" != "xno"], [
+              AM_CHECK_PYMOD(sphinx,
+                             [StrictVersion(sphinx.__version__) >= StrictVersion ('1.6.7')],
+                             [sphinx=true],
+                             [sphinx=false; AC_MSG_WARN([could not find sphinx to generate docs, version 1.6.7+ required])]
+                             )
+  ])
 ])
 
 #  If --enable-docs=yes, but no doc generator found,
