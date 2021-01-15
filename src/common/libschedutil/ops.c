@@ -24,47 +24,20 @@ static void alloc_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     schedutil_t *util = arg;
-    flux_jobid_t id;
-    json_t *o;
-    char *jobspec;
 
-    if (util == NULL) {
-        errno = EINVAL;
-        goto error;
-    }
+    assert (util);
 
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s:I s:o}",
-                             "id",
-                             &id,
-                             "jobspec",
-                             &o) < 0)
-        goto error;
-    if (!(jobspec = json_dumps (o, JSON_COMPACT)))
-        goto nomem;
-    util->alloc_cb (h, msg, jobspec, util->cb_arg);
-    free (jobspec);
-    return;
-nomem:
-    errno = ENOMEM;
-error:
-    flux_log_error (h, "sched.alloc");
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "sched.alloc respond_error");
+    util->ops->alloc (h, msg, util->cb_arg);
 }
 
 static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     schedutil_t *util = arg;
-    flux_jobid_t id;
 
-    if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0) {
-        flux_log_error (h, "sched.cancel");
-        return;
-    }
-    util->cancel_cb (h, id, util->cb_arg);
+    assert (util);
+
+    util->ops->cancel (h, msg, util->cb_arg);
 }
 
 static void free_continuation (flux_future_t *f, void *arg)
@@ -80,7 +53,7 @@ static void free_continuation (flux_future_t *f, void *arg)
     }
     if (schedutil_remove_outstanding_future (util, f) < 0)
         flux_log_error (h, "sched.free unable to remove outstanding future");
-    util->free_cb (h, msg, R, util->cb_arg);
+    util->ops->free (h, msg, R, util->cb_arg);
     flux_future_destroy (f);
     return;
 error:
@@ -97,6 +70,13 @@ static void free_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_jobid_t id;
     flux_future_t *f;
     char key[64];
+
+    assert (util);
+
+    if (util->flags & SCHEDUTIL_FREE_NOLOOKUP) {
+        util->ops->free (h, msg, NULL, util->cb_arg);
+        return;
+    }
 
     if (flux_request_unpack (msg, NULL, "{s:I}", "id", &id) < 0)
         goto error;
@@ -127,10 +107,22 @@ error:
         flux_log_error (h, "sched.free respond_error");
 }
 
+static void prioritize_cb (flux_t *h, flux_msg_handler_t *mh,
+                           const flux_msg_t *msg, void *arg)
+{
+    schedutil_t *util = arg;
+
+    assert (util);
+
+    if (util->ops->prioritize)
+        util->ops->prioritize (h, msg, util->cb_arg);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "sched.alloc", alloc_cb, 0},
     { FLUX_MSGTYPE_REQUEST,  "sched.cancel", cancel_cb, 0},
     { FLUX_MSGTYPE_REQUEST,  "sched.free", free_cb, 0},
+    { FLUX_MSGTYPE_REQUEST,  "sched.prioritize", prioritize_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 

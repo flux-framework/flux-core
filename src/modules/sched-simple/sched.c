@@ -32,7 +32,7 @@ struct jobreq {
     void *handle;
     const flux_msg_t *msg;
     uint32_t uid;
-    int priority;
+    unsigned int priority;
     double t_submit;
     flux_jobid_t id;
     struct jj_counts jj;
@@ -45,6 +45,7 @@ struct simple_sched {
 
     char *mode;             /* allocation mode */
     bool single;
+    int schedutil_flags;
     struct rlist *rlist;    /* list of resources */
     zlistx_t *queue;        /* job queue */
     schedutil_t *util_ctx;
@@ -95,20 +96,23 @@ jobreq_find (struct simple_sched *ss, flux_jobid_t id)
 }
 
 static struct jobreq *
-jobreq_create (const flux_msg_t *msg, const char *jobspec)
+jobreq_create (const flux_msg_t *msg)
 {
     struct jobreq *job = calloc (1, sizeof (*job));
+    json_t *jobspec;
 
     if (job == NULL)
         return NULL;
-    if (schedutil_alloc_request_decode (msg,
-                                        &job->id,
-                                        &job->priority,
-                                        &job->uid,
-                                        &job->t_submit) < 0)
+
+    if (flux_msg_unpack (msg, "{s:I s:i s:i s:f s:o}",
+                         "id", &job->id,
+                         "priority", &job->priority,
+                         "userid", &job->uid,
+                         "t_submit", &job->t_submit,
+                         "jobspec", &jobspec) < 0)
         goto err;
     job->msg = flux_msg_incref (msg);
-    if (libjj_get_counts (jobspec, &job->jj) < 0)
+    if (libjj_get_counts_json (jobspec, &job->jj) < 0)
         job->errnum = errno;
     return job;
 err:
@@ -299,6 +303,13 @@ void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
 {
     struct simple_sched *ss = arg;
 
+    if (!R) {
+        flux_log (h, LOG_ERR, "free: R is NULL");
+        if (flux_respond_error (h, msg, EINVAL, NULL) < 0)
+            flux_log_error (h, "free_cb: flux_respond_error");
+        return;
+    }
+
     if (try_free (h, ss, R) < 0) {
         if (flux_respond_error (h, msg, errno, NULL) < 0)
             flux_log_error (h, "free_cb: flux_respond_error");
@@ -311,8 +322,7 @@ void free_cb (flux_t *h, const flux_msg_t *msg, const char *R, void *arg)
     flux_watcher_start (ss->prep);
 }
 
-static void alloc_cb (flux_t *h, const flux_msg_t *msg,
-                      const char *jobspec, void *arg)
+static void alloc_cb (flux_t *h, const flux_msg_t *msg, void *arg)
 {
     struct simple_sched *ss = arg;
     struct jobreq *job;
@@ -323,7 +333,7 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg,
         errno = EINVAL;
         goto err;
     }
-    if (!(job = jobreq_create (msg, jobspec))) {
+    if (!(job = jobreq_create (msg))) {
         flux_log_error (h, "alloc: jobreq_create");
         goto err;
     }
@@ -355,13 +365,19 @@ err:
  * and "dequeue" it.
  */
 static void cancel_cb (flux_t *h,
-                       flux_jobid_t id,
+                       const flux_msg_t *msg,
                        void *arg)
 {
     struct simple_sched *ss = arg;
-    struct jobreq *job = jobreq_find (ss, id);
+    flux_jobid_t id;
+    struct jobreq *job;
 
-    if (job) {
+    if (flux_msg_unpack (msg, "{s:I}", "id", &id) < 0) {
+        flux_log_error (h, "invalid sched.cancel request");
+        return;
+    }
+
+    if ((job = jobreq_find (ss, id))) {
         if (schedutil_alloc_respond_cancel (ss->util_ctx, job->msg) < 0) {
             flux_log_error (h, "alloc_respond_cancel");
             return;
@@ -376,8 +392,9 @@ static void cancel_cb (flux_t *h,
  * matching job found in queue, update the priority and reorder queue
  * as necessary.
  */
-void prioritize_cb (flux_t *h, flux_msg_handler_t *mh,
-                    const flux_msg_t *msg, void *arg)
+static void prioritize_cb (flux_t *h,
+                           const flux_msg_t *msg,
+                           void *arg)
 {
     struct simple_sched *ss = arg;
     json_t *jobs;
@@ -413,10 +430,7 @@ proto_error:
 }
 
 static int hello_cb (flux_t *h,
-                     flux_jobid_t id,
-                     int priority,
-                     uint32_t userid,
-                     double t_submit,
+                     const flux_msg_t *msg,
                      const char *R,
                      void *arg)
 {
@@ -424,9 +438,22 @@ static int hello_cb (flux_t *h,
     int rc = -1;
     struct simple_sched *ss = arg;
     struct rlist *alloc;
+    flux_jobid_t id;
+    unsigned int priority;
+    uint32_t userid;
+    double t_submit;
+
+    if (flux_msg_unpack (msg, "{s:I s:i s:i s:f}",
+                         "id", &id,
+                         "priority", &priority,
+                         "userid", &userid,
+                         "t_submit", &t_submit) < 0) {
+        flux_log_error (h, "hello: invalid hello payload");
+        return -1;
+    }
 
     flux_log (h, LOG_DEBUG,
-              "hello: id=%ju priority=%d userid=%u t_submit=%0.1f",
+              "hello: id=%ju priority=%u userid=%u t_submit=%0.1f",
               (uintmax_t)id,
               priority,
               (unsigned int)userid,
@@ -614,7 +641,7 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
 
     /*  Complete synchronous hello protocol:
      */
-    if (schedutil_hello (ss->util_ctx, hello_cb, ss) < 0) {
+    if (schedutil_hello (ss->util_ctx) < 0) {
         flux_log_error (h, "schedutil_hello");
         goto out;
     }
@@ -643,6 +670,14 @@ static char * get_alloc_mode (flux_t *h, const char *mode)
     return NULL;
 }
 
+static struct schedutil_ops ops = {
+    .hello = hello_cb,
+    .alloc = alloc_cb,
+    .free = free_cb,
+    .cancel = cancel_cb,
+    .prioritize = prioritize_cb,
+};
+
 static int process_args (flux_t *h, struct simple_sched *ss,
                          int argc, char *argv[])
 {
@@ -655,6 +690,9 @@ static int process_args (flux_t *h, struct simple_sched *ss,
         else if (strcmp ("unlimited", argv[i]) == 0) {
             ss->single = false;
         }
+        else if (strcmp ("test-free-nolookup", argv[i]) == 0) {
+            ss->schedutil_flags |= SCHEDUTIL_FREE_NOLOOKUP;
+        }
         else {
             flux_log_error (h, "Unknown module option: '%s'", argv[i]);
             return -1;
@@ -665,7 +703,6 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "*.resource-status", status_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST, "sched.prioritize", prioritize_cb, 0},
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -684,7 +721,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (process_args (h, ss, argc, argv) < 0)
         return -1;
 
-    ss->util_ctx = schedutil_create (h, alloc_cb, free_cb, cancel_cb, ss);
+    ss->util_ctx = schedutil_create (h, ss->schedutil_flags, &ops, ss);
     if (ss->util_ctx == NULL) {
         flux_log_error (h, "schedutil_create");
         goto done;

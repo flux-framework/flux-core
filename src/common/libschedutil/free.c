@@ -17,12 +17,6 @@
 #include "init.h"
 #include "free.h"
 
-
-int schedutil_free_request_decode (const flux_msg_t *msg, flux_jobid_t *id)
-{
-    return flux_request_unpack (msg, NULL, "{s:I}", "id", id);
-}
-
 int schedutil_free_respond (schedutil_t *util, const flux_msg_t *msg)
 {
     flux_jobid_t id;

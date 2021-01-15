@@ -15,6 +15,8 @@
 #include "config.h"
 #endif
 
+#include <jansson.h>
+
 #define JJ_ERROR_TEXT_LENGTH 256
 
 struct jj_counts {
@@ -32,6 +34,10 @@ struct jj_counts {
  *  Returns 0 on success and -1 on failure with errno set and jj->error[]
  *   with an error message string.
  */
+
 int libjj_get_counts (const char *spec, struct jj_counts *counts);
+
+/*  Identical to libjj_get_counts, but take json_t  */
+int libjj_get_counts_json (json_t *jobspec, struct jj_counts *counts);
 
 #endif /* !HAVE_SCHED_LIBJJ_H */

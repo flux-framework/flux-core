@@ -227,6 +227,24 @@ test_expect_success 'sched-simple: ensure more urgent job run' '
 	EOF
 	test_cmp unlimited-allocs2.expected unlimited-allocs2.out
 '
+# cancel all jobs, to ensure no interference with follow up tests
+# cancel non-running jobs first to ensure they are not accidentally run
+test_expect_success 'sched-simple: cancel jobs' '
+	flux job cancelall --states=SCHED -f &&
+	flux job cancelall -f &&
+	flux job wait-event --timeout=5.0 $(cat job18.id) free &&
+	flux job wait-event --timeout=5.0 $(cat job15.id) free &&
+	flux job wait-event --timeout=5.0 $(cat job16.id) free
+'
+test_expect_success 'sched-simple: reload sched-simple to cover free flags' '
+	flux module reload sched-simple test-free-nolookup
+'
+test_expect_success 'sched-simple: submit job and cancel it' '
+	flux job submit basic.json >job19.id &&
+	flux job wait-event --timeout=5.0 $(cat job19.id) alloc &&
+	flux job cancel $(cat job19.id) &&
+	$dmesg_grep -t 10 "free: R is NULL"
+'
 test_expect_success 'sched-simple: remove sched-simple and cancel jobs' '
 	flux module remove sched-simple &&
 	flux job cancelall -f

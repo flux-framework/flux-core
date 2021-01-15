@@ -20,9 +20,8 @@
 struct schedutil_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
-    schedutil_alloc_cb_f *alloc_cb;
-    schedutil_free_cb_f *free_cb;
-    schedutil_cancel_cb_f *cancel_cb;
+    const struct schedutil_ops *ops;
+    int flags;
     void *cb_arg;
     zlistx_t *outstanding_futures;
 };

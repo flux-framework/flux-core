@@ -17,35 +17,61 @@
 extern "C" {
 #endif
 
-/* Callback for an alloc request.  jobspec is looked up as a convenience.
- * Decode msg with schedutil_alloc_request_decode().
- * 'msg' and 'jobspec' are only valid for hte duration of this call.
- * You should either respond to the request immediately (see alloc.h),
- * or cache this information for later response.
+/* In the following callbacks, 'msg' is a request or response message from
+ * the job manager with payload defined by RFC 27.  The message's reference
+ * count is decremented when the callback returns.
  */
-typedef void (schedutil_alloc_cb_f)(flux_t *h,
-                                    const flux_msg_t *msg,
-                                    const char *jobspec,
-                                    void *arg);
+struct schedutil_ops {
+    /* Callback for ingesting R + metadata for jobs that have resources
+     * Return 0 on success, -1 on failure with errno set.
+     */
+    int (*hello)(flux_t *h,
+                 const flux_msg_t *msg,
+                 const char *R,
+                 void *arg);
 
-/* Callback for a free request.  R is looked up as a convenience.
- * Decode msg with schedutil_free_request_decode().
- * 'msg' and 'R' are only valid for the duration of this call.
- * You should either respond to the request immediately (see free.h),
- * or cache this information for later response.
- */
-typedef void (schedutil_free_cb_f)(flux_t *h,
-                                   const flux_msg_t *msg,
-                                   const char *R,
-                                   void *arg);
+    /* Callback for an alloc request.  'msg' is only valid for the
+     * duration of this call.  You should either respond to the
+     * request immediately (see alloc.h), or cache this information
+     * for later response.
+     */
+    void (*alloc)(flux_t *h,
+                  const flux_msg_t *msg,
+                  void *arg);
 
-/* The job manager wants to cancel a pending alloc request.
- * The scheduler should look up the job in its queue.  If not found, do nothing.
- * If found, call schedutil_alloc_respond_cancel() and dequeue.
- */
-typedef void (schedutil_cancel_cb_f)(flux_t *h,
-                                     flux_jobid_t id,
-                                     void *arg);
+    /* Callback for a free request.  R is looked up as a convenience.
+     * 'msg' and 'R' are only valid for the duration of this call.
+     * You should either respond to the request immediately (see
+     * free.h), or cache this information for later response.
+     *
+     * If R is unneeded, it is recommended that the
+     * SCHEDUTIL_FREE_NOLOOKUP flag be set in schedutil_create().  By
+     * setting this flag, R will not be looked up, saving a KVS lookup
+     * on every invocation of this callback.  R will be set to NULL
+     * instead.
+     */
+    void (*free)(flux_t *h,
+                 const flux_msg_t *msg,
+                 const char *R,
+                 void *arg);
+
+    /* The job manager wants to cancel a pending alloc request.  The
+     * scheduler should look up the job in its queue.  If not found,
+     * do nothing.  If found, call schedutil_alloc_respond_cancel()
+     * and dequeue.
+     */
+    void (*cancel)(flux_t *h,
+                   const flux_msg_t *msg,
+                   void *arg);
+
+    /* The job manager wants to change the priority one or more jobs.
+     * This callback is not required and can be set to NULL if the
+     * caller wishes to ignore these messages.
+     */
+    void (*prioritize)(flux_t *h,
+                       const flux_msg_t *msg,
+                       void *arg);
+};
 
 #ifdef __cplusplus
 }
