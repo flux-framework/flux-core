@@ -40,6 +40,7 @@ struct alloc {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
     zlistx_t *queue;
+    zlistx_t *pending_jobs;
     sched_interface_t mode;
     bool ready;
     bool disable;
@@ -49,7 +50,6 @@ struct alloc {
     flux_watcher_t *idle;
     unsigned int alloc_pending_count; // for mode=single, max of 1
     unsigned int free_pending_count;
-    struct job *pending_job; // for mode=single
     char *sched_sender; // for disconnect
 };
 
@@ -60,12 +60,15 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
     bool cleared = false;
 
     assert (job->alloc_pending);
-    assert (job->handle == NULL);
+    if (job->handle) {
+        if (zlistx_delete (alloc->pending_jobs, job->handle) < 0)
+            flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
+        job->handle = NULL;
+    }
+    job->alloc_pending = 0;
     if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
         flux_log (ctx->h, LOG_ERR, "failed to enqueue job for scheduling");
-    job->alloc_pending = 0;
     job->alloc_queued = 1;
-    alloc->pending_job = NULL;
     annotations_sched_clear (job, &cleared);
     if (cleared) {
         if (event_job_post_pack (ctx->event, job, "annotations",
@@ -225,8 +228,11 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_SUCCESS:
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
-        if (alloc->mode == SCHED_SINGLE)
-            alloc->pending_job = NULL;
+        if (alloc->mode == SCHED_SINGLE) {
+            if (zlistx_delete (alloc->pending_jobs, job->handle) < 0)
+                flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
+            job->handle = NULL;
+        }
         if (job->has_resources) {
             flux_log (h,
                       LOG_ERR,
@@ -259,8 +265,11 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
-        if (alloc->mode == SCHED_SINGLE)
-            alloc->pending_job = NULL;
+        if (alloc->mode == SCHED_SINGLE) {
+            if (zlistx_delete (alloc->pending_jobs, job->handle) < 0)
+                flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
+            job->handle = NULL;
+        }
         annotations_clear (job, &cleared);
         if (cleared) {
             if (event_job_post_pack (ctx->event, job, "annotations",
@@ -280,12 +289,16 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         break;
     case FLUX_SCHED_ALLOC_CANCEL:
         alloc->alloc_pending_count--;
-        if (alloc->mode == SCHED_SINGLE)
-            alloc->pending_job = NULL;
         if (job->state == FLUX_JOB_STATE_SCHED)
             requeue_pending (alloc, job);
-        else
+        else {
+            if (alloc->mode == SCHED_SINGLE) {
+                if (zlistx_delete (alloc->pending_jobs, job->handle) < 0)
+                    flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
+                job->handle = NULL;
+            }
             annotations_clear (job, &cleared);
+        }
         job->alloc_pending = 0;
         if (cleared) {
             if (event_job_post_pack (ctx->event, job, "annotations",
@@ -475,6 +488,7 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     */
     if ((job = zlistx_first (alloc->queue))
         && job->priority != FLUX_JOB_PRIORITY_MIN) {
+        bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
         if (alloc_request (alloc, job) < 0) {
             flux_log_error (ctx->h, "alloc_request fatal error");
             flux_reactor_stop_error (flux_get_reactor (ctx->h));
@@ -485,8 +499,10 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
         job->alloc_pending = 1;
         job->alloc_queued = 0;
         alloc->alloc_pending_count++;
-        if (alloc->mode == SCHED_SINGLE)
-            alloc->pending_job = job;
+        if (alloc->mode == SCHED_SINGLE) {
+            if (!(job->handle = zlistx_insert (alloc->pending_jobs, job, fwd)))
+                flux_log (ctx->h, LOG_ERR, "failed to enqueue pending job");
+        }
         if ((job->flags & FLUX_JOB_DEBUG))
             (void)event_job_post_pack (ctx->event, job,
                                        "debug.alloc-request", 0, NULL);
@@ -593,11 +609,12 @@ int alloc_queue_reprioritize (struct alloc *alloc)
 /* called if highest priority job may have changed */
 int alloc_queue_recalc_pending (struct alloc *alloc) {
     struct job *head = zlistx_first (alloc->queue);
+    struct job *tail = zlistx_last (alloc->pending_jobs);
     if (alloc->mode == SCHED_SINGLE
-        && alloc->pending_job
-        && head) {
-        if (job_comparator (head, alloc->pending_job) < 0) {
-            if (alloc_cancel_alloc_request (alloc, alloc->pending_job) < 0) {
+        && head
+        && tail) {
+        if (job_comparator (head, tail) < 0) {
+            if (alloc_cancel_alloc_request (alloc, tail) < 0) {
                 flux_log_error (alloc->ctx->h, "%s: alloc_cancel_alloc_request",
                                 __FUNCTION__);
                 return -1;
@@ -736,6 +753,7 @@ void alloc_ctx_destroy (struct alloc *alloc)
         flux_watcher_destroy (alloc->check);
         flux_watcher_destroy (alloc->idle);
         zlistx_destroy (&alloc->queue);
+        zlistx_destroy (&alloc->pending_jobs);
         free (alloc->disable_reason);
         free (alloc->sched_sender);
         free (alloc);
@@ -765,6 +783,12 @@ struct alloc *alloc_ctx_create (struct job_manager *ctx)
     zlistx_set_destructor (alloc->queue, job_destructor);
     zlistx_set_comparator (alloc->queue, job_comparator);
     zlistx_set_duplicator (alloc->queue, job_duplicator);
+
+    if (!(alloc->pending_jobs = zlistx_new()))
+        goto error;
+    zlistx_set_destructor (alloc->pending_jobs, job_destructor);
+    zlistx_set_comparator (alloc->pending_jobs, job_comparator);
+    zlistx_set_duplicator (alloc->pending_jobs, job_duplicator);
 
     if (flux_msg_handler_addvec (ctx->h, htab, ctx, &alloc->handlers) < 0)
         goto error;
