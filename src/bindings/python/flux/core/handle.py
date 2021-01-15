@@ -317,5 +317,15 @@ class Flux(Wrapper):
             reactor = self.get_reactor()
         self.flux_reactor_stop_error(reactor)
 
+    def reactor_incref(self, reactor=None):
+        if reactor is None:
+            reactor = self.get_reactor()
+        self.reactor_active_incref(reactor)
+
+    def reactor_decref(self, reactor=None):
+        if reactor is None:
+            reactor = self.get_reactor()
+        self.reactor_active_decref(reactor)
+
 
 # vi: ts=4 sw=4 expandtab
