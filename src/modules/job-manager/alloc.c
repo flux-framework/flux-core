@@ -14,7 +14,6 @@
  *
  * TODO:
  * - implement flow control (credit based?) interface mode
- * - handle post alloc request job priority change
  */
 
 #if HAVE_CONFIG_H
