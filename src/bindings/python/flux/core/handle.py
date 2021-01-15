@@ -55,6 +55,11 @@ class Flux(Wrapper):
             destructor=raw.flux_close,
         )
 
+        # Ensure reactor_depth is initialized for this thread
+        if "reactor_depth" not in self.tls.__dict__:
+            self.tls.reactor_depth = 0
+            self.tls.exception = None
+
         if handle is None:
             try:
                 self.handle = raw.flux_open(url, flags)
@@ -261,6 +266,17 @@ class Flux(Wrapper):
         rc = 0
         if reactor is None:
             reactor = self.get_reactor()
+
+        #
+        #  Only do the whole signals rigamarole below if we're in the
+        #   the main thread: libev don't take kindly to registration
+        #   of signal watcher from multiple threads.
+        #
+        if threading.current_thread() != threading.main_thread():
+            rc = self.flux_reactor_run(reactor, flags)
+            if rc < 0:
+                Flux.raise_if_exception()
+            return rc
 
         reactor_interrupted = False
 

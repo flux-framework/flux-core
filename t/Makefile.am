@@ -229,6 +229,7 @@ dist_check_SCRIPTS = \
 	issues/t3415-job-shell-segfault-on-null.sh \
 	issues/t3432-python-sigint.sh \
 	issues/t3429-python-future-ref.py \
+	issues/t3470-multithread-reactor-run.py \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
