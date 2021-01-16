@@ -43,7 +43,7 @@ struct simple_sched {
     flux_t *h;
     flux_future_t *acquire_f; /* resource.acquire future */
 
-    char *mode;             /* allocation mode */
+    char *alloc_mode;             /* allocation mode */
     bool single;
     int schedutil_flags;
     struct rlist *rlist;    /* list of resources */
@@ -134,7 +134,7 @@ static void simple_sched_destroy (flux_t *h, struct simple_sched *ss)
     flux_watcher_destroy (ss->idle);
     schedutil_destroy (ss->util_ctx);
     rlist_destroy (ss->rlist);
-    free (ss->mode);
+    free (ss->alloc_mode);
     free (ss);
 }
 
@@ -181,7 +181,7 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     jj = &job->jj;
     if (!fail_alloc) {
         errno = 0;
-        alloc = rlist_alloc (ss->rlist, ss->mode,
+        alloc = rlist_alloc (ss->rlist, ss->alloc_mode,
                              jj->nnodes, jj->nslots, jj->slot_size);
     }
     if (!alloc || !(R = Rstring_create (alloc, now, jj->duration))) {
@@ -671,13 +671,13 @@ out:
     return rc;
 }
 
-static char * get_alloc_mode (flux_t *h, const char *mode)
+static char * get_alloc_mode (flux_t *h, const char *alloc_mode)
 {
-    if (strcmp (mode, "worst-fit") == 0
-        || strcmp (mode, "first-fit") == 0
-        || strcmp (mode, "best-fit") == 0)
-        return strdup (mode);
-    flux_log (h, LOG_ERR, "unknown allocation mode: %s", mode);
+    if (strcmp (alloc_mode, "worst-fit") == 0
+        || strcmp (alloc_mode, "first-fit") == 0
+        || strcmp (alloc_mode, "best-fit") == 0)
+        return strdup (alloc_mode);
+    flux_log (h, LOG_ERR, "unknown allocation mode: %s", alloc_mode);
     return NULL;
 }
 
@@ -694,9 +694,9 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 {
     int i;
     for (i = 0; i < argc; i++) {
-        if (strncmp ("mode=", argv[i], 5) == 0) {
-            free (ss->mode);
-            ss->mode = get_alloc_mode (h, argv[i]+5);
+        if (strncmp ("alloc-mode=", argv[i], 11) == 0) {
+            free (ss->alloc_mode);
+            ss->alloc_mode = get_alloc_mode (h, argv[i]+11);
         }
         else if (strcmp ("unlimited", argv[i]) == 0) {
             ss->single = false;
