@@ -44,7 +44,8 @@ struct simple_sched {
     flux_future_t *acquire_f; /* resource.acquire future */
 
     char *alloc_mode;             /* allocation mode */
-    bool single;
+    char *mode;             /* concurrency mode */
+    unsigned int alloc_limit; /* 0 = unlimited */
     int schedutil_flags;
     struct rlist *rlist;    /* list of resources */
     zlistx_t *queue;        /* job queue */
@@ -135,6 +136,7 @@ static void simple_sched_destroy (flux_t *h, struct simple_sched *ss)
     schedutil_destroy (ss->util_ctx);
     rlist_destroy (ss->rlist);
     free (ss->alloc_mode);
+    free (ss->mode);
     free (ss);
 }
 
@@ -145,7 +147,7 @@ static struct simple_sched * simple_sched_create (void)
         return NULL;
 
     /* Single alloc request mode is default */
-    ss->single = true;
+    ss->alloc_limit = 1;
     return ss;
 }
 
@@ -328,7 +330,8 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg, void *arg)
     struct jobreq *job;
     bool search_dir;
 
-    if (ss->single && zlistx_size (ss->queue) > 0) {
+    if (ss->alloc_limit
+        && zlistx_size (ss->queue) >= ss->alloc_limit) {
         flux_log (h, LOG_ERR, "alloc received before previous one handled");
         errno = EINVAL;
         goto err;
@@ -657,7 +660,7 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
         goto out;
     }
     if (schedutil_ready (ss->util_ctx,
-                         ss->single ? "single": "unlimited",
+                         ss->mode ? ss->mode : "single",
                          NULL) < 0) {
         flux_log_error (h, "schedutil_ready");
         goto out;
@@ -684,11 +687,17 @@ static char * get_alloc_mode (flux_t *h, const char *alloc_mode)
 static void set_mode (struct simple_sched *ss, const char *mode)
 {
     if (strcasecmp (mode, "single") == 0)
-        ss->single = true;
-    else if (strcasecmp (mode, "unlimited") == 0)
-        ss->single = false;
-    else
+        ss->alloc_limit = 1;
+    else if (strcasecmp (mode, "unlimited") == 0) {
+        ss->alloc_limit = 0;
+    }
+    else {
         flux_log (ss->h, LOG_ERR, "unknown mode: %s", mode);
+        return;
+    }
+    free (ss->mode);
+    if (!(ss->mode = strdup (mode)))
+        flux_log_error (ss->h, "error setting mode: %s", mode);
 }
 
 static struct schedutil_ops ops = {
