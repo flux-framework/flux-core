@@ -332,7 +332,9 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg, void *arg)
 
     if (ss->alloc_limit
         && zlistx_size (ss->queue) >= ss->alloc_limit) {
-        flux_log (h, LOG_ERR, "alloc received before previous one handled");
+        flux_log (h, LOG_ERR,
+                  "alloc received above max concurrency: %d",
+                  ss->alloc_limit);
         errno = EINVAL;
         goto err;
     }
@@ -686,8 +688,15 @@ static char * get_alloc_mode (flux_t *h, const char *alloc_mode)
 
 static void set_mode (struct simple_sched *ss, const char *mode)
 {
-    if (strcasecmp (mode, "limited=1") == 0)
-        ss->alloc_limit = 1;
+    if (!strncmp (mode, "limited=", 8)) {
+        char *endptr;
+        int n = strtol (mode+8, &endptr, 0);
+        if (*endptr != '\0' || n <= 0) {
+            flux_log (ss->h, LOG_ERR, "invalid limited value: %s\n", mode);
+            return;
+        }
+        ss->alloc_limit = n;
+    }
     else if (strcasecmp (mode, "unlimited") == 0) {
         ss->alloc_limit = 0;
     }
