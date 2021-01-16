@@ -122,7 +122,7 @@ test_expect_success 'job-manager: release final held job' '
 '
 PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
 test_expect_success 'job-manager: test with random priority plugin' '
-	flux module reload sched-simple unlimited &&
+	flux module reload sched-simple mode=unlimited &&
 	ncores=$(flux resource list -s free -no {ncores}) &&
 	sleepjob=$(flux mini submit -n ${ncores} sleep 3000) &&
 	flux jobtap load ${PLUGINPATH}/random.so &&

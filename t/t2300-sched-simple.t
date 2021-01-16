@@ -188,7 +188,7 @@ test_expect_success 'sched-simple: there are no outstanding sched requests' '
 	grep "0 free requests pending to scheduler" queue_status.out
 '
 test_expect_success 'sched-simple: reload in unlimited mode' '
-	flux module load sched-simple unlimited &&
+	flux module load sched-simple mode=unlimited &&
 	$dmesg_grep -t 10 "scheduler: ready unlimited"
 '
 test_expect_success 'sched-simple: submit 5 more jobs' '

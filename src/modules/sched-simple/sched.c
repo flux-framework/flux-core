@@ -681,6 +681,16 @@ static char * get_alloc_mode (flux_t *h, const char *alloc_mode)
     return NULL;
 }
 
+static void set_mode (struct simple_sched *ss, const char *mode)
+{
+    if (strcasecmp (mode, "single") == 0)
+        ss->single = true;
+    else if (strcasecmp (mode, "unlimited") == 0)
+        ss->single = false;
+    else
+        flux_log (ss->h, LOG_ERR, "unknown mode: %s", mode);
+}
+
 static struct schedutil_ops ops = {
     .hello = hello_cb,
     .alloc = alloc_cb,
@@ -698,8 +708,8 @@ static int process_args (flux_t *h, struct simple_sched *ss,
             free (ss->alloc_mode);
             ss->alloc_mode = get_alloc_mode (h, argv[i]+11);
         }
-        else if (strcmp ("unlimited", argv[i]) == 0) {
-            ss->single = false;
+        else if (strncmp ("mode=", argv[i], 5) == 0) {
+            set_mode (ss, argv[i]+5);
         }
         else if (strcmp ("test-free-nolookup", argv[i]) == 0) {
             ss->schedutil_flags |= SCHEDUTIL_FREE_NOLOOKUP;
