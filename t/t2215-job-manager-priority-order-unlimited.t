@@ -47,7 +47,7 @@ test_expect_success HAVE_JQ 'job-manager: no annotations (SSSSS)' '
 '
 
 # --setbit 0x2 enables creation of reason_pending field
-# flux queue stop/start to ensure not raciness with setting up debug bits
+# flux queue stop/start to ensure no raciness with setting up debug bits
 test_expect_success 'job-manager: load sched-simple w/ 2 cores' '
         flux R encode -r0 -c0-1 >R.test &&
         flux resource reload R.test &&
@@ -65,7 +65,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SSSRR' '
         jmgr_check_state $(cat job5.id) R
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate jobs (RRSSS)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs (SSSRR)' '
         jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "1" &&
         jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"insufficient resources\"" &&
@@ -134,7 +134,7 @@ test_expect_success HAVE_JQ 'job-manager: job state SRRII' '
         jmgr_check_state $(cat job5.id) I
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSRRI)' '
+test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SRRII)' '
         jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "0" &&
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&

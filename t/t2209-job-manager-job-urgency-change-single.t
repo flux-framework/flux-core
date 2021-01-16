@@ -44,7 +44,7 @@ test_expect_success HAVE_JQ 'job-manager: no annotations (SSSS)' '
 '
 
 # --setbit 0x2 enables creation of reason_pending field
-# flux queue stop/start to ensure not raciness with setting up debug bits
+# flux queue stop/start to ensure no raciness with setting up debug bits
 test_expect_success 'job-manager: load sched-simple w/ 2 cores' '
         flux R encode -r0 -c0-1 >R.test &&
         flux resource reload R.test &&
