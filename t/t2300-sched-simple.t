@@ -44,6 +44,14 @@ test_expect_success 'sched-simple: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
+test_expect_success 'job-manager: load sched-simple w/ an illegal mode' '
+        flux module unload sched-simple &&
+        flux module load sched-simple mode=foobar
+'
+test_expect_success 'job-manager: load sched-simple w/ an illegal limited range' '
+        flux module unload sched-simple &&
+        flux module load sched-simple mode=limited=-1
+'
 test_expect_success 'sched-simple: reload sched-simple with default resource.R' '
 	flux module unload sched-simple &&
 	flux resource reload R.test &&
