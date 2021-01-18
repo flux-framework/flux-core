@@ -361,11 +361,27 @@ static void jobtap_handle_load_req (struct job_manager *ctx,
     char *prev = NULL;
     jobtap_error_t error;
     const char *errstr = NULL;
+    struct job *job = NULL;
 
     if (!(prev = strdup (jobtap_plugin_name (ctx->jobtap->plugin))))
         goto error;
     if (jobtap_load (ctx->jobtap, path, &error) < 0) {
         errstr = error.text;
+        goto error;
+    }
+
+    /*  Make plugin aware of all active jobs via job.new callback
+     */
+    job = zhashx_first (ctx->active_jobs);
+    while (job) {
+        (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
+        job = zhashx_next (ctx->active_jobs);
+    }
+
+    /* Now schedule reprioritize of all jobs
+     */
+    if (reprioritize_all (ctx) < 0) {
+        errstr = "jobtap: plugin loaded but failed to reprioritize all jobs";
         goto error;
     }
     if (flux_respond_pack (ctx->h,
