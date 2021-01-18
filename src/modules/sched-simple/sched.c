@@ -383,8 +383,7 @@ static void cancel_cb (flux_t *h,
             return;
         }
         zlistx_delete (ss->queue, job->handle);
-        if (!ss->single)
-            annotate_reason_pending (ss);
+        annotate_reason_pending (ss);
     }
 }
 
@@ -433,8 +432,7 @@ static void prioritize_cb (flux_t *h,
             job = zlistx_next (ss->queue);
         }
     }
-    if (!ss->single)
-        annotate_reason_pending (ss);
+    annotate_reason_pending (ss);
     return;
 
 proto_error:
