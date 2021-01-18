@@ -14,6 +14,13 @@
 #include <flux/core.h>
 #include "job-manager.h"
 
+/*  Request that all jobs be reprioritized. This involves calling the
+ *   job.priority.get plugin callback for all jobs, and sending the
+ *   sched.prioritize RPC to update the scheduler with any job
+ *   priorities which have changed.
+ */
+int reprioritize_all (struct job_manager *ctx);
+
 /*  Request reprioritization of a single job
  */
 int reprioritize_job (struct job_manager *ctx,

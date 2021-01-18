@@ -20,7 +20,9 @@
 #include "job.h"
 #include "event.h"
 #include "alloc.h"
+#include "jobtap-internal.h"
 #include "job-manager.h"
+
 #include "prioritize.h"
 
 static int sched_prioritize (flux_t *h, json_t *priorities)
@@ -153,6 +155,92 @@ int reprioritize_id (struct job_manager *ctx,
         return -1;
     }
     return reprioritize_job (ctx, job, priority);
+}
+
+/*  Request reprioritization of all jobs
+ */
+int reprioritize_all (struct job_manager *ctx)
+{
+    int64_t priority;
+    flux_t *h = ctx->h;
+    struct job *job = zhashx_first (ctx->active_jobs);
+    json_t *priorities = json_array ();
+
+    if (!priorities)
+        return -1;
+
+    for (job = zhashx_first (ctx->active_jobs); job;
+         job = zhashx_next (ctx->active_jobs)) {
+        /*
+         *  Only proess jobs between PRIORITY and SCHED states:
+         */
+        if (job->state != FLUX_JOB_STATE_PRIORITY
+            && job->state != FLUX_JOB_STATE_SCHED)
+            continue;
+
+        /*  Call plugin to get immediate priority calculation
+         */
+        if (jobtap_get_priority (ctx->jobtap, job, &priority) < 0) {
+            flux_log_error (h, "jobtap_get_priority: %ju",
+                            (uintmax_t) job->id);
+            continue;
+        }
+
+        /*  Only do any work if job priority was set and differs
+         *   from current job priority
+         */
+        if (priority > -1 && job->priority != priority) {
+
+            /*  Re-prioritize job. This will update job->priority and
+             *   post a priority event if the priority changes
+             */
+            if (reprioritize_one (ctx, job, priority, false) < 0) {
+                flux_log_error (h, "reprioritize_one: %ju",
+                                (uintmax_t) job->id);
+                goto error;
+            }
+
+            /*  The rest of the work here is only for jobs with
+             *   outstanding alloc requests
+             */
+            if (!job->alloc_pending)
+                continue;
+
+            /*  Collect changed priorities which are > 0 in a priorities
+             *   array for use with sched.prioritize RPC.
+             *
+             *   priority == 0 or held jobs have already been handled
+             *   by the call to `reprioritize_one()` above.
+             */
+            if (job->priority > FLUX_JOB_PRIORITY_MIN) {
+                json_t *entry = json_pack ("[II]", job->id, job->priority);
+                if (!entry || json_array_append_new (priorities, entry) < 0) {
+                    json_decref (entry);
+                    flux_log (h, LOG_ERR,
+                              "reprioritize: json_pack/append failed");
+                        goto error;
+                }
+            }
+        }
+    }
+
+    /*  Reorder alloc queue. Canceled alloc requests will be reinserted
+     *   into the queue as the scheduler responds to them.
+     */
+    alloc_queue_reprioritize (ctx->alloc);
+
+    /*  Update scheduler with any changed priorities */
+    if (sched_prioritize (ctx->h, priorities) < 0) {
+        flux_log_error (ctx->h,
+                        "reprioritize: sched.priority: failed for %ld jobs",
+                        json_array_size (priorities));
+        goto error;
+    }
+
+    return 0;
+error:
+    json_decref (priorities);
+    return -1;
 }
 
 /*
