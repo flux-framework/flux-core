@@ -24,6 +24,7 @@
 #include "restart.h"
 #include "event.h"
 #include "wait.h"
+#include "jobtap-internal.h"
 
 /* restart_map callback should return -1 on error to stop map with error,
  * or 0 on success.  'job' is only valid for the duration of the callback.
@@ -220,6 +221,21 @@ int restart_from_kvs (struct job_manager *ctx)
      */
     job = zhashx_first (ctx->active_jobs);
     while (job) {
+        /*
+         *  On restart, call 'job.new' plugin callbacks since this is
+         *   the first time this instance of the job-manager has seen
+         *   this job. Be sure to call this before posting any other
+         *   events below, since job.new should always be the first
+         *   callback for a job.
+         *
+         *  Jobs in SCHED state may also immediately transition back to
+         *   PRIORITY, potentially generating two other plugin callbacks
+         *   after this one. (job.priority, job.sched...)
+         */
+        if (jobtap_call (ctx->jobtap, job, "job.new", NULL) < 0)
+            flux_log_error (ctx->h, "jobtap_call (id=%ju, new)",
+                                (uintmax_t) job->id);
+
         if (job->state == FLUX_JOB_STATE_SCHED) {
             /*
              * This is confusing. In order to update priority on transition

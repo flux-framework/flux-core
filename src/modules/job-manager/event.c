@@ -46,6 +46,7 @@
 #include "journal.h"
 #include "wait.h"
 #include "prioritize.h"
+#include "jobtap-internal.h"
 
 #include "event.h"
 
@@ -324,8 +325,6 @@ int event_job_action (struct event *event, struct job *job)
              * SCHED state, dequeue the job first.
              */
             alloc_dequeue_alloc_request (ctx->alloc, job);
-            if (reprioritize_job (ctx, job, job->urgency) < 0)
-                return -1;
             break;
         case FLUX_JOB_STATE_SCHED:
             if (alloc_enqueue_alloc_request (ctx->alloc, job) < 0)
@@ -433,6 +432,34 @@ static int event_release_context_decode (json_t *context,
     }
 
     return 0;
+}
+
+/*  Return a callback topic string for the current job state
+ *
+ *   NOTE: 'job.state.new' and 'job.state.depend' are not currently used
+ *    since jobs do not transition through these states in
+ *    event_job_post_pack().
+ */
+static const char *state_topic (struct job *job)
+{
+    switch (job->state) {
+        case FLUX_JOB_STATE_NEW:
+            return "job.state.new";
+        case FLUX_JOB_STATE_DEPEND:
+            return "job.state.depend";
+        case FLUX_JOB_STATE_PRIORITY:
+            return "job.state.priority";
+        case FLUX_JOB_STATE_SCHED:
+            return "job.state.sched";
+        case FLUX_JOB_STATE_RUN:
+            return "job.state.run";
+        case FLUX_JOB_STATE_CLEANUP:
+            return "job.state.cleanup";
+        case FLUX_JOB_STATE_INACTIVE:
+            return "job.state.inactive";
+    }
+    /* NOTREACHED */
+    return "job.state.none";
 }
 
 /* This function implements state transitions per RFC 21.
@@ -554,6 +581,48 @@ static int get_timestamp_now (double *timestamp)
     return 0;
 }
 
+
+/*  Call jobtap plugin for event if necessary.
+ *  Currently jobtap plugins are called only on state transitions or
+ *   update of job urgency via "urgency" event.
+ */
+static int event_jobtap_call (struct event *event,
+                              struct job *job,
+                              const char *name,
+                              json_t *entry,
+                              flux_job_state_t old_state)
+{
+    if (job->state != old_state) {
+        /*
+         *  Call plugin callback on state change
+         */
+        return jobtap_call (event->ctx->jobtap,
+                            job,
+                            state_topic (job),
+                            "{s:O s:i}",
+                            "entry", entry,
+                            "prev_state", old_state);
+    }
+    else if (strcmp (name, "urgency") == 0) {
+        /*
+         *  An urgency update ocurred. Get new priority value from plugin
+         *   and reprioritize job if there was a change.
+         *   (Note: reprioritize_job() is a noop if job is not in PRIORITY
+         *    or SCHED state)
+         */
+        int64_t priority = -1;
+        if (jobtap_get_priority (event->ctx->jobtap, job, &priority) < 0
+            || reprioritize_job (event->ctx, job, priority) < 0) {
+            flux_log_error (event->ctx->h,
+                            "jobtap: urgency: %ju: priority update failed",
+                            (uintmax_t) job->id);
+            return -1;
+        }
+    }
+    return 0;
+}
+
+
 int event_job_post_pack (struct event *event,
                          struct job *job,
                          const char *name,
@@ -592,11 +661,16 @@ int event_job_post_pack (struct event *event,
             goto error;
     }
 
-    /*  Reprioritize job on urgency update
+    /*  Ensure jobtap call happens after the current state is published,
+     *   in case any plugin callback causes a transition to a new state,
+     *   but the call needs to occur before event_job_action() which may
+     *   itself cause the job to recursively enter a new state.
+     *
+     *  Note: Failure from the jobtap call is currently ignored, but will
+     *   be logged in jobtap_call(). The goal is to do something with the
+     *   errors at some point (perhaps raise a job exception).
      */
-    if (strcmp (name, "urgency") == 0
-        && reprioritize_job (event->ctx, job, job->urgency) < 0)
-        goto error;
+    (void) event_jobtap_call (event, job, name, entry, old_state);
 
     /* Keep track of running job count.
      * If queue reaches idle state, event_job_action() triggers any waiters.

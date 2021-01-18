@@ -53,7 +53,10 @@ libjob_manager_la_SOURCES = \
 	getattr.h \
 	getattr.c \
 	prioritize.h \
-	prioritize.c
+	prioritize.c \
+	jobtap-internal.h \
+	jobtap.h \
+	jobtap.c
 
 job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_manager_la_LIBADD = \
