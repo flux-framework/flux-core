@@ -58,6 +58,9 @@ libjob_manager_la_SOURCES = \
 	jobtap.h \
 	jobtap.c
 
+fluxinclude_HEADERS = \
+	jobtap.h
+
 job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_manager_la_LIBADD = \
 	libjob-manager.la \
