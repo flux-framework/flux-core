@@ -520,3 +520,9 @@ dec
 subkey
 waitstatus
 returncode
+bulksubmit
+basename
+bcc
+dirname
+jps
+xargs
