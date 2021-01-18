@@ -31,6 +31,20 @@
 
 #define FLUX_JOBTAP_PRIORITY_UNAVAIL INT64_C(-2)
 
+struct jobtap_builtin {
+    const char *name;
+    flux_plugin_init_f init;
+};
+
+extern int default_priority_plugin_init (flux_plugin_t *p);
+extern int hold_priority_plugin_init (flux_plugin_t *p);
+
+static struct jobtap_builtin jobtap_builtins [] = {
+    { "builtin.priority.default", default_priority_plugin_init },
+    { "builtin.priority.hold", hold_priority_plugin_init },
+    { 0 },
+};
+
 struct jobtap {
     struct job_manager *ctx;
     flux_plugin_t *plugin;
@@ -43,6 +57,10 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
     if (!jobtap)
         return NULL;
     jobtap->ctx = ctx;
+    if (jobtap_load (jobtap, "builtin.priority.default", NULL) < 0) {
+        free (jobtap);
+        return NULL;
+    }
     return jobtap;
 }
 
@@ -305,6 +323,24 @@ int jobtap_call (struct jobtap *jobtap,
     return rc;
 }
 
+static int jobtap_load_builtin (flux_plugin_t *p,
+                                const char *name)
+{
+    struct jobtap_builtin *builtin = jobtap_builtins;
+
+    while (builtin && builtin->name) {
+        if (strcmp (name, builtin->name) == 0) {
+            if (flux_plugin_set_name (p, builtin->name) < 0)
+                return -1;
+            return (*builtin->init) (p);
+        }
+        builtin++;
+    }
+
+    errno = ENOENT;
+    return -1;
+}
+
 int jobtap_load (struct jobtap *jobtap,
                  const char *path,
                  jobtap_error_t *errp)
@@ -334,6 +370,11 @@ int jobtap_load (struct jobtap *jobtap,
     if (!(p = flux_plugin_create ())
         || flux_plugin_aux_set (p, "flux::jobtap", jobtap, NULL) < 0)
         goto error;
+    if (strncmp (path, "builtin.", 8) == 0) {
+        if (jobtap_load_builtin (p, path) < 0)
+            goto error;
+        goto done;
+    }
     flux_plugin_set_flags (p, FLUX_PLUGIN_RTLD_NOW);
     if (flux_plugin_load_dso (p, path) < 0)
         goto error;
@@ -345,6 +386,7 @@ int jobtap_load (struct jobtap *jobtap,
                   "Plugin did not set name in flux_plugin_init");
         goto error;
     }
+done:
     jobtap->plugin = p;
     return 0;
 error:
