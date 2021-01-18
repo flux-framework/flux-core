@@ -491,6 +491,16 @@ int flux_jobtap_service_register (flux_plugin_t *p,
     return 0;
 }
 
+int flux_jobtap_reprioritize_all (flux_plugin_t *p)
+{
+    struct jobtap *jobtap = flux_plugin_aux_get (p, "flux::jobtap");
+    if (!jobtap) {
+        errno = EINVAL;
+        return -1;
+    }
+    return reprioritize_all (jobtap->ctx);
+}
+
 int flux_jobtap_reprioritize_job (flux_plugin_t *p,
                                   flux_jobid_t id,
                                   unsigned int priority)

@@ -33,6 +33,12 @@ int flux_jobtap_service_register (flux_plugin_t *p,
                                   flux_msg_handler_f cb,
                                   void *arg);
 
+/*  Start a loop to re-prioritize all jobs. The plugin "priority.get"
+ *   callback will be called for each job currently in SCHED or
+ *   PRIORITY states.
+ */
+int flux_jobtap_reprioritize_all (flux_plugin_t *p);
+
 /*  Set the priority of job `id` to `priority`. This does nothing
  *   if the priority isn't changed from the current value or if the
  *   job is not in the PRIORITY or SCHED states. O/w, a priority event

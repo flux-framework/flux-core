@@ -172,7 +172,7 @@ int reprioritize_all (struct job_manager *ctx)
     for (job = zhashx_first (ctx->active_jobs); job;
          job = zhashx_next (ctx->active_jobs)) {
         /*
-         *  Only proess jobs between PRIORITY and SCHED states:
+         *  Only process jobs between PRIORITY and SCHED states:
          */
         if (job->state != FLUX_JOB_STATE_PRIORITY
             && job->state != FLUX_JOB_STATE_SCHED)
