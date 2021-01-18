@@ -221,6 +221,14 @@ int restart_from_kvs (struct job_manager *ctx)
     job = zhashx_first (ctx->active_jobs);
     while (job) {
         if (job->state == FLUX_JOB_STATE_SCHED) {
+            /*
+             * This is confusing. In order to update priority on transition
+             *  back to PRIORITY state, the priority must be reset to "-1",
+             *  even though the last priority value was reconstructed from
+             *  the eventlog. This is becuase the transitioning "priority"
+             *  event is only posted when the priority changes.
+             */
+            job->priority = -1;
             if (event_job_post_pack (ctx->event,
                                      job,
                                      "flux-restart",

@@ -51,6 +51,7 @@ struct job *job_create (void)
     job->refcount = 1;
     job->userid = FLUX_USERID_UNKNOWN;
     job->urgency = FLUX_JOB_URGENCY_DEFAULT;
+    job->priority = -1;
     job->state = FLUX_JOB_STATE_NEW;
     return job;
 }

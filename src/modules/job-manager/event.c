@@ -45,6 +45,7 @@
 #include "drain.h"
 #include "journal.h"
 #include "wait.h"
+#include "prioritize.h"
 
 #include "event.h"
 
@@ -309,7 +310,6 @@ nomem:
 int event_job_action (struct event *event, struct job *job)
 {
     struct job_manager *ctx = event->ctx;
-    int64_t priority;
 
     switch (job->state) {
         case FLUX_JOB_STATE_NEW:
@@ -319,28 +319,12 @@ int event_job_action (struct event *event, struct job *job)
                 return -1;
             break;
         case FLUX_JOB_STATE_PRIORITY:
-            /* N.B. Priority will be set via a priority plugin call in
-             * the future. For the time being, we pass the
-             * urgency set via submit or urgency change.
-             *
+            /*
              * In the event we have re-entered this state from the
              * SCHED state, dequeue the job first.
              */
             alloc_dequeue_alloc_request (ctx->alloc, job);
-            if (job->urgency == FLUX_JOB_URGENCY_HOLD)
-                priority = FLUX_JOB_PRIORITY_MIN;
-            else if (job->urgency == FLUX_JOB_URGENCY_EXPEDITE)
-                priority = FLUX_JOB_PRIORITY_MAX;
-            else
-                priority = job->urgency;
-            /* We pack priority with I instead of i to avoid issue of
-             * signed vs unsigned int */
-            if (event_job_post_pack (event,
-                                     job,
-                                     "priority",
-                                     0,
-                                     "{ s:I }",
-                                     "priority", priority) < 0)
+            if (reprioritize_job (ctx, job, job->urgency) < 0)
                 return -1;
             break;
         case FLUX_JOB_STATE_SCHED:
@@ -409,8 +393,6 @@ static int event_submit_context_decode (json_t *context,
 static int event_priority_context_decode (json_t *context,
                                           int64_t *priority)
 {
-    /* N.B. eventually this will be the priority, but is the
-     * same of the urgency at the moment */
     if (json_unpack (context, "{ s:I }", "priority", priority) < 0) {
         errno = EPROTO;
         return -1;
@@ -609,6 +591,12 @@ int event_job_post_pack (struct event *event,
         if (event_batch_pub_state (event, job, timestamp) < 0)
             goto error;
     }
+
+    /*  Reprioritize job on urgency update
+     */
+    if (strcmp (name, "urgency") == 0
+        && reprioritize_job (event->ctx, job, job->urgency) < 0)
+        goto error;
 
     /* Keep track of running job count.
      * If queue reaches idle state, event_job_action() triggers any waiters.

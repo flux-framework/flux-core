@@ -51,7 +51,9 @@ libjob_manager_la_SOURCES = \
 	journal.h \
 	journal.c \
 	getattr.h \
-	getattr.c
+	getattr.c \
+	prioritize.h \
+	prioritize.c
 
 job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module
 job_manager_la_LIBADD = \

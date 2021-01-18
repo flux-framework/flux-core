@@ -446,11 +446,11 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (alloc->mode == SCHED_SINGLE && alloc->alloc_pending_count > 0)
         return;
    /* The queue is sorted from highest to lowest priority, so if the
-    * first job has urgency=HOLD (priority=MIN), all other jobs must have
-    * the same priority, and no alloc requests can be sent.
+    * first job has priority=MIN, all other jobs must have the same priority,
+    * and no alloc requests can be sent.
     */
     if ((job = zlistx_first (alloc->queue))
-        && job->urgency != FLUX_JOB_URGENCY_HOLD)
+        && job->priority != FLUX_JOB_PRIORITY_MIN)
         flux_watcher_start (alloc->idle);
 }
 
@@ -471,11 +471,11 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (alloc->mode == SCHED_SINGLE && alloc->alloc_pending_count > 0)
         return;
    /* The queue is sorted from highest to lowest priority, so if the
-    * first job has urgency=HOLD (priority=MIN), all other jobs must have
-    * the same priority, and no alloc requests can be sent.
+    * first job has priority=MIN, all other jobs must have the same priority,
+    * and no alloc requests can be sent.
     */
     if ((job = zlistx_first (alloc->queue))
-        && job->urgency != FLUX_JOB_URGENCY_HOLD) {
+        && job->priority != FLUX_JOB_PRIORITY_MIN) {
         if (alloc_request (alloc, job) < 0) {
             flux_log_error (ctx->h, "alloc_request fatal error");
             flux_reactor_stop_error (flux_get_reactor (ctx->h));
@@ -517,7 +517,7 @@ int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
     assert (job->state == FLUX_JOB_STATE_SCHED);
     if (!job->alloc_queued
         && !job->alloc_pending
-        && job->urgency != FLUX_JOB_URGENCY_HOLD) {
+        && job->priority != FLUX_JOB_PRIORITY_MIN) {
         bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
         assert (job->handle == NULL);
         if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
@@ -562,7 +562,7 @@ struct job *alloc_queue_next (struct alloc *alloc)
     return zlistx_next (alloc->queue);
 }
 
-/* called from urgency_handle_request() */
+/* called from reprioritize_job() */
 void alloc_queue_reorder (struct alloc *alloc, struct job *job)
 {
     bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
