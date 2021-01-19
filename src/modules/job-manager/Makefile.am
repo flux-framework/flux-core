@@ -11,11 +11,17 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS) $(JANSSON_CFLAGS)
 
-fluxmod_LTLIBRARIES = job-manager.la
+fluxmod_LTLIBRARIES = \
+	job-manager.la
+
+noinst_LTLIBRARIES = \
+	libjob-manager.la
 
 job_manager_la_SOURCES = \
 	job-manager.c \
-	job-manager.h \
+	job-manager.h
+
+libjob_manager_la_SOURCES = \
 	job.c \
 	job.h \
 	submit.c \
@@ -48,12 +54,14 @@ job_manager_la_SOURCES = \
 	getattr.c
 
 job_manager_la_LDFLAGS = $(fluxmod_ldflags) -module
-job_manager_la_LIBADD = $(fluxmod_libadd) \
-		    $(top_builddir)/src/common/libjob/libjob.la \
-		    $(top_builddir)/src/common/libflux-internal.la \
-		    $(top_builddir)/src/common/libflux-core.la \
-		    $(top_builddir)/src/common/libflux-optparse.la \
-		    $(ZMQ_LIBS)
+job_manager_la_LIBADD = \
+	libjob-manager.la \
+	$(fluxmod_libadd) \
+	$(top_builddir)/src/common/libjob/libjob.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-optparse.la \
+	$(ZMQ_LIBS)
 
 TESTS = \
 	test_job.t \
@@ -65,15 +73,7 @@ TESTS = \
 	test_annotate.t
 
 test_ldadd = \
-        $(top_builddir)/src/modules/job-manager/event.o \
-        $(top_builddir)/src/modules/job-manager/job.o \
-        $(top_builddir)/src/modules/job-manager/alloc.o \
-        $(top_builddir)/src/modules/job-manager/start.o \
-        $(top_builddir)/src/modules/job-manager/drain.o \
-        $(top_builddir)/src/modules/job-manager/submit.o \
-        $(top_builddir)/src/modules/job-manager/wait.o \
-        $(top_builddir)/src/modules/job-manager/annotate.o \
-        $(top_builddir)/src/modules/job-manager/journal.o \
+	libjob-manager.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
