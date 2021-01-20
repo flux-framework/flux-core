@@ -660,7 +660,7 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
         goto out;
     }
     if (schedutil_ready (ss->util_ctx,
-                         ss->mode ? ss->mode : "single",
+                         ss->mode ? ss->mode : "limited=1",
                          NULL) < 0) {
         flux_log_error (h, "schedutil_ready");
         goto out;
@@ -686,7 +686,7 @@ static char * get_alloc_mode (flux_t *h, const char *alloc_mode)
 
 static void set_mode (struct simple_sched *ss, const char *mode)
 {
-    if (strcasecmp (mode, "single") == 0)
+    if (strcasecmp (mode, "limited=1") == 0)
         ss->alloc_limit = 1;
     else if (strcasecmp (mode, "unlimited") == 0) {
         ss->alloc_limit = 0;

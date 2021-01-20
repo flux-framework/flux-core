@@ -42,9 +42,9 @@ struct alloc {
     flux_watcher_t *prep;
     flux_watcher_t *check;
     flux_watcher_t *idle;
-    // e.g. for mode single, is 1, for mode unlimited set to 0
+    // e.g. for mode limited w/ limit=1, is 1, for mode unlimited set to 0
     unsigned int alloc_limit;
-    // e.g. for mode single, max of 1
+    // e.g. for mode limited w/ limit=1, max of 1
     unsigned int alloc_pending_count;
     unsigned int free_pending_count;
     char *sched_sender; // for disconnect
@@ -397,13 +397,21 @@ static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager *ctx = arg;
     const char *mode;
+    int limit = 0;
     int count;
     struct job *job;
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "mode", &mode) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s?:i}",
+                                        "mode", &mode,
+                                        "limit", &limit) < 0)
         goto error;
-    if (!strcmp (mode, "single"))
-        ctx->alloc->alloc_limit = 1;
+    if (!strcmp (mode, "limited")) {
+        if (limit <= 0) {
+            errno = EPROTO;
+            goto error;
+        }
+        ctx->alloc->alloc_limit = limit;
+    }
     else if (!strcmp (mode, "unlimited"))
         ctx->alloc->alloc_limit = 0;
     else {
@@ -452,7 +460,8 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     if (!alloc->ready || alloc->disable)
         return;
-    if (alloc->alloc_limit && alloc->alloc_pending_count > 0)
+    if (alloc->alloc_limit
+        && alloc->alloc_pending_count >= alloc->alloc_limit)
         return;
    /* The queue is sorted from highest to lowest priority, so if the
     * first job has priority=MIN, all other jobs must have the same priority,
@@ -477,7 +486,8 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_watcher_stop (alloc->idle);
     if (!alloc->ready || alloc->disable)
         return;
-    if (alloc->alloc_limit && alloc->alloc_pending_count > 0)
+    if (alloc->alloc_limit
+        && alloc->alloc_pending_count >= alloc->alloc_limit)
         return;
    /* The queue is sorted from highest to lowest priority, so if the
     * first job has priority=MIN, all other jobs must have the same priority,
@@ -582,6 +592,14 @@ void alloc_queue_reorder (struct alloc *alloc, struct job *job)
     zlistx_reorder (alloc->queue, job->handle, fwd);
 }
 
+void alloc_pending_reorder (struct alloc *alloc, struct job *job)
+{
+    if (alloc->alloc_limit) {
+        bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
+        zlistx_reorder (alloc->pending_jobs, job->handle, fwd);
+    }
+}
+
 int alloc_queue_reprioritize (struct alloc *alloc)
 {
     struct job *job;
@@ -591,10 +609,19 @@ int alloc_queue_reprioritize (struct alloc *alloc)
      *   the sort swaps contents of nodes, not the nodes themselves.
      *   Therefore, job handles into the list must be re-acquired here:
      */
+
     job = zlistx_first (alloc->queue);
     while (job) {
         job->handle = zlistx_cursor (alloc->queue);
         job = zlistx_next (alloc->queue);
+    }
+
+    zlistx_sort (alloc->pending_jobs);
+
+    job = zlistx_first (alloc->pending_jobs);
+    while (job) {
+        job->handle = zlistx_cursor (alloc->pending_jobs);
+        job = zlistx_next (alloc->pending_jobs);
     }
 
     if (alloc->alloc_limit)
@@ -607,9 +634,9 @@ int alloc_queue_reprioritize (struct alloc *alloc)
 int alloc_queue_recalc_pending (struct alloc *alloc) {
     struct job *head = zlistx_first (alloc->queue);
     struct job *tail = zlistx_last (alloc->pending_jobs);
-    if (alloc->alloc_limit
-        && head
-        && tail) {
+    while (alloc->alloc_limit
+           && head
+           && tail) {
         if (job_comparator (head, tail) < 0) {
             if (alloc_cancel_alloc_request (alloc, tail) < 0) {
                 flux_log_error (alloc->ctx->h, "%s: alloc_cancel_alloc_request",
@@ -617,6 +644,10 @@ int alloc_queue_recalc_pending (struct alloc *alloc) {
                 return -1;
             }
         }
+        else
+            break;
+        head = zlistx_next (alloc->queue);
+        tail = zlistx_prev (alloc->pending_jobs);
     }
     return 0;
 }
