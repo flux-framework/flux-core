@@ -154,6 +154,7 @@ TESTSCRIPTS = \
 	t2700-mini-cmd.t \
 	t2701-mini-batch.t \
 	t2702-mini-alloc.t \
+	t2703-mini-bulksubmit.t \
 	t2800-jobs-cmd.t \
 	t2900-job-timelimits.t \
 	t3000-mpi-basic.t \

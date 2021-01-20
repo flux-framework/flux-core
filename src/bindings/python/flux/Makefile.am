@@ -31,7 +31,8 @@ nobase_fluxpy_PYTHON = \
 	resource/ResourceSetImplementation.py \
 	resource/ResourceSet.py \
 	hostlist.py \
-	idset.py
+	idset.py \
+	progress.py
 
 if HAVE_FLUX_SECURITY
 nobase_fluxpy_PYTHON += security.py

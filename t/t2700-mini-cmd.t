@@ -228,4 +228,20 @@ test_expect_success HAVE_JQ 'flux-mini --env-file works' '
 	       {\"FOO\":\"bar\", \"BAR\":\"bar/baz\"}" envfile.out
     done
 '
+test_expect_success 'flux-mini submit --cc works' '
+	flux mini submit --cc=0-3 sh -c "echo \$FLUX_JOB_CC" >cc.jobids &&
+	test_debug "cat cc.jobids" &&
+	test $(wc -l < cc.jobids) -eq 4 &&
+	for job in $(cat cc.jobids); do
+		flux job attach $job
+	done > cc.output &&
+	sort cc.output > cc.output.sorted &&
+	cat <<-EOF >cc.output.expected &&
+	0
+	1
+	2
+	3
+	EOF
+	test_cmp cc.output.expected cc.output.sorted
+'
 test_done

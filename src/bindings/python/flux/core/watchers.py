@@ -38,9 +38,11 @@ class Watcher(object):
 
     def start(self):
         raw.flux_watcher_start(self.handle)
+        return self
 
     def stop(self):
         raw.flux_watcher_stop(self.handle)
+        return self
 
     def destroy(self):
         if self.handle is not None:
