@@ -1,3 +1,43 @@
+flux-core version 0.23.0 - 2021-01-25
+-------------------------------------
+
+This release adds a job priority plugin framework, enabling the
+flux-accounting project to set job priorities with a fair share
+algorithm.
+
+The scheduler protocol (RFC 27) and libschedutil convenience API
+have changed, therefore users of flux-sched must upgrade to 0.15.0.
+
+### New features
+
+ * jobtap: prototype job-manager plugin support (#3464)
+ * flux-mini: add bulk job submission capabilities (#3426, #3478)
+ * job-manager: send updated priorities to schedulers (#3442)
+ * job-manager: support job hold and expedite (#3428)
+
+### Fixes
+
+ * connectors/ssh: forward `LD_LIBRARY_PATH` over ssh when set (#3458)
+ * python: fix use of `Flux.reactor_run()` from multiple threads (#3471)
+ * python: misc. fixes to docstrings and argument names in bindings (#3451)
+ * python: fix circular reference in `check_future_error` decorator (#3437)
+ * python: fix ctrl-c, re-throw unhandled exceptions in `reactor_run()` (#3435)
+ * shell: fix dropped stdout from shell plugins in task.exec callback (#3446)
+
+### Cleanup/Testing
+
+ * ci: limit asan build to unit tests only (#3479)
+ * libschedutil: API improvements and priority integration (#3447)
+ * configure: add switch to allow flux to be built without python (#3459)
+ * testsuite: remove sched-dummy, migrate testing to sched-simple (#3462)
+ * testsuite: add debug, workarounds for failures in github actions (#3467)
+ * test: fix test for installing poison libflux (#3461)
+ * cleanup: update outdated terminology (#3456)
+ * Globally standardize spelling of "canceled" (#3443)
+ * ci: better script portability and other small updates (#3438)
+ * testsuite: fix invalid tests, cleanup list-jobs, avoid hard-coding (#3436)
+ * fix github actions on tag push (#3430)
+
 flux-core version 0.22.0 - 2020-12-16
 -------------------------------------
 
