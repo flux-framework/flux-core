@@ -145,6 +145,7 @@ static char *which (const char *prog, char *buf, size_t size)
 int build_ssh_command (const char *uri_path,
                        const char *ssh_cmd,
                        const char *flux_cmd,
+                       const char *ld_lib_path,
                        char ***argvp,
                        char **argbuf)
 {
@@ -188,6 +189,14 @@ int build_ssh_command (const char *uri_path,
         if (argz_add (&argz, &argz_len, yuri.host) != 0)
             goto nomem;
     }
+
+    /* LD_LIBRARY_PATH */
+    if (ld_lib_path) {
+        (void)snprintf (buf, sizeof (buf), "LD_LIBRARY_PATH=%s", ld_lib_path);
+        if (argz_add (&argz, &argz_len, buf) != 0)
+            goto nomem;
+    }
+
     /* flux-relay */
     if (argz_add (&argz, &argz_len, flux_cmd) != 0)
         goto nomem;
@@ -226,6 +235,7 @@ flux_t *connector_init (const char *path, int flags)
     char buf[PATH_MAX + 1];
     const char *ssh_cmd;
     const char *flux_cmd;
+    const char *ld_lib_path;
     char *argbuf = NULL;
     char **argv = NULL;
 
@@ -247,10 +257,20 @@ flux_t *connector_init (const char *path, int flags)
     if (!flux_cmd)
         flux_cmd = "flux"; // maybe this will work for installed version
 
+    /* ssh and rsh do not forward environment variables, thus LD_LIBRARY_PATH
+     * is not guaranteed to be set on the remote node where the flux command is
+     * run.  If the flux command is linked against libraries that can only be
+     * found when LD_LIBRARY_PATH is set, then the flux command will fail to
+     * run over ssh.  Grab the client-side LD_LIBRARY_PATH so that we can
+     * manually forward it. See flux-core issue #3457 for more details.
+     */
+    ld_lib_path = getenv ("LD_LIBRARY_PATH");
+
     /* Construct argv for ssh command from uri "path" (non-scheme part)
      * and flux and ssh command paths.
      */
-    if (build_ssh_command (path, ssh_cmd, flux_cmd, &argv, &argbuf) < 0)
+    if (build_ssh_command (path, ssh_cmd, flux_cmd, ld_lib_path,
+                           &argv, &argbuf) < 0)
         goto error;
 
     /* Start the ssh command
