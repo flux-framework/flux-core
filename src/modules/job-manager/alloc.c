@@ -201,7 +201,6 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *annotations = NULL;
     struct job *job;
     bool cleared = false;
-    json_t *tmp = NULL;
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown; // ENOSYS here if scheduler not loaded/shutting down
@@ -237,25 +236,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = EEXIST;
             goto teardown;
         }
-        if (annotations_update (h, job, annotations) < 0)
+        if (annotations_update_and_publish (ctx, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%ju", (uintmax_t)id);
-        if (annotations) {
-            if (job->annotations) {
-                /* deep copy necessary for journal history, as
-                 * job->annotations can be modified in future */
-                if (!(tmp = json_deep_copy (job->annotations)))
-                    goto nomem;
-            }
-            if (event_job_post_pack (ctx->event,
-                                     job,
-                                     "annotations",
-                                     EVENT_JOURNAL_ONLY,
-                                     "{s:O?}",
-                                     "annotations", tmp) < 0)
-                flux_log_error (ctx->h,
-                                "%s: event_job_post_pack: id=%ju",
-                                __FUNCTION__, (uintmax_t)id);
-        }
         if (job->annotations) {
             if (event_job_post_pack (ctx->event, job, "alloc", 0,
                                      "{ s:O }",
@@ -272,23 +254,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = EPROTO;
             goto teardown;
         }
-        if (annotations_update (h, job, annotations) < 0)
+        if (annotations_update_and_publish (ctx, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%ju", (uintmax_t)id);
-        if (job->annotations) {
-            /* deep copy necessary for journal history, as
-             * job->annotations can be modified in future */
-            if (!(tmp = json_deep_copy (job->annotations)))
-                goto nomem;
-        }
-        if (event_job_post_pack (ctx->event,
-                                 job,
-                                 "annotations",
-                                 EVENT_JOURNAL_ONLY,
-                                 "{s:O?}",
-                                 "annotations", tmp) < 0)
-            flux_log_error (ctx->h,
-                            "%s: event_job_post_pack: id=%ju",
-                            __FUNCTION__, (uintmax_t)id);
         break;
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
@@ -341,12 +308,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EINVAL;
         goto teardown;
     }
-    json_decref (tmp);
     return;
-nomem:
-    errno = ENOMEM;
 teardown:
-    json_decref (tmp);
     interface_teardown (alloc, "alloc response error", errno);
 }
 
