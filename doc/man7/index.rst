@@ -6,3 +6,4 @@ man7
    :maxdepth: 1
 
    flux-broker-attributes
+   flux-jobtap-plugins
