@@ -24,8 +24,8 @@ declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,inception"
-declare -r short_opts="hqIdi:S:j:t:D:Pr"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,inception"
+declare -r short_opts="hqIdi:S:j:t:D:Pru"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
 Build docker image for CI builds, then run tests inside the new\n\
@@ -46,6 +46,7 @@ Options:\n\
  -j, --jobs=N                  Value for make -j (default=$JOBS)\n
  -d, --distcheck               Run 'make distcheck' instead of 'make check'\n\
  -r, --recheck                 Run 'make recheck' after failure\n\
+ -u, --unit-test-only          Only run unit tests\n\
  -P, --no-poison               Do not install poison libflux and flux(1)\n\
  -D, --build-directory=DIRNAME Name of a subdir to build in, will be made\n\
  -I, --interactive             Instead of running ci build, run docker\n\
@@ -74,6 +75,7 @@ while true; do
       -I|--interactive)            INTERACTIVE="/bin/bash";    shift   ;;
       -d|--distcheck)              DISTCHECK=t;                shift   ;;
       -r|--recheck)                RECHECK=t;                  shift   ;;
+      -u|--unit-test-only)         UNIT_TEST_ONLY=t;           shift   ;;
       -D|--build-directory)        BUILD_DIR="$2";             shift 2 ;;
       --no-cache)                  NO_CACHE="--no-cache";      shift   ;;
       --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
@@ -141,6 +143,7 @@ export INCEPTION
 export JOBS
 export DISTCHECK
 export RECHECK
+export UNIT_TEST_ONLY
 export BUILD_DIR
 export chain_lint
 
@@ -176,6 +179,7 @@ else
         -e CPPCHECK \
         -e DISTCHECK \
         -e RECHECK \
+        -e UNIT_TEST_ONLY \
         -e chain_lint \
         -e JOBS \
         -e USER \
