@@ -15,6 +15,7 @@
 #  CPPCHECK      Run cppcheck if set to "t"
 #  DISTCHECK     Run `make distcheck` if set
 #  RECHECK       Run `make recheck` if `make check` fails the first time
+#  UNIT_TEST_ONLY Only run `make check` under ./src
 #  PRELOAD       Set as LD_PRELOAD for make and tests
 #  POISON        Install poison libflux and flux(1) in image
 #  INCEPTION     Run tests under a flux instance with prove(1)
@@ -140,6 +141,10 @@ if test -n "$PRELOAD" ; then
   CHECKCMDS="/usr/bin/env 'LD_PRELOAD=$PRELOAD' ${CHECKCMDS}"
 fi
 
+if test -n "$UNIT_TEST_ONLY"; then
+  CHECKCMDS="(cd src && $CHECKCMDS)"
+fi
+
 # CI has limited resources, even though number of processors might
 #  might appear to be large. Limit session size for testing to 5 to avoid
 #  spurious timeouts.
@@ -183,10 +188,10 @@ if test "$POISON" = "t" -a "$PROJECT" = "flux-core"; then
 fi
 
 if test "$DISTCHECK" != "t"; then
-  checks_group "${MAKECMDS}" eval ${MAKECMDS} \
+  checks_group "${MAKECMDS}" "${MAKECMDS}" \
 	|| (printf "::error::${MAKECMDS} failed\n"; exit 1)
 fi
-checks_group "${CHECKCMDS}" eval "${CHECKCMDS}"
+checks_group "${CHECKCMDS}" "${CHECKCMDS}"
 RC=$?
 
 if test "$RECHECK" = "t" -a $RC -ne 0; then

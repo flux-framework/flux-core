@@ -22,7 +22,7 @@ jobs:
         TAP_DRIVER_QUIET: t
       run: >
         src/test/docker/docker-run-checks.sh \
-          --image=bionic --recheck -j2 \
+          --image=bionic --unit-test-only -j2 \
           -- --with-flux-security --enable-sanitizer=address
 
     - name: after failure
