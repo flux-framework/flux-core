@@ -341,6 +341,10 @@ OTHER OPTIONS
 **--shuffle**
    *(bulksubmit)* Shuffle the list of commands before submission.
 
+**--sep=STRING**
+   *(bulksubmit)* Change the separator for file input. The default is
+   to separate files (including stdin) by newline. To separate by
+   consecutive whitespace, specify ``--sep=none``.
 
 .. _bulksubmit:
 

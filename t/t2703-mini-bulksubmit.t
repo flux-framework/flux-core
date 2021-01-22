@@ -14,7 +14,7 @@ flux setattr log-stderr-level 1
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py -f asciicast --line-buffer"
 
 test_expect_success 'flux-mini bulksubmit submits each arg as a job' '
-	echo 1 2 3 | flux mini bulksubmit echo {} >bs.ids &&
+	seq 1 3 | flux mini bulksubmit echo {} >bs.ids &&
 	test $(wc -l < bs.ids) -eq 3 &&
 	for job in $(cat bs.ids); do
 	    flux job attach $job
@@ -36,7 +36,7 @@ test_expect_success 'flux-mini bulksubmit uses default command of {}' '
 	test_cmp default-cmd.expected default-cmd.out
 '
 test_expect_success 'flux-mini bulksubmit --cc works' '
-	echo 1 2 3 | flux mini bulksubmit --cc=0-1 echo {} >bs2.ids &&
+	seq 1 3 | flux mini bulksubmit --cc=0-1 echo {} >bs2.ids &&
 	test $(wc -l < bs2.ids) -eq 6 &&
 	for job in $(cat bs2.ids); do
 	    flux job attach $job
@@ -52,7 +52,7 @@ test_expect_success 'flux-mini bulksubmit --cc works' '
 	test_cmp bs2.expected bs2.output
 '
 test_expect_success 'flux-mini bulksubmit --bcc works' '
-	echo 1 2 3 | \
+	seq 1 3 | \
 	    flux mini bulksubmit --quiet --watch --bcc=0-1 \
 	        sh -c "echo {}\$FLUX_JOB_CC" >bcc.out &&
 	sort bcc.out > bcc.out.sorted &&
@@ -115,8 +115,9 @@ test_expect_success 'flux-mini bulksubmit --wait returns highest exit code' '
 '
 test_expect_success 'flux-mini bulksubmit replacement format strings work' '
 	echo /a/b/c/d.txt /a/b/c/d c.txt | \
-	    flux mini bulksubmit --dry-run {seq} {} {.%} {./} {.//} {./%} \
-	    >repl.out &&
+	    flux mini bulksubmit --sep=None --dry-run \
+	        {seq} {} {.%} {./} {.//} {./%} \
+	        >repl.out &&
 	cat <<-EOF >repl.expected &&
 	flux-mini: submit 0 /a/b/c/d.txt /a/b/c/d d.txt /a/b/c d
 	flux-mini: submit 1 /a/b/c/d /a/b/c/d d /a/b/c d
@@ -184,11 +185,23 @@ test_expect_success 'flux-mini bulksubmit reads from files with ::::' '
 	EOF
 	test_cmp fileinput.expected fileinput.out
 '
+test_expect_success 'flux-mini bulksubmit splits files on newline only' '
+	cat <<-EOF >inputs2 &&
+	this is a line
+	another line
+	EOF
+	flux mini bulksubmit --dry-run echo {} :::: inputs2 >whitespace.out &&
+	cat <<-EOT >whitespace.expected &&
+	flux-mini: submit echo this is a line
+	flux-mini: submit echo another line
+	EOT
+	test_cmp whitespace.expected whitespace.out
+'
 test_expect_success 'flux-mini bulksubmit can substitute in list options' "
 	flux mini bulksubmit --dry-run --env=-* --env=SEQ={seq} ::: a b c \
 	    >envsub.out &&
-	test_debug "cat envsub.out" &&
-	cat <<-EOF >envsub.expected
+	test_debug 'cat envsub.out' &&
+	cat <<-EOF >envsub.expected &&
 	flux-mini: submit --env=['-*', 'SEQ=0'] a
 	flux-mini: submit --env=['-*', 'SEQ=1'] b
 	flux-mini: submit --env=['-*', 'SEQ=2'] c

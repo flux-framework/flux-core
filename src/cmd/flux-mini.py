@@ -784,6 +784,14 @@ class BulkSubmitCmd(SubmitBulkCmd):
             help="Shuffle list of commands before submission",
         )
         self.parser.add_argument(
+            "--sep",
+            type=str,
+            metavar="STRING",
+            default="\n",
+            help="Set the input argument separator. To split on whitespace, "
+            "use --sep=none. The default is newline.",
+        )
+        self.parser.add_argument(
             "--define",
             action="append",
             type=lambda kv: kv.split("="),
@@ -944,6 +952,11 @@ class BulkSubmitCmd(SubmitBulkCmd):
             return " ".join(result)
 
     @staticmethod
+    def input_file(filep, sep):
+        """Read set of inputs from file object filep, using separator sep"""
+        return list(filter(None, filep.read().split(sep)))
+
+    @staticmethod
     def split_before(iterable, pred):
         """
         Like more_itertools.split_before, but if predicate returns
@@ -957,7 +970,7 @@ class BulkSubmitCmd(SubmitBulkCmd):
             buf.append(item)
         yield buf
 
-    def split_command_inputs(self, command, sep=None, delim=":::"):
+    def split_command_inputs(self, command, sep="\n", delim=":::"):
         """Generate a list of inputs from command list
 
         Splits the command list on the input delimiter ``delim``,
@@ -992,10 +1005,10 @@ class BulkSubmitCmd(SubmitBulkCmd):
                 if len(lst) > 1:
                     raise ValueError("Multiple args not allowed after ::::")
                 if lst[0] == "-":
-                    input_lists[i] = sys.stdin.read().split(sep)
+                    input_lists[i] = self.input_file(sys.stdin, sep)
                 else:
                     with open(lst[0]) as filep:
-                        input_lists[i] = filep.read().split(sep)
+                        input_lists[i] = self.input_file(filep, sep)
             if first in (delim + "+", delim + ":+"):
                 #
                 #  "Link" input to previous, similar to GNU parallel:
@@ -1011,7 +1024,12 @@ class BulkSubmitCmd(SubmitBulkCmd):
 
     def create_commands(self, args):
         """Create bulksubmit commands list"""
-        sep = None
+
+        #  Expand any escape sequences in args.sep, and replace "none"
+        #   with literal None:
+        sep = bytes(args.sep, "utf-8").decode("unicode_escape")
+        if sep.lower() == "none":
+            sep = None
 
         #  Ensure any provided methods can compile
         args.methods = {
@@ -1030,7 +1048,7 @@ class BulkSubmitCmd(SubmitBulkCmd):
 
         #  If no inputs on commandline, read from stdin:
         if not input_list:
-            input_list = [sys.stdin.read().split(sep)]
+            input_list = [self.input_file(sys.stdin, sep)]
 
         #  Take the product of all inputs in input_list
         inputs = [list(x) for x in list(itertools.product(*input_list))]
