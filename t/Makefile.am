@@ -116,6 +116,9 @@ TESTSCRIPTS = \
 	t2214-job-manager-hold-unlimited.t \
 	t2215-job-manager-priority-order-unlimited.t \
 	t2216-job-manager-plugins.t \
+	t2217-job-manager-limited.t \
+	t2218-job-manager-hold-limited.t \
+	t2219-job-manager-priority-order-limited.t \
 	t2230-job-info-list.t \
 	t2231-job-info-lookup.t \
 	t2232-job-info-eventlog-watch.t \
