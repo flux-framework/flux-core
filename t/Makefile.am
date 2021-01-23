@@ -327,6 +327,7 @@ check_LTLIBRARIES = \
 	shell/plugins/log.la \
 	shell/plugins/test-event.la \
 	job-manager/plugins/priority-wait.la \
+	job-manager/plugins/priority-invert.la \
 	job-manager/plugins/args.la \
 	job-manager/plugins/test.la \
 	job-manager/plugins/random.la
@@ -636,6 +637,15 @@ job_manager_plugins_priority_wait_la_CPPFLAGS = \
 job_manager_plugins_priority_wait_la_LDFLAGS = \
 	-module -rpath /nowhere
 job_manager_plugins_priority_wait_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_priority_invert_la_SOURCES = \
+	job-manager/plugins/priority-invert.c
+job_manager_plugins_priority_invert_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_priority_invert_la_LDFLAGS = \
+	-module -rpath /nowhere
+job_manager_plugins_priority_invert_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
 job_manager_plugins_args_la_SOURCES = \

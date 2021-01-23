@@ -122,24 +122,47 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSRRI)' '
         jmgr_check_no_annotations $(cat job5.id)
 '
 
+PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
+test_expect_success 'job-manager: load priority-invert plugin' '
+        flux jobtap load ${PLUGINPATH}/priority-invert.so
+'
+
+test_expect_success HAVE_JQ 'job-manager: job state SSRRI' '
+        jmgr_check_state $(cat job1.id) S &&
+        jmgr_check_state $(cat job2.id) S &&
+        jmgr_check_state $(cat job3.id) R &&
+        jmgr_check_state $(cat job4.id) R &&
+        jmgr_check_state $(cat job5.id) I
+'
+
+test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SSRRI)' '
+        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
+        jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "0" &&
+        jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"insufficient resources\"" &&
+        jmgr_check_annotation $(cat job2.id) "sched.jobs_ahead" "1" &&
+        jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core0\"" &&
+        jmgr_check_annotation $(cat job4.id) "sched.resource_summary" "\"rank0/core1\"" &&
+        jmgr_check_no_annotations $(cat job5.id)
+'
+
 test_expect_success 'job-manager: cancel 4' '
         flux job cancel $(cat job4.id)
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SRRII' '
-        jmgr_check_state $(cat job1.id) S &&
-        jmgr_check_state $(cat job2.id) R &&
+test_expect_success HAVE_JQ 'job-manager: job state RSRII' '
+        jmgr_check_state $(cat job1.id) R &&
+        jmgr_check_state $(cat job2.id) S &&
         jmgr_check_state $(cat job3.id) R &&
         jmgr_check_state $(cat job4.id) I &&
         jmgr_check_state $(cat job5.id) I
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (SRRII)' '
-        jmgr_check_annotation $(cat job1.id) "sched.reason_pending" "\"insufficient resources\"" &&
-        jmgr_check_annotation $(cat job1.id) "sched.jobs_ahead" "0" &&
-        jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        test_must_fail jmgr_check_annotation_exists $(cat job2.id) "sched.reason_pending" &&
-        test_must_fail jmgr_check_annotation_exists $(cat job2.id) "sched.jobs_ahead" &&
+test_expect_success HAVE_JQ 'job-manager: annotate jobs updated (RSRII)' '
+        jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core1\"" &&
+        test_must_fail jmgr_check_annotation_exists $(cat job1.id) "sched.reason_pending" &&
+        test_must_fail jmgr_check_annotation_exists $(cat job1.id) "sched.jobs_ahead" &&
+        jmgr_check_annotation $(cat job2.id) "sched.reason_pending" "\"insufficient resources\"" &&
+        jmgr_check_annotation $(cat job2.id) "sched.jobs_ahead" "0" &&
         jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core0\"" &&
         jmgr_check_no_annotations $(cat job4.id) &&
         jmgr_check_no_annotations $(cat job5.id)
