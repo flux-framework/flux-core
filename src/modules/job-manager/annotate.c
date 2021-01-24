@@ -106,6 +106,10 @@ int update_annotation_recursive (struct job *job, json_t *orig, json_t *new)
 
 int annotations_update (flux_t *h, struct job *job, json_t *annotations)
 {
+    if (!json_is_object (annotations)) {
+        errno = EINVAL;
+        return -1;
+    }
     if (annotations) {
         if (!job->annotations) {
             if (!(job->annotations = json_object ())) {
