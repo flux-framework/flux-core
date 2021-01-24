@@ -44,6 +44,7 @@ int jobtap_get_priority (struct jobtap *jobtap,
  */
 int jobtap_load (struct jobtap *jobtap,
                  const char *path,
+                 json_t *conf,
                  jobtap_error_t *errp);
 
 /*  Job manager RPC handler for loading new jobtap plugins.

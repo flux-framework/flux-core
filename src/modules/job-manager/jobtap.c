@@ -57,7 +57,7 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
     if (!jobtap)
         return NULL;
     jobtap->ctx = ctx;
-    if (jobtap_load (jobtap, "builtin.priority.default", NULL) < 0) {
+    if (jobtap_load (jobtap, "builtin.priority.default", NULL, NULL) < 0) {
         free (jobtap);
         return NULL;
     }
@@ -343,12 +343,29 @@ static int jobtap_load_builtin (flux_plugin_t *p,
 
 int jobtap_load (struct jobtap *jobtap,
                  const char *path,
+                 json_t *conf,
                  jobtap_error_t *errp)
 {
     flux_plugin_t *p = NULL;
+    char *conf_str = NULL;
 
     if (errp)
         memset (errp->text, 0, sizeof (errp->text));
+
+    if (conf && !json_is_null (conf)) {
+        if (!json_is_object (conf)) {
+            errno = EINVAL;
+            snprintf (errp->text, sizeof (errp->text), "%s",
+                      "jobptap: plugin conf must be a JSON object");
+            goto error;
+        }
+        if (!(conf_str = json_dumps (conf, 0))) {
+            errno = ENOMEM;
+            snprintf (errp->text, sizeof (errp->text), "%s: %s",
+                      "jobtap: json_dumps(conf) failed", strerror (errno));
+            goto error;
+        }
+    }
 
     /*  Always unload current plugin before loading next plugin.
      *  This works around an issue in message dispatch when re-loading
@@ -375,6 +392,12 @@ int jobtap_load (struct jobtap *jobtap,
             goto error;
         goto done;
     }
+    if (conf_str) {
+        int rc = flux_plugin_set_conf (p, conf_str);
+        free (conf_str);
+        if (rc < 0)
+            goto error;
+    }
     flux_plugin_set_flags (p, FLUX_PLUGIN_RTLD_NOW);
     if (flux_plugin_load_dso (p, path) < 0)
         goto error;
@@ -398,7 +421,8 @@ error:
 
 static void jobtap_handle_load_req (struct job_manager *ctx,
                                     const flux_msg_t *msg,
-                                    const char *path)
+                                    const char *path,
+                                    json_t *conf)
 {
     char *prev = NULL;
     jobtap_error_t error;
@@ -407,7 +431,7 @@ static void jobtap_handle_load_req (struct job_manager *ctx,
 
     if (!(prev = strdup (jobtap_plugin_name (ctx->jobtap->plugin))))
         goto error;
-    if (jobtap_load (ctx->jobtap, path, &error) < 0) {
+    if (jobtap_load (ctx->jobtap, path, conf, &error) < 0) {
         errstr = error.text;
         goto error;
     }
@@ -461,11 +485,13 @@ void jobtap_handler (flux_t *h,
     struct job_manager *ctx = arg;
     const char *path = NULL;
     int query_only = 0;
+    json_t *conf = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s?s s?b}",
+                             "{s?s s?o s?b}",
                              "load", &path,
+                             "conf", &conf,
                              "query_only", &query_only) < 0) {
         if (flux_respond_error (h, msg, EPROTO, NULL) < 0)
             flux_log_error (h, "jobtap_handler: flux_respond_error");
@@ -474,7 +500,7 @@ void jobtap_handler (flux_t *h,
     if (query_only)
         jobtap_handle_list_req (h, ctx->jobtap, msg);
     else
-        jobtap_handle_load_req (ctx, msg, path);
+        jobtap_handle_load_req (ctx, msg, path, conf);
 }
 
 flux_t *flux_jobtap_get_flux (flux_plugin_t *p)
