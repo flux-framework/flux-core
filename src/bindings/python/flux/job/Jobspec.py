@@ -20,7 +20,7 @@ import six
 import yaml
 
 from _flux._core import ffi
-from flux.util import parse_fsd
+from flux.util import parse_fsd, set_treedict
 
 
 def _convert_jobspec_arg_to_string(jobspec):
@@ -392,22 +392,12 @@ class Jobspec(object):
         self.setattr_shell_option("{}.{}.type".format(iotype, stream_name), "file")
         self.setattr_shell_option("{}.{}.path".format(iotype, stream_name), path)
 
-    def _set_treedict(self, in_dict, key, val):
-        """
-        _set_treedict(d, "a.b.c", 42) is like d[a][b][c] = 42
-        but levels are created on demand.
-        """
-        path = key.split(".", 1)
-        if len(path) == 2:
-            self._set_treedict(in_dict.setdefault(path[0], {}), path[1], val)
-        else:
-            in_dict[key] = val
-
     def setattr(self, key, val):
+
         """
         set job attribute
         """
-        self._set_treedict(self.jobspec, "attributes." + key, val)
+        set_treedict(self.jobspec, "attributes." + key, val)
 
     def setattr_shell_option(self, key, val):
         """
