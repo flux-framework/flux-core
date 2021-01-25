@@ -106,6 +106,7 @@ class JobInfo:
         "t_inactive": 0.0,
         "expiration": 0.0,
         "nnodes": "",
+        "priority": "",
         "ranks": "",
         "nodelist": "",
         "success": "",

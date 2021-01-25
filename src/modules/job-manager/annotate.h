@@ -26,6 +26,10 @@ void annotate_ctx_destroy (struct annotate *annotate);
 /* exposed for unit testing only */
 int update_annotation_recursive (struct job *job, json_t *orig, json_t *new);
 
+int annotations_update_and_publish (struct job_manager *ctx,
+                                    struct job *job,
+                                    json_t *annotations);
+
 #endif /* ! _FLUX_JOB_MANAGER_ANNOTATE_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

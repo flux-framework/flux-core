@@ -30,6 +30,7 @@
 #include "annotate.h"
 #include "journal.h"
 #include "getattr.h"
+#include "jobtap-internal.h"
 
 #include "job-manager.h"
 
@@ -113,6 +114,12 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
+        "job-manager.jobtap",
+        jobtap_handler,
+        FLUX_ROLE_OWNER,
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
         "job-manager.disconnect",
         disconnect_rpc,
         0
@@ -182,6 +189,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating journal interface");
         goto done;
     }
+    if (!(ctx.jobtap = jobtap_create (&ctx))) {
+        flux_log_error (h, "error creating jobtap interface");
+        goto done;
+    }
     if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
         flux_log_error (h, "flux_msghandler_add");
         goto done;
@@ -211,6 +222,7 @@ done:
     alloc_ctx_destroy (ctx.alloc);
     submit_ctx_destroy (ctx.submit);
     event_ctx_destroy (ctx.event);
+    jobtap_destroy (ctx.jobtap);
     zhashx_destroy (&ctx.active_jobs);
     return rc;
 }

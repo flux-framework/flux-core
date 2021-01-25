@@ -72,6 +72,7 @@ man3
    flux_zmq_watcher_create
    idset_create
    idset_encode
+   flux_jobtap_get_flux
 
 .. toctree::
    :hidden:

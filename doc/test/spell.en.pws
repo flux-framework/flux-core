@@ -527,3 +527,8 @@ dirname
 jps
 xargs
 sep
+RPCs
+jobtap
+unavail
+reprioritize
+reprioritization

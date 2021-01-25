@@ -115,6 +115,7 @@ TESTSCRIPTS = \
 	t2213-job-manager-hold-single.t \
 	t2214-job-manager-hold-unlimited.t \
 	t2215-job-manager-priority-order-unlimited.t \
+	t2216-job-manager-plugins.t \
 	t2230-job-info-list.t \
 	t2231-job-info-lookup.t \
 	t2232-job-info-eventlog-watch.t \
@@ -324,7 +325,11 @@ check_LTLIBRARIES = \
 	shell/plugins/getopt.la \
 	shell/plugins/setopt.la \
 	shell/plugins/log.la \
-	shell/plugins/test-event.la
+	shell/plugins/test-event.la \
+	job-manager/plugins/priority-wait.la \
+	job-manager/plugins/args.la \
+	job-manager/plugins/test.la \
+	job-manager/plugins/random.la
 
 check-prep:
 	$(MAKE) $(check_PROGRAMS) $(check_LTLIBRARIES)
@@ -623,6 +628,45 @@ shell_plugins_test_event_la_CPPFLAGS = $(test_cppflags)
 shell_plugins_test_event_la_LDFLAGS = -module -rpath /nowhere
 shell_plugins_test_event_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_priority_wait_la_SOURCES = \
+	job-manager/plugins/priority-wait.c
+job_manager_plugins_priority_wait_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_priority_wait_la_LDFLAGS = \
+	-module -rpath /nowhere
+job_manager_plugins_priority_wait_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_args_la_SOURCES = \
+	job-manager/plugins/args.c
+job_manager_plugins_args_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_args_la_LDFLAGS = \
+	-module -rpath /nowhere
+job_manager_plugins_args_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_test_la_SOURCES = \
+	job-manager/plugins/test.c
+job_manager_plugins_test_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_test_la_LDFLAGS = \
+	-module -rpath /nowhere
+job_manager_plugins_test_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_random_la_SOURCES = \
+	job-manager/plugins/random.c
+job_manager_plugins_random_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_random_la_LDFLAGS = \
+	-module -rpath /nowhere
+job_manager_plugins_random_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
+
+
 
 hwloc_hwloc_convert_SOURCES = hwloc/hwloc-convert.c
 hwloc_hwloc_convert_CPPFLAGS = $(HWLOC_CFLAGS) $(test_cppflags)

@@ -106,6 +106,10 @@ int update_annotation_recursive (struct job *job, json_t *orig, json_t *new)
 
 int annotations_update (flux_t *h, struct job *job, json_t *annotations)
 {
+    if (!json_is_object (annotations)) {
+        errno = EINVAL;
+        return -1;
+    }
     if (annotations) {
         if (!job->annotations) {
             if (!(job->annotations = json_object ())) {
@@ -128,6 +132,36 @@ int annotations_update (flux_t *h, struct job *job, json_t *annotations)
     }
 
     return 0;
+}
+
+int annotations_update_and_publish (struct job_manager *ctx,
+                                    struct job *job,
+                                    json_t *annotations)
+{
+    int rc = -1;
+    json_t *tmp = NULL;
+
+    if (annotations_update (ctx->h, job, annotations) < 0)
+        return -1;
+    if (job->annotations) {
+        /* deep copy necessary for journal history, as
+         * job->annotations can be modified in future */
+        if (!(tmp = json_deep_copy (job->annotations))) {
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+    if (event_job_post_pack (ctx->event,
+                             job,
+                             "annotations",
+                             EVENT_JOURNAL_ONLY,
+                             "{s:O?}",
+                             "annotations", tmp) < 0)
+        goto error;
+    rc = 0;
+error:
+    json_decref (tmp);
+    return rc;
 }
 
 void annotate_handle_request (flux_t *h,
@@ -157,27 +191,12 @@ void annotate_handle_request (flux_t *h,
         errstr = "guests can only annotate their own jobs";
         goto error;
     }
-    if (annotations_update (ctx->h, job, annotations) < 0)
-        goto error;
-    if (job->annotations) {
-        /* deep copy necessary for journal history, as
-         * job->annotations can be modified in future */
-        if (!(tmp = json_deep_copy (job->annotations)))
-            goto nomem;
-    }
-    if (event_job_post_pack (ctx->event,
-                             job,
-                             "annotations",
-                             EVENT_JOURNAL_ONLY,
-                             "{s:O?}",
-                             "annotations", tmp) < 0)
+    if (annotations_update_and_publish (ctx, job, annotations) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     json_decref (tmp);
     return;
-nomem:
-    errno = ENOMEM;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);

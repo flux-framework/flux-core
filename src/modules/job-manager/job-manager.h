@@ -27,6 +27,7 @@ struct job_manager {
     struct kill *kill;
     struct annotate *annotate;
     struct journal *journal;
+    struct jobtap *jobtap;
 };
 
 #endif /* !_FLUX_JOB_MANAGER_H */

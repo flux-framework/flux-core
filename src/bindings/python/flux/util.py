@@ -147,6 +147,44 @@ def help_formatter(argwidth=40):
     return lambda prog: FluxHelpFormatter(prog, max_help_position=argwidth)
 
 
+def set_treedict(in_dict, key, val):
+    """
+    set_treedict(d, "a.b.c", 42) is like d[a][b][c] = 42
+    but levels are created on demand.
+    """
+    path = key.split(".", 1)
+    if len(path) == 2:
+        set_treedict(in_dict.setdefault(path[0], {}), path[1], val)
+    else:
+        in_dict[key] = val
+
+
+class TreedictAction(argparse.Action):
+    """
+    argparse action that returns a dictionary from a set of key=value option
+    arguments. The ``flux.util.set_treedict()`` function is used to set
+    ``key`` in the dictionary, which allows ``key`` to have embedded dots.
+    e.g. ``a.b.c=42`` is like::
+
+       dest[a][b][c] = 42
+
+    but levels are created on demand.
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        result = {}
+        for arg in values:
+            tmp = arg.split("=", 1)
+            if len(tmp) != 2:
+                raise ValueError(f"Missing required value for key {arg}")
+            try:
+                val = json.loads(tmp[1])
+            except (json.JSONDecodeError, TypeError):
+                val = tmp[1]
+            set_treedict(result, tmp[0], val)
+            setattr(namespace, self.dest, result)
+
+
 class CLIMain(object):
     def __init__(self, logger=None):
         if logger is None:

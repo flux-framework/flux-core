@@ -1,0 +1,141 @@
+======================
+flux-jobtap-plugins(7)
+======================
+
+
+DESCRIPTION
+===========
+
+The *jobtap* interface supports loading of builtin and external
+plugins into the job manager broker module. These plugins can be used
+to assign job priorities using algorithms other than the default,
+aid in debugging of the flow of job states, or generically extend
+the functionality of the job manager.
+
+NOTE:
+   Currently only a single jobtap plugin may be loaded into the job manager
+   at a time.
+
+Jobtap plugins are defined using the Flux standard plugin format. Therefore
+a jobtap plugin should export the single symbol: ``flux_plugin_init()``,
+from which calls to ``flux_plugin_add_handler(3)`` should be used to
+register functions which will be called for the callback topic strings
+described in the :ref:`callback_topics` section below.
+
+Each callback function uses the Flux standard plugin callback form, e.g.::
+
+   int callback (flux_plugin_t *p,
+                 const char *topic,
+                 flux_plugin_arg_t *args,
+                 void *arg);
+
+where ``p`` is the handle for the current *jobtap* plugin, ``topic`` is
+the *topic string* for the currently invoked callback, ``args`` contains
+a set of plugin arguments which may be unpacked with the
+``flux_plugin_arg_unpack(3)`` call, and ``arg`` is any opaque argument
+passed along when registering the handler.
+
+JOBTAP PLUGIN ARGUMENTS
+=======================
+
+For job-specific callbacks, all job data is passed to the plugin via
+the ``flux_plugin_arg_t *args``, and return data is sent back to the
+job manager via the same ``args``. Incoming arguments may be unpacked
+using ``flux_plugin_arg_unpack(3)``, e.g.::
+
+   rc = flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+                                "{s{s:o}, s:I}",
+                                "jobspec", "resources", &resources,
+                                "id", &id);
+
+will unpack the ``resources`` section of jobspec and the jobid into
+``resources`` and ``id`` respectively.
+
+The full list of available args includes the following:
+
+========== ==== ==========================================
+name       type description
+========== ==== ==========================================
+jobspec    o    jobspec with environment redacted
+id         I    jobid
+state      i    current job state
+prev_state i    previous state (``job.state.*`` callbacks)
+userid     i    userid
+urgency    i    current urgency
+priority   I    current priority
+t_submit   f    submit timestamp in floating point seconds
+entry      o    posted eventlog entry, including context
+========== ==== ==========================================
+
+Return arguments can be packed using the ``FLUX_PLUGIN_ARG_OUT`` and
+optionally ``FLUX_PLUGIN_ARG_UPDATE`` flags. For example to return
+a priority::
+
+   rc = flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_OUT,
+                              "{s:I}",
+                              "priority", (int64_t) priority);
+
+While a job is pending, *jobtap* plugin callbacks may also add job
+annotations by returning a value for the ``annotations`` key::
+
+   flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_OUT|FLUX_PLUGIN_ARG_UPDATE,
+                         "{s:{s:s}}",
+                         "annotations", "test", value);
+
+.. _callback_topics:
+
+CALLBACK TOPICS
+===============
+
+The following callback "topic strings" are currently provided by the
+*jobtap* interface:
+
+job.new
+  The ``job.new`` topic is used by the job manager to notify a jobtap plugin
+  about a newly introduced job. This call may be made in three different
+  situations:
+
+    1. on job job submission
+    2. when the job manager is restarted and has reloaded a job from the KVS
+    3. when a new jobtap plugin is loaded
+
+  In case 1 above, the job state will always be ``FLUX_JOB_STATE_NEW``, while
+  jobs in cases 2 and 3 can be in any state except ``FLUX_JOB_STATE_INACTIVE``.
+
+job.state.*
+  The ``job.state.*`` callbacks are made just after a job state transition.
+  The callback is made after the state has been published to the job's
+  eventlog, but before any action has been taken on that state (since the
+  action could involve immediately transitioning to a new state)
+
+job.state.priority
+  The callback for ``FLUX_JOB_STATE_PRIORITY`` is special, in that a plugin
+  must return a priority at the end of the callback (if the plugin is
+  a priority-managing plugin). If no priority is returned from this callback,
+  then the job manager assumes the plugin does not set job priorities,
+  and will take default action. If the job priority is not available, the
+  plugin should instead use ``flux_jobtap_priority_unavail()`` to indicate
+  that the priority cannot be set. Jobs that do not have a priority will
+  remain in the PRIORITY state until a priority is assigned, so a plugin
+  should arrange for the priority to be set asynchronously using 
+  ``flux_jobtap_reprioritize_job()``).
+
+job.priority.get
+  The job manager calls the ``job.priority.get`` topic whenever it wants
+  to update the job priority of a single job. The plugin should return a
+  priority immediately, but if one is not available when a job is in
+  the PRIORITY state, the plugin may use ``flux_jobtap_priority_unavail()``
+  to indicate the priority is not available. Returning an unavailable
+  priority in the SCHED state is an error and it will be logged, but
+  otherwise ignored.
+
+RESOURCES
+=========
+
+Github: http://github.com/flux-framework
+
+
+SEE ALSO
+========
+
+

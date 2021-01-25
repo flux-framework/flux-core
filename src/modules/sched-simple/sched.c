@@ -396,30 +396,43 @@ static void prioritize_cb (flux_t *h,
                            const flux_msg_t *msg,
                            void *arg)
 {
+    static int min_sort_size = 4;
     struct simple_sched *ss = arg;
+    struct jobreq *job;
     json_t *jobs;
     size_t index;
     json_t *arr;
+    size_t count;
 
     if (flux_request_unpack (msg, NULL, "{s:o}", "jobs", &jobs) < 0)
         goto proto_error;
 
+    count = json_array_size (jobs);
     json_array_foreach (jobs, index, arr) {
         flux_jobid_t id;
         int64_t priority;
-        struct jobreq *job;
 
         if (json_unpack (arr, "[I,I]", &id, &priority) < 0)
             goto proto_error;
 
-        job = jobreq_find (ss, id);
-
-        if (job) {
+        if ((job = jobreq_find (ss, id))) {
             job->priority = priority;
-            zlistx_reorder (ss->queue, job->handle, true);
+            if (count < min_sort_size)
+                zlistx_reorder (ss->queue, job->handle, true);
         }
     }
+    if (count >= min_sort_size) {
+        zlistx_sort (ss->queue);
 
+        /*  zlistx handles are invalidated after a zlistx_sort(),
+         *   so reaquire them now
+         */
+        job = zlistx_first (ss->queue);
+        while (job) {
+            job->handle = zlistx_cursor (ss->queue);
+            job = zlistx_next (ss->queue);
+        }
+    }
     if (!ss->single)
         annotate_reason_pending (ss);
     return;

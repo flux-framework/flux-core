@@ -37,26 +37,6 @@
 
 #define MAXOF(a,b)   ((a)>(b)?(a):(b))
 
-static int reprioritize (struct job_manager *ctx, struct job *job)
-{
-    flux_future_t *f;
-
-    if (!(f = flux_rpc_pack (ctx->h,
-                             "sched.prioritize",
-                             FLUX_NODEID_ANY,
-                             FLUX_RPC_NORESPONSE,
-                             "{s:[[I,I]]}",
-                             "jobs",
-                             job->id,
-                             job->priority))) {
-        flux_log_error (ctx->h, "sending sched.prioritize id=%ju",
-                        (uintmax_t)job->id);
-        return -1;
-    }
-    flux_future_destroy (f);
-    return 0;
-}
-
 void urgency_handle_request (flux_t *h,
                              flux_msg_handler_t *mh,
                              const flux_msg_t *msg,
@@ -105,7 +85,9 @@ void urgency_handle_request (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    /* Post event, change job's queue position, and respond.
+    /* Post event: this will update job->urgency, which will then result
+     *  in a call to recalculate priority, which reprioritize job if there
+     *  was a priority change.
      */
     orig_urgency = job->urgency;
     if (event_job_post_pack (ctx->event, job,
@@ -114,39 +96,6 @@ void urgency_handle_request (flux_t *h,
                              "userid", cred.userid,
                              "urgency", urgency) < 0)
         goto error;
-    /* N.B. once priority plugin work developed, should recall with
-     * new urgency, but for now priority is set to urgency */
-    if (urgency != orig_urgency) {
-        if (urgency == FLUX_JOB_URGENCY_HOLD)
-            job->priority = FLUX_JOB_PRIORITY_MIN;
-        else if (urgency == FLUX_JOB_URGENCY_EXPEDITE)
-            job->priority = FLUX_JOB_PRIORITY_MAX;
-        else
-            job->priority = urgency;
-        /* We pack priority with I instead of i to avoid issue of
-         * signed vs unsigned int */
-        if (event_job_post_pack (ctx->event, job,
-                                 "priority",
-                                 0,
-                                 "{ s:I }",
-                                 "priority", job->priority) < 0)
-            goto error;
-        if (job->alloc_queued) {
-            alloc_queue_reorder (ctx->alloc, job);
-            if (alloc_queue_recalc_pending (ctx->alloc) < 0)
-                goto error;
-        }
-        else if (job->alloc_pending) {
-            if (urgency == FLUX_JOB_URGENCY_HOLD) {
-                if (alloc_cancel_alloc_request (ctx->alloc, job) < 0)
-                    goto error;
-            }
-            else {
-                if (reprioritize (ctx, job) < 0)
-                    goto error;
-            }
-        }
-    }
     if (flux_respond_pack (h, msg, "{s:i}", "old_urgency", orig_urgency) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;

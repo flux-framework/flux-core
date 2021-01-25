@@ -201,7 +201,6 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     json_t *annotations = NULL;
     struct job *job;
     bool cleared = false;
-    json_t *tmp = NULL;
 
     if (flux_response_decode (msg, NULL, NULL) < 0)
         goto teardown; // ENOSYS here if scheduler not loaded/shutting down
@@ -237,25 +236,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = EEXIST;
             goto teardown;
         }
-        if (annotations_update (h, job, annotations) < 0)
+        if (annotations_update_and_publish (ctx, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%ju", (uintmax_t)id);
-        if (annotations) {
-            if (job->annotations) {
-                /* deep copy necessary for journal history, as
-                 * job->annotations can be modified in future */
-                if (!(tmp = json_deep_copy (job->annotations)))
-                    goto nomem;
-            }
-            if (event_job_post_pack (ctx->event,
-                                     job,
-                                     "annotations",
-                                     EVENT_JOURNAL_ONLY,
-                                     "{s:O?}",
-                                     "annotations", tmp) < 0)
-                flux_log_error (ctx->h,
-                                "%s: event_job_post_pack: id=%ju",
-                                __FUNCTION__, (uintmax_t)id);
-        }
         if (job->annotations) {
             if (event_job_post_pack (ctx->event, job, "alloc", 0,
                                      "{ s:O }",
@@ -272,23 +254,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
             errno = EPROTO;
             goto teardown;
         }
-        if (annotations_update (h, job, annotations) < 0)
+        if (annotations_update_and_publish (ctx, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%ju", (uintmax_t)id);
-        if (job->annotations) {
-            /* deep copy necessary for journal history, as
-             * job->annotations can be modified in future */
-            if (!(tmp = json_deep_copy (job->annotations)))
-                goto nomem;
-        }
-        if (event_job_post_pack (ctx->event,
-                                 job,
-                                 "annotations",
-                                 EVENT_JOURNAL_ONLY,
-                                 "{s:O?}",
-                                 "annotations", tmp) < 0)
-            flux_log_error (ctx->h,
-                            "%s: event_job_post_pack: id=%ju",
-                            __FUNCTION__, (uintmax_t)id);
         break;
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
@@ -341,12 +308,8 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EINVAL;
         goto teardown;
     }
-    json_decref (tmp);
     return;
-nomem:
-    errno = ENOMEM;
 teardown:
-    json_decref (tmp);
     interface_teardown (alloc, "alloc response error", errno);
 }
 
@@ -483,11 +446,11 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (alloc->mode == SCHED_SINGLE && alloc->alloc_pending_count > 0)
         return;
    /* The queue is sorted from highest to lowest priority, so if the
-    * first job has urgency=HOLD (priority=MIN), all other jobs must have
-    * the same priority, and no alloc requests can be sent.
+    * first job has priority=MIN, all other jobs must have the same priority,
+    * and no alloc requests can be sent.
     */
     if ((job = zlistx_first (alloc->queue))
-        && job->urgency != FLUX_JOB_URGENCY_HOLD)
+        && job->priority != FLUX_JOB_PRIORITY_MIN)
         flux_watcher_start (alloc->idle);
 }
 
@@ -508,11 +471,11 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (alloc->mode == SCHED_SINGLE && alloc->alloc_pending_count > 0)
         return;
    /* The queue is sorted from highest to lowest priority, so if the
-    * first job has urgency=HOLD (priority=MIN), all other jobs must have
-    * the same priority, and no alloc requests can be sent.
+    * first job has priority=MIN, all other jobs must have the same priority,
+    * and no alloc requests can be sent.
     */
     if ((job = zlistx_first (alloc->queue))
-        && job->urgency != FLUX_JOB_URGENCY_HOLD) {
+        && job->priority != FLUX_JOB_PRIORITY_MIN) {
         if (alloc_request (alloc, job) < 0) {
             flux_log_error (ctx->h, "alloc_request fatal error");
             flux_reactor_stop_error (flux_get_reactor (ctx->h));
@@ -554,7 +517,7 @@ int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
     assert (job->state == FLUX_JOB_STATE_SCHED);
     if (!job->alloc_queued
         && !job->alloc_pending
-        && job->urgency != FLUX_JOB_URGENCY_HOLD) {
+        && job->priority != FLUX_JOB_PRIORITY_MIN) {
         bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
         assert (job->handle == NULL);
         if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
@@ -599,12 +562,33 @@ struct job *alloc_queue_next (struct alloc *alloc)
     return zlistx_next (alloc->queue);
 }
 
-/* called from urgency_handle_request() */
+/* called from reprioritize_job() */
 void alloc_queue_reorder (struct alloc *alloc, struct job *job)
 {
     bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
 
     zlistx_reorder (alloc->queue, job->handle, fwd);
+}
+
+int alloc_queue_reprioritize (struct alloc *alloc)
+{
+    struct job *job;
+    zlistx_sort (alloc->queue);
+
+    /*  N.B.: zlistx_sort() invalidates all list handles since
+     *   the sort swaps contents of nodes, not the nodes themselves.
+     *   Therefore, job handles into the list must be re-acquired here:
+     */
+    job = zlistx_first (alloc->queue);
+    while (job) {
+        job->handle = zlistx_cursor (alloc->queue);
+        job = zlistx_next (alloc->queue);
+    }
+
+    if (alloc->mode == SCHED_SINGLE)
+        return alloc_queue_recalc_pending (alloc);
+    else
+        return 0;
 }
 
 /* called if highest priority job may have changed */

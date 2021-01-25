@@ -109,7 +109,8 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_kvs_copy.3 \
 	man3/flux_core_version.3 \
 	man3/idset_create.3 \
-	man3/idset_encode.3
+	man3/idset_encode.3 \
+	man3/flux_jobtap_get_flux.3
 
 # These files are generated as clones of a primary page.
 # Sphinx handles this automatically if declared in the conf.py
@@ -253,7 +254,11 @@ MAN3_FILES_SECONDARY = \
 	man3/idset_first.3 \
 	man3/idset_next.3 \
 	man3/idset_count.3 \
-	man3/idset_equal.3
+	man3/idset_equal.3 \
+	man3/flux_jobtap_service_register.3 \
+	man3/flux_jobtap_reprioritize_all.3 \
+	man3/flux_jobtap_reprioritize_job.3 \
+	man3/flux_jobtap_priority_unavail.3
 
 MAN5_FILES = $(MAN5_FILES_PRIMARY)
 
@@ -263,7 +268,8 @@ MAN5_FILES_PRIMARY = \
 MAN7_FILES = $(MAN7_FILES_PRIMARY)
 
 MAN7_FILES_PRIMARY = \
-	man7/flux-broker-attributes.7
+	man7/flux-broker-attributes.7 \
+	man7/flux-jobtap-plugins.7
 
 
 RST_FILES  = \

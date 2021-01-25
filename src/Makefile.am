@@ -12,4 +12,5 @@ noinst_HEADERS = \
 	include/flux/idset.h \
 	include/flux/schedutil.h \
 	include/flux/shell.h \
-	include/flux/hostlist.h
+	include/flux/hostlist.h \
+	include/flux/jobtap.h
