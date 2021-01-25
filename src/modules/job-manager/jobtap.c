@@ -83,10 +83,8 @@ static const char *jobtap_plugin_name (flux_plugin_t *p)
     return "unknown";
 }
 
-static flux_plugin_arg_t *jobtap_args_vcreate (struct jobtap *jobtap,
-                                               struct job *job,
-                                               const char *fmt,
-                                               va_list ap)
+static flux_plugin_arg_t *jobtap_args_create (struct jobtap *jobtap,
+                                              struct job *job)
 {
     flux_plugin_arg_t *args = flux_plugin_arg_create ();
     if (!args)
@@ -103,13 +101,6 @@ static flux_plugin_arg_t *jobtap_args_vcreate (struct jobtap *jobtap,
                               "priority", job->priority,
                               "t_submit", job->t_submit) < 0)
         goto error;
-
-    if (fmt
-        && flux_plugin_arg_vpack (args,
-                                  FLUX_PLUGIN_ARG_IN|FLUX_PLUGIN_ARG_UPDATE,
-                                  fmt, ap) < 0)
-        goto error;
-
     /*
      *  Always start with empty OUT args. This allows unpack of OUT
      *   args to work without error, even if plugin does not set any
@@ -124,13 +115,32 @@ error:
     return NULL;
 }
 
+static flux_plugin_arg_t *jobtap_args_vcreate (struct jobtap *jobtap,
+                                               struct job *job,
+                                               const char *fmt,
+                                               va_list ap)
+{
+    flux_plugin_arg_t *args = jobtap_args_create (jobtap, job);
+    if (!args)
+        return NULL;
+
+    if (fmt
+        && flux_plugin_arg_vpack (args,
+                                  FLUX_PLUGIN_ARG_IN|FLUX_PLUGIN_ARG_UPDATE,
+                                  fmt, ap) < 0)
+        goto error;
+    return args;
+error:
+    flux_plugin_arg_destroy (args);
+    return NULL;
+}
+
 int jobtap_get_priority (struct jobtap *jobtap,
                          struct job *job,
                          int64_t *pprio)
 {
     int rc = -1;
     flux_plugin_arg_t *args;
-    va_list ap;
     int64_t priority = -1;
 
     if (!jobtap || !job || !pprio) {
@@ -141,10 +151,7 @@ int jobtap_get_priority (struct jobtap *jobtap,
         *pprio = job->urgency;
         return 0;
     }
-    /*  N.B.: passing uninitialized ap to args_vcreate, but it should be
-     *   ok, since fmt == NULL, ap will not be used.
-     */
-    if (!(args = jobtap_args_vcreate (jobtap, job, NULL, ap)))
+    if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
     rc = flux_plugin_call (jobtap->plugin, "job.priority.get", args);
     if (rc == 1) {
