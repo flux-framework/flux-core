@@ -128,4 +128,27 @@ test_expect_success 'drain with no args lists currently drained targets' '
 	grep "happy happy, joy joy" drain.out
 '
 
+test_expect_success 'drain/undrain works on rank > 0' '
+	flux exec -r 1 flux resource undrain 0 &&
+	flux exec -r 1 flux resource drain 0 whee drained again
+'
+
+drain_onrank() {
+	local op=$1
+	local nodeid=$2
+	local target=$3
+	flux python -c "import flux; print(flux.Flux().rpc(\"resource.$op\",{\"targets\":$target, \"reason\":\"\"}, nodeid=$nodeid).get())"
+}
+
+test_expect_success 'resource.drain RPC fails on rank > 0' '
+       test_must_fail drain_onrank drain 1 0 2>drain1.err &&
+       grep -i "unknown service method" drain1.err
+'
+
+test_expect_success 'resource.undrain RPC fails on rank > 0' '
+       test_must_fail drain_onrank undrain 1 0 2>undrain1.err &&
+       grep -i "unknown service method" undrain1.err
+'
+
+
 test_done
