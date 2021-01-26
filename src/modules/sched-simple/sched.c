@@ -679,7 +679,7 @@ static char * get_alloc_mode (flux_t *h, const char *mode)
         || strcmp (mode, "first-fit") == 0
         || strcmp (mode, "best-fit") == 0)
         return strdup (mode);
-    flux_log_error (h, "unknown allocation mode: %s\n", mode);
+    flux_log (h, LOG_ERR, "unknown allocation mode: %s", mode);
     return NULL;
 }
 
