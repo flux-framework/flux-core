@@ -48,6 +48,7 @@ def drain(args):
         flux.Flux(),
         "resource.drain",
         {"targets": args.targets, "reason": " ".join(args.reason)},
+        nodeid=0,
     ).get()
 
 
@@ -55,7 +56,7 @@ def undrain(args):
     """
     Send an "undrain" request to resource module for args.targets
     """
-    RPC(flux.Flux(), "resource.undrain", {"targets": args.targets}).get()
+    RPC(flux.Flux(), "resource.undrain", {"targets": args.targets}, nodeid=0).get()
 
 
 class StatusLine:
