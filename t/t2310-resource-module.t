@@ -195,6 +195,19 @@ test_expect_success 'resource.get-xml blocks until all ranks are up' '
 	flux python ${SHARNESS_TEST_SRCDIR}/resource/get-xml-test.py
 '
 
+test_expect_success 'flux resource status works on rank > 0' '
+	flux exec -r 1 flux resource status
+'
+
+status_onrank() {
+	flux python -c "import flux; print(flux.Flux().rpc(\"resource.status\",nodeid=$1).get())"
+}
+
+test_expect_success 'resource.status RPC fails on rank > 0' '
+	test_must_fail status_onrank 1 2>status.err &&
+	grep "only works on rank 0" status.err
+'
+
 test_expect_success 'unload resource module' '
 	flux exec -r all flux module remove resource
 '

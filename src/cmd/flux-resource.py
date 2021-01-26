@@ -274,7 +274,7 @@ def status(args):
     if args.from_stdin:
         resp = sys.stdin.read()
     else:
-        resp = RPC(flux.Flux(), "resource.status").get()
+        resp = RPC(flux.Flux(), "resource.status", nodeid=0).get()
 
     rstat = ResourceStatus.from_status_response(resp, fmt)
 

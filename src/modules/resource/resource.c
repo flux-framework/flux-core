@@ -156,15 +156,18 @@ static void status_cb (flux_t *h,
                        void *arg)
 {
     struct resource_ctx *ctx = arg;
-    const struct idset *online = monitor_get_up (ctx->monitor);
-    const struct idset *offline = monitor_get_down (ctx->monitor);
-    const struct idset *exclude = exclude_get (ctx->exclude);
     json_t *drain;
     const json_t *R;
     json_t *o = NULL;
+    const char *errstr = NULL;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
+    if (ctx->rank != 0) {
+        errno = EPROTO;
+        errstr = "this RPC only works on rank 0";
+        goto error;
+    }
     if (!(R = inventory_get (ctx->inventory)))
         goto error;
     if (!(drain = drain_get_info (ctx->drain)))
@@ -174,11 +177,17 @@ static void status_cb (flux_t *h,
         errno = ENOMEM;
         goto error;
     }
-    if (rutil_set_json_idset (o, "online", online) < 0)
+    if (rutil_set_json_idset (o,
+                              "online",
+                              monitor_get_up (ctx->monitor)) < 0)
         goto error;
-    if (rutil_set_json_idset (o, "offline", offline) < 0)
+    if (rutil_set_json_idset (o,
+                              "offline",
+                              monitor_get_down (ctx->monitor)) < 0)
         goto error;
-    if (rutil_set_json_idset (o, "exclude", exclude) < 0)
+    if (rutil_set_json_idset (o,
+                              "exclude",
+                              exclude_get (ctx->exclude)) < 0)
         goto error;
     if (flux_respond_pack (h, msg, "o", o) < 0) {
         flux_log_error (h, "error responding to resource.status request");
@@ -186,7 +195,7 @@ static void status_cb (flux_t *h,
     }
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to resource.status request");
     json_decref (o);
 }
