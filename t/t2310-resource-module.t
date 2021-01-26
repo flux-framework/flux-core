@@ -113,8 +113,8 @@ test_expect_success 'flux resource reload fails on nonexistent XML directory' '
 '
 
 test_expect_success 'flux resource reload fails on empty XML directory' '
-    mkdir empty &&
-    test_must_fail flux resource reload -x $(pwd)/empty
+	mkdir empty &&
+	test_must_fail flux resource reload -x $(pwd)/empty
 '
 
 test_expect_success HAVE_JQ 'extract hwloc XML from JSON object' '
@@ -192,7 +192,7 @@ test_expect_success HAVE_JQ 'all ranks were drained' '
 '
 
 test_expect_success 'resource.get-xml blocks until all ranks are up' '
-    flux python ${SHARNESS_TEST_SRCDIR}/resource/get-xml-test.py
+	flux python ${SHARNESS_TEST_SRCDIR}/resource/get-xml-test.py
 '
 
 test_expect_success 'unload resource module' '
