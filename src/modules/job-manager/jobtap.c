@@ -421,7 +421,9 @@ done:
     return 0;
 error:
     if (errp && errp->text[0] == '\0')
-        strncpy (errp->text, flux_plugin_strerror (p), sizeof (errp->text));
+        strncpy (errp->text,
+                 flux_plugin_strerror (p),
+                 sizeof (errp->text) - 1);
     flux_plugin_destroy (p);
     return -1;
 }
