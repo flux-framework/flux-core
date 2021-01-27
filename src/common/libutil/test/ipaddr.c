@@ -18,23 +18,18 @@ int main(int argc, char** argv)
 {
     char host[MAXHOSTNAMELEN + 1];
     char errstr[200];
-    char *addrs = NULL;
-    size_t addrs_len = 0;
-    const char *entry = NULL;
+    int n;
 
     plan (NO_PLAN);
 
     memset (errstr, 0, sizeof (errstr));
-    ok (ipaddr_getprimary (host, sizeof (host), errstr, sizeof (errstr)) == 0,
-        "ipaddr_getprimary works: errstr=%s", errstr);
-    diag ("primary: %s", host);
-
-    ok (ipaddr_getall (&addrs, &addrs_len, errstr, sizeof (errstr)) == 0,
-        "ipaddrs_getall works");
-    while ((entry = argz_next (addrs, addrs_len, entry)))
-        diag ("%s", entry);
-
-    free (addrs);
+    n = ipaddr_getprimary (host, sizeof (host), errstr, sizeof (errstr));
+    ok (n == 0,
+        "ipaddr_getprimary works");
+    if (n == 0)
+        diag ("primary: %s", host);
+    else
+        diag ("Error: %s", errstr);
 
     done_testing();
 }
