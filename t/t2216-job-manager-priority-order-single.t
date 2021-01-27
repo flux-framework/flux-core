@@ -15,8 +15,11 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
-test_expect_success 'job-manager: initially run without scheduler' '
-        flux module unload sched-simple
+# --setbit 0x2 enables creation of reason_pending field
+test_expect_success 'job-manager: load sched-simple (1 rank, 2 cores/rank)' '
+        flux module unload sched-simple &&
+        flux module load sched-simple mode=limited=1 &&
+        flux module debug --setbit 0x2 sched-simple
 '
 
 test_expect_success 'job-manager: submit 4 jobs' '
@@ -24,15 +27,6 @@ test_expect_success 'job-manager: submit 4 jobs' '
         flux job submit --flags=debug basic.json >job2.id &&
         flux job submit --flags=debug basic.json >job3.id &&
         flux job submit --flags=debug basic.json >job4.id
-'
-
-# --setbit 0x2 enables creation of reason_pending field
-# flux queue stop/start to ensure no raciness with setting up debug bits
-test_expect_success 'job-manager: load sched-simple (1 rank, 2 cores/rank)' '
-        flux queue stop &&
-        flux module load sched-simple mode=limited=1 &&
-        flux module debug --setbit 0x2 sched-simple &&
-        flux queue start
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RRSS' '
