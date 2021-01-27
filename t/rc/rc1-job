@@ -44,7 +44,10 @@ if test $RANK -eq 0; then
 fi
 modload all resource noverify
 
-modload 0 job-exec
+if [ "${TEST_UNDER_FLUX_NO_JOB_EXEC}" != "y" ]
+then
+    modload 0 job-exec
+fi
 
 modload 0 sched-simple
 

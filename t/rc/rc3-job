@@ -10,7 +10,10 @@ modrm() {
     fi
 }
 
-modrm 0 job-exec
+if [ "${TEST_UNDER_FLUX_NO_EXEC}" != "y" ]
+then
+    modrm 0 job-exec
+fi
 modrm 0 sched-simple
 modrm all resource
 modrm 0 job-info
