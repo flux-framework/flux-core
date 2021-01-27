@@ -1,3 +1,12 @@
+flux-core version 0.23.1 - 2021-01-27
+-------------------------------------
+
+### Fixes
+
+ * flux resource: allow drain, undrain, and status to work on any rank (#3486)
+ * job-manager: fix compilation error on gcc-10 (#3485)
+ * job-manager: fix uninitialized variable warning in jobtap.c (#3481)
+
 flux-core version 0.23.0 - 2021-01-25
 -------------------------------------
 
