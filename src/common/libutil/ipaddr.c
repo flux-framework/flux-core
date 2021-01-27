@@ -24,6 +24,18 @@
 #include "log.h"
 #include "ipaddr.h"
 
+static __attribute__ ((format (printf, 3, 4)))
+void esprintf (char *buf, int len, const char *fmt, ...)
+{
+    if (buf) {
+        va_list ap;
+
+        va_start (ap, fmt);
+        vsnprintf (buf, len, fmt, ap);
+        va_end (ap);
+    }
+}
+
 int ipaddr_getprimary (char *buf, int len, char *errstr, int errstrsz)
 {
     char hostname[HOST_NAME_MAX + 1];
@@ -31,8 +43,7 @@ int ipaddr_getprimary (char *buf, int len, char *errstr, int errstrsz)
     int e;
 
     if (gethostname (hostname, sizeof (hostname)) < 0) {
-        if (errstr)
-            snprintf (errstr, errstrsz, "gethostname: %s", strerror (errno));
+        esprintf (errstr, errstrsz, "gethostname: %s", strerror (errno));
         return -1;
     }
     memset (&hints, 0, sizeof (hints));
@@ -40,15 +51,13 @@ int ipaddr_getprimary (char *buf, int len, char *errstr, int errstrsz)
     hints.ai_socktype = SOCK_STREAM;
 
     if ((e = getaddrinfo (hostname, NULL, &hints, &res)) || res == NULL) {
-        if (errstr)
-            snprintf (errstr, errstrsz, "getaddrinfo %s: %s",
-                      hostname, gai_strerror (e));
+        esprintf (errstr, errstrsz, "getaddrinfo %s: %s",
+                  hostname, gai_strerror (e));
         return -1;
     }
     if ((e = getnameinfo (res->ai_addr, res->ai_addrlen, buf, len,
                           NULL, 0, NI_NUMERICHOST))) {
-        if (errstr)
-            snprintf (errstr, errstrsz, "getnameinfo: %s", gai_strerror (e));
+        esprintf (errstr, errstrsz, "getnameinfo: %s", gai_strerror (e));
         freeaddrinfo (res);
         return -1;
     }
