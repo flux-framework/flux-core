@@ -6,7 +6,7 @@ test_description='Test flux job manager service with sched-simple (single)'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 job
+test_under_flux 2 job
 
 flux setattr log-stderr-level 1
 
@@ -32,7 +32,7 @@ test_expect_success 'job-manager: submit 5 jobs' '
 
 # --setbit 0x2 enables creation of reason_pending field
 # flux queue stop/start to ensure no raciness with setting up debug bits
-test_expect_success 'job-manager: load sched-simple w/ 2 cores' '
+test_expect_success 'job-manager: load sched-simple w/ 1 rank, 2 cores/rank' '
         flux R encode -r0 -c0-1 >R.test &&
         flux resource reload R.test &&
         flux queue stop &&
@@ -127,7 +127,7 @@ test_expect_success 'job-manager: canceled job has exception, free events' '
         flux job wait-event --timeout=5.0 $(cat job2.id) free
 '
 
-test_expect_success 'job-manager: reload sched-simple w/ 4 cores' '
+test_expect_success 'job-manager: reload sched-simple w/ 2 ranks, 2 cores/rank' '
         flux dmesg -C &&
         flux module unload sched-simple &&
         flux R encode -r0-1 -c0-1 >R2.test &&

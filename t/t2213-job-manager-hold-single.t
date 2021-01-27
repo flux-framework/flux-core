@@ -6,7 +6,8 @@ test_description='Test flux job manager job hold (single mode)'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 job
+export TEST_UNDER_FLUX_CORES_PER_RANK=1
+test_under_flux 1 job
 
 flux setattr log-stderr-level 1
 
@@ -32,9 +33,7 @@ test_expect_success 'job-manager: submit 5 jobs (job 2 held)' '
 
 # --setbit 0x2 enables creation of reason_pending field
 # flux queue stop/start to ensure no raciness with setting up debug bits
-test_expect_success 'job-manager: load sched-simple w/ 1 core' '
-        flux R encode -r0 -c0 >R.test &&
-        flux resource reload R.test &&
+test_expect_success 'job-manager: load sched-simple (1 rank, 1 core/rank)' '
         flux queue stop &&
         flux module load sched-simple mode=limited=1 &&
         flux module debug --setbit 0x2 sched-simple &&
