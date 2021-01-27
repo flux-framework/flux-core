@@ -8,6 +8,7 @@ test_description='Test flux job manager job hold (single mode)'
 
 export TEST_UNDER_FLUX_CORES_PER_RANK=1
 export TEST_UNDER_FLUX_NO_JOB_EXEC=y
+export TEST_UNDER_FLUX_SCHED_SIMPLE_MODE="limited=1"
 test_under_flux 1 job
 
 flux setattr log-stderr-level 1
@@ -16,13 +17,7 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
-# --setbit 0x2 enables creation of reason_pending field
-test_expect_success 'job-manager: load sched-simple (1 rank, 1 core/rank)' '
-        flux module unload sched-simple &&
-        flux module load sched-simple mode=limited=1 &&
-        flux module debug --setbit 0x2 sched-simple
-'
-
+# N.B. resources = 1 rank, 1 core/rank
 test_expect_success 'job-manager: submit 5 jobs (job 2 held)' '
         flux job submit --flags=debug basic.json >job1.id &&
         flux job submit --flags=debug --urgency=0 basic.json >job2.id &&

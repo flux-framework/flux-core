@@ -49,7 +49,20 @@ then
     modload 0 job-exec
 fi
 
-modload 0 sched-simple
+# mirror sched-simple default of limited=8
+if [ "${TEST_UNDER_FLUX_SCHED_SIMPLE_MODE}x" != "x" ]
+then
+    mode=${TEST_UNDER_FLUX_SCHED_SIMPLE_MODE}
+else
+    mode="limited=8"
+fi
+
+modload 0 sched-simple mode=${mode}
+#--setbit 0x2 enables creation of reason_pending field
+if [ $RANK -eq 0 ]
+then
+    flux module debug --setbit 0x2 sched-simple
+fi
 
 test $RANK -ne 0 || flux admin cleanup-push <<-EOT
 	flux queue stop

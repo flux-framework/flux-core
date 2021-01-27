@@ -15,6 +15,9 @@ test_expect_success 'flux-job: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
+# N.B. we will fake with different resources later on in this file, thus
+# the need to set resources manually instead of through test_under_flux()
+#
 # --setbit 0x2 enables creation of reason_pending field
 test_expect_success 'job-manager: load sched-simple w/ 1 rank, 2 cores/rank' '
         flux module unload sched-simple &&
