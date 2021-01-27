@@ -30,14 +30,6 @@ test_expect_success 'job-manager: submit 5 jobs' '
         flux job submit --flags=debug basic.json >job5.id
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SSSSS (no scheduler)' '
-        jmgr_check_state $(cat job1.id) S &&
-        jmgr_check_state $(cat job2.id) S &&
-        jmgr_check_state $(cat job3.id) S &&
-        jmgr_check_state $(cat job4.id) S &&
-        jmgr_check_state $(cat job5.id) S
-'
-
 # --setbit 0x2 enables creation of reason_pending field
 # flux queue stop/start to ensure no raciness with setting up debug bits
 test_expect_success 'job-manager: load sched-simple w/ 2 cores' '

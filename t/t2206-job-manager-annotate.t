@@ -29,14 +29,6 @@ test_expect_success 'job-manager: submit 5 jobs' '
         flux job submit --flags=debug basic.json >job5.id
 '
 
-test_expect_success HAVE_JQ 'job-manager: job state SSSSS (no scheduler)' '
-        jmgr_check_state $(cat job1.id) S &&
-        jmgr_check_state $(cat job2.id) S &&
-        jmgr_check_state $(cat job3.id) S &&
-        jmgr_check_state $(cat job4.id) S &&
-        jmgr_check_state $(cat job5.id) S
-'
-
 test_expect_success HAVE_JQ 'job-manager: no annotations (SSSSS)' '
         jmgr_check_no_annotations $(cat job1.id) &&
         jmgr_check_no_annotations $(cat job2.id) &&

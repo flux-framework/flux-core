@@ -2,6 +2,8 @@
 
 test_description='Test flux job manager service'
 
+. `dirname $0`/job-manager/sched-helper.sh
+
 . $(dirname $0)/sharness.sh
 
 test_under_flux 4 kvs
@@ -186,6 +188,12 @@ test_expect_success HAVE_JQ 'job-manager: that job is now the first job' '
 	firstid=$($jq .id <list10_reordered.out | head -1) &&
 	lastid=$(tail -1 <list10_ids.out) &&
 	test "${lastid}" -eq "${firstid}"
+'
+
+test_expect_success HAVE_JQ 'job-manager: jobs in state S w/ no scheduler' '
+	for id in $(cat submit10.out); do \
+            jmgr_check_state ${id} S; \
+	done
 '
 
 test_expect_success HAVE_JQ 'job-manager: save max_jobid' '
