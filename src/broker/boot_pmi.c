@@ -112,38 +112,6 @@ done:
     return (rv);
 }
 
-/* Process attribute with format_endpoint(), writing it back to the
- * attribute cache, then returning it in 'value'.
- * If attribute was not initially set, start with 'default_value'.
- * Return 0 on success, -1 on failure with diagnostics to stderr.
- */
-static int update_endpoint_attr (attr_t *attrs, const char *name,
-                                 const char **value, const char *default_value)
-{
-    const char *val;
-    char *fmt_val = NULL;
-    int rc = -1;
-
-    if (attr_get (attrs, name, &val, NULL) < 0)
-        val = default_value;
-    if (!(fmt_val = format_endpoint (attrs, val))) {
-        log_msg ("malformed %s: %s", name, val);
-        return -1;
-    }
-    (void)attr_delete (attrs, name, true);
-    if (attr_add (attrs, name, fmt_val, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("setattr %s", name);
-        goto done;
-    }
-    if (attr_get (attrs, name, &val, NULL) < 0)
-        goto done;
-    *value = val;
-    rc = 0;
-done:
-    free (fmt_val);
-    return rc;
-}
-
 /*  If the broker is launched via flux-shell, then the shell may opt
  *  to set a "flux.instance-level" parameter in the PMI kvs to tell
  *  the booting instance at what "level" it will be running, i.e. the
@@ -182,7 +150,6 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
     int rank;
     char key[64];
     char val[1024];
-    const char *tbonendpoint = NULL;
     struct pmi_handle *pmi;
     struct pmi_params pmi_params;
     int result;
@@ -225,33 +192,28 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
                       pmi_params.size,
                       pmi_params.rank,
                       0) != KARY_NONE) {
+        const char *fmt;
+        char *tmp;
 
-        if (update_endpoint_attr (attrs,
-                                  "tbon.endpoint",
-                                  &tbonendpoint,
-                                  "tcp://%h:*") < 0) {
-            log_msg ("update_endpoint_attr failed");
+        if (attr_get (attrs, "tbon.endpoint", &fmt, NULL) < 0)
+            fmt = "tcp://%h:*";
+        if (!(tmp = format_endpoint (attrs, fmt)))
+            goto error;
+        if (overlay_bind (overlay, tmp) < 0) {
+            log_err ("overlay_bind %s failed", tmp);
+            free (tmp);
             goto error;
         }
-        if (overlay_bind (overlay, tbonendpoint) < 0) {
-            log_err ("overlay_bind failed");
-            goto error;
-        }
-        if (!(uri = (char *)overlay_get_bind_uri (overlay))) {
-            log_msg ("overlay_get_bind_uri returned NULL");
-            goto error;
-        }
+        free (tmp);
+        uri = (char *)overlay_get_bind_uri (overlay);
     }
     else {
-        (void)attr_delete (attrs, "tbon.endpoint", true);
-        if (attr_add (attrs,
-                     "tbon.endpoint",
-                     NULL,
-                     FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-            log_err ("setattr tbon.endpoint");
-            goto error;
-        }
         uri = NULL;
+    }
+    (void)attr_delete (attrs, "tbon.endpoint", true);
+    if (attr_add (attrs, "tbon.endpoint", uri, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("setattr tbon.endpoint");
+        goto error;
     }
 
     /* Each broker writes a "business card" consisting of (currently):

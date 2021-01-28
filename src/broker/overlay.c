@@ -605,10 +605,8 @@ int overlay_bind (struct overlay *ov, const char *uri)
     zcert_apply (ov->cert, ov->child->zsock);
     zsock_set_curve_server (ov->child->zsock, 1);
 
-    if (zsock_bind (ov->child->zsock, "%s", ov->child->uri) < 0) {
-        log_err ("could not bind to %s", ov->child->uri);
+    if (zsock_bind (ov->child->zsock, "%s", ov->child->uri) < 0)
         return -1;
-    }
     if (strchr (ov->child->uri, '*')) { /* capture dynamically assigned port */
         char *newuri = zsock_last_endpoint (ov->child->zsock);
         if (!newuri)
