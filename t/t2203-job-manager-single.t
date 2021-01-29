@@ -11,10 +11,6 @@ test_under_flux 2 job
 
 flux setattr log-stderr-level 1
 
-test_expect_success 'flux-job: generate jobspec for simple test job' '
-        flux jobspec srun -n1 hostname >basic.json
-'
-
 # N.B. we will fake with different resources later on in this file, thus
 # the need to set resources manually instead of through test_under_flux()
 #
@@ -28,11 +24,11 @@ test_expect_success 'job-manager: load sched-simple w/ 1 rank, 2 cores/rank' '
 '
 
 test_expect_success 'job-manager: submit 5 jobs' '
-        flux job submit --flags=debug basic.json >job1.id &&
-        flux job submit --flags=debug basic.json >job2.id &&
-        flux job submit --flags=debug basic.json >job3.id &&
-        flux job submit --flags=debug basic.json >job4.id &&
-        flux job submit --flags=debug basic.json >job5.id
+        flux mini submit --flags=debug -n1 hostname >job1.id &&
+        flux mini submit --flags=debug -n1 hostname >job2.id &&
+        flux mini submit --flags=debug -n1 hostname >job3.id &&
+        flux mini submit --flags=debug -n1 hostname >job4.id &&
+        flux mini submit --flags=debug -n1 hostname >job5.id
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
@@ -234,7 +230,7 @@ test_expect_success 'job-manager: annotate jobs in flux jobs (IIIII)' '
 
 test_expect_success 'job-manager: simulate alloc failure' '
         flux module debug --setbit 0x1 sched-simple &&
-        flux job submit --flags=debug basic.json >job6.id &&
+        flux mini submit --flags=debug -n1 hostname >job6.id &&
         flux job wait-event --timeout=5 $(cat job6.id) exception >ev6.out &&
         grep -q "type=\"alloc\"" ev6.out &&
         grep -q severity=0 ev6.out &&

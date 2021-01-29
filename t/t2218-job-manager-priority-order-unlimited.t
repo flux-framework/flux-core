@@ -12,19 +12,15 @@ test_under_flux 1 job
 
 flux setattr log-stderr-level 1
 
-test_expect_success 'flux-job: generate jobspec for simple test job' '
-        flux jobspec srun -n1 hostname >basic.json
-'
-
 # N.B. resources = 1 rank, 2 cores/rank
 # flux queue stop/start to ensure no scheduling until after all jobs submitted
 test_expect_success 'job-manager: submit 5 jobs (differing urgencies)' '
         flux queue stop &&
-        flux job submit --flags=debug --urgency=12 basic.json >job1.id &&
-        flux job submit --flags=debug --urgency=10 basic.json >job2.id &&
-        flux job submit --flags=debug --urgency=14 basic.json >job3.id &&
-        flux job submit --flags=debug --urgency=16 basic.json >job4.id &&
-        flux job submit --flags=debug --urgency=18 basic.json >job5.id &&
+        flux mini submit --flags=debug --urgency=12 -n1 hostname >job1.id &&
+        flux mini submit --flags=debug --urgency=10 -n1 hostname >job2.id &&
+        flux mini submit --flags=debug --urgency=14 -n1 hostname >job3.id &&
+        flux mini submit --flags=debug --urgency=16 -n1 hostname >job4.id &&
+        flux mini submit --flags=debug --urgency=18 -n1 hostname >job5.id &&
         flux queue start
 '
 

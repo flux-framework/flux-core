@@ -13,17 +13,13 @@ test_under_flux 1 job
 
 flux setattr log-stderr-level 1
 
-test_expect_success 'flux-job: generate jobspec for simple test job' '
-        flux jobspec srun -n1 hostname >basic.json
-'
-
 # N.B. resources = 1 rank, 1 core/rank
 test_expect_success 'job-manager: submit 5 jobs (job 2 held)' '
-        flux job submit --flags=debug basic.json >job1.id &&
-        flux job submit --flags=debug --urgency=0 basic.json >job2.id &&
-        flux job submit --flags=debug basic.json >job3.id &&
-        flux job submit --flags=debug basic.json >job4.id &&
-        flux job submit --flags=debug basic.json >job5.id
+        flux mini submit --flags=debug -n1 hostname >job1.id &&
+        flux mini submit --flags=debug --urgency=0 -n1 hostname >job2.id &&
+        flux mini submit --flags=debug -n1 hostname >job3.id &&
+        flux mini submit --flags=debug -n1 hostname >job4.id &&
+        flux mini submit --flags=debug -n1 hostname >job5.id
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RSSSS' '
