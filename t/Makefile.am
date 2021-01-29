@@ -107,7 +107,7 @@ TESTSCRIPTS = \
 	t2206-job-manager-bulk-state.t \
 	t2207-job-manager-wait.t \
 	t2208-queue-cmd.t \
-	t2209-job-manager-job-urgency-change-single.t \
+	t2209-job-manager-priority-order-single.t \
 	t2210-job-manager-bugs.t \
 	t2211-job-manager-events-journal.t \
 	t2212-job-manager-jobspec.t \
@@ -116,6 +116,9 @@ TESTSCRIPTS = \
 	t2214-job-manager-hold-unlimited.t \
 	t2215-job-manager-priority-order-unlimited.t \
 	t2216-job-manager-plugins.t \
+	t2217-job-manager-limited.t \
+	t2218-job-manager-hold-limited.t \
+	t2219-job-manager-priority-order-limited.t \
 	t2230-job-info-list.t \
 	t2231-job-info-lookup.t \
 	t2232-job-info-eventlog-watch.t \
@@ -327,6 +330,7 @@ check_LTLIBRARIES = \
 	shell/plugins/log.la \
 	shell/plugins/test-event.la \
 	job-manager/plugins/priority-wait.la \
+	job-manager/plugins/priority-invert.la \
 	job-manager/plugins/args.la \
 	job-manager/plugins/test.la \
 	job-manager/plugins/random.la
@@ -636,6 +640,15 @@ job_manager_plugins_priority_wait_la_CPPFLAGS = \
 job_manager_plugins_priority_wait_la_LDFLAGS = \
 	-module -rpath /nowhere
 job_manager_plugins_priority_wait_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_priority_invert_la_SOURCES = \
+	job-manager/plugins/priority-invert.c
+job_manager_plugins_priority_invert_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_priority_invert_la_LDFLAGS = \
+	-module -rpath /nowhere
+job_manager_plugins_priority_invert_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
 job_manager_plugins_args_la_SOURCES = \

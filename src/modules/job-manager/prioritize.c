@@ -123,6 +123,9 @@ static int reprioritize_one (struct job_manager *ctx,
         else if (oneshot) {
             if (sched_prioritize_one (ctx, job) < 0)
                 return -1;
+            alloc_pending_reorder (ctx->alloc, job);
+            if (alloc_queue_recalc_pending (ctx->alloc) < 0)
+                return -1;
         }
     }
     return 0;
@@ -224,8 +227,9 @@ int reprioritize_all (struct job_manager *ctx)
         }
     }
 
-    /*  Reorder alloc queue. Canceled alloc requests will be reinserted
-     *   into the queue as the scheduler responds to them.
+    /*  Reorder alloc queue and pending jobs. Canceled alloc requests
+     *   will be reinserted into the queue as the scheduler responds
+     *   to them.
      */
     alloc_queue_reprioritize (ctx->alloc);
 

@@ -43,8 +43,9 @@ struct simple_sched {
     flux_t *h;
     flux_future_t *acquire_f; /* resource.acquire future */
 
-    char *mode;             /* allocation mode */
-    bool single;
+    char *alloc_mode;             /* allocation mode */
+    char *mode;             /* concurrency mode */
+    unsigned int alloc_limit; /* 0 = unlimited */
     int schedutil_flags;
     struct rlist *rlist;    /* list of resources */
     zlistx_t *queue;        /* job queue */
@@ -134,6 +135,7 @@ static void simple_sched_destroy (flux_t *h, struct simple_sched *ss)
     flux_watcher_destroy (ss->idle);
     schedutil_destroy (ss->util_ctx);
     rlist_destroy (ss->rlist);
+    free (ss->alloc_mode);
     free (ss->mode);
     free (ss);
 }
@@ -144,8 +146,10 @@ static struct simple_sched * simple_sched_create (void)
     if (ss == NULL)
         return NULL;
 
-    /* Single alloc request mode is default */
-    ss->single = true;
+    /* default limit to 8, testing shows quite good throughput without
+     * concurrency being excessively large.
+     */
+    ss->alloc_limit = 8;
     return ss;
 }
 
@@ -181,7 +185,7 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     jj = &job->jj;
     if (!fail_alloc) {
         errno = 0;
-        alloc = rlist_alloc (ss->rlist, ss->mode,
+        alloc = rlist_alloc (ss->rlist, ss->alloc_mode,
                              jj->nnodes, jj->nslots, jj->slot_size);
     }
     if (!alloc || !(R = Rstring_create (alloc, now, jj->duration))) {
@@ -328,8 +332,11 @@ static void alloc_cb (flux_t *h, const flux_msg_t *msg, void *arg)
     struct jobreq *job;
     bool search_dir;
 
-    if (ss->single && zlistx_size (ss->queue) > 0) {
-        flux_log (h, LOG_ERR, "alloc received before previous one handled");
+    if (ss->alloc_limit
+        && zlistx_size (ss->queue) >= ss->alloc_limit) {
+        flux_log (h, LOG_ERR,
+                  "alloc received above max concurrency: %d",
+                  ss->alloc_limit);
         errno = EINVAL;
         goto err;
     }
@@ -383,8 +390,7 @@ static void cancel_cb (flux_t *h,
             return;
         }
         zlistx_delete (ss->queue, job->handle);
-        if (!ss->single)
-            annotate_reason_pending (ss);
+        annotate_reason_pending (ss);
     }
 }
 
@@ -433,8 +439,7 @@ static void prioritize_cb (flux_t *h,
             job = zlistx_next (ss->queue);
         }
     }
-    if (!ss->single)
-        annotate_reason_pending (ss);
+    annotate_reason_pending (ss);
     return;
 
 proto_error:
@@ -659,7 +664,7 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
         goto out;
     }
     if (schedutil_ready (ss->util_ctx,
-                         ss->single ? "single": "unlimited",
+                         ss->mode ? ss->mode : "limited=8",
                          NULL) < 0) {
         flux_log_error (h, "schedutil_ready");
         goto out;
@@ -673,14 +678,37 @@ out:
     return rc;
 }
 
-static char * get_alloc_mode (flux_t *h, const char *mode)
+static char * get_alloc_mode (flux_t *h, const char *alloc_mode)
 {
-    if (strcmp (mode, "worst-fit") == 0
-       || strcmp (mode, "first-fit") == 0
-       || strcmp (mode, "best-fit") == 0)
-        return strdup (mode);
-    flux_log_error (h, "unknown allocation mode: %s\n", mode);
+    if (strcmp (alloc_mode, "worst-fit") == 0
+        || strcmp (alloc_mode, "first-fit") == 0
+        || strcmp (alloc_mode, "best-fit") == 0)
+        return strdup (alloc_mode);
+    flux_log (h, LOG_ERR, "unknown allocation mode: %s", alloc_mode);
     return NULL;
+}
+
+static void set_mode (struct simple_sched *ss, const char *mode)
+{
+    if (!strncmp (mode, "limited=", 8)) {
+        char *endptr;
+        int n = strtol (mode+8, &endptr, 0);
+        if (*endptr != '\0' || n <= 0) {
+            flux_log (ss->h, LOG_ERR, "invalid limited value: %s\n", mode);
+            return;
+        }
+        ss->alloc_limit = n;
+    }
+    else if (strcasecmp (mode, "unlimited") == 0) {
+        ss->alloc_limit = 0;
+    }
+    else {
+        flux_log (ss->h, LOG_ERR, "unknown mode: %s", mode);
+        return;
+    }
+    free (ss->mode);
+    if (!(ss->mode = strdup (mode)))
+        flux_log_error (ss->h, "error setting mode: %s", mode);
 }
 
 static struct schedutil_ops ops = {
@@ -696,12 +724,12 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 {
     int i;
     for (i = 0; i < argc; i++) {
-        if (strncmp ("mode=", argv[i], 5) == 0) {
-            free (ss->mode);
-            ss->mode = get_alloc_mode (h, argv[i]+5);
+        if (strncmp ("alloc-mode=", argv[i], 11) == 0) {
+            free (ss->alloc_mode);
+            ss->alloc_mode = get_alloc_mode (h, argv[i]+11);
         }
-        else if (strcmp ("unlimited", argv[i]) == 0) {
-            ss->single = false;
+        else if (strncmp ("mode=", argv[i], 5) == 0) {
+            set_mode (ss, argv[i]+5);
         }
         else if (strcmp ("test-free-nolookup", argv[i]) == 0) {
             ss->schedutil_flags |= SCHEDUTIL_FREE_NOLOOKUP;

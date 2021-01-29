@@ -44,6 +44,14 @@ test_expect_success 'sched-simple: generate jobspec for simple test job' '
         flux jobspec srun -n1 hostname >basic.json
 '
 
+test_expect_success 'job-manager: load sched-simple w/ an illegal mode' '
+        flux module unload sched-simple &&
+        flux module load sched-simple mode=foobar
+'
+test_expect_success 'job-manager: load sched-simple w/ an illegal limited range' '
+        flux module unload sched-simple &&
+        flux module load sched-simple mode=limited=-1
+'
 test_expect_success 'sched-simple: reload sched-simple with default resource.R' '
 	flux module unload sched-simple &&
 	flux resource reload R.test &&
@@ -110,8 +118,8 @@ test_expect_success 'sched-simple: cancel all jobs' '
 	flux job wait-event --timeout=5.0 $(cat job1.id) free &&
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
-test_expect_success 'sched-simple: reload in best-fit mode' '
-	flux module reload sched-simple mode=best-fit
+test_expect_success 'sched-simple: reload in best-fit alloc-mode' '
+	flux module reload sched-simple alloc-mode=best-fit
 '
 test_expect_success 'sched-simple: submit 5 more jobs' '
 	flux job submit basic.json >job6.id &&
@@ -145,10 +153,10 @@ test_expect_success 'sched-simple: cancel remaining jobs' '
 	flux job cancel $(cat job9.id) &&
 	flux job wait-event --timeout=5.0 $(cat job9.id) free
 '
-test_expect_success 'sched-simple: reload in first-fit mode' '
+test_expect_success 'sched-simple: reload in first-fit alloc-mode' '
         flux module remove sched-simple &&
 	flux resource reload R.test.first_fit &&
-        flux module load sched-simple mode=first-fit &&
+        flux module load sched-simple alloc-mode=first-fit &&
 	test_debug "echo result=\"$($query)\"" &&
 	test "$($query)" = "rank0/core[0-1] rank1/core0"
 '
@@ -188,7 +196,7 @@ test_expect_success 'sched-simple: there are no outstanding sched requests' '
 	grep "0 free requests pending to scheduler" queue_status.out
 '
 test_expect_success 'sched-simple: reload in unlimited mode' '
-	flux module load sched-simple unlimited &&
+	flux module load sched-simple mode=unlimited &&
 	$dmesg_grep -t 10 "scheduler: ready unlimited"
 '
 test_expect_success 'sched-simple: submit 5 more jobs' '

@@ -14,7 +14,6 @@
  *
  * TODO:
  * - implement flow control (credit based?) interface mode
- * - handle post alloc request job priority change
  */
 
 #if HAVE_CONFIG_H
@@ -32,25 +31,22 @@
 #include "drain.h"
 #include "annotate.h"
 
-typedef enum {
-    SCHED_SINGLE,       // only allow one outstanding sched.alloc request
-    SCHED_UNLIMITED,    // send all sched.alloc requests immediately
-} sched_interface_t;
-
 struct alloc {
     struct job_manager *ctx;
     flux_msg_handler_t **handlers;
     zlistx_t *queue;
-    sched_interface_t mode;
+    zlistx_t *pending_jobs;
     bool ready;
     bool disable;
     char *disable_reason;
     flux_watcher_t *prep;
     flux_watcher_t *check;
     flux_watcher_t *idle;
-    unsigned int alloc_pending_count; // for mode=single, max of 1
+    // e.g. for mode limited w/ limit=1, is 1, for mode unlimited set to 0
+    unsigned int alloc_limit;
+    // e.g. for mode limited w/ limit=1, max of 1
+    unsigned int alloc_pending_count;
     unsigned int free_pending_count;
-    struct job *pending_job; // for mode=single
     char *sched_sender; // for disconnect
 };
 
@@ -61,12 +57,15 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
     bool cleared = false;
 
     assert (job->alloc_pending);
-    assert (job->handle == NULL);
+    if (job->handle) {
+        if (zlistx_delete (alloc->pending_jobs, job->handle) < 0)
+            flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
+        job->handle = NULL;
+    }
+    job->alloc_pending = 0;
     if (!(job->handle = zlistx_insert (alloc->queue, job, fwd)))
         flux_log (ctx->h, LOG_ERR, "failed to enqueue job for scheduling");
-    job->alloc_pending = 0;
     job->alloc_queued = 1;
-    alloc->pending_job = NULL;
     annotations_sched_clear (job, &cleared);
     if (cleared) {
         if (event_job_post_pack (ctx->event, job, "annotations",
@@ -226,8 +225,11 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_SUCCESS:
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
-        if (alloc->mode == SCHED_SINGLE)
-            alloc->pending_job = NULL;
+        if (alloc->alloc_limit) {
+            if (zlistx_delete (alloc->pending_jobs, job->handle) < 0)
+                flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
+            job->handle = NULL;
+        }
         if (job->has_resources) {
             flux_log (h,
                       LOG_ERR,
@@ -260,8 +262,11 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     case FLUX_SCHED_ALLOC_DENY: // error
         alloc->alloc_pending_count--;
         job->alloc_pending = 0;
-        if (alloc->mode == SCHED_SINGLE)
-            alloc->pending_job = NULL;
+        if (alloc->alloc_limit) {
+            if (zlistx_delete (alloc->pending_jobs, job->handle) < 0)
+                flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
+            job->handle = NULL;
+        }
         annotations_clear (job, &cleared);
         if (cleared) {
             if (event_job_post_pack (ctx->event, job, "annotations",
@@ -281,12 +286,16 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         break;
     case FLUX_SCHED_ALLOC_CANCEL:
         alloc->alloc_pending_count--;
-        if (alloc->mode == SCHED_SINGLE)
-            alloc->pending_job = NULL;
         if (job->state == FLUX_JOB_STATE_SCHED)
             requeue_pending (alloc, job);
-        else
+        else {
+            if (alloc->alloc_limit) {
+                if (zlistx_delete (alloc->pending_jobs, job->handle) < 0)
+                    flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
+                job->handle = NULL;
+            }
             annotations_clear (job, &cleared);
+        }
         job->alloc_pending = 0;
         if (cleared) {
             if (event_job_post_pack (ctx->event, job, "annotations",
@@ -388,15 +397,23 @@ static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager *ctx = arg;
     const char *mode;
+    int limit = 0;
     int count;
     struct job *job;
 
-    if (flux_request_unpack (msg, NULL, "{s:s}", "mode", &mode) < 0)
+    if (flux_request_unpack (msg, NULL, "{s:s s?:i}",
+                                        "mode", &mode,
+                                        "limit", &limit) < 0)
         goto error;
-    if (!strcmp (mode, "single"))
-        ctx->alloc->mode = SCHED_SINGLE;
+    if (!strcmp (mode, "limited")) {
+        if (limit <= 0) {
+            errno = EPROTO;
+            goto error;
+        }
+        ctx->alloc->alloc_limit = limit;
+    }
     else if (!strcmp (mode, "unlimited"))
-        ctx->alloc->mode = SCHED_UNLIMITED;
+        ctx->alloc->alloc_limit = 0;
     else {
         errno = EPROTO;
         goto error;
@@ -443,7 +460,8 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     if (!alloc->ready || alloc->disable)
         return;
-    if (alloc->mode == SCHED_SINGLE && alloc->alloc_pending_count > 0)
+    if (alloc->alloc_limit
+        && alloc->alloc_pending_count >= alloc->alloc_limit)
         return;
    /* The queue is sorted from highest to lowest priority, so if the
     * first job has priority=MIN, all other jobs must have the same priority,
@@ -468,7 +486,8 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_watcher_stop (alloc->idle);
     if (!alloc->ready || alloc->disable)
         return;
-    if (alloc->mode == SCHED_SINGLE && alloc->alloc_pending_count > 0)
+    if (alloc->alloc_limit
+        && alloc->alloc_pending_count >= alloc->alloc_limit)
         return;
    /* The queue is sorted from highest to lowest priority, so if the
     * first job has priority=MIN, all other jobs must have the same priority,
@@ -476,6 +495,7 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     */
     if ((job = zlistx_first (alloc->queue))
         && job->priority != FLUX_JOB_PRIORITY_MIN) {
+        bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
         if (alloc_request (alloc, job) < 0) {
             flux_log_error (ctx->h, "alloc_request fatal error");
             flux_reactor_stop_error (flux_get_reactor (ctx->h));
@@ -486,8 +506,10 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
         job->alloc_pending = 1;
         job->alloc_queued = 0;
         alloc->alloc_pending_count++;
-        if (alloc->mode == SCHED_SINGLE)
-            alloc->pending_job = job;
+        if (alloc->alloc_limit) {
+            if (!(job->handle = zlistx_insert (alloc->pending_jobs, job, fwd)))
+                flux_log (ctx->h, LOG_ERR, "failed to enqueue pending job");
+        }
         if ((job->flags & FLUX_JOB_DEBUG))
             (void)event_job_post_pack (ctx->event, job,
                                        "debug.alloc-request", 0, NULL);
@@ -570,6 +592,14 @@ void alloc_queue_reorder (struct alloc *alloc, struct job *job)
     zlistx_reorder (alloc->queue, job->handle, fwd);
 }
 
+void alloc_pending_reorder (struct alloc *alloc, struct job *job)
+{
+    if (alloc->alloc_limit) {
+        bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
+        zlistx_reorder (alloc->pending_jobs, job->handle, fwd);
+    }
+}
+
 int alloc_queue_reprioritize (struct alloc *alloc)
 {
     struct job *job;
@@ -579,13 +609,22 @@ int alloc_queue_reprioritize (struct alloc *alloc)
      *   the sort swaps contents of nodes, not the nodes themselves.
      *   Therefore, job handles into the list must be re-acquired here:
      */
+
     job = zlistx_first (alloc->queue);
     while (job) {
         job->handle = zlistx_cursor (alloc->queue);
         job = zlistx_next (alloc->queue);
     }
 
-    if (alloc->mode == SCHED_SINGLE)
+    zlistx_sort (alloc->pending_jobs);
+
+    job = zlistx_first (alloc->pending_jobs);
+    while (job) {
+        job->handle = zlistx_cursor (alloc->pending_jobs);
+        job = zlistx_next (alloc->pending_jobs);
+    }
+
+    if (alloc->alloc_limit)
         return alloc_queue_recalc_pending (alloc);
     else
         return 0;
@@ -594,16 +633,21 @@ int alloc_queue_reprioritize (struct alloc *alloc)
 /* called if highest priority job may have changed */
 int alloc_queue_recalc_pending (struct alloc *alloc) {
     struct job *head = zlistx_first (alloc->queue);
-    if (alloc->mode == SCHED_SINGLE
-        && alloc->pending_job
-        && head) {
-        if (job_comparator (head, alloc->pending_job) < 0) {
-            if (alloc_cancel_alloc_request (alloc, alloc->pending_job) < 0) {
+    struct job *tail = zlistx_last (alloc->pending_jobs);
+    while (alloc->alloc_limit
+           && head
+           && tail) {
+        if (job_comparator (head, tail) < 0) {
+            if (alloc_cancel_alloc_request (alloc, tail) < 0) {
                 flux_log_error (alloc->ctx->h, "%s: alloc_cancel_alloc_request",
                                 __FUNCTION__);
                 return -1;
             }
         }
+        else
+            break;
+        head = zlistx_next (alloc->queue);
+        tail = zlistx_prev (alloc->pending_jobs);
     }
     return 0;
 }
@@ -737,6 +781,7 @@ void alloc_ctx_destroy (struct alloc *alloc)
         flux_watcher_destroy (alloc->check);
         flux_watcher_destroy (alloc->idle);
         zlistx_destroy (&alloc->queue);
+        zlistx_destroy (&alloc->pending_jobs);
         free (alloc->disable_reason);
         free (alloc->sched_sender);
         free (alloc);
@@ -766,6 +811,12 @@ struct alloc *alloc_ctx_create (struct job_manager *ctx)
     zlistx_set_destructor (alloc->queue, job_destructor);
     zlistx_set_comparator (alloc->queue, job_comparator);
     zlistx_set_duplicator (alloc->queue, job_duplicator);
+
+    if (!(alloc->pending_jobs = zlistx_new()))
+        goto error;
+    zlistx_set_destructor (alloc->pending_jobs, job_destructor);
+    zlistx_set_comparator (alloc->pending_jobs, job_comparator);
+    zlistx_set_duplicator (alloc->pending_jobs, job_duplicator);
 
     if (flux_msg_handler_addvec (ctx->h, htab, ctx, &alloc->handlers) < 0)
         goto error;

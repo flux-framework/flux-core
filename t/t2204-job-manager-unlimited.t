@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test flux job manager service with sched-simply (unlimited)'
+test_description='Test flux job manager service with sched-simple (unlimited)'
 
 . `dirname $0`/job-manager/sched-helper.sh
 
@@ -47,12 +47,12 @@ test_expect_success HAVE_JQ 'job-manager: no annotations (SSSSS)' '
 '
 
 # --setbit 0x2 enables creation of reason_pending field
-# flux queue stop/start to ensure not raciness with setting up debug bits
+# flux queue stop/start to ensure no raciness with setting up debug bits
 test_expect_success 'job-manager: load sched-simple w/ 2 cores' '
         flux R encode -r0 -c0-1 >R.test &&
         flux resource reload R.test &&
         flux queue stop &&
-        flux module load sched-simple unlimited &&
+        flux module load sched-simple mode=unlimited &&
         flux module debug --setbit 0x2 sched-simple &&
         flux queue start
 '
