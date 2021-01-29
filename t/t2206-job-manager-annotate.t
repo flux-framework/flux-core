@@ -15,11 +15,10 @@ test_expect_success 'job-manager: initially run without scheduler' '
         flux module unload sched-simple
 '
 test_expect_success 'job-manager: submit 5 jobs' '
-        flux mini submit --flags=debug -n1 hostname >job1.id &&
-        flux mini submit --flags=debug -n1 hostname >job2.id &&
-        flux mini submit --flags=debug -n1 hostname >job3.id &&
-        flux mini submit --flags=debug -n1 hostname >job4.id &&
-        flux mini submit --flags=debug -n1 hostname >job5.id
+        flux mini submit --cc="1-5" --flags=debug -n1 \
+           hostname > jobids.out &&
+        split --numeric-suffixes=1 --additional-suffix=.id -l 1 -a 1 \
+           jobids.out job
 '
 
 test_expect_success HAVE_JQ 'job-manager: no annotations (SSSSS)' '
