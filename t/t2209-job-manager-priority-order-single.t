@@ -49,7 +49,7 @@ test_expect_success 'job-manager: load sched-simple w/ 2 cores' '
         flux R encode -r0 -c0-1 >R.test &&
         flux resource reload R.test &&
         flux queue stop &&
-        flux module load sched-simple &&
+        flux module load sched-simple mode=limited=1 &&
         flux module debug --setbit 0x2 sched-simple &&
         flux queue start
 '

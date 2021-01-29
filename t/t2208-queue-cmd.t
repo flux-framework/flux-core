@@ -176,7 +176,7 @@ test_expect_success 'flux-queue: queue contains 1 active job' '
 '
 
 test_expect_success 'flux-queue: load scheduler' '
-	flux module load sched-simple
+	flux module load sched-simple mode=limited=1
 '
 
 test_expect_success 'flux-queue: queue says scheduling is enabled' '

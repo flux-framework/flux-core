@@ -146,8 +146,10 @@ static struct simple_sched * simple_sched_create (void)
     if (ss == NULL)
         return NULL;
 
-    /* Single alloc request mode is default */
-    ss->alloc_limit = 1;
+    /* default limit to 8, testing shows quite good throughput without
+     * concurrency being excessively large.
+     */
+    ss->alloc_limit = 8;
     return ss;
 }
 
@@ -662,7 +664,7 @@ static int simple_sched_init (flux_t *h, struct simple_sched *ss)
         goto out;
     }
     if (schedutil_ready (ss->util_ctx,
-                         ss->mode ? ss->mode : "limited=1",
+                         ss->mode ? ss->mode : "limited=8",
                          NULL) < 0) {
         flux_log_error (h, "schedutil_ready");
         goto out;

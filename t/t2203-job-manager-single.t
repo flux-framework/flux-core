@@ -52,7 +52,7 @@ test_expect_success 'job-manager: load sched-simple w/ 2 cores' '
         flux R encode -r0 -c0-1 >R.test &&
         flux resource reload R.test &&
         flux queue stop &&
-        flux module load sched-simple &&
+        flux module load sched-simple mode=limited=1 &&
         flux module debug --setbit 0x2 sched-simple &&
         flux queue start
 '
@@ -148,7 +148,7 @@ test_expect_success 'job-manager: reload sched-simple w/ 4 cores' '
         flux module unload sched-simple &&
         flux R encode -r0-1 -c0-1 >R2.test &&
         flux resource reload R2.test &&
-        flux module load sched-simple &&
+        flux module load sched-simple mode=limited=1 &&
         flux module debug --setbit 0x2 sched-simple &&
         flux dmesg | grep "hello:" >hello.dmesg
 '
