@@ -22,6 +22,7 @@
 
 #include "src/common/libutil/fluid.h"
 #include "src/common/libjob/sign_none.h"
+#include "src/common/libjob/job_hash.h"
 #include "src/common/libeventlog/eventlog.h"
 
 #include "validate.h"
@@ -115,6 +116,14 @@ struct batch {
     flux_kvs_txn_t *txn;
     zlist_t *jobs;
     json_t *joblist;
+};
+
+struct batch_response {
+    flux_future_t *f;
+    bool batch_failed;
+    int errnum;
+    const char *errmsg;
+    zhashx_t *errors;
 };
 
 static int make_key (char *buf, int bufsz, struct job *job, const char *name);
@@ -233,8 +242,86 @@ error:
     return NULL;
 }
 
-/* Respond to all requestors (for each job) with errnum and errstr (required).
- */
+static void batch_response_destroy (struct batch_response *bresp)
+{
+    if (bresp) {
+        zhashx_destroy (&bresp->errors);
+        flux_future_destroy (bresp->f);
+        free (bresp);
+    }
+}
+
+static void *jobid_duplicator (const void *item)
+{
+    flux_jobid_t *id = calloc (1, sizeof (flux_jobid_t));
+    *id = *((flux_jobid_t *)item);
+    return id;
+}
+
+static void jobid_destructor (void **item)
+{
+    if (item) {
+        free (*item);
+        *item = NULL;
+    }
+}
+
+static struct batch_response *batch_response_create (flux_future_t *f)
+{
+    struct batch_response *bresp = NULL;
+    json_t *o = NULL;
+    json_t *entry = NULL;
+    size_t index;
+
+    if (!(bresp = calloc (1, sizeof (*bresp)))
+        || !(bresp->errors = job_hash_create ()))
+        goto error;
+    zhashx_set_key_duplicator (bresp->errors, jobid_duplicator);
+    zhashx_set_key_destructor (bresp->errors, jobid_destructor);
+    bresp->f = f;
+    flux_future_incref (f);
+
+    /*  We differentiate future fulfilled with error (entire batch failed)
+     *   and failure to unpack payload (EPROTO). This is why "future_get"
+     *   is called twice below:
+     */
+    if (flux_rpc_get (f, NULL) < 0) {
+        bresp->errnum = errno;
+        bresp->errmsg = future_strerror (f, errno);
+        bresp->batch_failed = true;
+        return bresp;
+    }
+    if (flux_rpc_get_unpack (f, "{s?o}", "errors", &o) < 0) {
+        errno = EPROTO;
+        goto error;
+    }
+    /*  Empty payload indicates the whole batch was successful
+     */
+    if (o == NULL)
+        return bresp;
+
+    /*  O/w, there were zero or more failures sent in the errors array.
+     *   Capture these in the response errors hash.
+     */
+    json_array_foreach (o, index, entry) {
+        flux_jobid_t id;
+        char *errmsg;
+        if (json_unpack (entry, "[Is]", &id, &errmsg) < 0) {
+            errno = EPROTO;
+            goto error;
+        }
+        if (zhashx_insert (bresp->errors, &id, errmsg) < 0) {
+            /* jobid duplicated? Should not happen */
+            errno = EPROTO;
+            goto error;
+        }
+    }
+    return bresp;
+error:
+    batch_response_destroy (bresp);
+    return NULL;
+}
+
 static void batch_respond_error (struct batch *batch,
                                  int errnum, const char *errstr)
 {
@@ -247,14 +334,26 @@ static void batch_respond_error (struct batch *batch,
     }
 }
 
-/* Respond to all requestors (for each job) with their id.
+/* Respond to all requestors (for each job) with their id or an error if
+ *  job submit failed
  */
-static void batch_respond_success (struct batch *batch)
+static void batch_respond (struct batch *batch, struct batch_response *br)
 {
     flux_t *h = batch->ctx->h;
+    const char *errmsg;
     struct job *job = zlist_first (batch->jobs);
+
+    if (br->batch_failed) {
+        batch_respond_error (batch, br->errnum, br->errmsg);
+        return;
+    }
+
     while (job) {
-        if (flux_respond_pack (h, job->msg, "{s:I}", "id", job->id) < 0)
+        if ((errmsg = zhashx_lookup (br->errors, &job->id))) {
+            if (flux_respond_error (h, job->msg, EINVAL, errmsg) < 0)
+                flux_log_error (h, "batch_respond: flux_respond_error");
+        }
+        else if (flux_respond_pack (h, job->msg, "{s:I}", "id", job->id) < 0)
             flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         job = zlist_next (batch->jobs);
     }
@@ -269,30 +368,38 @@ static void batch_cleanup_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-/* Remove KVS job entries previously committed for all jobs in batch.
+/* Remove KVS job entries previously committed for all failed jobs in batch.
  */
-static int batch_cleanup (struct batch *batch)
+static int batch_cleanup (struct batch *batch, struct batch_response *br)
 {
     flux_t *h = batch->ctx->h;
     flux_kvs_txn_t *txn;
     struct job *job;
     flux_future_t *f = NULL;
     char key[64];
+    int count = 0;
 
     if (!(txn = flux_kvs_txn_create ()))
         return -1;
     job = zlist_first (batch->jobs);
     while (job) {
-        if (make_key (key, sizeof (key), job, NULL) < 0)
-            goto error;
-        if (flux_kvs_txn_unlink (txn, 0, key) < 0)
-            goto error;
+        if (br == NULL
+            || br->batch_failed
+            || zhashx_lookup (br->errors, &job->id)) {
+            if (make_key (key, sizeof (key), job, NULL) < 0)
+                goto error;
+            if (flux_kvs_txn_unlink (txn, 0, key) < 0)
+                goto error;
+            count++;
+        }
         job = zlist_next (batch->jobs);
     }
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
-        goto error;
-    if (flux_future_then (f, -1., batch_cleanup_continuation, NULL) < 0)
-        goto error;
+    if (count > 0) {
+        if (!(f = flux_kvs_commit (h, NULL, 0, txn)))
+            goto error;
+        if (flux_future_then (f, -1., batch_cleanup_continuation, NULL) < 0)
+            goto error;
+    }
     flux_kvs_txn_destroy (txn);
     return 0;
 error:
@@ -307,17 +414,23 @@ error:
 static void batch_announce_continuation (flux_future_t *f, void *arg)
 {
     struct batch *batch = arg;
+    struct batch_response *bresp;
     flux_t *h = batch->ctx->h;
 
-    if (flux_future_get (f, NULL) < 0) {
-        batch_respond_error (batch, errno, future_strerror (f, errno));
-        if (batch_cleanup (batch) < 0)
-            flux_log_error (h, "%s: KVS cleanup failure", __FUNCTION__);
-    }
+    if (!(bresp = batch_response_create (f)))
+        batch_respond_error (batch,
+                             errno,
+                             "Failed to process batch response");
     else
-        batch_respond_success (batch);
+        batch_respond (batch, bresp);
+
+    /*  Clean up any state in KVS for failed jobs
+     */
+    if (batch_cleanup (batch, bresp) < 0)
+        flux_log_error (h, "%s: KVS cleanup failure", __FUNCTION__);
 
     batch_destroy (batch);
+    batch_response_destroy (bresp);
     flux_future_destroy (f);
 }
 
@@ -338,7 +451,7 @@ static void batch_announce (struct batch *batch)
 error:
     flux_log_error (h, "%s: error sending RPC", __FUNCTION__);
     batch_respond_error (batch, errno, "error sending job-manager.submit RPC");
-    if (batch_cleanup (batch) < 0)
+    if (batch_cleanup (batch, NULL) < 0)
         flux_log_error (h, "%s: KVS cleanup failure", __FUNCTION__);
     batch_destroy (batch);
     flux_future_destroy (f);
@@ -383,7 +496,7 @@ static void batch_flush (flux_reactor_t *r, flux_watcher_t *w,
     if (flux_future_then (f, -1., batch_flush_continuation, batch) < 0) {
         batch_respond_error (batch, errno, "flux_future_then (kvs) failed");
         flux_future_destroy (f);
-        if (batch_cleanup (batch) < 0)
+        if (batch_cleanup (batch, NULL) < 0)
             flux_log_error (ctx->h, "%s: KVS cleanup failure", __FUNCTION__);
         goto error;
     }
