@@ -18,7 +18,8 @@
 
 void single_job_check (zhashx_t *active_jobs)
 {
-    zlist_t *newjobs;
+    zlistx_t *newjobs;
+    zlistx_t *newjobs_saved;
     json_t *job1;
     json_t *job2;
     struct job *job;
@@ -26,11 +27,8 @@ void single_job_check (zhashx_t *active_jobs)
     ok (zhashx_size (active_jobs) == 0,
         "hash is initially empty");
 
-    if (!(newjobs = zlist_new ()))
-        BAIL_OUT ("zlist_new() failed");
-
     /* good job */
-    if (!(job1 = json_pack ("{s:I s:i s:i s:f s:i s:{}}",
+    if (!(job1 = json_pack ("[{s:I s:i s:i s:f s:i s:{}}]",
                             "id", 1,
                             "urgency", 10,
                             "userid", 42,
@@ -38,36 +36,48 @@ void single_job_check (zhashx_t *active_jobs)
                             "flags", 0,
                             "jobspec")))
         BAIL_OUT ("json_pack() failed");
-    ok (submit_add_one_job (active_jobs, newjobs, job1) == 0,
-        "submit_add_one_job works");
-    ok (zhashx_size (active_jobs) == 1,
-        "hash contains one job");
-    ok ((job = zlist_head (newjobs)) != NULL,
+
+    newjobs = submit_jobs_to_list (job1);
+    ok (newjobs != NULL,
+        "submit_jobs_to_list works");
+    ok (zlistx_size (newjobs) == 1,
         "newjobs contains one job");
+    if (!(job = zlistx_first (newjobs)))
+        BAIL_OUT ("submit_jobs_to_list failed");
+
     ok (job->id == 1 && job->urgency == 10 && job->userid == 42
         && job->t_submit == 1.0 && job->flags == 0,
         "struct job was properly decoded");
 
+    ok (submit_hash_jobs (active_jobs, newjobs) == 0,
+        "submit_hash_jobs works");
+    ok (zhashx_size (active_jobs) == 1,
+        "hash contains one job");
+
     /* malformed job */
-    if (!(job2 = json_pack ("{s:I}", "id", 2)))
+    if (!(job2 = json_pack ("[{s:I}]", "id", 2)))
         BAIL_OUT ("json_pack() failed");
-    errno = 0;
-    ok (submit_add_one_job (active_jobs, newjobs, job2) < 0 && errno == EPROTO,
-        "submit_add_one job o=(malformed) fails with EPROTO");
+
+    ok (submit_jobs_to_list (job2) == NULL && errno == EPROTO,
+        "submit_jobs_to_list fails with EPROTO on invalid job");
+
+    zlistx_set_duplicator (newjobs, job_duplicator);
+    newjobs_saved = zlistx_dup (newjobs);
 
     /* resubmit orig job */
-    ok (submit_add_one_job (active_jobs, newjobs, job1) == 0,
-        "submit_add_one_job o=(dup id) works");
+    ok (submit_hash_jobs (active_jobs, newjobs) == 0,
+        "submit_hash_jobs with duplicates works");
     ok (zhashx_size (active_jobs) == 1,
         "but hash contains one job");
-    ok (zlist_size (newjobs) == 1,
-        "and newjobs still contains one job");
+    ok (zlistx_size (newjobs) == 0,
+        "and newjobs now has zero jobs");
 
     /* clean up (batch submit error path) */
-    submit_add_jobs_cleanup (active_jobs, newjobs); // destroys newjobs
+    submit_add_jobs_cleanup (active_jobs, newjobs_saved); // destroys newjobs
     ok (zhashx_size (active_jobs) == 0,
         "submit_add_jobs_cleanup removed orig hash entry");
 
+    zlistx_destroy (&newjobs);
     json_decref (job2);
     json_decref (job1);
 }
@@ -75,7 +85,7 @@ void single_job_check (zhashx_t *active_jobs)
 void multi_job_check (zhashx_t *active_jobs)
 {
 
-    zlist_t *newjobs;
+    zlistx_t *newjobs;
     json_t *jobs;
 
     ok (zhashx_size (active_jobs) == 0,
@@ -96,13 +106,16 @@ void multi_job_check (zhashx_t *active_jobs)
                             "jobspec")))
         BAIL_OUT ("json_pack() failed");
 
-    newjobs = submit_add_jobs (active_jobs, jobs);
+    newjobs = submit_jobs_to_list (jobs);
     ok (newjobs != NULL,
-        "submit_add_jobs works");
+        "submit_jobs_to_list works");
+    ok (zlistx_size (newjobs) == 2,
+        "submit_jobs_to_list returned correct number of jobs");
+
+    ok (submit_hash_jobs (active_jobs, newjobs) == 0,
+        "submit_hash_jobs works");
     ok (zhashx_size (active_jobs) == 2,
         "hash contains 2 jobs");
-    ok (zlist_size (newjobs) == 2,
-        "newjobs contains 2 jobs");
     submit_add_jobs_cleanup (active_jobs, newjobs);
     ok (zhashx_size (active_jobs) == 0,
         "submit_add_jobs_cleanup removed hash entries");
