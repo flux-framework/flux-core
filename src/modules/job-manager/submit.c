@@ -211,7 +211,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: error enqueuing batch", __FUNCTION__);
         goto error;
     }
-    if (flux_respond (h, msg, NULL) < 0)
+    if (flux_respond (h, msg, "{}") < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 
     /* Submitting user is being responded to with jobid's.
