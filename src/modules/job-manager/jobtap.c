@@ -221,6 +221,39 @@ int jobtap_get_priority (struct jobtap *jobtap,
     return rc;
 }
 
+int jobtap_validate (struct jobtap *jobtap,
+                     struct job *job,
+                     char **errp)
+{
+    int rc;
+    flux_plugin_arg_t *args;
+    const char *errmsg = NULL;
+
+    if (!jobtap->plugin
+        || !flux_plugin_match_handler (jobtap->plugin, "job.validate"))
+        return 0;
+    if (!(args = jobtap_args_create (jobtap, job)))
+        return -1;
+    rc = flux_plugin_call (jobtap->plugin, "job.validate", args);
+    if (rc < 0) {
+        /*
+         *  Plugin callback failed, check for errmsg for this job
+         *   If plugin did not provide an error message, then construct
+         *   a generic error "rejected by plugin".
+         */
+        if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
+                                    "{s:s}",
+                                    "errmsg", &errmsg) < 0)
+                errmsg = "rejected by job-manager plugin";
+        if ((*errp = strdup (errmsg)) == NULL)
+            flux_log (jobtap->ctx->h, LOG_ERR,
+                      "jobtap: %s: validate failed to capture errmsg",
+                      jobtap_plugin_name (jobtap->plugin));
+    }
+    flux_plugin_arg_destroy (args);
+    return rc;
+}
+
 int jobtap_call (struct jobtap *jobtap,
                  struct job *job,
                  const char *topic,

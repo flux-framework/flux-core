@@ -39,6 +39,15 @@ int jobtap_get_priority (struct jobtap *jobtap,
                          struct job *job,
                          int64_t *pprio);
 
+
+/*  Jobtap call specific to validating a job during submission. If the
+ *   plugin returns failure from this callback the job will be rejected
+ *   with an optional error message passed back in `errp`.
+ */
+int jobtap_validate (struct jobtap *jobtap,
+                     struct job *job,
+                     char **errp);
+
 /*  Load a new jobtap from `path`. Path may start with `builtin.` to
  *   attempt to load one of the builtin jobtap plugins.
  */
