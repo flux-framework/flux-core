@@ -180,6 +180,59 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
     return rv;
 }
 
+/*  Call the jobtap job.validate hook for all jobs in newjobs.
+ *  If a plugin returns < 0 for a job, remove that job from the newjobs
+ *   list and append the error to the errp array.
+ */
+static int submit_validate_jobs (struct job_manager *ctx,
+                                 zlistx_t *newjobs,
+                                 json_t **errp)
+{
+    struct job * job;
+    json_t *array;
+
+    if (!(array = json_array ())) {
+        errno = ENOMEM;
+        return -1;
+    }
+    job = zlistx_first (newjobs);
+    while (job) {
+        char *errmsg = NULL;
+        json_t *entry = NULL;
+
+        if (jobtap_validate (ctx->jobtap, job, &errmsg) < 0) {
+            /*
+             *  This job is rejected: append error to error payload and
+             *   delete the job from newjobs list
+             */
+            if (errmsg) {
+                entry = json_pack ("[Is]", job->id, errmsg);
+                free (errmsg);
+            }
+            else
+                entry = json_pack ("[Is]", job->id, "rejected by plugin");
+
+            /*  Append error to errors array and remove the job from
+             *   the newjobs list since it failed validation.
+             */
+            if (entry == NULL
+                || json_array_append_new (array, entry) < 0
+                || zlistx_delete (newjobs, zlistx_cursor (newjobs)) < 0) {
+                flux_log (ctx->h, LOG_ERR,
+                          "submit_validate_jobs: failed to invalidate job");
+                json_decref (entry);
+                goto error;
+            }
+        }
+        job = zlistx_next (newjobs);
+    }
+    *errp = array;
+    return 0;
+error:
+    json_decref (array);
+    return -1;
+}
+
 /* handle submit request (from job-ingest module)
  * This is a batched request for one or more jobs already validated
  * by the ingest module, and already instantiated in the KVS.
@@ -190,6 +243,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager *ctx = arg;
     json_t *jobs;
+    json_t *errors = NULL;
     zlistx_t *newjobs;
     struct job *job;
     const char *errmsg = NULL;
@@ -207,11 +261,15 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: error creating newjobs list", __FUNCTION__);
         goto error;
     }
+    if (submit_validate_jobs (ctx, newjobs, &errors) < 0) {
+        flux_log_error (h, "%s: error validating batch", __FUNCTION__);
+        goto error;
+    }
     if (submit_hash_jobs (ctx->active_jobs, newjobs) < 0) {
         flux_log_error (h, "%s: error enqueuing batch", __FUNCTION__);
         goto error;
     }
-    if (flux_respond (h, msg, "{}") < 0)
+    if (flux_respond_pack (h, msg, "{s:o}", "errors", errors) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 
     /* Submitting user is being responded to with jobid's.
