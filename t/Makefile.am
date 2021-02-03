@@ -333,7 +333,8 @@ check_LTLIBRARIES = \
 	job-manager/plugins/priority-invert.la \
 	job-manager/plugins/args.la \
 	job-manager/plugins/test.la \
-	job-manager/plugins/random.la
+	job-manager/plugins/random.la \
+	job-manager/plugins/validate.la
 
 check-prep:
 	$(MAKE) $(check_PROGRAMS) $(check_LTLIBRARIES)
@@ -676,6 +677,16 @@ job_manager_plugins_random_la_CPPFLAGS = \
 job_manager_plugins_random_la_LDFLAGS = \
 	-module -rpath /nowhere
 job_manager_plugins_random_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
+
+job_manager_plugins_validate_la_SOURCES = \
+	job-manager/plugins/validate.c
+job_manager_plugins_validate_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_validate_la_LDFLAGS = \
+	-module -rpath /nowhere
+job_manager_plugins_validate_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
 

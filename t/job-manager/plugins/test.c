@@ -27,6 +27,16 @@ static int cb (flux_plugin_t *p,
         return -1;
     }
 
+    if (strcmp (topic, "job.validate") == 0) {
+        if (strcmp (test_mode, "validate failure") == 0)
+            return flux_jobtap_reject_job (p, args, "rejected for testing");
+        if (strcmp (test_mode, "validate failure nullmsg") == 0)
+            return flux_jobtap_reject_job (p, args, NULL);
+        if (strcmp (test_mode, "validate failure nomsg") == 0)
+            return -1;
+        return 0;
+    }
+
     /*  Update annotations with the test mode:
      */
     if (flux_plugin_arg_pack (args,
