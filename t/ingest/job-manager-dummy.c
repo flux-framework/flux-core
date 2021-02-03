@@ -19,6 +19,7 @@
 #include "src/common/libeventlog/eventlog.h"
 
 const char *eventlog_path = "test.ingest.eventlog";
+static int force_fail = 0;
 
 /* KVS commit completed.
  * Respond to original request which was copied and passed as 'arg'.
@@ -115,6 +116,11 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     flux_future_t *f = NULL;
     flux_msg_t *cpy = NULL;
 
+    if (force_fail) {
+        errno = EAGAIN;
+        goto error;
+    }
+
     if (flux_request_unpack (msg, NULL, "{s:o}", "jobs", &jobs) < 0)
         goto error;
     if (!(cpy = flux_msg_copy (msg, false)))
@@ -166,6 +172,9 @@ int mod_main (flux_t *h, int argc, char *argv[])
 {
     flux_msg_handler_t **handlers = NULL;
     int rc = -1;
+
+    if (argc >= 1 && strcmp (argv[0], "force_fail") == 0)
+        force_fail = 1;
 
     if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0) {
         flux_log_error (h, "flux_msghandler_add");
