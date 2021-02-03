@@ -258,7 +258,8 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_jobtap_service_register.3 \
 	man3/flux_jobtap_reprioritize_all.3 \
 	man3/flux_jobtap_reprioritize_job.3 \
-	man3/flux_jobtap_priority_unavail.3
+	man3/flux_jobtap_priority_unavail.3 \
+	man3/flux_jobtap_reject_job.3
 
 MAN5_FILES = $(MAN5_FILES_PRIMARY)
 

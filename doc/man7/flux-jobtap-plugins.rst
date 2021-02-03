@@ -90,6 +90,18 @@ CALLBACK TOPICS
 The following callback "topic strings" are currently provided by the
 *jobtap* interface:
 
+job.validate
+  The ``job.validate`` topic allows a plugin to reject a job before
+  it is introduced to the job manager. A rejected job will result in
+  a job submission error in the submitting client, and any job data in
+  the KVS will be purged. No further callbacks will be made for rejected
+  jobs. Note: If a job is not rejected, then the ``job.new`` callback will
+  be invoked immediately after ``job.validate``. This allows limits or
+  other validation to be implemented in the ``job.validate`` callback,
+  but accounting for those limits should be confined to the ``job.new``
+  callback, since ``job.new`` may also be called during job-manager
+  restart or plugin reload.
+
 job.new
   The ``job.new`` topic is used by the job manager to notify a jobtap plugin
   about a newly introduced job. This call may be made in three different
