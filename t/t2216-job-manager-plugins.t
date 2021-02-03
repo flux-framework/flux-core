@@ -140,7 +140,7 @@ test_expect_success 'job-manager: run args test plugin' '
 	flux mini run hostname &&
 	flux dmesg | grep args-check > args-check.log &&
 	test_debug "cat args-check.log" &&
-	test $(grep -c OK args-check.log) = 7
+	test $(grep -c OK args-check.log) = 8
 '
 test_expect_success 'job-manager: load test jobtap plugin' '
 	flux jobtap load ${PLUGINPATH}/test.so foo.test=1 &&
