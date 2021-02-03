@@ -140,11 +140,6 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
     if (!entry)
         goto error;
 
-    /*  Explicitly call `job.new` before "submit" event is posted
-     *  (Failure is currently ignored)
-     */
-    (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
-
     /* call before eventlog_seq increment below */
     if (journal_process_event (ctx->journal,
                                job->id,
@@ -223,6 +218,18 @@ static int submit_validate_jobs (struct job_manager *ctx,
                 json_decref (entry);
                 goto error;
             }
+        }
+        else {
+            /*  The job has been accepted and will progress past the NEW
+             *   state after it has been added to the active jobs hash.
+             *
+             *   Immediately notify any plugins of a new job here (unless
+             *   the job is already hashed, an allowed condition) so that
+             *   any internal plugin state (e.g. user job count) can be
+             *   updated before the next job is validated.
+             */
+            if (!zhashx_lookup (ctx->active_jobs, &job->id))
+                (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
         }
         job = zlistx_next (newjobs);
     }
