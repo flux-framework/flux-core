@@ -88,6 +88,8 @@ struct job_ingest_ctx {
     struct batch *batch;
     flux_watcher_t *timer;
 
+    int batch_count;            // if nonzero, batch by count not timer
+
     bool shutdown;              // no new jobs are accepted in shutdown mode
     int shutdown_process_count; // number of validators executing at shutdown
     flux_watcher_t *shutdown_timer;
@@ -474,15 +476,13 @@ static void batch_flush_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
-/* batch timer - expires 'batch_timeout' seconds after batch was created.
+/*
  * Replace ctx->batch with a NULL, and pass 'batch' off to a chain of
  * continuations that commit its data to the KVS, respond to requestors,
  * and announce the new jobids.
  */
-static void batch_flush (flux_reactor_t *r, flux_watcher_t *w,
-                         int revents, void *arg)
+static void batch_flush (struct job_ingest_ctx *ctx)
 {
-    struct job_ingest_ctx *ctx = arg;
     struct batch *batch;
     flux_future_t *f;
 
@@ -503,6 +503,16 @@ static void batch_flush (flux_reactor_t *r, flux_watcher_t *w,
     return;
 error:
     batch_destroy (batch);
+}
+
+/* batch timer - expires 'batch_timeout' seconds after batch was created.
+ */
+static void batch_timer_cb (flux_reactor_t *r,
+                            flux_watcher_t *w,
+                            int revents,
+                            void *arg)
+{
+    batch_flush ((struct job_ingest_ctx *) arg);
 }
 
 /* Format key within the KVS directory of 'job'.
@@ -608,12 +618,19 @@ void validate_continuation (flux_future_t *f, void *arg)
     if (!ctx->batch) {
         if (!(ctx->batch = batch_create (ctx)))
             goto error;
-        flux_timer_watcher_reset (ctx->timer, batch_timeout, 0.);
-        flux_watcher_start (ctx->timer);
+        if (!ctx->batch_count) {
+            flux_timer_watcher_reset (ctx->timer, batch_timeout, 0.);
+            flux_watcher_start (ctx->timer);
+        }
     }
     if (batch_add_job (ctx->batch, job) < 0)
         goto error;
     flux_future_destroy (f);
+
+    if (ctx->batch_count
+        && zlist_size (ctx->batch->jobs) == ctx->batch_count)
+        batch_flush (ctx);
+
     return;
 error:
     if (flux_respond_error (h, job->msg, errno, errmsg) < 0)
@@ -869,6 +886,14 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
                 return -1;
             }
         }
+        else if (!strncmp (argv[i], "batch-count=", 12)) {
+            char *endptr;
+            ctx->batch_count = strtol (argv[i]+12, &endptr, 0);
+            if (*endptr != '\0' || ctx->batch_count < 0) {
+                flux_log (h, LOG_ERR, "Invalid batch-count: %s", argv[i]);
+                return -1;
+            }
+        }
         else {
             flux_log (h, LOG_ERR, "invalid option %s", argv[i]);
             flux_log (h, LOG_ERR, "%s", usage_message);
@@ -897,7 +922,8 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
         return -1;
     }
     if (!(ctx->timer = flux_timer_watcher_create (r, 0., 0.,
-                                                  batch_flush, ctx))) {
+                                                  batch_timer_cb,
+                                                  ctx))) {
         flux_log_error (h, "flux_timer_watcher_create");
         return -1;
     }
