@@ -840,26 +840,25 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-/* Configure the validator.
- * Use compiled in path and string for validator program and args,
- * unless overridden with validator=path or schema=path on module load
- * command line.
- */
-int validate_initialize (flux_t *h,
+int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
+                         flux_t *h,
                          int argc,
-                         char **argv,
-                         struct validate **validate)
+                         char **argv)
 {
+    flux_reactor_t *r = flux_get_reactor (h);
     const char *usage_message = "Usage: flux module load [OPTIONS] job-ingest "
                                 " [validator-args=ARGS] [validator=PATH]";
     const char *valpath;
     const char *valargs;
-    struct validate *v;
-    int i;
+
+    memset (ctx, 0, sizeof (*ctx));
+    ctx->h = h;
 
     valpath = flux_conf_builtin_get ("jobspec_validate_path", FLUX_CONF_AUTO);
     valargs = flux_conf_builtin_get ("jobspec_validator_args", FLUX_CONF_AUTO);
-    for (i = 0; i < argc; i++) {
+
+    /*  Process cmdline args */
+    for (int i = 0; i < argc; i++) {
         if (!strncmp (argv[i], "validator-args=", 15)) {
             valargs = argv[i] + 15;
         }
@@ -877,11 +876,39 @@ int validate_initialize (flux_t *h,
             return -1;
         }
     }
-    if (!(v = validate_create (h, valpath, valargs))) {
+    if (!(ctx->validate = validate_create (h, valpath, valargs))) {
         flux_log_error (h, "validate_create");
         return -1;
     }
-    *validate = v;
+
+#if HAVE_FLUX_SECURITY
+    if (!(ctx->sec = flux_security_create (0))) {
+        flux_log_error (h, "flux_security_create");
+        return -1;
+    }
+    if (flux_security_configure (ctx->sec, NULL) < 0) {
+        flux_log_error (h, "flux_security_configure: %s",
+                        flux_security_last_error (ctx->sec));
+        return -1;
+    }
+#endif
+    if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0) {
+        flux_log_error (h, "flux_msghandler_add");
+        return -1;
+    }
+    if (!(ctx->timer = flux_timer_watcher_create (r, 0., 0.,
+                                                  batch_flush, ctx))) {
+        flux_log_error (h, "flux_timer_watcher_create");
+        return -1;
+    }
+    if (!(ctx->shutdown_timer = flux_timer_watcher_create (r,
+                                                           0.,
+                                                           0.,
+                                                           shutdown_timeout_cb,
+                                                           ctx))) {
+        flux_log_error (h, "flux_timer_watcher_create");
+        return -1;
+    }
     return 0;
 }
 
@@ -892,36 +919,11 @@ int mod_main (flux_t *h, int argc, char **argv)
     struct job_ingest_ctx ctx;
     uint32_t rank;
 
-    memset (&ctx, 0, sizeof (ctx));
-    ctx.h = h;
-#if HAVE_FLUX_SECURITY
-    if (!(ctx.sec = flux_security_create (0))) {
-        flux_log_error (h, "flux_security_create");
+    if (job_ingest_ctx_init (&ctx, h, argc, argv) < 0) {
+        flux_log (h, LOG_ERR, "Failed to initialize job-ingest ctx");
         goto done;
     }
-    if (flux_security_configure (ctx.sec, NULL) < 0) {
-        flux_log_error (h, "flux_security_configure: %s",
-                        flux_security_last_error (ctx.sec));
-        goto done;
-    }
-#endif
-    if (flux_msg_handler_addvec (h, htab, &ctx, &ctx.handlers) < 0) {
-        flux_log_error (h, "flux_msghandler_add");
-        goto done;
-    }
-    if (!(ctx.timer = flux_timer_watcher_create (r, 0., 0.,
-                                                 batch_flush, &ctx))) {
-        flux_log_error (h, "flux_timer_watcher_create");
-        goto done;
-    }
-    if (!(ctx.shutdown_timer = flux_timer_watcher_create (r,
-                                                          0.,
-                                                          0.,
-                                                          shutdown_timeout_cb,
-                                                          &ctx))) {
-        flux_log_error (h, "flux_timer_watcher_create");
-        goto done;
-    }
+
     if (flux_get_rank (h, &rank) < 0) {
         flux_log_error (h, "flux_get_rank");
         goto done;
@@ -978,8 +980,6 @@ int mod_main (flux_t *h, int argc, char **argv)
         }
     }
     flux_log (h, LOG_DEBUG, "fluid ts=%jums", (uint64_t)ctx.gen.timestamp);
-    if (validate_initialize (h, argc, argv, &ctx.validate) < 0)
-        goto done;
     if (flux_reactor_run (r, 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;
