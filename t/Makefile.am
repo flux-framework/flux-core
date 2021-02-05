@@ -102,28 +102,28 @@ TESTSCRIPTS = \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
 	t2203-job-manager-single.t \
-	t2204-job-manager-unlimited.t \
-	t2205-job-manager-annotate.t \
-	t2206-job-manager-bulk-state.t \
-	t2207-job-manager-wait.t \
-	t2208-queue-cmd.t \
-	t2209-job-manager-priority-order-single.t \
-	t2210-job-manager-bugs.t \
-	t2211-job-manager-events-journal.t \
-	t2212-job-manager-jobspec.t \
-	t2220-job-archive.t \
+	t2204-job-manager-limited.t \
+	t2205-job-manager-unlimited.t \
+	t2206-job-manager-annotate.t \
+	t2207-job-manager-bulk-state.t \
+	t2208-job-manager-wait.t \
+	t2209-job-manager-bugs.t \
+	t2210-job-manager-events-journal.t \
+	t2211-job-manager-jobspec.t \
+	t2212-job-manager-plugins.t \
 	t2213-job-manager-hold-single.t \
-	t2214-job-manager-hold-unlimited.t \
-	t2215-job-manager-priority-order-unlimited.t \
-	t2216-job-manager-plugins.t \
-	t2217-job-manager-limited.t \
-	t2218-job-manager-hold-limited.t \
-	t2219-job-manager-priority-order-limited.t \
+	t2214-job-manager-hold-limited.t \
+	t2215-job-manager-hold-unlimited.t \
+	t2216-job-manager-priority-order-single.t \
+	t2217-job-manager-priority-order-limited.t \
+	t2218-job-manager-priority-order-unlimited.t \
 	t2230-job-info-list.t \
 	t2231-job-info-lookup.t \
 	t2232-job-info-eventlog-watch.t \
 	t2233-job-info-security.t \
 	t2234-job-info-list-update.t \
+	t2240-queue-cmd.t \
+	t2250-job-archive.t \
 	t2300-sched-simple.t \
 	t2302-sched-simple-up-down.t \
 	t2310-resource-module.t \

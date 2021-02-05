@@ -6,55 +6,28 @@ test_description='Test flux job manager service with sched-simple (single)'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 job
+export TEST_UNDER_FLUX_NO_JOB_EXEC=y
+test_under_flux 2 job
 
 flux setattr log-stderr-level 1
 
-test_expect_success 'flux-job: generate jobspec for simple test job' '
-        flux jobspec srun -n1 hostname >basic.json
-'
-
-test_expect_success 'unload job-exec module to prevent job execution' '
-        flux module remove job-exec
-'
-
-test_expect_success 'job-manager: initially run without scheduler' '
-        flux module unload sched-simple
+# N.B. we will fake with different resources later on in this file, thus
+# the need to set resources manually instead of through test_under_flux()
+#
+# --setbit 0x2 enables creation of reason_pending field
+test_expect_success 'job-manager: load sched-simple w/ 1 rank, 2 cores/rank' '
+        flux module unload sched-simple &&
+        flux R encode -r0 -c0-1 >R.test &&
+        flux resource reload R.test &&
+        flux module load sched-simple mode=limited=1 &&
+        flux module debug --setbit 0x2 sched-simple
 '
 
 test_expect_success 'job-manager: submit 5 jobs' '
-        flux job submit --flags=debug basic.json >job1.id &&
-        flux job submit --flags=debug basic.json >job2.id &&
-        flux job submit --flags=debug basic.json >job3.id &&
-        flux job submit --flags=debug basic.json >job4.id &&
-        flux job submit --flags=debug basic.json >job5.id
-'
-
-test_expect_success HAVE_JQ 'job-manager: job state SSSSS (no scheduler)' '
-        jmgr_check_state $(cat job1.id) S &&
-        jmgr_check_state $(cat job2.id) S &&
-        jmgr_check_state $(cat job3.id) S &&
-        jmgr_check_state $(cat job4.id) S &&
-        jmgr_check_state $(cat job5.id) S
-'
-
-test_expect_success HAVE_JQ 'job-manager: no annotations (SSSSS)' '
-        jmgr_check_no_annotations $(cat job1.id) &&
-        jmgr_check_no_annotations $(cat job2.id) &&
-        jmgr_check_no_annotations $(cat job3.id) &&
-        jmgr_check_no_annotations $(cat job4.id) &&
-        jmgr_check_no_annotations $(cat job5.id)
-'
-
-# --setbit 0x2 enables creation of reason_pending field
-# flux queue stop/start to ensure no raciness with setting up debug bits
-test_expect_success 'job-manager: load sched-simple w/ 2 cores' '
-        flux R encode -r0 -c0-1 >R.test &&
-        flux resource reload R.test &&
-        flux queue stop &&
-        flux module load sched-simple mode=limited=1 &&
-        flux module debug --setbit 0x2 sched-simple &&
-        flux queue start
+        flux mini submit --cc="1-5" --flags=debug -n1 \
+           hostname > jobids.out &&
+        split --numeric-suffixes=1 --additional-suffix=.id -l 1 -a 1 \
+           jobids.out job
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
@@ -143,7 +116,7 @@ test_expect_success 'job-manager: canceled job has exception, free events' '
         flux job wait-event --timeout=5.0 $(cat job2.id) free
 '
 
-test_expect_success 'job-manager: reload sched-simple w/ 4 cores' '
+test_expect_success 'job-manager: reload sched-simple w/ 2 ranks, 2 cores/rank' '
         flux dmesg -C &&
         flux module unload sched-simple &&
         flux R encode -r0-1 -c0-1 >R2.test &&
@@ -256,7 +229,7 @@ test_expect_success 'job-manager: annotate jobs in flux jobs (IIIII)' '
 
 test_expect_success 'job-manager: simulate alloc failure' '
         flux module debug --setbit 0x1 sched-simple &&
-        flux job submit --flags=debug basic.json >job6.id &&
+        flux mini submit --flags=debug -n1 hostname >job6.id &&
         flux job wait-event --timeout=5 $(cat job6.id) exception >ev6.out &&
         grep -q "type=\"alloc\"" ev6.out &&
         grep -q severity=0 ev6.out &&

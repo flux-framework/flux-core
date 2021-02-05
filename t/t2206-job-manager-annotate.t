@@ -6,35 +6,19 @@ test_description='Test flux job manager annoate service'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 job
+export TEST_UNDER_FLUX_NO_JOB_EXEC=y
+test_under_flux 1 job
 
 flux setattr log-stderr-level 1
-
-test_expect_success 'flux-job: generate jobspec for simple test job' '
-        flux jobspec srun -n1 hostname >basic.json
-'
-
-test_expect_success 'unload job-exec module to prevent job execution' '
-        flux module remove job-exec
-'
 
 test_expect_success 'job-manager: initially run without scheduler' '
         flux module unload sched-simple
 '
 test_expect_success 'job-manager: submit 5 jobs' '
-        flux job submit --flags=debug basic.json >job1.id &&
-        flux job submit --flags=debug basic.json >job2.id &&
-        flux job submit --flags=debug basic.json >job3.id &&
-        flux job submit --flags=debug basic.json >job4.id &&
-        flux job submit --flags=debug basic.json >job5.id
-'
-
-test_expect_success HAVE_JQ 'job-manager: job state SSSSS (no scheduler)' '
-        jmgr_check_state $(cat job1.id) S &&
-        jmgr_check_state $(cat job2.id) S &&
-        jmgr_check_state $(cat job3.id) S &&
-        jmgr_check_state $(cat job4.id) S &&
-        jmgr_check_state $(cat job5.id) S
+        flux mini submit --cc="1-5" --flags=debug -n1 \
+           hostname > jobids.out &&
+        split --numeric-suffixes=1 --additional-suffix=.id -l 1 -a 1 \
+           jobids.out job
 '
 
 test_expect_success HAVE_JQ 'job-manager: no annotations (SSSSS)' '
@@ -91,9 +75,7 @@ test_expect_success HAVE_JQ 'job-manager: user annotations in job-info (SSSSS)' 
 
 # --setbit 0x2 enables creation of reason_pending field
 # flux queue stop/start to ensure no raciness with setting up debug bits
-test_expect_success 'job-manager: load sched-simple w/ 2 cores' '
-        flux R encode -r0 -c0-1 >R.test &&
-        flux resource reload R.test &&
+test_expect_success 'job-manager: load sched-simple (1 rank, 2 cores/rank)' '
         flux queue stop &&
         flux module load sched-simple mode=unlimited &&
         flux module debug --setbit 0x2 sched-simple &&

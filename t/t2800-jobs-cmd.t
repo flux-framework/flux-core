@@ -708,13 +708,7 @@ test_expect_success 'flux-jobs --format={expiration!D:h},{t_remaining!H:h} works
 	test "${t_remaining}" = "-"
 '
 # note that a significant amount of annotation format tests occur in
-# job-manager tests such as
-#
-# t2203-job-manager-dummysched-single.t
-# t2204-job-manager-dummysched-unlimited.t
-# t2205-job-manager-annotate.t
-#
-# as the schedulers in those tests do varied but testable annotations
+# job-manager tests such as t2206-job-manager-annotate.t
 
 test_expect_success 'flux-jobs annotation "sched" short hands work' '
 	fmt="{annotations.sched},{annotations.sched.resource_summary}" &&
