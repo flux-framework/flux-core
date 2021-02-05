@@ -257,7 +257,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL,
       "Perform KVS namespace operations",
       cmd_namespace,
-      0,
+      OPTPARSE_SUBCMD_SKIP_OPTS,
       NULL,
     },
     { "get",
@@ -363,7 +363,7 @@ static struct optparse_subcommand subcommands[] = {
       NULL,
       "Manipulate a KVS eventlog",
       cmd_eventlog,
-      0,
+      OPTPARSE_SUBCMD_SKIP_OPTS,
       NULL,
     },
     OPTPARSE_SUBCMD_END
