@@ -16,7 +16,7 @@ flux setattr log-stderr-level 1
 # N.B. resources = 1 rank, 1 core/rank
 test_expect_success 'job-manager: submit 5 jobs (job 2 held)' '
         flux mini bulksubmit --urgency="{}" --flags=debug -n1 \
-           hostname ::: 16 0 16 16 16 > jobids.out &&
+           hostname ::: default hold default default default > jobids.out &&
         split --numeric-suffixes=1 --additional-suffix=.id -l 1 -a 1 \
            jobids.out job
 '
