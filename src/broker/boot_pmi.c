@@ -35,7 +35,7 @@
  * fully expanded.
  *
  * Possible format specifiers:
- * - %h - IP address of current hostname
+ * - %h - local IP address by heuristic (see src/libutil/ipaddr.h)
  * - %B - value of attribute broker.rundir
  *
  * Caller is responsible for freeing memory of returned value.
@@ -153,7 +153,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
     struct pmi_handle *pmi;
     struct pmi_params pmi_params;
     int result;
-    char *uri;
+    const char *uri;
     int i;
 
     memset (&pmi_params, 0, sizeof (pmi_params));
@@ -205,7 +205,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
             goto error;
         }
         free (tmp);
-        uri = (char *)overlay_get_bind_uri (overlay);
+        uri = overlay_get_bind_uri (overlay);
     }
     else {
         uri = NULL;
@@ -253,6 +253,8 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
      * and public key.
      */
     if (pmi_params.rank > 0) {
+        char *cp;
+
         rank = kary_parentof (tbon_k, pmi_params.rank);
         if (snprintf (key, sizeof (key), "%d", rank) >= sizeof (key)) {
             log_msg ("pmi key string overflow");
@@ -264,13 +266,13 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
             log_msg ("broker_pmi_kvs_get %s: %s", key, pmi_strerror (result));
             goto error;
         }
-        if ((uri = strchr (val, ',')))
-            *uri++ = '\0';
-        if (!uri) {
+        if ((cp = strchr (val, ',')))
+            *cp++ = '\0';
+        if (!cp) {
             log_msg ("rank %d business card has no URI", rank);
             goto error;
         }
-        if (overlay_set_parent_uri (overlay, uri) < 0) {
+        if (overlay_set_parent_uri (overlay, cp) < 0) {
             log_err ("overlay_set_parent_uri");
             goto error;
         }
@@ -283,6 +285,8 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
     /* Fetch the business card of children and inform overlay of public keys.
      */
     for (i = 0; i < tbon_k; i++) {
+        char *cp;
+
         rank = kary_childof (tbon_k, pmi_params.size, pmi_params.rank, i);
         if (rank == KARY_NONE)
             break;
@@ -297,8 +301,8 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
             log_msg ("broker_pmi_kvs_get %s: %s", key, pmi_strerror (result));
             goto error;
         }
-        if ((uri = strchr (val, ',')))
-            *uri++ = '\0';
+        if ((cp = strchr (val, ',')))
+            *cp = '\0';
         if (overlay_authorize (overlay, key, val) < 0) {
             log_err ("overlay_authorize %s=%s", key, val);
             goto error;
