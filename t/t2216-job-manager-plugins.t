@@ -140,7 +140,7 @@ test_expect_success 'job-manager: run args test plugin' '
 	flux mini run hostname &&
 	flux dmesg | grep args-check > args-check.log &&
 	test_debug "cat args-check.log" &&
-	test $(grep -c OK args-check.log) = 7
+	test $(grep -c OK args-check.log) = 8
 '
 test_expect_success 'job-manager: load test jobtap plugin' '
 	flux jobtap load ${PLUGINPATH}/test.so foo.test=1 &&
@@ -186,6 +186,26 @@ test_expect_success 'job-manager: run test plugin modes for priority.get' '
 	test_debug "flux dmesg | grep jobtap\.test" &&
 	run_timeout 20 flux job wait -v --all
 '
+test_expect_success 'job-manager: run test plugin modes for job.validate' '
+	test_expect_code 1 \
+	    flux mini submit\
+	        --setattr=system.jobtap.test-mode="validate failure" \
+	        hostname >validate-failure.out 2>&1 &&
+	test_debug "cat validate-failure.out" &&
+	grep "rejected for testing" validate-failure.out &&
+	test_expect_code 1 \
+	    flux mini submit\
+	        --setattr=system.jobtap.test-mode="validate failure nullmsg" \
+	        hostname >validate-failure2.out 2>&1 &&
+	test_debug "cat validate-failure2.out" &&
+	grep "rejected by job-manager plugin" validate-failure2.out &&
+	test_expect_code 1 \
+	    flux mini submit\
+	        --setattr=system.jobtap.test-mode="validate failure nomsg" \
+	        hostname >validate-failure3.out 2>&1 &&
+	test_debug "cat validate-failure3.out" &&
+	grep "rejected by job-manager plugin" validate-failure3.out
+'
 test_expect_success 'job-manager: plugin can keep job in PRIORITY state' '
 	flux jobtap load ${PLUGINPATH}/priority-wait.so &&
 	jobid=$(flux mini submit hostname) &&
@@ -208,5 +228,16 @@ test_expect_success 'job-manager: job exits PRIORITY when priority is set' '
 	flux job wait-event -vt 5 $jobid clean &&
 	flux jobs -no {priority} $jobid &&
 	test $(flux jobs -no {priority} $jobid) = 42000
+'
+test_expect_success 'job-manager: plugin can reject some jobs in a batch' '
+	flux module reload job-ingest batch-count=6 &&
+	flux jobtap load ${PLUGINPATH}/validate.so &&
+	test_expect_code 1 \
+	    flux mini bulksubmit --watch \
+	        --setattr=system.jobtap.validate-test-id={} \
+	        echo foo ::: 1 1 1 4 4 1 >validate-plugin.out 2>&1 &&
+	test_debug "cat validate-plugin.out" &&
+	grep "Job had reject_id" validate-plugin.out &&
+	test 4 -eq $(grep -c foo validate-plugin.out)
 '
 test_done

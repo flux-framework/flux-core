@@ -215,6 +215,17 @@ test_expect_success 'job-ingest: validator unexpected exit is handled' '
 	grep "unexpectedly exited" badvalidator.out
 '
 
+test_expect_success 'job-ingest: reload dummy job-manager in fail mode' '
+	ingest_module reload batch-count=4 &&
+	flux module remove job-manager &&
+	flux module load \
+	    ${FLUX_BUILD_DIR}/t/ingest/.libs/job-manager-dummy.so force_fail
+'
+
+test_expect_success 'job-ingest: handle total batch failure in job-ingest' '
+	test_must_fail flux mini submit --cc=1-4 hostname
+'
+
 test_expect_success 'job-ingest: remove modules' '
 	flux module remove job-manager &&
 	flux exec -r all flux module remove job-ingest

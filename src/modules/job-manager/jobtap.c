@@ -221,6 +221,39 @@ int jobtap_get_priority (struct jobtap *jobtap,
     return rc;
 }
 
+int jobtap_validate (struct jobtap *jobtap,
+                     struct job *job,
+                     char **errp)
+{
+    int rc;
+    flux_plugin_arg_t *args;
+    const char *errmsg = NULL;
+
+    if (!jobtap->plugin
+        || !flux_plugin_match_handler (jobtap->plugin, "job.validate"))
+        return 0;
+    if (!(args = jobtap_args_create (jobtap, job)))
+        return -1;
+    rc = flux_plugin_call (jobtap->plugin, "job.validate", args);
+    if (rc < 0) {
+        /*
+         *  Plugin callback failed, check for errmsg for this job
+         *   If plugin did not provide an error message, then construct
+         *   a generic error "rejected by plugin".
+         */
+        if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
+                                    "{s:s}",
+                                    "errmsg", &errmsg) < 0)
+                errmsg = "rejected by job-manager plugin";
+        if ((*errp = strdup (errmsg)) == NULL)
+            flux_log (jobtap->ctx->h, LOG_ERR,
+                      "jobtap: %s: validate failed to capture errmsg",
+                      jobtap_plugin_name (jobtap->plugin));
+    }
+    flux_plugin_arg_destroy (args);
+    return rc;
+}
+
 int jobtap_call (struct jobtap *jobtap,
                  struct job *job,
                  const char *topic,
@@ -619,6 +652,42 @@ int flux_jobtap_priority_unavail (flux_plugin_t *p, flux_plugin_arg_t *args)
                                  FLUX_PLUGIN_ARG_OUT|FLUX_PLUGIN_ARG_UPDATE,
                                  "{s:I}",
                                  "priority", FLUX_JOBTAP_PRIORITY_UNAVAIL);
+}
+
+int flux_jobtap_reject_job (flux_plugin_t *p,
+                            flux_plugin_arg_t *args,
+                            const char *fmt,
+                            ...)
+{
+    char errmsg [1024];
+    int len = sizeof (errmsg);
+    int n;
+
+    if (fmt) {
+        va_list ap;
+        va_start (ap, fmt);
+        n = vsnprintf (errmsg, sizeof (errmsg), fmt, ap);
+        va_end (ap);
+    }
+    else {
+        n = snprintf (errmsg,
+                      sizeof (errmsg),
+                      "rejected by job-manager plugin '%s'",
+                      jobtap_plugin_name (p));
+    }
+    if (n >= len) {
+        errmsg[len - 1] = '\0';
+        errmsg[len - 2] = '+';
+    }
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_OUT|FLUX_PLUGIN_ARG_UPDATE,
+                              "{s:s}",
+                              "errmsg", errmsg) < 0) {
+        flux_t *h = flux_jobtap_get_flux (p);
+        if (h)
+            flux_log_error (h, "flux_jobtap_reject_job: failed to pack error");
+    }
+    return -1;
 }
 
 /*

@@ -35,15 +35,12 @@ struct submit {
     flux_msg_handler_t **handlers;
 };
 
-/* Decode 'o' into a struct job, then add it to the active_job hash.
- * Also record the job in 'newjobs'.
- */
-int submit_add_one_job (zhashx_t *active_jobs, zlist_t *newjobs, json_t *o)
+static struct job *submit_unpack_job (json_t *o)
 {
     struct job *job;
 
     if (!(job = job_create ()))
-        return -1;
+        return NULL;
     if (json_unpack (o, "{s:I s:i s:i s:f s:i s:O}",
                         "id", &job->id,
                         "urgency", &job->urgency,
@@ -53,21 +50,55 @@ int submit_add_one_job (zhashx_t *active_jobs, zlist_t *newjobs, json_t *o)
                         "jobspec", &job->jobspec_redacted) < 0) {
         errno = EPROTO;
         job_decref (job);
-        return -1;
+        job = NULL;
     }
-    if (zhashx_insert (active_jobs, &job->id, job) < 0) {
-        job_decref (job);
-        /* zhashx_insert() fails if hash item already exists.
-         * This is not an error - there is a window for restart_from_kvs()
-         * to pick up a job that also has a submit request in flight.
-         */
-        return 0;
-    }
-    if (zlist_push (newjobs, job) < 0) {
-        zhashx_delete (active_jobs, &job->id);
-        job_decref (job);
+    return job;
+}
+
+zlistx_t *submit_jobs_to_list (json_t *jobs)
+{
+    int saved_errno;
+    size_t index;
+    json_t *el;
+    zlistx_t *newjobs;
+    struct job * job;
+
+    if (!(newjobs = zlistx_new ())) {
         errno = ENOMEM;
-        return -1;
+        return NULL;
+    }
+    zlistx_set_destructor (newjobs, job_destructor);
+    json_array_foreach (jobs, index, el) {
+        if (!(job = submit_unpack_job (el)))
+            goto error;
+        if (zlistx_add_end (newjobs, job) < 0) {
+            job_decref (job);
+            errno = ENOMEM;
+            goto error;
+        }
+    }
+    return newjobs;
+error:
+    saved_errno = errno;
+    zlistx_destroy (&newjobs);
+    errno = saved_errno;
+    return NULL;
+}
+
+int submit_hash_jobs (zhashx_t *active_jobs,
+                      zlistx_t *newjobs)
+{
+    struct job * job = zlistx_first (newjobs);
+    while (job) {
+        if (zhashx_insert (active_jobs, &job->id, job) < 0) {
+            /* zhashx_insert() fails if hash item already exists.
+             * This is not an error - there is a window for restart_from_kvs()
+             * to pick up a job that also has a submit request in flight.
+             */
+            if (zlistx_delete (newjobs, zlistx_cursor (newjobs)) < 0)
+                return -1;
+        }
+        job = zlistx_next (newjobs);
     }
     return 0;
 }
@@ -75,42 +106,18 @@ int submit_add_one_job (zhashx_t *active_jobs, zlist_t *newjobs, json_t *o)
 /* The submit request has failed.  Dequeue jobs recorded in 'newjobs',
  * then destroy the newjobs list.
  */
-void submit_add_jobs_cleanup (zhashx_t *active_jobs, zlist_t *newjobs)
+void submit_add_jobs_cleanup (zhashx_t *active_jobs, zlistx_t *newjobs)
 {
     if (newjobs) {
         int saved_errno = errno;
-        struct job *job;
-        while ((job = zlist_pop (newjobs))) {
+        struct job *job = zlistx_first (newjobs);
+        while (job) {
             zhashx_delete (active_jobs, &job->id);
-            job_decref (job);
+            job = zlistx_next (newjobs);
         }
-        zlist_destroy (&newjobs);
+        zlistx_destroy (&newjobs);
         errno = saved_errno;
     }
-}
-
-/* Add jobs from 'jobs' array to 'active_jobs' hash.
- * On success, return a list of struct job's.
- * On failure, return NULL with errno set (no jobs added).
- */
-zlist_t *submit_add_jobs (zhashx_t *active_jobs, json_t *jobs)
-{
-    size_t index;
-    json_t *el;
-    zlist_t *newjobs;
-
-    if (!(newjobs = zlist_new ())) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    json_array_foreach (jobs, index, el) {
-        if (submit_add_one_job (active_jobs, newjobs, el) < 0)
-            goto error;
-    }
-    return newjobs;
-error:
-    submit_add_jobs_cleanup (active_jobs, newjobs);
-    return NULL;
 }
 
 /* Submit event requires special handling.  It cannot go through
@@ -132,11 +139,6 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
                                  "flags", job->flags);
     if (!entry)
         goto error;
-
-    /*  Explicitly call `job.new` before "submit" event is posted
-     *  (Failure is currently ignored)
-     */
-    (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
 
     /* call before eventlog_seq increment below */
     if (journal_process_event (ctx->journal,
@@ -173,6 +175,71 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
     return rv;
 }
 
+/*  Call the jobtap job.validate hook for all jobs in newjobs.
+ *  If a plugin returns < 0 for a job, remove that job from the newjobs
+ *   list and append the error to the errp array.
+ */
+static int submit_validate_jobs (struct job_manager *ctx,
+                                 zlistx_t *newjobs,
+                                 json_t **errp)
+{
+    struct job * job;
+    json_t *array;
+
+    if (!(array = json_array ())) {
+        errno = ENOMEM;
+        return -1;
+    }
+    job = zlistx_first (newjobs);
+    while (job) {
+        char *errmsg = NULL;
+        json_t *entry = NULL;
+
+        if (jobtap_validate (ctx->jobtap, job, &errmsg) < 0) {
+            /*
+             *  This job is rejected: append error to error payload and
+             *   delete the job from newjobs list
+             */
+            if (errmsg) {
+                entry = json_pack ("[Is]", job->id, errmsg);
+                free (errmsg);
+            }
+            else
+                entry = json_pack ("[Is]", job->id, "rejected by plugin");
+
+            /*  Append error to errors array and remove the job from
+             *   the newjobs list since it failed validation.
+             */
+            if (entry == NULL
+                || json_array_append_new (array, entry) < 0
+                || zlistx_delete (newjobs, zlistx_cursor (newjobs)) < 0) {
+                flux_log (ctx->h, LOG_ERR,
+                          "submit_validate_jobs: failed to invalidate job");
+                json_decref (entry);
+                goto error;
+            }
+        }
+        else {
+            /*  The job has been accepted and will progress past the NEW
+             *   state after it has been added to the active jobs hash.
+             *
+             *   Immediately notify any plugins of a new job here (unless
+             *   the job is already hashed, an allowed condition) so that
+             *   any internal plugin state (e.g. user job count) can be
+             *   updated before the next job is validated.
+             */
+            if (!zhashx_lookup (ctx->active_jobs, &job->id))
+                (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
+        }
+        job = zlistx_next (newjobs);
+    }
+    *errp = array;
+    return 0;
+error:
+    json_decref (array);
+    return -1;
+}
+
 /* handle submit request (from job-ingest module)
  * This is a batched request for one or more jobs already validated
  * by the ingest module, and already instantiated in the KVS.
@@ -183,7 +250,8 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager *ctx = arg;
     json_t *jobs;
-    zlist_t *newjobs;
+    json_t *errors = NULL;
+    zlistx_t *newjobs;
     struct job *job;
     const char *errmsg = NULL;
 
@@ -196,18 +264,27 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errmsg = ctx->submit->disable_errmsg;
         goto error;
     }
-    if (!(newjobs = submit_add_jobs (ctx->active_jobs, jobs))) {
+    if (!(newjobs = submit_jobs_to_list (jobs))) {
+        flux_log_error (h, "%s: error creating newjobs list", __FUNCTION__);
+        goto error;
+    }
+    if (submit_validate_jobs (ctx, newjobs, &errors) < 0) {
+        flux_log_error (h, "%s: error validating batch", __FUNCTION__);
+        goto error;
+    }
+    if (submit_hash_jobs (ctx->active_jobs, newjobs) < 0) {
         flux_log_error (h, "%s: error enqueuing batch", __FUNCTION__);
         goto error;
     }
-    if (flux_respond (h, msg, NULL) < 0)
+    if (flux_respond_pack (h, msg, "{s:o}", "errors", errors) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
 
     /* Submitting user is being responded to with jobid's.
      * Now walk the list of new jobs and advance their state.
      * Side effect: update ctx->max_jobid.
      */
-    while ((job = zlist_pop (newjobs))) {
+    job = zlistx_first (newjobs);
+    while (job) {
         if (submit_post_event (ctx, job) < 0)
             flux_log_error (h, "%s: submit_post_event id=%ju",
                             __FUNCTION__, (uintmax_t)job->id);
@@ -217,9 +294,9 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         if (ctx->max_jobid < job->id)
             ctx->max_jobid = job->id;
 
-        job_decref (job);
+        job = zlistx_next (newjobs);
     }
-    zlist_destroy (&newjobs);
+    zlistx_destroy (&newjobs);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)

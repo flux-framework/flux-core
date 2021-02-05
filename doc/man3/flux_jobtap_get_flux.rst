@@ -37,6 +37,12 @@ SYNOPSIS
    int flux_jobtap_priority_unavail (flux_plugin_t *p,
                                      flux_plugin_arg_t *args);
 
+::
+
+   int flux_jobtap_reject_job (flux_plugin_t *p,
+                               flux_plugin_arg_t *args,
+                               const char *fmt, ...);
+
 
 DESCRIPTION
 ===========
@@ -71,6 +77,15 @@ called as::
 
    return flux_jobtap_priority_unavail (p, args);
 
+``flux_jobtap_reject_job()`` is a convenience function which may be used
+by a plugin from the ``job.validate`` callback to reject a job before its
+submission is fully complete. The error and optional message supplied in
+``fmt`` will be returned to the originating job submission request. This
+function returns ``-1`` so that it may be conveniently called as::
+
+  return flux_jobtap_reject_job (p, args,
+                                 "User exceeded %d jobs",
+                                 limit);
 
 RETURN VALUE
 ============
@@ -78,6 +93,9 @@ RETURN VALUE
 ``flux_jobtap_get_flux()`` returns a ``flux_t *`` handle on success. ``NULL``
 is returned with errno set to ``EINVAL`` if the supplied ``flux_plugin_t *p``
 is not a jobtap plugin handle.
+
+``flux_jobtap_reject_job()`` always returns ``-1`` so that it may be used
+to exit the ``job.validate`` callback.
 
 The remaining functions return 0 on success, -1 on failure.
 
