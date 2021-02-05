@@ -9,27 +9,58 @@
 \************************************************************/
 
 #include <sys/param.h>
-#include <argz.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/ipaddr.h"
 
+
+static void setopt (const char *name, int val)
+{
+    if (val) {
+        if (setenv (name, "1", 1) < 0)
+            BAIL_OUT ("setenv %s", name);
+    }
+    else {
+        if (unsetenv (name) < 0)
+            BAIL_OUT ("unsetenv %s", name);
+    }
+}
+
 int main(int argc, char** argv)
 {
     char host[MAXHOSTNAMELEN + 1];
-    char errstr[200];
+    char err[200];
     int n;
 
     plan (NO_PLAN);
 
-    memset (errstr, 0, sizeof (errstr));
-    n = ipaddr_getprimary (host, sizeof (host), errstr, sizeof (errstr));
+    setopt ("FLUX_IPADDR_HOSTNAME", 0);
+    setopt ("FLUX_IPADDR_V6", 0);
+    n = ipaddr_getprimary (host, sizeof (host), err, sizeof (err));
     ok (n == 0,
-        "ipaddr_getprimary works");
-    if (n == 0)
-        diag ("primary: %s", host);
-    else
-        diag ("Error: %s", errstr);
+        "ipaddr_getprimary (hostname=0 v6=0) works");
+    diag ("%s", n == 0 ? host : err);
+
+    setopt ("FLUX_IPADDR_HOSTNAME", 0);
+    setopt ("FLUX_IPADDR_V6", 1);
+    n = ipaddr_getprimary (host, sizeof (host), err, sizeof (err));
+    ok (n == 0,
+        "ipaddr_getprimary (hostname=0 v6=1) works");
+    diag ("%s", n == 0 ? host : err);
+
+    setopt ("FLUX_IPADDR_HOSTNAME", 1);
+    setopt ("FLUX_IPADDR_V6", 0);
+    n = ipaddr_getprimary (host, sizeof (host), err, sizeof (err));
+    ok (n == 0,
+        "ipaddr_getprimary (hostname=1 v6=0) works");
+    diag ("%s", n == 0 ? host : err);
+
+    setopt ("FLUX_IPADDR_HOSTNAME", 1);
+    setopt ("FLUX_IPADDR_V6", 1);
+    n = ipaddr_getprimary (host, sizeof (host), err, sizeof (err));
+    ok (n == 0,
+        "ipaddr_getprimary (hostname=1 v6=1)");
+    diag ("%s", n == 0 ? host : err);
 
     done_testing();
 }
