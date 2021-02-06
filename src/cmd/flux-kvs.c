@@ -386,7 +386,6 @@ int usage (optparse_t *p, struct optparse_option *o, const char *optarg)
 
 int main (int argc, char *argv[])
 {
-    flux_t *h;
     char *cmdusage = "[OPTIONS] COMMAND ARGS";
     optparse_t *p;
     int optindex;
@@ -420,15 +419,9 @@ int main (int argc, char *argv[])
         exit (1);
     }
 
-    if (!(h = flux_open (NULL, 0)))
-        log_err_exit ("flux_open");
-
-    optparse_set_data (p, "flux_handle", h);
-
     if ((exitval = optparse_run_subcommand (p, argc, argv)) < 0)
         exit (1);
 
-    flux_close (h);
     optparse_destroy (p);
     log_fini ();
     return (exitval);
@@ -436,7 +429,7 @@ int main (int argc, char *argv[])
 
 int cmd_namespace_create (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     flux_future_t *f;
     int optindex, i;
     uint32_t owner = FLUX_USERID_UNKNOWN;
@@ -455,6 +448,9 @@ int cmd_namespace_create (optparse_t *p, int argc, char **argv)
             log_msg_exit ("--owner requires an unsigned integer argument");
     }
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
     for (i = optindex; i < argc; i++) {
         const char *name = argv[i];
         int flags = 0;
@@ -463,12 +459,13 @@ int cmd_namespace_create (optparse_t *p, int argc, char **argv)
             log_err_exit ("%s", name);
         flux_future_destroy (f);
     }
+    flux_close (h);
     return (0);
 }
 
 int cmd_namespace_remove (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     flux_future_t *f;
     int optindex, i;
 
@@ -477,6 +474,10 @@ int cmd_namespace_remove (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
     for (i = optindex; i < argc; i++) {
         const char *name = argv[i];
         if (!(f = flux_kvs_namespace_remove (h, name))
@@ -484,12 +485,13 @@ int cmd_namespace_remove (optparse_t *p, int argc, char **argv)
             log_err_exit ("%s", name);
         flux_future_destroy (f);
     }
+    flux_close (h);
     return (0);
 }
 
 int cmd_namespace_list (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     int optindex;
     flux_future_t *f;
     json_t *array;
@@ -500,6 +502,9 @@ int cmd_namespace_list (optparse_t *p, int argc, char **argv)
         optparse_print_usage (p);
         exit (1);
     }
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
 
     if (!(f = flux_rpc (h, "kvs.namespace-list", NULL, FLUX_NODEID_ANY, 0)))
         log_err_exit ("flux_rpc");
@@ -529,6 +534,7 @@ int cmd_namespace_list (optparse_t *p, int argc, char **argv)
     }
 
     flux_future_destroy (f);
+    flux_close (h);
     return (0);
 }
 
@@ -730,7 +736,7 @@ void cmd_get_one (flux_t *h, const char *key, struct lookup_ctx *ctx)
 
 int cmd_get (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     int optindex, i;
     struct lookup_ctx ctx;
 
@@ -744,6 +750,9 @@ int cmd_get (optparse_t *p, int argc, char **argv)
     ctx.maxcount = optparse_get_int (p, "count", 0);
     ctx.ns = optparse_get_str (p, "namespace", NULL);
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
     for (i = optindex; i < argc; i++)
         cmd_get_one (h, argv[i], &ctx);
     /* Unless --watch is specified, cmd_get_one() starts the reactor and
@@ -756,6 +765,7 @@ int cmd_get (optparse_t *p, int argc, char **argv)
             log_err_exit ("flux_reactor_run");
     }
 
+    flux_close (h);
     return (0);
 }
 
@@ -781,7 +791,7 @@ void commit_finish (flux_future_t *f, optparse_t *p)
 
 int cmd_put (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     const char *ns = NULL;
     int optindex, i;
     flux_future_t *f;
@@ -798,6 +808,10 @@ int cmd_put (optparse_t *p, int argc, char **argv)
 
     if (optparse_hasopt (p, "no-merge"))
         commit_flags |= FLUX_KVS_NO_MERGE;
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
     for (i = optindex; i < argc; i++) {
@@ -851,6 +865,7 @@ int cmd_put (optparse_t *p, int argc, char **argv)
     commit_finish (f, p);
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
+    flux_close (h);
     return (0);
 }
 
@@ -921,7 +936,7 @@ done:
 
 int cmd_unlink (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     const char *ns = NULL;
     int optindex, i;
     flux_future_t *f;
@@ -936,6 +951,9 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
     ns = optparse_get_str (p, "namespace", NULL);
     Ropt = optparse_hasopt (p, "recursive");
     fopt = optparse_hasopt (p, "force");
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
 
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
@@ -953,12 +971,13 @@ int cmd_unlink (optparse_t *p, int argc, char **argv)
     commit_finish (f, p);
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
+    flux_close (h);
     return (0);
 }
 
 int cmd_link (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     const char *linkns = NULL;
     const char *targetns = NULL;
     const char *target, *linkname;
@@ -979,6 +998,9 @@ int cmd_link (optparse_t *p, int argc, char **argv)
     target = argv[optindex];
     linkname = argv[optindex + 1];
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
     if (flux_kvs_txn_symlink (txn, 0, linkname, targetns, target) < 0)
@@ -988,12 +1010,13 @@ int cmd_link (optparse_t *p, int argc, char **argv)
     commit_finish (f, p);
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
+    flux_close (h);
     return (0);
 }
 
 int cmd_readlink (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     const char *ns = NULL;
     int optindex, i;
     flux_future_t *f;
@@ -1008,6 +1031,9 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
     ns = optparse_get_str (p, "namespace", NULL);
     ns_only = optparse_hasopt (p, "namespace-only");
     key_only = optparse_hasopt (p, "key-only");
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
 
     for (i = optindex; i < argc; i++) {
         const char *linkns = NULL;
@@ -1035,12 +1061,13 @@ int cmd_readlink (optparse_t *p, int argc, char **argv)
         }
         flux_future_destroy (f);
     }
+    flux_close (h);
     return (0);
 }
 
 int cmd_mkdir (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     const char *ns;
     int optindex, i;
     flux_kvs_txn_t *txn;
@@ -1053,6 +1080,9 @@ int cmd_mkdir (optparse_t *p, int argc, char **argv)
     }
     ns = optparse_get_str (p, "namespace", NULL);
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
     if (!(txn = flux_kvs_txn_create ()))
         log_err_exit ("flux_kvs_txn_create");
     for (i = optindex; i < argc; i++) {
@@ -1064,6 +1094,7 @@ int cmd_mkdir (optparse_t *p, int argc, char **argv)
     commit_finish (f, p);
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
+    flux_close (h);
     return (0);
 }
 
@@ -1073,13 +1104,14 @@ int cmd_version (optparse_t *p, int argc, char **argv)
     const char *ns = NULL;
     int vers;
 
-    h = (flux_t *)optparse_get_data (p, "flux_handle");
-
     ns = optparse_get_str (p, "namespace", NULL);
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
     if (flux_kvs_get_version (h, ns, &vers) < 0)
         log_err_exit ("flux_kvs_get_version");
     printf ("%d\n", vers);
+    flux_close (h);
     return (0);
 }
 
@@ -1089,8 +1121,6 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     const char *ns = NULL;
     int vers;
     int optindex;
-
-    h = (flux_t *)optparse_get_data (p, "flux_handle");
 
     optindex = optparse_option_index (p);
 
@@ -1104,8 +1134,12 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     ns = optparse_get_str (p, "namespace", NULL);
 
     vers = strtoul (argv[optindex], NULL, 10);
+
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
     if (flux_kvs_wait_version (h, ns, vers) < 0)
         log_err_exit ("flux_kvs_wait_version");
+    flux_close (h);
     return (0);
 }
 
@@ -1113,7 +1147,8 @@ int cmd_dropcache (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
 
-    h = (flux_t *)optparse_get_data (p, "flux_handle");
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
 
     if (optparse_hasopt (p, "all")) {
         flux_msg_t *msg = flux_event_encode ("kvs.dropcache", NULL);
@@ -1125,6 +1160,7 @@ int cmd_dropcache (optparse_t *p, int argc, char **argv)
         if (flux_kvs_dropcache (h) < 0)
             log_err_exit ("flux_kvs_dropcache");
     }
+    flux_close (h);
     return (0);
 }
 
@@ -1231,7 +1267,7 @@ static void dump_kvs_dir (const flux_kvsdir_t *dir, int maxcol,
 
 int cmd_dir (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     int maxcol = get_window_width (p, STDOUT_FILENO);
     const char *ns = NULL;
     bool Ropt;
@@ -1252,6 +1288,9 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
     else
         log_msg_exit ("dir: specify zero or one directory");
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
     if (optparse_hasopt (p, "at")) {
         const char *reference = optparse_get_str (p, "at", NULL);
         if (!(f = flux_kvs_lookupat (h, FLUX_KVS_READDIR, key, reference)))
@@ -1265,6 +1304,7 @@ int cmd_dir (optparse_t *p, int argc, char **argv)
         log_err_exit ("%s", key);
     dump_kvs_dir (dir, maxcol, ns, Ropt, dopt);
     flux_future_destroy (f);
+    flux_close (h);
     return (0);
 }
 
@@ -1489,10 +1529,9 @@ static int categorize_link (flux_t *h, const char *ns, char *nkey,
  * its contents are to be listed or not.  If -F is specified,
  * 'singles' key names are decorated based on their type.
  */
-static int categorize_key (optparse_t *p, const char *ns, const char *key,
-                           zlist_t *dirs, zlist_t *singles)
+static int categorize_key (flux_t *h, optparse_t *p, const char *ns,
+                           const char *key, zlist_t *dirs, zlist_t *singles)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
     flux_future_t *f;
     const char *json_str;
     char *nkey;
@@ -1573,7 +1612,7 @@ error:
  */
 int cmd_ls (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     const char *ns = NULL;
     int optindex = optparse_option_index (p);
     int win_width = get_window_width (p, STDOUT_FILENO);
@@ -1591,12 +1630,15 @@ int cmd_ls (optparse_t *p, int argc, char **argv)
     if (!(dirs = zlist_new ()) || !(singles = zlist_new ()))
         log_err_exit ("zlist_new");
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
     if (optindex == argc) {
-        if (categorize_key (p, ns, ".", dirs, singles) < 0)
+        if (categorize_key (h, p, ns, ".", dirs, singles) < 0)
             rc = -1;
     }
     while (optindex < argc) {
-        if (categorize_key (p, ns, argv[optindex++], dirs, singles) < 0)
+        if (categorize_key (h, p, ns, argv[optindex++], dirs, singles) < 0)
             rc = -1;
     }
     if (zlist_size (singles) > 0) {
@@ -1616,12 +1658,13 @@ int cmd_ls (optparse_t *p, int argc, char **argv)
     zlist_destroy (&dirs);
     zlist_destroy (&singles);
 
+    flux_close (h);
     return rc;
 }
 
 int cmd_copy (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = (flux_t *)optparse_get_data (p, "flux_handle");
+    flux_t *h;
     int optindex;
     flux_future_t *f;
     const char *srckey, *dstkey;
@@ -1637,11 +1680,14 @@ int cmd_copy (optparse_t *p, int argc, char **argv)
     srckey = argv[optindex];
     dstkey = argv[optindex + 1];
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
     if (!(f = flux_kvs_copy (h, srcns, srckey, dstns, dstkey, 0))
             || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_copy");
     flux_future_destroy (f);
 
+    flux_close (h);
     return (0);
 }
 
@@ -1653,8 +1699,6 @@ int cmd_move (optparse_t *p, int argc, char **argv)
     const char *srckey, *dstkey;
     const char *srcns, *dstns;
 
-    h = (flux_t *)optparse_get_data (p, "flux_handle");
-
     optindex = optparse_option_index (p);
     if (optindex != (argc - 2))
         log_msg_exit ("move: specify srckey dstkey");
@@ -1665,11 +1709,14 @@ int cmd_move (optparse_t *p, int argc, char **argv)
     srckey = argv[optindex];
     dstkey = argv[optindex + 1];
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
     if (!(f = flux_kvs_move (h, srcns, srckey, dstns, dstkey, 0))
             || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_move");
     flux_future_destroy (f);
 
+    flux_close (h);
     return (0);
 }
 
@@ -1704,7 +1751,7 @@ void getroot_continuation (flux_future_t *f, void *arg)
 
 int cmd_getroot (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = optparse_get_data (p, "flux_handle");
+    flux_t *h;
     int optindex = optparse_option_index (p);
     const char *ns = NULL;
     flux_future_t *f;
@@ -1716,12 +1763,15 @@ int cmd_getroot (optparse_t *p, int argc, char **argv)
     }
     ns = optparse_get_str (p, "namespace", NULL);
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
     if (!(f = flux_kvs_getroot (h, ns, flags)))
         log_err_exit ("flux_kvs_getroot");
     if (flux_future_then (f, -1., getroot_continuation, p) < 0)
         log_err_exit ("flux_future_then");
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
+    flux_close (h);
     return (0);
 }
 
@@ -1773,7 +1823,7 @@ static flux_future_t *eventlog_append_event (flux_t *h,
 
 int cmd_eventlog_append (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = optparse_get_data (p, "flux_handle");
+    flux_t *h;
     const char *ns = NULL;
     int optindex = optparse_option_index (p);
     const char *key;
@@ -1793,6 +1843,9 @@ int cmd_eventlog_append (optparse_t *p, int argc, char **argv)
     if (optindex < argc)
         context = eventlog_context_from_args (argv + optindex);
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
     f = eventlog_append_event (h, ns, key, timestamp, name, context);
     if (flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_commit");
@@ -1800,6 +1853,7 @@ int cmd_eventlog_append (optparse_t *p, int argc, char **argv)
     flux_future_destroy (f);
     free (context);
 
+    flux_close (h);
     return (0);
 }
 
@@ -1914,7 +1968,7 @@ void eventlog_get_continuation (flux_future_t *f, void *arg)
 
 int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = optparse_get_data (p, "flux_handle");
+    flux_t *h;
     const char *ns = NULL;
     int optindex = optparse_option_index (p);
     const char *key;
@@ -1940,6 +1994,8 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
     ctx.count = 0;
     ctx.maxcount = optparse_get_int (p, "count", 0);
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
     if (!(f = flux_kvs_lookup (h, ns, flags, key)))
         log_err_exit ("flux_kvs_lookup");
     if (flux_future_then (f, -1., eventlog_get_continuation, &ctx) < 0)
@@ -1947,6 +2003,7 @@ int cmd_eventlog_get (optparse_t *p, int argc, char **argv)
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
 
+    flux_close (h);
     return (0);
 }
 
@@ -2012,7 +2069,7 @@ void eventlog_wait_event_continuation (flux_future_t *f, void *arg)
 
 int cmd_eventlog_wait_event (optparse_t *p, int argc, char **argv)
 {
-    flux_t *h = optparse_get_data (p, "flux_handle");
+    flux_t *h;
     const char *ns = NULL;
     int optindex = optparse_option_index (p);
     flux_future_t *f;
@@ -2038,6 +2095,8 @@ int cmd_eventlog_wait_event (optparse_t *p, int argc, char **argv)
     if (optparse_hasopt (p, "waitcreate"))
         flags |= FLUX_KVS_WAITCREATE;
 
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
     if (!(f = flux_kvs_lookup (h, ns, flags, ctx.key)))
         log_err_exit ("flux_kvs_lookup");
     if (flux_future_then (f,
@@ -2048,6 +2107,7 @@ int cmd_eventlog_wait_event (optparse_t *p, int argc, char **argv)
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
 
+    flux_close (h);
     return (0);
 }
 
