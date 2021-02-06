@@ -11,23 +11,30 @@
 #ifndef _UTIL_GETIP_H
 #define _UTIL_GETIP_H
 
-#include <sys/types.h>
+#include <sys/socket.h> // for AF_INET, AF_INET6
 
-/* Get ip address associated with primary hostname.
- * Return it as a string in buf (up to len bytes, always null terminated)
+/* Guess at a usable network address for the local node using one
+ * of these methods:
+ * 1. Find the interface associated with the default route, then
+ *    look up address of that interface.
+ * 2. Look up address associated with the hostname
+ *
+ * Main use case: determine bind address for a PMI-bootstrapped flux broker.
+ *
+ * Some environment variables alter the default behavior:
+ *
+ * FLUX_IPADDR_IPV6
+ *   if set, IPv6 addresses are preferred, with fallback to IPv4
+ *   if unset, IPv4 addresses are preferred, wtih fallback to IPv6
+ * FLUX_IPADDR_HOSTNAME
+ *   if set, only method 2 is tried above
+ *   if unset, first method 1 is tried, then if that fails, method 2 is tried
+ *
+ * Return address as a string in buf (up to len bytes, always null terminated)
  * Return 0 on success, -1 on error with error message written to errstr
  * if non-NULL.
  */
 int ipaddr_getprimary (char *buf, int len, char *errstr, int errstrsz);
-
-
-/* Get a list of all stringified ip addresses associated with interfaces on
- * the local host.  The result is appended to 'addrs', 'addrsz', an argz list
- * that must be initialized as described in argz_add(3).  Both AF_INET
- * and AF_INET6 address families are included in the list.  Return 0 on
- * success, -1 on error with error message written to errstr if non-NULL.
- */
-int ipaddr_getall (char **addrs, size_t *addrssz, char *errstr, int errstrsz);
 
 #endif /* !_UTIL_GETIP_H */
 

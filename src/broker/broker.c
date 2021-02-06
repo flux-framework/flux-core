@@ -298,6 +298,7 @@ int main (int argc, char *argv[])
     zsys_set_linger (5);
     zsys_set_rcvhwm (0);
     zsys_set_sndhwm (0);
+    zsys_set_ipv6 (1);
 
     /* Set up the flux reactor.
      */
