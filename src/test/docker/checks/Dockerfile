@@ -43,7 +43,7 @@ RUN set -x && groupadd fluxuser \
 RUN case $BASE_IMAGE in \
      bionic*) adduser $USER sudo && adduser fluxuser sudo ;; \
      focal*)  adduser $USER sudo && adduser fluxuser sudo ;; \
-     centos*) usermod -G wheel $USER && usermod -G wheel fluxuser ;; \
+     centos*|fedora*) usermod -G wheel $USER && usermod -G wheel fluxuser ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
@@ -56,7 +56,7 @@ RUN case $BASE_IMAGE in \
 RUN case $BASE_IMAGE in \
      bionic*) ;; \
      focal*) ;; \
-     centos*) ;; \
+     centos*|fedora*) ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
