@@ -267,7 +267,9 @@ OTHER OPTIONS
    Specify job urgency, which affects queue order. Numerically higher urgency
    jobs are considered by the scheduler first. Guests may submit jobs with
    urgency in the range of 0 to 16, while instance owners may submit jobs
-   with urgency in the range of 0 to 31 (default 16).
+   with urgency in the range of 0 to 31 (default 16).  In addition to
+   numerical values, the special names ``hold`` (0), ``default`` (16),
+   and ``expedite`` (31) are also accepted.
 
 **-v, --verbose**
    *(run,alloc,submit,bulksubmit)* Increase verbosity on stderr. For example,

@@ -57,6 +57,14 @@ test_expect_success 'flux mini submit --urgency=6 works' '
 	jobid=$(flux mini submit --urgency=6 hostname) &&
 	flux job eventlog $jobid | grep submit | grep urgency=6
 '
+test_expect_success 'flux mini submit --urgency special options works' '
+	jobid=$(flux mini submit --urgency=default hostname) &&
+	flux job eventlog $jobid | grep submit | grep urgency=16 &&
+	jobid=$(flux mini submit --urgency=hold hostname) &&
+	flux job eventlog $jobid | grep submit | grep urgency=0 &&
+	jobid=$(flux mini submit --urgency=expedite hostname) &&
+	flux job eventlog $jobid | grep submit | grep urgency=31
+'
 test_expect_success 'flux mini submit --flags debug works' '
 	jobid=$(flux mini submit --flags debug hostname) &&
 	flux job eventlog $jobid | grep submit | grep flags=2

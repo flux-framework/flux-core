@@ -173,7 +173,7 @@ class MiniCmd:
         )
         parser.add_argument(
             "--urgency",
-            help="Set job urgency (0-31, default=16)",
+            help="Set job urgency (0-31), hold=0, default=16, expedite=31",
             metavar="N",
             default="16",
         )
@@ -365,10 +365,19 @@ class MiniCmd:
         if not self.flux_handle:
             self.flux_handle = flux.Flux()
 
+        if args.urgency == "default":
+            urgency = flux.constants.FLUX_JOB_URGENCY_DEFAULT
+        elif args.urgency == "hold":
+            urgency = flux.constants.FLUX_JOB_URGENCY_HOLD
+        elif args.urgency == "expedite":
+            urgency = flux.constants.FLUX_JOB_URGENCY_EXPEDITE
+        else:
+            urgency = int(args.urgency)
+
         return job.submit_async(
             self.flux_handle,
             jobspec.dumps(),
-            urgency=int(args.urgency),
+            urgency=urgency,
             waitable=arg_waitable,
             debug=arg_debug,
         )
