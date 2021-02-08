@@ -150,7 +150,7 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
         case 'v':   /* --verbose */
-            ctx->verbose = true;
+            ctx->verbose++;
             break;
         case 'X':   /* --module-path PATH */
             if (attr_set (ctx->attrs, "conf.module_path", optarg, true) < 0)
@@ -491,7 +491,7 @@ int main (int argc, char *argv[])
 
     /* Initialize module infrastructure.
      */
-    if (ctx.verbose)
+    if (ctx.verbose > 1)
         log_msg ("initializing modules");
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
@@ -524,7 +524,7 @@ int main (int argc, char *argv[])
      * which uses the local connector.
      * The shutdown protocol unloads it.
      */
-    if (ctx.verbose)
+    if (ctx.verbose > 1)
         log_msg ("loading connector-local");
     if (load_module_byname (&ctx, "connector-local", NULL, 0, NULL) < 0) {
         log_err ("load_module connector-local");
@@ -533,13 +533,13 @@ int main (int argc, char *argv[])
 
     /* Event loop
      */
-    if (ctx.verbose)
+    if (ctx.verbose > 1)
         log_msg ("entering event loop");
     /* Once we enter the reactor, default exit_rc is now 0 */
     ctx.exit_rc = 0;
     if (flux_reactor_run (ctx.reactor, 0) < 0)
         log_err ("flux_reactor_run");
-    if (ctx.verbose)
+    if (ctx.verbose > 1)
         log_msg ("exited event loop");
 
     /* inform all lingering subprocesses we are tearing down.  Do this
@@ -549,7 +549,7 @@ int main (int argc, char *argv[])
     exec_terminate_subprocesses (ctx.h);
 
 cleanup:
-    if (ctx.verbose)
+    if (ctx.verbose > 1)
         log_msg ("cleaning up");
 
     /* Restore default sigmask and actions for SIGINT, SIGTERM
