@@ -519,6 +519,7 @@ AC_CONFIG_FILES( \
   src/modules/content-files/Makefile \
   src/modules/content-s3/Makefile \
   src/modules/barrier/Makefile \
+  src/modules/heartbeat/Makefile \
   src/modules/cron/Makefile \
   src/modules/job-ingest/Makefile \
   src/modules/job-manager/Makefile \
