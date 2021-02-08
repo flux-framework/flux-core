@@ -38,7 +38,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 
-#include "heartbeat.h"
 #include "module.h"
 #include "modservice.h"
 
@@ -55,8 +54,7 @@ struct broker_module {
     flux_t *broker_h;
     flux_watcher_t *broker_w;
 
-    int lastseen;
-    heartbeat_t *heartbeat;
+    double lastseen;
 
     zsock_t *sock;          /* broker end of PAIR socket */
     struct flux_msg_cred cred; /* cred of connection */
@@ -94,7 +92,6 @@ struct modhash {
     zhash_t *zh_byuuid;
     uint32_t rank;
     flux_t *broker_h;
-    heartbeat_t *heartbeat;
 };
 
 static int setup_module_profiling (module_t *p)
@@ -267,7 +264,7 @@ const char *module_get_uuid (module_t *p)
 
 static int module_get_idle (module_t *p)
 {
-    return heartbeat_get_epoch (p->heartbeat) - p->lastseen;
+    return flux_reactor_now (flux_get_reactor (p->broker_h)) - p->lastseen;
 }
 
 flux_msg_t *module_recvmsg (module_t *p)
@@ -481,7 +478,7 @@ static void module_cb (flux_reactor_t *r, flux_watcher_t *w,
 {
     module_t *p = arg;
     assert (p->magic == MODULE_MAGIC);
-    p->lastseen = heartbeat_get_epoch (p->heartbeat);
+    p->lastseen = flux_reactor_now (r);
     if (p->poller_cb)
         p->poller_cb (p, p->poller_arg);
 }
@@ -660,7 +657,6 @@ module_t *module_add (modhash_t *mh, const char *path)
 
     p->rank = mh->rank;
     p->broker_h = mh->broker_h;
-    p->heartbeat = mh->heartbeat;
 
     /* Broker end of PAIR socket is opened here.
      */
@@ -747,11 +743,6 @@ void modhash_set_rank (modhash_t *mh, uint32_t rank)
 void modhash_set_flux (modhash_t *mh, flux_t *h)
 {
     mh->broker_h = h;
-}
-
-void modhash_set_heartbeat (modhash_t *mh, heartbeat_t *hb)
-{
-    mh->heartbeat = hb;
 }
 
 json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw)

@@ -496,7 +496,6 @@ int main (int argc, char *argv[])
         log_msg ("initializing modules");
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
-    modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
 
     /* install heartbeat (including timer on rank 0)
      */
