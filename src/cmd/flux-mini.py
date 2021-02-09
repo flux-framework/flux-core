@@ -223,6 +223,9 @@ class Xcmd:
         in command and applicable options using string.format().
 
         """
+        #  Save reference to original args:
+        self._orig_args = args
+
         #  Convert all inputs to Xinputs so special attributes are
         #   available during .format() processing:
         #
@@ -248,13 +251,15 @@ class Xcmd:
         self.modified = {}
         for attr in self.mutable_args:
             val = getattr(args, attr)
+            if val is None:
+                continue
             try:
                 if isinstance(val, str):
-                    setattr(self, attr, val.format(*inputs, **kwargs))
+                    newval = val.format(*inputs, **kwargs)
                 elif isinstance(val, list):
-                    setattr(self, attr, [x.format(*inputs, **kwargs) for x in val])
+                    newval = [x.format(*inputs, **kwargs) for x in val]
                 else:
-                    setattr(self, attr, val)
+                    newval = val
             except IndexError:
                 LOGGER.error(
                     "Invalid replacement string in %s: '%s'",
@@ -262,20 +267,19 @@ class Xcmd:
                     val,
                 )
                 sys.exit(1)
+            setattr(self, attr, newval)
 
             #  For better verbose and dry-run output, capture mutable
             #   args that were actually changed:
-            if val != getattr(self, attr):
+            if val != newval:
                 self.modified[attr] = True
 
-    def apply(self, args):
+    def __getattr__(self, attr):
         """
-        Apply the command and options in this Xcmd object to the
-        argparse Namespace `args`:
+        Fall back to original args if attribute not found.
+        This allows an Xcmd object to used in place of an argparse Namespace.
         """
-        args.command = self.command
-        for attr in self.mutable_args:
-            setattr(args, attr, getattr(self, attr))
+        return getattr(self._orig_args, attr)
 
     def __str__(self):
         """String representation of an Xcmd for debugging output"""
@@ -1086,9 +1090,8 @@ class BulkSubmitCmd(SubmitBulkCmd):
 
         #  Calculate total number of commands for use with progress:
         total = 0
-        for xcmd in commands:
-            xcmd.apply(args)
-            total += len(self.cc_list(args))
+        for xargs in commands:
+            total += len(self.cc_list(xargs))
 
         #  Initialize progress bar if requested:
         if args.progress:
@@ -1098,12 +1101,11 @@ class BulkSubmitCmd(SubmitBulkCmd):
                 print(f"flux-mini: submitting a total of {total} jobs")
 
         #  Loop through commands and asynchronously submit them:
-        for xcmd in commands:
+        for xargs in commands:
             if args.verbose or args.dry_run:
-                print(f"flux-mini: submit {xcmd}")
-            xcmd.apply(args)
+                print(f"flux-mini: submit {xargs}")
             if not args.dry_run:
-                self.submit_async_with_cc(args)
+                self.submit_async_with_cc(xargs)
 
         if not args.dry_run:
             self.run_and_exit()
