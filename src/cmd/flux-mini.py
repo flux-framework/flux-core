@@ -216,6 +216,32 @@ class Xcmd:
                 return result
             raise ValueError(f"Unknown input string method '.{attr}'")
 
+    @staticmethod
+    def preserve_mustache(val):
+        """Preserve any mustache template in value 'val'"""
+
+        def subst(val):
+            return val.replace("{{", "=stache=").replace("}}", "=/stache=")
+
+        if isinstance(val, str):
+            return subst(val)
+        if isinstance(val, list):
+            return [subst(x) for x in val]
+        return val
+
+    @staticmethod
+    def restore_mustache(val):
+        """Restore any mustache template in value 'val'"""
+
+        def restore(val):
+            return val.replace("=stache=", "{{").replace("=/stache=", "}}")
+
+        if isinstance(val, str):
+            return restore(val)
+        if isinstance(val, list):
+            return [restore(x) for x in val]
+        return val
+
     def __init__(self, args, inputs, **kwargs):
         """Initialize and Xcmd (eXtensible Command) object
 
@@ -253,6 +279,9 @@ class Xcmd:
             val = getattr(args, attr)
             if val is None:
                 continue
+
+            val = self.preserve_mustache(val)
+
             try:
                 if isinstance(val, str):
                     newval = val.format(*inputs, **kwargs)
@@ -267,6 +296,9 @@ class Xcmd:
                     val,
                 )
                 sys.exit(1)
+
+            newval = self.restore_mustache(newval)
+
             setattr(self, attr, newval)
 
             #  For better verbose and dry-run output, capture mutable
