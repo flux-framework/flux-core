@@ -242,13 +242,16 @@ class Xcmd:
             return [restore(x) for x in val]
         return val
 
-    def __init__(self, args, inputs, **kwargs):
+    def __init__(self, args, inputs=None, **kwargs):
         """Initialize and Xcmd (eXtensible Command) object
 
         Given BulkSubmit `args` and `inputs`, substitute all inputs
         in command and applicable options using string.format().
 
         """
+        if inputs is None:
+            inputs = []
+
         #  Save reference to original args:
         self._orig_args = args
 
