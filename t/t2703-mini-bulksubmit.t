@@ -116,12 +116,12 @@ test_expect_success 'flux-mini bulksubmit --wait returns highest exit code' '
 test_expect_success 'flux-mini bulksubmit replacement format strings work' '
 	echo /a/b/c/d.txt /a/b/c/d c.txt | \
 	    flux mini bulksubmit --sep=None --dry-run \
-	        {seq} {} {.%} {./} {.//} {./%} \
+	        {seq} {seq1} {} {.%} {./} {.//} {./%} \
 	        >repl.out &&
 	cat <<-EOF >repl.expected &&
-	flux-mini: submit 0 /a/b/c/d.txt /a/b/c/d d.txt /a/b/c d
-	flux-mini: submit 1 /a/b/c/d /a/b/c/d d /a/b/c d
-	flux-mini: submit 2 c.txt c c.txt  c
+	flux-mini: submit 0 1 /a/b/c/d.txt /a/b/c/d d.txt /a/b/c d
+	flux-mini: submit 1 2 /a/b/c/d /a/b/c/d d /a/b/c d
+	flux-mini: submit 2 3 c.txt c c.txt  c
 	EOF
 	test_debug "cat repl.out" &&
 	test_cmp repl.expected repl.out
@@ -245,5 +245,47 @@ test_expect_success 'flux-mini bulksubmit reports invalid replacement strings' '
 	test_debug "cat bad2.out" &&
 	grep "Invalid replacement string in command" bad.out &&
 	grep "Invalid replacement string in -n" bad2.out
+'
+test_expect_success 'flux-mini bulksubmit: preserves mustache templates' '
+	flux mini bulksubmit --dry-run --output=flux-{}.{{id}}.out \
+	    hostname ::: 0 1 >mustache.out &&
+	test_debug "cat mustache.out" &&
+	cat <<-EOF > mustache.expected  &&
+	flux-mini: submit --output=flux-0.{{id}}.out hostname
+	flux-mini: submit --output=flux-1.{{id}}.out hostname
+	EOF
+	test_cmp mustache.expected mustache.out
+'
+test_expect_success 'flux-mini submit --log works and can substitute {cc}' '
+	flux mini submit --log=job{cc}.id --cc=1-5 hostname &&
+	for id in $(seq 1 5); do
+	    test -f job${id}.id &&
+	    flux job wait-event -v $(cat job${id}.id) clean
+	done
+'
+test_expect_success 'flux-mini submit --log-stderr works' '
+	flux mini submit --log-stderr=job{cc}.stderr --cc=0-1 --watch -vv \
+	    hostname &&
+	for id in $(seq 0 1); do
+	    test -f job${id}.stderr &&
+	    grep complete job${id}.stderr
+	done
+'
+test_expect_success 'flux-mini submit --log-stderr works' '
+	flux mini submit --log-stderr=job{cc}.stderr --cc=0-1 --watch -vv \
+	    hostname &&
+	for id in $(seq 0 1); do
+	    test -f job${id}.stderr &&
+	    grep complete job${id}.stderr
+	done
+'
+test_expect_success 'flux-mini bulksubmit preserves {cc} in args' '
+	flux mini bulksubmit --log=preserve-{cc}.out --cc=0-1 --watch \
+		echo {cc}={} ::: a b c &&
+	for id in 0 1; do
+	    grep ^${id}=a preserve-${id}.out &&
+	    grep ^${id}=b preserve-${id}.out &&
+	    grep ^${id}=c preserve-${id}.out
+	done
 '
 test_done
