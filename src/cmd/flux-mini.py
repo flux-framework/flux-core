@@ -147,6 +147,148 @@ class EnvFilterAction(argparse.Action):
         setattr(namespace, "env", items)
 
 
+class Xcmd:
+    """Represent a Flux job with mutable command and option args"""
+
+    # dict of mutable argparse args. The values are used in
+    #  the string representation of an Xcmd object.
+    mutable_args = {
+        "ntasks": "-n",
+        "nodes": "-N",
+        "cores_per_task": "-c",
+        "gpus_per_task": "-g",
+        "time_limit": "-t",
+        "env": "--env=",
+        "env_file": "--env-file=",
+        "urgency": "--urgency=",
+        "setopt": "-o ",
+        "setattr": "--setattr=",
+        "job_name": "--job-name=",
+        "input": "--input=",
+        "output": "--output=",
+        "error": "--error=",
+        "cc": "--cc=",
+        "bcc": "--bcc=",
+    }
+
+    class Xinput:
+        """A string class with convenient attributes for formatting args
+
+        This class represents a string with special attributes specific
+        for use on the bulksubmit command line, e.g.::
+
+            {0.%}    : the argument without filename extension
+            {0./}    : the argument basename
+            {0.//}   : the argument dirname
+            {0./%}   : the basename without filename extension
+            {0.name} : the result of dynamically assigned method "name"
+
+        """
+
+        def __init__(self, arg, methods):
+            self.methods = methods
+            self.string = arg
+
+        def __str__(self):
+            return self.string
+
+        def __getattr__(self, attr):
+            if attr == "%":
+                return os.path.splitext(self.string)[0]
+            if attr == "/":
+                return os.path.basename(self.string)
+            if attr == "//":
+                return os.path.dirname(self.string)
+            if attr == "/%":
+                return os.path.basename(os.path.splitext(self.string)[0])
+            if attr in self.methods:
+                #  Note: combine list return values with the special
+                #   sentinel ::list::: so they can be split up again
+                #   after .format() converts them to strings. This allows
+                #   user-provided methods to return lists as well as
+                #   single values, where each list element can become
+                #   a new argument in a command
+                #
+                # pylint: disable=eval-used
+                result = eval(self.methods[attr], globals(), dict(x=self.string))
+                if isinstance(result, list):
+                    return "::list::".join(result)
+                return result
+            raise ValueError(f"Unknown input string method '.{attr}'")
+
+    def __init__(self, args, inputs, **kwargs):
+        """Initialize and Xcmd (eXtensible Command) object
+
+        Given BulkSubmit `args` and `inputs`, substitute all inputs
+        in command and applicable options using string.format().
+
+        """
+        #  Convert all inputs to Xinputs so special attributes are
+        #   available during .format() processing:
+        #
+        inputs = [self.Xinput(x, args.methods) for x in inputs]
+
+        #  Format each argument in args.command, splitting on the
+        #   special "::list::" sentinel to handle the case where
+        #   custom input methods return a list (See Xinput.__getattr__)
+        #
+        self.command = []
+        for arg in args.command:
+            try:
+                result = arg.format(*inputs, **kwargs).split("::list::")
+            except IndexError:
+                LOGGER.error("Invalid replacement string in command: '%s'", arg)
+                sys.exit(1)
+            if result:
+                self.command.extend(result)
+
+        #  Format all supported mutable options defined in `mutable_args`
+        #  Note: only list and string options are supported.
+        #
+        self.modified = {}
+        for attr in self.mutable_args:
+            val = getattr(args, attr)
+            try:
+                if isinstance(val, str):
+                    setattr(self, attr, val.format(*inputs, **kwargs))
+                elif isinstance(val, list):
+                    setattr(self, attr, [x.format(*inputs, **kwargs) for x in val])
+                else:
+                    setattr(self, attr, val)
+            except IndexError:
+                LOGGER.error(
+                    "Invalid replacement string in %s: '%s'",
+                    self.mutable_args[attr],
+                    val,
+                )
+                sys.exit(1)
+
+            #  For better verbose and dry-run output, capture mutable
+            #   args that were actually changed:
+            if val != getattr(self, attr):
+                self.modified[attr] = True
+
+    def apply(self, args):
+        """
+        Apply the command and options in this Xcmd object to the
+        argparse Namespace `args`:
+        """
+        args.command = self.command
+        for attr in self.mutable_args:
+            setattr(args, attr, getattr(self, attr))
+
+    def __str__(self):
+        """String representation of an Xcmd for debugging output"""
+        result = []
+        for attr in self.mutable_args:
+            value = getattr(self, attr)
+            if attr in self.modified and value:
+                opt = self.mutable_args[attr]
+                result.append(f"{opt}{value}")
+        result.extend(self.command)
+        return " ".join(result)
+
+
 class MiniCmd:
     """
     MiniCmd is the base class for all flux-mini subcommands
@@ -817,149 +959,6 @@ class BulkSubmitCmd(SubmitBulkCmd):
             help="Job command and iniital arguments",
         )
 
-    class Xcmd:
-        """Represent a Flux job with mutable command and option args"""
-
-        # dict of mutable argparse args. The values are used in
-        #  the string representation of an Xcmd object.
-        mutable_args = {
-            "ntasks": "-n",
-            "nodes": "-N",
-            "cores_per_task": "-c",
-            "gpus_per_task": "-g",
-            "time_limit": "-t",
-            "env": "--env=",
-            "env_file": "--env-file=",
-            "urgency": "--urgency=",
-            "setopt": "-o ",
-            "setattr": "--setattr=",
-            "job_name": "--job-name=",
-            "input": "--input=",
-            "output": "--output=",
-            "error": "--error=",
-            "cc": "--cc=",
-            "bcc": "--bcc=",
-        }
-
-        class Xinput:
-            """A string class with convenient attributes for formatting args
-
-            This class represents a string with special attributes specific
-            for use on the bulksubmit command line, e.g.::
-
-                {0.%}    : the argument without filename extension
-                {0./}    : the argument basename
-                {0.//}   : the argument dirname
-                {0./%}   : the basename without filename extension
-                {0.name} : the result of dynamically assigned method "name"
-
-            """
-
-            def __init__(self, arg, methods):
-                self.methods = methods
-                self.string = arg
-
-            def __str__(self):
-                return self.string
-
-            def __getattr__(self, attr):
-                if attr == "%":
-                    return os.path.splitext(self.string)[0]
-                if attr == "/":
-                    return os.path.basename(self.string)
-                if attr == "//":
-                    return os.path.dirname(self.string)
-                if attr == "/%":
-                    return os.path.basename(os.path.splitext(self.string)[0])
-                if attr in self.methods:
-                    #  Note: combine list return values with the special
-                    #   sentinel ::list::: so they can be split up again
-                    #   after .format() converts them to strings. This allows
-                    #   user-provided methods to return lists as well as
-                    #   single values, where each list element can become
-                    #   a new argument in a command
-                    #
-                    # pylint: disable=eval-used
-                    result = eval(self.methods[attr], globals(), dict(x=self.string))
-                    if isinstance(result, list):
-                        return "::list::".join(result)
-                    return result
-                raise ValueError(f"Unknown input string method '.{attr}'")
-
-        def __init__(self, args, inputs, **kwargs):
-            """Initialize and Xcmd (eXtensible Command) object
-
-            Given BulkSubmit `args` and `inputs`, substitute all inputs
-            in command and applicable options using string.format().
-
-            """
-            #  Convert all inputs to Xinputs so special attributes are
-            #   available during .format() processing:
-            #
-            inputs = [self.Xinput(x, args.methods) for x in inputs]
-
-            #  Format each argument in args.command, splitting on the
-            #   special "::list::" sentinel to handle the case where
-            #   custom input methods return a list (See Xinput.__getattr__)
-            #
-            self.command = []
-            for arg in args.command:
-                try:
-                    result = arg.format(*inputs, **kwargs).split("::list::")
-                except IndexError:
-                    LOGGER.error(
-                        "Invalid replacement string in command args: '%s'", arg
-                    )
-                    sys.exit(1)
-                if result:
-                    self.command.extend(result)
-
-            #  Format all supported mutable options defined in `mutable_args`
-            #  Note: only list and string options are supported.
-            #
-            self.modified = {}
-            for attr in self.mutable_args:
-                val = getattr(args, attr)
-                try:
-                    if isinstance(val, str):
-                        setattr(self, attr, val.format(*inputs, **kwargs))
-                    elif isinstance(val, list):
-                        setattr(self, attr, [x.format(*inputs, **kwargs) for x in val])
-                    else:
-                        setattr(self, attr, val)
-                except IndexError:
-                    LOGGER.error(
-                        "Invalid replacement string in %s: '%s'",
-                        self.mutable_args[attr],
-                        val,
-                    )
-                    sys.exit(1)
-
-                #  For better verbose and dry-run output, capture mutable
-                #   args that were actually changed:
-                if val != getattr(self, attr):
-                    self.modified[attr] = True
-
-        def apply(self, args):
-            """
-            Apply the command and options in this Xcmd object to the
-            argparse Namespace `args`:
-            """
-            args.command = self.command
-            for attr in self.mutable_args:
-                setattr(args, attr, getattr(self, attr))
-
-        def __str__(self):
-            """String representation of an Xcmd for debugging output"""
-            result = []
-            for attr in self.mutable_args:
-                value = getattr(self, attr)
-                if attr in self.modified and value:
-                    opt = self.mutable_args[attr]
-                    result.append(f"{opt}{value}")
-            result.extend(self.command)
-            return " ".join(result)
-
     @staticmethod
     def input_file(filep, sep):
         """Read set of inputs from file object filep, using separator sep"""
@@ -1071,7 +1070,7 @@ class BulkSubmitCmd(SubmitBulkCmd):
         #  For each set of generated input lists, append a command
         #   to run. Keep a sequence counter so that {seq} can be used
         #   in the format expansion.
-        return [self.Xcmd(args, inp, seq=i) for i, inp in enumerate(inputs)]
+        return [Xcmd(args, inp, seq=i) for i, inp in enumerate(inputs)]
 
     def main(self, args):
         if not args.command:
