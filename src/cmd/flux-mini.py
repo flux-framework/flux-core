@@ -18,6 +18,7 @@ import fnmatch
 import re
 import random
 import itertools
+import atexit
 from itertools import chain
 from string import Template
 from collections import ChainMap
@@ -169,6 +170,8 @@ class Xcmd:
         "error": "--error=",
         "cc": "--cc=",
         "bcc": "--bcc=",
+        "log": "--log=",
+        "log_stderr": "--log-stderr=",
     }
 
     class Xinput:
@@ -646,6 +649,10 @@ class SubmitBulkCmd(SubmitBaseCmd):
     """
 
     def __init__(self):
+
+        #  dictionary of open logfiles for --log, --log-stderr:
+        self._logfiles = {}
+
         super().__init__()
         self.parser.add_argument(
             "-q",
@@ -677,6 +684,18 @@ class SubmitBulkCmd(SubmitBaseCmd):
             help="Watch all job output (implies --wait)",
         )
         self.parser.add_argument(
+            "--log",
+            metavar="FILE",
+            help="Print program log messages (e.g. submitted jobid) to FILE "
+            "instead of terminal",
+        )
+        self.parser.add_argument(
+            "--log-stderr",
+            metavar="FILE",
+            help="Separate stderr messages into FILE instead of terminal or "
+            "logfile destination",
+        )
+        self.parser.add_argument(
             "--progress",
             action="store_true",
             help="Show progress of job submission or completion (with --wait)",
@@ -697,9 +716,9 @@ class SubmitBulkCmd(SubmitBaseCmd):
                 data = event.context["data"]
                 rank = event.context["rank"]
                 if args.label_io:
-                    getattr(sys, stream).write(f"{jobid}: {rank}: {data}")
+                    getattr(args, stream).write(f"{jobid}: {rank}: {data}")
                 else:
-                    getattr(sys, stream).write(data)
+                    getattr(args, stream).write(data)
 
     def exec_watch_cb(self, future, args, jobid, label=""):
         """Handle events in the guest.exec.eventlog"""
@@ -749,7 +768,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
             note = event.context["note"]
             print(
                 f"{jobid}: exception: type={exception_type} note={note}",
-                file=sys.stderr,
+                file=args.stderr,
             )
         elif event.name == "start" and args.watch:
             #
@@ -766,7 +785,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
             jobinfo["state"] = "done"
             status = self.status_to_exitcode(event.context["status"])
             if args.verbose:
-                print(f"{jobid}: complete: status={status}", file=sys.stderr)
+                print(f"{jobid}: complete: status={status}", file=args.stderr)
             if status > self.exitcode:
                 self.exitcode = status
 
@@ -774,9 +793,9 @@ class SubmitBulkCmd(SubmitBaseCmd):
         try:
             jobid = JobID(future.get_id())
             if not args.quiet:
-                print(jobid)
+                print(jobid, file=args.stdout)
         except OSError as exc:
-            print(f"{label}{exc}", file=sys.stderr)
+            print(f"{label}{exc}", file=args.stderr)
             self.exitcode = 1
             self.progress_update(submit_failed=True)
             return
@@ -915,6 +934,13 @@ class SubmitBulkCmd(SubmitBaseCmd):
             cclist = IDset(args.bcc)
         return cclist
 
+    def openlog(self, filename):
+        if filename not in self._logfiles:
+            filep = open(filename, "w", buffering=1)
+            atexit.register(lambda x: x.close(), filep)
+            self._logfiles[filename] = filep
+        return self._logfiles[filename]
+
     def submit_async_with_cc(self, args, cclist=None):
         """
         Asynchronously submit jobs, optionally submitting a copy of
@@ -925,17 +951,40 @@ class SubmitBulkCmd(SubmitBaseCmd):
         if not cclist:
             cclist = self.cc_list(args)
         label = ""
-        jobspec = self.jobspec_create(args)
+
+        #  Save default stdout/err location in args so it can be overridden
+        #   by --log and --log-stderr and the correct location is available
+        #   in each job's callback chain:
+        #
+        args.stdout = sys.stdout
+        args.stderr = sys.stderr
 
         if args.progress:
             self.progress_start(args, len(cclist))
 
         for i in cclist:
+            #  substitute any {cc} in args and create jobspec:
+            xargs = Xcmd(args, cc=i)
+            jobspec = self.jobspec_create(xargs)
+
             if args.cc or args.bcc:
                 label = f"cc={i}: "
                 if not args.bcc:
                     jobspec.environment["FLUX_JOB_CC"] = str(i)
-            self.submit_async(args, jobspec).then(self.submit_cb, args, label)
+
+            #  Check for request to redirect program stdout/err
+            #  By default, --log redirects both stdout and stderr
+            #  (We explicitly don't want these attributes defined in
+            #   __init__, o/w we won't fall back to parent args, so
+            #   disable pylint warning)
+            #  pylint: disable=attribute-defined-outside-init
+            if xargs.log:
+                xargs.stdout = self.openlog(xargs.log)
+                xargs.stderr = xargs.stdout
+            if xargs.log_stderr:
+                xargs.stderr = self.openlog(xargs.log_stderr)
+
+            self.submit_async(xargs, jobspec).then(self.submit_cb, xargs, label)
 
     def main(self, args):
         self.submit_async_with_cc(args)
