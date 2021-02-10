@@ -92,6 +92,7 @@ TESTSCRIPTS = \
 	t1103-apidisconnect.t \
 	t1105-proxy.t \
 	t1106-ssh-connector.t \
+	t1107-heartbeat.t \
 	t2004-hydra.t \
 	t2005-hwloc-basic.t \
 	t2006-hwloc-versions.t \
