@@ -1158,7 +1158,10 @@ class BulkSubmitCmd(SubmitBulkCmd):
         #  For each set of generated input lists, append a command
         #   to run. Keep a sequence counter so that {seq} can be used
         #   in the format expansion.
-        return [Xcmd(args, inp, seq=i, cc="{cc}") for i, inp in enumerate(inputs)]
+        return [
+            Xcmd(args, inp, seq=i, seq1=i + 1, cc="{cc}")
+            for i, inp in enumerate(inputs)
+        ]
 
     def main(self, args):
         if not args.command:
