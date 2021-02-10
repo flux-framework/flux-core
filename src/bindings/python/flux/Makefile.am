@@ -26,6 +26,7 @@ nobase_fluxpy_PYTHON = \
 	job/wait.py \
 	job/stats.py \
 	job/_wrapper.py \
+	job/executor.py \
 	resource/Rlist.py \
 	resource/__init__.py \
 	resource/ResourceSetImplementation.py \
