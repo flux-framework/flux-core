@@ -13,10 +13,8 @@ test_under_flux 1 job
 flux setattr log-stderr-level 1
 
 test_expect_success 'job-manager: submit 5 jobs' '
-        flux mini submit --cc="1-5" --flags=debug -n1 \
-           hostname > jobids.out &&
-        split --numeric-suffixes=1 --additional-suffix=.id -l 1 -a 1 \
-           jobids.out job
+        flux mini submit --log=job{cc}.id --cc="1-5" --flags=debug -n1 \
+           hostname
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
