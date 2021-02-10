@@ -28,6 +28,7 @@ typedef int... pid_t;
 typedef ... va_list;
 void * unpack_long(ptrdiff_t num);
 void free(void *ptr);
+#define FLUX_JOBID_ANY 0xFFFFFFFFFFFFFFFF
 
     """
 

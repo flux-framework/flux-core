@@ -301,6 +301,7 @@ check_PROGRAMS = \
 	rexec/rexec_count_stdout \
 	rexec/rexec_getline \
 	job-manager/list-jobs \
+	job-manager/print-constants \
 	job-manager/events_journal_stream \
 	ingest/submitbench \
 	sched-simple/jj-reader \
@@ -574,6 +575,11 @@ ingest_submitbench_LDADD = \
 job_manager_list_jobs_SOURCES = job-manager/list-jobs.c
 job_manager_list_jobs_CPPFLAGS = $(test_cppflags)
 job_manager_list_jobs_LDADD = \
+	$(test_ldadd) $(LIBDL)
+
+job_manager_print_constants_SOURCES = job-manager/print-constants.c
+job_manager_print_constants_CPPFLAGS = $(test_cppflags)
+job_manager_print_constants_LDADD = \
 	$(test_ldadd) $(LIBDL)
 
 job_manager_events_journal_stream_SOURCES = job-manager/events_journal_stream.c
