@@ -14,10 +14,8 @@ flux setattr log-stderr-level 1
 
 # N.B. resources = 1 rank, 2 cores/rank
 test_expect_success 'job-manager: submit 4 jobs' '
-        flux mini submit --cc="1-4" --flags=debug -n1 \
-           hostname > jobids.out &&
-        split --numeric-suffixes=1 --additional-suffix=.id -l 1 -a 1 \
-           jobids.out job
+        flux mini submit --log=job{cc}.id --cc="1-4" --flags=debug -n1 \
+           hostname
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RRSS' '
