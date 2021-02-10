@@ -2822,7 +2822,7 @@ void info_output (flux_future_t *f, const char *suffix, flux_jobid_t id)
     if (flux_rpc_get_unpack (f, "{s:s}", suffix, &s) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
-            log_msg_exit ("job %lu id or key not found", id);
+            log_msg_exit ("job %ju id or key not found", (uintmax_t)id);
         }
         else
             log_err_exit ("flux_rpc_get_unpack");
