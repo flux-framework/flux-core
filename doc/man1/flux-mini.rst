@@ -312,11 +312,27 @@ OTHER OPTIONS
    *(submit,bulksubmit)* Replicate the job for each ``id`` in ``IDSET``.
    ``FLUX_JOB_CC=id`` will be set in the environment of each submitted job
    to allow the job to alter its execution based on the submission index.
-   (e.g. for reading from a different input file).
+   (e.g. for reading from a different input file). When using ``--cc``,
+   the substitution string ``{cc}`` may be used in options and commands
+   and will be replaced by the current ``id``.
 
 **--bcc=IDSET**
    *(submit,bulksubmit)* Identical to ``--cc``, but do not set
    ``FLUX_JOB_CC`` in each job. All jobs will be identical copies.
+   As with ``--cc``, ``{cc}`` in option arguments and commands will be
+   replaced with the current ``id``.
+
+**--log=FILE**
+   *(submit,bulksubmit)* Log ``flux-mini`` output and stderr to ``FILE``
+   instead of the terminal. If a replacement (e.g. ``{}`` or ``{cc}``)
+   appears in ``FILE``, then one or more output files may be opened.
+   For example, to save all submitted jobids into separate files, use::
+
+      flux mini submit --cc=1-4 --log=job{cc}.id hostname
+
+**--log-stderr=FILE**
+   *(submit,bulksubmit)* Separate stderr into ``FILE`` instead of sending
+   it to the terminal or a ``FILE`` specified by ``--log``.
 
 **--wait**
    *(submit,bulksubmit)* Wait on completion of all jobs before exiting.
@@ -425,10 +441,18 @@ These include:
  - ``{./%}`` returns the basename of the input string with any
    extension removed.
  - ``{.//}`` returns the dirname of the input string
- - ``{seq}`` returns the input sequence number (0 origin).
+ - ``{seq}`` returns the input sequence number (0 origin)
+ - ``{seq1}`` returns the input sequence number (1 origin)
+ - ``{cc}`` returns the current ``id`` from use of ``--cc`` or ``--bcc``.
+   Note that replacement of ``{cc}`` is done in a second pass, since the
+   ``--cc`` option argument may itself be replaced in the first substitution
+   pass. If ``--cc/bcc`` were not used, then ``{cc}`` is replaced with an
+   empty string. This is the only substitution supported with
+   ``flux-mini submit``.
 
-Note that besides ``{seq}``, these attributes can also take the input
-index, e.g. ``{0.%}`` or ``{1.//}``, when multiple inputs are used.
+Note that besides ``{seq}``, ``{seq1}``, and ``{cc}`` these attributes
+can also take the input index, e.g. ``{0.%}`` or ``{1.//}``, when multiple
+inputs are used.
 
 Additional attributes may be defined with the ``--define`` option, e.g.::
 
