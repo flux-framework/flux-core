@@ -8,24 +8,25 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_JOB_INFO_JOB_UTIL_H
-#define _FLUX_JOB_INFO_JOB_UTIL_H
+#ifndef _FLUX_JOB_LIST_H
+#define _FLUX_JOB_LIST_H
 
 #include <flux/core.h>
+#include <czmq.h>
 
 #include "job_state.h"
 
-typedef struct {
-    char text[160];
-} job_info_error_t;
+struct list_ctx {
+    flux_t *h;
+    flux_msg_handler_t **handlers;
+    struct job_state_ctx *jsctx;
+    zlistx_t *idsync_lookups;
+    zhashx_t *idsync_waits;
+};
 
-void __attribute__((format (printf, 2, 3)))
-seterror (job_info_error_t *errp, const char *fmt, ...);
-
-json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp);
-
-#endif /* ! _FLUX_JOB_INFO_JOB_UTIL_H */
+#endif /* _FLUX_JOB_LIST_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
+

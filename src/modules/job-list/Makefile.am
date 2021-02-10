@@ -11,22 +11,24 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS) $(FLUX_SECURITY_CFLAGS) $(YAMLCPP_CFLAGS)
 
-fluxmod_LTLIBRARIES = job-info.la
+fluxmod_LTLIBRARIES = job-list.la
 
-job_info_la_SOURCES = \
-	job-info.c \
-	info.h \
-	allow.h \
-	allow.c \
-	lookup.h \
-	lookup.c \
-	watch.h \
-	watch.c \
-	guest_watch.h \
-	guest_watch.c
+job_list_la_SOURCES = \
+	job-list.c \
+	job-list.h \
+	job_state.h \
+	job_state.c \
+	list.h \
+	list.c \
+	job_util.h \
+	job_util.c \
+	idsync.h \
+	idsync.c \
+	stats.h \
+	stats.c
 
-job_info_la_LDFLAGS = $(fluxmod_ldflags) -module
-job_info_la_LIBADD = $(fluxmod_libadd) \
+job_list_la_LDFLAGS = $(fluxmod_ldflags) -module
+job_list_la_LIBADD = $(fluxmod_libadd) \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \

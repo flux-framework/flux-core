@@ -16,12 +16,9 @@
 
 #include "info.h"
 #include "allow.h"
-#include "job_state.h"
-#include "list.h"
 #include "lookup.h"
 #include "watch.h"
 #include "guest_watch.h"
-#include "idsync.h"
 
 static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
@@ -49,43 +46,14 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     int lookups = zlist_size (ctx->lookups);
     int watchers = zlist_size (ctx->watchers);
     int guest_watchers = zlist_size (ctx->guest_watchers);
-    int pending = zlistx_size (ctx->jsctx->pending);
-    int running = zlistx_size (ctx->jsctx->running);
-    int inactive = zlistx_size (ctx->jsctx->inactive);
-    int idsync_lookups = zlistx_size (ctx->idsync_lookups);
-    int idsync_waits = zhashx_size (ctx->idsync_waits);
-    if (flux_respond_pack (h, msg, "{s:i s:i s:i s:{s:i s:i s:i} s:{s:i s:i}}",
+    if (flux_respond_pack (h, msg, "{s:i s:i s:i}",
                            "lookups", lookups,
                            "watchers", watchers,
-                           "guest_watchers", guest_watchers,
-                           "jobs",
-                           "pending", pending,
-                           "running", running,
-                           "inactive", inactive,
-                           "idsync",
-                           "lookups", idsync_lookups,
-                           "waits", idsync_waits) < 0) {
+                           "guest_watchers", guest_watchers) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
 
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
-static void job_stats_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
-{
-    struct info_ctx *ctx = arg;
-    json_t *o = job_stats_encode (&ctx->jsctx->stats);
-    if (o == NULL)
-        goto error;
-    if (flux_respond_pack (h, msg, "o", o) < 0) {
-        flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
@@ -119,41 +87,6 @@ static const struct flux_msg_handler_spec htab[] = {
       .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.list",
-      .cb           = list_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.list-inactive",
-      .cb           = list_inactive_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.list-id",
-      .cb           = list_id_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.list-attrs",
-      .cb           = list_attrs_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.job-state-pause",
-      .cb           = job_state_pause_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.job-state-unpause",
-      .cb           = job_state_unpause_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
-      .topic_glob   = "job-info.job-stats",
-      .cb           = job_stats_cb,
-      .rolemask     = FLUX_ROLE_USER
-    },
-    { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.disconnect",
       .cb           = disconnect_cb,
       .rolemask     = 0
@@ -182,10 +115,6 @@ static void info_ctx_destroy (struct info_ctx *ctx)
             guest_watch_cleanup (ctx);
             zlist_destroy (&ctx->guest_watchers);
         }
-        if (ctx->jsctx)
-            job_state_destroy (ctx->jsctx);
-        if (ctx->idsync_lookups)
-            idsync_cleanup (ctx);
         free (ctx);
         errno = saved_errno;
     }
@@ -205,10 +134,6 @@ static struct info_ctx *info_ctx_create (flux_t *h)
         goto error;
     if (!(ctx->guest_watchers = zlist_new ()))
         goto error;
-    if (!(ctx->jsctx = job_state_create (ctx)))
-        goto error;
-    if (idsync_setup (ctx) < 0)
-        goto error;
     return ctx;
 error:
     info_ctx_destroy (ctx);
@@ -224,8 +149,6 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "initialization error");
         goto done;
     }
-    if (job_state_init_from_kvs (ctx) < 0)
-        goto done;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         goto done;
     rc = 0;

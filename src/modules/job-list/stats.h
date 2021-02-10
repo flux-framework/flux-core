@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_JOB_INFO_JOB_STATS_H
-#define _FLUX_JOB_INFO_JOB_STATS_H
+#ifndef _FLUX_JOB_LIST_JOB_STATS_H
+#define _FLUX_JOB_LIST_JOB_STATS_H
 
 #include <flux/core.h> /* FLUX_JOB_NR_STATES */
 
@@ -31,4 +31,4 @@ void job_stats_update (struct job_stats *stats,
 
 json_t * job_stats_encode (struct job_stats *stats);
 
-#endif /* ! _FLUX_JOB_INFO_JOB_STATS_H */
+#endif /* ! _FLUX_JOB_LIST_JOB_STATS_H */

@@ -1044,12 +1044,12 @@ test_expect_success 'reload job-ingest with defaults' '
 # we make R invalid by overwriting it in the KVS before job-info will
 # look it up
 test_expect_success HAVE_JQ 'flux jobs works on job with illegal R' '
-	${RPC} job-info.job-state-pause 0 </dev/null &&
+	${RPC} job-list.job-state-pause 0 </dev/null &&
         jobid=`flux job submit hostname.json` &&
         flux job wait-event $jobid clean >/dev/null &&
         jobkvspath=`flux job id --to kvs $jobid` &&
         flux kvs put "${jobkvspath}.R=foobar" &&
-	${RPC} job-info.job-state-unpause 0 </dev/null &&
+	${RPC} job-list.job-state-unpause 0 </dev/null &&
         i=0 &&
         while ! flux jobs --filter=inactive | grep $jobid > /dev/null \
                && [ $i -lt 5 ]

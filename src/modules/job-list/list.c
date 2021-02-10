@@ -24,7 +24,7 @@
 #include "job_util.h"
 #include "job_state.h"
 
-json_t *get_job_by_id (struct info_ctx *ctx,
+json_t *get_job_by_id (struct list_ctx *ctx,
                        job_info_error_t *errp,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
@@ -88,7 +88,7 @@ int get_jobs_from_list (json_t *jobs,
  * EPROTO - malformed or empty attrs array, max_entries out of range
  * ENOMEM - out of memory
  */
-json_t *get_jobs (struct info_ctx *ctx,
+json_t *get_jobs (struct list_ctx *ctx,
                   job_info_error_t *errp,
                   int max_entries,
                   json_t *attrs,
@@ -160,7 +160,7 @@ error:
 void list_cb (flux_t *h, flux_msg_handler_t *mh,
               const flux_msg_t *msg, void *arg)
 {
-    struct info_ctx *ctx = arg;
+    struct list_ctx *ctx = arg;
     job_info_error_t err;
     json_t *jobs = NULL;
     json_t *attrs;
@@ -228,7 +228,7 @@ error:
  * EPROTO - malformed or empty attrs array
  * ENOMEM - out of memory
  */
-json_t *get_inactive_jobs (struct info_ctx *ctx,
+json_t *get_inactive_jobs (struct list_ctx *ctx,
                            job_info_error_t *errp,
                            int max_entries,
                            double since,
@@ -274,7 +274,7 @@ error:
 void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
-    struct info_ctx *ctx = arg;
+    struct list_ctx *ctx = arg;
     job_info_error_t err = {{0}};
     json_t *jobs = NULL;
     int max_entries;
@@ -321,7 +321,7 @@ error:
     json_decref (jobs);
 }
 
-int wait_id_valid (struct info_ctx *ctx, struct idsync_data *isd)
+int wait_id_valid (struct list_ctx *ctx, struct idsync_data *isd)
 {
     zlistx_t *list_isd;
     void *handle;
@@ -364,7 +364,7 @@ error_destroy:
 void check_id_valid_continuation (flux_future_t *f, void *arg)
 {
     struct idsync_data *isd = arg;
-    struct info_ctx *ctx = isd->ctx;
+    struct list_ctx *ctx = isd->ctx;
     void *handle;
 
     if (flux_future_get (f, NULL) < 0) {
@@ -405,7 +405,7 @@ cleanup:
     return;
 }
 
-int check_id_valid (struct info_ctx *ctx,
+int check_id_valid (struct list_ctx *ctx,
                     const flux_msg_t *msg,
                     flux_jobid_t id,
                     json_t *attrs)
@@ -461,7 +461,7 @@ error:
  * EINVAL - invalid id
  * ENOMEM - out of memory
  */
-json_t *get_job_by_id (struct info_ctx *ctx,
+json_t *get_job_by_id (struct list_ctx *ctx,
                        job_info_error_t *errp,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
@@ -504,7 +504,7 @@ json_t *get_job_by_id (struct info_ctx *ctx,
 void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
                   const flux_msg_t *msg, void *arg)
 {
-    struct info_ctx *ctx = arg;
+    struct list_ctx *ctx = arg;
     job_info_error_t err = {{0}};
     json_t *job = NULL;
     flux_jobid_t id;

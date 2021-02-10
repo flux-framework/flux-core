@@ -64,7 +64,7 @@ static int exception_context_parse (flux_t *h,
                                     json_t *context,
                                     int *severityP);
 
-static void process_next_state (struct info_ctx *ctx, struct job *job);
+static void process_next_state (struct list_ctx *ctx, struct job *job);
 
 static int journal_process_events (struct job_state_ctx *jsctx, json_t *events);
 
@@ -125,7 +125,7 @@ static void job_destroy_wrapper (void **data)
     job_destroy (*job);
 }
 
-static struct job *job_create (struct info_ctx *ctx, flux_jobid_t id)
+static struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
 {
     struct job *job = NULL;
 
@@ -174,7 +174,7 @@ static bool search_direction (struct job *job)
         return false;
 }
 
-static void update_job_state (struct info_ctx *ctx,
+static void update_job_state (struct list_ctx *ctx,
                               struct job *job,
                               flux_job_state_t new_state,
                               double timestamp)
@@ -193,7 +193,7 @@ static void update_job_state (struct info_ctx *ctx,
     job->states_mask |= job->state;
 }
 
-static void revert_job_state (struct info_ctx *ctx,
+static void revert_job_state (struct list_ctx *ctx,
                               struct job *job,
                               double timestamp)
 {
@@ -268,7 +268,7 @@ static zlistx_t *get_list (struct job_state_ctx *jsctx, flux_job_state_t state)
         return jsctx->inactive;
 }
 
-static void update_job_state_and_list (struct info_ctx *ctx,
+static void update_job_state_and_list (struct list_ctx *ctx,
                                        struct job *job,
                                        flux_job_state_t newstate,
                                        double timestamp)
@@ -297,7 +297,7 @@ static void update_job_state_and_list (struct info_ctx *ctx,
                         search_direction (job));
 }
 
-static void list_id_respond (struct info_ctx *ctx,
+static void list_id_respond (struct list_ctx *ctx,
                              struct idsync_data *isd,
                              struct job *job)
 {
@@ -321,7 +321,7 @@ error:
     json_decref (o);
 }
 
-static void check_waiting_id (struct info_ctx *ctx,
+static void check_waiting_id (struct list_ctx *ctx,
                               struct job *job)
 {
     zlistx_t *list_isd;
@@ -343,7 +343,7 @@ struct res_level {
     json_t *with;
 };
 
-static int parse_res_level (struct info_ctx *ctx,
+static int parse_res_level (struct list_ctx *ctx,
                             struct job *job,
                             json_t *o,
                             struct res_level *resp)
@@ -385,7 +385,7 @@ parse_job_name (const char *path)
     return path;
 }
 
-static int jobspec_parse (struct info_ctx *ctx,
+static int jobspec_parse (struct list_ctx *ctx,
                           struct job *job,
                           const char *s)
 {
@@ -555,7 +555,7 @@ error:
 static void state_depend_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
-    struct info_ctx *ctx = job->ctx;
+    struct list_ctx *ctx = job->ctx;
     struct state_transition *st;
     const char *s;
     void *handle;
@@ -612,7 +612,7 @@ static flux_future_t *state_depend_lookup (struct job_state_ctx *jsctx,
     return NULL;
 }
 
-static int R_lookup_parse (struct info_ctx *ctx,
+static int R_lookup_parse (struct list_ctx *ctx,
                            struct job *job,
                            const char *s)
 {
@@ -670,7 +670,7 @@ nonfatal_error:
 static void state_run_lookup_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
-    struct info_ctx *ctx = job->ctx;
+    struct list_ctx *ctx = job->ctx;
     struct state_transition *st;
     const char *s;
     void *handle;
@@ -727,7 +727,7 @@ static flux_future_t *state_run_lookup (struct job_state_ctx *jsctx,
 }
 
 /* calculate any remaining fields */
-static void eventlog_inactive_complete (struct info_ctx *ctx,
+static void eventlog_inactive_complete (struct list_ctx *ctx,
                                         struct job *job)
 {
     /* Default result is failed, overridden below */
@@ -786,7 +786,7 @@ static int add_state_transition (struct job *job,
     return -1;
 }
 
-static void process_next_state (struct info_ctx *ctx, struct job *job)
+static void process_next_state (struct list_ctx *ctx, struct job *job)
 {
     struct state_transition *st;
     struct job_state_ctx *jsctx = job->ctx->jsctx;
@@ -860,7 +860,7 @@ static void process_next_state (struct info_ctx *ctx, struct job *job)
 void job_state_pause_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
-    struct info_ctx *ctx = arg;
+    struct list_ctx *ctx = arg;
 
     ctx->jsctx->pause = true;
 
@@ -879,7 +879,7 @@ void job_state_pause_cb (flux_t *h, flux_msg_handler_t *mh,
 void job_state_unpause_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
-    struct info_ctx *ctx = arg;
+    struct list_ctx *ctx = arg;
     json_t *o;
 
     ctx->jsctx->pause = false;
@@ -904,7 +904,7 @@ void job_state_unpause_cb (flux_t *h, flux_msg_handler_t *mh,
     zlistx_purge (ctx->jsctx->events_journal_backlog);
 }
 
-static struct job *eventlog_restart_parse (struct info_ctx *ctx,
+static struct job *eventlog_restart_parse (struct list_ctx *ctx,
                                            const char *eventlog,
                                            flux_jobid_t id)
 {
@@ -1017,7 +1017,7 @@ static int depthfirst_count_depth (const char *s)
     return count;
 }
 
-static int depthfirst_map_one (struct info_ctx *ctx, const char *key,
+static int depthfirst_map_one (struct list_ctx *ctx, const char *key,
                                int dirskip)
 {
     struct job *job = NULL;
@@ -1092,7 +1092,7 @@ done:
     return rc;
 }
 
-static int depthfirst_map (struct info_ctx *ctx, const char *key,
+static int depthfirst_map (struct list_ctx *ctx, const char *key,
                            int dirskip)
 {
     flux_future_t *f;
@@ -1142,7 +1142,7 @@ done:
 }
 
 /* Read jobs present in the KVS at startup. */
-int job_state_init_from_kvs (struct info_ctx *ctx)
+int job_state_init_from_kvs (struct list_ctx *ctx)
 {
     const char *dirname = "job";
     int dirskip = strlen (dirname);
@@ -1733,7 +1733,7 @@ error:
     return;
 }
 
-struct job_state_ctx *job_state_create (struct info_ctx *ctx)
+struct job_state_ctx *job_state_create (struct list_ctx *ctx)
 {
     struct job_state_ctx *jsctx = NULL;
     int saved_errno;

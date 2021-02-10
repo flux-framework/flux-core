@@ -432,7 +432,7 @@ class TestJob(unittest.TestCase):
                     self.assertEqual(getattr(jobid, key), test[key])
 
     def test_25_job_list_attrs(self):
-        valid_attrs = self.fh.rpc("job-info.list-attrs", "{}").get()["attrs"]
+        valid_attrs = self.fh.rpc("job-list.list-attrs", "{}").get()["attrs"]
         self.assertEqual(set(valid_attrs), set(VALID_ATTRS))
 
     def test_30_job_stats_sync(self):

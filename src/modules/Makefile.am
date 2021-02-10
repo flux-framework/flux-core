@@ -9,6 +9,7 @@ SUBDIRS = \
  job-ingest \
  job-manager \
  job-info \
+ job-list \
  job-exec \
  job-archive \
  resource \

@@ -523,6 +523,7 @@ AC_CONFIG_FILES( \
   src/modules/job-ingest/Makefile \
   src/modules/job-manager/Makefile \
   src/modules/job-info/Makefile \
+  src/modules/job-list/Makefile \
   src/modules/job-exec/Makefile \
   src/modules/job-archive/Makefile \
   src/modules/sched-simple/Makefile \

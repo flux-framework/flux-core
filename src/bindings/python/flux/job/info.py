@@ -92,7 +92,7 @@ class AnnotationsInfo:
 
 class JobInfo:
     """
-    JobInfo class: encapsulate job-info.list response in an object
+    JobInfo class: encapsulate job-list.list response in an object
     that implements a getattr interface to job information with
     memoization. Better for use with output formats since results
     are only computed as-needed.
@@ -115,7 +115,7 @@ class JobInfo:
     }
 
     def __init__(self, info_resp):
-        #  Set defaults, then update with job-info.list response items:
+        #  Set defaults, then update with job-list.list response items:
         combined_dict = self.defaults.copy()
         combined_dict.update(info_resp)
 
@@ -147,7 +147,7 @@ class JobInfo:
         for key, value in combined_dict.items():
             setattr(self, "_{0}".format(key), value)
 
-    #  getattr method to return all non-computed values in job-info.list
+    #  getattr method to return all non-computed values in job-list.list
     #   response by default. Avoids the need to wrap @property methods
     #   that just return self._<attr>.
     #
