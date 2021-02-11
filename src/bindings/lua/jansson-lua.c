@@ -34,11 +34,11 @@ int lua_is_json_null (lua_State *L, int index)
 
 int json_object_to_lua (lua_State *L, json_t *o)
 {
-        if (o == NULL) {
-            lua_pushnil (L);
-            return (1);
-        }
-        switch (json_typeof (o)) {
+    if (o == NULL) {
+        lua_pushnil (L);
+        return (1);
+    }
+    switch (json_typeof (o)) {
         case JSON_OBJECT:
             json_object_to_lua_table (L, o);
             break;
@@ -63,8 +63,8 @@ int json_object_to_lua (lua_State *L, json_t *o)
         case JSON_NULL:
             lua_pushnil (L);
             break;
-        }
-        return (1);
+    }
+    return (1);
 }
 
 int json_object_string_to_lua (lua_State *L, const char *json_str)
