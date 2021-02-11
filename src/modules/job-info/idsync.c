@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* job_util.c - job utility functions */
+/* idsync.c - code to sync job ids if job-info not yet aware of them */
 
 #if HAVE_CONFIG_H
 #include "config.h"
