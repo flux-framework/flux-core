@@ -236,7 +236,7 @@ int reprioritize_all (struct job_manager *ctx)
     /*  Update scheduler with any changed priorities */
     if (sched_prioritize (ctx->h, priorities) < 0) {
         flux_log_error (ctx->h,
-                        "reprioritize: sched.priority: failed for %ld jobs",
+                        "reprioritize: sched.priority: failed for %zu jobs",
                         json_array_size (priorities));
         goto error;
     }

@@ -254,7 +254,7 @@ static void subprocess_destroy_finish (flux_future_t *f, void *arg)
     if (flux_future_get (f, NULL) < 0) {
         flux_t *h = flux_subprocess_aux_get (p, "flux_t");
         flux_log_error (h, "subprocess_kill: %ju: %s",
-                        (uintmax_t) flux_subprocess_pid,
+                        (uintmax_t) flux_subprocess_pid (p),
                         flux_strerror (errno));
     }
     flux_subprocess_destroy (p);

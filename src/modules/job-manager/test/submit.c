@@ -29,7 +29,7 @@ void single_job_check (zhashx_t *active_jobs)
 
     /* good job */
     if (!(job1 = json_pack ("[{s:I s:i s:i s:f s:i s:{}}]",
-                            "id", 1,
+                            "id", 1LL,
                             "urgency", 10,
                             "userid", 42,
                             "t_submit", 1.0,
@@ -92,13 +92,13 @@ void multi_job_check (zhashx_t *active_jobs)
         "hash is initially empty");
     if (!(jobs = json_pack ("[{s:I s:i s:i s:f s:i s:{}},"
                              "{s:I s:i s:i s:f s:i s:{}}]",
-                            "id", 1,
+                            "id", 1LL,
                             "urgency", 10,
                             "userid", 42,
                             "t_submit", 1.0,
                             "flags", 0,
                             "jobspec",
-                            "id", 2,
+                            "id", 2LL,
                             "urgency", 11,
                             "userid", 43,
                             "t_submit", 1.1,

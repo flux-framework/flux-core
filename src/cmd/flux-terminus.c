@@ -675,7 +675,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
             rank,
             datestr);
     if ((n = json_array_size (l)))
-        printf ("%ld current session%s:\n", n, n > 1 ? "s" : "");
+        printf ("%zu current session%s:\n", n, n > 1 ? "s" : "");
     else
         printf ("no sessions\n");
     for (int i = 0; i < json_array_size (l); i++)

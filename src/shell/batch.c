@@ -86,7 +86,7 @@ batch_info_create (flux_shell_t *shell, json_t *batch)
             shell_log_error ("mkstemp");
             goto error;
         }
-        shell_debug ("Copying batch script size=%ld for job to %s",
+        shell_debug ("Copying batch script size=%zu for job to %s",
                      len,
                      b->script);
         if (write_all (fd, data, len) < 0) {

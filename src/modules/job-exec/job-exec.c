@@ -998,7 +998,7 @@ static void exception_cb (flux_t *h, flux_msg_handler_t *mh,
          *   doesn't dump a duplicate exception into the eventlog.
          */
         job->exception_in_progress = 1;
-        flux_log (h, LOG_DEBUG, "exec aborted: id=%ld", id);
+        flux_log (h, LOG_DEBUG, "exec aborted: id=%ju", (uintmax_t)id);
         jobinfo_fatal_error (job, 0, "aborted due to exception type=%s", type);
     }
 }

@@ -12,12 +12,23 @@ SUBMIT_WAITANY="flux python ${FLUX_SOURCE_DIR}/t/job-manager/submit-waitany.py"
 SUBMIT_SW="flux python ${FLUX_SOURCE_DIR}/t/job-manager/submit-sliding-window.py"
 SUBMIT_INTER="flux python ${FLUX_SOURCE_DIR}/t/job-manager/wait-interrupted.py"
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
+PRINT_CONSTANTS="${FLUX_BUILD_DIR}/t/job-manager/print-constants"
 
 flux setattr log-stderr-level 1
 
 test_job_count() {
     test $(${list_jobs} | wc -l) -eq $1
 }
+
+print_jobid_any_py() {
+	flux python -c 'import flux.constants; print(f"{flux.constants.FLUX_JOBID_ANY:x}")'
+}
+
+test_expect_success "python FLUX_JOBID_ANY matches job.h" '
+	py_id=$(print_jobid_any_py) &&
+	c_id=$($PRINT_CONSTANTS FLUX_JOBID_ANY) &&
+	test $py_id = $c_id
+'
 
 test_expect_success "wait works on waitable job run with flux-mini" '
 	JOBID=$(flux mini submit --flags waitable /bin/true) &&

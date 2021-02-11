@@ -38,9 +38,8 @@ enum job_queue_priority {
     FLUX_JOB_PRIORITY_MAX = 4294967295,
 };
 
-enum {
-    FLUX_JOBID_ANY = 0xFFFFFFFFFFFFFFFF, // ~(uint64_t)0
-};
+// N.B. value is duplicated in python bindings
+#define FLUX_JOBID_ANY 0xFFFFFFFFFFFFFFFF // ~(uint64_t)0
 
 typedef enum {
     FLUX_JOB_STATE_NEW                    = 1,

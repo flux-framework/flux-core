@@ -563,10 +563,10 @@ int cmd_rerank (optparse_t *p, int argc, char **argv)
         if (errno == ENOENT)
             log_msg_exit ("failed to find one or more provided hosts in R");
         else if (errno == EOVERFLOW)
-            log_msg_exit ("Too many hosts specified (expected %ld)",
+            log_msg_exit ("Too many hosts specified (expected %zu)",
                           rlist_nnodes (rl));
         else if (errno == ENOSPC)
-            log_msg_exit ("Too few hosts specified (expected %ld)",
+            log_msg_exit ("Too few hosts specified (expected %zu)",
                           rlist_nnodes (rl));
         else
             log_err_exit ("rlist_rerank");

@@ -747,7 +747,7 @@ static int l_msghandler_remove (lua_State *L)
 
 static int l_msghandler_add (lua_State *L)
 {
-    struct flux_match match;
+    struct flux_match match = FLUX_MATCH_ANY;
     struct l_flux_ref *mh = NULL;
     flux_msg_handler_t *fmh = NULL;
     flux_t *f = lua_get_flux (L, 1);

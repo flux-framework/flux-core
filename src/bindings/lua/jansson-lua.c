@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdint.h>
 #include <math.h>
 #include <errno.h>
 #include <lua.h>
@@ -34,11 +35,12 @@ int lua_is_json_null (lua_State *L, int index)
 
 int json_object_to_lua (lua_State *L, json_t *o)
 {
-        if (o == NULL) {
-            lua_pushnil (L);
-            return (1);
-        }
-        switch (json_typeof (o)) {
+    uint64_t val;
+    if (o == NULL) {
+        lua_pushnil (L);
+        return (1);
+    }
+    switch (json_typeof (o)) {
         case JSON_OBJECT:
             json_object_to_lua_table (L, o);
             break;
@@ -49,7 +51,12 @@ int json_object_to_lua (lua_State *L, json_t *o)
             lua_pushstring (L, json_string_value (o));
             break;
         case JSON_INTEGER:
-            lua_pushinteger (L, json_integer_value (o));
+            val = json_integer_value (o);
+#if LUA_VERSION_NUM < 530 && SIZEOF_PTRDIFF_T == 4
+            lua_pushnumber (L, (double) val);
+#else
+            lua_pushinteger (L, (lua_Integer) val);
+#endif
             break;
         case JSON_REAL:
             lua_pushnumber (L, json_real_value (o));
@@ -63,8 +70,8 @@ int json_object_to_lua (lua_State *L, json_t *o)
         case JSON_NULL:
             lua_pushnil (L);
             break;
-        }
-        return (1);
+    }
+    return (1);
 }
 
 int json_object_string_to_lua (lua_State *L, const char *json_str)
@@ -132,8 +139,13 @@ int lua_value_to_json (lua_State *L, int i, json_t **valp)
 
     switch (lua_type (L, index)) {
         case LUA_TNUMBER:
-            if (lua_is_integer (L, index))
+            if (lua_is_integer (L, index)) {
+#if LUA_VERSION_NUM < 530 && SIZEOF_PTRDIFF_T == 4
+                o = json_integer ((json_int_t) lua_tonumber (L, index));
+#else
                 o = json_integer (lua_tointeger (L, index));
+#endif
+            }
             else
                 o = json_real (lua_tonumber (L, index));
             break;
