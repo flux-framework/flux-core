@@ -53,9 +53,7 @@ test_expect_success HAVE_JQ 'redacted jobspec does not contain environment' '
 
 test_expect_success 'reload job manager and dependent modules' '
 	flux module remove sched-simple &&
-	flux module remove job-info &&
 	flux module reload job-manager &&
-	flux module load job-info &&
 	flux module load sched-simple
 '
 

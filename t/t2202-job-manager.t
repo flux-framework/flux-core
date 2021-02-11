@@ -200,11 +200,8 @@ test_expect_success HAVE_JQ 'job-manager: save max_jobid' '
 	${RPC} job-manager.getinfo | jq .max_jobid >max2.exp
 '
 
-# job-info module depends on job-manager, unload and reload it too
 test_expect_success 'job-manager: reload the job manager' '
-	flux module remove job-info &&
-	flux module reload job-manager &&
-	flux module load job-info
+	flux module reload job-manager
 '
 
 test_expect_success 'job-manager: queue was successfully reconstructed' '

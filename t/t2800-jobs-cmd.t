@@ -23,7 +23,7 @@ JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/valida
 #   - running jobs - by start time (most recent first)
 #   - inactive jobs - by completion time (most recent first)
 #
-# the job-info module has eventual consistency with the jobs stored in
+# the job-list module has eventual consistency with the jobs stored in
 # the job-manager's queue.  To ensure no raciness in tests, we spin
 # until all of the pending jobs have reached SCHED state, running jobs
 # have reached RUN state, and inactive jobs have reached INACTIVE
@@ -1041,7 +1041,7 @@ test_expect_success 'reload job-ingest with defaults' '
         ingest_module reload
 '
 
-# we make R invalid by overwriting it in the KVS before job-info will
+# we make R invalid by overwriting it in the KVS before job-list will
 # look it up
 test_expect_success HAVE_JQ 'flux jobs works on job with illegal R' '
 	${RPC} job-list.job-state-pause 0 </dev/null &&

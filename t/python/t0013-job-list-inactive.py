@@ -56,7 +56,7 @@ class TestJob(unittest.TestCase):
             print("{}: {}".format("rpc", e.strerror), file=sys.stderr)
             sys.exit(1)
 
-    # NOTE: the job-info module has eventual consistency with the jobs stored
+    # NOTE: the job-list module has eventual consistency with the jobs stored
     # in the job-manager's queue. To ensure no raciness in tests, we spin
     # until all of the inactive jobs have reached INACTIVE state.
     @classmethod

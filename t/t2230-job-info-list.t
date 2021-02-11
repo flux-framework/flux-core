@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test flux job info list services'
+test_description='Test flux job list services'
 
 . $(dirname $0)/sharness.sh
 
@@ -77,7 +77,7 @@ state_count() {
     state_ids "$@" | wc -l
 }
 
-# the job-info module has eventual consistency with the jobs stored in
+# the job-list module has eventual consistency with the jobs stored in
 # the job-manager's queue.  To ensure no raciness in tests, we spin
 # until all of the pending jobs have reached SCHED state, running jobs
 # have reached RUN state, and inactive jobs have reached INACTIVE
@@ -412,7 +412,7 @@ test_expect_success 'reload the job-list module' '
         wait_inactive
 '
 
-test_expect_success HAVE_JQ 'job-info: list successfully reconstructed' '
+test_expect_success HAVE_JQ 'job-list: list successfully reconstructed' '
         flux job list -a > after_reload.out &&
         test_cmp before_reload.out after_reload.out
 '
@@ -536,7 +536,7 @@ test_expect_success HAVE_JQ 'flux job list-ids fails with one bad ID out of seve
 #
 # Note that between the background process of `flux job list-ids` and
 # `unpause`, we must ensure the background process has sent the
-# request to the job-info service and is now waiting for the id to be
+# request to the job-list service and is now waiting for the id to be
 # synced.  We call wait_idsync to check stats for this to ensure the
 # racy behavior is covered.
 
@@ -853,11 +853,11 @@ test_expect_success HAVE_JQ 'verify nnodes/ranks/nodelist preserved across resta
 '
 
 #
-# job-info can handle flux-restart events
+# job-list can handle flux-restart events
 #
-# TODO: presently job-info depends on job-manager journal, so it is
+# TODO: presently job-list depends on job-manager journal, so it is
 # not possible to test the reload of the job-manager that doesn't also
-# reload job-info.
+# reload job-list.
 #
 
 wait_jobid() {
@@ -877,7 +877,7 @@ wait_jobid() {
 }
 
 # to ensure jobs are still in PENDING state, stop queue before
-# reloading job-info & job-manager.  reload job-exec & sched-simple
+# reloading job-list & job-manager.  reload job-exec & sched-simple
 # after wait_jobid, b/c we do not want the job to be accidentally
 # executed.
 test_expect_success 'job-list parses flux-restart events' '
@@ -1093,11 +1093,11 @@ test_expect_success LONGTEST 'stress job-list.list-id' '
 #
 # to avoid potential racyness, wait up to 5 seconds for job to appear
 # in job list.  Note that we can't use `flux job list-ids`, b/c we
-# need specific job states to be crossed to ensure the job-info module
+# need specific job states to be crossed to ensure the job-list module
 # has processed the invalid data.
 #
 # In addition, note that the tests below are specific to how the data
-# is invalid in these tests and how job-info parses the invalid data.
+# is invalid in these tests and how job-list parses the invalid data.
 # Different parsing errors could have some fields initialized but
 # others not.
 #
@@ -1154,7 +1154,7 @@ test_expect_success 'reload job-ingest with defaults' '
         ingest_module reload
 '
 
-# we make R invalid by overwriting it in the KVS before job-info will
+# we make R invalid by overwriting it in the KVS before job-list will
 # look it up
 test_expect_success HAVE_JQ 'flux job list works on job with illegal R' '
 	${RPC} job-list.job-state-pause 0 </dev/null &&
