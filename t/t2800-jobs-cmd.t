@@ -8,7 +8,7 @@ test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
-PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-info/jobspec-permissive.jsonschema
+PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-list/jobspec-permissive.jsonschema
 JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
 
 # submit a whole bunch of jobs for job list testing

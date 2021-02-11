@@ -117,13 +117,13 @@ TESTSCRIPTS = \
 	t2216-job-manager-priority-order-single.t \
 	t2217-job-manager-priority-order-limited.t \
 	t2218-job-manager-priority-order-unlimited.t \
-	t2230-job-info-list.t \
-	t2231-job-info-lookup.t \
-	t2232-job-info-eventlog-watch.t \
-	t2233-job-info-security.t \
-	t2234-job-info-list-update.t \
+	t2230-job-info-lookup.t \
+	t2231-job-info-eventlog-watch.t \
+	t2232-job-info-security.t \
 	t2240-queue-cmd.t \
 	t2250-job-archive.t \
+	t2260-job-list.t \
+	t2261-job-list-update.t \
 	t2300-sched-simple.t \
 	t2302-sched-simple-up-down.t \
 	t2310-resource-module.t \
@@ -263,9 +263,9 @@ dist_check_SCRIPTS = \
 	job-attach/outputsleep.sh \
 	job-exec/dummy.sh \
 	job-exec/imp.sh \
-	job-info/list-id.py \
-	job-info/list-rpc.py \
-	job-info/jobspec-permissive.jsonschema \
+	job-list/list-id.py \
+	job-list/list-rpc.py \
+	job-list/jobspec-permissive.jsonschema \
 	job-archive/query.py \
 	ingest/fake-validate.sh \
 	ingest/bad-validate.sh

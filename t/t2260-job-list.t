@@ -7,8 +7,8 @@ test_description='Test flux job list services'
 test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
-listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-info/list-rpc.py"
-PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-info/jobspec-permissive.jsonschema
+listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-list/list-rpc.py"
+PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-list/jobspec-permissive.jsonschema
 JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 
@@ -1085,7 +1085,7 @@ wait_jobs_finish() {
 }
 
 test_expect_success LONGTEST 'stress job-list.list-id' '
-        flux python ${FLUX_SOURCE_DIR}/t/job-info/list-id.py 500 &&
+        flux python ${FLUX_SOURCE_DIR}/t/job-list/list-id.py 500 &&
         wait_jobs_finish
 '
 
