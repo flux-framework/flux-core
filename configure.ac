@@ -172,6 +172,7 @@ AX_COMPILE_CHECK_SIZEOF(int)
 AX_COMPILE_CHECK_SIZEOF(long)
 AX_COMPILE_CHECK_SIZEOF(long long)
 AX_COMPILE_CHECK_SIZEOF(uintptr_t, [#include <stdint.h>])
+AX_COMPILE_CHECK_SIZEOF(ptrdiff_t, [#include <stddef.h>])
 AX_COMPILE_CHECK_SIZEOF(size_t, [#include <stdint.h>])
 
 ##
