@@ -146,7 +146,7 @@ void getinfo_cb (flux_t *h,
                  const flux_msg_t *msg,
                  void *arg)
 {
-    flux_jobid_t id = (1000UL * 1000) << 24; // fluid with 1000s timestamp
+    flux_jobid_t id = (1000ULL * 1000) << 24; // fluid with 1000s timestamp
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     if (flux_respond_pack (h,
