@@ -24,8 +24,8 @@ declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,inception"
-declare -r short_opts="hqIdi:S:j:t:D:Pru"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,inception,platform:"
+declare -r short_opts="hqIdi:S:j:t:D:Prup:"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
 Build docker image for CI builds, then run tests inside the new\n\
@@ -42,6 +42,7 @@ Options:\n\
  -q, --quiet                   Add --quiet to docker-build\n\
  -t, --tag=TAG                 If checks succeed, tag image as NAME\n\
  -i, --image=NAME              Use base docker image NAME (default=$IMAGE)\n\
+ -p, --platform=NAME           Run on alternate platform (if supported)\n\
  -S, --flux-security-version=N Install flux-security vers N (default=$FLUX_SECURITY_VERSION)\n
  -j, --jobs=N                  Value for make -j (default=$JOBS)\n
  -d, --distcheck               Run 'make distcheck' instead of 'make check'\n\
@@ -70,6 +71,7 @@ while true; do
       -h|--help)                   echo -ne "$usage";          exit 0  ;;
       -q|--quiet)                  QUIET="--quiet";            shift   ;;
       -i|--image)                  IMAGE="$2";                 shift 2 ;;
+      -p|--platform)               PLATFORM="--platform=$2";   shift 2 ;;
       -S|--flux-security-version)  FLUX_SECURITY_VERSION="$2"; shift 2 ;;
       -j|--jobs)                   JOBS="$2";                  shift 2 ;;
       -I|--interactive)            INTERACTIVE="/bin/bash";    shift   ;;
@@ -92,6 +94,11 @@ TOP=$(git rev-parse --show-toplevel 2>&1) \
     || die "not inside $PROJECT git repository!"
 which docker >/dev/null \
     || die "unable to find a docker binary"
+if docker buildx >/dev/null 2>&1; then
+    DOCKER_BUILD="docker buildx build --load"
+else
+    DOCKER_BUILD="docker build"
+fi
 
 # distcheck incompatible with some configure args
 if test "$DISTCHECK" = "t"; then
@@ -119,7 +126,8 @@ else
 fi
 
 checks_group "Building image $IMAGE for user $USER $(id -u) group=$(id -g)" \
-  docker build \
+  ${DOCKER_BUILD} \
+    ${PLATFORM} \
     ${NO_CACHE} \
     ${QUIET} \
     --build-arg BASE_IMAGE=$IMAGE \
@@ -151,6 +159,7 @@ if [[ "$INSTALL_ONLY" == "t" ]]; then
     docker run --rm \
         --workdir=/usr/src \
         --volume=$TOP:/usr/src \
+        ${PLATFORM} \
         ${BUILD_IMAGE} \
         sh -c "./autogen.sh &&
                ./configure --prefix=/usr --sysconfdir=/etc \
@@ -165,6 +174,7 @@ else
     docker run --rm \
         --workdir=/usr/src \
         --volume=$TOP:/usr/src \
+        ${PLATFORM} \
         $MOUNT_HOME_ARGS \
         -e CC \
         -e CXX \
@@ -215,6 +225,7 @@ if test -n "$TAG"; then
 	--workdir=/usr/src/${BUILD_DIR} \
         --volume=$TOP:/usr/src \
         --user="root" \
+        ${PLATFORM} \
 	${BUILD_IMAGE} \
 	sh -c "make install && \
                userdel $USER" \
