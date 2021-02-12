@@ -21,6 +21,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/kary.h"
 #include "src/common/libutil/cleanup.h"
+#include "src/common/libutil/fsd.h"
 
 #include "heartbeat.h"
 #include "overlay.h"
@@ -43,6 +44,12 @@ struct child {
     bool idle;
 };
 
+/* Wake up every heartbeat and:
+ * 1) send keepalive to parent if nothing was sent in 'idle_min' seconds
+ * 2) find children that have not been heard from in 'idle_max' seconds
+ */
+static const double idle_min = 5.0;
+static const double idle_max = 30.0;
 
 struct overlay {
     zcert_t *cert;
@@ -52,7 +59,6 @@ struct overlay {
 
     flux_t *h;
     flux_msg_handler_t **handlers;
-    int epoch;
 
     uint32_t size;
     uint32_t rank;
@@ -77,8 +83,6 @@ struct overlay {
 
     overlay_init_cb_f init_cb;
     void *init_arg;
-
-    int idle_warning;
 };
 
 /* Convenience iterator for ov->children
@@ -195,28 +199,26 @@ int overlay_get_child_peer_count (struct overlay *ov)
     return count;
 }
 
-void overlay_set_idle_warning (struct overlay *ov, int heartbeats)
-{
-    ov->idle_warning = heartbeats;
-}
-
 void overlay_log_idle_children (struct overlay *ov)
 {
     struct child *child;
+    double now = flux_reactor_now (flux_get_reactor (ov->h));
+    char fsd[64];
     int idle;
 
-    if (ov->idle_warning > 0) {
+    if (idle_max > 0) {
         foreach_overlay_child (ov, child) {
             if (child->connected) {
-                idle = ov->epoch - child->lastseen;
+                idle = now - child->lastseen;
 
-                if (idle >= ov->idle_warning) {
+                if (idle >= idle_max) {
+                    (void)fsd_format_duration (fsd, sizeof (fsd), idle);
                     if (!child->idle) {
                         flux_log (ov->h,
                                   LOG_ERR,
-                                  "child %lu idle for %d heartbeats",
+                                  "child %lu idle for %s",
                                   child->rank,
-                                  idle);
+                                  fsd);
                         child->idle = true;
                     }
                 }
@@ -256,7 +258,7 @@ void overlay_keepalive_child (struct overlay *ov, const char *uuid, int status)
             child->connected = true;
         else // status == KEEPALIVE_STATUS_DISCONNECT
             child->connected = false;
-        child->lastseen = ov->epoch;
+        child->lastseen = flux_reactor_now (flux_get_reactor (ov->h));
 
         if (child->connected != prev_value)
             overlay_monitor_notify (ov);
@@ -294,7 +296,7 @@ int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg)
     }
     rc = flux_msg_sendzsock (ov->parent->zsock, msg);
     if (rc == 0)
-        ov->parent_lastsent = ov->epoch;
+        ov->parent_lastsent = flux_reactor_now (flux_get_reactor (ov->h));
 done:
     return rc;
 }
@@ -321,17 +323,16 @@ done:
     return rc;
 }
 
-static void heartbeat_cb (flux_t *h,
-                          flux_msg_handler_t *mh,
-                          const flux_msg_t *msg,
-                          void *arg)
+static void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
+                          const flux_msg_t *msg, void *arg)
 {
     struct overlay *ov = arg;
+    double now = flux_reactor_now (flux_get_reactor (ov->h));
 
-    if (flux_heartbeat_decode (msg, &ov->epoch) < 0)
-        return;
+    if (flux_event_decode (msg, NULL, NULL) < 0)
+        flux_log_error (ov->h, "heartbeat");
 
-    if (ov->epoch - ov->parent_lastsent > 1)
+    if (now - ov->parent_lastsent > idle_min)
         overlay_keepalive_parent (ov, KEEPALIVE_STATUS_NORMAL);
     overlay_log_idle_children (ov);
 }
@@ -694,14 +695,15 @@ static json_t *lspeer_object_create (struct overlay *ov)
 {
     json_t *o = NULL;
     json_t *child_o;
+    double now = flux_reactor_now (flux_get_reactor (ov->h));
     struct child *child;
 
     if (!(o = json_object ()))
         goto nomem;
     foreach_overlay_child (ov, child) {
-        if (!(child_o = json_pack ("{s:i}",
+        if (!(child_o = json_pack ("{s:f}",
                                    "idle",
-                                   ov->epoch - child->lastseen)))
+                                   now - child->lastseen)))
             goto nomem;
         if (json_object_set_new (o, child->uuid, child_o) < 0) {
             json_decref (child_o);
@@ -805,7 +807,6 @@ void overlay_destroy (struct overlay *ov)
 
         if (ov->h)
             (void)flux_event_unsubscribe (ov->h, "hb");
-
         flux_msg_handler_delvec (ov->handlers);
         overlay_keepalive_parent (ov, KEEPALIVE_STATUS_DISCONNECT);
         endpoint_destroy (ov->parent);
