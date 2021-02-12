@@ -534,7 +534,6 @@ int flux_future_get (flux_future_t *f, const void **result)
 /* Set up continuation to run once future is fulfilled.
  * Lazily set up the "then" reactor context.
  * If timer expires, fulfill the future with ETIMEDOUT error.
- * This function can only be called once.
  */
 int flux_future_then (flux_future_t *f, double timeout,
                       flux_continuation_f cb, void *arg)
