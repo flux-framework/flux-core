@@ -90,11 +90,10 @@ static void now_context_destroy (struct now_context *now)
 
 static struct now_context *now_context_create (void)
 {
-    struct now_context *now = calloc (1, sizeof (*now));
-    if (!now) {
-        errno = ENOMEM;
-        goto error;
-    }
+    struct now_context *now;
+
+    if (!(now = calloc (1, sizeof (*now))))
+        return NULL;
     if (!(now->r = flux_reactor_create (0)))
         goto error;
     return now;
@@ -148,11 +147,10 @@ static void then_context_destroy (struct then_context *then)
 
 static struct then_context *then_context_create (flux_reactor_t *r, void *arg)
 {
-    struct then_context *then = calloc (1, sizeof (*then));
-    if (!then) {
-        errno = ENOMEM;
-        goto error;
-    }
+    struct then_context *then;
+
+    if (!(then = calloc (1, sizeof (*then))))
+        return NULL;
     then->r = r;
     if (!(then->check = flux_check_watcher_create (r, check_cb, arg)))
         goto error;
@@ -313,20 +311,16 @@ void flux_future_destroy (flux_future_t *f)
  */
 flux_future_t *flux_future_create (flux_future_init_f cb, void *arg)
 {
-    flux_future_t *f = calloc (1, sizeof (*f));
-    if (!f) {
-        errno = ENOMEM;
-        goto error;
-    }
+    flux_future_t *f;
+
+    if (!(f = calloc (1, sizeof (*f))))
+        return NULL;
     f->init = cb;
     f->init_arg = arg;
     f->queue = NULL;
     f->embed = NULL;
     f->refcount = 1;
     return f;
-error:
-    flux_future_destroy (f);
-    return NULL;
 }
 
 void flux_future_incref (flux_future_t *f)
