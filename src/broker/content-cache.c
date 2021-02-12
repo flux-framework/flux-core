@@ -27,7 +27,7 @@
 static const uint32_t default_cache_purge_target_entries = 1024*1024;
 static const uint32_t default_cache_purge_target_size = 1024*1024*16;
 
-static const uint32_t default_cache_purge_old_entry = 5;
+static const uint32_t default_cache_purge_old_entry = 10; // seconds
 static const uint32_t default_cache_purge_large_entry = 256;
 
 /* Raise the max blob size value to 1GB so that large KVS values
@@ -51,7 +51,7 @@ struct cache_entry {
     uint8_t store_pending:1;
     zlist_t *load_requests;
     zlist_t *store_requests;
-    int lastused;
+    double lastused;
 };
 
 struct content_cache {
@@ -63,7 +63,6 @@ struct content_cache {
     char *backing_name;
     char hash_name[BLOBREF_MAX_STRING_SIZE];
     zlist_t *flush_requests;
-    int epoch;
 
     uint32_t blob_size_limit;
     uint32_t flush_batch_limit;
@@ -290,7 +289,7 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
         cache->acct_valid++;
         cache->acct_size += len;
     }
-    e->lastused = cache->epoch;
+    e->lastused = flux_reactor_now (flux_get_reactor (cache->h));
     request_list_respond_raw (&e->load_requests,
                               cache->h,
                               e->data,
@@ -382,7 +381,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
         }
         return; /* RPC continuation will respond to msg */
     }
-    e->lastused = cache->epoch;
+    e->lastused = flux_reactor_now (flux_get_reactor (cache->h));
     data = e->data;
     len = e->len;
     if (flux_respond_raw (h, msg, data, len) < 0)
@@ -555,7 +554,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
             cache->acct_dirty++;
         }
     }
-    e->lastused = cache->epoch;
+    e->lastused = flux_reactor_now (flux_get_reactor (cache->h));
     if (e->dirty) {
         if (cache->rank > 0 || cache->backing) {
             if (cache_store (cache, e) < 0)
@@ -823,6 +822,7 @@ error:
 
 static int cache_purge (content_cache_t *cache)
 {
+    double now = flux_reactor_now (flux_get_reactor (cache->h));
     int after_entries = zhash_size (cache->entries);
     int after_size = cache->acct_size;
     struct cache_entry *e;
@@ -839,7 +839,7 @@ static int cache_purge (content_cache_t *cache)
             break;
         if (!e->valid || e->dirty)
             continue;
-        if (cache->epoch - e->lastused < cache->purge_old_entry)
+        if (now - e->lastused < cache->purge_old_entry)
             continue;
         if (after_entries <= cache->purge_target_entries
                     && e->len < cache->purge_large_entry)
@@ -869,8 +869,8 @@ static void heartbeat_event (flux_t *h, flux_msg_handler_t *mh,
 {
     content_cache_t *cache = arg;
 
-    if (flux_heartbeat_decode (msg, &cache->epoch) < 0)
-        return; /* ignore mangled heartbeat */
+    if (flux_event_decode (msg, NULL, NULL) < 0)
+        flux_log_error (h, "heartbeat");
     cache_purge (cache);
 }
 
