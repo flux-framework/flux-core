@@ -33,6 +33,7 @@ struct now_context {
 struct then_context {
     flux_reactor_t *r;      // external reactor for then
     flux_watcher_t *timer;  // timer watcher (if timeout set)
+    double timeout;
     flux_watcher_t *check;
     flux_watcher_t *idle;
     bool init_called;
@@ -178,6 +179,7 @@ static int then_context_set_timeout (struct then_context *then,
                                      double timeout, void *arg)
 {
     if (then) {
+        then->timeout = timeout;
         if (timeout < 0.)       // disable
             flux_watcher_stop (then->timer);
         else {
@@ -351,8 +353,10 @@ void flux_future_reset (flux_future_t *f)
     if (f) {
         clear_result (&f->result);
         f->result_valid = false;
-        if (f->then)
+        if (f->then) {
             then_context_stop (f->then);
+            (void)then_context_set_timeout (f->then, f->then->timeout, f);
+        }
         if (f->queue && zlist_size (f->queue) > 0) {
             struct future_result *fs = zlist_pop (f->queue);
             move_result (&f->result, fs);
@@ -362,7 +366,6 @@ void flux_future_reset (flux_future_t *f)
         }
     }
 }
-
 
 /* Set the flux reactor to be used for 'then' context.
  * In 'now' context, reactor will be a temporary one.

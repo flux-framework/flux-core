@@ -88,10 +88,9 @@ out immediately if the future has not already been fulfilled.
 
 ``flux_future_reset()`` unfulfills a future, invalidating any result stored
 in the container, and preparing it to be fulfilled once again. If a
-continuation was registered, it remains in effect for the next fulfillment,
-however any timeout will have been cleared by the current fulfillment
-and must be re-established by following the ``flux_future_reset()`` with
-another ``flux_future_then()``, if desired.
+continuation was registered, it remains in effect for the next fulfillment.
+If a timeout was specified when the continuation was registered, it is
+restarted.
 
 ``flux_future_destroy()`` destroys a future, including any result contained
 within.
