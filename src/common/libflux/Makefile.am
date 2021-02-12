@@ -82,7 +82,8 @@ fluxcoreinclude_HEADERS = \
 	barrier.h \
 	buffer.h \
 	service.h \
-	plugin.h
+	plugin.h \
+	sync.h
 
 nodist_fluxcoreinclude_HEADERS = \
 	version.h
@@ -122,7 +123,8 @@ libflux_la_SOURCES = \
 	buffer.c \
 	service.c \
 	version.c \
-	plugin.c
+	plugin.c \
+	sync.c
 
 libflux_la_CPPFLAGS = \
 	$(installed_conf_cppflags) \
@@ -153,7 +155,8 @@ TESTS = test_message.t \
 	test_panic.t \
 	test_attr.t \
 	test_module.t \
-	test_plugin.t
+	test_plugin.t \
+	test_sync.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtestutil/libtestutil.la \
@@ -270,6 +273,10 @@ test_panic_t_LDADD = $(test_ldadd) $(LIBDL)
 test_attr_t_SOURCES = test/attr.c
 test_attr_t_CPPFLAGS = $(test_cppflags)
 test_attr_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_sync_t_SOURCES = test/sync.c
+test_sync_t_CPPFLAGS = $(test_cppflags)
+test_sync_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_module_t_SOURCES = test/module.c
 test_module_t_CPPFLAGS = $(test_cppflags) \

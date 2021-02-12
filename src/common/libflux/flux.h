@@ -34,6 +34,7 @@
 #include "service.h"
 #include "version.h"
 #include "plugin.h"
+#include "sync.h"
 
 #endif /* !_FLUX_CORE_FLUX_H */
 
