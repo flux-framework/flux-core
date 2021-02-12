@@ -179,16 +179,13 @@ static void cache_entry_destroy (void *arg)
  */
 static struct cache_entry *cache_entry_create (flux_t *h, const char *blobref)
 {
-    struct cache_entry *e = malloc (sizeof (*e));
-    if (!e) {
-        errno = ENOMEM;
+    struct cache_entry *e;
+
+    if (!(e = calloc (1, sizeof (*e))))
         return NULL;
-    }
-    memset (e, 0, sizeof (*e));
     e->h = h;
     if (!(e->blobref = strdup (blobref))) {
-        free (e);
-        errno = ENOMEM;
+        ERRNO_SAFE_WRAP (free, e);
         return NULL;
     }
     return e;
@@ -199,21 +196,17 @@ static struct cache_entry *cache_entry_create (flux_t *h, const char *blobref)
  */
 static int cache_entry_fill (struct cache_entry *e, const void *data, int len)
 {
-    int rc = -1;
-
     if (!e->valid) {
         assert (!e->data);
         assert (e->len == 0);
-        if (len > 0 && !(e->data = malloc (len))) {
-            errno = ENOMEM;
-            goto done;
+        if (len > 0) {
+            if (!(e->data = malloc (len)))
+                return -1;
+            memcpy (e->data, data, len);
         }
-        memcpy (e->data, data, len);
         e->len = len;
     }
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 /* Insert a cache entry, by blobref.
@@ -740,7 +733,7 @@ error:
     flux_log (h, LOG_DEBUG, "content dropcache: %s", flux_strerror (errno));
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "content dropcache");
-    zlist_destroy (&keys);
+    ERRNO_SAFE_WRAP (zlist_destroy, &keys);
 }
 
 /* Return stats about the cache.
@@ -867,7 +860,7 @@ static int cache_purge (content_cache_t *cache)
     }
     rc = 0;
 done:
-    zlist_destroy (&purge);
+    ERRNO_SAFE_WRAP (zlist_destroy, &purge);
     return rc;
 }
 
@@ -1065,11 +1058,10 @@ void content_cache_destroy (content_cache_t *cache)
 
 content_cache_t *content_cache_create (void)
 {
-    content_cache_t *cache = calloc (1, sizeof (*cache));
-    if (!cache) {
-        errno = ENOMEM;
+    content_cache_t *cache;
+
+    if (!(cache = calloc (1, sizeof (*cache))))
         return NULL;
-    }
     if (!(cache->entries = zhash_new ())) {
         content_cache_destroy (cache);
         errno = ENOMEM;
