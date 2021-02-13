@@ -770,11 +770,12 @@ class SubmitBulkCmd(SubmitBaseCmd):
                 f"{jobid}: exception: type={exception_type} note={note}",
                 file=args.stderr,
             )
+        elif event.name == "alloc" and args.watch:
+            jobinfo["state"] = "running"
         elif event.name == "start" and args.watch:
             #
             #  Watch the exec eventlog if the --watch option was provided:
             #
-            jobinfo["state"] = "running"
             job.event_watch_async(
                 self.flux_handle, jobid, eventlog="guest.exec.eventlog"
             ).then(self.exec_watch_cb, args, jobid, label)
@@ -888,7 +889,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
             )
         elif event is None:
             self.progress.update(jps=self.jobs_per_sec())
-        elif event.name == "start":
+        elif event.name == "alloc":
             self.progress.update(
                 advance=0,
                 pending=self.progress.pending - 1,
