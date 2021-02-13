@@ -89,7 +89,7 @@ test_expect_success 'flux-mini submit --progress works without --wait' '
 test_expect_success 'flux-mini submit --progress works with --wait' '
 	$runpty flux mini submit --cc=1-10 --progress --wait hostname \
 	    >bs6.out &&
-	grep "PD:10 *R:0 *CD:0 *F:0" bs6.out &&
+	grep "PD:1 *R:0 *CD:0 *F:0" bs6.out &&
 	grep "PD:0 *R:0 *CD:10 *F:0" bs6.out &&
 	grep "100.0%" bs6.out
 '
@@ -97,7 +97,7 @@ test_expect_success 'flux-mini bulksubmit --wait/progress with failed jobs' '
         test_expect_code 1 $runpty flux mini bulksubmit \
 	    -n{} --progress --wait hostname ::: 1 2 4 1024 \
 	    >bs7.out &&
-	grep "PD:4 *R:0 *CD:0 *F:0" bs7.out &&
+	grep "PD:1 *R:0 *CD:0 *F:0" bs7.out &&
 	grep "PD:0 *R:0 *CD:3 *F:1" bs7.out &&
 	grep "100.0%" bs7.out
 '
@@ -105,9 +105,19 @@ test_expect_success 'flux-mini bulksubmit --wait/progress with failed jobs' '
         test_expect_code 2 $runpty flux mini bulksubmit \
 	    -n1 --progress --wait sh -c "exit {}" ::: 0 1 0 0 2 \
 	    >bs8.out &&
-	grep "PD:5 *R:0 *CD:0 *F:0" bs8.out &&
+	grep "PD:1 *R:0 *CD:0 *F:0" bs8.out &&
 	grep "PD:0 *R:0 *CD:3 *F:2" bs8.out &&
 	grep "100.0%" bs8.out
+'
+test_expect_success 'flux-mini submit --wait/progress with job exceptions' '
+        test_expect_code 1 $runpty flux mini bulksubmit \
+	    -n1 --progress --wait \
+	    --setattr=system.exec.bulkexec.mock_exception={} hostname \
+	    ::: 0 init init 0 0 \
+	    >bs9.out &&
+	grep "PD:1 *R:0 *CD:0 *F:0" bs9.out &&
+	grep "PD:0 *R:0 *CD:3 *F:2" bs9.out &&
+	grep "100.0%" bs9.out
 '
 test_expect_success 'flux-mini bulksubmit --wait returns highest exit code' '
 	test_expect_code 143 \
