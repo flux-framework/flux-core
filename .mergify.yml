@@ -8,6 +8,7 @@ pull_request_rules:
       - status-success="python lint"
       - status-success="mypy"
       - status-success="bionic"
+      - status-success="bionic - 32 bit"
       - status-success="bionic - gcc-8,content-s3,distcheck"
       - status-success="bionic - py3.7,clang-6.0"
       - status-success="bionic - test-install"

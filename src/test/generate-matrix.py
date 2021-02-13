@@ -73,12 +73,18 @@ class BuildMatrix:
         test_s3=False,
         coverage=False,
         recheck=True,
+        platform=None,
         command_args="",
     ):
         """Add a build to the matrix.include array"""
 
         # Extra environment to add to this command:
         env = env or {}
+
+        needs_buildx = False
+        if platform:
+            command_args += f"--platform={platform}"
+            needs_buildx = True
 
         # The command to run:
         command = f"{docker_run_checks} -j{jobs} --image={image} {command_args}"
@@ -114,6 +120,7 @@ class BuildMatrix:
                 "coverage": coverage,
                 "test_s3": test_s3,
                 "docker_tag": docker_tag,
+                "needs_buildx": needs_buildx,
                 "create_release": create_release,
             }
         )
@@ -129,6 +136,12 @@ matrix = BuildMatrix()
 
 # Ubuntu: no args
 matrix.add_build(name="bionic")
+
+# Ubuntu: 32b
+matrix.add_build(
+    name="bionic - 32 bit",
+    platform="linux/386",
+)
 
 # Ubuntu: gcc-8, content-s3, distcheck
 matrix.add_build(
