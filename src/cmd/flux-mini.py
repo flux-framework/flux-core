@@ -770,7 +770,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
                 f"{jobid}: exception: type={exception_type} note={note}",
                 file=args.stderr,
             )
-        elif event.name == "alloc" and args.watch:
+        elif event.name == "alloc":
             jobinfo["state"] = "running"
         elif event.name == "start" and args.watch:
             #
