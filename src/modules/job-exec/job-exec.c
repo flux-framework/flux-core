@@ -293,6 +293,10 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
 {
     flux_t *h = job->ctx->h;
     job->running = 0;
+
+    if (job->exception_in_progress && job->wait_status == 0)
+        job->wait_status = 1<<8;
+
     if (h && job->req) {
         jobinfo_emit_event_pack_nowait (job, "complete",
                                         "{ s:i }",
