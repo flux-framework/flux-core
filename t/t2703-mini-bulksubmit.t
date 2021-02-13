@@ -109,6 +109,16 @@ test_expect_success 'flux-mini bulksubmit --wait/progress with failed jobs' '
 	grep "PD:0 *R:0 *CD:3 *F:2" bs8.out &&
 	grep "100.0%" bs8.out
 '
+test_expect_success 'flux-mini submit --wait/progress with job exceptions' '
+        test_expect_code 1 $runpty flux mini bulksubmit \
+	    -n1 --progress --wait \
+	    --setattr=system.exec.bulkexec.mock_exception={} hostname \
+	    ::: 0 init init 0 0 \
+	    >bs9.out &&
+	grep "PD:5 *R:0 *CD:0 *F:0" bs9.out &&
+	grep "PD:0 *R:0 *CD:3 *F:2" bs9.out &&
+	grep "100.0%" bs9.out
+'
 test_expect_success 'flux-mini bulksubmit --wait returns highest exit code' '
 	test_expect_code 143 \
 	    flux mini bulksubmit --wait sh -c "kill -{} \$\$" ::: 0 0 15
