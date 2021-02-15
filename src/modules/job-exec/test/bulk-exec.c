@@ -15,6 +15,7 @@
 #define _GNU_SOURCE 1
 #include <unistd.h>
 #include <assert.h>
+#include <signal.h>
 
 #include <flux/core.h>
 #include <flux/idset.h>

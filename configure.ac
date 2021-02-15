@@ -327,7 +327,7 @@ AM_CONDITIONAL([ENABLE_PYLINT], [test "x$PYLINT" = "xpylint"])
 AX_PROG_LUA([5.1],[5.5])
 AX_LUA_HEADERS
 AX_LUA_LIBS
-X_AC_ZEROMQ
+PKG_CHECK_MODULES([ZMQ], [libczmq >= 3.0.0 libzmq >= 4.0.4])
 X_AC_JANSSON
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.11.1], [], [])
 PKG_CHECK_MODULES([LZ4], [liblz4], [], [])
