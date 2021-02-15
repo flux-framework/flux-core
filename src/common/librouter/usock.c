@@ -467,6 +467,15 @@ static struct usock_conn *server_accept (struct usock_server *server,
     return conn;
 }
 
+static void timeout_cb (flux_reactor_t *r,
+                        flux_watcher_t *w,
+                        int revents,
+                        void *arg)
+{
+    struct usock_server *server = arg;
+    flux_watcher_start (server->w);
+    flux_watcher_destroy (w);
+}
 
 static void server_cb (flux_reactor_t *r,
                        flux_watcher_t *w,
@@ -478,8 +487,24 @@ static void server_cb (flux_reactor_t *r,
     if ((revents & FLUX_POLLIN)) {
         struct usock_conn *conn;
 
-        if (!(conn = server_accept (server, r)))
+        if (!(conn = server_accept (server, r))) {
+            if (errno == ENFILE || errno == EMFILE) {
+                /*  Too many open files. Do not just go back to sleep in the
+                 *   reactor since we'll wake right back up again. Instead
+                 *   disable this callback until after a short pause, giving
+                 *   time for fds to be closed and have success on the next
+                 *   try...
+                 */
+                flux_watcher_t *tw = flux_timer_watcher_create (r,
+                                                                0.01,
+                                                                0,
+                                                                timeout_cb,
+                                                                server);
+                flux_watcher_start (tw);
+                flux_watcher_stop (w);
+            }
             return;
+        }
         if (zlist_append (server->connections, conn) < 0) {
             usock_conn_destroy (conn);
             return;
