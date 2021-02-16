@@ -358,8 +358,5 @@ test_expect_success 'job-info stats works' '
 test_expect_success 'eventlog-watch request with empty payload fails with EPROTO(71)' '
 	${RPC} job-info.eventlog-watch 71 </dev/null
 '
-test_expect_success 'guest-eventlog-watch request with empty payload fails with EPROTO(71)' '
-	${RPC} job-info.guest-eventlog-watch 71 </dev/null
-'
 
 test_done

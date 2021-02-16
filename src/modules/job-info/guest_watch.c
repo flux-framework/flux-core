@@ -8,8 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* guest_watch.c - handle job-info.guest-eventlog-watch &
- * job-info.guest-eventlog-watch-cancel for job-info */
+/* guest_watch.c - handle guest eventlog logic for
+ * job-info.eventlog-watch & job-info.eventlog-watch-cancel for
+ * job-info */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -24,7 +25,7 @@
 #include "info.h"
 #include "watch.h"
 
-/* The callback for job-info.guest-eventlog-watch handles all
+/* This code (entrypoint guest_watch()) handles all
  * of the tricky / racy things related to reading an eventlog from the
  * guest namespace.  Effectively it is a state machine, checking the
  * main job eventlog (via job-info.lookup) to determine what state the
@@ -802,29 +803,13 @@ cleanup:
     zlist_remove (ctx->guest_watchers, gw);
 }
 
-void guest_watch_cb (flux_t *h, flux_msg_handler_t *mh,
-                     const flux_msg_t *msg, void *arg)
+int guest_watch (struct info_ctx *ctx,
+                 const flux_msg_t *msg,
+                 flux_jobid_t id,
+                 const char *path,
+                 int flags)
 {
-    struct info_ctx *ctx = arg;
     struct guest_watch_ctx *gw = NULL;
-    flux_jobid_t id;
-    const char *path = NULL;
-    int flags;
-    const char *errmsg = NULL;
-
-    if (flux_request_unpack (msg, NULL, "{s:I s:s s:i}",
-                             "id", &id,
-                             "path", &path,
-                             "flags", &flags) < 0) {
-        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
-        goto error;
-    }
-    if (!flux_msg_is_streaming (msg)) {
-        errno = EPROTO;
-        errmsg = "guest-eventlog-watch request rejected without streaming "
-                 "RPC flag";
-        goto error;
-    }
 
     if (!(gw = guest_watch_ctx_create (ctx, msg, id, path, flags)))
         goto error;
@@ -833,18 +818,17 @@ void guest_watch_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
 
     if (zlist_append (ctx->guest_watchers, gw) < 0) {
-        flux_log_error (h, "%s: zlist_append", __FUNCTION__);
+        flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
         goto error;
     }
     zlist_freefn (ctx->guest_watchers, gw, guest_watch_ctx_destroy, true);
     gw = NULL;
 
-    return;
+    return 0;
 
 error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     guest_watch_ctx_destroy (gw);
+    return -1;
 }
 
 /* Cancel guest_watch 'gw' if it matches (sender, matchtag).
@@ -877,25 +861,6 @@ void guest_watchers_cancel (struct info_ctx *ctx,
         guest_watch_cancel (ctx, gw, sender, matchtag);
         gw = zlist_next (ctx->guest_watchers);
     }
-}
-
-void guest_watch_cancel_cb (flux_t *h, flux_msg_handler_t *mh,
-                            const flux_msg_t *msg, void *arg)
-{
-    struct info_ctx *ctx = arg;
-    uint32_t matchtag;
-    char *sender;
-
-    if (flux_request_unpack (msg, NULL, "{s:i}", "matchtag", &matchtag) < 0) {
-        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
-        return;
-    }
-    if (flux_msg_get_route_first (msg, &sender) < 0) {
-        flux_log_error (h, "%s: flux_msg_get_route_first", __FUNCTION__);
-        return;
-    }
-    guest_watchers_cancel (ctx, sender, matchtag);
-    free (sender);
 }
 
 void guest_watch_cleanup (struct info_ctx *ctx)

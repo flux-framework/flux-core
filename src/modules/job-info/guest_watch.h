@@ -13,11 +13,13 @@
 
 #include <flux/core.h>
 
-void guest_watch_cb (flux_t *h, flux_msg_handler_t *mh,
-                     const flux_msg_t *msg, void *arg);
+#include "info.h"
 
-void guest_watch_cancel_cb (flux_t *h, flux_msg_handler_t *mh,
-                            const flux_msg_t *msg, void *arg);
+int guest_watch (struct info_ctx *ctx,
+                 const flux_msg_t *msg,
+                 flux_jobid_t id,
+                 const char *path,
+                 int flags);
 
 /* Cancel all lookups that match (sender, matchtag). */
 void guest_watchers_cancel (struct info_ctx *ctx,

@@ -448,17 +448,11 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id,
     flux_future_t *f;
     const char *topic = "job-info.eventlog-watch";
     int rpc_flags = FLUX_RPC_STREAMING;
-    bool guest = false;
 
     /* No flags supported yet */
     if (!h || !path || flags) {
         errno = EINVAL;
         return NULL;
-    }
-    if (path && !strncmp (path, "guest.", 6)) {
-        topic = "job-info.guest-eventlog-watch";
-        path += 6;
-        guest = true;
     }
     if (!(f = flux_rpc_pack (h, topic, FLUX_NODEID_ANY, rpc_flags,
                              "{s:I s:s s:i}",
@@ -466,13 +460,6 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id,
                              "path", path,
                              "flags", flags)))
         return NULL;
-    if (guest) {
-        /* value not relevant, set to anything */
-        if (flux_future_aux_set (f, "guest", "", NULL) < 0) {
-            flux_future_destroy (f);
-            return NULL;
-        }
-    }
     return f;
 }
 
@@ -496,8 +483,6 @@ int flux_job_event_watch_cancel (flux_future_t *f)
         errno = EINVAL;
         return -1;
     }
-    if (flux_future_aux_get (f, "guest") != NULL)
-        topic = "job-info.guest-eventlog-watch-cancel";
     if (!(f2 = flux_rpc_pack (flux_future_get_flux (f),
                               topic,
                               FLUX_NODEID_ANY,
