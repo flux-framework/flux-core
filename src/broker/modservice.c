@@ -158,7 +158,7 @@ static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
                         int revents, void *arg)
 {
     modservice_ctx_t *ctx = arg;
-    flux_msg_t *msg = flux_keepalive_encode (0, FLUX_MODSTATE_SLEEPING);
+    flux_msg_t *msg = flux_keepalive_encode (0, FLUX_MODSTATE_RUNNING);
     if (!msg || flux_send (ctx->h, msg, 0) < 0)
         flux_log_error (ctx->h, "error sending keepalive");
     flux_msg_destroy (msg);

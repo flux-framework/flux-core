@@ -541,7 +541,6 @@ void module_set_status_cb (module_t *p, module_status_cb_f cb, void *arg)
 void module_set_status (module_t *p, int new_status)
 {
     assert (p->magic == MODULE_MAGIC);
-    assert (p->status != new_status);
     assert (new_status != FLUX_MODSTATE_INIT);  /* illegal state transition */
     assert (p->status != FLUX_MODSTATE_EXITED); /* illegal state transition */
     int prev_status = p->status;
