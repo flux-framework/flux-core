@@ -236,6 +236,7 @@ dist_check_SCRIPTS = \
 	issues/t3432-python-sigint.sh \
 	issues/t3429-python-future-ref.py \
 	issues/t3470-multithread-reactor-run.py \
+	issues/t3503-nofiles-limit.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \

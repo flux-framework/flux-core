@@ -162,10 +162,23 @@ static void output_cb (struct bulk_exec *exec, flux_subprocess_t *p,
 static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
 {
     struct jobinfo *job = arg;
-    const char *arg0 = flux_cmd_arg (flux_subprocess_get_cmd (p), 0);
-    jobinfo_fatal_error (job, flux_subprocess_fail_errno (p),
-                              "cmd=%s: rank=%d failed",
-                              arg0, flux_subprocess_rank (p));
+    flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
+
+    /*  cmd may be NULL here if exec implementation failed to
+     *   create flux_cmd_t
+     */
+    if (cmd) {
+        const char *arg0 = flux_cmd_arg (flux_subprocess_get_cmd (p), 0);
+        jobinfo_fatal_error (job,
+                              flux_subprocess_fail_errno (p),
+                             "cmd=%s: rank=%d exec failed",
+                             arg0, flux_subprocess_rank (p));
+    }
+    else
+        jobinfo_fatal_error (job,
+                             flux_subprocess_fail_errno (p),
+                             "rank=%d exec failed",
+                             flux_subprocess_rank (p));
 }
 
 static struct bulk_exec_ops exec_ops = {
