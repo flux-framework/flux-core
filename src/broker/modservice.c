@@ -40,7 +40,6 @@ typedef struct {
     module_t *p;
     zlist_t *handlers;
     flux_watcher_t *w_prepare;
-    flux_watcher_t *w_check;
 } modservice_ctx_t;
 
 static void freectx (void *arg)
@@ -51,7 +50,6 @@ static void freectx (void *arg)
         flux_msg_handler_destroy (mh);
     zlist_destroy (&ctx->handlers);
     flux_watcher_destroy (ctx->w_prepare);
-    flux_watcher_destroy (ctx->w_check);
     free (ctx);
 }
 
@@ -158,22 +156,19 @@ static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
                         int revents, void *arg)
 {
     modservice_ctx_t *ctx = arg;
-    flux_msg_t *msg = flux_keepalive_encode (0, FLUX_MODSTATE_SLEEPING);
-    if (!msg || flux_send (ctx->h, msg, 0) < 0)
-        flux_log_error (ctx->h, "error sending keepalive");
-    flux_msg_destroy (msg);
-}
 
-/* Reactor loop just unblocked.
- */
-static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
-                      int revents, void *arg)
-{
-    modservice_ctx_t *ctx = arg;
+    /*  Notify broker that this module has finished initialization
+     */
     flux_msg_t *msg = flux_keepalive_encode (0, FLUX_MODSTATE_RUNNING);
     if (!msg || flux_send (ctx->h, msg, 0) < 0)
         flux_log_error (ctx->h, "error sending keepalive");
     flux_msg_destroy (msg);
+
+    /*  Then, disable te prepare watcher. We no longer send keepalive
+     *   messages on every entry/exit of the reactor.
+     */
+    flux_watcher_destroy (ctx->w_prepare);
+    ctx->w_prepare = NULL;
 }
 
 static int register_event (modservice_ctx_t *ctx, const char *name,
@@ -281,12 +276,7 @@ int modservice_register (flux_t *h, module_t *p)
         log_err ("flux_prepare_watcher_create");
         return -1;
     }
-    if (!(ctx->w_check = flux_check_watcher_create (r, check_cb, ctx))) {
-        log_err ("flux_check_watcher_create");
-        return -1;
-    }
     flux_watcher_start (ctx->w_prepare);
-    flux_watcher_start (ctx->w_check);
     return 0;
 }
 

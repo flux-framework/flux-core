@@ -1703,14 +1703,13 @@ static void module_status_cb (module_t *p, int prev_status, void *arg)
     int status = module_get_status (p);
     const char *name = module_get_name (p);
 
-    /* Transition from INIT 
-     * If module started normally, i.e. INIT->SLEEPING/RUNNING, then
+    /* Transition from INIT
+     * If module started normally, i.e. INIT->RUNNING, then
      * respond to insmod requests now. O/w, delay responses until
      * EXITED, when any errnum is available.
      */
-    if (prev_status == FLUX_MODSTATE_INIT &&
-        (status == FLUX_MODSTATE_RUNNING ||
-         status == FLUX_MODSTATE_SLEEPING)) {
+    if (prev_status == FLUX_MODSTATE_INIT
+        && status == FLUX_MODSTATE_RUNNING) {
         if (module_insmod_respond (ctx->h, p) < 0)
             flux_log_error (ctx->h, "flux_respond to insmod %s", name);
     }

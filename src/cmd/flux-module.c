@@ -442,8 +442,6 @@ char lsmod_state_char (int state)
     switch (state) {
     case FLUX_MODSTATE_INIT:
         return 'I';
-    case FLUX_MODSTATE_SLEEPING:
-        return 'S';
     case FLUX_MODSTATE_RUNNING:
         return 'R';
     case FLUX_MODSTATE_FINALIZING:
