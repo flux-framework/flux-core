@@ -147,6 +147,8 @@ flux_watcher_t *flux_timer_watcher_create (flux_reactor_t *r,
 
 void flux_timer_watcher_reset (flux_watcher_t *w, double after, double repeat);
 
+void flux_timer_watcher_again (flux_watcher_t *w);
+
 /* periodic
  */
 
