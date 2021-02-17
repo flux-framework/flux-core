@@ -30,7 +30,7 @@ void basic_api_tests (void)
     struct kvsroot *tmproot;
     struct flux_msg_cred cred;
 
-    cache = cache_create ();
+    cache = cache_create (NULL);
 
     ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
         "kvsroot_mgr_create works");
@@ -163,7 +163,7 @@ void basic_iter_tests (void)
     struct kvsroot *root;
     int count;
 
-    cache = cache_create ();
+    cache = cache_create (NULL);
 
     ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
         "kvsroot_mgr_create works");
@@ -223,7 +223,7 @@ void basic_kvstxn_mgr_tests (void)
     json_t *ops = NULL;
     void *tmpaux;
 
-    cache = cache_create ();
+    cache = cache_create (NULL);
 
     ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
         "kvsroot_mgr_create works");

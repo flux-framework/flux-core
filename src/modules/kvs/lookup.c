@@ -393,7 +393,7 @@ static lookup_process_t walk (lookup_t *lh)
                 goto error;
             }
 
-            if (!(entry = cache_lookup (lh->cache, refstr, lh->current_epoch))
+            if (!(entry = cache_lookup (lh->cache, refstr))
                 || !cache_entry_get_valid (entry)) {
                 lh->missing_ref = refstr;
                 return LOOKUP_PROCESS_LOAD_MISSING_REFS;
@@ -668,7 +668,7 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
                 if (!(ref = treeobj_get_blobref (lh->valref_missing_refs, i)))
                     return -1;
 
-                if (!(entry = cache_lookup (lh->cache, ref, lh->current_epoch))
+                if (!(entry = cache_lookup (lh->cache, ref))
                     || !cache_entry_get_valid (entry)) {
 
                     /* valref points to raw data, raw_data flag is always
@@ -773,7 +773,7 @@ static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
         lh->errnum = errno;
         return -1;
     }
-    if (!(entry = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+    if (!(entry = cache_lookup (lh->cache, reftmp))
         || !cache_entry_get_valid (entry)) {
         lh->valref_missing_refs = lh->wdirent;
         (*stall) = true;
@@ -806,7 +806,7 @@ static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
             lh->errnum = errno;
             return -1;
         }
-        if (!(entry = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+        if (!(entry = cache_lookup (lh->cache, reftmp))
             || !cache_entry_get_valid (entry)) {
             lh->valref_missing_refs = lh->wdirent;
             (*stall) = true;
@@ -857,7 +857,7 @@ static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount,
         reftmp = treeobj_get_blobref (lh->wdirent, i);
         assert (reftmp);
 
-        entry = cache_lookup (lh->cache, reftmp, lh->current_epoch);
+        entry = cache_lookup (lh->cache, reftmp);
         assert (entry);
         assert (cache_entry_get_valid (entry));
 
@@ -982,9 +982,7 @@ lookup_process_t lookup (lookup_t *lh)
                         lh->errnum = EISDIR;
                         goto error;
                     }
-                    if (!(entry = cache_lookup (lh->cache,
-                                                lh->root_ref,
-                                                lh->current_epoch))
+                    if (!(entry = cache_lookup (lh->cache, lh->root_ref))
                         || !cache_entry_get_valid (entry)) {
                         lh->missing_ref = lh->root_ref;
                         return LOOKUP_PROCESS_LOAD_MISSING_REFS;
@@ -1082,8 +1080,7 @@ lookup_process_t lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto error;
                 }
-                if (!(entry = cache_lookup (lh->cache, reftmp,
-                                            lh->current_epoch))
+                if (!(entry = cache_lookup (lh->cache, reftmp))
                     || !cache_entry_get_valid (entry)) {
                     lh->missing_ref = reftmp;
                     return LOOKUP_PROCESS_LOAD_MISSING_REFS;

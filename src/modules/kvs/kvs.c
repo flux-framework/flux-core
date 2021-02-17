@@ -40,9 +40,9 @@
 #include "kvsroot.h"
 #include "kvssync.h"
 
-/* Expire cache_entry after 'max_lastuse_age' heartbeats.
+/* Expire cache_entry after 'max_lastuse_age' seconds.
  */
-const int max_lastuse_age = 5;
+const double max_lastuse_age = 10.;
 
 /* Expire namespaces after 'max_namespace_age' heartbeats.
  *
@@ -114,7 +114,7 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
         flux_log_error (h, "getattr content.hash");
         goto error;
     }
-    if (!(ctx->cache = cache_create ()))
+    if (!(ctx->cache = cache_create (r)))
         goto error;
     if (!(ctx->krm = kvsroot_mgr_create (ctx->h, ctx)))
         goto error;
@@ -456,7 +456,7 @@ static void content_load_completion (flux_future_t *f, void *arg)
      * b/c it is not yet valid.  But check and log incase there is
      * logic error dealng with error paths using cache_remove_entry().
      */
-    if (!(entry = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
+    if (!(entry = cache_lookup (ctx->cache, blobref))) {
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
         goto done;
     }
@@ -516,7 +516,7 @@ error:
  */
 static int load (struct kvs_ctx *ctx, const char *ref, wait_t *wait, bool *stall)
 {
-    struct cache_entry *entry = cache_lookup (ctx->cache, ref, ctx->epoch);
+    struct cache_entry *entry = cache_lookup (ctx->cache, ref);
     int saved_errno, ret;
 
     assert (wait != NULL);
@@ -612,7 +612,7 @@ static void content_store_completion (flux_future_t *f, void *arg)
      * b/c it was dirty.  But check and log incase there is logic
      * error dealng with error paths using cache_remove_entry().
      */
-    if (!(entry = cache_lookup (ctx->cache, blobref, ctx->epoch))) {
+    if (!(entry = cache_lookup (ctx->cache, blobref))) {
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
         goto error;
     }
@@ -644,7 +644,7 @@ error:
      */
 
     /* we can't do anything if this cache_lookup fails */
-    if (!(entry = cache_lookup (ctx->cache, cache_blobref, ctx->epoch))) {
+    if (!(entry = cache_lookup (ctx->cache, cache_blobref))) {
         flux_log (ctx->h, LOG_ERR, "%s: cache_lookup", __FUNCTION__);
         return;
     }
@@ -774,7 +774,7 @@ static int setroot_event_send (struct kvs_ctx *ctx, struct kvsroot *root,
     if (event_includes_rootdir) {
         struct cache_entry *entry;
 
-        if ((entry = cache_lookup (ctx->cache, root->ref, ctx->epoch)))
+        if ((entry = cache_lookup (ctx->cache, root->ref)))
             root_dir = cache_entry_get_treeobj (entry);
         assert (root_dir != NULL); // root entry is always in cache on rank 0
     }
@@ -1125,7 +1125,7 @@ static void dropcache_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     size = cache_count_entries (ctx->cache);
-    if ((expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0)) < 0) {
+    if ((expcount = cache_expire_entries (ctx->cache, 0)) < 0) {
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
         goto error;
     }
@@ -1153,7 +1153,7 @@ static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
     size = cache_count_entries (ctx->cache);
-    if ((expcount = cache_expire_entries (ctx->cache, ctx->epoch, 0)) < 0)
+    if ((expcount = cache_expire_entries (ctx->cache, 0)) < 0)
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
     else
         flux_log (h, LOG_ALERT, "dropped %d of %d cache entries",
@@ -1192,7 +1192,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
         start_root_remove (ctx, root->ns_name);
     }
     else /* "touch" root */
-        (void)cache_lookup (ctx->cache, root->ref, ctx->epoch);
+        (void)cache_lookup (ctx->cache, root->ref);
 
     return 0;
 }
@@ -1211,7 +1211,7 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
     if (kvsroot_mgr_iter_roots (ctx->krm, heartbeat_root_cb, ctx) < 0)
         flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
 
-    if (cache_expire_entries (ctx->cache, ctx->epoch, max_lastuse_age) < 0)
+    if (cache_expire_entries (ctx->cache, max_lastuse_age) < 0)
         flux_log_error (ctx->h, "%s: cache_expire_entries", __FUNCTION__);
 }
 
@@ -2019,7 +2019,7 @@ static void prime_cache_with_rootdir (struct kvs_ctx *ctx, json_t *rootdir)
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto done;
     }
-    if ((entry = cache_lookup (ctx->cache, ref, ctx->epoch)))
+    if ((entry = cache_lookup (ctx->cache, ref)))
         goto done; // already in cache, possibly dirty/invalid - we don't care
     if (!(entry = cache_entry_create (ref))) {
         flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
@@ -2883,7 +2883,7 @@ static int store_initial_rootdir (struct kvs_ctx *ctx, char *ref, int ref_len)
         flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }
-    if (!(entry = cache_lookup (ctx->cache, ref, ctx->epoch))) {
+    if (!(entry = cache_lookup (ctx->cache, ref))) {
         if (!(entry = cache_entry_create (ref))) {
             flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;

@@ -284,7 +284,7 @@ static int store_cache (kvstxn_t *kt, int current_epoch, json_t *o,
         flux_log_error (kt->ktm->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }
-    if (!(entry = cache_lookup (kt->ktm->cache, ref, current_epoch))) {
+    if (!(entry = cache_lookup (kt->ktm->cache, ref))) {
         if (!(entry = cache_entry_create (ref))) {
             flux_log_error (kt->ktm->h, "%s: cache_entry_create", __FUNCTION__);
             goto error;
@@ -625,7 +625,7 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
                 goto done;
             }
 
-            if (!(entry = cache_lookup (kt->ktm->cache, ref, current_epoch))
+            if (!(entry = cache_lookup (kt->ktm->cache, ref))
                 || !cache_entry_get_valid (entry)) {
                 *missing_ref = ref;
                 goto success; /* stall */
@@ -851,9 +851,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
 
         kt->state = KVSTXN_STATE_LOAD_ROOT;
 
-        if (!(entry = cache_lookup (kt->ktm->cache,
-                                    rootdir_ref,
-                                    current_epoch))
+        if (!(entry = cache_lookup (kt->ktm->cache, rootdir_ref))
             || !cache_entry_get_valid (entry)) {
 
             if (add_missing_ref (kt, rootdir_ref) < 0) {

@@ -42,7 +42,7 @@ static void ltest_finalize (struct cache *cache, kvsroot_mgr_t *krm)
 
 static void ltest_init (struct cache **cache, kvsroot_mgr_t **krm)
 {
-    if (!(*cache = cache_create ()))
+    if (!(*cache = cache_create (NULL)))
         BAIL_OUT ("cache_create failed");
     if (!(*krm = kvsroot_mgr_create (NULL, NULL)))
         BAIL_OUT ("kvsroot_mgr_create failed");
@@ -3344,7 +3344,7 @@ void lookup_stall_ref_expire_cache_entries (void) {
     ok (cache_count_entries (cache) == 1,
         "cache_count_entries returns 1");
 
-    ok (cache_expire_entries (cache, 10, 1) == 0,
+    ok (cache_expire_entries (cache, 0) == 0,
         "cache_expire_entries expires 0 entries, b/c references appropriately taken");
 
     (void)cache_insert (cache, create_cache_entry_treeobj (dirref1_ref, dirref1));
@@ -3356,7 +3356,7 @@ void lookup_stall_ref_expire_cache_entries (void) {
 
     /* clear cache */
 
-    ok (cache_expire_entries (cache, 10, 1) == 2,
+    ok (cache_expire_entries (cache, 0) == 2,
         "cache_expire_entries expires 2 entries");
 
     ok (cache_count_entries (cache) == 0,
@@ -3382,7 +3382,7 @@ void lookup_stall_ref_expire_cache_entries (void) {
     ok (cache_count_entries (cache) == 1,
         "cache_count_entries returns 1");
 
-    ok (cache_expire_entries (cache, 10, 1) == 0,
+    ok (cache_expire_entries (cache, 0) == 0,
         "cache_expire_entries expires 0 entries, b/c references appropriately taken");
 
     (void)cache_insert (cache, create_cache_entry_treeobj (dirref2_ref, dirref2));
@@ -3394,7 +3394,7 @@ void lookup_stall_ref_expire_cache_entries (void) {
 
     /* clear cache */
 
-    ok (cache_expire_entries (cache, 10, 1) == 2,
+    ok (cache_expire_entries (cache, 0) == 2,
         "cache_expire_entries expires 2 entries");
 
     ok (cache_count_entries (cache) == 0,
@@ -3425,7 +3425,7 @@ void lookup_stall_ref_expire_cache_entries (void) {
     ok (cache_count_entries (cache) == 2,
         "cache_count_entries returns 2");
 
-    ok (cache_expire_entries (cache, 10, 1) == 1,
+    ok (cache_expire_entries (cache, 0) == 1,
         "cache_expire_entries expires 1 entry, only 1 entry has reference on it");
 
     (void)cache_insert (cache, create_cache_entry_raw (valref_ref, "abcd", 4));
@@ -3437,7 +3437,7 @@ void lookup_stall_ref_expire_cache_entries (void) {
 
     /* clear cache */
 
-    ok (cache_expire_entries (cache, 10, 1) == 2,
+    ok (cache_expire_entries (cache, 0) == 2,
         "cache_expire_entries expires 2 entries");
 
     ok (cache_count_entries (cache) == 0,

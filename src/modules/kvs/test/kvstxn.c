@@ -39,7 +39,7 @@ static void ktest_finalize (struct cache *cache, kvsroot_mgr_t *krm)
 
 static void ktest_init (struct cache **cache, kvsroot_mgr_t **krm)
 {
-    if (!(*cache = cache_create ()))
+    if (!(*cache = cache_create (NULL)))
         BAIL_OUT ("cache_create failed");
     if (!(*krm = kvsroot_mgr_create (NULL, NULL)))
         BAIL_OUT ("kvsroot_mgr_create failed");
@@ -159,7 +159,7 @@ struct cache *create_cache_with_empty_rootdir (char *ref, int ref_len)
 
     rootdir = treeobj_create_dir ();
 
-    ok ((cache = cache_create ()) != NULL,
+    ok ((cache = cache_create (NULL)) != NULL,
         "cache_create works");
     ok (treeobj_hash ("sha1", rootdir, ref, ref_len) == 0,
         "treeobj_hash worked");
