@@ -89,82 +89,55 @@ static void start_root_remove (struct kvs_ctx *ctx, const char *ns);
 /*
  * kvs_ctx functions
  */
-static void freectx (void *arg)
+static void kvs_ctx_destroy (struct kvs_ctx *ctx)
 {
-    struct kvs_ctx *ctx = arg;
     if (ctx) {
+        int saved_errno = errno;
         cache_destroy (ctx->cache);
         kvsroot_mgr_destroy (ctx->krm);
         flux_watcher_destroy (ctx->prep_w);
         flux_watcher_destroy (ctx->check_w);
         flux_watcher_destroy (ctx->idle_w);
         free (ctx);
+        errno = saved_errno;
     }
 }
 
-static struct kvs_ctx *getctx (flux_t *h)
+static struct kvs_ctx *kvs_ctx_create (flux_t *h)
 {
-    struct kvs_ctx *ctx = flux_aux_get (h, "kvssrv");
-    flux_reactor_t *r;
-    int saved_errno;
+    flux_reactor_t *r = flux_get_reactor (h);
+    struct kvs_ctx *ctx;
 
-    if (!ctx) {
-        if (!(ctx = calloc (1, sizeof (*ctx)))) {
-            saved_errno = errno;
-            goto error;
-        }
-        if (!(r = flux_get_reactor (h))) {
-            saved_errno = errno;
-            goto error;
-        }
-        if (!(ctx->hash_name = flux_attr_get (h, "content.hash"))) {
-            saved_errno = errno;
-            flux_log_error (h, "content.hash");
-            goto error;
-        }
-        ctx->cache = cache_create ();
-        if (!ctx->cache) {
-            saved_errno = errno;
-            goto error;
-        }
-        if (!(ctx->krm = kvsroot_mgr_create (ctx->h, ctx))) {
-            saved_errno = errno;
-            goto error;
-        }
-        ctx->h = h;
-        if (flux_get_rank (h, &ctx->rank) < 0) {
-            saved_errno = errno;
-            goto error;
-        }
-        if (ctx->rank == 0) {
-            ctx->prep_w = flux_prepare_watcher_create (r, transaction_prep_cb, ctx);
-            if (!ctx->prep_w) {
-                saved_errno = errno;
-                goto error;
-            }
-            ctx->check_w = flux_check_watcher_create (r, transaction_check_cb, ctx);
-            if (!ctx->check_w) {
-                saved_errno = errno;
-                goto error;
-            }
-            ctx->idle_w = flux_idle_watcher_create (r, NULL, NULL);
-            if (!ctx->idle_w) {
-                saved_errno = errno;
-                goto error;
-            }
-            flux_watcher_start (ctx->prep_w);
-            flux_watcher_start (ctx->check_w);
-        }
-        ctx->transaction_merge = 1;
-        if (flux_aux_set (h, "kvssrv", ctx, freectx) < 0) {
-            saved_errno = errno;
-            goto error;
-        }
+    if (!(ctx = calloc (1, sizeof (*ctx))))
+        return NULL;
+    if (!(ctx->hash_name = flux_attr_get (h, "content.hash"))) {
+        flux_log_error (h, "getattr content.hash");
+        goto error;
     }
+    if (!(ctx->cache = cache_create ()))
+        goto error;
+    if (!(ctx->krm = kvsroot_mgr_create (ctx->h, ctx)))
+        goto error;
+    ctx->h = h;
+    if (flux_get_rank (h, &ctx->rank) < 0)
+        goto error;
+    if (ctx->rank == 0) {
+        ctx->prep_w = flux_prepare_watcher_create (r, transaction_prep_cb, ctx);
+        if (!ctx->prep_w)
+            goto error;
+        ctx->check_w = flux_check_watcher_create (r, transaction_check_cb, ctx);
+        if (!ctx->check_w)
+            goto error;
+        ctx->idle_w = flux_idle_watcher_create (r, NULL, NULL);
+        if (!ctx->idle_w)
+            goto error;
+        flux_watcher_start (ctx->prep_w);
+        flux_watcher_start (ctx->check_w);
+    }
+    ctx->transaction_merge = 1;
     return ctx;
 error:
-    freectx (ctx);
-    errno = saved_errno;
+    kvs_ctx_destroy (ctx);
     return NULL;
 }
 
@@ -2960,11 +2933,11 @@ error:
 
 int mod_main (flux_t *h, int argc, char **argv)
 {
-    struct kvs_ctx *ctx = getctx (h);
+    struct kvs_ctx *ctx;
     flux_msg_handler_t **handlers = NULL;
     int rc = -1;
 
-    if (!ctx) {
+    if (!(ctx = kvs_ctx_create (h))) {
         flux_log_error (h, "error creating KVS context");
         goto done;
     }
@@ -3039,6 +3012,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (handlers);
+    kvs_ctx_destroy (ctx);
     return rc;
 }
 
