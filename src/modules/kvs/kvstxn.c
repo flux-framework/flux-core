@@ -666,7 +666,7 @@ static int kvstxn_link_dirent (kvstxn_t *kt, int current_epoch,
             }
 
             if (asprintf (&nkey, "%s.%s", target, next) < 0) {
-                saved_errno = ENOMEM;
+                saved_errno = errno;
                 goto done;
             }
             if (kvstxn_link_dirent (kt,
@@ -746,7 +746,7 @@ static int add_missing_ref (kvstxn_t *kt, const char *ref)
     char *refcpy = NULL;
 
     if (!(refcpy = strdup (ref))) {
-        errno = ENOMEM;
+        errno = errno;
         goto err;
     }
 
@@ -1106,7 +1106,7 @@ kvstxn_mgr_t *kvstxn_mgr_create (struct cache *cache,
     }
 
     if (!(ktm = calloc (1, sizeof (*ktm)))) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto error;
     }
     ktm->cache = cache;

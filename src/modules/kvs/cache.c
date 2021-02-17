@@ -65,14 +65,11 @@ struct cache_entry *cache_entry_create (const char *ref)
         return NULL;
     }
 
-    if (!(entry = calloc (1, sizeof (*entry)))) {
-        errno = ENOMEM;
+    if (!(entry = calloc (1, sizeof (*entry))))
         return NULL;
-    }
 
     if (!(entry->blobref = strdup (ref))) {
         cache_entry_destroy (entry);
-        errno = ENOMEM;
         return NULL;
     }
 
@@ -262,6 +259,7 @@ void cache_entry_destroy (void *arg)
 {
     struct cache_entry *entry = arg;
     if (entry) {
+        int saved_errno = errno;
         free (entry->data);
         json_decref (entry->o);
         if (entry->waitlist_notdirty)
@@ -270,6 +268,7 @@ void cache_entry_destroy (void *arg)
             wait_queue_destroy (entry->waitlist_valid);
         free (entry->blobref);
         free (entry);
+        errno = saved_errno;
     }
 }
 
@@ -450,10 +449,8 @@ static void cache_entry_destroy_wrapper (void **arg)
 struct cache *cache_create (void)
 {
     struct cache *cache = calloc (1, sizeof (*cache));
-    if (!cache) {
-        errno = ENOMEM;
+    if (!cache)
         return NULL;
-    }
     if (!(cache->zhx = zhashx_new ())) {
         free (cache);
         errno = ENOMEM;

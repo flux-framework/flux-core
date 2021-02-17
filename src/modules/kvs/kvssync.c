@@ -64,10 +64,8 @@ int kvssync_add (struct kvsroot *root, flux_msg_handler_f cb, flux_t *h,
         goto error;
     }
 
-    if (!(ks = calloc (1, sizeof (*ks)))) {
-        errno = ENOMEM;
+    if (!(ks = calloc (1, sizeof (*ks))))
         goto error;
-    }
 
     ks->msg = flux_msg_incref (msg);
     ks->cb = cb;

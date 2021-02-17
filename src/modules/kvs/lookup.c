@@ -181,16 +181,16 @@ static walk_level_t *walk_level_create (const char *root_ref,
     int saved_errno;
 
     if (!wl) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto error;
     }
     if (!(wl->path_copy = strdup (path))) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto error;
     }
     wl->depth = depth;
     if (!(wl->root_ref = strdup (root_ref))) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto error;
     }
     if (!(wl->root_dirent = treeobj_create_dirref (root_ref))) {
@@ -243,7 +243,7 @@ static lookup_process_t symlink_check_namespace (lookup_t *lh,
     if (!root) {
         free (lh->missing_namespace);
         if (!(lh->missing_namespace = strdup (ns))) {
-            lh->errnum = ENOMEM;
+            lh->errnum = errno;
             goto done;
         }
         ret = LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
@@ -536,7 +536,7 @@ lookup_t *lookup_create (struct cache *cache,
     }
 
     if (!(lh = calloc (1, sizeof (*lh)))) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto cleanup;
     }
 
@@ -547,7 +547,7 @@ lookup_t *lookup_create (struct cache *cache,
     if (ns) {
         /* must duplicate strings, user may not keep pointer alive */
         if (!(lh->ns_name = strdup (ns))) {
-            saved_errno = ENOMEM;
+            saved_errno = errno;
             goto cleanup;
         }
     }
@@ -559,7 +559,7 @@ lookup_t *lookup_create (struct cache *cache,
 
     if (root_ref) {
         if (!(lh->root_ref = strdup (root_ref))) {
-            saved_errno = ENOMEM;
+            saved_errno = errno;
             goto cleanup;
         }
         lh->root_seq = root_seq;
@@ -940,7 +940,7 @@ lookup_process_t lookup (lookup_t *lh)
                 if (!root) {
                     free (lh->missing_namespace);
                     if (!(lh->missing_namespace = strdup (lh->ns_name))) {
-                        lh->errnum = ENOMEM;
+                        lh->errnum = errno;
                         goto error;
                     }
                     return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
@@ -955,7 +955,7 @@ lookup_process_t lookup (lookup_t *lh)
                  * namespace could timeout or be removed when
                  * stalling */
                 if (!(lh->root_ref = strdup (root->ref))) {
-                    lh->errnum = ENOMEM;
+                    lh->errnum = errno;
                     goto error;
                 }
                 lh->root_seq = root->seq;

@@ -110,7 +110,7 @@ static struct kvs_ctx *getctx (flux_t *h)
 
     if (!ctx) {
         if (!(ctx = calloc (1, sizeof (*ctx)))) {
-            saved_errno = ENOMEM;
+            saved_errno = errno;
             goto error;
         }
         if (!(r = flux_get_reactor (h))) {
@@ -124,11 +124,11 @@ static struct kvs_ctx *getctx (flux_t *h)
         }
         ctx->cache = cache_create ();
         if (!ctx->cache) {
-            saved_errno = ENOMEM;
+            saved_errno = errno;
             goto error;
         }
         if (!(ctx->krm = kvsroot_mgr_create (ctx->h, ctx))) {
-            saved_errno = ENOMEM;
+            saved_errno = errno;
             goto error;
         }
         ctx->h = h;
@@ -520,10 +520,8 @@ static int content_load_request_send (struct kvs_ctx *ctx, const char *ref)
         flux_log_error (ctx->h, "%s: flux_content_load", __FUNCTION__);
         goto error;
     }
-    if (!(refcpy = strdup (ref))) {
-        errno = ENOMEM;
+    if (!(refcpy = strdup (ref)))
         goto error;
-    }
     if (flux_future_aux_set (f, "ref", refcpy, free) < 0) {
         flux_log_error (ctx->h, "%s: flux_future_aux_set", __FUNCTION__);
         free (refcpy);
@@ -817,7 +815,7 @@ static int setroot_event_send (struct kvs_ctx *ctx, struct kvsroot *root,
     }
 
     if (asprintf (&setroot_topic, "kvs.namespace-%s-setroot", root->ns_name) < 0) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
     }
@@ -861,7 +859,7 @@ static int error_event_send (struct kvs_ctx *ctx, const char *ns,
     int saved_errno, rc = -1;
 
     if (asprintf (&error_topic, "kvs.namespace-%s-error", ns) < 0) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         flux_log_error (ctx->h, "%s: asprintf", __FUNCTION__);
         goto done;
     }
@@ -898,8 +896,8 @@ static int error_event_send_to_name (struct kvs_ctx *ctx, const char *ns,
     int rc = -1;
 
     if (!(names = json_pack ("[ s ]", name))) {
-        flux_log_error (ctx->h, "%s: json_pack", __FUNCTION__);
         errno = ENOMEM;
+        flux_log_error (ctx->h, "%s: json_pack", __FUNCTION__);
         goto done;
     }
 
@@ -2470,8 +2468,8 @@ static int root_remove_process_transactions (treq_t *tr, void *data)
         json_t *names = NULL;
 
         if (!(names = json_pack ("[ s ]", treq_get_name (tr)))) {
-            flux_log_error (cbd->ctx->h, "%s: json_pack", __FUNCTION__);
             errno = ENOMEM;
+            flux_log_error (cbd->ctx->h, "%s: json_pack", __FUNCTION__);
             return -1;
         }
 
@@ -2529,10 +2527,9 @@ static int namespace_remove (struct kvs_ctx *ctx, const char *ns)
     }
 
     if (asprintf (&topic, "kvs.namespace-%s-removed", ns) < 0) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto cleanup;
     }
-
     if (!(msg = flux_event_pack (topic, "{ s:s }", "namespace", ns))) {
         saved_errno = errno;
         flux_log_error (ctx->h, "%s: flux_event_pack", __FUNCTION__);

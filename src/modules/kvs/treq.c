@@ -52,7 +52,7 @@ treq_mgr_t *treq_mgr_create (void)
     int saved_errno;
 
     if (!(trm = calloc (1, sizeof (*trm)))) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto error;
     }
     if (!(trm->transactions = zhash_new ())) {
@@ -148,10 +148,8 @@ int treq_mgr_remove_transaction (treq_mgr_t *trm, const char *name)
     if (trm->iterating_transactions) {
         char *str = strdup (name);
 
-        if (!str) {
-            errno = ENOMEM;
+        if (!str)
             return -1;
-        }
 
         if (zlist_append (trm->removelist, str) < 0) {
             free (str);
@@ -192,8 +190,11 @@ static treq_t *treq_create_common (int nprocs, int flags)
         saved_errno = EINVAL;
         goto error;
     }
-    if (!(tr = calloc (1, sizeof (*tr)))
-        || !(tr->ops = json_array ())
+    if (!(tr = calloc (1, sizeof (*tr)))) {
+        saved_errno = errno;
+        goto error;
+    }
+    if (!(tr->ops = json_array ())
         || !(tr->requests = zlist_new ())) {
         saved_errno = ENOMEM;
         goto error;
@@ -225,7 +226,7 @@ treq_t *treq_create (const char *name, int nprocs, int flags)
     }
 
     if (!(tr->name = strdup (name))) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto error;
     }
 
@@ -247,7 +248,7 @@ treq_t *treq_create_rank (uint32_t rank, unsigned int seq, int nprocs, int flags
     }
 
     if (asprintf (&(tr->name), "treq.%u.%u", rank, seq) < 0) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto error;
     }
 
