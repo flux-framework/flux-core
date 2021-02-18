@@ -58,7 +58,6 @@ struct kvs_ctx {
     int faults;                 /* for kvs.stats.get, etc. */
     flux_t *h;
     uint32_t rank;
-    int epoch;              /* tracks current heartbeat epoch */
     flux_watcher_t *prep_w;
     flux_watcher_t *idle_w;
     flux_watcher_t *check_w;
@@ -1198,10 +1197,8 @@ static void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct kvs_ctx *ctx = arg;
 
-    if (flux_heartbeat_decode (msg, &ctx->epoch) < 0) {
-        flux_log_error (ctx->h, "%s: flux_heartbeat_decode", __FUNCTION__);
-        return;
-    }
+    if (flux_event_decode (msg, NULL, NULL) < 0)
+        flux_log_error (h, "heartbeat");
 
     /* don't error return, fallthrough to deal with rest as necessary */
     if (kvsroot_mgr_iter_roots (ctx->krm, heartbeat_root_cb, ctx) < 0)
