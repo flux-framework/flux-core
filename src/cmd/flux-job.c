@@ -2630,7 +2630,6 @@ int cmd_eventlog (optparse_t *p, int argc, char **argv)
 struct wait_event_ctx {
     optparse_t *p;
     const char *wait_event;
-    double timeout;
     const char *jobid;
     flux_jobid_t id;
     const char *path;
@@ -2746,10 +2745,6 @@ void wait_event_continuation (flux_future_t *f, void *arg)
     json_decref (o);
 
     flux_future_reset (f);
-
-    /* re-call to set timeout */
-    if (flux_future_then (f, ctx->timeout, wait_event_continuation, arg) < 0)
-        log_err_exit ("flux_future_then");
 }
 
 int cmd_wait_event (optparse_t *p, int argc, char **argv)
@@ -2759,6 +2754,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     flux_future_t *f;
     struct wait_event_ctx ctx = {0};
     const char *str;
+    double timeout;
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
@@ -2771,8 +2767,8 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
     ctx.id = parse_jobid (ctx.jobid);
     ctx.p = p;
     ctx.wait_event = argv[optindex++];
-    ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
     ctx.path = optparse_get_str (p, "path", "eventlog");
+    timeout = optparse_get_duration (p, "timeout", -1.0);
     entry_format_parse_options (p, &ctx.e);
     if ((str = optparse_get_str (p, "match-context", NULL))) {
         ctx.context_key = xstrdup (str);
@@ -2787,7 +2783,7 @@ int cmd_wait_event (optparse_t *p, int argc, char **argv)
 
     if (!(f = flux_job_event_watch (h, ctx.id, ctx.path, 0)))
         log_err_exit ("flux_job_event_watch");
-    if (flux_future_then (f, ctx.timeout, wait_event_continuation, &ctx) < 0)
+    if (flux_future_then (f, timeout, wait_event_continuation, &ctx) < 0)
         log_err_exit ("flux_future_then");
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
         log_err_exit ("flux_reactor_run");
