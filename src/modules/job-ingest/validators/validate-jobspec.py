@@ -46,8 +46,10 @@ while True:
     if line == "":
         break
     errnum, errstr = (0, None)
+
+    job = json.loads(line)
     try:
-        validate_jobspec(line, args.require_version)
+        validate_jobspec(json.dumps(job["jobspec"]), args.require_version)
     except (ValueError, TypeError, EnvironmentError) as e:
         errnum, errstr = (1, str(e))
     if errstr != None:

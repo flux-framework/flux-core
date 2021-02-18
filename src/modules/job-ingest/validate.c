@@ -8,21 +8,18 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* validate - asynchronous jobspec validation interface
+/* validate - asynchronous job validation interface
  *
- * Spawn worker(s) to validate jobspec.  Up to 'DEFAULT_WORKER_COUNT'
+ * Spawn worker(s) to validate job.  Up to 'DEFAULT_WORKER_COUNT'
  * workers may be active at one time.  They are started lazily, on demand,
  * and stop after a period of inactivity (see "tunables" below).
- *
- * The validator executable and its command line, including the
- * location of jobspec.jsonschema, are currently hardwired.
  *
  * Jobspec is expected to be in encoded JSON form, with or without
  * whitespace or NULL termination.  The encoding is normalized before
  * it is sent to the worker on a single line.
  *
  * The future is fulfilled with the result of validation.  On success,
- * the container will be empty.  On failure, the reason the jobspec
+ * the container will be empty.  On failure, the reason the job
  * did not pass validation (suitable for returning to the submitting user)
  * will be assigned to the future's extended error string.
  */
@@ -202,16 +199,16 @@ struct worker *select_best_worker (struct validate *v)
     return best;
 }
 
-/* Re-encode jobspec in compact form to eliminate any white space (esp \n),
+/* Re-encode job info in compact form to eliminate any white space (esp \n),
  * then pass it to least busy validation worker, returning a future.
  */
-flux_future_t *validate_jobspec (struct validate *v, json_t *jobspec)
+flux_future_t *validate_job (struct validate *v, json_t *job)
 {
     flux_future_t *f;
     char *s;
     struct worker *w;
 
-    if (!(s = json_dumps (jobspec, JSON_COMPACT))) {
+    if (!(s = json_dumps (job, JSON_COMPACT))) {
         errno = ENOMEM;
         goto error;
     }

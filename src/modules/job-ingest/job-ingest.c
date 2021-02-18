@@ -662,6 +662,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *mech_type;
     flux_future_t *f = NULL;
     json_error_t e;
+    json_t *o = NULL;
 
     if (ctx->shutdown) {
         errno = ENOSYS;
@@ -768,12 +769,25 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     /* Validate jobspec asynchronously.
      * Continue submission process in validate_continuation().
      */
-    if (!(f = validate_jobspec (ctx->validate, job->jobspec_obj)))
+    if (!(o = json_pack_ex (&e, 0,
+                            "{s:O s:i s:i s:i s:i}",
+                            "jobspec", job->jobspec_obj,
+                            "userid", job->cred.userid,
+                            "rolemask", job->cred.rolemask,
+                            "urgency", job->urgency,
+                            "flags", job->flags))) {
+        snprintf (errbuf, sizeof (errbuf), "Internal error: %s", e.text);
+        errmsg = errbuf;
+        goto error;
+    }
+    if (!(f = validate_job (ctx->validate, o)))
         goto error;
     if (flux_future_then (f, -1., validate_continuation, job) < 0)
         goto error;
+    json_decref (o);
     return;
 error:
+    json_decref (o);
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     job_destroy (job);

@@ -20,9 +20,8 @@ def emit(object_dict):
     sys.stdout.flush()
 
 
-def validate(schema, line):
+def validate(schema, jobspec):
     try:
-        jobspec = json.loads(line)
         jsonschema.validate(jobspec, schema)
     except ValueError as e:
         return (1, str(e))
@@ -49,7 +48,8 @@ while True:
     line = sys.stdin.readline()
     if line == "":
         break
-    errnum, errstr = validate(schema, line)
+    job = json.loads(line)
+    errnum, errstr = validate(schema, job["jobspec"])
     if errstr != None:
         emit({"errnum": errnum, "errstr": errstr})
     else:
