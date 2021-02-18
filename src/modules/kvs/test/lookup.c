@@ -34,6 +34,20 @@ struct lookup_ref_data
     int count;
 };
 
+static void ltest_finalize (struct cache *cache, kvsroot_mgr_t *krm)
+{
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
+static void ltest_init (struct cache **cache, kvsroot_mgr_t **krm)
+{
+    if (!(*cache = cache_create ()))
+        BAIL_OUT ("cache_create failed");
+    if (!(*krm = kvsroot_mgr_create (NULL, NULL)))
+        BAIL_OUT ("kvsroot_mgr_create failed");
+};
+
 static int treeobj_hash (const char *hash_name, json_t *obj,
                          char *blobref, int blobref_len)
 {
@@ -210,10 +224,8 @@ void basic_api (void)
     lookup_t *lh;
     const char *tmp;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
+
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, "root.ref.foo", 0);
 
     ok ((lh = lookup_create (cache,
@@ -252,8 +264,7 @@ void basic_api (void)
 
     lookup_destroy (lh);
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
 }
 
 void basic_api_errors (void)
@@ -274,10 +285,7 @@ void basic_api_errors (void)
                        NULL) == NULL,
         "lookup_create fails on bad input");
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     ok ((lh = lookup_create (cache,
                              krm,
@@ -337,8 +345,7 @@ void basic_api_errors (void)
 
     lookup_destroy (lh);
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
 }
 
 /* basic lookup to test a few situations that we don't want to
@@ -352,10 +359,7 @@ void basic_lookup (void) {
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     const char *tmp;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -415,6 +419,8 @@ void basic_lookup (void) {
         "lookup_get_root_seq returned correct root_seq");
 
     lookup_destroy (lh);
+
+    ltest_finalize (cache, krm);
 }
 
 void check_common (lookup_t *lh,
@@ -573,10 +579,7 @@ void lookup_root (void) {
     char valref_ref[BLOBREF_MAX_STRING_SIZE];
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -654,8 +657,7 @@ void lookup_root (void) {
         "lookup_create on root w/ flag = FLUX_KVS_READDIR, bad root_ref, should EINVAL");
     check_error (lh, EINVAL, "root w/ FLUX_KVS_READDIR, bad root_ref, should EINVAL");
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -677,10 +679,7 @@ void lookup_basic (void) {
     char dirref_test_ref[BLOBREF_MAX_STRING_SIZE];
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -989,8 +988,7 @@ void lookup_basic (void) {
     check_value (lh, test, "lookup dirref.symlinkNS treeobj");
     json_decref (test);
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (dirref_test);
     json_decref (dir);
     json_decref (dirref);
@@ -1012,10 +1010,7 @@ void lookup_errors (void) {
     char valref_ref[BLOBREF_MAX_STRING_SIZE];
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -1413,8 +1408,7 @@ void lookup_errors (void) {
         "lookup still returns LOOKUP_PROCESS_ERROR on second call");
     lookup_destroy (lh);
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (dirref);
     json_decref (dir);
     json_decref (root);
@@ -1434,10 +1428,7 @@ void lookup_security (void) {
     struct flux_msg_cred owner_7 = { .userid = 7, .rolemask = FLUX_ROLE_OWNER};
     struct flux_msg_cred user_7 = { .userid = 7, .rolemask = FLUX_ROLE_USER};
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -1572,8 +1563,7 @@ void lookup_security (void) {
         "lookup_create on val on namespace altnamespace with rolemask user and invalid owner");
     check_error (lh, EPERM, "lookup_create on val on namespace altnamespace with rolemask user and invalid owner");
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -1594,10 +1584,7 @@ void lookup_links (void) {
     char dirref1_ref[BLOBREF_MAX_STRING_SIZE];
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -1831,8 +1818,7 @@ void lookup_links (void) {
     check_value (lh, test, "dirref1.link2symlink");
     json_decref (test);
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (dirref3);
     json_decref (dir);
     json_decref (dirref2);
@@ -1853,10 +1839,7 @@ void lookup_alt_root (void) {
     char dirref2_ref[BLOBREF_MAX_STRING_SIZE];
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -1953,8 +1936,7 @@ void lookup_alt_root (void) {
     check_value (lh, test, "alt root val");
     json_decref (test);
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (dirref1);
     json_decref (dirref2);
     json_decref (root);
@@ -1972,10 +1954,7 @@ void lookup_root_symlink (void) {
     char valref_ref[BLOBREF_MAX_STRING_SIZE];
     char dirref_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -2110,8 +2089,7 @@ void lookup_root_symlink (void) {
         "lookup_create on symlinkroot w/ flag = FLUX_KVS_READDIR, bad root_ref, should EINVAL");
     check_error (lh, EINVAL, "symlinkroot w/ FLUX_KVS_READDIR, bad root_ref, should EINVAL");
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (dirref);
     json_decref (root);
 }
@@ -2127,10 +2105,7 @@ void lookup_symlinkNS (void) {
     char root_refA[BLOBREF_MAX_STRING_SIZE];
     char root_refB[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -2280,8 +2255,7 @@ void lookup_symlinkNS (void) {
         "lookup_create symlinkNS2B on namespace A, readdir");
     check_value (lh, rootB, "symlinkNS2B on namespace A, readdir");
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (rootA);
     json_decref (rootB);
 }
@@ -2302,10 +2276,7 @@ void lookup_symlinkNS_security (void) {
     struct flux_msg_cred user_1000 = { .rolemask = FLUX_ROLE_USER,
                                        .userid = 1000 };
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -2403,8 +2374,7 @@ void lookup_symlinkNS_security (void) {
         "lookup_create on symlinkNS2C.val with rolemask user and invalid owner");
     check_error (lh, EPERM, "lookup_create on symlinkNS2C.val with rolemask user and invalid owner");
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (rootA);
     json_decref (rootB);
     json_decref (rootC);
@@ -2422,10 +2392,7 @@ void lookup_stall_namespace (void) {
     char root_ref2[BLOBREF_MAX_STRING_SIZE];
     const char *tmp;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -2562,8 +2529,7 @@ void lookup_stall_namespace (void) {
     check_value (lh, test, ".");
     json_decref (test);
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (root1);
     json_decref (root2);
 }
@@ -2576,10 +2542,7 @@ void lookup_stall_ref_root (void) {
     lookup_t *lh;
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -2628,8 +2591,7 @@ void lookup_stall_ref_root (void) {
         "lookup_create stalltest \".\"");
     check_value (lh, root, "root \".\" #2");
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -2655,10 +2617,7 @@ void lookup_stall_ref (void) {
     char dirref2_ref[BLOBREF_MAX_STRING_SIZE];
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -2973,8 +2932,7 @@ void lookup_stall_ref (void) {
         "dirref1.valrefmisc_multi: error & errno properly returned from callback error");
     lookup_destroy (lh);
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (dirref1);
     json_decref (valref_tmp1);
     json_decref (valref_tmp2);
@@ -2995,10 +2953,7 @@ void lookup_stall_namespace_removed (void) {
     char dirref_ref[BLOBREF_MAX_STRING_SIZE];
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -3306,8 +3261,7 @@ void lookup_stall_namespace_removed (void) {
     cache_remove_entry (cache, valref_ref);
     setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, root_ref, 0);
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (dirref);
     json_decref (valref);
     json_decref (root);
@@ -3327,10 +3281,7 @@ void lookup_stall_ref_expire_cache_entries (void) {
     char dirref2_ref[BLOBREF_MAX_STRING_SIZE];
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ltest_init (&cache, &krm);
 
     /* This cache is
      *
@@ -3492,8 +3443,7 @@ void lookup_stall_ref_expire_cache_entries (void) {
     ok (cache_count_entries (cache) == 0,
         "cache_count_entries returns 0");
 
-    cache_destroy (cache);
-    kvsroot_mgr_destroy (krm);
+    ltest_finalize (cache, krm);
     json_decref (dirref1);
     json_decref (dirref2);
     json_decref (root);

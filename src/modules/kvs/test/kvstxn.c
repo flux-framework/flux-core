@@ -31,6 +31,20 @@ static int test_global = 5;
 /* Use when we do not yet have a root_ref. */
 static const char *ref_dummy = "sha1-508259c0f7fd50e47716b50ad1f0fc6ed46017f9";
 
+static void ktest_finalize (struct cache *cache, kvsroot_mgr_t *krm)
+{
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
+static void ktest_init (struct cache **cache, kvsroot_mgr_t **krm)
+{
+    if (!(*cache = cache_create ()))
+        BAIL_OUT ("cache_create failed");
+    if (!(*krm = kvsroot_mgr_create (NULL, NULL)))
+        BAIL_OUT ("kvsroot_mgr_create failed");
+};
+
 static int treeobj_hash (const char *hash_name, json_t *obj,
                          char *blobref, int blobref_len)
 {
@@ -1036,10 +1050,7 @@ void kvstxn_basic_root_not_dir (void)
     json_t *root;
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* make a non-dir root */
     root = treeobj_create_val ("abcd", 4);
@@ -1072,8 +1083,7 @@ void kvstxn_basic_root_not_dir (void)
         "kvstxn_get_errnum return EINVAL");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -1115,10 +1125,8 @@ void kvstxn_process_root_missing (void)
     json_t *rootdir;
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
+
     ok ((rootdir = treeobj_create_dir ()) != NULL,
         "treeobj_create_dir works");
 
@@ -1175,8 +1183,7 @@ void kvstxn_process_root_missing (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1", "1");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
 }
 
 int missingref_count_cb (kvstxn_t *kt, const char *ref, void *data)
@@ -1201,10 +1208,7 @@ void kvstxn_process_missing_ref (void)
     const char *newroot;
     int count = 0;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1287,8 +1291,7 @@ void kvstxn_process_missing_ref (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val", "52");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -1312,10 +1315,7 @@ void kvstxn_process_multiple_missing_ref (void)
     json_t *ops = NULL;
     int count = 0;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1437,8 +1437,7 @@ void kvstxn_process_multiple_missing_ref (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir3.c", "72");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir1);
     json_decref (dir2);
     json_decref (dir3);
@@ -1460,10 +1459,7 @@ void kvstxn_process_multiple_identical_missing_ref (void)
     json_t *ops = NULL;
     int count = 0;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1554,8 +1550,7 @@ void kvstxn_process_multiple_identical_missing_ref (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.c", "72");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -1575,10 +1570,7 @@ void kvstxn_process_missing_ref_removed (void)
     json_t *ops = NULL;
     int count = 0;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1667,8 +1659,7 @@ void kvstxn_process_missing_ref_removed (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir", NULL);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -1700,10 +1691,7 @@ void kvstxn_process_error_callbacks (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1764,8 +1752,7 @@ void kvstxn_process_error_callbacks (void)
         "kvstxn_iter_dirty_cache_entries errors on callback error & returns correct errno");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -1799,10 +1786,7 @@ void kvstxn_process_error_callbacks_partway (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1861,8 +1845,7 @@ void kvstxn_process_error_callbacks_partway (void)
         "correct number of successful returns from dirty cache callback");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -1876,10 +1859,7 @@ void kvstxn_process_invalid_operation (void)
     json_t *root;
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is an empty root */
     root = treeobj_create_dir ();
@@ -1912,8 +1892,7 @@ void kvstxn_process_invalid_operation (void)
         "kvstxn_get_errnum return EINVAL");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -1974,10 +1953,7 @@ void kvstxn_process_invalid_hash (void)
     json_t *root;
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is an empty root */
     root = treeobj_create_dir ();
@@ -2010,8 +1986,7 @@ void kvstxn_process_invalid_hash (void)
         "kvstxn_get_errnum return EINVAL %d", kvstxn_get_errnum (kt));
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -2027,10 +2002,7 @@ void kvstxn_process_follow_link_no_namespace (void)
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2091,8 +2063,7 @@ void kvstxn_process_follow_link_no_namespace (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "symlink.val", "52");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -2107,10 +2078,7 @@ void kvstxn_process_follow_link_namespace (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2191,8 +2159,7 @@ void kvstxn_process_follow_link_namespace (void)
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -2207,10 +2174,7 @@ void kvstxn_process_dirval_test (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2261,8 +2225,7 @@ void kvstxn_process_dirval_test (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val", "52");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -2279,10 +2242,7 @@ void kvstxn_process_delete_test (void)
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2342,8 +2302,7 @@ void kvstxn_process_delete_test (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val", NULL);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -2358,10 +2317,7 @@ void kvstxn_process_delete_nosubdir_test (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is an empty root */
     root = treeobj_create_dir ();
@@ -2398,8 +2354,7 @@ void kvstxn_process_delete_nosubdir_test (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "noexistdir.val", NULL);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -2415,10 +2370,7 @@ void kvstxn_process_delete_filevalinpath_test (void)
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2473,8 +2425,7 @@ void kvstxn_process_delete_filevalinpath_test (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val.valbaz", NULL);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -2491,10 +2442,7 @@ void kvstxn_process_bad_dirrefs (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2548,8 +2496,7 @@ void kvstxn_process_bad_dirrefs (void)
         "kvstxn_get_errnum return ENOTRECOVERABLE");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (dirref);
     json_decref (root);
@@ -2588,10 +2535,7 @@ void kvstxn_process_big_fileval (void)
     struct cache_count cache_count;
     int i;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2692,8 +2636,7 @@ void kvstxn_process_big_fileval (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "val", bigstr);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -2712,10 +2655,7 @@ void kvstxn_process_giant_dir (void)
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is.
      *
@@ -2822,8 +2762,7 @@ void kvstxn_process_giant_dir (void)
         "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -2840,10 +2779,7 @@ void kvstxn_process_append (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2975,8 +2911,7 @@ void kvstxn_process_append (void)
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -2990,10 +2925,7 @@ void kvstxn_process_append_errors (void)
     json_t *dir;
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -3073,8 +3005,7 @@ void kvstxn_process_append_errors (void)
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -3097,10 +3028,7 @@ void kvstxn_process_append_no_duplicate (void)
     const char *newroot;
     json_t *ops = NULL;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -3199,8 +3127,7 @@ void kvstxn_process_append_no_duplicate (void)
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -3360,8 +3287,7 @@ void kvstxn_process_fallback_merge (void)
         "kvstxn_mgr_get_ready_transaction returns NULL, no more transactions");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
 }
 
 int main (int argc, char *argv[])
