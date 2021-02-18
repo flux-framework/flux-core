@@ -33,6 +33,7 @@ struct now_context {
 struct then_context {
     flux_reactor_t *r;      // external reactor for then
     flux_watcher_t *timer;  // timer watcher (if timeout set)
+    double timeout;
     flux_watcher_t *check;
     flux_watcher_t *idle;
     bool init_called;
@@ -90,11 +91,10 @@ static void now_context_destroy (struct now_context *now)
 
 static struct now_context *now_context_create (void)
 {
-    struct now_context *now = calloc (1, sizeof (*now));
-    if (!now) {
-        errno = ENOMEM;
-        goto error;
-    }
+    struct now_context *now;
+
+    if (!(now = calloc (1, sizeof (*now))))
+        return NULL;
     if (!(now->r = flux_reactor_create (0)))
         goto error;
     return now;
@@ -148,11 +148,10 @@ static void then_context_destroy (struct then_context *then)
 
 static struct then_context *then_context_create (flux_reactor_t *r, void *arg)
 {
-    struct then_context *then = calloc (1, sizeof (*then));
-    if (!then) {
-        errno = ENOMEM;
-        goto error;
-    }
+    struct then_context *then;
+
+    if (!(then = calloc (1, sizeof (*then))))
+        return NULL;
     then->r = r;
     if (!(then->check = flux_check_watcher_create (r, check_cb, arg)))
         goto error;
@@ -180,28 +179,20 @@ static int then_context_set_timeout (struct then_context *then,
                                      double timeout, void *arg)
 {
     if (then) {
-        if (timeout < 0.)       // disable
+        then->timeout = timeout;
+        if (timeout < 0.)
             flux_watcher_stop (then->timer);
         else {
-            if (!then->timer) { // set
-                then->timer = flux_timer_watcher_create (then->r, timeout, 0.,
+            if (!then->timer) {
+                then->timer = flux_timer_watcher_create (then->r, 0., timeout,
                                                          then_timer_cb, arg);
                 if (!then->timer)
                     return -1;
             }
-            else {              // reset
-                flux_timer_watcher_reset (then->timer, timeout, 0.);
-            }
-            flux_watcher_start (then->timer);
+            flux_timer_watcher_again (then->timer);
         }
     }
     return 0;
-}
-
-static void then_context_clear_timer (struct then_context *then)
-{
-    if (then)
-        flux_watcher_stop (then->timer);
 }
 
 static void init_result (struct future_result *fs)
@@ -313,20 +304,16 @@ void flux_future_destroy (flux_future_t *f)
  */
 flux_future_t *flux_future_create (flux_future_init_f cb, void *arg)
 {
-    flux_future_t *f = calloc (1, sizeof (*f));
-    if (!f) {
-        errno = ENOMEM;
-        goto error;
-    }
+    flux_future_t *f;
+
+    if (!(f = calloc (1, sizeof (*f))))
+        return NULL;
     f->init = cb;
     f->init_arg = arg;
     f->queue = NULL;
     f->embed = NULL;
     f->refcount = 1;
     return f;
-error:
-    flux_future_destroy (f);
-    return NULL;
 }
 
 void flux_future_incref (flux_future_t *f)
@@ -343,7 +330,6 @@ void flux_future_decref (flux_future_t *f)
 static void post_fulfill (flux_future_t *f)
 {
     now_context_clear_timer (f->now);
-    then_context_clear_timer (f->then);
     if (f->now)
         flux_reactor_stop (f->now->r);
     if (f->then)
@@ -357,8 +343,10 @@ void flux_future_reset (flux_future_t *f)
     if (f) {
         clear_result (&f->result);
         f->result_valid = false;
-        if (f->then)
+        if (f->then) {
             then_context_stop (f->then);
+            (void)then_context_set_timeout (f->then, f->then->timeout, f);
+        }
         if (f->queue && zlist_size (f->queue) > 0) {
             struct future_result *fs = zlist_pop (f->queue);
             move_result (&f->result, fs);
@@ -368,7 +356,6 @@ void flux_future_reset (flux_future_t *f)
         }
     }
 }
-
 
 /* Set the flux reactor to be used for 'then' context.
  * In 'now' context, reactor will be a temporary one.
@@ -534,7 +521,6 @@ int flux_future_get (flux_future_t *f, const void **result)
 /* Set up continuation to run once future is fulfilled.
  * Lazily set up the "then" reactor context.
  * If timer expires, fulfill the future with ETIMEDOUT error.
- * This function can only be called once.
  */
 int flux_future_then (flux_future_t *f, double timeout,
                       flux_continuation_f cb, void *arg)

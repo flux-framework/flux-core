@@ -687,6 +687,14 @@ void flux_timer_watcher_reset (flux_watcher_t *w, double after, double repeat)
     ev_timer_set (tw, after, repeat);
 }
 
+void flux_timer_watcher_again (flux_watcher_t *w)
+{
+    assert (flux_watcher_get_ops (w) == &timer_watcher);
+    ev_timer *tw = w->data;
+    struct ev_loop *loop = w->r->loop;
+    ev_timer_again (loop, tw);
+}
+
 /* Periodic
  */
 struct f_periodic {

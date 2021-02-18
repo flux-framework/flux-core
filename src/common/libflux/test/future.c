@@ -221,6 +221,56 @@ void test_timeout_then (void)
     diag ("%s: timeout works in reactor context", __FUNCTION__);
 }
 
+void timeout_reset_contin (flux_future_t *f, void *arg)
+{
+    int *count = arg;
+
+    diag ("%s: count=%d\n", __FUNCTION__, *count);
+
+    /* Expecting ETIMEDOUT every time
+     */
+    if (flux_future_get (f, NULL) == 0)
+        errno = EPROTO; // fall through
+    if (errno != ETIMEDOUT)
+        goto error;
+
+    if (--(*count) > 0)
+        flux_future_reset (f);
+    else
+        flux_reactor_stop (flux_future_get_reactor (f));
+    return;
+error:
+    flux_reactor_stop_error (flux_future_get_reactor (f));
+}
+
+void test_timeout_then_reset (void)
+{
+    flux_future_t *f;
+    flux_reactor_t *r;
+    int count = 10;
+
+    r = flux_reactor_create (0);
+    if (!r)
+        BAIL_OUT ("flux_reactor_create failed");
+
+    f = flux_future_create (NULL, NULL);
+    if (!f)
+        BAIL_OUT ("could not create future");
+    flux_future_set_reactor (f, r);
+
+    ok (flux_future_then (f, 0.01, timeout_reset_contin, &count) == 0,
+        "flux_future_then registered continuation with timeout");
+    ok (flux_reactor_run (r, 0) == 0,
+        "reactor ran successfully");
+    ok (count == 0,
+        "future timed out the expected number of times");
+
+    flux_future_destroy (f);
+    flux_reactor_destroy (r);
+
+    diag ("%s: timeout with reset works in reactor context", __FUNCTION__);
+}
+
 void simple_init_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
                               int revents, void *arg)
 {
@@ -1405,6 +1455,7 @@ int main (int argc, char *argv[])
     test_simple ();
     test_timeout_now ();
     test_timeout_then ();
+    test_timeout_then_reset ();
 
     test_init_now ();
     test_init_then ();
