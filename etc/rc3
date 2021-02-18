@@ -26,7 +26,7 @@ modrm 0 sched-simple
 modrm all resource
 modrm 0 job-exec
 modrm 0 job-list
-modrm 0 job-info
+modrm all job-info
 modrm 0 job-manager
 modrm all job-ingest
 
