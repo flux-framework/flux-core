@@ -44,12 +44,9 @@
  */
 const double max_lastuse_age = 10.;
 
-/* Expire namespaces after 'max_namespace_age' heartbeats.
- *
- * If heartbeats are the default of 2 seconds, 1000 heartbeats is
- * about half an hour.
+/* Expire namespaces after 'max_namespace_age' seconds.
  */
-const int max_namespace_age = 1000;
+const double max_namespace_age = 3600.;
 
 /* Include root directory in kvs.namespace-<NS>-setroot event.
  */
@@ -264,7 +261,7 @@ static void setroot (struct kvs_ctx *ctx, struct kvsroot *root,
     if (rootseq == 0 || rootseq > root->seq) {
         kvsroot_setroot (ctx->krm, root, rootref, rootseq);
         kvssync_process (root, false);
-        root->last_update_epoch = ctx->epoch;
+        root->last_update_time = flux_reactor_now (flux_get_reactor (ctx->h));
     }
 }
 
@@ -1161,6 +1158,7 @@ static void dropcache_event_cb (flux_t *h, flux_msg_handler_t *mh,
 static int heartbeat_root_cb (struct kvsroot *root, void *arg)
 {
     struct kvs_ctx *ctx = arg;
+    double now = flux_reactor_now (flux_get_reactor (ctx->h));
 
     if (root->remove) {
         if (!zlist_size (root->synclist)
@@ -1179,7 +1177,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     else if (ctx->rank != 0
              && !root->remove
              && strcasecmp (root->ns_name, KVS_PRIMARY_NAMESPACE)
-             && (ctx->epoch - root->last_update_epoch) > max_namespace_age
+             && (now - root->last_update_time) > max_namespace_age
              && !zlist_size (root->synclist)
              && !treq_mgr_transactions_count (root->trm)
              && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
