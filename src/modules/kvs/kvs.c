@@ -925,9 +925,7 @@ static void kvstxn_apply (kvstxn_t *kt)
     if ((errnum = kvstxn_get_aux_errnum (kt)))
         goto done;
 
-    if ((ret = kvstxn_process (kt,
-                               ctx->epoch,
-                               root->ref)) == KVSTXN_PROCESS_ERROR) {
+    if ((ret = kvstxn_process (kt, root->ref)) == KVSTXN_PROCESS_ERROR) {
         errnum = kvstxn_get_errnum (kt);
         goto done;
     }
@@ -1252,7 +1250,6 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
     wait_t *wait = NULL;
     lookup_process_t lret;
     int rc = -1;
-    int ret;
 
     /* if lookup_handle exists in msg as aux data, is a replay */
     lh = flux_msg_aux_get (msg, "lookup_handle");
@@ -1304,7 +1301,6 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
 
         if (!(lh = lookup_create (ctx->cache,
                                   ctx->krm,
-                                  ctx->epoch,
                                   ns,
                                   root_ref,
                                   root_seq,
@@ -1322,9 +1318,6 @@ static lookup_t *lookup_common (flux_t *h, flux_msg_handler_t *mh,
             errno = err;
             goto done;
         }
-
-        ret = lookup_set_current_epoch (lh, ctx->epoch);
-        assert (ret == 0);
     }
 
     lret = lookup (lh);

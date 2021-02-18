@@ -54,7 +54,6 @@ struct lookup {
     /* inputs from user */
     struct cache *cache;
     kvsroot_mgr_t *krm;
-    int current_epoch;
 
     char *ns_name;
     char *root_ref;
@@ -512,7 +511,6 @@ error:
 
 lookup_t *lookup_create (struct cache *cache,
                          kvsroot_mgr_t *krm,
-                         int current_epoch,
                          const char *ns,
                          const char *root_ref,
                          int root_seq,
@@ -542,7 +540,6 @@ lookup_t *lookup_create (struct cache *cache,
 
     lh->cache = cache;
     lh->krm = krm;
-    lh->current_epoch = current_epoch;
 
     if (ns) {
         /* must duplicate strings, user may not keep pointer alive */
@@ -699,13 +696,6 @@ const char *lookup_missing_namespace (lookup_t *lh)
     return NULL;
 }
 
-int lookup_get_current_epoch (lookup_t *lh)
-{
-    if (lh)
-        return lh->current_epoch;
-    return -1;
-}
-
 const char *lookup_get_namespace (lookup_t *lh)
 {
     if (lh)
@@ -724,15 +714,6 @@ int lookup_get_root_seq (lookup_t *lh)
 {
     if (lh && lh->state == LOOKUP_STATE_FINISHED)
         return lh->root_seq;
-    return -1;
-}
-
-int lookup_set_current_epoch (lookup_t *lh, int epoch)
-{
-    if (lh) {
-        lh->current_epoch = epoch;
-        return 0;
-    }
     return -1;
 }
 
