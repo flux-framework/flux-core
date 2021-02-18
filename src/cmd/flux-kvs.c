@@ -1814,7 +1814,6 @@ struct eventlog_wait_event_ctx {
     const char *key;
     const char *wait_event;
     bool got_event;
-    double timeout;
 };
 
 /* print event in raw form */
@@ -2008,14 +2007,6 @@ void eventlog_wait_event_continuation (flux_future_t *f, void *arg)
             log_err_exit ("flux_kvs_lookup_cancel");
     }
     flux_future_reset (f);
-
-    /* re-call to set timeout */
-    if (flux_future_then (f,
-                          ctx->timeout,
-                          eventlog_wait_event_continuation,
-                          arg) < 0)
-        log_err_exit ("flux_future_then");
-
     json_decref (a);
 }
 
@@ -2025,6 +2016,7 @@ int cmd_eventlog_wait_event (optparse_t *p, int argc, char **argv)
     const char *ns = NULL;
     int optindex = optparse_option_index (p);
     flux_future_t *f;
+    double timeout;
     int flags = 0;
     struct eventlog_wait_event_ctx ctx;
 
@@ -2038,7 +2030,8 @@ int cmd_eventlog_wait_event (optparse_t *p, int argc, char **argv)
     ctx.key = argv[optindex++];
     ctx.wait_event = argv[optindex++];
     ctx.got_event = false;
-    ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
+
+    timeout = optparse_get_duration (p, "timeout", -1.0);
 
     flags |= FLUX_KVS_WATCH;
     flags |= FLUX_KVS_WATCH_APPEND;
@@ -2048,7 +2041,7 @@ int cmd_eventlog_wait_event (optparse_t *p, int argc, char **argv)
     if (!(f = flux_kvs_lookup (h, ns, flags, ctx.key)))
         log_err_exit ("flux_kvs_lookup");
     if (flux_future_then (f,
-                          ctx.timeout,
+                          timeout,
                           eventlog_wait_event_continuation,
                           &ctx) < 0)
         log_err_exit ("flux_future_then");

@@ -84,10 +84,6 @@ static void watch_count_cb (flux_future_t *f, void *arg)
 
     flux_future_reset (f);
 
-    /* re-call to set timeout */
-    if (flux_future_then (f, WATCH_TIMEOUT, watch_count_cb, arg) < 0)
-        log_err_exit ("flux_future_then");
-
     if (changecount == threadcount) {
         if (flux_kvs_lookup_cancel (f) < 0)
             log_err_exit ("flux_kvs_lookup_cancel");
