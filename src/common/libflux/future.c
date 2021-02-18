@@ -180,28 +180,19 @@ static int then_context_set_timeout (struct then_context *then,
 {
     if (then) {
         then->timeout = timeout;
-        if (timeout < 0.)       // disable
+        if (timeout < 0.)
             flux_watcher_stop (then->timer);
         else {
-            if (!then->timer) { // set
-                then->timer = flux_timer_watcher_create (then->r, timeout, 0.,
+            if (!then->timer) {
+                then->timer = flux_timer_watcher_create (then->r, 0., timeout,
                                                          then_timer_cb, arg);
                 if (!then->timer)
                     return -1;
             }
-            else {              // reset
-                flux_timer_watcher_reset (then->timer, timeout, 0.);
-            }
-            flux_watcher_start (then->timer);
+            flux_timer_watcher_again (then->timer);
         }
     }
     return 0;
-}
-
-static void then_context_clear_timer (struct then_context *then)
-{
-    if (then)
-        flux_watcher_stop (then->timer);
 }
 
 static void init_result (struct future_result *fs)
@@ -339,7 +330,6 @@ void flux_future_decref (flux_future_t *f)
 static void post_fulfill (flux_future_t *f)
 {
     now_context_clear_timer (f->now);
-    then_context_clear_timer (f->then);
     if (f->now)
         flux_reactor_stop (f->now->r);
     if (f->then)
