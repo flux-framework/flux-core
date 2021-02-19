@@ -409,6 +409,57 @@ test_expect_success 'no unit tests built with libtool wrapper' '
 	test_must_fail grep -q "\.libs" test_dirs
 '
 
+CMDS="\
+R \
+admin \
+cron \
+event \
+exec \
+job \
+jobs \
+jobspec \
+jobtap \
+keygen \
+kvs \
+logger \
+mini \
+module \
+ping \
+queue \
+resource \
+start \
+terminus \
+"
+
+test_cmd_help ()
+{
+    local rc=0
+    for cmd in ${CMDS}; do
+        flux ${cmd} --help 2>&1 | grep -i usage || rc=1
+    done
+    return ${rc}
+}
+
+KVS_SUBCMDS="\
+namespace \
+eventlog \
+"
+
+test_kvs_subcmd_help ()
+{
+    local rc=0
+    for subcmd in ${KVS_SUBCMDS}; do
+        flux kvs ${subcmd} --help 2>&1 | grep -i usage || rc=1
+    done
+    return ${rc}
+}
+
+test_expect_success 'command --help works outside of flux instance' '
+        flux --help 2>&1 | grep -i usage &&
+        test_cmd_help &&
+        test_kvs_subcmd_help
+'
+
 # Note: flux-start auto-removes rundir
 
 test_done
