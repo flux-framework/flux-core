@@ -24,6 +24,13 @@
 #include "attr.h"
 #include "content-cache.h"
 
+/* A periodic callback purges the cache of least recently used entries.
+ * The callback is synchronized wtih the instance heartbeat, within the
+ * bounds of 'sync_min' and 'sync_max' seconds.
+ */
+static double sync_min = 1.;
+static double sync_max = 10.;
+
 static const uint32_t default_cache_purge_target_entries = 1024*1024;
 static const uint32_t default_cache_purge_target_size = 1024*1024*16;
 
@@ -57,6 +64,7 @@ struct cache_entry {
 struct content_cache {
     flux_t *h;
     flux_msg_handler_t **handlers;
+    flux_future_t *f_sync;
     uint32_t rank;
     zhash_t *entries;
     uint8_t backing:1;              /* 'content.backing' service available */
@@ -864,14 +872,12 @@ done:
     return rc;
 }
 
-static void heartbeat_event (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void sync_cb (flux_future_t *f, void *arg)
 {
     content_cache_t *cache = arg;
 
-    if (flux_event_decode (msg, NULL, NULL) < 0)
-        flux_log_error (h, "heartbeat");
     cache_purge (cache);
+    flux_future_reset (f);
 }
 
 /* Initialization
@@ -920,12 +926,6 @@ static const struct flux_msg_handler_spec htab[] = {
         content_flush_request,
         0
     },
-    {
-        FLUX_MSGTYPE_EVENT,
-        "hb",
-        heartbeat_event,
-        0
-    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -937,7 +937,8 @@ int content_cache_set_flux (content_cache_t *cache, flux_t *h)
         return -1;
     if (flux_get_rank (h, &cache->rank) < 0)
         return -1;
-    if (flux_event_subscribe (h, "hb") < 0)
+    if (!(cache->f_sync = flux_sync_create (h, sync_min))
+        || flux_future_then (cache->f_sync, sync_max, sync_cb, cache) < 0)
         return -1;
     return 0;
 }
@@ -1045,7 +1046,7 @@ void content_cache_destroy (content_cache_t *cache)
 {
     if (cache) {
         if (cache->h) {
-            (void)flux_event_unsubscribe (cache->h, "hb");
+            flux_future_destroy (cache->f_sync);
             flux_msg_handler_delvec (cache->handlers);
         }
         if (cache->backing_name)
