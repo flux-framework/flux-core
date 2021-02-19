@@ -26,7 +26,7 @@ local to, err = f:timer {
 }
 type_ok (to, 'userdata', "created timeout handler")
 is (err, nil, "error from timer create is nil")
-is (to.timeout, 250, 'timeout is 500ms')
+is (to.timeout, 250, 'timeout is 250ms')
 type_ok (to.id, 'number', 'new timeout id is '..to.id)
 
 local r = f:reactor()
