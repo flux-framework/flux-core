@@ -16,7 +16,7 @@ CPUS_ALLOWED_COUNT="$(pwd)/cpus-allowed-count.sh"
 
 cat >${CPUS_ALLOWED_COUNT} << EOF
 #!/bin/sh
-hwloc-bind --get | hwloc-calc --number-of core
+hwloc-bind --get | hwloc-calc --number-of core | tail -n 1
 EOF
 chmod +x ${CPUS_ALLOWED_COUNT}
 
