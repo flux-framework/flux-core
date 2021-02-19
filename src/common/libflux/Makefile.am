@@ -77,7 +77,6 @@ fluxcoreinclude_HEADERS = \
 	attr.h \
 	flog.h \
 	conf.h \
-	heartbeat.h \
 	content.h \
 	future.h \
 	barrier.h \
@@ -114,7 +113,6 @@ libflux_la_SOURCES = \
 	ev_buffer_read.c \
 	ev_buffer_write.h \
 	ev_buffer_write.c \
-	heartbeat.c \
 	keepalive.c \
 	content.c \
 	future.c \

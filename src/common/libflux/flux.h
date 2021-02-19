@@ -27,7 +27,6 @@
 #include "attr.h"
 #include "flog.h"
 #include "conf.h"
-#include "heartbeat.h"
 #include "content.h"
 #include "future.h"
 #include "barrier.h"
