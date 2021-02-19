@@ -12,8 +12,8 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 test_expect_success 'heartbeat is received on all ranks' '
 	run_timeout 5 \
-          flux exec -n flux event sub --count=1 hb >output_event_sub &&
-	hb_count=`grep "^hb" output_event_sub | wc -l` &&
+          flux exec -n flux event sub --count=1 heartbeat.pulse >output_event_sub &&
+	hb_count=`grep "^heartbeat.pulse" output_event_sub | wc -l` &&
         test $hb_count -eq $SIZE
 '
 

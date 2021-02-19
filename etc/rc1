@@ -22,7 +22,7 @@ modload all kvs
 modload all kvs-watch
 
 modload all resource
-modload 0 cron sync=hb
+modload 0 cron sync=heartbeat.pulse
 modload 0 job-manager
 modload all job-info
 modload 0 job-list

@@ -64,7 +64,6 @@ syslog
 graphviz
 prepended
 multipart
-hb
 Tpng
 nodesets
 keepalives

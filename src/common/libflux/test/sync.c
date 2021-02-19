@@ -23,7 +23,7 @@ void send_fake_heartbeat (flux_t *h, int seq)
 {
     flux_msg_t *msg;
 
-    if (!(msg = flux_event_encode ("hb", NULL))
+    if (!(msg = flux_event_encode ("heartbeat.pulse", NULL))
             || flux_msg_set_seq (msg, seq) < 0
             || flux_send (h, msg, 0) < 0)
         BAIL_OUT ("failed to send fake heartbeat");

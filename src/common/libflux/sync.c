@@ -31,7 +31,7 @@ static void sync_destroy (struct flux_sync *sync)
 {
     if (sync) {
         int saved_errno = errno;
-        (void)flux_event_unsubscribe (sync->h, "hb");
+        (void)flux_event_unsubscribe (sync->h, "heartbeat.pulse");
         free (sync);
         errno = saved_errno;
     }
@@ -45,7 +45,7 @@ static struct flux_sync *sync_create (flux_t *h, double minimum)
         return NULL;
     sync->h = h;
     sync->minimum = minimum;
-    if (flux_event_subscribe (h, "hb") < 0)
+    if (flux_event_subscribe (h, "heartbeat.pulse") < 0)
         goto error;
     return sync;
 error:
@@ -100,7 +100,7 @@ static void initialize_cb (flux_future_t *f, void *arg)
     flux_msg_handler_t *mh;
     struct flux_match match = FLUX_MATCH_EVENT;
 
-    match.topic_glob = "hb";
+    match.topic_glob = "heartbeat.pulse";
     if (!(mh = flux_msg_handler_create (h, match, heartbeat_cb, f)))
         goto error;
     if (flux_future_aux_set (f,

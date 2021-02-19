@@ -78,7 +78,7 @@ static void timer_cb (flux_reactor_t *r, flux_watcher_t *w,
     heartbeat_t *hb = arg;
     flux_msg_t *msg = NULL;
 
-    if (!(msg = flux_event_encode ("hb", NULL))) {
+    if (!(msg = flux_event_encode ("heartbeat.pulse", NULL))) {
         log_err ("heartbeat_encode");
         goto done;
     }
