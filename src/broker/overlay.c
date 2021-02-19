@@ -23,7 +23,6 @@
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/fsd.h"
 
-#include "heartbeat.h"
 #include "overlay.h"
 #include "attr.h"
 
@@ -44,10 +43,13 @@ struct child {
     bool idle;
 };
 
-/* Wake up every heartbeat and:
+/* Wake up periodically (between 'sync_min' and 'sync_max' seconds) and:
  * 1) send keepalive to parent if nothing was sent in 'idle_min' seconds
  * 2) find children that have not been heard from in 'idle_max' seconds
  */
+static const double sync_min = 1.0;
+static const double sync_max = 5.0;
+
 static const double idle_min = 5.0;
 static const double idle_max = 30.0;
 
@@ -59,6 +61,7 @@ struct overlay {
 
     flux_t *h;
     flux_msg_handler_t **handlers;
+    flux_future_t *f_sync;
 
     uint32_t size;
     uint32_t rank;
@@ -323,18 +326,16 @@ done:
     return rc;
 }
 
-static void heartbeat_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
+static void sync_cb (flux_future_t *f, void *arg)
 {
     struct overlay *ov = arg;
     double now = flux_reactor_now (flux_get_reactor (ov->h));
 
-    if (flux_event_decode (msg, NULL, NULL) < 0)
-        flux_log_error (ov->h, "heartbeat");
-
     if (now - ov->parent_lastsent > idle_min)
         overlay_keepalive_parent (ov, KEEPALIVE_STATUS_NORMAL);
     overlay_log_idle_children (ov);
+
+    flux_future_reset (f);
 }
 
 void overlay_set_parent_cb (struct overlay *ov, overlay_sock_cb_f cb, void *arg)
@@ -805,8 +806,7 @@ void overlay_destroy (struct overlay *ov)
         }
         zcertstore_destroy (&ov->certstore);
 
-        if (ov->h)
-            (void)flux_event_unsubscribe (ov->h, "hb");
+        flux_future_destroy (ov->f_sync);
         flux_msg_handler_delvec (ov->handlers);
         overlay_keepalive_parent (ov, KEEPALIVE_STATUS_DISCONNECT);
         endpoint_destroy (ov->parent);
@@ -819,7 +819,6 @@ void overlay_destroy (struct overlay *ov)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_EVENT,  "hb", heartbeat_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "overlay.lspeer", lspeer_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -836,7 +835,8 @@ struct overlay *overlay_create (flux_t *h)
 
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;
-    if (flux_event_subscribe (ov->h, "hb") < 0)
+    if (!(ov->f_sync = flux_sync_create (h, sync_min))
+        || flux_future_then (ov->f_sync, sync_max, sync_cb, ov) < 0)
         goto error;
     if (!(ov->cert = zcert_new ()))
         goto nomem;
