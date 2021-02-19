@@ -31,6 +31,20 @@ static int test_global = 5;
 /* Use when we do not yet have a root_ref. */
 static const char *ref_dummy = "sha1-508259c0f7fd50e47716b50ad1f0fc6ed46017f9";
 
+static void ktest_finalize (struct cache *cache, kvsroot_mgr_t *krm)
+{
+    cache_destroy (cache);
+    kvsroot_mgr_destroy (krm);
+}
+
+static void ktest_init (struct cache **cache, kvsroot_mgr_t **krm)
+{
+    if (!(*cache = cache_create (NULL)))
+        BAIL_OUT ("cache_create failed");
+    if (!(*krm = kvsroot_mgr_create (NULL, NULL)))
+        BAIL_OUT ("kvsroot_mgr_create failed");
+};
+
 static int treeobj_hash (const char *hash_name, json_t *obj,
                          char *blobref, int blobref_len)
 {
@@ -145,7 +159,7 @@ struct cache *create_cache_with_empty_rootdir (char *ref, int ref_len)
 
     rootdir = treeobj_create_dir ();
 
-    ok ((cache = cache_create ()) != NULL,
+    ok ((cache = cache_create (NULL)) != NULL,
         "cache_create works");
     ok (treeobj_hash ("sha1", rootdir, ref, ref_len) == 0,
         "treeobj_hash worked");
@@ -643,7 +657,6 @@ void verify_value (struct cache *cache,
 
     ok ((lh = lookup_create (cache,
                              krm,
-                             1,
                              ns,
                              root_ref,
                              0,
@@ -701,7 +714,7 @@ void kvstxn_basic_kvstxn_process_test (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
@@ -710,7 +723,7 @@ void kvstxn_basic_kvstxn_process_test (void)
     ok (count == 1,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -760,7 +773,7 @@ void kvstxn_basic_kvstxn_process_test_normalization (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
@@ -769,7 +782,7 @@ void kvstxn_basic_kvstxn_process_test_normalization (void)
     ok (count == 2,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -825,7 +838,7 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
@@ -834,7 +847,7 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions (void)
     ok (count == 1,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -850,7 +863,7 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     count = 0;
@@ -862,7 +875,7 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions (void)
     ok (count == 2,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -927,7 +940,7 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
@@ -940,7 +953,7 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
     ok (count == 3,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -960,13 +973,13 @@ void kvstxn_basic_kvstxn_process_test_multiple_transactions_merge (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -1018,7 +1031,7 @@ void kvstxn_basic_kvstxn_process_test_invalid_transaction (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready transaction");
 
-    ok (kvstxn_process (ktbad, 1, rootref) == KVSTXN_PROCESS_ERROR
+    ok (kvstxn_process (ktbad, rootref) == KVSTXN_PROCESS_ERROR
         && kvstxn_get_errnum (ktbad) == EINVAL,
         "kvstxn_process fails on bad kvstxn");
 
@@ -1036,10 +1049,7 @@ void kvstxn_basic_root_not_dir (void)
     json_t *root;
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* make a non-dir root */
     root = treeobj_create_val ("abcd", 4);
@@ -1061,19 +1071,18 @@ void kvstxn_basic_root_not_dir (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     /* error is caught continuously */
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR again");
 
     ok (kvstxn_get_errnum (kt) == EINVAL,
         "kvstxn_get_errnum return EINVAL");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -1115,10 +1124,8 @@ void kvstxn_process_root_missing (void)
     json_t *rootdir;
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
+
     ok ((rootdir = treeobj_create_dir ()) != NULL,
         "treeobj_create_dir works");
 
@@ -1141,11 +1148,11 @@ void kvstxn_process_root_missing (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
         "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
 
     /* user forgot to call kvstxn_iter_missing_refs() test */
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
         "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS again");
 
     rd.cache = cache;
@@ -1154,17 +1161,17 @@ void kvstxn_process_root_missing (void)
     ok (kvstxn_iter_missing_refs (kt, rootref_cb, &rd) == 0,
         "kvstxn_iter_missing_refs works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     /* user forgot to call kvstxn_iter_dirty_cache_entries() test */
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES again");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -1175,8 +1182,7 @@ void kvstxn_process_root_missing (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1", "1");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
 }
 
 int missingref_count_cb (kvstxn_t *kt, const char *ref, void *data)
@@ -1201,10 +1207,7 @@ void kvstxn_process_missing_ref (void)
     const char *newroot;
     int count = 0;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1246,11 +1249,11 @@ void kvstxn_process_missing_ref (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
         "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
 
     /* user forgot to call kvstxn_iter_missing_refs() test */
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
         "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS again");
 
     ok (kvstxn_iter_missing_refs (kt, missingref_count_cb, &count) == 0,
@@ -1266,17 +1269,17 @@ void kvstxn_process_missing_ref (void)
 
     (void)cache_insert (cache, entry);
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     /* user forgot to call kvstxn_iter_dirty_cache_entries() test */
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES again");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -1287,8 +1290,7 @@ void kvstxn_process_missing_ref (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val", "52");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -1312,10 +1314,7 @@ void kvstxn_process_multiple_missing_ref (void)
     json_t *ops = NULL;
     int count = 0;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1392,7 +1391,7 @@ void kvstxn_process_multiple_missing_ref (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
         "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
 
     ok (kvstxn_iter_missing_refs (kt, missingref_count_cb, &count) == 0,
@@ -1418,13 +1417,13 @@ void kvstxn_process_multiple_missing_ref (void)
 
     (void)cache_insert (cache, entry);
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -1437,8 +1436,7 @@ void kvstxn_process_multiple_missing_ref (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir3.c", "72");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir1);
     json_decref (dir2);
     json_decref (dir3);
@@ -1460,10 +1458,7 @@ void kvstxn_process_multiple_identical_missing_ref (void)
     json_t *ops = NULL;
     int count = 0;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1519,7 +1514,7 @@ void kvstxn_process_multiple_identical_missing_ref (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
         "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
 
     ok (kvstxn_iter_missing_refs (kt, missingref_count_cb, &count) == 0,
@@ -1535,13 +1530,13 @@ void kvstxn_process_multiple_identical_missing_ref (void)
 
     (void)cache_insert (cache, entry);
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -1554,8 +1549,7 @@ void kvstxn_process_multiple_identical_missing_ref (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.c", "72");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -1575,10 +1569,7 @@ void kvstxn_process_missing_ref_removed (void)
     json_t *ops = NULL;
     int count = 0;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1632,7 +1623,7 @@ void kvstxn_process_missing_ref_removed (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
         "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
 
     ok (kvstxn_iter_missing_refs (kt, missingref_count_cb, &count) == 0,
@@ -1648,13 +1639,13 @@ void kvstxn_process_missing_ref_removed (void)
 
     (void)cache_insert (cache, entry);
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -1667,8 +1658,7 @@ void kvstxn_process_missing_ref_removed (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir", NULL);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -1700,10 +1690,7 @@ void kvstxn_process_error_callbacks (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1743,7 +1730,7 @@ void kvstxn_process_error_callbacks (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
         "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
 
     errno = 0;
@@ -1755,7 +1742,7 @@ void kvstxn_process_error_callbacks (void)
      * kvstxn_process call */
     (void)cache_insert (cache, create_cache_entry_treeobj (dir_ref, dir));
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     errno = 0;
@@ -1764,8 +1751,7 @@ void kvstxn_process_error_callbacks (void)
         "kvstxn_iter_dirty_cache_entries errors on callback error & returns correct errno");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -1799,10 +1785,7 @@ void kvstxn_process_error_callbacks_partway (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -1847,7 +1830,7 @@ void kvstxn_process_error_callbacks_partway (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     errno = 0;
@@ -1861,8 +1844,7 @@ void kvstxn_process_error_callbacks_partway (void)
         "correct number of successful returns from dirty cache callback");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -1876,10 +1858,7 @@ void kvstxn_process_invalid_operation (void)
     json_t *root;
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is an empty root */
     root = treeobj_create_dir ();
@@ -1901,19 +1880,18 @@ void kvstxn_process_invalid_operation (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     /* error is caught continuously */
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR again");
 
     ok (kvstxn_get_errnum (kt) == EINVAL,
         "kvstxn_get_errnum return EINVAL");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -1955,7 +1933,7 @@ void kvstxn_process_malformed_operation (void)
      */
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR
         && kvstxn_get_errnum (kt) == EPROTO,
         "kvstxn_process encountered EPROTO error");
 
@@ -1974,10 +1952,7 @@ void kvstxn_process_invalid_hash (void)
     json_t *root;
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is an empty root */
     root = treeobj_create_dir ();
@@ -1999,19 +1974,18 @@ void kvstxn_process_invalid_hash (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     /* verify kvstxn_process() does not continue processing */
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR on second call");
 
     ok (kvstxn_get_errnum (kt) == EINVAL,
         "kvstxn_get_errnum return EINVAL %d", kvstxn_get_errnum (kt));
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -2027,10 +2001,7 @@ void kvstxn_process_follow_link_no_namespace (void)
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2074,13 +2045,13 @@ void kvstxn_process_follow_link_no_namespace (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2091,8 +2062,7 @@ void kvstxn_process_follow_link_no_namespace (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "symlink.val", "52");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -2107,10 +2077,7 @@ void kvstxn_process_follow_link_namespace (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2146,13 +2113,13 @@ void kvstxn_process_follow_link_namespace (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2182,7 +2149,7 @@ void kvstxn_process_follow_link_namespace (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     ok (kvstxn_get_errnum (kt) == EINVAL,
@@ -2191,8 +2158,7 @@ void kvstxn_process_follow_link_namespace (void)
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -2207,10 +2173,7 @@ void kvstxn_process_dirval_test (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2244,13 +2207,13 @@ void kvstxn_process_dirval_test (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2261,8 +2224,7 @@ void kvstxn_process_dirval_test (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val", "52");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -2279,10 +2241,7 @@ void kvstxn_process_delete_test (void)
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2325,13 +2284,13 @@ void kvstxn_process_delete_test (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2342,8 +2301,7 @@ void kvstxn_process_delete_test (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val", NULL);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -2358,10 +2316,7 @@ void kvstxn_process_delete_nosubdir_test (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is an empty root */
     root = treeobj_create_dir ();
@@ -2387,7 +2342,7 @@ void kvstxn_process_delete_nosubdir_test (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2398,8 +2353,7 @@ void kvstxn_process_delete_nosubdir_test (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "noexistdir.val", NULL);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -2415,10 +2369,7 @@ void kvstxn_process_delete_filevalinpath_test (void)
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2462,7 +2413,7 @@ void kvstxn_process_delete_filevalinpath_test (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2473,8 +2424,7 @@ void kvstxn_process_delete_filevalinpath_test (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "dir.val.valbaz", NULL);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -2491,10 +2441,7 @@ void kvstxn_process_bad_dirrefs (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2537,19 +2484,18 @@ void kvstxn_process_bad_dirrefs (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     /* error is caught continuously */
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR again");
 
     ok (kvstxn_get_errnum (kt) == ENOTRECOVERABLE,
         "kvstxn_get_errnum return ENOTRECOVERABLE");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (dirref);
     json_decref (root);
@@ -2588,10 +2534,7 @@ void kvstxn_process_big_fileval (void)
     struct cache_count cache_count;
     int i;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2624,7 +2567,7 @@ void kvstxn_process_big_fileval (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     cache_count.treeobj_count = 0;
@@ -2639,7 +2582,7 @@ void kvstxn_process_big_fileval (void)
     ok (cache_count.total_count == 1,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2663,7 +2606,7 @@ void kvstxn_process_big_fileval (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     cache_count.treeobj_count = 0;
@@ -2681,7 +2624,7 @@ void kvstxn_process_big_fileval (void)
     ok (cache_count.total_count == 2,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2692,8 +2635,7 @@ void kvstxn_process_big_fileval (void)
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "val", bigstr);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -2712,10 +2654,7 @@ void kvstxn_process_giant_dir (void)
     char dir_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is.
      *
@@ -2798,13 +2737,13 @@ void kvstxn_process_giant_dir (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) == 0,
         "kvstxn_iter_dirty_cache_entries works for dirty cache entries");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2822,8 +2761,7 @@ void kvstxn_process_giant_dir (void)
         "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -2840,10 +2778,7 @@ void kvstxn_process_append (void)
     char root_ref[BLOBREF_MAX_STRING_SIZE];
     const char *newroot;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -2885,7 +2820,7 @@ void kvstxn_process_append (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     count = 0;
@@ -2897,7 +2832,7 @@ void kvstxn_process_append (void)
     ok (count == 3,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2918,7 +2853,7 @@ void kvstxn_process_append (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     count = 0;
@@ -2930,7 +2865,7 @@ void kvstxn_process_append (void)
     ok (count == 2,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2951,7 +2886,7 @@ void kvstxn_process_append (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     count = 0;
@@ -2962,7 +2897,7 @@ void kvstxn_process_append (void)
     ok (count == 1,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -2975,8 +2910,7 @@ void kvstxn_process_append (void)
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (root);
 }
 
@@ -2990,10 +2924,7 @@ void kvstxn_process_append_errors (void)
     json_t *dir;
     char root_ref[BLOBREF_MAX_STRING_SIZE];
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -3030,7 +2961,7 @@ void kvstxn_process_append_errors (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     ok (kvstxn_get_errnum (kt) == EISDIR,
@@ -3047,7 +2978,7 @@ void kvstxn_process_append_errors (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     ok (kvstxn_get_errnum (kt) == EOPNOTSUPP,
@@ -3064,7 +2995,7 @@ void kvstxn_process_append_errors (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     ok (kvstxn_get_errnum (kt) == EOPNOTSUPP,
@@ -3073,8 +3004,7 @@ void kvstxn_process_append_errors (void)
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -3097,10 +3027,7 @@ void kvstxn_process_append_no_duplicate (void)
     const char *newroot;
     json_t *ops = NULL;
 
-    ok ((cache = cache_create ()) != NULL,
-        "cache_create works");
-    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
-        "kvsroot_mgr_create works");
+    ktest_init (&cache, &krm);
 
     /* This root is
      *
@@ -3156,7 +3083,7 @@ void kvstxn_process_append_no_duplicate (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_LOAD_MISSING_REFS,
         "kvstxn_process returns KVSTXN_PROCESS_LOAD_MISSING_REFS");
 
     ok (kvstxn_iter_missing_refs (kt, missingref_count_cb, &count) == 0,
@@ -3172,7 +3099,7 @@ void kvstxn_process_append_no_duplicate (void)
 
     (void)cache_insert (cache, entry);
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     count = 0;
@@ -3185,7 +3112,7 @@ void kvstxn_process_append_no_duplicate (void)
     ok (count == 4,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, root_ref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, root_ref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -3199,8 +3126,7 @@ void kvstxn_process_append_no_duplicate (void)
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
     json_decref (dir);
     json_decref (root);
 }
@@ -3251,7 +3177,7 @@ void kvstxn_process_fallback_merge (void)
     ok (kvstxn_fallback_mergeable (kt) == true,
         "kvstxn_fallback_mergeable returns true on merged transaction");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_count_dirty_cb, &count) == 0,
@@ -3260,7 +3186,7 @@ void kvstxn_process_fallback_merge (void)
     ok (count == 1,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -3291,7 +3217,7 @@ void kvstxn_process_fallback_merge (void)
     ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
         "kvstxn_mgr_get_ready_transaction returns ready transaction");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     ok (kvstxn_get_errnum (kt) == EINVAL,
@@ -3314,7 +3240,7 @@ void kvstxn_process_fallback_merge (void)
     ok (kvstxn_fallback_mergeable (kt) == false,
         "kvstxn_fallback_mergeable returns false on unmerged transaction");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES,
         "kvstxn_process returns KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES");
 
     count = 0;
@@ -3324,7 +3250,7 @@ void kvstxn_process_fallback_merge (void)
     ok (count == 1,
         "correct number of cache entries were dirty");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_FINISHED,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_FINISHED,
         "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
 
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
@@ -3346,7 +3272,7 @@ void kvstxn_process_fallback_merge (void)
     ok (kvstxn_fallback_mergeable (kt) == false,
         "kvstxn_fallback_mergeable returns false on unmerged transaction");
 
-    ok (kvstxn_process (kt, 1, rootref) == KVSTXN_PROCESS_ERROR,
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_ERROR,
         "kvstxn_process returns KVSTXN_PROCESS_ERROR");
 
     ok (kvstxn_get_errnum (kt) == EINVAL,
@@ -3360,8 +3286,7 @@ void kvstxn_process_fallback_merge (void)
         "kvstxn_mgr_get_ready_transaction returns NULL, no more transactions");
 
     kvstxn_mgr_destroy (ktm);
-    kvsroot_mgr_destroy (krm);
-    cache_destroy (cache);
+    ktest_finalize (cache, krm);
 }
 
 int main (int argc, char *argv[])

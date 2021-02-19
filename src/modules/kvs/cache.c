@@ -42,7 +42,7 @@ struct cache_entry {
     void *data;             /* value raw data */
     int len;
     json_t *o;              /* value treeobj object */
-    int lastuse_epoch;      /* time of last use for cache expiry */
+    double lastuse_time;    /* time of last use for cache expiry */
     bool valid;             /* flag indicating if raw data or treeobj
                              * set, don't use data == NULL as test, as
                              * zero length data can be valid */
@@ -53,8 +53,19 @@ struct cache_entry {
 };
 
 struct cache {
+    flux_reactor_t *r;
+    double fake_time;       /* -1. for invalid */
     zhashx_t *zhx;
 };
+
+static double cache_now (struct cache *cache)
+{
+    if (cache->fake_time >= 0.)
+        return cache->fake_time;
+    if (cache->r)
+        return flux_reactor_now (cache->r);
+    return 0.;
+}
 
 struct cache_entry *cache_entry_create (const char *ref)
 {
@@ -65,14 +76,11 @@ struct cache_entry *cache_entry_create (const char *ref)
         return NULL;
     }
 
-    if (!(entry = calloc (1, sizeof (*entry)))) {
-        errno = ENOMEM;
+    if (!(entry = calloc (1, sizeof (*entry))))
         return NULL;
-    }
 
     if (!(entry->blobref = strdup (ref))) {
         cache_entry_destroy (entry);
-        errno = ENOMEM;
         return NULL;
     }
 
@@ -262,6 +270,7 @@ void cache_entry_destroy (void *arg)
 {
     struct cache_entry *entry = arg;
     if (entry) {
+        int saved_errno = errno;
         free (entry->data);
         json_decref (entry->o);
         if (entry->waitlist_notdirty)
@@ -270,6 +279,7 @@ void cache_entry_destroy (void *arg)
             wait_queue_destroy (entry->waitlist_valid);
         free (entry->blobref);
         free (entry);
+        errno = saved_errno;
     }
 }
 
@@ -299,12 +309,12 @@ int cache_entry_wait_valid (struct cache_entry *entry, wait_t *wait)
     return 0;
 }
 
-struct cache_entry *cache_lookup (struct cache *cache, const char *ref,
-                                  int current_epoch)
+struct cache_entry *cache_lookup (struct cache *cache, const char *ref)
 {
     struct cache_entry *entry = zhashx_lookup (cache->zhx, ref);
-    if (entry && current_epoch > entry->lastuse_epoch)
-        entry->lastuse_epoch = current_epoch;
+    double current_time = cache_now (cache);
+    if (entry && current_time > entry->lastuse_time)
+        entry->lastuse_time = current_time;
     return entry;
 }
 
@@ -340,16 +350,17 @@ int cache_count_entries (struct cache *cache)
     return zhashx_size (cache->zhx);
 }
 
-static int cache_entry_age (struct cache_entry *entry, int current_epoch)
+static int cache_entry_age (struct cache_entry *entry, struct cache *cache)
 {
+    double current_time = cache_now (cache);
     if (!entry)
         return -1;
-    if (entry->lastuse_epoch == 0)
-        entry->lastuse_epoch = current_epoch;
-    return current_epoch - entry->lastuse_epoch;
+    if (entry->lastuse_time == 0.)
+        entry->lastuse_time = current_time;
+    return current_time - entry->lastuse_time;
 }
 
-int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
+int cache_expire_entries (struct cache *cache, double thresh)
 {
     zlistx_t *keys;
     char *ref;
@@ -368,8 +379,8 @@ int cache_expire_entries (struct cache *cache, int current_epoch, int thresh)
             && !cache_entry_get_dirty (entry)
             && cache_entry_get_valid (entry)
             && !entry->refcount
-            && (thresh == 0
-                || cache_entry_age (entry, current_epoch) > thresh)) {
+            && (thresh == 0.
+                    || cache_entry_age (entry, cache) > thresh)) {
                 zhashx_delete (cache->zhx, ref);
                 count++;
         }
@@ -447,18 +458,18 @@ static void cache_entry_destroy_wrapper (void **arg)
         cache_entry_destroy (*entry);
 }
 
-struct cache *cache_create (void)
+struct cache *cache_create (flux_reactor_t *r)
 {
     struct cache *cache = calloc (1, sizeof (*cache));
-    if (!cache) {
-        errno = ENOMEM;
+    if (!cache)
         return NULL;
-    }
     if (!(cache->zhx = zhashx_new ())) {
         free (cache);
         errno = ENOMEM;
         return NULL;
     }
+    cache->r = r;
+    cache->fake_time = -1.;
     /* do not duplicate hash keys, use blobrefs stored in cache entry */
     zhashx_set_key_destructor (cache->zhx, NULL);
     zhashx_set_key_duplicator (cache->zhx, NULL);
@@ -472,6 +483,20 @@ void cache_destroy (struct cache *cache)
         zhashx_destroy (&cache->zhx);
         free (cache);
     }
+}
+
+/* for testing */
+void cache_entry_set_fake_time (struct cache_entry *entry, double time)
+{
+    if (entry)
+        entry->lastuse_time = time;
+}
+
+/* for testing */
+void cache_set_fake_time (struct cache *cache, double time)
+{
+    if (cache)
+        cache->fake_time = time;
 }
 
 /*

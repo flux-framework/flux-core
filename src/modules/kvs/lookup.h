@@ -40,7 +40,6 @@ typedef int (*lookup_ref_f)(lookup_t *c,
  */
 lookup_t *lookup_create (struct cache *cache,
                          kvsroot_mgr_t *krm,
-                         int current_epoch,
                          const char *ns,
                          const char *root_ref,
                          int root_seq,

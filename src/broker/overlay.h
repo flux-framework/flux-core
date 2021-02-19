@@ -33,13 +33,12 @@ void overlay_set_init_callback (struct overlay *ov,
                                 overlay_init_cb_f cb,
                                 void *arg);
 
-/* These need to be called before connect/bind.
+/* Call before connect/bind.
  */
 int overlay_init (struct overlay *ov,
                   uint32_t size,
                   uint32_t rank,
                   int tbon_k);
-void overlay_set_idle_warning (struct overlay *ov, int heartbeats);
 
 
 /* CURVE key management

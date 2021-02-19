@@ -54,7 +54,6 @@ struct lookup {
     /* inputs from user */
     struct cache *cache;
     kvsroot_mgr_t *krm;
-    int current_epoch;
 
     char *ns_name;
     char *root_ref;
@@ -181,16 +180,16 @@ static walk_level_t *walk_level_create (const char *root_ref,
     int saved_errno;
 
     if (!wl) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto error;
     }
     if (!(wl->path_copy = strdup (path))) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto error;
     }
     wl->depth = depth;
     if (!(wl->root_ref = strdup (root_ref))) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto error;
     }
     if (!(wl->root_dirent = treeobj_create_dirref (root_ref))) {
@@ -243,7 +242,7 @@ static lookup_process_t symlink_check_namespace (lookup_t *lh,
     if (!root) {
         free (lh->missing_namespace);
         if (!(lh->missing_namespace = strdup (ns))) {
-            lh->errnum = ENOMEM;
+            lh->errnum = errno;
             goto done;
         }
         ret = LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
@@ -393,7 +392,7 @@ static lookup_process_t walk (lookup_t *lh)
                 goto error;
             }
 
-            if (!(entry = cache_lookup (lh->cache, refstr, lh->current_epoch))
+            if (!(entry = cache_lookup (lh->cache, refstr))
                 || !cache_entry_get_valid (entry)) {
                 lh->missing_ref = refstr;
                 return LOOKUP_PROCESS_LOAD_MISSING_REFS;
@@ -512,7 +511,6 @@ error:
 
 lookup_t *lookup_create (struct cache *cache,
                          kvsroot_mgr_t *krm,
-                         int current_epoch,
                          const char *ns,
                          const char *root_ref,
                          int root_seq,
@@ -536,18 +534,17 @@ lookup_t *lookup_create (struct cache *cache,
     }
 
     if (!(lh = calloc (1, sizeof (*lh)))) {
-        saved_errno = ENOMEM;
+        saved_errno = errno;
         goto cleanup;
     }
 
     lh->cache = cache;
     lh->krm = krm;
-    lh->current_epoch = current_epoch;
 
     if (ns) {
         /* must duplicate strings, user may not keep pointer alive */
         if (!(lh->ns_name = strdup (ns))) {
-            saved_errno = ENOMEM;
+            saved_errno = errno;
             goto cleanup;
         }
     }
@@ -559,7 +556,7 @@ lookup_t *lookup_create (struct cache *cache,
 
     if (root_ref) {
         if (!(lh->root_ref = strdup (root_ref))) {
-            saved_errno = ENOMEM;
+            saved_errno = errno;
             goto cleanup;
         }
         lh->root_seq = root_seq;
@@ -668,7 +665,7 @@ int lookup_iter_missing_refs (lookup_t *lh, lookup_ref_f cb, void *data)
                 if (!(ref = treeobj_get_blobref (lh->valref_missing_refs, i)))
                     return -1;
 
-                if (!(entry = cache_lookup (lh->cache, ref, lh->current_epoch))
+                if (!(entry = cache_lookup (lh->cache, ref))
                     || !cache_entry_get_valid (entry)) {
 
                     /* valref points to raw data, raw_data flag is always
@@ -699,13 +696,6 @@ const char *lookup_missing_namespace (lookup_t *lh)
     return NULL;
 }
 
-int lookup_get_current_epoch (lookup_t *lh)
-{
-    if (lh)
-        return lh->current_epoch;
-    return -1;
-}
-
 const char *lookup_get_namespace (lookup_t *lh)
 {
     if (lh)
@@ -724,15 +714,6 @@ int lookup_get_root_seq (lookup_t *lh)
 {
     if (lh && lh->state == LOOKUP_STATE_FINISHED)
         return lh->root_seq;
-    return -1;
-}
-
-int lookup_set_current_epoch (lookup_t *lh, int epoch)
-{
-    if (lh) {
-        lh->current_epoch = epoch;
-        return 0;
-    }
     return -1;
 }
 
@@ -773,7 +754,7 @@ static int get_single_blobref_valref_value (lookup_t *lh, bool *stall)
         lh->errnum = errno;
         return -1;
     }
-    if (!(entry = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+    if (!(entry = cache_lookup (lh->cache, reftmp))
         || !cache_entry_get_valid (entry)) {
         lh->valref_missing_refs = lh->wdirent;
         (*stall) = true;
@@ -806,7 +787,7 @@ static int get_multi_blobref_valref_length (lookup_t *lh, int refcount,
             lh->errnum = errno;
             return -1;
         }
-        if (!(entry = cache_lookup (lh->cache, reftmp, lh->current_epoch))
+        if (!(entry = cache_lookup (lh->cache, reftmp))
             || !cache_entry_get_valid (entry)) {
             lh->valref_missing_refs = lh->wdirent;
             (*stall) = true;
@@ -857,7 +838,7 @@ static char *get_multi_blobref_valref_data (lookup_t *lh, int refcount,
         reftmp = treeobj_get_blobref (lh->wdirent, i);
         assert (reftmp);
 
-        entry = cache_lookup (lh->cache, reftmp, lh->current_epoch);
+        entry = cache_lookup (lh->cache, reftmp);
         assert (entry);
         assert (cache_entry_get_valid (entry));
 
@@ -940,7 +921,7 @@ lookup_process_t lookup (lookup_t *lh)
                 if (!root) {
                     free (lh->missing_namespace);
                     if (!(lh->missing_namespace = strdup (lh->ns_name))) {
-                        lh->errnum = ENOMEM;
+                        lh->errnum = errno;
                         goto error;
                     }
                     return LOOKUP_PROCESS_LOAD_MISSING_NAMESPACE;
@@ -955,7 +936,7 @@ lookup_process_t lookup (lookup_t *lh)
                  * namespace could timeout or be removed when
                  * stalling */
                 if (!(lh->root_ref = strdup (root->ref))) {
-                    lh->errnum = ENOMEM;
+                    lh->errnum = errno;
                     goto error;
                 }
                 lh->root_seq = root->seq;
@@ -982,9 +963,7 @@ lookup_process_t lookup (lookup_t *lh)
                         lh->errnum = EISDIR;
                         goto error;
                     }
-                    if (!(entry = cache_lookup (lh->cache,
-                                                lh->root_ref,
-                                                lh->current_epoch))
+                    if (!(entry = cache_lookup (lh->cache, lh->root_ref))
                         || !cache_entry_get_valid (entry)) {
                         lh->missing_ref = lh->root_ref;
                         return LOOKUP_PROCESS_LOAD_MISSING_REFS;
@@ -1082,8 +1061,7 @@ lookup_process_t lookup (lookup_t *lh)
                     lh->errnum = errno;
                     goto error;
                 }
-                if (!(entry = cache_lookup (lh->cache, reftmp,
-                                            lh->current_epoch))
+                if (!(entry = cache_lookup (lh->cache, reftmp))
                     || !cache_entry_get_valid (entry)) {
                     lh->missing_ref = reftmp;
                     return LOOKUP_PROCESS_LOAD_MISSING_REFS;

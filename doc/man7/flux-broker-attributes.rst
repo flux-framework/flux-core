@@ -167,7 +167,7 @@ content.purge-large-entry
 
 content.purge-old-entry
    When the cache size footprint needs to be reduced, only consider
-   purging entries that are older than this number of heartbeats.
+   purging entries that are older than this number of seconds.
 
 content.purge-target-entries
    If possible, the cache size purged periodically so that the total

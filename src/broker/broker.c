@@ -344,7 +344,6 @@ int main (int argc, char *argv[])
     }
     overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
     overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
-    overlay_set_idle_warning (ctx.overlay, 5);
 
     /* Arrange for the publisher to route event messages.
      * handle_event - local subscribers (ctx.h)
@@ -496,7 +495,6 @@ int main (int argc, char *argv[])
         log_msg ("initializing modules");
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
-    modhash_set_heartbeat (ctx.modhash, ctx.heartbeat);
 
     /* install heartbeat (including timer on rank 0)
      */

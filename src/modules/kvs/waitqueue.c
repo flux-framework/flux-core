@@ -50,10 +50,8 @@ int wait_get_usecount (wait_t *w)
 wait_t *wait_create (wait_cb_f cb, void *arg)
 {
     wait_t *w = calloc (1, sizeof (*w));
-    if (!w) {
-        errno = ENOMEM;
+    if (!w)
         return NULL;
-    }
     w->magic = WAIT_MAGIC;
     w->cb = cb;
     w->cb_arg = arg;
@@ -104,10 +102,8 @@ void *wait_msg_aux_get (wait_t *w, const char *name)
 waitqueue_t *wait_queue_create (void)
 {
     waitqueue_t *q = calloc (1, sizeof (*q));
-    if (!q) {
-        errno = ENOMEM;
+    if (!q)
         return NULL;
-    }
     if (!(q->q = zlist_new ())) {
         free (q);
         errno = ENOMEM;

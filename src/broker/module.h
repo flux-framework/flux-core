@@ -30,7 +30,6 @@ void modhash_destroy (modhash_t *mh);
 
 void modhash_set_rank (modhash_t *mh, uint32_t rank);
 void modhash_set_flux (modhash_t *mh, flux_t *h);
-void modhash_set_heartbeat (modhash_t *mh, heartbeat_t *hb);
 
 /* Prepare module at 'path' for starting.
  */

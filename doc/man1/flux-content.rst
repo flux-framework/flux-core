@@ -90,8 +90,8 @@ flux-setattr(1):
    (default 16777216)
 
 **content.purge-old-entry**
-   Only entries that have not been accessed in **old-entry** heartbeat epochs
-   are eligible for purge (default 5).
+   Only entries that have not been accessed in **old-entry** seconds
+   are eligible for purge (default 10).
 
 **content.purge-large-entry**
    Only entries with blob size greater than or equal to **large-entry** are

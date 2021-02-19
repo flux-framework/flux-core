@@ -27,7 +27,7 @@
 static const uint32_t default_cache_purge_target_entries = 1024*1024;
 static const uint32_t default_cache_purge_target_size = 1024*1024*16;
 
-static const uint32_t default_cache_purge_old_entry = 5;
+static const uint32_t default_cache_purge_old_entry = 10; // seconds
 static const uint32_t default_cache_purge_large_entry = 256;
 
 /* Raise the max blob size value to 1GB so that large KVS values
@@ -51,7 +51,7 @@ struct cache_entry {
     uint8_t store_pending:1;
     zlist_t *load_requests;
     zlist_t *store_requests;
-    int lastused;
+    double lastused;
 };
 
 struct content_cache {
@@ -63,7 +63,6 @@ struct content_cache {
     char *backing_name;
     char hash_name[BLOBREF_MAX_STRING_SIZE];
     zlist_t *flush_requests;
-    int epoch;
 
     uint32_t blob_size_limit;
     uint32_t flush_batch_limit;
@@ -179,16 +178,13 @@ static void cache_entry_destroy (void *arg)
  */
 static struct cache_entry *cache_entry_create (flux_t *h, const char *blobref)
 {
-    struct cache_entry *e = malloc (sizeof (*e));
-    if (!e) {
-        errno = ENOMEM;
+    struct cache_entry *e;
+
+    if (!(e = calloc (1, sizeof (*e))))
         return NULL;
-    }
-    memset (e, 0, sizeof (*e));
     e->h = h;
     if (!(e->blobref = strdup (blobref))) {
-        free (e);
-        errno = ENOMEM;
+        ERRNO_SAFE_WRAP (free, e);
         return NULL;
     }
     return e;
@@ -199,21 +195,17 @@ static struct cache_entry *cache_entry_create (flux_t *h, const char *blobref)
  */
 static int cache_entry_fill (struct cache_entry *e, const void *data, int len)
 {
-    int rc = -1;
-
     if (!e->valid) {
         assert (!e->data);
         assert (e->len == 0);
-        if (len > 0 && !(e->data = malloc (len))) {
-            errno = ENOMEM;
-            goto done;
+        if (len > 0) {
+            if (!(e->data = malloc (len)))
+                return -1;
+            memcpy (e->data, data, len);
         }
-        memcpy (e->data, data, len);
         e->len = len;
     }
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 /* Insert a cache entry, by blobref.
@@ -297,7 +289,7 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
         cache->acct_valid++;
         cache->acct_size += len;
     }
-    e->lastused = cache->epoch;
+    e->lastused = flux_reactor_now (flux_get_reactor (cache->h));
     request_list_respond_raw (&e->load_requests,
                               cache->h,
                               e->data,
@@ -389,7 +381,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
         }
         return; /* RPC continuation will respond to msg */
     }
-    e->lastused = cache->epoch;
+    e->lastused = flux_reactor_now (flux_get_reactor (cache->h));
     data = e->data;
     len = e->len;
     if (flux_respond_raw (h, msg, data, len) < 0)
@@ -562,7 +554,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
             cache->acct_dirty++;
         }
     }
-    e->lastused = cache->epoch;
+    e->lastused = flux_reactor_now (flux_get_reactor (cache->h));
     if (e->dirty) {
         if (cache->rank > 0 || cache->backing) {
             if (cache_store (cache, e) < 0)
@@ -740,7 +732,7 @@ error:
     flux_log (h, LOG_DEBUG, "content dropcache: %s", flux_strerror (errno));
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "content dropcache");
-    zlist_destroy (&keys);
+    ERRNO_SAFE_WRAP (zlist_destroy, &keys);
 }
 
 /* Return stats about the cache.
@@ -830,6 +822,7 @@ error:
 
 static int cache_purge (content_cache_t *cache)
 {
+    double now = flux_reactor_now (flux_get_reactor (cache->h));
     int after_entries = zhash_size (cache->entries);
     int after_size = cache->acct_size;
     struct cache_entry *e;
@@ -846,7 +839,7 @@ static int cache_purge (content_cache_t *cache)
             break;
         if (!e->valid || e->dirty)
             continue;
-        if (cache->epoch - e->lastused < cache->purge_old_entry)
+        if (now - e->lastused < cache->purge_old_entry)
             continue;
         if (after_entries <= cache->purge_target_entries
                     && e->len < cache->purge_large_entry)
@@ -867,7 +860,7 @@ static int cache_purge (content_cache_t *cache)
     }
     rc = 0;
 done:
-    zlist_destroy (&purge);
+    ERRNO_SAFE_WRAP (zlist_destroy, &purge);
     return rc;
 }
 
@@ -876,8 +869,8 @@ static void heartbeat_event (flux_t *h, flux_msg_handler_t *mh,
 {
     content_cache_t *cache = arg;
 
-    if (flux_heartbeat_decode (msg, &cache->epoch) < 0)
-        return; /* ignore mangled heartbeat */
+    if (flux_event_decode (msg, NULL, NULL) < 0)
+        flux_log_error (h, "heartbeat");
     cache_purge (cache);
 }
 
@@ -1065,11 +1058,10 @@ void content_cache_destroy (content_cache_t *cache)
 
 content_cache_t *content_cache_create (void)
 {
-    content_cache_t *cache = calloc (1, sizeof (*cache));
-    if (!cache) {
-        errno = ENOMEM;
+    content_cache_t *cache;
+
+    if (!(cache = calloc (1, sizeof (*cache))))
         return NULL;
-    }
     if (!(cache->entries = zhash_new ())) {
         content_cache_destroy (cache);
         errno = ENOMEM;

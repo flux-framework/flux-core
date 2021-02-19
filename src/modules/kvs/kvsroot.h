@@ -30,7 +30,7 @@ struct kvsroot {
     kvstxn_mgr_t *ktm;
     treq_mgr_t *trm;
     zlist_t *synclist;
-    int last_update_epoch;
+    double last_update_time;
     int flags;
     bool remove;
     bool setroot_pause;

@@ -110,16 +110,16 @@ int cache_entry_wait_valid (struct cache_entry *entry, wait_t *wait);
 const char *cache_entry_get_blobref (struct cache_entry *entry);
 
 /* Create/destroy the cache container and its contents.
+ * 'r' is used as a source of relative current time for cache aging.
+ * If NULL, the cache never ages.
  */
-struct cache *cache_create (void);
+struct cache *cache_create (flux_reactor_t *r);
 void cache_destroy (struct cache *cache);
 
 /* Look up a cache entry.
- * Update the entry's "last used" time to 'current_epoch',
- * taking care not to not run backwards.
+ * Update the cache entry's "last used" time.
  */
-struct cache_entry *cache_lookup (struct cache *cache,
-                                  const char *ref, int current_epoch);
+struct cache_entry *cache_lookup (struct cache *cache, const char *ref);
 
 /* Insert entry in the cache.  Reference for entry created during
  * cache_entry_create() time.  Ownership of the cache entry is
@@ -138,10 +138,11 @@ int cache_remove_entry (struct cache *cache, const char *ref);
 int cache_count_entries (struct cache *cache);
 
 /* Expire cache entries that are not dirty, not incomplete, and last
- * used more than 'thresh' epoch's ago.
+ * used more than 'max_age' seconds ago.  If max_age == 0, expire all
+ * entries that are not dirty/incomplete.
  * Returns -1 on error, expired count on success.
  */
-int cache_expire_entries (struct cache *cache, int current_epoch, int thresh);
+int cache_expire_entries (struct cache *cache, double max_age);
 
 /* Obtain statistics on the cache.
  * Returns -1 on error, 0 on success
@@ -153,6 +154,14 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *size,
  * if they meet match criteria.
  */
 int cache_wait_destroy_msg (struct cache *cache, wait_test_msg_f cb, void *arg);
+
+/* for testing */
+void cache_entry_set_fake_time (struct cache_entry *entry, double time);
+void cache_set_fake_time (struct cache *cache, double time);
+
+/*
+ * vi:tabstop=4 shiftwidth=4 expandtab
+ */
 
 #endif /* !_FLUX_KVS_CACHE_H */
 

@@ -73,11 +73,15 @@ void cache_tests (void)
     struct cache *cache;
     tstat_t ts;
     int size, incomplete, dirty;
+    flux_reactor_t *r;
+
+    if (!(r = flux_reactor_create (0)))
+        BAIL_OUT ("flux_reactor_create failed");
 
     cache_destroy (NULL);
     diag ("cache_destroy accept NULL arg");
 
-    ok ((cache = cache_create ()) != NULL,
+    ok ((cache = cache_create (r)) != NULL,
         "cache_create works");
     ok (cache_count_entries (cache) == 0,
         "cache contains 0 entries");
@@ -89,6 +93,7 @@ void cache_tests (void)
     ok (incomplete == 0, "empty cache, incomplete == 0");
     ok (dirty == 0, "empty cache, dirty == 0");
     cache_destroy (cache);
+    flux_reactor_destroy (r);
 }
 
 void cache_entry_basic_tests (void)
@@ -458,7 +463,7 @@ void cache_blobref_tests (void)
     struct cache_entry *e;
     const char *ref;
 
-    ok ((cache = cache_create ()) != NULL,
+    ok ((cache = cache_create (NULL)) != NULL,
         "cache_create works");
     ok ((e = cache_entry_create ("abcd")) != NULL,
         "cache_entry_create works");
@@ -480,20 +485,20 @@ void cache_remove_entry_tests (void)
     wait_t *w;
     int count;
 
-    ok ((cache = cache_create ()) != NULL,
+    ok ((cache = cache_create (NULL)) != NULL,
         "cache_create works");
 
     ok ((e = cache_entry_create ("remove-ref")) != NULL,
         "cache_entry_create works");
     ok (cache_insert (cache, e) == 0,
         "cache_insert works");
-    ok (cache_lookup (cache, "remove-ref", 0) != NULL,
+    ok (cache_lookup (cache, "remove-ref") != NULL,
         "cache_lookup verify entry exists");
     ok (cache_remove_entry (cache, "blalalala") == 0,
         "cache_remove_entry failed on bad reference");
     ok (cache_remove_entry (cache, "remove-ref") == 1,
         "cache_remove_entry removed cache entry w/o object");
-    ok (cache_lookup (cache, "remove-ref", 0) == NULL,
+    ok (cache_lookup (cache, "remove-ref") == NULL,
         "cache_lookup verify entry gone");
 
     count = 0;
@@ -503,7 +508,7 @@ void cache_remove_entry_tests (void)
         "cache_entry_create created empty object");
     ok (cache_insert (cache, e) == 0,
         "cache_insert works");
-    ok (cache_lookup (cache, "remove-ref", 0) != NULL,
+    ok (cache_lookup (cache, "remove-ref") != NULL,
         "cache_lookup verify entry exists");
     ok (cache_entry_get_valid (e) == false,
         "cache entry invalid, adding waiter");
@@ -521,7 +526,7 @@ void cache_remove_entry_tests (void)
         "waiter callback ran");
     ok (cache_remove_entry (cache, "remove-ref") == 1,
         "cache_remove_entry removed cache entry after valid waiter gone");
-    ok (cache_lookup (cache, "remove-ref", 0) == NULL,
+    ok (cache_lookup (cache, "remove-ref") == NULL,
         "cache_lookup verify entry gone");
 
     count = 0;
@@ -535,7 +540,7 @@ void cache_remove_entry_tests (void)
     json_decref (o);
     ok (cache_insert (cache, e) == 0,
         "cache_insert works");
-    ok (cache_lookup (cache, "remove-ref", 0) != NULL,
+    ok (cache_lookup (cache, "remove-ref") != NULL,
         "cache_lookup verify entry exists");
     ok (cache_entry_set_dirty (e, true) == 0,
         "cache_entry_set_dirty success");
@@ -551,7 +556,7 @@ void cache_remove_entry_tests (void)
         "waiter callback ran");
     ok (cache_remove_entry (cache, "remove-ref") == 1,
         "cache_remove_entry removed cache entry after notdirty waiter gone");
-    ok (cache_lookup (cache, "remove-ref", 0) == NULL,
+    ok (cache_lookup (cache, "remove-ref") == NULL,
         "cache_lookup verify entry gone");
 
     cache_destroy (cache);
@@ -571,7 +576,7 @@ void cache_expiration_tests (void)
 
     /* Put entry in cache and test lookup, expire
      */
-    ok ((cache = cache_create ()) != NULL,
+    ok ((cache = cache_create (NULL)) != NULL,
         "cache_create works");
     ok (cache_count_entries (cache) == 0,
         "cache contains 0 entries");
@@ -583,10 +588,11 @@ void cache_expiration_tests (void)
         "cache_insert works");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry after insert");
-    ok (cache_lookup (cache, "yyy1", 0) == NULL,
+    ok (cache_lookup (cache, "yyy1") == NULL,
         "cache_lookup of wrong hash fails");
-    ok ((e2 = cache_lookup (cache, "xxx1", 42)) != NULL,
+    ok ((e2 = cache_lookup (cache, "xxx1")) != NULL,
         "cache_lookup of correct hash works (last use=42)");
+    cache_entry_set_fake_time (e2, 42);
     ok (cache_entry_get_treeobj (e2) == NULL,
         "no treeobj object found");
     ok (cache_count_entries (cache) == 1,
@@ -598,11 +604,13 @@ void cache_expiration_tests (void)
     ok (size == 0, "cache w/ entry w/o data, size == 0");
     ok (incomplete == 1, "cache w/ entry w/o data, incomplete == 1");
     ok (dirty == 0, "cache w/ entry w/o data, dirty == 0");
-    ok (cache_expire_entries (cache, 43, 1) == 0,
+    cache_set_fake_time (cache, 43);
+    ok (cache_expire_entries (cache, 1) == 0,
         "cache_expire_entries now=43 thresh=1 expired 0 b/c entry invalid");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry");
-    ok (cache_expire_entries (cache, 44, 1) == 0,
+    cache_set_fake_time (cache, 44);
+    ok (cache_expire_entries (cache, 1) == 0,
         "cache_expire_entries now=44 thresh=1 expired 0");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry");
@@ -618,10 +626,11 @@ void cache_expiration_tests (void)
         "cache_insert works");
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries after insert");
-    ok (cache_lookup (cache, "yyy2", 0) == NULL,
+    ok (cache_lookup (cache, "yyy2") == NULL,
         "cache_lookup of wrong hash fails");
-    ok ((e4 = cache_lookup (cache, "xxx2", 42)) != NULL,
+    ok ((e4 = cache_lookup (cache, "xxx2")) != NULL,
         "cache_lookup of correct hash works (last use=42)");
+    cache_entry_set_fake_time (e4, 42);
     ok ((otmp = cache_entry_get_treeobj (e4)) != NULL,
         "cache_entry_get_treeobj found entry");
     otest = treeobj_create_val ("foo", 3);
@@ -654,11 +663,13 @@ void cache_expiration_tests (void)
     ok (cache_entry_set_dirty (e4, false) == 0,
         "cache_entry_set_dirty success");
 
-    ok (cache_expire_entries (cache, 43, 1) == 0,
+    cache_set_fake_time (cache, 43);
+    ok (cache_expire_entries (cache, 1) == 0,
         "cache_expire_entries now=43 thresh=1 expired 0");
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries");
-    ok (cache_expire_entries (cache, 44, 1) == 1,
+    cache_set_fake_time (cache, 44);
+    ok (cache_expire_entries (cache, 1) == 1,
         "cache_expire_entries now=44 thresh=1 expired 1");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry");
@@ -673,10 +684,11 @@ void cache_expiration_tests (void)
         "cache_insert works");
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries after insert");
-    ok (cache_lookup (cache, "yyy3", 0) == NULL,
+    ok (cache_lookup (cache, "yyy3") == NULL,
         "cache_lookup of wrong hash fails");
-    ok ((e6 = cache_lookup (cache, "xxx3", 42)) != NULL,
+    ok ((e6 = cache_lookup (cache, "xxx3")) != NULL,
         "cache_lookup of correct hash works (last use=42)");
+    cache_entry_set_fake_time (e6, 42);
     ok (cache_entry_get_raw (e6, &data, &len) == 0,
         "cache_entry_get_raw found entry");
     ok (len == 6
@@ -685,14 +697,16 @@ void cache_expiration_tests (void)
 
     cache_entry_incref (e6);
 
-    ok (cache_expire_entries (cache, 44, 1) == 0,
+    cache_set_fake_time (cache, 44);
+    ok (cache_expire_entries (cache, 1) == 0,
         "cache_expire_entries now=44 thresh=1 expired 0");
     ok (cache_count_entries (cache) == 2,
         "cache contains 2 entries");
 
     cache_entry_decref (e6);
 
-    ok (cache_expire_entries (cache, 44, 1) == 1,
+    cache_set_fake_time (cache, 44);
+    ok (cache_expire_entries (cache, 1) == 1,
         "cache_expire_entries now=44 thresh=1 expired 1");
     ok (cache_count_entries (cache) == 1,
         "cache contains 1 entry");
