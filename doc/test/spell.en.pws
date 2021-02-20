@@ -246,6 +246,7 @@ topen
 tevent
 tsend
 trecv
+tsync
 scalability
 env
 ENV
