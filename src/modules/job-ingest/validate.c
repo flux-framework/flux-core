@@ -113,64 +113,90 @@ static bool str_ends_with (const char *str, const char *suffix)
 {
     int str_len = strlen (str);
     int suffix_len = strlen (suffix);
-
     return (str_len >= suffix_len) && \
         (!strncmp ((str + str_len) - suffix_len, suffix, suffix_len));
 }
 
+static int validator_argz_create (char **argzp,
+                                  size_t *argz_lenp,
+                                  const char *validate_path,
+                                  const char *validator_plugins,
+                                  const char *validator_args)
+{
+    int e;
+
+    if (validate_path) {
+        if (str_ends_with (validate_path, ".py")
+            && ((e = argz_add (argzp, argz_lenp, PYTHON_INTERPRETER))))
+            goto error;
+        if ((e = argz_add (argzp, argz_lenp, validate_path)))
+            goto error;
+    }
+    else if ((e = argz_add (argzp, argz_lenp, "flux"))
+            || (e = argz_add (argzp, argz_lenp, "job-validator")))
+        goto error;
+
+    if (validator_plugins) {
+        if ((e = argz_add (argzp, argz_lenp, "--plugins"))
+            || (e = argz_add (argzp, argz_lenp, validator_plugins))) {
+            goto error;
+        }
+    }
+    if (validator_args
+        && (e = argz_add_sep (argzp, argz_lenp, validator_args, ','))) {
+        goto error;
+    }
+    return 0;
+error:
+    errno = e;
+    return -1;
+}
+
 struct validate *validate_create (flux_t *h,
                                   const char *validate_path,
+                                  const char *validator_plugins,
                                   const char *validator_args)
 {
     struct validate *v;
-    char *argv[5];
-    int argc = 0;
+    int argc;
+    char **argv = NULL;
+    char *argz = NULL;
+    size_t argz_len = 0;
     int i;
-    char *validator_argz = NULL;
-    char *validator_arg = NULL;
-    size_t validator_argz_len = 0;
 
     if (!(v = calloc (1, sizeof (*v))))
         return NULL;
     v->h = h;
 
-    assert (validate_path != NULL);
+    if (validator_argz_create (&argz,
+                               &argz_len,
+                               validate_path,
+                               validator_plugins,
+                               validator_args) < 0)
+        goto error;
 
-    if (str_ends_with (validate_path, ".py"))
-        argv[argc++] = PYTHON_INTERPRETER;
-    argv[argc++] = (char *)validate_path;
-    if (validator_args != NULL) {
-        // Parse the comma-separated argument list passed in when loading the
-        // job-ingest module.  For example:
-        // module load job-ingest validator-args=--schema,/path/to/schema.json
-        if (argz_create_sep (validator_args,
-                             ',',
-                             &validator_argz,
-                             &validator_argz_len) != 0) {
-            goto error;
-        }
-        validator_arg = argz_next (validator_argz,
-                                   validator_argz_len,
-                                   NULL);
-        while (validator_arg != NULL) {
-            argv[argc++] = validator_arg;
-            validator_arg = argz_next (validator_argz,
-                                       validator_argz_len,
-                                       validator_arg);
-        }
+    argc = argz_count (argz, argz_len);
+    if (!(argv = calloc (1, sizeof (char *) * (argc + 1)))) {
+        flux_log_error (h, "failed to create argv");
+        goto error;
     }
-    argv[argc] = NULL;
+    argz_extract (argz, argz_len, argv);
 
     for (i = 0; i < MAX_WORKER_COUNT; i++) {
-        if (!(v->worker[i] = worker_create (h, worker_inactivity_timeout,
-                                            validate_path,
+        char name[256];
+        (void) snprintf (name, sizeof (name), "validator[%d]", i);
+        if (!(v->worker[i] = worker_create (h,
+                                            worker_inactivity_timeout,
+                                            name,
                                             argc, argv)))
             goto error;
     }
-    free (validator_argz);
+    free (argv);
+    free (argz);
     return v;
 error:
-    free (validator_argz);
+    free (argv);
+    free (argz);
     validate_destroy (v);
     return NULL;
 }

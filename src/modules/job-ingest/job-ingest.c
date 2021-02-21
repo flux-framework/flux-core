@@ -877,16 +877,15 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
                          char **argv)
 {
     flux_reactor_t *r = flux_get_reactor (h);
-    const char *usage_message = "Usage: flux module load [OPTIONS] job-ingest "
-                                " [validator-args=ARGS] [validator=PATH]";
-    const char *valpath;
-    const char *valargs;
+    const char *usage_message =
+        "Usage: flux module load [OPTIONS] job-ingest"
+        " [validator-plugins=LIST] [validator-args=ARGS]";
+    const char *valpath = NULL;
+    const char *plugins = NULL;
+    const char *valargs = NULL;
 
     memset (ctx, 0, sizeof (*ctx));
     ctx->h = h;
-
-    valpath = flux_conf_builtin_get ("jobspec_validate_path", FLUX_CONF_AUTO);
-    valargs = flux_conf_builtin_get ("jobspec_validator_args", FLUX_CONF_AUTO);
 
     /*  Process cmdline args */
     for (int i = 0; i < argc; i++) {
@@ -899,6 +898,9 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
                 flux_log_error (h, "validator %s", valpath);
                 return -1;
             }
+        }
+        else if (!strncmp (argv[i], "validator-plugins=", 18)) {
+            plugins = argv[i] + 18;
         }
         else if (!strncmp (argv[i], "batch-count=", 12)) {
             char *endptr;
@@ -915,7 +917,7 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
             return -1;
         }
     }
-    if (!(ctx->validate = validate_create (h, valpath, valargs))) {
+    if (!(ctx->validate = validate_create (h, valpath, plugins, valargs))) {
         flux_log_error (h, "validate_create");
         return -1;
     }
