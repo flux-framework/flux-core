@@ -9,7 +9,6 @@ test_under_flux 4 job
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-list/list-rpc.py"
 PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-list/jobspec-permissive.jsonschema
-JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 
 if test "$TEST_LONG" = "t"; then
@@ -1113,9 +1112,8 @@ ingest_module ()
         flux module ${cmd} job-ingest $*
 }
 
-test_expect_success 'reload job-ingest with more permissive validator' '
-        ingest_module reload \
-                validator=${JSONSCHEMA_VALIDATOR} validator-args=--schema,${PERMISSIVE_SCHEMA}
+test_expect_success 'reload job-ingest without validator' '
+        ingest_module reload disable-validator
 '
 
 test_expect_success HAVE_JQ 'create illegal jobspec with empty command array' '

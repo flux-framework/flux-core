@@ -12,9 +12,6 @@ query="flux resource list --state=free -no {rlist}"
 
 flux R encode -r0-1 -c0-3 >R.test
 
-SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
-JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
-
 check_resource()
 {
 	local name="$1"
@@ -31,13 +28,9 @@ check_rlist() { check_resource "rlist" "$@"; }
 test_expect_success 'unload job-exec module to prevent job execution' '
 	flux module remove job-exec
 '
-test_expect_success 'sched-simple: reload ingest module with lax validator' '
-	flux module reload job-ingest \
-		validator-args="--schema,${SCHEMA}" \
-		validator=${JSONSCHEMA_VALIDATOR} &&
-	flux exec -r all -x 0 flux module reload job-ingest \
-		validator-args="--schema,${SCHEMA}" \
-		validator=${JSONSCHEMA_VALIDATOR}
+test_expect_success 'sched-simple: reload ingest module without validator' '
+	flux module reload job-ingest disable-validator  &&
+	flux exec -r all -x 0 flux module reload job-ingest disable-validator
 '
 
 test_expect_success 'sched-simple: reload sched-simple with default resource.R' '

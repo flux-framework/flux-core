@@ -267,9 +267,8 @@ dist_check_SCRIPTS = \
 	job-list/list-id.py \
 	job-list/list-rpc.py \
 	job-list/jobspec-permissive.jsonschema \
-	job-archive/query.py \
-	ingest/fake-validate.sh \
-	ingest/bad-validate.sh
+	ingest/bad-validate.py \
+	job-archive/query.py
 
 check_PROGRAMS = \
 	shmem/backtoback.t \
