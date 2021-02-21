@@ -62,10 +62,13 @@ struct validate {
 
 static void validate_killall (struct validate *v)
 {
-    flux_future_t *cf = flux_future_wait_all_create ();
+    flux_future_t *cf = NULL;
     flux_future_t *f;
     int i;
-    if (!cf) {
+
+    if (v == NULL)
+        return;
+    if (!(cf = flux_future_wait_all_create ())) {
         flux_log_error (v->h, "validate_destroy: flux_future_wait_all_create");
         return;
     }
@@ -89,6 +92,9 @@ int validate_stop_notify (struct validate *v, process_exit_f cb, void *arg)
 {
     int i;
     int count;
+
+    if (v == NULL)
+        return 0;
 
     count = 0;
     for (i = 0; i < MAX_WORKER_COUNT; i++)
