@@ -893,7 +893,6 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
     const char *usage_message =
         "Usage: flux module load [OPTIONS] job-ingest"
         " [validator-plugins=LIST] [validator-args=ARGS]";
-    const char *valpath = NULL;
     const char *plugins = NULL;
     const char *valargs = NULL;
     bool use_validator = true;
@@ -905,13 +904,6 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
     for (int i = 0; i < argc; i++) {
         if (!strncmp (argv[i], "validator-args=", 15)) {
             valargs = argv[i] + 15;
-        }
-        else if (!strncmp (argv[i], "validator=", 10)) {
-            valpath = argv[i] + 10;
-            if (access (valpath, X_OK) < 0) {
-                flux_log_error (h, "validator %s", valpath);
-                return -1;
-            }
         }
         else if (!strncmp (argv[i], "validator-plugins=", 18)) {
             plugins = argv[i] + 18;
@@ -935,7 +927,7 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
         }
     }
     if (use_validator &&
-        !(ctx->validate = validate_create (h, valpath, plugins, valargs))) {
+        !(ctx->validate = validate_create (h, plugins, valargs))) {
         flux_log_error (h, "validate_create");
         return -1;
     }

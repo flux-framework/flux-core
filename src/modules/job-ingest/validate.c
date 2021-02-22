@@ -115,30 +115,13 @@ void validate_destroy (struct validate *v)
     }
 }
 
-static bool str_ends_with (const char *str, const char *suffix)
-{
-    int str_len = strlen (str);
-    int suffix_len = strlen (suffix);
-    return (str_len >= suffix_len) && \
-        (!strncmp ((str + str_len) - suffix_len, suffix, suffix_len));
-}
-
 static int validator_argz_create (char **argzp,
                                   size_t *argz_lenp,
-                                  const char *validate_path,
                                   const char *validator_plugins,
                                   const char *validator_args)
 {
     int e;
-
-    if (validate_path) {
-        if (str_ends_with (validate_path, ".py")
-            && ((e = argz_add (argzp, argz_lenp, PYTHON_INTERPRETER))))
-            goto error;
-        if ((e = argz_add (argzp, argz_lenp, validate_path)))
-            goto error;
-    }
-    else if ((e = argz_add (argzp, argz_lenp, "flux"))
+    if ((e = argz_add (argzp, argz_lenp, "flux"))
             || (e = argz_add (argzp, argz_lenp, "job-validator")))
         goto error;
 
@@ -159,7 +142,6 @@ error:
 }
 
 struct validate *validate_create (flux_t *h,
-                                  const char *validate_path,
                                   const char *validator_plugins,
                                   const char *validator_args)
 {
@@ -176,7 +158,6 @@ struct validate *validate_create (flux_t *h,
 
     if (validator_argz_create (&argz,
                                &argz_len,
-                               validate_path,
                                validator_plugins,
                                validator_args) < 0)
         goto error;
