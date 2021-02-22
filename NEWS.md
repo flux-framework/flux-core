@@ -1,3 +1,44 @@
+flux-core version 0.24.0 - 2021-02-22
+-------------------------------------
+
+This release features multiple performance enhancements, including the
+addition of the FluxExecutor Python class which allows rapid, asynchronous
+submission of jobs.
+
+### Fixes
+
+ * broker: fix segfault/perf issues when hitting file descriptor limit (#3513)
+ * module: reduce keepalive message traffic (#3516)
+ * flux-kvs: fix --help output when not in an instance (#3500)
+ * flux-kvs: fix help output in nested subcommands (#3497)
+ * flux-mini: fix --progress counters with job exceptions (#3514)
+ * portability: fix 32-bit issues (#3507)
+ * portability: cross compilation fixes for Julia bindings (#3503)
+ * libflux: restart continuation timeout in `flux_future_reset()` (#3518)
+
+### New Features
+
+ * python: add concurrent.futures executor (#3468)
+ * libflux: add `flux_sync_create()` (#3524)
+ * job-manager: allow jobtap plugins to reject jobs (#3494)
+ * job-manager: support mode=limited (#3473)
+ * flux-mini: support `--urgency` values "default", "hold", "expedite" (#3499)
+ * broker: improve IP address heuristic in PMI bootstrap (#3489)
+ * flux-mini: add --log and --log-stderr options (#3509)
+ * use reactor time instead of heartbeats for internal time management (#3519)
+ * heartbeat: convert to loadable module (#3512)
+
+### Cleanup/Testing
+
+ * job-info: split into two modules, job-info and job-list (#3510)
+ * libflux: remove unnecessary `flux_future_then()` calls (#3520)
+ * testsuite: cleanup job-manager tests (#3488)
+ * testsuite: update hwloc-calc usage (#3523)
+ * ci: add fedora33 docker image for testing (#3498)
+ * ci: add 32 bit build to github ci checks (#3511)
+ * ci: explicitly checkout tag if creating a release (#3531)
+
+
 flux-core version 0.23.1 - 2021-01-27
 -------------------------------------
 
