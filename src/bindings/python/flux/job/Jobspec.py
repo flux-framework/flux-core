@@ -347,7 +347,7 @@ class Jobspec(object):
 
     @stdin.setter
     def stdin(self, path):
-        """Redirect stdin to a file given by `path`"""
+        """Redirect stdin to a file given by `path`, a string or pathlib object."""
         self._set_io_path("input", "stdin", path)
 
     @property
@@ -356,7 +356,7 @@ class Jobspec(object):
 
     @stdout.setter
     def stdout(self, path):
-        """Redirect stdout to a file given by `path`"""
+        """Redirect stdout to a file given by `path`, a string or pathlib object."""
         self._set_io_path("output", "stdout", path)
 
     @property
@@ -365,7 +365,7 @@ class Jobspec(object):
 
     @stderr.setter
     def stderr(self, path):
-        """Redirect stderr to a file given by `path`"""
+        """Redirect stderr to a file given by `path`, a string or pathlib object."""
         self._set_io_path("output", "stderr", path)
 
     def _get_io_path(self, iotype, stream_name):
@@ -388,6 +388,13 @@ class Jobspec(object):
         :param stream_name: the name of the io stream
         :param path: the path to redirect the stream
         """
+        if isinstance(path, os.PathLike):
+            path = os.fspath(path)
+        if not isinstance(path, str):
+            raise TypeError(
+                "The path must be a string or pathlib object, "
+                f"got {type(path).__name__}"
+            )
         self.setattr_shell_option("{}.{}.type".format(iotype, stream_name), "file")
         self.setattr_shell_option("{}.{}.path".format(iotype, stream_name), path)
 

@@ -346,6 +346,8 @@ class TestJob(unittest.TestCase):
             for path in ("foo.txt", "bar.md", "foo.json"):
                 setattr(jobspec, stream, path)
                 self.assertEqual(getattr(jobspec, stream), path)
+            with self.assertRaises(TypeError):
+                setattr(jobspec, stream, None)
 
     def test_22_from_batch_command(self):
         """Test that `from_batch_command` produces a valid jobspec"""
