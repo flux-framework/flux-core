@@ -29,7 +29,6 @@ struct broker {
     int event_recv_seq;
     zlist_t *sigwatchers;
     struct service_switch *services;
-    struct heartbeat *heartbeat;
     struct brokercfg *config;
     const char *config_path;
     double heartbeat_rate;

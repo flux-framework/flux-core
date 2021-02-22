@@ -138,7 +138,6 @@ repo
 lua
 cpath
 DEST
-heartrate
 logdest
 modopt
 noshell

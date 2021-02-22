@@ -29,8 +29,6 @@ libbroker_la_SOURCES = \
 	modservice.h \
 	overlay.h \
 	overlay.c \
-	heartbeat.h \
-	heartbeat.c \
 	service.h \
 	service.c \
 	attr.h \
@@ -70,8 +68,7 @@ flux_broker_LDADD = \
 
 flux_broker_LDFLAGS =
 
-TESTS = test_heartbeat.t \
-	test_attr.t \
+TESTS = test_attr.t \
 	test_service.t \
 	test_liblist.t \
 	test_pmiutil.t \
