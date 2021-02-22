@@ -119,6 +119,10 @@ jobs:
        ref: ${{ github.event.pull_request.head.sha }}
        fetch-depth: 0
 
+    - name: checkout tag
+      if: ${{ matrix.create_release }}
+      run: git checkout ${{ matrix.tag }}
+
     - name: coverage setup
       env: ${{matrix.env}}
       if: matrix.coverage
