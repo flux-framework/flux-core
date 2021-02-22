@@ -110,7 +110,9 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_core_version.3 \
 	man3/idset_create.3 \
 	man3/idset_encode.3 \
-	man3/flux_jobtap_get_flux.3
+	man3/flux_jobtap_get_flux.3 \
+	man3/flux_sync_create.3
+
 
 # These files are generated as clones of a primary page.
 # Sphinx handles this automatically if declared in the conf.py
@@ -365,6 +367,7 @@ check_PROGRAMS = \
 	man3/tsend \
 	man3/trecv \
 	man3/tevent \
+	man3/tsync \
 	man3/trpc \
 	man3/trpc_then \
 	man3/tinfo

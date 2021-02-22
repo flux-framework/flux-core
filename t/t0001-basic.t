@@ -351,7 +351,7 @@ test_expect_success 'scripts/waitfile works after 1s' '
 '
 # test for issue #1025
 test_expect_success 'instance can stop cleanly with subscribers (#1025)' '
-	flux start ${ARGS} -s2 --bootstrap=selfpmi bash -c "nohup flux event sub hb &"
+	flux start ${ARGS} -s2 --bootstrap=selfpmi bash -c "nohup flux event sub heartbeat.pulse &"
 '
 
 # test for issue #1191

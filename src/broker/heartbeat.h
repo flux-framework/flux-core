@@ -18,11 +18,6 @@
  * All ranks should call heartbeat_start() to install reactor watchers.
  * On rank 0 only, this registers a reactor timer watcher which sends
  * the reactor event message.
- *
- * The heartbeat_get_epoch() getter obtains the most recently processed epoch.
- *
- * Note: rank 0's epoch update is driven by the receipt of the
- * heartbeat event, not its generation.
  */
 
 typedef struct heartbeat heartbeat_t;
@@ -35,10 +30,6 @@ int heartbeat_set_rate (heartbeat_t *hb, double rate);
 double heartbeat_get_rate (heartbeat_t *hb);
 
 void heartbeat_set_flux (heartbeat_t *hb, flux_t *h);
-int heartbeat_register_attrs (heartbeat_t *hb, attr_t *attrs);
-
-void heartbeat_set_epoch (heartbeat_t *hb, int epoch);
-int heartbeat_get_epoch (heartbeat_t *hb);
 
 int heartbeat_start (heartbeat_t *hb);
 void heartbeat_stop (heartbeat_t *hb);

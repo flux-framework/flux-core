@@ -27,7 +27,6 @@
 #include "attr.h"
 #include "flog.h"
 #include "conf.h"
-#include "heartbeat.h"
 #include "content.h"
 #include "future.h"
 #include "barrier.h"
@@ -35,6 +34,7 @@
 #include "service.h"
 #include "version.h"
 #include "plugin.h"
+#include "sync.h"
 
 #endif /* !_FLUX_CORE_FLUX_H */
 

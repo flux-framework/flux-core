@@ -350,6 +350,7 @@ man_pages = [
     ('man3/flux_jobtap_get_flux','flux_jobtap_reprioritize_job', 'Flux jobtap plugin interfaces', [author], 3),
     ('man3/flux_jobtap_get_flux','flux_jobtap_priority_unavail', 'Flux jobtap plugin interfaces', [author], 3),
     ('man3/flux_jobtap_get_flux','flux_jobtap_reject_job', 'Flux jobtap plugin interfaces', [author], 3),
+    ('man3/flux_sync_create','flux_sync_create', 'Synchronize on system heartbeat', [author], 3),
     ('man5/flux-config-bootstrap', 'flux-config-bootstrap', 'configure Flux instance bootstrap', [author], 5),
     ('man7/flux-broker-attributes', 'flux-broker-attributes', 'overview Flux broker attributes', [author], 7),
     ('man7/flux-jobtap-plugins', 'flux-jobtap-plugins', 'overview Flux jobtap plugin API', [author], 7),

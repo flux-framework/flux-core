@@ -64,7 +64,6 @@ syslog
 graphviz
 prepended
 multipart
-hb
 Tpng
 nodesets
 keepalives
@@ -247,6 +246,7 @@ topen
 tevent
 tsend
 trecv
+tsync
 scalability
 env
 ENV

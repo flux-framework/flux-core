@@ -24,8 +24,8 @@ test_expect_success 'event: can publish' '
 	test_cmp expected_event_pub output_event_pub
 '
 test_expect_success 'event: can subscribe' '
-	flux event sub --count=1 hb >output_event_sub &&
-	grep "^hb" output_event_sub
+	flux event sub --count=1 heartbeat.pulse>output_event_sub &&
+	grep "^heartbeat.pulse" output_event_sub
 '
 
 test_expect_success 'version: reports expected values under an instance' '

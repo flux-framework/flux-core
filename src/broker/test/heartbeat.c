@@ -21,31 +21,19 @@ void fatal_err (const char *message, void *arg)
     BAIL_OUT ("fatal error: %s", message);
 }
 
+static int count;
 void heartbeat_event_cb (flux_t *h, flux_msg_handler_t *w,
                           const flux_msg_t *msg, void *arg)
 {
     heartbeat_t *hb = arg;
-    int epoch = -1;
-    int rc = flux_heartbeat_decode (msg, &epoch);
+    int rc = flux_event_decode (msg, NULL, NULL);
 
     ok (rc == 0,
-        "received heartbeat event epoch %d", epoch);
-    if (epoch == 2) {
+        "received heartbeat event %d", count);
+    if (--count == 0) {
         flux_msg_handler_stop (w);
         heartbeat_stop (hb);
     }
-}
-
-void check_codec (void)
-{
-    flux_msg_t *msg;
-    int epoch;
-
-    ok ((msg = flux_heartbeat_encode (44000)) != NULL,
-        "flux_heartbeat_encode works");
-    ok (flux_heartbeat_decode (msg, &epoch) == 0 && epoch == 44000,
-        "flux_heartbeat_decode works and returns encoded epoch");
-    flux_msg_destroy (msg);
 }
 
 int main (int argc, char **argv)
@@ -54,9 +42,7 @@ int main (int argc, char **argv)
     heartbeat_t *hb;
     flux_msg_handler_t *w;
 
-    plan (16);
-
-    check_codec ();
+    plan (NO_PLAN);
 
     ok ((h = flux_open ("loop://", 0)) != NULL,
         "opened loop connector");
@@ -82,14 +68,12 @@ int main (int argc, char **argv)
     ok (heartbeat_get_rate (hb) == 0.1,
         "heartbeat_get_rate returns what was set");
 
-    ok (heartbeat_get_epoch (hb) == 0,
-        "heartbeat_get_epoch works, default is zero");
-
     w = flux_msg_handler_create (h, FLUX_MATCH_EVENT, heartbeat_event_cb, hb);
     ok (w != NULL,
         "created event watcher");
     flux_msg_handler_start (w);
 
+    count = 4;
     ok (heartbeat_start (hb) == 0,
         "heartbeat_start works");
 

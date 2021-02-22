@@ -1,5 +1,5 @@
 /************************************************************\
- * Copyright 2014 Lawrence Livermore National Security, LLC
+ * Copyright 2021 Lawrence Livermore National Security, LLC
  * (c.f. AUTHORS, NOTICE.LLNS, COPYING)
  *
  * This file is part of the Flux resource manager framework.
@@ -8,25 +8,27 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_CORE_HEARTBEAT
-#define _FLUX_CORE_HEARTBEAT
+#ifndef _FLUX_CORE_SYNC_H
+#define _FLUX_CORE_SYNC_H
 
-#include "message.h"
+#include <flux/core.h>
 
 #ifdef __cplusplus
 extern "C" {
 #endif
 
-flux_msg_t *flux_heartbeat_encode (int epoch);
-int flux_heartbeat_decode (const flux_msg_t *msg, int *epoch);
+/* Synchronize future to the system heartbeat.
+ * Set minimum > 0. to establish a minimum time between fulfillments.
+ * Use a continuation timeout to establish a maximum time between fulfillments.
+ */
+flux_future_t *flux_sync_create (flux_t *h, double minimum);
 
 #ifdef __cplusplus
 }
 #endif
 
-#endif /* !_FLUX_CORE_HEARTBEAT */
+#endif /* !_FLUX_CORE_SYNC_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
-

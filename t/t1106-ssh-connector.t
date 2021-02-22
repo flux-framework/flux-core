@@ -50,7 +50,7 @@ test_expect_success 'ssh:// can handle nontrivial message load' '
 
 test_expect_success 'ssh:// can work with events' '
 	FLUX_URI=ssh://localhost$TEST_SOCKDIR FLUX_SSH=$TEST_SSH \
-	  flux event sub --count=1 hb
+	  flux event sub --count=1 heartbeat.pulse
 '
 
 test_expect_success 'ssh:// can register a service' "
