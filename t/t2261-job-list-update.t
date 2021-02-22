@@ -1,6 +1,6 @@
 #!/bin/sh
 
-test_description='Test flux job info list services w/ changing job data'
+test_description='Test flux job list services w/ changing job data'
 
 . $(dirname $0)/sharness.sh
 
@@ -73,7 +73,7 @@ state_count() {
     state_ids "$@" | wc -l
 }
 
-# the job-info module has eventual consistency with the jobs stored in
+# the job-list module has eventual consistency with the jobs stored in
 # the job-manager's queue.  To ensure no raciness in tests, we spin
 # until all of the pending jobs have reached SCHED state, running jobs
 # have reached RUN state, and inactive jobs have reached INACTIVE
@@ -210,7 +210,7 @@ test_expect_success HAVE_JQ 'change a job urgency' '
         flux job urgency ${jobid} 1
 '
 
-test_expect_success HAVE_JQ 'wait for job-info to see job urgency change' '
+test_expect_success HAVE_JQ 'wait for job-list to see job urgency change' '
         jobidhead=`head -n 2 pending.ids > pending_after.ids` &&
         jobidhead=`head -n 6 pending.ids | tail -n 3 >> pending_after.ids` &&
         jobidchange=`head -n 3 pending.ids | tail -n 1 >> pending_after.ids` &&

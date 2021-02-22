@@ -12,7 +12,7 @@ from flux.rpc import RPC
 
 
 class JobStats:
-    """Container for job statistics as returned by job-info.job-stats
+    """Container for job statistics as returned by job-list.job-stats
 
 
     Attributes:
@@ -71,7 +71,7 @@ class JobStats:
             self.callback(self, **self.cb_kwargs)
 
     def _query(self):
-        return RPC(self.handle, "job-info.job-stats", {})
+        return RPC(self.handle, "job-list.job-stats", {})
 
     def update(self, callback=None, **kwargs):
         """Asynchronously fetch job statistics and update this object.

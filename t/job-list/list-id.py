@@ -32,7 +32,7 @@ def list_cb(f, arg):
 
 def submit_cb(f, arg):
     jobid = job.submit_get_id(f)
-    h.rpc("job-info.list-id", dict(id=jobid, attrs=attrs)).then(list_cb)
+    h.rpc("job-list.list-id", dict(id=jobid, attrs=attrs)).then(list_cb)
 
 
 h = flux.Flux()

@@ -71,14 +71,14 @@ def job_list(
         "states": states,
         "results": results,
     }
-    return JobListRPC(flux_handle, "job-info.list", payload)
+    return JobListRPC(flux_handle, "job-list.list", payload)
 
 
 def job_list_inactive(flux_handle, since=0.0, max_entries=1000, attrs=[], name=None):
     payload = {"since": float(since), "max_entries": int(max_entries), "attrs": attrs}
     if name:
         payload["name"] = name
-    return JobListRPC(flux_handle, "job-info.list-inactive", payload)
+    return JobListRPC(flux_handle, "job-list.list-inactive", payload)
 
 
 class JobListIdRPC(RPC):
@@ -97,7 +97,7 @@ class JobListIdRPC(RPC):
 # array, so don't use JobListRPC
 def job_list_id(flux_handle, jobid, attrs=[]):
     payload = {"id": int(jobid), "attrs": attrs}
-    rpc = JobListIdRPC(flux_handle, "job-info.list-id", payload)
+    rpc = JobListIdRPC(flux_handle, "job-list.list-id", payload)
     #  save original JobId argument for error reporting
     rpc.jobid = jobid
     return rpc

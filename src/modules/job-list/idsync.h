@@ -8,16 +8,16 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_JOB_INFO_IDSYNC_H
-#define _FLUX_JOB_INFO_IDSYNC_H
+#ifndef _FLUX_JOB_LIST_IDSYNC_H
+#define _FLUX_JOB_LIST_IDSYNC_H
 
 #include <flux/core.h>
 
-#include "info.h"
+#include "job-list.h"
 #include "job_state.h"
 
 struct idsync_data {
-    struct info_ctx *ctx;
+    struct list_ctx *ctx;
     flux_jobid_t id;
     flux_msg_t *msg;
     json_t *attrs;
@@ -25,21 +25,21 @@ struct idsync_data {
     flux_future_t *f_lookup;
 };
 
-int idsync_setup (struct info_ctx *ctx);
+int idsync_setup (struct list_ctx *ctx);
 
-void idsync_cleanup (struct info_ctx *ctx);
+void idsync_cleanup (struct list_ctx *ctx);
 
 void idsync_data_destroy (void *data);
 
 void idsync_data_destroy_wrapper (void **data);
 
-struct idsync_data *idsync_data_create (struct info_ctx *ctx,
+struct idsync_data *idsync_data_create (struct list_ctx *ctx,
                                         flux_jobid_t id,
                                         const flux_msg_t *msg,
                                         json_t *attrs,
                                         flux_future_t *f_lookup);
 
-#endif /* ! _FLUX_JOB_INFO_IDSYNC_H */
+#endif /* ! _FLUX_JOB_LIST_IDSYNC_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

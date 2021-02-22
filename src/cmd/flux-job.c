@@ -2908,7 +2908,7 @@ int cmd_stats (optparse_t *p, int argc, char **argv)
 {
     flux_t *h;
     flux_future_t *f;
-    const char *topic = "job-info.job-stats";
+    const char *topic = "job-list.job-stats";
     const char *s;
 
     if (!(h = flux_open (NULL, 0)))

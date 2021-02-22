@@ -8,13 +8,13 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_JOB_INFO_JOB_STATE_H
-#define _FLUX_JOB_INFO_JOB_STATE_H
+#ifndef _FLUX_JOB_LIST_JOB_STATE_H
+#define _FLUX_JOB_LIST_JOB_STATE_H
 
 #include <flux/core.h>
 #include <jansson.h>
 
-#include "info.h"
+#include "job-list.h"
 #include "stats.h"
 
 /* To handle the common case of user queries on job state, we will
@@ -38,7 +38,7 @@
 
 struct job_state_ctx {
     flux_t *h;
-    struct info_ctx *ctx;
+    struct list_ctx *ctx;
     zhashx_t *index;
     zlistx_t *pending;
     zlistx_t *running;
@@ -59,7 +59,7 @@ struct job_state_ctx {
 };
 
 struct job {
-    struct info_ctx *ctx;
+    struct list_ctx *ctx;
 
     flux_jobid_t id;
     uint32_t userid;
@@ -125,7 +125,7 @@ struct job {
     double t_inactive;
 };
 
-struct job_state_ctx *job_state_create (struct info_ctx *ctx);
+struct job_state_ctx *job_state_create (struct list_ctx *ctx);
 
 void job_state_destroy (void *data);
 
@@ -135,9 +135,9 @@ void job_state_pause_cb (flux_t *h, flux_msg_handler_t *mh,
 void job_state_unpause_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg);
 
-int job_state_init_from_kvs (struct info_ctx *ctx);
+int job_state_init_from_kvs (struct list_ctx *ctx);
 
-#endif /* ! _FLUX_JOB_INFO_JOB_STATE_H */
+#endif /* ! _FLUX_JOB_LIST_JOB_STATE_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

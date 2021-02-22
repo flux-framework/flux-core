@@ -8,7 +8,7 @@ test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
-PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-info/jobspec-permissive.jsonschema
+PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-list/jobspec-permissive.jsonschema
 JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
 
 # submit a whole bunch of jobs for job list testing
@@ -23,7 +23,7 @@ JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/valida
 #   - running jobs - by start time (most recent first)
 #   - inactive jobs - by completion time (most recent first)
 #
-# the job-info module has eventual consistency with the jobs stored in
+# the job-list module has eventual consistency with the jobs stored in
 # the job-manager's queue.  To ensure no raciness in tests, we spin
 # until all of the pending jobs have reached SCHED state, running jobs
 # have reached RUN state, and inactive jobs have reached INACTIVE
@@ -1041,15 +1041,15 @@ test_expect_success 'reload job-ingest with defaults' '
         ingest_module reload
 '
 
-# we make R invalid by overwriting it in the KVS before job-info will
+# we make R invalid by overwriting it in the KVS before job-list will
 # look it up
 test_expect_success HAVE_JQ 'flux jobs works on job with illegal R' '
-	${RPC} job-info.job-state-pause 0 </dev/null &&
+	${RPC} job-list.job-state-pause 0 </dev/null &&
         jobid=`flux job submit hostname.json` &&
         flux job wait-event $jobid clean >/dev/null &&
         jobkvspath=`flux job id --to kvs $jobid` &&
         flux kvs put "${jobkvspath}.R=foobar" &&
-	${RPC} job-info.job-state-unpause 0 </dev/null &&
+	${RPC} job-list.job-state-unpause 0 </dev/null &&
         i=0 &&
         while ! flux jobs --filter=inactive | grep $jobid > /dev/null \
                && [ $i -lt 5 ]

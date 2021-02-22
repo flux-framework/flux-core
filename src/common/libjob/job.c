@@ -233,7 +233,7 @@ flux_future_t *flux_job_list (flux_t *h,
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-info.list", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h, "job-list.list", FLUX_NODEID_ANY, 0,
                              "{s:i s:o s:i s:i s:i}",
                              "max_entries", max_entries,
                              "attrs", o,
@@ -262,7 +262,7 @@ flux_future_t *flux_job_list_inactive (flux_t *h,
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-info.list-inactive", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h, "job-list.list-inactive", FLUX_NODEID_ANY, 0,
                              "{s:i s:f s:o}",
                              "max_entries", max_entries,
                              "since", since,
@@ -288,7 +288,7 @@ flux_future_t *flux_job_list_id (flux_t *h,
         errno = EINVAL;
         return NULL;
     }
-    if (!(f = flux_rpc_pack (h, "job-info.list-id", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (h, "job-list.list-id", FLUX_NODEID_ANY, 0,
                              "{s:I s:O}",
                              "id", id,
                              "attrs", o)))

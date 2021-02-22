@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* job_util.c - job utility functions */
+/* idsync.c - code to sync job ids if job-info not yet aware of them */
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -42,7 +42,7 @@ void idsync_data_destroy_wrapper (void **data)
     }
 }
 
-struct idsync_data *idsync_data_create (struct info_ctx *ctx,
+struct idsync_data *idsync_data_create (struct list_ctx *ctx,
                                         flux_jobid_t id,
                                         const flux_msg_t *msg,
                                         json_t *attrs,
@@ -77,7 +77,7 @@ void idsync_waits_list_destroy (void **data)
         zlistx_destroy ((zlistx_t **) data);
 }
 
-int idsync_setup (struct info_ctx *ctx)
+int idsync_setup (struct list_ctx *ctx)
 {
     if (!(ctx->idsync_lookups = zlistx_new ()))
         return -1;
@@ -88,7 +88,7 @@ int idsync_setup (struct info_ctx *ctx)
     return 0;
 }
 
-void idsync_cleanup (struct info_ctx *ctx)
+void idsync_cleanup (struct list_ctx *ctx)
 {
     struct idsync_data *isd;
     isd = zlistx_first (ctx->idsync_lookups);

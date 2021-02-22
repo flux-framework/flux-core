@@ -44,12 +44,12 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs (RRSSS)' '
         jmgr_check_no_annotations $(cat job5.id)
 '
 
-test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-info (RRSSS)' '
-        jinfo_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
-        jinfo_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jinfo_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
-        jinfo_check_no_annotations $(cat job4.id) &&
-        jinfo_check_no_annotations $(cat job5.id)
+test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-list (RRSSS)' '
+        jlist_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
+        jlist_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
+        jlist_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
+        jlist_check_no_annotations $(cat job4.id) &&
+        jlist_check_no_annotations $(cat job5.id)
 '
 
 test_expect_success 'job-manager: annotate jobs in flux-jobs (RRSSS)' '
@@ -85,17 +85,17 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs (RIRSS)' '
 '
 
 # compared to above, note that job id #2 retains annotations, it is
-# cached in job-info
-test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-info (RIRSS)' '
-        jinfo_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
-        jinfo_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jinfo_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jinfo_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
-        jinfo_check_no_annotations $(cat job5.id)
+# cached in job-list
+test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-list (RIRSS)' '
+        jlist_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
+        jlist_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
+        jlist_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
+        jlist_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
+        jlist_check_no_annotations $(cat job5.id)
 '
 
 # compared to above, note that job id #2 retains annotations, it is
-# cached in job-info
+# cached in job-list
 test_expect_success 'job-manager: annotate jobs in flux jobs (RIRSS)' '
         fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "rank0/core0" &&
         fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "rank0/core1" &&
@@ -154,17 +154,17 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs (RIRRR)' '
 '
 
 # compared to above, note that job id #2 retains annotations, it is
-# cached in job-info
-test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-info (RIRRR)' '
-        jinfo_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
-        jinfo_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jinfo_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jinfo_check_annotation $(cat job4.id) "sched.resource_summary" "\"rank1/core0\"" &&
-        jinfo_check_annotation $(cat job5.id) "sched.resource_summary" "\"rank1/core1\""
+# cached in job-list
+test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-list (RIRRR)' '
+        jlist_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
+        jlist_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
+        jlist_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
+        jlist_check_annotation $(cat job4.id) "sched.resource_summary" "\"rank1/core0\"" &&
+        jlist_check_annotation $(cat job5.id) "sched.resource_summary" "\"rank1/core1\""
 '
 
 # compared to above, note that job id #2 retains annotations, it is
-# cached in job-info
+# cached in job-list
 test_expect_success 'job-manager: annotate jobs in flux jobs (RIRRR)' '
         fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "rank0/core0" &&
         fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "rank0/core1" &&
@@ -208,12 +208,12 @@ test_expect_success HAVE_JQ 'job-manager: no annotations (IIIII)' '
 '
 
 # compared to above, annotations are cached
-test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-info (IIIII)' '
-        jinfo_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
-        jinfo_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jinfo_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jinfo_check_annotation $(cat job4.id) "sched.resource_summary" "\"rank1/core0\"" &&
-        jinfo_check_annotation $(cat job5.id) "sched.resource_summary" "\"rank1/core1\""
+test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-list (IIIII)' '
+        jlist_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
+        jlist_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
+        jlist_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
+        jlist_check_annotation $(cat job4.id) "sched.resource_summary" "\"rank1/core0\"" &&
+        jlist_check_annotation $(cat job5.id) "sched.resource_summary" "\"rank1/core1\""
 '
 
 # compared to above, annotations are cached

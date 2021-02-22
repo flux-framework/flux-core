@@ -23,7 +23,7 @@ if len(sys.argv) > 1:
 else:
     name = "list"
 try:
-    print(h.rpc(f"job-info.{name}", payload).get())
+    print(h.rpc(f"job-list.{name}", payload).get())
 except OSError as err:
     print(f"errno {err.errno}: {err.strerror}")
 
