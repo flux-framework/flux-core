@@ -1,7 +1,5 @@
 # Usage: flux python summarize-minimal-jobspec.py -j jobspec >summary.txt
 
-from __future__ import print_function
-
 import sys
 import json
 import argparse

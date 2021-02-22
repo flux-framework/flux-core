@@ -56,7 +56,6 @@ lua-devel         | liblua5.1-dev     | >= 5.1, < 5.5     |
 lua-posix         | lua-posix         |                   | *1*
 python36-devel    | python3-dev       | >= 3.6            |
 python36-cffi     | python3-cffi      | >= 1.1            |
-python36-six      | python3-six       | >= 1.9            |
 python36-yaml     | python3-yaml      | >= 3.10.0         |
 python36-jsonschema | python3-jsonschema | >= 2.3.0       |
 phthon3-sphinx    | python3-sphinx    |                   | *2*

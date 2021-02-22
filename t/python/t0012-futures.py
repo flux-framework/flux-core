@@ -10,13 +10,10 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from __future__ import print_function
-
 import gc
 import errno
 import unittest
 
-import six.moves
 import flux
 import flux.constants
 from flux.core.inner import ffi
@@ -199,7 +196,7 @@ class TestHandle(unittest.TestCase):
             future.reset()
 
         def service_cb(fh, t, msg, arg):
-            for x in six.moves.range(msg.payload["count"]):
+            for x in range(msg.payload["count"]):
                 fh.respond(msg, {"seq": x})
 
         fut = self.f.service_register("rpctest")

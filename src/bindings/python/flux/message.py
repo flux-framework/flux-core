@@ -11,8 +11,6 @@
 import errno
 import json
 
-import six
-
 from flux.wrapper import Wrapper, WrapperPimpl
 from flux.core.inner import ffi, lib, raw
 from flux.core.watchers import Watcher
@@ -152,9 +150,9 @@ class MessageWatcher(Watcher):
 
         if topic_glob is None or topic_glob == ffi.NULL:
             topic_glob = ffi.NULL
-        elif isinstance(topic_glob, six.text_type):
+        elif isinstance(topic_glob, str):
             topic_glob = topic_glob.encode("UTF-8")
-        elif not isinstance(topic_glob, six.binary_type):
+        elif not isinstance(topic_glob, bytes):
             errmsg = "Topic must be a string, not {}".format(type(topic_glob))
             raise TypeError(errno.EINVAL, errmsg)
         c_topic_glob = ffi.new("char[]", topic_glob)

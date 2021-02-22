@@ -12,7 +12,6 @@
 
 import unittest
 
-import six
 import flux
 from flux.core.inner import ffi, raw
 import flux.wrapper
@@ -45,8 +44,8 @@ class TestWrapper(unittest.TestCase):
         future = f.rpc("broker.ping", payload)
         resp = future.get()
         future.pimpl.handle = None
-        with six.assertRaisesRegex(
-            self, ValueError, r"Attempting to call a cached, bound method.*NULL handle"
+        with self.assertRaisesRegex(
+            ValueError, r"Attempting to call a cached, bound method.*NULL handle"
         ):
             resp = future.get()
 
@@ -54,7 +53,7 @@ class TestWrapper(unittest.TestCase):
         flux.core.inner.raw.flux_log(flux.Flux("loop://"), 0, "stuff")
 
     def test_masked_function(self):
-        with six.assertRaisesRegex(self, AttributeError, r".*masks function.*"):
+        with self.assertRaisesRegex(AttributeError, r".*masks function.*"):
             flux.Flux("loop://").rpc("topic").pimpl.flux_request_encode("request", 15)
 
     def test_set_pimpl_handle(self):
@@ -67,7 +66,7 @@ class TestWrapper(unittest.TestCase):
     def test_set_pimpl_handle_invalid(self):
         f = flux.Flux("loop://")
         r = f.rpc("topic")
-        with six.assertRaisesRegex(self, TypeError, r".*expected a.*"):
+        with self.assertRaisesRegex(TypeError, r".*expected a.*"):
             r.handle = f.rpc("other topic")
 
     def test_read_basic_value(self):
@@ -78,8 +77,7 @@ class TestWrapper(unittest.TestCase):
         infinite recursion as documented in
         https://github.com/flux-framework/flux-core/issues/2485
         """
-        with six.assertRaisesRegex(
-            self,
+        with self.assertRaisesRegex(
             TypeError,
             (
                 r"(.*takes at least.*arguments.*)"

@@ -18,10 +18,10 @@ import unittest
 import datetime
 import signal
 import locale
+import pathlib
 from glob import glob
 
 import yaml
-import six
 
 import flux
 import flux.kvs
@@ -140,10 +140,6 @@ class TestJob(unittest.TestCase):
                 jobspec.duration = duration
 
     def test_11_cwd_pathlib(self):
-        if six.PY2:
-            return
-        import pathlib
-
         jobspec_path = pathlib.PosixPath(self.jobspec_dir) / "valid" / "basic_v1.yaml"
         jobspec = Jobspec.from_yaml_file(jobspec_path)
         cwd = pathlib.PosixPath("/tmp")

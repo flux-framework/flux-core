@@ -11,7 +11,6 @@
 import signal
 import threading
 from contextlib import contextmanager
-import six
 
 from flux.wrapper import Wrapper
 from flux.rpc import RPC
@@ -148,7 +147,7 @@ class Flux(Wrapper):
         :param fstring: A string to log, C-style formatting is *not* supported
         """
         # Short-circuited because variadics can't be wrapped cleanly
-        if isinstance(fstring, six.text_type):
+        if isinstance(fstring, str):
             fstring = fstring.encode("utf-8")
         lib.flux_log(self.handle, level, fstring)
 

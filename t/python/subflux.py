@@ -10,8 +10,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from __future__ import print_function
-
 import os
 import sys
 import subprocess

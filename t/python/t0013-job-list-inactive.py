@@ -20,7 +20,6 @@ import time
 from glob import glob
 
 import yaml
-import six
 
 import flux
 from flux import job

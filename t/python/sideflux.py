@@ -9,7 +9,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from __future__ import print_function
 import io
 import re
 import os
@@ -23,7 +22,7 @@ import pprint
 import shutil
 import tempfile
 import time
-from six.moves import queue as Queue
+import queue
 import pycotap
 
 # pprint.pprint(os.environ)
@@ -200,7 +199,7 @@ class SimpleAsyncRunner(object):
         if not self.done:
             try:
                 self.res = self.q.get(True, timeout)
-            except Queue.Empty:
+            except queue.Empty:
                 raise AsyncTimeout("The result is not ready, has a test run too long?")
             self.done = True
         return self.res
