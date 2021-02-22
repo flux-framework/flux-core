@@ -57,7 +57,6 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
 
-#include "heartbeat.h"
 #include "module.h"
 #include "brokercfg.h"
 #include "overlay.h"
@@ -115,12 +114,11 @@ static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "+vX:k:H:g:S:c:"
+#define OPTIONS "+vX:k:g:S:c:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"module-path",     required_argument,  0, 'X'},
     {"k-ary",           required_argument,  0, 'k'},
-    {"heartrate",       required_argument,  0, 'H'},
     {"shutdown-grace",  required_argument,  0, 'g'},
     {"setattr",         required_argument,  0, 'S'},
     {"config-path",     required_argument,  0, 'c'},
@@ -134,7 +132,6 @@ static void usage (void)
 " -v,--verbose                 Be annoyingly verbose\n"
 " -X,--module-path PATH        Set module search path (colon separated)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
-" -H,--heartrate SECS          Set heartrate in seconds (rank 0 only)\n"
 " -S,--setattr ATTR=VAL        Set broker attribute\n"
 " -c,--config-path PATH        Set broker config directory (default: none)\n"
 );
@@ -150,7 +147,7 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
     while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (c) {
         case 'v':   /* --verbose */
-            ctx->verbose = true;
+            ctx->verbose++;
             break;
         case 'X':   /* --module-path PATH */
             if (attr_set (ctx->attrs, "conf.module_path", optarg, true) < 0)
@@ -163,10 +160,6 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
                 log_err_exit ("k-ary '%s'", optarg);
             if (ctx->tbon_k < 1)
                 usage ();
-            break;
-        case 'H':   /* --heartrate SECS */
-            if (fsd_parse_duration (optarg, &ctx->heartbeat_rate) < 0)
-                log_err_exit ("heartrate '%s'", optarg);
             break;
         case 'g':   /* --shutdown-grace */
             log_msg ("Warning: --shutdown-grace option is deprecated");
@@ -252,8 +245,6 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.services = service_switch_create ()))
         oom ();
-    if (!(ctx.heartbeat = heartbeat_create ()))
-        oom ();
     if (!(ctx.attrs = attr_create ()))
         oom ();
     if (!(ctx.subscriptions = zlist_new ()))
@@ -269,7 +260,6 @@ int main (int argc, char *argv[])
     /* Set default rolemask for messages sent with flux_send()
      * on the broker's internal handle. */
     ctx.cred.rolemask = FLUX_ROLE_OWNER;
-    ctx.heartbeat_rate = 2;
 
     init_attrs (ctx.attrs, getpid (), &ctx.cred);
 
@@ -491,25 +481,10 @@ int main (int argc, char *argv[])
 
     /* Initialize module infrastructure.
      */
-    if (ctx.verbose)
+    if (ctx.verbose > 1)
         log_msg ("initializing modules");
     modhash_set_rank (ctx.modhash, ctx.rank);
     modhash_set_flux (ctx.modhash, ctx.h);
-
-    /* install heartbeat (including timer on rank 0)
-     */
-    heartbeat_set_flux (ctx.heartbeat, ctx.h);
-    if (heartbeat_set_rate (ctx.heartbeat, ctx.heartbeat_rate) < 0) {
-        log_err ("heartbeat_set_rate");
-        goto cleanup;
-    }
-    if (heartbeat_start (ctx.heartbeat) < 0) {
-        log_err ("heartbeat_start");
-        goto cleanup;
-    }
-    if (ctx.rank == 0 && ctx.verbose)
-        log_msg ("installing session heartbeat: T=%0.1fs",
-                  heartbeat_get_rate (ctx.heartbeat));
 
     /* Configure broker state machine
      */
@@ -524,7 +499,7 @@ int main (int argc, char *argv[])
      * which uses the local connector.
      * The shutdown protocol unloads it.
      */
-    if (ctx.verbose)
+    if (ctx.verbose > 1)
         log_msg ("loading connector-local");
     if (load_module_byname (&ctx, "connector-local", NULL, 0, NULL) < 0) {
         log_err ("load_module connector-local");
@@ -533,13 +508,13 @@ int main (int argc, char *argv[])
 
     /* Event loop
      */
-    if (ctx.verbose)
+    if (ctx.verbose > 1)
         log_msg ("entering event loop");
     /* Once we enter the reactor, default exit_rc is now 0 */
     ctx.exit_rc = 0;
     if (flux_reactor_run (ctx.reactor, 0) < 0)
         log_err ("flux_reactor_run");
-    if (ctx.verbose)
+    if (ctx.verbose > 1)
         log_msg ("exited event loop");
 
     /* inform all lingering subprocesses we are tearing down.  Do this
@@ -549,7 +524,7 @@ int main (int argc, char *argv[])
     exec_terminate_subprocesses (ctx.h);
 
 cleanup:
-    if (ctx.verbose)
+    if (ctx.verbose > 1)
         log_msg ("cleaning up");
 
     /* Restore default sigmask and actions for SIGINT, SIGTERM
@@ -561,10 +536,6 @@ cleanup:
     if (sigaction (SIGTERM, &old_sigact_term, NULL) < 0)
         log_err ("sigaction");
 
-    /* remove heartbeat timer, if any
-     */
-    heartbeat_stop (ctx.heartbeat);
-
     /* Unregister builtin services
      */
     attr_destroy (ctx.attrs);
@@ -574,7 +545,6 @@ cleanup:
     zlist_destroy (&ctx.sigwatchers);
     state_machine_destroy (ctx.state_machine);
     overlay_destroy (ctx.overlay);
-    heartbeat_destroy (ctx.heartbeat);
     service_switch_destroy (ctx.services);
     broker_remove_services (handlers);
     publisher_destroy (ctx.publisher);

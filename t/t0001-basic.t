@@ -234,9 +234,6 @@ test_expect_success 'broker broker.pid attribute is immutable' '
 test_expect_success 'broker --verbose option works' '
 	flux start ${ARGS} -o,-v /bin/true
 '
-test_expect_success 'broker --heartrate option works' '
-	flux start ${ARGS} -o,--heartrate=0.1 /bin/true
-'
 test_expect_success NO_CHAIN_LINT 'broker --k-ary option works' '
 	pids="" &&
 	flux start ${ARGS} -s4 -o,--k-ary=1 /bin/true & pids=$!

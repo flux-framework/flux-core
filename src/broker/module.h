@@ -15,7 +15,7 @@
 
 #include "src/common/librouter/disconnect.h"
 
-#include "heartbeat.h"
+#include "attr.h"
 #include "service.h"
 
 typedef struct broker_module module_t;

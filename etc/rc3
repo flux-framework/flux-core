@@ -22,6 +22,7 @@ for rcdir in $all_dirs; do
 done
 shopt -u nullglob
 
+modrm 0 heartbeat
 modrm 0 sched-simple
 modrm all resource
 modrm 0 job-exec

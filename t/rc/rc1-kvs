@@ -13,3 +13,4 @@ modload() {
 modload 0 content-sqlite
 modload all kvs
 modload all kvs-watch
+modload 0 heartbeat

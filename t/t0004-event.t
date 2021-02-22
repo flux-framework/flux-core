@@ -6,7 +6,7 @@ test_description='Test event propagation'
 . `dirname $0`/sharness.sh
 SIZE=4
 LASTRANK=$(($SIZE-1))
-test_under_flux ${SIZE} minimal
+test_under_flux ${SIZE} kvs
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 

@@ -82,12 +82,12 @@ test_expect_success 'flux-mini batch: --broker-opts works' '
 	id=$(flux mini batch -n1 --flags=waitable \
 	     --broker-opts=-v batch-script.sh) &&
 	id2=$(flux mini batch -n1 --flags=waitable \
-	     --broker-opts=-v,-H5 batch-script.sh) &&
+	     --broker-opts=-v,-v batch-script.sh) &&
 	run_timeout 60 flux job wait $id &&
 	test_debug "cat flux-${id}.out" &&
 	grep "boot: rank=0 size=1" flux-${id}.out &&
 	run_timeout 60 flux job wait $id2 &&
 	grep "boot: rank=0 size=1" flux-${id2}.out &&
-	grep "heartbeat: T=5.0s" flux-${id2}.out
+	grep "entering event loop" flux-${id2}.out
 '
 test_done

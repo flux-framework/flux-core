@@ -1,6 +1,7 @@
 SUBDIRS = \
  barrier \
  connector-local \
+ heartbeat \
  kvs \
  kvs-watch \
  content-sqlite \
