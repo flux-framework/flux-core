@@ -216,7 +216,6 @@ requeues
 RQ
 libev
 baz
-hb
 unsubscribe
 unsubscribes
 zeromq
