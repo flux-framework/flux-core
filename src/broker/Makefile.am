@@ -98,11 +98,6 @@ TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
 
-test_heartbeat_t_SOURCES = test/heartbeat.c
-test_heartbeat_t_CPPFLAGS = $(test_cppflags)
-test_heartbeat_t_LDADD = $(test_ldadd)
-test_heartbeat_t_LDFLAGS = $(test_ldflags)
-
 test_attr_t_SOURCES = test/attr.c
 test_attr_t_CPPFLAGS = $(test_cppflags)
 test_attr_t_LDADD = $(test_ldadd)
