@@ -550,6 +550,63 @@ err:
         flux_log_error (h, "flux_respond_error");
 }
 
+static void feasibility_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
+{
+    struct simple_sched *ss = arg;
+    struct jj_counts jj;
+    json_t *jobspec;
+    struct rlist *alloc = NULL;
+    const char *errmsg = NULL;
+
+    if (flux_request_unpack (msg, NULL, "{s:o}",
+                            "jobspec", &jobspec) < 0)
+        goto err;
+    if (libjj_get_counts_json (jobspec, &jj) < 0) {
+        errmsg = jj.error;
+        goto err;
+    }
+    if (!(alloc = rlist_alloc (ss->rlist,
+                               ss->alloc_mode,
+                               jj.nnodes,
+                               jj.nslots,
+                               jj.slot_size))) {
+        if (errno == EOVERFLOW) {
+            errmsg = "request is not satisfiable";
+            goto err;
+        }
+        else if (errno != ENOSPC) {
+            errmsg = "cannot allocate this jobspec";
+            goto err;
+        }
+        /* Fall-through: job is satisfiable */
+    }
+    else {
+        int rc = rlist_free (ss->rlist, alloc);
+        rlist_destroy (alloc);
+        if (rc < 0) {
+            /*  If rlist_free() fails we're in trouble because
+             *  ss->rlist will have an invalid allocation. This should
+             *  be rare if not impossible, so just exit the reactor.
+             *
+             *  The sched module can then be reloaded without loss of jobs.
+             */
+            flux_log_error (h, "feasibility_cb: failed to free fake alloc");
+            flux_reactor_stop_error (flux_get_reactor (h));
+            errmsg = "Internal scheduler error";
+            goto err;
+        }
+    }
+    if (flux_respond_pack (h, msg, "{s:i}", "errnum", 0) < 0)
+        flux_log_error (h, "feasibility_cb: flux_respond_pack");
+    return;
+err:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "feasibility_cb: flux_respond_error");
+}
+
 static int ss_resource_update (struct simple_sched *ss, flux_future_t *f)
 {
     const char *up = NULL;
@@ -744,6 +801,7 @@ static int process_args (flux_t *h, struct simple_sched *ss,
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "*.resource-status", status_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "*.feasibility", feasibility_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
