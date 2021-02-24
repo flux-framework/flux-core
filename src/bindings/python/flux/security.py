@@ -8,8 +8,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-import six
-
 from _flux._security import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl, FunctionWrapper
 
@@ -54,23 +52,23 @@ class SecurityContext(WrapperPimpl):
         self.pimpl.configure(config_pattern)
 
     def sign_wrap_as(self, userid, payload, mech_type=ffi.NULL, flags=0):
-        if isinstance(payload, six.text_type):
+        if isinstance(payload, str):
             payload = payload.encode("utf-8", errors="surrogateescape")
-        elif not isinstance(payload, six.binary_type):
+        elif not isinstance(payload, bytes):
             errstr = "payload must be a text or binary type, not {}"
             raise TypeError(errstr.format(type(payload)))
         return self.pimpl.wrap_as(userid, payload, len(payload), mech_type, flags)
 
     def sign_wrap(self, payload, mech_type=ffi.NULL, flags=0):
-        if isinstance(payload, six.text_type):
+        if isinstance(payload, str):
             payload = payload.encode("utf-8")
-        elif not isinstance(payload, six.binary_type):
+        elif not isinstance(payload, bytes):
             errstr = "payload must be a text or binary type, not {}"
             raise TypeError(errstr.format(type(payload)))
         return self.pimpl.wrap(payload, len(payload), mech_type, flags)
 
     def sign_unwrap(self, signed_payload, flags=0):
-        if not isinstance(signed_payload, six.binary_type):
+        if not isinstance(signed_payload, bytes):
             errstr = "signed_payload must be a binary type, not {}"
             raise TypeError(errstr.format(type(signed_payload)))
 

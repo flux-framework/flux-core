@@ -10,11 +10,8 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from __future__ import print_function
 import unittest
 import multiprocessing as mp
-
-from six.moves import range as range
 
 import flux
 from subflux import rerun_under_flux

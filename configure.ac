@@ -250,11 +250,6 @@ AM_COND_IF([WITH_PYTHON], [
                  ,
                  [AC_MSG_ERROR([could not find python module cffi, version 1.1+ required])]
                  )
-  AM_CHECK_PYMOD(six,
-                 [StrictVersion(six.__version__) >= StrictVersion('1.9.0')],
-                 ,
-                 [AC_MSG_ERROR([could not find python module six, version 1.9.0+ required])]
-                 )
   AM_CHECK_PYMOD(yaml,
                  [StrictVersion(yaml.__version__) >= StrictVersion ('3.10.0')],
                  ,

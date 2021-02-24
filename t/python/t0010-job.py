@@ -18,10 +18,10 @@ import unittest
 import datetime
 import signal
 import locale
+import pathlib
 from glob import glob
 
 import yaml
-import six
 
 import flux
 import flux.kvs
@@ -140,10 +140,6 @@ class TestJob(unittest.TestCase):
                 jobspec.duration = duration
 
     def test_11_cwd_pathlib(self):
-        if six.PY2:
-            return
-        import pathlib
-
         jobspec_path = pathlib.PosixPath(self.jobspec_dir) / "valid" / "basic_v1.yaml"
         jobspec = Jobspec.from_yaml_file(jobspec_path)
         cwd = pathlib.PosixPath("/tmp")
@@ -350,6 +346,8 @@ class TestJob(unittest.TestCase):
             for path in ("foo.txt", "bar.md", "foo.json"):
                 setattr(jobspec, stream, path)
                 self.assertEqual(getattr(jobspec, stream), path)
+            with self.assertRaises(TypeError):
+                setattr(jobspec, stream, None)
 
     def test_22_from_batch_command(self):
         """Test that `from_batch_command` produces a valid jobspec"""

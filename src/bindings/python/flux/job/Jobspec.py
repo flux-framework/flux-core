@@ -16,7 +16,6 @@ import collections
 import collections.abc as abc
 import numbers
 
-import six
 import yaml
 
 from _flux._core import ffi
@@ -34,12 +33,12 @@ def _convert_jobspec_arg_to_string(jobspec):
     """
     if isinstance(jobspec, Jobspec):
         jobspec = jobspec.dumps()
-    elif isinstance(jobspec, six.text_type):
+    elif isinstance(jobspec, str):
         jobspec = jobspec.encode("utf-8", errors="surrogateescape")
     elif jobspec is None or jobspec == ffi.NULL:
         # catch this here rather than in C for a better error message
         raise EnvironmentError(errno.EINVAL, "jobspec must not be None/NULL")
-    elif not isinstance(jobspec, six.binary_type):
+    elif not isinstance(jobspec, bytes):
         raise TypeError(
             "jobspec must be a Jobspec or string (either binary or unicode)"
         )
@@ -168,7 +167,7 @@ class Jobspec(object):
         for key in ["min", "max", "operand"]:
             if key not in range_dict:
                 continue
-            if not isinstance(range_dict[key], six.integer_types):
+            if not isinstance(range_dict[key], int):
                 raise TypeError("{} must be an int".format(key))
             if range_dict[key] < 1:
                 raise ValueError("{} must be > 0".format(key))
@@ -187,7 +186,7 @@ class Jobspec(object):
         # validate the 'type' key
         if "type" not in res:
             raise ValueError("type is a required key for resources")
-        if not isinstance(res["type"], six.string_types):
+        if not isinstance(res["type"], str):
             raise TypeError("type must be a string")
 
         # validate the 'count' key
@@ -196,14 +195,14 @@ class Jobspec(object):
         count = res["count"]
         if isinstance(count, abc.Mapping):
             cls._validate_complex_range(count)
-        elif not isinstance(count, six.integer_types):
+        elif not isinstance(count, int):
             raise TypeError("count must be an int or mapping")
         elif count < 1:
             raise ValueError("count must be > 0")
 
         # validate the string keys
         for key in ["id", "unit", "label"]:
-            if key in res and not isinstance(res[key], six.string_types):
+            if key in res and not isinstance(res[key], str):
                 raise TypeError("{} must be a string".format(key))
 
         # validate the 'exclusive' key
@@ -225,7 +224,7 @@ class Jobspec(object):
         if not isinstance(task["count"], abc.Mapping):
             raise TypeError("count must be a mapping")
 
-        if not isinstance(task["slot"], six.string_types):
+        if not isinstance(task["slot"], str):
             raise TypeError("slot must be a string")
 
         if "attributes" in task and not isinstance(task["attributes"], abc.Mapping):
@@ -237,9 +236,9 @@ class Jobspec(object):
         if not (
             (  # sequence of strings - N.B. also true for just a plain string
                 isinstance(command, abc.Sequence)
-                and all(isinstance(x, six.string_types) for x in command)
+                and all(isinstance(x, str) for x in command)
             )
-        ) or isinstance(command, six.string_types):
+        ) or isinstance(command, str):
             raise TypeError("command must be a list of strings")
 
     @staticmethod
@@ -250,7 +249,7 @@ class Jobspec(object):
     def _create_resource(res_type, count, with_child=None):
         if with_child is not None and not isinstance(with_child, abc.Sequence):
             raise TypeError("child resource must None or a sequence")
-        if with_child is not None and isinstance(with_child, six.string_types):
+        if with_child is not None and isinstance(with_child, str):
             raise TypeError("child resource must not be a string")
         if not count > 0:
             raise ValueError("resource count must be > 0")
@@ -283,7 +282,7 @@ class Jobspec(object):
         - a python datetime.timedelta
         A duration of zero is interpreted as "not set".
         """
-        if isinstance(duration, six.string_types):
+        if isinstance(duration, str):
             time = parse_fsd(duration)
         elif isinstance(duration, datetime.timedelta):
             time = duration.total_seconds()
@@ -314,9 +313,9 @@ class Jobspec(object):
         - a pathlib object (if py 3.6+)
         - a string
         """
-        if six.PY3 and isinstance(cwd, os.PathLike):
+        if isinstance(cwd, os.PathLike):
             cwd = os.fspath(cwd)
-        if not isinstance(cwd, six.string_types):
+        if not isinstance(cwd, str):
             raise ValueError("cwd must be a string")
         self.setattr("system.cwd", cwd)
 
@@ -348,7 +347,7 @@ class Jobspec(object):
 
     @stdin.setter
     def stdin(self, path):
-        """Redirect stdin to a file given by `path`"""
+        """Redirect stdin to a file given by `path`, a string or pathlib object."""
         self._set_io_path("input", "stdin", path)
 
     @property
@@ -357,7 +356,7 @@ class Jobspec(object):
 
     @stdout.setter
     def stdout(self, path):
-        """Redirect stdout to a file given by `path`"""
+        """Redirect stdout to a file given by `path`, a string or pathlib object."""
         self._set_io_path("output", "stdout", path)
 
     @property
@@ -366,7 +365,7 @@ class Jobspec(object):
 
     @stderr.setter
     def stderr(self, path):
-        """Redirect stderr to a file given by `path`"""
+        """Redirect stderr to a file given by `path`, a string or pathlib object."""
         self._set_io_path("output", "stderr", path)
 
     def _get_io_path(self, iotype, stream_name):
@@ -389,6 +388,13 @@ class Jobspec(object):
         :param stream_name: the name of the io stream
         :param path: the path to redirect the stream
         """
+        if isinstance(path, os.PathLike):
+            path = os.fspath(path)
+        if not isinstance(path, str):
+            raise TypeError(
+                "The path must be a string or pathlib object, "
+                f"got {type(path).__name__}"
+            )
         self.setattr_shell_option("{}.{}.type".format(iotype, stream_name), "file")
         self.setattr_shell_option("{}.{}.path".format(iotype, stream_name), path)
 

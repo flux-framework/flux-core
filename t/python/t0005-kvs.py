@@ -10,9 +10,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from __future__ import print_function
 import unittest
-import six
 
 import flux
 import flux.kvs
@@ -39,7 +37,7 @@ class TestKVS(unittest.TestCase):
         kd.commit()
         nv = kd[key]
         self.assertEqual(value, nv)
-        self.assertFalse(isinstance(nv, six.binary_type))
+        self.assertFalse(isinstance(nv, bytes))
         return kd
 
     def test_set_int(self):
@@ -123,7 +121,7 @@ class TestKVS(unittest.TestCase):
             )
 
     def test_read_non_existent_basedir(self):
-        with self.assertRaisesRegexp(EnvironmentError, "No such file"):
+        with self.assertRaisesRegex(EnvironmentError, "No such file"):
             print(
                 flux.kvs.KVSDir(
                     self.f, "crazykeythatclearlydoesntexistandneverwillinanyuniverse"

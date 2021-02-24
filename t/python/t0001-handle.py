@@ -12,7 +12,6 @@
 
 import unittest
 import syslog
-import six
 
 import flux
 from subflux import rerun_under_flux, script_dir
@@ -43,7 +42,7 @@ class TestHandle(unittest.TestCase):
         r = self.f.rpc(b"broker.ping", {"seq": 1, "pad": "stuff"}).get()
         self.assertEqual(r["seq"], 1)
         self.assertEqual(r["pad"], u"stuff")
-        self.assertTrue(isinstance(r["pad"], six.text_type))
+        self.assertTrue(isinstance(r["pad"], str))
 
     def test_anonymous_handle_rpc_ping(self):
         """Send a ping using an anonymous/unnamed flux handle"""
@@ -59,7 +58,7 @@ class TestHandle(unittest.TestCase):
         ).get()
         self.assertEqual(r[u"\xa3"], u"value")
         self.assertEqual(r["key"], u"\u32db \u263a \u32e1")
-        self.assertTrue(isinstance(r["key"], six.text_type))
+        self.assertTrue(isinstance(r["key"], str))
 
     def test_rpc_with(self):
         """Sending a ping"""
@@ -82,7 +81,7 @@ class TestHandle(unittest.TestCase):
 
     def test_attr_get(self):
         local_uri = self.f.attr_get("local-uri")
-        self.assertTrue(isinstance(local_uri, six.text_type))
+        self.assertTrue(isinstance(local_uri, str))
         self.assertEqual(local_uri[:6], "local:")
 
         attr_rank = int(self.f.attr_get("rank"))

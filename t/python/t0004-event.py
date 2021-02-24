@@ -10,9 +10,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-from __future__ import print_function
 import unittest
-import six
 
 import flux
 from subflux import rerun_under_flux
@@ -36,7 +34,7 @@ class TestEvent(unittest.TestCase):
         """Unsubscribe from an event"""
         self.assertGreaterEqual(self.f.event_subscribe("testevent.2"), 0)
         self.assertGreaterEqual(self.f.event_unsubscribe("testevent.2"), 0)
-        with self.assertRaisesRegexp(EnvironmentError, "No such file"):
+        with self.assertRaisesRegex(EnvironmentError, "No such file"):
             self.f.event_unsubscribe("nonexistent.event")
 
     def test_full_event(self):
@@ -48,7 +46,7 @@ class TestEvent(unittest.TestCase):
             evt = self.f.event_recv()
             self.assertIsNotNone(evt)
 
-            if isinstance(event_name, six.binary_type):
+            if isinstance(event_name, bytes):
                 self.assertEqual(evt.topic, event_name.decode("utf-8"))
             else:
                 self.assertEqual(evt.topic, event_name)

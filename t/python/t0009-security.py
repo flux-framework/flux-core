@@ -50,7 +50,7 @@ allowed-types = [ "none" ]
         self.assertEqual(wrapping_user, os.getuid())
 
     def test_01_security_error(self):
-        with self.assertRaisesRegexp(EnvironmentError, "sign-unwrap:.*"):
+        with self.assertRaisesRegex(EnvironmentError, "sign-unwrap:.*"):
             unwrapped_payload, wrapping_user = self.context.sign_unwrap(b"foo")
 
 

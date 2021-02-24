@@ -22,8 +22,6 @@ import threading
 from datetime import timedelta
 from string import Formatter
 
-import six
-
 from flux.core.inner import ffi, raw
 
 __all__ = [
@@ -86,9 +84,9 @@ def interruptible(func):
 def encode_payload(payload):
     if payload is None or payload == ffi.NULL:
         payload = ffi.NULL
-    elif isinstance(payload, six.text_type):
+    elif isinstance(payload, str):
         payload = payload.encode("UTF-8")
-    elif not isinstance(payload, six.binary_type):
+    elif not isinstance(payload, bytes):
         payload = json.dumps(payload, ensure_ascii=False).encode("UTF-8")
     return payload
 
@@ -97,9 +95,9 @@ def encode_topic(topic):
     # Convert topic to utf-8 binary string
     if topic is None or topic == ffi.NULL:
         raise EnvironmentError(errno.EINVAL, "Topic must not be None/NULL")
-    if isinstance(topic, six.text_type):
+    if isinstance(topic, str):
         topic = topic.encode("UTF-8")
-    elif not isinstance(topic, six.binary_type):
+    elif not isinstance(topic, bytes):
         errmsg = "Topic must be a string, not {}".format(type(topic))
         raise TypeError(errno.EINVAL, errmsg)
     return topic
