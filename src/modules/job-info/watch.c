@@ -23,6 +23,7 @@
 
 #include "info.h"
 #include "watch.h"
+#include "guest_watch.h"
 #include "allow.h"
 
 struct watch_ctx {
@@ -317,6 +318,45 @@ error:
     zlist_remove (ctx->watchers, w);
 }
 
+int watch (struct info_ctx *ctx,
+           const flux_msg_t *msg,
+           flux_jobid_t id,
+           const char *path,
+           int flags,
+           bool guest)
+{
+    struct watch_ctx *w = NULL;
+
+    if (!(w = watch_ctx_create (ctx, msg, id, guest, path, flags)))
+        goto error;
+
+    /* if user requested an alternate path and that alternate path is
+     * not the main eventlog, we have to check the main eventlog for
+     * access first.
+     */
+    if (path && strcasecmp (path, "eventlog")) {
+        if (check_eventlog (w) < 0)
+            goto error;
+    }
+    else {
+        if (watch_key (w) < 0)
+            goto error;
+    }
+
+    if (zlist_append (ctx->watchers, w) < 0) {
+        flux_log_error (ctx->h, "%s: zlist_append", __FUNCTION__);
+        goto error;
+    }
+    zlist_freefn (ctx->watchers, w, watch_ctx_destroy, true);
+    w = NULL;
+
+    return 0;
+
+error:
+    watch_ctx_destroy (w);
+    return -1;
+}
+
 void watch_cb (flux_t *h, flux_msg_handler_t *mh,
                const flux_msg_t *msg, void *arg)
 {
@@ -340,30 +380,19 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
         errmsg = "eventlog-watch request rejected without streaming RPC flag";
         goto error;
     }
+    /* guest flag indicates to read path from guest namespace */
     (void)flux_request_unpack (msg, NULL, "{s:b}", "guest", &guest);
 
-    if (!(w = watch_ctx_create (ctx, msg, id, guest, path, flags)))
-        goto error;
-
-    /* if user requested an alternate path and that alternate path is
-     * not the main eventlog, we have to check the main eventlog for
-     * access first.
-     */
-    if (path && strcasecmp (path, "eventlog")) {
-        if (check_eventlog (w) < 0)
+    /* if watching a "guest" path, forward to guest watcher for
+     * handling */
+    if (!strncmp (path, "guest.", 6)) {
+        if (guest_watch (ctx, msg, id, path + 6, flags) < 0)
             goto error;
     }
     else {
-        if (watch_key (w) < 0)
+        if (watch (ctx, msg, id, path, flags, guest) < 0)
             goto error;
     }
-
-    if (zlist_append (ctx->watchers, w) < 0) {
-        flux_log_error (h, "%s: zlist_append", __FUNCTION__);
-        goto error;
-    }
-    zlist_freefn (ctx->watchers, w, watch_ctx_destroy, true);
-    w = NULL;
 
     return;
 
@@ -429,6 +458,7 @@ void watch_cancel_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
     watchers_cancel (ctx, sender, matchtag);
+    guest_watchers_cancel (ctx, sender, matchtag);
     free (sender);
 }
 
