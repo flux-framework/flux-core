@@ -369,6 +369,12 @@ static void get_main_eventlog_continuation (flux_future_t *f, void *arg)
         goto done;
     }
 
+    /* N.B. Check for whether requester should be allowed to read this
+     * eventlog could be done here (eventlog_allow ()), however since
+     * it will be done in the primary watch code anyways, we let the
+     * check fallthrough to be done there.
+     */
+
     if (check_guest_namespace_status (gw, s) < 0)
         goto error;
 
