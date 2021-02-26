@@ -13,7 +13,7 @@
 
 #include <flux/core.h>
 
-#include "info.h"
+#include "job-info.h"
 
 /* Determine if user who sent request 'msg' is allowed to
  * access job eventlog 's'.  Assume first event is the "submit"

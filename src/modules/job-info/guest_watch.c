@@ -22,7 +22,7 @@
 #include "src/common/libjob/job.h"
 #include "src/common/libeventlog/eventlog.h"
 
-#include "info.h"
+#include "job-info.h"
 #include "watch.h"
 
 /* This code (entrypoint guest_watch()) handles all

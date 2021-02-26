@@ -17,7 +17,7 @@
 #include <jansson.h>
 #include <flux/core.h>
 
-#include "info.h"
+#include "job-info.h"
 #include "lookup.h"
 #include "allow.h"
 

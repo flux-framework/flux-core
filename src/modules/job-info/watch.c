@@ -21,7 +21,7 @@
 #include "src/common/libjob/job.h"
 #include "src/common/libeventlog/eventlog.h"
 
-#include "info.h"
+#include "job-info.h"
 #include "watch.h"
 #include "guest_watch.h"
 #include "allow.h"

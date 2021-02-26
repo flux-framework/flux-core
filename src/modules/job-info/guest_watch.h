@@ -13,7 +13,7 @@
 
 #include <flux/core.h>
 
-#include "info.h"
+#include "job-info.h"
 
 int guest_watch (struct info_ctx *ctx,
                  const flux_msg_t *msg,

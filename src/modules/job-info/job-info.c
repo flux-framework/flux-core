@@ -14,7 +14,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "info.h"
+#include "job-info.h"
 #include "allow.h"
 #include "lookup.h"
 #include "watch.h"

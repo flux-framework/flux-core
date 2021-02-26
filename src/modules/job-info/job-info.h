@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_JOB_INFO_INFO_H
-#define _FLUX_JOB_INFO_INFO_H
+#ifndef _FLUX_JOB_INFO_H
+#define _FLUX_JOB_INFO_H
 
 #include <flux/core.h>
 #include <czmq.h>
@@ -22,7 +22,7 @@ struct info_ctx {
     zlist_t *guest_watchers;
 };
 
-#endif /* _FLUX_JOB_INFO_INFO_H */
+#endif /* _FLUX_JOB_INFO_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

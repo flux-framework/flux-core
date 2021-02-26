@@ -16,7 +16,7 @@
 #include <jansson.h>
 #include <flux/core.h>
 
-#include "info.h"
+#include "job-info.h"
 #include "allow.h"
 
 #include "src/common/libeventlog/eventlog.h"
