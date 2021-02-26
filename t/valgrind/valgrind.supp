@@ -77,3 +77,14 @@
    fun:_dl_open
    ...
 }
+{
+   <issue_3522>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   obj:/usr/lib64/libhwloc.so.15.4.0
+   obj:/usr/lib64/libhwloc.so.15.4.0
+   obj:/usr/lib64/libhwloc.so.15.4.0
+   fun:hwloc_topology_load
+   ...
+}

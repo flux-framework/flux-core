@@ -17,7 +17,7 @@ echo "# $0: flux session size will be ${SIZE}"
 for testscript in ${FLUX_SOURCE_DIR}/t/issues/*; do
     testname=`basename $testscript`
     prereqs=$(sed -n 's/^.*test-prereqs: \(.*\).*$/\1/gp' $testscript)
-    test_expect_success  "$prereqs" $testname "run_timeout 30 $testscript"
+    test_expect_success  "$prereqs" $testname "run_timeout 120 $testscript"
 done
 
 test_done
