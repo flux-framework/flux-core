@@ -162,7 +162,7 @@ static void check_eventlog_continuation (flux_future_t *f, void *arg)
     }
 
     if (!w->allow) {
-        if (eventlog_allow (ctx, w->msg, s) < 0)
+        if (eventlog_allow (ctx, w->msg, w->id, s) < 0)
             goto error;
         w->allow = true;
     }
@@ -259,7 +259,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
     }
 
     if (!w->allow) {
-        if (eventlog_allow (ctx, w->msg, s) < 0)
+        if (eventlog_allow (ctx, w->msg, w->id, s) < 0)
             goto error_cancel;
         w->allow = true;
     }
@@ -335,7 +335,8 @@ int watch (struct info_ctx *ctx,
      * not the main eventlog, we have to check the main eventlog for
      * access first.
      *
-     * if rpc from owner, no need to do guest access check
+     * if rpc from owner, no need to do guest access check.  Likewise
+     * if the cached check indicates we can read the alternate path.
      */
 
     if (flux_msg_get_rolemask (msg, &rolemask) < 0)
@@ -343,6 +344,17 @@ int watch (struct info_ctx *ctx,
 
     if ((rolemask & FLUX_ROLE_OWNER))
         w->allow = true;
+
+    if (!w->allow) {
+        int ret;
+        if ((ret = eventlog_allow_lru (w->ctx,
+                                       w->msg,
+                                       w->id)) < 0)
+            return -1;
+
+        if (ret)
+            w->allow = true;
+    }
 
     if (path
         && strcasecmp (path, "eventlog")

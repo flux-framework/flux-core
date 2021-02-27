@@ -17,10 +17,21 @@
 
 /* Determine if user who sent request 'msg' is allowed to
  * access job eventlog 's'.  Assume first event is the "submit"
- * event which records the job owner.
+ * event which records the job owner.  Will cache recently looked
+ * up job owners in an LRU cache.
  */
 int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg,
-                    const char *s);
+                    flux_jobid_t id, const char *s);
+
+/* Determine if user who sent request 'msg' is allowed to access job
+ * eventlog via LRU cache.  Returns 1 if access allowed, 0 if
+ * indeterminate, -1 on error (including EPERM if access not allowed).
+ * If 0 returned, typically that means the eventlog needs to be looked
+ * up and then eventlog_allow() has to be called.
+ */
+int eventlog_allow_lru (struct info_ctx *ctx,
+                        const flux_msg_t *msg,
+                        flux_jobid_t id);
 
 #endif /* ! _FLUX_JOB_INFO_ALLOW_H */
 

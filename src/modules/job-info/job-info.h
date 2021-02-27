@@ -14,9 +14,14 @@
 #include <flux/core.h>
 #include <czmq.h>
 
+#include "src/common/libutil/lru_cache.h"
+
+#define OWNER_LRU_MAXSIZE 1000
+
 struct info_ctx {
     flux_t *h;
     flux_msg_handler_t **handlers;
+    lru_cache_t *owner_lru; /* jobid -> owner LRU */
     zlist_t *lookups;
     zlist_t *watchers;
     zlist_t *guest_watchers;

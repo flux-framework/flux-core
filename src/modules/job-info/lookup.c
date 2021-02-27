@@ -173,7 +173,7 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
             goto error;
         }
 
-        if (eventlog_allow (ctx, l->msg, s) < 0)
+        if (eventlog_allow (ctx, l->msg, l->id, s) < 0)
             goto error;
         l->allow = true;
     }
@@ -246,6 +246,17 @@ static int check_keys_for_eventlog (struct lookup_ctx *l)
 {
     size_t index;
     json_t *key;
+    int ret;
+
+    if ((ret = eventlog_allow_lru (l->ctx,
+                                   l->msg,
+                                   l->id)) < 0)
+        return -1;
+
+    if (ret) {
+        l->allow = true;
+        return 0;
+    }
 
     json_array_foreach(l->keys, index, key) {
         const char *keystr;
