@@ -326,6 +326,7 @@ int watch (struct info_ctx *ctx,
            bool guest)
 {
     struct watch_ctx *w = NULL;
+    uint32_t rolemask;
 
     if (!(w = watch_ctx_create (ctx, msg, id, guest, path, flags)))
         goto error;
@@ -333,8 +334,19 @@ int watch (struct info_ctx *ctx,
     /* if user requested an alternate path and that alternate path is
      * not the main eventlog, we have to check the main eventlog for
      * access first.
+     *
+     * if rpc from owner, no need to do guest access check
      */
-    if (path && strcasecmp (path, "eventlog")) {
+
+    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+        goto error;
+
+    if ((rolemask & FLUX_ROLE_OWNER))
+        w->allow = true;
+
+    if (path
+        && strcasecmp (path, "eventlog")
+        && !w->allow) {
         if (check_eventlog (w) < 0)
             goto error;
     }
