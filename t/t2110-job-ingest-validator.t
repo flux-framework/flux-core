@@ -15,20 +15,15 @@ BAD_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/bad-validate.py
 
 test_valid ()
 {
-    local rc=0
-    for job in $*; do
-        cat ${job} | ${Y2J} | ${SUBMITBENCH} - || rc=1
-    done
-    return ${rc}
+	flux mini bulksubmit --quiet --wait --watch --progress \
+		sh -c "cat {} | $Y2J | $SUBMITBENCH --urgency=0 -" ::: $*
 }
 
 test_invalid ()
 {
-    local rc=0
-    for job in $*; do
-        cat ${job} | ${Y2J} | ${SUBMITBENCH} - && rc=1
-    done
-    return ${rc}
+	flux mini bulksubmit --quiet --wait --watch --progress \
+		sh -c "cat {} | $Y2J | $SUBMITBENCH --urgency=0 -" ::: $*
+	test $? -ne 0
 }
 
 # load|reload ingest modules (in proper order) with specified arguments
@@ -85,9 +80,6 @@ test_expect_success HAVE_JQ 'flux job-validator --feasibility-service works ' '
 			--feasibility-service=kvs.ping \
 		| jq -e ".errnum == 0"
 '
-test_expect_success 'stop job queue' '
-	flux queue stop
-'
 test_expect_success 'job-ingest: valid jobspecs accepted' '
 	test_valid ${JOBSPEC}/valid/*
 '
@@ -108,7 +100,7 @@ test_expect_success 'job-ingest: test python jsonschema validator' '
 		validator-args=--schema,${SCHEMA}
 '
 test_expect_success 'job-ingest: YAML jobspec is rejected by schema validator' '
-	test_must_fail flux job submit ${JOBSPEC}/valid/basic.yaml
+	test_must_fail flux job submit --urgency=0 ${JOBSPEC}/valid/basic.yaml
 '
 test_expect_success 'job-ingest: valid jobspecs accepted by schema validator' '
 	test_valid ${JOBSPEC}/valid/*
@@ -116,8 +108,11 @@ test_expect_success 'job-ingest: valid jobspecs accepted by schema validator' '
 test_expect_success 'job-ingest: invalid jobs rejected by schema validator' '
 	test_invalid ${JOBSPEC}/invalid/*
 '
+test_expect_success 'job-ingest: stop the queue so no more jobs run' '
+	flux queue stop
+'
 test_expect_success 'job-ingest: load feasibilty validator plugin' '
-       ingest_module reload validator-plugins=feasibility
+	ingest_module reload validator-plugins=feasibility
 '
 test_expect_success 'job-ingest: feasibility check succceeds with ENOSYS' '
 	flux module remove sched-simple &&
