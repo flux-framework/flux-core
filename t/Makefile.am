@@ -99,7 +99,8 @@ TESTSCRIPTS = \
 	t2007-caliper.t \
 	t2008-althash.t \
 	t2010-kvs-snapshot-restore.t \
-	t2200-job-ingest.t \
+	t2100-job-ingest.t \
+	t2110-job-ingest-validator.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
 	t2203-job-manager-single.t \
@@ -267,9 +268,8 @@ dist_check_SCRIPTS = \
 	job-list/list-id.py \
 	job-list/list-rpc.py \
 	job-list/jobspec-permissive.jsonschema \
-	job-archive/query.py \
-	ingest/fake-validate.sh \
-	ingest/bad-validate.sh
+	ingest/bad-validate.py \
+	job-archive/query.py
 
 check_PROGRAMS = \
 	shmem/backtoback.t \

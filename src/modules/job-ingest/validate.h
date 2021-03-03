@@ -17,10 +17,10 @@
 
 struct validate;
 
-/* Submit jobspec for validation.
+/* Submit job for validation.
  * Future is fulfilled once validation is complete.
  */
-flux_future_t *validate_jobspec (struct validate *v, json_t *jobspec);
+flux_future_t *validate_job (struct validate *v, json_t *job);
 
 /* Tell validators to stop.
  * Return a count of running processes.
@@ -29,7 +29,7 @@ flux_future_t *validate_jobspec (struct validate *v, json_t *jobspec);
 int validate_stop_notify (struct validate *v, process_exit_f cb, void *arg);
 
 struct validate *validate_create (flux_t *h,
-                                  const char *validate_path,
+                                  const char *validator_plugins,
                                   const char *validator_args);
 
 void validate_destroy (struct validate *v);

@@ -8,21 +8,18 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* validate - asynchronous jobspec validation interface
+/* validate - asynchronous job validation interface
  *
- * Spawn worker(s) to validate jobspec.  Up to 'DEFAULT_WORKER_COUNT'
+ * Spawn worker(s) to validate job.  Up to 'DEFAULT_WORKER_COUNT'
  * workers may be active at one time.  They are started lazily, on demand,
  * and stop after a period of inactivity (see "tunables" below).
- *
- * The validator executable and its command line, including the
- * location of jobspec.jsonschema, are currently hardwired.
  *
  * Jobspec is expected to be in encoded JSON form, with or without
  * whitespace or NULL termination.  The encoding is normalized before
  * it is sent to the worker on a single line.
  *
  * The future is fulfilled with the result of validation.  On success,
- * the container will be empty.  On failure, the reason the jobspec
+ * the container will be empty.  On failure, the reason the job
  * did not pass validation (suitable for returning to the submitting user)
  * will be assigned to the future's extended error string.
  */
@@ -65,10 +62,13 @@ struct validate {
 
 static void validate_killall (struct validate *v)
 {
-    flux_future_t *cf = flux_future_wait_all_create ();
+    flux_future_t *cf = NULL;
     flux_future_t *f;
     int i;
-    if (!cf) {
+
+    if (v == NULL)
+        return;
+    if (!(cf = flux_future_wait_all_create ())) {
         flux_log_error (v->h, "validate_destroy: flux_future_wait_all_create");
         return;
     }
@@ -93,6 +93,9 @@ int validate_stop_notify (struct validate *v, process_exit_f cb, void *arg)
     int i;
     int count;
 
+    if (v == NULL)
+        return 0;
+
     count = 0;
     for (i = 0; i < MAX_WORKER_COUNT; i++)
         count += worker_stop_notify (v->worker[i], cb, arg);
@@ -112,68 +115,75 @@ void validate_destroy (struct validate *v)
     }
 }
 
-static bool str_ends_with (const char *str, const char *suffix)
+static int validator_argz_create (char **argzp,
+                                  size_t *argz_lenp,
+                                  const char *validator_plugins,
+                                  const char *validator_args)
 {
-    int str_len = strlen (str);
-    int suffix_len = strlen (suffix);
+    int e;
+    if ((e = argz_add (argzp, argz_lenp, "flux"))
+            || (e = argz_add (argzp, argz_lenp, "job-validator")))
+        goto error;
 
-    return (str_len >= suffix_len) && \
-        (!strncmp ((str + str_len) - suffix_len, suffix, suffix_len));
+    if (validator_plugins) {
+        if ((e = argz_add (argzp, argz_lenp, "--plugins"))
+            || (e = argz_add (argzp, argz_lenp, validator_plugins))) {
+            goto error;
+        }
+    }
+    if (validator_args
+        && (e = argz_add_sep (argzp, argz_lenp, validator_args, ','))) {
+        goto error;
+    }
+    return 0;
+error:
+    errno = e;
+    return -1;
 }
 
 struct validate *validate_create (flux_t *h,
-                                  const char *validate_path,
+                                  const char *validator_plugins,
                                   const char *validator_args)
 {
     struct validate *v;
-    char *argv[5];
-    int argc = 0;
+    int argc;
+    char **argv = NULL;
+    char *argz = NULL;
+    size_t argz_len = 0;
     int i;
-    char *validator_argz = NULL;
-    char *validator_arg = NULL;
-    size_t validator_argz_len = 0;
 
     if (!(v = calloc (1, sizeof (*v))))
         return NULL;
     v->h = h;
 
-    assert (validate_path != NULL);
+    if (validator_argz_create (&argz,
+                               &argz_len,
+                               validator_plugins,
+                               validator_args) < 0)
+        goto error;
 
-    if (str_ends_with (validate_path, ".py"))
-        argv[argc++] = PYTHON_INTERPRETER;
-    argv[argc++] = (char *)validate_path;
-    if (validator_args != NULL) {
-        // Parse the comma-separated argument list passed in when loading the
-        // job-ingest module.  For example:
-        // module load job-ingest validator-args=--schema,/path/to/schema.json
-        if (argz_create_sep (validator_args,
-                             ',',
-                             &validator_argz,
-                             &validator_argz_len) != 0) {
-            goto error;
-        }
-        validator_arg = argz_next (validator_argz,
-                                   validator_argz_len,
-                                   NULL);
-        while (validator_arg != NULL) {
-            argv[argc++] = validator_arg;
-            validator_arg = argz_next (validator_argz,
-                                       validator_argz_len,
-                                       validator_arg);
-        }
+    argc = argz_count (argz, argz_len);
+    if (!(argv = calloc (1, sizeof (char *) * (argc + 1)))) {
+        flux_log_error (h, "failed to create argv");
+        goto error;
     }
-    argv[argc] = NULL;
+    argz_extract (argz, argz_len, argv);
 
     for (i = 0; i < MAX_WORKER_COUNT; i++) {
-        if (!(v->worker[i] = worker_create (h, worker_inactivity_timeout,
-                                            validate_path,
+        char name[256];
+        (void) snprintf (name, sizeof (name), "validator[%d]", i);
+        if (!(v->worker[i] = worker_create (h,
+                                            worker_inactivity_timeout,
+                                            name,
                                             argc, argv)))
             goto error;
     }
-    free (validator_argz);
+    free (argv);
+    free (argz);
     return v;
 error:
-    free (validator_argz);
+    free (argv);
+    free (argz);
     validate_destroy (v);
     return NULL;
 }
@@ -202,16 +212,16 @@ struct worker *select_best_worker (struct validate *v)
     return best;
 }
 
-/* Re-encode jobspec in compact form to eliminate any white space (esp \n),
+/* Re-encode job info in compact form to eliminate any white space (esp \n),
  * then pass it to least busy validation worker, returning a future.
  */
-flux_future_t *validate_jobspec (struct validate *v, json_t *jobspec)
+flux_future_t *validate_job (struct validate *v, json_t *job)
 {
     flux_future_t *f;
     char *s;
     struct worker *w;
 
-    if (!(s = json_dumps (jobspec, JSON_COMPACT))) {
+    if (!(s = json_dumps (job, JSON_COMPACT))) {
         errno = ENOMEM;
         goto error;
     }

@@ -597,6 +597,31 @@ error:
     return -1;
 }
 
+static int ingest_add_job (struct job_ingest_ctx *ctx, struct job *job)
+{
+    if (fluid_generate (&ctx->gen, &job->id) < 0)
+        return -1;
+
+    /* Add job to the current "batch" of new jobs, creating the batch if
+     * one doesn't exist already.  Submit is finalized upon timer expiration.
+     */
+    if (!ctx->batch) {
+        if (!(ctx->batch = batch_create (ctx)))
+            return -1;
+        if (!ctx->batch_count) {
+            flux_timer_watcher_reset (ctx->timer, batch_timeout, 0.);
+            flux_watcher_start (ctx->timer);
+        }
+    }
+    if (batch_add_job (ctx->batch, job) < 0)
+        return -1;
+
+    if (ctx->batch_count
+        && zlist_size (ctx->batch->jobs) == ctx->batch_count)
+        batch_flush (ctx);
+    return 0;
+}
+
 void validate_continuation (flux_future_t *f, void *arg)
 {
     struct job *job = arg;
@@ -610,27 +635,11 @@ void validate_continuation (flux_future_t *f, void *arg)
         errmsg = future_strerror (f, errno);
         goto error;
     }
-    if (fluid_generate (&ctx->gen, &job->id) < 0)
+
+    if (ingest_add_job (ctx, job) < 0)
         goto error;
-    /* Add job to the current "batch" of new jobs, creating the batch if
-     * one doesn't exist already.  Submit is finalized upon timer expiration.
-     */
-    if (!ctx->batch) {
-        if (!(ctx->batch = batch_create (ctx)))
-            goto error;
-        if (!ctx->batch_count) {
-            flux_timer_watcher_reset (ctx->timer, batch_timeout, 0.);
-            flux_watcher_start (ctx->timer);
-        }
-    }
-    if (batch_add_job (ctx->batch, job) < 0)
-        goto error;
+
     flux_future_destroy (f);
-
-    if (ctx->batch_count
-        && zlist_size (ctx->batch->jobs) == ctx->batch_count)
-        batch_flush (ctx);
-
     return;
 error:
     if (flux_respond_error (h, job->msg, errno, errmsg) < 0)
@@ -662,6 +671,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *mech_type;
     flux_future_t *f = NULL;
     json_error_t e;
+    json_t *o = NULL;
 
     if (ctx->shutdown) {
         errno = ENOSYS;
@@ -765,15 +775,32 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EINVAL;
         goto error;
     }
-    /* Validate jobspec asynchronously.
-     * Continue submission process in validate_continuation().
-     */
-    if (!(f = validate_jobspec (ctx->validate, job->jobspec_obj)))
-        goto error;
-    if (flux_future_then (f, -1., validate_continuation, job) < 0)
+    if (ctx->validate) {
+        /* Validate jobspec asynchronously.
+         * Continue submission process in validate_continuation().
+         */
+        if (!(o = json_pack_ex (&e, 0,
+                                "{s:O s:i s:i s:i s:i}",
+                                "jobspec", job->jobspec_obj,
+                                "userid", job->cred.userid,
+                                "rolemask", job->cred.rolemask,
+                                "urgency", job->urgency,
+                                "flags", job->flags))) {
+            snprintf (errbuf, sizeof (errbuf), "Internal error: %s", e.text);
+            errmsg = errbuf;
+            goto error;
+        }
+        if (!(f = validate_job (ctx->validate, o)))
+            goto error;
+        if (flux_future_then (f, -1., validate_continuation, job) < 0)
+            goto error;
+        json_decref (o);
+    }
+    else if (ingest_add_job (ctx, job) < 0)
         goto error;
     return;
 error:
+    json_decref (o);
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     job_destroy (job);
@@ -863,28 +890,23 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
                          char **argv)
 {
     flux_reactor_t *r = flux_get_reactor (h);
-    const char *usage_message = "Usage: flux module load [OPTIONS] job-ingest "
-                                " [validator-args=ARGS] [validator=PATH]";
-    const char *valpath;
-    const char *valargs;
+    const char *usage_message =
+        "Usage: flux module load [OPTIONS] job-ingest"
+        " [validator-plugins=LIST] [validator-args=ARGS]";
+    const char *plugins = NULL;
+    const char *valargs = NULL;
+    bool use_validator = true;
 
     memset (ctx, 0, sizeof (*ctx));
     ctx->h = h;
-
-    valpath = flux_conf_builtin_get ("jobspec_validate_path", FLUX_CONF_AUTO);
-    valargs = flux_conf_builtin_get ("jobspec_validator_args", FLUX_CONF_AUTO);
 
     /*  Process cmdline args */
     for (int i = 0; i < argc; i++) {
         if (!strncmp (argv[i], "validator-args=", 15)) {
             valargs = argv[i] + 15;
         }
-        else if (!strncmp (argv[i], "validator=", 10)) {
-            valpath = argv[i] + 10;
-            if (access (valpath, X_OK) < 0) {
-                flux_log_error (h, "validator %s", valpath);
-                return -1;
-            }
+        else if (!strncmp (argv[i], "validator-plugins=", 18)) {
+            plugins = argv[i] + 18;
         }
         else if (!strncmp (argv[i], "batch-count=", 12)) {
             char *endptr;
@@ -894,6 +916,9 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
                 return -1;
             }
         }
+        else if (!strcmp (argv[i], "disable-validator")) {
+            use_validator = false;
+        }
         else {
             flux_log (h, LOG_ERR, "invalid option %s", argv[i]);
             flux_log (h, LOG_ERR, "%s", usage_message);
@@ -901,7 +926,8 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
             return -1;
         }
     }
-    if (!(ctx->validate = validate_create (h, valpath, valargs))) {
+    if (use_validator &&
+        !(ctx->validate = validate_create (h, plugins, valargs))) {
         flux_log_error (h, "validate_create");
         return -1;
     }

@@ -20,34 +20,11 @@ JOBSPEC=${SHARNESS_TEST_SRCDIR}/jobspec
 Y2J="flux python ${JOBSPEC}/y2j.py"
 SUBMITBENCH="${FLUX_BUILD_DIR}/t/ingest/submitbench"
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
-SCHEMA=${FLUX_SOURCE_DIR}/src/modules/job-ingest/schemas/jobspec.jsonschema
-BINDINGS_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-jobspec.py
-JSONSCHEMA_VALIDATOR=${FLUX_SOURCE_DIR}/src/modules/job-ingest/validators/validate-schema.py
-FAKE_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/fake-validate.sh
-BAD_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/bad-validate.sh
 
 DUMMY_EVENTLOG=test.ingest.eventlog
 
 DUMMY_MAX_JOBID=16777216000000
 DUMMY_FLUID_TS=1000000
-
-test_valid ()
-{
-    local rc=0
-    for job in $*; do
-        cat ${job} | ${Y2J} | ${SUBMITBENCH} - || rc=1
-    done
-    return ${rc}
-}
-
-test_invalid ()
-{
-    local rc=0
-    for job in $*; do
-        cat ${job} | ${Y2J} | ${SUBMITBENCH} - && rc=1
-    done
-    return ${rc}
-}
 
 # load|reload ingest modules (in proper order) with specified arguments
 ingest_module ()
@@ -78,13 +55,8 @@ test_expect_success 'job-ingest: job-ingest fails with bad option' '
 	test_must_fail flux module load job-ingest badopt=xyz
 '
 
-test_expect_success 'job-ingest: job-ingest fails with bad validator path' '
-	test_must_fail flux module load job-ingest validator=/noexist
-'
-
 test_expect_success 'job-ingest: load job-ingest' '
-	ingest_module load \
-		validator=${BINDINGS_VALIDATOR}
+	ingest_module load validator-plugins=jobspec
 '
 
 test_expect_success HAVE_JQ 'job-ingest: dummy job-manager has expected max_jobid' '
@@ -142,14 +114,6 @@ test_expect_success 'job-ingest: guest cannot submit urgency=17' '
 	! FLUX_HANDLE_ROLEMASK=0x2 flux job submit --urgency=17 basic.json
 '
 
-test_expect_success 'job-ingest: valid jobspecs accepted' '
-	test_valid ${JOBSPEC}/valid/*
-'
-
-test_expect_success 'job-ingest: invalid jobs rejected' '
-	test_invalid ${JOBSPEC}/invalid/*
-'
-
 test_expect_success NO_ASAN 'job-ingest: submit job 100 times' '
 	${SUBMITBENCH} -r 100 use_case_2.6.json
 '
@@ -171,48 +135,6 @@ test_expect_success HAVE_FLUX_SECURITY 'job-ingest: non-owner mech=none fails' '
 
 test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 	${RPC} job-ingest.submit 71 </dev/null
-'
-
-test_expect_success 'job-ingest: test validator with version 1 enforced' '
-	ingest_module reload \
-		validator=${BINDINGS_VALIDATOR} validator-args="--require-version,1"
-'
-
-test_expect_success 'job-ingest: v1 jobspecs accepted with v1 requirement' '
-	test_valid ${JOBSPEC}/valid_v1/*
-'
-
-test_expect_success 'job-ingest: test non-python validator' '
-	ingest_module reload \
-		validator=${FAKE_VALIDATOR}
-'
-
-test_expect_success 'job-ingest: submit succeeds with non-python validator' '
-    flux job submit basic.json
-'
-
-test_expect_success 'job-ingest: test python jsonschema validator' '
-	ingest_module reload \
-		validator=${JSONSCHEMA_VALIDATOR} validator-args=--schema,${SCHEMA}
-'
-
-test_expect_success 'job-ingest: YAML jobspec is rejected by jsonschema validator' '
-	test_must_fail flux job submit ${JOBSPEC}/valid/basic.yaml
-'
-
-test_expect_success 'job-ingest: valid jobspecs accepted by jsonschema validator' '
-	test_valid ${JOBSPEC}/valid/*
-'
-
-test_expect_success 'job-ingest: invalid jobs rejected by jsonschema validator' '
-	test_invalid ${JOBSPEC}/invalid/*
-'
-
-test_expect_success 'job-ingest: validator unexpected exit is handled' '
-	ingest_module reload \
-		validator=${BAD_VALIDATOR} &&
-	test_must_fail flux job submit basic.json 2>badvalidator.out &&
-	grep "unexpectedly exited" badvalidator.out
 '
 
 test_expect_success 'job-ingest: reload dummy job-manager in fail mode' '

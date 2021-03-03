@@ -247,7 +247,7 @@ static void worker_output_cb (flux_subprocess_t *p, const char *stream)
             worker_inactive (w);
     }
     else if (!strcmp (stream, "stderr")) {
-        //flux_log (w->h, LOG_DEBUG, "%s: %s", w->name, s ? s : "");
+        flux_log (w->h, LOG_DEBUG, "%s: %s", w->name, s ? s : "");
     }
 }
 
