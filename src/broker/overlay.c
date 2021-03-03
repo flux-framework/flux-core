@@ -29,6 +29,11 @@
 #define FLUX_ZAP_DOMAIN "flux"
 #define ZAP_ENDPOINT "inproc://zeromq.zap.01"
 
+enum {
+    KEEPALIVE_STATUS_NORMAL = 0,
+    KEEPALIVE_STATUS_DISCONNECT = 1,
+};
+
 struct endpoint {
     zsock_t *zsock;
     char *uri;
@@ -71,15 +76,14 @@ struct overlay {
     struct child *children;
     int child_count;
 
+    overlay_recv_f recv_cb;
+    void *recv_arg;
+
     struct endpoint *parent;    /* DEALER - requests to parent */
-    overlay_sock_cb_f parent_cb;
-    void *parent_arg;
     int parent_lastsent;
     char *parent_pubkey;
 
     struct endpoint *child;     /* ROUTER - requests from children */
-    overlay_sock_cb_f child_cb;
-    void *child_arg;
 
     overlay_monitor_cb_f child_monitor_cb;
     void *child_monitor_arg;
@@ -250,24 +254,6 @@ static struct child *child_lookup (struct overlay *ov, const char *uuid)
     return NULL;
 }
 
-void overlay_keepalive_child (struct overlay *ov, const char *uuid, int status)
-{
-    struct child *child = child_lookup (ov, uuid);
-
-    if (child) {
-        bool prev_value = child->connected;
-
-        if (status == KEEPALIVE_STATUS_NORMAL)
-            child->connected = true;
-        else // status == KEEPALIVE_STATUS_DISCONNECT
-            child->connected = false;
-        child->lastseen = flux_reactor_now (flux_get_reactor (ov->h));
-
-        if (child->connected != prev_value)
-            overlay_monitor_notify (ov);
-    }
-}
-
 int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey)
 {
     if (!(ov->parent_pubkey = strdup (pubkey)))
@@ -304,11 +290,6 @@ done:
     return rc;
 }
 
-flux_msg_t *overlay_recvmsg_parent (struct overlay *ov)
-{
-    return flux_msg_recvzsock (ov->parent->zsock);
-}
-
 static int overlay_keepalive_parent (struct overlay *ov, int status)
 {
     flux_msg_t *msg = NULL;
@@ -338,24 +319,11 @@ static void sync_cb (flux_future_t *f, void *arg)
     flux_future_reset (f);
 }
 
-void overlay_set_parent_cb (struct overlay *ov, overlay_sock_cb_f cb, void *arg)
-{
-    ov->parent_cb = cb;
-    ov->parent_arg = arg;
-}
-
-
 const char *overlay_get_bind_uri (struct overlay *ov)
 {
     if (!ov->child)
         return NULL;
     return ov->child->uri;
-}
-
-void overlay_set_child_cb (struct overlay *ov, overlay_sock_cb_f cb, void *arg)
-{
-    ov->child_cb = cb;
-    ov->child_arg = arg;
 }
 
 int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
@@ -369,11 +337,6 @@ int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
     rc = flux_msg_sendzsock_ex (ov->child->zsock, msg, true);
 done:
     return rc;
-}
-
-flux_msg_t *overlay_recvmsg_child (struct overlay *ov)
-{
-    return flux_msg_recvzsock (ov->child->zsock);
 }
 
 static int overlay_mcast_child_one (void *zsock,
@@ -422,21 +385,90 @@ void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
         overlay_monitor_notify (ov);
 }
 
+/* Handle a message received from TBON child (downstream).
+ */
 static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
                       int revents, void *arg)
 {
     struct overlay *ov = arg;
-    if (ov->child_cb)
-        ov->child_cb (ov, ov->child_arg);
+    flux_msg_t *msg;
+    int type = -1;
+    char *uuid = NULL;
+    struct child *child;
+    int status;
+    bool connected = true;
+
+    if (!(msg = flux_msg_recvzsock (ov->child->zsock)))
+        return;
+    if (flux_msg_get_type (msg, &type) < 0
+        || flux_msg_get_route_last (msg, &uuid) < 0
+        || !(child = child_lookup (ov, uuid))) {
+        flux_log (ov->h,
+                  LOG_ERR, "DROP downstream %s from %s",
+                  type != -1 ? flux_msg_typestr (type) : "message",
+                  uuid != NULL ? uuid : "unknown");
+        goto done;
+    }
+    switch (type) {
+        case FLUX_MSGTYPE_KEEPALIVE:
+            if (flux_keepalive_decode (msg, NULL, &status) == 0
+                && status == KEEPALIVE_STATUS_DISCONNECT) {
+                connected = false;
+            }
+            break;
+        case FLUX_MSGTYPE_REQUEST:
+            break;
+        case FLUX_MSGTYPE_RESPONSE:
+            /* Response message traveling upstream requires special handling:
+             * ROUTER socket will have pushed peer uuid onto message as if it
+             * were a request, but the effect we want for responses is to have
+             * a route popped off at each router hop.
+             */
+            (void)flux_msg_pop_route (msg, NULL); // child uuid from ROUTER
+            (void)flux_msg_pop_route (msg, NULL); // my uuid
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            break;
+    }
+    child->lastseen = flux_reactor_now (flux_get_reactor (ov->h));
+    if (child->connected != connected) {
+        child->connected = connected;
+        overlay_monitor_notify (ov);
+    }
+    if (type != FLUX_MSGTYPE_KEEPALIVE)
+        ov->recv_cb (msg, OVERLAY_DOWNSTREAM, ov->recv_arg);
+done:
+    free (uuid);
+    flux_msg_decref (msg);
 }
 
 static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg)
 {
     struct overlay *ov = arg;
+    flux_msg_t *msg;
+    int type;
+    bool dropped = false;
 
-    if (ov->parent_cb)
-        ov->parent_cb (ov, ov->parent_arg);
+    if (!(msg = flux_msg_recvzsock (ov->parent->zsock)))
+        return;
+    if (flux_msg_get_type (msg, &type) < 0) {
+        dropped = true;
+        goto done;
+    }
+    if (type == FLUX_MSGTYPE_EVENT) {
+        if (flux_msg_clear_route (msg) < 0) {
+            dropped = true;
+            goto done;
+        }
+    }
+    ov->recv_cb (msg, OVERLAY_UPSTREAM, ov->recv_arg);
+done:
+    if (dropped)
+        flux_log (ov->h,
+                  LOG_ERR, "DROP upstream %s",
+                  type != -1 ? flux_msg_typestr (type) : "message");
+    flux_msg_destroy (msg);
 }
 
 static zframe_t *get_zmsg_nth (zmsg_t *msg, int n)
@@ -823,7 +855,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct overlay *overlay_create (flux_t *h)
+struct overlay *overlay_create (flux_t *h, overlay_recv_f cb, void *arg)
 {
     struct overlay *ov;
 
@@ -832,7 +864,8 @@ struct overlay *overlay_create (flux_t *h)
     ov->rank = FLUX_NODEID_ANY;
     ov->parent_lastsent = -1;
     ov->h = h;
-
+    ov->recv_cb = cb;
+    ov->recv_arg = arg;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;
     if (!(ov->f_sync = flux_sync_create (h, sync_min))
