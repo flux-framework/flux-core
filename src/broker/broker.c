@@ -1488,7 +1488,7 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 
     /* Forward to this rank's children.
      */
-    overlay_mcast_child (ctx->overlay, msg);
+    overlay_sendmsg (ctx->overlay, msg, OVERLAY_DOWNSTREAM);
 
     /* Internal services may install message handlers for events.
      */
@@ -1658,34 +1658,6 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     state_machine_kill (ctx->state_machine, signum);
 }
 
-/* Send a request message down the TBON.
- * N.B. this message is going from ROUTER socket to DEALER socket.
- * Since ROUTER pops a route off the stack and uses it to select the peer,
- * we must push *two* routes on the stack: the identity of this broker,
- * then the identity the peer.  The parent_cb() can then accept the request
- * from DEALER as though it were received on ROUTER.
- */
-static int sendmsg_child_request (broker_ctx_t *ctx,
-                                  const flux_msg_t *msg,
-                                  uint32_t nodeid)
-{
-    flux_msg_t *cpy = flux_msg_copy (msg, true);
-    char uuid[16];
-    int rc = -1;
-
-    if (flux_msg_push_route (cpy, ctx->uuid) < 0)
-        goto done;
-    snprintf (uuid, sizeof (uuid), "%"PRIu32, nodeid);
-    if (flux_msg_push_route (cpy, uuid) < 0)
-        goto done;
-    if (overlay_sendmsg_child (ctx->overlay, cpy) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_msg_destroy (cpy);
-    return rc;
-}
-
 /* Route request.
  * On success, return 0.  On failure, return -1 with errno set.
  */
@@ -1702,7 +1674,7 @@ static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
     /* Route up TBON if destination if upstream of this broker.
      */
     if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ctx->rank) {
-        if (overlay_sendmsg_parent (ctx->overlay, msg) < 0)
+        if (overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0)
             return -1;
     }
     /* Deliver to local service if destination *could* be this broker.
@@ -1713,7 +1685,7 @@ static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
         if (service_send (ctx->services, msg) < 0) {
             if (errno != ENOSYS)
                 return -1;
-            if (overlay_sendmsg_parent (ctx->overlay, msg) < 0) {
+            if (overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0) {
                 if (errno == EHOSTUNREACH)
                     errno = ENOSYS;
                 return -1;
@@ -1729,16 +1701,8 @@ static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
     /* Send the request up or down TBON as addressed.
      */
     else {
-        uint32_t down_rank;
-        down_rank = kary_child_route (ctx->tbon_k, ctx->size, ctx->rank, nodeid);
-        if (down_rank == KARY_NONE) { // up
-            if (overlay_sendmsg_parent (ctx->overlay, msg) < 0)
-                return -1;
-        }
-        else { // down
-            if (sendmsg_child_request (ctx, msg, down_rank) < 0)
-                return -1;
-        }
+        if (overlay_sendmsg (ctx->overlay, msg, OVERLAY_ANY) < 0)
+            return -1;
     }
     return 0;
 }
@@ -1765,38 +1729,13 @@ static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
     }
 }
 
-/* Broker's use their rank in place of a UUID for message routing purposes.
- * Try to convert a UUID from a message to a rank.
- * It must be entirely numerical, and be less than 'size'.
- * If it works, assign result to 'rank' and return true.
- * If it doesn't return false.
- */
-static bool uuid_to_rank (const char *s, uint32_t size, uint32_t *rank)
+static bool string_isdigits (const char *s)
 {
-    unsigned long num;
-    char *endptr;
-
-    if (!isdigit (*s))
-        return false;
-    errno = 0;
-    num = strtoul (s, &endptr, 10);
-    if (errno != 0)
-        return false;
-    if (*endptr != '\0')
-        return false;
-    if (num >= size)
-        return false;
-    *rank = num;
+    while (*s) {
+        if (!isdigit (*s++))
+            return false;
+    }
     return true;
-}
-
-/* Test whether the TBON parent of this broker is 'rank'.
- */
-static bool is_my_parent (broker_ctx_t *ctx, uint32_t rank)
-{
-    if (kary_parentof (ctx->tbon_k, ctx->rank) == rank)
-        return true;
-    return false;
 }
 
 /* Route a response message, determining next hop from route stack.
@@ -1806,63 +1745,34 @@ static bool is_my_parent (broker_ctx_t *ctx, uint32_t rank)
  */
 static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
-    int rc = -1;
+    int rc;
     char *uuid = NULL;
-    uint32_t rank;
 
     if (flux_msg_get_route_last (msg, &uuid) < 0)
-        goto done;
-    if (uuid == NULL) { // broker resident service
-        if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
-            goto done;
-    }
-    else if (uuid_to_rank (uuid, ctx->size, &rank)) {
-        if (is_my_parent (ctx, rank)) {
-            if (overlay_sendmsg_parent (ctx->overlay, msg) < 0)
-                goto done;
-        }
-        else {
-            if (overlay_sendmsg_child (ctx->overlay, msg) < 0) {
-                if (errno == EINVAL)
-                    errno = EHOSTUNREACH;
-                goto done;
-            }
-        }
-    }
-    else {
-        if (module_response_sendmsg (ctx->modhash, msg) < 0)
-            goto done;
-    }
-    rc = 0;
-done:
+        return -1;
+    if (uuid == NULL) // broker resident service
+        rc = flux_requeue (ctx->h, msg, FLUX_RQ_TAIL);
+    else if (string_isdigits (uuid))
+        rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_ANY);
+    else
+        rc = module_response_sendmsg (ctx->modhash, msg);
     ERRNO_SAFE_WRAP (free, uuid);
     return rc;
 }
 
-/* Events are forwarded up the TBON to rank 0, then published from there.
- * (This mechanism predates and is separate from the "event.pub" service).
+/* Events are forwarded up the TBON to rank 0, then published per RFC 3.
+ * An alternate publishing mechanism that allows the event sequence number
+ * to be obtained is to send an RPC to event.pub.
  */
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
+    int rc;
 
-    if (ctx->rank > 0) {
-        flux_msg_t *cpy;
-        if (!(cpy = flux_msg_copy (msg, true)))
-            return -1;
-        if (flux_msg_enable_route (cpy) < 0) {
-            flux_msg_destroy (cpy);
-            return -1;
-        }
-        if (overlay_sendmsg_parent (ctx->overlay, cpy) < 0) {
-            flux_msg_destroy (cpy);
-            return -1;
-        }
-        flux_msg_destroy (cpy);
-    } else {
-        if (publisher_send (ctx->publisher, msg) < 0)
-            return -1;
-    }
-    return 0;
+    if (ctx->rank > 0)
+        rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM);
+    else
+        rc = publisher_send (ctx->publisher, msg);
+    return rc;
 }
 
 /**

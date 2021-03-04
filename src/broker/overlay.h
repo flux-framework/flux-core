@@ -43,6 +43,11 @@ int overlay_init (struct overlay *ov,
                   uint32_t rank,
                   int tbon_k);
 
+/* Send a message on the overlay network.
+ */
+int overlay_sendmsg (struct overlay *ov,
+                     const flux_msg_t *msg,
+                     overlay_where_t where);
 
 /* CURVE key management
  * If downstream peers, call overlay_authorize() with public key of each peer.
@@ -65,19 +70,12 @@ int overlay_get_child_peer_count (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
 int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey);
 const char *overlay_get_parent_uri (struct overlay *ov);
-int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
 
 /* The child is where other ranks connect to send requests.
  * This is the ROUTER side of parent sockets described above.
  */
 int overlay_bind (struct overlay *ov, const char *uri);
 const char *overlay_get_bind_uri (struct overlay *ov);
-int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
-
-/* We can "multicast" events to all child peers using mcast_child().
- * It walks the 'children' hash, finding peers and routeing them a copy of msg.
- */
-void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg);
 
 /* Register callback that will be called each time a child connects/disconnects.
  * Use overlay_get_child_peer_count() to access the actual count.
