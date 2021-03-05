@@ -21,8 +21,8 @@ typedef enum {
 
 struct overlay;
 
-typedef int (*overlay_init_cb_f)(struct overlay *ov, void *arg);
-typedef void (*overlay_monitor_cb_f)(struct overlay *ov, void *arg);
+typedef int (*overlay_init_f)(struct overlay *ov, void *arg);
+typedef void (*overlay_monitor_f)(struct overlay *ov, void *arg);
 typedef void (*overlay_recv_f)(const flux_msg_t *msg,
                                overlay_where_t from,
                                void *arg);
@@ -33,7 +33,7 @@ void overlay_destroy (struct overlay *ov);
 /* Set a callback triggered during overlay_init()
  */
 void overlay_set_init_callback (struct overlay *ov,
-                                overlay_init_cb_f cb,
+                                overlay_init_f cb,
                                 void *arg);
 
 /* Call before connect/bind.
@@ -81,7 +81,7 @@ const char *overlay_get_bind_uri (struct overlay *ov);
  * Use overlay_get_child_peer_count() to access the actual count.
  */
 void overlay_set_monitor_cb (struct overlay *ov,
-                             overlay_monitor_cb_f cb,
+                             overlay_monitor_f cb,
                              void *arg);
 
 /* Establish communication with parent.

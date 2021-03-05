@@ -87,10 +87,10 @@ struct overlay {
 
     struct endpoint *child;     /* ROUTER - requests from children */
 
-    overlay_monitor_cb_f child_monitor_cb;
+    overlay_monitor_f child_monitor_cb;
     void *child_monitor_arg;
 
-    overlay_init_cb_f init_cb;
+    overlay_init_f init_cb;
     void *init_arg;
 };
 
@@ -138,7 +138,7 @@ error:
 }
 
 void overlay_set_init_callback (struct overlay *ov,
-                                overlay_init_cb_f cb,
+                                overlay_init_f cb,
                                 void *arg)
 {
     ov->init_cb = cb;
@@ -834,7 +834,7 @@ int overlay_register_attrs (struct overlay *overlay, attr_t *attrs)
 }
 
 void overlay_set_monitor_cb (struct overlay *ov,
-                             overlay_monitor_cb_f cb,
+                             overlay_monitor_f cb,
                              void *arg)
 {
     ov->child_monitor_cb = cb;
