@@ -223,11 +223,15 @@ void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     flux_reactor_stop_error (r);
 }
 
+/* Receive a message with timeout.
+ * Returns 0 on success, or -1 with errno=ETIMEDOUT.
+ */
 const flux_msg_t *recvmsg_timeout (struct context *ctx, double timeout)
 {
 
     flux_reactor_t *r = flux_get_reactor (ctx->h);
     flux_watcher_t *w;
+    int rc;
 
     flux_msg_decref (ctx->msg);
     ctx->msg = NULL;
@@ -236,9 +240,11 @@ const flux_msg_t *recvmsg_timeout (struct context *ctx, double timeout)
         BAIL_OUT ("flux_timer_watcher_create failed");
     flux_watcher_start (w);
 
-    if (flux_reactor_run (r, 0) < 0)
-        return NULL; // timeout
-    return ctx->msg;
+    rc = flux_reactor_run (r, 0);
+
+    flux_watcher_destroy (w);
+
+    return rc < 0 ? NULL : ctx->msg;
 }
 
 /* Rank 0,1 are properly configured.
