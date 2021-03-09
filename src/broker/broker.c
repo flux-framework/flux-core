@@ -769,7 +769,7 @@ cleanup:
  */
 static int create_rundir (attr_t *attrs)
 {
-    const char *run_dir;
+    const char *run_dir = NULL;
     char *dir = NULL;
     bool do_cleanup = true;
     struct stat sb;
@@ -829,10 +829,10 @@ static int create_rundir (attr_t *attrs)
         log_err ("error setting rundir broker attribute flags");
         goto done;
     }
-    if (do_cleanup)
-        cleanup_push_string (cleanup_directory_recursive, run_dir);
     rc = 0;
 done:
+    if (do_cleanup && run_dir != NULL)
+        cleanup_push_string (cleanup_directory_recursive, run_dir);
     free (dir);
     return rc;
 }
