@@ -34,6 +34,7 @@ struct context {
     char name[32];
     int rank;
     int size;
+    const flux_msg_t *msg;
 };
 
 void clear_list (zlist_t *list)
@@ -71,10 +72,12 @@ void ctx_destroy (struct context *ctx)
 {
     attr_destroy (ctx->attrs);
     overlay_destroy (ctx->ov);
+    flux_msg_decref (ctx->msg);
     free (ctx);
 }
 
-struct context *ctx_create (flux_t *h, const char *name, int size,  int rank)
+struct context *ctx_create (flux_t *h, const char *name, int size, int rank,
+                            overlay_recv_f cb)
 {
     struct context *ctx;
     const char *temp = getenv ("TMPDIR");
@@ -87,7 +90,7 @@ struct context *ctx_create (flux_t *h, const char *name, int size,  int rank)
     ctx->size = size;
     ctx->rank = rank;
     snprintf (ctx->name, sizeof (ctx->name), "%s-%d", name, rank);
-    if (!(ctx->ov = overlay_create (h)))
+    if (!(ctx->ov = overlay_create (h, cb, ctx)))
         BAIL_OUT ("overlay_create");
     if (!(ctx->attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
@@ -109,7 +112,7 @@ int single_init_cb (struct overlay *ov, void *arg)
 
 void single (flux_t *h)
 {
-    struct context *ctx = ctx_create (h, "single", 1, 0);;
+    struct context *ctx = ctx_create (h, "single", 1, 0, NULL);
     flux_msg_t *msg;
 
     overlay_set_init_callback (ctx->ov, single_init_cb, ctx);
@@ -141,17 +144,60 @@ void single (flux_t *h)
     ok (overlay_get_bind_uri (ctx->ov) == NULL,
         "%s: overlay_get_bind_uri returned NULL", ctx->name);
 
-    /* Try to mcast an event downstream */
+    /* Event
+     */
     if (!(msg = flux_event_encode ("foo", NULL)))
         BAIL_OUT ("flux_event_encode failed");
-    overlay_mcast_child (ctx->ov, msg);
+    ok (overlay_sendmsg (ctx->ov, msg, OVERLAY_DOWNSTREAM) == 0,
+        "%s: overlay_sendmsg event where=DOWN succeeds",
+        ctx->name);
+    errno = 0;
+    ok (overlay_sendmsg (ctx->ov, msg, OVERLAY_UPSTREAM) < 0
+        && errno == EHOSTUNREACH,
+        "%s: overlay_sendmsg event where=UP fails with EHOSTUNREACH",
+        ctx->name);
     flux_msg_decref (msg);
 
-    /* Try to send a response to non-existent downstream peer */
+    /* Response
+     */
     if (!(msg = flux_response_encode ("foo", NULL)))
+        BAIL_OUT ("flux_response_encode failed");
+    errno = 0;
+    ok (overlay_sendmsg (ctx->ov, msg, OVERLAY_DOWNSTREAM) < 0
+        && errno == EHOSTUNREACH,
+        "%s: overlay_sendmsg response where=DOWN fails with EHOSTUNREACH",
+        ctx->name);
+    errno = 0;
+    ok (overlay_sendmsg (ctx->ov, msg, OVERLAY_ANY) < 0
+        && errno == EHOSTUNREACH,
+        "%s: overlay_sendmsg response where=ANY fails with EHOSTUNREACH",
+        ctx->name);
+    errno = 0;
+    ok (overlay_sendmsg (ctx->ov, msg, OVERLAY_UPSTREAM) < 0
+        && errno == EHOSTUNREACH,
+        "%s: overlay_sendmsg response where=UP fails with EHOSTUNREACH",
+        ctx->name);
+    flux_msg_decref (msg);
+
+    /* Request
+     */
+    if (!(msg = flux_request_encode ("foo", NULL)))
         BAIL_OUT ("flux_request_encode failed");
-    ok (overlay_sendmsg_child (ctx->ov, msg) < 0 && errno == EINVAL,
-        "%s: overlay_sendmsg_child fails with EINVAL", ctx->name);
+    errno = 0;
+    ok (overlay_sendmsg (ctx->ov, msg, OVERLAY_DOWNSTREAM) < 0
+        && errno == EHOSTUNREACH,
+        "%s: overlay_sendmsg request where=DOWN fails with EHOSTUNREACH",
+        ctx->name);
+    errno = 0;
+    ok (overlay_sendmsg (ctx->ov, msg, OVERLAY_ANY) < 0
+        && errno == EHOSTUNREACH,
+        "%s: overlay_sendmsg request where=ANY fails with EHOSTUNREACH",
+        ctx->name);
+    errno = 0;
+    ok (overlay_sendmsg (ctx->ov, msg, OVERLAY_UPSTREAM) < 0
+        && errno == EHOSTUNREACH,
+        "%s: overlay_sendmsg request where=UP fails with EHOSTUNREACH",
+        ctx->name);
     flux_msg_decref (msg);
 
     ok (overlay_get_child_peer_count (ctx->ov) == 0,
@@ -160,56 +206,44 @@ void single (flux_t *h)
     ctx_destroy (ctx);
 }
 
-int duo_init_cb (struct overlay *ov, void *arg)
+void recv_cb (const flux_msg_t *msg, overlay_where_t from, void *arg)
 {
     struct context *ctx = arg;
 
-    flux_log (ctx->h, LOG_INFO, "duo_init_cb called for %s", ctx->name);
-    return 0;
-}
-
-void socket_cb (struct overlay *ov, void *arg)
-{
-    struct context *ctx = arg;
+    diag ("%s message received",
+          from == OVERLAY_UPSTREAM ? "upstream" : "downstream");
+    ctx->msg = flux_msg_incref (msg);
     flux_reactor_stop (flux_get_reactor (ctx->h));
 }
 
 void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
+    diag ("receive timeout");
     errno = ETIMEDOUT;
     flux_reactor_stop_error (r);
 }
 
-flux_msg_t *recvmsg_child_timeout (struct context *ctx, double timeout)
+const flux_msg_t *recvmsg_timeout (struct context *ctx, double timeout)
 {
+
     flux_reactor_t *r = flux_get_reactor (ctx->h);
     flux_watcher_t *w;
 
-    overlay_set_child_cb (ctx->ov, socket_cb, ctx);
+    flux_msg_decref (ctx->msg);
+    ctx->msg = NULL;
+
     if (!(w = flux_timer_watcher_create (r, timeout, 0., timeout_cb, ctx)))
         BAIL_OUT ("flux_timer_watcher_create failed");
     flux_watcher_start (w);
 
     if (flux_reactor_run (r, 0) < 0)
-        return NULL;
-    return overlay_recvmsg_child (ctx->ov);
+        return NULL; // timeout
+    return ctx->msg;
 }
 
-flux_msg_t *recvmsg_parent_timeout (struct context *ctx, double timeout)
-{
-    flux_reactor_t *r = flux_get_reactor (ctx->h);
-    flux_watcher_t *w;
-
-    overlay_set_parent_cb (ctx->ov, socket_cb, ctx);
-    if (!(w = flux_timer_watcher_create (r, timeout, 0., timeout_cb, ctx)))
-        BAIL_OUT ("flux_timer_watcher_create failed");
-    flux_watcher_start (w);
-
-    if (flux_reactor_run (r, 0) < 0)
-        return NULL;
-    return overlay_recvmsg_parent (ctx->ov);
-}
-
+/* Rank 0,1 are properly configured.
+ * Rank 2 will try to get involved without proper credentials etc.
+ */
 void trio (flux_t *h)
 {
     struct context *ctx[2];
@@ -219,15 +253,15 @@ void trio (flux_t *h)
     const char *server_pubkey;
     const char *client_pubkey;
     const char *tmp;
+    const flux_msg_t *rmsg;
     flux_msg_t *msg;
-    flux_msg_t *msg2;
     const char *topic;
-    char uuid[16];
     zsock_t *zsock_none;
     zsock_t *zsock_curve;
     zcert_t *cert;
+    char *sender;
 
-    ctx[0] = ctx_create (h, "trio", size, 0);
+    ctx[0] = ctx_create (h, "trio", size, 0, recv_cb);
 
     ok (overlay_init (ctx[0]->ov, size, 0, k_ary) == 0,
         "%s: overlay_init works", ctx[0]->name);
@@ -239,7 +273,7 @@ void trio (flux_t *h)
     ok (overlay_bind (ctx[0]->ov, parent_uri) == 0,
         "%s: overlay_bind %s works", ctx[0]->name, parent_uri);
 
-    ctx[1] = ctx_create (h, "trio", size, 1);
+    ctx[1] = ctx_create (h, "trio", size, 1, recv_cb);
 
     ok (overlay_init (ctx[1]->ov, size, 1, k_ary) == 0,
         "%s: overlay_init works", ctx[1]->name);
@@ -265,36 +299,115 @@ void trio (flux_t *h)
 
     /* Send 1->0
      */
+
+    /* Request
+     */
     if (!(msg = flux_request_encode ("meep", NULL)))
         BAIL_OUT ("flux_request_encode failed");
-    ok (overlay_sendmsg_parent (ctx[1]->ov, msg) == 0,
-        "%s: overlay_sendmsg_parent works", ctx[1]->name);
-    flux_msg_destroy (msg);
+    ok (overlay_sendmsg (ctx[1]->ov, msg, OVERLAY_ANY) == 0,
+        "%s: overlay_sendmsg request where=ANY works", ctx[1]->name);
+    flux_msg_decref (msg);
 
-    msg = recvmsg_child_timeout (ctx[0], 5);
-    ok (msg != NULL,
-        "%s: overlay_recvmsg_child works", ctx[0]->name);
-    ok (flux_msg_get_topic (msg, &topic) == 0 && !strcmp (topic, "meep"),
+    rmsg = recvmsg_timeout (ctx[0], 5);
+    ok (rmsg != NULL,
+        "%s: request was received by overlay", ctx[0]->name);
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "meep"),
         "%s: received message has expected topic", ctx[0]->name);
-    flux_msg_destroy (msg);
+    sender = NULL;
+    ok (flux_msg_get_route_first (rmsg, &sender) == 0
+        && sender != NULL && !strcmp (sender, "1"),
+        "%s: received message sender is rank 1", ctx[0]->name);
+    free (sender);
+
+    /* Response
+     */
+    if (!(msg = flux_response_encode ("m000", NULL)))
+        BAIL_OUT ("flux_response_encode failed");
+    if (flux_msg_push_route (msg, "0") < 0)
+        BAIL_OUT ("flux_msg_push_route failed");
+    ok (overlay_sendmsg (ctx[1]->ov, msg, OVERLAY_ANY) == 0,
+        "%s: overlay_sendmsg response where=ANY works", ctx[1]->name);
+    flux_msg_decref (msg);
+
+    rmsg = recvmsg_timeout (ctx[0], 5);
+    ok (rmsg != NULL,
+        "%s: response was received by overlay", ctx[0]->name);
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "m000"),
+        "%s: received message has expected topic", ctx[0]->name);
+    ok (flux_msg_get_route_count (rmsg) == 0,
+        "%s: received message has no routes");
+
+    /* Event
+     */
+    if (!(msg = flux_event_encode ("eeek", NULL)))
+        BAIL_OUT ("flux_event_encode failed");
+    ok (overlay_sendmsg (ctx[1]->ov, msg, OVERLAY_UPSTREAM) == 0,
+        "%s: overlay_sendmsg event where=UP works", ctx[1]->name);
+    flux_msg_decref (msg);
+
+    rmsg = recvmsg_timeout (ctx[0], 5);
+    ok (rmsg != NULL,
+        "%s: event was received by overlay", ctx[0]->name);
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "eeek"),
+        "%s: received message has expected topic", ctx[0]->name);
+
 
     /* Send 0->1
      */
+
+    /* Request
+     */
+    if (!(msg = flux_request_encode ("errr", NULL)))
+        BAIL_OUT ("flux_request_encode failed");
+    if (flux_msg_set_nodeid (msg, 1) < 0)
+        BAIL_OUT ("flux_msg_set_nodeid failed");
+    ok (overlay_sendmsg (ctx[0]->ov, msg, OVERLAY_ANY) == 0,
+        "%s: overlay_sendmsg request where=ANY works", ctx[0]->name);
+    flux_msg_decref (msg);
+
+    rmsg = recvmsg_timeout (ctx[1], 5);
+    ok (rmsg != NULL,
+        "%s: request was received by overlay", ctx[1]->name);
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "errr"),
+        "%s: request has expected topic", ctx[1]->name);
+    sender = NULL;
+    ok (flux_msg_get_route_first (rmsg, &sender) == 0
+        && sender != NULL && !strcmp (sender, "0"),
+        "%s: request sender is rank 0", ctx[1]->name);
+    free (sender);
+
+    /* Response
+     */
     if (!(msg = flux_response_encode ("moop", NULL)))
         BAIL_OUT ("flux_response_encode failed");
-    snprintf (uuid, sizeof (uuid), "%d", 1);
-    if (flux_msg_push_route (msg, uuid) < 0) // direct router socket to 1
+    if (flux_msg_push_route (msg, "1") < 0)
         BAIL_OUT ("flux_msg_push_route failed");
-    ok (overlay_sendmsg_child (ctx[0]->ov, msg) == 0,
-        "%s: overlay_sendmsg_child works", ctx[0]->name);
-    flux_msg_destroy (msg);
+    ok (overlay_sendmsg (ctx[0]->ov, msg, OVERLAY_ANY) == 0,
+        "%s: overlay_sendmsg response where=ANY works", ctx[0]->name);
+    flux_msg_decref (msg);
 
-    msg = recvmsg_parent_timeout (ctx[1], 5);
+    rmsg = recvmsg_timeout (ctx[1], 5);
     ok (msg != NULL,
-        "%s: overlay_recvmsg_parent works", ctx[1]->name);
-    ok (flux_msg_get_topic (msg, &topic) == 0 && !strcmp (topic, "moop"),
+        "%s: response was received by overlay", ctx[1]->name);
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "moop"),
+        "%s: response has expected topic", ctx[1]->name);
+    ok (flux_msg_get_route_count (rmsg) == 0,
+        "%s: response has no routes");
+
+    /* Event
+     */
+    if (!(msg = flux_event_encode ("eeeb", NULL)))
+        BAIL_OUT ("flux_event_encode failed");
+    ok (overlay_sendmsg (ctx[0]->ov, msg, OVERLAY_DOWNSTREAM) == 0,
+        "%s: overlay_sendmsg event where=DOWN works", ctx[0]->name);
+    flux_msg_decref (msg);
+
+    rmsg = recvmsg_timeout (ctx[1], 5);
+    ok (rmsg != NULL,
+        "%s: event was received by overlay", ctx[1]->name);
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "eeeb"),
         "%s: received message has expected topic", ctx[1]->name);
-    flux_msg_destroy (msg);
+
 
     errno = 0;
     ok (overlay_bind (ctx[1]->ov, "ipc://@foo") < 0 && errno == EINVAL,
@@ -304,17 +417,19 @@ void trio (flux_t *h)
      * First a baseline - resend 1->0 and make sure timed recv works.
      * Test message will be reused below.
      */
+    /* 0) Baseline
+     * 'msg' created here will be reused in each test.
+     */
     if (!(msg = flux_request_encode ("erp", NULL)))
         BAIL_OUT ("flux_request_encode failed");
-    ok (overlay_sendmsg_parent (ctx[1]->ov, msg) == 0,
-        "%s: overlay_sendmsg_parent works", ctx[1]->name);
-    msg2 = recvmsg_child_timeout (ctx[0], 5);
-    ok (msg2 != NULL,
-        "%s: recvmsg_child_timeout received test message", ctx[0]->name);
-    flux_msg_decref (msg2);
+    ok (overlay_sendmsg (ctx[1]->ov, msg, OVERLAY_UPSTREAM) == 0,
+        "%s: overlay_sendmsg where=UPSTREAM works", ctx[1]->name);
+    rmsg = recvmsg_timeout (ctx[0], 5);
+    ok (rmsg != NULL,
+        "%s: message was received by overlay", ctx[0]->name);
     errno = 0;
-    ok (recvmsg_child_timeout (ctx[0], 0.1) == NULL  && errno == ETIMEDOUT,
-        "%s: recvmsg_child_timeout timed out as expected", ctx[0]->name);
+    ok (recvmsg_timeout (ctx[0], 0.1) == NULL  && errno == ETIMEDOUT,
+        "%s: test reactor timed out as expected", ctx[0]->name);
 
     /* 1) No security
      */
@@ -346,7 +461,7 @@ void trio (flux_t *h)
     /* Neither of the above attempts should have gotten a message through.
      */
     errno = 0;
-    ok (recvmsg_child_timeout (ctx[0], 1.0) == NULL  && errno == ETIMEDOUT,
+    ok (recvmsg_timeout (ctx[0], 1.0) == NULL  && errno == ETIMEDOUT,
         "%s: no messages received within 1.0s", ctx[0]->name);
 
     flux_msg_decref (msg);
@@ -364,10 +479,10 @@ void wrongness (flux_t *h)
     struct overlay *ov;
 
     errno = 0;
-    ok (overlay_create (NULL) == NULL && errno == EINVAL,
+    ok (overlay_create (NULL, NULL, NULL) == NULL && errno == EINVAL,
         "overlay_create h=NULL fails with EINVAL");
 
-    if (!(ov = overlay_create (h)))
+    if (!(ov = overlay_create (h, NULL, NULL)))
         BAIL_OUT ("overlay_create failed");
 
     errno = 0;

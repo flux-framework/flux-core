@@ -83,8 +83,9 @@ static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg);
 static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
                                             const flux_msg_t *msg);
 
-static void parent_cb (struct overlay *ov, void *arg);
-static void child_cb (struct overlay *ov, void *arg);
+static void overlay_recv_cb (const flux_msg_t *msg,
+                             overlay_where_t where,
+                             void *arg);
 static void module_cb (module_t *p, void *arg);
 static void module_status_cb (module_t *p, int prev_state, void *arg);
 static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -328,12 +329,10 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (!(ctx.overlay = overlay_create (ctx.h))) {
+    if (!(ctx.overlay = overlay_create (ctx.h, overlay_recv_cb, &ctx))) {
         log_err ("overlay_create");
         goto cleanup;
     }
-    overlay_set_parent_cb (ctx.overlay, parent_cb, &ctx);
-    overlay_set_child_cb (ctx.overlay, child_cb, &ctx);
 
     /* Arrange for the publisher to route event messages.
      * handle_event - local subscribers (ctx.h)
@@ -1416,61 +1415,51 @@ static void broker_remove_services (flux_msg_handler_t *handlers[])
  ** reactor callbacks
  **/
 
-
-/* Handle requests from overlay peers.
+/* Handle messages received from overlay peers.
  */
-static void child_cb (struct overlay *ov, void *arg)
+static void overlay_recv_cb (const flux_msg_t *msg,
+                             overlay_where_t where,
+                             void *arg)
 {
     broker_ctx_t *ctx = arg;
     int type;
-    char *uuid = NULL;
-    flux_msg_t *msg = overlay_recvmsg_child (ctx->overlay);
-    int status = KEEPALIVE_STATUS_NORMAL;
+    bool dropped = false;
 
-    if (!msg)
-        goto done;
     if (flux_msg_get_type (msg, &type) < 0)
-        goto done;
-    if (flux_msg_get_route_last (msg, &uuid) < 0)
-        goto done;
-    if (type != FLUX_MSGTYPE_KEEPALIVE)
-        overlay_keepalive_child (ctx->overlay, uuid, status);
+        return;
     switch (type) {
-        case FLUX_MSGTYPE_KEEPALIVE:
-            if (flux_keepalive_decode (msg, NULL, &status) < 0)
-                goto done;
-            overlay_keepalive_child (ctx->overlay, uuid, status);
-            break;
         case FLUX_MSGTYPE_REQUEST:
-            broker_request_sendmsg (ctx, msg);
+            broker_request_sendmsg (ctx, msg); // handles errors internally
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            /* TRICKY:  Fix up ROUTER socket used in reverse direction.
-             * Request/response is designed for requests to travel
-             * ROUTER->DEALER (up) and responses DEALER-ROUTER (down).
-             * When used conventionally, the route stack is accumulated
-             * automatically as a request is routed up, and unwound
-             * automatically as a response is routed down.  When responses
-             * are routed up, ROUTER socket behavior must be subverted on
-             * the receiving end by popping two frames off of the stack and
-             * discarding.
-             */
-            (void)flux_msg_pop_route (msg, NULL);
-            (void)flux_msg_pop_route (msg, NULL);
             if (broker_response_sendmsg (ctx, msg) < 0)
-                goto done;
+                dropped = true;
             break;
         case FLUX_MSGTYPE_EVENT:
-            (void)broker_event_sendmsg (ctx, msg);
+            /* If event originated from upstream peer, then it has already been
+             * published and we are to continue its distribution.
+             * Otherwise, take the next step to get the event published.
+             */
+            if (where == OVERLAY_UPSTREAM) {
+                if (handle_event (ctx, msg) < 0)
+                    dropped = true;
+            }
+            else {
+                if (broker_event_sendmsg (ctx, msg) < 0)
+                    dropped = true;
+            }
+            break;
+        default:
             break;
     }
-done:
-    if (uuid)
-        free (uuid);
-    flux_msg_destroy (msg);
+    if (dropped) {
+        flux_log_error (ctx->h, "DROP %s %s",
+                        where == OVERLAY_UPSTREAM ? "upstream" : "downstream",
+                        flux_msg_typestr (type));
+    }
 }
 
-/* Handle events received by parent_cb.
+/* Distribute events downstream, and to module and broker-resident subscribers.
  * On rank 0, publisher is wired to send events here also.
  */
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
@@ -1499,7 +1488,7 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
 
     /* Forward to this rank's children.
      */
-    overlay_mcast_child (ctx->overlay, msg);
+    overlay_sendmsg (ctx->overlay, msg, OVERLAY_DOWNSTREAM);
 
     /* Internal services may install message handlers for events.
      */
@@ -1515,43 +1504,6 @@ static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg)
     /* Finally, route to local module subscribers.
      */
     return module_event_mcast (ctx->modhash, msg);
-}
-
-/* Handle messages from parent.
- */
-static void parent_cb (struct overlay *ov, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    flux_msg_t *msg = overlay_recvmsg_parent (ctx->overlay);
-    int type;
-
-    if (!msg)
-        goto done;
-    if (flux_msg_get_type (msg, &type) < 0)
-        goto done;
-    switch (type) {
-        case FLUX_MSGTYPE_RESPONSE:
-            if (broker_response_sendmsg (ctx, msg) < 0)
-                goto done;
-            break;
-        case FLUX_MSGTYPE_EVENT:
-            if (flux_msg_clear_route (msg) < 0) {
-                flux_log (ctx->h, LOG_ERR, "dropping malformed event");
-                goto done;
-            }
-            if (handle_event (ctx, msg) < 0)
-                goto done;
-            break;
-        case FLUX_MSGTYPE_REQUEST:
-            broker_request_sendmsg (ctx, msg);
-            break;
-        default:
-            flux_log (ctx->h, LOG_ERR, "%s: unexpected %s", __FUNCTION__,
-                      flux_msg_typestr (type));
-            break;
-    }
-done:
-    flux_msg_destroy (msg);
 }
 
 /* Callback to send disconnect messages on behalf of unloading module.
@@ -1706,34 +1658,6 @@ static void signal_cb (flux_reactor_t *r, flux_watcher_t *w,
     state_machine_kill (ctx->state_machine, signum);
 }
 
-/* Send a request message down the TBON.
- * N.B. this message is going from ROUTER socket to DEALER socket.
- * Since ROUTER pops a route off the stack and uses it to select the peer,
- * we must push *two* routes on the stack: the identity of this broker,
- * then the identity the peer.  The parent_cb() can then accept the request
- * from DEALER as though it were received on ROUTER.
- */
-static int sendmsg_child_request (broker_ctx_t *ctx,
-                                  const flux_msg_t *msg,
-                                  uint32_t nodeid)
-{
-    flux_msg_t *cpy = flux_msg_copy (msg, true);
-    char uuid[16];
-    int rc = -1;
-
-    if (flux_msg_push_route (cpy, ctx->uuid) < 0)
-        goto done;
-    snprintf (uuid, sizeof (uuid), "%"PRIu32, nodeid);
-    if (flux_msg_push_route (cpy, uuid) < 0)
-        goto done;
-    if (overlay_sendmsg_child (ctx->overlay, cpy) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_msg_destroy (cpy);
-    return rc;
-}
-
 /* Route request.
  * On success, return 0.  On failure, return -1 with errno set.
  */
@@ -1750,7 +1674,7 @@ static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
     /* Route up TBON if destination if upstream of this broker.
      */
     if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ctx->rank) {
-        if (overlay_sendmsg_parent (ctx->overlay, msg) < 0)
+        if (overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0)
             return -1;
     }
     /* Deliver to local service if destination *could* be this broker.
@@ -1761,7 +1685,7 @@ static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
         if (service_send (ctx->services, msg) < 0) {
             if (errno != ENOSYS)
                 return -1;
-            if (overlay_sendmsg_parent (ctx->overlay, msg) < 0) {
+            if (overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM) < 0) {
                 if (errno == EHOSTUNREACH)
                     errno = ENOSYS;
                 return -1;
@@ -1777,16 +1701,8 @@ static int broker_request_sendmsg_internal (broker_ctx_t *ctx,
     /* Send the request up or down TBON as addressed.
      */
     else {
-        uint32_t down_rank;
-        down_rank = kary_child_route (ctx->tbon_k, ctx->size, ctx->rank, nodeid);
-        if (down_rank == KARY_NONE) { // up
-            if (overlay_sendmsg_parent (ctx->overlay, msg) < 0)
-                return -1;
-        }
-        else { // down
-            if (sendmsg_child_request (ctx, msg, down_rank) < 0)
-                return -1;
-        }
+        if (overlay_sendmsg (ctx->overlay, msg, OVERLAY_ANY) < 0)
+            return -1;
     }
     return 0;
 }
@@ -1813,38 +1729,13 @@ static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
     }
 }
 
-/* Broker's use their rank in place of a UUID for message routing purposes.
- * Try to convert a UUID from a message to a rank.
- * It must be entirely numerical, and be less than 'size'.
- * If it works, assign result to 'rank' and return true.
- * If it doesn't return false.
- */
-static bool uuid_to_rank (const char *s, uint32_t size, uint32_t *rank)
+static bool string_isdigits (const char *s)
 {
-    unsigned long num;
-    char *endptr;
-
-    if (!isdigit (*s))
-        return false;
-    errno = 0;
-    num = strtoul (s, &endptr, 10);
-    if (errno != 0)
-        return false;
-    if (*endptr != '\0')
-        return false;
-    if (num >= size)
-        return false;
-    *rank = num;
+    while (*s) {
+        if (!isdigit (*s++))
+            return false;
+    }
     return true;
-}
-
-/* Test whether the TBON parent of this broker is 'rank'.
- */
-static bool is_my_parent (broker_ctx_t *ctx, uint32_t rank)
-{
-    if (kary_parentof (ctx->tbon_k, ctx->rank) == rank)
-        return true;
-    return false;
 }
 
 /* Route a response message, determining next hop from route stack.
@@ -1854,68 +1745,34 @@ static bool is_my_parent (broker_ctx_t *ctx, uint32_t rank)
  */
 static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
-    int rc = -1;
+    int rc;
     char *uuid = NULL;
-    uint32_t rank;
 
     if (flux_msg_get_route_last (msg, &uuid) < 0)
-        goto done;
-    if (uuid == NULL) { // broker resident service
-        if (flux_requeue (ctx->h, msg, FLUX_RQ_TAIL) < 0)
-            goto done;
-    }
-    else if (uuid_to_rank (uuid, ctx->size, &rank)) {
-        if (is_my_parent (ctx, rank)) {
-            /* N.B. this message is going from DEALER socket to ROUTER socket.
-             * Instead of popping a route off the stack, ROUTER pushes one
-             * on, so the upstream broker must to detect this case and pop
-             * *two* off to maintain route stack integrity.  See child_cb().
-             */
-            if (overlay_sendmsg_parent (ctx->overlay, msg) < 0)
-                goto done;
-        }
-        else {
-            if (overlay_sendmsg_child (ctx->overlay, msg) < 0) {
-                if (errno == EINVAL)
-                    errno = EHOSTUNREACH;
-                goto done;
-            }
-        }
-    }
-    else {
-        if (module_response_sendmsg (ctx->modhash, msg) < 0)
-            goto done;
-    }
-    rc = 0;
-done:
+        return -1;
+    if (uuid == NULL) // broker resident service
+        rc = flux_requeue (ctx->h, msg, FLUX_RQ_TAIL);
+    else if (string_isdigits (uuid))
+        rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_ANY);
+    else
+        rc = module_response_sendmsg (ctx->modhash, msg);
     ERRNO_SAFE_WRAP (free, uuid);
     return rc;
 }
 
-/* Events are forwarded up the TBON to rank 0, then published from there.
- * (This mechanism predates and is separate from the "event.pub" service).
+/* Events are forwarded up the TBON to rank 0, then published per RFC 3.
+ * An alternate publishing mechanism that allows the event sequence number
+ * to be obtained is to send an RPC to event.pub.
  */
 static int broker_event_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
+    int rc;
 
-    if (ctx->rank > 0) {
-        flux_msg_t *cpy;
-        if (!(cpy = flux_msg_copy (msg, true)))
-            return -1;
-        if (flux_msg_enable_route (cpy) < 0) {
-            flux_msg_destroy (cpy);
-            return -1;
-        }
-        if (overlay_sendmsg_parent (ctx->overlay, cpy) < 0) {
-            flux_msg_destroy (cpy);
-            return -1;
-        }
-        flux_msg_destroy (cpy);
-    } else {
-        if (publisher_send (ctx->publisher, msg) < 0)
-            return -1;
-    }
-    return 0;
+    if (ctx->rank > 0)
+        rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM);
+    else
+        rc = publisher_send (ctx->publisher, msg);
+    return rc;
 }
 
 /**
