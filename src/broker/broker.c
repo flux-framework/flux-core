@@ -769,8 +769,10 @@ cleanup:
  */
 static int create_rundir (attr_t *attrs)
 {
+    const char *tmpdir;
     const char *run_dir = NULL;
-    char *dir = NULL;
+    char path[1024];
+    int len;
     bool do_cleanup = true;
     struct stat sb;
     int rc = -1;
@@ -781,12 +783,14 @@ static int create_rundir (attr_t *attrs)
      *   the dir for auto-cleanup at broker exit.
      */
     if (attr_get (attrs, "rundir", &run_dir, NULL) < 0) {
-        const char *tmpdir = getenv ("TMPDIR");
-        if (asprintf (&dir, "%s/flux-XXXXXX", tmpdir ? tmpdir : "/tmp") < 0) {
-            log_err ("out of memory");
+        if (!(tmpdir = getenv ("TMPDIR")))
+            tmpdir = "/tmp";
+        len = snprintf (path, sizeof (path), "%s/flux-XXXXXX", tmpdir);
+        if (len >= sizeof (path)) {
+            log_msg ("rundir buffer overflow");
             goto done;
         }
-        if (!(run_dir = mkdtemp (dir))) {
+        if (!(run_dir = mkdtemp (path))) {
             log_err ("cannot create directory in %s", tmpdir);
             goto done;
         }
@@ -833,7 +837,6 @@ static int create_rundir (attr_t *attrs)
 done:
     if (do_cleanup && run_dir != NULL)
         cleanup_push_string (cleanup_directory_recursive, run_dir);
-    free (dir);
     return rc;
 }
 
