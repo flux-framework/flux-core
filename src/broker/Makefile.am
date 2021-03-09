@@ -8,6 +8,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
+	$(PMIX_CFLAGS) \
 	$(ZMQ_CFLAGS) \
 	$(LIBUUID_CFLAGS) \
 	$(VALGRIND_CFLAGS)
@@ -64,7 +65,8 @@ flux_broker_LDADD = \
 	$(builddir)/libbroker.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libpmi/libpmi_client.la \
-	$(top_builddir)/src/common/libflux-internal.la
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(PMIX_LIBS)
 
 flux_broker_LDFLAGS =
 
@@ -82,7 +84,8 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libpmi/libpmi_client.la \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libtap/libtap.la
+	$(top_builddir)/src/common/libtap/libtap.la \
+	$(PMIX_LIBS)
 
 test_ldflags = \
 	-no-install

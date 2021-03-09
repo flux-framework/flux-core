@@ -385,6 +385,8 @@ AS_IF([test "x$enable_content_s3" = "xyes"], [
 
 AM_CONDITIONAL([ENABLE_CONTENT_S3], [test "x$enable_content_s3" = "xyes"])
 
+X_AC_PMIX
+
 ##
 # Check for systemd
 ##
