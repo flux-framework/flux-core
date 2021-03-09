@@ -771,7 +771,6 @@ static int create_rundir (attr_t *attrs)
 {
     const char *run_dir;
     char *dir = NULL;
-    char *uri = NULL;
     bool do_cleanup = true;
     struct stat sb;
     int rc = -1;
@@ -835,7 +834,6 @@ static int create_rundir (attr_t *attrs)
     rc = 0;
 done:
     free (dir);
-    free (uri);
     return rc;
 }
 
