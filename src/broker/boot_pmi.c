@@ -21,6 +21,7 @@
 #include "src/common/libutil/kary.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
+#include "src/common/libpmi/clique.h"
 
 #include "attr.h"
 #include "overlay.h"
@@ -145,6 +146,26 @@ static int set_instance_level_attr (struct pmi_handle *pmi,
     return 0;
 }
 
+/* Set broker.mapping attribute from enclosing instance PMI_process_mapping.
+ */
+static int set_broker_mapping_attr (struct pmi_handle *pmi,
+                                    const char *kvsname,
+                                    attr_t *attrs)
+{
+    char buf[1024];
+    char *val = NULL;
+
+    if (broker_pmi_kvs_get (pmi,
+                            kvsname,
+                            "PMI_process_mapping",
+                            buf,
+                            sizeof (buf)) == PMI_SUCCESS)
+        val = buf;
+    if (attr_add (attrs, "broker.mapping", val, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+    return 0;
+}
+
 int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
 {
     int rank;
@@ -173,6 +194,10 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
     }
     if (set_instance_level_attr (pmi, pmi_params.kvsname, attrs) < 0) {
         log_err ("set_instance_level_attr");
+        goto error;
+    }
+    if (set_broker_mapping_attr (pmi, pmi_params.kvsname, attrs) < 0) {
+        log_err ("error setting broker.mapping attribute");
         goto error;
     }
     if (overlay_init (overlay, pmi_params.size, pmi_params.rank, tbon_k) < 0)
