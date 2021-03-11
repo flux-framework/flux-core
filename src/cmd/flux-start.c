@@ -29,6 +29,7 @@
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/setenvf.h"
 #include "src/common/libpmi/simple_server.h"
+#include "src/common/libpmi/clique.h"
 #include "src/common/libpmi/dgetline.h"
 
 #define DEFAULT_KILLER_TIMEOUT 20.0
@@ -94,6 +95,8 @@ static struct optparse_option opts[] = {
       .usage = "Trace pmi simple server protocol exchange", },
     { .name = "scratchdir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
       .usage = "Use DIR as scratch directory", },
+    { .name = "noclique", .key = 'c', .has_arg = 0, .arginfo = NULL,
+      .usage = "Don't set PMI_process_mapping in PMI KVS", },
 
 /* Option group 1, these options will be listed after those above */
     { .group = 1,
@@ -209,6 +212,8 @@ int main (int argc, char *argv[])
     case BOOTSTRAP_PMI:
         if (optparse_hasopt (ctx.opts, "scratchdir"))
             log_msg_exit ("--scratchdir only works with --bootstrap=selfpmi");
+        if (optparse_hasopt (ctx.opts, "noclique"))
+            log_msg_exit ("--noclique only works with --bootstrap=selfpmi");
         status = exec_broker (command, len, broker_path);
         break;
     case BOOTSTRAP_SELFPMI:
@@ -546,8 +551,22 @@ void pmi_server_initialize (int flags)
         .debug_trace = pmi_debug_trace,
     };
     int appnum = 0;
+
     if (!(ctx.pmi.kvs = zhash_new()))
         oom ();
+
+    if (!optparse_hasopt (ctx.opts, "noclique")) {
+        struct pmi_map_block mapblock = {
+            .nodeid = 0,
+            .nodes = 1,
+            .procs = ctx.size,
+        };
+        char buf[256];
+        if (pmi_process_mapping_encode (&mapblock, 1, buf, sizeof (buf)) < 0)
+            log_msg_exit ("error encoding PMI_process_mapping");
+        zhash_update (ctx.pmi.kvs, "PMI_process_mapping", xstrdup (buf));
+    }
+
     ctx.pmi.srv = pmi_simple_server_create (ops, appnum, ctx.size,
                                             ctx.size, "-", flags, NULL);
     if (!ctx.pmi.srv)

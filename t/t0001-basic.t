@@ -90,6 +90,12 @@ test_expect_success 'flux-start --bootstrap=selfpmi fails (no size specified)' "
 test_expect_success 'flux-start --size=1 --boostrap=pmi fails' "
 	test_must_fail flux start ${ARGS} --size=1 --bootstrap=pmi /bin/true
 "
+test_expect_success 'flux-start --scratchdir --boostrap=pmi fails' "
+	test_must_fail flux start ${ARGS} --scratchdir=$(pwd) --bootstrap=pmi /bin/true
+"
+test_expect_success 'flux-start --noclique --boostrap=pmi fails' "
+	test_must_fail flux start ${ARGS} --noclique --bootstrap=pmi /bin/true
+"
 test_expect_success 'flux-start in exec mode passes through errors from command' "
 	test_must_fail flux start ${ARGS} /bin/false
 "
