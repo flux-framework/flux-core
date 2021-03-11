@@ -62,6 +62,12 @@ test_expect_success 'job-shell: PMI works' '
 	flux job attach $id >pmi_info.out 2>pmi_info.err &&
 	grep size=4 pmi_info.out
 '
+test_expect_success 'pmi-shell: bad pmi.clique option fails' '
+	test_must_fail flux mini run -opmi.clique=badopt \
+		/bin/true 2>badopt.err &&
+	grep "pmi.clique=badopt is invalid" badopt.err
+'
+
 test_expect_success 'pmi-shell: PMI cliques are correct for 1 ppn' '
         id=$(flux jobspec srun -N4 -n4 ${PMI_INFO} -c | flux job submit) &&
 	flux job attach $id >pmi_clique1.raw &&
