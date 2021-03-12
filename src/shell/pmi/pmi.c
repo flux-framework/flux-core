@@ -362,6 +362,31 @@ static void pmi_fd_cb (flux_shell_task_t *task,
     }
 }
 
+/* Query broker to see if instance mapping is known, then use that information
+ * to select whether process mapping should be "none", "single", or "pershell".
+ */
+static const char *guess_clique_option (struct shell_pmi *pmi)
+{
+    const char *val;
+    struct pmi_map_block *blocks = NULL;
+    int nblocks;
+    const char *opt = "none";
+
+    if (pmi->shell->standalone)
+        goto done;
+    if (!(val = flux_attr_get (pmi->shell->h, "broker.mapping")))
+        goto done;
+    if (pmi_process_mapping_parse (val, &blocks, &nblocks) < 0)
+        goto done;
+    if (nblocks == 1 && blocks[0].nodes == 1)       // one node
+        opt = "single";
+    else if (nblocks == 1 && blocks[0].procs == 1)  // one broker per node
+        opt = "pershell";
+done:
+    free (blocks);
+    return opt;
+}
+
 /* Generate 'PMI_process_mapping' key (see RFC 13) for MPI clique computation.
  */
 static int init_clique (struct shell_pmi *pmi, const char *opt)
@@ -370,6 +395,9 @@ static int init_clique (struct shell_pmi *pmi, const char *opt)
     int nblocks;
     int i;
     char val[SIMPLE_KVS_VAL_MAX];
+
+    if (!opt)
+        opt = guess_clique_option (pmi);
 
      /* pmi.clique=pershell (default): one clique per shell.
       * Create an array of pmi_map_block structures, sized for worst case
@@ -513,7 +541,7 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
     char kvsname[32];
     const char *kvs = "exchange";
     int exchange_k = 0; // 0=use default tree fanout
-    const char *clique = "pershell";
+    const char *clique = NULL;
 
     if (!(pmi = calloc (1, sizeof (*pmi))))
         return NULL;
