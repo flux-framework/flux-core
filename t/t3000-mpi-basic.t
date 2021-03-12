@@ -10,37 +10,25 @@ if test -z "$FLUX_TEST_MPI"; then
     test_done
 fi
 
-if ! test -x ${FLUX_BUILD_DIR}/t/mpi/hello; then
+HELLO=${FLUX_BUILD_DIR}/t/mpi/hello
+if ! test -x ${HELLO}; then
     skip_all='skipping MPI tests, MPI not available/configured'
     test_done
 fi
 
-# Size the session to one more than the number of cores, minimum of 4
-SIZE=$(test_size_large)
-test_under_flux ${SIZE}
-echo "# $0: flux session size will be ${SIZE}"
+# rc1-job ensures there are 2 cores per node
+SIZE=2
+MAX_MPI_SIZE=$(($SIZE*2))
+test_under_flux $SIZE job
 
-# Usage: run_program timeout ntasks nnodes
-run_program() {
-	local timeout=$1
-	local ntasks=$2
-	local nnodes=$3
-        local opts=$4
-	shift 3
-	run_timeout $timeout flux mini run \
-		    -n${ntasks} -N${nnodes} $*
+hello_world() {
+	run_timeout 30 flux mini run -n$1 ${HELLO} >hello-$1.out &&
+	grep -q "are $1 tasks" hello-$1.out &&
+	test_debug "cat hello-$1.out"
 }
 
-test_expect_success "mpi hello singleton" '
-	run_program 15 1 1 ${FLUX_BUILD_DIR}/t/mpi/hello >single.out &&
-	test_debug "cat single.out"
-'
-
-test_expect_success "mpi hello all ranks" '
-	run_program 15 ${SIZE} ${SIZE} ${FLUX_BUILD_DIR}/t/mpi/hello \
-		> allranks.out &&
-		test_debug "cat allranks.out" &&
-		grep -q "There are ${SIZE} tasks" allranks.out
-'
+for size in $(seq 1 ${MAX_MPI_SIZE}); do
+	test_expect_success "mpi hello size=${size}" "hello_world ${size}"
+done
 
 test_done
