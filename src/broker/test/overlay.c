@@ -335,7 +335,7 @@ void trio (flux_t *h)
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "m000"),
         "%s: received message has expected topic", ctx[0]->name);
     ok (flux_msg_get_route_count (rmsg) == 0,
-        "%s: received message has no routes");
+        "%s: received message has no routes", ctx[0]->name);
 
     /* Event
      */
@@ -392,7 +392,7 @@ void trio (flux_t *h)
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "moop"),
         "%s: response has expected topic", ctx[1]->name);
     ok (flux_msg_get_route_count (rmsg) == 0,
-        "%s: response has no routes");
+        "%s: response has no routes", ctx[1]->name);
 
     /* Event
      */
