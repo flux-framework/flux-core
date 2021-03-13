@@ -130,10 +130,10 @@ static int alloc_children (uint32_t rank,
     return count;
 }
 
-int overlay_init (struct overlay *ov,
-                  uint32_t size,
-                  uint32_t rank,
-                  int tbon_k)
+int overlay_set_geometry (struct overlay *ov,
+                          uint32_t size,
+                          uint32_t rank,
+                          int tbon_k)
 {
     ov->size = size;
     ov->rank = rank;

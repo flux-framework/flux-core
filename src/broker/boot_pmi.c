@@ -178,7 +178,10 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
         log_err ("error setting broker.mapping attribute");
         goto error;
     }
-    if (overlay_init (overlay, pmi_params.size, pmi_params.rank, tbon_k) < 0)
+    if (overlay_set_geometry (overlay,
+                              pmi_params.size,
+                              pmi_params.rank,
+                              tbon_k) < 0)
         goto error;
 
     /* A size=1 instance has no peers, so skip the PMI exchange.

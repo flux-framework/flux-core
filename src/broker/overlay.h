@@ -31,10 +31,10 @@ void overlay_destroy (struct overlay *ov);
 
 /* Call before connect/bind.
  */
-int overlay_init (struct overlay *ov,
-                  uint32_t size,
-                  uint32_t rank,
-                  int tbon_k);
+int overlay_set_geometry (struct overlay *ov,
+                          uint32_t size,
+                          uint32_t rank,
+                          int tbon_k);
 
 /* Send a message on the overlay network.
  */

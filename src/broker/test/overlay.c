@@ -103,8 +103,8 @@ void single (flux_t *h)
     struct context *ctx = ctx_create (h, "single", 1, 0, NULL);
     flux_msg_t *msg;
 
-    ok (overlay_init (ctx->ov, 1, 0, 2) == 0,
-        "%s: overlay_init size=1 rank=0 tbon_k=2 works", ctx->name);
+    ok (overlay_set_geometry (ctx->ov, 1, 0, 2) == 0,
+        "%s: overlay_set_geometry size=1 rank=0 tbon_k=2 works", ctx->name);
 
     ok (overlay_get_size (ctx->ov) == 1,
         "%s: overlay_get_size returns 1", ctx->name);
@@ -254,8 +254,8 @@ void trio (flux_t *h)
 
     ctx[0] = ctx_create (h, "trio", size, 0, recv_cb);
 
-    ok (overlay_init (ctx[0]->ov, size, 0, k_ary) == 0,
-        "%s: overlay_init works", ctx[0]->name);
+    ok (overlay_set_geometry (ctx[0]->ov, size, 0, k_ary) == 0,
+        "%s: overlay_set_geometry works", ctx[0]->name);
 
     ok ((server_pubkey = overlay_cert_pubkey (ctx[0]->ov)) != NULL,
         "%s: overlay_cert_pubkey works", ctx[0]->name);
@@ -266,7 +266,7 @@ void trio (flux_t *h)
 
     ctx[1] = ctx_create (h, "trio", size, 1, recv_cb);
 
-    ok (overlay_init (ctx[1]->ov, size, 1, k_ary) == 0,
+    ok (overlay_set_geometry (ctx[1]->ov, size, 1, k_ary) == 0,
         "%s: overlay_init works", ctx[1]->name);
 
     ok ((client_pubkey = overlay_cert_pubkey (ctx[1]->ov)) != NULL,
