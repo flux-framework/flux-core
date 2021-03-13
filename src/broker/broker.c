@@ -104,7 +104,6 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
 static void set_proctitle (uint32_t rank);
 
 static int create_rundir (attr_t *attrs);
-static int create_broker_rundir (struct overlay *ov, void *arg);
 static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static int create_runat_phases (broker_ctx_t *ctx);
@@ -112,6 +111,8 @@ static int create_runat_phases (broker_ctx_t *ctx);
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg);
 
 static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred);
+
+static int init_local_uri_attr (struct overlay *ov, attr_t *attrs);
 
 static const struct flux_handle_ops broker_handle_ops;
 
@@ -350,11 +351,6 @@ int main (int argc, char *argv[])
     if (create_rundir (ctx.attrs) < 0)
         goto cleanup;
 
-    /* Set & create broker.rundir *after* overlay initialization,
-     * when broker rank is determined.
-     */
-    overlay_set_init_callback (ctx.overlay, create_broker_rundir, ctx.attrs);
-
     /* Execute broker network bootstrap.
      * Default method is pmi.
      * If [bootstrap] is defined in configuration, use static configuration.
@@ -427,6 +423,9 @@ int main (int argc, char *argv[])
     }
 
     set_proctitle (ctx.rank);
+
+    if (init_local_uri_attr (ctx.overlay, ctx.attrs) < 0) // used by runat
+        goto cleanup;
 
     if (create_runat_phases (&ctx) < 0)
         goto cleanup;
@@ -840,51 +839,28 @@ done:
     return rc;
 }
 
-static int create_broker_rundir (struct overlay *ov, void *arg)
+static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
 {
-    attr_t *attrs = arg;
-    uint32_t rank;
-    const char *rundir;
-    const char *local_uri;
-    char *broker_rundir = NULL;
-    char *uri = NULL;
-    int rv = -1;
+    if (attr_get (attrs, "local-uri", NULL, NULL) < 0) {
+        uint32_t rank = overlay_get_rank (ov);
+        const char *rundir;
+        char buf[1024];
 
-    if (attr_get (attrs, "rundir", &rundir, NULL) < 0) {
-        log_msg ("create_broker_rundir: rundir attribute not set");
-        goto cleanup;
-    }
-
-    rank = overlay_get_rank (ov);
-    if (asprintf (&broker_rundir, "%s/%u", rundir, rank) < 0) {
-        log_err ("create_broker_rundir: asprintf");
-        goto cleanup;
-    }
-    if (mkdir (broker_rundir, 0700) < 0) {
-        log_err ("create_broker_rundir: mkdir (%s)", broker_rundir);
-        goto cleanup;
-    }
-    if (attr_add (attrs, "broker.rundir", broker_rundir,
-                  FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("create_broker_rundir: attr_add broker.rundir");
-        goto cleanup;
-    }
-
-    if (attr_get (attrs, "local-uri", &local_uri, NULL) < 0) {
-        if (asprintf (&uri, "local://%s/local", broker_rundir) < 0) {
-            log_err ("create_broker_rundir: asprintf (uri)");
-            goto cleanup;
+        if (attr_get (attrs, "rundir", &rundir, NULL) < 0) {
+            log_msg ("rundir attribute is not set");
+            return -1;
         }
-        if (attr_add (attrs, "local-uri", uri, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-            log_err ("create_broker_rundir: attr_add (local-uri)");
-            goto cleanup;
+        if (snprintf (buf, sizeof (buf), "local://%s/local-%d",
+                      rundir, rank) >= sizeof (buf)) {
+            log_msg ("buffer overflow while building local-uri");
+            return -1;
+        }
+        if (attr_add (attrs, "local-uri", buf, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+            log_err ("setattr local-uri");
+            return -1;
         }
     }
-    rv = 0;
-cleanup:
-    free (uri);
-    free (broker_rundir);
-    return rv;
+    return 0;
 }
 
 static bool nodeset_member (const char *s, uint32_t rank)

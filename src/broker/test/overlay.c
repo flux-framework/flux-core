@@ -98,28 +98,13 @@ struct context *ctx_create (flux_t *h, const char *name, int size, int rank,
     return ctx;
 }
 
-int single_init_cb (struct overlay *ov, void *arg)
-{
-    struct context *ctx = arg;
-    // get rundir attr
-    // create rank subidr
-    // set broker.rundir attr
-    // set local-uri attr to local://${broker.rundir}/local
-    flux_log (ctx->h, LOG_INFO, "single_init_cb called");
-    return 0;
-}
-
-
 void single (flux_t *h)
 {
     struct context *ctx = ctx_create (h, "single", 1, 0, NULL);
     flux_msg_t *msg;
 
-    overlay_set_init_callback (ctx->ov, single_init_cb, ctx);
     ok (overlay_init (ctx->ov, 1, 0, 2) == 0,
         "%s: overlay_init size=1 rank=0 tbon_k=2 works", ctx->name);
-    ok (match_list (logs, "single_init_cb called") == 1,
-        "%s: overlay_init triggered init callback", ctx->name);
 
     ok (overlay_get_size (ctx->ov) == 1,
         "%s: overlay_get_size returns 1", ctx->name);

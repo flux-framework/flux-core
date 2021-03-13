@@ -21,7 +21,6 @@ typedef enum {
 
 struct overlay;
 
-typedef int (*overlay_init_f)(struct overlay *ov, void *arg);
 typedef void (*overlay_monitor_f)(struct overlay *ov, void *arg);
 typedef void (*overlay_recv_f)(const flux_msg_t *msg,
                                overlay_where_t from,
@@ -29,12 +28,6 @@ typedef void (*overlay_recv_f)(const flux_msg_t *msg,
 
 struct overlay *overlay_create (flux_t *h, overlay_recv_f cb, void *arg);
 void overlay_destroy (struct overlay *ov);
-
-/* Set a callback triggered during overlay_init()
- */
-void overlay_set_init_callback (struct overlay *ov,
-                                overlay_init_f cb,
-                                void *arg);
 
 /* Call before connect/bind.
  */
