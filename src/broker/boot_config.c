@@ -446,15 +446,6 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k)
     uint32_t size;
     json_t *hosts = NULL;
 
-    /* Throw an error if 'tbon.endpoint' attribute is already set.
-     * flux-start sets this, and it's not compatible with the
-     * config boot method as it would be overwritten below.
-     */
-    if (attr_get (attrs, "tbon.endpoint", NULL, NULL) == 0) {
-        log_msg ("attr tbon.endpoint may not be set with [bootstrap] config");
-        return -1;
-    }
-
     /* Ingest the [bootstrap] stanza.
      */
     if (boot_config_parse (flux_get_conf (h), &conf, &hosts) < 0)

@@ -486,7 +486,6 @@ struct client *client_create (const char *broker_path, const char *scratch_dir,
     argz_add (&argz, &argz_len, broker_path);
     char *dir_arg = xasprintf ("--setattr=rundir=%s", scratch_dir);
     argz_add (&argz, &argz_len, dir_arg);
-    argz_add (&argz, &argz_len, "--setattr=tbon.endpoint=ipc://%B/req");
     free (dir_arg);
     add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
     if (rank == 0 && cmd_argz)

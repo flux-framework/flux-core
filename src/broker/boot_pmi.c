@@ -29,90 +29,6 @@
 #include "pmiutil.h"
 
 
-/* Generally accepted max, although some go higher (IE is 2083) */
-#define ENDPOINT_MAX 2048
-
-/* Given a string with possible format specifiers, return string that is
- * fully expanded.
- *
- * Possible format specifiers:
- * - %h - local IP address by heuristic (see src/libutil/ipaddr.h)
- * - %B - value of attribute broker.rundir
- *
- * Caller is responsible for freeing memory of returned value.
- */
-static char * format_endpoint (attr_t *attrs, const char *endpoint)
-{
-    char ipaddr[HOST_NAME_MAX + 1];
-    char *ptr, *buf, *rv = NULL;
-    bool percent_flag = false;
-    unsigned int len = 0;
-    const char *rundir;
-    char error[200];
-
-    if (!(buf = calloc (1, ENDPOINT_MAX + 1))) {
-        errno = ENOMEM;
-        return NULL;
-    }
-
-    ptr = (char *)endpoint;
-    while (*ptr) {
-        if (percent_flag) {
-            if (*ptr == 'h') {
-                if (ipaddr_getprimary (ipaddr, sizeof (ipaddr),
-                                       error, sizeof (error)) < 0) {
-                    log_msg ("%s", error);
-                    goto done;
-                }
-                if ((len + strlen (ipaddr)) > ENDPOINT_MAX) {
-                    log_msg ("ipaddr overflow max endpoint length");
-                    goto done;
-                }
-                strcat (buf, ipaddr);
-                len += strlen (ipaddr);
-            }
-            else if (*ptr == 'B') {
-                if (attr_get (attrs, "broker.rundir", &rundir, NULL) < 0) {
-                    log_msg ("broker.rundir attribute is not set");
-                    goto done;
-                }
-                if ((len + strlen (rundir)) > ENDPOINT_MAX) {
-                    log_msg ("broker.rundir overflow max endpoint length");
-                    goto done;
-                }
-                strcat (buf, rundir);
-                len += strlen (rundir);
-            }
-            else if (*ptr == '%')
-                buf[len++] = '%';
-            else {
-                buf[len++] = '%';
-                buf[len++] = *ptr;
-            }
-            percent_flag = false;
-        }
-        else {
-            if (*ptr == '%')
-                percent_flag = true;
-            else
-                buf[len++] = *ptr;
-        }
-
-        if (len >= ENDPOINT_MAX) {
-            log_msg ("overflow max endpoint length");
-            goto done;
-        }
-
-        ptr++;
-    }
-
-    rv = buf;
-done:
-    if (!rv)
-        free (buf);
-    return (rv);
-}
-
 /*  If the broker is launched via flux-shell, then the shell may opt
  *  to set a "flux.instance-level" parameter in the PMI kvs to tell
  *  the booting instance at what "level" it will be running, i.e. the
@@ -166,6 +82,66 @@ static int set_broker_mapping_attr (struct pmi_handle *pmi,
     return 0;
 }
 
+/* Check if IPC can be used to communicate.
+ * Currently this only goes so far as to check if the process mapping of
+ * brokers has all brokers on the same node.  We could check if all peers
+ * are on the same node, but given how the TBON maps to rank assignments,
+ * it is fairly unlikely.
+ */
+static bool use_ipc (attr_t *attrs)
+{
+    bool result = false;
+    struct pmi_map_block *blocks = NULL;
+    int nblocks;
+    const char *val;
+
+    if (attr_get (attrs, "broker.mapping", &val, NULL) < 0 || !val)
+        goto done;
+    if (pmi_process_mapping_parse (val, &blocks, &nblocks) < 0)
+        goto done;
+    if (nblocks == 1 && blocks[0].nodes == 1) // one node
+        result = true;
+done:
+    free (blocks);
+    return result;
+}
+
+/* Build URI for broker TBON to bind to.
+ * If IPC, use '<rundir>/tbon-<rank>' which should be unique if there are
+ * multiple brokers and/or multiple instances per node.
+ * If using TCP, choose the address to be the one associated with the default
+ * route (see src/common/libutil/ipaddr.h), and a randomly chosen port.
+ */
+static int format_bind_uri (char *buf, int bufsz, attr_t *attrs, int rank)
+{
+    if (use_ipc (attrs)) {
+        const char *rundir;
+
+        if (attr_get (attrs, "rundir", &rundir, NULL) < 0) {
+            log_err ("rundir attribute is not set");
+            return -1;
+        }
+        if (snprintf (buf, bufsz, "ipc://%s/tbon-%d", rundir, rank) >= bufsz)
+            goto overflow;
+    }
+    else {
+        char ipaddr[HOST_NAME_MAX + 1];
+        char error[200];
+
+        if (ipaddr_getprimary (ipaddr, sizeof (ipaddr),
+                               error, sizeof (error)) < 0) {
+            log_err ("%s", error);
+            return -1;
+        }
+        if (snprintf (buf, bufsz, "tcp://%s:*", ipaddr) >= bufsz)
+            goto overflow;
+    }
+    return 0;
+overflow:
+    log_msg ("buffer overflow while building bind URI");
+    return -1;
+}
+
 int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
 {
     int rank;
@@ -217,25 +193,19 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
                       pmi_params.size,
                       pmi_params.rank,
                       0) != KARY_NONE) {
-        const char *fmt;
-        char *tmp;
+        char buf[1024];
 
-        if (attr_get (attrs, "tbon.endpoint", &fmt, NULL) < 0)
-            fmt = "tcp://%h:*";
-        if (!(tmp = format_endpoint (attrs, fmt)))
+        if (format_bind_uri (buf, sizeof (buf), attrs, pmi_params.rank) < 0)
             goto error;
-        if (overlay_bind (overlay, tmp) < 0) {
-            log_err ("overlay_bind %s failed", tmp);
-            free (tmp);
+        if (overlay_bind (overlay, buf) < 0) {
+            log_err ("error binding to %s", buf);
             goto error;
         }
-        free (tmp);
         uri = overlay_get_bind_uri (overlay);
     }
     else {
         uri = NULL;
     }
-    (void)attr_delete (attrs, "tbon.endpoint", true);
     if (attr_add (attrs, "tbon.endpoint", uri, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
         log_err ("setattr tbon.endpoint");
         goto error;
