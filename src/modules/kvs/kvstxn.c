@@ -56,6 +56,7 @@ struct kvstxn {
     json_t *rootcpy;   /* working copy of root dir */
     const json_t *rootdir;      /* source of rootcpy above */
     struct cache_entry *entry;  /* for reference counting rootdir above */
+    struct cache_entry *newroot_entry;  /* for reference counting new root */
     char newroot[BLOBREF_MAX_STRING_SIZE];
     zlist_t *missing_refs_list;
     zlist_t *dirty_cache_entries_list;
@@ -79,6 +80,7 @@ static void kvstxn_destroy (kvstxn_t *kt)
         json_decref (kt->names);
         json_decref (kt->rootcpy);
         cache_entry_decref (kt->entry);
+        cache_entry_decref (kt->newroot_entry);
         if (kt->missing_refs_list)
             zlist_destroy (&kt->missing_refs_list);
         if (kt->dirty_cache_entries_list)
@@ -214,6 +216,11 @@ void kvstxn_cleanup_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry)
         int len;
         int ret;
 
+        /* special case, must clear */
+        if (kt->newroot_entry == entry)
+            kt->newroot_entry = NULL;
+
+        cache_entry_decref (entry);
         assert (cache_entry_get_valid (entry) == true);
         assert (cache_entry_get_dirty (entry) == true);
         ret = cache_entry_clear_dirty (entry);
@@ -236,6 +243,18 @@ static void cleanup_dirty_cache_list (kvstxn_t *kt)
 
     while ((entry = zlist_pop (kt->dirty_cache_entries_list)))
         kvstxn_cleanup_dirty_cache_entry (kt, entry);
+}
+
+static int kvstxn_add_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry)
+{
+    cache_entry_incref (entry);
+    if (zlist_push (kt->dirty_cache_entries_list, entry) < 0) {
+        /* cache_entry_decref() called in kvstxn_cleanup_dirty_cache_entry() */
+        kvstxn_cleanup_dirty_cache_entry (kt, entry);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
 }
 
 /* Store object 'o' under key 'ref' in local cache.
@@ -359,11 +378,8 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
                                     false, ref, sizeof (ref), &entry)) < 0)
                 return -1;
             if (ret) {
-                if (zlist_push (kt->dirty_cache_entries_list, entry) < 0) {
-                    kvstxn_cleanup_dirty_cache_entry (kt, entry);
-                    errno = ENOMEM;
+                if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
                     return -1;
-                }
             }
             if (!(ktmp = treeobj_create_dirref (ref)))
                 return -1;
@@ -383,11 +399,8 @@ static int kvstxn_unroll (kvstxn_t *kt, json_t *dir)
                                         true, ref, sizeof (ref), &entry)) < 0)
                     return -1;
                 if (ret) {
-                    if (zlist_push (kt->dirty_cache_entries_list, entry) < 0) {
-                        kvstxn_cleanup_dirty_cache_entry (kt, entry);
-                        errno = ENOMEM;
+                    if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
                         return -1;
-                    }
                 }
                 if (!(ktmp = treeobj_create_valref (ref)))
                     return -1;
@@ -419,11 +432,8 @@ static int kvstxn_val_data_to_cache (kvstxn_t *kt,
         return -1;
 
     if (ret) {
-        if (zlist_push (kt->dirty_cache_entries_list, entry) < 0) {
-            kvstxn_cleanup_dirty_cache_entry (kt, entry);
-            errno = ENOMEM;
+        if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
             return -1;
-        }
     }
 
     return 0;
@@ -965,10 +975,9 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
                                       sizeof (kt->newroot),
                                       &entry)) < 0)
             kt->errnum = errno;
-        else if (sret
-                 && zlist_push (kt->dirty_cache_entries_list, entry) < 0) {
-            kvstxn_cleanup_dirty_cache_entry (kt, entry);
-            kt->errnum = ENOMEM;
+        else if (sret) {
+            if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
+                kt->errnum = errno;
         }
 
         if (kt->errnum) {
@@ -982,6 +991,17 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
         kt->state = KVSTXN_STATE_PRE_FINISHED;
         json_decref (kt->rootcpy);
         kt->rootcpy = NULL;
+
+        /* the cache entry for the new root has the chance to expire
+         * in between the processing of dirty cache entries and the
+         * user being done with the transaction.  Therefore a call
+         * later to kvstxn_get_newroot_ref() could result in a
+         * reference that no longer has its cache entry valid.  We'll
+         * take an additional reference on the cache entry to ensure
+         * it can't expire until the transaction is completed.
+         */
+        kt->newroot_entry = entry;
+        cache_entry_incref (kt->newroot_entry);
 
         /* fallthrough */
     }
@@ -1062,6 +1082,7 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
     }
 
     while ((entry = zlist_pop (kt->dirty_cache_entries_list))) {
+        cache_entry_decref (entry);
         if (cb (kt, entry, data) < 0) {
             saved_errno = errno;
             rc = -1;
