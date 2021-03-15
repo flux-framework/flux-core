@@ -362,39 +362,92 @@ static void pmi_fd_cb (flux_shell_task_t *task,
     }
 }
 
-/* Generate 'PMI_process_mapping' key (see RFC 13) for MPI clique computation.
- *
- * Create an array of pmi_map_block structures, sized for worst case mapping
- * (no compression possible).  Walk through the rcalc info for each shell rank.
- * If shell's mapping looks identical to previous one, increment block->nodes;
- * otherwise consume another array slot.  Finally, encode to string, put it
- * in the local KVS hash, and free array.
+/* Query broker to see if instance mapping is known, then use that information
+ * to select whether process mapping should be "none", "single", or "pershell".
  */
-static int init_clique (struct shell_pmi *pmi)
+static const char *guess_clique_option (struct shell_pmi *pmi)
 {
-    struct pmi_map_block *blocks;
+    const char *val;
+    struct pmi_map_block *blocks = NULL;
+    int nblocks;
+    const char *opt = "none";
+
+    if (pmi->shell->standalone)
+        goto done;
+    if (!(val = flux_attr_get (pmi->shell->h, "broker.mapping")))
+        goto done;
+    if (pmi_process_mapping_parse (val, &blocks, &nblocks) < 0)
+        goto done;
+    if (nblocks == 1 && blocks[0].nodes == 1)       // one node
+        opt = "single";
+    else if (nblocks == 1 && blocks[0].procs == 1)  // one broker per node
+        opt = "pershell";
+done:
+    free (blocks);
+    return opt;
+}
+
+/* Generate 'PMI_process_mapping' key (see RFC 13) for MPI clique computation.
+ */
+static int init_clique (struct shell_pmi *pmi, const char *opt)
+{
+    struct pmi_map_block *blocks = NULL;
     int nblocks;
     int i;
     char val[SIMPLE_KVS_VAL_MAX];
 
-    if (!(blocks = calloc (pmi->shell->info->shell_size, sizeof (*blocks))))
-        return -1;
-    nblocks = 0;
+    if (!opt)
+        opt = guess_clique_option (pmi);
 
-    for (i = 0; i < pmi->shell->info->shell_size; i++) {
-        struct rcalc_rankinfo ri;
+     /* pmi.clique=pershell (default): one clique per shell.
+      * Create an array of pmi_map_block structures, sized for worst case
+      * mapping (no compression possible).  Walk through the rcalc info for
+      * each shell rank.  If shell's mapping looks identical to previous one,
+      * increment block->nodes; otherwise consume another array slot.
+      */
+    if (!strcmp (opt, "pershell")) {
+        if (!(blocks = calloc (pmi->shell->info->shell_size, sizeof (*blocks))))
+            return -1;
+        nblocks = 0;
 
-        if (rcalc_get_nth (pmi->shell->info->rcalc, i, &ri) < 0)
-            goto error;
-        if (nblocks == 0 || blocks[nblocks - 1].procs != ri.ntasks) {
-            blocks[nblocks].nodeid = i;
-            blocks[nblocks].procs = ri.ntasks;
-            blocks[nblocks].nodes = 1;
-            nblocks++;
+        for (i = 0; i < pmi->shell->info->shell_size; i++) {
+            struct rcalc_rankinfo ri;
+
+            if (rcalc_get_nth (pmi->shell->info->rcalc, i, &ri) < 0)
+                goto error;
+            if (nblocks == 0 || blocks[nblocks - 1].procs != ri.ntasks) {
+                blocks[nblocks].nodeid = i;
+                blocks[nblocks].procs = ri.ntasks;
+                blocks[nblocks].nodes = 1;
+                nblocks++;
+            }
+            else
+                blocks[nblocks - 1].nodes++;
         }
-        else
-            blocks[nblocks - 1].nodes++;
     }
+    /* pmi.clique=single: all procs are on the same node.
+     */
+    else if (!strcmp (opt, "single")) {
+        if (!(blocks = calloc (1, sizeof (*blocks))))
+            return -1;
+        nblocks = 1;
+        blocks[0].nodeid = 0;
+        blocks[0].procs = pmi->shell->info->total_ntasks;
+        blocks[0].nodes = 1;
+    }
+    /* pmi.clique=none: disable PMI_process_mapping generation.
+     */
+    else if (!strcmp (opt, "none")) {
+        goto out;
+    }
+    else {
+        shell_log_error ("pmi.clique=%s is invalid", opt);
+        goto error;
+    }
+
+    /* Encode to string, and store to local KVS hash.
+     */
+
     /* If value exceeds SIMPLE_KVS_VAL_MAX, skip setting the key
      * without generating an error.  The client side will not treat
      * a missing key as an error.  It should be unusual though so log it.
@@ -462,15 +515,20 @@ static struct pmi_simple_ops shell_pmi_ops = {
     .abort          = shell_pmi_abort,
 };
 
-static int parse_args (flux_shell_t *shell, int *exchange_k, const char **kvs)
+static int parse_args (flux_shell_t *shell,
+                       int *exchange_k,
+                       const char **kvs,
+                       const char **clique)
 {
     if (flux_shell_getopt_unpack (shell,
                                   "pmi",
-                                  "{s?s s?{s?i}}",
+                                  "{s?s s?{s?i} s?s}",
                                   "kvs",
                                   kvs,
                                   "exchange",
-                                    "k", exchange_k) < 0)
+                                    "k", exchange_k,
+                                  "clique",
+                                  clique) < 0)
         return -1;
     return 0;
 }
@@ -483,12 +541,13 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
     char kvsname[32];
     const char *kvs = "exchange";
     int exchange_k = 0; // 0=use default tree fanout
+    const char *clique = NULL;
 
     if (!(pmi = calloc (1, sizeof (*pmi))))
         return NULL;
     pmi->shell = shell;
 
-    if (parse_args (shell, &exchange_k, &kvs) < 0)
+    if (parse_args (shell, &exchange_k, &kvs, &clique) < 0)
         goto error;
     if (!strcmp (kvs, "native")) {
         shell_pmi_ops.kvs_put = native_kvs_put;
@@ -534,7 +593,7 @@ static struct shell_pmi *pmi_create (flux_shell_t *shell)
         errno = ENOMEM;
         goto error;
     }
-    if (init_clique (pmi) < 0)
+    if (init_clique (pmi, clique) < 0)
         goto error;
     if (!shell->standalone) {
         if (set_flux_instance_level (pmi) < 0)

@@ -90,6 +90,12 @@ test_expect_success 'flux-start --bootstrap=selfpmi fails (no size specified)' "
 test_expect_success 'flux-start --size=1 --boostrap=pmi fails' "
 	test_must_fail flux start ${ARGS} --size=1 --bootstrap=pmi /bin/true
 "
+test_expect_success 'flux-start --scratchdir --boostrap=pmi fails' "
+	test_must_fail flux start ${ARGS} --scratchdir=$(pwd) --bootstrap=pmi /bin/true
+"
+test_expect_success 'flux-start --noclique --boostrap=pmi fails' "
+	test_must_fail flux start ${ARGS} --noclique --bootstrap=pmi /bin/true
+"
 test_expect_success 'flux-start in exec mode passes through errors from command' "
 	test_must_fail flux start ${ARGS} /bin/false
 "
@@ -165,23 +171,19 @@ test_expect_success 'tbon.endpoint can be read' '
 	ATTR_VAL=`flux start ${ARGS} -s2 flux getattr tbon.endpoint` &&
 	echo $ATTR_VAL | grep "://"
 '
-test_expect_success 'tbon.endpoint can be set and %h works' '
-	flux start ${ARGS} -s2 -o,--setattr=tbon.endpoint=tcp://%h:* \
-		flux getattr tbon.endpoint >pct_h.out &&
-	grep "^tcp" pct_h.out &&
-	test_must_fail grep "%h" pct_h.out
+test_expect_success 'tbon.endpoint uses ipc:// in standalone instance' '
+	flux start ${ARGS} -s2 \
+		flux getattr tbon.endpoint >endpoint.out &&
+	grep "^ipc://" endpoint.out
 '
-test_expect_success 'tbon.endpoint with %B works' '
-	flux start ${ARGS} -s2 -o,--setattr=tbon.endpoint=ipc://%B/req \
-		flux getattr tbon.endpoint >pct_B.out &&
-	grep "^ipc" pct_B.out &&
-	test_must_fail grep "%B" pct_B.out
+test_expect_success 'tbon.endpoint uses tcp:// if process mapping unavailable' '
+	flux start ${ARGS} -s2 --noclique \
+		flux getattr tbon.endpoint >endpoint2.out &&
+	grep "^tcp" endpoint2.out
 '
-# N.B. rank 1 has to be killed in this test after rank 0 fails gracefully
-# so test_must_fail won't work here
-test_expect_success 'tbon.endpoint fails on bad endpoint' '
-	! flux start ${ARGS} -s2 --killer-timeout=0.2 \
-		-o,--setattr=tbon.endpoint=foo://bar /bin/true
+test_expect_success 'tbon.endpoint cannot be set' '
+	test_must_fail flux start ${ARGS} -s2 \
+		-o,--setattr=tbon.endpoint=ipc:///tmp/customflux /bin/true
 '
 test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
 	test_must_fail flux start ${ARGS} -s2 flux getattr tbon.parent-endpoint

@@ -64,11 +64,6 @@ tbon.maxlevel
 
 tbon.endpoint
    The endpoint for the tree based overlay network to communicate over.
-   Format specifier "%h" can be used to specify the IP address of the
-   host and is useful when configuring an IP endpoint. Format specifier
-   "%B" can be used to specify the value of the attribute broker.rundir.
-   It is useful when configuring an IPC endpoint. Defaults to
-   "tcp://%h:\*".
 
 
 SOCKET ATTRIBUTES

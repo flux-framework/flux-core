@@ -16,7 +16,8 @@ test_expect_success 'pmi_info works' '
 '
 
 test_expect_success 'pmi_info --clique shows each node with own clique' '
-	flux mini run -n${SIZE} -N${SIZE} ${pmi_info} --clique >clique.out &&
+	flux mini run -opmi.clique=pershell -n${SIZE} -N${SIZE} \
+		${pmi_info} --clique >clique.out &&
 	count=$(cut -f2 -d: clique.out | sort | uniq | wc -l) &&
 	test $count -eq ${SIZE}
 '

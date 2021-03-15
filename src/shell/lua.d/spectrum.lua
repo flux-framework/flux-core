@@ -44,18 +44,11 @@ local function strip_env_by_prefix (env, prefix)
     end
 end
 
-local f = require 'flux'.new()
-local rundir = f:getattr ('broker.rundir')
-
 local env = shell.getenv()
 
 -- Clear all existing PMIX_ and OMPI_ values before setting our own
 strip_env_by_prefix (env, "PMIX_")
 strip_env_by_prefix (env, "OMPI_")
-
--- Avoid shared memory segment name collisions
--- when flux instance runs >1 broker per node.
-shell.setenv ('OMPI_MCA_orte_tmpdir_base', rundir)
 
 -- Assumes the installation paths of Spectrum MPI on LLNL's Sierra
 shell.setenv ('OMPI_MCA_osc', "pt2pt")
