@@ -380,8 +380,7 @@ void add_args_list (char **argz, size_t *argz_len, optparse_t *opt, const char *
 char *create_scratch_dir (void)
 {
     char *tmpdir = getenv ("TMPDIR");
-    char *scratchdir = xasprintf ("%s/flux-%d-XXXXXX",
-                                  tmpdir ? tmpdir : "/tmp", (int)getpid());
+    char *scratchdir = xasprintf ("%s/flux-XXXXXX", tmpdir ? tmpdir : "/tmp");
 
     if (!mkdtemp (scratchdir))
         log_err_exit ("mkdtemp %s", scratchdir);
