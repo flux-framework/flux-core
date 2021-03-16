@@ -356,6 +356,12 @@ int flux_msg_get_route_count (const flux_msg_t *msg);
  */
 char *flux_msg_get_route_string (const flux_msg_t *msg);
 
+/* Return true if messages have the same first routing frame.
+ * (For requests, the sender)
+ */
+bool flux_msg_match_route_first (const flux_msg_t *msg1,
+                                 const flux_msg_t *msg2);
+
 #ifdef __cplusplus
 }
 #endif

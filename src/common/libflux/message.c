@@ -929,18 +929,15 @@ int flux_msg_get_route_last (const flux_msg_t *msg, char **id)
     return 0;
 }
 
-/* replaces flux_msg_sender */
-int flux_msg_get_route_first (const flux_msg_t *msg, char **id)
+static zframe_t *find_route_first (const flux_msg_t *msg)
 {
     uint8_t flags;
     zframe_t *zf, *zf_next;
-    char *s = NULL;
 
-    if (flux_msg_get_flags (msg, &flags) < 0)
-        return -1;
-    if (!(flags & FLUX_MSGFLAG_ROUTE)) {
-        errno = EPROTO;
-        return -1;
+    if (!msg
+        || flux_msg_get_flags (msg, &flags) < 0
+        || !(flags & FLUX_MSGFLAG_ROUTE)) {
+        return NULL;
     }
     zf = zmsg_first (msg->zmsg);
     while (zf && zframe_size (zf) > 0) {
@@ -949,7 +946,16 @@ int flux_msg_get_route_first (const flux_msg_t *msg, char **id)
             break;
         zf = zf_next;
     }
-    if (!zf) {
+    return zf;
+}
+
+/* replaces flux_msg_sender */
+int flux_msg_get_route_first (const flux_msg_t *msg, char **id)
+{
+    zframe_t *zf;
+    char *s = NULL;
+
+    if (!(zf = find_route_first (msg))) {
         errno = EPROTO;
         return -1;
     }
@@ -1655,6 +1661,19 @@ int flux_match_asprintf (struct flux_match *m, const char *topic_glob_fmt, ...)
     return res;
 }
 
+bool flux_msg_match_route_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
+{
+    zframe_t *zf1 = find_route_first (msg1);
+    zframe_t *zf2 = find_route_first (msg2);
+    int len;
+
+    if (!zf1 || !zf2)
+        return false;
+    if ((len = zframe_size (zf1)) != zframe_size (zf2)
+        || memcmp (zframe_data (zf1), zframe_data (zf2), len) != 0)
+        return false;
+    return true;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
