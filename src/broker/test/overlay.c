@@ -98,28 +98,13 @@ struct context *ctx_create (flux_t *h, const char *name, int size, int rank,
     return ctx;
 }
 
-int single_init_cb (struct overlay *ov, void *arg)
-{
-    struct context *ctx = arg;
-    // get rundir attr
-    // create rank subidr
-    // set broker.rundir attr
-    // set local-uri attr to local://${broker.rundir}/local
-    flux_log (ctx->h, LOG_INFO, "single_init_cb called");
-    return 0;
-}
-
-
 void single (flux_t *h)
 {
     struct context *ctx = ctx_create (h, "single", 1, 0, NULL);
     flux_msg_t *msg;
 
-    overlay_set_init_callback (ctx->ov, single_init_cb, ctx);
-    ok (overlay_init (ctx->ov, 1, 0, 2) == 0,
-        "%s: overlay_init size=1 rank=0 tbon_k=2 works", ctx->name);
-    ok (match_list (logs, "single_init_cb called") == 1,
-        "%s: overlay_init triggered init callback", ctx->name);
+    ok (overlay_set_geometry (ctx->ov, 1, 0, 2) == 0,
+        "%s: overlay_set_geometry size=1 rank=0 tbon_k=2 works", ctx->name);
 
     ok (overlay_get_size (ctx->ov) == 1,
         "%s: overlay_get_size returns 1", ctx->name);
@@ -223,11 +208,15 @@ void timeout_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     flux_reactor_stop_error (r);
 }
 
+/* Receive a message with timeout.
+ * Returns 0 on success, or -1 with errno=ETIMEDOUT.
+ */
 const flux_msg_t *recvmsg_timeout (struct context *ctx, double timeout)
 {
 
     flux_reactor_t *r = flux_get_reactor (ctx->h);
     flux_watcher_t *w;
+    int rc;
 
     flux_msg_decref (ctx->msg);
     ctx->msg = NULL;
@@ -236,9 +225,11 @@ const flux_msg_t *recvmsg_timeout (struct context *ctx, double timeout)
         BAIL_OUT ("flux_timer_watcher_create failed");
     flux_watcher_start (w);
 
-    if (flux_reactor_run (r, 0) < 0)
-        return NULL; // timeout
-    return ctx->msg;
+    rc = flux_reactor_run (r, 0);
+
+    flux_watcher_destroy (w);
+
+    return rc < 0 ? NULL : ctx->msg;
 }
 
 /* Rank 0,1 are properly configured.
@@ -263,8 +254,8 @@ void trio (flux_t *h)
 
     ctx[0] = ctx_create (h, "trio", size, 0, recv_cb);
 
-    ok (overlay_init (ctx[0]->ov, size, 0, k_ary) == 0,
-        "%s: overlay_init works", ctx[0]->name);
+    ok (overlay_set_geometry (ctx[0]->ov, size, 0, k_ary) == 0,
+        "%s: overlay_set_geometry works", ctx[0]->name);
 
     ok ((server_pubkey = overlay_cert_pubkey (ctx[0]->ov)) != NULL,
         "%s: overlay_cert_pubkey works", ctx[0]->name);
@@ -275,7 +266,7 @@ void trio (flux_t *h)
 
     ctx[1] = ctx_create (h, "trio", size, 1, recv_cb);
 
-    ok (overlay_init (ctx[1]->ov, size, 1, k_ary) == 0,
+    ok (overlay_set_geometry (ctx[1]->ov, size, 1, k_ary) == 0,
         "%s: overlay_init works", ctx[1]->name);
 
     ok ((client_pubkey = overlay_cert_pubkey (ctx[1]->ov)) != NULL,
@@ -335,7 +326,7 @@ void trio (flux_t *h)
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "m000"),
         "%s: received message has expected topic", ctx[0]->name);
     ok (flux_msg_get_route_count (rmsg) == 0,
-        "%s: received message has no routes");
+        "%s: received message has no routes", ctx[0]->name);
 
     /* Event
      */
@@ -392,7 +383,7 @@ void trio (flux_t *h)
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "moop"),
         "%s: response has expected topic", ctx[1]->name);
     ok (flux_msg_get_route_count (rmsg) == 0,
-        "%s: response has no routes");
+        "%s: response has no routes", ctx[1]->name);
 
     /* Event
      */

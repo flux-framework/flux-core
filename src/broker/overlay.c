@@ -86,9 +86,6 @@ struct overlay {
 
     overlay_recv_f recv_cb;
     void *recv_arg;
-
-    overlay_init_f init_cb;
-    void *init_arg;
 };
 
 static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg);
@@ -106,14 +103,6 @@ static void overlay_monitor_notify (struct overlay *ov)
 {
     if (ov->child_monitor_cb)
         ov->child_monitor_cb (ov, ov->child_monitor_arg);
-}
-
-void overlay_set_init_callback (struct overlay *ov,
-                                overlay_init_f cb,
-                                void *arg)
-{
-    ov->init_cb = cb;
-    ov->init_arg = arg;
 }
 
 /* Allocate children array based on static tree topology, and return size.
@@ -141,10 +130,10 @@ static int alloc_children (uint32_t rank,
     return count;
 }
 
-int overlay_init (struct overlay *ov,
-                  uint32_t size,
-                  uint32_t rank,
-                  int tbon_k)
+int overlay_set_geometry (struct overlay *ov,
+                          uint32_t size,
+                          uint32_t rank,
+                          int tbon_k)
 {
     ov->size = size;
     ov->rank = rank;
@@ -159,8 +148,6 @@ int overlay_init (struct overlay *ov,
         uint32_t parent_rank = kary_parentof (tbon_k, rank);
         snprintf (ov->parent_uuid, sizeof (ov->uuid), "%"PRIu32, parent_rank);
     }
-    if (ov->init_cb)
-        return (*ov->init_cb) (ov, ov->init_arg);
 
     return 0;
 }

@@ -479,7 +479,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k)
     /* Tell overlay network this broker's rank, size, and branching factor.
      * If a curve certificate was provided, load it.
      */
-    if (overlay_init (overlay, size, rank, tbon_k) < 0)
+    if (overlay_set_geometry (overlay, size, rank, tbon_k) < 0)
         goto error;
     if (conf.curve_cert) {
         if (overlay_cert_load (overlay, conf.curve_cert) < 0)

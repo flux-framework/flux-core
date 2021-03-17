@@ -224,11 +224,67 @@ test_expect_success 'rundir override creates nonexistent dirs' '
 	flux start ${ARGS} -o,--setattr=rundir=$RUNDIR sh -c "test -d $RUNDIR" &&
 	test_expect_code 1 test -d $RUNDIR
 '
+test_expect_success 'broker fails gracefully when rundir buffer overflows' '
+	longstring=$(head -c 1024 < /dev/zero | tr \\0 D) &&
+	! TMPDIR=$longstring flux start ${ARGS} /bin/true 2>overflow.err &&
+	grep overflow overflow.err
+'
+test_expect_success 'broker fails gracefully on nonexistent TMPDIR' '
+	! TMPDIR=/noexist flux start ${ARGS} /bin/true 2>noexist.err &&
+	grep "cannot create directory in /noexist" noexist.err
+'
+test_expect_success 'broker fails gracefully on non-directory rundir' '
+	touch notdir &&
+	test_must_fail flux start ${ARGS} -o,-Srundir=notdir \
+		/bin/true 2>notdir.err &&
+	grep "Not a directory" notdir.err
+'
+test_expect_success 'broker fails gracefully on unwriteable rundir' '
+	mkdir -p privdir &&
+	chmod u-w privdir &&
+	test_must_fail flux start ${ARGS} -o,-Srundir=privdir \
+		/bin/true 2>privdir.err &&
+	grep "permissions" privdir.err
+'
 # Use -eq hack to test that BROKERPID is a number
 test_expect_success 'broker broker.pid attribute is readable' '
 	BROKERPID=`flux start ${ARGS} flux getattr broker.pid` &&
 	test -n "$BROKERPID" &&
 	test "$BROKERPID" -eq "$BROKERPID"
+'
+test_expect_success 'local-uri override works' '
+	flux start ${ARGS} -o,-Slocal-uri=local://$(pwd)/meep printenv FLUX_URI
+'
+test_expect_success 'broker fails gracefully when local-uri is malformed' '
+	test_must_fail flux start ${ARGS} -o,-Slocal-uri=baduri \
+		/bin/true 2>baduri.err &&
+	grep malformed baduri.err
+'
+test_expect_success 'broker fails gracefully when local-uri buffer overflows' '
+	longuri="local://$(head -c 1024 < /dev/zero | tr \\0 D)" &&
+	test_must_fail flux start ${ARGS} -o,-Slocal-uri=${longuri} \
+		/bin/true 2>longuri.err &&
+	grep "buffer overflow" longuri.err
+'
+test_expect_success 'broker fails gracefully when local-uri in missing dir' '
+	test_must_fail flux start ${ARGS} -o,-Slocal-uri=local:///noexist/x \
+		/bin/true 2>nodiruri.err &&
+	grep "cannot stat" nodiruri.err
+'
+test_expect_success 'broker fails gracefully when local-uri in non-dir' '
+	touch urinotdir &&
+	test_must_fail flux start ${ARGS} \
+		-o,-Slocal-uri=local://$(pwd)/urinotdir/x \
+		/bin/true 2>urinotdir.err &&
+	grep "Not a directory" urinotdir.err
+'
+test_expect_success 'broker fails gracefully when local-uri in unwritable dir' '
+	mkdir -p privdir &&
+	chmod u-w privdir &&
+	test_must_fail flux start ${ARGS} \
+		-o,-Slocal-uri=local://$(pwd)/privdir/x \
+		/bin/true 2>uriprivdir.err &&
+	grep "permissions" uriprivdir.err
 '
 test_expect_success 'broker broker.pid attribute is immutable' '
 	test_must_fail flux start ${ARGS} -o,--setattr=broker.pid=1234 flux getattr broker.pid
