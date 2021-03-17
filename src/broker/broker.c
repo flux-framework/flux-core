@@ -758,6 +758,28 @@ cleanup:
     return rc;
 }
 
+static int checkdir (const char *name, const char *path)
+{
+    struct stat sb;
+
+    if (stat (path, &sb) < 0) {
+        log_err ("cannot stat %s %s", name, path);
+        return -1;
+    }
+    if (!S_ISDIR (sb.st_mode)) {
+        errno = ENOTDIR;
+        log_err ("%s %s", name, path);
+        return -1;
+    }
+    if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
+        log_msg ("%s %s does not have owner=rwx permissions", name, path);
+        errno = EPERM;
+        return -1;
+    }
+    return 0;
+}
+
+
 /*  Handle global rundir attribute.
  *
  *  If not set, create a temporary directory and use it as the rundir.
@@ -774,7 +796,6 @@ static int create_rundir (attr_t *attrs)
     char path[1024];
     int len;
     bool do_cleanup = true;
-    struct stat sb;
     int rc = -1;
 
     /*  If rundir attribute isn't set, then create a temp directory
@@ -811,20 +832,8 @@ static int create_rundir (attr_t *attrs)
 
     /*  Ensure created or existing directory is writeable:
      */
-    if (stat (run_dir, &sb) < 0) {
-        log_err ("cannot stat rundir %s ", run_dir);
+    if (checkdir ("rundir", run_dir) < 0)
         goto done;
-    }
-    if (!S_ISDIR (sb.st_mode)) {
-        errno = ENOTDIR;
-        log_err ("rundir %s ", run_dir);
-        goto done;
-    }
-    if ((sb.st_mode & S_IRWXU) != S_IRWXU) {
-        log_msg ("rundir %s does not have owner=rwx permissions", run_dir);
-        errno = EPERM;
-        goto done;
-    }
 
     /*  rundir is now fixed, so make the attribute immutable, and
      *   schedule the dir for cleanup at exit if we created it here.
@@ -842,7 +851,9 @@ done:
 
 static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
 {
-    if (attr_get (attrs, "local-uri", NULL, NULL) < 0) {
+    const char *uri;
+
+    if (attr_get (attrs, "local-uri", &uri, NULL) < 0) {
         uint32_t rank = overlay_get_rank (ov);
         const char *rundir;
         char buf[1024];
@@ -860,6 +871,20 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
             log_err ("setattr local-uri");
             return -1;
         }
+    }
+    else {
+        char path[1024];
+
+        if (strncmp (uri, "local://", 8) != 0) {
+            log_msg ("local-uri is malformed");
+            return -1;
+        }
+        if (snprintf (path, sizeof (path), "%s", uri + 8) >= sizeof (path)) {
+            log_msg ("buffer overflow while checking local-uri");
+            return -1;
+        }
+        if (checkdir ("local-uri directory", dirname (path)) < 0)
+            return -1;
     }
     return 0;
 }
