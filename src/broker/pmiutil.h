@@ -30,7 +30,8 @@ int broker_pmi_kvs_get (struct pmi_handle *pmi,
                         const char *kvsname,
                         const char *key,
                         char *value,
-                        int len);
+                        int len,
+                        int from_rank); // -1 for undefined
 
 int broker_pmi_barrier (struct pmi_handle *pmi);
 

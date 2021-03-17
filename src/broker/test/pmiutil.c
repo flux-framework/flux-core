@@ -66,7 +66,8 @@ int main (int argc, char **argv)
     ok (result == PMI_SUCCESS,
         "broker_pmi_barrier works");
 
-    result = broker_pmi_kvs_get (pmi, params.kvsname, "foo", val, sizeof (val));
+    result = broker_pmi_kvs_get (pmi, params.kvsname, "foo", val, sizeof (val),
+                                 -1);
     ok (result != PMI_SUCCESS,
         "broker_pmi_kvs_get fails since singleton doesn't implement kvs");
     // at least while we can get away without it!

@@ -151,7 +151,7 @@ matrix.add_build(
         CXX="g++8",
         DISTCHECK="t",
     ),
-    args="--with-flux-security --enable-caliper",
+    args="--with-flux-security --enable-caliper --enable-pmix-bootstrap",
     test_s3=True,
 )
 
@@ -169,7 +169,7 @@ matrix.add_build(
 )
 
 # Ubuntu: coverage
-matrix.add_build(name="coverage", coverage=True, jobs=2)
+matrix.add_build(name="coverage", coverage=True, jobs=2, args="--enable-pmix-bootstrap")
 
 # Ubuntu: TEST_INSTALL
 matrix.add_build(

@@ -13,7 +13,8 @@ AM_CPPFLAGS = \
 	$(ZMQ_CFLAGS) \
 	$(LIBUUID_CFLAGS) \
 	$(LIBSODIUM_CFLAGS) \
-	$(HWLOC_CFLAGS)
+	$(HWLOC_CFLAGS) \
+	$(PMIX_CFLAGS)
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
