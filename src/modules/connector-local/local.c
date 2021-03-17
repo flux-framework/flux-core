@@ -304,6 +304,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (!(tmpdir = strstr (local_uri, "local://"))) {
         flux_log (h, LOG_ERR, "malformed local-uri");
+        errno = EINVAL;
         goto done;
     }
     sockpath = tmpdir + 8;
