@@ -26,6 +26,7 @@
 
 #include "annotate.h"
 #include "prioritize.h"
+#include "event.h"
 #include "jobtap.h"
 #include "jobtap-internal.h"
 
@@ -688,6 +689,58 @@ int flux_jobtap_reject_job (flux_plugin_t *p,
             flux_log_error (h, "flux_jobtap_reject_job: failed to pack error");
     }
     return -1;
+}
+
+static struct job *lookup_job (struct job_manager *ctx, flux_jobid_t id)
+{
+    struct job *job = zhashx_lookup (ctx->active_jobs, &id);
+    if (!job)
+        errno = ENOENT;
+    return job;
+}
+
+
+static int emit_dependency_event (flux_plugin_t *p,
+                                  flux_jobid_t id,
+                                  const char *event,
+                                  const char *description)
+{
+    int flags = 0;
+    struct job *job;
+
+    struct jobtap *jobtap = flux_plugin_aux_get (p, "flux::jobtap");
+    if (!jobtap) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job = lookup_job (jobtap->ctx, id)))
+        return -1;
+    if (job->state != FLUX_JOB_STATE_DEPEND) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!job_dependency_event_valid (job, event, description))
+       return -1;
+    return event_job_post_pack (jobtap->ctx->event,
+                                job,
+                                event,
+                                flags,
+                                "{s:s}",
+                                "description", description);
+}
+
+int flux_jobtap_dependency_add (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                const char *description)
+{
+    return emit_dependency_event (p, id, "dependency-add", description);
+}
+
+int flux_jobtap_dependency_remove (flux_plugin_t *p,
+                                   flux_jobid_t id,
+                                   const char *description)
+{
+    return emit_dependency_event (p, id, "dependency-remove", description);
 }
 
 /*
