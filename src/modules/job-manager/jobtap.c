@@ -487,6 +487,14 @@ static void jobtap_handle_load_req (struct job_manager *ctx,
     job = zlistx_first (jobs);
     while (job) {
         (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
+
+        /*  If job is in DEPEND state then there may be pending dependencies.
+         *  Notify plugin of the DEPEND state assuming it needs to create
+         *   some state in order to resolve the dependency.
+         */
+        if (job->state == FLUX_JOB_STATE_DEPEND)
+            (void) jobtap_call (ctx->jobtap, job, "job.state.depend", NULL);
+
         job = zlistx_next (jobs);
     }
     zlistx_destroy (&jobs);
