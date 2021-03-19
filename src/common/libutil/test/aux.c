@@ -176,6 +176,38 @@ void simple_test (void)
         "aux_destroy aux=NULL doesn't crash");
 }
 
+void test_delete (void)
+{
+    struct aux_item *aux = NULL;
+    int items[8];
+    int i;
+
+    for (i = 0; i < 8; i++)
+        if (aux_set (&aux, NULL, &items[i], myfree) < 0)
+            BAIL_OUT ("aux_set failed on item %d", i);
+
+    myfree_count = 0;
+    aux_delete (NULL, "foo");
+    ok (myfree_count == 0,
+        "aux_delete aux=NULL does nothing");
+
+    myfree_count = 0;
+    aux_delete (&aux, NULL);
+    ok (myfree_count == 0,
+        "aux_delete val=NULL does nothing");
+
+    myfree_count = 0;
+    aux_delete (&aux, &i);
+    ok (myfree_count == 0,
+        "aux_delete val=unknown does nothing");
+
+    myfree_count = 0;
+    for (i = 0; i < 8; i++)
+        aux_delete (&aux, &items[i]);
+    ok (myfree_count == 8,
+        "aux_delete works with valid pointer");
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -183,6 +215,7 @@ int main (int argc, char *argv[])
     simple_test ();
     aux_destroy_no_get_self ();
     aux_destroy_set_ok ();
+    test_delete ();
 
     done_testing ();
 

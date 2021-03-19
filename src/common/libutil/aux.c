@@ -146,6 +146,22 @@ int aux_set (struct aux_item **head,
     return 0;
 }
 
+void aux_delete (struct aux_item **head, const void *val)
+{
+    struct aux_item *item;
+
+    if (head && val) {
+        while ((item = *head)) {
+            if (item->val == val) {
+                *head = item->next;
+                aux_item_destroy (item);
+                break;
+            }
+            head = &item->next;
+        }
+    }
+}
+
 /* Destroy aux list 'head', calling destructors on items that have them.
  */
 void aux_destroy (struct aux_item **head)

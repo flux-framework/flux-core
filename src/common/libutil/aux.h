@@ -36,6 +36,8 @@ struct aux_item;
 int aux_set (struct aux_item **aux, const char *key,
              void *val, aux_free_f free_fn);
 
+void aux_delete (struct aux_item **aux, const void *val);
+
 void *aux_get (struct aux_item *aux, const char *key);
 
 void aux_destroy (struct aux_item **aux);
