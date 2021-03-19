@@ -109,6 +109,9 @@ int flux_plugin_aux_set (flux_plugin_t *p,
  */
 void * flux_plugin_aux_get (flux_plugin_t *p, const char *key);
 
+/*  Delete auxiliary data by value.
+ */
+void flux_plugin_aux_delete (flux_plugin_t *p, const void *val);
 
 /*  Set optional JSON string as load-time config for plugin 'p'.
  */
