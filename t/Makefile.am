@@ -339,7 +339,8 @@ check_LTLIBRARIES = \
 	job-manager/plugins/args.la \
 	job-manager/plugins/test.la \
 	job-manager/plugins/random.la \
-	job-manager/plugins/validate.la
+	job-manager/plugins/validate.la \
+	job-manager/plugins/dependency-test.la
 
 check-prep:
 	$(MAKE) $(check_PROGRAMS) $(check_LTLIBRARIES)
@@ -699,8 +700,14 @@ job_manager_plugins_validate_la_LDFLAGS = \
 job_manager_plugins_validate_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
-
-
+job_manager_plugins_dependency_test_la_SOURCES = \
+	job-manager/plugins/dependency-test.c
+job_manager_plugins_dependency_test_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_dependency_test_la_LDFLAGS = \
+	-module -rpath /nowhere
+job_manager_plugins_dependency_test_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
 
 hwloc_hwloc_convert_SOURCES = hwloc/hwloc-convert.c
 hwloc_hwloc_convert_CPPFLAGS = $(HWLOC_CFLAGS) $(test_cppflags)
