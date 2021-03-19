@@ -136,7 +136,7 @@ class TestFluxExecutorThread(unittest.TestCase):
     def test_exit_condition(self):
         deq = collections.deque()
         event = threading.Event()
-        thread = _FluxExecutorThread(event, deq, 0.1, (), {})
+        thread = _FluxExecutorThread(event, deq, 0.01, (), {})
         self.assertTrue(thread._FluxExecutorThread__work_remains())
         event.set()
         self.assertFalse(thread._FluxExecutorThread__work_remains())
@@ -148,13 +148,28 @@ class TestFluxExecutorThread(unittest.TestCase):
         event = threading.Event()
         thread = _FluxExecutorThread(event, deq, 0.01, (), {})
         futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
-        deq.extend((None, f) for f in futures)
+        deq.extend(((None,), {}, f) for f in futures)  # send jobspec of None
         event.set()
         thread.run()
         self.assertFalse(deq)
         self.assertEqual(0, thread._FluxExecutorThread__remaining_flux_futures)
         for fut in futures:
             self.assertIsInstance(fut.exception(), OSError)
+
+    def test_bad_submit_arguments(self):
+        """send bad arguments to ``flux.job.submit``"""
+        deq = collections.deque()
+        event = threading.Event()
+        thread = _FluxExecutorThread(event, deq, 0.01, (), {})
+        futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
+        jobspec = JobspecV1.from_command(["false"])
+        deq.extend(((jobspec,), {"not_an_arg": 42}, f) for f in futures)
+        event.set()
+        thread.run()
+        self.assertFalse(deq)
+        self.assertEqual(0, thread._FluxExecutorThread__remaining_flux_futures)
+        for fut in futures:
+            self.assertIsInstance(fut.exception(), TypeError)
 
     def test_cancel(self):
         deq = collections.deque()
@@ -163,7 +178,7 @@ class TestFluxExecutorThread(unittest.TestCase):
         thread = _FluxExecutorThread(event, deq, 0.01, (), {})
         futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
         for fut in futures:
-            deq.append((jobspec, fut))
+            deq.append(((jobspec,), {}, fut))
             fut.cancel()
         event.set()
         thread.run()

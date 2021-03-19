@@ -89,16 +89,16 @@ class _FluxExecutorThread(threading.Thread):
             time.sleep(self.__poll_interval)
         while self.__jobspecs_to_submit:
             try:
-                jobspec, user_future = self.__jobspecs_to_submit.popleft()
+                args, kwargs, user_future = self.__jobspecs_to_submit.popleft()
             except IndexError:
                 continue
             if user_future.set_running_or_notify_cancel():
                 try:
-                    submit_async(self.__flux_handle, jobspec).then(
+                    submit_async(self.__flux_handle, *args, **kwargs).then(
                         self.__submission_callback, user_future
                     )
-                except OSError as os_error:
-                    user_future.set_exception(os_error)
+                except Exception as submit_exc:  # pylint: disable=broad-except
+                    user_future.set_exception(submit_exc)
                 else:
                     self.__remaining_flux_futures += 1
 
@@ -432,7 +432,7 @@ class FluxExecutor:
             for deque in self._submission_queues:
                 while deque:
                     try:
-                        _, user_future = deque.popleft()
+                        _, _, user_future = deque.popleft()
                     except IndexError:
                         pass
                     else:
@@ -442,8 +442,28 @@ class FluxExecutor:
             for thread in self._executor_threads:
                 thread.join()
 
-    def submit(self, jobspec):
+    def submit(self, *args, **kwargs):
         """Submit a jobspec to Flux and return a ``FluxExecutorFuture``.
+
+        Accepts the same positional and keyword arguments as ``flux.job.submit``,
+        except for the ``flux.job.submit`` function's first argument, ``flux_handle``.
+
+        :param jobspec: jobspec defining the job request
+        :type jobspec: Jobspec or its string encoding
+        :param urgency: job urgency 0 (lowest) through 31 (highest)
+            (default is 16).  Priorities 0 through 15 are restricted to
+            the instance owner.
+        :type urgency: int
+        :param waitable: allow result to be fetched with ``flux.job.wait()``
+            (default is False).  Waitable=True is restricted to the
+            instance owner.
+        :type waitable: bool
+        :param debug: enable job manager debugging events to job eventlog
+            (default is False)
+        :type debug: bool
+        :param pre_signed: jobspec argument is already signed
+            (default is False)
+        :type pre_signed: bool
 
         :raises RuntimeError: if ``shutdown`` has been called.
         """
@@ -452,7 +472,7 @@ class FluxExecutor:
                 raise RuntimeError("cannot schedule new futures after shutdown")
             future_owner_id = self._executor_threads[self._next_thread].ident
             fut = FluxExecutorFuture(future_owner_id)
-            self._submission_queues[self._next_thread].append((jobspec, fut))
+            self._submission_queues[self._next_thread].append((args, kwargs, fut))
             self._next_thread = (self._next_thread + 1) % len(self._submission_queues)
             return fut
 
