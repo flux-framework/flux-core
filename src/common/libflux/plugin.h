@@ -91,7 +91,7 @@ int flux_plugin_register (flux_plugin_t *p,
                           const char *name,
                           const struct flux_plugin_handler t[]);
 
-/*  Associate auxillary data with the plugin handle 'p'. If free_fn is
+/*  Associate auxiliary data with the plugin handle 'p'. If free_fn is
  *   set then this function will be called on the data at plugin
  *   destruction.
  *
@@ -105,7 +105,7 @@ int flux_plugin_aux_set (flux_plugin_t *p,
                          void *val,
                          flux_free_f free_fn);
 
-/*  Get current auxillary data under `key`.
+/*  Get current auxiliary data under `key`.
  */
 void * flux_plugin_aux_get (flux_plugin_t *p, const char *key);
 
