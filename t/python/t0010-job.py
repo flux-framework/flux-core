@@ -233,6 +233,7 @@ class TestJob(unittest.TestCase):
         self.assertEqual(len(events), 9)
         self.assertEqual(events[0], "submit")
         self.assertEqual(events[-1], "clean")
+        self.assertLess(set(events), job.MAIN_EVENTS)
 
     def test_20_002_job_event_watch_no_autoreset(self):
         jobid = job.submit(self.fh, JobspecV1.from_command(["sleep", "0"]))
@@ -279,6 +280,7 @@ class TestJob(unittest.TestCase):
             self.assertTrue(hasattr(event, "context"))
             self.assertIs(type(event.timestamp), float)
             self.assertIs(type(event.name), str)
+            self.assertIn(event.name, job.MAIN_EVENTS)
             self.assertIs(type(event.context), dict)
             events.append(event.name)
         self.assertEqual(len(events), 9)

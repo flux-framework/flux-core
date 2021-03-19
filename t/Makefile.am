@@ -191,6 +191,7 @@ TESTSCRIPTS = \
 	python/t0021-idset.py \
 	python/t0022-resource-set.py \
 	python/t0023-executor.py \
+	python/t0024-asyncio.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY

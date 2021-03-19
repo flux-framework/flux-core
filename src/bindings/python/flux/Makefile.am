@@ -38,7 +38,9 @@ nobase_fluxpy_PYTHON = \
 	resource/ResourceSet.py \
 	hostlist.py \
 	idset.py \
-	progress.py
+	progress.py \
+	asyncio/__init__.py \
+	asyncio/job.py
 
 if HAVE_FLUX_SECURITY
 nobase_fluxpy_PYTHON += security.py
