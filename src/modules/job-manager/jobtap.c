@@ -471,6 +471,7 @@ static void jobtap_handle_load_req (struct job_manager *ctx,
     jobtap_error_t error;
     const char *errstr = NULL;
     struct job *job = NULL;
+    zlistx_t *jobs;
 
     if (!(prev = strdup (jobtap_plugin_name (ctx->jobtap->plugin))))
         goto error;
@@ -481,11 +482,14 @@ static void jobtap_handle_load_req (struct job_manager *ctx,
 
     /*  Make plugin aware of all active jobs via job.new callback
      */
-    job = zhashx_first (ctx->active_jobs);
+    jobs = zhashx_values (ctx->active_jobs);
+    zlistx_set_destructor (jobs, NULL);
+    job = zlistx_first (jobs);
     while (job) {
         (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
-        job = zhashx_next (ctx->active_jobs);
+        job = zlistx_next (jobs);
     }
+    zlistx_destroy (&jobs);
 
     /* Now schedule reprioritize of all jobs
      */
