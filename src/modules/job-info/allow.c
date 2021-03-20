@@ -25,12 +25,13 @@
  * Assume "submit" is the first event.
  */
 static int eventlog_get_userid (struct info_ctx *ctx, const char *s,
-                                int *useridp)
+                                uint32_t *useridp)
 {
     json_t *a = NULL;
     json_t *entry = NULL;
     const char *name = NULL;
     json_t *context = NULL;
+    int userid;
     int rv = -1;
 
     if (!(a = eventlog_decode (s))) {
@@ -50,10 +51,11 @@ static int eventlog_get_userid (struct info_ctx *ctx, const char *s,
         errno = EINVAL;
         goto error;
     }
-    if (json_unpack (context, "{ s:i }", "userid", useridp) < 0) {
+    if (json_unpack (context, "{ s:i }", "userid", &userid) < 0) {
         errno = EPROTO;
         goto error;
     }
+    (*useridp) = userid;
     rv = 0;
 error:
     json_decref (a);
@@ -67,14 +69,14 @@ int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg,
                     const char *s)
 {
     struct flux_msg_cred cred;
-    int job_user;
 
     if (flux_msg_get_cred (msg, &cred) < 0)
         return -1;
     if (!(cred.rolemask & FLUX_ROLE_OWNER)) {
-        if (eventlog_get_userid (ctx, s, &job_user) < 0)
+        uint32_t userid;
+        if (eventlog_get_userid (ctx, s, &userid) < 0)
             return -1;
-        if (flux_msg_cred_authorize (cred, job_user) < 0)
+        if (flux_msg_cred_authorize (cred, userid) < 0)
             return -1;
     }
     return 0;
