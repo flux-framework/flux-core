@@ -1023,10 +1023,11 @@ int mod_main (flux_t *h, int argc, char **argv)
             goto done;
         }
         flux_future_destroy (f);
-        /* fluid_init() will fail on rank > 16K.
+        /* fluid_init() only works on first 16K ranks (0-16383).
+         * Reserve the highest numbered rank for job manager fastpath.
          * Just skip loading the job module on those ranks.
          */
-        if (fluid_init (&ctx.gen, rank, timestamp) < 0) {
+        if (rank >= 16383 || fluid_init (&ctx.gen, rank, timestamp) < 0) {
             flux_log (h, LOG_ERR, "fluid_init failed");
             errno = EINVAL;
         }
