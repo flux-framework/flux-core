@@ -31,6 +31,7 @@
 #include "annotate.h"
 #include "journal.h"
 #include "getattr.h"
+#include "runjob.h"
 #include "jobtap-internal.h"
 
 #include "job-manager.h"
@@ -112,6 +113,12 @@ static const struct flux_msg_handler_spec htab[] = {
         "job-manager.getinfo",
         getinfo_handle_request,
         FLUX_ROLE_USER
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.runjob",
+        runjob_handler,
+        FLUX_ROLE_OWNER,
     },
     {
         FLUX_MSGTYPE_REQUEST,
@@ -202,6 +209,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "restart_from_kvs");
         goto done;
     }
+    if (!(ctx.runjob = runjob_ctx_create (&ctx))) {            // uses max_jobid
+        flux_log_error (h, "error creating runjob interface"); //   from restart
+        goto done;
+    }
     if (flux_reactor_run (r, 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;
@@ -223,6 +234,7 @@ done:
     alloc_ctx_destroy (ctx.alloc);
     submit_ctx_destroy (ctx.submit);
     event_ctx_destroy (ctx.event);
+    runjob_ctx_destroy (ctx.runjob);
     jobtap_destroy (ctx.jobtap);
     zhashx_destroy (&ctx.active_jobs);
     return rc;

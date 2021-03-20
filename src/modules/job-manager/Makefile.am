@@ -58,6 +58,8 @@ libjob_manager_la_SOURCES = \
 	getattr.c \
 	prioritize.h \
 	prioritize.c \
+	runjob.h \
+	runjob.c \
 	jobtap-internal.h \
 	jobtap.h \
 	jobtap.c \
