@@ -43,6 +43,8 @@ struct job {
 
     void *handle;           // zlistx_t handle
     int refcount;           // private to job.c
+
+    struct aux_item *aux;
 };
 
 void job_decref (struct job *job);
@@ -53,6 +55,13 @@ struct job *job_create (void);
 struct job *job_create_from_eventlog (flux_jobid_t id,
                                       const char *eventlog,
                                       const char *jobspec);
+
+int job_aux_set (struct job *job,
+                 const char *name,
+                 void *val,
+                 flux_free_f destroy);
+void *job_aux_get (struct job *job, const char *name);
+void job_aux_delete (struct job *job, const void *val);
 
 /* Helpers for maintaining czmq containers of 'struct job'.
  * The comparator sorts by (1) priority, then (2) jobid.
