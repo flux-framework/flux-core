@@ -27,7 +27,6 @@ void job_decref (struct job *job)
     if (job && --job->refcount == 0) {
         int saved_errno = errno;
         json_decref (job->end_event);
-        flux_msg_decref (job->waiter);
         json_decref (job->jobspec_redacted);
         json_decref (job->annotations);
         aux_destroy (&job->aux);

@@ -27,6 +27,15 @@ void wait_disconnect_rpc (flux_t *h,
                           const flux_msg_t *msg,
                           void *arg);
 
+/* 'msg' will receive a response once job becomes inactive.
+ * Takes a ref on 'msg' while waiting.
+ */
+int wait_set_waiter (struct waitjob *wait,
+                     struct job *job,
+                     const flux_msg_t *msg);
+void wait_clear_waiter (struct waitjob *wait, struct job *job);
+const flux_msg_t *wait_get_waiter (struct job *job);
+
 struct job *wait_zombie_first (struct waitjob *wait);
 struct job *wait_zombie_next (struct waitjob *wait);
 
