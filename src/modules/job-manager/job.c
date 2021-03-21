@@ -20,6 +20,7 @@
 #include "event.h"
 
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libutil/aux.h"
 
 void job_decref (struct job *job)
 {
@@ -29,6 +30,7 @@ void job_decref (struct job *job)
         flux_msg_decref (job->waiter);
         json_decref (job->jobspec_redacted);
         json_decref (job->annotations);
+        aux_destroy (&job->aux);
         free (job);
         errno = saved_errno;
     }
@@ -54,6 +56,24 @@ struct job *job_create (void)
     job->priority = -1;
     job->state = FLUX_JOB_STATE_NEW;
     return job;
+}
+
+int job_aux_set (struct job *job,
+                 const char *name,
+                 void *val,
+                 flux_free_f destroy)
+{
+    return aux_set (&job->aux, name, val, destroy);
+}
+
+void *job_aux_get (struct job *job, const char *name)
+{
+    return aux_get (job->aux, name);
+}
+
+void job_aux_delete (struct job *job, const void *val)
+{
+    aux_delete (&job->aux, val);
 }
 
 /* Follow path (NULL terminated array of keys) through multiple JSON
