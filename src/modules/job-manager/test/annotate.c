@@ -83,6 +83,7 @@ void basic (void)
 
     json_decref (new);
     json_decref (cmp);
+    json_decref (orig);
 }
 
 void recursive (void)
@@ -103,6 +104,9 @@ void recursive (void)
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive recursively does nothing on "
         "empty dictionary");
+
+    json_decref (new);
+    json_decref (cmp);
 
     new = json_pack ("{s:{s:s}}", "obj", "str", "foo");
     cmp = json_pack ("{s:{s:s}}", "obj", "str", "foo");
@@ -178,6 +182,7 @@ void recursive (void)
 
     json_decref (new);
     json_decref (cmp);
+    json_decref (orig);
 }
 
 void overwrite (void)
@@ -236,6 +241,7 @@ void overwrite (void)
 
     json_decref (new);
     json_decref (cmp);
+    json_decref (orig);
 }
 
 int main (int argc, char *argv[])

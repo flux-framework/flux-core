@@ -501,6 +501,7 @@ void test_attr (const char *dir)
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
     flux_conf_decref (cf);
+    attr_destroy (attrs);
 }
 
 void test_curve_cert (const char *dir)
@@ -525,6 +526,7 @@ void test_curve_cert (const char *dir)
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);
 
+    flux_conf_decref (cf);
 }
 
 int main (int argc, char **argv)

@@ -39,6 +39,7 @@ void test_empty (void)
     json_t *o;
     char *s;
     const char *key;
+    char *keyat;
 
     lives_ok ({flux_kvsdir_destroy (NULL);},
         "flux_kvsdir_destroy with NULL paramter doesn't crash");
@@ -76,6 +77,7 @@ void test_empty (void)
         BAIL_OUT ("json_dumps failed on new treeobj");
     dir = flux_kvsdir_create (NULL, NULL, "foo", s);
     free (s);
+    json_decref (o);
 
     ok (dir != NULL,
         "flux_kvsdir_create with empty directory works");
@@ -91,9 +93,10 @@ void test_empty (void)
     key = flux_kvsdir_key (dir);
     ok (key != NULL && !strcmp (key, "foo"),
         "flux_kvsdir_key returns the key we put in");
-    key = flux_kvsdir_key_at (dir, "a.b.c");
-    ok (key != NULL && !strcmp (key, "foo.a.b.c"),
+    keyat = flux_kvsdir_key_at (dir, "a.b.c");
+    ok (keyat != NULL && !strcmp (keyat, "foo.a.b.c"),
         "flux_kvsdir_key_at a.b.c returns foo.a.b.c");
+    free (keyat);
     ok (flux_kvsdir_handle (dir) == NULL,
         "flux_kvsdir_handle returns NULL since that's what we put in");
     ok (flux_kvsdir_rootref (dir) == NULL,
@@ -239,6 +242,8 @@ void test_full (void)
         "flux_kvsdir_get_size on copy still returns 4 after orig freed");
 
     flux_kvsdir_destroy (cpy);
+
+    json_decref (o);
 }
 
 int main (int argc, char *argv[])

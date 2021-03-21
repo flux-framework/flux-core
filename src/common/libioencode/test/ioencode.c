@@ -75,6 +75,7 @@ void basic (void)
         && eof == true,
         "iodecode returned correct info");
     free (data);
+    json_decref (o);
 }
 
 int main (int argc, char *argv[])
