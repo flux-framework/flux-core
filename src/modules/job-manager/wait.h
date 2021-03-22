@@ -36,6 +36,11 @@ int wait_set_waiter (struct waitjob *wait,
 void wait_clear_waiter (struct waitjob *wait, struct job *job);
 const flux_msg_t *wait_get_waiter (struct job *job);
 
+/* Store terminating event for waiter to decode.
+ * Do nothing if job is not waitable, or event has already been stored.
+ */
+int wait_set_end_event (struct job *job, json_t *event);
+
 struct job *wait_zombie_first (struct waitjob *wait);
 struct job *wait_zombie_next (struct waitjob *wait);
 

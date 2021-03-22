@@ -463,8 +463,8 @@ static const char *state_topic (struct job *job)
 }
 
 /* This function implements state transitions per RFC 21.
- * If FLUX_JOB_WAITABLE flag is set, then on a fatal exception or
- * cleanup event, capture the event in job->end_event for flux_job_wait().
+ * On a fatal exception or cleanup event, capture the event in job struct
+ * for flux_job_wait().
  */
 int event_job_update (struct job *job, json_t *event)
 {
@@ -511,9 +511,7 @@ int event_job_update (struct job *job, json_t *event)
         if (event_exception_context_decode (context, &severity) < 0)
             goto error;
         if (severity == 0) {
-            if ((job->flags & FLUX_JOB_WAITABLE) && !job->end_event)
-                job->end_event = json_incref (event);
-
+            wait_set_end_event (job, event);
             job->state = FLUX_JOB_STATE_CLEANUP;
         }
     }
@@ -535,9 +533,7 @@ int event_job_update (struct job *job, json_t *event)
             && job->state != FLUX_JOB_STATE_CLEANUP)
             goto inval;
         if (job->state == FLUX_JOB_STATE_RUN) {
-            if ((job->flags & FLUX_JOB_WAITABLE) && !job->end_event)
-                job->end_event = json_incref (event);
-
+            wait_set_end_event (job, event);
             job->state = FLUX_JOB_STATE_CLEANUP;
         }
     }

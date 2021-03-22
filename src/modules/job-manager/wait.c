@@ -18,7 +18,7 @@
  * - a textual error string
  *
  * The event that transitions a waitable job to the CLEANUP state is
- * captured in job->end_event.  RFC 21 dictates it must be a finish event
+ * captured in the job struct.  RFC 21 dictates it must be a finish event
  * containing a wait(2) style status byte, or a fatal exception.
  * The event is converted to the summary above when the wait response
  * is constructed.
@@ -69,17 +69,33 @@ struct waitjob {
     struct flux_msglist *requests; // requests to wait in FLUX_JOBID_ANY
 };
 
+int wait_set_end_event (struct job *job, json_t *event)
+{
+    if ((job->flags & FLUX_JOB_WAITABLE)
+        && !job_aux_get (job, "wait::end_event")) {
+        if (job_aux_set (job,
+                         "wait::end_event",
+                         json_incref (event),
+                         (flux_free_f)json_decref) < 0) {
+            json_decref (event);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static int decode_job_result (struct job *job,
                               bool *success,
                               char *errbuf,
                               int errbufsz)
 {
     const char *name;
+    json_t *event;
     json_t *context;
 
-    if (!job->end_event)
+    if (!(event = job_aux_get (job, "wait::end_event")))
         return -1;
-    if (eventlog_entry_parse (job->end_event, NULL, &name, &context) < 0)
+    if (eventlog_entry_parse (event, NULL, &name, &context) < 0)
         return -1;
 
     /* Exception - set errbuf=description, set success=false
