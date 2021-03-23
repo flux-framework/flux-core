@@ -12,9 +12,6 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
-#include <stdbool.h>
-
-#include "src/common/libutil/xzmalloc.h"
 
 typedef struct {
     const char *id;
@@ -43,15 +40,11 @@ static libbarrier_ctx_t *getctx (flux_t *h)
             errno = EINVAL;
             goto error;
         }
-        if (!(ctx = calloc (1, sizeof (*ctx)))) {
-            errno = ENOMEM;
+        if (!(ctx = calloc (1, sizeof (*ctx))))
             goto error;
-        }
         ctx->name_len = strlen (id) + 16;
-        if (!(ctx->name = calloc (1, ctx->name_len))) {
-            errno = ENOMEM;
+        if (!(ctx->name = calloc (1, ctx->name_len)))
             goto error;
-        }
         ctx->id = id;
         if (flux_aux_set (h, "flux::barrier_client", ctx, freectx) < 0)
             goto error;
