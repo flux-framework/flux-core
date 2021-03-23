@@ -15,11 +15,11 @@
 #include <czmq.h>
 #include <uuid.h>
 #include <pthread.h>
+#include <sys/poll.h>
 
 #include "util.h"
 
 #include "src/common/libtap/tap.h"
-#include "src/common/libutil/msglist.h"
 
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
@@ -329,7 +329,7 @@ static flux_t *test_connector_create (const char *shmem_name,
  */
 
 struct loopback_connector {
-    msglist_t *queue;
+    struct flux_msglist *queue;
     flux_t *h;
     int pollfd;
     int pollevents;
@@ -342,7 +342,7 @@ static int loopback_connector_pollevents (void *impl)
     int e;
     int revents = 0;
 
-    if ((e = msglist_pollevents (lcon->queue)) < 0)
+    if ((e = flux_msglist_pollevents (lcon->queue)) < 0)
         return -1;
     if (e & POLLIN)
         revents |= FLUX_POLLIN;
@@ -358,7 +358,7 @@ static int loopback_connector_pollfd (void *impl)
 {
     struct loopback_connector *lcon = impl;
 
-    return msglist_pollfd (lcon->queue);
+    return flux_msglist_pollfd (lcon->queue);
 }
 
 static int loopback_connector_send (void *impl, const flux_msg_t *msg,
@@ -380,8 +380,9 @@ static int loopback_connector_send (void *impl, const flux_msg_t *msg,
         if (flux_msg_set_rolemask (cpy, lcon->cred.rolemask) < 0)
             goto error;
     }
-    if (msglist_append (lcon->queue, cpy) < 0) // steals 'cpy'
+    if (flux_msglist_append (lcon->queue, cpy) < 0)
         goto error;
+    flux_msg_destroy (cpy);
     return 0;
 error:
     flux_msg_destroy (cpy);
@@ -393,7 +394,7 @@ static flux_msg_t *loopback_connector_recv (void *impl, int flags)
     struct loopback_connector *lcon = impl;
     flux_msg_t *msg;
 
-    if (!(msg = msglist_pop (lcon->queue))) {
+    if (!(msg = (flux_msg_t *)flux_msglist_pop (lcon->queue))) {
         errno = EWOULDBLOCK;
         return NULL;
     }
@@ -453,7 +454,7 @@ static void loopback_connector_fini (void *impl)
 {
     struct loopback_connector *lcon = impl;
 
-    msglist_destroy (lcon->queue);
+    flux_msglist_destroy (lcon->queue);
     free (lcon);
 }
 
@@ -477,8 +478,8 @@ flux_t *loopback_create (int flags)
         BAIL_OUT ("calloc");
     lcon->cred.userid = getuid ();
     lcon->cred.rolemask = FLUX_ROLE_OWNER;
-    if (!(lcon->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
-        BAIL_OUT ("msglist_create");
+    if (!(lcon->queue = flux_msglist_create ()))
+        BAIL_OUT ("flux_msglist_create");
 
     if (!(lcon->h = flux_handle_create (lcon, &loopback_ops, flags)))
         BAIL_OUT ("flux_handle_create");
