@@ -27,7 +27,7 @@
  *   task sends an EOF for both stdout and stderr.
  * - completion reference also taken for each KVS commit, to ensure
  *   commits complete before shell exits
- * - all shells (even the leader) send I/O to the service with RPC
+ * - follower shells send I/O to the service with RPC
  * - Any errors getting I/O to the leader are logged by RPC completion
  *   callbacks.
  * - Any outstanding RPCs at shell_output_destroy() are synchronously waited for
@@ -394,21 +394,13 @@ static int shell_output_file (struct shell_output *out)
     return 0;
 }
 
-/* Convert 'iodecode' object to an valid RFC 24 data event.
- * N.B. the iodecode object is a valid "context" for the event.
- */
-static void shell_output_write_cb (flux_t *h,
-                                   flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg,
-                                   void *arg)
+static int shell_output_write_leader (struct shell_output *out,
+                                      json_t *o,
+                                      flux_msg_handler_t *mh) // may be NULL
 {
-    struct shell_output *out = arg;
     bool eof = false;
-    json_t *o;
     json_t *entry;
 
-    if (flux_request_unpack (msg, NULL, "o", &o) < 0)
-        goto error;
     if (iodecode (o, NULL, NULL, NULL, NULL, &eof) < 0)
         goto error;
     if (!(entry = eventlog_entry_pack (0., "data", "O", o))) // increfs 'o'
@@ -453,6 +445,26 @@ static void shell_output_write_cb (flux_t *h,
             }
         }
     }
+    return 0;
+error:
+    return -1;
+}
+
+/* Convert 'iodecode' object to an valid RFC 24 data event.
+ * N.B. the iodecode object is a valid "context" for the event.
+ */
+static void shell_output_write_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
+{
+    struct shell_output *out = arg;
+    json_t *o;
+
+    if (flux_request_unpack (msg, NULL, "o", &o) < 0)
+        goto error;
+    if (shell_output_write_leader (out, o, mh) < 0)
+        goto error;
     if (flux_respond (out->shell->h, msg, NULL) < 0)
         shell_log_errno ("flux_respond");
     return;
@@ -491,16 +503,22 @@ static int shell_output_write (struct shell_output *out,
         return -1;
     }
 
-    if (!(f = flux_shell_rpc_pack (out->shell, "write", 0, 0, "O", o)))
-        goto error;
-    if (flux_future_then (f, -1, shell_output_write_completion, out) < 0)
-        goto error;
-    if (zlist_append (out->pending_writes, f) < 0)
-        shell_log_error ("zlist_append failed");
+    if (out->shell->info->shell_rank == 0) {
+        if (shell_output_write_leader (out, o, NULL) < 0)
+            shell_log_errno ("shell_output_write_leader");
+    }
+    else {
+        if (!(f = flux_shell_rpc_pack (out->shell, "write", 0, 0, "O", o)))
+            goto error;
+        if (flux_future_then (f, -1, shell_output_write_completion, out) < 0)
+            goto error;
+        if (zlist_append (out->pending_writes, f) < 0)
+            shell_log_error ("zlist_append failed");
+        if (zlist_size (out->pending_writes) >= shell_output_hwm)
+            shell_output_control (out, true);
+    }
     json_decref (o);
 
-    if (zlist_size (out->pending_writes) >= shell_output_hwm)
-        shell_output_control (out, true);
     return 0;
 
 error:
@@ -522,7 +540,7 @@ void shell_output_destroy (struct shell_output *out)
         if (out->pending_writes) {
             flux_future_t *f;
 
-            while ((f = zlist_pop (out->pending_writes))) { // leader+follower
+            while ((f = zlist_pop (out->pending_writes))) { // follower only
                 if (flux_future_get (f, NULL) < 0)
                     shell_log_errno ("shell_output_write");
                 flux_future_destroy (f);
