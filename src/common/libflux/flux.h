@@ -17,6 +17,7 @@
 #include "msg_handler.h"
 #include "connector.h"
 #include "message.h"
+#include "msglist.h"
 #include "request.h"
 #include "response.h"
 #include "keepalive.h"
