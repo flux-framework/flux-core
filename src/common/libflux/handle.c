@@ -763,14 +763,6 @@ int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
     return 0;
 }
 
-int flux_requeue_nocopy (flux_t *h, flux_msg_t *msg, int flags)
-{
-    if (requeue (h, msg, flags) < 0)
-        return -1;
-
-    return 0;
-}
-
 int flux_event_subscribe (flux_t *h, const char *topic)
 {
     h = lookup_clone_ancestor (h);
