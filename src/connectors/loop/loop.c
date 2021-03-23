@@ -16,11 +16,11 @@
 #include <assert.h>
 #include <errno.h>
 #include <unistd.h>
+#include <sys/poll.h>
 
 #include <flux/core.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/msglist.h"
 
 #define CTX_MAGIC   0xf434aaa0
 typedef struct {
@@ -29,7 +29,7 @@ typedef struct {
 
     struct flux_msg_cred cred;
 
-    msglist_t *queue;
+    struct flux_msglist *queue;
 } loop_ctx_t;
 
 
@@ -42,7 +42,7 @@ static int op_pollevents (void *impl)
     loop_ctx_t *c = impl;
     int e, revents = 0;
 
-    if ((e = msglist_pollevents (c->queue)) < 0)
+    if ((e = flux_msglist_pollevents (c->queue)) < 0)
         return e;
     if (e & POLLIN)
         revents |= FLUX_POLLIN;
@@ -56,7 +56,7 @@ static int op_pollevents (void *impl)
 static int op_pollfd (void *impl)
 {
     loop_ctx_t *c = impl;
-    return msglist_pollfd (c->queue);
+    return flux_msglist_pollfd (c->queue);
 }
 
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
@@ -77,13 +77,11 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
         cred.rolemask = c->cred.rolemask;
     if (flux_msg_set_cred (cpy, cred) < 0)
         goto done;
-    if (msglist_append (c->queue, cpy) < 0)
+    if (flux_msglist_append (c->queue, cpy) < 0)
         goto done;
-    cpy = NULL; /* c->queue now owns cpy */
     rc = 0;
 done:
-    if (cpy)
-        flux_msg_destroy (cpy);
+    flux_msg_destroy (cpy);
     return rc;
 }
 
@@ -91,7 +89,7 @@ static flux_msg_t *op_recv (void *impl, int flags)
 {
     loop_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
-    flux_msg_t *msg = msglist_pop (c->queue);
+    flux_msg_t *msg = (flux_msg_t *)flux_msglist_pop (c->queue);
     if (!msg)
         errno = EWOULDBLOCK;
     return msg;
@@ -102,7 +100,7 @@ static void op_fini (void *impl)
     loop_ctx_t *c = impl;
     assert (c->magic == CTX_MAGIC);
 
-    msglist_destroy (c->queue);
+    flux_msglist_destroy (c->queue);
     c->magic = ~CTX_MAGIC;
     free (c);
 }
@@ -116,7 +114,7 @@ flux_t *connector_init (const char *path, int flags)
     }
     memset (c, 0, sizeof (*c));
     c->magic = CTX_MAGIC;
-    if (!(c->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
+    if (!(c->queue = flux_msglist_create ()))
         goto error;
     if (!(c->h = flux_handle_create (c, &handle_ops, flags)))
         goto error;
