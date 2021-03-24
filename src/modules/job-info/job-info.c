@@ -14,7 +14,7 @@
 #include <czmq.h>
 #include <flux/core.h>
 
-#include "info.h"
+#include "job-info.h"
 #include "allow.h"
 #include "lookup.h"
 #include "watch.h"
@@ -94,6 +94,7 @@ static void info_ctx_destroy (struct info_ctx *ctx)
     if (ctx) {
         int saved_errno = errno;
         flux_msg_handler_delvec (ctx->handlers);
+        lru_cache_destroy (ctx->owner_lru);
         /* freefn set on lookup entries will destroy list entries */
         if (ctx->lookups)
             zlist_destroy (&ctx->lookups);
@@ -118,6 +119,9 @@ static struct info_ctx *info_ctx_create (flux_t *h)
     ctx->h = h;
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;
+    if (!(ctx->owner_lru = lru_cache_create (OWNER_LRU_MAXSIZE)))
+        goto error;
+    lru_cache_set_free_f (ctx->owner_lru, (lru_cache_free_f)free);
     if (!(ctx->lookups = zlist_new ()))
         goto error;
     if (!(ctx->watchers = zlist_new ()))

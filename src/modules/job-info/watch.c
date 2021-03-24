@@ -21,7 +21,7 @@
 #include "src/common/libjob/job.h"
 #include "src/common/libeventlog/eventlog.h"
 
-#include "info.h"
+#include "job-info.h"
 #include "watch.h"
 #include "guest_watch.h"
 #include "allow.h"
@@ -162,7 +162,7 @@ static void check_eventlog_continuation (flux_future_t *f, void *arg)
     }
 
     if (!w->allow) {
-        if (eventlog_allow (ctx, w->msg, s) < 0)
+        if (eventlog_allow (ctx, w->msg, w->id, s) < 0)
             goto error;
         w->allow = true;
     }
@@ -259,7 +259,7 @@ static void watch_continuation (flux_future_t *f, void *arg)
     }
 
     if (!w->allow) {
-        if (eventlog_allow (ctx, w->msg, s) < 0)
+        if (eventlog_allow (ctx, w->msg, w->id, s) < 0)
             goto error_cancel;
         w->allow = true;
     }
@@ -326,6 +326,7 @@ int watch (struct info_ctx *ctx,
            bool guest)
 {
     struct watch_ctx *w = NULL;
+    uint32_t rolemask;
 
     if (!(w = watch_ctx_create (ctx, msg, id, guest, path, flags)))
         goto error;
@@ -333,8 +334,31 @@ int watch (struct info_ctx *ctx,
     /* if user requested an alternate path and that alternate path is
      * not the main eventlog, we have to check the main eventlog for
      * access first.
+     *
+     * if rpc from owner, no need to do guest access check.  Likewise
+     * if the cached check indicates we can read the alternate path.
      */
-    if (path && strcasecmp (path, "eventlog")) {
+
+    if (flux_msg_get_rolemask (msg, &rolemask) < 0)
+        goto error;
+
+    if ((rolemask & FLUX_ROLE_OWNER))
+        w->allow = true;
+
+    if (!w->allow) {
+        int ret;
+        if ((ret = eventlog_allow_lru (w->ctx,
+                                       w->msg,
+                                       w->id)) < 0)
+            return -1;
+
+        if (ret)
+            w->allow = true;
+    }
+
+    if (path
+        && strcasecmp (path, "eventlog")
+        && !w->allow) {
         if (check_eventlog (w) < 0)
             goto error;
     }
