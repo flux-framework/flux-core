@@ -34,7 +34,6 @@
 #include "conf.h"
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/msglist.h"
 #include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/errno_safe.h"
@@ -66,7 +65,7 @@ struct flux_handle_struct {
     const struct flux_handle_ops *ops;
     void            *impl;
     void            *dso;
-    msglist_t       *queue;
+    struct flux_msglist *queue;
     int             pollfd;
 
     struct tagpool  *tagpool;
@@ -329,7 +328,7 @@ flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int f
     if (!(h->tagpool = tagpool_create ()))
         goto nomem;
     tagpool_set_grow_cb (h->tagpool, tagpool_grow_notify, h);
-    if (!(h->queue = msglist_create ((msglist_free_f)flux_msg_destroy)))
+    if (!(h->queue = flux_msglist_create ()))
         goto nomem;
     h->pollfd = -1;
     return h;
@@ -388,7 +387,7 @@ void flux_handle_destroy (flux_t *h)
             if (h->dso)
                 dlclose (h->dso);
 #endif
-            msglist_destroy (h->queue);
+            flux_msglist_destroy (h->queue);
             if (h->pollfd >= 0)
                 (void)close (h->pollfd);
         }
@@ -530,13 +529,11 @@ void flux_matchtag_free (flux_t *h, uint32_t matchtag)
         .topic_glob = NULL,
         .matchtag = matchtag,
     };
-    flux_msg_t *msg = msglist_first (h->queue);
+    const flux_msg_t *msg = flux_msglist_first (h->queue);
     while (msg) {
-        if (flux_msg_cmp (msg, match)) {
-            msglist_remove (h->queue, msg);
-            flux_msg_destroy (msg);
-        }
-        msg = msglist_next (h->queue);
+        if (flux_msg_cmp (msg, match))
+            flux_msglist_delete (h->queue);
+        msg = flux_msglist_next (h->queue);
     }
     tagpool_free (h->tagpool, matchtag);
 }
@@ -649,8 +646,8 @@ static void defer_destroy (zlist_t **l)
 static flux_msg_t *flux_recv_any (flux_t *h, int flags)
 {
     flux_msg_t *msg = NULL;
-    if (msglist_count (h->queue) > 0)
-        msg = msglist_pop (h->queue);
+    if (flux_msglist_count (h->queue) > 0)
+        msg = (flux_msg_t *)flux_msglist_pop (h->queue);
     else if (h->ops->recv)
         msg = h->ops->recv (h->impl, flags);
     else
@@ -725,7 +722,7 @@ fatal:
 /* FIXME: FLUX_O_TRACE will show these messages being received again
  * So will message counters.
  */
-static int requeue (flux_t *h, flux_msg_t *msg, int flags)
+int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
 {
     h = lookup_clone_ancestor (h);
     int rc;
@@ -735,40 +732,15 @@ static int requeue (flux_t *h, flux_msg_t *msg, int flags)
         goto fatal;
     }
     if (flags == FLUX_RQ_TAIL)
-        rc = msglist_append (h->queue, msg);
+        rc = flux_msglist_append (h->queue, msg);
     else
-        rc = msglist_push (h->queue, msg);
+        rc = flux_msglist_push (h->queue, msg);
     if (rc < 0)
         goto fatal;
     return 0;
 fatal:
     FLUX_FATAL (h);
     return -1;
-}
-
-int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
-{
-    flux_msg_t *cpy = NULL;
-
-    if (!(cpy = flux_msg_copy (msg, true))) {
-        FLUX_FATAL (h);
-        return -1;
-    }
-
-    if (requeue (h, cpy, flags) < 0) {
-        flux_msg_destroy (cpy);
-        return -1;
-    }
-
-    return 0;
-}
-
-int flux_requeue_nocopy (flux_t *h, flux_msg_t *msg, int flags)
-{
-    if (requeue (h, msg, flags) < 0)
-        return -1;
-
-    return 0;
 }
 
 int flux_event_subscribe (flux_t *h, const char *topic)
@@ -807,7 +779,7 @@ int flux_pollfd (flux_t *h)
         if ((h->pollfd = epoll_create1 (EPOLL_CLOEXEC)) < 0)
             goto fatal;
         /* add queue pollfd */
-        ev.data.fd = msglist_pollfd (h->queue);
+        ev.data.fd = flux_msglist_pollfd (h->queue);
         if (ev.data.fd < 0)
             goto fatal;
         if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
@@ -847,7 +819,7 @@ int flux_pollevents (flux_t *h)
             goto fatal;
     }
     /* get queue events */
-    if ((e = msglist_pollevents (h->queue)) < 0)
+    if ((e = flux_msglist_pollevents (h->queue)) < 0)
         goto fatal;
     if ((e & POLLIN))
         events |= FLUX_POLLIN;

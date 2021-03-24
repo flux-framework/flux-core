@@ -69,12 +69,10 @@
 #include "monitor.h"
 #include "rutil.h"
 
+/* Stored as aux item in request message.
+ */
 struct acquire_request {
-    struct acquire *acquire;
-
-    const flux_msg_t *msg;              // orig request
     int response_count;                 // count of response messages sent
-
     json_t *resources;                  // resource object
     struct idset *valid;                // valid targets
     struct idset *up;                   // available targets
@@ -83,40 +81,30 @@ struct acquire_request {
 struct acquire {
     struct resource_ctx *ctx;
     flux_msg_handler_t **handlers;
-    struct acquire_request *request;    // N.B. there can be only one currently
+    struct flux_msglist *requests;      // N.B. there can be only one currently
 };
 
 
 static void acquire_request_destroy (struct acquire_request *ar)
 {
     if (ar) {
-        flux_msg_decref (ar->msg);
+        int saved_errno = errno;
         json_decref (ar->resources);
         idset_destroy (ar->valid);
         idset_destroy (ar->up);
         free (ar);
+        errno = saved_errno;
     }
-}
-
-static struct acquire_request *acquire_request_create (struct acquire *acquire,
-                                                       const flux_msg_t *msg)
-{
-    struct acquire_request *ar;
-
-    if (!(ar = calloc (1, sizeof (*ar))))
-        return NULL;
-    ar->acquire = acquire;
-    ar->msg = flux_msg_incref (msg);
-    return ar;
 }
 
 /* Initialize request context once resource object is available.
  * This may be called from acquire_cb() or reslog_cb().
  */
 static int acquire_request_init (struct acquire_request *ar,
+                                 struct acquire *acquire,
                                  json_t *resobj)
 {
-    struct resource_ctx *ctx = ar->acquire->ctx;
+    struct resource_ctx *ctx = acquire->ctx;
     const struct idset *exclude = exclude_get (ctx->exclude);
     json_error_t e;
     struct rlist *rl;
@@ -164,11 +152,12 @@ error:
  * Replace ar->up with new set of available targets.
  */
 static int acquire_request_update (struct acquire_request *ar,
+                                   struct acquire *acquire,
                                    const char *name,
                                    struct idset **up,
                                    struct idset **dn)
 {
-    struct resource_ctx *ctx = ar->acquire->ctx;
+    struct resource_ctx *ctx = acquire->ctx;
     struct idset *new_up;
     struct idset *drain = NULL;
 
@@ -197,8 +186,9 @@ error:
 /* Send the first response to resource.acquire request.  This presumes
  * that acquire_request_init() has already prepared ar->resources and ar->up.
  */
-static int acquire_respond_first (struct acquire_request *ar)
+static int acquire_respond_first (flux_t *h, const flux_msg_t *msg)
 {
+    struct acquire_request *ar = flux_msg_aux_get (msg, "acquire");
     json_t *o = NULL;
 
     if (!(o = json_object()))
@@ -207,7 +197,7 @@ static int acquire_respond_first (struct acquire_request *ar)
         goto nomem;
     if (rutil_set_json_idset (o, "up", ar->up) < 0)
         goto error;
-    if (flux_respond_pack (ar->acquire->ctx->h, ar->msg, "O", o) < 0)
+    if (flux_respond_pack (h, msg, "O", o) < 0)
         goto error;
     json_decref (o);
     ar->response_count++;
@@ -222,10 +212,12 @@ error:
 /* Send a subsequent response to resource.acquire request, driven by
  * reslog_cb().
  */
-static int acquire_respond_next (struct acquire_request *ar,
+static int acquire_respond_next (flux_t *h,
+                                 const flux_msg_t *msg,
                                  struct idset *up,
                                  struct idset *down)
 {
+    struct acquire_request *ar = flux_msg_aux_get (msg, "acquire");
     json_t *o;
 
     if (!(o = json_object()))
@@ -234,7 +226,7 @@ static int acquire_respond_next (struct acquire_request *ar,
         goto error;
     if (down && rutil_set_json_idset (o, "down", down) < 0)
         goto error;
-    if (flux_respond_pack (ar->acquire->ctx->h, ar->msg, "O", o) < 0)
+    if (flux_respond_pack (h, msg, "O", o) < 0)
         goto error;
     json_decref (o);
     ar->response_count++;
@@ -256,36 +248,39 @@ static void acquire_cb (flux_t *h,
                         void *arg)
 {
     struct acquire *acquire = arg;
-    const char *errmsg = NULL;
+    struct acquire_request *ar;
     json_t *resobj;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
+    if (!(ar = calloc (1, sizeof (*ar))))
         goto error;
-    if (acquire->request) {
+    if (flux_request_decode (msg, NULL, NULL) < 0
+        || flux_msg_aux_set (msg,
+                             "acquire",
+                             ar,
+                             (flux_free_f)acquire_request_destroy) < 0) {
+        acquire_request_destroy (ar);
+        goto error;
+    }
+    if (flux_msglist_count (acquire->requests) == 1) {
         errno = EBUSY;
         goto error;
     }
-    if (!(acquire->request = acquire_request_create (acquire, msg)))
+    if (flux_msglist_append (acquire->requests, msg) < 0)
         goto error;
     if (!(resobj = inventory_get (acquire->ctx->inventory)))
         return; // defer response until resource-define event
 
-    if (acquire_request_init (acquire->request, resobj) < 0) {
-        acquire_request_destroy (acquire->request);
-        acquire->request = NULL;
+    if (acquire_request_init (ar, acquire, resobj) < 0)
         goto error;
-    }
-    if (acquire_respond_first (acquire->request) < 0)
+    if (acquire_respond_first (h, msg) < 0)
         flux_log_error (h, "error responding to acquire request");
     return;
 error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "error responding to acquire request");
 }
 
-/* Cancellation protocol per RFC 6.
- * This RPC does not receive a response.  If a matching resource.acquire
- * RPC is found, it is terminated with an ECANCELED response.
+/* Handle resource.acquire-cancel request.
  */
 static void cancel_cb (flux_t *h,
                        flux_msg_handler_t *mh,
@@ -293,39 +288,29 @@ static void cancel_cb (flux_t *h,
                        void *arg)
 {
     struct acquire *acquire = arg;
-    uint32_t matchtag1, matchtag2;
+    int count;
 
-    if (flux_request_unpack (msg, NULL, "{s:i}", "matchtag", &matchtag1) == 0
-            && acquire->request != NULL
-            && flux_msg_get_matchtag (acquire->request->msg, &matchtag2) == 0
-            && matchtag1 == matchtag2
-            && rutil_match_request_sender (acquire->request->msg, msg)) {
-
-        if (flux_respond_error (h, acquire->request->msg, ECANCELED, NULL) < 0)
-            flux_log_error (h, "error responding to acquire request");
-        acquire_request_destroy (acquire->request);
-        acquire->request = NULL;
-        flux_log (h, LOG_DEBUG, "%s: resource.acquire canceled", __func__);
-    }
+    if ((count = flux_msglist_cancel (h, acquire->requests, msg)) < 0)
+        flux_log_error (h, "error handling discnonect request");
+    if (count > 0)
+        flux_log (h, LOG_DEBUG, "canceled %d resource.acquire", count);
 }
 
-/* If disconnect notification matches acquire->request, destroy the request
- * to make the single request slot available.
+/* Handle resource.disconnect message.
  */
 void acquire_disconnect (struct acquire *acquire, const flux_msg_t *msg)
 {
     flux_t *h = acquire->ctx->h;
+    int count;
 
-    if (acquire->request
-            && rutil_match_request_sender (acquire->request->msg, msg)) {
-        acquire_request_destroy (acquire->request);
-        acquire->request = NULL;
-        flux_log (h, LOG_DEBUG, "%s: resource.acquire aborted", __func__);
-    }
+    if ((count = flux_msglist_disconnect (acquire->requests, msg)) < 0)
+        flux_log_error (h, "error handling discnonect request");
+    if (count > 0)
+        flux_log (h, LOG_DEBUG, "aborted %d resource.acquire(s)", count);
 }
 
 /* An event was committed to resource.eventlog.
- * Generate response to acquire->request as appropriate.
+ * Generate response to acquire requests as appropriate.
  * FWIW, this function is not called until after the eventlog KVS
  * commit completes.
  */
@@ -333,66 +318,69 @@ static void reslog_cb (struct reslog *reslog, const char *name, void *arg)
 {
     struct acquire *acquire = arg;
     struct resource_ctx *ctx = acquire->ctx;
+    flux_t *h = ctx->h;
     const char *errmsg = NULL;
     json_t *resobj;
+    const flux_msg_t *msg;
 
     flux_log (ctx->h, LOG_DEBUG, "%s: %s event posted", __func__, name);
 
-    if (!acquire->request)
-        return;
+    msg = flux_msglist_first (acquire->requests);
+    while (msg) {
+        struct acquire_request *ar = flux_msg_aux_get (msg, "acquire");
 
-    if (!strcmp (name, "resource-define")) {
-        if (acquire->request->response_count == 0) {
-            if (!(resobj = inventory_get (ctx->inventory))) {
-                errmsg = "resource discovery failed or interrupted";
-                errno = ENOENT;
-                goto error;
-            }
-            if (acquire_request_init (acquire->request, resobj) < 0) {
-                errmsg = "error preparing first resource.acquire response";
-                goto error;
+        if (!strcmp (name, "resource-define")) {
+            if (ar->response_count == 0) {
+                if (!(resobj = inventory_get (ctx->inventory))) {
+                    errmsg = "resource discovery failed or interrupted";
+                    errno = ENOENT;
+                    goto error;
+                }
+                if (acquire_request_init (ar, acquire, resobj) < 0) {
+                    errmsg = "error preparing first resource.acquire response";
+                    goto error;
 
-            }
-            if (acquire_respond_first (acquire->request) < 0) {
-                flux_log_error (ctx->h,
-                                "error responding to resource.acquire (%s)",
-                                name);
-            }
-        }
-    }
-    else if (!strcmp (name, "online") || !strcmp (name, "offline")
-            || !strcmp (name, "exclude") || !strcmp (name, "unexclude")
-            || !strcmp (name, "drain") || !strcmp (name, "undrain")) {
-        if (acquire->request->response_count > 0) {
-            struct idset *up, *dn;
-            if (acquire_request_update (acquire->request, name, &up, &dn) < 0) {
-                errmsg = "error preparing resource.acquire update response";
-                goto error;
-            }
-            if (up || dn) {
-                if (acquire_respond_next (acquire->request, up, dn) < 0) {
-                    flux_log_error (ctx->h,
+                }
+                if (acquire_respond_first (h, msg) < 0) {
+                    flux_log_error (h,
                                     "error responding to resource.acquire (%s)",
                                     name);
                 }
-                idset_destroy (up);
-                idset_destroy (dn);
             }
         }
+        else if (!strcmp (name, "online") || !strcmp (name, "offline")
+                || !strcmp (name, "exclude") || !strcmp (name, "unexclude")
+                || !strcmp (name, "drain") || !strcmp (name, "undrain")) {
+            if (ar->response_count > 0) {
+                struct idset *up, *dn;
+                if (acquire_request_update (ar, acquire, name, &up, &dn) < 0) {
+                    errmsg = "error preparing resource.acquire update response";
+                    goto error;
+                }
+                if (up || dn) {
+                    if (acquire_respond_next (h, msg, up, dn) < 0) {
+                        flux_log_error (h,
+                                    "error responding to resource.acquire (%s)",
+                                    name);
+                    }
+                    idset_destroy (up);
+                    idset_destroy (dn);
+                }
+            }
+        }
+        msg = flux_msglist_next (acquire->requests);
     }
+
     return;
 error:
-    if (flux_respond_error (ctx->h, acquire->request->msg, errno, errmsg) < 0)
-        flux_log_error (ctx->h, "error responding to acquire request");
-    acquire_request_destroy (acquire->request);
-    acquire->request = NULL;
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to acquire request");
+    flux_msglist_delete (acquire->requests);
 }
 
 int acquire_clients (struct acquire *acquire)
 {
-    if (acquire->request != NULL)
-        return 1;
-    return 0;
+    return flux_msglist_count (acquire->requests);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -405,16 +393,23 @@ void acquire_destroy (struct acquire *acquire)
 {
     if (acquire) {
         int saved_errno = errno;
+
         flux_msg_handler_delvec (acquire->handlers);
         reslog_set_callback (acquire->ctx->reslog, NULL, NULL);
-        if (acquire->request) {
-            if (flux_respond_error (acquire->ctx->h,
-                                    acquire->request->msg,
-                                    ECANCELED,
-                                    "the resource module was unloaded") < 0)
-                flux_log_error (acquire->ctx->h,
-                                "error responding to acquire request");
-            acquire_request_destroy (acquire->request);
+
+        if (acquire->requests) {
+            const flux_msg_t *msg;
+            flux_t *h = acquire->ctx->h;
+
+            msg = flux_msglist_first (acquire->requests);
+            while (msg) {
+                if (flux_respond_error (h, msg, ECANCELED,
+                                        "the resource module was unloaded") < 0)
+                    flux_log_error (h, "error responding to acquire request");
+                flux_msglist_delete (acquire->requests);
+                msg = flux_msglist_next (acquire->requests);
+            }
+            flux_msglist_destroy (acquire->requests);
         }
         free (acquire);
         errno = saved_errno;
@@ -428,6 +423,8 @@ struct acquire *acquire_create (struct resource_ctx *ctx)
     if (!(acquire = calloc (1, sizeof (*acquire))))
         return NULL;
     acquire->ctx = ctx;
+    if (!(acquire->requests = flux_msglist_create ()))
+        goto error;
     if (flux_msg_handler_addvec (ctx->h, htab, acquire, &acquire->handlers) < 0)
         goto error;
     reslog_set_callback (ctx->reslog, reslog_cb, acquire);

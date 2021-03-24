@@ -330,12 +330,12 @@ static void getroot_completion (flux_future_t *f, void *arg)
     if (!root->remove)
         setroot (ctx, root, ref, rootseq);
 
-    /* flux_requeue_nocopy takes ownership of 'msg', no need to destroy */
-    if (flux_requeue_nocopy (ctx->h, msg, FLUX_RQ_HEAD) < 0) {
-        flux_log_error (ctx->h, "%s: flux_requeue_nocopy", __FUNCTION__);
+    if (flux_requeue (ctx->h, msg, FLUX_RQ_HEAD) < 0) {
+        flux_log_error (ctx->h, "%s: flux_requeue", __FUNCTION__);
         goto error;
     }
 
+    flux_msg_destroy (msg);
     flux_future_destroy (f);
     return;
 

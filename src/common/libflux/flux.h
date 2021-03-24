@@ -17,6 +17,7 @@
 #include "msg_handler.h"
 #include "connector.h"
 #include "message.h"
+#include "msglist.h"
 #include "request.h"
 #include "response.h"
 #include "keepalive.h"
@@ -35,6 +36,7 @@
 #include "version.h"
 #include "plugin.h"
 #include "sync.h"
+#include "disconnect.h"
 
 #endif /* !_FLUX_CORE_FLUX_H */
 

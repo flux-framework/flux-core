@@ -66,7 +66,7 @@ struct waitjob {
     zhashx_t *zombies;
     int waiters; // count of waiters blocked on specific active jobs
     int waitables; // count of active waitable jobs
-    zlistx_t *requests; // requests to wait in FLUX_JOBID_ANY
+    struct flux_msglist *requests; // requests to wait in FLUX_JOBID_ANY
 };
 
 static int decode_job_result (struct job *job,
@@ -187,9 +187,9 @@ void wait_notify_inactive (struct waitjob *wait, struct job *job)
         job->waiter = NULL;
         wait->waiters--;
     }
-    else if ((req = zlistx_detach (wait->requests, NULL))) {
+    else if ((req = flux_msglist_first (wait->requests))) {
         wait_respond (wait, req, job);
-        flux_msg_decref (req);
+        flux_msglist_delete (wait->requests);
     }
     else {
         if (zhashx_insert (wait->zombies, &job->id, job) < 0) // increfs job
@@ -232,12 +232,8 @@ static void wait_rpc (flux_t *h,
         /* Enqueue request until a waitable job transitions to inactive.
          */
         else {
-            if (zlistx_add_end (wait->requests,
-                                (void *)flux_msg_incref (msg)) < 0) {
-                flux_msg_decref (msg);
-                errno = ENOMEM;
+            if (flux_msglist_append (wait->requests, msg) < 0)
                 goto error;
-            }
         }
     }
     else {
@@ -275,8 +271,8 @@ static void wait_rpc (flux_t *h,
      * (1) wait on specific ID increased wait->waiters, or
      * (2) wait on FLUX_JOBID_ANY increased wait->requests.
      */
-    if (zlistx_size (wait->requests) + wait->waiters > wait->waitables) {
-        const flux_msg_t *req = zlistx_last (wait->requests);
+    if (flux_msglist_count (wait->requests) + wait->waiters > wait->waitables) {
+        const flux_msg_t *req = flux_msglist_last (wait->requests);
 
         if (req) {
             if (flux_respond_error (h,
@@ -284,8 +280,7 @@ static void wait_rpc (flux_t *h,
                                     ECHILD,
                                     "there are no more waitable jobs") < 0)
                 flux_log_error (h, "%s: flux_respond_error", __func__);
-            zlistx_detach_cur (wait->requests);
-            flux_msg_decref (req);
+            flux_msglist_delete (wait->requests);
         }
     }
     return;
@@ -306,39 +301,21 @@ void wait_disconnect_rpc (flux_t *h,
 {
     struct job_manager *ctx = arg;
     struct waitjob *wait = ctx->wait;
-    char *sender;
-    char *w_sender;
     struct job *job;
-    const flux_msg_t *req;
 
-    if (flux_msg_get_route_first (msg, &sender) < 0)
-        return;
     job = zhashx_first (ctx->active_jobs);
     while (job && wait->waiters > 0) {
         if (job->waiter) {
-            if (flux_msg_get_route_first (job->waiter, &w_sender) == 0) {
-                if (!strcmp (sender, w_sender)) {
-                    flux_msg_decref (job->waiter);
-                    job->waiter = NULL;
-                    wait->waiters--;
-                }
+            if (flux_msg_match_route_first (job->waiter, msg)) {
+                flux_msg_decref (job->waiter);
+                job->waiter = NULL;
+                wait->waiters--;
             }
-            free (w_sender);
         }
         job = zhashx_next (ctx->active_jobs);
     }
-    req = zlistx_first (wait->requests);
-    while (req) {
-        if (flux_msg_get_route_first (req, &w_sender) == 0) {
-            if (!strcmp (sender, w_sender)) {
-                zlistx_detach_cur (wait->requests);
-                flux_msg_decref (req);
-            }
-            free (w_sender);
-        }
-        req = zlistx_next (wait->requests);
-    }
-    free (sender);
+
+    flux_msglist_disconnect (wait->requests, msg);
 }
 
 struct job *wait_zombie_first (struct waitjob *wait)
@@ -387,11 +364,12 @@ void wait_ctx_destroy (struct waitjob *wait)
         if (wait->requests) {
             const flux_msg_t *msg;
 
-            while ((msg = zlistx_detach (wait->requests, NULL))) {
+            while ((msg = flux_msglist_first (wait->requests))) {
                 respond_unloading (h, msg);
-                flux_msg_decref (msg);
+                flux_msglist_delete (wait->requests);
+                msg = flux_msglist_next (wait->requests);
             }
-            zlistx_destroy (&wait->requests);
+            flux_msglist_destroy (wait->requests);
         }
 
         zhashx_destroy (&wait->zombies);
@@ -423,7 +401,7 @@ struct waitjob *wait_ctx_create (struct job_manager *ctx)
     zhashx_set_destructor (wait->zombies, job_destructor);
     zhashx_set_duplicator (wait->zombies, job_duplicator);
 
-    if (!(wait->requests = zlistx_new ()))
+    if (!(wait->requests = flux_msglist_create ()))
         goto error;
 
     if (flux_msg_handler_addvec (ctx->h, htab, ctx, &wait->handlers) < 0)

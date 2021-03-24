@@ -36,7 +36,7 @@ struct quorum {
 };
 
 struct monitor {
-    zlist_t *requests;
+    struct flux_msglist *requests;
 
     flux_future_t *f;
     broker_state_t parent_state;
@@ -86,7 +86,9 @@ static void action_finalize (struct state_machine *s);
 static void action_exit (struct state_machine *s);
 
 static void runat_completion_cb (struct runat *r, const char *name, void *arg);
-static void monitor_update (flux_t *h, zlist_t *requests, broker_state_t state);
+static void monitor_update (flux_t *h,
+                            struct flux_msglist *requests,
+                            broker_state_t state);
 static void join_check_parent (struct state_machine *s);
 static int quorum_add_self (struct state_machine *s);
 static void quorum_check_parent (struct state_machine *s);
@@ -717,7 +719,9 @@ error:
     free (tmp);
 }
 
-static void monitor_update (flux_t *h, zlist_t *requests, broker_state_t state)
+static void monitor_update (flux_t *h,
+                            struct flux_msglist *requests,
+                            broker_state_t state)
 {
     const flux_msg_t *msg;
 
@@ -728,13 +732,13 @@ static void monitor_update (flux_t *h, zlist_t *requests, broker_state_t state)
      */
     if (state == STATE_FINALIZE || state == STATE_EXIT)
         return;
-    msg = zlist_first (requests);
+    msg = flux_msglist_first (requests);
     while (msg) {
         if (flux_respond_pack (h, msg, "{s:i}", "state", state) < 0) {
             if (errno != EHOSTUNREACH)
                 flux_log_error (h, "error responding to monitor request");
         }
-        msg = zlist_next (requests);
+        msg = flux_msglist_next (requests);
     }
 }
 
@@ -750,12 +754,8 @@ static void monitor_cb (flux_t *h,
     if (flux_respond_pack (h, msg, "{s:i}", "state", s->state) < 0)
         flux_log_error (h, "error responding to monitor request");
     if (flux_msg_is_streaming (msg)) {
-        if (zlist_append (s->monitor.requests,
-                          (flux_msg_t *)flux_msg_incref (msg)) < 0) {
-            flux_msg_decref (msg);
-            errno = ENOMEM;
+        if (flux_msglist_append (s->monitor.requests, msg) < 0)
             goto error;
-        }
     }
     return;
 error:
@@ -816,40 +816,6 @@ static void child_connect_cb (struct overlay *overlay, void *arg)
         state_machine_post (s, "children-complete");
 }
 
-/* Returns true if 'sender' matches the sender of request 'msg'.
- */
-static bool match_sender (const flux_msg_t *msg, const char *sender)
-{
-    char *sender2;
-    bool match = false;
-
-    if (flux_msg_get_route_first (msg, &sender2) == 0) {
-        if (!strcmp (sender2, sender))
-            match = true;
-        free (sender2);
-    }
-    return match;
-}
-
-/* Returns true if a matching request was found and removed.
- * (Call until false to remove all matching requests - we can't do it in one
- * go since zlist_t is not remove-save over iteration).
- */
-static bool msglist_drop_sender (zlist_t *l, const char *sender)
-{
-    const flux_msg_t *msg;
-
-    msg = zlist_first (l);
-    while (msg) {
-        if (match_sender (msg, sender)) {
-            zlist_remove (l, (void *)msg);
-            flux_msg_decref (msg);
-            return true;
-        }
-        msg = zlist_next (l);
-    }
-    return false;
-}
 
 /* If a disconnect is received for streaming monitor request,
  * drop the request.
@@ -860,20 +826,12 @@ static void disconnect_cb (flux_t *h,
                            void *arg)
 {
     struct state_machine *s = arg;
-    char *sender;
-    int count = 0;
+    int count;
 
-    if (flux_msg_get_route_first (msg, &sender) == 0) {
-        while (msglist_drop_sender (s->monitor.requests, sender))
-            count++;
-        free (sender);
-        if (count > 0) {
-            flux_log (s->ctx->h,
-                      LOG_DEBUG,
-                      "state-machine: goodbye to %d clients",
-                      count);
-        }
-    }
+    if ((count = flux_msglist_disconnect (s->monitor.requests, msg)) < 0)
+        flux_log_error (h, "error handling state-machine.disconnect");
+    if (count > 0)
+        flux_log (h, LOG_DEBUG, "state-machine: goodbye to %d clients", count);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -883,16 +841,6 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "state-machine.disconnect", disconnect_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
-
-static void msglist_destroy (zlist_t *l)
-{
-    if (l) {
-        const flux_msg_t *msg;
-        while ((msg = zlist_pop (l)))
-            flux_msg_decref (msg);
-        zlist_destroy (&l);
-    }
-}
 
 void state_machine_destroy (struct state_machine *s)
 {
@@ -904,7 +852,7 @@ void state_machine_destroy (struct state_machine *s)
         flux_watcher_destroy (s->idle);
         flux_msg_handler_delvec (s->handlers);
         flux_future_destroy (s->monitor.f);
-        msglist_destroy (s->monitor.requests);
+        flux_msglist_destroy (s->monitor.requests);
         idset_destroy (s->quorum.want);
         idset_destroy (s->quorum.have);
         flux_watcher_destroy (s->quorum.batch_timer);
@@ -935,8 +883,8 @@ struct state_machine *state_machine_create (struct broker *ctx)
         goto nomem;
     flux_watcher_start (s->prep);
     flux_watcher_start (s->check);
-    if (!(s->monitor.requests = zlist_new ()))
-        goto nomem;
+    if (!(s->monitor.requests = flux_msglist_create ()))
+        goto error;
     if (ctx->rank > 0) {
         if (!(s->monitor.f = monitor_parent (ctx->h, s)))
             goto error;

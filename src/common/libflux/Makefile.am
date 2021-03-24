@@ -63,6 +63,7 @@ fluxcoreinclude_HEADERS = \
 	reactor.h \
 	msg_handler.h \
 	message.h \
+	msglist.h \
 	request.h \
 	keepalive.h \
 	response.h \
@@ -79,7 +80,8 @@ fluxcoreinclude_HEADERS = \
 	buffer.h \
 	service.h \
 	plugin.h \
-	sync.h
+	sync.h \
+	disconnect.h
 
 nodist_fluxcoreinclude_HEADERS = \
 	version.h
@@ -94,6 +96,7 @@ libflux_la_SOURCES = \
 	reactor.c \
 	msg_handler.c \
 	message.c \
+	msglist.c \
 	request.c \
 	response.c \
 	rpc.c \
@@ -120,7 +123,8 @@ libflux_la_SOURCES = \
 	service.c \
 	version.c \
 	plugin.c \
-	sync.c
+	sync.c \
+	disconnect.c
 
 libflux_la_CPPFLAGS = \
 	$(installed_conf_cppflags) \
@@ -129,6 +133,7 @@ libflux_la_CPPFLAGS = \
 libflux_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
 
 TESTS = test_message.t \
+	test_msglist.t \
 	test_request.t \
 	test_response.t \
 	test_event.t \
@@ -152,7 +157,8 @@ TESTS = test_message.t \
 	test_attr.t \
 	test_module.t \
 	test_plugin.t \
-	test_sync.t
+	test_sync.t \
+	test_disconnect.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libtestutil/libtestutil.la \
@@ -189,6 +195,10 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_message_t_SOURCES = test/message.c
 test_message_t_CPPFLAGS = $(test_cppflags)
 test_message_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_msglist_t_SOURCES = test/msglist.c
+test_msglist_t_CPPFLAGS = $(test_cppflags)
+test_msglist_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_event_t_SOURCES = test/event.c
 test_event_t_CPPFLAGS = $(test_cppflags)
@@ -273,6 +283,10 @@ test_attr_t_LDADD = $(test_ldadd) $(LIBDL)
 test_sync_t_SOURCES = test/sync.c
 test_sync_t_CPPFLAGS = $(test_cppflags)
 test_sync_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_disconnect_t_SOURCES = test/disconnect.c
+test_disconnect_t_CPPFLAGS = $(test_cppflags)
+test_disconnect_t_LDADD = $(test_ldadd) $(LIBDL)
 
 test_module_t_SOURCES = test/module.c
 test_module_t_CPPFLAGS = $(test_cppflags) \

@@ -36,8 +36,6 @@ libutil_la_SOURCES = \
 	read_all.h \
 	ev_zmq.c \
 	ev_zmq.h \
-	msglist.c \
-	msglist.h \
 	cleanup.c \
 	cleanup.h \
 	unlink_recursive.c \
@@ -92,7 +90,6 @@ libutil_la_SOURCES = \
 EXTRA_DIST = veb_mach.c
 
 TESTS = test_ev.t \
-	test_msglist.t \
 	test_sha1.t \
 	test_sha256.t \
 	test_popen2.t \
@@ -142,10 +139,6 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 test_ev_t_SOURCES = test/ev.c
 test_ev_t_CPPFLAGS = $(test_cppflags)
 test_ev_t_LDADD = $(test_ldadd)
-
-test_msglist_t_SOURCES = test/msglist.c
-test_msglist_t_CPPFLAGS = $(test_cppflags)
-test_msglist_t_LDADD = $(test_ldadd)
 
 test_sha1_t_SOURCES = test/sha1.c
 test_sha1_t_CPPFLAGS = $(test_cppflags)

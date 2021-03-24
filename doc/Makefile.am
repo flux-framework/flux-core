@@ -137,7 +137,6 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_shell_task_cmd.3 \
 	man3/flux_clone.3 \
 	man3/flux_close.3 \
-	man3/flux_requeue_nocopy.3 \
 	man3/flux_aux_get.3 \
 	man3/flux_flags_unset.3 \
 	man3/flux_flags_get.3 \
