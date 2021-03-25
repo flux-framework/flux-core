@@ -16,6 +16,7 @@
 
 #include "job-list.h"
 #include "stats.h"
+#include "src/common/libutil/grudgeset.h"
 
 /* To handle the common case of user queries on job state, we will
  * store jobs in three different lists.
@@ -83,6 +84,7 @@ struct job {
     const char *exception_note;
     flux_job_result_t result;
     json_t *annotations;
+    struct grudgeset *dependencies;
     int eventlog_seq;           /* last event seq read */
 
     /* cache of job information */

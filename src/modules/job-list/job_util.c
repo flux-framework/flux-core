@@ -183,6 +183,11 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
                 continue;
             val = json_incref (job->annotations);
         }
+        else if (!strcmp (attr, "dependencies")) {
+            if (!job->dependencies)
+                continue;
+            val = json_incref (grudgeset_tojson (job->dependencies));
+        }
         else {
             seterror (errp, "%s is not a valid attribute", attr);
             errno = EINVAL;
