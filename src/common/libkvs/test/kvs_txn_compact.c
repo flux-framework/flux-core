@@ -42,8 +42,9 @@ int check_null_value (json_t *dirent)
 
 int check_raw_value (json_t *dirent, const char *expected, int expected_len)
 {
-    char *data;
+    char *data = NULL;
     int len;
+    int rc = -1;
 
     if (treeobj_decode_val (dirent, (void **)&data, &len) < 0) {
         diag ("%s: initial base64 decode failed", __FUNCTION__);
@@ -51,8 +52,9 @@ int check_raw_value (json_t *dirent, const char *expected, int expected_len)
     }
     if (len == expected_len
         && memcmp (data, expected, len) == 0)
-        return 0;
-    return -1;
+        rc = 0;
+    free (data);
+    return rc;
 }
 
 int main (int argc, char *argv[])
@@ -355,6 +357,8 @@ int main (int argc, char *argv[])
         && flags == FLUX_KVS_APPEND
         && check_null_value (dirent) == 0,
         "1: consolidated foo = A");
+
+    flux_kvs_txn_destroy (txn);
 
     /* Test 8: single append is a no-op */
 

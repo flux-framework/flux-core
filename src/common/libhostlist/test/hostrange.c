@@ -217,6 +217,8 @@ void test_cmp ()
             "hostrange_cmp (%s, %s) = %d, expected %d",
              s1, s2, result, t->result);
         t++;
+        free (s1);
+        free (s2);
     }
 }
 

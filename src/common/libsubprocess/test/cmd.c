@@ -188,6 +188,8 @@ void test_find_opts (void)
 
     ok (flux_cmd_find_opts (cmd, substrings4) == 0,
         "flux_cmd_find_opts doesn't find substrings");
+
+    flux_cmd_destroy (cmd);
 }
 
 void test_stringify (void)

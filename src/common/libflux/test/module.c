@@ -42,6 +42,7 @@ void test_modname (void)
     name = flux_modname (FAKE1, NULL, NULL);
     ok (name != NULL && !strcmp (name, "fake1"),
         "flux_modname path=module_fake1 works");
+    free (name);
 
     errno = 0;
     errmsg_count = 0;
@@ -123,13 +124,14 @@ void test_modfind_fini (void)
 
 void test_modfind (void)
 {
-    const char *path;
+    char *path;
 
     test_modfind_init ();
 
     path = flux_modfind (searchpath, "fake1", errmsg_cb, NULL);
     ok (path != NULL && !strcmp (path, link1),
         "flux_modfind modname=fake1 returns correct path");
+    free (path);
 
     errno = 0;
     errmsg_count = 0;

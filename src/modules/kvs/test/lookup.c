@@ -405,6 +405,7 @@ void basic_lookup (void) {
     lookup_destroy (lh);
 
     ltest_finalize (cache, krm);
+    json_decref (root);
 }
 
 void check_common (lookup_t *lh,

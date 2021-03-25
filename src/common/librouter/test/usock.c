@@ -152,6 +152,7 @@ void conn_invalid (void)
     ok (usock_conn_create (r, 0, -1) == NULL && errno == EINVAL,
         "usock_conn_create outfd=-1 fails with EINVAL");
 
+    flux_msg_destroy (msg);
     usock_conn_destroy (conn);
     (void)close (fd[0]);
     (void)close (fd[1]);

@@ -98,6 +98,7 @@ void test_simple (const char *dbpath)
         "filedb_get key1 works");
     ok (data && size == sizeof (val2) && memcmp (data, val2, size) == 0,
         "and returned the updated data");
+    free (data);
 }
 
 int main (int argc, char *argv[])

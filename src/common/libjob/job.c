@@ -230,6 +230,7 @@ flux_future_t *flux_job_list (flux_t *h,
     if (!h || max_entries < 0 || !json_str
            || !(o = json_loads (json_str, 0, NULL))
            || states & ~valid_states) {
+        json_decref (o);
         errno = EINVAL;
         return NULL;
     }

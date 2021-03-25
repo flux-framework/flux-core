@@ -251,6 +251,7 @@ void test_basic (flux_t *h)
         BAIL_OUT ("flux_request_encode failed");
     router_entry_recv (entry, request); // router recives message from abcd
     ok (flux_reactor_run (r, 0) >= 0, "basic: reactor processed one message");
+    flux_msg_destroy (request);
 
     router_entry_delete (entry);
     router_destroy (rtr);

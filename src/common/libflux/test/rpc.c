@@ -274,6 +274,8 @@ void test_corner_case (flux_t *h)
     ok (flux_rpc_pack (h, "topic", 0, 0xFF, "{ s:s }", "foo", "bar") == NULL
         && errno == EINVAL,
         "flux_rpc_pack fails with EINVAL on invalid flags");
+
+    flux_msg_destroy (msg);
 }
 
 void test_service (flux_t *h)
@@ -791,14 +793,16 @@ void test_rpc_message (flux_t *h)
  */
 static int fake_server (flux_t *h, void *arg)
 {
-    flux_msg_t *msg;
+    flux_msg_t *msg = NULL;
 
     while ((msg = flux_recv (h, FLUX_MATCH_ANY, 0)) != NULL) {
         const char *topic = "unknown";
         (void)flux_msg_get_topic (msg, &topic);
         if (!strcmp (topic, "shutdown"))
             break;
+        flux_msg_destroy (msg);
     }
+    flux_msg_destroy (msg);
     return 0;
 }
 
