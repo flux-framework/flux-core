@@ -90,6 +90,13 @@ class AnnotationsInfo:
             return AnnotationsInfo({})
 
 
+class InfoList(list):
+    """Extend list with string representation appropriate for JobInfo format"""
+
+    def __str__(self):
+        return ",".join(self)
+
+
 class JobInfo:
     """
     JobInfo class: encapsulate job-list.list response in an object
@@ -141,6 +148,9 @@ class JobInfo:
         combined_dict["annotations"] = AnnotationsInfo(aDict)
         combined_dict["sched"] = combined_dict["annotations"].sched
         combined_dict["user"] = combined_dict["annotations"].user
+
+        deps = combined_dict.get("dependencies", [])
+        combined_dict["dependencies"] = InfoList(deps)
 
         #  Set all keys as self._{key} to be found by getattr and
         #   memoized_property decorator:
@@ -375,6 +385,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "exception.type": "EXCEPTION-TYPE",
         "exception.note": "EXCEPTION-NOTE",
         "annotations": "ANNOTATIONS",
+        "dependencies": "DEPENDENCIES",
         # The following are special pre-defined cases per RFC27
         "annotations.sched.t_estimate": "T_ESTIMATE",
         "annotations.sched.reason_pending": "REASON",

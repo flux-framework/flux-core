@@ -85,6 +85,7 @@ def fetch_jobs_flux(args, fields):
         "expiration": ("expiration", "state", "result"),
         "t_remaining": ("expiration", "state", "result"),
         "annotations": ("annotations",),
+        "dependencies": ("dependencies",),
         # Special cases, pointers to sub-dicts in annotations
         "sched": ("annotations",),
         "user": ("annotations",),
