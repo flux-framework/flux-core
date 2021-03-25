@@ -64,6 +64,14 @@ int list_append_job (json_t *jobs, struct job *job)
             return -1;
         }
     }
+    if (job->dependencies) {
+        json_t *deps = grudgeset_tojson (job->dependencies);
+        if (json_object_set (o, "dependencies", deps) < 0) {
+            json_decref (o);
+            errno = ENOMEM;
+            return -1;
+        }
+    }
     if (json_array_append_new (jobs, o) < 0) {
         json_decref (o);
         errno = ENOMEM;
