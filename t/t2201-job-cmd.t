@@ -591,5 +591,16 @@ test_expect_success 'flux job: killall -f kills one job' '
         flux job killall -f &&
 	run_timeout 60 flux queue drain
 '
+test_expect_success 'flux job exec works' '
+	flux job exec /bin/true
+'
+test_expect_success 'flux job exec --label-io works' '
+	flux job exec --label-io echo hi >exec1.out &&
+	grep "0: hi" exec1.out
+'
+test_expect_success 'flux job exec --ntasks=2 works' '
+	flux job exec --ntasks=2 --label-io echo hi >exec2.out &&
+	grep "1: hi" exec2.out
+'
 
 test_done
