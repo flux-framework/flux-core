@@ -127,8 +127,9 @@ struct cache_entry *cache_lookup (struct cache *cache, const char *ref);
  */
 int cache_insert (struct cache *cache, struct cache_entry *entry);
 
-/* Remove a cache_entry from the cache.  Will not be removed if dirty
- * or there are any waiters of any sort.
+/* Remove a cache_entry from the cache.  Will not be removed if dirty,
+ * if there are any waiters of any sort, or if there are any references
+ * taken on the entry (i.e. with cache_entry_incref()).
  * Returns 1 on removed, 0 if not
  */
 int cache_remove_entry (struct cache *cache, const char *ref);

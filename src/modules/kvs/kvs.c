@@ -1073,8 +1073,8 @@ static int kvstxn_check_root_cb (struct kvsroot *root, void *arg)
 
     if ((kt = kvstxn_mgr_get_ready_transaction (root->ktm))) {
         if (cbd->ctx->transaction_merge) {
-            /* if merge fails, set errnum in txn_t, let
-             * txn_apply() handle error handling.
+            /* if merge fails, set errnum in kvstxn_t, let
+             * kvstxn_apply() handle error handling.
              */
             if (kvstxn_mgr_merge_ready_transactions (root->ktm) < 0)
                 kvstxn_set_aux_errnum (kt, errno);
