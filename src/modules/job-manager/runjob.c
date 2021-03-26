@@ -102,7 +102,7 @@ void runjob_handler (flux_t *h,
     struct runjob *runjob = ctx->runjob;
     json_t *command;
     json_t *attributes;
-    int ntasks;
+    struct resource_param param = { .nodes = 0 };
     char errbuf[128];
     const char *errstr = NULL;
     struct job *job = NULL;
@@ -111,15 +111,13 @@ void runjob_handler (flux_t *h,
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:o s:o s:i}",
+                             "{s:o s:o s:i s:i s:i}",
                              "command", &command,
                              "attributes", &attributes,
-                             "ntasks", &ntasks) < 0) {
+                             "ntasks", &param.ntasks,
+                             "cores-per-task", &param.cores_per_task,
+                             "gpus-per-task", &param.gpus_per_task) < 0) {
         errstr = "malformed runjob request";
-        goto error;
-    }
-    if (specutil_attr_check (attributes, errbuf, sizeof (errbuf)) < 0) {
-        errstr = errbuf;
         goto error;
     }
     if (!(job = job_create ()))
@@ -143,11 +141,10 @@ void runjob_handler (flux_t *h,
      */
     if (!(job->jobspec_redacted  = specutil_jobspec_create (attributes,
                                                             command,
-                                                            ntasks,
-                                                            0,
-                                                            1,
-                                                            0))) {
-        errstr = "error building jobspec";
+                                                            &param,
+                                                            errbuf,
+                                                            sizeof (errbuf)))) {
+        errstr = errbuf;
         goto error;
     }
     /* Start KVS commit of jobspec.
