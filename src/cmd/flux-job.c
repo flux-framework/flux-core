@@ -324,11 +324,21 @@ static struct optparse_option wait_opts[] =  {
 };
 
 static struct optparse_option exec_opts[] =  {
-    { .name = "ntasks", .key = 'n', .has_arg = 1, .arginfo = "COUNT",
+    { .name = "ntasks", .key = 'n', .has_arg = 1, .arginfo = "N",
       .usage = "Run N tasks (default 1)"
+    },
+    { .name = "cores-per-task", .key = 'c', .has_arg = 1, .arginfo = "N",
+      .usage = "Number of cores to allocate per task (default 1)"
+    },
+    { .name = "gpus-per-task", .key = 'g', .has_arg = 1, .arginfo = "N",
+      .usage = "Number of GPUs to allocate per task (default 0)"
     },
     { .name = "label-io", .key = 'l', .has_arg = 0,
       .usage = "Label output by rank",
+    },
+    { .name = "setopt", .key = 'o', .has_arg = 1, .arginfo = "OPT",
+      .usage = "Set shell option OPT[=VAL] (default VAL=1)",
+      .flags = OPTPARSE_OPT_AUTOSPLIT,
     },
     OPTPARSE_TABLE_END
 };
@@ -484,7 +494,7 @@ static struct optparse_subcommand subcommands[] = {
     },
     { "exec",
       "[OPTIONS]",
-      "Run job with one task per core to completion",
+      "Run job job to completion",
       cmd_exec,
       0,
       exec_opts,
@@ -3081,26 +3091,72 @@ int cmd_annotate (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
-static json_t *make_attribute_object (json_t *env, const char *cwd)
+static json_t *make_shell_options (optparse_t *p)
+{
+    json_t *opt;
+    const char *arg;
+
+    if (!(opt = json_object ()))
+        goto nomem;
+    if (specutil_attr_pack (opt,
+                            "input.stdin",
+                            "{s:s s:s}",
+                            "type", "file",
+                            "path", "/dev/null") < 0)
+        goto error;
+
+    if (optparse_hasopt (p, "setopt")) {
+        optparse_getopt_iterator_reset (p, "setopt");
+        while ((arg = optparse_getopt_next (p, "setopt"))) {
+            char *key, *val;
+            int rc;
+
+            if (!(key = strdup (arg)))
+                goto nomem;
+            if ((val = strchr (key, '=')))
+                *val++ = '\0';
+            if (val && *val)
+                rc = specutil_attr_pack (opt, key, "s", val);
+            else
+                rc = specutil_attr_pack (opt, key, "i", 1);
+            ERRNO_SAFE_WRAP (free, key);
+            if (rc < 0)
+                goto error;
+        }
+    }
+    return opt;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, opt);
+    return NULL;
+}
+
+static json_t *make_attribute_object (optparse_t *p,
+                                      json_t *env,
+                                      const char *cwd)
 {
     json_t *attr;
+    json_t *opt;
 
     if (!(attr = json_object ())) {
         errno = ENOMEM;
         return NULL;
     }
+    if (!(opt = make_shell_options (p)))
+        goto error;
     if (specutil_attr_pack (attr, "system.duration", "f", 0.) < 0
         || specutil_attr_pack (attr, "system.cwd", "s", cwd) < 0
-        || specutil_attr_pack (attr,
-                               "system.shell.input.stdin",
-                               "{s:s s:s}",
-                               "type", "file",
-                               "path", "/dev/null") < 0
+        || specutil_attr_set (attr, "system.shell.options", opt) < 0
         || specutil_attr_set (attr, "system.environment", env) < 0) {
-        ERRNO_SAFE_WRAP (json_decref, attr);
-        return NULL;
+        goto error;
     }
+    json_decref (opt);
     return attr;
+error:
+    ERRNO_SAFE_WRAP (json_decref, attr);
+    ERRNO_SAFE_WRAP (json_decref, opt);
+    return NULL;
 }
 
 static void dump_job_output_entry (json_t *entry, bool label_io)
@@ -3136,16 +3192,21 @@ static void dump_job_output (flux_t *h, flux_jobid_t id, bool label_io)
 
     if (flux_job_kvs_key (key, sizeof (key), id, "guest.output") < 0)
         log_err_exit ("failed to build guest.output key");
-    if (!(f = flux_kvs_lookup (h, NULL, 0, key))
-        || flux_kvs_lookup_get (f, &val) < 0)
-        log_err_exit ("%s", key);
-    if (!(eventlog = eventlog_decode (val)))
-        log_err_exit ("failed to decode guest.output");
-    // N.B. header ignored, UTF-8 encoding assumed
-    json_array_foreach (eventlog, index, entry) {
-        dump_job_output_entry (entry, label_io);
+    if (!(f = flux_kvs_lookup (h, NULL, 0, key)))
+        log_err_exit ("error sending KVS lookup");
+
+    /* If output is missing, it may be due to an exception that prevented
+     * the job from starting.  Return and let the exception be reported.
+     */
+    if (flux_kvs_lookup_get (f, &val) == 0) {
+        if (!(eventlog = eventlog_decode (val)))
+            log_err_exit ("failed to decode guest.output");
+        // N.B. header ignored, UTF-8 encoding assumed
+        json_array_foreach (eventlog, index, entry) {
+            dump_job_output_entry (entry, label_io);
+        }
+        json_decref (eventlog);
     }
-    json_decref (eventlog);
     flux_future_destroy (f);
 }
 
@@ -3172,7 +3233,7 @@ int cmd_exec (optparse_t *p, int argc, char **argv)
         log_err_exit ("error creating environment object");
     if (!getcwd (cwd, sizeof (cwd)))
         log_err_exit ("getcwd");
-    if (!(attributes = make_attribute_object (environment, cwd)))
+    if (!(attributes = make_attribute_object (p, environment, cwd)))
         log_err_exit ("error creating attribute object");
 
     if (!(h = flux_open (NULL, 0)))
@@ -3182,10 +3243,15 @@ int cmd_exec (optparse_t *p, int argc, char **argv)
                              "job-manager.runjob",
                              FLUX_NODEID_ANY,
                              0,
-                             "{s:o s:o s:i}",
+                             "{s:o s:o s:i s:i s:i}",
                              "command", command,
                              "attributes", attributes,
-                             "ntasks", optparse_get_int (p, "ntasks", 1))))
+                             "ntasks",
+                                optparse_get_int (p, "ntasks", 1),
+                             "cores-per-task",
+                                optparse_get_int (p, "cores-per-task", 1),
+                             "gpus-per-task",
+                                optparse_get_int (p, "gpus-per-task", 0))))
         log_err_exit ("error submitting job");
     if (flux_rpc_get_unpack (f,
                              "{s:I s:b s:s}",
