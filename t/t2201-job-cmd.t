@@ -602,5 +602,25 @@ test_expect_success 'flux job exec --ntasks=2 works' '
 	flux job exec --ntasks=2 --label-io echo hi >exec2.out &&
 	grep "1: hi" exec2.out
 '
+# sched-simple does not support GPU resources
+test_expect_success 'flux job exec --gpus-per-task=1 fails because scheduler' '
+	test_must_fail flux job exec --gpus-per-task=1 /bin/true 2>exec3.err &&
+	grep "resource type" exec3.err
+'
+test_expect_success 'flux job exec --cores-per-task=2 works' '
+	flux job exec --cores-per-task=2 /bin/true
+'
+test_expect_success HAVE_JQ 'flux job exec --setopt=foo works' '
+	id=$(flux job exec --setopt=foo printenv FLUX_JOB_ID) &&
+	flux job info $id jobspec >foo.jobspec &&
+	value=$(jq -e .attributes.system.shell.options.foo foo.jobspec) &&
+	test "$value" = "1"
+'
+test_expect_success HAVE_JQ 'flux job exec --setopt=a.b=bar works' '
+	id=$(flux job exec --setopt=a.b=bar printenv FLUX_JOB_ID) &&
+	flux job info $id jobspec >ab.jobspec &&
+	value=$(jq -e -r .attributes.system.shell.options.a.b ab.jobspec) &&
+	test "$value" = "bar"
+'
 
 test_done
