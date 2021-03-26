@@ -187,13 +187,16 @@ void check_jobspec (void)
     json_t *av;
     json_t *spec;
     json_t *val;
+    struct resource_param p = { 0, 0, 0, 0 };
+    char errbuf[128];
 
     if (!(attr = json_object ()))
         BAIL_OUT ("json_object failed");
     if (!(av = specutil_argv_create (argc, argv)))
         BAIL_OUT ("specutil_argv_create failed");
 
-    ok ((spec = specutil_jobspec_create (attr, av, 0, 0, 0, 0)) != NULL,
+    ok ((spec = specutil_jobspec_create (attr, av, &p,
+                                         errbuf, sizeof (errbuf))) != NULL,
         "specutil_jobspec_create works");
     ok (json_object_get (spec, "resources") != NULL,
         "jobspec has resources section");

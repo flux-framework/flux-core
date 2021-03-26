@@ -352,48 +352,46 @@ static json_t *specutil_tasks_create (json_t *argv)
     return tasks;
 }
 
-static json_t *specutil_resources_create (int ntasks,
-                                          int nodes,
-                                          int cores_per_task,
-                                          int gpus_per_task)
+static json_t *specutil_resources_create (struct resource_param *param)
 {
     json_t *slot;
+    struct resource_param p = *param;
 
-    if (cores_per_task < 1)
-        cores_per_task = 1;
-    if (ntasks < 1)
-        ntasks = 1;
-    if (nodes > ntasks) {
+    if (p.cores_per_task < 1)
+        p.cores_per_task = 1;
+    if (p.ntasks < 1)
+        p.ntasks = 1;
+    if (p.nodes > p.ntasks) {
         errno = EINVAL;
         return NULL;
     }
-    if (gpus_per_task > 0) {
+    if (p.gpus_per_task > 0) {
         if (!(slot = json_pack ("[{s:s s:i s:[{s:s s:i} {s:s s:i}] s:s}]",
                                 "type", "slot",
-                                "count", ntasks,
+                                "count", p.ntasks,
                                 "with",
                                   "type", "core",
-                                  "count", cores_per_task,
+                                  "count", p.cores_per_task,
                                   "type", "gpu",
-                                  "count", gpus_per_task,
+                                  "count", p.gpus_per_task,
                                 "label", "task")))
             goto nomem;
     }
     else {
         if (!(slot = json_pack ("[{s:s s:i s:[{s:s s:i}] s:s}]",
                                 "type", "slot",
-                                "count", ntasks,
+                                "count", p.ntasks,
                                 "with",
                                 "type", "core",
-                                "count", cores_per_task,
+                                "count", p.cores_per_task,
                                 "label", "task")))
             goto nomem;
     }
-    if (nodes > 0) {
+    if (p.nodes > 0) {
         json_t *node;
         if (!(node = json_pack ("[{s:s s:i s:o}]",
                                 "type", "node",
-                                "count", nodes,
+                                "count", p.nodes,
                                 "with", slot))) {
             json_decref (slot);
             goto nomem;
@@ -408,28 +406,31 @@ nomem:
 
 json_t *specutil_jobspec_create (json_t *attributes,
                                  json_t *argv,
-                                 int ntasks,
-                                 int nodes,
-                                 int cores_per_task,
-                                 int gpus_per_task)
+                                 struct resource_param *param,
+                                 char *errbuf,
+                                 int errbufsz)
 {
     json_t *tasks = NULL;
     json_t *resources = NULL;
     json_t *jobspec;
 
-    if (!(tasks = specutil_tasks_create (argv)))
+    if (specutil_attr_check (attributes, errbuf, errbufsz) < 0)
         goto error;
-    if (!(resources = specutil_resources_create (ntasks,
-                                                 nodes,
-                                                 cores_per_task,
-                                                 gpus_per_task)))
+    if (!(tasks = specutil_tasks_create (argv))) {
+        snprintf (errbuf, errbufsz, "Error creating tasks object");
         goto error;
+    }
+    if (!(resources = specutil_resources_create (param))) {
+        snprintf (errbuf, errbufsz, "Error creating resources object");
+        goto error;
+    }
     if (!(jobspec = json_pack ("{s:o s:o s:O s:i}",
                                "resources", resources,
                                "tasks", tasks,
                                "attributes", attributes, // incref
                                "version", 1))) {
         errno = ENOMEM;
+        snprintf (errbuf, errbufsz, "Error creating jobspec object");
         goto error;
     }
     return jobspec;

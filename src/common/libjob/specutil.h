@@ -13,12 +13,18 @@
 
 #include <jansson.h>
 
+struct resource_param {
+    int ntasks;
+    int nodes;
+    int cores_per_task;
+    int gpus_per_task;
+};
+
 json_t *specutil_jobspec_create (json_t *attributes,
                                  json_t *argv,
-                                 int ntasks,
-                                 int nodes,
-                                 int cores_per_task,
-                                 int gpus_per_task);
+                                 struct resource_param *param,
+                                 char *errbuf,
+                                 int errbufsz);
 
 json_t *specutil_argv_create (int argc, char **argv);
 
