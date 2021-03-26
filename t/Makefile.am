@@ -127,6 +127,7 @@ TESTSCRIPTS = \
 	t2250-job-archive.t \
 	t2260-job-list.t \
 	t2261-job-list-update.t \
+	t2270-job-dependencies.t \
 	t2300-sched-simple.t \
 	t2302-sched-simple-up-down.t \
 	t2310-resource-module.t \
