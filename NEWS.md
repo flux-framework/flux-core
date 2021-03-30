@@ -1,3 +1,36 @@
+flux-core version 0.25.0 - 2021-04-01
+-------------------------------------
+
+### Fixes
+
+ * kvs: fix assert due to busy KVS (#3560)
+ * systemd: configure weak dependency on munge (#3577)
+ * Fix various memleaks discovered by ASAN (#3568)
+ * README: add missing dependency - pkgconfig (#3570)
+ * fix `PMI_process_mapping` for multiple brokers per node (#3553)
+ * Python: fix "no such file or directory" job exception resulting from
+   bad jobspec (#3534)
+
+### New Features
+
+ * libflux: add `flux_plugin_aux_delete()` (#3565)
+ * job-info: support LRU cache mapping job id -> owner (#3548)
+ * python: expand FluxExecutor.submit parameters (#3562)
+ * broker: add support for PMIx bootstrap (#3537)
+ * job-ingest: add new plugin-based job validator (#3533)
+
+### Cleanup/Testing
+
+ * README.md: remove python3-six dependency (#3579)
+ * clean up disconnect, cancel handlers (#3569)
+ * broker: drop broker.rundir, select ipc vs tcp using broker.mapping (#3554)
+ * broker: refactor overlay network send/receive interfaces (#3547)
+ * github: add a stale issues and PR bot for flux-core (#3544)
+ * build/test: remove stale heartbeat references (#3535)
+ * job-info: consolidate watch RPC targets (#3525)
+ * enhance testsuite reliability on RHEL8/TOSS4 (#3540)
+
+
 flux-core version 0.24.0 - 2021-02-22
 -------------------------------------
 
