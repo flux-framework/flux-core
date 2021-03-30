@@ -9,8 +9,8 @@ DESCRIPTION
 The *jobtap* interface supports loading of builtin and external
 plugins into the job manager broker module. These plugins can be used
 to assign job priorities using algorithms other than the default,
-aid in debugging of the flow of job states, or generically extend
-the functionality of the job manager.
+assign job dependencies, aid in debugging of the flow of job states,
+or generically extend the functionality of the job manager.
 
 NOTE:
    Currently only a single jobtap plugin may be loaded into the job manager
@@ -119,6 +119,18 @@ job.state.*
   The callback is made after the state has been published to the job's
   eventlog, but before any action has been taken on that state (since the
   action could involve immediately transitioning to a new state)
+
+job.state.depend
+  The callback for ``FLUX_JOB_STATE_DEPEND`` is the only place from which
+  a plugin may add dependencies to a job. Dependencies are added via
+  the ``flux_jobtap_dependency_add()`` function. This function allows a
+  named dependency to be attached to a job. Jobs with dependencies will
+  remain in the ``DEPEND`` state until all dependencies are removed with
+  a corresponding call the ``flux_jobtap_dependency_remove()``. A dependency
+  may only be used once. A second call to ``flux_jobtap_dependency_add()``
+  with the same dependency description will return ``EEXIST``, even if
+  the dependency was subsequently removed. (This allows idempotent operation
+  of plugin-managed dependencies for job-manager or plugin restart).
 
 job.state.priority
   The callback for ``FLUX_JOB_STATE_PRIORITY`` is special, in that a plugin
