@@ -1,5 +1,6 @@
 [Unit]
 Description=Flux message broker
+Wants=munge.service
 
 [Service]
 TimeoutStopSec=90
