@@ -212,6 +212,35 @@ flux_future_t *flux_job_event_watch (flux_t *h, flux_jobid_t id,
 int flux_job_event_watch_get (flux_future_t *f, const char **event);
 int flux_job_event_watch_cancel (flux_future_t *f);
 
+/*  Wait for job to reach its terminal state and fetch the job result
+ *   along with other ancillary information from the job eventlog.
+ */
+flux_future_t *flux_job_result (flux_t *h, flux_jobid_t id, int flags);
+
+/*  Get the job result "payload" as a JSON string
+ */
+int flux_job_result_get (flux_future_t *f,
+                         const char **json_str);
+
+/*  Decode and unpack the result payload from future `f`.
+ *  The result object contains the following information:
+ *
+ *   {
+ *     "id":i,                 jobid
+ *     "result:i,              flux_job_result_t
+ *     "t_submit":f,           timestamp of job submit event
+ *     "t_run":f,              timestamp of job alloc event
+ *     "t_cleanup":f,          timestamp of job finish event
+ *     "waitstatus"?i,         wait status (if job started)
+ *     "exception_occurred":b, true if job exception occurred
+ *     "exception_severity"?i, exception severity (if exception)
+ *     "exception_type"?s,     exception type (if exception)
+ *     "exception_note"?s      exception note (if exception)
+ *   }
+ *
+ */
+int flux_job_result_get_unpack (flux_future_t *f, const char *fmt, ...);
+
 #ifdef __cplusplus
 }
 #endif
