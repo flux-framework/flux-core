@@ -2212,90 +2212,24 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     return ctx.exit_code;
 }
 
-#define EXCEPTION_TYPE_LENGTH 64
-struct job_status {
-    flux_jobid_t id;
-    const char *jobid;
-    int status;
-    int exit_code;
-    int exception_exit_code;
-    bool exception;
-    char ex_type[EXCEPTION_TYPE_LENGTH];
-};
+static void result_cb (flux_future_t *f, void *arg)
+{}
 
-static void job_status_handle_exception (struct job_status *stat,
-                                         json_t *context)
+/*  Translate status to an exit code as would be done by UNIX shell:
+ */
+static int status_to_exitcode (int status)
 {
-    const char *type;
-    int severity;
-    const char *note = NULL;
-
-    if (json_unpack (context,
-                     "{s:s s:i s?:s}",
-                     "type", &type,
-                     "severity", &severity,
-                     "note", &note) < 0)
-        log_err_exit ("error decoding exception context");
-    if (severity == 0) {
-        /* Note: the exit_code and status will be overridden
-         *  by the finish event if this job is still running.
-         *  O/w, for a non-running job with a fatal exception
-         *  the default exit code is stat->exception_exit_code.
-         */
-        stat->exit_code = stat->exception_exit_code;
-        stat->status = stat->exit_code << 8;
-        stat->exception = true;
-        strncpy (stat->ex_type, type, sizeof(stat->ex_type) - 1);
-    }
-}
-
-static void status_eventlog_cb (flux_future_t *f, void *arg)
-{
-    struct job_status *stat = arg;
-    const char *entry = NULL;
-    const char *name = NULL;
-    json_t *context = NULL;
-    json_t *o = NULL;
-
-    if (flux_job_event_watch_get (f, &entry) < 0) {
-        if (errno == ENODATA)
-            goto done;
-        if (errno == ENOENT)
-            log_msg_exit ("%s: No such job", stat->jobid);
-        log_msg_exit ("%s: flux_job_event_watch_get: %s",
-                      stat->jobid,
-                      future_strerror (f, errno));
-    }
-    if (!(o = eventlog_entry_decode (entry)))
-        log_err_exit ("eventlog_entry_decode");
-    if (eventlog_entry_parse (o, NULL, &name, &context) < 0)
-        log_err_exit ("eventlog_entry_parse");
-
-    if (!strcmp (name, "finish")) {
-        if (json_unpack (context, "{s:i}", "status", &stat->status) < 0)
-            log_err_exit ("error decoding finish context");
-        if (flux_job_event_watch_cancel (f) < 0)
-            log_err_exit ("flux_job_event_watch_cancel");
-        if (WIFSIGNALED (stat->status))
-            stat->exit_code = WTERMSIG (stat->status) + 128;
-        else
-            stat->exit_code = WEXITSTATUS (stat->status);
-    }
-    else if (!strcmp (name, "exception"))
-        job_status_handle_exception (stat, context);
-
-    json_decref (o);
-    flux_future_reset (f);
-    return;
-done:
-    flux_future_destroy (f);
+    if (status < 0)
+        return 0;
+    if (WIFSIGNALED (status))
+        return 128 + WTERMSIG (status);
+    return WEXITSTATUS (status);
 }
 
 int cmd_status (optparse_t *p, int argc, char **argv)
 {
-    struct job_status *stats;
     flux_t *h = NULL;
-    flux_future_t *f = NULL;
+    flux_future_t **futures = NULL;
     int exit_code;
     int i;
     int njobs;
@@ -2311,18 +2245,14 @@ int cmd_status (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!(stats = calloc (njobs, sizeof (*stats))))
-        log_err_exit ("Failed to initialize stats array");
+    if (!(futures = calloc (njobs, sizeof (*futures))))
+        log_err_exit ("Failed to initialize futures array");
 
     for (i = 0; i < njobs; i++) {
-        struct job_status *stat = &stats[i];
-        stat->jobid = argv[optindex+i];
-        stat->id = parse_jobid (stat->jobid);
-        stat->exception_exit_code = exception_exit_code;
-
-        if (!(f = flux_job_event_watch (h, stat->id, "eventlog", 0)))
-            log_err_exit ("flux_job_event_watch");
-        if (flux_future_then (f, -1, status_eventlog_cb, stat) < 0)
+        flux_jobid_t id = parse_jobid (argv[optindex+i]);
+        if (!(futures[i] = flux_job_result (h, id, 0)))
+            log_err_exit ("flux_job_wait_status");
+        if (flux_future_then (futures[i], -1., result_cb, NULL) < 0)
             log_err_exit ("flux_future_then");
     }
 
@@ -2337,29 +2267,45 @@ int cmd_status (optparse_t *p, int argc, char **argv)
 
     exit_code = 0;
     for (i = 0; i < njobs; i++) {
-        struct job_status *stat = &stats[i];
-        if (stat->exit_code > exit_code)
-            exit_code = stat->exit_code;
+        const char *jobid = argv[optindex+i];
+        int status = -1;
+        int exitcode;
+        int exception = 0;
+        const char *exc_type = NULL;
+        if (flux_job_result_get_unpack (futures[i],
+                                        "{s:b s?s s?i}",
+                                        "exception_occurred", &exception,
+                                        "exception_type", &exc_type,
+                                        "waitstatus", &status) < 0) {
+            if (errno == ENOENT)
+                log_msg_exit ("%s: No such job", jobid);
+            log_err_exit ("%s: flux_job_wait_status_get", jobid);
+        }
+        if ((exitcode = status_to_exitcode (status)) > exit_code)
+            exit_code = exitcode;
+        if (exception && exception_exit_code > exit_code)
+            exit_code = exception_exit_code;
         if (optparse_hasopt (p, "verbose")) {
-            if (WIFSIGNALED (stat->status)) {
+            if (WIFSIGNALED (status)) {
                 log_msg ("%s: job shell died by signal %d",
-                         stat->jobid,
-                         WTERMSIG (stat->status));
+                         jobid,
+                         WTERMSIG (status));
             }
-            else if (verbose > 1 || stat->exit_code != 0) {
-                if (!stat->exception)
+            else if (verbose > 1 || exitcode != 0) {
+                if (!exception)
                     log_msg ("%s: exited with exit code %d",
-                            stat->jobid,
-                            stat->exit_code);
+                            jobid,
+                            exitcode);
                 else
                     log_msg ("%s: exception type=%s",
-                            stat->jobid,
-                            stat->ex_type);
+                            jobid,
+                            exc_type);
             }
         }
+        flux_future_destroy (futures[i]);
     }
     flux_close (h);
-    free (stats);
+    free (futures);
     return exit_code;
 }
 
