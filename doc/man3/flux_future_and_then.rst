@@ -23,6 +23,12 @@ SYNOPSIS
    void flux_future_continue_error (flux_future_t *prev, int errnum,
                                     const char *errstr);
 
+::
+
+   int flux_future_fulfill_next (flux_future_t *f,
+                                 void *result,
+                                 flux_free_f free_fn);
+
 
 DESCRIPTION
 ===========
@@ -84,6 +90,14 @@ but immediately fulfills the next future in the chain with an error and
 an optional error string. Once ``flux_future_continue_error(3)``
 completes, the future ``prev`` may safely be destroyed.
 
+``flux_future_fulfill_next(3)`` is like ``flux_future_fulfill(3)``, but
+fulfills the next future in the chain instead of the current future (which
+is presumably already fulfilled). This call is useful when a chained future
+is being used for post-processing a result from intermediate future-based
+calls, as it allows the next future to be fulfilled with a custom result,
+instead of with the value of another future as in
+``flux_future_continue(3)``.
+
 
 RETURN VALUE
 ============
@@ -94,6 +108,9 @@ future, the returned ``flux_future_t`` from each will be the same object.
 
 ``flux_future_continue()`` returns 0 on success, or -1 on error with errno
 set.
+
+``flux_future_fulfill_next()`` returns 0 on success, or -1 with errno set
+to ``EINVAL`` if the target future does not have a next future to fulfill.
 
 
 ERRORS
