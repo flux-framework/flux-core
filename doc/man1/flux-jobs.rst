@@ -173,6 +173,9 @@ The field names that can be specified are:
 **priority**
    job priority
 
+**dependencies**
+   list of any currently outstanding job dependencies
+
 **status**
    job status (PENDING, RUNNING, COMPLETED, FAILED, or CANCELED)
 
