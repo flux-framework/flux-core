@@ -55,10 +55,6 @@ const double max_lastuse_age = 10.;
  */
 const double max_namespace_age = 3600.;
 
-/* Include root directory in kvs.namespace-<NS>-setroot event.
- */
-const bool event_includes_rootdir = true;
-
 struct kvs_ctx {
     struct cache *cache;    /* blobref => cache_entry */
     kvsroot_mgr_t *krm;
@@ -765,29 +761,11 @@ static void flux_msg_destroy_wrapper (void *arg)
 static int setroot_event_send (struct kvs_ctx *ctx, struct kvsroot *root,
                                json_t *names, json_t *keys)
 {
-    const json_t *root_dir = NULL;
-    json_t *nullobj = NULL;
     flux_msg_t *msg = NULL;
     char *setroot_topic = NULL;
     int saved_errno, rc = -1;
 
     assert (ctx->rank == 0);
-
-    if (event_includes_rootdir) {
-        struct cache_entry *entry;
-
-        if ((entry = cache_lookup (ctx->cache, root->ref)))
-            root_dir = cache_entry_get_treeobj (entry);
-        assert (root_dir != NULL); // root entry is always in cache on rank 0
-    }
-    else {
-        if (!(nullobj = json_null ())) {
-            saved_errno = errno;
-            flux_log_error (ctx->h, "%s: json_null", __FUNCTION__);
-            goto done;
-        }
-        root_dir = nullobj;
-    }
 
     if (asprintf (&setroot_topic, "kvs.namespace-%s-setroot", root->ns_name) < 0) {
         saved_errno = errno;
@@ -796,12 +774,11 @@ static int setroot_event_send (struct kvs_ctx *ctx, struct kvsroot *root,
     }
 
     if (!(msg = flux_event_pack (setroot_topic,
-                                 "{ s:s s:i s:s s:O s:O s:O s:i}",
+                                 "{ s:s s:i s:s s:O s:O s:i}",
                                  "namespace", root->ns_name,
                                  "rootseq", root->seq,
                                  "rootref", root->ref,
                                  "names", names,
-                                 "rootdir", root_dir,
                                  "keys", keys,
                                  "owner", root->owner))) {
         saved_errno = errno;
@@ -820,7 +797,6 @@ static int setroot_event_send (struct kvs_ctx *ctx, struct kvsroot *root,
 done:
     free (setroot_topic);
     flux_msg_destroy (msg);
-    json_decref (nullobj);
     if (rc < 0)
         errno = saved_errno;
     return rc;
@@ -1987,55 +1963,11 @@ static void error_event_cb (flux_t *h, flux_msg_handler_t *mh,
     finalize_transaction_bynames (ctx, root, names, errnum);
 }
 
-/* Optimization: the current rootdir object is optionally included
- * in the kvs.namespace-<NS>-setroot event.  Prime the local cache with it.
- * If there are complications, just skip it.  Not critical.
- */
-static void prime_cache_with_rootdir (struct kvs_ctx *ctx, json_t *rootdir)
-{
-    struct cache_entry *entry;
-    char ref[BLOBREF_MAX_STRING_SIZE];
-    void *data = NULL;
-    int len;
-
-    if (treeobj_validate (rootdir) < 0 || !treeobj_is_dir (rootdir)) {
-        flux_log (ctx->h, LOG_ERR, "%s: invalid rootdir", __FUNCTION__);
-        goto done;
-    }
-    if (!(data = treeobj_encode (rootdir))) {
-        flux_log_error (ctx->h, "%s: treeobj_encode", __FUNCTION__);
-        goto done;
-    }
-    len = strlen (data);
-    if (blobref_hash (ctx->hash_name, data, len, ref, sizeof (ref)) < 0) {
-        flux_log_error (ctx->h, "%s: blobref_hash", __FUNCTION__);
-        goto done;
-    }
-    if ((entry = cache_lookup (ctx->cache, ref)))
-        goto done; // already in cache, possibly dirty/invalid - we don't care
-    if (!(entry = cache_entry_create (ref))) {
-        flux_log_error (ctx->h, "%s: cache_entry_create", __FUNCTION__);
-        goto done;
-    }
-    if (cache_entry_set_raw (entry, data, len) < 0) {
-        flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
-        cache_entry_destroy (entry);
-        goto done;
-    }
-    if (cache_insert (ctx->cache, entry) < 0) {
-        flux_log_error (ctx->h, "%s: cache_insert", __FUNCTION__);
-        cache_entry_destroy (entry);
-        goto done;
-    }
-done:
-    free (data);
-}
-
 /* Alter the (rootref, rootseq) in response to a setroot event.
  */
 static void setroot_event_process (struct kvs_ctx *ctx, struct kvsroot *root,
-                                   json_t *names, json_t *rootdir,
-                                   const char *rootref, int rootseq)
+                                   json_t *names, const char *rootref,
+                                   int rootseq)
 {
     int errnum = 0;
 
@@ -2050,13 +1982,6 @@ static void setroot_event_process (struct kvs_ctx *ctx, struct kvsroot *root,
     if (errnum)
         return;
 
-    /* Optimization: prime local cache with directory object, if provided
-     * in event message.  Ignore failure here - object will be fetched on
-     * demand from content cache if not in local cache.
-     */
-    if (!json_is_null (rootdir))
-        prime_cache_with_rootdir (ctx, rootdir);
-
     setroot (ctx, root, rootref, rootseq);
 }
 
@@ -2068,15 +1993,13 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
     const char *ns;
     int rootseq;
     const char *rootref;
-    json_t *rootdir = NULL;
     json_t *names = NULL;
 
-    if (flux_event_unpack (msg, NULL, "{ s:s s:i s:s s:o s:o }",
+    if (flux_event_unpack (msg, NULL, "{ s:s s:i s:s s:o }",
                            "namespace", &ns,
                            "rootseq", &rootseq,
                            "rootref", &rootref,
-                           "names", &names,
-                           "rootdir", &rootdir) < 0) {
+                           "names", &names) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
@@ -2115,7 +2038,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
         return;
     }
 
-    setroot_event_process (ctx, root, names, rootdir, rootref, rootseq);
+    setroot_event_process (ctx, root, names, rootref, rootseq);
 }
 
 static bool disconnect_cmp (const flux_msg_t *msg, void *arg)
@@ -2676,20 +2599,18 @@ static void setroot_unpause_process_msg (struct kvs_ctx *ctx,
     const char *ns;
     int rootseq;
     const char *rootref;
-    json_t *rootdir = NULL;
     json_t *names = NULL;
 
-    if (flux_event_unpack (msg, NULL, "{ s:s s:i s:s s:o s:o }",
+    if (flux_event_unpack (msg, NULL, "{ s:s s:i s:s s:o }",
                            "namespace", &ns,
                            "rootseq", &rootseq,
                            "rootref", &rootref,
-                           "names", &names,
-                           "rootdir", &rootdir) < 0) {
+                           "names", &names) < 0) {
         flux_log_error (ctx->h, "%s: flux_event_unpack", __FUNCTION__);
         return;
     }
 
-    setroot_event_process (ctx, root, names, rootdir, rootref, rootseq);
+    setroot_event_process (ctx, root, names, rootref, rootseq);
     return;
 }
 
