@@ -42,7 +42,7 @@ void test_msg_handler_create (flux_t *h)
      */
     mh = flux_msg_handler_create (h, FLUX_MATCH_ANY, dummy_msg_handler, NULL);
     ok (mh != NULL,
-        "able to creat fake message handler");
+        "able to create fake message handler");
     flux_msg_handler_destroy (mh);
 
     /* invalid arguments
