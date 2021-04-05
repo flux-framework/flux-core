@@ -33,7 +33,6 @@ static void aux_item_destroy (struct aux_item *aux)
         int saved_errno = errno;
         if (aux->free_fn && aux->val)
             aux->free_fn (aux->val);
-        free (aux->key);
         free (aux);
         errno = saved_errno;
     }
@@ -46,17 +45,17 @@ static struct aux_item *aux_item_create (const char *key,
                                          void *val, aux_free_f free_fn)
 {
     struct aux_item *aux;
+    int keysize = key ? strlen (key) + 1 : 0;
 
-    if (!(aux = calloc (1, sizeof (*aux))))
+    if (!(aux = calloc (1, sizeof (*aux) + keysize)))
         return NULL;
-    if (key && !(aux->key = strdup (key)))
-        goto error;
+    if (key) {
+        aux->key = (char *)(aux + 1);
+        strcpy (aux->key, key);
+    }
     aux->val = val;
     aux->free_fn = free_fn;
     return aux;
-error:
-    aux_item_destroy (aux);
-    return NULL;
 }
 
 /* Delete from 'head' an aux item that was stored under 'key', if any.
