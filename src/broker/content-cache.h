@@ -11,10 +11,8 @@
 #ifndef HAVE_BROKER_CONTENT_CACHE_H
 #define HAVE_BROKER_CONTENT_CACHE_H 1
 
-struct content_cache *content_cache_create (void);
+struct content_cache *content_cache_create (flux_t *h);
 void content_cache_destroy (struct content_cache *cache);
-
-int content_cache_set_flux (struct content_cache *cache, flux_t *h);
 
 int content_cache_register_attrs (struct content_cache *cache, attr_t *attr);
 

@@ -913,20 +913,6 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int content_cache_set_flux (struct content_cache *cache, flux_t *h)
-{
-    cache->h = h;
-
-    if (flux_msg_handler_addvec (h, htab, cache, &cache->handlers) < 0)
-        return -1;
-    if (flux_get_rank (h, &cache->rank) < 0)
-        return -1;
-    if (!(cache->f_sync = flux_sync_create (h, sync_min))
-        || flux_future_then (cache->f_sync, sync_max, sync_cb, cache) < 0)
-        return -1;
-    return 0;
-}
-
 static int content_cache_setattr (const char *name, const char *val, void *arg)
 {
 
@@ -1029,29 +1015,25 @@ int content_cache_register_attrs (struct content_cache *cache, attr_t *attr)
 void content_cache_destroy (struct content_cache *cache)
 {
     if (cache) {
-        if (cache->h) {
-            flux_future_destroy (cache->f_sync);
-            flux_msg_handler_delvec (cache->handlers);
-        }
-        if (cache->backing_name)
-            free (cache->backing_name);
+        int saved_errno = errno;
+        flux_future_destroy (cache->f_sync);
+        flux_msg_handler_delvec (cache->handlers);
+        free (cache->backing_name);
         zhash_destroy (&cache->entries);
         flux_msglist_destroy (cache->flush_requests);
         free (cache);
+        errno = saved_errno;
     }
 }
 
-struct content_cache *content_cache_create (void)
+struct content_cache *content_cache_create (flux_t *h)
 {
     struct content_cache *cache;
 
     if (!(cache = calloc (1, sizeof (*cache))))
         return NULL;
-    if (!(cache->entries = zhash_new ())) {
-        content_cache_destroy (cache);
-        errno = ENOMEM;
-        return NULL;
-    }
+    if (!(cache->entries = zhash_new ()))
+        goto nomem;
     cache->rank = FLUX_NODEID_ANY;
     cache->blob_size_limit = default_blob_size_limit;
     cache->flush_batch_limit = default_flush_batch_limit;
@@ -1060,7 +1042,20 @@ struct content_cache *content_cache_create (void)
     cache->purge_old_entry = default_cache_purge_old_entry;
     cache->purge_large_entry = default_cache_purge_large_entry;
     strcpy (cache->hash_name, "sha1");
+    cache->h = h;
+    if (flux_msg_handler_addvec (h, htab, cache, &cache->handlers) < 0)
+        goto error;
+    if (flux_get_rank (h, &cache->rank) < 0)
+        goto error;
+    if (!(cache->f_sync = flux_sync_create (h, sync_min))
+        || flux_future_then (cache->f_sync, sync_max, sync_cb, cache) < 0)
+        goto error;
     return cache;
+nomem:
+    errno = ENOMEM;
+error:
+    content_cache_destroy (cache);
+    return NULL;
 }
 
 /*
