@@ -31,6 +31,8 @@ void check_msglist (void)
     if (!(msg2 = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
         BAIL_OUT ("flux_msg_create failed");
 
+    ok (flux_msglist_count (NULL) == 0,
+        "flux_msglist_count l=NULL is 0");
     l = flux_msglist_create ();
     ok (l != NULL,
         "flux_msglist_create works");
