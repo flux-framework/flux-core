@@ -56,8 +56,8 @@ struct cache_entry {
                                     /*   or to backing store (rank 0) */
     uint8_t load_pending:1;
     uint8_t store_pending:1;
-    zlist_t *load_requests;
-    zlist_t *store_requests;
+    struct flux_msglist *load_requests;
+    struct flux_msglist *store_requests;
     double lastused;
 };
 
@@ -70,7 +70,7 @@ struct content_cache {
     uint8_t backing:1;              /* 'content.backing' service available */
     char *backing_name;
     char hash_name[BLOBREF_MAX_STRING_SIZE];
-    zlist_t *flush_requests;
+    struct flux_msglist *flush_requests;
 
     uint32_t blob_size_limit;
     uint32_t flush_batch_limit;
@@ -89,21 +89,11 @@ struct content_cache {
 static void flush_respond (content_cache_t *cache);
 static int cache_flush (content_cache_t *cache);
 
-static void request_list_destroy (zlist_t **l)
-{
-    const flux_msg_t *msg;
-    if (*l) {
-        while ((msg = zlist_pop (*l)))
-            flux_msg_decref (msg);
-        zlist_destroy (l);
-    }
-}
-
 /* Respond identically to a list of requests.
  * The list is always run to completion, then destroyed.
  * On error, log at LOG_ERR level.
  */
-static void request_list_respond_raw (zlist_t **l,
+static void request_list_respond_raw (struct flux_msglist **l,
                                       flux_t *h,
                                       const void *data,
                                       int len,
@@ -111,18 +101,19 @@ static void request_list_respond_raw (zlist_t **l,
 {
     if (*l) {
         const flux_msg_t *msg;
-        while ((msg = zlist_pop (*l))) {
+        while ((msg = flux_msglist_pop (*l))) {
             if (flux_respond_raw (h, msg, data, len) < 0)
                 flux_log_error (h, "%s (%s):", __FUNCTION__, type);
             flux_msg_decref (msg);
         }
-        zlist_destroy (l);
+        flux_msglist_destroy (*l);
+        *l = NULL;
     }
 }
 
 /* Same as above only send errnum, errmsg response
  */
-static void request_list_respond_error (zlist_t **l,
+static void request_list_respond_error (struct flux_msglist **l,
                                         flux_t *h,
                                         int errnum,
                                         const char *errmsg,
@@ -130,32 +121,25 @@ static void request_list_respond_error (zlist_t **l,
 {
     if (*l) {
         const flux_msg_t *msg;
-        while ((msg = zlist_pop (*l))) {
+        while ((msg = flux_msglist_pop (*l))) {
             if (flux_respond_error (h, msg, errnum, errmsg) < 0)
                 flux_log_error (h, "%s (%s):", __FUNCTION__, type);
             flux_msg_decref (msg);
         }
-        zlist_destroy (l);
+        flux_msglist_destroy (*l);
+        *l = NULL;
     }
 }
 
 /* Add request message to a list, creating the list as needed.
  * Returns 0 on succes, -1 on failure with errno set.
  */
-static int request_list_add (zlist_t **l, const flux_msg_t *msg)
+static int msglist_append_create (struct flux_msglist **l,
+                                  const flux_msg_t *msg)
 {
-    if (!*l) {
-        if (!(*l = zlist_new ())) {
-            errno = ENOMEM;
-            return -1;
-        }
-    }
-    if (zlist_append (*l, (void *)flux_msg_incref (msg)) < 0) {
-        flux_msg_decref (msg);
-        errno = ENOMEM;
+    if (!*l && !(*l = flux_msglist_create ()))
         return -1;
-    }
-    return 0;
+    return flux_msglist_append (*l, msg);
 }
 
 /* Destroy a cache entry
@@ -168,14 +152,14 @@ static void cache_entry_destroy (void *arg)
             free (e->data);
         if (e->blobref)
             free (e->blobref);
-        if (e->load_requests && zlist_size (e->load_requests) > 0)
+        if (flux_msglist_count (e->load_requests) > 0)
             flux_log (e->h, LOG_ERR, "%s: load_requests not empty",
                       __FUNCTION__);
-        if (e->store_requests && zlist_size (e->store_requests) > 0)
+        if (flux_msglist_count (e->store_requests) > 0)
             flux_log (e->h, LOG_ERR, "%s: store_requests not empty",
                       __FUNCTION__);
-        request_list_destroy (&e->load_requests);
-        request_list_destroy (&e->store_requests);
+        flux_msglist_destroy (e->load_requests);
+        flux_msglist_destroy (e->store_requests);
         free (e);
     }
 }
@@ -251,8 +235,8 @@ static struct cache_entry *lookup_entry (content_cache_t *cache,
  */
 static void remove_entry (content_cache_t *cache, struct cache_entry *e)
 {
-    assert (!e->load_requests || zlist_size (e->load_requests) == 0);
-    assert (!e->store_requests || zlist_size (e->store_requests) == 0);
+    assert (flux_msglist_count (e->load_requests) == 0);
+    assert (flux_msglist_count (e->store_requests) == 0);
     if (e->valid) {
         cache->acct_size -= e->len;
         cache->acct_valid--;
@@ -383,7 +367,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
     if (!e->valid) {
         if (cache_load (cache, e) < 0)
             goto error;
-        if (request_list_add (&e->load_requests, msg) < 0) {
+        if (msglist_append_create (&e->load_requests, msg) < 0) {
             flux_log_error (h, "content load");
             goto error;
         }
@@ -568,7 +552,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
             if (cache_store (cache, e) < 0)
                 goto error;
             if (cache->rank > 0) {  /* write-through */
-                if (request_list_add (&e->store_requests, msg) < 0)
+                if (msglist_append_create (&e->store_requests, msg) < 0)
                     goto error;
                 return;
             }
@@ -806,7 +790,7 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
         if (cache_flush (cache) < 0)
             goto error;
         if (cache->acct_dirty > 0) {
-            if (request_list_add (&cache->flush_requests, msg) < 0)
+            if (msglist_append_create (&cache->flush_requests, msg) < 0)
                 goto error;
             return;
         }
@@ -1052,7 +1036,7 @@ void content_cache_destroy (content_cache_t *cache)
         if (cache->backing_name)
             free (cache->backing_name);
         zhash_destroy (&cache->entries);
-        request_list_destroy (&cache->flush_requests);
+        flux_msglist_destroy (cache->flush_requests);
         free (cache);
     }
 }
