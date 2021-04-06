@@ -23,6 +23,8 @@
 #include <jansson.h>
 #include <czmq.h>
 
+#include "src/common/libutil/errno_safe.h"
+
 #include "request.h"
 #include "response.h"
 #include "message.h"
@@ -80,6 +82,7 @@ out:
 static void rpc_destroy (struct flux_rpc *rpc)
 {
     if (rpc) {
+        int saved_errno = errno;
         if (rpc_finalize (rpc) < 0)
             log_matchtag_leak (flux_future_get_flux (rpc->f),
                                (rpc->flags & FLUX_RPC_STREAMING)
@@ -87,6 +90,7 @@ static void rpc_destroy (struct flux_rpc *rpc)
                                     : "unfulfilled RPC",
                                rpc->matchtag);
         free (rpc);
+        errno = saved_errno;
     }
 }
 
@@ -94,10 +98,8 @@ static struct flux_rpc *rpc_create (flux_t *h, flux_future_t *f, int flags)
 {
     struct flux_rpc *rpc;
 
-    if (!(rpc = calloc (1, sizeof (*rpc)))) {
-        errno = ENOMEM;
-        goto error;
-    }
+    if (!(rpc = calloc (1, sizeof (*rpc))))
+        return NULL;
     rpc->f = f;
     rpc->flags = flags;
     if ((flags & FLUX_RPC_NORESPONSE)) {
@@ -111,7 +113,7 @@ static struct flux_rpc *rpc_create (flux_t *h, flux_future_t *f, int flags)
     flux_future_set_flux (f, h);
     return rpc;
 error:
-    free (rpc);
+    ERRNO_SAFE_WRAP (free, rpc);
     return NULL;
 }
 
