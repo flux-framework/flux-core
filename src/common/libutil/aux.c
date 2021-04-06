@@ -59,6 +59,7 @@ static struct aux_item *aux_item_create (const char *key,
 }
 
 /* Delete from 'head' an aux item that was stored under 'key', if any.
+ * Quit search once an item with a NULL key is found, since these come last.
  * 'head' is an in/out parameter.
  */
 static void aux_item_delete (struct aux_item **head, const char *key)
@@ -66,8 +67,8 @@ static void aux_item_delete (struct aux_item **head, const char *key)
     if (key && head) {
         struct aux_item *item;
 
-        while ((item = *head)) {
-            if (item->key && !strcmp (item->key, key)) {
+        while ((item = *head) && item->key) {
+            if (!strcmp (item->key, key)) {
                 *head = item->next;
                 aux_item_destroy (item);
                 break;
@@ -78,13 +79,14 @@ static void aux_item_delete (struct aux_item **head, const char *key)
 }
 
 /* Find in 'head' an aux item stored under 'key'.
+ * Quit search once an item with a NULL key is found, since these come last.
  * Returns item on success, NULL on failure.
  */
 static struct aux_item *aux_item_find (struct aux_item *head, const char *key)
 {
     if (key) {
-        while (head) {
-            if (head->key && !strcmp (key, head->key))
+        while (head && head->key) {
+            if (!strcmp (key, head->key))
                 return head;
             head = head->next;
         }
@@ -100,6 +102,18 @@ static void aux_item_insert (struct aux_item **head, struct aux_item *item)
     if (head && item) {
         if (*head)
             item->next = *head;
+        *head = item;
+    }
+}
+
+/* Insert item at the end of 'head'.
+ * 'head' is an in/out parameter.
+ */
+static void aux_item_append (struct aux_item **head, struct aux_item *item)
+{
+    if (head && item) {
+        while (*head)
+            head = &(*head)->next;
         *head = item;
     }
 }
@@ -124,6 +138,8 @@ void *aux_get (struct aux_item *head, const char *key)
 
 /* Insert ('key', 'value', 'free_fn') tuple in 'head'.
  * If 'key' is present in list, remove it first.
+ * If 'key' is NULL, append item to the list rather than prepend,
+ * so aux_get doesn't have to search keyless items.
  * 'head' is an in/out parameter.
  * Returns 0 on success, -1 on failure with errno set (EINVAL, ENOMEM).
  */
@@ -140,7 +156,10 @@ int aux_set (struct aux_item **head,
     if (val) {
         if (!(item = aux_item_create (key, val, free_fn)))
             return -1;
-        aux_item_insert (head, item);
+        if (key)
+            aux_item_insert (head, item);
+        else
+            aux_item_append (head, item);
     }
     return 0;
 }
