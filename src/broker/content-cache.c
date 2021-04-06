@@ -86,8 +86,8 @@ struct content_cache {
     uint32_t acct_dirty;            /* count of dirty cache entries */
 };
 
-static void flush_respond (content_cache_t *cache);
-static int cache_flush (content_cache_t *cache);
+static void flush_respond (struct content_cache *cache);
+static int cache_flush (struct content_cache *cache);
 
 /* Respond identically to a list of requests.
  * The list is always run to completion, then destroyed.
@@ -204,7 +204,7 @@ static int cache_entry_fill (struct cache_entry *e, const void *data, int len)
  * Returns 0 on success, -1 on failure with errno set.
  * Side effect: destroys entry on failure.
  */
-static int insert_entry (content_cache_t *cache, struct cache_entry *e)
+static int insert_entry (struct content_cache *cache, struct cache_entry *e)
 {
     if (zhash_insert (cache->entries, e->blobref, e) < 0) {
         cache_entry_destroy (e);
@@ -225,7 +225,7 @@ static int insert_entry (content_cache_t *cache, struct cache_entry *e)
  * Returns entry on success, NULL on failure.
  * N.B. errno is not set
  */
-static struct cache_entry *lookup_entry (content_cache_t *cache,
+static struct cache_entry *lookup_entry (struct content_cache *cache,
                                          const char *blobref)
 {
     return zhash_lookup (cache->entries, blobref);
@@ -233,7 +233,7 @@ static struct cache_entry *lookup_entry (content_cache_t *cache,
 
 /* Remove a cache entry.
  */
-static void remove_entry (content_cache_t *cache, struct cache_entry *e)
+static void remove_entry (struct content_cache *cache, struct cache_entry *e)
 {
     assert (flux_msglist_count (e->load_requests) == 0);
     assert (flux_msglist_count (e->store_requests) == 0);
@@ -259,7 +259,7 @@ static void remove_entry (content_cache_t *cache, struct cache_entry *e)
 
 static void cache_load_continuation (flux_future_t *f, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     struct cache_entry *e = flux_future_aux_get (f, "entry");
     const void *data = NULL;
     int len = 0;
@@ -299,7 +299,7 @@ error:
     flux_future_destroy (f);
 }
 
-static int cache_load (content_cache_t *cache, struct cache_entry *e)
+static int cache_load (struct content_cache *cache, struct cache_entry *e)
 {
     flux_future_t *f;
     int saved_errno = 0;
@@ -339,7 +339,7 @@ done:
 void content_load_request (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     const char *blobref;
     int blobref_size;
     void *data = NULL;
@@ -410,7 +410,7 @@ error:
  * only do it when the number of outstanding store requests falls to
  * a low water mark, here hardwired to be half of the limit.
  */
-static void cache_resume_flush (content_cache_t *cache)
+static void cache_resume_flush (struct content_cache *cache)
 {
     if (cache->acct_dirty == 0 || (cache->rank == 0 && !cache->backing))
         flush_respond (cache);
@@ -421,7 +421,7 @@ static void cache_resume_flush (content_cache_t *cache)
 
 static void cache_store_continuation (flux_future_t *f, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     struct cache_entry *e = flux_future_aux_get (f, "entry");
     const char *blobref;
 
@@ -463,7 +463,7 @@ error:
     cache_resume_flush (cache);
 }
 
-static int cache_store (content_cache_t *cache, struct cache_entry *e)
+static int cache_store (struct content_cache *cache, struct cache_entry *e)
 {
     flux_future_t *f;
     int saved_errno = 0;
@@ -506,7 +506,7 @@ done:
 static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     const void *data;
     int len;
     struct cache_entry *e = NULL;
@@ -582,7 +582,7 @@ error:
  * dropping from the rank 0 cache.
  */
 
-static int cache_flush (content_cache_t *cache)
+static int cache_flush (struct content_cache *cache)
 {
     struct cache_entry *e;
     const char *key;
@@ -618,7 +618,7 @@ static void content_register_backing_request (flux_t *h,
                                               const flux_msg_t *msg,
                                               void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     const char *name;
     const char *errstr = NULL;
 
@@ -664,7 +664,7 @@ static void content_unregister_backing_request (flux_t *h,
                                                 const flux_msg_t *msg,
                                                 void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     const char *errstr = NULL;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
@@ -694,7 +694,7 @@ error:
 static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
                                        const flux_msg_t *msg, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     zlist_t *keys = NULL;
     char *key;
     struct cache_entry *e;
@@ -733,7 +733,7 @@ error:
 static void content_stats_request (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
@@ -758,7 +758,7 @@ error:
  */
 
 /* This is called when outstanding store ops have completed.  */
-static void flush_respond (content_cache_t *cache)
+static void flush_respond (struct content_cache *cache)
 {
     if (!cache->acct_dirty) {
         request_list_respond_raw (&cache->flush_requests,
@@ -782,7 +782,7 @@ static void flush_respond (content_cache_t *cache)
 static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
@@ -812,7 +812,7 @@ error:
 /* Heartbeat drives periodic cache purge
  */
 
-static int cache_purge (content_cache_t *cache)
+static int cache_purge (struct content_cache *cache)
 {
     double now = flux_reactor_now (flux_get_reactor (cache->h));
     int after_entries = zhash_size (cache->entries);
@@ -858,7 +858,7 @@ done:
 
 static void sync_cb (flux_future_t *f, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
 
     cache_purge (cache);
     flux_future_reset (f);
@@ -913,7 +913,7 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int content_cache_set_flux (content_cache_t *cache, flux_t *h)
+int content_cache_set_flux (struct content_cache *cache, flux_t *h)
 {
     cache->h = h;
 
@@ -930,7 +930,7 @@ int content_cache_set_flux (content_cache_t *cache, flux_t *h)
 static int content_cache_setattr (const char *name, const char *val, void *arg)
 {
 
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     if (!strcmp (name, "content.hash")) {
         if (blobref_validate_hashtype (val) < 0)
             goto invalid;
@@ -945,7 +945,7 @@ invalid:
 
 static int content_cache_getattr (const char *name, const char **val, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     static char s[32];
 
     if (!strcmp (name, "content.hash"))
@@ -960,7 +960,7 @@ static int content_cache_getattr (const char *name, const char **val, void *arg)
     return 0;
 }
 
-int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
+int content_cache_register_attrs (struct content_cache *cache, attr_t *attr)
 {
     const char *s;
 
@@ -1026,7 +1026,7 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
     return 0;
 }
 
-void content_cache_destroy (content_cache_t *cache)
+void content_cache_destroy (struct content_cache *cache)
 {
     if (cache) {
         if (cache->h) {
@@ -1041,9 +1041,9 @@ void content_cache_destroy (content_cache_t *cache)
     }
 }
 
-content_cache_t *content_cache_create (void)
+struct content_cache *content_cache_create (void)
 {
-    content_cache_t *cache;
+    struct content_cache *cache;
 
     if (!(cache = calloc (1, sizeof (*cache))))
         return NULL;
