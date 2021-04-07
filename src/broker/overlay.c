@@ -38,7 +38,7 @@ enum {
 struct child {
     int lastseen;
     unsigned long rank;
-    char uuid[16];
+    char rank_str[16];
     bool connected;
     bool idle;
 };
@@ -66,14 +66,14 @@ struct overlay {
     uint32_t size;
     uint32_t rank;
     int tbon_k;
-    char uuid[16];
+    char rank_str[16];
 
     zsock_t *parent_zsock;      // NULL on rank 0
     char *parent_uri;
     flux_watcher_t *parent_w;
     int parent_lastsent;
     char *parent_pubkey;
-    char parent_uuid[16];
+    char parent_rank_str[16];
 
     zsock_t *bind_zsock;        // NULL if no downstream peers
     char *bind_uri;
@@ -123,7 +123,8 @@ static int alloc_children (uint32_t rank,
             return -1;
         for (i = 0; i < count; i++) {
             ch[i].rank = kary_childof (k, size, rank, i);
-            snprintf (ch[i].uuid, sizeof (ch[i].uuid), "%lu", ch[i].rank);
+            snprintf (ch[i].rank_str, sizeof (ch[i].rank_str),"%lu",
+                      ch[i].rank);
         }
     }
     *chp = ch;
@@ -143,10 +144,12 @@ int overlay_set_geometry (struct overlay *ov,
                                            tbon_k,
                                            &ov->children)) < 0)
         return -1;
-    snprintf (ov->uuid, sizeof (ov->uuid), "%"PRIu32, rank);
+    snprintf (ov->rank_str, sizeof (ov->rank_str), "%"PRIu32, rank);
     if (rank > 0) {
-        uint32_t parent_rank = kary_parentof (tbon_k, rank);
-        snprintf (ov->parent_uuid, sizeof (ov->uuid), "%"PRIu32, parent_rank);
+        snprintf (ov->parent_rank_str,
+                  sizeof (ov->parent_rank_str),
+                  "%"PRIu32,
+                  kary_parentof (tbon_k, rank));
     }
 
     return 0;
@@ -216,7 +219,7 @@ static struct child *child_lookup (struct overlay *ov, const char *uuid)
     struct child *child;
 
     foreach_overlay_child (ov, child) {
-        if (!strcmp (uuid, child->uuid))
+        if (!strcmp (uuid, child->rank_str))
             return child;
     }
     return NULL;
@@ -311,7 +314,7 @@ int overlay_sendmsg (struct overlay *ov,
                                                    nodeid)) != KARY_NONE) {
                         if (!(cpy = flux_msg_copy (msg, true)))
                             goto error;
-                        if (flux_msg_push_route (cpy, ov->uuid) < 0)
+                        if (flux_msg_push_route (cpy, ov->rank_str) < 0)
                             goto error;
                         snprintf (rte, sizeof (rte), "%"PRIu32, route);
                         if (flux_msg_push_route (cpy, rte) < 0)
@@ -339,7 +342,7 @@ int overlay_sendmsg (struct overlay *ov,
                 if (ov->rank > 0
                     && flux_msg_get_route_last (msg, &uuid) == 0
                     && uuid != NULL
-                    && !strcmp (uuid, ov->parent_uuid))
+                    && !strcmp (uuid, ov->parent_rank_str))
                     where = OVERLAY_UPSTREAM;
                 else
                     where = OVERLAY_DOWNSTREAM;
@@ -424,7 +427,7 @@ static int overlay_mcast_child_one (struct overlay *ov,
         return -1;
     if (flux_msg_enable_route (cpy) < 0)
         goto done;
-    if (flux_msg_push_route (cpy, child->uuid) < 0)
+    if (flux_msg_push_route (cpy, child->rank_str) < 0)
         goto done;
     if (overlay_sendmsg_child (ov, cpy) < 0)
         goto done;
@@ -676,7 +679,7 @@ int overlay_connect (struct overlay *ov)
         zsock_set_zap_domain (ov->parent_zsock, FLUX_ZAP_DOMAIN);
         zcert_apply (ov->cert, ov->parent_zsock);
         zsock_set_curve_serverkey (ov->parent_zsock, ov->parent_pubkey);
-        zsock_set_identity (ov->parent_zsock, ov->uuid);
+        zsock_set_identity (ov->parent_zsock, ov->rank_str);
         if (zsock_connect (ov->parent_zsock, "%s", ov->parent_uri) < 0)
             goto nomem;
         if (!(ov->parent_w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
@@ -806,7 +809,7 @@ static json_t *lspeer_object_create (struct overlay *ov)
                                    "idle",
                                    now - child->lastseen)))
             goto nomem;
-        if (json_object_set_new (o, child->uuid, child_o) < 0) {
+        if (json_object_set_new (o, child->rank_str, child_o) < 0) {
             json_decref (child_o);
             goto nomem;
         }
