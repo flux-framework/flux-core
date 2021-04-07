@@ -43,6 +43,15 @@ struct child {
     bool idle;
 };
 
+struct parent {
+    zsock_t *zsock;         // NULL on rank 0
+    char *uri;
+    flux_watcher_t *w;
+    int lastsent;
+    char *pubkey;
+    char rank_str[16];
+};
+
 /* Wake up periodically (between 'sync_min' and 'sync_max' seconds) and:
  * 1) send keepalive to parent if nothing was sent in 'idle_min' seconds
  * 2) find children that have not been heard from in 'idle_max' seconds
@@ -68,12 +77,7 @@ struct overlay {
     int tbon_k;
     char rank_str[16];
 
-    zsock_t *parent_zsock;      // NULL on rank 0
-    char *parent_uri;
-    flux_watcher_t *parent_w;
-    int parent_lastsent;
-    char *parent_pubkey;
-    char parent_rank_str[16];
+    struct parent parent;
 
     zsock_t *bind_zsock;        // NULL if no downstream peers
     char *bind_uri;
@@ -146,8 +150,8 @@ int overlay_set_geometry (struct overlay *ov,
         return -1;
     snprintf (ov->rank_str, sizeof (ov->rank_str), "%"PRIu32, rank);
     if (rank > 0) {
-        snprintf (ov->parent_rank_str,
-                  sizeof (ov->parent_rank_str),
+        snprintf (ov->parent.rank_str,
+                  sizeof (ov->parent.rank_str),
                   "%"PRIu32,
                   kary_parentof (tbon_k, rank));
     }
@@ -227,35 +231,35 @@ static struct child *child_lookup (struct overlay *ov, const char *uuid)
 
 int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey)
 {
-    if (!(ov->parent_pubkey = strdup (pubkey)))
+    if (!(ov->parent.pubkey = strdup (pubkey)))
         return -1;
     return 0;
 }
 
 int overlay_set_parent_uri (struct overlay *ov, const char *uri)
 {
-    free (ov->parent_uri);
-    if (!(ov->parent_uri = strdup (uri)))
+    free (ov->parent.uri);
+    if (!(ov->parent.uri = strdup (uri)))
         return -1;
     return 0;
 }
 
 const char *overlay_get_parent_uri (struct overlay *ov)
 {
-    return ov->parent_uri;
+    return ov->parent.uri;
 }
 
 static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg)
 {
     int rc = -1;
 
-    if (!ov->parent_zsock) {
+    if (!ov->parent.zsock) {
         errno = EHOSTUNREACH;
         goto done;
     }
-    rc = flux_msg_sendzsock (ov->parent_zsock, msg);
+    rc = flux_msg_sendzsock (ov->parent.zsock, msg);
     if (rc == 0)
-        ov->parent_lastsent = flux_reactor_now (flux_get_reactor (ov->h));
+        ov->parent.lastsent = flux_reactor_now (flux_get_reactor (ov->h));
 done:
     return rc;
 }
@@ -264,7 +268,7 @@ static int overlay_keepalive_parent (struct overlay *ov, int status)
 {
     flux_msg_t *msg = NULL;
 
-    if (ov->parent_zsock) {
+    if (ov->parent.zsock) {
         if (!(msg = flux_keepalive_encode (0, status)))
             return -1;
         if (flux_msg_enable_route (msg) < 0)
@@ -342,7 +346,7 @@ int overlay_sendmsg (struct overlay *ov,
                 if (ov->rank > 0
                     && flux_msg_get_route_last (msg, &uuid) == 0
                     && uuid != NULL
-                    && !strcmp (uuid, ov->parent_rank_str))
+                    && !strcmp (uuid, ov->parent.rank_str))
                     where = OVERLAY_UPSTREAM;
                 else
                     where = OVERLAY_DOWNSTREAM;
@@ -391,7 +395,7 @@ static void sync_cb (flux_future_t *f, void *arg)
     struct overlay *ov = arg;
     double now = flux_reactor_now (flux_get_reactor (ov->h));
 
-    if (now - ov->parent_lastsent > idle_min)
+    if (now - ov->parent.lastsent > idle_min)
         overlay_keepalive_parent (ov, KEEPALIVE_STATUS_NORMAL);
     overlay_log_idle_children (ov);
 
@@ -525,7 +529,7 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
     int type;
     bool dropped = false;
 
-    if (!(msg = flux_msg_recvzsock (ov->parent_zsock)))
+    if (!(msg = flux_msg_recvzsock (ov->parent.zsock)))
         return;
     if (flux_msg_get_type (msg, &type) < 0) {
         dropped = true;
@@ -670,25 +674,25 @@ static int overlay_zap_init (struct overlay *ov)
 int overlay_connect (struct overlay *ov)
 {
     if (ov->rank > 0) {
-        if (!ov->h || ov->rank == FLUX_NODEID_ANY || !ov->parent_uri) {
+        if (!ov->h || ov->rank == FLUX_NODEID_ANY || !ov->parent.uri) {
             errno = EINVAL;
             return -1;
         }
-        if (!(ov->parent_zsock = zsock_new_dealer (NULL)))
+        if (!(ov->parent.zsock = zsock_new_dealer (NULL)))
             goto nomem;
-        zsock_set_zap_domain (ov->parent_zsock, FLUX_ZAP_DOMAIN);
-        zcert_apply (ov->cert, ov->parent_zsock);
-        zsock_set_curve_serverkey (ov->parent_zsock, ov->parent_pubkey);
-        zsock_set_identity (ov->parent_zsock, ov->rank_str);
-        if (zsock_connect (ov->parent_zsock, "%s", ov->parent_uri) < 0)
+        zsock_set_zap_domain (ov->parent.zsock, FLUX_ZAP_DOMAIN);
+        zcert_apply (ov->cert, ov->parent.zsock);
+        zsock_set_curve_serverkey (ov->parent.zsock, ov->parent.pubkey);
+        zsock_set_identity (ov->parent.zsock, ov->rank_str);
+        if (zsock_connect (ov->parent.zsock, "%s", ov->parent.uri) < 0)
             goto nomem;
-        if (!(ov->parent_w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
-                                                      ov->parent_zsock,
+        if (!(ov->parent.w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
+                                                      ov->parent.zsock,
                                                       FLUX_POLLIN,
                                                       parent_cb,
                                                       ov)))
         return -1;
-        flux_watcher_start (ov->parent_w);
+        flux_watcher_start (ov->parent.w);
     }
     return 0;
 nomem:
@@ -913,10 +917,10 @@ void overlay_destroy (struct overlay *ov)
         flux_msg_handler_delvec (ov->handlers);
         overlay_keepalive_parent (ov, KEEPALIVE_STATUS_DISCONNECT);
 
-        zsock_destroy (&ov->parent_zsock);
-        free (ov->parent_uri);
-        flux_watcher_destroy (ov->parent_w);
-        free (ov->parent_pubkey);
+        zsock_destroy (&ov->parent.zsock);
+        free (ov->parent.uri);
+        flux_watcher_destroy (ov->parent.w);
+        free (ov->parent.pubkey);
 
         zsock_destroy (&ov->bind_zsock);
         free (ov->bind_uri);
@@ -940,7 +944,7 @@ struct overlay *overlay_create (flux_t *h, overlay_recv_f cb, void *arg)
     if (!(ov = calloc (1, sizeof (*ov))))
         return NULL;
     ov->rank = FLUX_NODEID_ANY;
-    ov->parent_lastsent = -1;
+    ov->parent.lastsent = -1;
     ov->h = h;
     ov->recv_cb = cb;
     ov->recv_arg = arg;
