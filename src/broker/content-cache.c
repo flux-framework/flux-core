@@ -56,8 +56,8 @@ struct cache_entry {
                                     /*   or to backing store (rank 0) */
     uint8_t load_pending:1;
     uint8_t store_pending:1;
-    zlist_t *load_requests;
-    zlist_t *store_requests;
+    struct flux_msglist *load_requests;
+    struct flux_msglist *store_requests;
     double lastused;
 };
 
@@ -66,11 +66,11 @@ struct content_cache {
     flux_msg_handler_t **handlers;
     flux_future_t *f_sync;
     uint32_t rank;
-    zhash_t *entries;
+    zhashx_t *entries;
     uint8_t backing:1;              /* 'content.backing' service available */
     char *backing_name;
     char hash_name[BLOBREF_MAX_STRING_SIZE];
-    zlist_t *flush_requests;
+    struct flux_msglist *flush_requests;
 
     uint32_t blob_size_limit;
     uint32_t flush_batch_limit;
@@ -86,24 +86,14 @@ struct content_cache {
     uint32_t acct_dirty;            /* count of dirty cache entries */
 };
 
-static void flush_respond (content_cache_t *cache);
-static int cache_flush (content_cache_t *cache);
-
-static void request_list_destroy (zlist_t **l)
-{
-    const flux_msg_t *msg;
-    if (*l) {
-        while ((msg = zlist_pop (*l)))
-            flux_msg_decref (msg);
-        zlist_destroy (l);
-    }
-}
+static void flush_respond (struct content_cache *cache);
+static int cache_flush (struct content_cache *cache);
 
 /* Respond identically to a list of requests.
  * The list is always run to completion, then destroyed.
  * On error, log at LOG_ERR level.
  */
-static void request_list_respond_raw (zlist_t **l,
+static void request_list_respond_raw (struct flux_msglist **l,
                                       flux_t *h,
                                       const void *data,
                                       int len,
@@ -111,18 +101,19 @@ static void request_list_respond_raw (zlist_t **l,
 {
     if (*l) {
         const flux_msg_t *msg;
-        while ((msg = zlist_pop (*l))) {
+        while ((msg = flux_msglist_pop (*l))) {
             if (flux_respond_raw (h, msg, data, len) < 0)
                 flux_log_error (h, "%s (%s):", __FUNCTION__, type);
             flux_msg_decref (msg);
         }
-        zlist_destroy (l);
+        flux_msglist_destroy (*l);
+        *l = NULL;
     }
 }
 
 /* Same as above only send errnum, errmsg response
  */
-static void request_list_respond_error (zlist_t **l,
+static void request_list_respond_error (struct flux_msglist **l,
                                         flux_t *h,
                                         int errnum,
                                         const char *errmsg,
@@ -130,71 +121,71 @@ static void request_list_respond_error (zlist_t **l,
 {
     if (*l) {
         const flux_msg_t *msg;
-        while ((msg = zlist_pop (*l))) {
+        while ((msg = flux_msglist_pop (*l))) {
             if (flux_respond_error (h, msg, errnum, errmsg) < 0)
                 flux_log_error (h, "%s (%s):", __FUNCTION__, type);
             flux_msg_decref (msg);
         }
-        zlist_destroy (l);
+        flux_msglist_destroy (*l);
+        *l = NULL;
     }
 }
 
 /* Add request message to a list, creating the list as needed.
  * Returns 0 on succes, -1 on failure with errno set.
  */
-static int request_list_add (zlist_t **l, const flux_msg_t *msg)
+static int msglist_append_create (struct flux_msglist **l,
+                                  const flux_msg_t *msg)
 {
-    if (!*l) {
-        if (!(*l = zlist_new ())) {
-            errno = ENOMEM;
-            return -1;
-        }
-    }
-    if (zlist_append (*l, (void *)flux_msg_incref (msg)) < 0) {
-        flux_msg_decref (msg);
-        errno = ENOMEM;
+    if (!*l && !(*l = flux_msglist_create ()))
         return -1;
-    }
-    return 0;
+    return flux_msglist_append (*l, msg);
 }
 
 /* Destroy a cache entry
  */
-static void cache_entry_destroy (void *arg)
+static void cache_entry_destroy (struct cache_entry *e)
 {
-    struct cache_entry *e = arg;
     if (e) {
-        if (e->data)
-            free (e->data);
-        if (e->blobref)
-            free (e->blobref);
-        if (e->load_requests && zlist_size (e->load_requests) > 0)
-            flux_log (e->h, LOG_ERR, "%s: load_requests not empty",
-                      __FUNCTION__);
-        if (e->store_requests && zlist_size (e->store_requests) > 0)
-            flux_log (e->h, LOG_ERR, "%s: store_requests not empty",
-                      __FUNCTION__);
-        request_list_destroy (&e->load_requests);
-        request_list_destroy (&e->store_requests);
+        int saved_errno = errno;
+        if (flux_msglist_count (e->load_requests) > 0)
+            flux_log (e->h, LOG_ERR, "cache entry freed with pending loads");
+        if (flux_msglist_count (e->store_requests) > 0)
+            flux_log (e->h, LOG_ERR, "cache entry freed wtih pending stores");
+        free (e->data);
+        flux_msglist_destroy (e->load_requests);
+        flux_msglist_destroy (e->store_requests);
         free (e);
+        errno = saved_errno;
+    }
+}
+
+/* zhashx_destructor_fn footprint
+ */
+static void cache_entry_destructor (void **item)
+{
+    if (item) {
+        cache_entry_destroy (*item);
+        *item = NULL;
     }
 }
 
 /* Create a cache entry.
- * Initially only the digest is filled in;  defaults for the rest (zeroed).
+ * Entries are created with a blobref, but no data (e.g. "invalid").
+ * The blobref is copied to the space following the entry struct so the entry
+ * and the blobref can be co-located in memory, and allocated with one malloc.
  * Returns entry on success, NULL with errno set on failure.
  */
 static struct cache_entry *cache_entry_create (flux_t *h, const char *blobref)
 {
     struct cache_entry *e;
+    int bloblen = strlen (blobref) + 1;
 
-    if (!(e = calloc (1, sizeof (*e))))
+    if (!(e = calloc (1, sizeof (*e) + bloblen)))
         return NULL;
     e->h = h;
-    if (!(e->blobref = strdup (blobref))) {
-        ERRNO_SAFE_WRAP (free, e);
-        return NULL;
-    }
+    e->blobref = (char *)(e + 1);
+    memcpy (e->blobref, blobref, bloblen);
     return e;
 }
 
@@ -216,18 +207,17 @@ static int cache_entry_fill (struct cache_entry *e, const void *data, int len)
     return 0;
 }
 
-/* Insert a cache entry, by blobref.
+/* Insert a cache entry, using entry->blobref as the hash key.
+ * The hash is configured not to duplicate or destroy the key.
  * Returns 0 on success, -1 on failure with errno set.
- * Side effect: destroys entry on failure.
  */
-static int insert_entry (content_cache_t *cache, struct cache_entry *e)
+static int cache_entry_insert (struct content_cache *cache,
+                               struct cache_entry *e)
 {
-    if (zhash_insert (cache->entries, e->blobref, e) < 0) {
-        cache_entry_destroy (e);
-        errno = ENOMEM;
+    if (zhashx_insert (cache->entries, e->blobref, e) < 0) {
+        errno = EEXIST;
         return -1;
     }
-    zhash_freefn (cache->entries, e->blobref, cache_entry_destroy);
     if (e->valid) {
         cache->acct_size += e->len;
         cache->acct_valid++;
@@ -241,25 +231,25 @@ static int insert_entry (content_cache_t *cache, struct cache_entry *e)
  * Returns entry on success, NULL on failure.
  * N.B. errno is not set
  */
-static struct cache_entry *lookup_entry (content_cache_t *cache,
+static struct cache_entry *lookup_entry (struct content_cache *cache,
                                          const char *blobref)
 {
-    return zhash_lookup (cache->entries, blobref);
+    return zhashx_lookup (cache->entries, blobref);
 }
 
 /* Remove a cache entry.
  */
-static void remove_entry (content_cache_t *cache, struct cache_entry *e)
+static void remove_entry (struct content_cache *cache, struct cache_entry *e)
 {
-    assert (!e->load_requests || zlist_size (e->load_requests) == 0);
-    assert (!e->store_requests || zlist_size (e->store_requests) == 0);
+    assert (flux_msglist_count (e->load_requests) == 0);
+    assert (flux_msglist_count (e->store_requests) == 0);
     if (e->valid) {
         cache->acct_size -= e->len;
         cache->acct_valid--;
     }
     if (e->dirty)
         cache->acct_dirty--;
-    zhash_delete (cache->entries, e->blobref);
+    zhashx_delete (cache->entries, e->blobref);
 }
 
 /* Load operation
@@ -275,7 +265,7 @@ static void remove_entry (content_cache_t *cache, struct cache_entry *e)
 
 static void cache_load_continuation (flux_future_t *f, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     struct cache_entry *e = flux_future_aux_get (f, "entry");
     const void *data = NULL;
     int len = 0;
@@ -315,7 +305,7 @@ error:
     flux_future_destroy (f);
 }
 
-static int cache_load (content_cache_t *cache, struct cache_entry *e)
+static int cache_load (struct content_cache *cache, struct cache_entry *e)
 {
     flux_future_t *f;
     int saved_errno = 0;
@@ -355,7 +345,7 @@ done:
 void content_load_request (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     const char *blobref;
     int blobref_size;
     void *data = NULL;
@@ -375,15 +365,16 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         }
         if (!(e = cache_entry_create (h, blobref))
-                                            || insert_entry (cache, e) < 0) {
+            || cache_entry_insert (cache, e) < 0) {
+            cache_entry_destroy (e);
             flux_log_error (h, "content load");
-            goto error; /* insert destroys 'e' on failure */
+            goto error;
         }
     }
     if (!e->valid) {
         if (cache_load (cache, e) < 0)
             goto error;
-        if (request_list_add (&e->load_requests, msg) < 0) {
+        if (msglist_append_create (&e->load_requests, msg) < 0) {
             flux_log_error (h, "content load");
             goto error;
         }
@@ -426,7 +417,7 @@ error:
  * only do it when the number of outstanding store requests falls to
  * a low water mark, here hardwired to be half of the limit.
  */
-static void cache_resume_flush (content_cache_t *cache)
+static void cache_resume_flush (struct content_cache *cache)
 {
     if (cache->acct_dirty == 0 || (cache->rank == 0 && !cache->backing))
         flush_respond (cache);
@@ -437,7 +428,7 @@ static void cache_resume_flush (content_cache_t *cache)
 
 static void cache_store_continuation (flux_future_t *f, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     struct cache_entry *e = flux_future_aux_get (f, "entry");
     const char *blobref;
 
@@ -479,7 +470,7 @@ error:
     cache_resume_flush (cache);
 }
 
-static int cache_store (content_cache_t *cache, struct cache_entry *e)
+static int cache_store (struct content_cache *cache, struct cache_entry *e)
 {
     flux_future_t *f;
     int saved_errno = 0;
@@ -522,7 +513,7 @@ done:
 static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     const void *data;
     int len;
     struct cache_entry *e = NULL;
@@ -541,8 +532,10 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
     if (!(e = lookup_entry (cache, blobref))) {
         if (!(e = cache_entry_create (h, blobref)))
             goto error;
-        if (insert_entry (cache, e) < 0)
-            goto error; /* insert destroys 'e' on failure */
+        if (cache_entry_insert (cache, e) < 0) {
+            cache_entry_destroy (e);
+            goto error;
+        }
     }
     if (!e->valid) {
         if (cache_entry_fill (e, data, len) < 0)
@@ -568,7 +561,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
             if (cache_store (cache, e) < 0)
                 goto error;
             if (cache->rank > 0) {  /* write-through */
-                if (request_list_add (&e->store_requests, msg) < 0)
+                if (msglist_append_create (&e->store_requests, msg) < 0)
                     goto error;
                 return;
             }
@@ -598,7 +591,7 @@ error:
  * dropping from the rank 0 cache.
  */
 
-static int cache_flush (content_cache_t *cache)
+static int cache_flush (struct content_cache *cache)
 {
     struct cache_entry *e;
     const char *key;
@@ -611,7 +604,7 @@ static int cache_flush (content_cache_t *cache)
         return 0;
 
     flux_log (cache->h, LOG_DEBUG, "content flush begin");
-    FOREACH_ZHASH (cache->entries, key, e) {
+    FOREACH_ZHASHX (cache->entries, key, e) {
         if (!e->dirty || e->store_pending)
             continue;
         if (cache_store (cache, e) < 0) {
@@ -634,7 +627,7 @@ static void content_register_backing_request (flux_t *h,
                                               const flux_msg_t *msg,
                                               void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     const char *name;
     const char *errstr = NULL;
 
@@ -680,7 +673,7 @@ static void content_unregister_backing_request (flux_t *h,
                                                 const flux_msg_t *msg,
                                                 void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     const char *errstr = NULL;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
@@ -710,37 +703,40 @@ error:
 static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
                                        const flux_msg_t *msg, void *arg)
 {
-    content_cache_t *cache = arg;
-    zlist_t *keys = NULL;
-    char *key;
+    struct content_cache *cache = arg;
+    zlistx_t *drop = NULL;
+    const char *key;
     struct cache_entry *e;
     int orig_size;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    orig_size = zhash_size (cache->entries);
-    if (!(keys = zhash_keys (cache->entries))) {
-        errno = ENOMEM;
-        goto error;
+    orig_size = zhashx_size (cache->entries);
+    FOREACH_ZHASHX (cache->entries, key, e) {
+        if (e->valid && !e->dirty) {
+            if (!drop && !(drop = zlistx_new ()))
+                goto nomem;
+            if (zlistx_add_end (drop, e) < 0)
+                goto nomem;
+        }
     }
-    while ((key = zlist_pop (keys))) {
-        e = zhash_lookup (cache->entries, key);
-        assert (e != NULL);
-        if (e->valid && !e->dirty)
+    if (drop) {
+        while ((e = zlistx_detach_cur (drop)))
             remove_entry (cache, e);
-        free (key);
+        zlistx_destroy (&drop);
     }
     flux_log (h, LOG_DEBUG, "content dropcache %d/%d",
-              orig_size - (int)zhash_size (cache->entries), orig_size);
+              orig_size - (int)zhashx_size (cache->entries), orig_size);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "content dropcache");
-    zlist_destroy (&keys);
     return;
+nomem:
+    errno = ENOMEM;
 error:
     flux_log (h, LOG_DEBUG, "content dropcache: %s", flux_strerror (errno));
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "content dropcache");
-    ERRNO_SAFE_WRAP (zlist_destroy, &keys);
+    ERRNO_SAFE_WRAP (zlistx_destroy, &drop);
 }
 
 /* Return stats about the cache.
@@ -749,12 +745,12 @@ error:
 static void content_stats_request (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     if (flux_respond_pack (h, msg, "{ s:i s:i s:i s:i}",
-                           "count", zhash_size (cache->entries),
+                           "count", zhashx_size (cache->entries),
                            "valid", cache->acct_valid,
                            "dirty", cache->acct_dirty,
                            "size", cache->acct_size) < 0)
@@ -774,7 +770,7 @@ error:
  */
 
 /* This is called when outstanding store ops have completed.  */
-static void flush_respond (content_cache_t *cache)
+static void flush_respond (struct content_cache *cache)
 {
     if (!cache->acct_dirty) {
         request_list_respond_raw (&cache->flush_requests,
@@ -798,7 +794,7 @@ static void flush_respond (content_cache_t *cache)
 static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
@@ -806,7 +802,7 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
         if (cache_flush (cache) < 0)
             goto error;
         if (cache->acct_dirty > 0) {
-            if (request_list_add (&cache->flush_requests, msg) < 0)
+            if (msglist_append_create (&cache->flush_requests, msg) < 0)
                 goto error;
             return;
         }
@@ -828,20 +824,20 @@ error:
 /* Heartbeat drives periodic cache purge
  */
 
-static int cache_purge (content_cache_t *cache)
+static int cache_purge (struct content_cache *cache)
 {
     double now = flux_reactor_now (flux_get_reactor (cache->h));
-    int after_entries = zhash_size (cache->entries);
+    int after_entries = zhashx_size (cache->entries);
     int after_size = cache->acct_size;
     struct cache_entry *e;
-    zlist_t *purge = NULL;
+    zlistx_t *purge = NULL;
     int rc = -1;
     const char *key;
 
-    if (cache->acct_dirty == zhash_size (cache->entries))
+    if (cache->acct_dirty == zhashx_size (cache->entries))
         return 0;
 
-    FOREACH_ZHASH (cache->entries, key, e) {
+    FOREACH_ZHASHX (cache->entries, key, e) {
         if (after_size <= cache->purge_target_size
                         && after_entries <= cache->purge_target_entries)
             break;
@@ -852,8 +848,11 @@ static int cache_purge (content_cache_t *cache)
         if (after_entries <= cache->purge_target_entries
                     && e->len < cache->purge_large_entry)
             continue;
-        if ((!purge && !(purge = zlist_new ()))
-                    || zlist_append (purge, e) < 0) {
+        if (!purge && !(purge = zlistx_new ())) {
+            errno = ENOMEM;
+            goto done;
+        }
+        if (zlistx_add_end (purge, e) < 0) {
             errno = ENOMEM;
             goto done;
         }
@@ -862,19 +861,19 @@ static int cache_purge (content_cache_t *cache)
     }
     if (purge) {
         flux_log (cache->h, LOG_DEBUG, "content purge: %d entries",
-                  (int)zlist_size (purge));
-        while ((e = zlist_pop (purge)))
+                  (int)zlistx_size (purge));
+        while ((e = zlistx_detach_cur (purge)))
             remove_entry (cache, e);
     }
     rc = 0;
 done:
-    ERRNO_SAFE_WRAP (zlist_destroy, &purge);
+    ERRNO_SAFE_WRAP (zlistx_destroy, &purge);
     return rc;
 }
 
 static void sync_cb (flux_future_t *f, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
 
     cache_purge (cache);
     flux_future_reset (f);
@@ -929,24 +928,10 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-int content_cache_set_flux (content_cache_t *cache, flux_t *h)
-{
-    cache->h = h;
-
-    if (flux_msg_handler_addvec (h, htab, cache, &cache->handlers) < 0)
-        return -1;
-    if (flux_get_rank (h, &cache->rank) < 0)
-        return -1;
-    if (!(cache->f_sync = flux_sync_create (h, sync_min))
-        || flux_future_then (cache->f_sync, sync_max, sync_cb, cache) < 0)
-        return -1;
-    return 0;
-}
-
 static int content_cache_setattr (const char *name, const char *val, void *arg)
 {
 
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     if (!strcmp (name, "content.hash")) {
         if (blobref_validate_hashtype (val) < 0)
             goto invalid;
@@ -961,7 +946,7 @@ invalid:
 
 static int content_cache_getattr (const char *name, const char **val, void *arg)
 {
-    content_cache_t *cache = arg;
+    struct content_cache *cache = arg;
     static char s[32];
 
     if (!strcmp (name, "content.hash"))
@@ -969,14 +954,14 @@ static int content_cache_getattr (const char *name, const char **val, void *arg)
     else if (!strcmp (name, "content.backing-module"))
         *val = cache->backing_name;
     else if (!strcmp (name, "content.acct-entries")) {
-        snprintf (s, sizeof (s), "%zd", zhash_size (cache->entries));
+        snprintf (s, sizeof (s), "%zd", zhashx_size (cache->entries));
         *val = s;
     } else
         return -1;
     return 0;
 }
 
-int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
+int content_cache_register_attrs (struct content_cache *cache, attr_t *attr)
 {
     const char *s;
 
@@ -1042,32 +1027,32 @@ int content_cache_register_attrs (content_cache_t *cache, attr_t *attr)
     return 0;
 }
 
-void content_cache_destroy (content_cache_t *cache)
+void content_cache_destroy (struct content_cache *cache)
 {
     if (cache) {
-        if (cache->h) {
-            flux_future_destroy (cache->f_sync);
-            flux_msg_handler_delvec (cache->handlers);
-        }
-        if (cache->backing_name)
-            free (cache->backing_name);
-        zhash_destroy (&cache->entries);
-        request_list_destroy (&cache->flush_requests);
+        int saved_errno = errno;
+        flux_future_destroy (cache->f_sync);
+        flux_msg_handler_delvec (cache->handlers);
+        free (cache->backing_name);
+        zhashx_destroy (&cache->entries);
+        flux_msglist_destroy (cache->flush_requests);
         free (cache);
+        errno = saved_errno;
     }
 }
 
-content_cache_t *content_cache_create (void)
+struct content_cache *content_cache_create (flux_t *h)
 {
-    content_cache_t *cache;
+    struct content_cache *cache;
 
     if (!(cache = calloc (1, sizeof (*cache))))
         return NULL;
-    if (!(cache->entries = zhash_new ())) {
-        content_cache_destroy (cache);
-        errno = ENOMEM;
-        return NULL;
-    }
+    if (!(cache->entries = zhashx_new ()))
+        goto nomem;
+    zhashx_set_destructor (cache->entries, cache_entry_destructor);
+    zhashx_set_key_destructor (cache->entries, NULL); // key is part of entry
+    zhashx_set_key_duplicator (cache->entries, NULL); // key is part of entry
+
     cache->rank = FLUX_NODEID_ANY;
     cache->blob_size_limit = default_blob_size_limit;
     cache->flush_batch_limit = default_flush_batch_limit;
@@ -1076,7 +1061,20 @@ content_cache_t *content_cache_create (void)
     cache->purge_old_entry = default_cache_purge_old_entry;
     cache->purge_large_entry = default_cache_purge_large_entry;
     strcpy (cache->hash_name, "sha1");
+    cache->h = h;
+    if (flux_msg_handler_addvec (h, htab, cache, &cache->handlers) < 0)
+        goto error;
+    if (flux_get_rank (h, &cache->rank) < 0)
+        goto error;
+    if (!(cache->f_sync = flux_sync_create (h, sync_min))
+        || flux_future_then (cache->f_sync, sync_max, sync_cb, cache) < 0)
+        goto error;
     return cache;
+nomem:
+    errno = ENOMEM;
+error:
+    content_cache_destroy (cache);
+    return NULL;
 }
 
 /*

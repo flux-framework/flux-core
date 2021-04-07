@@ -160,7 +160,7 @@ const flux_msg_t *flux_msglist_pop (struct flux_msglist *l)
 
 int flux_msglist_count (struct flux_msglist *l)
 {
-    return zlistx_size (l->zl);
+    return l ? zlistx_size (l->zl) : 0;
 }
 
 int flux_msglist_pollfd (struct flux_msglist *l)

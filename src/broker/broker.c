@@ -251,8 +251,6 @@ int main (int argc, char *argv[])
         oom ();
     if (!(ctx.subscriptions = zlist_new ()))
         oom ();
-    if (!(ctx.cache = content_cache_create ()))
-        oom ();
     if (!(ctx.publisher = publisher_create ()))
         oom ();
 
@@ -404,10 +402,10 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Registers message handlers and obtains rank.
+    /* Create content cache.
      */
-    if (content_cache_set_flux (ctx.cache, ctx.h) < 0) {
-        log_err ("content_cache_set_flux");
+    if (!(ctx.cache = content_cache_create (ctx.h))) {
+        log_err ("content_cache_create");
         goto cleanup;
     }
     if (content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
