@@ -39,6 +39,8 @@ static void aux_item_destroy (struct aux_item *aux)
 }
 
 /* Create an aux item.
+ * The key (if any) is copied to the space following the item struct so the
+ * item and the key can be co-located in memory, and allocated with one malloc.
  * Return item on success, NULL on failure with errno set (ENOMEM).
  */
 static struct aux_item *aux_item_create (const char *key,
