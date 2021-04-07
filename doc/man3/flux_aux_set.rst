@@ -38,7 +38,9 @@ but no new value is stored. If *name* is NULL,
 
 ``flux_aux_get()`` retrieves application-specific data
 by *name*. If the data was stored anonymously, it
-cannot be retrieved.
+cannot be retrieved.  Note that ``flux_aux_get()`` does not scale to a
+large number of items, and flux module handles may persist for a long
+time.
 
 Names beginning with "flux::" are reserved for internal use.
 

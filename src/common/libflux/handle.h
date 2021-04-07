@@ -115,6 +115,9 @@ bool flux_fatality (flux_t *h);
  * handle by name.  The destructor, if non-NULL, will be called
  * to destroy this state when the handle is destroyed.
  * Key names used internally by flux-core are prefixed with "flux::".
+ *
+ * N.B. flux_aux_get does not scale to a large number of items, and
+ * broker module handles may persist for a long time.
  */
 void *flux_aux_get (flux_t *h, const char *name);
 int flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy);

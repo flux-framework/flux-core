@@ -174,7 +174,10 @@ flux_future_t *flux_kvs_copy (flux_t *h,
                                      dstkey,
                                      commit_flags)))
         goto error;
-    if (flux_aux_set (h, NULL, ctx, (flux_free_f)copy_context_destroy) < 0) {
+    if (flux_future_aux_set (f1,
+                             NULL,
+                             ctx,
+                             (flux_free_f)copy_context_destroy) < 0) {
         copy_context_destroy (ctx);
         goto error;
     }
@@ -209,7 +212,10 @@ flux_future_t *flux_kvs_move (flux_t *h,
                                      dstkey,
                                      commit_flags)))
         goto error;
-    if (flux_aux_set (h, NULL, ctx, (flux_free_f)copy_context_destroy) < 0) {
+    if (flux_future_aux_set (f1,
+                             NULL,
+                             ctx,
+                             (flux_free_f)copy_context_destroy) < 0) {
         copy_context_destroy (ctx);
         goto error;
     }
