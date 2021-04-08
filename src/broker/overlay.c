@@ -37,7 +37,7 @@ enum {
 
 struct child {
     int lastseen;
-    unsigned long rank;
+    uint32_t rank;
     char rank_str[16];
     bool connected;
     bool idle;
@@ -128,7 +128,7 @@ static int alloc_children (uint32_t rank,
         for (i = 0; i < count; i++) {
             ch[i].rank = kary_childof (k, size, rank, i);
             snprintf (ch[i].rank_str, sizeof (ch[i].rank_str),"%lu",
-                      ch[i].rank);
+                      (unsigned long)ch[i].rank);
         }
     }
     *chp = ch;
@@ -148,12 +148,12 @@ int overlay_set_geometry (struct overlay *ov,
                                            tbon_k,
                                            &ov->children)) < 0)
         return -1;
-    snprintf (ov->rank_str, sizeof (ov->rank_str), "%"PRIu32, rank);
+    snprintf (ov->rank_str, sizeof (ov->rank_str), "%lu", (unsigned long)rank);
     if (rank > 0) {
         snprintf (ov->parent.rank_str,
                   sizeof (ov->parent.rank_str),
-                  "%"PRIu32,
-                  kary_parentof (tbon_k, rank));
+                  "%lu",
+                  (unsigned long)kary_parentof (tbon_k, rank));
     }
 
     return 0;
@@ -199,7 +199,7 @@ void overlay_log_idle_children (struct overlay *ov)
                         flux_log (ov->h,
                                   LOG_ERR,
                                   "child %lu idle for %s",
-                                  child->rank,
+                                  (unsigned long)child->rank,
                                   fsd);
                         child->idle = true;
                     }
@@ -209,7 +209,7 @@ void overlay_log_idle_children (struct overlay *ov)
                         flux_log (ov->h,
                                   LOG_ERR,
                                   "child %lu no longer idle",
-                                  child->rank);
+                                  (unsigned long)child->rank);
                         child->idle = false;
                     }
                 }
@@ -320,7 +320,7 @@ int overlay_sendmsg (struct overlay *ov,
                             goto error;
                         if (flux_msg_push_route (cpy, ov->rank_str) < 0)
                             goto error;
-                        snprintf (rte, sizeof (rte), "%"PRIu32, route);
+                        snprintf (rte, sizeof (rte), "%lu", (unsigned long)route);
                         if (flux_msg_push_route (cpy, rte) < 0)
                             goto error;
                         msg = cpy;
@@ -456,7 +456,7 @@ static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
                 else
                     flux_log_error (ov->h,
                                     "mcast error to child rank %lu",
-                                    child->rank);
+                                    (unsigned long)child->rank);
             }
         }
     }
