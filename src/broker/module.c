@@ -47,8 +47,8 @@
 
 
 struct broker_module {
-    uint32_t rank;
-    flux_t *broker_h;
+    struct modhash *modhash;
+
     flux_watcher_t *broker_w;
 
     double lastseen;
@@ -162,7 +162,7 @@ static void *module_thread (void *arg)
         log_err ("flux_open %s", uri);
         goto done;
     }
-    if (asprintf (&rankstr, "%"PRIu32, p->rank) < 0) {
+    if (asprintf (&rankstr, "%"PRIu32, p->modhash->rank) < 0) {
         log_err ("asprintf");
         goto done;
     }
@@ -174,7 +174,7 @@ static void *module_thread (void *arg)
     /* Copy the broker's config object so that modules
      * can call flux_get_conf() and expect it to always succeed.
      */
-    if (!(conf = flux_conf_copy (flux_get_conf (p->broker_h)))
+    if (!(conf = flux_conf_copy (flux_get_conf (p->modhash->broker_h)))
             || flux_set_conf (p->h, conf) < 0) {
         flux_conf_decref (conf);
         log_err ("%s: error duplicating config object", p->name);
@@ -258,7 +258,7 @@ const char *module_get_uuid (module_t *p)
 
 static int module_get_idle (module_t *p)
 {
-    return flux_reactor_now (flux_get_reactor (p->broker_h)) - p->lastseen;
+    return flux_reactor_now (flux_get_reactor (p->modhash->broker_h)) - p->lastseen;
 }
 
 flux_msg_t *module_recvmsg (module_t *p)
@@ -325,7 +325,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
     switch (type) {
         case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
             char uuid[16];
-            snprintf (uuid, sizeof (uuid), "%"PRIu32, p->rank);
+            snprintf (uuid, sizeof (uuid), "%"PRIu32, p->modhash->rank);
             if (!(cpy = flux_msg_copy (msg, true)))
                 goto done;
             if (flux_msg_push_route (cpy, uuid) < 0)
@@ -447,8 +447,8 @@ int module_stop (module_t *p)
 
     if (asprintf (&topic, "%s.shutdown", p->name) < 0)
         goto done;
-    if (!(f = flux_rpc (p->broker_h, topic, NULL,
-                          FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
+    if (!(f = flux_rpc (p->modhash->broker_h, topic, NULL,
+                        FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
         goto done;
     rc = 0;
 done:
@@ -624,8 +624,7 @@ module_t *module_add (modhash_t *mh, const char *path)
     if (!(p->subs = zlist_new ()))
         goto nomem;
 
-    p->rank = mh->rank;
-    p->broker_h = mh->broker_h;
+    p->modhash = mh;
 
     /* Broker end of PAIR socket is opened here.
      */
@@ -637,9 +636,12 @@ module_t *module_add (modhash_t *mh, const char *path)
         log_err ("zsock_bind inproc://%s", module_get_uuid (p));
         goto cleanup;
     }
-    if (!(p->broker_w = flux_zmq_watcher_create (flux_get_reactor (p->broker_h),
-                                                 p->sock, FLUX_POLLIN,
-                                                 module_cb, p))) {
+    if (!(p->broker_w = flux_zmq_watcher_create (
+                                        flux_get_reactor (p->modhash->broker_h),
+                                        p->sock,
+                                        FLUX_POLLIN,
+                                        module_cb,
+                                        p))) {
         log_err ("flux_zmq_watcher_create");
         goto cleanup;
     }
