@@ -204,7 +204,7 @@ static void *module_thread (void *arg)
      */
     ac = argz_count (p->argz, p->argz_len);
     if (!(av = calloc (1, sizeof (av[0]) * (ac + 1)))) {
-        log_errn (ENOMEM, "calloc");
+        log_err ("calloc");
         goto done;
     }
     argz_extract (p->argz, p->argz_len, av);
@@ -244,8 +244,7 @@ static void *module_thread (void *arg)
 done:
     free (uri);
     free (rankstr);
-    if (av)
-        free (av);
+    free (av);
     flux_close (p->h);
     p->h = NULL;
     return NULL;
@@ -382,8 +381,7 @@ int module_response_sendmsg (modhash_t *mh, const flux_msg_t *msg)
     }
     rc = module_sendmsg (p, msg);
 done:
-    if (uuid)
-        free (uuid);
+    free (uuid);
     return rc;
 }
 
@@ -405,6 +403,7 @@ static void module_destroy (module_t *p)
 {
     int e;
     void *res;
+    int saved_errno = errno;
 
     if (!p)
         return;
@@ -445,6 +444,7 @@ static void module_destroy (module_t *p)
     zlist_destroy (&p->rmmod);
     p->magic = ~MODULE_MAGIC;
     free (p);
+    errno = saved_errno;
 }
 
 /* Send shutdown request, broker to module.
@@ -626,34 +626,27 @@ module_t *module_add (modhash_t *mh, const char *path)
         return NULL;
     }
     if (!(p = calloc (1, sizeof (*p)))) {
+        int saved_errno = errno;
         dlclose (dso);
-        errno = ENOMEM;
+        errno = saved_errno;
         return NULL;
     }
     p->magic = MODULE_MAGIC;
     p->main = mod_main;
     p->dso = dso;
-    if (!(p->name = strdup (*mod_namep))) {
-        errno = ENOMEM;
+    if (!(p->name = strdup (*mod_namep)))
         goto cleanup;
-    }
     zf = zfile_new (NULL, path);
-    if (!(p->digest = strdup (zfile_digest (zf)))) {
-        errno = ENOMEM;
+    if (!(p->digest = strdup (zfile_digest (zf))))
         goto cleanup;
-    }
     p->size = (int)zfile_cursize (zf);
     zfile_destroy (&zf);
     uuid_generate (p->uuid);
     uuid_unparse (p->uuid, p->uuid_str);
-    if (!(p->rmmod = zlist_new ())) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
-    if (!(p->subs = zlist_new ())) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
+    if (!(p->rmmod = zlist_new ()))
+        goto nomem;
+    if (!(p->subs = zlist_new ()))
+        goto nomem;
 
     p->rank = mh->rank;
     p->broker_h = mh->broker_h;
@@ -688,7 +681,8 @@ module_t *module_add (modhash_t *mh, const char *path)
     zhash_freefn (mh->zh_byuuid, module_get_uuid (p),
                   (zhash_free_fn *)module_destroy);
     return p;
-
+nomem:
+    errno = ENOMEM;
 cleanup:
     module_destroy (p);
     return NULL;
@@ -703,13 +697,11 @@ void module_remove (modhash_t *mh, module_t *p)
 modhash_t *modhash_create (void)
 {
     modhash_t *mh = calloc (1, sizeof (*mh));
-    if (!mh) {
-        errno = ENOMEM;
+    if (!mh)
         return NULL;
-    }
     if (!(mh->zh_byuuid = zhash_new ())) {
-        modhash_destroy (mh);
         errno = ENOMEM;
+        modhash_destroy (mh);
         return NULL;
     }
     return mh;
@@ -717,6 +709,7 @@ modhash_t *modhash_create (void)
 
 void modhash_destroy (modhash_t *mh)
 {
+    int saved_errno = errno;
     const char *uuid;
     module_t *p;
     int e;
@@ -733,6 +726,7 @@ void modhash_destroy (modhash_t *mh)
         }
         free (mh);
     }
+    errno = saved_errno;
 }
 
 void modhash_set_rank (modhash_t *mh, uint32_t rank)
@@ -830,10 +824,8 @@ int module_subscribe (modhash_t *mh, const char *uuid, const char *topic)
         errno = ENOENT;
         goto done;
     }
-    if (!(cpy = strdup (topic))) {
-        errno = ENOMEM;
+    if (!(cpy = strdup (topic)))
         goto done;
-    }
     if (zlist_push (p->subs, cpy) < 0) {
         free (cpy);
         errno = ENOMEM;
