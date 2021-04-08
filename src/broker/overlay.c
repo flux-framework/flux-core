@@ -49,6 +49,7 @@ struct parent {
     flux_watcher_t *w;
     int lastsent;
     char *pubkey;
+    uint32_t rank;
     char rank_str[16];
 };
 
@@ -150,10 +151,11 @@ int overlay_set_geometry (struct overlay *ov,
         return -1;
     snprintf (ov->rank_str, sizeof (ov->rank_str), "%lu", (unsigned long)rank);
     if (rank > 0) {
+        ov->parent.rank = kary_parentof (tbon_k, rank);
         snprintf (ov->parent.rank_str,
                   sizeof (ov->parent.rank_str),
                   "%lu",
-                  (unsigned long)kary_parentof (tbon_k, rank));
+                  (unsigned long)ov->parent.rank);
     }
 
     return 0;
