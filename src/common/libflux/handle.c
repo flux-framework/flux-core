@@ -519,22 +519,9 @@ uint32_t flux_matchtag_alloc (flux_t *h)
     return tag;
 }
 
-/* Free matchtag, first deleting any queued matching responses.
- */
 void flux_matchtag_free (flux_t *h, uint32_t matchtag)
 {
     h = lookup_clone_ancestor (h);
-    struct flux_match match = {
-        .typemask = FLUX_MSGTYPE_RESPONSE,
-        .topic_glob = NULL,
-        .matchtag = matchtag,
-    };
-    const flux_msg_t *msg = flux_msglist_first (h->queue);
-    while (msg) {
-        if (flux_msg_cmp (msg, match))
-            flux_msglist_delete (h->queue);
-        msg = flux_msglist_next (h->queue);
-    }
     tagpool_free (h->tagpool, matchtag);
 }
 
