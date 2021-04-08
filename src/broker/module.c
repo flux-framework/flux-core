@@ -46,10 +46,7 @@
 #endif
 
 
-#define MODULE_MAGIC    0xfeefbe01
 struct broker_module {
-    int magic;
-
     uint32_t rank;
     flux_t *broker_h;
     flux_watcher_t *broker_w;
@@ -143,7 +140,6 @@ done:
 static void *module_thread (void *arg)
 {
     module_t *p = arg;
-    assert (p->magic == MODULE_MAGIC);
     sigset_t signal_set;
     int errnum;
     char *uri = NULL;
@@ -252,7 +248,6 @@ done:
 
 const char *module_get_name (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     return p->name;
 }
 
@@ -271,8 +266,6 @@ flux_msg_t *module_recvmsg (module_t *p)
     flux_msg_t *msg = NULL;
     int type;
     struct flux_msg_cred cred;
-
-    assert (p->magic == MODULE_MAGIC);
 
     if (!(msg = flux_msg_recvzsock (p->sock)))
         goto error;
@@ -408,8 +401,6 @@ static void module_destroy (module_t *p)
     if (!p)
         return;
 
-    assert (p->magic == MODULE_MAGIC);
-
     if (p->t) {
         if ((e = pthread_join (p->t, &res)) != 0)
             log_errn_exit (e, "pthread_cancel");
@@ -442,7 +433,6 @@ static void module_destroy (module_t *p)
         zlist_destroy (&p->subs);
     }
     zlist_destroy (&p->rmmod);
-    p->magic = ~MODULE_MAGIC;
     free (p);
     errno = saved_errno;
 }
@@ -451,7 +441,6 @@ static void module_destroy (module_t *p)
  */
 int module_stop (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     char *topic = NULL;
     flux_future_t *f = NULL;
     int rc = -1;
@@ -477,7 +466,6 @@ static void module_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg)
 {
     module_t *p = arg;
-    assert (p->magic == MODULE_MAGIC);
     p->lastseen = flux_reactor_now (r);
     if (p->poller_cb)
         p->poller_cb (p, p->poller_arg);
@@ -485,7 +473,6 @@ static void module_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 int module_start (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     int errnum;
     int rc = -1;
 
@@ -503,7 +490,6 @@ void module_set_args (module_t *p, int argc, char * const argv[])
 {
     int e;
 
-    assert (p->magic == MODULE_MAGIC);
     if (p->argz) {
         free (p->argz);
         p->argz_len = 0;
@@ -516,28 +502,24 @@ void module_add_arg (module_t *p, const char *arg)
 {
     int e;
 
-    assert (p->magic == MODULE_MAGIC);
     if ((e = argz_add (&p->argz, &p->argz_len, arg)) != 0)
         log_errn_exit (e, "argz_add");
 }
 
 void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg)
 {
-    assert (p->magic == MODULE_MAGIC);
     p->poller_cb = cb;
     p->poller_arg = arg;
 }
 
 void module_set_status_cb (module_t *p, module_status_cb_f cb, void *arg)
 {
-    assert (p->magic == MODULE_MAGIC);
     p->status_cb = cb;
     p->status_arg = arg;
 }
 
 void module_set_status (module_t *p, int new_status)
 {
-    assert (p->magic == MODULE_MAGIC);
     assert (new_status != FLUX_MODSTATE_INIT);  /* illegal state transition */
     assert (p->status != FLUX_MODSTATE_EXITED); /* illegal state transition */
     int prev_status = p->status;
@@ -548,19 +530,16 @@ void module_set_status (module_t *p, int new_status)
 
 int module_get_status (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     return p->status;
 }
 
 void module_set_errnum (module_t *p, int errnum)
 {
-    assert (p->magic == MODULE_MAGIC);
     p->errnum = errnum;
 }
 
 int module_get_errnum (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     return p->errnum;
 }
 
@@ -578,7 +557,6 @@ int module_push_rmmod (module_t *p, const flux_msg_t *msg)
 
 flux_msg_t *module_pop_rmmod (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     return zlist_pop (p->rmmod);
 }
 
@@ -597,7 +575,6 @@ int module_push_insmod (module_t *p, const flux_msg_t *msg)
 
 flux_msg_t *module_pop_insmod (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     flux_msg_t *msg = p->insmod;
     p->insmod = NULL;
     return msg;
@@ -631,7 +608,6 @@ module_t *module_add (modhash_t *mh, const char *path)
         errno = saved_errno;
         return NULL;
     }
-    p->magic = MODULE_MAGIC;
     p->main = mod_main;
     p->dso = dso;
     if (!(p->name = strdup (*mod_namep)))
@@ -690,7 +666,6 @@ cleanup:
 
 void module_remove (modhash_t *mh, module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     zhash_delete (mh->zh_byuuid, module_get_uuid (p));
 }
 
