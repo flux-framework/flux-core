@@ -15,6 +15,7 @@
 #include <czmq.h>
 #include <jansson.h>
 #include "src/common/libjob/job.h"
+#include "src/common/libutil/grudgeset.h"
 
 struct job {
     flux_jobid_t id;
@@ -37,6 +38,8 @@ struct job {
 
     json_t *annotations;
 
+    struct grudgeset *dependencies;
+
     void *handle;           // zlistx_t handle
     int refcount;           // private to job.c
 };
@@ -56,6 +59,23 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
 void job_destructor (void **item);
 void *job_duplicator (const void *item);
 int job_comparator (const void *a1, const void *a2);
+
+/*  Add and remove job dependencies
+ */
+int job_dependency_add (struct job *job, const char *description);
+int job_dependency_remove (struct job *job, const char *description);
+int job_dependency_count (struct job *job);
+
+/*  Test if dependency event 'event' (dependency-add or dependency-remove)
+ *    is valid for this job.
+ *  Returns false if:
+ *   - EEXIST - when adding a dependency if dependency has already been used
+ *   - ENOENT - when removing a dependency that does not exist
+ *   - EINVAL - event name is not dependency-add or -remove
+ */
+bool job_dependency_event_valid (struct job *job,
+                                 const char *event,
+                                 const char *description);
 
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 

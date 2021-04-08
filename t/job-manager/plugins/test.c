@@ -9,13 +9,15 @@ static int cb (flux_plugin_t *p,
                flux_plugin_arg_t *args,
                void *arg)
 {
+    flux_jobid_t id;
     const char *test_mode;
     flux_t *h = flux_jobtap_get_flux (p);
 
     /*  Get test-mode argument from jobspec
      */
     if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
-                                "{s:{s:{s:{s:{s:s}}}}}",
+                                "{s:I s:{s:{s:{s:{s:s}}}}}",
+                                "id", &id,
                                 "jobspec",
                                  "attributes",
                                   "system",
@@ -80,6 +82,9 @@ static int cb (flux_plugin_t *p,
                                   FLUX_PLUGIN_ARG_OUT|FLUX_PLUGIN_ARG_UPDATE,
                                   "{s:i}",
                                   "priority", 42);
+        }
+        if (strcmp (test_mode, "sched: dependency-add") == 0) {
+            return flux_jobtap_dependency_add (p, id, "foo");
         }
     }
     else if (strcmp (topic, "job.priority.get") == 0) {

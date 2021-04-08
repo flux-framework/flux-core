@@ -153,6 +153,7 @@ test_expect_success 'job-manager: run all test plugin test modes' '
 	priority type error
 	sched: priority unavail
 	sched: update priority
+	sched: dependency-add
 	annotations error
 	EOF
 	COUNT=$(cat test-modes.txt | wc -l) &&
@@ -239,5 +240,32 @@ test_expect_success 'job-manager: plugin can reject some jobs in a batch' '
 	test_debug "cat validate-plugin.out" &&
 	grep "Job had reject_id" validate-plugin.out &&
 	test 4 -eq $(grep -c foo validate-plugin.out)
+'
+test_expect_success 'job-manager: plugin can manage depedencies' '
+	cat <<-EOF >dep-remove.py &&
+	import flux
+	from flux.job import JobID
+	import sys
+
+	jobid = flux.job.JobID(sys.argv[1])
+	topic = "job-manager.dependency-test.remove"
+	payload = {"id": jobid, "description": "dependency-test"}
+	print(flux.Flux().rpc(topic, payload).get())
+	EOF
+	flux module reload job-ingest &&
+	flux jobtap load ${PLUGINPATH}/dependency-test.so &&
+	jobid=$(flux mini submit hostname) &&
+	flux job wait-event -vt 15 ${jobid} dependency-add &&
+	test $(flux jobs -no {state} ${jobid}) = DEPEND &&
+	flux python dep-remove.py ${jobid} &&
+	flux job wait-event -vt 15 ${jobid} clean
+'
+test_expect_success 'job-manager: job.state.depend is called on plugin load' '
+	jobid=$(flux mini submit hostname) &&
+	flux job wait-event -vt 15 ${jobid} dependency-add &&
+	flux jobtap load ${PLUGINPATH}/dependency-test.so &&
+	test $(flux jobs -no {state} ${jobid}) = DEPEND &&
+	flux python dep-remove.py ${jobid} &&
+	flux job wait-event -vt 15 ${jobid} clean
 '
 test_done

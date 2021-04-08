@@ -85,7 +85,9 @@ libutil_la_SOURCES = \
 	errno_safe.h \
 	intree.c \
 	intree.h \
-	llog.h
+	llog.h \
+	grudgeset.c \
+	grudgeset.h
 
 EXTRA_DIST = veb_mach.c
 
@@ -111,7 +113,8 @@ TESTS = test_ev.t \
 	test_fdutils.t \
 	test_fsd.t \
 	test_intree.t \
-	test_fdwalk.t
+	test_fdwalk.t \
+	test_grudgeset.t
 
 
 test_ldadd = \
@@ -232,3 +235,7 @@ test_intree_t_LDADD = $(test_ldadd)
 test_fdwalk_t_SOURCES = test/fdwalk.c
 test_fdwalk_t_CPPFLAGS = $(test_cppflags)
 test_fdwalk_t_LDADD = $(test_ldadd)
+
+test_grudgeset_t_SOURCES = test/grudgeset.c
+test_grudgeset_t_CPPFLAGS = $(test_cppflags)
+test_grudgeset_t_LDADD = $(test_ldadd)

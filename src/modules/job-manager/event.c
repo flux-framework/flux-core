@@ -316,7 +316,11 @@ int event_job_action (struct event *event, struct job *job)
         case FLUX_JOB_STATE_NEW:
             break;
         case FLUX_JOB_STATE_DEPEND:
-            if (event_job_post_pack (event, job, "depend", 0, NULL) < 0)
+            /*  Post the "depend" event when the job has no more dependency
+             *   references outstanding.
+             */
+            if (job_dependency_count (job) == 0
+                && event_job_post_pack (event, job, "depend", 0, NULL) < 0)
                 return -1;
             break;
         case FLUX_JOB_STATE_PRIORITY:
@@ -434,6 +438,27 @@ static int event_release_context_decode (json_t *context,
     return 0;
 }
 
+static int event_handle_dependency (struct job *job,
+                                    const char *cmd,
+                                    json_t *context)
+{
+    const char *desc;
+
+    if (json_unpack (context, "{s:s}", "description", &desc) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    if (strcmp (cmd, "add") == 0)
+        return job_dependency_add (job, desc);
+    else if (strcmp (cmd, "remove") == 0)
+        return job_dependency_remove (job, desc);
+    else {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
 /*  Return a callback topic string for the current job state
  *
  *   NOTE: 'job.state.new' and 'job.state.depend' are not currently used
@@ -486,7 +511,13 @@ int event_job_update (struct job *job, json_t *event)
             goto error;
         job->state = FLUX_JOB_STATE_DEPEND;
     }
-    if (!strcmp (name, "depend")) {
+    else if (!strncmp (name, "dependency-", 11)) {
+        if (job->state != FLUX_JOB_STATE_DEPEND)
+            goto inval;
+        if (event_handle_dependency (job, name+11, context) < 0)
+            goto error;
+    }
+    else if (!strcmp (name, "depend")) {
         if (job->state != FLUX_JOB_STATE_DEPEND)
             goto inval;
         job->state = FLUX_JOB_STATE_PRIORITY;

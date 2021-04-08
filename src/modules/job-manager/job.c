@@ -20,6 +20,7 @@
 #include "event.h"
 
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libutil/grudgeset.h"
 
 void job_decref (struct job *job)
 {
@@ -29,6 +30,7 @@ void job_decref (struct job *job)
         flux_msg_decref (job->waiter);
         json_decref (job->jobspec_redacted);
         json_decref (job->annotations);
+        grudgeset_destroy (job->dependencies);
         free (job);
         errno = saved_errno;
     }
@@ -54,6 +56,48 @@ struct job *job_create (void)
     job->priority = -1;
     job->state = FLUX_JOB_STATE_NEW;
     return job;
+}
+
+int job_dependency_count (struct job *job)
+{
+    return grudgeset_size (job->dependencies);
+}
+
+int job_dependency_add (struct job *job, const char *description)
+{
+    assert (job->state == FLUX_JOB_STATE_DEPEND);
+    if (grudgeset_add (&job->dependencies, description) < 0
+        && errno != EEXIST)
+        return -1;
+    return job_dependency_count (job);
+}
+
+int job_dependency_remove (struct job *job, const char *description)
+{
+    return grudgeset_remove (job->dependencies, description);
+}
+
+bool job_dependency_event_valid (struct job *job,
+                                 const char *event,
+                                 const char *description)
+{
+    if (strcmp (event, "dependency-add") == 0) {
+        if (grudgeset_used (job->dependencies, description)) {
+            errno = EEXIST;
+            return false;
+        }
+    }
+    else if (strcmp (event, "dependency-remove") == 0) {
+        if (!grudgeset_contains (job->dependencies, description)) {
+            errno = ENOENT;
+            return false;
+        }
+    }
+    else {
+        errno = EINVAL;
+        return false;
+    }
+    return true;
 }
 
 /* Follow path (NULL terminated array of keys) through multiple JSON

@@ -1061,7 +1061,7 @@ static const char *list_attrs =
     "\"success\",\"exception_occurred\",\"exception_severity\"," \
     "\"exception_type\",\"exception_note\",\"result\",\"waitstatus\","  \
     "\"t_depend\",\"t_run\",\"t_cleanup\"," \
-    "\"t_inactive\"," "\"annotations\"]";
+    "\"t_inactive\",\"annotations\",\"dependencies\"]";
 
 int cmd_list (optparse_t *p, int argc, char **argv)
 {

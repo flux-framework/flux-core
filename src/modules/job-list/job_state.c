@@ -20,6 +20,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/fluid.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/grudgeset.h"
 #include "src/common/libjob/job_hash.h"
 #include "src/common/librlist/rlist.h"
 #include "src/common/libidset/idset.h"
@@ -63,6 +64,10 @@ static int exception_context_parse (flux_t *h,
                                     struct job *job,
                                     json_t *context,
                                     int *severityP);
+static int dependency_context_parse (flux_t *h,
+                                     struct job *job,
+                                     const char *cmd,
+                                     json_t *context);
 
 static void process_next_state (struct list_ctx *ctx, struct job *job);
 
@@ -112,6 +117,7 @@ static void job_destroy (void *data)
         json_decref (job->jobspec_job);
         json_decref (job->jobspec_cmd);
         json_decref (job->R);
+        grudgeset_destroy (job->dependencies);
         free (job->ranks);
         free (job->nodelist);
         zlist_destroy (&job->next_states);
@@ -989,6 +995,10 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
         else if (!strcmp (name, "flux-restart")) {
             revert_job_state (ctx, job, timestamp);
         }
+        else if (!strncmp (name, "dependency-", 11)) {
+            if (dependency_context_parse (ctx->h, job, name+11, context) < 0)
+                goto error;
+        }
     }
 
     if (job->state == FLUX_JOB_STATE_NEW) {
@@ -1500,6 +1510,69 @@ static int exception_context_parse (flux_t *h,
     return 0;
 }
 
+
+static int dependency_add (struct job *job,
+                           const char *description)
+{
+    if (grudgeset_add (&job->dependencies, description) < 0
+        && errno != EEXIST)
+        /*  Log non-EEXIST errors, but it is not fatal */
+        flux_log_error (job->ctx->h,
+                        "job %ju: dependency-add",
+                         (uintmax_t) job->id);
+    return 0;
+}
+
+static int dependency_remove (struct job *job,
+                              const char *description)
+{
+    int rc = grudgeset_remove (job->dependencies, description);
+    if (rc < 0 && errno == ENOENT) {
+        /*  No matching dependency is non-fatal error */
+        flux_log (job->ctx->h,
+                  LOG_DEBUG,
+                  "job %ju: dependency-remove '%s' not found",
+                  (uintmax_t) job->id,
+                  description);
+        rc = 0;
+    }
+    return rc;
+}
+
+static int dependency_context_parse (flux_t *h,
+                                     struct job *job,
+                                     const char *cmd,
+                                     json_t *context)
+{
+    int rc;
+    const char *description = NULL;
+
+    if (!context
+        || json_unpack (context,
+                        "{s:s}",
+                        "description", &description) < 0) {
+        flux_log (h, LOG_ERR,
+                  "job %ju: dependency-%s context invalid",
+                  (uintmax_t) job->id,
+                  cmd);
+        errno = EPROTO;
+        return -1;
+    }
+
+    if (strcmp (cmd, "add") == 0)
+        rc = dependency_add (job, description);
+    else if (strcmp (cmd, "remove") == 0)
+        rc = dependency_remove (job, description);
+    else {
+        flux_log (h, LOG_ERR,
+                  "job %ju: invalid dependency event: dependency-%s",
+                  (uintmax_t) job->id,
+                  cmd);
+        return -1;
+    }
+    return rc;
+}
+
 static int journal_exception_event (struct job_state_ctx *jsctx,
                                     flux_jobid_t id,
                                     int eventlog_seq,
@@ -1563,6 +1636,23 @@ static int journal_annotations_event (struct job_state_ctx *jsctx,
         job->annotations = json_incref (annotations);
 
     return 0;
+}
+
+static int journal_dependency_event (struct job_state_ctx *jsctx,
+                                     flux_jobid_t id,
+                                     const char *cmd,
+                                     json_t *context)
+{
+    struct job *job;
+
+    if (!(job = zhashx_lookup (jsctx->index, &id))) {
+        flux_log_error (jsctx->h, "%s: job %ju not in hash",
+                        __FUNCTION__, (uintmax_t)id);
+        /* do not return error, we consider it a non-fatal error */
+        return 0;
+    }
+
+    return dependency_context_parse (jsctx->h, job, cmd, context);
 }
 
 static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
@@ -1652,6 +1742,10 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
     }
     else if (!strcmp (name, "annotations")) {
         if (journal_annotations_event (jsctx, id, context) < 0)
+            return -1;
+    }
+    else if (!strncmp (name, "dependency-", 11)) {
+        if (journal_dependency_event (jsctx, id, name+11, context) < 0)
             return -1;
     }
     else if (!strcmp (name, "flux-restart")) {

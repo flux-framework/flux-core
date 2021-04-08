@@ -66,6 +66,38 @@ int flux_jobtap_reject_job (flux_plugin_t *p,
                             const char *fmt, ...)
                             __attribute__ ((format (printf, 3, 4)));
 
+
+/*  Add a job dependency to a job with the given description. The dependency
+ *   will keep the job in the DEPEND state until it is removed later via the
+ *   flux_jobtap_dependency_remove() function.
+ *
+ *  This function is only valid from the job.state.depend callback.
+ *
+ *  A job dependency may only be added to a job once.
+ *
+ *  Returns 0 on success, or -1 on error with errno set:
+ *   - ENOENT: job 'id' not found
+ *   - EEXIST: dependency 'description' has already been used
+ *   - EINVAL: invalid argument
+ *
+ */
+int flux_jobtap_dependency_add (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                const char *description);
+
+/*  Remove a currently active job dependency with the given description.
+ *   Once all outstanding job dependencies have been removed, then the job
+ *   will proceed out of the DEPEND state.
+ *
+ *  Returns 0 on success, -1 on failure with errno set:
+ *   ENOENT: job 'id' not found or 'description' is not a current dependency
+ *   EINVAL: invalid argument
+ *
+ */
+int flux_jobtap_dependency_remove (flux_plugin_t *p,
+                                   flux_jobid_t id,
+                                   const char *description);
+
 #ifdef __cplusplus
 }
 #endif
