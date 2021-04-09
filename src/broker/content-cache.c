@@ -46,6 +46,11 @@ static const uint32_t default_blob_size_limit = 1048576*1024;
 
 static const uint32_t default_flush_batch_limit = 256;
 
+struct msgstack {
+    const flux_msg_t *msg;
+    struct msgstack *next;
+};
+
 struct cache_entry {
     flux_t *h;
     void *data;
@@ -56,8 +61,8 @@ struct cache_entry {
                                     /*   or to backing store (rank 0) */
     uint8_t load_pending:1;
     uint8_t store_pending:1;
-    struct flux_msglist *load_requests;
-    struct flux_msglist *store_requests;
+    struct msgstack *load_requests;
+    struct msgstack *store_requests;
     double lastused;
 };
 
@@ -70,7 +75,7 @@ struct content_cache {
     uint8_t backing:1;              /* 'content.backing' service available */
     char *backing_name;
     char hash_name[BLOBREF_MAX_STRING_SIZE];
-    struct flux_msglist *flush_requests;
+    struct msgstack *flush_requests;
 
     uint32_t blob_size_limit;
     uint32_t flush_batch_limit;
@@ -89,57 +94,70 @@ struct content_cache {
 static void flush_respond (struct content_cache *cache);
 static int cache_flush (struct content_cache *cache);
 
+static int msgstack_push (struct msgstack **msp, const flux_msg_t *msg)
+{
+    struct msgstack *ms;
+    if (!(ms = malloc (sizeof (*ms))))
+        return -1;
+    ms->msg = flux_msg_incref (msg);
+    ms->next = *msp;
+    *msp = ms;
+    return 0;
+}
+
+static const flux_msg_t *msgstack_pop (struct msgstack **msp)
+{
+    struct msgstack *ms;
+    const flux_msg_t *msg = NULL;
+
+    if ((ms = *msp)) {
+        *msp = ms->next;
+        msg = ms->msg;
+        free (ms);
+    }
+    return msg;
+}
+
+static void msgstack_destroy (struct msgstack **msp)
+{
+    const flux_msg_t *msg;
+    while ((msg = msgstack_pop (msp)))
+        flux_msg_decref (msg);
+}
+
+
 /* Respond identically to a list of requests.
- * The list is always run to completion, then destroyed.
+ * The list is always run to completion.
  * On error, log at LOG_ERR level.
  */
-static void request_list_respond_raw (struct flux_msglist **l,
+static void request_list_respond_raw (struct msgstack **l,
                                       flux_t *h,
                                       const void *data,
                                       int len,
                                       const char *type)
 {
-    if (*l) {
-        const flux_msg_t *msg;
-        while ((msg = flux_msglist_pop (*l))) {
-            if (flux_respond_raw (h, msg, data, len) < 0)
-                flux_log_error (h, "%s (%s):", __FUNCTION__, type);
-            flux_msg_decref (msg);
-        }
-        flux_msglist_destroy (*l);
-        *l = NULL;
+    const flux_msg_t *msg;
+    while ((msg = msgstack_pop (l))) {
+        if (flux_respond_raw (h, msg, data, len) < 0)
+            flux_log_error (h, "%s (%s):", __FUNCTION__, type);
+        flux_msg_decref (msg);
     }
 }
 
 /* Same as above only send errnum, errmsg response
  */
-static void request_list_respond_error (struct flux_msglist **l,
+static void request_list_respond_error (struct msgstack **l,
                                         flux_t *h,
                                         int errnum,
                                         const char *errmsg,
                                         const char *type)
 {
-    if (*l) {
-        const flux_msg_t *msg;
-        while ((msg = flux_msglist_pop (*l))) {
-            if (flux_respond_error (h, msg, errnum, errmsg) < 0)
-                flux_log_error (h, "%s (%s):", __FUNCTION__, type);
-            flux_msg_decref (msg);
-        }
-        flux_msglist_destroy (*l);
-        *l = NULL;
+    const flux_msg_t *msg;
+    while ((msg = msgstack_pop (l))) {
+        if (flux_respond_error (h, msg, errnum, errmsg) < 0)
+            flux_log_error (h, "%s (%s):", __FUNCTION__, type);
+        flux_msg_decref (msg);
     }
-}
-
-/* Add request message to a list, creating the list as needed.
- * Returns 0 on succes, -1 on failure with errno set.
- */
-static int msglist_append_create (struct flux_msglist **l,
-                                  const flux_msg_t *msg)
-{
-    if (!*l && !(*l = flux_msglist_create ()))
-        return -1;
-    return flux_msglist_append (*l, msg);
 }
 
 /* Destroy a cache entry
@@ -148,13 +166,13 @@ static void cache_entry_destroy (struct cache_entry *e)
 {
     if (e) {
         int saved_errno = errno;
-        if (flux_msglist_count (e->load_requests) > 0)
+        if (e->load_requests > 0)
             flux_log (e->h, LOG_ERR, "cache entry freed with pending loads");
-        if (flux_msglist_count (e->store_requests) > 0)
+        if (e->store_requests > 0)
             flux_log (e->h, LOG_ERR, "cache entry freed wtih pending stores");
         free (e->data);
-        flux_msglist_destroy (e->load_requests);
-        flux_msglist_destroy (e->store_requests);
+        msgstack_destroy (&e->load_requests);
+        msgstack_destroy (&e->store_requests);
         free (e);
         errno = saved_errno;
     }
@@ -241,8 +259,8 @@ static struct cache_entry *lookup_entry (struct content_cache *cache,
  */
 static void remove_entry (struct content_cache *cache, struct cache_entry *e)
 {
-    assert (flux_msglist_count (e->load_requests) == 0);
-    assert (flux_msglist_count (e->store_requests) == 0);
+    assert (e->load_requests == NULL);
+    assert (e->store_requests == NULL);
     if (e->valid) {
         cache->acct_size -= e->len;
         cache->acct_valid--;
@@ -374,7 +392,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
     if (!e->valid) {
         if (cache_load (cache, e) < 0)
             goto error;
-        if (msglist_append_create (&e->load_requests, msg) < 0) {
+        if (msgstack_push (&e->load_requests, msg) < 0) {
             flux_log_error (h, "content load");
             goto error;
         }
@@ -561,7 +579,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
             if (cache_store (cache, e) < 0)
                 goto error;
             if (cache->rank > 0) {  /* write-through */
-                if (msglist_append_create (&e->store_requests, msg) < 0)
+                if (msgstack_push (&e->store_requests, msg) < 0)
                     goto error;
                 return;
             }
@@ -802,7 +820,7 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
         if (cache_flush (cache) < 0)
             goto error;
         if (cache->acct_dirty > 0) {
-            if (msglist_append_create (&cache->flush_requests, msg) < 0)
+            if (msgstack_push (&cache->flush_requests, msg) < 0)
                 goto error;
             return;
         }
@@ -1035,7 +1053,7 @@ void content_cache_destroy (struct content_cache *cache)
         flux_msg_handler_delvec (cache->handlers);
         free (cache->backing_name);
         zhashx_destroy (&cache->entries);
-        flux_msglist_destroy (cache->flush_requests);
+        msgstack_destroy (&cache->flush_requests);
         free (cache);
         errno = saved_errno;
     }
