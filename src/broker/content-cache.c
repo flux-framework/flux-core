@@ -52,7 +52,6 @@ struct msgstack {
 };
 
 struct cache_entry {
-    flux_t *h;
     void *data;
     int len;
     char *blobref;
@@ -166,10 +165,8 @@ static void cache_entry_destroy (struct cache_entry *e)
 {
     if (e) {
         int saved_errno = errno;
-        if (e->load_requests > 0)
-            flux_log (e->h, LOG_ERR, "cache entry freed with pending loads");
-        if (e->store_requests > 0)
-            flux_log (e->h, LOG_ERR, "cache entry freed wtih pending stores");
+        assert (e->load_requests == 0);
+        assert (e->store_requests == 0);
         free (e->data);
         msgstack_destroy (&e->load_requests);
         msgstack_destroy (&e->store_requests);
@@ -201,7 +198,6 @@ static struct cache_entry *cache_entry_create (flux_t *h, const char *blobref)
 
     if (!(e = calloc (1, sizeof (*e) + bloblen)))
         return NULL;
-    e->h = h;
     e->blobref = (char *)(e + 1);
     memcpy (e->blobref, blobref, bloblen);
     return e;
