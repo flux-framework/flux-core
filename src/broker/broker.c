@@ -404,12 +404,8 @@ int main (int argc, char *argv[])
 
     /* Create content cache.
      */
-    if (!(ctx.cache = content_cache_create (ctx.h))) {
+    if (!(ctx.cache = content_cache_create (ctx.h, ctx.attrs))) {
         log_err ("content_cache_create");
-        goto cleanup;
-    }
-    if (content_cache_register_attrs (ctx.cache, ctx.attrs) < 0) {
-        log_err ("content cache attributes");
         goto cleanup;
     }
 

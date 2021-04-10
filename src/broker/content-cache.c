@@ -975,7 +975,7 @@ static int content_cache_getattr (const char *name, const char **val, void *arg)
     return 0;
 }
 
-int content_cache_register_attrs (struct content_cache *cache, attr_t *attr)
+static int register_attrs (struct content_cache *cache, attr_t *attr)
 {
     const char *s;
 
@@ -1055,7 +1055,7 @@ void content_cache_destroy (struct content_cache *cache)
     }
 }
 
-struct content_cache *content_cache_create (flux_t *h)
+struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
 {
     struct content_cache *cache;
 
@@ -1076,6 +1076,10 @@ struct content_cache *content_cache_create (flux_t *h)
     cache->purge_large_entry = default_cache_purge_large_entry;
     strcpy (cache->hash_name, "sha1");
     cache->h = h;
+
+    if (register_attrs (cache, attrs) < 0)
+        goto error;
+
     if (flux_msg_handler_addvec (h, htab, cache, &cache->handlers) < 0)
         goto error;
     if (flux_get_rank (h, &cache->rank) < 0)
