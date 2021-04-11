@@ -21,7 +21,8 @@ SUBDIRS = \
 	libterminus \
 	libcontent \
 	libhostlist \
-	librlist
+	librlist \
+	libczmqcontainers
 
 AM_CFLAGS = $(WARNING_CFLAGS) $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS = $(CODE_COVERAGE_LIBS)
@@ -42,6 +43,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libioencode/libioencode.la \
 	$(builddir)/librouter/librouter.la \
 	$(builddir)/libhostlist/libhostlist.la \
+	$(builddir)/libczmqcontainers/libczmqcontainers.la \
 	$(JANSSON_LIBS) \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
