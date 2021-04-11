@@ -67,6 +67,7 @@ struct cache_entry {
 
 struct content_cache {
     flux_t *h;
+    flux_reactor_t *reactor;
     flux_msg_handler_t **handlers;
     flux_future_t *f_sync;
     uint32_t rank;
@@ -377,7 +378,7 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
         cache->acct_valid++;
         cache->acct_size += len;
     }
-    e->lastused = flux_reactor_now (flux_get_reactor (cache->h));
+    e->lastused = flux_reactor_now (cache->reactor);
     request_list_respond_raw (&e->load_requests,
                               cache->h,
                               e->data,
@@ -470,7 +471,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
         }
         return; /* RPC continuation will respond to msg */
     }
-    e->lastused = flux_reactor_now (flux_get_reactor (cache->h));
+    e->lastused = flux_reactor_now (cache->reactor);
     data = e->data;
     len = e->len;
     if (flux_respond_raw (h, msg, data, len) < 0)
@@ -645,7 +646,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
             cache->acct_dirty++;
         }
     }
-    e->lastused = flux_reactor_now (flux_get_reactor (cache->h));
+    e->lastused = flux_reactor_now (cache->reactor);
     if (e->dirty) {
         if (cache->rank > 0 || cache->backing) {
             if (cache_store (cache, e) < 0)
@@ -930,7 +931,7 @@ static bool cache_purge_map (struct content_cache *cache,
 
 static void cache_purge (struct content_cache *cache)
 {
-    double now = flux_reactor_now (flux_get_reactor (cache->h));
+    double now = flux_reactor_now (cache->reactor);
 
     cache_lru_map (cache, cache_purge_map, &now);
 }
@@ -1119,6 +1120,7 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
     cache->purge_old_entry = default_cache_purge_old_entry;
     strcpy (cache->hash_name, "sha1");
     cache->h = h;
+    cache->reactor = flux_get_reactor (h);
 
     if (register_attrs (cache, attrs) < 0)
         goto error;
