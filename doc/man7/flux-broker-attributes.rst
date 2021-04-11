@@ -149,17 +149,9 @@ content.flush-batch-limit
 content.hash
    The selected hash algorithm, default sha1.
 
-content.purge-large-entry
-   When the cache size footprint needs to be reduced, first consider
-   purging entries of this size or greater.
-
 content.purge-old-entry
    When the cache size footprint needs to be reduced, only consider
    purging entries that are older than this number of seconds.
-
-content.purge-target-entries
-   If possible, the cache size purged periodically so that the total
-   number of entries stays at or below this value.
 
 content.purge-target-size
    If possible, the cache size purged periodically so that the total

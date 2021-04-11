@@ -79,11 +79,6 @@ CACHE EXPIRATION
 The parameters affecting local cache expiration may be tuned with
 flux-setattr(1):
 
-**content.purge-target-entries**
-   The cache is purged to bring the number of cache entries less than
-   or equal to this value
-   (default 1048576).
-
 **content.purge-target-size**
    The cache is purged to bring the sum of the size of cached blobs less
    than or equal to this value
@@ -93,12 +88,7 @@ flux-setattr(1):
    Only entries that have not been accessed in **old-entry** seconds
    are eligible for purge (default 10).
 
-**content.purge-large-entry**
-   Only entries with blob size greater than or equal to **large-entry** are
-   purged to reach the size target (default 256).
-
-Expiration becomes active on every heartbeat, when the cache exceeds one
-or both of the targets configured above. Dirty or invalid entries are
+Expiration becomes active on every heartbeat.  Dirty or invalid entries are
 not eligible for purge.
 
 
