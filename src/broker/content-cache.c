@@ -31,11 +31,8 @@
 static double sync_min = 1.;
 static double sync_max = 10.;
 
-static const uint32_t default_cache_purge_target_entries = 1024*1024;
 static const uint32_t default_cache_purge_target_size = 1024*1024*16;
-
 static const uint32_t default_cache_purge_old_entry = 10; // seconds
-static const uint32_t default_cache_purge_large_entry = 256;
 
 /* Raise the max blob size value to 1GB so that large KVS values
  * (including KVS directories) can be supported while the KVS transitions
@@ -63,6 +60,9 @@ struct cache_entry {
     struct msgstack *load_requests;
     struct msgstack *store_requests;
     double lastused;
+
+    struct cache_entry *lru_prev;
+    struct cache_entry *lru_next;
 };
 
 struct content_cache {
@@ -76,19 +76,24 @@ struct content_cache {
     char hash_name[BLOBREF_MAX_STRING_SIZE];
     struct msgstack *flush_requests;
 
+    struct cache_entry *lru_first;
+    struct cache_entry *lru_last;
+
     uint32_t blob_size_limit;
     uint32_t flush_batch_limit;
     uint32_t flush_batch_count;
 
-    uint32_t purge_target_entries;
     uint32_t purge_target_size;
     uint32_t purge_old_entry;
-    uint32_t purge_large_entry;
 
     uint32_t acct_size;             /* total size of all cache entries */
     uint32_t acct_valid;            /* count of valid cache entries */
     uint32_t acct_dirty;            /* count of dirty cache entries */
 };
+
+typedef bool (*lru_map_f)(struct content_cache *cache,
+                          struct cache_entry *entry,
+                          void *arg);
 
 static void flush_respond (struct content_cache *cache);
 static int cache_flush (struct content_cache *cache);
@@ -156,6 +161,70 @@ static void request_list_respond_error (struct msgstack **l,
         if (flux_respond_error (h, msg, errnum, errmsg) < 0)
             flux_log_error (h, "%s (%s):", __FUNCTION__, type);
         flux_msg_decref (msg);
+    }
+}
+
+/* Add entry to the front of the LRU list.
+ */
+static void cache_lru_push (struct content_cache *cache,
+                            struct cache_entry *entry)
+{
+    entry->lru_next = cache->lru_first;
+    if (cache->lru_last == NULL)
+        cache->lru_last = cache->lru_first = entry;
+    else {
+        cache->lru_first->lru_prev = entry;
+        cache->lru_first = entry;
+    }
+}
+
+/* Remove entry from LRU list.
+ * This is a no-op if entry is not in the LRU list.
+ */
+static void cache_lru_remove (struct content_cache *cache,
+                              struct cache_entry *entry)
+{
+    if (cache->lru_first == entry)
+        cache->lru_first = entry->lru_next;
+    else if (entry->lru_prev != NULL)
+        entry->lru_prev->lru_next = entry->lru_next;
+    if (cache->lru_last == entry)
+        cache->lru_last = entry->lru_prev;
+    else if (entry->lru_next != NULL)
+        entry->lru_next->lru_prev = entry->lru_prev;
+
+    entry->lru_prev = entry->lru_next = NULL;
+}
+
+/* Move entry to the front of the LRU list.
+ * - if entry is already at the front, this is a no-op
+ * - if entry is not in the list, this is equivalent to cache_lru_push()
+ */
+static void cache_lru_move (struct content_cache *cache,
+                            struct cache_entry *entry)
+{
+    if (cache->lru_first != entry) {
+        cache_lru_remove (cache, entry);
+        cache_lru_push (cache, entry);
+    }
+}
+
+/* Call 'map' function for each cache entry, in reverse-LRU order.
+ * - the map function returns true to continue, false to stop iteration
+ * - the map function may safely call cache_lru_remove()
+ */
+static void cache_lru_map (struct content_cache *cache,
+                           lru_map_f map,
+                           void *arg)
+{
+    struct cache_entry *e;
+
+    e = cache->lru_last;
+    while (e) {
+        struct cache_entry *next = e ? e->lru_prev : NULL;
+        if (!map (cache, e, arg))
+            break;
+        e = next;
     }
 }
 
@@ -238,6 +307,7 @@ static int cache_entry_insert (struct content_cache *cache,
     }
     if (e->dirty)
         cache->acct_dirty++;
+    cache_lru_push (cache, e);
     return 0;
 }
 
@@ -245,18 +315,24 @@ static int cache_entry_insert (struct content_cache *cache,
  * Returns entry on success, NULL on failure.
  * N.B. errno is not set
  */
-static struct cache_entry *lookup_entry (struct content_cache *cache,
-                                         const char *blobref)
+static struct cache_entry *cache_entry_lookup (struct content_cache *cache,
+                                               const char *blobref)
 {
-    return zhashx_lookup (cache->entries, blobref);
+    struct cache_entry *e;
+    if (!(e = zhashx_lookup (cache->entries, blobref)))
+        return NULL;
+    cache_lru_move (cache, e);
+    return e;
 }
 
 /* Remove a cache entry.
  */
-static void remove_entry (struct content_cache *cache, struct cache_entry *e)
+static void cache_entry_remove (struct content_cache *cache,
+                                struct cache_entry *e)
 {
     assert (e->load_requests == NULL);
     assert (e->store_requests == NULL);
+    cache_lru_remove (cache, e);
     if (e->valid) {
         cache->acct_size -= e->len;
         cache->acct_valid--;
@@ -315,7 +391,7 @@ error:
                                 errno,
                                 NULL,
                                 "load");
-    remove_entry (cache, e);
+    cache_entry_remove (cache, e);
     flux_future_destroy (f);
 }
 
@@ -373,7 +449,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-    if (!(e = lookup_entry (cache, blobref))) {
+    if (!(e = cache_entry_lookup (cache, blobref))) {
         if (cache->rank == 0 && !cache->backing) {
             errno = ENOENT;
             goto error;
@@ -543,7 +619,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
                       sizeof (blobref)) < 0)
         goto error;
 
-    if (!(e = lookup_entry (cache, blobref))) {
+    if (!(e = cache_entry_lookup (cache, blobref))) {
         if (!(e = cache_entry_create (h, blobref)))
             goto error;
         if (cache_entry_insert (cache, e) < 0) {
@@ -736,7 +812,7 @@ static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
     }
     if (drop) {
         while ((e = zlistx_detach_cur (drop)))
-            remove_entry (cache, e);
+            cache_entry_remove (cache, e);
         zlistx_destroy (&drop);
     }
     flux_log (h, LOG_DEBUG, "content dropcache %d/%d",
@@ -838,51 +914,25 @@ error:
 /* Heartbeat drives periodic cache purge
  */
 
-static int cache_purge (struct content_cache *cache)
+static bool cache_purge_map (struct content_cache *cache,
+                             struct cache_entry *e,
+                             void *arg)
+{
+    double *now = arg;
+
+    if (cache->acct_size <= cache->purge_target_size
+        || *now - e->lastused < cache->purge_old_entry)
+        return false;
+    if (e->valid && !e->dirty)
+        cache_entry_remove (cache, e);
+    return true;
+}
+
+static void cache_purge (struct content_cache *cache)
 {
     double now = flux_reactor_now (flux_get_reactor (cache->h));
-    int after_entries = zhashx_size (cache->entries);
-    int after_size = cache->acct_size;
-    struct cache_entry *e;
-    zlistx_t *purge = NULL;
-    int rc = -1;
-    const char *key;
 
-    if (cache->acct_dirty == zhashx_size (cache->entries))
-        return 0;
-
-    FOREACH_ZHASHX (cache->entries, key, e) {
-        if (after_size <= cache->purge_target_size
-                        && after_entries <= cache->purge_target_entries)
-            break;
-        if (!e->valid || e->dirty)
-            continue;
-        if (now - e->lastused < cache->purge_old_entry)
-            continue;
-        if (after_entries <= cache->purge_target_entries
-                    && e->len < cache->purge_large_entry)
-            continue;
-        if (!purge && !(purge = zlistx_new ())) {
-            errno = ENOMEM;
-            goto done;
-        }
-        if (zlistx_add_end (purge, e) < 0) {
-            errno = ENOMEM;
-            goto done;
-        }
-        after_size -= e->len;
-        after_entries--;
-    }
-    if (purge) {
-        flux_log (cache->h, LOG_DEBUG, "content purge: %d entries",
-                  (int)zlistx_size (purge));
-        while ((e = zlistx_detach_cur (purge)))
-            remove_entry (cache, e);
-    }
-    rc = 0;
-done:
-    ERRNO_SAFE_WRAP (zlistx_destroy, &purge);
-    return rc;
+    cache_lru_map (cache, cache_purge_map, &now);
 }
 
 static void sync_cb (flux_future_t *f, void *arg)
@@ -890,6 +940,7 @@ static void sync_cb (flux_future_t *f, void *arg)
     struct content_cache *cache = arg;
 
     cache_purge (cache);
+
     flux_future_reset (f);
 }
 
@@ -991,17 +1042,11 @@ static int register_attrs (struct content_cache *cache, attr_t *attr)
 
     /* Purge tunables
      */
-    if (attr_add_active_uint32 (attr, "content.purge-target-entries",
-                &cache->purge_target_entries, 0) < 0)
-        return -1;
     if (attr_add_active_uint32 (attr, "content.purge-target-size",
                 &cache->purge_target_size, 0) < 0)
         return -1;
     if (attr_add_active_uint32 (attr, "content.purge-old-entry",
                 &cache->purge_old_entry, 0) < 0)
-        return -1;
-    if (attr_add_active_uint32 (attr, "content.purge-large-entry",
-                &cache->purge_large_entry, 0) < 0)
         return -1;
     /* Accounting numbers
      */
@@ -1070,10 +1115,8 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
     cache->rank = FLUX_NODEID_ANY;
     cache->blob_size_limit = default_blob_size_limit;
     cache->flush_batch_limit = default_flush_batch_limit;
-    cache->purge_target_entries = default_cache_purge_target_entries;
     cache->purge_target_size = default_cache_purge_target_size;
     cache->purge_old_entry = default_cache_purge_old_entry;
-    cache->purge_large_entry = default_cache_purge_large_entry;
     strcpy (cache->hash_name, "sha1");
     cache->h = h;
 
