@@ -475,8 +475,7 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose > 1)
         log_msg ("initializing modules");
-    modhash_set_rank (ctx.modhash, ctx.rank);
-    modhash_set_flux (ctx.modhash, ctx.h);
+    modhash_initialize (ctx.modhash, ctx.h, ctx.uuid);
 
     /* Configure broker state machine
      */

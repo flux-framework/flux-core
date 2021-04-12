@@ -89,6 +89,7 @@ struct modhash {
     zhash_t *zh_byuuid;
     uint32_t rank;
     flux_t *broker_h;
+    char uuid_str[UUID_STR_LEN];
 };
 
 static int setup_module_profiling (module_t *p)
@@ -96,7 +97,7 @@ static int setup_module_profiling (module_t *p)
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.type", "module");
     cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
-    cali_begin_int_byname ("flux.rank", p->rank);
+    cali_begin_int_byname ("flux.rank", p->modhash->rank);
     cali_begin_string_byname ("flux.name", p->name);
 #endif
     return (0);
@@ -144,7 +145,7 @@ static void *module_thread (void *arg)
     int errnum;
     char *uri = NULL;
     char **av = NULL;
-    char *rankstr = NULL;
+    const char *rankstr;
     int ac;
     int mod_main_errno = 0;
     flux_msg_t *msg;
@@ -162,12 +163,9 @@ static void *module_thread (void *arg)
         log_err ("flux_open %s", uri);
         goto done;
     }
-    if (asprintf (&rankstr, "%"PRIu32, p->modhash->rank) < 0) {
-        log_err ("asprintf");
-        goto done;
-    }
-    if (flux_attr_set_cacheonly (p->h, "rank", rankstr) < 0) {
-        log_err ("%s: error faking rank attribute", p->name);
+    if (!(rankstr = flux_attr_get (p->modhash->broker_h, "rank"))
+        || flux_attr_set_cacheonly (p->h, "rank", rankstr) < 0) {
+        log_err ("%s: error duplicating rank attribute", p->name);
         goto done;
     }
     flux_log_set_appname (p->h, p->name);
@@ -239,7 +237,6 @@ static void *module_thread (void *arg)
     flux_msg_destroy (msg);
 done:
     free (uri);
-    free (rankstr);
     free (av);
     flux_close (p->h);
     p->h = NULL;
@@ -324,11 +321,9 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
     }
     switch (type) {
         case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
-            char uuid[16];
-            snprintf (uuid, sizeof (uuid), "%"PRIu32, p->modhash->rank);
             if (!(cpy = flux_msg_copy (msg, true)))
                 goto done;
-            if (flux_msg_push_route (cpy, uuid) < 0)
+            if (flux_msg_push_route (cpy, p->modhash->uuid_str) < 0)
                 goto done;
             if (flux_msg_sendzsock (p->sock, cpy) < 0)
                 goto done;
@@ -706,14 +701,11 @@ void modhash_destroy (modhash_t *mh)
     errno = saved_errno;
 }
 
-void modhash_set_rank (modhash_t *mh, uint32_t rank)
-{
-    mh->rank = rank;
-}
-
-void modhash_set_flux (modhash_t *mh, flux_t *h)
+void modhash_initialize (modhash_t *mh, flux_t *h, const char *uuid)
 {
     mh->broker_h = h;
+    flux_get_rank (h, &mh->rank);
+    strncpy (mh->uuid_str, uuid, sizeof (mh->uuid_str) - 1);
 }
 
 json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw)
