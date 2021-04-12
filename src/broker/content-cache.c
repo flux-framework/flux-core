@@ -31,6 +31,8 @@
 static double sync_min = 1.;
 static double sync_max = 10.;
 
+static const char *default_hash = "sha1";
+
 static const uint32_t default_cache_purge_target_size = 1024*1024*16;
 static const uint32_t default_cache_purge_old_entry = 10; // seconds
 
@@ -74,7 +76,7 @@ struct content_cache {
     zhashx_t *entries;
     uint8_t backing:1;              /* 'content.backing' service available */
     char *backing_name;
-    char hash_name[BLOBREF_MAX_STRING_SIZE];
+    const char *hash_name;
     struct msgstack *flush_requests;
 
     struct cache_entry *lru_first;
@@ -995,29 +997,11 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-static int content_cache_setattr (const char *name, const char *val, void *arg)
-{
-
-    struct content_cache *cache = arg;
-    if (!strcmp (name, "content.hash")) {
-        if (blobref_validate_hashtype (val) < 0)
-            goto invalid;
-        strcpy (cache->hash_name, val);
-    } else
-        goto invalid;
-    return 0;
-invalid:
-    errno = EINVAL;
-    return -1;
-}
-
 static int content_cache_getattr (const char *name, const char **val, void *arg)
 {
     struct content_cache *cache = arg;
 
-    if (!strcmp (name, "content.hash"))
-        *val = cache->hash_name;
-    else if (!strcmp (name, "content.backing-module"))
+    if (!strcmp (name, "content.backing-module"))
         *val = cache->backing_name;
     else
         return -1;
@@ -1038,6 +1022,25 @@ static int register_attrs (struct content_cache *cache, attr_t *attr)
             return -1;
     }
 
+    /* content.hash may be set on the command line.
+     */
+    if (attr_get (attr, "content.hash", &s, NULL) < 0) {
+        if (attr_add (attr,
+                      "content.hash",
+                      cache->hash_name,
+                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            return -1;
+    }
+    else {
+        if (blobref_validate_hashtype (s) < 0) {
+            log_msg ("%s: unknown hash type", s);
+            return -1;
+        }
+        if (attr_set_flags (attr, "content.hash", FLUX_ATTRFLAG_IMMUTABLE) < 0)
+            return -1;
+        cache->hash_name = s;
+    }
+
     /* Purge tunables
      */
     if (attr_add_active_uint32 (attr, "content.purge-target-size",
@@ -1056,12 +1059,6 @@ static int register_attrs (struct content_cache *cache, attr_t *attr)
         return -1;
     if (attr_add_active (attr, "content.backing-module",FLUX_ATTRFLAG_READONLY,
                  content_cache_getattr, NULL, cache) < 0)
-        return -1;
-    /* content-hash can be set on the command line
-     */
-    if (attr_add_active (attr, "content.hash", FLUX_ATTRFLAG_IMMUTABLE,
-                         content_cache_getattr,
-                         content_cache_setattr, cache) < 0)
         return -1;
 
     return 0;
@@ -1098,7 +1095,7 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
     cache->flush_batch_limit = default_flush_batch_limit;
     cache->purge_target_size = default_cache_purge_target_size;
     cache->purge_old_entry = default_cache_purge_old_entry;
-    strcpy (cache->hash_name, "sha1");
+    cache->hash_name = default_hash;
     cache->h = h;
     cache->reactor = flux_get_reactor (h);
 
