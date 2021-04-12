@@ -840,11 +840,12 @@ static void content_stats_request (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (flux_respond_pack (h, msg, "{ s:i s:i s:i s:i}",
+    if (flux_respond_pack (h, msg, "{s:i s:i s:i s:i s:i}",
                            "count", zhashx_size (cache->entries),
                            "valid", cache->acct_valid,
                            "dirty", cache->acct_dirty,
-                           "size", cache->acct_size) < 0)
+                           "size", cache->acct_size,
+                           "flush-batch-count", cache->flush_batch_count) < 0)
         flux_log_error (h, "content stats");
     return;
 error:
@@ -1013,16 +1014,12 @@ invalid:
 static int content_cache_getattr (const char *name, const char **val, void *arg)
 {
     struct content_cache *cache = arg;
-    static char s[32];
 
     if (!strcmp (name, "content.hash"))
         *val = cache->hash_name;
     else if (!strcmp (name, "content.backing-module"))
         *val = cache->backing_name;
-    else if (!strcmp (name, "content.acct-entries")) {
-        snprintf (s, sizeof (s), "%zd", zhashx_size (cache->entries));
-        *val = s;
-    } else
+    else
         return -1;
     return 0;
 }
@@ -1049,20 +1046,6 @@ static int register_attrs (struct content_cache *cache, attr_t *attr)
     if (attr_add_active_uint32 (attr, "content.purge-old-entry",
                 &cache->purge_old_entry, 0) < 0)
         return -1;
-    /* Accounting numbers
-     */
-    if (attr_add_active_uint32 (attr, "content.acct-size",
-                &cache->acct_size, FLUX_ATTRFLAG_READONLY) < 0)
-        return -1;
-    if (attr_add_active_uint32 (attr, "content.acct-dirty",
-                &cache->acct_dirty, FLUX_ATTRFLAG_READONLY) < 0)
-        return -1;
-    if (attr_add_active_uint32 (attr, "content.acct-valid",
-                &cache->acct_valid, FLUX_ATTRFLAG_READONLY) < 0)
-        return -1;
-    if (attr_add_active (attr, "content.acct-entries", FLUX_ATTRFLAG_READONLY,
-                content_cache_getattr, NULL, cache) < 0)
-        return -1;
     /* Misc
      */
     if (attr_add_active_uint32 (attr, "content.flush-batch-limit",
@@ -1073,9 +1056,6 @@ static int register_attrs (struct content_cache *cache, attr_t *attr)
         return -1;
     if (attr_add_active (attr, "content.backing-module",FLUX_ATTRFLAG_READONLY,
                  content_cache_getattr, NULL, cache) < 0)
-        return -1;
-    if (attr_add_active_uint32 (attr, "content.flush-batch-count",
-                &cache->flush_batch_count, 0) < 0)
         return -1;
     /* content-hash can be set on the command line
      */
