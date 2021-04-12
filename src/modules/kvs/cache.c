@@ -32,6 +32,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libkvs/kvs_util_private.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "waitqueue.h"
 #include "cache.h"

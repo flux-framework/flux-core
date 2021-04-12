@@ -22,6 +22,7 @@
 #include <flux/shell.h>
 
 #include "src/common/libeventlog/eventlogger.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 struct shell_eventlogger {
     flux_shell_t *shell;

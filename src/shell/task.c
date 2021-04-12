@@ -41,6 +41,8 @@
 #include <flux/core.h>
 #include <flux/shell.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "task.h"
 #include "info.h"
 

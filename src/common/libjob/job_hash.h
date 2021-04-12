@@ -14,6 +14,8 @@
 #include <flux/core.h>
 #include <czmq.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 /* Create a zhashx_t with hasher and comparator set to use flux_jobid_t
  * as the hash key.  The default key duplicator and destructor are disabled
  * on the presumption that the id is a member of the job object.

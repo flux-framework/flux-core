@@ -27,6 +27,7 @@
 #include <flux/core.h>
 
 #include "src/common/libjob/job.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "job.h"
 #include "list.h"

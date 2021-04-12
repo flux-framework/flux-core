@@ -17,6 +17,7 @@
 #include "job-list.h"
 #include "stats.h"
 #include "src/common/libutil/grudgeset.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 /* To handle the common case of user queries on job state, we will
  * store jobs in three different lists.

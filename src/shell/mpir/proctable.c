@@ -15,6 +15,8 @@
 #include <errno.h>
 #include <czmq.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "mpir/rangelist.h"
 #include "mpir/nodelist.h"
 #include "mpir/proctable.h"

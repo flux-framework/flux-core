@@ -90,11 +90,13 @@ fluxcmd_PROGRAMS = \
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
-	$(top_builddir)/src/common/libpmi/libpmi_server.la
+	$(top_builddir)/src/common/libpmi/libpmi_server.la \
+	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la
 
 flux_job_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(top_builddir)/src/shell/libmpir.la \
+	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
 	$(top_builddir)/src/common/libdebugged/libdebugged.la \
 	$(top_builddir)/src/common/libterminus/libterminus.la
 
@@ -108,6 +110,7 @@ flux_terminus_LDADD = \
 flux_R_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(top_builddir)/src/common/librlist/librlist.la \
+	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
 	$(top_builddir)/src/common/libhostlist/libhostlist.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
 	$(top_builddir)/src/common/libutil/libutil.la \

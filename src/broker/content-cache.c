@@ -20,6 +20,7 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "attr.h"
 #include "content-cache.h"

@@ -22,6 +22,7 @@
 #include <flux/shell.h>
 
 #include "src/common/libutil/iterators.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "plugstack.h"
 

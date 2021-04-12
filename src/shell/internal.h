@@ -17,6 +17,8 @@
 #include <flux/shell.h>
 
 #include "src/common/libutil/aux.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "plugstack.h"
 #include "events.h"
 
