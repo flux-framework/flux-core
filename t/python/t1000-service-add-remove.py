@@ -25,28 +25,18 @@ def __flux_size():
     return 2
 
 
-def service_add(f, name):
-    future = f.service_register(name)
-    return f.future_get(future, ffi.NULL)
-
-
-def service_remove(f, name):
-    future = f.service_unregister(name)
-    return f.future_get(future, ffi.NULL)
-
-
 class TestServiceAddRemove(unittest.TestCase):
     @classmethod
     def setUpClass(self):
         self.f = flux.Flux()
 
     def test_001_register_service(self):
-        rc = service_add(self.f, "foo")
-        self.assertEqual(rc, 0)
+        rc = self.f.service_register("foo").get()
+        self.assertEqual(rc, None)
 
     def test_002_service_add_eexist(self):
         with self.assertRaises(EnvironmentError) as e:
-            service_add(self.f, "foo")
+            self.f.service_register("foo").get()
         self.assertEqual(e.exception.errno, errno.EEXIST)
 
     def test_003_add_service_message_watcher(self):
@@ -87,15 +77,15 @@ class TestServiceAddRemove(unittest.TestCase):
         w2.destroy()
 
     def test_005_unregister_service(self):
-        rc = service_remove(self.f, "foo")
-        self.assertEqual(rc, 0)
+        rc = self.f.service_unregister("foo").get()
+        self.assertEqual(rc, None)
 
         # done with message handler
         self.f.watcher.destroy()
 
     def test_006_unregister_service_enoent(self):
         with self.assertRaises(EnvironmentError) as e:
-            service_remove(self.f, "foo")
+            self.f.service_unregister("foo").get()
         self.assertEqual(e.exception.errno, errno.ENOENT)
 
     def test_007_service_rpc_enosys(self):
@@ -115,7 +105,11 @@ class TestServiceAddRemove(unittest.TestCase):
             import sys
 
             h = flux.Flux()
-            sys.exit(service_add(h, "baz"))
+            try:
+                h.service_register("baz").get()
+            except Exception():
+                sys.exit(-1)
+            sys.exit(0)
 
         p = Process(target=add_service_and_disconnect)
         p.start()

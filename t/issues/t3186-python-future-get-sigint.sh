@@ -9,10 +9,9 @@ die() { log "$@"; exit 1; }
 
 cat <<EOF >get-intr.py || die "Failed to create test script"
 import flux
-from flux.future import Future
 
 f = flux.Flux()
-Future(f.service_register("$SERVICE")).get()
+f.service_register("$SERVICE").get()
 print("get-intr.py: Added service $SERVICE", flush=True)
 
 # The following should block until interrupted:

@@ -199,8 +199,7 @@ class TestHandle(unittest.TestCase):
             for x in range(msg.payload["count"]):
                 fh.respond(msg, {"seq": x})
 
-        fut = self.f.service_register("rpctest")
-        self.f.future_get(fut, ffi.NULL)
+        self.f.service_register("rpctest").get()
         watcher = self.f.msg_watcher_create(
             service_cb, flux.constants.FLUX_MSGTYPE_REQUEST, "rpctest.multi"
         )
