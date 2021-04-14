@@ -213,7 +213,12 @@ class FunctionWrapper(object):
             if errnum != 0:
                 raise EnvironmentError(
                     errnum,
-                    "{}: {}".format(errno.errorcode[errnum], os.strerror(errnum)),
+                    "{}: {}".format(
+                        errno.errorcode[errnum]
+                        if errnum in errno.errorcode
+                        else "Errno" + str(errnum),
+                        os.strerror(errnum),
+                    ),
                 )
 
         return result
