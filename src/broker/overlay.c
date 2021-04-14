@@ -70,6 +70,7 @@ struct overlay {
     flux_watcher_t *zap_w;
 
     flux_t *h;
+    flux_reactor_t *reactor;
     flux_msg_handler_t **handlers;
     flux_future_t *f_sync;
 
@@ -186,7 +187,7 @@ int overlay_get_child_peer_count (struct overlay *ov)
 void overlay_log_idle_children (struct overlay *ov)
 {
     struct child *child;
-    double now = flux_reactor_now (flux_get_reactor (ov->h));
+    double now = flux_reactor_now (ov->reactor);
     char fsd[64];
     int idle;
 
@@ -261,7 +262,7 @@ static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg)
     }
     rc = flux_msg_sendzsock (ov->parent.zsock, msg);
     if (rc == 0)
-        ov->parent.lastsent = flux_reactor_now (flux_get_reactor (ov->h));
+        ov->parent.lastsent = flux_reactor_now (ov->reactor);
 done:
     return rc;
 }
@@ -395,7 +396,7 @@ error:
 static void sync_cb (flux_future_t *f, void *arg)
 {
     struct overlay *ov = arg;
-    double now = flux_reactor_now (flux_get_reactor (ov->h));
+    double now = flux_reactor_now (ov->reactor);
 
     if (now - ov->parent.lastsent > idle_min)
         overlay_keepalive_parent (ov, KEEPALIVE_STATUS_NORMAL);
@@ -511,7 +512,7 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
         case FLUX_MSGTYPE_EVENT:
             break;
     }
-    child->lastseen = flux_reactor_now (flux_get_reactor (ov->h));
+    child->lastseen = flux_reactor_now (ov->reactor);
     if (child->connected != connected) {
         child->connected = connected;
         overlay_monitor_notify (ov);
@@ -663,7 +664,7 @@ static int overlay_zap_init (struct overlay *ov)
         log_err ("could not bind to %s", ZAP_ENDPOINT);
         return -1;
     }
-    if (!(ov->zap_w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
+    if (!(ov->zap_w = flux_zmq_watcher_create (ov->reactor,
                                                ov->zap,
                                                FLUX_POLLIN,
                                                overlay_zap_cb,
@@ -688,7 +689,7 @@ int overlay_connect (struct overlay *ov)
         zsock_set_identity (ov->parent.zsock, ov->rank_str);
         if (zsock_connect (ov->parent.zsock, "%s", ov->parent.uri) < 0)
             goto nomem;
-        if (!(ov->parent.w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
+        if (!(ov->parent.w = flux_zmq_watcher_create (ov->reactor,
                                                       ov->parent.zsock,
                                                       FLUX_POLLIN,
                                                       parent_cb,
@@ -725,7 +726,7 @@ int overlay_bind (struct overlay *ov, const char *uri)
      */
     if (!(ov->bind_uri = zsock_last_endpoint (ov->bind_zsock)))
         return -1;
-    if (!(ov->bind_w = flux_zmq_watcher_create (flux_get_reactor (ov->h),
+    if (!(ov->bind_w = flux_zmq_watcher_create (ov->reactor,
                                                 ov->bind_zsock,
                                                 FLUX_POLLIN,
                                                 child_cb,
@@ -948,6 +949,7 @@ struct overlay *overlay_create (flux_t *h, overlay_recv_f cb, void *arg)
     ov->rank = FLUX_NODEID_ANY;
     ov->parent.lastsent = -1;
     ov->h = h;
+    ov->reactor = flux_get_reactor (h);
     ov->recv_cb = cb;
     ov->recv_arg = arg;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
