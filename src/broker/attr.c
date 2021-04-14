@@ -34,33 +34,24 @@ static void entry_destroy (void *arg)
 {
     struct entry *e = arg;
     if (e) {
-        if (e->val)
-            free (e->val);
-        if (e->name)
-            free (e->name);
+        int saved_errno = errno;
+        free (e->val);
+        free (e->name);
         free (e);
+        errno = saved_errno;
     }
 }
 
 static struct entry *entry_create (const char *name, const char *val, int flags)
 {
-    struct entry *e = calloc (1, sizeof (*e));
-    if (!e) {
-        errno = ENOMEM;
+    struct entry *e;
+    if (!(e = calloc (1, sizeof (*e))))
         return NULL;
-    }
-    if (name) {
-        if (!(e->name = strdup (name))) {
-            errno = ENOMEM;
-            goto cleanup;
-        }
-    }
-    if (val) {
-        if (!(e->val = strdup (val))) {
-            errno = ENOMEM;
-            goto cleanup;
-        }
-    }
+
+    if (name && !(e->name = strdup (name)))
+        goto cleanup;
+    if (val && !(e->val = strdup (val)))
+        goto cleanup;
     e->flags = flags;
     return e;
 cleanup:
@@ -151,10 +142,8 @@ int attr_get (attr_t *attrs, const char *name, const char **val, int *flags)
             if (e->val)
                 free (e->val);
             if (tmp) {
-                if (!(e->val = strdup (tmp))) {
-                    errno = ENOMEM;
+                if (!(e->val = strdup (tmp)))
                     goto done;
-                }
             }
             else
                 e->val = NULL;
@@ -193,10 +182,8 @@ int attr_set (attr_t *attrs, const char *name, const char *val, bool force)
     if (e->val)
         free (e->val);
     if (val) {
-        if (!(e->val = strdup (val))) {
-            errno = ENOMEM;
+        if (!(e->val = strdup (val)))
             goto done;
-        }
     }
     else
         e->val = NULL;
@@ -412,14 +399,11 @@ void lsattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     name = attr_first (attrs);
     while (name) {
-        if (!(js = json_string (name))) {
-            errno = ENOMEM;
-            goto error;
-        }
+        if (!(js = json_string (name)))
+            goto nomem;
         if (json_array_append_new (names, js) < 0) {
             json_decref (js);
-            errno = ENOMEM;
-            goto error;
+            goto nomem;
         }
         name = attr_next (attrs);
     }
@@ -427,6 +411,8 @@ void lsattr_request_cb (flux_t *h, flux_msg_handler_t *mh,
         FLUX_LOG_ERROR (h);
     json_decref (names);
     return;
+nomem:
+    errno = ENOMEM;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
         FLUX_LOG_ERROR (h);
@@ -455,11 +441,10 @@ int attr_register_handlers (attr_t *attrs, flux_t *h)
 
 attr_t *attr_create (void)
 {
-    attr_t *attrs = calloc (1, sizeof (*attrs));
-    if (!attrs) {
-        errno = ENOMEM;
+    attr_t *attrs;
+
+    if (!(attrs = calloc (1, sizeof (*attrs))))
         return NULL;
-    }
     if (!(attrs->hash = zhash_new ())) {
         attr_destroy (attrs);
         errno = ENOMEM;
@@ -471,10 +456,12 @@ attr_t *attr_create (void)
 void attr_destroy (attr_t *attrs)
 {
     if (attrs) {
-        if (attrs->handlers)
-            flux_msg_handler_delvec (attrs->handlers);
+        int saved_errno = errno;
+        flux_msg_handler_delvec (attrs->handlers);
         zhash_destroy (&attrs->hash);
         free (attrs);
+        errno = saved_errno;
+
     }
 }
 
