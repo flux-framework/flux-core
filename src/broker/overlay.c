@@ -802,51 +802,26 @@ void overlay_set_monitor_cb (struct overlay *ov,
     ov->child_monitor_arg = arg;
 }
 
-static json_t *lspeer_object_create (struct overlay *ov)
-{
-    json_t *o = NULL;
-    json_t *child_o;
-    double now = flux_reactor_now (flux_get_reactor (ov->h));
-    struct child *child;
-
-    if (!(o = json_object ()))
-        goto nomem;
-    foreach_overlay_child (ov, child) {
-        if (!(child_o = json_pack ("{s:f}",
-                                   "idle",
-                                   now - child->lastseen)))
-            goto nomem;
-        if (json_object_set_new (o, child->rank_str, child_o) < 0) {
-            json_decref (child_o);
-            goto nomem;
-        }
-    }
-    return o;
-nomem:
-    json_decref (o);
-    errno = ENOMEM;
-    return NULL;
-}
-
-static void lspeer_cb (flux_t *h,
-                       flux_msg_handler_t *mh,
-                       const flux_msg_t *msg,
-                       void *arg)
+static void overlay_stats_get_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
 {
     struct overlay *ov = arg;
-    json_t *o;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (!(o = lspeer_object_create (ov)))
-        goto error;
-    if (flux_respond_pack (h, msg, "O", o) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    json_decref (o);
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:i s:i}",
+                           "child-count", ov->child_count,
+                           "child-connected", overlay_get_child_peer_count (ov),
+                           "parent-count", ov->rank > 0 ? 1 : 0) < 0)
+        flux_log_error (h, "error responding to overlay.stats.get");
     return;
 error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+        flux_log_error (h, "error responding to overlay.stats.get");
 }
 
 int overlay_cert_load (struct overlay *ov, const char *path)
@@ -936,7 +911,12 @@ void overlay_destroy (struct overlay *ov)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  "overlay.lspeer", lspeer_cb, 0 },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.stats.get",
+        overlay_stats_get_cb,
+        0
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
