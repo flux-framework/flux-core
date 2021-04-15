@@ -63,9 +63,7 @@ class Flux(Wrapper):
             try:
                 self.handle = raw.flux_open(url, flags)
             except EnvironmentError as err:
-                raise EnvironmentError(
-                    err.errno, "Unable to connect to Flux: {}".format(err.strerror)
-                )
+                raise EnvironmentError(err.errno, "Unable to connect to Flux")
 
         self.aux_txn = None
 

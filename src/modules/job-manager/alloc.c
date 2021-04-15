@@ -631,7 +631,8 @@ int alloc_queue_reprioritize (struct alloc *alloc)
 }
 
 /* called if highest priority job may have changed */
-int alloc_queue_recalc_pending (struct alloc *alloc) {
+int alloc_queue_recalc_pending (struct alloc *alloc)
+{
     struct job *head = zlistx_first (alloc->queue);
     struct job *tail = zlistx_last (alloc->pending_jobs);
     while (alloc->alloc_limit
