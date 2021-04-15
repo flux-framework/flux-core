@@ -256,6 +256,9 @@ static struct optparse_option status_opts[] = {
                " solely due to an exception (e.g. canceled jobs or"
                " jobs rejected by the scheduler) to N [default=1]"
     },
+    { .name = "json", .key = 'j', .has_arg = 0,
+      .usage = "Dump job result information gleaned from eventlog to stdout",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -2234,6 +2237,7 @@ int cmd_status (optparse_t *p, int argc, char **argv)
     int i;
     int njobs;
     int verbose = optparse_getopt (p, "verbose", NULL);
+    int json = optparse_getopt (p, "json", NULL);
     int optindex = optparse_option_index (p);
     int exception_exit_code = optparse_get_int (p, "exception-exit-code", 1);
 
@@ -2272,6 +2276,14 @@ int cmd_status (optparse_t *p, int argc, char **argv)
         int exitcode;
         int exception = 0;
         const char *exc_type = NULL;
+
+        if (json) {
+            const char *s = NULL;
+            if (flux_job_result_get (futures[i], &s) < 0)
+                log_err_exit ("flux_job_result_get");
+            printf ("%s\n", s);
+        }
+
         if (flux_job_result_get_unpack (futures[i],
                                         "{s:b s?s s?i}",
                                         "exception_occurred", &exception,
