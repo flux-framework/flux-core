@@ -89,6 +89,7 @@ struct overlay {
     flux_watcher_t *bind_w;
     struct child *children;
     int child_count;
+    zhashx_t *child_hash;
 
     overlay_monitor_f child_monitor_cb;
     void *child_monitor_arg;
@@ -116,29 +117,11 @@ static void overlay_monitor_notify (struct overlay *ov)
         ov->child_monitor_cb (ov, ov->child_monitor_arg);
 }
 
-/* Allocate children array based on static tree topology, and return size.
- */
-static int alloc_children (uint32_t rank,
-                           uint32_t size,
-                           int k,
-                           struct child **chp)
+static int child_count (uint32_t rank, uint32_t size, int k)
 {
-    struct child *ch = NULL;
     int count;
-    int i;
-
     for (count = 0; kary_childof (k, size, rank, count) != KARY_NONE; count++)
         ;
-    if (count > 0) {
-        if (!(ch = calloc (count, sizeof (*ch))))
-            return -1;
-        for (i = 0; i < count; i++) {
-            ch[i].rank = kary_childof (k, size, rank, i);
-            snprintf (ch[i].rank_str, sizeof (ch[i].rank_str),"%lu",
-                      (unsigned long)ch[i].rank);
-        }
-    }
-    *chp = ch;
     return count;
 }
 
@@ -150,12 +133,28 @@ int overlay_set_geometry (struct overlay *ov,
     ov->size = size;
     ov->rank = rank;
     ov->tbon_k = tbon_k;
-    if ((ov->child_count = alloc_children (rank,
-                                           size,
-                                           tbon_k,
-                                           &ov->children)) < 0)
-        return -1;
+    ov->child_count = child_count (rank, size, tbon_k);
     snprintf (ov->rank_str, sizeof (ov->rank_str), "%lu", (unsigned long)rank);
+    if (ov->child_count > 0) {
+        int i;
+
+        if (!(ov->children = calloc (ov->child_count, sizeof (struct child))))
+            return -1;
+        if (!(ov->child_hash = zhashx_new ()))
+            return -1;
+        zhashx_set_key_duplicator (ov->child_hash, NULL);
+        zhashx_set_key_destructor (ov->child_hash, NULL);
+        for (i = 0; i < ov->child_count; i++) {
+            struct child *child = &ov->children[i];
+
+            child->rank = kary_childof (tbon_k, size, rank, i);
+            snprintf (child->rank_str,
+                      sizeof (child->rank_str),
+                      "%lu",
+                      (unsigned long)child->rank);
+            zhashx_insert (ov->child_hash, child->rank_str, child);
+        }
+    }
     if (rank > 0) {
         ov->parent.rank = kary_parentof (tbon_k, rank);
         snprintf (ov->parent.rank_str,
@@ -248,15 +247,9 @@ void overlay_log_idle_children (struct overlay *ov)
     }
 }
 
-static struct child *child_lookup (struct overlay *ov, const char *uuid)
+static struct child *child_lookup (struct overlay *ov, const char *id)
 {
-    struct child *child;
-
-    foreach_overlay_child (ov, child) {
-        if (!strcmp (uuid, child->rank_str))
-            return child;
-    }
-    return NULL;
+    return ov->child_hash ?  zhashx_lookup (ov->child_hash, id) : NULL;
 }
 
 /* Given a rank, find a (direct) child peer.
@@ -1109,6 +1102,7 @@ void overlay_destroy (struct overlay *ov)
         free (ov->bind_uri);
         flux_watcher_destroy (ov->bind_w);
 
+        zhashx_destroy (&ov->child_hash);
         free (ov->children);
         free (ov);
         errno = saved_errno;
