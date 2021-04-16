@@ -463,6 +463,131 @@ void trio (flux_t *h)
     ctx_destroy (ctx[0]);
 }
 
+void test_create (flux_t *h,
+                  const char *name,
+                  int size,
+                  struct context *ctx[])
+{
+    int k_ary = size - 1;
+    char uri[64] = { 0 };
+    int rank;
+
+    for (rank = 0; rank < size; rank++) {
+        ctx[rank] = ctx_create (h, name, size, rank, recv_cb);
+        if (overlay_set_geometry (ctx[rank]->ov, size, rank, k_ary) < 0)
+            BAIL_OUT ("%s: overlay_set_geometry failed", ctx[rank]->name);
+        if (rank == 0)
+            snprintf (uri, sizeof (uri), "ipc://@%s", ctx[0]->name);
+        else {
+            if (overlay_authorize (ctx[0]->ov,
+                                   ctx[rank]->name,
+                                   overlay_cert_pubkey (ctx[rank]->ov)) < 0)
+                BAIL_OUT ("%s: overlay_authorize failed", ctx[rank]->name);
+            if (overlay_set_parent_pubkey (ctx[rank]->ov,
+                                   overlay_cert_pubkey (ctx[0]->ov)) < 0)
+                BAIL_OUT ("%s: overlay_set_parent_pubkey failed", ctx[1]->name);
+            if (overlay_set_parent_uri (ctx[rank]->ov, uri) < 0)
+                BAIL_OUT ("%s: overlay_set_parent_uri %s failed", ctx[1]->name);
+        }
+    }
+
+    if (overlay_bind (ctx[0]->ov, uri) < 0)
+        BAIL_OUT ("%s: overlay_bind failed", ctx[0]->name);
+}
+
+void test_destroy (int size, struct context *ctx[])
+{
+    int rank;
+
+    for (rank = 0; rank < size; rank++)
+        ctx_destroy (ctx[rank]);
+}
+
+void monitor_diag_cb (struct overlay *ov, void *arg)
+{
+    struct context *ctx = arg;
+    diag ("%s: children=%d parent_success=%s parent_error=%s",
+          ctx->name,
+          overlay_get_child_peer_count (ov),
+          overlay_parent_success (ov) ? "true" : "false",
+          overlay_parent_error (ov) ? "true" : "false");
+}
+
+void monitor_cb (struct overlay *ov, void *arg)
+{
+    struct context *ctx = arg;
+    monitor_diag_cb (ov, arg);
+    flux_reactor_stop (flux_get_reactor (ctx->h));
+}
+
+
+void check_monitor (flux_t *h)
+{
+    const int size = 5;
+    const char *name = "mon";
+    struct context *ctx[size];
+
+    test_create (h, name, size, ctx);
+
+    /* If anything changes on rank 0, stop the reactor
+     */
+    overlay_set_monitor_cb (ctx[0]->ov, monitor_cb, ctx[0]);
+
+    /* connect (1->0) - rank 0 stops reactor on connect */
+    overlay_set_monitor_cb (ctx[1]->ov, monitor_diag_cb, ctx[1]);
+    if (overlay_connect (ctx[1]->ov) < 0)
+        BAIL_OUT ("%s: overlay_connect failed", ctx[1]->name);
+    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
+        "%s: reactor ran until child connected", ctx[0]->name);
+    ok (overlay_get_child_peer_count (ctx[0]->ov) == 1,
+        "%s: overlay_get_child_peer_count returns 1", ctx[0]->name);
+    overlay_set_monitor_cb (ctx[0]->ov, monitor_diag_cb, ctx[0]);
+
+    /* connect (2->0) - rank 2 stops reactor on connect */
+    overlay_set_monitor_cb (ctx[2]->ov, monitor_cb, ctx[2]);
+    if (overlay_connect (ctx[2]->ov) < 0)
+        BAIL_OUT ("%s: overlay_connect failed", ctx[2]->name);
+
+    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
+        "%s: reactor ran until child connected", ctx[0]->name);
+    ok (overlay_get_child_peer_count (ctx[0]->ov) == 2,
+        "%s: overlay_get_child_peer_count returns 2", ctx[0]->name);
+    ok (overlay_parent_success (ctx[2]->ov) == true,
+        "%s: overlay_parent_connected returns true", ctx[2]->name);
+
+    /* rank 3 will try to connect with simulated wrong flux-core version
+     * Disable rank 0 stopping the reactor and enable rank 3 to do it.
+     */
+    overlay_set_monitor_cb (ctx[3]->ov, monitor_cb, ctx[3]);
+    overlay_set_version (ctx[3]->ov, 0xffffff);
+    if (overlay_connect (ctx[3]->ov) < 0)
+        BAIL_OUT ("%s: overlay_connect failed", ctx[3]->name);
+
+    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
+        "%s: reactor ran until bad version connection fails", ctx[0]->name);
+    ok (overlay_get_child_peer_count (ctx[0]->ov) == 2,
+        "%s: overlay_get_child_peer_count is still 2", ctx[0]->name);
+    ok (overlay_parent_error (ctx[3]->ov) == true,
+        "%s: overlay_parent_connected returns true", ctx[3]->name);
+    overlay_set_monitor_cb (ctx[3]->ov, monitor_diag_cb, ctx[3]);
+
+    /* rank 4 will have its rank altered to '42' for overlay.hello
+     */
+    overlay_set_monitor_cb (ctx[4]->ov, monitor_cb, ctx[4]);
+    overlay_set_rank (ctx[4]->ov, 42);
+    if (overlay_connect (ctx[4]->ov) < 0)
+        BAIL_OUT ("%s: overlay_connect failed", ctx[4]->name);
+
+    ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0,
+        "%s: reactor ran until bad rank connection fails", ctx[0]->name);
+    ok (overlay_get_child_peer_count (ctx[0]->ov) == 2,
+        "%s: overlay_get_child_peer_count is still 2", ctx[0]->name);
+    ok (overlay_parent_error (ctx[4]->ov) == true,
+        "%s: overlay_parent_connected returns true", ctx[4]->name);
+
+    test_destroy (size, ctx);
+}
+
 /* Probe some possible failure cases
  */
 void wrongness (flux_t *h)
@@ -526,6 +651,9 @@ int main (int argc, char *argv[])
     clear_list (logs);
 
     trio (h);
+    clear_list (logs);
+
+    check_monitor (h);
     clear_list (logs);
 
     wrongness (h);

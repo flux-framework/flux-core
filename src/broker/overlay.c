@@ -51,7 +51,8 @@ struct parent {
     char *pubkey;
     uint32_t rank;
     char rank_str[16];
-    bool error;
+    bool hello_error;
+    bool hello_responded;
 };
 
 /* Wake up periodically (between 'sync_min' and 'sync_max' seconds) and:
@@ -79,6 +80,7 @@ struct overlay {
     uint32_t rank;
     int tbon_k;
     char rank_str[16];
+    int version;
 
     struct parent parent;
 
@@ -98,6 +100,8 @@ struct overlay {
 static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg);
 static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
 static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
+static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg);
+static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg);
 
 /* Convenience iterator for ov->children
  */
@@ -168,6 +172,11 @@ uint32_t overlay_get_rank (struct overlay *ov)
     return ov->rank;
 }
 
+void overlay_set_rank (struct overlay *ov, uint32_t rank)
+{
+    ov->rank = rank;
+}
+
 uint32_t overlay_get_size (struct overlay *ov)
 {
     return ov->size;
@@ -175,7 +184,19 @@ uint32_t overlay_get_size (struct overlay *ov)
 
 bool overlay_parent_error (struct overlay *ov)
 {
-    return ov->parent.error;
+    return (ov->parent.hello_responded
+            && ov->parent.hello_error);
+}
+
+bool overlay_parent_success (struct overlay *ov)
+{
+    return (ov->parent.hello_responded
+            && !ov->parent.hello_error);
+}
+
+void overlay_set_version (struct overlay *ov, int version)
+{
+    ov->version = version;
 }
 
 int overlay_get_child_peer_count (struct overlay *ov)
@@ -236,6 +257,23 @@ static struct child *child_lookup (struct overlay *ov, const char *uuid)
             return child;
     }
     return NULL;
+}
+
+/* Given a rank, find a (direct) child peer.
+ * Since child ranks are numerically contiguous, perform a range check
+ * and index into the child array directly.
+ * Returns NULL on lookup failure.
+ */
+static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank)
+{
+    uint32_t first;
+    int i;
+
+    if ((first = kary_childof (ov->tbon_k, ov->size, ov->rank, 0)) == KARY_NONE
+        || (i = rank - first) < 0
+        || i >= ov->child_count)
+        return NULL;
+    return &ov->children[i];
 }
 
 int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey)
@@ -481,52 +519,62 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     struct overlay *ov = arg;
     flux_msg_t *msg;
     int type = -1;
-    char *uuid = NULL;
+    const char *topic = NULL;
+    char *sender = NULL;
     struct child *child;
     int status;
-    bool connected = true;
 
     if (!(msg = flux_msg_recvzsock (ov->bind_zsock)))
         return;
     if (flux_msg_get_type (msg, &type) < 0
-        || flux_msg_get_route_last (msg, &uuid) < 0
-        || !(child = child_lookup (ov, uuid))) {
-        flux_log (ov->h,
-                  LOG_ERR, "DROP downstream %s from %s",
-                  type != -1 ? flux_msg_typestr (type) : "message",
-                  uuid != NULL ? uuid : "unknown");
-        goto done;
+        || flux_msg_get_route_last (msg, &sender) < 0
+        || !(child = child_lookup (ov, sender)))
+        goto drop;
+    child->lastseen = flux_reactor_now (ov->reactor);
+    if (!child->connected) {
+        if (type == FLUX_MSGTYPE_REQUEST
+            && flux_msg_get_topic (msg, &topic) == 0
+            && !strcmp (topic, "overlay.hello"))
+            hello_request_handler (ov, msg);
+        goto handled; // don't log drops until hello completes successfully
     }
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
             if (flux_keepalive_decode (msg, NULL, &status) == 0
-                && status == KEEPALIVE_STATUS_DISCONNECT) {
-                connected = false;
+                && status == KEEPALIVE_STATUS_DISCONNECT
+                && child->connected == true) {
+                child->connected = false;
+                overlay_monitor_notify (ov);
             }
-            break;
+            goto handled;
         case FLUX_MSGTYPE_REQUEST:
             break;
         case FLUX_MSGTYPE_RESPONSE:
             /* Response message traveling upstream requires special handling:
-             * ROUTER socket will have pushed peer uuid onto message as if it
+             * ROUTER socket will have pushed peer id onto message as if it
              * were a request, but the effect we want for responses is to have
              * a route popped off at each router hop.
              */
-            (void)flux_msg_pop_route (msg, NULL); // child uuid from ROUTER
-            (void)flux_msg_pop_route (msg, NULL); // my uuid
+            (void)flux_msg_pop_route (msg, NULL); // child id from ROUTER
+            (void)flux_msg_pop_route (msg, NULL); // my id
             break;
         case FLUX_MSGTYPE_EVENT:
             break;
     }
-    child->lastseen = flux_reactor_now (ov->reactor);
-    if (child->connected != connected) {
-        child->connected = connected;
-        overlay_monitor_notify (ov);
-    }
-    if (type != FLUX_MSGTYPE_KEEPALIVE)
-        ov->recv_cb (msg, OVERLAY_DOWNSTREAM, ov->recv_arg);
-done:
-    free (uuid);
+    ov->recv_cb (msg, OVERLAY_DOWNSTREAM, ov->recv_arg);
+handled:
+    free (sender);
+    flux_msg_decref (msg);
+    return;
+drop:
+    if (!topic && type != FLUX_MSGTYPE_KEEPALIVE)
+        (void)flux_msg_get_topic (msg, &topic);
+    flux_log (ov->h,
+              LOG_ERR, "DROP downstream %s topic %s from %s",
+              type != -1 ? flux_msg_typestr (type) : "message",
+              topic ? topic : "-",
+              sender != NULL ? sender : "unknown");
+    free (sender);
     flux_msg_decref (msg);
 }
 
@@ -536,26 +584,37 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
     struct overlay *ov = arg;
     flux_msg_t *msg;
     int type;
-    bool dropped = false;
+    const char *topic = NULL;
 
     if (!(msg = flux_msg_recvzsock (ov->parent.zsock)))
         return;
     if (flux_msg_get_type (msg, &type) < 0) {
-        dropped = true;
-        goto done;
+        goto drop;
+    }
+    if (!ov->parent.hello_responded) {
+        if (type != FLUX_MSGTYPE_RESPONSE
+            || flux_msg_get_topic (msg, &topic) < 0
+            || strcmp (topic, "overlay.hello") != 0)
+            goto drop;
+        hello_response_handler (ov, msg);
+        goto handled;
     }
     if (type == FLUX_MSGTYPE_EVENT) {
         if (flux_msg_clear_route (msg) < 0) {
-            dropped = true;
-            goto done;
+            goto drop;
         }
     }
     ov->recv_cb (msg, OVERLAY_UPSTREAM, ov->recv_arg);
-done:
-    if (dropped)
-        flux_log (ov->h,
-                  LOG_ERR, "DROP upstream %s",
-                  type != -1 ? flux_msg_typestr (type) : "message");
+handled:
+    flux_msg_destroy (msg);
+    return;
+drop:
+    if (!topic && type != FLUX_MSGTYPE_KEEPALIVE)
+        (void)flux_msg_get_topic (msg, &topic);
+    flux_log (ov->h,
+              LOG_ERR, "DROP upstream %s topic %s",
+              type != -1 ? flux_msg_typestr (type) : "message",
+              topic ? topic : "-");
     flux_msg_destroy (msg);
 }
 
@@ -680,6 +739,144 @@ static int overlay_zap_init (struct overlay *ov)
     return 0;
 }
 
+/* Check child flux-core version 'v1' against this broker's version 'v2'.
+ * For now we require an exact match of (major,minor,patch) and
+ * ignore any commit id appended to the version string.
+ * Return 0 on error, or -1 on failure with message for child in 'errubuf'.
+ */
+static bool version_check (int v1, int v2, char *errbuf, int errbufsz)
+{
+    if (v1 != v2) {
+        snprintf (errbuf, errbufsz,
+                  "flux-core v%u.%u.%u mismatched with parent v%u.%u.%u",
+                  (v1 >> 16) & 0xff,
+                  (v1 >> 8) & 0xff,
+                  v1 & 0xff,
+                  (v2 >> 16) & 0xff,
+                  (v2 >> 8) & 0xff,
+                  v2 & 0xff);
+        return false;
+    }
+    return true;
+}
+
+/* Handle overlay.hello request from downstream (child) TBON peer.
+ * The peer may be rejected here if it is improperly configured.
+ * If successful the peer is marked 'connected' and the state machine is
+ * notified.
+ *
+ * N.B. use overlay sockets directly to handle this message instead of higher
+ * level API to allow child->connected to gate the flow of messages from a
+ * peer, and to avoid complicating the standalone overlay unit test,
+ */
+static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
+{
+    struct child *child;
+    json_int_t rank;
+    int version;
+    const char *errmsg = NULL;
+    char errbuf[128];
+    flux_msg_t *response;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:I s:i}",
+                             "rank", &rank,
+                             "version", &version) < 0
+        || flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0)
+        goto error; // EPROTO or EPERM (unlikely)
+
+    if (!(child = child_lookup_byrank (ov, rank))) {
+        snprintf (errbuf, sizeof (errbuf),
+                  "rank %lu is not a peer of parent %lu: mismatched config?",
+                  (unsigned long)rank,
+                  (unsigned long)ov->parent.rank);
+        errmsg = errbuf;
+        errno = EINVAL;
+        goto error_log;
+    }
+    if (!version_check (version, ov->version, errbuf, sizeof (errbuf))) {
+        errmsg = errbuf;
+        errno = EINVAL;
+        goto error_log;
+    }
+
+    child->connected = true;
+    overlay_monitor_notify (ov);
+
+    flux_log (ov->h, LOG_DEBUG, "hello child %lu version %u.%u.%u",
+              (unsigned long)rank,
+              (version >> 16) & 0xff,
+              (version >> 8) & 0xff,
+              version & 0xff);
+
+    if (!(response = flux_response_derive (msg, 0))
+        || overlay_sendmsg_child (ov, response) < 0)
+        flux_log_error (ov->h, "error responding to overlay.hello request");
+    flux_msg_destroy (response);
+    return;
+error_log:
+    flux_log (ov->h, LOG_ERR, "overlay.hello from rank %lu rejected",
+              (unsigned long)rank);
+error:
+    if (!(response = flux_response_derive (msg, errno))
+        || (errmsg && flux_msg_set_string (response, errmsg) < 0)
+        || overlay_sendmsg_child (ov, response) < 0)
+        flux_log_error (ov->h, "error responding to overlay.hello request");
+    flux_msg_destroy (response);
+}
+
+/* Process overlay.hello response.
+ * If the response indicates an error, set in motion a clean broker exit by
+ * printing the error message to stderr and notifying the state machine
+ * that it should check overlay_parent_error() / overlay_parent_success().
+ * N.B. see note in hello_request_handler() on direct use of overlay sockets.
+ */
+static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
+{
+    const char *errstr = NULL;
+
+    if (flux_response_decode (msg, NULL, NULL) < 0) {
+        int saved_errno = errno;
+        (void)flux_msg_get_string (msg, &errstr);
+        errno = saved_errno;
+        goto error;
+    }
+    flux_log (ov->h, LOG_DEBUG, "hello parent %lu",
+              (unsigned long)ov->parent.rank);
+    ov->parent.hello_responded = true;
+    ov->parent.hello_error = false;
+    overlay_monitor_notify (ov);
+    return;
+error:
+    log_msg ("overlay.hello: %s", errstr ? errstr : flux_strerror (errno));
+    ov->parent.hello_responded = true;
+    ov->parent.hello_error = true;
+    overlay_monitor_notify (ov);
+}
+
+/* Send overlay.hello message to TBON parent.
+ */
+static int hello_request_send (struct overlay *ov,
+                               json_int_t rank,
+                               int version)
+{
+    flux_msg_t *msg;
+
+    if (!(msg = flux_request_encode ("overlay.hello", NULL))
+        || flux_msg_pack (msg,
+                          "{s:I s:i}",
+                          "rank", rank,
+                          "version", ov->version) < 0
+        || flux_msg_set_rolemask (msg, FLUX_ROLE_OWNER) < 0
+        || overlay_sendmsg_parent (ov, msg) < 0) {
+        flux_msg_decref (msg);
+        return -1;
+    }
+    flux_msg_decref (msg);
+    return 0;
+}
+
 int overlay_connect (struct overlay *ov)
 {
     if (ov->rank > 0) {
@@ -702,6 +899,8 @@ int overlay_connect (struct overlay *ov)
                                                       ov)))
         return -1;
         flux_watcher_start (ov->parent.w);
+        if (hello_request_send (ov, ov->rank, FLUX_CORE_VERSION_HEX) < 0)
+            return -1;
     }
     return 0;
 nomem:
@@ -938,6 +1137,7 @@ struct overlay *overlay_create (flux_t *h, overlay_recv_f cb, void *arg)
     ov->reactor = flux_get_reactor (h);
     ov->recv_cb = cb;
     ov->recv_arg = arg;
+    ov->version = FLUX_CORE_VERSION_HEX;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;
     if (!(ov->f_sync = flux_sync_create (h, sync_min))
