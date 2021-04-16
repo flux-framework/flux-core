@@ -51,6 +51,7 @@ struct parent {
     char *pubkey;
     uint32_t rank;
     char rank_str[16];
+    bool error;
 };
 
 /* Wake up periodically (between 'sync_min' and 'sync_max' seconds) and:
@@ -170,6 +171,11 @@ uint32_t overlay_get_rank (struct overlay *ov)
 uint32_t overlay_get_size (struct overlay *ov)
 {
     return ov->size;
+}
+
+bool overlay_parent_error (struct overlay *ov)
+{
+    return ov->parent.error;
 }
 
 int overlay_get_child_peer_count (struct overlay *ov)
