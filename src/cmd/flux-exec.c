@@ -24,6 +24,7 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 static struct optparse_option cmdopts[] = {
     { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "IDSET",

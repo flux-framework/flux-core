@@ -28,6 +28,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "runat.h"
 

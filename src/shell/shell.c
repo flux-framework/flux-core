@@ -27,6 +27,7 @@
 #include "src/common/liboptparse/optparse.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "internal.h"
 #include "builtins.h"

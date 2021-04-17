@@ -34,6 +34,7 @@
 #include <czmq.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "disconnect.h"
 

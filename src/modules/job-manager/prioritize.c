@@ -17,6 +17,8 @@
 #endif
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "job.h"
 #include "event.h"
 #include "alloc.h"

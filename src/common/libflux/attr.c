@@ -16,6 +16,8 @@
 #include <czmq.h>
 #include <jansson.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "attr.h"
 #include "rpc.h"
 

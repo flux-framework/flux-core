@@ -73,6 +73,8 @@
 #include <sys/param.h>
 #include <czmq.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "simple_server.h"
 #include "keyval.h"
 #include "pmi.h"

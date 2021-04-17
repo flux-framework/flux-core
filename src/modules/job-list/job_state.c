@@ -24,6 +24,7 @@
 #include "src/common/libjob/job_hash.h"
 #include "src/common/librlist/rlist.h"
 #include "src/common/libidset/idset.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "job_state.h"
 #include "idsync.h"

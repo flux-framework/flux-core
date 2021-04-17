@@ -95,6 +95,8 @@
 #include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "job-exec.h"
 
 static double kill_timeout=5.0;

@@ -11,6 +11,8 @@
 #ifndef FLUX_ITERATORS_H
 #define FLUX_ITERATORS_H
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #define FOREACH_ZLIST(LIST, VAR)   \
     for((VAR) = zlist_first(LIST); \
             VAR;                   \

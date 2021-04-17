@@ -24,6 +24,7 @@
 #include "src/common/libjob/sign_none.h"
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "validate.h"
 

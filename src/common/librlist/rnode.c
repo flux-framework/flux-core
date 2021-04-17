@@ -20,6 +20,8 @@
 #include <jansson.h>
 #include <flux/idset.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "rnode.h"
 
 static int idset_subtract (struct idset *from, struct idset *ids)

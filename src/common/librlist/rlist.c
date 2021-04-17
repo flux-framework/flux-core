@@ -22,6 +22,8 @@
 
 #include "src/common/libidset/idset.h"
 #include "src/common/libhostlist/hostlist.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "rnode.h"
 #include "rlist.h"
 #include "rhwloc.h"

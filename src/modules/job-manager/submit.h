@@ -16,6 +16,8 @@
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "job.h"
 #include "job-manager.h"
 

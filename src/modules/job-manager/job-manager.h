@@ -11,6 +11,8 @@
 #ifndef _FLUX_JOB_MANAGER_H
 #define _FLUX_JOB_MANAGER_H
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 struct job_manager {
     flux_t *h;
     flux_msg_handler_t **handlers;

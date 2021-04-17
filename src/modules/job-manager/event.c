@@ -51,6 +51,7 @@
 #include "event.h"
 
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 const double batch_timeout = 0.01;
 
