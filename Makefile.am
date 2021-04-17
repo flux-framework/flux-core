@@ -27,7 +27,8 @@ CODE_COVERAGE_IGNORE_PATTERN = \
 	"*/common/liblsd/*" \
 	"*/common/liboptparse/getopt*" \
 	"*/common/libtestutil/*" \
-	"*/common/libyuarel/*"
+	"*/common/libyuarel/*" \
+	"*/common/libczmqcontainers/*"
 
 CODE_COVERAGE_LCOV_OPTIONS =
 @CODE_COVERAGE_RULES@
