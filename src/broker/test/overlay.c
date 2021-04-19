@@ -34,6 +34,7 @@ struct context {
     char name[32];
     int rank;
     int size;
+    const char *uuid;
     const flux_msg_t *msg;
 };
 
@@ -92,8 +93,12 @@ struct context *ctx_create (flux_t *h, const char *name, int size, int rank,
     snprintf (ctx->name, sizeof (ctx->name), "%s-%d", name, rank);
     if (!(ctx->ov = overlay_create (h, cb, ctx)))
         BAIL_OUT ("overlay_create");
+    if (!(ctx->uuid = overlay_get_uuid (ctx->ov)))
+        BAIL_OUT ("overlay_get_uuid failed");
     if (!(ctx->attrs = attr_create ()))
         BAIL_OUT ("attr_create failed");
+    diag ("created %s: rank %d size %d uuid %s",
+          ctx->name, ctx->rank, ctx->size, ctx->uuid);
 
     return ctx;
 }
@@ -288,10 +293,9 @@ void trio (flux_t *h)
     ok (overlay_authorize (ctx[0]->ov, "foo", "1234") < 0 && errno == EINVAL,
         "overlay_authorize with short pubkey fails with EINVAL");
 
-    /* Send 1->0
-     */
-
-    /* Request
+    /* Send request 1->0
+     * Side effect: during recvmsg_timeout(), reactor allows hello request
+     * from 1->0 to be processed at 0.
      */
     if (!(msg = flux_request_encode ("meep", NULL)))
         BAIL_OUT ("flux_request_encode failed");
@@ -306,47 +310,13 @@ void trio (flux_t *h)
         "%s: received message has expected topic", ctx[0]->name);
     sender = NULL;
     ok (flux_msg_get_route_first (rmsg, &sender) == 0
-        && sender != NULL && !strcmp (sender, "1"),
+        && sender != NULL && !strcmp (sender, ctx[1]->uuid),
         "%s: received message sender is rank 1", ctx[0]->name);
     free (sender);
 
-    /* Response
-     */
-    if (!(msg = flux_response_encode ("m000", NULL)))
-        BAIL_OUT ("flux_response_encode failed");
-    if (flux_msg_push_route (msg, "0") < 0)
-        BAIL_OUT ("flux_msg_push_route failed");
-    ok (overlay_sendmsg (ctx[1]->ov, msg, OVERLAY_ANY) == 0,
-        "%s: overlay_sendmsg response where=ANY works", ctx[1]->name);
-    flux_msg_decref (msg);
-
-    rmsg = recvmsg_timeout (ctx[0], 5);
-    ok (rmsg != NULL,
-        "%s: response was received by overlay", ctx[0]->name);
-    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "m000"),
-        "%s: received message has expected topic", ctx[0]->name);
-    ok (flux_msg_get_route_count (rmsg) == 0,
-        "%s: received message has no routes", ctx[0]->name);
-
-    /* Event
-     */
-    if (!(msg = flux_event_encode ("eeek", NULL)))
-        BAIL_OUT ("flux_event_encode failed");
-    ok (overlay_sendmsg (ctx[1]->ov, msg, OVERLAY_UPSTREAM) == 0,
-        "%s: overlay_sendmsg event where=UP works", ctx[1]->name);
-    flux_msg_decref (msg);
-
-    rmsg = recvmsg_timeout (ctx[0], 5);
-    ok (rmsg != NULL,
-        "%s: event was received by overlay", ctx[0]->name);
-    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "eeek"),
-        "%s: received message has expected topic", ctx[0]->name);
-
-
-    /* Send 0->1
-     */
-
-    /* Request
+    /* Send request 0->1
+     * Side effect: during recvmsg_timeout(), reactor allows hello response
+     * from 0->1 to be processed at 1.
      */
     if (!(msg = flux_request_encode ("errr", NULL)))
         BAIL_OUT ("flux_request_encode failed");
@@ -363,15 +333,48 @@ void trio (flux_t *h)
         "%s: request has expected topic", ctx[1]->name);
     sender = NULL;
     ok (flux_msg_get_route_first (rmsg, &sender) == 0
-        && sender != NULL && !strcmp (sender, "0"),
+        && sender != NULL && !strcmp (sender, ctx[0]->uuid),
         "%s: request sender is rank 0", ctx[1]->name);
     free (sender);
 
-    /* Response
+    /* Response 1->0
+     */
+    if (!(msg = flux_response_encode ("m000", NULL)))
+        BAIL_OUT ("flux_response_encode failed");
+    if (flux_msg_push_route (msg, ctx[0]->uuid) < 0)
+        BAIL_OUT ("flux_msg_push_route failed");
+    ok (overlay_sendmsg (ctx[1]->ov, msg, OVERLAY_ANY) == 0,
+        "%s: overlay_sendmsg response where=ANY works", ctx[1]->name);
+    flux_msg_decref (msg);
+
+    rmsg = recvmsg_timeout (ctx[0], 5);
+    ok (rmsg != NULL,
+        "%s: response was received by overlay", ctx[0]->name);
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "m000"),
+        "%s: received message has expected topic", ctx[0]->name);
+    ok (flux_msg_get_route_count (rmsg) == 0,
+        "%s: received message has no routes", ctx[0]->name);
+
+    /* Event 1->0
+     */
+    if (!(msg = flux_event_encode ("eeek", NULL)))
+        BAIL_OUT ("flux_event_encode failed");
+    ok (overlay_sendmsg (ctx[1]->ov, msg, OVERLAY_UPSTREAM) == 0,
+        "%s: overlay_sendmsg event where=UP works", ctx[1]->name);
+    flux_msg_decref (msg);
+
+    rmsg = recvmsg_timeout (ctx[0], 5);
+    ok (rmsg != NULL,
+        "%s: event was received by overlay", ctx[0]->name);
+    ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "eeek"),
+        "%s: received message has expected topic", ctx[0]->name);
+
+
+    /* Response 0->1
      */
     if (!(msg = flux_response_encode ("moop", NULL)))
         BAIL_OUT ("flux_response_encode failed");
-    if (flux_msg_push_route (msg, "1") < 0)
+    if (flux_msg_push_route (msg, ctx[1]->uuid) < 0)
         BAIL_OUT ("flux_msg_push_route failed");
     ok (overlay_sendmsg (ctx[0]->ov, msg, OVERLAY_ANY) == 0,
         "%s: overlay_sendmsg response where=ANY works", ctx[0]->name);
@@ -385,7 +388,7 @@ void trio (flux_t *h)
     ok (flux_msg_get_route_count (rmsg) == 0,
         "%s: response has no routes", ctx[1]->name);
 
-    /* Event
+    /* Event 0->1
      */
     if (!(msg = flux_event_encode ("eeeb", NULL)))
         BAIL_OUT ("flux_event_encode failed");
