@@ -181,6 +181,11 @@ uint32_t overlay_get_size (struct overlay *ov)
     return ov->size;
 }
 
+const char *overlay_get_uuid (struct overlay *ov)
+{
+    return ov->rank_str;
+}
+
 bool overlay_parent_error (struct overlay *ov)
 {
     return (ov->parent.hello_responded
@@ -267,6 +272,20 @@ static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank)
         || i >= ov->child_count)
         return NULL;
     return &ov->children[i];
+}
+
+bool overlay_uuid_is_child (struct overlay *ov, const char *uuid)
+{
+    if (child_lookup (ov, uuid) != NULL)
+        return true;
+    return false;
+}
+
+bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid)
+{
+    if (ov->rank > 0 && !strcmp (uuid, ov->parent.rank_str))
+        return true;
+    return false;
 }
 
 int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey)
