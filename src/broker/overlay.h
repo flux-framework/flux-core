@@ -66,11 +66,15 @@ int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey);
 /* Misc. accessors
  */
 uint32_t overlay_get_rank (struct overlay *ov);
+void overlay_set_rank (struct overlay *ov, uint32_t rank); // test only
 uint32_t overlay_get_size (struct overlay *ov);
 int overlay_get_child_peer_count (struct overlay *ov);
 const char *overlay_get_bind_uri (struct overlay *ov);
 const char *overlay_get_parent_uri (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
+bool overlay_parent_error (struct overlay *ov);
+bool overlay_parent_success (struct overlay *ov);
+void overlay_set_version (struct overlay *ov, int version); // test only
 
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they
@@ -83,9 +87,9 @@ int overlay_bind (struct overlay *ov, const char *uri);
  */
 int overlay_connect (struct overlay *ov);
 
-/* This hook is used by the state machine to detect when a downstream
- * peer connects or disconnects.  The callback may access the current count
- * of connected peers using overlay_get_child_peer_count().
+/* 'cb' is called each time the number of connected TBON peers changes,
+ * or when a TBON parent error occurs.  Use overlay_get_child_peer_count(),
+ * overlay_parent_error(), or overlay_parent_connected() from the callback.
  */
 void overlay_set_monitor_cb (struct overlay *ov,
                              overlay_monitor_f cb,

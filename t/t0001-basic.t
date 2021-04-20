@@ -72,14 +72,16 @@ test_expect_success 'flux-start in subprocess/pmi mode works (size 2)' "
 	flux start ${ARGS} --size=2 flux getattr size | grep -x 2
 "
 test_expect_success 'flux-start with size 1 has no peers' '
+	echo 0 >nochild.exp &&
 	flux start ${ARGS} --size=1 \
-		flux python -c "import flux; print(flux.Flux().rpc(\"overlay.lspeer\").get())" >idle.out &&
-	test_must_fail grep idle idle.out
+		flux module stats --parse=child-count overlay >nochild.out &&
+	test_cmp nochild.exp nochild.out
 '
 test_expect_success 'flux-start with size 2 has rank 1 peer' '
+	echo 1 >child2.exp &&
 	flux start ${ARGS} --size=2 \
-		flux python -c "import flux; print(flux.Flux().rpc(\"overlay.lspeer\").get())" >idle2.out &&
-	grep idle idle2.out
+		flux module stats --parse=child-count overlay >child2.out &&
+	test_cmp child2.exp child2.out
 '
 test_expect_success 'flux-start --size=1 --bootstrap=selfpmi works' "
 	flux start ${ARGS} --size=1 --bootstrap=selfpmi /bin/true

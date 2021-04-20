@@ -802,20 +802,35 @@ static flux_future_t *monitor_parent (flux_t *h, void *arg)
     return f;
 }
 
-/* This callback is called each time a child connects or disconnects.
- * In SHUTDOWN state, post exit event if children have disconnected.
- * If there are no children on entry to SHUTDOWN state (e.g. leaf node)
- * the exit event is posted immediately in action_shutdown().
+/* This callback is called when the overlay connection state has changed.
  */
-static void child_connect_cb (struct overlay *overlay, void *arg)
+static void overlay_monitor_cb (struct overlay *overlay, void *arg)
 {
     struct state_machine *s = arg;
 
-    s->child_count = overlay_get_child_peer_count (overlay);
-    if (s->state == STATE_SHUTDOWN && s->child_count == 0)
-        state_machine_post (s, "children-complete");
+    switch (s->state) {
+        /* IN JOIN state, post parent-fail if something goes wrong with the
+         * parent TBON connection.
+         */
+        case STATE_JOIN:
+            if (overlay_parent_error (overlay)) {
+                s->ctx->exit_rc = 1;
+                state_machine_post (s, "parent-fail");
+            }
+            break;
+        /* In SHUTDOWN state, post exit event if children have disconnected.
+         * If there are no children on entry to SHUTDOWN state (e.g. leaf
+         * node) the exit event is posted immediately in action_shutdown().
+         */
+        case STATE_SHUTDOWN:
+            s->child_count = overlay_get_child_peer_count (overlay);
+            if (s->child_count == 0)
+                state_machine_post (s, "children-complete");
+            break;
+        default:
+            break;
+    }
 }
-
 
 /* If a disconnect is received for streaming monitor request,
  * drop the request.
@@ -896,7 +911,7 @@ struct state_machine *state_machine_create (struct broker *ctx)
     if (!(s->quorum.batch_timer = quorum_create_batch_timer (s)))
         goto error;
     s->child_count = overlay_get_child_peer_count (ctx->overlay);
-    overlay_set_monitor_cb (ctx->overlay, child_connect_cb, s);
+    overlay_set_monitor_cb (ctx->overlay, overlay_monitor_cb, s);
     return s;
 nomem:
     errno = ENOMEM;
