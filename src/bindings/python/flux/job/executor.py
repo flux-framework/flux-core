@@ -193,16 +193,21 @@ class FluxExecutorFuture(concurrent.futures.Future):
         :param timeout: The number of seconds to wait for the jobid.
             If None, then there is no limit on the wait time.
 
-        :return: a positive integer jobid, or ``-1`` if the future was cancelled.
+        :return: a positive integer jobid.
 
         :raises concurrent.futures.TimeoutError: If the jobid is not available
             before the given timeout.
+        :raises concurrent.futures.CancelledError: If the future was cancelled.
         """
         if self.__jobid is not None:
+            if self.cancelled():
+                raise concurrent.futures.CancelledError()
             return self.__jobid
         with self.__jobid_condition:
             self.__jobid_condition.wait(timeout)
             if self.__jobid is not None:
+                if self.cancelled():
+                    raise concurrent.futures.CancelledError()
                 return self.__jobid
             raise concurrent.futures.TimeoutError()
 
@@ -265,6 +270,8 @@ class FluxExecutorFuture(concurrent.futures.Future):
 
         When cancelling, set the jobid to something invalid.
         """
+        if self.cancelled():  # if already cancelled, return True
+            return True
         cancelled = super().cancel(*args, **kwargs)
         if cancelled:
             self._set_jobid(-1)
