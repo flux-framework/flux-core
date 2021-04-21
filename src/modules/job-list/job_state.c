@@ -132,6 +132,14 @@ static void job_destroy_wrapper (void **data)
     job_destroy (*job);
 }
 
+static void free_wrapper (void **data)
+{
+    if (data) {
+        free (*data);
+        *data = NULL;
+    }
+}
+
 static struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
 {
     struct job *job = NULL;
@@ -1216,8 +1224,9 @@ static struct job *_lookup_job (struct job_state_ctx *jsctx,
 {
     struct job *job;
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                        prefix, (uintmax_t)id);
+        if (!zhashx_lookup (jsctx->purged_jobids, &id))
+            flux_log_error (jsctx->h, "%s: job %ju not in hash",
+                            prefix, (uintmax_t)id);
         return NULL;
     }
     return job;
@@ -1302,6 +1311,11 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
     struct job *job;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
+        /* If we purged this job and this is a replay, don't add this
+         * job to the index */
+        if (zhashx_lookup (jsctx->purged_jobids, &id))
+            return 0;
+
         if (!(job = job_create (jsctx->ctx, id))){
             flux_log_error (jsctx->h, "%s: job_create", __FUNCTION__);
             return -1;
@@ -1876,6 +1890,10 @@ struct job_state_ctx *job_state_create (struct list_ctx *ctx)
         goto error;
     }
 
+    if (!(jsctx->purged_jobids = job_hash_create ()))
+        goto error;
+    zhashx_set_destructor (jsctx->purged_jobids, free_wrapper);
+
     return jsctx;
 
 error:
@@ -1911,6 +1929,7 @@ void job_state_destroy (void *data)
         zhashx_destroy (&jsctx->index);
         zlistx_destroy (&jsctx->events_journal_backlog);
         flux_future_destroy (jsctx->events);
+        zhashx_destroy (&jsctx->purged_jobids);
         free (jsctx);
     }
 }

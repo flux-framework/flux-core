@@ -58,6 +58,8 @@ struct job_state_ctx {
 
     /* stream of job events from the job-manager */
     flux_future_t *events;
+
+    zhashx_t *purged_jobids;
 };
 
 struct job {

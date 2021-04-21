@@ -471,6 +471,13 @@ json_t *get_job_by_id (struct list_ctx *ctx,
     struct job *job;
 
     if (!(job = zhashx_lookup (ctx->jsctx->index, &id))) {
+        /* if id was purged, for time being return EFAULT.  Picking
+         * an errno to just make it obvious this is a unique corner
+         * case. */
+        if (zhashx_lookup (ctx->jsctx->purged_jobids, &id)) {
+            errno = EFAULT;
+            return NULL;
+        }
         if (stall) {
             if (check_id_valid (ctx, msg, id, attrs) < 0) {
                 flux_log_error (ctx->h, "%s: check_id_valid", __FUNCTION__);

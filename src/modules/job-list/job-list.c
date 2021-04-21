@@ -19,6 +19,7 @@
 #include "job_state.h"
 #include "list.h"
 #include "idsync.h"
+#include "purge.h"
 
 static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
@@ -29,6 +30,10 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     int inactive = zlistx_size (ctx->jsctx->inactive);
     int idsync_lookups = zlistx_size (ctx->idsync_lookups);
     int idsync_waits = zhashx_size (ctx->idsync_waits);
+    /* N.B. the inactive count is the number of inactive jobs
+     * currently stored, which can be affected by possible
+     * purging of the inactive cache
+     */
     if (flux_respond_pack (h, msg, "{s:{s:i s:i s:i} s:{s:i s:i}}",
                            "jobs",
                            "pending", pending,
@@ -103,6 +108,11 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-list.stats.get",
       .cb           = stats_cb,
+      .rolemask     = 0
+    },
+    { .typemask     = FLUX_MSGTYPE_REQUEST,
+      .topic_glob   = "job-list.purge",
+      .cb           = purge_cb,
       .rolemask     = 0
     },
     FLUX_MSGHANDLER_TABLE_END,

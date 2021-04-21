@@ -20,6 +20,8 @@ job_list_la_SOURCES = \
 	job_state.c \
 	list.h \
 	list.c \
+	purge.h \
+	purge.c \
 	job_util.h \
 	job_util.c \
 	idsync.h \

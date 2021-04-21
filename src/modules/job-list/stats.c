@@ -69,6 +69,22 @@ void job_stats_update (struct job_stats *stats,
     }
 }
 
+void job_stats_remove_inactive (struct job_stats *stats,
+                                struct job *job)
+{
+    assert (job->state == FLUX_JOB_STATE_INACTIVE);
+    stats->state_count[state_index(job->state)]--;
+    if (!job->success) {
+        stats->failed--;
+        if (job->exception_occurred) {
+            if (strcmp (job->exception_type, "cancel") == 0)
+                stats->canceled--;
+            else if (strcmp (job->exception_type, "timeout") == 0)
+                stats->timeout--;
+        }
+    }
+}
+
 static int json_add_counter (json_t *o,
                              const char *key,
                              unsigned int n)
