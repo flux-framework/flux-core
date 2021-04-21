@@ -132,6 +132,14 @@ static void job_destroy_wrapper (void **data)
     job_destroy (*job);
 }
 
+static void free_wrapper (void **data)
+{
+    if (data) {
+        free (*data);
+        *data = NULL;
+    }
+}
+
 static struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
 {
     struct job *job = NULL;
@@ -215,6 +223,36 @@ static void revert_job_state (struct list_ctx *ctx,
     }
 }
 
+static void evict_one_inactive_job (struct job_state_ctx *jsctx)
+{
+    struct job *job = NULL;
+    flux_jobid_t id;
+    flux_jobid_t *idptr = NULL;
+
+    zlistx_last (jsctx->inactive);
+    job = zlistx_detach_cur (jsctx->inactive);
+    id = job->id;
+    assert (job != NULL);
+    zhashx_delete (jsctx->index, &job->id);
+
+    if (!(idptr = malloc (sizeof (flux_jobid_t)))) {
+        flux_log_error (jsctx->h, "%s: malloc", __FUNCTION__);
+        return;
+    }
+    (*idptr) = id;
+
+    /* we don't care about the contents stored in the evicted_jobs
+     * hash, just store ptr to this id.  The destructor set on
+     * evicted_jobids will free this memory. */
+    if (zhashx_insert (jsctx->evicted_jobids, idptr, idptr) < 0) {
+        flux_log_error (jsctx->h, "%s: zhashx_insert", __FUNCTION__);
+        free (idptr);
+        return;
+    }
+
+    return;
+}
+
 static void job_insert_list (struct job_state_ctx *jsctx,
                              struct job *job,
                              flux_job_state_t newstate)
@@ -242,6 +280,14 @@ static void job_insert_list (struct job_state_ctx *jsctx,
                                                    job)))
             flux_log_error (jsctx->h, "%s: zlistx_add_start",
                             __FUNCTION__);
+
+        /* eliminate older inactive jobs if we've exceeded the max
+         * number of jobs to cache.  If init-ing from KVS, do this
+         * step later. */
+        if (jsctx->inactive_cache_size >= 0
+            && zlistx_size (jsctx->inactive) > jsctx->inactive_cache_size
+            && !jsctx->init_from_kvs)
+            evict_one_inactive_job (jsctx);
     }
 }
 
@@ -1155,18 +1201,33 @@ done:
 /* Read jobs present in the KVS at startup. */
 int job_state_init_from_kvs (struct list_ctx *ctx)
 {
+    struct job_state_ctx *jsctx = ctx->jsctx;
     const char *dirname = "job";
     int dirskip = strlen (dirname);
     int count;
+    int rc = -1;
 
+    jsctx->init_from_kvs = true;
     count = depthfirst_map (ctx, dirname, dirskip);
     if (count < 0)
-        return -1;
+        goto out;
     flux_log (ctx->h, LOG_DEBUG, "%s: read %d jobs", __FUNCTION__, count);
 
-    zlistx_sort (ctx->jsctx->running);
-    zlistx_sort (ctx->jsctx->inactive);
-    return 0;
+    zlistx_sort (jsctx->running);
+    zlistx_sort (jsctx->inactive);
+
+    /* eliminate older inactive jobs if we've exceeded the max
+     * number of jobs to cache. */
+    if (jsctx->inactive_cache_size >= 0
+        && zlistx_size (jsctx->inactive) > jsctx->inactive_cache_size) {
+        while (zlistx_size (jsctx->inactive) > jsctx->inactive_cache_size)
+            evict_one_inactive_job (jsctx);
+    }
+
+    rc = 0;
+out:
+    jsctx->init_from_kvs = false;
+    return rc;
 }
 
 static int job_update_eventlog_seq (struct job_state_ctx *jsctx,
@@ -1215,8 +1276,9 @@ static struct job *lookup_job (struct job_state_ctx *jsctx,
 {
     struct job *job;
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                        prefix, (uintmax_t)id);
+        if (!zhashx_lookup (jsctx->evicted_jobids, &id))
+            flux_log_error (jsctx->h, "%s: job %ju not in hash",
+                            prefix, (uintmax_t)id);
         return NULL;
     }
     return job;
@@ -1301,6 +1363,11 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
     struct job *job;
 
     if (!(job = zhashx_lookup (jsctx->index, &id))) {
+        /* If we evicted this job and this is a replay, don't add this
+         * job to the index */
+        if (zhashx_lookup (jsctx->evicted_jobids, &id))
+            return 0;
+
         if (!(job = job_create (jsctx->ctx, id))){
             flux_log_error (jsctx->h, "%s: job_create", __FUNCTION__);
             return -1;
@@ -1817,6 +1884,7 @@ error:
 struct job_state_ctx *job_state_create (struct list_ctx *ctx)
 {
     struct job_state_ctx *jsctx = NULL;
+    flux_conf_error_t err;
     int saved_errno;
 
     if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
@@ -1875,6 +1943,23 @@ struct job_state_ctx *job_state_create (struct list_ctx *ctx)
         goto error;
     }
 
+    jsctx->inactive_cache_size = INACTIVE_CACHE_SIZE_UNLIMITED;
+    if (flux_conf_unpack (flux_get_conf (ctx->h),
+                          &err,
+                          "{s?{s?i}}",
+                          "job-list",
+                          "inactive-cache-size",
+                          &jsctx->inactive_cache_size) < 0) {
+        flux_log (ctx->h, LOG_ERR,
+                  "error reading job-list config: %s",
+                  err.errbuf);
+        goto error;
+    }
+
+    if (!(jsctx->evicted_jobids = job_hash_create ()))
+        goto error;
+    zhashx_set_destructor (jsctx->evicted_jobids, free_wrapper);
+
     return jsctx;
 
 error:
@@ -1910,6 +1995,7 @@ void job_state_destroy (void *data)
         zhashx_destroy (&jsctx->index);
         zlistx_destroy (&jsctx->events_journal_backlog);
         flux_future_destroy (jsctx->events);
+        zhashx_destroy (&jsctx->evicted_jobids);
         free (jsctx);
     }
 }

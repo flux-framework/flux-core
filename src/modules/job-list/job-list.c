@@ -30,6 +30,10 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
     int inactive = zlistx_size (ctx->jsctx->inactive);
     int idsync_lookups = zlistx_size (ctx->idsync_lookups);
     int idsync_waits = zhashx_size (ctx->idsync_waits);
+    /* N.B. the inactive count is the number of inactive jobs
+     * currently stored, which can be affected by the
+     * inactive_cache_size configuration.
+     */
     if (flux_respond_pack (h, msg, "{s:{s:i s:i s:i} s:{s:i s:i}}",
                            "jobs",
                            "pending", pending,

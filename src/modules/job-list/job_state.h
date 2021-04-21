@@ -38,6 +38,8 @@
  * The list `futures` is used to store in process futures.
  */
 
+#define INACTIVE_CACHE_SIZE_UNLIMITED -1
+
 struct job_state_ctx {
     flux_t *h;
     struct list_ctx *ctx;
@@ -58,6 +60,16 @@ struct job_state_ctx {
 
     /* stream of job events from the job-manager */
     flux_future_t *events;
+
+    /* config */
+
+    /* max inactive jobs to store / cache, < 0 indicates unlimited */
+    int inactive_cache_size;
+    zhashx_t *evicted_jobids;
+
+    /* flag indicates we are initializing via KVS, process some things
+     * differently */
+    bool init_from_kvs;
 };
 
 struct job {
