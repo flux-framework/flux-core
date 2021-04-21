@@ -64,7 +64,6 @@ class SideFlux(object):
         flux_command = [
             flux_exe,
             "start",
-            "--bootstrap=selfpmi",
             "--test-size={}".format(self.size),
             "-o",
             "-Slog-forward-level=7",

@@ -14,12 +14,11 @@ DESCRIPTION
 ===========
 
 flux-start(1) launches a new Flux instance. By default, flux-start
-execs a single flux-broker(1) directly. By default it will attempt to use
+execs a single flux-broker(1) directly, which will attempt to use
 PMI to fetch job information and bootstrap a flux instance.
 
 If a size is specified via *--test-size*, an instance of that size is to be
-started on the local host with flux-start as the parent. (Mostly used for
-testing purposes.)
+started on the local host with flux-start as the parent.
 
 A failure of the initial program (such as non-zero exit code)
 causes flux-start to exit with a non-zero exit code.
@@ -29,17 +28,7 @@ OPTIONS
 =======
 
 **-s, --test-size**\ =\ *N*
-   Launch an instance of size *N* on the local host. Only works with
-   *--bootstrap=selfpmi*. Automatically sets *--bootstrap=selfpmi* and prints
-   a warning to stderr if no *--bootstrap* option is specified.
-
-**-b, --bootstrap**\ =\ *METHOD*
-   Select the flux bootstrap method. Possible values of *METHOD* are:
-
-   -  pmi - Use PMI (Process Management Interface)
-
-   -  selfpmi - The flux-start process will activate its own internal PMI server,
-      and then it will launch flux-brokers that will bootstrap using said PMI server.
+   Launch an instance of size *N* on the local host.
 
 **-o, --broker-opts**\ =\ *option_string*
    Add options to the message broker daemon, separated by commas.
@@ -57,7 +46,7 @@ OPTIONS
    set in the environment, it will default to 0 for all brokers.
 
 **--scratchdir**\ =\ *DIR*
-   For selfpmi bootstrap mode, set the directory that will be
+   (only with *--test-size*) Set the directory that will be
    used as the rundir directory for the instance. If the directory
    does not exist then it will be created during instance startup.
    If a DIR is not set with this option, a unique temporary directory

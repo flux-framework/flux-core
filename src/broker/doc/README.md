@@ -9,7 +9,7 @@ a static set of config files, or using the Process Management Interface (PMI).
 ### PMI
 
 When Flux is launched by Flux, by another resource manager, or by
-`flux start [--bootstrap=selfpmi] ...`, PMI provides the broker rank and
+`flux start [--testsize=N] ...`, PMI provides the broker rank and
 size straight away, and the PMI KVS is used to share broker URIs via
 global exchange.
 

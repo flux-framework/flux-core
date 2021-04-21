@@ -82,8 +82,6 @@ static struct optparse_option opts[] = {
       .usage = "Be annoyingly informative", },
     { .name = "noexec",     .key = 'X', .has_arg = 0,
       .usage = "Don't execute (useful with -v, --verbose)", },
-    { .name = "bootstrap",  .key = 'b', .has_arg = 1, .arginfo = "METHOD",
-      .usage = "Set flux instance's network bootstrap method", },
     { .name = "test-size",       .key = 's', .has_arg = 1, .arginfo = "N",
       .usage = "Start a test instance by launching N brokers locally", },
     { .name = "broker-opts",.key = 'o', .has_arg = 1, .arginfo = "OPTS",
@@ -116,36 +114,6 @@ static struct optparse_option opts[] = {
     OPTPARSE_TABLE_END,
 };
 
-enum {
-    BOOTSTRAP_PMI,
-    BOOTSTRAP_SELFPMI
-};
-
-static struct {
-    char *string;
-    int num;
-} bootstrap_options[] = {
-    {"pmi", BOOTSTRAP_PMI},
-    {"selfpmi", BOOTSTRAP_SELFPMI},
-    {NULL, -1}
-};
-
-/* Turn the bootstrap option string into an integer value */
-static int parse_bootstrap_option (optparse_t *opts)
-{
-    const char *bootstrap;
-    int i;
-
-    bootstrap = optparse_get_str (opts, "bootstrap", "pmi");
-    for (i = 0; ; i++) {
-        if (bootstrap_options[i].string == NULL)
-            break;
-        if (!strcmp(bootstrap_options[i].string, bootstrap))
-            return bootstrap_options[i].num;
-    }
-    log_msg_exit("Unknown bootstrap method \"%s\"", bootstrap);
-}
-
 /* Various things will go wrong with module loading, process execution, etc.
  *  when current directory can't be found. Exit early with error to avoid
  *  chaotic stream of error messages later in startup.
@@ -165,7 +133,6 @@ int main (int argc, char *argv[])
     const char *searchpath;
     int optindex;
     char *broker_path;
-    int bootstrap;
 
     log_init ("flux-start");
 
@@ -192,15 +159,7 @@ int main (int argc, char *argv[])
     if (!(broker_path = find_broker (searchpath)))
         log_msg_exit ("Could not locate broker in %s", searchpath);
 
-    bootstrap = parse_bootstrap_option (ctx.opts);
     if (optparse_hasopt (ctx.opts, "test-size")) {
-        if (bootstrap != BOOTSTRAP_SELFPMI) {
-            if (!optparse_hasopt (ctx.opts, "bootstrap")) {
-                bootstrap = BOOTSTRAP_SELFPMI;
-            } else {
-                log_errn_exit(EINVAL, "--test-size can only be used with --bootstrap=selfpmi");
-            }
-        }
         ctx.test_size = optparse_get_int (ctx.opts, "test-size", -1);
         if (ctx.test_size <= 0)
             log_msg_exit ("--test-size argument must be > 0");
@@ -208,21 +167,15 @@ int main (int argc, char *argv[])
 
     setup_profiling_env ();
 
-    switch (bootstrap) {
-    case BOOTSTRAP_PMI:
+    if (!optparse_hasopt (ctx.opts, "test-size")) {
         if (optparse_hasopt (ctx.opts, "scratchdir"))
-            log_msg_exit ("--scratchdir only works with --bootstrap=selfpmi");
+            log_msg_exit ("--scratchdir only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "noclique"))
-            log_msg_exit ("--noclique only works with --bootstrap=selfpmi");
+            log_msg_exit ("--noclique only works with --test-size=N");
         status = exec_broker (command, len, broker_path);
-        break;
-    case BOOTSTRAP_SELFPMI:
-        if (!optparse_hasopt (ctx.opts, "test-size"))
-            log_msg_exit ("--test-size must be specified for --bootstrap=selfpmi");
+    }
+    else {
         status = start_session (command, len, broker_path);
-        break;
-    default:
-        assert(0); /* should never happen */
     }
 
     optparse_destroy (ctx.opts);
