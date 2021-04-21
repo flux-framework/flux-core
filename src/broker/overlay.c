@@ -17,6 +17,7 @@
 #include <flux/core.h>
 #include <inttypes.h>
 #include <jansson.h>
+#include <uuid.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/kary.h"
@@ -26,6 +27,10 @@
 
 #include "overlay.h"
 #include "attr.h"
+
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN 37     // defined in later libuuid headers
+#endif
 
 #define FLUX_ZAP_DOMAIN "flux"
 #define ZAP_ENDPOINT "inproc://zeromq.zap.01"
@@ -38,7 +43,7 @@ enum {
 struct child {
     int lastseen;
     uint32_t rank;
-    char rank_str[16];
+    char uuid[UUID_STR_LEN];
     bool connected;
     bool idle;
 };
@@ -50,7 +55,7 @@ struct parent {
     int lastsent;
     char *pubkey;
     uint32_t rank;
-    char rank_str[16];
+    char uuid[UUID_STR_LEN];
     bool hello_error;
     bool hello_responded;
 };
@@ -79,7 +84,7 @@ struct overlay {
     uint32_t size;
     uint32_t rank;
     int tbon_k;
-    char rank_str[16];
+    char uuid[UUID_STR_LEN];
     int version;
 
     struct parent parent;
@@ -134,7 +139,6 @@ int overlay_set_geometry (struct overlay *ov,
     ov->rank = rank;
     ov->tbon_k = tbon_k;
     ov->child_count = child_count (rank, size, tbon_k);
-    snprintf (ov->rank_str, sizeof (ov->rank_str), "%lu", (unsigned long)rank);
     if (ov->child_count > 0) {
         int i;
 
@@ -146,21 +150,11 @@ int overlay_set_geometry (struct overlay *ov,
         zhashx_set_key_destructor (ov->child_hash, NULL);
         for (i = 0; i < ov->child_count; i++) {
             struct child *child = &ov->children[i];
-
             child->rank = kary_childof (tbon_k, size, rank, i);
-            snprintf (child->rank_str,
-                      sizeof (child->rank_str),
-                      "%lu",
-                      (unsigned long)child->rank);
-            zhashx_insert (ov->child_hash, child->rank_str, child);
         }
     }
     if (rank > 0) {
         ov->parent.rank = kary_parentof (tbon_k, rank);
-        snprintf (ov->parent.rank_str,
-                  sizeof (ov->parent.rank_str),
-                  "%lu",
-                  (unsigned long)ov->parent.rank);
     }
 
     return 0;
@@ -179,6 +173,11 @@ void overlay_set_rank (struct overlay *ov, uint32_t rank)
 uint32_t overlay_get_size (struct overlay *ov)
 {
     return ov->size;
+}
+
+const char *overlay_get_uuid (struct overlay *ov)
+{
+    return ov->uuid;
 }
 
 bool overlay_parent_error (struct overlay *ov)
@@ -269,6 +268,32 @@ static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank)
     return &ov->children[i];
 }
 
+/* Look up child that provides route to 'rank' (NULL if none).
+ */
+static struct child *child_lookup_route (struct overlay *ov, uint32_t rank)
+{
+    uint32_t child_rank;
+
+    child_rank = kary_child_route (ov->tbon_k, ov->size, ov->rank, rank);
+    if (child_rank == KARY_NONE)
+        return NULL;
+    return child_lookup_byrank (ov, child_rank);
+}
+
+bool overlay_uuid_is_child (struct overlay *ov, const char *uuid)
+{
+    if (child_lookup (ov, uuid) != NULL)
+        return true;
+    return false;
+}
+
+bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid)
+{
+    if (ov->rank > 0 && !strcmp (uuid, ov->parent.uuid))
+        return true;
+    return false;
+}
+
 int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey)
 {
     if (!(ov->parent.pubkey = strdup (pubkey)))
@@ -332,8 +357,7 @@ int overlay_sendmsg (struct overlay *ov,
     flux_msg_t *cpy = NULL;
     char *uuid = NULL;
     uint32_t nodeid;
-    uint32_t route;
-    char rte[16];
+    struct child *child;
     int rc;
 
     if (flux_msg_get_type (msg, &type) < 0
@@ -352,16 +376,16 @@ int overlay_sendmsg (struct overlay *ov,
                 if ((flags & FLUX_MSGFLAG_UPSTREAM) && nodeid == ov->rank)
                     where = OVERLAY_UPSTREAM;
                 else {
-                    if ((route = kary_child_route (ov->tbon_k,
-                                                   ov->size,
-                                                   ov->rank,
-                                                   nodeid)) != KARY_NONE) {
+                    if ((child = child_lookup_route (ov, nodeid))) {
+                        if (!child->connected) {
+                            errno = EHOSTUNREACH;
+                            goto error;
+                        }
                         if (!(cpy = flux_msg_copy (msg, true)))
                             goto error;
-                        if (flux_msg_push_route (cpy, ov->rank_str) < 0)
+                        if (flux_msg_push_route (cpy, ov->uuid) < 0)
                             goto error;
-                        snprintf (rte, sizeof (rte), "%lu", (unsigned long)route);
-                        if (flux_msg_push_route (cpy, rte) < 0)
+                        if (flux_msg_push_route (cpy, child->uuid) < 0)
                             goto error;
                         msg = cpy;
                         where = OVERLAY_DOWNSTREAM;
@@ -386,7 +410,7 @@ int overlay_sendmsg (struct overlay *ov,
                 if (ov->rank > 0
                     && flux_msg_get_route_last (msg, &uuid) == 0
                     && uuid != NULL
-                    && !strcmp (uuid, ov->parent.rank_str))
+                    && !strcmp (uuid, ov->parent.uuid))
                     where = OVERLAY_UPSTREAM;
                 else
                     where = OVERLAY_DOWNSTREAM;
@@ -471,7 +495,7 @@ static int overlay_mcast_child_one (struct overlay *ov,
         return -1;
     if (flux_msg_enable_route (cpy) < 0)
         goto done;
-    if (flux_msg_push_route (cpy, child->rank_str) < 0)
+    if (flux_msg_push_route (cpy, child->uuid) < 0)
         goto done;
     if (overlay_sendmsg_child (ov, cpy) < 0)
         goto done;
@@ -491,6 +515,7 @@ static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
             if (overlay_mcast_child_one (ov, msg, child) < 0) {
                 if (errno == EHOSTUNREACH) {
                     child->connected = false;
+                    zhashx_delete (ov->child_hash, child->uuid);
                     disconnects++;
                 }
                 else
@@ -521,22 +546,23 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
         return;
     if (flux_msg_get_type (msg, &type) < 0
         || flux_msg_get_route_last (msg, &sender) < 0
-        || !(child = child_lookup (ov, sender)))
+        || sender == NULL)
         goto drop;
-    child->lastseen = flux_reactor_now (ov->reactor);
-    if (!child->connected) {
+    if (!(child = child_lookup (ov, sender)) || !child->connected) {
         if (type == FLUX_MSGTYPE_REQUEST
             && flux_msg_get_topic (msg, &topic) == 0
             && !strcmp (topic, "overlay.hello"))
             hello_request_handler (ov, msg);
         goto handled; // don't log drops until hello completes successfully
     }
+    child->lastseen = flux_reactor_now (ov->reactor);
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
             if (flux_keepalive_decode (msg, NULL, &status) == 0
                 && status == KEEPALIVE_STATUS_DISCONNECT
                 && child->connected == true) {
                 child->connected = false;
+                zhashx_delete (ov->child_hash, child->uuid);
                 overlay_monitor_notify (ov);
             }
             goto handled;
@@ -770,12 +796,14 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     const char *errmsg = NULL;
     char errbuf[128];
     flux_msg_t *response;
+    const char *uuid;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:I s:i}",
+                             "{s:I s:i s:s}",
                              "rank", &rank,
-                             "version", &version) < 0
+                             "version", &version,
+                             "uuid", &uuid) < 0
         || flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0)
         goto error; // EPROTO or EPERM (unlikely)
 
@@ -793,17 +821,23 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
         errno = EINVAL;
         goto error_log;
     }
+    if (child->connected) // crash
+        zhashx_delete (ov->child_hash, child->uuid);
 
+    snprintf (child->uuid, sizeof (child->uuid), "%s", uuid);
+    zhashx_insert (ov->child_hash, child->uuid, child);
     child->connected = true;
     overlay_monitor_notify (ov);
 
-    flux_log (ov->h, LOG_DEBUG, "hello child %lu version %u.%u.%u",
+    flux_log (ov->h, LOG_DEBUG, "hello child %lu version %u.%u.%u %s",
               (unsigned long)rank,
               (version >> 16) & 0xff,
               (version >> 8) & 0xff,
-              version & 0xff);
+              version & 0xff,
+              uuid);
 
     if (!(response = flux_response_derive (msg, 0))
+        || flux_msg_pack (response, "{s:s}", "uuid", ov->uuid) < 0
         || overlay_sendmsg_child (ov, response) < 0)
         flux_log_error (ov->h, "error responding to overlay.hello request");
     flux_msg_destroy (response);
@@ -828,15 +862,18 @@ error:
 static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
 {
     const char *errstr = NULL;
+    const char *uuid;
 
-    if (flux_response_decode (msg, NULL, NULL) < 0) {
+    if (flux_response_decode (msg, NULL, NULL) < 0
+        || flux_msg_unpack (msg, "{s:s}", "uuid", &uuid) < 0) {
         int saved_errno = errno;
         (void)flux_msg_get_string (msg, &errstr);
         errno = saved_errno;
         goto error;
     }
-    flux_log (ov->h, LOG_DEBUG, "hello parent %lu",
-              (unsigned long)ov->parent.rank);
+    flux_log (ov->h, LOG_DEBUG, "hello parent %lu %s",
+              (unsigned long)ov->parent.rank, uuid);
+    snprintf (ov->parent.uuid, sizeof (ov->parent.uuid), "%s", uuid);
     ov->parent.hello_responded = true;
     ov->parent.hello_error = false;
     overlay_monitor_notify (ov);
@@ -858,9 +895,10 @@ static int hello_request_send (struct overlay *ov,
 
     if (!(msg = flux_request_encode ("overlay.hello", NULL))
         || flux_msg_pack (msg,
-                          "{s:I s:i}",
+                          "{s:I s:i s:s}",
                           "rank", rank,
-                          "version", ov->version) < 0
+                          "version", ov->version,
+                          "uuid", ov->uuid) < 0
         || flux_msg_set_rolemask (msg, FLUX_ROLE_OWNER) < 0
         || overlay_sendmsg_parent (ov, msg) < 0) {
         flux_msg_decref (msg);
@@ -882,7 +920,7 @@ int overlay_connect (struct overlay *ov)
         zsock_set_zap_domain (ov->parent.zsock, FLUX_ZAP_DOMAIN);
         zcert_apply (ov->cert, ov->parent.zsock);
         zsock_set_curve_serverkey (ov->parent.zsock, ov->parent.pubkey);
-        zsock_set_identity (ov->parent.zsock, ov->rank_str);
+        zsock_set_identity (ov->parent.zsock, ov->uuid);
         if (zsock_connect (ov->parent.zsock, "%s", ov->parent.uri) < 0)
             goto nomem;
         if (!(ov->parent.w = flux_zmq_watcher_create (ov->reactor,
@@ -1122,6 +1160,7 @@ static const struct flux_msg_handler_spec htab[] = {
 struct overlay *overlay_create (flux_t *h, overlay_recv_f cb, void *arg)
 {
     struct overlay *ov;
+    uuid_t uuid;
 
     if (!(ov = calloc (1, sizeof (*ov))))
         return NULL;
@@ -1132,6 +1171,8 @@ struct overlay *overlay_create (flux_t *h, overlay_recv_f cb, void *arg)
     ov->recv_cb = cb;
     ov->recv_arg = arg;
     ov->version = FLUX_CORE_VERSION_HEX;
+    uuid_generate (uuid);
+    uuid_unparse (uuid, ov->uuid);
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;
     if (!(ov->f_sync = flux_sync_create (h, sync_min))

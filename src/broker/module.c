@@ -46,12 +46,9 @@
 #endif
 
 
-#define MODULE_MAGIC    0xfeefbe01
 struct broker_module {
-    int magic;
+    struct modhash *modhash;
 
-    uint32_t rank;
-    flux_t *broker_h;
     flux_watcher_t *broker_w;
 
     double lastseen;
@@ -92,6 +89,7 @@ struct modhash {
     zhash_t *zh_byuuid;
     uint32_t rank;
     flux_t *broker_h;
+    char uuid_str[UUID_STR_LEN];
 };
 
 static int setup_module_profiling (module_t *p)
@@ -99,7 +97,7 @@ static int setup_module_profiling (module_t *p)
 #if HAVE_CALIPER
     cali_begin_string_byname ("flux.type", "module");
     cali_begin_int_byname ("flux.tid", syscall (SYS_gettid));
-    cali_begin_int_byname ("flux.rank", p->rank);
+    cali_begin_int_byname ("flux.rank", p->modhash->rank);
     cali_begin_string_byname ("flux.name", p->name);
 #endif
     return (0);
@@ -143,12 +141,11 @@ done:
 static void *module_thread (void *arg)
 {
     module_t *p = arg;
-    assert (p->magic == MODULE_MAGIC);
     sigset_t signal_set;
     int errnum;
     char *uri = NULL;
     char **av = NULL;
-    char *rankstr = NULL;
+    const char *rankstr;
     int ac;
     int mod_main_errno = 0;
     flux_msg_t *msg;
@@ -166,19 +163,16 @@ static void *module_thread (void *arg)
         log_err ("flux_open %s", uri);
         goto done;
     }
-    if (asprintf (&rankstr, "%"PRIu32, p->rank) < 0) {
-        log_err ("asprintf");
-        goto done;
-    }
-    if (flux_attr_set_cacheonly (p->h, "rank", rankstr) < 0) {
-        log_err ("%s: error faking rank attribute", p->name);
+    if (!(rankstr = flux_attr_get (p->modhash->broker_h, "rank"))
+        || flux_attr_set_cacheonly (p->h, "rank", rankstr) < 0) {
+        log_err ("%s: error duplicating rank attribute", p->name);
         goto done;
     }
     flux_log_set_appname (p->h, p->name);
     /* Copy the broker's config object so that modules
      * can call flux_get_conf() and expect it to always succeed.
      */
-    if (!(conf = flux_conf_copy (flux_get_conf (p->broker_h)))
+    if (!(conf = flux_conf_copy (flux_get_conf (p->modhash->broker_h)))
             || flux_set_conf (p->h, conf) < 0) {
         flux_conf_decref (conf);
         log_err ("%s: error duplicating config object", p->name);
@@ -204,7 +198,7 @@ static void *module_thread (void *arg)
      */
     ac = argz_count (p->argz, p->argz_len);
     if (!(av = calloc (1, sizeof (av[0]) * (ac + 1)))) {
-        log_errn (ENOMEM, "calloc");
+        log_err ("calloc");
         goto done;
     }
     argz_extract (p->argz, p->argz_len, av);
@@ -243,9 +237,7 @@ static void *module_thread (void *arg)
     flux_msg_destroy (msg);
 done:
     free (uri);
-    free (rankstr);
-    if (av)
-        free (av);
+    free (av);
     flux_close (p->h);
     p->h = NULL;
     return NULL;
@@ -253,7 +245,6 @@ done:
 
 const char *module_get_name (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     return p->name;
 }
 
@@ -264,7 +255,7 @@ const char *module_get_uuid (module_t *p)
 
 static int module_get_idle (module_t *p)
 {
-    return flux_reactor_now (flux_get_reactor (p->broker_h)) - p->lastseen;
+    return flux_reactor_now (flux_get_reactor (p->modhash->broker_h)) - p->lastseen;
 }
 
 flux_msg_t *module_recvmsg (module_t *p)
@@ -272,8 +263,6 @@ flux_msg_t *module_recvmsg (module_t *p)
     flux_msg_t *msg = NULL;
     int type;
     struct flux_msg_cred cred;
-
-    assert (p->magic == MODULE_MAGIC);
 
     if (!(msg = flux_msg_recvzsock (p->sock)))
         goto error;
@@ -332,11 +321,9 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
     }
     switch (type) {
         case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
-            char uuid[16];
-            snprintf (uuid, sizeof (uuid), "%"PRIu32, p->rank);
             if (!(cpy = flux_msg_copy (msg, true)))
                 goto done;
-            if (flux_msg_push_route (cpy, uuid) < 0)
+            if (flux_msg_push_route (cpy, p->modhash->uuid_str) < 0)
                 goto done;
             if (flux_msg_sendzsock (p->sock, cpy) < 0)
                 goto done;
@@ -382,8 +369,7 @@ int module_response_sendmsg (modhash_t *mh, const flux_msg_t *msg)
     }
     rc = module_sendmsg (p, msg);
 done:
-    if (uuid)
-        free (uuid);
+    free (uuid);
     return rc;
 }
 
@@ -405,11 +391,10 @@ static void module_destroy (module_t *p)
 {
     int e;
     void *res;
+    int saved_errno = errno;
 
     if (!p)
         return;
-
-    assert (p->magic == MODULE_MAGIC);
 
     if (p->t) {
         if ((e = pthread_join (p->t, &res)) != 0)
@@ -443,23 +428,22 @@ static void module_destroy (module_t *p)
         zlist_destroy (&p->subs);
     }
     zlist_destroy (&p->rmmod);
-    p->magic = ~MODULE_MAGIC;
     free (p);
+    errno = saved_errno;
 }
 
 /* Send shutdown request, broker to module.
  */
 int module_stop (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     char *topic = NULL;
     flux_future_t *f = NULL;
     int rc = -1;
 
     if (asprintf (&topic, "%s.shutdown", p->name) < 0)
         goto done;
-    if (!(f = flux_rpc (p->broker_h, topic, NULL,
-                          FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
+    if (!(f = flux_rpc (p->modhash->broker_h, topic, NULL,
+                        FLUX_NODEID_ANY, FLUX_RPC_NORESPONSE)))
         goto done;
     rc = 0;
 done:
@@ -477,7 +461,6 @@ static void module_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg)
 {
     module_t *p = arg;
-    assert (p->magic == MODULE_MAGIC);
     p->lastseen = flux_reactor_now (r);
     if (p->poller_cb)
         p->poller_cb (p, p->poller_arg);
@@ -485,7 +468,6 @@ static void module_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 int module_start (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     int errnum;
     int rc = -1;
 
@@ -503,7 +485,6 @@ void module_set_args (module_t *p, int argc, char * const argv[])
 {
     int e;
 
-    assert (p->magic == MODULE_MAGIC);
     if (p->argz) {
         free (p->argz);
         p->argz_len = 0;
@@ -516,28 +497,24 @@ void module_add_arg (module_t *p, const char *arg)
 {
     int e;
 
-    assert (p->magic == MODULE_MAGIC);
     if ((e = argz_add (&p->argz, &p->argz_len, arg)) != 0)
         log_errn_exit (e, "argz_add");
 }
 
 void module_set_poller_cb (module_t *p, modpoller_cb_f cb, void *arg)
 {
-    assert (p->magic == MODULE_MAGIC);
     p->poller_cb = cb;
     p->poller_arg = arg;
 }
 
 void module_set_status_cb (module_t *p, module_status_cb_f cb, void *arg)
 {
-    assert (p->magic == MODULE_MAGIC);
     p->status_cb = cb;
     p->status_arg = arg;
 }
 
 void module_set_status (module_t *p, int new_status)
 {
-    assert (p->magic == MODULE_MAGIC);
     assert (new_status != FLUX_MODSTATE_INIT);  /* illegal state transition */
     assert (p->status != FLUX_MODSTATE_EXITED); /* illegal state transition */
     int prev_status = p->status;
@@ -548,19 +525,16 @@ void module_set_status (module_t *p, int new_status)
 
 int module_get_status (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     return p->status;
 }
 
 void module_set_errnum (module_t *p, int errnum)
 {
-    assert (p->magic == MODULE_MAGIC);
     p->errnum = errnum;
 }
 
 int module_get_errnum (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     return p->errnum;
 }
 
@@ -578,7 +552,6 @@ int module_push_rmmod (module_t *p, const flux_msg_t *msg)
 
 flux_msg_t *module_pop_rmmod (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     return zlist_pop (p->rmmod);
 }
 
@@ -597,7 +570,6 @@ int module_push_insmod (module_t *p, const flux_msg_t *msg)
 
 flux_msg_t *module_pop_insmod (module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     flux_msg_t *msg = p->insmod;
     p->insmod = NULL;
     return msg;
@@ -626,37 +598,28 @@ module_t *module_add (modhash_t *mh, const char *path)
         return NULL;
     }
     if (!(p = calloc (1, sizeof (*p)))) {
+        int saved_errno = errno;
         dlclose (dso);
-        errno = ENOMEM;
+        errno = saved_errno;
         return NULL;
     }
-    p->magic = MODULE_MAGIC;
     p->main = mod_main;
     p->dso = dso;
-    if (!(p->name = strdup (*mod_namep))) {
-        errno = ENOMEM;
+    if (!(p->name = strdup (*mod_namep)))
         goto cleanup;
-    }
     zf = zfile_new (NULL, path);
-    if (!(p->digest = strdup (zfile_digest (zf)))) {
-        errno = ENOMEM;
+    if (!(p->digest = strdup (zfile_digest (zf))))
         goto cleanup;
-    }
     p->size = (int)zfile_cursize (zf);
     zfile_destroy (&zf);
     uuid_generate (p->uuid);
     uuid_unparse (p->uuid, p->uuid_str);
-    if (!(p->rmmod = zlist_new ())) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
-    if (!(p->subs = zlist_new ())) {
-        errno = ENOMEM;
-        goto cleanup;
-    }
+    if (!(p->rmmod = zlist_new ()))
+        goto nomem;
+    if (!(p->subs = zlist_new ()))
+        goto nomem;
 
-    p->rank = mh->rank;
-    p->broker_h = mh->broker_h;
+    p->modhash = mh;
 
     /* Broker end of PAIR socket is opened here.
      */
@@ -668,9 +631,12 @@ module_t *module_add (modhash_t *mh, const char *path)
         log_err ("zsock_bind inproc://%s", module_get_uuid (p));
         goto cleanup;
     }
-    if (!(p->broker_w = flux_zmq_watcher_create (flux_get_reactor (p->broker_h),
-                                                 p->sock, FLUX_POLLIN,
-                                                 module_cb, p))) {
+    if (!(p->broker_w = flux_zmq_watcher_create (
+                                        flux_get_reactor (p->modhash->broker_h),
+                                        p->sock,
+                                        FLUX_POLLIN,
+                                        module_cb,
+                                        p))) {
         log_err ("flux_zmq_watcher_create");
         goto cleanup;
     }
@@ -688,7 +654,8 @@ module_t *module_add (modhash_t *mh, const char *path)
     zhash_freefn (mh->zh_byuuid, module_get_uuid (p),
                   (zhash_free_fn *)module_destroy);
     return p;
-
+nomem:
+    errno = ENOMEM;
 cleanup:
     module_destroy (p);
     return NULL;
@@ -696,20 +663,17 @@ cleanup:
 
 void module_remove (modhash_t *mh, module_t *p)
 {
-    assert (p->magic == MODULE_MAGIC);
     zhash_delete (mh->zh_byuuid, module_get_uuid (p));
 }
 
 modhash_t *modhash_create (void)
 {
     modhash_t *mh = calloc (1, sizeof (*mh));
-    if (!mh) {
-        errno = ENOMEM;
+    if (!mh)
         return NULL;
-    }
     if (!(mh->zh_byuuid = zhash_new ())) {
-        modhash_destroy (mh);
         errno = ENOMEM;
+        modhash_destroy (mh);
         return NULL;
     }
     return mh;
@@ -717,6 +681,7 @@ modhash_t *modhash_create (void)
 
 void modhash_destroy (modhash_t *mh)
 {
+    int saved_errno = errno;
     const char *uuid;
     module_t *p;
     int e;
@@ -733,16 +698,14 @@ void modhash_destroy (modhash_t *mh)
         }
         free (mh);
     }
+    errno = saved_errno;
 }
 
-void modhash_set_rank (modhash_t *mh, uint32_t rank)
-{
-    mh->rank = rank;
-}
-
-void modhash_set_flux (modhash_t *mh, flux_t *h)
+void modhash_initialize (modhash_t *mh, flux_t *h, const char *uuid)
 {
     mh->broker_h = h;
+    flux_get_rank (h, &mh->rank);
+    strncpy (mh->uuid_str, uuid, sizeof (mh->uuid_str) - 1);
 }
 
 json_t *module_get_modlist (modhash_t *mh, struct service_switch *sw)
@@ -830,10 +793,8 @@ int module_subscribe (modhash_t *mh, const char *uuid, const char *topic)
         errno = ENOENT;
         goto done;
     }
-    if (!(cpy = strdup (topic))) {
-        errno = ENOMEM;
+    if (!(cpy = strdup (topic)))
         goto done;
-    }
     if (zlist_push (p->subs, cpy) < 0) {
         free (cpy);
         errno = ENOMEM;

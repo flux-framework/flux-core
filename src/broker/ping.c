@@ -119,15 +119,13 @@ int ping_initialize (flux_t *h, const char *service, const char *uuid)
     if (!p)
         goto error;
     /* The uuid is tacked onto the route string constructed for
-     * ping responses.  If it contains a hyphen, truncate it there
-     * to match policy of flux_msg_get_route_str().  If it doesn't
-     * contain a hyphen, it's probably a broker rank - never truncate that.
+     * ping responses.  Truncate the uuid to 8 chars to match policy
+     * of flux_msg_get_route_str().
      */
     if (!(p->uuid = strdup (uuid)))
         goto error;
-    char *cp = strchr (p->uuid, '-');
-    if (cp)
-        *cp = '\0';
+    if (strlen (p->uuid) > 8)
+        p->uuid[8] = '\0';
 
     match.typemask = FLUX_MSGTYPE_REQUEST;
     if (flux_match_asprintf (&match, "%s.ping", service) < 0)

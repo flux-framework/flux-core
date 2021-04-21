@@ -75,6 +75,9 @@ int overlay_set_parent_uri (struct overlay *ov, const char *uri);
 bool overlay_parent_error (struct overlay *ov);
 bool overlay_parent_success (struct overlay *ov);
 void overlay_set_version (struct overlay *ov, int version); // test only
+const char *overlay_get_uuid (struct overlay *ov);
+bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid);
+bool overlay_uuid_is_child (struct overlay *ov, const char *uuid);
 
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they

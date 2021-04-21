@@ -18,7 +18,6 @@ struct broker {
     struct overlay *overlay;
     uint32_t rank;
     uint32_t size;
-    char uuid[16];
 
     struct broker_attr *attrs;
     struct flux_msg_cred cred;  /* instance owner */

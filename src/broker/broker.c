@@ -370,7 +370,6 @@ int main (int argc, char *argv[])
 
     ctx.rank = overlay_get_rank (ctx.overlay);
     ctx.size = overlay_get_size (ctx.overlay);
-    snprintf (ctx.uuid, sizeof (ctx.uuid), "%"PRIu32, ctx.rank);
 
     assert (ctx.size > 0);
 
@@ -457,7 +456,7 @@ int main (int argc, char *argv[])
         log_err ("exec_initialize");
         goto cleanup;
     }
-    if (ping_initialize (ctx.h, "broker", ctx.uuid) < 0) {
+    if (ping_initialize (ctx.h, "broker", overlay_get_uuid (ctx.overlay)) < 0) {
         log_err ("ping_initialize");
         goto cleanup;
     }
@@ -475,8 +474,7 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose > 1)
         log_msg ("initializing modules");
-    modhash_set_rank (ctx.modhash, ctx.rank);
-    modhash_set_flux (ctx.modhash, ctx.h);
+    modhash_initialize (ctx.modhash, ctx.h, overlay_get_uuid (ctx.overlay));
 
     /* Configure broker state machine
      */
@@ -1725,19 +1723,10 @@ static void broker_request_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
     }
 }
 
-static bool string_isdigits (const char *s)
-{
-    while (*s) {
-        if (!isdigit (*s++))
-            return false;
-    }
-    return true;
-}
-
 /* Route a response message, determining next hop from route stack.
  * If there is no next hop, routing is complete to broker-resident service.
- * If the next hop is a rank, route up or down the TBON.
- * If not a rank, look up a module by uuid.
+ * If the next hop is an overlay peer, route up or down the TBON.
+ * If not a peer, look up a module by uuid.
  */
 static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
 {
@@ -1748,8 +1737,10 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
         return -1;
     if (uuid == NULL) // broker resident service
         rc = flux_requeue (ctx->h, msg, FLUX_RQ_TAIL);
-    else if (string_isdigits (uuid))
-        rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_ANY);
+    else if (overlay_uuid_is_parent (ctx->overlay, uuid))
+        rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM);
+    else if (overlay_uuid_is_child (ctx->overlay, uuid))
+        rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_DOWNSTREAM);
     else
         rc = module_response_sendmsg (ctx->modhash, msg);
     ERRNO_SAFE_WRAP (free, uuid);
