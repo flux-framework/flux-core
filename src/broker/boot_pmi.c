@@ -66,19 +66,23 @@ static int set_instance_level_attr (struct pmi_handle *pmi,
 /* Set broker.mapping attribute from enclosing instance PMI_process_mapping.
  */
 static int set_broker_mapping_attr (struct pmi_handle *pmi,
-                                    const char *kvsname,
+                                    struct pmi_params *pmi_params,
                                     attr_t *attrs)
 {
     char buf[1024];
     char *val = NULL;
 
-    if (broker_pmi_kvs_get (pmi,
-                            kvsname,
-                            "PMI_process_mapping",
-                            buf,
-                            sizeof (buf),
-                            -1) == PMI_SUCCESS)
-        val = buf;
+    if (pmi_params->size == 1)
+        val = "(vector,(0,1,1))";
+    else {
+        if (broker_pmi_kvs_get (pmi,
+                                pmi_params->kvsname,
+                                "PMI_process_mapping",
+                                buf,
+                                sizeof (buf),
+                                -1) == PMI_SUCCESS)
+            val = buf;
+    }
     if (attr_add (attrs, "broker.mapping", val, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
     return 0;
@@ -174,7 +178,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
         log_err ("set_instance_level_attr");
         goto error;
     }
-    if (set_broker_mapping_attr (pmi, pmi_params.kvsname, attrs) < 0) {
+    if (set_broker_mapping_attr (pmi, &pmi_params, attrs) < 0) {
         log_err ("error setting broker.mapping attribute");
         goto error;
     }
