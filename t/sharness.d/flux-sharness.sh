@@ -123,7 +123,7 @@ test_under_flux() {
     logopts="-o -Slog-filename=${log_file},-Slog-forward-level=7"
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
-      exec flux start --bootstrap=selfpmi --size=${size} \
+      exec flux start --bootstrap=selfpmi --test-size=${size} \
                       ${RC1_PATH+-o -Sbroker.rc1_path=${RC1_PATH}} \
                       ${RC3_PATH+-o -Sbroker.rc3_path=${RC3_PATH}} \
                       ${logopts} \

@@ -17,9 +17,9 @@ flux-start(1) launches a new Flux instance. By default, flux-start
 execs a single flux-broker(1) directly. By default it will attempt to use
 PMI to fetch job information and bootstrap a flux instance.
 
-If a size is specified via *--size*, an instance of that size is to be
-started on the local host with flux-start as the parent. (Mostly used for testing
-purposes.)
+If a size is specified via *--test-size*, an instance of that size is to be
+started on the local host with flux-start as the parent. (Mostly used for
+testing purposes.)
 
 A failure of the initial program (such as non-zero exit code)
 causes flux-start to exit with a non-zero exit code.
@@ -28,7 +28,7 @@ causes flux-start to exit with a non-zero exit code.
 OPTIONS
 =======
 
-**-s, --size**\ =\ *N*
+**-s, --test-size**\ =\ *N*
    Launch an instance of size *N* on the local host. Only works with
    *--bootstrap=selfpmi*. Automatically sets *--bootstrap=selfpmi* and prints
    a warning to stderr if no *--bootstrap* option is specified.
