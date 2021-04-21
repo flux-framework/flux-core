@@ -25,8 +25,9 @@ import yaml
 
 import flux
 import flux.kvs
+import flux.constants
 from flux import job
-from flux.job import Jobspec, JobspecV1, ffi
+from flux.job import Jobspec, JobspecV1, ffi, JobID, JobInfo
 from flux.job.list import VALID_ATTRS
 from flux.job.stats import JobStats
 from flux.future import Future
@@ -471,6 +472,139 @@ class TestJob(unittest.TestCase):
         stats.update(callback=cb, mykw="mykw")
         self.fh.reactor_run()
         self.assertTrue(called[0])
+
+    def assertJobInfoEqual(self, x, y, msg=None):
+
+        self.assertEqual(x.id, y.id)
+        self.assertEqual(x.result, y.result)
+        self.assertEqual(x.returncode, y.returncode)
+        self.assertEqual(x.waitstatus, y.waitstatus)
+        if y.t_run == 0.0:
+            self.assertEqual(x.runtime, y.runtime)
+        else:
+            self.assertGreater(x.runtime, 0.0)
+
+        self.assertEqual(x.exception.occurred, y.exception.occurred)
+
+        if y.exception.occurred:
+            self.assertEqual(x.exception.type, y.exception.type)
+            self.assertEqual(x.exception.severity, y.exception.severity)
+            self.assertEqual(x.exception.note, y.exception.note)
+
+    def test_32_job_result(self):
+        result = {}
+        ids = []
+
+        def cb(future, jobid):
+            result[jobid] = future
+
+        ids.append(job.submit(self.fh, JobspecV1.from_command(["true"])))
+        ids.append(job.submit(self.fh, JobspecV1.from_command(["false"])))
+        ids.append(job.submit(self.fh, JobspecV1.from_command(["nosuchprog"])))
+        ids.append(job.submit(self.fh, JobspecV1.from_command(["sleep", "120"])))
+
+        # Submit held job so we can cancel before RUN state
+        ids.append(job.submit(self.fh, JobspecV1.from_command(["true"]), urgency=0))
+        job.cancel(self.fh, ids[4])
+
+        for jobid in ids:
+            flux.job.result_async(self.fh, jobid).then(cb, jobid)
+
+        def cancel_on_start(future, jobid):
+            event = future.get_event()
+            if event is None:
+                return
+            if event.name == "start":
+                job.cancel(self.fh, jobid)
+                future.cancel()
+
+        job.event_watch_async(self.fh, ids[3]).then(cancel_on_start, ids[3])
+
+        self.fh.reactor_run()
+        self.assertEqual(len(result.keys()), len(ids))
+
+        self.addTypeEqualityFunc(JobInfo, self.assertJobInfoEqual)
+
+        self.assertEqual(
+            result[ids[0]].get_info(),
+            JobInfo(
+                {
+                    "id": ids[0],
+                    "result": flux.constants.FLUX_JOB_RESULT_COMPLETED,
+                    "t_start": 1.0,
+                    "t_run": 2.0,
+                    "t_cleanup": 3.0,
+                    "waitstatus": 0,
+                    "exception_occurred": False,
+                }
+            ),
+        )
+        self.assertEqual(
+            result[ids[1]].get_info(),
+            JobInfo(
+                {
+                    "id": ids[1],
+                    "result": flux.constants.FLUX_JOB_RESULT_FAILED,
+                    "t_submit": 1.0,
+                    "t_run": 2.0,
+                    "t_cleanup": 3.0,
+                    "waitstatus": 256,
+                    "exception_occurred": False,
+                }
+            ),
+        )
+        self.assertEqual(
+            result[ids[2]].get_info(),
+            JobInfo(
+                {
+                    "id": ids[2],
+                    "result": flux.constants.FLUX_JOB_RESULT_FAILED,
+                    "t_submit": 1.0,
+                    "t_run": 2.0,
+                    "t_cleanup": 3.0,
+                    "waitstatus": 32512,
+                    "exception_occurred": True,
+                    "exception_type": "exec",
+                    "exception_note": "task 0: start failed: nosuchprog: "
+                    "No such file or directory",
+                    "exception_severity": 0,
+                }
+            ),
+        )
+        self.assertEqual(
+            result[ids[3]].get_info(),
+            JobInfo(
+                {
+                    "id": ids[3],
+                    "result": flux.constants.FLUX_JOB_RESULT_CANCELED,
+                    "t_submit": 1.0,
+                    "t_run": 2.0,
+                    "t_cleanup": 3.0,
+                    "waitstatus": 15,
+                    "exception_occurred": True,
+                    "exception_type": "cancel",
+                    "exception_note": "",
+                    "exception_severity": 0,
+                }
+            ),
+        )
+        self.assertEqual(
+            result[ids[4]].get_info(),
+            JobInfo(
+                {
+                    "id": ids[4],
+                    "result": flux.constants.FLUX_JOB_RESULT_CANCELED,
+                    "t_submit": 0.0,
+                    "exception_occurred": True,
+                    "exception_type": "cancel",
+                    "exception_note": "",
+                    "exception_severity": 0,
+                }
+            ),
+        )
+
+        # synchronous job.result() test
+        self.assertEqual(job.result(self.fh, ids[3]), result[ids[3]].get_info())
 
 
 if __name__ == "__main__":

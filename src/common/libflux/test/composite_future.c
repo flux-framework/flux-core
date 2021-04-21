@@ -724,6 +724,41 @@ void test_empty_composite (flux_reactor_t *r)
     flux_future_destroy (all);
 }
 
+static void fnext_cb (flux_future_t *f, void *arg)
+{
+    // Dummy continuation callback for testing below
+}
+
+void test_future_fulfill_next (flux_reactor_t *r)
+{
+    char *result = NULL;
+    const char *s = NULL;
+    flux_future_t *f = flux_future_create (NULL, NULL);
+    flux_future_t *f2 = flux_future_and_then (f, fnext_cb, NULL);
+    if (!f || !f2)
+        BAIL_OUT ("Error creating test futures");
+
+    ok (flux_future_fulfill_next (f2, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_future_fulfill_next() returns EINVAL if future is not chained");
+
+    if (!(result = strdup ("ok")))
+        BAIL_OUT ("Failed to create result");
+
+    ok (flux_future_fulfill_next (f, result, free) == 0,
+        "flux_future_fulfill_next() works on chained future");
+
+    flux_future_destroy (f);
+
+    ok (flux_future_wait_for (f2, 0.1) == 0,
+        "next future was fulfilled by flux_future_fulfill_next()");
+    ok (flux_future_get (f2, (const void **) &s) == 0,
+        "flux_future_get on fulfilled future works");
+    ok (s == result,
+        "flux_future_get() returns expected result", s, s);
+
+    flux_future_destroy (f2);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *reactor;
@@ -750,6 +785,8 @@ int main (int argc, char *argv[])
 
     test_composite_anon_child (reactor, false);
     test_empty_composite (reactor);
+
+    test_future_fulfill_next (reactor);
 
     flux_reactor_destroy (reactor);
 

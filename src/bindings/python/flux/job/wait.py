@@ -9,8 +9,10 @@
 ###############################################################
 import errno
 import collections
+import json
 
-from flux.util import check_future_error
+import flux
+from flux.util import check_future_error, interruptible
 from flux.future import Future
 from flux.job._wrapper import _RAW as RAW
 from _flux._core import ffi, lib
@@ -85,3 +87,102 @@ def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
     """
     future = wait_async(flux_handle, jobid)
     return future.get_status()
+
+
+class JobResultFuture(Future):
+    """Future fulfilled with a job "result"
+
+    Supports methods to return the result as either a raw :obj:`dict` or
+    :obj:`flux.job.info.JobInfo` object.
+    """
+
+    @interruptible
+    def get_dict(self):
+        """Get the raw "result" dictionary for the job
+
+        Return the underlying "result" payload from ``flux_job_result(3)``
+        as a dictionary.
+        """
+        result_str = ffi.new("char *[1]")
+        RAW.result_get(self.handle, result_str)
+        if result_str[0] == ffi.NULL:
+            return None
+        return json.loads(ffi.string(result_str[0]).decode("utf-8"))
+
+    @interruptible
+    def get_info(self):
+        """Get a :obj:`flux.job.info.JobInfo` object from the job result
+
+        Note: The JobInfo object returned from this method is only capable
+        of computing a small subset of job information, including, but possibly
+        not limited to:
+            - id
+            - t_submit, t_run, t_cleanup
+            - returncode
+            - waitstatus
+            - runtime
+            - result
+            - result_id
+        """
+        return flux.job.JobInfo(self.get_dict())
+
+
+def result_async(flux_handle, jobid, flags=0):
+    """Wait for a job to reach its terminal state and return job result
+
+    This function waits for job completion by watching the eventlog.
+    Because this function must process the eventlog, it is a little more
+    heavyweight than :meth:`flux.job.wait.wait_async`. However, it may
+    be used for non-waitable jobs, jobs that have already completed,
+    and works multiple times on the same jobid.
+
+    Once the eventlog terminal state is reached, the returned Future is
+    fulfilled with a set of information gleaned from the processed events,
+    including whether the job started running (in case it was canceled
+    before starting), any exception state, and the final exit code and
+    wait(2) status.
+
+    Args:
+        flux_handle (:obj:`flux.Flux`): handle for Flux broker
+        jobid (:obj:`flux.job.JobID`): the jobid for which to fetch result
+
+    Returns:
+        :obj:`JobResultFuture`: A Future fulfilled with the job result.
+    """
+    future = RAW.result(flux_handle, flux.job.JobID(jobid), flags)
+    return JobResultFuture(future)
+
+
+def result(flux_handle, jobid, flags=0):
+    """Wait for a job to reach its terminal state and return job result
+
+    This function waits for job completion by watching the eventlog.
+    Because this function must process the eventlog, it is a little more
+    heavyweight than :meth:`flux.job.wait.wait`. However, it may be used
+    for non-waitable jobs, jobs that have already completed, and works
+    multiple times on the same jobid.
+
+    This function will wait until the job result is available and returns
+    a :obj:`flux.job.info.JobInfo` object filled with the available information.
+
+    Note: The JobInfo object returned from this method is only capable
+    of computing a small subset of job information, including, but possibly
+    not limited to:
+        - id
+        - t_submit, t_run, t_cleanup
+        - returncode
+        - waitstatus
+        - runtime
+        - result
+        - result_id
+
+    Args:
+        flux_handle (:obj:`flux.Flux`): handle for Flux broker
+        jobid (:obj:`flux.job.JobID`): the jobid for which to fetch result
+
+    Returns:
+        :obj:`JobInfo`: A limited JobInfo object which can be used to fetch
+        the final job result, returncode, etc.
+    """
+    future = result_async(flux_handle, flux.job.JobID(jobid), flags)
+    return future.get_info()

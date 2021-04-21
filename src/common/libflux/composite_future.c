@@ -522,6 +522,20 @@ void flux_future_continue_error (flux_future_t *prev, int errnum,
     }
 }
 
+int flux_future_fulfill_next (flux_future_t *f,
+                              void *result,
+                              flux_free_f free_fn)
+{
+    struct chained_future *cf = chained_future_get (f);
+    if (cf == NULL || !cf->next) {
+        errno = EINVAL;
+        return -1;
+    }
+    cf->continued = true;
+    flux_future_fulfill (cf->next, result, free_fn);
+    return 0;
+}
+
 flux_future_t *flux_future_and_then (flux_future_t *prev,
                                      flux_continuation_f next_cb, void *arg)
 {

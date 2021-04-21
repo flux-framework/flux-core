@@ -125,6 +125,12 @@ int flux_future_continue (flux_future_t *prev, flux_future_t *f);
 void flux_future_continue_error (flux_future_t *prev, int errnum,
                                  const char *errstr);
 
+/*  Fulfill the next future in the chain immediately with a result.
+ */
+int flux_future_fulfill_next (flux_future_t *prev,
+                              void *result,
+                              flux_free_f free_fn);
+
 #ifdef __cplusplus
 }
 #endif
