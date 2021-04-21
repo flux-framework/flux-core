@@ -13,6 +13,7 @@ import threading
 from contextlib import contextmanager
 
 from flux.wrapper import Wrapper
+from flux.future import Future
 from flux.rpc import RPC
 from flux.message import Message
 from flux.util import encode_topic, encode_payload
@@ -323,6 +324,12 @@ class Flux(Wrapper):
         if reactor is None:
             reactor = self.get_reactor()
         self.reactor_active_decref(reactor)
+
+    def service_register(self, name):
+        return Future(self.flux_service_register(name))
+
+    def service_unregister(self, name):
+        return Future(self.flux_service_unregister(name))
 
 
 # vi: ts=4 sw=4 expandtab
