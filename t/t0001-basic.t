@@ -66,55 +66,49 @@ test_expect_success 'flux-start in exec mode works' "
 	flux start ${ARGS} flux getattr size | grep -x 1
 "
 test_expect_success 'flux-start in subprocess/pmi mode works (size 1)' "
-	flux start ${ARGS} --size=1 flux getattr size | grep -x 1
+	flux start ${ARGS} -s1 flux getattr size | grep -x 1
 "
 test_expect_success 'flux-start in subprocess/pmi mode works (size 2)' "
-	flux start ${ARGS} --size=2 flux getattr size | grep -x 2
+	flux start ${ARGS} -s2 flux getattr size | grep -x 2
 "
 test_expect_success 'flux-start with size 1 has no peers' '
 	echo 0 >nochild.exp &&
-	flux start ${ARGS} --size=1 \
+	flux start ${ARGS} -s1 \
 		flux module stats --parse=child-count overlay >nochild.out &&
 	test_cmp nochild.exp nochild.out
 '
 test_expect_success 'flux-start with size 2 has rank 1 peer' '
 	echo 1 >child2.exp &&
-	flux start ${ARGS} --size=2 \
+	flux start ${ARGS} -s2 \
 		flux module stats --parse=child-count overlay >child2.out &&
 	test_cmp child2.exp child2.out
 '
-test_expect_success 'flux-start --size=1 --bootstrap=selfpmi works' "
-	flux start ${ARGS} --size=1 --bootstrap=selfpmi /bin/true
+test_expect_success 'flux-start -s1 works' "
+	flux start ${ARGS} -s1 /bin/true
 "
-test_expect_success 'flux-start --bootstrap=selfpmi fails (no size specified)' "
-	test_must_fail flux start ${ARGS} --bootstrap=selfpmi /bin/true
+test_expect_success 'flux-start --scratchdir without --test-size fails' "
+	test_must_fail flux start ${ARGS} --scratchdir=$(pwd) /bin/true
 "
-test_expect_success 'flux-start --size=1 --boostrap=pmi fails' "
-	test_must_fail flux start ${ARGS} --size=1 --bootstrap=pmi /bin/true
-"
-test_expect_success 'flux-start --scratchdir --boostrap=pmi fails' "
-	test_must_fail flux start ${ARGS} --scratchdir=$(pwd) --bootstrap=pmi /bin/true
-"
-test_expect_success 'flux-start --noclique --boostrap=pmi fails' "
-	test_must_fail flux start ${ARGS} --noclique --bootstrap=pmi /bin/true
+test_expect_success 'flux-start --noclique without --test-size fails' "
+	test_must_fail flux start ${ARGS} --noclique /bin/true
 "
 test_expect_success 'flux-start in exec mode passes through errors from command' "
 	test_must_fail flux start ${ARGS} /bin/false
 "
 test_expect_success 'flux-start in subprocess/pmi mode passes through errors from command' "
-	test_must_fail flux start ${ARGS} --size=1 /bin/false
+	test_must_fail flux start ${ARGS} -s1 /bin/false
 "
 test_expect_success 'flux-start in exec mode passes exit code due to signal' "
 	test_expect_code 130 flux start ${ARGS} 'kill -INT \$\$'
 "
 test_expect_success 'flux-start in subprocess/pmi mode passes exit code due to signal' "
-	test_expect_code 130 flux start ${ARGS} --size=1 'kill -INT \$\$'
+	test_expect_code 130 flux start ${ARGS} -s1 'kill -INT \$\$'
 "
 test_expect_success 'flux-start in exec mode works as initial program' "
-	flux start ${ARGS} --size=2 flux start ${ARGS} flux getattr size | grep -x 1
+	flux start ${ARGS} -s2 flux start ${ARGS} flux getattr size | grep -x 1
 "
 test_expect_success 'flux-start in subprocess/pmi mode works as initial program' "
-	flux start ${ARGS} --size=2 flux start ${ARGS} --size=1 flux getattr size | grep -x 1
+	flux start ${ARGS} -s2 flux start ${ARGS} -s1 flux getattr size | grep -x 1
 "
 
 test_expect_success 'flux-start --wrap option works' '
@@ -128,8 +122,8 @@ test_expect_success 'flux-start --wrap option works' '
 	EOF
 	test_cmp wrap.expected wrap.output
 '
-test_expect_success 'flux-start --wrap option works with --size' '
-	flux start ${ARGS} --size=2 -vX --wrap=test-wrap > wrap2.output 2>&1 &&
+test_expect_success 'flux-start --wrap option works with --test-size' '
+	flux start ${ARGS} -s2 -vX --wrap=test-wrap > wrap2.output 2>&1 &&
 	test_debug "cat wrap2.output" &&
 	test "$(grep -c test-wrap wrap2.output)" = "2"
 '
@@ -191,24 +185,24 @@ test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
 	test_must_fail flux start ${ARGS} -s2 flux getattr tbon.parent-endpoint
 '
 test_expect_success 'tbon.parent-endpoint can be read on not rank 0' '
-       NUM=`flux start ${ARGS} --size 4 flux exec -n flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
+       NUM=`flux start ${ARGS} -s4 flux exec -n flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
        test $NUM -eq 3
 '
-test_expect_success 'flux start --bootstrap=pmi (singlton) cleans up rundir' '
-	flux start ${ARGS} --bootstrap=pmi \
+test_expect_success 'flux start (singlton) cleans up rundir' '
+	flux start ${ARGS} \
 		flux getattr rundir >rundir_pmi.out &&
 	RUNDIR=$(cat rundir_pmi.out) &&
 	test_must_fail test -d $RUNDIR
 '
-test_expect_success 'flux start --bootstrap=selfpmi --size=1 cleans up rundirs' '
-	flux start ${ARGS} --bootstrap=selfpmi --size=1 \
+test_expect_success 'flux start -s1 cleans up rundirs' '
+	flux start ${ARGS} -s1 \
 		flux getattr rundir >rundir_selfpmi1.out &&
 	RUNDIR=$(cat rundir_selfpmi1.out) &&
 	test -n "$RUNDIR" &&
 	test_must_fail test -d $RUNDIR
 '
-test_expect_success 'flux start --bootstrap=selfpmi --size=2 cleans up rundirs' '
-	flux start ${ARGS} --bootstrap=selfpmi --size=2 \
+test_expect_success 'flux start -s2 cleans up rundirs' '
+	flux start ${ARGS} -s2 \
 		flux getattr rundir >rundir_selfpmi2.out &&
 	RUNDIR=$(cat rundir_selfpmi2.out) &&
 	test -n "$RUNDIR" &&
@@ -408,7 +402,7 @@ test_expect_success 'scripts/waitfile works after 1s' '
 '
 # test for issue #1025
 test_expect_success 'instance can stop cleanly with subscribers (#1025)' '
-	flux start ${ARGS} -s2 --bootstrap=selfpmi bash -c "nohup flux event sub heartbeat.pulse &"
+	flux start ${ARGS} -s2 bash -c "nohup flux event sub heartbeat.pulse &"
 '
 
 # test for issue #1191
@@ -439,7 +433,7 @@ test_expect_success 'create panic script' '
 
 test_expect_success 'flux-start: panic rank 1 of a size=2 instance' '
 	! flux start ${ARGS} \
-		--killer-timeout=0.2 --bootstrap=selfpmi --size=2 \
+		--killer-timeout=0.2 -s2 \
 		bash -c "flux getattr rundir; flux exec -r 1 ./panic.sh; sleep 5" >panic.out 2>panic.err
 '
 test_expect_success 'flux-start: panic message reached stderr' '

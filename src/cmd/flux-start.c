@@ -41,7 +41,7 @@ static struct {
     flux_watcher_t *timer;
     zlist_t *clients;
     optparse_t *opts;
-    int size;
+    int test_size;
     int count;
     int exit_rc;
     struct {
@@ -82,10 +82,8 @@ static struct optparse_option opts[] = {
       .usage = "Be annoyingly informative", },
     { .name = "noexec",     .key = 'X', .has_arg = 0,
       .usage = "Don't execute (useful with -v, --verbose)", },
-    { .name = "bootstrap",  .key = 'b', .has_arg = 1, .arginfo = "METHOD",
-      .usage = "Set flux instance's network bootstrap method", },
-    { .name = "size",       .key = 's', .has_arg = 1, .arginfo = "N",
-      .usage = "Set number of ranks in new instance", },
+    { .name = "test-size",       .key = 's', .has_arg = 1, .arginfo = "N",
+      .usage = "Start a test instance by launching N brokers locally", },
     { .name = "broker-opts",.key = 'o', .has_arg = 1, .arginfo = "OPTS",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Add comma-separated broker options, e.g. \"-o,-v\"", },
@@ -116,36 +114,6 @@ static struct optparse_option opts[] = {
     OPTPARSE_TABLE_END,
 };
 
-enum {
-    BOOTSTRAP_PMI,
-    BOOTSTRAP_SELFPMI
-};
-
-static struct {
-    char *string;
-    int num;
-} bootstrap_options[] = {
-    {"pmi", BOOTSTRAP_PMI},
-    {"selfpmi", BOOTSTRAP_SELFPMI},
-    {NULL, -1}
-};
-
-/* Turn the bootstrap option string into an integer value */
-static int parse_bootstrap_option (optparse_t *opts)
-{
-    const char *bootstrap;
-    int i;
-
-    bootstrap = optparse_get_str (opts, "bootstrap", "pmi");
-    for (i = 0; ; i++) {
-        if (bootstrap_options[i].string == NULL)
-            break;
-        if (!strcmp(bootstrap_options[i].string, bootstrap))
-            return bootstrap_options[i].num;
-    }
-    log_msg_exit("Unknown bootstrap method \"%s\"", bootstrap);
-}
-
 /* Various things will go wrong with module loading, process execution, etc.
  *  when current directory can't be found. Exit early with error to avoid
  *  chaotic stream of error messages later in startup.
@@ -165,7 +133,6 @@ int main (int argc, char *argv[])
     const char *searchpath;
     int optindex;
     char *broker_path;
-    int bootstrap;
 
     log_init ("flux-start");
 
@@ -192,37 +159,23 @@ int main (int argc, char *argv[])
     if (!(broker_path = find_broker (searchpath)))
         log_msg_exit ("Could not locate broker in %s", searchpath);
 
-    bootstrap = parse_bootstrap_option (ctx.opts);
-    if (optparse_hasopt (ctx.opts, "size")) {
-        if (bootstrap != BOOTSTRAP_SELFPMI) {
-            if (!optparse_hasopt (ctx.opts, "bootstrap")) {
-                bootstrap = BOOTSTRAP_SELFPMI;
-            } else {
-                log_errn_exit(EINVAL, "--size can only be used with --bootstrap=selfpmi");
-            }
-        }
-        ctx.size = optparse_get_int (ctx.opts, "size", -1);
-        if (ctx.size <= 0)
-            log_msg_exit ("--size argument must be > 0");
+    if (optparse_hasopt (ctx.opts, "test-size")) {
+        ctx.test_size = optparse_get_int (ctx.opts, "test-size", -1);
+        if (ctx.test_size <= 0)
+            log_msg_exit ("--test-size argument must be > 0");
     }
 
     setup_profiling_env ();
 
-    switch (bootstrap) {
-    case BOOTSTRAP_PMI:
+    if (!optparse_hasopt (ctx.opts, "test-size")) {
         if (optparse_hasopt (ctx.opts, "scratchdir"))
-            log_msg_exit ("--scratchdir only works with --bootstrap=selfpmi");
+            log_msg_exit ("--scratchdir only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "noclique"))
-            log_msg_exit ("--noclique only works with --bootstrap=selfpmi");
+            log_msg_exit ("--noclique only works with --test-size=N");
         status = exec_broker (command, len, broker_path);
-        break;
-    case BOOTSTRAP_SELFPMI:
-        if (!optparse_hasopt (ctx.opts, "size"))
-            log_msg_exit ("--size must be specified for --bootstrap=selfpmi");
+    }
+    else {
         status = start_session (command, len, broker_path);
-        break;
-    default:
-        assert(0); /* should never happen */
     }
 
     optparse_destroy (ctx.opts);
@@ -504,7 +457,7 @@ struct client *client_create (const char *broker_path, const char *scratch_dir,
         log_err_exit ("flux_cmd_add_channel");
     if (flux_cmd_setenvf (cli->cmd, 1, "PMI_RANK", "%d", rank) < 0)
         log_err_exit ("flux_cmd_setenvf");
-    if (flux_cmd_setenvf (cli->cmd, 1, "PMI_SIZE", "%d", ctx.size) < 0)
+    if (flux_cmd_setenvf (cli->cmd, 1, "PMI_SIZE", "%d", ctx.test_size) < 0)
         log_err_exit ("flux_cmd_setenvf");
     return cli;
 fail:
@@ -557,7 +510,7 @@ void pmi_server_initialize (int flags)
         struct pmi_map_block mapblock = {
             .nodeid = 0,
             .nodes = 1,
-            .procs = ctx.size,
+            .procs = ctx.test_size,
         };
         char buf[256];
         if (pmi_process_mapping_encode (&mapblock, 1, buf, sizeof (buf)) < 0)
@@ -565,8 +518,8 @@ void pmi_server_initialize (int flags)
         zhash_update (ctx.pmi.kvs, "PMI_process_mapping", xstrdup (buf));
     }
 
-    ctx.pmi.srv = pmi_simple_server_create (ops, appnum, ctx.size,
-                                            ctx.size, "-", flags, NULL);
+    ctx.pmi.srv = pmi_simple_server_create (ops, appnum, ctx.test_size,
+                                            ctx.test_size, "-", flags, NULL);
     if (!ctx.pmi.srv)
         log_err_exit ("pmi_simple_server_create");
 }
@@ -606,7 +559,7 @@ void restore_termios (void)
         log_err ("tcsetattr");
 }
 
-/* Start an internal PMI server, and then launch "size" number of
+/* Start an internal PMI server, and then launch the requested number of
  * broker processes that inherit a file desciptor to the internal PMI
  * server.  They will use that to bootstrap.  Since the PMI server is
  * internal and the connections to it passed through inherited file
@@ -648,7 +601,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
 
     pmi_server_initialize (flags);
 
-    for (rank = 0; rank < ctx.size; rank++) {
+    for (rank = 0; rank < ctx.test_size; rank++) {
         if (!(cli = client_create (broker_path, scratch_dir, rank,
                                    cmd_argz, cmd_argz_len)))
             log_err_exit ("client_create");

@@ -187,7 +187,7 @@ following extra functions:
 	size <size>. If size is not given a default of 1 is used.
 	This function essentially invokes
 	
-	  exec flux start --size=N /path/to/test/script args...
+	  exec flux start --test-size=N /path/to/test/script args...
 
   run_timeout S COMMAND... :
 	Runs COMMAND with timeout of S seconds. run_timeout will

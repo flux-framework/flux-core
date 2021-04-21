@@ -71,7 +71,7 @@ function fluxTest:start_session (t)
     local extra_args = t.args or {}
     local cmd = { self.flux_path, "start",
                   unpack (self.start_args),
-                  string.format ("--size=%d", size) }
+                  string.format ("--test-size=%d", size) }
 
     if t.args then
         for _,v in pairs (t.args) do

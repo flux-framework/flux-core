@@ -45,7 +45,7 @@ def rerun_under_flux(size=1, personality="full"):
     # ported from sharness.d/flux-sharness.sh
     child_env["FLUX_BUILD_DIR"] = builddir
     child_env["FLUX_SOURCE_DIR"] = srcdir
-    command = [flux_exe, "start", "--bootstrap=selfpmi", "--size", str(size)]
+    command = [flux_exe, "start", "--test-size", str(size)]
     if personality != "full":
         for rc_num in [1, 3]:
             attr = "broker.rc{}_path".format(rc_num)
