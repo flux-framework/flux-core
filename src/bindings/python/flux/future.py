@@ -71,6 +71,13 @@ class Future(WrapperPimpl):
             if prefixes is None:
                 prefixes = ["flux_future_"]
 
+            # enable Future(fut_obj) to work by just re-wrapping the
+            # underlying future object and increments its reference to avoid
+            # pre-mature destruction when the original obj gets GC'd
+            if isinstance(handle, Future):
+                handle.incref()
+                handle = handle.handle
+
             super(Future.InnerWrapper, self).__init__(
                 ffi, lib, handle, match, filter_match, prefixes, destructor
             )
@@ -166,6 +173,9 @@ class Future(WrapperPimpl):
         until future is fulfilled and throws OSError on failure.
         """
         self.pimpl.flux_future_get(ffi.NULL)
+
+    def incref(self):
+        self.pimpl.flux_future_incref()
 
 
 class WaitAllFuture(Future):

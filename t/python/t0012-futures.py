@@ -218,6 +218,26 @@ class TestHandle(unittest.TestCase):
         fut = self.f.service_unregister("rpctest")
         self.assertEqual(self.f.future_get(fut, ffi.NULL), 0)
 
+    def test_08_future_from_future(self):
+        orig_fut = Future(self.f.future_create(ffi.NULL, ffi.NULL))
+        new_fut = Future(orig_fut)
+        self.assertFalse(new_fut.is_ready())
+        orig_fut.pimpl.fulfill(ffi.NULL, ffi.NULL)
+        self.assertTrue(new_fut.is_ready())
+
+        orig_fut = self.f.rpc("broker.ping", payload=self.ping_payload)
+        new_fut = Future(orig_fut)
+        del orig_fut
+        resp_payload = new_fut.get()
+        # Future's `get` returns `None`, so just test that it is fulfilled
+        self.assertTrue(new_fut.is_ready())
+
+        orig_fut = self.f.rpc("foo.bar")
+        new_fut = Future(orig_fut)
+        del orig_fut
+        with self.assertRaises(EnvironmentError):
+            resp_payload = new_fut.get()
+
 
 if __name__ == "__main__":
     if rerun_under_flux(__flux_size()):
