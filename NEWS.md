@@ -1,3 +1,35 @@
+flux-core version 0.26.0 - 2021-04-22
+-------------------------------------
+
+This release features several performance improvements that affect
+job throughput over time (see issue #3583).
+
+### Fixes
+
+ * avoid mvapich segfault under flux start singleton (#3603)
+ * python: avoid throwing 2nd exception on unknown errno (#3588)
+ * avoid routing stale responses to restarted brokers (#3601)
+
+### Performance
+
+ * fix aggressive zhashx resize by importing fixed source (#3596, #3598)
+ * use zhashx, LRU in content-cache (#3589, #3593)
+ * drop root directory object from KVS setroot event (#3581)
+ * add minor optimizations to aux container (#3586)
+ * drop extra code in `flux_matchtag_free()` (#3590)
+ * libkvs: save KVS copy/move aux data in future not handle (#3585)
+
+### New Features
+
+ * libjob: add `flux_job_result(3)` (#3582)
+ * python: add explicit `service_(un)register` method (#3602)
+ * add overlay network version/config check (#3597)
+ * job-manager: enable job dependency management (#3563)
+
+### Cleanup/Testing
+
+ * flux-start: rename --size to --test-size, drop --bootstrap (#3605)
+
 flux-core version 0.25.0 - 2021-04-01
 -------------------------------------
 
