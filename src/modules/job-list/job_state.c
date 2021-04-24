@@ -1209,6 +1209,19 @@ static int job_transition_state (struct job_state_ctx *jsctx,
     return 0;
 }
 
+static struct job *lookup_job (struct job_state_ctx *jsctx,
+                               flux_jobid_t id,
+                               const char *prefix)
+{
+    struct job *job;
+    if (!(job = zhashx_lookup (jsctx->index, &id))) {
+        flux_log_error (jsctx->h, "%s: job %ju not in hash",
+                        prefix, (uintmax_t)id);
+        return NULL;
+    }
+    return job;
+}
+
 static int journal_advance_job (struct job_state_ctx *jsctx,
                                 flux_jobid_t id,
                                 flux_job_state_t newstate,
@@ -1217,12 +1230,9 @@ static int journal_advance_job (struct job_state_ctx *jsctx,
 {
     struct job *job;
 
-    if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                        __FUNCTION__, (uintmax_t)id);
-        /* do not return error, we consider it a non-fatal error */
+    /* job not found is not-fatal, do not return error */
+    if (!(job = lookup_job (jsctx, id, __FUNCTION__)))
         return 0;
-    }
 
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
@@ -1237,12 +1247,9 @@ static int journal_revert_job (struct job_state_ctx *jsctx,
 {
     struct job *job;
 
-    if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                        __FUNCTION__, (uintmax_t)id);
-        /* do not return error, we consider it a non-fatal error */
+    /* job not found is not-fatal, do not return error */
+    if (!(job = lookup_job (jsctx, id, __FUNCTION__)))
         return 0;
-    }
 
     /* The flux-restart event is currently only posted to jobs in
      * SCHED state since that is the only state transition defined
@@ -1351,12 +1358,9 @@ static int journal_priority_event (struct job_state_ctx *jsctx,
     struct job *job;
     int64_t orig_priority;
 
-    if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                        __FUNCTION__, (uintmax_t)id);
-        /* do not return error, we consider it a non-fatal error */
+    /* job not found is not-fatal, do not return error */
+    if (!(job = lookup_job (jsctx, id, __FUNCTION__)))
         return 0;
-    }
 
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
@@ -1412,12 +1416,9 @@ static int journal_finish_event (struct job_state_ctx *jsctx,
 {
     struct job *job;
 
-    if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                        __FUNCTION__, (uintmax_t)id);
-        /* do not return error, we consider it a non-fatal error */
+    /* job not found is not-fatal, do not return error */
+    if (!(job = lookup_job (jsctx, id, __FUNCTION__)))
         return 0;
-    }
 
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
@@ -1460,12 +1461,9 @@ static int journal_urgency_event (struct job_state_ctx *jsctx,
 {
     struct job *job;
 
-    if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                        __FUNCTION__, (uintmax_t)id);
-        /* do not return error, we consider it a non-fatal error */
+    /* job not found is not-fatal, do not return error */
+    if (!(job = lookup_job (jsctx, id, __FUNCTION__)))
         return 0;
-    }
 
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
@@ -1583,12 +1581,9 @@ static int journal_exception_event (struct job_state_ctx *jsctx,
     struct job *job;
     int severity;
 
-    if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                        __FUNCTION__, (uintmax_t)id);
-        /* do not return error, we consider it a non-fatal error */
+    /* job not found is not-fatal, do not return error */
+    if (!(job = lookup_job (jsctx, id, __FUNCTION__)))
         return 0;
-    }
 
     if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
         return 0;
@@ -1623,12 +1618,9 @@ static int journal_annotations_event (struct job_state_ctx *jsctx,
         return -1;
     }
 
-    if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                        __FUNCTION__, (uintmax_t)id);
-        /* do not return error, we consider it a non-fatal error */
+    /* job not found is not-fatal, do not return error */
+    if (!(job = lookup_job (jsctx, id, __FUNCTION__)))
         return 0;
-    }
 
     json_decref (job->annotations);
     if (json_is_null (annotations))
@@ -1646,12 +1638,9 @@ static int journal_dependency_event (struct job_state_ctx *jsctx,
 {
     struct job *job;
 
-    if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                        __FUNCTION__, (uintmax_t)id);
-        /* do not return error, we consider it a non-fatal error */
+    /* job not found is not-fatal, do not return error */
+    if (!(job = lookup_job (jsctx, id, __FUNCTION__)))
         return 0;
-    }
 
     return dependency_context_parse (jsctx->h, job, cmd, context);
 }
@@ -1764,12 +1753,9 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
     }
     else {
         struct job *job;
-        if (!(job = zhashx_lookup (jsctx->index, &id))) {
-            flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                            __FUNCTION__, (uintmax_t)id);
-            /* do not return error, we consider it a non-fatal error */
+        /* job not found is not-fatal, do not return error */
+        if (!(job = lookup_job (jsctx, id, __FUNCTION__)))
             return 0;
-        }
         (void) job_update_eventlog_seq (jsctx, job, eventlog_seq);
     }
 
