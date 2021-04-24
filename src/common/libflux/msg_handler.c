@@ -27,6 +27,11 @@
 #include "src/common/libutil/iterators.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
+struct handler_stack {
+    flux_msg_handler_t *mh;  // current message handler in stack
+    zlistx_t *stack;         // stack of message handlers if >1
+};
+
 struct dispatch {
     flux_t *h;
     zlist_t *handlers;
@@ -61,6 +66,117 @@ static void free_msg_handler (flux_msg_handler_t *mh);
 
 static size_t matchtag_hasher (const void *key);
 static int matchtag_cmp (const void *key1, const void *key2);
+
+
+static void handler_stack_destroy (struct handler_stack *hs)
+{
+    if (hs->stack)
+        zlistx_destroy (&hs->stack);
+    free (hs);
+}
+
+static void handler_stack_destructor (void **item)
+{
+    if (item && *item) {
+        handler_stack_destroy (*item);
+        *item = NULL;
+    }
+}
+
+static struct handler_stack *handler_stack_create (void)
+{
+    struct handler_stack *hs = calloc (1, sizeof (*hs));
+    return hs;
+}
+
+static int handler_stack_push (struct handler_stack *hs,
+                               flux_msg_handler_t *mh)
+{
+    if (!hs->mh) {
+        hs->mh = mh;
+        return 0;
+    }
+    if (!hs->stack) {
+        /*  Create stack, push current entry */
+        if (!(hs->stack = zlistx_new ())
+            || !zlistx_add_start (hs->stack, hs->mh))
+            return -1;
+    }
+    if (!zlistx_add_start (hs->stack, mh))
+        return -1;
+    hs->mh = mh;
+    return 0;
+}
+
+static int handler_stack_remove (struct handler_stack *hs,
+                                 flux_msg_handler_t *mh)
+{
+    void *handle;
+    if (!hs->stack) {
+        hs->mh = NULL;
+        return 0;
+    }
+    if (!(handle = zlistx_find (hs->stack, mh))
+        || !zlistx_detach (hs->stack, handle)) {
+        errno = ENOENT;
+        return -1;
+    }
+    if (hs->mh == mh)
+        hs->mh = zlistx_first (hs->stack);
+    return 0;
+}
+
+static int handler_stack_empty (struct handler_stack *hs)
+{
+    return (hs->mh == NULL);
+}
+
+static zhashx_t *method_hash_create (void)
+{
+    zhashx_t *hash = zhashx_new ();
+    if (!hash) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    zhashx_set_destructor (hash, handler_stack_destructor);
+    return hash;
+}
+
+
+static flux_msg_handler_t *method_hash_lookup (zhashx_t *hash,
+                                               const char *topic)
+{
+    struct handler_stack *hs = zhashx_lookup (hash, topic);
+    return hs ? hs->mh : NULL;
+}
+
+static int method_hash_add (zhashx_t *hash, flux_msg_handler_t *mh)
+{
+    struct handler_stack *hs = zhashx_lookup (hash, mh->match.topic_glob);
+    if (!hs) {
+        if (!(hs = handler_stack_create ()))
+            return -1;
+        if (zhashx_insert (hash, mh->match.topic_glob, hs) < 0) {
+            errno = EEXIST;
+            return -1;
+        }
+    }
+    return handler_stack_push (hs, mh);
+}
+
+static void method_hash_remove (zhashx_t *hash, flux_msg_handler_t *mh)
+{
+    struct handler_stack *hs = zhashx_lookup (hash, mh->match.topic_glob);
+    /*
+     *  Remove requested handler from this stack. If stack is empty
+     *   after remove, remove the hash entry entirely.
+     */
+    if (hs
+        && handler_stack_remove (hs, mh) == 0
+        && handler_stack_empty (hs)) {
+        zhashx_delete (hash, mh->match.topic_glob);
+    }
+}
 
 /* Return true if topic string 's' could match multiple request topics,
  * e.g. contains a glob character, or is NULL or "" which match anything.
@@ -145,13 +261,9 @@ static struct dispatch *dispatch_get (flux_t *h)
         zhashx_set_key_comparator (d->handlers_rpc, matchtag_cmp);
         zhashx_set_key_destructor (d->handlers_rpc, NULL);
         zhashx_set_key_duplicator (d->handlers_rpc, NULL);
-        /* N.B. d->handlers_method key points to mh->match.topic_glob in entry,
-         * so disable the key duplicator and destructor to avoid extra malloc.
-         */
-        if (!(d->handlers_method = zhashx_new ()))
+
+        if (!(d->handlers_method = method_hash_create ()))
             goto nomem;
-        zhashx_set_key_destructor (d->handlers_method, NULL);
-        zhashx_set_key_duplicator (d->handlers_method, NULL);
 #if HAVE_CALIPER
         d->prof_msg_type = cali_create_attribute ("flux.message.type",
                                                   CALI_TYPE_STRING,
@@ -263,7 +375,7 @@ static bool dispatch_message (struct dispatch *d,
     else if (type == FLUX_MSGTYPE_REQUEST) {
         const char *topic;
         if (flux_msg_get_topic (msg, &topic) == 0
-            && (mh = zhashx_lookup (d->handlers_method, topic))
+            && (mh = method_hash_lookup (d->handlers_method, topic))
             && mh->running) {
             call_handler (mh, msg);
             match = true;
@@ -492,7 +604,7 @@ void flux_msg_handler_destroy (flux_msg_handler_t *mh)
         }
         else if (mh->match.typemask == FLUX_MSGTYPE_REQUEST
                  && !isa_multmatch (mh->match.topic_glob)) {
-            zhashx_delete (mh->d->handlers_method, mh->match.topic_glob);
+            method_hash_remove (mh->d->handlers_method, mh);
         }
         else {
             zlist_remove (mh->d->handlers_new, mh);
@@ -539,12 +651,13 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
         }
     }
     /* Request (non-glob):
-     * Replace existing entry in the handlers_method hash, if any.
+     * Push entry onto top of the handlers_method stack, if any.
      * This allows builtin module methods to be overridden.
      */
     else if (mh->match.typemask == FLUX_MSGTYPE_REQUEST
              && !isa_multmatch (mh->match.topic_glob)) {
-        zhashx_update (d->handlers_method, mh->match.topic_glob, mh);
+        if (method_hash_add (d->handlers_method, mh) < 0)
+            goto error;
     }
     /* Request (glob), response (FLUX_MATCHTAG_NONE), events:
      * Message handler is pushed to the front of the handlers list,
