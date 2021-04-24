@@ -218,8 +218,8 @@ static void call_handler (flux_msg_handler_t *mh, const flux_msg_t *msg)
         return;
     if (!(rolemask & mh->rolemask)) {
         if (flux_msg_cmp (msg, FLUX_MATCH_REQUEST)
-                        && flux_msg_get_matchtag (msg, &matchtag) == 0
-                        && matchtag != FLUX_MATCHTAG_NONE) {
+            && flux_msg_get_matchtag (msg, &matchtag) == 0
+            && matchtag != FLUX_MATCHTAG_NONE) {
             const char *errmsg;
             if (mh->rolemask == 0 || mh->rolemask == FLUX_ROLE_OWNER)
                 errmsg = "Request requires owner credentals";
@@ -250,11 +250,11 @@ static bool dispatch_message (struct dispatch *d,
     if (type == FLUX_MSGTYPE_RESPONSE) {
         uint32_t matchtag;
         if (flux_msg_get_route_count (msg) == 0
-                && flux_msg_get_matchtag (msg, &matchtag) == 0
-                && matchtag != FLUX_MATCHTAG_NONE
-                && (mh = zhashx_lookup (d->handlers_rpc, &matchtag))
-                && mh->running
-                && flux_msg_cmp (msg, mh->match)) {
+            && flux_msg_get_matchtag (msg, &matchtag) == 0
+            && matchtag != FLUX_MATCHTAG_NONE
+            && (mh = zhashx_lookup (d->handlers_rpc, &matchtag))
+            && mh->running
+            && flux_msg_cmp (msg, mh->match)) {
             call_handler (mh, msg);
             match = true;
         }
@@ -263,8 +263,8 @@ static bool dispatch_message (struct dispatch *d,
     else if (type == FLUX_MSGTYPE_REQUEST) {
         const char *topic;
         if (flux_msg_get_topic (msg, &topic) == 0
-                && (mh = zhashx_lookup (d->handlers_method, topic))
-                && mh->running) {
+            && (mh = zhashx_lookup (d->handlers_method, topic))
+            && mh->running) {
             call_handler (mh, msg);
             match = true;
         }
@@ -487,11 +487,11 @@ void flux_msg_handler_destroy (flux_msg_handler_t *mh)
         int saved_errno = errno;
         assert (mh->magic == HANDLER_MAGIC);
         if (mh->match.typemask == FLUX_MSGTYPE_RESPONSE
-                            && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
+            && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
             zhashx_delete (mh->d->handlers_rpc, &mh->match.matchtag);
         }
         else if (mh->match.typemask == FLUX_MSGTYPE_REQUEST
-                            && !isa_multmatch (mh->match.topic_glob)) {
+                 && !isa_multmatch (mh->match.topic_glob)) {
             zhashx_delete (mh->d->handlers_method, mh->match.topic_glob);
         }
         else {
@@ -532,7 +532,7 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
      * indicates a matchtag reuse problem!
      */
     if (mh->match.typemask == FLUX_MSGTYPE_RESPONSE
-                            && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
+        && mh->match.matchtag != FLUX_MATCHTAG_NONE) {
         if (zhashx_insert (d->handlers_rpc, &mh->match.matchtag, mh) < 0) {
             errno = EEXIST;
             goto error;
@@ -543,7 +543,7 @@ flux_msg_handler_t *flux_msg_handler_create (flux_t *h,
      * This allows builtin module methods to be overridden.
      */
     else if (mh->match.typemask == FLUX_MSGTYPE_REQUEST
-                            && !isa_multmatch (mh->match.topic_glob)) {
+             && !isa_multmatch (mh->match.topic_glob)) {
         zhashx_update (d->handlers_method, mh->match.topic_glob, mh);
     }
     /* Request (glob), response (FLUX_MATCHTAG_NONE), events:
