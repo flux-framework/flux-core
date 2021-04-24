@@ -172,11 +172,60 @@ void test_method_override (flux_t *h)
     diag ("%d %d", cb_called, cb2_called);
     ok (cb_called == 0 && cb2_called == 1,
         "first handler not called, second handler called");
+    flux_future_destroy (f);
 
+    /* now remove mh2 and ensure old mh is reinstated */
+    flux_msg_handler_destroy (mh2);
+
+    cb_called = 0;
+    cb2_called = 0;
+
+    /* send message - who got it?
+     * N.B. The test doesn't generate a response so just destroy f
+     * after message is sent.
+     */
+    f = flux_rpc (h, "foo.bar", NULL, FLUX_NODEID_ANY, 0);
+    ok (f != NULL,
+        "sent foo.bar RPC");
+    rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
+    ok (rc >= 0,
+        "flux_reactor_run NOWAIT ran");
+    diag ("%d %d", cb_called, cb2_called);
+    ok (cb_called == 1 && cb2_called == 0,
+        "first handler called, second handler not called");
+    flux_future_destroy (f);
+
+    /* override foo.bar request handler again */
+    match.topic_glob = "foo.bar";
+    mh2 = flux_msg_handler_create (h, match, cb2, NULL);
+    flux_msg_handler_start (mh2);
+    ok (mh2 != NULL,
+        "foo.bar second request handler created and started");
+
+    /* now remove original message handler *after* override added */
+    flux_msg_handler_destroy (mh);
+    diag ("removed first message handler");
+
+    cb_called = 0;
+    cb2_called = 0;
+
+    /* send message - who got it?
+     * N.B. The test doesn't generate a response so just destroy f
+     * after message is sent.
+     */
+    f = flux_rpc (h, "foo.bar", NULL, FLUX_NODEID_ANY, 0);
+    ok (f != NULL,
+        "sent foo.bar RPC");
+    rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
+    ok (rc >= 0,
+        "flux_reactor_run NOWAIT ran");
+    diag ("%d %d", cb_called, cb2_called);
+    ok (cb_called == 0 && cb2_called == 1,
+        "first handler not called, second handler called");
     flux_future_destroy (f);
     flux_msg_handler_destroy (mh2);
-    flux_msg_handler_destroy (mh);
 }
+
 
 /* Verify that a request handler for a specific method is matched before
  * one for a glob.  A "router" should be able to register a catch-all
@@ -237,11 +286,13 @@ void test_response_catchall (flux_t *h)
     /* craft response message with valid matchtag */
     if ((mtag = flux_matchtag_alloc (h)) == FLUX_MATCHTAG_NONE)
         BAIL_OUT ("flux_matchtag_alloc failed");
-    msg = flux_response_encode ("foo.bar", NULL);
+    msg = flux_response_encode ("baz.fop", NULL);
     ok (msg != NULL,
-        "foo.bar RPC response created");
+        "baz.fop RPC response created");
     if (flux_msg_set_matchtag (msg, mtag) < 0)
         BAIL_OUT ("flux_msg_set_matchtag failed");
+    ok (flux_msg_cmp (msg, match),
+        "RPC response matches match object");
 
     /* register RPC response handler */
     match.matchtag = mtag;
@@ -249,14 +300,14 @@ void test_response_catchall (flux_t *h)
         BAIL_OUT ("flux_msg_handler_create");
     flux_msg_handler_start (mh);
     ok (mh != NULL,
-        "foo.bar RPC response handler created and started");
+        "baz.fop RPC response handler created and started mh=%p", mh);
 
     /* register catchall response handler */
     match.matchtag = FLUX_MATCHTAG_NONE;
     mh2 = flux_msg_handler_create (h, match, cb2, NULL);
     flux_msg_handler_start (mh2);
     ok (mh2 != NULL,
-        "catchall response handler created and started");
+        "catchall response handler created and started mh=%p", mh2);
 
     cb_called = 0;
     cb2_called = 0;
@@ -264,12 +315,13 @@ void test_response_catchall (flux_t *h)
     /* send message to method - who got it?
      */
     ok (flux_send (h, msg, 0) == 0,
-        "sent foo.bar response message on loop connector");
+        "sent baz.fop response message on loop connector");
     rc = flux_reactor_run (flux_get_reactor (h), FLUX_REACTOR_NOWAIT);
     ok (rc >= 0,
         "flux_reactor_run NOWAIT ran");
     ok (cb_called == 1 && cb2_called == 0,
-        "RPC response handler called, catchall not called");
+        "RPC response handler called, catchall not called (%d, %d)",
+        cb_called, cb2_called);
 
     flux_matchtag_free (h, mtag);
     flux_msg_destroy (msg);
