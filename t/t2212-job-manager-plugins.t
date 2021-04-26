@@ -37,7 +37,8 @@ test_expect_success 'job-manager: load with invalid conf fails' '
 test_expect_success 'job-manager: default plugin sets priority to urgency' '
 	jobid=$(flux mini submit --urgency=8 hostname) &&
 	flux job wait-event -v $jobid priority &&
-	test $(flux jobs -no {priority} $jobid) = 8
+	test $(flux jobs -no {priority} $jobid) = 8 &&
+	flux job wait-event -v $jobid clean
 '
 test_expect_success 'job-manager: default plugin works with sched.prioritize' '
 	ncores=$(flux resource list -s free -no {ncores}) &&
@@ -133,6 +134,7 @@ test_expect_success 'job-manager: test with random priority plugin' '
 	flux jobs -c4 -no {name}:{priority} | sort > pri-after.out &&
 	test_must_fail test_cmp pri-before.out pri-after.out &&
 	flux job cancel $sleepjob &&
+	flux job wait-event -vt 30 $sleepjob clean &&
 	flux job wait --all -v
 '
 test_expect_success 'job-manager: run args test plugin' '
