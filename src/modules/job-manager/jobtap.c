@@ -485,7 +485,6 @@ static void jobtap_handle_load_req (struct job_manager *ctx,
     /*  Make plugin aware of all active jobs via job.new callback
      */
     jobs = zhashx_values (ctx->active_jobs);
-    zlistx_set_destructor (jobs, NULL);
     job = zlistx_first (jobs);
     while (job) {
         (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
