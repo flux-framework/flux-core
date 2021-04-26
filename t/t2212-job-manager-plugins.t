@@ -23,8 +23,7 @@ test_expect_success 'job-manager: attempt to load invalid plugin fails' '
 	test_must_fail flux jobtap load builtin.foo &&
 	flux jobtap list >list2.out &&
 	test_debug "cat list2.out" &&
-	grep "none" list2.out &&
-	flux jobtap load builtin.priority.default
+	grep "default" list2.out
 '
 test_expect_success 'job-manager: load with invalid conf fails' '
 	cat <<-EOF >badconf.py &&
