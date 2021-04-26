@@ -410,22 +410,13 @@ int jobtap_load (struct jobtap *jobtap,
         }
     }
 
-    /*  Always unload current plugin before loading next plugin.
-     *  This works around an issue in message dispatch when re-loading
-     *   the same plugin which registers a service endpoint, or
-     *   a different plugin which results in the same service topic
-     *   string. This results in the old plugin's message handler
-     *   being removed from the dispatch hash when the new plugin
-     *   registers its handler, then the *new* plugin's message handler
-     *   is removed from the hash when the old plugin is destroyed.
-     */
-    flux_plugin_destroy (jobtap->plugin);
-    jobtap->plugin = NULL;
-
     /*  Special "none" value leaves no plugin loaded
      */
-    if (strcmp (path, "none") == 0)
+    if (strcmp (path, "none") == 0) {
+        flux_plugin_destroy (jobtap->plugin);
+        jobtap->plugin = NULL;
         return 0;
+    }
 
     if (!(p = flux_plugin_create ())
         || flux_plugin_aux_set (p, "flux::jobtap", jobtap, NULL) < 0)
@@ -453,6 +444,7 @@ int jobtap_load (struct jobtap *jobtap,
         goto error;
     }
 done:
+    flux_plugin_destroy (jobtap->plugin);
     jobtap->plugin = p;
     return 0;
 error:
@@ -485,7 +477,6 @@ static void jobtap_handle_load_req (struct job_manager *ctx,
     /*  Make plugin aware of all active jobs via job.new callback
      */
     jobs = zhashx_values (ctx->active_jobs);
-    zlistx_set_destructor (jobs, NULL);
     job = zlistx_first (jobs);
     while (job) {
         (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);

@@ -33,7 +33,7 @@ def jobtap_load(args):
         )
     except FileNotFoundError:
         LOGGER.error(
-            "%s not found, no plugin is currently loaded",
+            "%s not found",
             args.plugin,
         )
         sys.exit(1)
