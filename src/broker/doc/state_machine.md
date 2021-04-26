@@ -36,7 +36,7 @@ a Flux instance runs to completion without encountering exceptional conditions.
 
 ![broker state machine picture - normal](states_norm.png)
 
-green = common path; blue = rank 0 deviation; red = leaf node deviation
+green = common path; blue = rank 0 deviation from common path; red = leaf node deviation from common path
 
 #### startup
 
