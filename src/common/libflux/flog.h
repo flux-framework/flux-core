@@ -46,8 +46,7 @@ int flux_log (flux_t *h, int level, const char *fmt, ...)
               __attribute__ ((format (printf, 3, 4)));
 
 /* Log a message at LOG_ERR level, appending a colon, space, and error string.
- * The system 'errno' is assumed to be valid and contain an error code
- * that can be decoded with zmq_strerror(3).
+ * The system 'errno' is assumed to be valid.
  *
  * Flux handle is optional, if set to NULL output to stderr.
  */
