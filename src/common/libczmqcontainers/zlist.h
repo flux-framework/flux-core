@@ -144,9 +144,11 @@ CZMQ_EXPORT void
 CZMQ_EXPORT void *
     zlist_freefn (zlist_t *self, void *item, zlist_free_fn fn, bool at_tail);
 
+#ifdef CZMQ_BUILD_EXTRA
 //  Self test of this class.
 CZMQ_EXPORT void
     zlist_test (bool verbose);
+#endif // CZMQ_BUILD_EXTRA
 
 //  @end
 

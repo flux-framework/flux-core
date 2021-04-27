@@ -634,6 +634,7 @@ zlistx_set_comparator (zlistx_t *self, zlistx_comparator_fn comparator)
     self->comparator = comparator;
 }
 
+#ifdef CZMQ_BUILD_EXTRA
 //  --------------------------------------------------------------------------
 //  Serialize list to a binary frame that can be sent in a message.
 //  The packed format is compatible with the 'strings' type implemented by zproto:
@@ -878,3 +879,4 @@ zlistx_test (bool verbose)
 
     printf ("OK\n");
 }
+#endif // CZMQ_BUILD_EXTRA

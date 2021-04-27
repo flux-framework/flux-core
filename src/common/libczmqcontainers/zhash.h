@@ -31,11 +31,13 @@ typedef void (zhash_free_fn) (
 CZMQ_EXPORT zhash_t *
     zhash_new (void);
 
+#ifdef CZMQ_BUILD_EXTRA
 //  Unpack binary frame into a new hash table. Packed data must follow format
 //  defined by zhash_pack. Hash table is set to autofree. An empty frame
 //  unpacks to an empty hash table.
 CZMQ_EXPORT zhash_t *
     zhash_unpack (zframe_t *frame);
+#endif // CZMQ_BUILD_EXTRA
 
 //  Destroy a hash container and all items in it
 CZMQ_EXPORT void
@@ -115,6 +117,7 @@ CZMQ_EXPORT void *
 CZMQ_EXPORT const char *
     zhash_cursor (zhash_t *self);
 
+#ifdef CZMQ_BUILD_EXTRA
 //  Add a comment to hash table before saving to disk. You can add as many
 //  comment lines as you like. These comment lines are discarded when loading
 //  the file. If you use a null format, all comments are deleted.
@@ -163,15 +166,18 @@ CZMQ_EXPORT int
 //  file.
 CZMQ_EXPORT int
     zhash_refresh (zhash_t *self);
+#endif // CZMQ_BUILD_EXTRA
 
 //  Set hash for automatic value destruction. Note that this assumes that
 //  values are NULL-terminated strings. Do not use with different types.
 CZMQ_EXPORT void
     zhash_autofree (zhash_t *self);
 
+#ifdef CZMQ_BUILD_EXTRA
 //  Self test of this class.
 CZMQ_EXPORT void
     zhash_test (bool verbose);
+#endif // CZMQ_BUILD_EXTRA
 
 //  @end
 

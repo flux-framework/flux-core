@@ -491,6 +491,7 @@ zlist_autofree (zlist_t *self)
 }
 
 
+#ifdef CZMQ_BUILD_EXTRA
 static void
 s_zlist_free (void *data)
 {
@@ -633,3 +634,4 @@ zlist_test (bool verbose)
 
     printf ("OK\n");
 }
+#endif // CZMQ_BUILD_EXTRA

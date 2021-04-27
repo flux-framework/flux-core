@@ -497,6 +497,7 @@ zhash_cursor (zhash_t *self)
 }
 
 
+#ifdef CZMQ_BUILD_EXTRA
 //  --------------------------------------------------------------------------
 //  Add a comment to hash table before saving to disk. You can add as many
 //  comment lines as you like. These comment lines are discarded when loading
@@ -768,6 +769,7 @@ zhash_unpack (zframe_t *frame)
         zhash_autofree (self);
     return self;
 }
+#endif // CZMQ_BUILD_EXTRA
 
 
 //  --------------------------------------------------------------------------
@@ -781,6 +783,7 @@ zhash_autofree (zhash_t *self)
 }
 
 
+#ifdef CZMQ_BUILD_EXTRA
 //  --------------------------------------------------------------------------
 //  Runs selftest of class
 //
@@ -959,3 +962,4 @@ zhash_test (bool verbose)
 
     printf ("OK\n");
 }
+#endif // CZMQ_BUILD_EXTRA

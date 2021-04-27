@@ -69,11 +69,13 @@ typedef void * (zhashx_deserializer_fn) (
 CZMQ_EXPORT zhashx_t *
     zhashx_new (void);
 
+#ifdef CZMQ_BUILD_EXTRA
 //  Unpack binary frame into a new hash table. Packed data must follow format
 //  defined by zhashx_pack. Hash table is set to autofree. An empty frame
 //  unpacks to an empty hash table.
 CZMQ_EXPORT zhashx_t *
     zhashx_unpack (zframe_t *frame);
+#endif // CZMQ_BUILD_EXTRA
 
 //  Destroy a hash container and all items in it
 CZMQ_EXPORT void
@@ -162,6 +164,7 @@ CZMQ_EXPORT void *
 CZMQ_EXPORT const void *
     zhashx_cursor (zhashx_t *self);
 
+#ifdef CZMQ_BUILD_EXTRA
 //  Add a comment to hash table before saving to disk. You can add as many
 //  comment lines as you like. These comment lines are discarded when loading
 //  the file. If you use a null format, all comments are deleted.
@@ -210,6 +213,7 @@ CZMQ_EXPORT int
 //  Caller owns return value and must destroy it when done.
 CZMQ_EXPORT zframe_t *
     zhashx_pack (zhashx_t *self);
+#endif // CZMQ_BUILD_EXTRA
 
 //  Make a copy of the list; items are duplicated if you set a duplicator
 //  for the list, otherwise not. Copying a null reference returns a null
@@ -259,9 +263,11 @@ CZMQ_EXPORT void
 CZMQ_EXPORT zhashx_t *
     zhashx_dup_v2 (zhashx_t *self);
 
+#ifdef CZMQ_BUILD_EXTRA
 //  Self test of this class.
 CZMQ_EXPORT void
     zhashx_test (bool verbose);
+#endif // CZMQ_BUILD_EXTRA
 
 #ifdef CZMQ_BUILD_DRAFT_API
 //  *** Draft method, for development use, may change without warning ***

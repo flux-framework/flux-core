@@ -193,9 +193,11 @@ CZMQ_EXPORT void
 CZMQ_EXPORT void
     zlistx_set_comparator (zlistx_t *self, zlistx_comparator_fn comparator);
 
+#ifdef CZMQ_BUILD_EXTRA
 //  Self test of this class.
 CZMQ_EXPORT void
     zlistx_test (bool verbose);
+#endif // CZMQ_BUILD_EXTRA
 
 #ifdef CZMQ_BUILD_DRAFT_API
 //  *** Draft method, for development use, may change without warning ***
