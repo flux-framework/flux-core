@@ -34,7 +34,8 @@
 @end
 */
 
-#include "zhashx.h"
+#include "czmq_containers.h"
+#include "czmq_internal.h"
 
 //  Hash table performance parameters
 

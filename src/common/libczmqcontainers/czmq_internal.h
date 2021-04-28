@@ -32,11 +32,5 @@
 
 #define freen(x) do {free(x); x = NULL;} while(0)
 
-#ifndef CZMQ_EXPORT
-#define CZMQ_EXPORT
-#endif
-
-typedef struct _zhashx_t fzhashx_t;
-
 #endif
 
