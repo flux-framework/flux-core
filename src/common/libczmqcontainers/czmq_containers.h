@@ -19,12 +19,18 @@ extern "C" {
 #include "czmq_rename.h"
 
 typedef struct _zhashx_t zhashx_t;
+typedef struct _zlistx_t zlistx_t;
+typedef struct _zhash_t zhash_t;
+typedef struct _zlist_t zlist_t;
 
 #ifndef CZMQ_EXPORT
 #define CZMQ_EXPORT
 #endif
 
 #include "zhashx.h"
+#include "zlistx.h"
+#include "zhash.h"
+#include "zlist.h"
 
 #ifdef __cplusplus
 }

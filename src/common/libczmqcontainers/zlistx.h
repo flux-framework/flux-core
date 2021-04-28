@@ -11,8 +11,8 @@
     =========================================================================
 */
 
-#ifndef __ZLISTX_H_INCLUDED__
-#define __ZLISTX_H_INCLUDED__
+#ifndef __FLUXZLISTX_H_INCLUDED__
+#define __FLUXZLISTX_H_INCLUDED__
 
 #ifdef __cplusplus
 extern "C" {

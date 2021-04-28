@@ -19,4 +19,10 @@ libczmqcontainers_la_SOURCES = \
 	czmq_rename.h \
 	zhashx.h \
 	zhashx.c \
-	zhash_primes.inc
+	zhash_primes.inc \
+	zlistx.h \
+	zlistx.c \
+	zhash.h \
+	zhash.c \
+	zlist.h \
+	zlist.c

@@ -24,7 +24,9 @@
 @end
 */
 
-#include "czmq_classes.h"
+#include "czmq_containers.h"
+#include "czmq_internal.h"
+
 
 #define NODE_TAG            0xcafe0006
 

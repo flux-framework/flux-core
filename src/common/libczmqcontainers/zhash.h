@@ -11,8 +11,8 @@
     =========================================================================
 */
 
-#ifndef __ZHASH_H_INCLUDED__
-#define __ZHASH_H_INCLUDED__
+#ifndef __FLUXZHASH_H_INCLUDED__
+#define __FLUXZHASH_H_INCLUDED__
 
 #ifdef __cplusplus
 extern "C" {
