@@ -16,7 +16,7 @@ noinst_LTLIBRARIES = \
 libczmqcontainers_la_SOURCES = \
 	czmq_containers.h \
 	czmq_internal.h \
+	czmq_rename.h \
 	zhashx.h \
 	zhashx.c \
-	zhash_primes.inc \
-	zhashx_map.h
+	zhash_primes.inc
