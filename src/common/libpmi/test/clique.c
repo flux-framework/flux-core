@@ -8,7 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#include <czmq.h>
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <string.h>
 
 #include "src/common/libpmi/clique.h"

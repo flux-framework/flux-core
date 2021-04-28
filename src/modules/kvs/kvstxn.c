@@ -18,11 +18,12 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <ctype.h>
-#include <czmq.h>
 #include <flux/core.h>
 #include <jansson.h>
 #include <sodium.h>
+#include <assert.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/macros.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libkvs/treeobj.h"

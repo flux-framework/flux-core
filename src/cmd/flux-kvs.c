@@ -16,9 +16,11 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <jansson.h>
-#include <czmq.h>
 #include <argz.h>
+#include <ctype.h>
+#include <sys/ioctl.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/read_all.h"

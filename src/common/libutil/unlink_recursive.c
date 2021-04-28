@@ -20,8 +20,10 @@
 #include <dirent.h>
 #include <libgen.h>
 #include <unistd.h>
+#include <errno.h>
 
-#include <czmq.h>
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "unlink_recursive.h"
 #include "dirwalk.h"
 

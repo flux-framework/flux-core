@@ -13,9 +13,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libeventlog/eventlog.h"
 
 #include "job.h"
 #include "alloc.h"
@@ -25,9 +27,6 @@
 #include "jobtap-internal.h"
 
 #include "submit.h"
-
-#include "src/common/libeventlog/eventlog.h"
-#include "src/common/libczmqcontainers/czmq_containers.h"
 
 struct submit {
     struct job_manager *ctx;

@@ -15,11 +15,13 @@
 #include <unistd.h>
 #include <dlfcn.h>
 #include <assert.h>
-#include <czmq.h>
+#include <stdarg.h>
+#include <stdio.h>
 #ifdef HAVE_LIBPMIX
 #include <pmix.h>
 #endif
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libpmi/pmi.h"

@@ -25,10 +25,10 @@
 #include <sys/un.h>
 #include <sys/socket.h>
 #include <ctype.h>
-#include <czmq.h>
 #include <inttypes.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/librouter/usock.h"
 #include "src/common/librouter/router.h"

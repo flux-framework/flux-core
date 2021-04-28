@@ -78,6 +78,7 @@ libflux_core_la_LDFLAGS = \
 libflux_optparse_la_SOURCES =
 libflux_optparse_la_LIBADD = \
 	$(builddir)/liboptparse/liboptparse.la \
+	$(builddir)/libczmqcontainers/libczmqcontainers.la \
 	$(builddir)/liblsd/liblsd.la \
 	$(builddir)/libutil/fsd.lo \
 	$(ZMQ_LIBS) $(LIBUUID_LIBS) $(LIBPTHREAD)
@@ -100,6 +101,7 @@ libflux_idset_la_LDFLAGS = \
 libflux_schedutil_la_SOURCES =
 libflux_schedutil_la_LIBADD = \
 	$(builddir)/libschedutil/libschedutil.la \
+	$(builddir)/libczmqcontainers/libczmqcontainers.la \
 	libflux-core.la \
 	$(JANSSON_LIBS)
 libflux_schedutil_la_LDFLAGS = \

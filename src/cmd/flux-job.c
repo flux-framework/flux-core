@@ -22,16 +22,18 @@
 #include <stdio.h>
 #include <string.h>
 #include <ctype.h>
+#include <pwd.h>
 #include <assert.h>
 #include <locale.h>
 #include <jansson.h>
 #include <argz.h>
-#include <czmq.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #if HAVE_FLUX_SECURITY
 #include <flux/security/sign.h>
 #endif
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libjob/job.h"

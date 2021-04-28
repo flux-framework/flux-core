@@ -11,7 +11,8 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "future.h"
 

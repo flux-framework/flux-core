@@ -11,11 +11,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <flux/core.h>
 #include <flux/idset.h>
 #include <flux/schedutil.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libjob/job.h"
 #include "src/common/librlist/rlist.h"

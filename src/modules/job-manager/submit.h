@@ -12,7 +12,6 @@
 #define _FLUX_JOB_MANAGER_SUBMIT_H
 
 #include <stdbool.h>
-#include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
 

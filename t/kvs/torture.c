@@ -19,7 +19,6 @@
 #include <stdbool.h>
 #include <stdarg.h>
 #include <inttypes.h>
-#include <czmq.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/xzmalloc.h"

@@ -14,6 +14,7 @@
 #include <stdlib.h>
 #include <flux/core.h>
 #include <jansson.h>
+#include <assert.h>
 
 #include "src/common/libutil/errno_safe.h"
 #include "schedutil_private.h"

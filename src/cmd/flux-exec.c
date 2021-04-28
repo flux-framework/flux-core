@@ -11,6 +11,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <string.h>
@@ -18,13 +21,12 @@
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <signal.h>
-#include <czmq.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libczmqcontainers/czmq_containers.h"
 
 static struct optparse_option cmdopts[] = {
     { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "IDSET",

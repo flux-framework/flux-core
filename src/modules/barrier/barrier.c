@@ -40,12 +40,14 @@
 #include <stdio.h>
 #include <assert.h>
 #include <stdlib.h>
+#include <inttypes.h>
 #include <string.h>
 #include <errno.h>
 #include <stdbool.h>
+#include <stdbool.h>
 #include <flux/core.h>
-#include <czmq.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"

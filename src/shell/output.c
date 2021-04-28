@@ -46,6 +46,8 @@
 #include <stdio.h>
 #include <string.h>
 #include <jansson.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <flux/core.h>
 
 #include "src/common/libidset/idset.h"

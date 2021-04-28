@@ -11,8 +11,9 @@
 #ifndef HAVE_SCHEDUTIL_PRIVATE_H
 #define HAVE_SCHEDUTIL_PRIVATE_H 1
 
-#include <czmq.h>
 #include <flux/core.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "init.h"
 

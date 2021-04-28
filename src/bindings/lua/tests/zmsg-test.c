@@ -13,10 +13,10 @@
 #endif
 #include <lua.h>
 #include <lauxlib.h>
-#include <zmq.h>
-#include <czmq.h>
 #include <errno.h>
 #include <string.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "flux/core.h"
 #include "jansson-lua.h"

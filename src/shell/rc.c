@@ -17,13 +17,13 @@
 #endif
 #include <libgen.h>
 #include <glob.h>
-#include <czmq.h>
 #include <lua.h>
 #include <lauxlib.h>
 #include <lualib.h>
 #include <flux/core.h>
 #include <flux/shell.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/bindings/lua/jansson-lua.h"
 #include "src/bindings/lua/lutil.h"
 #include "internal.h"

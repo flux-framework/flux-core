@@ -13,8 +13,8 @@
 #endif
 #include <lua.h>
 #include <lauxlib.h>
-#include <zmq.h>
-#include <czmq.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "flux/core.h"
 #include "lutil.h"

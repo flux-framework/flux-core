@@ -15,9 +15,9 @@
 #endif
 #include <errno.h>
 #include <flux/core.h>
-#include <czmq.h>
 #include <sodium.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/macros.h"
 
 #include "publisher.h"

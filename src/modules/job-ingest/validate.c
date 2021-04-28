@@ -29,8 +29,9 @@
 #endif
 #include <unistd.h>
 #include <argz.h>
-#include <czmq.h>
 #include <jansson.h>
+#include <assert.h>
+#include <signal.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/errno_safe.h"

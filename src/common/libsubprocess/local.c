@@ -13,14 +13,14 @@
 #endif
 
 #include <sys/types.h>
+#include <sys/socket.h>
 #include <wait.h>
 #include <unistd.h>
 #include <errno.h>
 
-#include <czmq.h>
-
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdwalk.h"
 #include "src/common/libutil/fdutils.h"

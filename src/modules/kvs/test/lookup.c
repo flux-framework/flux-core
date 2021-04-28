@@ -18,6 +18,7 @@
 #include <sys/types.h>
 #include <assert.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libtap/tap.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_util_private.h"

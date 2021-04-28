@@ -13,7 +13,6 @@
 #endif
 
 #include <errno.h>
-#include <czmq.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 

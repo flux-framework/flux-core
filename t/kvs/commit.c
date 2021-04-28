@@ -18,10 +18,10 @@
 #include <pthread.h>
 #include <getopt.h>
 #include <inttypes.h>
-#include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/xzmalloc.h"

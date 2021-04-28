@@ -12,8 +12,11 @@
 #include "config.h"
 #endif
 #include <poll.h>
-#include <czmq.h>
+#include <unistd.h>
+#include <errno.h>
 #include <sys/eventfd.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "message.h"
 #include "msglist.h"

@@ -16,8 +16,8 @@
 #include <unistd.h>
 #include <errno.h>
 #include <jansson.h>
-#include <czmq.h>   /* zlist_t */
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libidset/idset.h"
 
 #include "rcalc.h"

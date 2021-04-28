@@ -15,7 +15,6 @@
 #include "config.h"
 #endif
 #include <stdbool.h>
-#include <czmq.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/errno_safe.h"

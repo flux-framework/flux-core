@@ -12,7 +12,6 @@
 #define _FLUX_KVS_KVSTXN_H
 
 #include <flux/core.h>
-#include <czmq.h>
 
 #include "cache.h"
 

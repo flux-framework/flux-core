@@ -28,10 +28,11 @@
 #include <stdbool.h>
 #include <sys/time.h>
 #include <ctype.h>
+#include <signal.h>
 #include <flux/core.h>
-#include <czmq.h>
 #include <jansson.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fsd.h"
 

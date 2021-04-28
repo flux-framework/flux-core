@@ -21,14 +21,13 @@
 #endif
 #include <signal.h>
 #include <assert.h>
-#include <czmq.h>
 #include <argz.h>
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/monotime.h"
-#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "runat.h"
 
@@ -86,6 +85,8 @@ static const char *env_blocklist[] = {
 #endif
     NULL,
 };
+
+extern char **environ;
 
 static const char *get_shell (void)
 {

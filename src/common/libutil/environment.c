@@ -16,9 +16,9 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <stdlib.h>
-#include <czmq.h>
 #include <argz.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/xzmalloc.h"

@@ -11,9 +11,14 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
+#include <stdlib.h>
+#include <unistd.h>
+#include <fcntl.h>
 #include <argz.h>
+#include <stdio.h>
+#include <ctype.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "liblist.h"
 
 static int liblist_append_from_environment (zlist_t *libs, const char *libname)

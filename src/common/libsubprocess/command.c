@@ -16,9 +16,11 @@
 #include <sys/types.h>
 #include <argz.h>
 #include <envz.h>
+#include <assert.h>
 
 #include <jansson.h>
-#include <czmq.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "command.h"
 

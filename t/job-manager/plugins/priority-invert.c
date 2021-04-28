@@ -12,9 +12,11 @@
  * are / should be.
  */
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <flux/core.h>
 #include <flux/jobtap.h>
-#include <czmq.h>
 
 static void trigger_cb (flux_t *h,
                         flux_msg_handler_t *mh,

@@ -15,7 +15,6 @@
 #include <string.h>
 #include <ctype.h>
 #include <assert.h>
-#include <czmq.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <jansson.h>

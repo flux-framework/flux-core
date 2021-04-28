@@ -14,7 +14,6 @@
 #include "config.h"
 #endif
 #include <sqlite3.h>
-#include <czmq.h>
 #include <lz4.h>
 #include <flux/core.h>
 

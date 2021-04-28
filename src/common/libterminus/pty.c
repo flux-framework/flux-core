@@ -42,6 +42,8 @@
 #include "config.h"
 #endif
 
+#include <sys/types.h>
+#include <signal.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <fcntl.h>
@@ -49,8 +51,8 @@
 #include <termios.h>
 
 #include <jansson.h>
-#include <czmq.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/errno_safe.h"
 

@@ -33,7 +33,6 @@
 #include "config.h"
 #endif
 #include <jansson.h>
-#include <czmq.h>
 #include <flux/core.h>
 #include <flux/shell.h>
 

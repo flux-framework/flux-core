@@ -8,6 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <limits.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -15,7 +18,6 @@
 #include <unistd.h>
 #include <string.h>
 #include <errno.h>
-
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libutil/unlink_recursive.h"

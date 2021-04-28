@@ -12,7 +12,6 @@
 #include "config.h"
 #endif
 #include <unistd.h>
-#include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
 #if HAVE_FLUX_SECURITY
@@ -20,11 +19,11 @@
 #include <flux/security/sign.h>
 #endif
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fluid.h"
 #include "src/common/libjob/sign_none.h"
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libeventlog/eventlog.h"
-#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "validate.h"
 

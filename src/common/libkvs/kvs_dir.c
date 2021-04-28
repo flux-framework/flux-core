@@ -15,8 +15,9 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <jansson.h>
-#include <czmq.h>
 #include <flux/core.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "kvs_dir_private.h"
 #include "treeobj.h"

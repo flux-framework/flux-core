@@ -20,11 +20,12 @@
 #include <string.h>
 #include <sys/types.h>
 
-#include <czmq.h>
 #include <jansson.h>
 
 #include <flux/core.h>
 #include <flux/shell.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "builtins.h"
 #include "mpir/proctable.h"

@@ -11,7 +11,6 @@
 #ifndef _FLUX_KVS_TREQ_H
 #define _FLUX_KVS_TREQ_H
 
-#include <czmq.h>
 #include <jansson.h>
 
 typedef struct treq_mgr treq_mgr_t;

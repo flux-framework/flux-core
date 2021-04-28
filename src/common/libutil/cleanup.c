@@ -12,16 +12,16 @@
 #  include <config.h>
 #endif /* HAVE_CONFIG_H */
 
-#include "cleanup.h"
-#include "unlink_recursive.h"
-
 #include <stdio.h>
 #include <stdlib.h>
 #include <libgen.h>
 #include <unistd.h>
 #include <pthread.h>
 
-#include <czmq.h>
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
+#include "cleanup.h"
+#include "unlink_recursive.h"
 
 static pthread_mutex_t mutex = PTHREAD_MUTEX_INITIALIZER;
 static pid_t cleaner_pid = 0;

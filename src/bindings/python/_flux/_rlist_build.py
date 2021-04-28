@@ -13,7 +13,7 @@ ffi.set_source(
     "_flux._rlist",
     """
 #include <jansson.h>
-#include <czmq.h>
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/librlist/rlist.h"
 
 

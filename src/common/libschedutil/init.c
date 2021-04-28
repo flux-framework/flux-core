@@ -8,10 +8,13 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#include <czmq.h>
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
 
 #include "init.h"

@@ -15,7 +15,10 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <stdlib.h>
-#include <czmq.h>
+#include <errno.h>
+#include <ctype.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "nodelist.h"
 #include "rangelist.h"

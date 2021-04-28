@@ -14,13 +14,14 @@
 #include <stdlib.h>
 #include <flux/core.h>
 #include <jansson.h>
-#include <czmq.h>
+#include <assert.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libeventlog/eventlog.h"
+#include "src/common/libutil/grudgeset.h"
 
 #include "job.h"
 #include "event.h"
-
-#include "src/common/libeventlog/eventlog.h"
-#include "src/common/libutil/grudgeset.h"
 
 void job_decref (struct job *job)
 {

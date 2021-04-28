@@ -18,8 +18,13 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
+#include <assert.h>
 #include <flux/core.h>
 
 #include "src/common/libidset/idset.h"

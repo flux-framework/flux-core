@@ -35,5 +35,6 @@ test_optparse_t_CPPFLAGS = $(AM_CPPFLAGS)
 test_optparse_t_LDADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liboptparse/liboptparse.la \
+	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(ZMQ_LIBS) $(LIBPTHREAD)

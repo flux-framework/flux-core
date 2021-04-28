@@ -12,8 +12,10 @@
 #include "config.h"
 #endif
 #include <jansson.h>
-#include <czmq.h>
+#include <assert.h>
 #include <flux/core.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "eventlog.h"
 #include "eventlogger.h"

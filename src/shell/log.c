@@ -23,6 +23,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <signal.h>
 #include <jansson.h>
 #include <flux/core.h>
 #include <flux/shell.h>

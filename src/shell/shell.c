@@ -20,14 +20,13 @@
 #include <stdarg.h>
 #include <locale.h>
 #include <jansson.h>
-#include <czmq.h>
 #include <flux/core.h>
 #include <flux/shell.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/liboptparse/optparse.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "internal.h"
 #include "builtins.h"

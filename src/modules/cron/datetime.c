@@ -15,7 +15,6 @@
 #include <sys/time.h>
 #include <ctype.h>
 #include <flux/core.h>
-#include <czmq.h>
 
 #include "src/common/libutil/cronodate.h"
 

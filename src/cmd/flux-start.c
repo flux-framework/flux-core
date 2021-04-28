@@ -11,18 +11,22 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <limits.h>
 #include <termios.h>
 #include <unistd.h>
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <libgen.h>
+#include <signal.h>
 #include <argz.h>
+#include <sys/ioctl.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
-#include <czmq.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"

@@ -12,10 +12,9 @@
 #define SHELL_TASK_H
 
 #include <flux/core.h>
-#include <czmq.h>
 
-#include "src/common/libutil/aux.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/aux.h"
 
 #include "info.h"
 

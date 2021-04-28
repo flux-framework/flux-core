@@ -11,7 +11,6 @@
 #ifndef _SHELL_INTERNAL_H
 #define _SHELL_INTERNAL_H
 
-#include <czmq.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <flux/shell.h>

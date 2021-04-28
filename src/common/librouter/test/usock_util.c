@@ -18,9 +18,9 @@
 #include <fcntl.h>
 #include <stdlib.h>
 #include <flux/core.h>
-#include <czmq.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/unlink_recursive.h"
 #include "src/common/librouter/usock.h"
 

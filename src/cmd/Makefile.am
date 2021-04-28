@@ -101,10 +101,10 @@ flux_job_LDADD = \
 	$(top_builddir)/src/common/libterminus/libterminus.la
 
 flux_terminus_LDADD = \
-	$(fluxcmd_ldadd) \
 	$(top_builddir)/src/common/libterminus/libterminus.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
+	$(fluxcmd_ldadd) \
 	$(ZMQ_LIBS)
 
 flux_R_LDADD = \

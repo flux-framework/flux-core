@@ -13,10 +13,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <jansson.h>
+#include <assert.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/fluid.h"
 #include "src/common/libutil/fsd.h"
@@ -24,7 +25,6 @@
 #include "src/common/libjob/job_hash.h"
 #include "src/common/librlist/rlist.h"
 #include "src/common/libidset/idset.h"
-#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "job_state.h"
 #include "idsync.h"

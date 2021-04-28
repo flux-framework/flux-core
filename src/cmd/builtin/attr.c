@@ -8,8 +8,13 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#include <czmq.h>
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <jansson.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "builtin.h"
 
 static struct optparse_option setattr_opts[] = {

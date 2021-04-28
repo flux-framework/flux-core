@@ -13,8 +13,9 @@
 #endif
 #include <jansson.h>
 #include <flux/core.h>
-#include <czmq.h>
 #include <string.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "kvs_txn_private.h"
 #include "treeobj.h"

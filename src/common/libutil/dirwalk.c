@@ -10,7 +10,9 @@
 
 /* dirwalk.c - simple interface to recurse a directory tree */
 
-#define _GNU_SOURCE
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <stdio.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -18,8 +20,12 @@
 #include <unistd.h>
 #include <libgen.h>
 #include <fnmatch.h>
+#include <assert.h>
+#include <errno.h>
+#include <stdlib.h>
+#include <fcntl.h>
 
-#include <czmq.h>
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "dirwalk.h"
 

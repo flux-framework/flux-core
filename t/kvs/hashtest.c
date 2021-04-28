@@ -15,8 +15,8 @@
 #include <sys/resource.h>
 #include <assert.h>
 #include <stdarg.h>
-#include <czmq.h>
 #include <stdlib.h>
+#include <czmq.h>
 #if HAVE_LIBJUDY
 #include <Judy.h>
 #endif
@@ -25,6 +25,7 @@
 #endif
 #include <sqlite3.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/cleanup.h"

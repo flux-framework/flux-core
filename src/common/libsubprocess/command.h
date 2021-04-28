@@ -12,7 +12,8 @@
 #define _SUBPROCESS_CMD_H
 
 #include <jansson.h>
-#include <czmq.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "subprocess.h"
 

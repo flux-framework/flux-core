@@ -17,8 +17,8 @@
 
 #include <flux/core.h>
 #include <flux/idset.h>
-#include <czmq.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
 #include "bulk-exec.h"
 
@@ -57,6 +57,8 @@ struct bulk_exec {
     struct bulk_exec_ops *handlers;
     void *arg;
 };
+
+extern char **environ;
 
 int bulk_exec_rc (struct bulk_exec *exec)
 {

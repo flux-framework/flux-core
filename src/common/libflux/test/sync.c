@@ -13,7 +13,6 @@
 #endif
 #include <errno.h>
 #include <string.h>
-#include <czmq.h>
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"

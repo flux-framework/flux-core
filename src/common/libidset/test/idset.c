@@ -14,9 +14,9 @@
 #include <errno.h>
 #include <string.h>
 #include <stdbool.h>
-#include <czmq.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libidset/idset_private.h"
 

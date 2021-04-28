@@ -14,8 +14,11 @@
 #include <time.h>
 #include <sys/time.h>
 #include <ctype.h>
-#include <czmq.h>
+#include <errno.h>
+#include <assert.h>
+#include <stdlib.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/xzmalloc.h"
 

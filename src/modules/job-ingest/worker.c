@@ -41,10 +41,13 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <limits.h>
 #include <unistd.h>
-#include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 #include "worker.h"
 
 const char *worker_auxkey = "flux::worker";
