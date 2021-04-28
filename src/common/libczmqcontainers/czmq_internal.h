@@ -21,6 +21,8 @@
 #endif
 
 #include <stdlib.h>
+#include <stdio.h>
+#include <stdlib.h>
 
 #ifdef NDEBUG
   #undef NDEBUG
@@ -31,6 +33,26 @@
 #endif
 
 #define freen(x) do {free(x); x = NULL;} while(0)
+
+//  Replacement for malloc() which asserts if we run out of heap, and
+//  which zeroes the allocated block.
+static inline void *
+safe_malloc (size_t size, const char *file, unsigned line)
+{
+//     printf ("%s:%u %08d\n", file, line, (int) size);
+    void *mem = calloc (1, size);
+    if (mem == NULL) {
+        fprintf (stderr, "FATAL ERROR at %s:%u\n", file, line);
+        fprintf (stderr, "OUT OF MEMORY (malloc returned NULL)\n");
+        fflush (stderr);
+        abort ();
+    }
+    return mem;
+}
+
+#define zmalloc(size) safe_malloc((size), __FILE__, __LINE__)
+
+#define streq(s1,s2) (!strcmp((s1), (s2)))
 
 void zstr_free (char **string_p);
 

@@ -15,7 +15,11 @@
 extern "C" {
 #endif
 
-#include <czmq.h>
+#include <sys/types.h>
+#include <stdbool.h>
+#include <stdint.h>
+#include <string.h>
+
 #include "czmq_rename.h"
 
 typedef struct _zhashx_t zhashx_t;

@@ -7,8 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
-	-I$(top_srcdir)/src/include \
-	$(ZMQ_CFLAGS)
+	-I$(top_srcdir)/src/include
 
 noinst_LTLIBRARIES = \
 	libczmqcontainers.la
