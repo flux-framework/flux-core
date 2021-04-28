@@ -9,31 +9,17 @@
     =========================================================================
 */
 
-/* To avoid copying in an excess amount of code from czmq, the
- * following have been manually cut and pasted in
- */
+#include "czmq_containers.h"
+#include "czmq_internal.h"
 
-#ifndef __CZMQ_INTERNAL__
-#define __CZMQ_INTERNAL__
+//  --------------------------------------------------------------------------
+//  Free a provided string, and nullify the parent pointer. Safe to call on
+//  a null pointer.
 
-#if HAVE_CONFIG_H
-# include "config.h"
-#endif
-
-#include <stdlib.h>
-
-#ifdef NDEBUG
-  #undef NDEBUG
-  #include <assert.h>
-  #define NDEBUG
-#else
-  #include <assert.h>
-#endif
-
-#define freen(x) do {free(x); x = NULL;} while(0)
-
-void zstr_free (char **string_p);
-
-
-#endif
-
+void
+zstr_free (char **string_p)
+{
+    assert (string_p);
+    free (*string_p);
+    *string_p = NULL;
+}

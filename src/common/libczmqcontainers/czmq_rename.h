@@ -142,6 +142,8 @@ extern "C" {
 #define zlist_freefn fzlist_freefn
 #define zlist_test fzlist_test
 
+#define zstr_free fzstr_free
+
 #ifdef __cplusplus
 }
 #endif
