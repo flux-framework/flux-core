@@ -29,3 +29,13 @@ pull_request_rules:
         method: merge
         strict: smart
         strict_method: rebase
+  - name: remove outdated approved reviews
+    conditions:
+      - author!=@core
+    actions:
+      dismiss_reviews:
+        approved: true
+        changes_requested: false
+        message: |
+          Approving reviews have been dismissed because this pull request
+          was updated.
