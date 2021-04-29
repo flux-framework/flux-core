@@ -16,9 +16,10 @@
 #endif
 
 #include <jansson.h>
-#include <czmq.h>
 #include <flux/idset.h>
 #include <flux/hostlist.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 typedef struct {
     char text[128];

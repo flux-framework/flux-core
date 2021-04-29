@@ -17,8 +17,9 @@
 
 #include <inttypes.h>
 #include <jansson.h>
-#include <czmq.h>
 #include <flux/idset.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 struct rnode_child {
     char *name;

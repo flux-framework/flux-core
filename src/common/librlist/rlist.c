@@ -17,7 +17,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
-#include <czmq.h>
 #include <jansson.h>
 
 #include "src/common/libidset/idset.h"
