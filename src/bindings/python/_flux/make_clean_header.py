@@ -75,19 +75,20 @@ def process_header(f, including_path="."):
         checked_heads[f] = 1
 
 
+orig_wd = os.getcwd()
+os.chdir(args.path)
+
+checked_heads = {}
+
+process_header(absolute_head)
+
+for header in args.additional_headers:
+    process_header(header)
+
+include_head = args.header
+if args.include_header != "":
+    include_head = args.include_header
+
+os.chdir(orig_wd)
 with open(args.output, "w") as clean_header:
-    os.chdir(args.path)
-
-    checked_heads = {}
-
-    process_header(absolute_head)
-
-    for header in args.additional_headers:
-        process_header(header)
-
-    include_head = args.header
-    if args.include_header != "":
-        include_head = args.include_header
-
-
     clean_header.write(mega_header)
