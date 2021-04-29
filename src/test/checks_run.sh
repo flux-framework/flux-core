@@ -18,7 +18,7 @@
 #  UNIT_TEST_ONLY Only run `make check` under ./src
 #  PRELOAD       Set as LD_PRELOAD for make and tests
 #  POISON        Install poison libflux and flux(1) in image
-#  INCEPTION     Run tests under a flux instance with prove(1)
+#  INCEPTION     Run tests under a flux instance
 #  chain_lint    Run sharness with --chain-lint if chain_lint=t
 #
 #  And, obviously, some crucial variables that configure itself cares about:
@@ -130,10 +130,10 @@ elif test "$TEST_INSTALL" = "t"; then
     CHECKCMDS="sudo make install && \
               FLUX_TEST_INSTALLED_PATH=/usr/bin ${MAKE} -j $JOBS check"
 
-# Run checks under prove(1):
+# Run checks as Flux jobs:
 elif test "$INCEPTION" = "t"; then
 	CHECKCMDS="make -j ${JOBS} check-prep && \
-	           cd t && ../src/cmd/flux start -s1 ./prove-under-flux.sh && \
+	           cd t && ../src/cmd/flux start -s1 ./test-inception.sh && \
 	           cd .."
 fi
 
