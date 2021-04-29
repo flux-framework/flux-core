@@ -12,8 +12,8 @@
 #define _FLUX_JOB_INFO_H
 
 #include <flux/core.h>
-#include <czmq.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/lru_cache.h"
 
 #define OWNER_LRU_MAXSIZE 1000

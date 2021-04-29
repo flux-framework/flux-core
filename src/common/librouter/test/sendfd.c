@@ -15,10 +15,10 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 #include <unistd.h>
-#include <czmq.h>
 
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/librouter/sendfd.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libtap/tap.h"

@@ -21,9 +21,8 @@
 
 #include <dirent.h>
 
-#include <czmq.h>
-
 #include "src/common/libtap/tap.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/dirwalk.h"
 
 static int makepath (const char *fmt, ...)

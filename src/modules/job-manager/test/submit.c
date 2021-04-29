@@ -8,9 +8,13 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <jansson.h>
-#include <czmq.h>
 #include <flux/core.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libtap/tap.h"
 

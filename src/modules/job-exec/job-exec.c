@@ -87,15 +87,16 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
+#include <assert.h>
+#include <unistd.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
-#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "job-exec.h"
 

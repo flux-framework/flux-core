@@ -28,6 +28,9 @@
  *   on the next mailbox event
  */
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <czmq.h>
 #include <zmq.h>
 #include <stdbool.h>

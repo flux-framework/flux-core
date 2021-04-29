@@ -11,6 +11,8 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <limits.h>
+#include <unistd.h>
 #include <assert.h>
 #include <string.h>
 #include <errno.h>
@@ -18,11 +20,16 @@
 #include <dlfcn.h>
 #include <sys/epoll.h>
 #include <poll.h>
-#include <czmq.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
 #include <sys/syscall.h>
 #endif
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/dirwalk.h"
+#include "src/common/libutil/aux.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "handle.h"
 #include "reactor.h"
@@ -32,11 +39,6 @@
 #include "msg_handler.h" // for flux_sleep_on ()
 #include "flog.h"
 #include "conf.h"
-
-#include "src/common/libutil/log.h"
-#include "src/common/libutil/dirwalk.h"
-#include "src/common/libutil/aux.h"
-#include "src/common/libutil/errno_safe.h"
 
 #if HAVE_CALIPER
 struct profiling_context {

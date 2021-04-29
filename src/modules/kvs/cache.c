@@ -22,17 +22,16 @@
 #include <stdbool.h>
 #include <ctype.h>
 #include <sys/time.h>
-#include <czmq.h>
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libkvs/kvs_util_private.h"
-#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "waitqueue.h"
 #include "cache.h"

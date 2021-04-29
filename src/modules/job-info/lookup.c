@@ -13,9 +13,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
+#include <assert.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "job-info.h"
 #include "lookup.h"

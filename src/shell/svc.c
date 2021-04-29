@@ -31,6 +31,7 @@
 #endif
 #include <stdio.h>
 #include <string.h>
+#include <unistd.h>
 #include <flux/core.h>
 
 #include "internal.h"

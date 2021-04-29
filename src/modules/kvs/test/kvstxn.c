@@ -16,6 +16,7 @@
 #include <assert.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libkvs/kvs.h"
 #include "src/common/libkvs/treeobj.h"

@@ -15,13 +15,16 @@
 #include "config.h"
 #endif
 
-#include <czmq.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <jansson.h>
 
 #include <flux/core.h>
 #include <flux/hostlist.h>
 #include <flux/optparse.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/librlist/rlist.h"

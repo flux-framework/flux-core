@@ -15,8 +15,9 @@
 #include <stdbool.h>
 #include <stdlib.h>
 #include <errno.h>
-#include <czmq.h>
+#include <assert.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
 
 #include "future.h"

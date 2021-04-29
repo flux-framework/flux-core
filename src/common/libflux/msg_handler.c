@@ -11,21 +11,21 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
+#include <assert.h>
 #if HAVE_CALIPER
 #include <caliper/cali.h>
 #include <sys/syscall.h>
 #endif
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/log.h"
+#include "src/common/libutil/iterators.h"
 
 #include "message.h"
 #include "reactor.h"
 #include "msg_handler.h"
 #include "response.h"
 #include "flog.h"
-
-#include "src/common/libutil/log.h"
-#include "src/common/libutil/iterators.h"
-#include "src/common/libczmqcontainers/czmq_containers.h"
 
 struct handler_stack {
     flux_msg_handler_t *mh;  // current message handler in stack

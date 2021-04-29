@@ -16,13 +16,12 @@
 #include <string.h>
 #include <glob.h>
 #include <dlfcn.h>
-#include <czmq.h>
 #include <stdarg.h>
 #include <flux/core.h>
 #include <flux/shell.h>
 
-#include "src/common/libutil/iterators.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/iterators.h"
 
 #include "plugstack.h"
 
@@ -135,7 +134,7 @@ struct plugstack * plugstack_create (void)
         plugstack_destroy (st);
         return NULL;
     }
-    zlistx_set_destructor (st->plugins, (czmq_destructor *) plugin_destroy);
+    zlistx_set_destructor (st->plugins, (zlistx_destructor_fn *) plugin_destroy);
     return (st);
 }
 

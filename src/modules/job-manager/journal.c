@@ -14,14 +14,14 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
 
-#include "journal.h"
-
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/errno_safe.h"
+
+#include "journal.h"
 
 #define EVENTS_MAXLEN 1000
 

@@ -14,12 +14,11 @@
 #include <getopt.h>
 #include <assert.h>
 #include <libgen.h>
-#include <czmq.h>
 #include <pthread.h>
 #include <flux/core.h>
-#include <czmq.h>
 #include <jansson.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/monotime.h"

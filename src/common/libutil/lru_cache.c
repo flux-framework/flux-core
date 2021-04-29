@@ -13,8 +13,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdlib.h>
 #include <unistd.h>
-#include <czmq.h>
+#include <errno.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "lru_cache.h"
 

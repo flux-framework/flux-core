@@ -21,7 +21,6 @@
 #include <sys/syscall.h>
 #endif
 #include <jansson.h>
-#include <czmq.h>
 
 #include "src/common/libutil/errno_safe.h"
 

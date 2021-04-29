@@ -49,13 +49,13 @@
 #include "config.h"
 #endif
 #include <stdbool.h>
-#include <czmq.h>
+#include <assert.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libjob/job_hash.h"
-#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "drain.h"
 #include "submit.h"

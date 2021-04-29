@@ -12,9 +12,9 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
-#include <czmq.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libtestutil/util.h"
 #include "src/common/librouter/servhash.h"
 

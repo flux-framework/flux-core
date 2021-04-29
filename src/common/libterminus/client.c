@@ -20,10 +20,10 @@
 #include <sys/ioctl.h>
 #include <signal.h>
 #include <termios.h>
-#include <czmq.h>
 
 #include <jansson.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/llog.h"
 

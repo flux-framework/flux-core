@@ -11,8 +11,12 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
+#include <limits.h>
 #include <jansson.h>
+#include <assert.h>
+#include <inttypes.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "attr.h"
 

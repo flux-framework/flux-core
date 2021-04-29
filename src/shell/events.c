@@ -16,13 +16,12 @@
 #include "config.h"
 #endif
 
-#include <czmq.h>
 #include <jansson.h>
 
 #include <flux/shell.h>
 
-#include "src/common/libeventlog/eventlogger.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libeventlog/eventlogger.h"
 
 struct shell_eventlogger {
     flux_shell_t *shell;

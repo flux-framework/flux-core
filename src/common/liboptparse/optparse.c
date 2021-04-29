@@ -20,8 +20,7 @@
 #include <stdarg.h>
 #include <argz.h>
 
-#include <czmq.h>
-
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fsd.h"
 
 #include "optparse.h"

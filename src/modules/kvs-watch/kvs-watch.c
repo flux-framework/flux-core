@@ -13,10 +13,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <jansson.h>
+#include <assert.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_util_private.h"
 #include "src/common/libutil/blobref.h"

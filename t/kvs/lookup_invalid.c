@@ -16,7 +16,6 @@
 #include <pthread.h>
 #include <getopt.h>
 #include <inttypes.h>
-#include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
 

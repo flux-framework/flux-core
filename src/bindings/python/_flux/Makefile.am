@@ -105,6 +105,8 @@ _rlist_clean.h: Makefile
 	  --path $(top_srcdir)/src/common/librlist \
 	  --search $(top_builddir)/config \
 	  --search /usr/include \
+	  --search $(top_srcdir) \
+	  --ignore_header czmq_containers \
 	  --output $@ \
 	  rlist.h
 

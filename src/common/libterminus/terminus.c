@@ -51,12 +51,12 @@
 #include <stdio.h>
 #include <errno.h>
 #include <string.h>
-#include <czmq.h>
 
 #include <jansson.h>
 
 #include <flux/idset.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/llog.h"
 #include "src/common/libterminus/pty.h"
 

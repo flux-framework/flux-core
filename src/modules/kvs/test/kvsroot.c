@@ -16,6 +16,7 @@
 #include <jansson.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libkvs/kvs.h"
 #include "src/modules/kvs/kvsroot.h"
 #include "src/modules/kvs/treq.h"

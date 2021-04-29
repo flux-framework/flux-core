@@ -15,7 +15,6 @@
 #include <errno.h>
 #include <stdlib.h>
 #include <jansson.h>
-#include <czmq.h>
 #include <flux/core.h>
 
 #include "kvs_getroot.h"

@@ -11,9 +11,10 @@
 #ifndef HAVE_CRON_ENTRY_H
 # define HAVE_CRON_ENTRY_H
 
-#include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 typedef struct cron_ctx cron_ctx_t;
 typedef struct cron_entry cron_entry_t;

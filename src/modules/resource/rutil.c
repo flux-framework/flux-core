@@ -15,6 +15,7 @@
 #endif
 #include <sys/types.h>
 #include <sys/stat.h>
+#include <unistd.h>
 #include <fcntl.h>
 #include <jansson.h>
 #include <flux/core.h>

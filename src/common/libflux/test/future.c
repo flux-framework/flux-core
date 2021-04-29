@@ -8,17 +8,22 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <errno.h>
+#include <assert.h>
 #include <string.h>
-#include <czmq.h>
+#include <flux/core.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libtestutil/util.h"
+#include "src/common/libtap/tap.h"
 
 #include "future.h"
 #include "reactor.h"
 #include "response.h"
-
-#include "src/common/libutil/xzmalloc.h"
-#include "src/common/libtestutil/util.h"
-#include "src/common/libtap/tap.h"
 
 int aux_destroy_called;
 void *aux_destroy_arg;

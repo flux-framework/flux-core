@@ -44,10 +44,10 @@
 #include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <czmq.h>
 #include <uuid.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/errno_safe.h"

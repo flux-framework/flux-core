@@ -12,8 +12,9 @@
 #define _FLUX_JOB_MANAGER_JOB_H
 
 #include <stdint.h>
-#include <czmq.h>
 #include <jansson.h>
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/grudgeset.h"
 

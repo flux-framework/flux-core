@@ -14,9 +14,9 @@
 #include <glob.h>
 #include <string.h>
 #include <argz.h>
-#include <czmq.h>
 #include <jansson.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 
 #include "cmdhelp.h"
@@ -153,17 +153,10 @@ static int categorycmp (const char *s1, const char *s2)
     return strcmp (s1, s2);
 }
 
-#if CZMQ_VERSION < CZMQ_MAKE_VERSION(3,0,1)
-static bool category_cmp (const char *s1, const char *s2)
-{
-    return (categorycmp (s1, s2) > 0);
-}
-#else
 static int category_cmp (const char *s1, const char *s2)
 {
     return categorycmp (s1, s2);
 }
-#endif
 
 zhash_t *get_command_list_hash (const char *pattern)
 {

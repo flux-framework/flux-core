@@ -16,8 +16,10 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
+#include <inttypes.h>
+#include <assert.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/wallclock.h"
 #include "src/common/libutil/stdlog.h"

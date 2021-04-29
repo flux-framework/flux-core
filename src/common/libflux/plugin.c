@@ -12,15 +12,18 @@
 #include "config.h"
 #endif
 
+#include <fcntl.h>
+#include <unistd.h>
 #include <errno.h>
 #include <string.h>
 #include <fnmatch.h>
 #include <dlfcn.h>
 #include <stdarg.h>
 #include <jansson.h>
-#include <czmq.h>
+#include <assert.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/aux.h"
 
 #include "plugin.h"

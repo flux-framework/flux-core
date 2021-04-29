@@ -25,9 +25,9 @@
 #include <sys/resource.h>
 #include <stdarg.h>
 #include <argz.h>
-#include <czmq.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 
 #include "module.h"

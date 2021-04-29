@@ -17,7 +17,6 @@
 #include <assert.h>
 #include <errno.h>
 #include <string.h>
-#include <czmq.h>
 #include <jansson.h>
 
 #include "src/common/libidset/idset.h"
@@ -994,8 +993,8 @@ static zlistx_t * rlist_mrlist (const struct rlist *rl)
     struct multi_rnode *mrn = NULL;
     zlistx_t *l = zlistx_new ();
 
-    zlistx_set_comparator (l, (czmq_comparator *) multi_rnode_cmp);
-    zlistx_set_destructor (l, (czmq_destructor *) multi_rnode_destroy);
+    zlistx_set_comparator (l, (zlistx_comparator_fn *) multi_rnode_cmp);
+    zlistx_set_destructor (l, (zlistx_destructor_fn *) multi_rnode_destroy);
 
     n = zlistx_first (rl->nodes);
     while (n) {
@@ -1027,7 +1026,7 @@ static json_t * rlist_compressed (struct rlist *rl)
 
     if (!l)
         return NULL;
-    zlistx_set_comparator (l, (czmq_comparator *) multi_rnode_by_rank);
+    zlistx_set_comparator (l, (zlistx_comparator_fn *) multi_rnode_by_rank);
     zlistx_sort (l);
     mrn = zlistx_first (l);
     while (mrn) {

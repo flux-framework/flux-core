@@ -14,10 +14,10 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <czmq.h>
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libeventlog/eventlog.h"
 

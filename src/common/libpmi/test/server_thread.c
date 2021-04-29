@@ -14,11 +14,10 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <pthread.h>
-#include <czmq.h>
+#include <assert.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/oom.h"
-#include "src/common/libutil/xzmalloc.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libpmi/pmi.h"

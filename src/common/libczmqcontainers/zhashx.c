@@ -34,7 +34,8 @@
 @end
 */
 
-#include "zhashx.h"
+#include "czmq_containers.h"
+#include "czmq_internal.h"
 
 //  Hash table performance parameters
 
@@ -629,6 +630,7 @@ zhashx_cursor (zhashx_t *self)
 }
 
 
+#ifdef CZMQ_BUILD_EXTRA
 //  --------------------------------------------------------------------------
 //  Add a comment to hash table before saving to disk. You can add as many
 //  comment lines as you like. These comment lines are discarded when loading
@@ -958,6 +960,7 @@ zhashx_unpack (zframe_t *frame)
 {
     return zhashx_unpack_own (frame, NULL);
 }
+#endif // CZMQ_BUILD_EXTRA
 
 
 //  --------------------------------------------------------------------------
@@ -1105,6 +1108,7 @@ zhashx_dup_v2 (zhashx_t *self)
 }
 
 
+#ifdef CZMQ_BUILD_EXTRA
 //  --------------------------------------------------------------------------
 //  Runs selftest of class
 //
@@ -1385,3 +1389,4 @@ zhashx_test (bool verbose)
 
     printf ("OK\n");
 }
+#endif // CZMQ_BUILD_EXTRA

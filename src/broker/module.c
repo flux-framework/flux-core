@@ -35,6 +35,7 @@
 #include <sys/syscall.h>
 #endif
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
 

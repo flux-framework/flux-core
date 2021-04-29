@@ -11,7 +11,7 @@
 #ifndef HAVE_UTIL_DIRWALK_H
 #define HAVE_UTIL_DIRWALK_H
 
-#include <czmq.h> /* zlist_t */
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 typedef struct dirwalk dirwalk_t;
 

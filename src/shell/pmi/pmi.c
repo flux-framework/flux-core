@@ -56,11 +56,11 @@
 #endif
 #include <unistd.h>
 #include <stdlib.h>
-#include <czmq.h>
 #include <assert.h>
 #include <flux/core.h>
 #include <jansson.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/clique.h"
 #include "src/common/libutil/errno_safe.h"

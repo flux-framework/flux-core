@@ -7,8 +7,7 @@ AM_LDFLAGS = \
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
-	-I$(top_srcdir)/src/include \
-	$(ZMQ_CFLAGS)
+	-I$(top_srcdir)/src/include
 
 noinst_LTLIBRARIES = \
 	libczmqcontainers.la
@@ -16,7 +15,14 @@ noinst_LTLIBRARIES = \
 libczmqcontainers_la_SOURCES = \
 	czmq_containers.h \
 	czmq_internal.h \
+	czmq_internal.c \
+	czmq_rename.h \
 	zhashx.h \
 	zhashx.c \
 	zhash_primes.inc \
-	zhashx_map.h
+	zlistx.h \
+	zlistx.c \
+	zhash.h \
+	zhash.c \
+	zlist.h \
+	zlist.c

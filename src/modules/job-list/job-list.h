@@ -12,7 +12,6 @@
 #define _FLUX_JOB_LIST_H
 
 #include <flux/core.h>
-#include <czmq.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 

@@ -17,8 +17,8 @@
 #include <libgen.h>
 #include <dlfcn.h>
 #include <argz.h>
-#include <flux/core.h>
 #include <czmq.h>
+#include <flux/core.h>
 #include <jansson.h>
 
 #include "src/common/libutil/xzmalloc.h"
