@@ -838,32 +838,31 @@ error:
     return -1;
 }
 
-/* Cancel guest_watch 'gw' if it matches (sender, matchtag).
- * matchtag=FLUX_MATCHTAG_NONE matches any matchtag.
+/* Cancel guest_watch 'gw' if it matches message
  */
 static void guest_watch_cancel (struct info_ctx *ctx,
                                 struct guest_watch_ctx *gw,
                                 const flux_msg_t *msg,
-                                uint32_t matchtag)
+                                bool cancel)
 {
-    uint32_t t;
-
-    if (matchtag != FLUX_MATCHTAG_NONE
-        && (flux_msg_get_matchtag (gw->msg, &t) < 0 || matchtag != t))
-        return;
-    if (flux_msg_match_route_first (msg, gw->msg))
+    bool match;
+    if (cancel)
+        match = flux_cancel_match (msg, gw->msg);
+    else
+        match = flux_disconnect_match (msg, gw->msg);
+    if (match)
         send_cancel (gw, NULL);
 }
 
 void guest_watchers_cancel (struct info_ctx *ctx,
                             const flux_msg_t *msg,
-                            uint32_t matchtag)
+                            bool cancel)
 {
     struct guest_watch_ctx *gw;
 
     gw = zlist_first (ctx->guest_watchers);
     while (gw) {
-        guest_watch_cancel (ctx, gw, msg, matchtag);
+        guest_watch_cancel (ctx, gw, msg, cancel);
         gw = zlist_next (ctx->guest_watchers);
     }
 }

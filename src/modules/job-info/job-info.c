@@ -25,8 +25,8 @@ static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     struct info_ctx *ctx = arg;
-    watchers_cancel (ctx, msg, FLUX_MATCHTAG_NONE);
-    guest_watchers_cancel (ctx, msg, FLUX_MATCHTAG_NONE);
+    watchers_cancel (ctx, msg, false);
+    guest_watchers_cancel (ctx, msg, false);
 }
 
 static void stats_cb (flux_t *h, flux_msg_handler_t *mh,

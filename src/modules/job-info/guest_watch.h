@@ -21,10 +21,13 @@ int guest_watch (struct info_ctx *ctx,
                  const char *path,
                  int flags);
 
-/* Cancel all lookups that match (msg credentials, matchtag). */
+/* Cancel all lookups that match msg.
+ * match credentials & matchtag if cancel true
+ * match credentials if cancel false
+ */
 void guest_watchers_cancel (struct info_ctx *ctx,
                             const flux_msg_t *msg,
-                            uint32_t matchtag);
+                            bool cancel);
 
 void guest_watch_cleanup (struct info_ctx *ctx);
 

@@ -426,20 +426,19 @@ error:
     watch_ctx_destroy (w);
 }
 
-/* Cancel watch 'w' if it matches (sender, matchtag).
- * matchtag=FLUX_MATCHTAG_NONE matches any matchtag.
+/* Cancel watch 'w' if it matches message.
  */
 static void watch_cancel (struct info_ctx *ctx,
                           struct watch_ctx *w,
                           const flux_msg_t *msg,
-                          uint32_t matchtag)
+                          bool cancel)
 {
-    uint32_t t;
-
-    if (matchtag != FLUX_MATCHTAG_NONE
-        && (flux_msg_get_matchtag (w->msg, &t) < 0 || matchtag != t))
-        return;
-    if (flux_msg_match_route_first (msg, w->msg)) {
+    bool match;
+    if (cancel)
+        match = flux_cancel_match (msg, w->msg);
+    else
+        match = flux_disconnect_match (msg, w->msg);
+    if (match) {
         w->cancel = true;
 
         /* if the watching hasn't started yet, no need to cancel */
@@ -451,15 +450,13 @@ static void watch_cancel (struct info_ctx *ctx,
     }
 }
 
-void watchers_cancel (struct info_ctx *ctx,
-                      const flux_msg_t *msg,
-                      uint32_t matchtag)
+void watchers_cancel (struct info_ctx *ctx, const flux_msg_t *msg, bool cancel)
 {
     struct watch_ctx *w;
 
     w = zlist_first (ctx->watchers);
     while (w) {
-        watch_cancel (ctx, w, msg, matchtag);
+        watch_cancel (ctx, w, msg, cancel);
         w = zlist_next (ctx->watchers);
     }
 }
@@ -468,14 +465,8 @@ void watch_cancel_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {
     struct info_ctx *ctx = arg;
-    uint32_t matchtag;
-
-    if (flux_request_unpack (msg, NULL, "{s:i}", "matchtag", &matchtag) < 0) {
-        flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
-        return;
-    }
-    watchers_cancel (ctx, msg, matchtag);
-    guest_watchers_cancel (ctx, msg, matchtag);
+    watchers_cancel (ctx, msg, true);
+    guest_watchers_cancel (ctx, msg, true);
 }
 
 void watch_cleanup (struct info_ctx *ctx)
