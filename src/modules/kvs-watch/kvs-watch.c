@@ -703,35 +703,34 @@ static void watcher_respond_ns (struct ns_monitor *nsm)
         flux_log_error (nsm->ctx->h, "%s: zlist_dup", __FUNCTION__);
 }
 
-/* Cancel watcher 'w' if it matches (sender, matchtag).
+/* Cancel watcher 'w' if it matches (msg credentials, matchtag).
  * matchtag=FLUX_MATCHTAG_NONE matches any matchtag.
  * If 'mute' is true, suppress response (e.g. for disconnect handling).
  */
-static void watcher_cancel (struct ns_monitor *nsm, struct watcher *w,
-                            const char *sender, uint32_t matchtag,
+static void watcher_cancel (struct ns_monitor *nsm,
+                            struct watcher *w,
+                            const flux_msg_t *msg,
+                            uint32_t matchtag,
                             bool mute)
 {
     uint32_t t;
-    char *s;
 
     if (matchtag != FLUX_MATCHTAG_NONE
             && (flux_msg_get_matchtag (w->request, &t) < 0 || matchtag != t))
         return;
-    if (flux_msg_get_route_first (w->request, &s) < 0)
-        return;
-    if (!strcmp (sender, s)) {
+    if (flux_msg_match_route_first (msg, w->request)) {
         w->canceled = true;
         w->mute = mute;
         watcher_respond (nsm, w);
     }
-    free (s);
 }
 
 /* Cancel all namespace watchers that match (sender, matchtag).
  * If 'mute' is true, suppress response.
  */
 static void watcher_cancel_ns (struct ns_monitor *nsm,
-                               const char *sender, uint32_t matchtag,
+                               const flux_msg_t *msg,
+                               uint32_t matchtag,
                                bool mute)
 {
     zlist_t *l;
@@ -740,7 +739,7 @@ static void watcher_cancel_ns (struct ns_monitor *nsm,
     if ((l = zlist_dup (nsm->watchers))) {
         w = zlist_first (l);
         while (w) {
-            watcher_cancel (nsm, w, sender, matchtag, mute);
+            watcher_cancel (nsm, w, msg, matchtag, mute);
             w = zlist_next (l);
         }
         zlist_destroy (&l);
@@ -753,7 +752,8 @@ static void watcher_cancel_ns (struct ns_monitor *nsm,
  * If 'mute' is true, suppress response.
  */
 static void watcher_cancel_all (struct watch_ctx *ctx,
-                                const char *sender, uint32_t matchtag,
+                                const flux_msg_t *msg,
+                                uint32_t matchtag,
                                 bool mute)
 {
     zlist_t *l;
@@ -764,7 +764,7 @@ static void watcher_cancel_all (struct watch_ctx *ctx,
         name = zlist_first (l);
         while (name) {
             nsm = zhash_lookup (ctx->namespaces, name);
-            watcher_cancel_ns (nsm, sender, matchtag, mute);
+            watcher_cancel_ns (nsm, msg, matchtag, mute);
             name = zlist_next (l);
         }
         zlist_destroy (&l);
@@ -1007,18 +1007,12 @@ static void cancel_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct watch_ctx *ctx = arg;
     uint32_t matchtag;
-    char *sender;
 
     if (flux_request_unpack (msg, NULL, "{s:i}", "matchtag", &matchtag) < 0) {
         flux_log_error (h, "%s: flux_request_unpack", __FUNCTION__);
         return;
     }
-    if (flux_msg_get_route_first (msg, &sender) < 0) {
-        flux_log_error (h, "%s: flux_msg_get_route_first", __FUNCTION__);
-        return;
-    }
-    watcher_cancel_all (ctx, sender, matchtag, false);
-    free (sender);
+    watcher_cancel_all (ctx, msg, matchtag, false);
 }
 
 /* kvs-watch.disconnect request
@@ -1029,14 +1023,7 @@ static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     struct watch_ctx *ctx = arg;
-    char *sender;
-
-    if (flux_msg_get_route_first (msg, &sender) < 0) {
-        flux_log_error (h, "%s: flux_msg_get_route_first", __FUNCTION__);
-        return;
-    }
-    watcher_cancel_all (ctx, sender, FLUX_MATCHTAG_NONE, true);
-    free (sender);
+    watcher_cancel_all (ctx, msg, FLUX_MATCHTAG_NONE, true);
 }
 
 /* kvs-watch.stats.get request
