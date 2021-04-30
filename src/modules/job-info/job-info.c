@@ -25,15 +25,8 @@ static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     struct info_ctx *ctx = arg;
-    char *sender;
-
-    if (flux_msg_get_route_first (msg, &sender) < 0) {
-        flux_log_error (h, "%s: flux_msg_get_route_first", __FUNCTION__);
-        return;
-    }
-    watchers_cancel (ctx, sender, FLUX_MATCHTAG_NONE);
-    guest_watchers_cancel (ctx, sender, FLUX_MATCHTAG_NONE);
-    free (sender);
+    watchers_cancel (ctx, msg, FLUX_MATCHTAG_NONE);
+    guest_watchers_cancel (ctx, msg, FLUX_MATCHTAG_NONE);
 }
 
 static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
