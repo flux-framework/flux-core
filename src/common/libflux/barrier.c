@@ -12,9 +12,6 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
-#include <stdbool.h>
-
-#include "src/common/libutil/xzmalloc.h"
 
 typedef struct {
     const char *id;
@@ -43,15 +40,11 @@ static libbarrier_ctx_t *getctx (flux_t *h)
             errno = EINVAL;
             goto error;
         }
-        if (!(ctx = calloc (1, sizeof (*ctx)))) {
-            errno = ENOMEM;
+        if (!(ctx = calloc (1, sizeof (*ctx))))
             goto error;
-        }
         ctx->name_len = strlen (id) + 16;
-        if (!(ctx->name = calloc (1, ctx->name_len))) {
-            errno = ENOMEM;
+        if (!(ctx->name = calloc (1, ctx->name_len)))
             goto error;
-        }
         ctx->id = id;
         if (flux_aux_set (h, "flux::barrier_client", ctx, freectx) < 0)
             goto error;
@@ -80,13 +73,21 @@ flux_future_t *flux_barrier (flux_t *h, const char *name, int nprocs)
     if (!name && !(name = generate_unique_name (h)))
         return NULL;
 
-    return flux_rpc_pack (h,
-                          "barrier.enter",
-                          FLUX_NODEID_ANY,
-                          0,
-                          "{s:s s:i}",
-                           "name", name,
-                           "nprocs", nprocs);
+    if (nprocs == 1) {
+        flux_future_t *f = flux_future_create (NULL, NULL);
+        if (f)
+            flux_future_fulfill (f, NULL, NULL);
+        return f;
+    }
+    else {
+        return flux_rpc_pack (h,
+                              "barrier.enter",
+                              FLUX_NODEID_ANY,
+                              0,
+                              "{s:s s:i}",
+                               "name", name,
+                               "nprocs", nprocs);
+    }
 }
 
 /*
