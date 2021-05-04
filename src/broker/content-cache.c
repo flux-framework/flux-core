@@ -635,11 +635,9 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
     if (!e->valid) {
         if (cache_entry_fill (e, data, len) < 0)
             goto error;
-        if (!e->valid) {
-            e->valid = 1;
-            cache->acct_valid++;
-            cache->acct_size += len;
-        }
+        e->valid = 1;
+        cache->acct_valid++;
+        cache->acct_size += len;
         request_list_respond_raw (&e->load_requests,
                                   cache->h,
                                   e->data,
