@@ -659,15 +659,6 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
                 return;
             }
         }
-    } else {
-        /* When a backing store module is unloaded, it will clear
-         * cache->backing then attempt to store all its blobs.  Any of
-         * those still in cache need to be marked dirty.
-         */
-        if (cache->rank == 0 && !cache->backing) {
-            e->dirty = 1;
-            cache->acct_dirty++;
-        }
     }
     if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
         flux_log_error (h, "content store: flux_respond_raw");
