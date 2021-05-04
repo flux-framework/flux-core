@@ -265,7 +265,7 @@ static void cache_entry_destructor (void **item)
  * and the blobref can be co-located in memory, and allocated with one malloc.
  * Returns entry on success, NULL with errno set on failure.
  */
-static struct cache_entry *cache_entry_create (flux_t *h, const char *blobref)
+static struct cache_entry *cache_entry_create (const char *blobref)
 {
     struct cache_entry *e;
     int bloblen = strlen (blobref) + 1;
@@ -459,7 +459,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
             errno = ENOENT;
             goto error;
         }
-        if (!(e = cache_entry_create (h, blobref))
+        if (!(e = cache_entry_create (blobref))
             || cache_entry_insert (cache, e) < 0) {
             cache_entry_destroy (e);
             flux_log_error (h, "content load");
@@ -625,7 +625,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
         goto error;
 
     if (!(e = cache_entry_lookup (cache, blobref))) {
-        if (!(e = cache_entry_create (h, blobref)))
+        if (!(e = cache_entry_create (blobref)))
             goto error;
         if (cache_entry_insert (cache, e) < 0) {
             cache_entry_destroy (e);
