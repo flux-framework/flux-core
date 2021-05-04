@@ -295,25 +295,22 @@ static int cache_entry_fill (struct cache_entry *e, const void *data, int len)
     return 0;
 }
 
-/* Insert a cache entry, using entry->blobref as the hash key.
- * The hash is configured not to duplicate or destroy the key.
+/* Create and insert a cache entry, using 'blobref' as the hash key.
  * Returns 0 on success, -1 on failure with errno set.
  */
-static int cache_entry_insert (struct content_cache *cache,
-                               struct cache_entry *e)
+static struct cache_entry *cache_entry_insert (struct content_cache *cache,
+                                               const char *blobref)
 {
+    struct cache_entry *e;
+    if (!(e = cache_entry_create (blobref)))
+        return NULL;
     if (zhashx_insert (cache->entries, e->blobref, e) < 0) {
         errno = EEXIST;
-        return -1;
+        cache_entry_destroy (e);
+        return NULL;
     }
-    if (e->valid) {
-        cache->acct_size += e->len;
-        cache->acct_valid++;
-    }
-    if (e->dirty)
-        cache->acct_dirty++;
     cache_lru_push (cache, e);
-    return 0;
+    return e;
 }
 
 /* Look up a cache entry, by blobref.
@@ -459,9 +456,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
             errno = ENOENT;
             goto error;
         }
-        if (!(e = cache_entry_create (blobref))
-            || cache_entry_insert (cache, e) < 0) {
-            cache_entry_destroy (e);
+        if (!(e = cache_entry_insert (cache, blobref))) {
             flux_log_error (h, "content load");
             goto error;
         }
@@ -625,12 +620,8 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
         goto error;
 
     if (!(e = cache_entry_lookup (cache, blobref))) {
-        if (!(e = cache_entry_create (blobref)))
+        if (!(e = cache_entry_insert (cache, blobref)))
             goto error;
-        if (cache_entry_insert (cache, e) < 0) {
-            cache_entry_destroy (e);
-            goto error;
-        }
     }
     if (!e->valid) {
         if (cache_entry_fill (e, data, len) < 0)
