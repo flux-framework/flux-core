@@ -203,7 +203,7 @@ static void cache_lru_remove (struct content_cache *cache,
 }
 
 /* Move entry to the front of the LRU list.
- * - if entry is already at the front, this is a no-op
+ * - if entry is already at the front, this just updates the lastused timestamp
  * - if entry is not in the list, this is equivalent to cache_lru_push()
  */
 static void cache_lru_move (struct content_cache *cache,
@@ -213,6 +213,8 @@ static void cache_lru_move (struct content_cache *cache,
         cache_lru_remove (cache, entry);
         cache_lru_push (cache, entry);
     }
+    else
+        entry->lastused = flux_reactor_now (cache->reactor);
 }
 
 /* Call 'map' function for each cache entry, in reverse-LRU order.
