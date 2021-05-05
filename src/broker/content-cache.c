@@ -181,6 +181,7 @@ static void cache_lru_push (struct content_cache *cache,
         cache->lru_first->lru_prev = entry;
         cache->lru_first = entry;
     }
+    entry->lastused = flux_reactor_now (cache->reactor);
 }
 
 /* Remove entry from LRU list.
@@ -312,6 +313,12 @@ static int cache_entry_fill (struct content_cache *cache,
                                   e->data,
                                   e->len,
                                   "load");
+
+        /* Push entry onto front of LRU upon transition from invalid to valid,
+         * but only if entry is not dirty.
+         */
+        if (!e->dirty)
+            cache_lru_push (cache, e);
     }
     return 0;
 }
@@ -327,6 +334,10 @@ static void cache_entry_dirty_clear (struct content_cache *cache,
                                   e->blobref,
                                   strlen (e->blobref) + 1,
                                   "store");
+
+        /* Push entry onto front of LRU upon transition from dirty to clean.
+         */
+        cache_lru_push (cache, e);
     }
 }
 
@@ -345,7 +356,6 @@ static struct cache_entry *cache_entry_insert (struct content_cache *cache,
         cache_entry_destroy (e);
         return NULL;
     }
-    cache_lru_push (cache, e);
     return e;
 }
 
@@ -359,7 +369,11 @@ static struct cache_entry *cache_entry_lookup (struct content_cache *cache,
     struct cache_entry *e;
     if (!(e = zhashx_lookup (cache->entries, blobref)))
         return NULL;
-    cache_lru_move (cache, e);
+
+    /* Move to front of LRU if valid and not dirty.
+     */
+    if (e->valid && !e->dirty)
+        cache_lru_move (cache, e);
     return e;
 }
 
@@ -410,7 +424,6 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
         flux_log_error (cache->h, "content load");
         goto error;
     }
-    e->lastused = flux_reactor_now (cache->reactor);
     flux_future_destroy (f);
     return;
 error:
@@ -496,7 +509,6 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
         }
         return; /* RPC continuation will respond to msg */
     }
-    e->lastused = flux_reactor_now (cache->reactor);
     data = e->data;
     len = e->len;
     if (flux_respond_raw (h, msg, data, len) < 0)
@@ -643,7 +655,6 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
     }
     if (cache_entry_fill (cache, e, data, len, true) < 0)
         goto error;
-    e->lastused = flux_reactor_now (cache->reactor);
     if (e->dirty) {
         if (cache->rank > 0 || cache->backing) {
             if (cache_store (cache, e) < 0)
@@ -913,8 +924,11 @@ static bool cache_purge_map (struct content_cache *cache,
     if (cache->acct_size <= cache->purge_target_size
         || *now - e->lastused < cache->purge_old_entry)
         return false;
-    if (e->valid && !e->dirty)
-        cache_entry_remove (cache, e);
+    /* Entries are not placed in the LRU until they are valid and not dirty.
+     */
+    assert (e->valid);
+    assert (!e->dirty);
+    cache_entry_remove (cache, e);
     return true;
 }
 
