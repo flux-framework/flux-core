@@ -787,46 +787,28 @@ error:
 
 /* Forcibly drop all entries from the cache that can be dropped
  * without data loss.
- * N.B. this walks the entire cache in one go.
  */
+
+static bool cache_drop_map (struct content_cache *cache,
+                            struct cache_entry *e,
+                            void *arg)
+{
+    cache_entry_remove (cache, e);
+    return true;
+}
 
 static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
                                        const flux_msg_t *msg, void *arg)
 {
     struct content_cache *cache = arg;
-    zlistx_t *drop = NULL;
-    const char *key;
-    struct cache_entry *e;
     int orig_size;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
     orig_size = zhashx_size (cache->entries);
-    FOREACH_ZHASHX (cache->entries, key, e) {
-        if (e->valid && !e->dirty) {
-            if (!drop && !(drop = zlistx_new ()))
-                goto nomem;
-            if (zlistx_add_end (drop, e) < 0)
-                goto nomem;
-        }
-    }
-    if (drop) {
-        while ((e = zlistx_detach_cur (drop)))
-            cache_entry_remove (cache, e);
-        zlistx_destroy (&drop);
-    }
+    cache_lru_map (cache, cache_drop_map, NULL);
     flux_log (h, LOG_DEBUG, "content dropcache %d/%d",
               orig_size - (int)zhashx_size (cache->entries), orig_size);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "content dropcache");
-    return;
-nomem:
-    errno = ENOMEM;
-error:
-    flux_log (h, LOG_DEBUG, "content dropcache: %s", flux_strerror (errno));
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "content dropcache");
-    ERRNO_SAFE_WRAP (zlistx_destroy, &drop);
 }
 
 /* Return stats about the cache.
