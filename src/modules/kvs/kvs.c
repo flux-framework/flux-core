@@ -2073,8 +2073,6 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
     struct kvs_cb_data cbd;
     char *sender = NULL;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        return;
     if (flux_msg_get_route_first (msg, &sender) < 0)
         return;
     cbd.ctx = ctx;

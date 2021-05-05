@@ -27,10 +27,6 @@ static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
     struct info_ctx *ctx = arg;
     char *sender;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0) {
-        flux_log_error (h, "%s: flux_request_decode", __FUNCTION__);
-        return;
-    }
     if (flux_msg_get_route_first (msg, &sender) < 0) {
         flux_log_error (h, "%s: flux_msg_get_route_first", __FUNCTION__);
         return;
