@@ -595,9 +595,7 @@ error:
 static int cache_store (struct content_cache *cache, struct cache_entry *e)
 {
     flux_future_t *f;
-    int saved_errno = 0;
     int flags = CONTENT_FLAG_UPSTREAM;
-    int rc = -1;
 
     assert (e->valid);
 
@@ -608,28 +606,16 @@ static int cache_store (struct content_cache *cache, struct cache_entry *e)
             return 0;
         flags = CONTENT_FLAG_CACHE_BYPASS;
     }
-    if (!(f = flux_content_store (cache->h, e->data, e->len, flags))) {
-        saved_errno = errno;
-        flux_log_error (cache->h, "content store");
-        goto done;
-    }
-    if (flux_future_aux_set (f, "entry", e, NULL) < 0) {
-        flux_log_error (cache->h, "content store: flux_future_aux_set");
-        goto done;
-    }
-    if (flux_future_then (f, -1., cache_store_continuation, cache) < 0) {
-        saved_errno = errno;
+    if (!(f = flux_content_store (cache->h, e->data, e->len, flags))
+        || flux_future_aux_set (f, "entry", e, NULL) < 0
+        || flux_future_then (f, -1., cache_store_continuation, cache) < 0) {
         flux_log_error (cache->h, "content store");
         flux_future_destroy (f);
-        goto done;
+        return -1;
     }
     e->store_pending = 1;
     cache->flush_batch_count++;
-    rc = 0;
-done:
-    if (rc < 0)
-        errno = saved_errno;
-    return rc;
+    return 0;
 }
 
 static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
