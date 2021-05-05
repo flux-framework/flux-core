@@ -181,6 +181,7 @@ static void cache_lru_push (struct content_cache *cache,
         cache->lru_first->lru_prev = entry;
         cache->lru_first = entry;
     }
+    entry->lastused = flux_reactor_now (cache->reactor);
 }
 
 /* Remove entry from LRU list.
@@ -265,7 +266,7 @@ static void cache_entry_destructor (void **item)
  * and the blobref can be co-located in memory, and allocated with one malloc.
  * Returns entry on success, NULL with errno set on failure.
  */
-static struct cache_entry *cache_entry_create (flux_t *h, const char *blobref)
+static struct cache_entry *cache_entry_create (const char *blobref)
 {
     struct cache_entry *e;
     int bloblen = strlen (blobref) + 1;
@@ -278,9 +279,18 @@ static struct cache_entry *cache_entry_create (flux_t *h, const char *blobref)
 }
 
 /* Make an invalid cache entry valid, filling in its data.
+ * Set dirty flag if 'dirty' is true.
+ * Perform accounting.
+ * Respond to any pending load requests.
+ * If entry is already valid, do not fill, do not set dirty; there will be
+ * no load requests.
  * Returns 0 on success, -1 on failure with errno set.
  */
-static int cache_entry_fill (struct cache_entry *e, const void *data, int len)
+static int cache_entry_fill (struct content_cache *cache,
+                             struct cache_entry *e,
+                             const void *data,
+                             int len,
+                             bool dirty)
 {
     if (!e->valid) {
         assert (!e->data);
@@ -291,29 +301,62 @@ static int cache_entry_fill (struct cache_entry *e, const void *data, int len)
             memcpy (e->data, data, len);
         }
         e->len = len;
+        e->valid = 1;
+        cache->acct_valid++;
+        cache->acct_size += len;
+        if (dirty) {
+            e->dirty = 1;
+            cache->acct_dirty++;
+        }
+        request_list_respond_raw (&e->load_requests,
+                                  cache->h,
+                                  e->data,
+                                  e->len,
+                                  "load");
+
+        /* Push entry onto front of LRU upon transition from invalid to valid,
+         * but only if entry is not dirty.
+         */
+        if (!e->dirty)
+            cache_lru_push (cache, e);
     }
     return 0;
 }
 
-/* Insert a cache entry, using entry->blobref as the hash key.
- * The hash is configured not to duplicate or destroy the key.
+static void cache_entry_dirty_clear (struct content_cache *cache,
+                                     struct cache_entry *e)
+{
+    if (e->dirty) {
+        cache->acct_dirty--;
+        e->dirty = 0;
+        request_list_respond_raw (&e->store_requests,
+                                  cache->h,
+                                  e->blobref,
+                                  strlen (e->blobref) + 1,
+                                  "store");
+
+        /* Push entry onto front of LRU upon transition from dirty to clean.
+         */
+        cache_lru_push (cache, e);
+    }
+}
+
+
+/* Create and insert a cache entry, using 'blobref' as the hash key.
  * Returns 0 on success, -1 on failure with errno set.
  */
-static int cache_entry_insert (struct content_cache *cache,
-                               struct cache_entry *e)
+static struct cache_entry *cache_entry_insert (struct content_cache *cache,
+                                               const char *blobref)
 {
+    struct cache_entry *e;
+    if (!(e = cache_entry_create (blobref)))
+        return NULL;
     if (zhashx_insert (cache->entries, e->blobref, e) < 0) {
         errno = EEXIST;
-        return -1;
+        cache_entry_destroy (e);
+        return NULL;
     }
-    if (e->valid) {
-        cache->acct_size += e->len;
-        cache->acct_valid++;
-    }
-    if (e->dirty)
-        cache->acct_dirty++;
-    cache_lru_push (cache, e);
-    return 0;
+    return e;
 }
 
 /* Look up a cache entry, by blobref.
@@ -326,7 +369,11 @@ static struct cache_entry *cache_entry_lookup (struct content_cache *cache,
     struct cache_entry *e;
     if (!(e = zhashx_lookup (cache->entries, blobref)))
         return NULL;
-    cache_lru_move (cache, e);
+
+    /* Move to front of LRU if valid and not dirty.
+     */
+    if (e->valid && !e->dirty)
+        cache_lru_move (cache, e);
     return e;
 }
 
@@ -373,21 +420,10 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
             flux_log_error (cache->h, "content load");
         goto error;
     }
-    if (cache_entry_fill (e, data, len) < 0) {
+    if (cache_entry_fill (cache, e, data, len, false) < 0) {
         flux_log_error (cache->h, "content load");
         goto error;
     }
-    if (!e->valid) {
-        e->valid = 1;
-        cache->acct_valid++;
-        cache->acct_size += len;
-    }
-    e->lastused = flux_reactor_now (cache->reactor);
-    request_list_respond_raw (&e->load_requests,
-                              cache->h,
-                              e->data,
-                              e->len,
-                              "load");
     flux_future_destroy (f);
     return;
 error:
@@ -459,9 +495,7 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
             errno = ENOENT;
             goto error;
         }
-        if (!(e = cache_entry_create (h, blobref))
-            || cache_entry_insert (cache, e) < 0) {
-            cache_entry_destroy (e);
+        if (!(e = cache_entry_insert (cache, blobref))) {
             flux_log_error (h, "content load");
             goto error;
         }
@@ -475,7 +509,6 @@ void content_load_request (flux_t *h, flux_msg_handler_t *mh,
         }
         return; /* RPC continuation will respond to msg */
     }
-    e->lastused = flux_reactor_now (cache->reactor);
     data = e->data;
     len = e->len;
     if (flux_respond_raw (h, msg, data, len) < 0)
@@ -543,15 +576,7 @@ static void cache_store_continuation (flux_future_t *f, void *arg)
         errno = EIO;
         goto error;
     }
-    if (e->dirty) {
-        cache->acct_dirty--;
-        e->dirty = 0;
-    }
-    request_list_respond_raw (&e->store_requests,
-                              cache->h,
-                              e->blobref,
-                              strlen (e->blobref) + 1,
-                              "store");
+    cache_entry_dirty_clear (cache, e);
     flux_future_destroy (f);
     cache_resume_flush (cache);
     return;
@@ -625,32 +650,11 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
         goto error;
 
     if (!(e = cache_entry_lookup (cache, blobref))) {
-        if (!(e = cache_entry_create (h, blobref)))
+        if (!(e = cache_entry_insert (cache, blobref)))
             goto error;
-        if (cache_entry_insert (cache, e) < 0) {
-            cache_entry_destroy (e);
-            goto error;
-        }
     }
-    if (!e->valid) {
-        if (cache_entry_fill (e, data, len) < 0)
-            goto error;
-        if (!e->valid) {
-            e->valid = 1;
-            cache->acct_valid++;
-            cache->acct_size += len;
-        }
-        request_list_respond_raw (&e->load_requests,
-                                  cache->h,
-                                  e->data,
-                                  e->len,
-                                  "load");
-        if (!e->dirty) {
-            e->dirty = 1;
-            cache->acct_dirty++;
-        }
-    }
-    e->lastused = flux_reactor_now (cache->reactor);
+    if (cache_entry_fill (cache, e, data, len, true) < 0)
+        goto error;
     if (e->dirty) {
         if (cache->rank > 0 || cache->backing) {
             if (cache_store (cache, e) < 0)
@@ -660,15 +664,6 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
                     goto error;
                 return;
             }
-        }
-    } else {
-        /* When a backing store module is unloaded, it will clear
-         * cache->backing then attempt to store all its blobs.  Any of
-         * those still in cache need to be marked dirty.
-         */
-        if (cache->rank == 0 && !cache->backing) {
-            e->dirty = 1;
-            cache->acct_dirty++;
         }
     }
     if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
@@ -929,8 +924,11 @@ static bool cache_purge_map (struct content_cache *cache,
     if (cache->acct_size <= cache->purge_target_size
         || *now - e->lastused < cache->purge_old_entry)
         return false;
-    if (e->valid && !e->dirty)
-        cache_entry_remove (cache, e);
+    /* Entries are not placed in the LRU until they are valid and not dirty.
+     */
+    assert (e->valid);
+    assert (!e->dirty);
+    cache_entry_remove (cache, e);
     return true;
 }
 
