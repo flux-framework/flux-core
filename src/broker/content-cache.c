@@ -740,8 +740,6 @@ static void content_unregister_backing_request (flux_t *h,
     struct content_cache *cache = arg;
     const char *errstr = NULL;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
     if (!cache->backing) {
         errno = EINVAL;
         errstr = "content backing store is not active";
@@ -793,18 +791,12 @@ static void content_stats_request (flux_t *h, flux_msg_handler_t *mh,
 {
     struct content_cache *cache = arg;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
     if (flux_respond_pack (h, msg, "{s:i s:i s:i s:i s:i}",
                            "count", zhashx_size (cache->entries),
                            "valid", cache->acct_valid,
                            "dirty", cache->acct_dirty,
                            "size", cache->acct_size,
                            "flush-batch-count", cache->flush_batch_count) < 0)
-        flux_log_error (h, "content stats");
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "content stats");
 }
 
@@ -843,8 +835,6 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
 {
     struct content_cache *cache = arg;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
     if (cache->acct_dirty != 0) {
         if (cache_flush (cache) < 0)
             goto error;
