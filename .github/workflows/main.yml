@@ -173,7 +173,7 @@ jobs:
       id: prep_release
       if: success() && matrix.create_release
       env: ${{matrix.env}}
-      run: echo "::set-output name=tarball::flux-core*.tar.gz"
+      run: echo "::set-output name=tarball::$(echo flux-core*.tar.gz)"
 
     - name: create release
       id: create_release
