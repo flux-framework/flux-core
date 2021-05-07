@@ -15,14 +15,6 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 HASHFUN=`flux getattr content.hash`
 
 
-store_junk() {
-    local name=$1
-    local n=$2
-    for i in `seq 1 $n`; do \
-        echo "$name:$i" | flux content store >/dev/null || return 1
-    done
-}
-
 test_expect_success 'load content-sqlite module on rank 0' '
 	flux module load content-sqlite
 '
@@ -32,7 +24,7 @@ test_expect_success 'verify content.backing-module=content-sqlite' '
 '
 
 test_expect_success 'store 100 blobs on rank 0' '
-	store_junk test 100 &&
+	flux content spam 100 100 >/dev/null &&
 	TOTAL=`flux module stats --type int --parse count content` &&
 	test $TOTAL -ge 100
 '
@@ -104,7 +96,7 @@ test_expect_success 'load and verify 1m blob on all ranks' '
 
 test_expect_success 'exercise batching of synchronous flush to backing store' '
 	flux setattr content.flush-batch-limit 5 &&
-	store_junk loadunload 200 &&
+	flux content spam 200 200 >/dev/null &&
 	flux content flush &&
 	NDIRTY=`flux module stats --type int --parse dirty content` &&
 	test ${NDIRTY} -eq 0
