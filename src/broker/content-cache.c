@@ -450,10 +450,7 @@ static int cache_load (struct content_cache *cache, struct cache_entry *e)
     if (!(f = flux_content_load (cache->h, e->blobref, flags))
         || flux_future_aux_set (f, "entry", e, NULL) < 0
         || flux_future_then (f, -1., cache_load_continuation, cache) < 0) {
-        if (errno == ENOSYS && cache->rank == 0)
-            errno = ENOENT;
-        if (errno != ENOENT)
-            flux_log_error (cache->h, "content load");
+        flux_log_error (cache->h, "content load");
         flux_future_destroy (f);
         return -1;
     }
