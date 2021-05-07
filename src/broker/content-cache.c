@@ -81,6 +81,7 @@ struct content_cache {
     struct msgstack *flush_requests;
 
     struct list_head lru;           /* LRU is for valid, clean entries only */
+    struct list_head flush;         /* dirties queued due to batch limit */
 
     uint32_t blob_size_limit;
     uint32_t flush_batch_limit;
@@ -454,19 +455,15 @@ error:
  */
 
 /* If cache has been flushed, respond to flush requests, if any.
- * If there are still dirty entries and the number of outstanding
- * store requests would not exceed the limit, flush more entries.
- * Optimization: since scanning for dirty entries is a linear search,
- * only do it when the number of outstanding store requests falls to
- * a low water mark, here hardwired to be half of the limit.
+ * If there are still dirty entries in the cache->flush queue waiting to
+ * be stored, call cache_flush() to see if we can start any more.
  */
 static void cache_resume_flush (struct content_cache *cache)
 {
     if (cache->acct_dirty == 0 || (cache->rank == 0 && !cache->backing))
         flush_respond (cache);
-    else if (cache->acct_dirty - cache->flush_batch_count > 0
-            && cache->flush_batch_count <= cache->flush_batch_limit / 2)
-        (void)cache_flush (cache); /* resume flushing */
+    else
+        (void)cache_flush (cache); /* resume flushing, subject to limits */
 }
 
 static void cache_store_continuation (flux_future_t *f, void *arg)
@@ -515,8 +512,10 @@ static int cache_store (struct content_cache *cache, struct cache_entry *e)
     if (e->store_pending)
         return 0;
     if (cache->rank == 0) {
-        if (cache->flush_batch_count >= cache->flush_batch_limit)
+        if (cache->flush_batch_count >= cache->flush_batch_limit) {
+            list_add_tail (&cache->flush, &e->list);
             return 0;
+        }
         flags = CONTENT_FLAG_CACHE_BYPASS;
     }
     if (!(f = flux_content_store (cache->h, e->data, e->len, flags))
@@ -585,31 +584,23 @@ error:
 static int cache_flush (struct content_cache *cache)
 {
     struct cache_entry *e;
-    const char *key;
-    int saved_errno = 0;
+    int last_errno = 0;
     int count = 0;
     int rc = 0;
 
-    if (cache->acct_dirty - cache->flush_batch_count == 0
-            || cache->flush_batch_count >= cache->flush_batch_limit)
-        return 0;
-
-    flux_log (cache->h, LOG_DEBUG, "content flush begin");
-    FOREACH_ZHASHX (cache->entries, key, e) {
-        if (!e->dirty || e->store_pending)
-            continue;
-        if (cache_store (cache, e) < 0) {
-            saved_errno = errno;
+    while (cache->flush_batch_count < cache->flush_batch_limit) {
+        if (!(e = list_pop (&cache->flush, struct cache_entry, list)))
+            break;
+        if (cache_store (cache, e) < 0) { // incr flush_batch_count
+            last_errno = errno;           //   and continuation will decr
             rc = -1;
         }
         count++;
-        if (cache->flush_batch_count >= cache->flush_batch_limit)
-            break;
     }
     flux_log (cache->h, LOG_DEBUG, "content flush +%d (dirty=%d pending=%d)",
               count, cache->acct_dirty, cache->flush_batch_count);
     if (rc < 0)
-        errno = saved_errno;
+        errno = last_errno;
     return rc;
 }
 
@@ -726,12 +717,11 @@ static void content_stats_request (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "content stats");
 }
 
-/* Flush all dirty entries by walking the entire cache, issuing store
- * requests for all dirty entries.  Responses are handled asynchronously
- * using RPC continuations.  A response to the flush request is not sent
- * until all the store responses are received.  If 'backing' is false on
- * rank 0, we go ahead and issue the store requests and handle the ENOSYS
- * errors that result.
+/* Handle request to store all dirty entries.  The store requests are batched
+ * and handled asynchronously.  flush_respond() may be called immediately
+ * if there are no dirty entries, or later from cache_resume_flush().
+ * If 'backing' is false on rank 0, we go ahead and try to issue the store
+ * requests and handle the ENOSYS errors that result.
  */
 
 /* This is called when outstanding store ops have completed.  */
@@ -953,6 +943,7 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
     cache->h = h;
     cache->reactor = flux_get_reactor (h);
     list_head_init (&cache->lru);
+    list_head_init (&cache->flush);
 
     if (register_attrs (cache, attrs) < 0)
         goto error;
