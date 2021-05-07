@@ -518,7 +518,7 @@ error:
  * of TBON.  Once present in the rank 0 cache, requests are unwound and
  * responded to at each level.
  *
- * Dirty cache is write-back for rank 0, that is;  the response is immediate
+ * Dirty cache is write-back for rank 0; that is, the response is immediate
  * even though the entry may be dirty with respect to a 'content.backing'
  * service.  This allows the cache to be updated at memory speeds,
  * while holding the invariant that after a store RPC returns, the entry may
