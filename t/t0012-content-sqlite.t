@@ -102,6 +102,10 @@ test_expect_success 'exercise batching of synchronous flush to backing store' '
 	test ${NDIRTY} -eq 0
 '
 
+test_expect_success 'drop the cache' '
+	flux content dropcache
+'
+
 kvs_checkpoint_put() {
 	jq -j -c -n  "{key:\"$1\",value:\"$2\"}" | $RPC kvs-checkpoint.put
 }
