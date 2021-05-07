@@ -832,27 +832,17 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
 {
     struct content_cache *cache = arg;
 
-    if (cache->acct_dirty != 0) {
-        if (cache_flush (cache) < 0)
+    if (cache->acct_dirty > 0) {
+        if (msgstack_push (&cache->flush_requests, msg) < 0)
             goto error;
-        if (cache->acct_dirty > 0) {
-            if (msgstack_push (&cache->flush_requests, msg) < 0)
-                goto error;
-            return;
-        }
-        if (cache->acct_dirty > 0) {
-            errno = EIO;
-            goto error;
-        }
+        return;
     }
-    flux_log (h, LOG_DEBUG, "content flush");
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "content flush");
+        flux_log_error (h, "error responding to content flush");
     return;
 error:
-    flux_log (h, LOG_DEBUG, "content flush: %s", flux_strerror (errno));
     if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "content flush");
+        flux_log_error (h, "error responding to content flush");
 }
 
 /* Heartbeat drives periodic cache purge
