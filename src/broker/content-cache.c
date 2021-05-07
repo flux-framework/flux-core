@@ -597,8 +597,6 @@ static int cache_flush (struct content_cache *cache)
         }
         count++;
     }
-    flux_log (cache->h, LOG_DEBUG, "content flush +%d (dirty=%d pending=%d)",
-              count, cache->acct_dirty, cache->flush_batch_count);
     if (rc < 0)
         errno = last_errno;
     return rc;
