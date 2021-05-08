@@ -25,19 +25,8 @@ static void disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     struct info_ctx *ctx = arg;
-    char *sender;
-
-    if (flux_request_decode (msg, NULL, NULL) < 0) {
-        flux_log_error (h, "%s: flux_request_decode", __FUNCTION__);
-        return;
-    }
-    if (flux_msg_get_route_first (msg, &sender) < 0) {
-        flux_log_error (h, "%s: flux_msg_get_route_first", __FUNCTION__);
-        return;
-    }
-    watchers_cancel (ctx, sender, FLUX_MATCHTAG_NONE);
-    guest_watchers_cancel (ctx, sender, FLUX_MATCHTAG_NONE);
-    free (sender);
+    watchers_cancel (ctx, msg, false);
+    guest_watchers_cancel (ctx, msg, false);
 }
 
 static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -80,7 +69,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.disconnect",
       .cb           = disconnect_cb,
-      .rolemask     = 0
+      .rolemask     = FLUX_ROLE_USER
     },
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-info.stats.get",

@@ -16,32 +16,34 @@
 #endif
 #include <flux/core.h>
 
-/* Is request's cred authorized to disconnect/cancel 'msg'?
- */
-static bool authorize (struct flux_msg_cred cred, const flux_msg_t *msg)
+bool flux_disconnect_match (const flux_msg_t *msg1, const flux_msg_t *msg2)
 {
+    struct flux_msg_cred cred;
     uint32_t userid;
 
-    if ((cred.rolemask & FLUX_ROLE_OWNER))
-        return true;
-    if ((cred.rolemask & FLUX_ROLE_USER)
-        && flux_msg_get_userid (msg, &userid) == 0
-        && cred.userid == userid)
-        return true;
-    return false;
+    if (!flux_msg_match_route_first (msg1, msg2))
+        return false;
+
+    if (flux_msg_get_cred (msg1, &cred) < 0)
+        return false;
+
+    if (flux_msg_get_userid (msg2, &userid) < 0)
+        return false;
+
+    if (flux_msg_cred_authorize (cred, userid) < 0)
+        return false;
+
+    return true;
 }
 
 int flux_msglist_disconnect (struct flux_msglist *l, const flux_msg_t *msg)
 {
-    struct flux_msg_cred cred;
     const flux_msg_t *item;
     int count = 0;
 
-    if (flux_msg_get_cred (msg, &cred) < 0)
-        return -1;
     item = flux_msglist_first (l);
     while (item) {
-        if (flux_msg_match_route_first (msg, item) && authorize (cred, item)) {
+        if (flux_disconnect_match (msg, item)) {
             flux_msglist_delete (l);
             count++;
         }
@@ -50,14 +52,23 @@ int flux_msglist_disconnect (struct flux_msglist *l, const flux_msg_t *msg)
     return count;
 }
 
-static bool match_matchtag (const flux_msg_t *msg, uint32_t matchtag)
+bool flux_cancel_match (const flux_msg_t *msg1, const flux_msg_t *msg2)
 {
+    uint32_t matchtag;
     uint32_t tag;
 
-    if (flux_msg_get_matchtag (msg, &tag) < 0)
+    if (!flux_disconnect_match (msg1, msg2))
         return false;
+
+    if (flux_request_unpack (msg1, NULL, "{s:i}", "matchtag", &matchtag) < 0)
+        return false;
+
+    if (flux_msg_get_matchtag (msg2, &tag) < 0)
+        return false;
+
     if (tag != matchtag)
         return false;
+
     return true;
 }
 
@@ -65,19 +76,12 @@ int flux_msglist_cancel (flux_t *h,
                          struct flux_msglist *l,
                          const flux_msg_t *msg)
 {
-    struct flux_msg_cred cred;
     const flux_msg_t *item;
-    uint32_t matchtag;
     int count = 0;
 
-    if (flux_request_unpack (msg, NULL, "{s:i}", "matchtag", &matchtag) < 0
-        || flux_msg_get_cred (msg, &cred) < 0)
-        return -1;
     item = flux_msglist_first (l);
     while (item) {
-        if (match_matchtag (item, matchtag)
-            && flux_msg_match_route_first (msg, item)
-            && authorize (cred, item)) {
+        if (flux_cancel_match (msg, item)) {
             if (flux_respond_error (h, item, ENODATA, NULL) < 0)
                 return -1;
             flux_msglist_delete (l);

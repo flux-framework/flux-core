@@ -256,7 +256,7 @@ int flux_msg_set_cred (flux_msg_t *msg, struct flux_msg_cred cred);
  */
 int flux_msg_cred_authorize (struct flux_msg_cred cred, uint32_t userid);
 
-/* Convenience functions that calls
+/* Convenience function that calls
  * flux_msg_get_cred() + flux_msg_cred_authorize().
  */
 int flux_msg_authorize (const flux_msg_t *msg, uint32_t userid);

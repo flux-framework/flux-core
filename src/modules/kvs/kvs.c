@@ -76,7 +76,7 @@ struct kvs_cb_data {
     wait_t *wait;
     int errnum;
     bool ready;
-    char *sender;
+    const flux_msg_t *msg;
 };
 
 static void transaction_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -2043,15 +2043,8 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
 
 static bool disconnect_cmp (const flux_msg_t *msg, void *arg)
 {
-    char *sender = arg;
-    char *s = NULL;
-    bool match = false;
-
-    if (flux_msg_get_route_first (msg, &s) == 0 && !strcmp (s, sender))
-        match = true;
-    if (s)
-        free (s);
-    return match;
+    flux_msg_t *msgreq = arg;
+    return flux_msg_match_route_first (msgreq, msg);
 }
 
 static int disconnect_request_root_cb (struct kvsroot *root, void *arg)
@@ -2060,7 +2053,7 @@ static int disconnect_request_root_cb (struct kvsroot *root, void *arg)
 
     /* Log error, but don't return -1, can continue to iterate
      * remaining roots */
-    if (kvssync_remove_msg (root, disconnect_cmp, cbd->sender) < 0)
+    if (kvssync_remove_msg (root, disconnect_cmp, (void *)cbd->msg) < 0)
         flux_log_error (cbd->ctx->h, "%s: kvssync_remove_msg", __FUNCTION__);
 
     return 0;
@@ -2071,20 +2064,14 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct kvs_ctx *ctx = arg;
     struct kvs_cb_data cbd;
-    char *sender = NULL;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        return;
-    if (flux_msg_get_route_first (msg, &sender) < 0)
-        return;
     cbd.ctx = ctx;
-    cbd.sender = sender;
+    cbd.msg = msg;
     if (kvsroot_mgr_iter_roots (ctx->krm, disconnect_request_root_cb, &cbd) < 0)
         flux_log_error (h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
 
-    if (cache_wait_destroy_msg (ctx->cache, disconnect_cmp, sender) < 0)
+    if (cache_wait_destroy_msg (ctx->cache, disconnect_cmp, (void *)msg) < 0)
         flux_log_error (h, "%s: wait_destroy_msg", __FUNCTION__);
-    free (sender);
 }
 
 static int stats_get_root_cb (struct kvsroot *root, void *arg)

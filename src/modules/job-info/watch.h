@@ -19,9 +19,13 @@ void watch_cb (flux_t *h, flux_msg_handler_t *mh,
 void watch_cancel_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg);
 
-/* Cancel all lookups that match (sender, matchtag). */
+/* Cancel all lookups that match msg.
+ * match credentials & matchtag if cancel true
+ * match credentials if cancel false
+ */
 void watchers_cancel (struct info_ctx *ctx,
-                      const char *sender, uint32_t matchtag);
+                      const flux_msg_t *msg,
+                      bool cancel);
 
 void watch_cleanup (struct info_ctx *ctx);
 
