@@ -14,6 +14,14 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 HASHFUN=`flux getattr content.hash`
 
+test_expect_success 'load heartbeat module with fast rate to drive purge' '
+	flux module load heartbeat period=0.1s
+'
+
+test_expect_success 'lower purge size and age thresholds' '
+	flux setattr content.purge-target-size 100 &&
+	flux setattr content.purge-old-entry 1
+'
 
 test_expect_success 'load content-sqlite module on rank 0' '
 	flux module load content-sqlite
@@ -106,6 +114,10 @@ test_expect_success 'drop the cache' '
 	flux content dropcache
 '
 
+test_expect_success 'fill the cache with more data for later purging' '
+	flux content spam 10000 200 >/dev/null
+'
+
 kvs_checkpoint_put() {
 	jq -j -c -n  "{key:\"$1\",value:\"$2\"}" | $RPC kvs-checkpoint.put
 }
@@ -133,7 +145,8 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned baz' '
 	test_cmp value2.exp value2.out
 '
 
-test_expect_success 'reload content-sqlite module on rank 0' '
+test_expect_success 'flush + reload content-sqlite module on rank 0' '
+	flux content flush &&
 	flux module reload content-sqlite
 '
 
@@ -153,8 +166,29 @@ test_expect_success 'content-backing.load invalid blobref fails' '
 	$RPC content-backing.load 2 <bad.blobref 2>load.err
 '
 
+getsize() {
+	flux module stats content | tee /dev/fd/2 | jq .size
+}
+
+test_expect_success HAVE_JQ 'wait for purge to clear cache entries' '
+	purge_size=$(flux getattr content.purge-target-size) &&
+	purge_age=$(flux getattr content.purge-old-entry) &&
+	echo "Purge size $purge_size bytes, age $purge_age secs" &&
+	size=$(getsize) && \
+	count=0 &&
+	while test $size -gt 100 -a $count -lt 300; do \
+		sleep 0.1; \
+		size=$(getsize); \
+		count=$(($count+1))
+	done
+'
+
 test_expect_success 'remove content-sqlite module on rank 0' '
 	flux module remove content-sqlite
+'
+
+test_expect_success 'remove heartbeat module' '
+	flux module remove heartbeat
 '
 
 
