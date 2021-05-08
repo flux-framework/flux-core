@@ -17,13 +17,18 @@
 #include <libgen.h>
 #include <dlfcn.h>
 #include <argz.h>
-#include <czmq.h>
 #include <flux/core.h>
 #include <jansson.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <assert.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
+#include "src/common/libutil/digest.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 typedef struct {
     char *name;
@@ -37,19 +42,6 @@ typedef struct {
 
 static zhash_t *modules = NULL;
 static uint32_t rank;
-
-/* Calculate file digest using zfile() class from czmq.
- * Caller must free.
- */
-char *digest (const char *path)
-{
-    zfile_t *zf = zfile_new (NULL, path);
-    char *digest = NULL;
-    if (zf)
-        digest = xstrdup (zfile_digest (zf));
-    zfile_destroy (&zf);
-    return digest;
-}
 
 static void module_destroy (module_t *m)
 {
@@ -69,7 +61,7 @@ static module_t *module_create (const char *path, char *argz, size_t argz_len)
     char **av = NULL;
 
     if (stat (path, &sb) < 0 || !(m->name = flux_modname (path, NULL, NULL))
-                             || !(m->digest = digest (path))) {
+                             || !(m->digest = digest_file (path, NULL))) {
         module_destroy (m);
         errno = ESRCH;
         return NULL;
