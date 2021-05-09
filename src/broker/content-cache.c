@@ -27,10 +27,9 @@
 #include "content-cache.h"
 
 /* A periodic callback purges the cache of least recently used entries.
- * The callback is synchronized wtih the instance heartbeat, within the
- * bounds of 'sync_min' and 'sync_max' seconds.
+ * The callback is synchronized with the instance heartbeat, with a
+ * sync period upper bound set to 'sync_max' seconds.
  */
-static double sync_min = 1.;
 static double sync_max = 10.;
 
 static const char *default_hash = "sha1";
@@ -1039,7 +1038,7 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
         goto error;
     if (flux_get_rank (h, &cache->rank) < 0)
         goto error;
-    if (!(cache->f_sync = flux_sync_create (h, sync_min))
+    if (!(cache->f_sync = flux_sync_create (h, 0))
         || flux_future_then (cache->f_sync, sync_max, sync_cb, cache) < 0)
         goto error;
     return cache;
