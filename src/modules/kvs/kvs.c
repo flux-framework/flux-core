@@ -2213,7 +2213,7 @@ static void stats_clear_request_cb (flux_t *h, flux_msg_handler_t *mh,
 }
 
 static int namespace_create (struct kvs_ctx *ctx, const char *ns,
-                             uint32_t owner, int flags)
+                             uint32_t owner, int flags, const char **errmsg)
 {
     struct kvsroot *root;
     json_t *rootdir = NULL;
@@ -2226,7 +2226,11 @@ static int namespace_create (struct kvs_ctx *ctx, const char *ns,
 
     /* If namespace already exists, return EEXIST.  Doesn't matter if
      * namespace is in process of being removed */
-    if (kvsroot_mgr_lookup_root (ctx->krm, ns)) {
+    if ((root = kvsroot_mgr_lookup_root (ctx->krm, ns))) {
+        if (root->remove)
+            (*errmsg) =
+                "namespace with identical name in process "
+                "of being removed. Try again later";
         errno = EEXIST;
         return -1;
     }
@@ -2302,6 +2306,7 @@ static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                          const flux_msg_t *msg, void *arg)
 {
     struct kvs_ctx *ctx = arg;
+    const char *errmsg = NULL;
     const char *ns;
     uint32_t owner;
     int flags;
@@ -2320,14 +2325,14 @@ static void namespace_create_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (owner == FLUX_USERID_UNKNOWN)
         owner = getuid ();
 
-    if (namespace_create (ctx, ns, owner, flags) < 0)
+    if (namespace_create (ctx, ns, owner, flags, &errmsg) < 0)
         goto error;
 
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
