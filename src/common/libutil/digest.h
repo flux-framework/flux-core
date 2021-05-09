@@ -16,4 +16,4 @@
 /* len - optionally return length of data read in file */
 char * digest_file (const char *path, size_t *len);
 
-#endif /* !_UTIL_READ_ALL_H */
+#endif /* !_UTIL_DIGEST_H */
