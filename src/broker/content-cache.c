@@ -27,10 +27,9 @@
 #include "content-cache.h"
 
 /* A periodic callback purges the cache of least recently used entries.
- * The callback is synchronized wtih the instance heartbeat, within the
- * bounds of 'sync_min' and 'sync_max' seconds.
+ * The callback is synchronized with the instance heartbeat, with a
+ * sync period upper bound set to 'sync_max' seconds.
  */
-static double sync_min = 1.;
 static double sync_max = 10.;
 
 static const char *default_hash = "sha1";
@@ -203,7 +202,7 @@ static void cache_lru_remove (struct content_cache *cache,
 }
 
 /* Move entry to the front of the LRU list.
- * - if entry is already at the front, this is a no-op
+ * - if entry is already at the front, this just updates the lastused timestamp
  * - if entry is not in the list, this is equivalent to cache_lru_push()
  */
 static void cache_lru_move (struct content_cache *cache,
@@ -213,6 +212,8 @@ static void cache_lru_move (struct content_cache *cache,
         cache_lru_remove (cache, entry);
         cache_lru_push (cache, entry);
     }
+    else
+        entry->lastused = flux_reactor_now (cache->reactor);
 }
 
 /* Call 'map' function for each cache entry, in reverse-LRU order.
@@ -439,38 +440,21 @@ error:
 static int cache_load (struct content_cache *cache, struct cache_entry *e)
 {
     flux_future_t *f;
-    int saved_errno = 0;
     int flags = CONTENT_FLAG_UPSTREAM;
-    int rc = -1;
 
     if (e->load_pending)
         return 0;
     if (cache->rank == 0)
         flags = CONTENT_FLAG_CACHE_BYPASS;
-    if (!(f = flux_content_load (cache->h, e->blobref, flags))) {
-        if (errno == ENOSYS && cache->rank == 0)
-            errno = ENOENT;
-        saved_errno = errno;
-        if (errno != ENOENT)
-            flux_log_error (cache->h, "%s: RPC", __FUNCTION__);
-        goto done;
-    }
-    if (flux_future_aux_set (f, "entry", e, NULL) < 0) {
-        flux_log_error (cache->h, "content load flux_future_aux_set");
-        goto done;
-    }
-    if (flux_future_then (f, -1., cache_load_continuation, cache) < 0) {
-        saved_errno = errno;
+    if (!(f = flux_content_load (cache->h, e->blobref, flags))
+        || flux_future_aux_set (f, "entry", e, NULL) < 0
+        || flux_future_then (f, -1., cache_load_continuation, cache) < 0) {
         flux_log_error (cache->h, "content load");
         flux_future_destroy (f);
-        goto done;
+        return -1;
     }
     e->load_pending = 1;
-    rc = 0;
-done:
-    if (rc < 0)
-        errno = saved_errno;
-    return rc;
+    return 0;
 }
 
 void content_load_request (flux_t *h, flux_msg_handler_t *mh,
@@ -530,7 +514,7 @@ error:
  * of TBON.  Once present in the rank 0 cache, requests are unwound and
  * responded to at each level.
  *
- * Dirty cache is write-back for rank 0, that is;  the response is immediate
+ * Dirty cache is write-back for rank 0; that is, the response is immediate
  * even though the entry may be dirty with respect to a 'content.backing'
  * service.  This allows the cache to be updated at memory speeds,
  * while holding the invariant that after a store RPC returns, the entry may
@@ -593,9 +577,7 @@ error:
 static int cache_store (struct content_cache *cache, struct cache_entry *e)
 {
     flux_future_t *f;
-    int saved_errno = 0;
     int flags = CONTENT_FLAG_UPSTREAM;
-    int rc = -1;
 
     assert (e->valid);
 
@@ -606,28 +588,16 @@ static int cache_store (struct content_cache *cache, struct cache_entry *e)
             return 0;
         flags = CONTENT_FLAG_CACHE_BYPASS;
     }
-    if (!(f = flux_content_store (cache->h, e->data, e->len, flags))) {
-        saved_errno = errno;
-        flux_log_error (cache->h, "content store");
-        goto done;
-    }
-    if (flux_future_aux_set (f, "entry", e, NULL) < 0) {
-        flux_log_error (cache->h, "content store: flux_future_aux_set");
-        goto done;
-    }
-    if (flux_future_then (f, -1., cache_store_continuation, cache) < 0) {
-        saved_errno = errno;
+    if (!(f = flux_content_store (cache->h, e->data, e->len, flags))
+        || flux_future_aux_set (f, "entry", e, NULL) < 0
+        || flux_future_then (f, -1., cache_store_continuation, cache) < 0) {
         flux_log_error (cache->h, "content store");
         flux_future_destroy (f);
-        goto done;
+        return -1;
     }
     e->store_pending = 1;
     cache->flush_batch_count++;
-    rc = 0;
-done:
-    if (rc < 0)
-        errno = saved_errno;
-    return rc;
+    return 0;
 }
 
 static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
@@ -766,8 +736,6 @@ static void content_unregister_backing_request (flux_t *h,
     struct content_cache *cache = arg;
     const char *errstr = NULL;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
     if (!cache->backing) {
         errno = EINVAL;
         errstr = "content backing store is not active";
@@ -787,46 +755,28 @@ error:
 
 /* Forcibly drop all entries from the cache that can be dropped
  * without data loss.
- * N.B. this walks the entire cache in one go.
  */
+
+static bool cache_drop_map (struct content_cache *cache,
+                            struct cache_entry *e,
+                            void *arg)
+{
+    cache_entry_remove (cache, e);
+    return true;
+}
 
 static void content_dropcache_request (flux_t *h, flux_msg_handler_t *mh,
                                        const flux_msg_t *msg, void *arg)
 {
     struct content_cache *cache = arg;
-    zlistx_t *drop = NULL;
-    const char *key;
-    struct cache_entry *e;
     int orig_size;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
     orig_size = zhashx_size (cache->entries);
-    FOREACH_ZHASHX (cache->entries, key, e) {
-        if (e->valid && !e->dirty) {
-            if (!drop && !(drop = zlistx_new ()))
-                goto nomem;
-            if (zlistx_add_end (drop, e) < 0)
-                goto nomem;
-        }
-    }
-    if (drop) {
-        while ((e = zlistx_detach_cur (drop)))
-            cache_entry_remove (cache, e);
-        zlistx_destroy (&drop);
-    }
+    cache_lru_map (cache, cache_drop_map, NULL);
     flux_log (h, LOG_DEBUG, "content dropcache %d/%d",
               orig_size - (int)zhashx_size (cache->entries), orig_size);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "content dropcache");
-    return;
-nomem:
-    errno = ENOMEM;
-error:
-    flux_log (h, LOG_DEBUG, "content dropcache: %s", flux_strerror (errno));
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "content dropcache");
-    ERRNO_SAFE_WRAP (zlistx_destroy, &drop);
 }
 
 /* Return stats about the cache.
@@ -837,18 +787,12 @@ static void content_stats_request (flux_t *h, flux_msg_handler_t *mh,
 {
     struct content_cache *cache = arg;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
     if (flux_respond_pack (h, msg, "{s:i s:i s:i s:i s:i}",
                            "count", zhashx_size (cache->entries),
                            "valid", cache->acct_valid,
                            "dirty", cache->acct_dirty,
                            "size", cache->acct_size,
                            "flush-batch-count", cache->flush_batch_count) < 0)
-        flux_log_error (h, "content stats");
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
         flux_log_error (h, "content stats");
 }
 
@@ -887,29 +831,17 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
 {
     struct content_cache *cache = arg;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
-    if (cache->acct_dirty != 0) {
-        if (cache_flush (cache) < 0)
+    if (cache->acct_dirty > 0) {
+        if (msgstack_push (&cache->flush_requests, msg) < 0)
             goto error;
-        if (cache->acct_dirty > 0) {
-            if (msgstack_push (&cache->flush_requests, msg) < 0)
-                goto error;
-            return;
-        }
-        if (cache->acct_dirty > 0) {
-            errno = EIO;
-            goto error;
-        }
+        return;
     }
-    flux_log (h, LOG_DEBUG, "content flush");
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "content flush");
+        flux_log_error (h, "error responding to content flush");
     return;
 error:
-    flux_log (h, LOG_DEBUG, "content flush: %s", flux_strerror (errno));
     if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "content flush");
+        flux_log_error (h, "error responding to content flush");
 }
 
 /* Heartbeat drives periodic cache purge
@@ -1106,7 +1038,7 @@ struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
         goto error;
     if (flux_get_rank (h, &cache->rank) < 0)
         goto error;
-    if (!(cache->f_sync = flux_sync_create (h, sync_min))
+    if (!(cache->f_sync = flux_sync_create (h, 0))
         || flux_future_then (cache->f_sync, sync_max, sync_cb, cache) < 0)
         goto error;
     return cache;

@@ -14,14 +14,14 @@ RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 HASHFUN=`flux getattr content.hash`
 
+test_expect_success 'load heartbeat module with fast rate to drive purge' '
+	flux module load heartbeat period=0.1s
+'
 
-store_junk() {
-    local name=$1
-    local n=$2
-    for i in `seq 1 $n`; do \
-        echo "$name:$i" | flux content store >/dev/null || return 1
-    done
-}
+test_expect_success 'lower purge size and age thresholds' '
+	flux setattr content.purge-target-size 100 &&
+	flux setattr content.purge-old-entry 1
+'
 
 test_expect_success 'load content-sqlite module on rank 0' '
 	flux module load content-sqlite
@@ -32,9 +32,9 @@ test_expect_success 'verify content.backing-module=content-sqlite' '
 '
 
 test_expect_success 'store 100 blobs on rank 0' '
-	store_junk test 100 &&
-        TOTAL=`flux module stats --type int --parse count content` &&
-        test $TOTAL -ge 100
+	flux content spam 100 100 >/dev/null &&
+	TOTAL=`flux module stats --type int --parse count content` &&
+	test $TOTAL -ge 100
 '
 
 # Store directly to content service
@@ -42,79 +42,87 @@ test_expect_success 'store 100 blobs on rank 0' '
 
 test_expect_success 'store blobs bypassing cache' '
 	cat /dev/null >0.0.store &&
-        flux content store --bypass-cache <0.0.store >0.0.hash &&
-        dd if=/dev/urandom count=1 bs=64 >64.0.store 2>/dev/null &&
-        flux content store --bypass-cache <64.0.store >64.0.hash &&
-        dd if=/dev/urandom count=1 bs=4096 >4k.0.store 2>/dev/null &&
-        flux content store --bypass-cache <4k.0.store >4k.0.hash &&
-        dd if=/dev/urandom count=256 bs=4096 >1m.0.store 2>/dev/null &&
-        flux content store --bypass-cache <1m.0.store >1m.0.hash
+	flux content store --bypass-cache <0.0.store >0.0.hash &&
+	dd if=/dev/urandom count=1 bs=64 >64.0.store 2>/dev/null &&
+	flux content store --bypass-cache <64.0.store >64.0.hash &&
+	dd if=/dev/urandom count=1 bs=4096 >4k.0.store 2>/dev/null &&
+	flux content store --bypass-cache <4k.0.store >4k.0.hash &&
+	dd if=/dev/urandom count=256 bs=4096 >1m.0.store 2>/dev/null &&
+	flux content store --bypass-cache <1m.0.store >1m.0.hash
 '
 
 test_expect_success 'load 0b blob bypassing cache' '
-        HASHSTR=`cat 0.0.hash` &&
-        flux content load --bypass-cache ${HASHSTR} >0.0.load &&
-        test_cmp 0.0.store 0.0.load
+	HASHSTR=`cat 0.0.hash` &&
+	flux content load --bypass-cache ${HASHSTR} >0.0.load &&
+	test_cmp 0.0.store 0.0.load
 '
 
 test_expect_success 'load 64b blob bypassing cache' '
-        HASHSTR=`cat 64.0.hash` &&
-        flux content load --bypass-cache ${HASHSTR} >64.0.load &&
-        test_cmp 64.0.store 64.0.load
+	HASHSTR=`cat 64.0.hash` &&
+	flux content load --bypass-cache ${HASHSTR} >64.0.load &&
+	test_cmp 64.0.store 64.0.load
 '
 
 test_expect_success 'load 4k blob bypassing cache' '
-        HASHSTR=`cat 4k.0.hash` &&
-        flux content load --bypass-cache ${HASHSTR} >4k.0.load &&
-        test_cmp 4k.0.store 4k.0.load
+	HASHSTR=`cat 4k.0.hash` &&
+	flux content load --bypass-cache ${HASHSTR} >4k.0.load &&
+	test_cmp 4k.0.store 4k.0.load
 '
 
 test_expect_success 'load 1m blob bypassing cache' '
-        HASHSTR=`cat 1m.0.hash` &&
-        flux content load --bypass-cache ${HASHSTR} >1m.0.load &&
-        test_cmp 1m.0.store 1m.0.load
+	HASHSTR=`cat 1m.0.hash` &&
+	flux content load --bypass-cache ${HASHSTR} >1m.0.load &&
+	test_cmp 1m.0.store 1m.0.load
 '
 
 # Verify same blobs on all ranks
 # forcing content to fault in from the content backing service
 
 test_expect_success 'load and verify 64b blob on all ranks' '
-        HASHSTR=`cat 64.0.hash` &&
-        flux exec -n echo ${HASHSTR} >64.0.all.expect &&
-        flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
-                                                >64.0.all.output &&
-        test_cmp 64.0.all.expect 64.0.all.output
+	HASHSTR=`cat 64.0.hash` &&
+	flux exec -n echo ${HASHSTR} >64.0.all.expect &&
+	flux exec -n sh -c "flux content load ${HASHSTR} \
+		| $BLOBREF $HASHFUN" >64.0.all.output &&
+	test_cmp 64.0.all.expect 64.0.all.output
 '
 
 test_expect_success 'load and verify 4k blob on all ranks' '
-        HASHSTR=`cat 4k.0.hash` &&
-        flux exec -n echo ${HASHSTR} >4k.0.all.expect &&
-        flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
-                                                >4k.0.all.output &&
-        test_cmp 4k.0.all.expect 4k.0.all.output
+	HASHSTR=`cat 4k.0.hash` &&
+	flux exec -n echo ${HASHSTR} >4k.0.all.expect &&
+	flux exec -n sh -c "flux content load ${HASHSTR} \
+		| $BLOBREF $HASHFUN" >4k.0.all.output &&
+	test_cmp 4k.0.all.expect 4k.0.all.output
 '
 
 test_expect_success 'load and verify 1m blob on all ranks' '
-        HASHSTR=`cat 1m.0.hash` &&
-        flux exec -n echo ${HASHSTR} >1m.0.all.expect &&
-        flux exec -n sh -c "flux content load ${HASHSTR} | $BLOBREF $HASHFUN" \
-                                                >1m.0.all.output &&
-        test_cmp 1m.0.all.expect 1m.0.all.output
+	HASHSTR=`cat 1m.0.hash` &&
+	flux exec -n echo ${HASHSTR} >1m.0.all.expect &&
+	flux exec -n sh -c "flux content load ${HASHSTR} \
+		| $BLOBREF $HASHFUN" >1m.0.all.output &&
+	test_cmp 1m.0.all.expect 1m.0.all.output
 '
 
 test_expect_success 'exercise batching of synchronous flush to backing store' '
 	flux setattr content.flush-batch-limit 5 &&
-        store_junk loadunload 200 &&
-    	flux content flush &&
+	flux content spam 200 200 >/dev/null &&
+	flux content flush &&
 	NDIRTY=`flux module stats --type int --parse dirty content` &&
 	test ${NDIRTY} -eq 0
 '
 
+test_expect_success 'drop the cache' '
+	flux content dropcache
+'
+
+test_expect_success 'fill the cache with more data for later purging' '
+	flux content spam 10000 200 >/dev/null
+'
+
 kvs_checkpoint_put() {
-        jq -j -c -n  "{key:\"$1\",value:\"$2\"}" | $RPC kvs-checkpoint.put
+	jq -j -c -n  "{key:\"$1\",value:\"$2\"}" | $RPC kvs-checkpoint.put
 }
 kvs_checkpoint_get() {
-        jq -j -c -n  "{key:\"$1\"}" | $RPC kvs-checkpoint.get
+	jq -j -c -n  "{key:\"$1\"}" | $RPC kvs-checkpoint.get
 }
 
 test_expect_success HAVE_JQ 'kvs-checkpoint.put foo=bar' '
@@ -137,7 +145,8 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned baz' '
 	test_cmp value2.exp value2.out
 '
 
-test_expect_success 'reload content-sqlite module on rank 0' '
+test_expect_success 'flush + reload content-sqlite module on rank 0' '
+	flux content flush &&
 	flux module reload content-sqlite
 '
 
@@ -148,17 +157,38 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo still returns baz' '
 '
 
 test_expect_success HAVE_JQ 'kvs-checkpoint.get noexist fails with No such...' '
-        test_must_fail kvs_checkpoint_get noexist 2>badkey.err &&
-        grep "No such file or directory" badkey.err
+	test_must_fail kvs_checkpoint_get noexist 2>badkey.err &&
+	grep "No such file or directory" badkey.err
 '
 
 test_expect_success 'content-backing.load invalid blobref fails' '
-        echo -n sha999-000 >bad.blobref &&
-        $RPC content-backing.load 2 <bad.blobref 2>load.err
+	echo -n sha999-000 >bad.blobref &&
+	$RPC content-backing.load 2 <bad.blobref 2>load.err
+'
+
+getsize() {
+	flux module stats content | tee /dev/fd/2 | jq .size
+}
+
+test_expect_success HAVE_JQ 'wait for purge to clear cache entries' '
+	purge_size=$(flux getattr content.purge-target-size) &&
+	purge_age=$(flux getattr content.purge-old-entry) &&
+	echo "Purge size $purge_size bytes, age $purge_age secs" &&
+	size=$(getsize) && \
+	count=0 &&
+	while test $size -gt 100 -a $count -lt 300; do \
+		sleep 0.1; \
+		size=$(getsize); \
+		count=$(($count+1))
+	done
 '
 
 test_expect_success 'remove content-sqlite module on rank 0' '
 	flux module remove content-sqlite
+'
+
+test_expect_success 'remove heartbeat module' '
+	flux module remove heartbeat
 '
 
 
