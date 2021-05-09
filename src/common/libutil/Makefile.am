@@ -87,7 +87,9 @@ libutil_la_SOURCES = \
 	intree.h \
 	llog.h \
 	grudgeset.c \
-	grudgeset.h
+	grudgeset.h \
+	digest.c \
+	digest.h
 
 EXTRA_DIST = veb_mach.c
 
@@ -114,8 +116,8 @@ TESTS = test_ev.t \
 	test_fsd.t \
 	test_intree.t \
 	test_fdwalk.t \
-	test_grudgeset.t
-
+	test_grudgeset.t \
+	test_digest.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -240,3 +242,7 @@ test_fdwalk_t_LDADD = $(test_ldadd)
 test_grudgeset_t_SOURCES = test/grudgeset.c
 test_grudgeset_t_CPPFLAGS = $(test_cppflags)
 test_grudgeset_t_LDADD = $(test_ldadd)
+
+test_digest_t_SOURCES = test/digest.c
+test_digest_t_CPPFLAGS = $(test_cppflags)
+test_digest_t_LDADD = $(test_ldadd)

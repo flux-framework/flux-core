@@ -38,6 +38,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
+#include "src/common/libutil/digest.h"
 
 #include "module.h"
 #include "modservice.h"
@@ -582,7 +583,7 @@ module_t *module_add (modhash_t *mh, const char *path)
     void *dso;
     const char **mod_namep;
     mod_main_f *mod_main;
-    zfile_t *zf;
+    size_t size;
     int rc;
 
     dlerror ();
@@ -608,11 +609,9 @@ module_t *module_add (modhash_t *mh, const char *path)
     p->dso = dso;
     if (!(p->name = strdup (*mod_namep)))
         goto cleanup;
-    zf = zfile_new (NULL, path);
-    if (!(p->digest = strdup (zfile_digest (zf))))
+    if (!(p->digest = digest_file (path, &size)))
         goto cleanup;
-    p->size = (int)zfile_cursize (zf);
-    zfile_destroy (&zf);
+    p->size = (int)size;
     uuid_generate (p->uuid);
     uuid_unparse (p->uuid, p->uuid_str);
     if (!(p->rmmod = zlist_new ()))

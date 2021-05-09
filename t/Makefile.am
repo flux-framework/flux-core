@@ -281,7 +281,6 @@ check_PROGRAMS = \
 	kvs/torture \
 	kvs/dtree \
 	kvs/blobref \
-	kvs/hashtest \
 	kvs/watch_disconnect \
 	kvs/commit \
 	kvs/fence_api \
@@ -446,11 +445,6 @@ kvs_watch_disconnect_SOURCES = kvs/watch_disconnect.c
 kvs_watch_disconnect_CPPFLAGS = $(test_cppflags)
 kvs_watch_disconnect_LDADD = \
 	$(test_ldadd) $(LIBDL)
-
-kvs_hashtest_SOURCES = kvs/hashtest.c
-kvs_hashtest_CPPFLAGS = $(test_cppflags) $(SQLITE_CFLAGS)
-kvs_hashtest_LDADD = \
-	$(test_ldadd) $(LIBDL) $(LIBJUDY) $(SQLITE_LIBS)
 
 kvs_issue1760_SOURCES = kvs/issue1760.c
 kvs_issue1760_CPPFLAGS = $(test_cppflags)

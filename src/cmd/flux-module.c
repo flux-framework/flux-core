@@ -17,15 +17,17 @@
 #include <flux/core.h>
 #include <flux/optparse.h>
 #include <jansson.h>
-#include <czmq.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <argz.h>
 #include <assert.h>
 
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
-#include "src/common/libutil/read_all.h"
-#include "src/common/libutil/iterators.h"
+#include "src/common/libutil/digest.h"
 
 const int max_idle = 99;
 
@@ -196,16 +198,6 @@ int main (int argc, char *argv[])
     return (exitval);
 }
 
-char *sha1 (const char *path)
-{
-    zfile_t *zf = zfile_new (NULL, path);
-    char *digest = NULL;
-    if (zf)
-        digest = xstrdup (zfile_digest (zf));
-    zfile_destroy (&zf);
-    return digest;
-}
-
 int filesize (const char *path)
 {
     struct stat sb;
@@ -254,7 +246,7 @@ int cmd_info (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     parse_modarg (argv[n], &modname, &modpath);
-    digest = sha1 (modpath);
+    digest = digest_file (modpath, NULL);
     printf ("Module name:  %s\n", modname);
     printf ("Module path:  %s\n", modpath);
     printf ("SHA1 Digest:  %s\n", digest);
