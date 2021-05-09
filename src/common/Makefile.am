@@ -22,7 +22,8 @@ SUBDIRS = \
 	libcontent \
 	libhostlist \
 	librlist \
-	libczmqcontainers
+	libczmqcontainers \
+	libccan
 
 AM_CFLAGS = $(WARNING_CFLAGS) $(CODE_COVERAGE_CFLAGS)
 AM_LDFLAGS = $(CODE_COVERAGE_LIBS)
@@ -34,6 +35,7 @@ noinst_LTLIBRARIES = libflux-internal.la
 libflux_internal_la_SOURCES =
 libflux_internal_la_LIBADD = \
 	$(builddir)/liblsd/liblsd.la \
+	$(builddir)/libccan/libccan.la \
 	$(builddir)/libutil/libutil.la \
 	$(builddir)/libidset/libidset.la \
 	$(builddir)/libev/libev.la \
