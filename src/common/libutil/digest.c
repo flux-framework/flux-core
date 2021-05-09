@@ -20,6 +20,7 @@
 
 #include "read_all.h"
 #include "sha1.h"
+#include "digest.h"
 
 static ssize_t sha1file (const char *path, uint8_t digest[SHA1_DIGEST_SIZE])
 {
