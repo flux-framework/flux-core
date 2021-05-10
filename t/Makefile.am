@@ -600,43 +600,50 @@ sched_simple_jj_reader_LDADD = \
 
 shell_plugins_dummy_la_SOURCES = shell/plugins/dummy.c
 shell_plugins_dummy_la_CPPFLAGS = $(test_cppflags)
-shell_plugins_dummy_la_LDFLAGS = -module -rpath /nowhere
+shell_plugins_dummy_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 
 shell_plugins_conftest_la_SOURCES = shell/plugins/conftest.c
 shell_plugins_conftest_la_CPPFLAGS = $(test_cppflags)
-shell_plugins_conftest_la_LDFLAGS = -module -rpath /nowhere
+shell_plugins_conftest_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 
 shell_plugins_invalid_args_la_SOURCES = shell/plugins/invalid-args.c
 shell_plugins_invalid_args_la_CPPFLAGS = $(test_cppflags)
-shell_plugins_invalid_args_la_LDFLAGS = -module -rpath /nowhere
+shell_plugins_invalid_args_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 shell_plugins_invalid_args_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-core.la
 
 shell_plugins_getopt_la_SOURCES = shell/plugins/getopt.c
 shell_plugins_getopt_la_CPPFLAGS = $(test_cppflags)
-shell_plugins_getopt_la_LDFLAGS = -module -rpath /nowhere
+shell_plugins_getopt_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 shell_plugins_getopt_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-core.la
 
 shell_plugins_setopt_la_SOURCES = shell/plugins/setopt.c
 shell_plugins_setopt_la_CPPFLAGS = $(test_cppflags)
-shell_plugins_setopt_la_LDFLAGS = -module -rpath /nowhere
+shell_plugins_setopt_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 shell_plugins_setopt_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-core.la
 
 shell_plugins_log_la_SOURCES = shell/plugins/log.c
 shell_plugins_log_la_CPPFLAGS = $(test_cppflags)
-shell_plugins_log_la_LDFLAGS = -module -rpath /nowhere
+shell_plugins_log_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 shell_plugins_log_la_LIBADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-core.la
 
 shell_plugins_test_event_la_SOURCES = shell/plugins/test-event.c
 shell_plugins_test_event_la_CPPFLAGS = $(test_cppflags)
-shell_plugins_test_event_la_LDFLAGS = -module -rpath /nowhere
+shell_plugins_test_event_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 shell_plugins_test_event_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
@@ -645,7 +652,7 @@ job_manager_plugins_priority_wait_la_SOURCES = \
 job_manager_plugins_priority_wait_la_CPPFLAGS = \
 	$(test_cppflags)
 job_manager_plugins_priority_wait_la_LDFLAGS = \
-	-module -rpath /nowhere
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_priority_wait_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
@@ -654,7 +661,7 @@ job_manager_plugins_priority_invert_la_SOURCES = \
 job_manager_plugins_priority_invert_la_CPPFLAGS = \
 	$(test_cppflags)
 job_manager_plugins_priority_invert_la_LDFLAGS = \
-	-module -rpath /nowhere
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_priority_invert_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
@@ -663,7 +670,7 @@ job_manager_plugins_args_la_SOURCES = \
 job_manager_plugins_args_la_CPPFLAGS = \
 	$(test_cppflags)
 job_manager_plugins_args_la_LDFLAGS = \
-	-module -rpath /nowhere
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_args_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
@@ -672,7 +679,7 @@ job_manager_plugins_test_la_SOURCES = \
 job_manager_plugins_test_la_CPPFLAGS = \
 	$(test_cppflags)
 job_manager_plugins_test_la_LDFLAGS = \
-	-module -rpath /nowhere
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_test_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
@@ -681,7 +688,7 @@ job_manager_plugins_random_la_SOURCES = \
 job_manager_plugins_random_la_CPPFLAGS = \
 	$(test_cppflags)
 job_manager_plugins_random_la_LDFLAGS = \
-	-module -rpath /nowhere
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_random_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
@@ -691,7 +698,7 @@ job_manager_plugins_validate_la_SOURCES = \
 job_manager_plugins_validate_la_CPPFLAGS = \
 	$(test_cppflags)
 job_manager_plugins_validate_la_LDFLAGS = \
-	-module -rpath /nowhere
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_validate_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
@@ -700,7 +707,7 @@ job_manager_plugins_dependency_test_la_SOURCES = \
 job_manager_plugins_dependency_test_la_CPPFLAGS = \
 	$(test_cppflags)
 job_manager_plugins_dependency_test_la_LDFLAGS = \
-	-module -rpath /nowhere
+	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_dependency_test_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
