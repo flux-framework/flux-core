@@ -35,6 +35,7 @@
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/clique.h"
 #include "src/common/libpmi/dgetline.h"
+#include "src/common/libhostlist/hostlist.h"
 
 #define DEFAULT_KILLER_TIMEOUT 20.0
 
@@ -66,8 +67,6 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
 int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
                  const char *broker_path);
 char *create_scratch_dir (void);
-struct client *client_create (const char *broker_path, const char *scratch_dir,
-                              int rank, const char *cmd_argz, size_t cmd_argz_len);
 void client_destroy (struct client *cli);
 char *find_broker (const char *searchpath);
 static void setup_profiling_env (void);
@@ -88,6 +87,8 @@ static struct optparse_option opts[] = {
       .usage = "Don't execute (useful with -v, --verbose)", },
     { .name = "test-size",       .key = 's', .has_arg = 1, .arginfo = "N",
       .usage = "Start a test instance by launching N brokers locally", },
+    { .name = "test-hosts", .has_arg = 1, .arginfo = "HOSTLIST",
+      .usage = "Set FLUX_FAKE_HOSTNAME in environment of each broker", },
     { .name = "broker-opts",.key = 'o', .has_arg = 1, .arginfo = "OPTS",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Add comma-separated broker options, e.g. \"-o,-v\"", },
@@ -176,6 +177,8 @@ int main (int argc, char *argv[])
             log_msg_exit ("--scratchdir only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "noclique"))
             log_msg_exit ("--noclique only works with --test-size=N");
+        if (optparse_hasopt (ctx.opts, "test-hosts"))
+            log_msg_exit ("--test-hosts only works with --test-size=N");
         status = exec_broker (command, len, broker_path);
     }
     else {
@@ -429,8 +432,12 @@ error:
     return -1;
 }
 
-struct client *client_create (const char *broker_path, const char *scratch_dir,
-                              int rank, const char *cmd_argz, size_t cmd_argz_len)
+struct client *client_create (const char *broker_path,
+                              const char *scratch_dir,
+                              int rank,
+                              const char *cmd_argz,
+                              size_t cmd_argz_len,
+                              const char *h)
 {
     struct client *cli = xzmalloc (sizeof (*cli));
     char *arg;
@@ -463,6 +470,10 @@ struct client *client_create (const char *broker_path, const char *scratch_dir,
         log_err_exit ("flux_cmd_setenvf");
     if (flux_cmd_setenvf (cli->cmd, 1, "PMI_SIZE", "%d", ctx.test_size) < 0)
         log_err_exit ("flux_cmd_setenvf");
+    if (h) {
+        if (flux_cmd_setenvf (cli->cmd, 1, "FLUX_FAKE_HOSTNAME", "%s", h) < 0)
+            log_err_exit ("error setting fake hostname for rank %d", rank);
+    }
     return cli;
 fail:
     free (argz);
@@ -577,6 +588,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     int rank;
     int flags = 0;
     char *scratch_dir;
+    struct hostlist *hosts = NULL;
 
     if (isatty (STDIN_FILENO)) {
         if (tcgetattr (STDIN_FILENO, &ctx.saved_termios) < 0)
@@ -605,9 +617,21 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
 
     pmi_server_initialize (flags);
 
+    if (optparse_hasopt (ctx.opts, "test-hosts")) {
+        const char *s = optparse_get_str (ctx.opts, "test-hosts", NULL);
+        if (!(hosts = hostlist_decode (s)))
+            log_msg_exit ("could not decode --test-hosts hostlist");
+        if (hostlist_count (hosts) != ctx.test_size)
+            log_msg_exit ("--test-hosts hostlist has incorrect size");
+    }
+
     for (rank = 0; rank < ctx.test_size; rank++) {
-        if (!(cli = client_create (broker_path, scratch_dir, rank,
-                                   cmd_argz, cmd_argz_len)))
+        if (!(cli = client_create (broker_path,
+                                   scratch_dir,
+                                   rank,
+                                   cmd_argz,
+                                   cmd_argz_len,
+                                   hosts ? hostlist_nth (hosts, rank) : NULL)))
             log_err_exit ("client_create");
         if (optparse_hasopt (ctx.opts, "verbose"))
             client_dumpargs (cli);
@@ -626,6 +650,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
 
     pmi_server_finalize ();
 
+    hostlist_destroy (hosts);
     free (scratch_dir);
 
     zlist_destroy (&ctx.clients);
