@@ -461,6 +461,9 @@ AC_SUBST(fluxbindingincludedir)
 fluxmod_ldflags="$san_ld_zdef_flag -avoid-version -export-symbols-regex '^mod_(main|name|service)\$\$' --disable-static -shared -export-dynamic"
 AC_SUBST(fluxmod_ldflags)
 
+fluxplugin_ldflags="-avoid-version -export-symbols-regex '^flux_plugin_init\$\$' --disable-static -shared -export-dynamic"
+AC_SUBST(fluxplugin_ldflags)
+
 fluxlib_ldflags="-shared -export-dynamic --disable-static $san_ld_zdef_flag"
 AC_SUBST(fluxlib_ldflags)
 
