@@ -16,6 +16,9 @@
 #include <stdbool.h>
 #include <errno.h>
 #include <assert.h>
+#include <stdio.h>
+
+#include "src/common/libccan/ccan/str/hex/hex.h"
 
 #include "blobref.h"
 #include "sha1.h"
@@ -103,23 +106,6 @@ static struct blobhash *lookup_blobhash (const char *name)
     return NULL;
 }
 
-static uint8_t xtoint (char c)
-{
-    if (c >= '0' && c <= '9')
-        return c - '0';
-    if (c >= 'A' && c <= 'F')
-        return c - 'A' + 0xA;
-    /* (c >= 'a' && c <= 'f') */
-    return c - 'a' + 0xA;
-}
-
-static char inttox (uint8_t i)
-{
-    if (i <= 9)
-        return '0' + i;
-    return 'a' + i - 0xa;
-}
-
 static bool isxdigit_lower (char c)
 {
     if ((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))
@@ -130,22 +116,16 @@ static bool isxdigit_lower (char c)
 int blobref_strtohash (const char *blobref, void *hash, int size)
 {
     struct blobhash *bh;
-    uint8_t *ihash = (uint8_t *)hash;
-    int i;
+    int len = strlen (blobref);
+    int offset;
 
     if (!(bh = lookup_blobhash (blobref)) || size < bh->hashlen)
         goto inval;
-    if (strlen (blobref) != bh->hashlen*2 + strlen (bh->name) + 1)
+    offset = strlen (bh->name) + 1;
+    if (len - offset + 1 != hex_str_size (bh->hashlen))
         goto inval;
-    blobref += strlen (bh->name) + 1;
-    for (i = 0; i < bh->hashlen; i++) {
-        if (!isxdigit_lower (blobref[i*2]))
-            goto inval;
-        ihash[i] = xtoint (blobref[i*2]) << 4;
-        if (!isxdigit_lower (blobref[i*2 + 1]))
-            goto inval;
-        ihash[i] |= xtoint (blobref[i*2 + 1]);
-    }
+    if (!hex_decode (blobref + offset, len - offset, hash, bh->hashlen))
+        goto inval;
     return bh->hashlen;
 inval:
     errno = EINVAL;
@@ -156,24 +136,21 @@ static int hashtostr (struct blobhash *bh,
                       const void *hash, int len,
                       char *blobref, int blobref_len)
 {
-    uint8_t *ihash = (uint8_t *)hash;
-    int i;
+    int offset;
 
-    if (len != bh->hashlen
-        || !blobref
-        || blobref_len < bh->hashlen*2 + strlen (bh->name) + 2) {
-        errno = EINVAL;
-        return -1;
-    }
+    if (len != bh->hashlen || !blobref)
+        goto inval;
+    offset = strlen (bh->name) + 1;
+    if (blobref_len - offset + 1 < (int)hex_str_size (bh->hashlen))
+        goto inval;
     strcpy (blobref, bh->name);
     strcat (blobref, "-");
-    blobref += strlen (bh->name) + 1;
-    for (i = 0; i < bh->hashlen; i++) {
-        blobref[i*2] = inttox (ihash[i] >> 4);
-        blobref[i*2 + 1] = inttox (ihash[i] & 0xf);
-    }
-    blobref[i*2] = '\0';
+    if (!hex_encode (hash, len, blobref + offset, blobref_len - offset))
+        goto inval;
     return 0;
+inval:
+    errno = EINVAL;
+    return -1;
 }
 
 int blobref_hashtostr (const char *hashtype,
@@ -208,20 +185,24 @@ int blobref_hash (const char *hashtype,
 int blobref_validate (const char *blobref)
 {
     struct blobhash *bh;
+    int len;
+    int offset;
 
-    if (!blobref || !(bh = lookup_blobhash (blobref))
-                 || strlen (blobref) != bh->hashlen*2 + strlen (bh->name) + 1) {
-        errno = EINVAL;
-        return -1;
-    }
-    blobref += strlen (bh->name) + 1;
+    if (!blobref || !(bh = lookup_blobhash (blobref)))
+        goto inval;
+    len = strlen (blobref);
+    offset = strlen (bh->name) + 1;
+    if (len - offset + 1 != hex_str_size (bh->hashlen))
+        goto inval;
+    blobref += offset;
     while (*blobref) {
-        if (!isxdigit_lower (*blobref++)) {
-            errno = EINVAL;
-            return -1;
-        }
+        if (!isxdigit_lower (*blobref++))
+            goto inval;
     }
     return 0;
+inval:
+    errno = EINVAL;
+    return -1;
 }
 
 int blobref_validate_hashtype (const char *name)

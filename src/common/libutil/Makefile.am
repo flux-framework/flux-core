@@ -12,6 +12,7 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
+	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
 	-DABS_TOP_BUILDDIR=\"$(abs_top_builddir)\"
 
@@ -126,6 +127,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(top_builddir)/src/common/libtomlc99/libtomlc99.la \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
+	$(top_builddir)/src/common/libccan/libccan.la \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(LIBPTHREAD) \

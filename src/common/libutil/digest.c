@@ -18,8 +18,12 @@
 #include <unistd.h>
 #include <errno.h>
 
+#include "src/common/libccan/ccan/str/hex/hex.h"
+
 #include "read_all.h"
 #include "sha1.h"
+#include "errno_safe.h"
+#include "digest.h"
 
 static ssize_t sha1file (const char *path, uint8_t digest[SHA1_DIGEST_SIZE])
 {
@@ -51,26 +55,21 @@ static ssize_t sha1file (const char *path, uint8_t digest[SHA1_DIGEST_SIZE])
 
 char *digest_file (const char *path, size_t *len)
 {
-    char *bin2hex = "01234567789ABCDEF";
-    ssize_t size = -1;
-    char *rv = NULL;
+    ssize_t file_size;
     uint8_t digest[SHA1_DIGEST_SIZE];
-    int i;
+    char *rv;
+    size_t rv_size = hex_str_size (sizeof (digest));
 
-    if ((size = sha1file (path, digest)) < 0)
+    if ((file_size = sha1file (path, digest)) < 0)
         return NULL;
 
-    if (!(rv = malloc (SHA1_DIGEST_SIZE*2 + 1)))
+    if (!(rv = malloc (rv_size)))
         return NULL;
 
-    for (i = 0; i < SHA1_DIGEST_SIZE; i++) {
-        rv[i*2] = bin2hex[digest[i] >> 4];
-        rv[i*2 + 1] = bin2hex[digest[i] & 0x0F];
-    }
-    rv[SHA1_DIGEST_SIZE*2] = '\0';
+    hex_encode (digest, sizeof (digest), rv, rv_size);
 
     if (len)
-        (*len) = size;
+        *len = file_size;
     return rv;
 }
 
