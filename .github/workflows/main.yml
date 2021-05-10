@@ -119,9 +119,16 @@ jobs:
        ref: ${{ github.event.pull_request.head.sha }}
        fetch-depth: 0
 
-    - name: checkout tag
-      if: ${{ matrix.create_release }}
-      run: git checkout ${{ matrix.tag }}
+    - name: fetch annotated tag
+      if: matrix.create_release || matrix.docker_tag
+      run: |
+        # Ensure git-describe works on a tag.
+        #  (checkout@v2 action may have left current tag as
+        #   lightweight instead of annotated. See
+        #   https://github.com/actions/checkout/issues/290)
+        #
+        git fetch -f origin ${{ github.ref }}:${{ github.ref }} ;
+        echo git describe now reports $(git describe --always)
 
     - name: coverage setup
       env: ${{matrix.env}}
@@ -166,7 +173,7 @@ jobs:
       id: prep_release
       if: success() && matrix.create_release
       env: ${{matrix.env}}
-      run: echo "::set-output name=tarball::flux-core*.tar.gz"
+      run: echo "::set-output name=tarball::$(echo flux-core*.tar.gz)"
 
     - name: create release
       id: create_release
