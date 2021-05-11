@@ -13,6 +13,7 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+startctl=${SHARNESS_TEST_SRCDIR}/scripts/startctl.py
 
 test_expect_success 'TEST_NAME is set' '
 	test -n "$TEST_NAME"
@@ -100,6 +101,20 @@ test_expect_success 'flux-start --test-hosts with insufficient hosts fails' "
 "
 test_expect_success 'flux-start --test-hosts with garbled hosts fails' "
 	test_must_fail flux start ${ARGS} -s2 --test-hosts=foo] /bin/true
+"
+test_expect_success 'flux-start embedded server works from initial program' "
+	flux start -v ${ARGS} -s1 flux python ${startctl} \
+		>startctl.out 2>startctl.err
+"
+test_expect_success HAVE_JQ 'flux-start embedded server status got JSON' "
+	jq -c . <startctl.out
+"
+test_expect_success 'flux-start embedded server logs hi/bye from client' "
+	grep hi startctl.err &&
+	grep bye startctl.err
+"
+test_expect_success 'flux-start embedded server logs disconnect notification' "
+	grep 'disconnect from' startctl.err
 "
 test_expect_success 'flux-start in exec mode passes through errors from command' "
 	test_must_fail flux start ${ARGS} /bin/false

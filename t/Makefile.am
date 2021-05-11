@@ -221,6 +221,7 @@ EXTRA_DIST= \
 	shell/initrc/tests \
 	flux-jobs/tests \
 	scripts/run_timeout.py \
+	scripts/startctl.py \
 	jobspec \
 	flux-resource \
 	resource/get-xml-test.py \
