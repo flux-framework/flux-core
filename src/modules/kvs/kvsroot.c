@@ -158,6 +158,7 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
         goto error;
     }
 
+    list_node_init (&root->work_queue_node);
     return root;
 
  error:
