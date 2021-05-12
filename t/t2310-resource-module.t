@@ -117,17 +117,21 @@ test_expect_success 'flux resource reload fails on empty XML directory' '
 	test_must_fail flux resource reload -x $(pwd)/empty
 '
 
+sanitize_hwloc_xml() {
+    sed 's/pci_link_speed=".*"//g' $1
+}
+
 test_expect_success HAVE_JQ 'extract hwloc XML from JSON object' '
 	mkdir -p hwloc &&
 	for i in $(seq 0 $(($SIZE-1))); do \
-		jq -r .xml[$i] hwloc.json >hwloc/$i.xml; \
+		jq -r .xml[$i] hwloc.json | sanitize_hwloc_xml >hwloc/$i.xml; \
 	done
 '
 
 test_expect_success HAVE_JQ 'get hwloc XML direct from ranks' '
 	mkdir -p hwloc_direct &&
 	for i in $(seq 0 $(($SIZE-1))); do \
-		get_topo $i >hwloc_direct/$i.xml || return 1; \
+		get_topo $i | sanitize_hwloc_xml >hwloc_direct/$i.xml || return 1; \
 	done
 '
 
