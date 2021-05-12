@@ -59,12 +59,14 @@ struct flux_match {
 };
 
 struct flux_match flux_match_init (int typemask,
-                                                   uint32_t matchtag,
-                                                   const char *topic_glob);
+                                   uint32_t matchtag,
+                                   const char *topic_glob);
 
 void flux_match_free (struct flux_match m);
 
-int flux_match_asprintf (struct flux_match *m, const char *topic_glob_fmt, ...);
+int flux_match_asprintf (struct flux_match *m,
+                         const char *topic_glob_fmt,
+                         ...);
 
 #define FLUX_MATCH_ANY flux_match_init( \
     FLUX_MSGTYPE_ANY, \
@@ -334,14 +336,14 @@ int flux_msg_pop_route (flux_msg_t *msg, char **id);
  * For requests, this is the sender; for responses, this is the recipient.
  * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
  */
-int flux_msg_get_route_first (const flux_msg_t *msg, char **id); /* closest to delim */
+int flux_msg_get_route_first (const flux_msg_t *msg, char **id);
 
 /* Copy the last routing frame (farthest from delimiter) contents (or NULL)
  * to 'id'.  Caller must free 'id'.
  * For requests, this is the last hop; for responses: this is the next hop.
  * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
  */
-int flux_msg_get_route_last (const flux_msg_t *msg, char **id); /* farthest from delim */
+int flux_msg_get_route_last (const flux_msg_t *msg, char **id);
 
 /* Return the number of route frames in the message.
  * It is an EPROTO error if there is no route stack.
