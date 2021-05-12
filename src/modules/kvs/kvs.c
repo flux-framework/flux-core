@@ -2386,8 +2386,8 @@ static void start_root_remove (struct kvs_ctx *ctx, const char *ns)
          */
 
         if (treq_mgr_iter_transactions (root->trm,
-                                          root_remove_process_transactions,
-                                          &cbd) < 0)
+                                        root_remove_process_transactions,
+                                        &cbd) < 0)
             flux_log_error (ctx->h, "%s: treq_mgr_iter_transactions",
                             __FUNCTION__);
     }
