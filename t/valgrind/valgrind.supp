@@ -88,3 +88,40 @@
    fun:hwloc_topology_load
    ...
 }
+{
+   <issue_3640>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:calloc
+   obj:/usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.460.73.01
+   ...
+   fun:clGetPlatformIDs
+   obj:/usr/lib/x86_64-linux-gnu/hwloc/hwloc_opencl.so
+   obj:/usr/lib/x86_64-linux-gnu/libhwloc.so.15.1.0
+   fun:hwloc_topology_load
+   ...
+}
+{
+   <issue_3640>
+   Memcheck:Leak
+   match-leak-kinds: possible
+   fun:malloc
+   obj:/usr/lib/x86_64-linux-gnu/libnvidia-opencl.so.460.73.01
+   ...
+   fun:clGetPlatformIDs
+   obj:/usr/lib/x86_64-linux-gnu/hwloc/hwloc_opencl.so
+   obj:/usr/lib/x86_64-linux-gnu/libhwloc.so.15.1.0
+   fun:hwloc_topology_load
+   ...
+}
+{
+   <issue_3640>
+   Memcheck:Leak
+   match-leak-kinds: definite
+   fun:malloc
+   fun:XNVCTRLQueryTargetStringAttribute
+   obj:/usr/lib/x86_64-linux-gnu/hwloc/hwloc_gl.so
+   obj:/usr/lib/x86_64-linux-gnu/libhwloc.so.15.1.0
+   fun:hwloc_topology_load
+   ...
+}
