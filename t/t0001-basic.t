@@ -92,6 +92,15 @@ test_expect_success 'flux-start --scratchdir without --test-size fails' "
 test_expect_success 'flux-start --noclique without --test-size fails' "
 	test_must_fail flux start ${ARGS} --noclique /bin/true
 "
+test_expect_success 'flux-start --test-hosts without --test-size fails' "
+	test_must_fail flux start ${ARGS} --test-hosts=foo /bin/true
+"
+test_expect_success 'flux-start --test-hosts with insufficient hosts fails' "
+	test_must_fail flux start ${ARGS} -s2 --test-hosts=foo /bin/true
+"
+test_expect_success 'flux-start --test-hosts with garbled hosts fails' "
+	test_must_fail flux start ${ARGS} -s2 --test-hosts=foo] /bin/true
+"
 test_expect_success 'flux-start in exec mode passes through errors from command' "
 	test_must_fail flux start ${ARGS} /bin/false
 "

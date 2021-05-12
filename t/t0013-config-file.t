@@ -104,12 +104,14 @@ test_expect_success '[bootstrap] hosts array can be empty' '
 	grep "tbon.endpoint.*-$" empty_attr.out
 '
 
-# Usage: start_broker config hostname cmd ...
-start_broker() {
-	local dir=$1; shift
-	local host=$1; shift
-	FLUX_FAKE_HOSTNAME=$host flux broker ${ARGS} -c $dir "$@" &
-}
+test_expect_success 'create initial program for testing' '
+	cat <<-EOT >attrdump.sh &&
+	#!/bin/sh
+	flux getattr size
+	flux getattr config.hostlist
+	EOT
+	chmod +x attrdump.sh
+'
 
 test_expect_success 'start size=2 instance with ipc://' '
 	mkdir conf8 &&
@@ -121,19 +123,14 @@ test_expect_success 'start size=2 instance with ipc://' '
 	    { host="fake1" }
 	]
 	EOT
-	cat <<-EOF >attrdump.sh &&
-	#!/bin/sh
-	flux getattr size
-	flux getattr config.hostlist
-	EOF
-	chmod +x attrdump.sh &&
-	start_broker conf8 fake0 ./attrdump.sh >ipc.out &&
-        F0=$! &&
-	start_broker conf8 fake1 &&
-        F1=$! &&
-	wait $F0 $F1 &&
-	echo 2 >ipc.exp &&
-	echo "fake[0-1]" >> ipc.exp &&
+	flux start -s2 --test-hosts=fake[0-1] \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,--config-path=conf8 \
+		./attrdump.sh >ipc.out &&
+	cat <<-EXP >ipc.exp &&
+	2
+	fake[0-1]
+	EXP
 	test_cmp ipc.exp ipc.out
 '
 
@@ -148,17 +145,14 @@ test_expect_success 'start size=4 instance with tcp://' '
 	    { host="fake[2-3]" }
 	]
 	EOT
-	start_broker conf9 fake0 ./attrdump.sh >tcp.out &&
-        F0=$! &&
-	start_broker conf9 fake1 &&
-        F1=$! &&
-	start_broker conf9 fake2 &&
-        F2=$! &&
-	start_broker conf9 fake3 &&
-        F3=$! &&
-	wait $F0 $F1 $F2 $F3 &&
-	echo 4 >tcp.exp &&
-	echo "fake[0-3]" >> tcp.exp &&
+	flux start -s4 --test-hosts=fake[0-3] \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+		-o,--config-path=conf9 \
+		./attrdump.sh >tcp.out &&
+	cat <<-EXP >tcp.exp &&
+	4
+	fake[0-3]
+	EXP
 	test_cmp tcp.exp tcp.out
 '
 
