@@ -141,16 +141,20 @@ test_expect_success HAVE_JQ 'hwloc XML from both sources match' '
 	done
 '
 
-test_expect_success 'reloading XML results in same R as before' '
-	flux kvs get resource.R >R.orig &&
+normalize_json() {
+	jq -cS .
+}
+
+test_expect_success HAVE_JQ 'reloading XML results in same R as before' '
+	flux kvs get resource.R | normalize_json >R.orig &&
 	flux resource reload -x hwloc &&
-	flux kvs get resource.R >R.new &&
+	flux kvs get resource.R | normalize_json >R.new &&
 	test_cmp R.orig R.new
 '
 
-test_expect_success 'reload original R just to do it and verify' '
+test_expect_success HAVE_JQ 'reload original R just to do it and verify' '
 	flux resource reload R.orig &&
-	flux kvs get resource.R >R.new2 &&
+	flux kvs get resource.R | normalize_json >R.new2 &&
 	test_cmp R.orig R.new2
 '
 
