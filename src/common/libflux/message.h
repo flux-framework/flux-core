@@ -191,7 +191,7 @@ int flux_msg_set_flags (flux_msg_t *msg, uint8_t flags);
 /* Get/set string payload.
  * flux_msg_set_string() accepts a NULL 's' (no payload).
  * flux_msg_get_string() will set 's' to NULL if there is no payload
- * N.B. the raw paylaod includes C string \0 terminator.
+ * N.B. the raw payload includes C string \0 terminator.
  */
 int flux_msg_set_string (flux_msg_t *msg, const char *);
 int flux_msg_get_string (const flux_msg_t *msg, const char **s);

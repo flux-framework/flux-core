@@ -37,7 +37,7 @@ int flux_event_decode (const flux_msg_t *msg, const char **topic,
 int flux_event_unpack (const flux_msg_t *msg, const char **topic,
                        const char *fmt, ...);
 
-/* Encode an event message with optinal string payload.
+/* Encode an event message with optional string payload.
  * If s is non-NULL, it is copied to the message payload.
  * Returns message or NULL on failure with errno set.
  */
@@ -77,7 +77,7 @@ flux_future_t *flux_event_publish_pack (flux_t *h,
                                         const char *topic, int flags,
                                         const char *fmt, ...);
 
-/* Publish an event with optinal raw paylaod.
+/* Publish an event with optional raw payload.
  */
 flux_future_t *flux_event_publish_raw (flux_t *h,
                                        const char *topic, int flags,
