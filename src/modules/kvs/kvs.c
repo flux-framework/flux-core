@@ -1044,11 +1044,11 @@ static void transaction_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 static int kvstxn_check_root_cb (struct kvsroot *root, void *arg)
 {
-    struct kvs_cb_data *cbd = arg;
+    struct kvs_ctx *ctx = arg;
     kvstxn_t *kt;
 
     if ((kt = kvstxn_mgr_get_ready_transaction (root->ktm))) {
-        if (cbd->ctx->transaction_merge) {
+        if (ctx->transaction_merge) {
             /* if merge fails, set errnum in kvstxn_t, let
              * kvstxn_apply() handle error handling.
              */
@@ -1076,11 +1076,10 @@ static void transaction_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                                   int revents, void *arg)
 {
     struct kvs_ctx *ctx = arg;
-    struct kvs_cb_data cbd = { .ctx = ctx, .ready = false };
 
     flux_watcher_stop (ctx->idle_w);
 
-    if (kvsroot_mgr_iter_roots (ctx->krm, kvstxn_check_root_cb, &cbd) < 0) {
+    if (kvsroot_mgr_iter_roots (ctx->krm, kvstxn_check_root_cb, ctx) < 0) {
         flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
         return;
     }
