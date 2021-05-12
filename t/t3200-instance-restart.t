@@ -12,19 +12,23 @@ if test -n "$S3_ACCESS_KEY_ID"; then
     export FLUX_CONF_DIR=$(pwd)
 fi
 
+lastword () {
+	awk '{ print $NF }'
+}
+
 test_expect_success 'run a job in persistent instance' '
 	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
-	           flux mini run -v /bin/true 2>&1 | sed -n "s/jobid: //p" >id1.out
+	           flux mini run -v /bin/true 2>&1 | lastword >id1.out
 '
 
 test_expect_success 'restart instance and run another job' '
 	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
-	           flux mini run -v /bin/true 2>&1 | sed -n "s/jobid: //p" >>id2.out
+	           flux mini run -v /bin/true 2>&1 | lastword >>id2.out
 '
 
 test_expect_success 'restart instance and run another job' '
 	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
-	           flux mini run -v /bin/true 2>&1 | sed -n "s/jobid: //p" >>id3.out
+	           flux mini run -v /bin/true 2>&1 | lastword >>id3.out
 '
 
 test_expect_success 'restart instance and list inactive jobs' '
@@ -48,7 +52,7 @@ test_expect_success 'run a job in persistent instance (content-files)' '
 	flux start \
 	    -o,-Scontent.backing-module=content-files \
 	    -o,-Scontent.backing-path=$(pwd)/content.files \
-	    flux mini run -v /bin/true 2>&1 | sed -n "s/jobid: //p" >files_id1.out
+	    flux mini run -v /bin/true 2>&1 | lastword >files_id1.out
 '
 test_expect_success 'restart instance and list inactive jobs' '
 	flux start \
@@ -83,7 +87,7 @@ test_expect_success S3 'create content-s3.toml from env' '
 test_expect_success S3 'run a job in persistent instance (content-s3)' '
 	flux start \
 	    -o,-Scontent.backing-module=content-s3 \
-	    flux mini run -v /bin/true 2>&1 | sed -n "s/jobid: //p" >files_id2.out
+	    flux mini run -v /bin/true 2>&1 | lastword >files_id2.out
 '
 test_expect_success S3 'restart instance and list inactive jobs' '
 	flux start \
