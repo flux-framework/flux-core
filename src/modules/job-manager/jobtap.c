@@ -51,6 +51,7 @@ static struct jobtap_builtin jobtap_builtins [] = {
 struct jobtap {
     struct job_manager *ctx;
     flux_plugin_t *plugin;
+    struct job *current_job;
     char last_error [128];
 };
 
@@ -138,6 +139,19 @@ error:
     return NULL;
 }
 
+static int jobtap_plugin_call (struct jobtap *jobtap,
+                               struct job *job,
+                               const char *topic,
+                               flux_plugin_arg_t *args)
+{
+    int rc;
+    jobtap->current_job = job_incref (job);
+    rc = flux_plugin_call (jobtap->plugin, topic, args);
+    jobtap->current_job = NULL;
+    job_decref (job);
+    return rc;
+}
+
 int jobtap_get_priority (struct jobtap *jobtap,
                          struct job *job,
                          int64_t *pprio)
@@ -156,7 +170,9 @@ int jobtap_get_priority (struct jobtap *jobtap,
     }
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
-    rc = flux_plugin_call (jobtap->plugin, "job.priority.get", args);
+
+    rc = jobtap_plugin_call (jobtap, job, "job.priority.get", args);
+
     if (rc == 1) {
         /*
          *  A priority.get callback was run. Try to unpack a new priority
@@ -237,7 +253,9 @@ int jobtap_validate (struct jobtap *jobtap,
         return 0;
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
-    rc = flux_plugin_call (jobtap->plugin, "job.validate", args);
+
+    rc = jobtap_plugin_call (jobtap, job, "job.validate", args);
+
     if (rc < 0) {
         /*
          *  Plugin callback failed, check for errmsg for this job
@@ -294,7 +312,7 @@ int jobtap_call (struct jobtap *jobtap,
     if (!args)
         return -1;
 
-    rc = flux_plugin_call (jobtap->plugin, topic, args);
+    rc = jobtap_plugin_call (jobtap, job, topic, args);
     if (rc < 0) {
         flux_log (jobtap->ctx->h, LOG_ERR,
                   "jobtap: %s: %s: callback returned error",
