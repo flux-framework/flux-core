@@ -9,7 +9,7 @@ flux-proxy(1)
 SYNOPSIS
 ========
 
-**flux** **proxy** URI [command [args...]]
+**flux** **proxy** [*OPTIONS*] URI [command [args...]]
 
 DESCRIPTION
 ===========
@@ -25,6 +25,13 @@ The purpose of **flux proxy** is to allow a connection to be reused,
 for example where connection establishment has high latency or
 requires authentication.
 
+
+OPTIONS
+=======
+
+**-f, --force**
+   Allow the proxy command to connect to a broker running a different
+   version of Flux with a warning message instead of a fatal error.
 
 EXAMPLES
 ========
