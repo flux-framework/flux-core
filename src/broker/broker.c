@@ -117,12 +117,11 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "+vX:k:g:S:c:"
+#define OPTIONS "+vX:k:S:c:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
     {"module-path",     required_argument,  0, 'X'},
     {"k-ary",           required_argument,  0, 'k'},
-    {"shutdown-grace",  required_argument,  0, 'g'},
     {"setattr",         required_argument,  0, 'S'},
     {"config-path",     required_argument,  0, 'c'},
     {0, 0, 0, 0},
@@ -163,9 +162,6 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
                 log_err_exit ("k-ary '%s'", optarg);
             if (ctx->tbon_k < 1)
                 usage ();
-            break;
-        case 'g':   /* --shutdown-grace */
-            log_msg ("Warning: --shutdown-grace option is deprecated");
             break;
         case 'S': { /* --setattr ATTR=VAL */
             char *val, *attr = xstrdup (optarg);
