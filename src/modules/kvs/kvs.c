@@ -1005,7 +1005,6 @@ done:
      * N.B. treq_t remains in the treq_mgr_t hash until event is received.
      */
     kvstxn_mgr_remove_transaction (root->ktm, kt, fallback);
-    return;
 
 stall:
     return;
