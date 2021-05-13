@@ -81,4 +81,18 @@ test_expect_success 'flux-proxy forwards LD_LIBRARY_PATH' '
 	grep -E "ssh.* LD_LIBRARY_PATH=[^ ]*:?/foo .*/flux relay" ./proxinator.log
 '
 
+test_expect_success 'set bogus broker version' '
+	flux getattr version >realversion &&
+	flux setattr version 0.0.0
+'
+test_expect_success 'flux-proxy fails with version mismatch' '
+	test_must_fail flux proxy $FLUX_URI /bin/true
+'
+test_expect_success 'flux-proxy --force works with version mismatch' '
+	flux proxy --force $FLUX_URI /bin/true
+'
+test_expect_success 'restore real broker version' '
+	flux setattr version $(cat realversion)
+'
+
 test_done
