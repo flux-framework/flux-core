@@ -639,8 +639,9 @@ static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
     init_attrs_rc_paths (attrs);
     init_attrs_shell_paths (attrs);
 
-    if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING,
-                                            FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    /* Allow version to be changed by instance owner for testing
+     */
+    if (attr_add (attrs, "version", FLUX_CORE_VERSION_STRING, 0) < 0)
         log_err_exit ("attr_add version");
 
     char tmp[32];
