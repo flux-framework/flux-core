@@ -238,18 +238,12 @@ int main (int argc, char *argv[])
 
     ctx.exit_rc = 1;
 
-    if (!(ctx.sigwatchers = zlist_new ()))
-        oom ();
-    if (!(ctx.modhash = modhash_create ()))
-        oom ();
-    if (!(ctx.services = service_switch_create ()))
-        oom ();
-    if (!(ctx.attrs = attr_create ()))
-        oom ();
-    if (!(ctx.subscriptions = zlist_new ()))
-        oom ();
-    if (!(ctx.publisher = publisher_create ()))
-        oom ();
+    if (!(ctx.sigwatchers = zlist_new ())
+        || !(ctx.modhash = modhash_create ())
+        || !(ctx.services = service_switch_create ())
+        || !(ctx.attrs = attr_create ())
+        || !(ctx.subscriptions = zlist_new ()))
+        log_msg_exit ("Out of memory in early initialization");
 
     ctx.tbon_k = 2; /* binary TBON is default */
     /* Record the instance owner: the effective uid of the broker. */
@@ -266,12 +260,10 @@ int main (int argc, char *argv[])
      */
     sigset_t sigmask;
     sigfillset (&sigmask);
-    if (sigprocmask (SIG_SETMASK, &sigmask, &old_sigmask) < 0)
-        log_err_exit ("sigprocmask");
-    if (sigaction (SIGINT, NULL, &old_sigact_int) < 0)
-        log_err_exit ("sigaction");
-    if (sigaction (SIGTERM, NULL, &old_sigact_term) < 0)
-        log_err_exit ("sigaction");
+    if (sigprocmask (SIG_SETMASK, &sigmask, &old_sigmask) < 0
+        || sigaction (SIGINT, NULL, &old_sigact_int) < 0
+        || sigaction (SIGTERM, NULL, &old_sigact_term) < 0)
+        log_err_exit ("error setting signal mask");
 
     /* Initailize zeromq context
      */
@@ -287,22 +279,13 @@ int main (int argc, char *argv[])
     zsys_set_sndhwm (0);
     zsys_set_ipv6 (1);
 
-    /* Set up the flux reactor.
+    /* Set up the flux reactor with support for child watchers.
+     * Associate an internal flux_t handle with the reactor.
      */
-    if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD))) {
-        log_err ("flux_reactor_create");
-        goto cleanup;
-    }
-
-    /* Set up flux handle.
-     * The handle is used for simple purposes such as logging.
-     */
-    if (!(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0))) {
-        log_err ("flux_handle_create");
-        goto cleanup;
-    }
-    if (flux_set_reactor (ctx.h, ctx.reactor) < 0) {
-        log_err ("flux_set_reactor");
+    if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD))
+        || !(ctx.h = flux_handle_create (&ctx, &broker_handle_ops, 0))
+        || flux_set_reactor (ctx.h, ctx.reactor) < 0) {
+        log_err ("error setting up broker reactor/flux_t handle");
         goto cleanup;
     }
 
@@ -333,13 +316,13 @@ int main (int argc, char *argv[])
     /* Arrange for the publisher to route event messages.
      * handle_event - local subscribers (ctx.h)
      */
-    if (publisher_set_flux (ctx.publisher, ctx.h) < 0) {
-        log_err ("publisher_set_flux");
-        goto cleanup;
-    }
-    if (publisher_set_sender (ctx.publisher, "handle_event",
-                              (publisher_send_f)handle_event, &ctx) < 0) {
-        log_err ("publisher_set_sender");
+    if (!(ctx.publisher = publisher_create ())
+        || publisher_set_flux (ctx.publisher, ctx.h) < 0
+        || publisher_set_sender (ctx.publisher,
+                                 "handle_event",
+                                 (publisher_send_f)handle_event,
+                                 &ctx) < 0) {
+        log_err ("error setting up event publishing service");
         goto cleanup;
     }
 
@@ -516,12 +499,10 @@ cleanup:
 
     /* Restore default sigmask and actions for SIGINT, SIGTERM
      */
-    if (sigprocmask (SIG_SETMASK, &old_sigmask, NULL) < 0)
-        log_err ("sigprocmask");
-    if (sigaction (SIGINT, &old_sigact_int, NULL) < 0)
-        log_err ("sigaction");
-    if (sigaction (SIGTERM, &old_sigact_term, NULL) < 0)
-        log_err ("sigaction");
+    if (sigprocmask (SIG_SETMASK, &old_sigmask, NULL) < 0
+        || sigaction (SIGINT, &old_sigact_int, NULL) < 0
+        || sigaction (SIGTERM, &old_sigact_term, NULL) < 0)
+        log_err ("error restoring signal mask");
 
     /* Unregister builtin services
      */
