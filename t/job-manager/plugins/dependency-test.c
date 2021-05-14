@@ -59,7 +59,7 @@ static int depend_cb (flux_plugin_t *p,
                                 "jobspec",
                                 "attributes",
                                 "system",
-                                "dependencies", &deps) < 0)
+                                "dependency-test", &deps) < 0)
         return -1;
     if (deps && json_is_array (deps)) {
         size_t index;

@@ -37,7 +37,7 @@ test_expect_success 'job-manager: dependency-test plugin is working' '
 '
 test_expect_success 'job dependencies are available in listing tools' '
 	jobid=$(flux mini submit \
-		--setattr=system.dependencies="[\"foo\"]" \
+		--setattr=system.dependency-test="[\"foo\"]" \
 		hostname) &&
 	flux job wait-event -t 15 -m description=foo ${jobid} dependency-add &&
 	flux jobs -o {id}:{dependencies} &&
@@ -49,7 +49,7 @@ test_expect_success 'job dependencies are available in listing tools' '
 '
 test_expect_success 'multiple job dependencies works' '
 	jobid=$(flux mini submit \
-		--setattr=system.dependencies="[\"foo\",\"bar\"]" \
+		--setattr=system.dependency-test="[\"foo\",\"bar\"]" \
 		hostname) &&
 	flux job wait-event -t 15 -m description=bar ${jobid} dependency-add &&
 	flux jobs -o {id}:{dependencies} &&
@@ -62,7 +62,7 @@ test_expect_success 'multiple job dependencies works' '
 '
 test_expect_success 'multiple dependency-add with same description is ignored' '
 	jobid=$(flux mini submit \
-		--setattr=system.dependencies="[\"bar\",\"bar\"]" \
+		--setattr=system.dependency-test="[\"bar\",\"bar\"]" \
 		hostname) &&
 	flux job wait-event -t 15 -m description=bar ${jobid} dependency-add &&
 	flux job eventlog ${jobid} &&
@@ -74,7 +74,7 @@ test_expect_success 'multiple dependency-add with same description is ignored' '
 
 test_expect_success 'invalid dependency-remove is ignored' '
 	jobid=$(flux mini submit \
-		--setattr=system.dependencies="[\"bar\"]" \
+		--setattr=system.dependency-test="[\"bar\"]" \
 		hostname) &&
 	flux job wait-event -t 15 -m description=bar ${jobid} dependency-add &&
 	test_must_fail flux python dep-remove.py ${jobid} foo  &&
@@ -87,7 +87,7 @@ test_expect_success 'invalid dependency-remove is ignored' '
 '
 test_expect_success 'dependencies are re-established after restart' '
 	jobid=$(flux mini submit \
-		--setattr=system.dependencies="[\"foo\",\"bar\"]" \
+		--setattr=system.dependency-test="[\"foo\",\"bar\"]" \
 		hostname) &&
 	flux job wait-event -t 15 -m description=bar ${jobid} dependency-add &&
 	flux jobs -o {id}:{dependencies} &&
