@@ -222,6 +222,34 @@ error:
     usock_conn_destroy (uconn);
 }
 
+/* Compare proxy version with broker version.
+ * Require major, minor, and patch numbers to match, ignoring patch suffix.
+ */
+static void version_check (flux_t *h, bool force)
+{
+    unsigned int n[3];
+    const char *version;
+
+    if (!(version = flux_attr_get (h, "version")))
+        log_err_exit ("flux_attr_get version");
+    if (sscanf (version, "%u.%u.%u", &n[0], &n[1], &n[2]) != 3
+        || n[0] != FLUX_CORE_VERSION_MAJOR
+        || n[1] != FLUX_CORE_VERSION_MINOR
+        || n[2] != FLUX_CORE_VERSION_PATCH) {
+        if (force) {
+            log_msg ("warning: proxy version %s != broker version %s",
+                      FLUX_CORE_VERSION_STRING,
+                      version);
+        }
+        else {
+            log_msg_exit ("fatal: proxy version %s != broker version %s "
+                          "(--force to connect anyway)",
+                          FLUX_CORE_VERSION_STRING,
+                          version);
+        }
+    }
+}
+
 static int cmd_proxy (optparse_t *p, int ac, char *av[])
 {
     int n;
@@ -249,6 +277,10 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         log_err_exit ("flux_reactor_create");
     if (flux_set_reactor (ctx.h, r) < 0)
         log_err_exit ("flux_set_reactor");
+
+    /* Check proxy version vs broker version
+     */
+    version_check (ctx.h, optparse_hasopt (p, "force"));
 
     /* Create router
      */
@@ -296,6 +328,12 @@ done:
     return (0);
 }
 
+static struct optparse_option proxy_opts[] = {
+    { .name = "force",  .key = 'f',  .has_arg = 0,
+      .usage = "Skip version check when connecting to Flux broker", },
+    OPTPARSE_TABLE_END,
+};
+
 int subcommand_proxy_register (optparse_t *p)
 {
     optparse_err_t e;
@@ -304,7 +342,7 @@ int subcommand_proxy_register (optparse_t *p)
         "[OPTIONS] URI [COMMAND...]",
         "Route messages to/from Flux instance",
         0,
-        NULL);
+        proxy_opts);
     if (e != OPTPARSE_SUCCESS)
         return (-1);
 
