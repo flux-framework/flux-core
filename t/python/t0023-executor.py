@@ -71,7 +71,8 @@ class TestFluxExecutor(unittest.TestCase):
                 if future.cancel():
                     self.assertFalse(future.running())
                     self.assertTrue(future.cancelled())
-                    self.assertEqual(future.jobid(), -1)
+                    with self.assertRaises(cf.CancelledError):
+                        future.jobid()
                     with self.assertRaises(cf.CancelledError):
                         future.exception()
                 else:
@@ -185,7 +186,8 @@ class TestFluxExecutorThread(unittest.TestCase):
         for fut in futures:
             with self.assertRaises(cf.CancelledError):
                 fut.result()
-            self.assertEqual(fut.jobid(), -1)
+            with self.assertRaises(cf.CancelledError):
+                fut.jobid()
 
     def test_exception_completion(self):
         jobspec = JobspecV1.from_command(["false"])
@@ -356,6 +358,17 @@ class TestFluxExecutorFuture(unittest.TestCase):
         )
         fut._set_event(EventLogEvent({"name": "start", "timestamp": 0}))
         self.assertTrue(flag.is_set())
+
+    def test_multiple_cancel(self):
+        fut = FluxExecutorFuture(threading.get_ident())
+        invocations = itertools.count()
+        fut.add_done_callback(lambda _: next(invocations))
+        self.assertFalse(fut.cancelled())
+        for _ in range(3):  # test cancelling more than once
+            self.assertTrue(fut.cancel())
+        self.assertEqual(next(invocations), 1)
+        with self.assertRaises(cf.CancelledError):
+            fut.jobid()
 
 
 if __name__ == "__main__":
