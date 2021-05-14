@@ -29,7 +29,9 @@ librouter_la_SOURCES = \
 	servhash.h \
 	servhash.c \
 	router.h \
-	router.c
+	router.c \
+	usock_service.h \
+	usock_service.c
 
 TESTS = \
 	test_sendfd.t \
@@ -41,7 +43,8 @@ TESTS = \
 	test_usock_emfile.t \
 	test_subhash.t \
 	test_router.t \
-	test_servhash.t
+	test_servhash.t \
+	test_usock_service.t
 
 check_PROGRAMS = \
         $(TESTS)
@@ -120,3 +123,8 @@ test_servhash_t_SOURCES = test/servhash.c
 test_servhash_t_CPPFLAGS = $(test_cppflags)
 test_servhash_t_LDADD = $(test_ldadd)
 test_servhash_t_LDFLAGS = $(test_ldflags)
+
+test_usock_service_t_SOURCES = test/usock_service.c
+test_usock_service_t_CPPFLAGS = $(test_cppflags)
+test_usock_service_t_LDADD = $(test_ldadd)
+test_usock_service_t_LDFLAGS = $(test_ldflags)

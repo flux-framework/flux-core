@@ -23,6 +23,7 @@
 #include <signal.h>
 #include <argz.h>
 #include <sys/ioctl.h>
+#include <jansson.h>
 #include <flux/core.h>
 #include <flux/optparse.h>
 
@@ -36,6 +37,7 @@
 #include "src/common/libpmi/clique.h"
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libhostlist/hostlist.h"
+#include "src/common/librouter/usock_service.h"
 
 #define DEFAULT_KILLER_TIMEOUT 20.0
 
@@ -53,6 +55,8 @@ static struct {
         zhash_t *kvs;
         struct pmi_simple_server *srv;
     } pmi;
+    flux_t *h;
+    flux_msg_handler_t **handlers;
 } ctx;
 
 struct client {
@@ -470,6 +474,9 @@ struct client *client_create (const char *broker_path,
         log_err_exit ("flux_cmd_setenvf");
     if (flux_cmd_setenvf (cli->cmd, 1, "PMI_SIZE", "%d", ctx.test_size) < 0)
         log_err_exit ("flux_cmd_setenvf");
+    if (flux_cmd_setenvf (cli->cmd, 1, "FLUX_START_URI",
+                          "local://%s/start", scratch_dir) < 0)
+        log_err_exit ("flux_cmd_setenvf");
     if (h) {
         if (flux_cmd_setenvf (cli->cmd, 1, "FLUX_FAKE_HOSTNAME", "%s", h) < 0)
             log_err_exit ("error setting fake hostname for rank %d", rank);
@@ -574,6 +581,90 @@ void restore_termios (void)
         log_err ("tcsetattr");
 }
 
+void status_cb (flux_t *h,
+                flux_msg_handler_t *mh,
+                const flux_msg_t *msg,
+                void *arg)
+{
+    struct client *cli;
+    json_t *procs = NULL;
+
+    if (!(procs = json_array()))
+        goto nomem;
+    cli = zlist_first (ctx.clients);
+    while (cli) {
+        json_t *entry;
+
+        if (!(entry = json_pack ("{s:i}",
+                                 "pid", flux_subprocess_pid (cli->p))))
+            goto nomem;
+        if (json_array_append_new (procs, entry) < 0) {
+            json_decref (entry);
+            goto nomem;
+        }
+        cli = zlist_next (ctx.clients);
+    }
+    if (flux_respond_pack (h, msg, "{s:O}", "procs", procs) < 0)
+        log_err ("error responding to status request");
+    json_decref (procs);
+    return;
+nomem:
+    errno = ENOMEM;
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        log_err ("error responding to status request");
+    json_decref (procs);
+}
+
+void disconnect_cb (flux_t *h,
+                    flux_msg_handler_t *mh,
+                    const flux_msg_t *msg,
+                    void *arg)
+{
+    char *uuid = NULL;
+
+    if (flux_msg_get_route_first (msg, &uuid) < 0)
+        goto done;
+    if (optparse_hasopt (ctx.opts, "verbose"))
+        log_msg ("disconnect from %.5s", uuid);
+done:
+    free (uuid);
+}
+
+const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "start.status", status_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "disconnect", disconnect_cb, 0 },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+/* Set up test-related RPC handlers on local://${rundir}/start
+ * Ensure that service-related reactor watchers do not contribute to the
+ * reactor usecount, since the reactor is expected to exit once the
+ * subprocesses are complete.
+ */
+void start_server_initialize (const char *rundir, bool verbose)
+{
+    char path[1024];
+    if (snprintf (path, sizeof (path), "%s/start", rundir) >= sizeof (path))
+        log_msg_exit ("internal buffer overflow");
+    if (!(ctx.h = usock_service_create (ctx.reactor, path, verbose)))
+        log_err_exit ("could not created embedded flux-start server");
+    if (flux_msg_handler_addvec (ctx.h, htab, NULL, &ctx.handlers) < 0)
+        log_err_exit ("could not register service methods");
+    /* Service related watchers:
+     * - usock server listen fd
+     * - flux_t handle watcher (adds 2 active prep/check watchers)
+     */
+    int ignore_watchers = 3;
+    while (ignore_watchers-- > 0)
+        flux_reactor_active_decref (ctx.reactor);
+}
+
+void start_server_finalize (void)
+{
+    flux_msg_handler_delvec (ctx.handlers);
+    flux_close (ctx.h);
+}
+
 /* Start an internal PMI server, and then launch the requested number of
  * broker processes that inherit a file desciptor to the internal PMI
  * server.  They will use that to bootstrap.  Since the PMI server is
@@ -612,6 +703,9 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     else
         scratch_dir = create_scratch_dir ();
 
+    start_server_initialize (scratch_dir,
+                             optparse_hasopt (ctx.opts, "verbose"));
+
     if (optparse_hasopt (ctx.opts, "trace-pmi-server"))
         flags |= PMI_SIMPLE_SERVER_TRACE;
 
@@ -649,6 +743,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
         log_err_exit ("flux_reactor_run");
 
     pmi_server_finalize ();
+    start_server_finalize ();
 
     hostlist_destroy (hosts);
     free (scratch_dir);
