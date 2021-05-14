@@ -22,6 +22,7 @@ import atexit
 from itertools import chain
 from string import Template
 from collections import ChainMap
+from urllib.parse import urlparse, parse_qs
 
 import flux
 from flux import job
@@ -30,6 +31,58 @@ from flux import util
 from flux import debugged
 from flux.idset import IDset
 from flux.progress import ProgressBar
+
+
+class Dependency:
+    """Convenience class for handling dependencies
+
+    Splits a dependency URI into fields and returns an RFC 26 dependency
+    entry via the entry attribute.
+    """
+
+    def __init__(self, uri):
+        # replace first ':' with ':FXX' to work around urlparse refusal
+        # to treat integer only path as a scheme:path.
+        self.uri = urlparse(uri.replace(":", ":FXX", 1))
+
+        if not self.uri.scheme or not self.uri.path:
+            raise ValueError(f'Invalid dependency URI "{uri}"')
+
+        self.path = self.uri.path.replace("FXX", "", 1)
+        self.scheme = self.uri.scheme
+
+    @staticmethod
+    def _try_number(value):
+        """Convert value to an int or a float if possible"""
+        for _type in (int, float):
+            try:
+                return _type(value)
+            except ValueError:
+                continue
+        return value
+
+    @property
+    def entry(self):
+        entry = {
+            "scheme": self.scheme,
+            "value": self._try_number(self.path),
+        }
+        if self.uri.query:
+            for key, val in parse_qs(self.uri.query).items():
+                #  val is always a list, but convert to single value
+                #   if it only contains a single item:
+                if len(val) > 1:
+                    entry[key] = [self._try_number(x) for x in val]
+                else:
+                    entry[key] = self._try_number(val[0])
+        return entry
+
+
+def dependency_array_create(uris):
+    dependencies = []
+    for uri in uris:
+        dependencies.append(Dependency(uri).entry)
+    return dependencies
 
 
 def filter_dict(env, pattern, reverseMatch=True):
@@ -392,6 +445,12 @@ class MiniCmd:
             metavar="ATTR=VAL",
         )
         parser.add_argument(
+            "--dependency",
+            action="append",
+            help="Set an RFC 26 dependency URI for this job",
+            metavar="URI",
+        )
+        parser.add_argument(
             "--env",
             action="append",
             help="Control how environment variables are exported. If RULE "
@@ -482,6 +541,10 @@ class MiniCmd:
         jobspec = self.init_jobspec(args)
         jobspec.cwd = os.getcwd()
         jobspec.environment = get_filtered_environment(args.env)
+        if args.dependency is not None:
+            jobspec.setattr(
+                "system.dependencies", dependency_array_create(args.dependency)
+            )
         if args.time_limit is not None:
             jobspec.duration = args.time_limit
 
