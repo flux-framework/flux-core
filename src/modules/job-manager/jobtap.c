@@ -273,6 +273,20 @@ int jobtap_get_priority (struct jobtap *jobtap,
     return rc;
 }
 
+static void error_asprintf (struct jobtap *jobtap,
+                            struct job *job,
+                            char **errp,
+                            const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    if (vasprintf (errp, fmt, ap) < 0)
+        flux_log_error (jobtap->ctx->h,
+                        "id=%ju: failed to create error string: fmt=%s",
+                        (uintmax_t) job->id, fmt);
+    va_end (ap);
+}
+
 int jobtap_validate (struct jobtap *jobtap,
                      struct job *job,
                      char **errp)
@@ -304,6 +318,140 @@ int jobtap_validate (struct jobtap *jobtap,
                       "jobtap: %s: validate failed to capture errmsg",
                       jobtap_plugin_name (jobtap->plugin));
     }
+    flux_plugin_arg_destroy (args);
+    return rc;
+}
+
+static int jobtap_check_dependency (struct jobtap *jobtap,
+                                    struct job *job,
+                                    flux_plugin_arg_t *args,
+                                    int index,
+                                    json_t *entry,
+                                    char **errp)
+{
+    int rc = -1;
+    char topic [128];
+    const char *scheme = NULL;
+
+    if (json_unpack (entry, "{s:s}", "scheme", &scheme) < 0
+        || scheme == NULL) {
+        error_asprintf (jobtap, job, errp,
+                        "dependency[%d] missing string scheme",
+                        index);
+        return -1;
+    }
+
+    if (snprintf (topic,
+                  sizeof (topic),
+                  "job.dependency.%s",
+                  scheme) > sizeof (topic)) {
+        error_asprintf (jobtap, job, errp,
+                        "rejecting absurdly long dependency scheme: %s",
+                        scheme);
+        return -1;
+    }
+
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_IN|FLUX_PLUGIN_ARG_UPDATE,
+                              "{s:O}",
+                              "dependency", entry) < 0
+        || flux_plugin_arg_set (args, FLUX_PLUGIN_ARG_OUT, "{}") < 0) {
+        flux_log_error (jobtap->ctx->h,
+                        "jobtap_check_depedency: failed to prepare args");
+        return -1;
+    }
+
+    rc = jobtap_plugin_call (jobtap, job, topic, args);
+    if (rc == 0) {
+        /*  No handler for job.dependency.<scheme>. return an error.
+         */
+        error_asprintf (jobtap, job, errp,
+                        "dependency scheme \"%s\" not supported",
+                        scheme);
+        rc = -1;
+    }
+    else if (rc < 0) {
+        /*
+         *  Plugin callback failed, check for errmsg for this job
+         *   If plugin did not provide an error message, then construct
+         *   a generic error "rejected by plugin".
+         */
+        const char *errmsg;
+        if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
+                                    "{s:s}",
+                                    "errmsg", &errmsg) < 0) {
+                errmsg = "rejected by job-manager dependency plugin";
+        }
+        error_asprintf (jobtap, job, errp,
+                        "%s: %s",
+                        jobtap_plugin_name (jobtap->plugin),
+                        errmsg);
+    }
+    return rc;
+}
+
+static int dependencies_unpack (struct jobtap * jobtap,
+                                struct job * job,
+                                char **errp,
+                                json_t **resultp)
+{
+    json_t *dependencies = NULL;
+    json_error_t error;
+
+    if (json_unpack_ex (job->jobspec_redacted, &error, 0,
+                        "{s:{s?{s?o}}}",
+                        "attributes",
+                        "system",
+                        "dependencies", &dependencies) < 0) {
+        error_asprintf (jobtap, job, errp,
+                        "unable to unpack dependencies: %s",
+                        error.text);
+        return -1;
+    }
+
+    if (!dependencies)
+        return 0;
+
+    if (!json_is_array (dependencies)) {
+        error_asprintf (jobtap, job, errp,
+                        "dependencies object must be an array");
+        return -1;
+    }
+
+    if (json_array_size (dependencies) == 0)
+        return 0;
+
+    *resultp = dependencies;
+    return 0;
+}
+
+int jobtap_check_dependencies (struct jobtap *jobtap,
+                               struct job *job,
+                               char **errp)
+{
+    int rc = -1;
+    flux_plugin_arg_t *args = NULL;
+    json_t *dependencies = NULL;
+    json_t *entry;
+    size_t index;
+
+    if ((rc = dependencies_unpack (jobtap, job, errp, &dependencies)) < 0
+        || dependencies == NULL)
+        return rc;
+
+    if (!(args = jobtap_args_create (jobtap, job))) {
+        error_asprintf (jobtap, job, errp,
+                        "jobtap_check_dependencies: failed to create args");
+        return -1;
+    }
+
+    json_array_foreach (dependencies, index, entry) {
+        rc = jobtap_check_dependency (jobtap, job, args, index, entry, errp);
+        if (rc < 0)
+           goto out;
+    }
+    rc = 0;
+out:
     flux_plugin_arg_destroy (args);
     return rc;
 }
