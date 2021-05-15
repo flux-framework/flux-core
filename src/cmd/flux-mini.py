@@ -964,8 +964,8 @@ class SubmitBulkCmd(SubmitBaseCmd):
             self.progress_start(args, len(cclist))
 
         for i in cclist:
-            #  substitute any {cc} in args and create jobspec:
-            xargs = Xcmd(args, cc=i)
+            #  substitute any {cc} in args (only if --cc or --bcc):
+            xargs = Xcmd(args, cc=i) if i else args
             jobspec = self.jobspec_create(xargs)
 
             if args.cc or args.bcc:
