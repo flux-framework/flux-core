@@ -19,6 +19,7 @@
 #include "treq.h"
 #include "waitqueue.h"
 #include "src/common/libutil/blobref.h"
+#include "src/common/libccan/ccan/list/list.h"
 
 typedef struct kvsroot_mgr kvsroot_mgr_t;
 
@@ -35,6 +36,7 @@ struct kvsroot {
     bool remove;
     bool setroot_pause;
     zlist_t *setroot_queue;
+    struct list_node work_queue_node;
 };
 
 /* return -1 on error, 0 on success, 1 on success & to stop iterating */

@@ -24,6 +24,7 @@
 #include <jansson.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libccan/ccan/list/list.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
@@ -68,6 +69,7 @@ struct kvs_ctx {
     bool events_init;            /* flag */
     const char *hash_name;
     unsigned int seq;           /* for commit transactions */
+    struct list_head work_queue;
 };
 
 struct kvs_cb_data {
@@ -75,7 +77,6 @@ struct kvs_cb_data {
     struct kvsroot *root;
     wait_t *wait;
     int errnum;
-    bool ready;
     const flux_msg_t *msg;
 };
 
@@ -134,6 +135,7 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
         flux_watcher_start (ctx->check_w);
     }
     ctx->transaction_merge = 1;
+    list_head_init (&ctx->work_queue);
     return ctx;
 error:
     kvs_ctx_destroy (ctx);
@@ -864,6 +866,32 @@ static void kvstxn_wait_error_cb (wait_t *w, int errnum, void *arg)
     kvstxn_set_aux_errnum (kt, errnum);
 }
 
+/* ccan list doesn't appear to have a macro to check if a node exists
+ * on a list */
+static inline bool root_on_work_queue (struct list_node *n)
+{
+    return !(n->next == n->prev && n->next == n);
+}
+
+static void work_queue_append (struct kvs_ctx *ctx,
+                               struct kvsroot *root)
+{
+    if (!root_on_work_queue (&root->work_queue_node))
+        list_add_tail (&ctx->work_queue, &root->work_queue_node);
+}
+
+static void work_queue_remove (struct kvsroot *root)
+{
+    list_del_init (&root->work_queue_node);
+}
+
+static void work_queue_check_append (struct kvs_ctx *ctx,
+                                     struct kvsroot *root)
+{
+    if (kvstxn_mgr_transaction_ready (root->ktm))
+        work_queue_append (ctx, root);
+}
+
 /* Write all the ops for a particular commit/fence request (rank 0
  * only).  The setroot event will cause responses to be sent to the
  * transaction requests and clean up the treq_t state.  This
@@ -1005,9 +1033,12 @@ done:
      * N.B. treq_t remains in the treq_mgr_t hash until event is received.
      */
     kvstxn_mgr_remove_transaction (root->ktm, kt, fallback);
-    return;
 
 stall:
+    if (kvstxn_mgr_transaction_ready (root->ktm))
+        work_queue_append (ctx, root);
+    else
+        work_queue_remove (root);
     return;
 }
 
@@ -1015,40 +1046,22 @@ stall:
  * pre/check event callbacks
  */
 
-static int kvstxn_prep_root_cb (struct kvsroot *root, void *arg)
-{
-    struct kvs_cb_data *cbd = arg;
-
-    if (kvstxn_mgr_transaction_ready (root->ktm)) {
-        cbd->ready = true;
-        return 1;
-    }
-
-    return 0;
-}
-
 static void transaction_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                                  int revents, void *arg)
 {
     struct kvs_ctx *ctx = arg;
-    struct kvs_cb_data cbd = { .ctx = ctx, .ready = false };
 
-    if (kvsroot_mgr_iter_roots (ctx->krm, kvstxn_prep_root_cb, &cbd) < 0) {
-        flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
-        return;
-    }
-
-    if (cbd.ready)
+    if (!list_empty (&ctx->work_queue))
         flux_watcher_start (ctx->idle_w);
 }
 
-static int kvstxn_check_root_cb (struct kvsroot *root, void *arg)
+static void kvstxn_check_root_cb (struct kvsroot *root, void *arg)
 {
-    struct kvs_cb_data *cbd = arg;
+    struct kvs_ctx *ctx = arg;
     kvstxn_t *kt;
 
     if ((kt = kvstxn_mgr_get_ready_transaction (root->ktm))) {
-        if (cbd->ctx->transaction_merge) {
+        if (ctx->transaction_merge) {
             /* if merge fails, set errnum in kvstxn_t, let
              * kvstxn_apply() handle error handling.
              */
@@ -1068,22 +1081,19 @@ static int kvstxn_check_root_cb (struct kvsroot *root, void *arg)
          */
         kvstxn_apply (kt);
     }
-
-    return 0;
 }
 
 static void transaction_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                                   int revents, void *arg)
 {
     struct kvs_ctx *ctx = arg;
-    struct kvs_cb_data cbd = { .ctx = ctx, .ready = false };
+    struct kvsroot *root = NULL;
+    struct kvsroot *next = NULL;
 
     flux_watcher_stop (ctx->idle_w);
 
-    if (kvsroot_mgr_iter_roots (ctx->krm, kvstxn_check_root_cb, &cbd) < 0) {
-        flux_log_error (ctx->h, "%s: kvsroot_mgr_iter_roots", __FUNCTION__);
-        return;
-    }
+    list_for_each_safe (&ctx->work_queue, root, next, work_queue_node)
+        kvstxn_check_root_cb (root, ctx);
 }
 
 /*
@@ -1529,6 +1539,7 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
+    work_queue_check_append (ctx, root);
     return;
 
 error:
@@ -1608,6 +1619,8 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
                             __FUNCTION__);
             goto error;
         }
+
+        work_queue_check_append (ctx, root);
     }
     else {
         flux_future_t *f;
@@ -1706,6 +1719,8 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
                             __FUNCTION__);
             goto error;
         }
+
+        work_queue_check_append (ctx, root);
     }
 
     return;
@@ -1811,6 +1826,8 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                 __FUNCTION__);
                 goto error;
             }
+
+            work_queue_check_append (ctx, root);
         }
     }
     else {
@@ -2369,6 +2386,8 @@ static void start_root_remove (struct kvs_ctx *ctx, const char *ns)
 
         root->remove = true;
 
+        work_queue_remove (root);
+
         /* Now that root has been marked for removal from roothash, run through
          * the whole synclist.  requests will notice root removed, return
          * ENOTSUP to all those trying to sync.
@@ -2386,8 +2405,8 @@ static void start_root_remove (struct kvs_ctx *ctx, const char *ns)
          */
 
         if (treq_mgr_iter_transactions (root->trm,
-                                          root_remove_process_transactions,
-                                          &cbd) < 0)
+                                        root_remove_process_transactions,
+                                        &cbd) < 0)
             flux_log_error (ctx->h, "%s: treq_mgr_iter_transactions",
                             __FUNCTION__);
     }
