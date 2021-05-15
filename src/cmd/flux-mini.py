@@ -271,7 +271,7 @@ class Xcmd:
         for arg in args.command:
             try:
                 result = arg.format(*inputs, **kwargs).split("::list::")
-            except IndexError:
+            except (IndexError, KeyError):
                 LOGGER.error("Invalid replacement string in command: '%s'", arg)
                 sys.exit(1)
             if result:
@@ -295,9 +295,17 @@ class Xcmd:
                     newval = [x.format(*inputs, **kwargs) for x in val]
                 else:
                     newval = val
-            except IndexError:
+            except IndexError as exc:
                 LOGGER.error(
-                    "Invalid replacement string in %s: '%s'",
+                    "Invalid replacement index in %s%s'",
+                    self.mutable_args[attr],
+                    val,
+                )
+                sys.exit(1)
+            except KeyError as exc:
+                LOGGER.error(
+                    "Replacement key %s not found in '%s%s'",
+                    exc,
                     self.mutable_args[attr],
                     val,
                 )
