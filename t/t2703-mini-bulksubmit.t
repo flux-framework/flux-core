@@ -253,8 +253,8 @@ test_expect_success 'flux-mini bulksubmit reports invalid replacement strings' '
 	test_expect_code 1 flux mini bulksubmit -n {1} {} ::: 0 1 2 \
 	    >bad2.out 2>&1 &&
 	test_debug "cat bad2.out" &&
-	grep "Invalid replacement string in command" bad.out &&
-	grep "Invalid replacement string in -n" bad2.out
+	grep "Invalid replacement .* in command" bad.out &&
+	grep "Invalid replacement .* in -n" bad2.out
 '
 test_expect_success 'flux-mini bulksubmit: preserves mustache templates' '
 	flux mini bulksubmit --dry-run --output=flux-{}.{{id}}.out \
