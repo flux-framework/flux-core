@@ -252,4 +252,11 @@ test_expect_success 'flux-mini submit --cc works' '
 	EOF
 	test_cmp cc.output.expected cc.output.sorted
 '
+test_expect_success HAVE_JQ 'flux-mini submit does not substitute {} without --cc' '
+	flux mini submit \
+		--env=-* \
+		--setattr=system.test={} \
+		--dry-run true > nocc.json &&
+	jq -e ".attributes.system.test == {}" < nocc.json
+'
 test_done
