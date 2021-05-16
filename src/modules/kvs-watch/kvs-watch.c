@@ -209,19 +209,13 @@ error:
     return NULL;
 }
 
-/* Helper for watcher_respond - is key a member of array?
- * N.B. array 'a' can be NULL
+/* Helper for watcher_respond - is key a member of object?
+ * N.B. object 'o' can be NULL
  */
-static bool array_match (json_t *a, const char *key)
+static bool key_match (json_t *o, const char *key)
 {
-    size_t index;
-    json_t *value;
-
-    json_array_foreach (a, index, value) {
-        const char *s = json_string_value (value);
-        if (s && !strcmp (s, key))
-            return true;
-    }
+    if (o && json_object_get (o, key))
+        return true;
     return false;
 }
 
@@ -666,7 +660,7 @@ static void watcher_respond (struct ns_monitor *nsm, struct watcher *w)
      */
     if (w->rootseq == -1
         || (w->flags & FLUX_KVS_WATCH_FULL)
-        || array_match (nsm->commit->keys, w->key)) {
+        || key_match (nsm->commit->keys, w->key)) {
         if (process_lookup_response (nsm, w) < 0)
             goto error_respond;
     }
