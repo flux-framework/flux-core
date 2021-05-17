@@ -1262,17 +1262,6 @@ static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
             }
         }
     }
-    if ((len = json_array_size (src->keys))) {
-        for (i = 0; i < len; i++) {
-            json_t *key;
-            if ((key = json_array_get (src->keys, i))) {
-                if (json_array_append (dest->keys, key) < 0) {
-                    errno = ENOMEM;
-                    return -1;
-                }
-            }
-        }
-    }
 
     return 1;
 }
