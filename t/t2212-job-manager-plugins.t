@@ -255,14 +255,14 @@ test_expect_success 'job-manager: plugin can manage depedencies' '
 	EOF
 	flux module reload job-ingest &&
 	flux jobtap load ${PLUGINPATH}/dependency-test.so &&
-	jobid=$(flux mini submit hostname) &&
+	jobid=$(flux mini submit --dependency=test:dependency-test hostname) &&
 	flux job wait-event -vt 15 ${jobid} dependency-add &&
 	test $(flux jobs -no {state} ${jobid}) = DEPEND &&
 	flux python dep-remove.py ${jobid} &&
 	flux job wait-event -vt 15 ${jobid} clean
 '
 test_expect_success 'job-manager: job.state.depend is called on plugin load' '
-	jobid=$(flux mini submit hostname) &&
+	jobid=$(flux mini submit --dependency=test:dependency-test hostname) &&
 	flux job wait-event -vt 15 ${jobid} dependency-add &&
 	flux jobtap load ${PLUGINPATH}/dependency-test.so &&
 	test $(flux jobs -no {state} ${jobid}) = DEPEND &&
