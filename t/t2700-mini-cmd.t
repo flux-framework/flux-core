@@ -129,6 +129,23 @@ test_expect_success HAVE_JQ 'flux mini submit --setattr works' '
 	test $(jq ".attributes.user.foo2" attr.out) = "\"yyy\"" &&
 	test $(jq ".attributes.system.bar" attr.out) = "42"
 '
+test_expect_success HAVE_JQ 'flux mini submit --setattr=^ATTR=VAL works' '
+	cat | jq -S . >attr.json <<-EOF &&
+	[
+	  { "foo":"value",
+	    "bar": 42
+	  },
+	  { "foo":"value2",
+	    "bar": null
+	  }
+	]
+	EOF
+	flux mini submit --dry-run \
+		--setattr ^user.foo=attr.json \
+		hostname | \
+	    jq -S .attributes.user.foo > attrout.json &&
+	test_cmp attr.json attrout.json
+'
 test_expect_success 'flux mini submit --setattr fails without value' '
 	test_expect_code 1 \
 		flux mini submit --dry-run \
@@ -136,6 +153,29 @@ test_expect_success 'flux mini submit --setattr fails without value' '
 		hostname >attr_fail.out 2>&1 &&
 	test_debug "cat attr_fail.out" &&
 	grep "Missing value for attr foo" attr_fail.out
+'
+test_expect_success HAVE_JQ 'flux mini submit --setattr=^ detects bad JSON' '
+	cat <<-EOF > bad.json &&
+	[ { "foo":"value",
+	    "bar": 42
+	  },
+	  { foo":"value2",
+	    "bar": null
+	  }
+	]
+	EOF
+	test_expect_code 1 \
+	    flux mini submit --dry-run \
+	      --setattr ^user.foo=bad.json \
+	      hostname > attrbadjson.out 2>&1 &&
+	test_debug "cat attrbadjson.out" &&
+	grep "ERROR: --setattr: bad.json:" attrbadjson.out &&
+	test_expect_code 1 \
+	    flux mini submit --dry-run \
+	      --setattr ^user.foo=nosuchfile.json \
+	      hostname > attrbadfile.out 2>&1 &&
+	test_debug "cat attrbadfile.out" &&
+	grep "ERROR:.*nosuchfile" attrbadfile.out
 '
 test_expect_success HAVE_JQ 'flux mini submit --setopt works' '
 	flux mini submit --dry-run \
@@ -251,5 +291,12 @@ test_expect_success 'flux-mini submit --cc works' '
 	3
 	EOF
 	test_cmp cc.output.expected cc.output.sorted
+'
+test_expect_success HAVE_JQ 'flux-mini submit does not substitute {} without --cc' '
+	flux mini submit \
+		--env=-* \
+		--setattr=system.test={} \
+		--dry-run true > nocc.json &&
+	jq -e ".attributes.system.test == {}" < nocc.json
 '
 test_done

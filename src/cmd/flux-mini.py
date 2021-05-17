@@ -271,7 +271,7 @@ class Xcmd:
         for arg in args.command:
             try:
                 result = arg.format(*inputs, **kwargs).split("::list::")
-            except IndexError:
+            except (IndexError, KeyError):
                 LOGGER.error("Invalid replacement string in command: '%s'", arg)
                 sys.exit(1)
             if result:
@@ -295,9 +295,17 @@ class Xcmd:
                     newval = [x.format(*inputs, **kwargs) for x in val]
                 else:
                     newval = val
-            except IndexError:
+            except IndexError as exc:
                 LOGGER.error(
-                    "Invalid replacement string in %s: '%s'",
+                    "Invalid replacement index in %s%s'",
+                    self.mutable_args[attr],
+                    val,
+                )
+                sys.exit(1)
+            except KeyError as exc:
+                LOGGER.error(
+                    "Replacement key %s not found in '%s%s'",
+                    exc,
                     self.mutable_args[attr],
                     val,
                 )
@@ -378,7 +386,9 @@ class MiniCmd:
         parser.add_argument(
             "--setattr",
             action="append",
-            help="Set job attribute ATTR to VAL (multiple use OK)",
+            help="Set job attribute ATTR to VAL (multiple use OK). "
+            + "If ATTR starts with ^, then VAL is a file containing valid "
+            + "JSON which will be used as the value of the attribute.",
             metavar="ATTR=VAL",
         )
         parser.add_argument(
@@ -514,10 +524,18 @@ class MiniCmd:
                 if len(tmp) != 2:
                     raise ValueError("--setattr: Missing value for attr " + keyval)
                 key = tmp[0]
-                try:
-                    val = json.loads(tmp[1])
-                except (json.JSONDecodeError, TypeError):
-                    val = tmp[1]
+                if key.startswith("^"):
+                    key = key.strip("^")
+                    with open(tmp[1]) as filep:
+                        try:
+                            val = json.load(filep)
+                        except (json.JSONDecodeError, TypeError) as exc:
+                            raise ValueError(f"--setattr: {tmp[1]}: {exc}")
+                else:
+                    try:
+                        val = json.loads(tmp[1])
+                    except (json.JSONDecodeError, TypeError):
+                        val = tmp[1]
                 jobspec.setattr(key, val)
 
         return jobspec
@@ -964,8 +982,8 @@ class SubmitBulkCmd(SubmitBaseCmd):
             self.progress_start(args, len(cclist))
 
         for i in cclist:
-            #  substitute any {cc} in args and create jobspec:
-            xargs = Xcmd(args, cc=i)
+            #  substitute any {cc} in args (only if --cc or --bcc):
+            xargs = Xcmd(args, cc=i) if i else args
             jobspec = self.jobspec_create(xargs)
 
             if args.cc or args.bcc:

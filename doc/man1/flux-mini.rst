@@ -287,7 +287,9 @@ OTHER OPTIONS
 **--setattr=KEY=VAL**
    Set jobspec attribute. Keys may include periods to denote hierarchy.
    VAL may be valid JSON (bare values, objects, or arrays), otherwise VAL
-   is interpreted as a string.
+   is interpreted as a string. If KEY starts with a ``^`` character, then
+   VAL is interpreted as a file, which must be valid JSON, to use as the
+   attribute value.
 
 **--dry-run**
    Don't actually submit job. Just emit jobspec on stdout and exit for
