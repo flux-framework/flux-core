@@ -103,24 +103,19 @@ struct shell_task *shell_task_create (struct shell_info *info,
     task->index = index;
     task->rank = info->rankinfo.global_basis + index;
     task->size = info->total_ntasks;
-    if (!(task->cmd = flux_cmd_create (0,
-                                       NULL,
-                                       info->jobspec->environment ? NULL
-                                                                  : environ)))
+    if (!(task->cmd = flux_cmd_create (0, NULL, NULL)))
         goto error;
     json_array_foreach (info->jobspec->command, i, entry) {
         if (flux_cmd_argv_append (task->cmd, json_string_value (entry)) < 0)
             goto error;
     }
-    if (info->jobspec->environment) {
-        json_object_foreach (info->jobspec->environment, key, entry) {
-            if (flux_cmd_setenvf (task->cmd,
-                                  1,
-                                  key,
-                                  "%s",
-                                  json_string_value (entry)) < 0)
-                goto error;
-        }
+    json_object_foreach (info->jobspec->environment, key, entry) {
+        if (flux_cmd_setenvf (task->cmd,
+                              1,
+                              key,
+                              "%s",
+                              json_string_value (entry)) < 0)
+            goto error;
     }
     if (flux_cmd_setenvf (task->cmd, 1, "FLUX_TASK_LOCAL_ID", "%d", index) < 0)
         goto error;
