@@ -27,6 +27,7 @@
 #include "src/common/liboptparse/optparse.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "internal.h"
 #include "builtins.h"
@@ -286,6 +287,26 @@ int flux_shell_get_environ (flux_shell_t *shell, char **json_str)
     return 0;
 }
 
+static int object_set_string (json_t *dict, const char *name, const char *val)
+{
+    json_t *o;
+
+    if (!dict || !name || !val) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(o = json_string (val)))
+        goto nomem;
+    if (json_object_set_new (dict, name, o) < 0) {
+        json_decref (o);
+        goto nomem;
+    }
+    return 0;
+nomem:
+    errno = ENOMEM;
+    return -1;
+}
+
 int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
                         const char *name, const char *fmt, ...)
 {
@@ -309,10 +330,8 @@ int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
     rc = vasprintf (&val, fmt, ap);
     va_end (ap);
     if (rc >= 0) {
-        json_t *o = json_string (val);
-        if (o)
-            rc = json_object_set_new (env, name, o);
-        free (val);
+        rc = object_set_string (env, name, val);
+        ERRNO_SAFE_WRAP (free, val);
     }
     return rc;
 }
