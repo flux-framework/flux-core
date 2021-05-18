@@ -49,35 +49,38 @@ static int depend_cb (flux_plugin_t *p,
                       void *arg)
 {
     flux_jobid_t id;
-    json_t *deps = NULL;
-    flux_t *h = flux_jobtap_get_flux (p);
+    const char *name = NULL;
+    int remove = 0;
 
     if (flux_plugin_arg_unpack (args,
                                 FLUX_PLUGIN_ARG_IN,
-                                "{s:I s:{s:{s:{s?o}}}}",
+                                "{s:I s:{s:s s?i}}",
                                 "id", &id,
-                                "jobspec",
-                                "attributes",
-                                "system",
-                                "dependencies", &deps) < 0)
-        return -1;
-    if (deps && json_is_array (deps)) {
-        size_t index;
-        json_t *val;
-        json_array_foreach (deps, index, val) {
-            const char *s = json_string_value (val);
-            if (flux_jobtap_dependency_add (p, id, s) < 0) {
-                flux_log_error (h, "jobtap_dependency_add (%s)", s);
-                return -1;
-            }
-        }
-        return 0;
+                                "dependency",
+                                "value", &name,
+                                "remove", &remove) < 0) {
+        return flux_jobtap_reject_job (p, args,
+                                       "failed to unpack dependency args: %s",
+                                       flux_plugin_arg_strerror (args));
     }
-    return flux_jobtap_dependency_add (p, id, "dependency-test");
+
+    if (flux_jobtap_dependency_add (p, id, name) < 0) {
+        flux_log_error (flux_jobtap_get_flux (p),
+                        "flux_jobtap_dependency_add (%s)",
+                        name);
+        return -1;
+    }
+    if (remove && flux_jobtap_dependency_remove (p, id, name) < 0) {
+        flux_log_error (flux_jobtap_get_flux (p),
+                        "flux_jobtap_dependency_remove (%s)",
+                        name);
+        return -1;
+    }
+    return 0;
 }
 
 static const struct flux_plugin_handler tab[] = {
-    { "job.state.depend", depend_cb, NULL },
+    { "job.dependency.test", depend_cb, NULL },
     { 0 },
 };
 

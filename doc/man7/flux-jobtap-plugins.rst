@@ -102,6 +102,21 @@ job.validate
   callback, since ``job.new`` may also be called during job-manager
   restart or plugin reload.
 
+job.dependency.*
+  The ``job.dependency.*`` topic allows a dependency plugin to notify the
+  job-manager that it handles a given dependency _scheme_. The job-manager
+  will scan the ``attirbutes.system.dependencies`` array, if provided, and
+  issue a ``job.dependency.SCHEME`` callback for each listed dependency.
+  If no plugin has registered for ``SCHEME``, then the job is rejected.
+  The plugin should then call ``flux_jobtap_dependency_add(3)`` to add
+  a new named dependency to the job (if necessary). Jobs with dependencies
+  will remain in the ``DEPEND`` state until all dependencies are removed
+  with a corresponding call to ``flux_jobtap_dependency_remove(3)``. See
+  ``job.state.depend`` below for more information about dependencies.
+  If there is an error in the dependency specification, the job may be
+  rejected with ``flux_jobtap_reject_job(3)`` and a negative return code 
+  from the callback.
+
 job.new
   The ``job.new`` topic is used by the job manager to notify a jobtap plugin
   about a newly introduced job. This call may be made in three different
@@ -121,7 +136,7 @@ job.state.*
   action could involve immediately transitioning to a new state)
 
 job.state.depend
-  The callback for ``FLUX_JOB_STATE_DEPEND`` is the only place from which
+  The callback for ``FLUX_JOB_STATE_DEPEND`` is the final place from which
   a plugin may add dependencies to a job. Dependencies are added via
   the ``flux_jobtap_dependency_add()`` function. This function allows a
   named dependency to be attached to a job. Jobs with dependencies will

@@ -25,6 +25,7 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/iterators.h"
 
 #include "annotate.h"
 #include "prioritize.h"
@@ -51,8 +52,41 @@ static struct jobtap_builtin jobtap_builtins [] = {
 struct jobtap {
     struct job_manager *ctx;
     flux_plugin_t *plugin;
+    struct job *current_job;
     char last_error [128];
 };
+
+struct dependency {
+    bool add;
+    char *description;
+};
+
+static int job_emit_pending_dependencies (struct jobtap *jobtap,
+                                          struct job *job);
+
+static struct dependency * dependency_create (bool add,
+                                              const char *description)
+{
+    struct dependency *dp = calloc (1, sizeof (*dp));
+    if (!dp || !(dp->description = strdup (description))) {
+        free (dp);
+        return NULL;
+    }
+    dp->add = add;
+    return dp;
+}
+
+static void dependency_destroy (void **item)
+{
+    if (*item) {
+        struct dependency *dp = *item;
+        int saved_errno = errno;
+        free (dp->description);
+        free (dp);
+        *item = NULL;
+        errno = saved_errno;
+    }
+}
 
 struct jobtap *jobtap_create (struct job_manager *ctx)
 {
@@ -138,6 +172,19 @@ error:
     return NULL;
 }
 
+static int jobtap_plugin_call (struct jobtap *jobtap,
+                               struct job *job,
+                               const char *topic,
+                               flux_plugin_arg_t *args)
+{
+    int rc;
+    jobtap->current_job = job_incref (job);
+    rc = flux_plugin_call (jobtap->plugin, topic, args);
+    jobtap->current_job = NULL;
+    job_decref (job);
+    return rc;
+}
+
 int jobtap_get_priority (struct jobtap *jobtap,
                          struct job *job,
                          int64_t *pprio)
@@ -156,7 +203,9 @@ int jobtap_get_priority (struct jobtap *jobtap,
     }
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
-    rc = flux_plugin_call (jobtap->plugin, "job.priority.get", args);
+
+    rc = jobtap_plugin_call (jobtap, job, "job.priority.get", args);
+
     if (rc == 1) {
         /*
          *  A priority.get callback was run. Try to unpack a new priority
@@ -224,6 +273,20 @@ int jobtap_get_priority (struct jobtap *jobtap,
     return rc;
 }
 
+static void error_asprintf (struct jobtap *jobtap,
+                            struct job *job,
+                            char **errp,
+                            const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    if (vasprintf (errp, fmt, ap) < 0)
+        flux_log_error (jobtap->ctx->h,
+                        "id=%ju: failed to create error string: fmt=%s",
+                        (uintmax_t) job->id, fmt);
+    va_end (ap);
+}
+
 int jobtap_validate (struct jobtap *jobtap,
                      struct job *job,
                      char **errp)
@@ -237,7 +300,9 @@ int jobtap_validate (struct jobtap *jobtap,
         return 0;
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
-    rc = flux_plugin_call (jobtap->plugin, "job.validate", args);
+
+    rc = jobtap_plugin_call (jobtap, job, "job.validate", args);
+
     if (rc < 0) {
         /*
          *  Plugin callback failed, check for errmsg for this job
@@ -253,6 +318,140 @@ int jobtap_validate (struct jobtap *jobtap,
                       "jobtap: %s: validate failed to capture errmsg",
                       jobtap_plugin_name (jobtap->plugin));
     }
+    flux_plugin_arg_destroy (args);
+    return rc;
+}
+
+static int jobtap_check_dependency (struct jobtap *jobtap,
+                                    struct job *job,
+                                    flux_plugin_arg_t *args,
+                                    int index,
+                                    json_t *entry,
+                                    char **errp)
+{
+    int rc = -1;
+    char topic [128];
+    const char *scheme = NULL;
+
+    if (json_unpack (entry, "{s:s}", "scheme", &scheme) < 0
+        || scheme == NULL) {
+        error_asprintf (jobtap, job, errp,
+                        "dependency[%d] missing string scheme",
+                        index);
+        return -1;
+    }
+
+    if (snprintf (topic,
+                  sizeof (topic),
+                  "job.dependency.%s",
+                  scheme) > sizeof (topic)) {
+        error_asprintf (jobtap, job, errp,
+                        "rejecting absurdly long dependency scheme: %s",
+                        scheme);
+        return -1;
+    }
+
+    if (flux_plugin_arg_pack (args,
+                              FLUX_PLUGIN_ARG_IN|FLUX_PLUGIN_ARG_UPDATE,
+                              "{s:O}",
+                              "dependency", entry) < 0
+        || flux_plugin_arg_set (args, FLUX_PLUGIN_ARG_OUT, "{}") < 0) {
+        flux_log_error (jobtap->ctx->h,
+                        "jobtap_check_depedency: failed to prepare args");
+        return -1;
+    }
+
+    rc = jobtap_plugin_call (jobtap, job, topic, args);
+    if (rc == 0) {
+        /*  No handler for job.dependency.<scheme>. return an error.
+         */
+        error_asprintf (jobtap, job, errp,
+                        "dependency scheme \"%s\" not supported",
+                        scheme);
+        rc = -1;
+    }
+    else if (rc < 0) {
+        /*
+         *  Plugin callback failed, check for errmsg for this job
+         *   If plugin did not provide an error message, then construct
+         *   a generic error "rejected by plugin".
+         */
+        const char *errmsg;
+        if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
+                                    "{s:s}",
+                                    "errmsg", &errmsg) < 0) {
+                errmsg = "rejected by job-manager dependency plugin";
+        }
+        error_asprintf (jobtap, job, errp,
+                        "%s: %s",
+                        jobtap_plugin_name (jobtap->plugin),
+                        errmsg);
+    }
+    return rc;
+}
+
+static int dependencies_unpack (struct jobtap * jobtap,
+                                struct job * job,
+                                char **errp,
+                                json_t **resultp)
+{
+    json_t *dependencies = NULL;
+    json_error_t error;
+
+    if (json_unpack_ex (job->jobspec_redacted, &error, 0,
+                        "{s:{s?{s?o}}}",
+                        "attributes",
+                        "system",
+                        "dependencies", &dependencies) < 0) {
+        error_asprintf (jobtap, job, errp,
+                        "unable to unpack dependencies: %s",
+                        error.text);
+        return -1;
+    }
+
+    if (!dependencies)
+        return 0;
+
+    if (!json_is_array (dependencies)) {
+        error_asprintf (jobtap, job, errp,
+                        "dependencies object must be an array");
+        return -1;
+    }
+
+    if (json_array_size (dependencies) == 0)
+        return 0;
+
+    *resultp = dependencies;
+    return 0;
+}
+
+int jobtap_check_dependencies (struct jobtap *jobtap,
+                               struct job *job,
+                               char **errp)
+{
+    int rc = -1;
+    flux_plugin_arg_t *args = NULL;
+    json_t *dependencies = NULL;
+    json_t *entry;
+    size_t index;
+
+    if ((rc = dependencies_unpack (jobtap, job, errp, &dependencies)) < 0
+        || dependencies == NULL)
+        return rc;
+
+    if (!(args = jobtap_args_create (jobtap, job))) {
+        error_asprintf (jobtap, job, errp,
+                        "jobtap_check_dependencies: failed to create args");
+        return -1;
+    }
+
+    json_array_foreach (dependencies, index, entry) {
+        rc = jobtap_check_dependency (jobtap, job, args, index, entry, errp);
+        if (rc < 0)
+           goto out;
+    }
+    rc = 0;
+out:
     flux_plugin_arg_destroy (args);
     return rc;
 }
@@ -281,6 +480,15 @@ int jobtap_call (struct jobtap *jobtap,
         return 0;
     }
 
+    if (job->state == FLUX_JOB_STATE_DEPEND) {
+        /*  Ensure any pending dependencies are emitted before calling
+         *   into job.state.depend callback to prevent the depend event
+         *   itself when not all dependencies are resolved.
+         */
+        if (job_emit_pending_dependencies (jobtap, job) < 0)
+            return -1;
+    }
+
     va_start (ap, fmt);
     if (!(args = jobtap_args_vcreate (jobtap, job, fmt, ap))) {
         flux_log (jobtap->ctx->h, LOG_ERR,
@@ -294,7 +502,7 @@ int jobtap_call (struct jobtap *jobtap,
     if (!args)
         return -1;
 
-    rc = flux_plugin_call (jobtap->plugin, topic, args);
+    rc = jobtap_plugin_call (jobtap, job, topic, args);
     if (rc < 0) {
         flux_log (jobtap->ctx->h, LOG_ERR,
                   "jobtap: %s: %s: callback returned error",
@@ -704,28 +912,67 @@ static struct job *lookup_job (struct job_manager *ctx, flux_jobid_t id)
     return job;
 }
 
-
-static int emit_dependency_event (flux_plugin_t *p,
-                                  flux_jobid_t id,
-                                  const char *event,
-                                  const char *description)
+static void zlist_free (void *arg)
 {
-    int flags = 0;
-    struct job *job;
+    if (arg)
+        zlistx_destroy ((zlistx_t **) &arg);
+}
 
-    struct jobtap *jobtap = flux_plugin_aux_get (p, "flux::jobtap");
-    if (!jobtap) {
-        errno = EINVAL;
+static int add_pending_dependency (struct job *job,
+                                   bool add,
+                                   const char *description)
+{
+    struct dependency *dp = NULL;
+    zlistx_t *l = job_aux_get (job, "pending-dependencies");
+    if (!l) {
+        if (!(l = zlistx_new ())) {
+            errno = ENOMEM;
+            return -1;
+        }
+        zlistx_set_destructor (l, dependency_destroy);
+        if (job_aux_set (job, "pending-dependencies", l, zlist_free) < 0) {
+            zlistx_destroy (&l);
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+    if (!(dp = dependency_create (add, description))
+        || !zlistx_add_end (l, dp)) {
+        dependency_destroy ((void **) &dp);
+        errno = ENOMEM;
         return -1;
     }
-    if (!(job = lookup_job (jobtap->ctx, id)))
-        return -1;
+    return 0;
+}
+
+static int jobtap_emit_dependency_event (struct jobtap *jobtap,
+                                         struct job *job,
+                                         bool add,
+                                         const char *description)
+{
+    int flags = 0;
+    const char *event = add ? "dependency-add" : "dependency-remove";
+
+    if (job->state == FLUX_JOB_STATE_NEW) {
+        /*  Dependencies cannot be emitted before DEPEND state, but it
+         *   is useful for plugins to generate them in job.validate or
+         *   job.new. In this case, stash these dependencies as pending
+         *   within the job itself. These will later be emitted as the job
+         *   enters DEPEND state.
+         */
+        return add_pending_dependency (job, add, description);
+    }
     if (job->state != FLUX_JOB_STATE_DEPEND) {
         errno = EINVAL;
         return -1;
     }
-    if (!job_dependency_event_valid (job, event, description))
-       return -1;
+    if (!job_dependency_event_valid (job, event, description)) {
+        /*  Ignore duplicate dependency-add/remove events
+         */
+        if (errno == EEXIST)
+            return 0;
+        return -1;
+    }
     return event_job_post_pack (jobtap->ctx->event,
                                 job,
                                 event,
@@ -734,18 +981,75 @@ static int emit_dependency_event (flux_plugin_t *p,
                                 "description", description);
 }
 
+static int emit_dependency_event (flux_plugin_t *p,
+                                  flux_jobid_t id,
+                                  bool add,
+                                  const char *description)
+{
+    struct job *job;
+    struct jobtap *jobtap = flux_plugin_aux_get (p, "flux::jobtap");
+    if (!jobtap) {
+        errno = EINVAL;
+        return -1;
+    }
+    job = jobtap->current_job;
+    if (!job || id != job->id) {
+        if (!(job = lookup_job (jobtap->ctx, id)))
+            return -1;
+    }
+    return jobtap_emit_dependency_event (jobtap, job, add, description);
+}
+
 int flux_jobtap_dependency_add (flux_plugin_t *p,
                                 flux_jobid_t id,
                                 const char *description)
 {
-    return emit_dependency_event (p, id, "dependency-add", description);
+    return emit_dependency_event (p, id, true, description);
 }
 
 int flux_jobtap_dependency_remove (flux_plugin_t *p,
                                    flux_jobid_t id,
                                    const char *description)
 {
-    return emit_dependency_event (p, id, "dependency-remove", description);
+    return emit_dependency_event (p, id, false, description);
+}
+
+static int job_emit_pending_dependencies (struct jobtap *jobtap,
+                                          struct job *job)
+{
+    zlistx_t *l = job_aux_get (job, "pending-dependencies");
+    if (l) {
+        struct dependency *dp;
+        FOREACH_ZLISTX (l, dp) {
+            if (jobtap_emit_dependency_event (jobtap,
+                                              job,
+                                              dp->add,
+                                              dp->description) < 0) {
+                char note [128];
+                (void) snprintf (note, sizeof (note),
+                                 "failed to %s dependency %s",
+                                 dp->add ? "add" : "remove",
+                                 dp->description);
+                if (event_job_post_pack (jobtap->ctx->event,
+                                         job, "exception", 0,
+                                         "{ s:s s:i s:i s:s }",
+                                         "type", "dependency",
+                                         "severity", 0,
+                                         "userid", FLUX_USERID_UNKNOWN,
+                                         "note", note) < 0) {
+                    flux_log_error (jobtap->ctx->h,
+                                    "%s: event_job_post_pack: id=%ju",
+                                    __FUNCTION__, (uintmax_t) job->id);
+                }
+                /*  Proceed no further, job has exception and will proceed
+                 *   to INACTIVE state
+                 */
+                break;
+            }
+        }
+        job_aux_delete (job, l);
+    }
+    return 0;
 }
 
 /*

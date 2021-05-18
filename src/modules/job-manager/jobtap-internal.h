@@ -48,6 +48,18 @@ int jobtap_validate (struct jobtap *jobtap,
                      struct job *job,
                      char **errp);
 
+/*  Jobtap call to iterate attributes.system.dependencies dictionary
+ *   and call job.dependency.<schema> for each entry.
+ *
+ *  If there is no plugin registered to handle a given schema then
+ *   an error is returned. A plugin which handles a given schema
+ *   may also reject the job if the dependency stanza has errors.
+ */
+int jobtap_check_dependencies (struct jobtap *jobtap,
+                               struct job *job,
+                               char **errp);
+
+
 /*  Load a new jobtap from `path`. Path may start with `builtin.` to
  *   attempt to load one of the builtin jobtap plugins.
  */

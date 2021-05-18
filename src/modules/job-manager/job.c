@@ -19,6 +19,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/grudgeset.h"
+#include "src/common/libutil/aux.h"
 
 #include "job.h"
 #include "event.h"
@@ -32,6 +33,7 @@ void job_decref (struct job *job)
         json_decref (job->jobspec_redacted);
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
+        aux_destroy (&job->aux);
         free (job);
         errno = saved_errno;
     }
@@ -99,6 +101,24 @@ bool job_dependency_event_valid (struct job *job,
         return false;
     }
     return true;
+}
+
+int job_aux_set (struct job *job,
+                 const char *name,
+                 void *val,
+                 flux_free_f destroy)
+{
+    return aux_set (&job->aux, name, val, destroy);
+}
+
+void *job_aux_get (struct job *job, const char *name)
+{
+    return aux_get (job->aux, name);
+}
+
+void job_aux_delete (struct job *job, const void *val)
+{
+    aux_delete (&job->aux, val);
 }
 
 /* Follow path (NULL terminated array of keys) through multiple JSON
