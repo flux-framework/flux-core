@@ -322,36 +322,26 @@ bool is_op_key (json_t *ops, const char *key)
  */
 bool keys_match_ops (json_t *ops, json_t *keys)
 {
-    size_t index;
-    json_t *key;
-    const char *k;
-
-    json_array_foreach (keys, index, key) {
-        k = json_string_value (key);
-        if (k == NULL || !is_op_key (ops, k))
+    const char *key;
+    json_t *value;
+    json_object_foreach (keys, key, value) {
+        if (!is_op_key (ops, key))
             return false;
     }
     return true;
 }
 
 
-/* Return true if 'key' is a member of 'keys' array
+/* Return true if 'key' is a member of 'keys' dict
  */
 bool is_key (json_t *keys, const char *key)
 {
-    size_t index;
-    json_t *o;
-    const char *k;
-
-    json_array_foreach (keys, index, o) {
-        if ((k = json_string_value (o))
-                    && !strcmp (key, k))
-            return true;
-    }
+    if (json_object_get (keys, key))
+        return true;
     return false;
 }
 
-/* Return true if all ops have a key array entry
+/* Return true if all ops have a key dict entry
  */
 bool ops_match_keys (json_t *keys, json_t *ops)
 {

@@ -769,42 +769,27 @@ err:
     return -1;
 }
 
-/* normalize key for setroot, and add it to keys array, if unique */
-static int normalize_and_append_unique (json_t *keys, const char *key)
+/* normalize key for setroot, and add it to keys dict, if unique */
+static int normalize_and_add_unique (json_t *keys, const char *key)
 {
     char *key_norm;
-    size_t index;
-    json_t *value;
-    bool unique = true;
+    int rc = -1;
 
     if ((key_norm = kvs_util_normalize_key (key, NULL)) == NULL)
         return -1;
-    json_array_foreach (keys, index, value) {
-        const char *s = json_string_value (value);
-        if (s && !strcmp (s, key_norm)) {
-            unique = false;
-            break;
-        }
-    }
-    if (unique) {
-        json_t *o;
-        if (!(o = json_string (key_norm)))
-            goto error;
-        if (json_array_append_new (keys, o) < 0) {
-            json_decref (o);
-            goto error;
-        }
-    }
-    free (key_norm);
-    return 0;
+    /* we don't need the value, just use a json null */
+    if (json_object_set_new (keys, key_norm, json_null ()) < 0)
+        goto error;
+    rc = 0;
 error:
     free (key_norm);
-    return -1;
+    return rc;
 }
 
-/* Create array of keys (strings) from array of operations ({ "key":s ... })
- * The keys array is for inclusion in the kvs.setroot event, so we can
- * notify watchers of keys that their key may have changed.
+/* Create dict of keys (strings) from array of operations ({ "key":s ... })
+ * The keys are for inclusion in the kvs.setroot event, so we can
+ * notify watchers of keys that their key may have changed.  The value in
+ * the dict is unneeded, so we set it to a json null.
  */
 static json_t *keys_from_ops (json_t *ops)
 {
@@ -812,13 +797,13 @@ static json_t *keys_from_ops (json_t *ops)
     size_t index;
     json_t *op;
 
-    if (!(keys = json_array ()))
+    if (!(keys = json_object ()))
         return NULL;
     json_array_foreach (ops, index, op) {
         const char *key;
         if (json_unpack (op, "{s:s}", "key", &key) < 0)
             goto error;
-        if (normalize_and_append_unique (keys, key) < 0)
+        if (normalize_and_add_unique (keys, key) < 0)
             goto error;
     }
     return keys;
@@ -1256,17 +1241,6 @@ static int kvstxn_merge (kvstxn_t *dest, kvstxn_t *src)
             json_t *op;
             if ((op = json_array_get (src->ops, i))) {
                 if (json_array_append (dest->ops, op) < 0) {
-                    errno = ENOMEM;
-                    return -1;
-                }
-            }
-        }
-    }
-    if ((len = json_array_size (src->keys))) {
-        for (i = 0; i < len; i++) {
-            json_t *key;
-            if ((key = json_array_get (src->keys, i))) {
-                if (json_array_append (dest->keys, key) < 0) {
                     errno = ENOMEM;
                     return -1;
                 }
