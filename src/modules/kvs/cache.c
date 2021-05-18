@@ -26,6 +26,7 @@
 #include <jansson.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libccan/ccan/list/list.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/tstat.h"
@@ -50,12 +51,21 @@ struct cache_entry {
     int errnum;
     char *blobref;
     int refcount;
+    struct list_head *notdirty_list;
+    struct list_node notdirty_node;
+    struct list_head *valid_list;
+    struct list_node valid_node;
 };
 
 struct cache {
     flux_reactor_t *r;
     double fake_time;       /* -1. for invalid */
     zhashx_t *zhx;
+    /* list of entries with notdirty & valid waitqueue's with messages
+     * on them.  These lists are used to avoid excess iteration
+     * through zhx */
+    struct list_head notdirty_list;
+    struct list_head valid_list;
 };
 
 static double cache_now (struct cache *cache)
@@ -84,6 +94,8 @@ struct cache_entry *cache_entry_create (const char *ref)
         return NULL;
     }
 
+    list_node_init (&entry->notdirty_node);
+    list_node_init (&entry->valid_node);
     return entry;
 }
 
@@ -112,6 +124,8 @@ int cache_entry_set_dirty (struct cache_entry *entry, bool val)
                     entry->dirty = true;
                     return -1;
                 }
+                if (!wait_queue_msgs_count (entry->waitlist_notdirty))
+                    list_del_init (&entry->notdirty_node);
             }
         }
         return 0;
@@ -137,6 +151,7 @@ int cache_entry_force_clear_dirty (struct cache_entry *entry)
         if (entry->dirty) {
             if (entry->waitlist_notdirty) {
                 wait_queue_destroy (entry->waitlist_notdirty);
+                list_del_init (&entry->notdirty_node);
                 entry->waitlist_notdirty = NULL;
             }
             entry->dirty = false;
@@ -199,6 +214,8 @@ int cache_entry_set_raw (struct cache_entry *entry, const void *data, int len)
     if (entry->waitlist_valid) {
         if (wait_runqueue (entry->waitlist_valid) < 0)
             goto reset_invalid;
+        if (!wait_queue_msgs_count (entry->waitlist_valid))
+            list_del_init (&entry->valid_node);
     }
     return 0;
 reset_invalid:
@@ -230,6 +247,8 @@ int cache_entry_set_errnum_on_valid (struct cache_entry *entry, int errnum)
             return -1;
         if (wait_runqueue (entry->waitlist_valid) < 0)
             return -1;
+        if (!wait_queue_msgs_count (entry->waitlist_valid))
+            list_del_init (&entry->valid_node);
     }
 
     return 0;
@@ -250,6 +269,8 @@ int cache_entry_set_errnum_on_notdirty (struct cache_entry *entry, int errnum)
             return -1;
         if (wait_runqueue (entry->waitlist_notdirty) < 0)
             return -1;
+        if (!wait_queue_msgs_count (entry->waitlist_notdirty))
+            list_del_init (&entry->notdirty_node);
     }
 
     return 0;
@@ -273,14 +294,25 @@ void cache_entry_destroy (void *arg)
         int saved_errno = errno;
         free (entry->data);
         json_decref (entry->o);
-        if (entry->waitlist_notdirty)
+        if (entry->waitlist_notdirty) {
             wait_queue_destroy (entry->waitlist_notdirty);
-        if (entry->waitlist_valid)
+            list_del (&entry->notdirty_node);
+        }
+        if (entry->waitlist_valid) {
             wait_queue_destroy (entry->waitlist_valid);
+            list_del (&entry->valid_node);
+        }
         free (entry->blobref);
         free (entry);
         errno = saved_errno;
     }
+}
+
+/* ccan list doesn't appear to have a macro to check if a node exists
+ * on a list */
+static inline bool on_list (struct list_node *n)
+{
+    return !(n->next == n->prev && n->next == n);
 }
 
 int cache_entry_wait_notdirty (struct cache_entry *entry, wait_t *wait)
@@ -292,6 +324,10 @@ int cache_entry_wait_notdirty (struct cache_entry *entry, wait_t *wait)
         }
         if (wait_addqueue (entry->waitlist_notdirty, wait) < 0)
             return -1;
+        if (wait_queue_msgs_count (entry->waitlist_notdirty) > 0
+            && entry->notdirty_list
+            && !on_list (&entry->notdirty_node))
+            list_add (entry->notdirty_list, &entry->notdirty_node);
     }
     return 0;
 }
@@ -305,6 +341,10 @@ int cache_entry_wait_valid (struct cache_entry *entry, wait_t *wait)
         }
         if (wait_addqueue (entry->waitlist_valid, wait) < 0)
             return -1;
+        if (wait_queue_msgs_count (entry->waitlist_valid) > 0
+            && entry->valid_list
+            && !on_list (&entry->valid_node))
+            list_add (entry->valid_list, &entry->valid_node);
     }
     return 0;
 }
@@ -324,6 +364,14 @@ int cache_insert (struct cache *cache, struct cache_entry *entry)
 
     if (cache && entry) {
         rc = zhashx_insert (cache->zhx, entry->blobref, entry);
+        entry->notdirty_list = &cache->notdirty_list;
+        entry->valid_list = &cache->valid_list;
+        if (entry->waitlist_notdirty
+            && wait_queue_msgs_count (entry->waitlist_notdirty) > 0)
+            list_add (entry->notdirty_list, &entry->notdirty_node);
+        if (entry->waitlist_valid
+            && wait_queue_msgs_count (entry->waitlist_valid) > 0)
+            list_add (entry->valid_list, &entry->valid_node);
         assert (rc == 0);
     }
     return 0;
@@ -424,22 +472,21 @@ int cache_get_stats (struct cache *cache, tstat_t *ts, int *sizep,
 
 int cache_wait_destroy_msg (struct cache *cache, wait_test_msg_f cb, void *arg)
 {
-    const char *key;
-    struct cache_entry *entry;
+    struct cache_entry *entry = NULL;
     int n, count = 0;
     int rc = -1;
 
-    FOREACH_ZHASHX (cache->zhx, key, entry) {
-        if (entry->waitlist_valid) {
-            if ((n = wait_destroy_msg (entry->waitlist_valid, cb, arg)) < 0)
-                goto done;
-            count += n;
-        }
-        if (entry->waitlist_notdirty) {
-            if ((n = wait_destroy_msg (entry->waitlist_notdirty, cb, arg)) < 0)
-                goto done;
-            count += n;
-        }
+    list_for_each (&cache->notdirty_list, entry, notdirty_node) {
+        assert (entry->waitlist_notdirty);
+        if ((n = wait_destroy_msg (entry->waitlist_notdirty, cb, arg)) < 0)
+            goto done;
+        count += n;
+    }
+    list_for_each (&cache->valid_list, entry, valid_node) {
+        assert (entry->waitlist_valid);
+        if ((n = wait_destroy_msg (entry->waitlist_valid, cb, arg)) < 0)
+            goto done;
+        count += n;
     }
     rc = count;
 done:
@@ -474,6 +521,8 @@ struct cache *cache_create (flux_reactor_t *r)
     zhashx_set_key_destructor (cache->zhx, NULL);
     zhashx_set_key_duplicator (cache->zhx, NULL);
     zhashx_set_destructor (cache->zhx, cache_entry_destroy_wrapper);
+    list_head_init (&cache->notdirty_list);
+    list_head_init (&cache->valid_list);
     return cache;
 }
 
