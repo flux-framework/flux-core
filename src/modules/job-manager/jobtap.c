@@ -27,6 +27,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/iterators.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "annotate.h"
 #include "prioritize.h"
@@ -52,6 +53,7 @@ static struct jobtap_builtin jobtap_builtins [] = {
 
 struct jobtap {
     struct job_manager *ctx;
+    char *searchpath;
     zlistx_t *plugins;
     struct job *current_job;
     char last_error [128];
@@ -125,6 +127,7 @@ void jobtap_destroy (struct jobtap *jobtap)
         int saved_errno = errno;
         zlistx_destroy (&jobtap->plugins);
         jobtap->ctx = NULL;
+        free (jobtap->searchpath);
         free (jobtap);
         errno = saved_errno;
     }
@@ -629,6 +632,96 @@ static int jobtap_load_builtin (flux_plugin_t *p,
     return -1;
 }
 
+/*  Return 1 if either searchpath is NULL, or path starts with '/' or './'.
+ */
+static int no_searchpath (const char *searchpath, const char *path)
+{
+    return (!searchpath
+            || path[0] == '/'
+            || (path[0] == '.' && path[1] == '/'));
+}
+
+static void item_free (void **item )
+{
+    if (*item) {
+        free (*item);
+        *item = NULL;
+    }
+}
+
+static zlistx_t *path_list (const char *searchpath, const char *path)
+{
+    char *copy;
+    char *str;
+    char *dir;
+    char *s;
+    char *sp = NULL;
+    zlistx_t *l = zlistx_new ();
+
+    if (!l || !(copy = strdup (searchpath)))
+        return NULL;
+    str = copy;
+
+    zlistx_set_destructor (l, item_free);
+
+    while ((dir = strtok_r (str, ":", &sp))) {
+        if (asprintf (&s, "%s/%s", dir, path) < 0)
+            goto error;
+        if (!zlistx_add_end (l, s))
+            goto error;
+        str = NULL;
+    }
+    free (copy);
+    return l;
+error:
+    ERRNO_SAFE_WRAP (free, copy);
+    ERRNO_SAFE_WRAP (zlistx_destroy, &l);
+    return NULL;
+}
+
+int jobtap_plugin_load_first (struct jobtap *jobtap,
+                              flux_plugin_t *p,
+                              const char *path,
+                              json_t *conf,
+                              jobtap_error_t *errp)
+{
+    bool found = false;
+    zlistx_t *l;
+    char *fullpath;
+
+    if (no_searchpath (jobtap->searchpath, path))
+        return flux_plugin_load_dso (p, path);
+
+    if (!(l = path_list (jobtap->searchpath, path)))
+        return -1;
+
+    fullpath = zlistx_first (l);
+    while (fullpath) {
+        int rc = flux_plugin_load_dso (p, fullpath);
+        if (rc == 0) {
+            found = true;
+            break;
+        }
+        if (rc < 0 && errno != ENOENT) {
+            (void) snprintf (errp->text, sizeof (errp->text),
+                             "%s: %s",
+                             fullpath,
+                             flux_plugin_strerror (p));
+            return -1;
+        }
+        fullpath = zlistx_next (l);
+    }
+    zlistx_destroy (&l);
+    if (!found) {
+        (void) snprintf (errp->text, sizeof (errp->text),
+                         "%s: No such plugin found",
+                         path);
+        errno = ENOENT;
+        return -1;
+    }
+    return 0;
+}
+
 flux_plugin_t * jobtap_load (struct jobtap *jobtap,
                              const char *path,
                              json_t *conf,
@@ -670,7 +763,7 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
     }
     else {
         flux_plugin_set_flags (p, FLUX_PLUGIN_RTLD_NOW);
-        if (flux_plugin_load_dso (p, path) < 0)
+        if (jobtap_plugin_load_first (jobtap, p, path, conf, errp) < 0)
             goto error;
         /*
          *  A jobtap plugin must set a name, error out if not:
