@@ -52,7 +52,7 @@ static struct jobtap_builtin jobtap_builtins [] = {
 
 struct jobtap {
     struct job_manager *ctx;
-    flux_plugin_t *plugin;
+    zlistx_t *plugins;
     struct job *current_job;
     char last_error [128];
 };
@@ -89,25 +89,44 @@ static void dependency_destroy (void **item)
     }
 }
 
+/*  zlistx_t plugin destructor */
+static void plugin_destroy (void **item)
+{
+    if (item) {
+        flux_plugin_t *p = *item;
+        flux_plugin_destroy (p);
+        *item = NULL;
+    }
+}
+
 struct jobtap *jobtap_create (struct job_manager *ctx)
 {
     struct jobtap *jobtap = calloc (1, sizeof (*jobtap));
     if (!jobtap)
         return NULL;
     jobtap->ctx = ctx;
-    if (jobtap_load (jobtap, "builtin.priority.default", NULL, NULL) < 0) {
-        free (jobtap);
-        return NULL;
+    if (!(jobtap->plugins = zlistx_new ())) {
+        errno = ENOMEM;
+        goto error;
     }
+    zlistx_set_destructor (jobtap->plugins, plugin_destroy);
+
+    if (jobtap_load (jobtap, "builtin.priority.default", NULL, NULL) < 0)
+        goto error;
     return jobtap;
+error:
+    jobtap_destroy (jobtap);
+    return NULL;
 }
 
 void jobtap_destroy (struct jobtap *jobtap)
 {
     if (jobtap) {
+        int saved_errno = errno;
+        zlistx_destroy (&jobtap->plugins);
         jobtap->ctx = NULL;
-        flux_plugin_destroy (jobtap->plugin);
         free (jobtap);
+        errno = saved_errno;
     }
 }
 
@@ -173,17 +192,45 @@ error:
     return NULL;
 }
 
-static int jobtap_plugin_call (struct jobtap *jobtap,
-                               struct job *job,
-                               const char *topic,
-                               flux_plugin_arg_t *args)
+static int jobtap_topic_match_count (struct jobtap *jobtap,
+                                     const char *topic)
 {
-    int rc;
+    int count = 0;
+    flux_plugin_t *p = zlistx_first (jobtap->plugins);
+    while (p) {
+        if (flux_plugin_match_handler (p, topic))
+            count++;
+        p = zlistx_next (jobtap->plugins);
+    }
+    return count;
+}
+
+static int jobtap_stack_call (struct jobtap *jobtap,
+                              struct job *job,
+                              const char *topic,
+                              flux_plugin_arg_t *args)
+{
+    int retcode = 0;
+    flux_plugin_t *p = zlistx_first (jobtap->plugins);
+
     jobtap->current_job = job_incref (job);
-    rc = flux_plugin_call (jobtap->plugin, topic, args);
+    while (p) {
+        int rc = flux_plugin_call (p, topic, args);
+        if (rc < 0)  {
+            flux_log (jobtap->ctx->h, LOG_DEBUG,
+                      "jobtap: %s: %s: rc=%d",
+                      jobtap_plugin_name (p),
+                      topic,
+                      rc);
+            retcode = -1;
+            break;
+        }
+        retcode += rc;
+        p = zlistx_next (jobtap->plugins);
+    }
     jobtap->current_job = NULL;
     job_decref (job);
-    return rc;
+    return retcode;
 }
 
 int jobtap_get_priority (struct jobtap *jobtap,
@@ -198,16 +245,20 @@ int jobtap_get_priority (struct jobtap *jobtap,
         errno = EINVAL;
         return -1;
     }
-    if (!jobtap->plugin) {
+
+    /*  Skip if no jobtap.priority.get handlers are active.
+     *   This avoids unnecessarily creating a flux_plugin_arg_t object.
+     */
+    if (jobtap_topic_match_count (jobtap, "job.priority.get")  == 0) {
         *pprio = job->urgency;
         return 0;
     }
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
 
-    rc = jobtap_plugin_call (jobtap, job, "job.priority.get", args);
+    rc = jobtap_stack_call (jobtap, job, "job.priority.get", args);
 
-    if (rc == 1) {
+    if (rc >= 1) {
         /*
          *  A priority.get callback was run. Try to unpack a new priority
          */
@@ -215,8 +266,7 @@ int jobtap_get_priority (struct jobtap *jobtap,
                                     "{s?I}",
                                     "priority", &priority) < 0) {
             flux_log (jobtap->ctx->h, LOG_ERR,
-                      "jobtap: %s: job.priority.get: arg_unpack: %s",
-                      jobtap_plugin_name (jobtap->plugin),
+                      "jobtap: job.priority.get: arg_unpack: %s",
                       flux_plugin_arg_strerror (args));
             rc = -1;
         }
@@ -243,8 +293,7 @@ int jobtap_get_priority (struct jobtap *jobtap,
              */
             if (job->state == FLUX_JOB_STATE_SCHED)
                 flux_log (jobtap->ctx->h, LOG_ERR,
-                          "jobtap: %s: %ju: BUG: plugin didn't return priority",
-                          jobtap_plugin_name (jobtap->plugin),
+                          "jobtap: %ju: BUG: plugin didn't return priority",
                           (uintmax_t) job->id);
         }
         /*
@@ -264,8 +313,7 @@ int jobtap_get_priority (struct jobtap *jobtap,
          *   and return the current priority.
          */
         flux_log (jobtap->ctx->h, LOG_ERR,
-                  "jobtap: %s: job.priority.get: callback failed",
-                  jobtap_plugin_name (jobtap->plugin));
+                  "jobtap: job.priority.get: callback failed");
         priority = job->priority;
     }
 
@@ -296,13 +344,12 @@ int jobtap_validate (struct jobtap *jobtap,
     flux_plugin_arg_t *args;
     const char *errmsg = NULL;
 
-    if (!jobtap->plugin
-        || !flux_plugin_match_handler (jobtap->plugin, "job.validate"))
+    if (jobtap_topic_match_count (jobtap, "job.validate") == 0)
         return 0;
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
 
-    rc = jobtap_plugin_call (jobtap, job, "job.validate", args);
+    rc = jobtap_stack_call (jobtap, job, "job.validate", args);
 
     if (rc < 0) {
         /*
@@ -316,8 +363,7 @@ int jobtap_validate (struct jobtap *jobtap,
                 errmsg = "rejected by job-manager plugin";
         if ((*errp = strdup (errmsg)) == NULL)
             flux_log (jobtap->ctx->h, LOG_ERR,
-                      "jobtap: %s: validate failed to capture errmsg",
-                      jobtap_plugin_name (jobtap->plugin));
+                      "jobtap: validate failed to capture errmsg");
     }
     flux_plugin_arg_destroy (args);
     return rc;
@@ -362,7 +408,7 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
         return -1;
     }
 
-    rc = jobtap_plugin_call (jobtap, job, topic, args);
+    rc = jobtap_stack_call (jobtap, job, topic, args);
     if (rc == 0) {
         /*  No handler for job.dependency.<scheme>. return an error.
          */
@@ -383,10 +429,7 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
                                     "errmsg", &errmsg) < 0) {
                 errmsg = "rejected by job-manager dependency plugin";
         }
-        error_asprintf (jobtap, job, errp,
-                        "%s: %s",
-                        jobtap_plugin_name (jobtap->plugin),
-                        errmsg);
+        error_asprintf (jobtap, job, errp, "%s", errmsg);
     }
     return rc;
 }
@@ -469,18 +512,6 @@ int jobtap_call (struct jobtap *jobtap,
     int64_t priority = -1;
     va_list ap;
 
-    if (!jobtap->plugin) {
-        /*
-         * Default with no plugin: ensure we advance past PRIORITY state
-         */
-        if (job->state == FLUX_JOB_STATE_PRIORITY
-           && reprioritize_job (jobtap->ctx, job, job->urgency) < 0)
-            flux_log (jobtap->ctx->h, LOG_ERR,
-                      "reprioritize_job: id=%ju: failed",
-                      (uintmax_t) job->id);
-        return 0;
-    }
-
     if (job->state == FLUX_JOB_STATE_DEPEND) {
         /*  Ensure any pending dependencies are emitted before calling
          *   into job.state.depend callback to prevent the depend event
@@ -490,11 +521,22 @@ int jobtap_call (struct jobtap *jobtap,
             return -1;
     }
 
+    if (jobtap_topic_match_count (jobtap, topic) == 0) {
+        /*
+         *  ensure job advances past PRIORITY state at job.state.priority
+         */
+        if (job->state == FLUX_JOB_STATE_PRIORITY
+           && reprioritize_job (jobtap->ctx, job, job->urgency) < 0)
+            flux_log (jobtap->ctx->h, LOG_ERR,
+                      "reprioritize_job: id=%ju: failed",
+                      (uintmax_t) job->id);
+        return 0;
+    }
+
     va_start (ap, fmt);
     if (!(args = jobtap_args_vcreate (jobtap, job, fmt, ap))) {
         flux_log (jobtap->ctx->h, LOG_ERR,
-                  "jobtap: %s: %s: %ju: failed to create plugin args",
-                  jobtap_plugin_name (jobtap->plugin),
+                  "jobtap: %s: %ju: failed to create plugin args",
                   topic,
                   (uintmax_t) job->id);
     }
@@ -503,11 +545,10 @@ int jobtap_call (struct jobtap *jobtap,
     if (!args)
         return -1;
 
-    rc = jobtap_plugin_call (jobtap, job, topic, args);
+    rc = jobtap_stack_call (jobtap, job, topic, args);
     if (rc < 0) {
         flux_log (jobtap->ctx->h, LOG_ERR,
-                  "jobtap: %s: %s: callback returned error",
-                  jobtap_plugin_name (jobtap->plugin),
+                  "jobtap: %s: callback returned error",
                   topic);
     }
     if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
@@ -515,8 +556,7 @@ int jobtap_call (struct jobtap *jobtap,
                                 "priority", &priority,
                                 "annotations", &note) < 0) {
         flux_log (jobtap->ctx->h, LOG_ERR,
-                  "jobtap: %s: %s: arg_unpack: %s",
-                  jobtap_plugin_name (jobtap->plugin),
+                  "jobtap: %s: arg_unpack: %s",
                   topic,
                   flux_plugin_arg_strerror (args));
         rc = -1;
@@ -537,8 +577,7 @@ int jobtap_call (struct jobtap *jobtap,
             rc = annotations_update_and_publish (jobtap->ctx, job, note);
         if (rc < 0)
             flux_log_error (jobtap->ctx->h,
-                            "jobtap: %s: %s: %ju: annotations_update",
-                            jobtap_plugin_name (jobtap->plugin),
+                            "jobtap: %s: %ju: annotations_update",
                             topic,
                             (uintmax_t) job->id);
     }
@@ -548,11 +587,8 @@ int jobtap_call (struct jobtap *jobtap,
          *   Note: reprioritize_job() is a no-op if job is not in
          *         PRIORITY or SCHED state)
          */
-        if (reprioritize_job (jobtap->ctx, job, priority) < 0) {
-            flux_log_error (jobtap->ctx->h,
-                            "jobtap: %s: reprioritize_job",
-                            jobtap_plugin_name (jobtap->plugin));
-        }
+        if (reprioritize_job (jobtap->ctx, job, priority) < 0)
+            flux_log_error (jobtap->ctx->h, "jobtap: reprioritize_job");
     }
     else if (job->state == FLUX_JOB_STATE_PRIORITY && priority == -1) {
         /*
@@ -601,16 +637,6 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
     flux_plugin_t *p = NULL;
     char *conf_str = NULL;
 
-    /*  XXX: Until multiple plugins are supported, any previous plugin
-     *  must be removed before continuing...
-     */
-    if (jobtap->plugin) {
-        errno = EEXIST;
-        snprintf (errp->text, sizeof (errp->text), "%s",
-                  "jobtap: only one plugin may be loaded at this time");
-        return NULL;
-    }
-
     if (errp)
         memset (errp->text, 0, sizeof (errp->text));
 
@@ -655,7 +681,13 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
             goto error;
         }
     }
-    jobtap->plugin = p;
+    if (!zlistx_add_end (jobtap->plugins, p)) {
+        if (errp)
+            (void) snprintf (errp->text, sizeof (errp->text), "%s",
+                             "Out of memory adding plugin to list");
+        errno = ENOMEM;
+        goto error;
+    }
     return p;
 error:
     if (errp && errp->text[0] == '\0')
@@ -677,26 +709,33 @@ static int jobtap_handle_remove_req (struct job_manager *ctx,
                                      const flux_msg_t *msg,
                                      const char *arg)
 {
-    if (ctx->jobtap->plugin) {
-        const char *name = jobtap_plugin_name (ctx->jobtap->plugin);
-        if (strcmp (arg, "all") == 0
-            || (isa_glob (arg) && fnmatch (arg, name, 0) == 0)
+    int count = 0;
+    bool isglob = isa_glob (arg);
+    bool all = strcmp (arg, "all") == 0;
+
+    flux_plugin_t *p = zlistx_first (ctx->jobtap->plugins);
+    while (p) {
+        const char *name = jobtap_plugin_name (p);
+        if (all
+            || (isglob && fnmatch (arg, name, 0) == 0)
             || strcmp (arg, name) == 0) {
-            flux_plugin_destroy (ctx->jobtap->plugin);
-            ctx->jobtap->plugin = NULL;
-            return 0;
+            zlistx_detach_cur (ctx->jobtap->plugins);
+            flux_plugin_destroy (p);
+            count++;
         }
+        p = zlistx_next (ctx->jobtap->plugins);
     }
-    else if (strcmp (arg, "all") == 0) {
-        /*  "all" should work even if no plugin(s) loaded
-         */
-        return 0;
-    }
-    if (flux_respond_error (ctx->h, msg, ENOENT,
-                            "Plugin(s) to remove not found") < 0)
+    /*  Respond with error if no plugins matched unless specifically
+     *   "all" was requested, in which case no match is not an error.
+     */
+    if (count == 0 && !all) {
+        if (flux_respond_error (ctx->h, msg, ENOENT,
+                                "Plugin(s) to remove not found") < 0)
         flux_log_error (ctx->h,
                         "jobtap_handle_remove_req: flux_respond_error");
-    return -1;
+        return -1;
+    }
+    return count;
 }
 
 static int jobtap_handle_load_req (struct job_manager *ctx,
@@ -757,14 +796,39 @@ error:
     return -1;
 }
 
+static json_t *jobtap_plugin_list (struct jobtap *jobtap)
+{
+    flux_plugin_t *p;
+    json_t *result = json_array ();
+    if (result == NULL)
+        return NULL;
+    p = zlistx_first (jobtap->plugins);
+    while (p) {
+        json_t *o = json_string (jobtap_plugin_name (p));
+        if (o == NULL)
+            goto error;
+        if (json_array_append_new (result, o) < 0) {
+            json_decref (o);
+            goto error;
+        }
+        p = zlistx_next (jobtap->plugins);
+    }
+    return result;
+error:
+    json_decref (result);
+    return NULL;
+}
+
 static void jobtap_handle_list_req (flux_t *h,
                                     struct jobtap *jobtap,
                                     const flux_msg_t *msg)
 {
-    if (flux_respond_pack (h, msg,
-                           "{ s:[s] }",
-                           "plugins",
-                           jobtap_plugin_name (jobtap->plugin)) < 0)
+    json_t *o = jobtap_plugin_list (jobtap);
+    if (o == NULL)
+        flux_respond_error (h, msg, ENOMEM, "Failed to create plugin list");
+    else if (flux_respond_pack (h, msg,
+                                "{ s:o }",
+                                "plugins", o) < 0)
         flux_log_error (h, "jobtap_handle_list: flux_respond");
 }
 
