@@ -45,7 +45,7 @@ OPTIONS
    built with --enable-caliper. Unless CALI_LOG_VERBOSITY is already
    set in the environment, it will default to 0 for all brokers.
 
-**--scratchdir**\ =\ *DIR*
+**--rundir**\ =\ *DIR*
    (only with *--test-size*) Set the directory that will be
    used as the rundir directory for the instance. If the directory
    does not exist then it will be created during instance startup.

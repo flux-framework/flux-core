@@ -67,7 +67,7 @@ class SideFlux(object):
             "--test-size={}".format(self.size),
             "-o",
             "-Slog-forward-level=7",
-            "--scratchdir=" + self.tmpdir,
+            "--rundir=" + self.tmpdir,
             "bash",
         ]
         # print ' '.join(flux_command)

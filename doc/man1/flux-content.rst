@@ -60,8 +60,7 @@ service, and is loaded by default.
 Content database files are stored persistently on rank 0 if the
 persist-directory broker attribute is set to a directory name for
 the session. Otherwise they are stored in the directory defined
-by the scratch-directory attribute and are cleaned up when the
-instance terminates.
+by the rundir attribute and are cleaned up when the instance terminates.
 
 When one of these modules is loaded, it informs the rank 0
 cache of its availability, which triggers the cache to begin
