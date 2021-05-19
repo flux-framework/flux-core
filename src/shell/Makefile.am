@@ -24,8 +24,7 @@ dist_shelllua_SCRIPTS = \
 	lua.d/mvapich.lua \
 	lua.d/intel_mpi.lua \
 	lua.d/openmpi.lua \
-	lua.d/spectrum.lua \
-	lua.d/tmpdir.lua
+	lua.d/spectrum.lua
 
 noinst_LTLIBRARIES = \
 	libshell.la \
@@ -83,6 +82,7 @@ flux_shell_SOURCES = \
 	evlog.c \
 	pty.c \
 	batch.c \
+	tmpdir.c \
 	mpir/mpir.c \
 	mpir/ptrace.c \
 	mustache.h \
