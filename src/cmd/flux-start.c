@@ -470,17 +470,13 @@ struct client *client_create (const char *broker_path,
 
     if (flux_cmd_add_channel (cli->cmd, "PMI_FD") < 0)
         log_err_exit ("flux_cmd_add_channel");
-    if (flux_cmd_setenvf (cli->cmd, 1, "PMI_RANK", "%d", rank) < 0)
-        log_err_exit ("flux_cmd_setenvf");
-    if (flux_cmd_setenvf (cli->cmd, 1, "PMI_SIZE", "%d", ctx.test_size) < 0)
-        log_err_exit ("flux_cmd_setenvf");
-    if (flux_cmd_setenvf (cli->cmd, 1, "FLUX_START_URI",
-                          "local://%s/start", rundir) < 0)
-        log_err_exit ("flux_cmd_setenvf");
-    if (hostname) {
-        if (flux_cmd_setenvf (cli->cmd, 1, "FLUX_FAKE_HOSTNAME", "%s", hostname) < 0)
-            log_err_exit ("error setting fake hostname for rank %d", rank);
-    }
+    if (flux_cmd_setenvf (cli->cmd, 1, "PMI_RANK", "%d", rank) < 0
+        || flux_cmd_setenvf (cli->cmd, 1, "PMI_SIZE", "%d", ctx.test_size) < 0
+        || flux_cmd_setenvf (cli->cmd, 1, "FLUX_START_URI",
+                             "local://%s/start", rundir) < 0
+        || (hostname && flux_cmd_setenvf (cli->cmd, 1, "FLUX_FAKE_HOSTNAME",
+                                          "%s", hostname) < 0))
+            log_err_exit ("error setting up environment for rank %d", rank);
     return cli;
 fail:
     free (argz);
