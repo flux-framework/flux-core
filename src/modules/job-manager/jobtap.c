@@ -21,6 +21,7 @@
 #include <errno.h>
 #include <unistd.h>
 #include <stdarg.h>
+#include <fnmatch.h>
 
 #include <flux/core.h>
 
@@ -592,13 +593,23 @@ static int jobtap_load_builtin (flux_plugin_t *p,
     return -1;
 }
 
-int jobtap_load (struct jobtap *jobtap,
-                 const char *path,
-                 json_t *conf,
-                 jobtap_error_t *errp)
+flux_plugin_t * jobtap_load (struct jobtap *jobtap,
+                             const char *path,
+                             json_t *conf,
+                             jobtap_error_t *errp)
 {
     flux_plugin_t *p = NULL;
     char *conf_str = NULL;
+
+    /*  XXX: Until multiple plugins are supported, any previous plugin
+     *  must be removed before continuing...
+     */
+    if (jobtap->plugin) {
+        errno = EEXIST;
+        snprintf (errp->text, sizeof (errp->text), "%s",
+                  "jobtap: only one plugin may be loaded at this time");
+        return NULL;
+    }
 
     if (errp)
         memset (errp->text, 0, sizeof (errp->text));
@@ -618,66 +629,89 @@ int jobtap_load (struct jobtap *jobtap,
         }
     }
 
-    /*  Special "none" value leaves no plugin loaded
-     */
-    if (strcmp (path, "none") == 0) {
-        flux_plugin_destroy (jobtap->plugin);
-        jobtap->plugin = NULL;
-        return 0;
-    }
-
     if (!(p = flux_plugin_create ())
         || flux_plugin_aux_set (p, "flux::jobtap", jobtap, NULL) < 0)
         goto error;
-    if (strncmp (path, "builtin.", 8) == 0) {
-        if (jobtap_load_builtin (p, path) < 0)
-            goto error;
-        goto done;
-    }
     if (conf_str) {
         int rc = flux_plugin_set_conf (p, conf_str);
         free (conf_str);
         if (rc < 0)
             goto error;
     }
-    flux_plugin_set_flags (p, FLUX_PLUGIN_RTLD_NOW);
-    if (flux_plugin_load_dso (p, path) < 0)
-        goto error;
-    /*
-     *  A jobtap plugin must set a name, error out if not:
-     */
-    if (strcmp (flux_plugin_get_name (p), path) == 0) {
-        snprintf (errp->text, sizeof (errp->text), "%s",
-                  "Plugin did not set name in flux_plugin_init");
-        goto error;
+    if (strncmp (path, "builtin.", 8) == 0) {
+        if (jobtap_load_builtin (p, path) < 0)
+            goto error;
     }
-done:
-    flux_plugin_destroy (jobtap->plugin);
+    else {
+        flux_plugin_set_flags (p, FLUX_PLUGIN_RTLD_NOW);
+        if (flux_plugin_load_dso (p, path) < 0)
+            goto error;
+        /*
+         *  A jobtap plugin must set a name, error out if not:
+         */
+        if (strcmp (flux_plugin_get_name (p), path) == 0) {
+            snprintf (errp->text, sizeof (errp->text), "%s",
+                      "Plugin did not set name in flux_plugin_init");
+            goto error;
+        }
+    }
     jobtap->plugin = p;
-    return 0;
+    return p;
 error:
     if (errp && errp->text[0] == '\0')
         strncpy (errp->text,
                  flux_plugin_strerror (p),
                  sizeof (errp->text) - 1);
     flux_plugin_destroy (p);
+    return NULL;
+}
+
+static bool isa_glob (const char *s)
+{
+    if (strchr (s, '*') || strchr (s, '?') || strchr (s, '['))
+        return true;
+    return false;
+}
+
+static int jobtap_handle_remove_req (struct job_manager *ctx,
+                                     const flux_msg_t *msg,
+                                     const char *arg)
+{
+    if (ctx->jobtap->plugin) {
+        const char *name = jobtap_plugin_name (ctx->jobtap->plugin);
+        if (strcmp (arg, "all") == 0
+            || (isa_glob (arg) && fnmatch (arg, name, 0) == 0)
+            || strcmp (arg, name) == 0) {
+            flux_plugin_destroy (ctx->jobtap->plugin);
+            ctx->jobtap->plugin = NULL;
+            return 0;
+        }
+    }
+    else if (strcmp (arg, "all") == 0) {
+        /*  "all" should work even if no plugin(s) loaded
+         */
+        return 0;
+    }
+    if (flux_respond_error (ctx->h, msg, ENOENT,
+                            "Plugin(s) to remove not found") < 0)
+        flux_log_error (ctx->h,
+                        "jobtap_handle_remove_req: flux_respond_error");
     return -1;
 }
 
-static void jobtap_handle_load_req (struct job_manager *ctx,
-                                    const flux_msg_t *msg,
-                                    const char *path,
-                                    json_t *conf)
+static int jobtap_handle_load_req (struct job_manager *ctx,
+                                   const flux_msg_t *msg,
+                                   const char *path,
+                                   json_t *conf)
 {
-    char *prev = NULL;
     jobtap_error_t error;
+    flux_plugin_t *p = NULL;
+    flux_plugin_arg_t *args = NULL;
     const char *errstr = NULL;
     struct job *job = NULL;
     zlistx_t *jobs;
 
-    if (!(prev = strdup (jobtap_plugin_name (ctx->jobtap->plugin))))
-        goto error;
-    if (jobtap_load (ctx->jobtap, path, conf, &error) < 0) {
+    if (!(p = jobtap_load (ctx->jobtap, path, conf, &error))) {
         errstr = error.text;
         goto error;
     }
@@ -687,15 +721,22 @@ static void jobtap_handle_load_req (struct job_manager *ctx,
     jobs = zhashx_values (ctx->active_jobs);
     job = zlistx_first (jobs);
     while (job) {
-        (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
+        if (!(args = jobtap_args_create (ctx->jobtap, job))) {
+            errstr = "Failed to create args for job";
+            goto error;
+        }
+
+        /*  Notify this plugin of all jobs via `job.new` callback. */
+        (void) flux_plugin_call (p, "job.new", args);
 
         /*  If job is in DEPEND state then there may be pending dependencies.
          *  Notify plugin of the DEPEND state assuming it needs to create
          *   some state in order to resolve the dependency.
          */
         if (job->state == FLUX_JOB_STATE_DEPEND)
-            (void) jobtap_call (ctx->jobtap, job, "job.state.depend", NULL);
+            (void) flux_plugin_call (p, "job.state.depend", args);
 
+        flux_plugin_arg_destroy (args);
         job = zlistx_next (jobs);
     }
     zlistx_destroy (&jobs);
@@ -706,20 +747,11 @@ static void jobtap_handle_load_req (struct job_manager *ctx,
         errstr = "jobtap: plugin loaded but failed to reprioritize all jobs";
         goto error;
     }
-    if (flux_respond_pack (ctx->h,
-                           msg,
-                           "{s:[s] s:[s]}",
-                           "plugins",
-                           jobtap_plugin_name (ctx->jobtap->plugin),
-                           "previous",
-                           prev ? prev : "none") < 0)
-        flux_log_error (ctx->h, "jobtap_handle_load_req: flux_respond");
-    free (prev);
-    return;
+    return 0;
 error:
-    free (prev);
     if (flux_respond_error (ctx->h, msg, errno, errstr) < 0)
         flux_log_error (ctx->h, "jobtap_handler: flux_respond_error");
+    return -1;
 }
 
 static void jobtap_handle_list_req (flux_t *h,
@@ -740,23 +772,31 @@ void jobtap_handler (flux_t *h,
 {
     struct job_manager *ctx = arg;
     const char *path = NULL;
+    const char *remove = NULL;
     int query_only = 0;
     json_t *conf = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s?s s?o s?b}",
+                             "{s?s s?o s?s s?b}",
                              "load", &path,
                              "conf", &conf,
+                             "remove", &remove,
                              "query_only", &query_only) < 0) {
         if (flux_respond_error (h, msg, EPROTO, NULL) < 0)
             flux_log_error (h, "jobtap_handler: flux_respond_error");
         return;
     }
-    if (query_only)
+    if (query_only) {
         jobtap_handle_list_req (h, ctx->jobtap, msg);
-    else
-        jobtap_handle_load_req (ctx, msg, path, conf);
+        return;
+    }
+    if (remove && jobtap_handle_remove_req (ctx, msg, remove) < 0)
+        return;
+    if (path && jobtap_handle_load_req (ctx, msg, path, conf) < 0)
+        return;
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "jobtap_handler: flux_respond");
 }
 
 flux_t *flux_jobtap_get_flux (flux_plugin_t *p)

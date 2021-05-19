@@ -57,7 +57,7 @@ test_expect_success 'job-manager: default plugin works with sched.prioritize' '
 	flux queue drain
 '
 test_expect_success 'job-manager: no plugin acts the same as default' '
-	flux jobtap load none &&
+	flux jobtap remove all &&
 	flux queue stop &&
 	jobid=$(flux mini submit --urgency=22 hostname) &&
 	flux job wait-event -v $jobid priority &&
@@ -69,7 +69,7 @@ test_expect_success 'job-manager: no plugin acts the same as default' '
 	flux job wait-event $jobid clean
 '
 test_expect_success HAVE_JQ 'job-manager: builtin hold plugin holds jobs' '
-	flux jobtap load builtin.priority.hold &&
+	flux jobtap load --remove=all builtin.priority.hold &&
 	flux mini bulksubmit --job-name=cc-{0} hostname ::: $(seq 1 4) \
 	    >hold.jobids &&
 	flux job wait-event -v $(cat hold.jobids | tail -1) priority &&
@@ -101,7 +101,7 @@ test_expect_success 'job-manager: add administrative hold to one job' '
 	test "$state" = "SCHED"
 '
 test_expect_success 'job-manager: held jobs get a priority on plugin load' '
-	flux jobtap load builtin.priority.default &&
+	flux jobtap load --remove=all builtin.priority.default &&
 	jobid=$(id_byname cc-4) &&
 	flux job wait-event -v -t 5 $jobid clean
 '
@@ -125,7 +125,7 @@ test_expect_success 'job-manager: test with random priority plugin' '
 	flux module reload sched-simple mode=unlimited &&
 	ncores=$(flux resource list -s free -no {ncores}) &&
 	sleepjob=$(flux mini submit -n ${ncores} sleep 3000) &&
-	flux jobtap load ${PLUGINPATH}/random.so &&
+	flux jobtap load --remove=all ${PLUGINPATH}/random.so &&
 	flux mini bulksubmit --flags waitable --job-name=random-{} hostname \
 	    ::: $(seq 1 4) &&
 	flux jobs -c4 -no {name}:{priority} | sort > pri-before.out &&
@@ -137,14 +137,14 @@ test_expect_success 'job-manager: test with random priority plugin' '
 	flux job wait --all -v
 '
 test_expect_success 'job-manager: run args test plugin' '
-	flux jobtap load ${PLUGINPATH}/args.so &&
+	flux jobtap load --remove=all ${PLUGINPATH}/args.so &&
 	flux mini run hostname &&
 	flux dmesg | grep args-check > args-check.log &&
 	test_debug "cat args-check.log" &&
 	test $(grep -c OK args-check.log) = 8
 '
 test_expect_success 'job-manager: load test jobtap plugin' '
-	flux jobtap load ${PLUGINPATH}/test.so foo.test=1 &&
+	flux jobtap load --remove=all ${PLUGINPATH}/test.so foo.test=1 &&
 	flux dmesg | grep "conf={\"foo\":{\"test\":1}}"
 '
 test_expect_success 'job-manager: run all test plugin test modes' '
@@ -209,7 +209,7 @@ test_expect_success 'job-manager: run test plugin modes for job.validate' '
 	grep "rejected by job-manager plugin" validate-failure3.out
 '
 test_expect_success 'job-manager: plugin can keep job in PRIORITY state' '
-	flux jobtap load ${PLUGINPATH}/priority-wait.so &&
+	flux jobtap load --remove=all ${PLUGINPATH}/priority-wait.so &&
 	jobid=$(flux mini submit hostname) &&
 	flux job wait-event -vt 5 $jobid depend &&
 	test $(flux jobs -no {state} $jobid) = "PRIORITY"
@@ -233,7 +233,7 @@ test_expect_success 'job-manager: job exits PRIORITY when priority is set' '
 '
 test_expect_success 'job-manager: plugin can reject some jobs in a batch' '
 	flux module reload job-ingest batch-count=6 &&
-	flux jobtap load ${PLUGINPATH}/validate.so &&
+	flux jobtap load --remove=all ${PLUGINPATH}/validate.so &&
 	test_expect_code 1 \
 	    flux mini bulksubmit --watch \
 	        --setattr=system.jobtap.validate-test-id={} \
@@ -254,7 +254,7 @@ test_expect_success 'job-manager: plugin can manage depedencies' '
 	print(flux.Flux().rpc(topic, payload).get())
 	EOF
 	flux module reload job-ingest &&
-	flux jobtap load ${PLUGINPATH}/dependency-test.so &&
+	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so &&
 	jobid=$(flux mini submit --dependency=test:dependency-test hostname) &&
 	flux job wait-event -vt 15 ${jobid} dependency-add &&
 	test $(flux jobs -no {state} ${jobid}) = DEPEND &&
@@ -264,7 +264,7 @@ test_expect_success 'job-manager: plugin can manage depedencies' '
 test_expect_success 'job-manager: job.state.depend is called on plugin load' '
 	jobid=$(flux mini submit --dependency=test:dependency-test hostname) &&
 	flux job wait-event -vt 15 ${jobid} dependency-add &&
-	flux jobtap load ${PLUGINPATH}/dependency-test.so &&
+	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so &&
 	test $(flux jobs -no {state} ${jobid}) = DEPEND &&
 	flux python dep-remove.py ${jobid} &&
 	flux job wait-event -vt 15 ${jobid} clean
