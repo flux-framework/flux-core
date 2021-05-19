@@ -441,7 +441,7 @@ struct client *client_create (const char *broker_path,
                               int rank,
                               const char *cmd_argz,
                               size_t cmd_argz_len,
-                              const char *h)
+                              const char *hostname)
 {
     struct client *cli = xzmalloc (sizeof (*cli));
     char *arg;
@@ -477,8 +477,8 @@ struct client *client_create (const char *broker_path,
     if (flux_cmd_setenvf (cli->cmd, 1, "FLUX_START_URI",
                           "local://%s/start", rundir) < 0)
         log_err_exit ("flux_cmd_setenvf");
-    if (h) {
-        if (flux_cmd_setenvf (cli->cmd, 1, "FLUX_FAKE_HOSTNAME", "%s", h) < 0)
+    if (hostname) {
+        if (flux_cmd_setenvf (cli->cmd, 1, "FLUX_FAKE_HOSTNAME", "%s", hostname) < 0)
             log_err_exit ("error setting fake hostname for rank %d", rank);
     }
     return cli;
