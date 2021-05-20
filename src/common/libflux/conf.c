@@ -59,6 +59,8 @@ static struct builtin builtin_tab[] = {
     { "shell_pluginpath",
                         INSTALLED_SHELL_PLUGINPATH, INTREE_SHELL_PLUGINPATH },
     { "shell_initrc",   INSTALLED_SHELL_INITRC,     INTREE_SHELL_INITRC },
+    { "jobtap_pluginpath",
+                        INSTALLED_JOBTAP_PLUGINPATH,INTREE_JOBTAP_PLUGINPATH },
     { "no_docs_path",   INSTALLED_NO_DOCS_PATH,     INTREE_NO_DOCS_PATH },
     { "rundir",         INSTALLED_RUNDIR,           NULL },
     { "bindir",         INSTALLED_BINDIR,           INTREE_BINDIR },
