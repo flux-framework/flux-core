@@ -103,10 +103,14 @@ static void plugin_destroy (void **item)
 
 struct jobtap *jobtap_create (struct job_manager *ctx)
 {
+    const char *path;
     struct jobtap *jobtap = calloc (1, sizeof (*jobtap));
     if (!jobtap)
         return NULL;
     jobtap->ctx = ctx;
+    if ((path = flux_conf_builtin_get ("jobtap_pluginpath", FLUX_CONF_AUTO))
+        && !(jobtap->searchpath = strdup (path)))
+        goto error;
     if (!(jobtap->plugins = zlistx_new ())) {
         errno = ENOMEM;
         goto error;
