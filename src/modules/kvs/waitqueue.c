@@ -42,6 +42,9 @@ struct wait_struct {
 struct waitqueue_struct {
     int magic;
     zlist_t *q;
+    /* special counter, count entries on 'q' that have messages,
+     * i.e. w->hand.msg */
+    int msgs_on_queue;
 };
 
 int wait_get_usecount (wait_t *w)
@@ -136,6 +139,12 @@ int wait_queue_length (waitqueue_t *q)
     return zlist_size (q->q);
 }
 
+int wait_queue_msgs_count (waitqueue_t *q)
+{
+    assert (q->magic == WAITQUEUE_MAGIC);
+    return q->msgs_on_queue;
+}
+
 int wait_queue_iter (waitqueue_t *q, wait_iter_cb_f cb, void *arg)
 {
     wait_t *w;
@@ -159,6 +168,8 @@ int wait_addqueue (waitqueue_t *q, wait_t *w)
         return -1;
     }
     w->usecount++;
+    if (w->hand.msg)
+        q->msgs_on_queue++;
     return 0;
 }
 
@@ -195,8 +206,11 @@ int wait_runqueue (waitqueue_t *q)
             return -1;
         }
         zlist_purge (q->q);
-        while ((w = zlist_pop (cpy)))
+        while ((w = zlist_pop (cpy))) {
+            if (w->hand.msg)
+                q->msgs_on_queue--;
             wait_runone (w);
+        }
         zlist_destroy (&cpy);
     }
     return 0;
@@ -261,6 +275,7 @@ int wait_destroy_msg (waitqueue_t *q, wait_test_msg_f cb, void *arg)
     if (tmp) {
         while ((w = zlist_pop (tmp))) {
             zlist_remove (q->q, w);
+            q->msgs_on_queue--;
             if (--w->usecount == 0)
                 wait_destroy (w);
         }
