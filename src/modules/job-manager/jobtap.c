@@ -67,6 +67,26 @@ struct dependency {
 static int job_emit_pending_dependencies (struct jobtap *jobtap,
                                           struct job *job);
 
+
+static int errprintf (jobtap_error_t *errp, const char *fmt, ...)
+{
+    va_list ap;
+    int n;
+    int saved_errno = errno;
+
+    if (!errp)
+        return -1;
+
+    va_start (ap, fmt);
+    n = vsnprintf (errp->text, sizeof (errp->text), fmt, ap);
+    va_end (ap);
+    if (n > sizeof (errp->text))
+        errp->text[sizeof (errp->text) - 2] = '+';
+
+    errno = saved_errno;
+    return -1;
+}
+
 static struct dependency * dependency_create (bool add,
                                               const char *description)
 {
@@ -707,21 +727,17 @@ int jobtap_plugin_load_first (struct jobtap *jobtap,
             break;
         }
         if (rc < 0 && errno != ENOENT) {
-            (void) snprintf (errp->text, sizeof (errp->text),
-                             "%s: %s",
-                             fullpath,
-                             flux_plugin_strerror (p));
-            return -1;
+            return errprintf (errp,
+                              "%s: %s",
+                              fullpath,
+                              flux_plugin_strerror (p));
         }
         fullpath = zlistx_next (l);
     }
     zlistx_destroy (&l);
     if (!found) {
-        (void) snprintf (errp->text, sizeof (errp->text),
-                         "%s: No such plugin found",
-                         path);
         errno = ENOENT;
-        return -1;
+        return errprintf (errp, "%s: No such plugin found", path);
     }
     return 0;
 }
@@ -740,14 +756,14 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
     if (conf && !json_is_null (conf)) {
         if (!json_is_object (conf)) {
             errno = EINVAL;
-            snprintf (errp->text, sizeof (errp->text), "%s",
-                      "jobptap: plugin conf must be a JSON object");
+            errprintf (errp, "jobptap: plugin conf must be a JSON object");
             goto error;
         }
         if (!(conf_str = json_dumps (conf, 0))) {
             errno = ENOMEM;
-            snprintf (errp->text, sizeof (errp->text), "%s: %s",
-                      "jobtap: json_dumps(conf) failed", strerror (errno));
+            errprintf (errp, "%s: %s",
+                      "jobtap: json_dumps(conf) failed",
+                      strerror (errno));
             goto error;
         }
     }
@@ -773,15 +789,12 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
          *  A jobtap plugin must set a name, error out if not:
          */
         if (strcmp (flux_plugin_get_name (p), path) == 0) {
-            snprintf (errp->text, sizeof (errp->text), "%s",
-                      "Plugin did not set name in flux_plugin_init");
+            errprintf (errp, "Plugin did not set name in flux_plugin_init");
             goto error;
         }
     }
     if (!zlistx_add_end (jobtap->plugins, p)) {
-        if (errp)
-            (void) snprintf (errp->text, sizeof (errp->text), "%s",
-                             "Out of memory adding plugin to list");
+        errprintf (errp, "Out of memory adding plugin to list");
         errno = ENOMEM;
         goto error;
     }
