@@ -321,10 +321,8 @@ int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
     }
 
     env = shell->info->jobspec->environment;
-    if (!overwrite && json_object_get (env, name)) {
-        errno = EEXIST;
-        return -1;
-    }
+    if (!overwrite && json_object_get (env, name))
+        return 0;
 
     va_start (ap, fmt);
     rc = vasprintf (&val, fmt, ap);
