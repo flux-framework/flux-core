@@ -9,7 +9,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import os
 import sys
 import logging
 import argparse
@@ -21,7 +20,7 @@ from flux.util import TreedictAction
 def jobtap_remove(args):
     """Remove jobtap plugin matching name"""
     try:
-        resp = flux.Flux().rpc("job-manager.jobtap", {"remove": args.plugin})
+        flux.Flux().rpc("job-manager.jobtap", {"remove": args.plugin}).get()
     except FileNotFoundError:
         LOGGER.error("%s not found", args.plugin)
         sys.exit(1)
@@ -29,19 +28,15 @@ def jobtap_remove(args):
 
 def jobtap_load(args):
     """Load a jobtap plugin into the job manager"""
-    if args.plugin.startswith("builtin."):
-        path = args.plugin
-    else:
-        path = os.path.abspath(args.plugin)
 
-    req = {"load": path}
+    req = {"load": args.plugin}
     if args.conf:
         req["conf"] = args.conf
     if args.remove:
         req["remove"] = args.remove
 
     try:
-        resp = flux.Flux().rpc("job-manager.jobtap", req).get()
+        flux.Flux().rpc("job-manager.jobtap", req).get()
     except FileNotFoundError:
         LOGGER.error(
             "%s not found",
