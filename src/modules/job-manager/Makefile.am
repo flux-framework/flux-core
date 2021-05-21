@@ -65,6 +65,7 @@ fluxinclude_HEADERS = \
 
 job_manager_la_LDFLAGS = \
 	$(fluxlib_ldflags) \
+	-avoid-version \
 	-export-symbols-regex \
 	'^(flux_jobtap.*|mod_name|mod_service|mod_main)$$' \
 	-module
