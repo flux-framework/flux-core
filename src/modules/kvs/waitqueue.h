@@ -46,6 +46,11 @@ int wait_get_usecount (wait_t *wait);
 waitqueue_t *wait_queue_create (void);
 void wait_queue_destroy (waitqueue_t *q);
 int wait_queue_length (waitqueue_t *q);
+/* Special counter indicating queue entries with msgs created with
+ * wait_create_msg_handler().  Useful if user wishes to avoid excess
+ * iteration calls on wait_destroy_msg().
+ */
+int wait_queue_msgs_count (waitqueue_t *q);
 
 /* Add a wait_t to a queue.
  * Returns -1 on error, 0 on success

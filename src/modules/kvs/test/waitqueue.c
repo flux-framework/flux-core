@@ -169,8 +169,16 @@ int main (int argc, char *argv[])
         "wait_create works");
     ok ((q = wait_queue_create ()) != NULL,
         "wait_queue_create works");
+    ok (wait_queue_length (q) == 0,
+        "wait_queue_length 0 on new queue");
+    ok (wait_queue_msgs_count (q) == 0,
+        "wait_queue_msgs_count 0 on new queue");
     ok (wait_addqueue (q, w) == 0,
         "wait_addqueue works");
+    ok (wait_queue_length (q) == 1,
+        "wait_queue_length 1 after addqueue");
+    ok (wait_queue_msgs_count (q) == 0,
+        "wait_queue_msgs_count 0 after addqueue w/o msg");
     ok (wait_get_usecount (w) == 1,
         "wait_get_usecount 1 after wait_addqueue");
     ok (count == 0,
@@ -191,6 +199,8 @@ int main (int argc, char *argv[])
         "wait_queue_create works");
     ok (wait_queue_length (q) == 0 && wait_queue_length (q2) == 0,
         "wait_queue_length 0 on new queue");
+    ok (wait_queue_msgs_count (q) == 0 && wait_queue_msgs_count (q2) == 0,
+        "wait_queue_msgs_count 0 on new queue");
 
     /* Create wait_t for msg
      * Add to two queues, run queues, wait_t called once
@@ -203,7 +213,6 @@ int main (int argc, char *argv[])
     ok (w != NULL,
         "wait_create_msg_handler with non-NULL msg works");
     flux_msg_destroy (msg);
-
     ok (wait_get_usecount (w) == 0,
         "wait_usecount 0 initially");
     ok (wait_addqueue (q, w) == 0,
@@ -216,11 +225,15 @@ int main (int argc, char *argv[])
         "wait_usecount 2 after adding to second queue");
     ok (wait_queue_length (q) == 1 && wait_queue_length (q2) == 1,
         "wait_queue_length of each queue is 1");
+    ok (wait_queue_msgs_count (q) == 1 && wait_queue_msgs_count (q2) == 1,
+        "wait_queue_msgs_count of each queue is 1");
 
     ok (wait_runqueue (q) == 0,
         "wait_runqueue success");
     ok (wait_queue_length (q) == 0 && wait_queue_length (q2) == 1,
         "wait_runqueue dequeued wait_t from first queue");
+    ok (wait_queue_msgs_count (q) == 0 && wait_queue_msgs_count (q2) == 1,
+        "wait_runqueue dequeued wait_t from first queue, msgs count valid");
     ok (wait_get_usecount (w) == 1,
         "wait_usecount 1 after one run");
     ok (count == 0,
@@ -230,6 +243,8 @@ int main (int argc, char *argv[])
         "wait_runqueue success");
     ok (wait_queue_length (q) == 0 && wait_queue_length (q2) == 0,
         "wait_runqueue dequeued wait_t from second queue");
+    ok (wait_queue_msgs_count (q) == 0 && wait_queue_msgs_count (q2) == 0,
+        "wait_runqueue dequeued wait_t from second queue, msgs count valid");
     ok (count == 1,
         "wait_t callback has run");
 
@@ -259,6 +274,8 @@ int main (int argc, char *argv[])
         "wait_destroy_msg found 3 matches");
     ok (wait_queue_length (q) == 17,
         "wait_queue_length 17 after 3 deletions");
+    ok (wait_queue_msgs_count (q) == 17,
+        "wait_queue_msgs_count 17 after 3 deletions");
     ok (count == 0,
         "wait_t callback has not run");
 
@@ -266,6 +283,8 @@ int main (int argc, char *argv[])
         "wait_destroy_msg found 17 matches");
     ok (wait_queue_length (q) == 0,
         "wait_queue_length 0 after 17 deletions");
+    ok (wait_queue_msgs_count (q) == 0,
+        "wait_queue_msgs_count 0 after 17 deletions");
     ok (count == 0,
         "wait_t callback has not run");
 
