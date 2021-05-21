@@ -121,7 +121,8 @@ static const char *jobtap_plugin_name (flux_plugin_t *p)
     const char *name;
     if (!p)
         return "none";
-    if ((name = flux_plugin_get_name (p)))
+    if ((name = flux_plugin_aux_get (p, "jobtap::basename"))
+        || (name = flux_plugin_get_name (p)))
         return name;
     return "unknown";
 }
@@ -226,7 +227,7 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
     if (reprioritize_all (ctx) < 0) {
         errprintf (errp,
                    "%s loaded but unable to reprioritize jobs",
-                   flux_plugin_get_name (p));
+                   jobtap_plugin_name (p));
     }
     return p;
 error:
@@ -870,10 +871,56 @@ error:
     return NULL;
 }
 
+static int plugin_set_name (flux_plugin_t *p,
+                            const char *basename)
+{
+    int rc = -1;
+    char *q;
+    char *copy = NULL;
+    const char *name = flux_plugin_get_name (p);
+
+    /*  It is ok to have a custom name, but that name may
+     *   not contain '/' or '.'
+     */
+    if (name && !strchr (name, '/') && !strchr (name, '.'))
+        return 0;
+    if (!(copy = strdup (basename)))
+        return -1;
+    if ((q = strchr (copy, '.')))
+        *q = '\0';
+    rc = flux_plugin_set_name (p, copy);
+    ERRNO_SAFE_WRAP (free, copy);
+    return rc;
+}
+
+static int plugin_try_load (flux_plugin_t *p,
+                            const char *fullpath,
+                            jobtap_error_t *errp)
+{
+    char *name = NULL;
+
+    if (flux_plugin_load_dso (p, fullpath) < 0)
+        return errprintf (errp,
+                          "%s: %s",
+                          fullpath,
+                          flux_plugin_strerror (p));
+    if (!(name = strdup (basename (fullpath)))
+        || flux_plugin_aux_set (p, "jobtap::basename", name, free) < 0) {
+        ERRNO_SAFE_WRAP (free, name);
+        return errprintf (errp,
+                          "%s: failed to create plugin basename",
+                          fullpath);
+    }
+    if (plugin_set_name (p, name) < 0)
+        return errprintf (errp,
+                          "%s: unable to set a plugin name",
+                           fullpath);
+    return 0;
+}
+
 int jobtap_plugin_load_first (struct jobtap *jobtap,
                               flux_plugin_t *p,
                               const char *path,
-                              json_t *conf,
                               jobtap_error_t *errp)
 {
     bool found = false;
@@ -881,23 +928,21 @@ int jobtap_plugin_load_first (struct jobtap *jobtap,
     char *fullpath;
 
     if (no_searchpath (jobtap->searchpath, path))
-        return flux_plugin_load_dso (p, path);
+        return plugin_try_load (p, path, errp);
 
     if (!(l = path_list (jobtap->searchpath, path)))
         return -1;
 
     fullpath = zlistx_first (l);
     while (fullpath) {
-        int rc = flux_plugin_load_dso (p, fullpath);
+        int rc = plugin_try_load (p, fullpath, errp);
+        if (rc < 0 && errno != ENOENT) {
+            ERRNO_SAFE_WRAP (zlistx_destroy , &l);
+            return -1;
+        }
         if (rc == 0) {
             found = true;
             break;
-        }
-        if (rc < 0 && errno != ENOENT) {
-            return errprintf (errp,
-                              "%s: %s",
-                              fullpath,
-                              flux_plugin_strerror (p));
         }
         fullpath = zlistx_next (l);
     }
@@ -950,15 +995,8 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
     }
     else {
         flux_plugin_set_flags (p, FLUX_PLUGIN_RTLD_NOW);
-        if (jobtap_plugin_load_first (jobtap, p, path, conf, errp) < 0)
+        if (jobtap_plugin_load_first (jobtap, p, path, errp) < 0)
             goto error;
-        /*
-         *  A jobtap plugin must set a name, error out if not:
-         */
-        if (strcmp (flux_plugin_get_name (p), path) == 0) {
-            errprintf (errp, "Plugin did not set name in flux_plugin_init");
-            goto error;
-        }
     }
     if (!zlistx_add_end (jobtap->plugins, p)) {
         errprintf (errp, "Out of memory adding plugin to list");
@@ -1099,11 +1137,13 @@ static int build_jobtap_topic (flux_plugin_t *p,
                                char *buf,
                                int len)
 {
-    const char *name = jobtap_plugin_name (p);
+    /*  N.B. use plugin provided or sanitized name (trailing .so removed)
+     *   in topic string. This name is stored as the main plugin name.
+     */
+    const char *name = flux_plugin_get_name (p);
 
-    /*  Plugin name must be set before calling service_register:
-     *  (by default, path loaded plugins have their name set to the path.
-     *   detect that here with strchr())
+    /*
+     *  Detect improperly initialized plugin name before continuing:
      */
     if (name == NULL || strchr (name, '/')) {
         errno = EINVAL;
