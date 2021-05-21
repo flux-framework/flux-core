@@ -37,8 +37,8 @@ test_expect_success 'job-manager: multiple plugins can be loaded' '
 	flux jobtap list > plugins &&
 	grep args plugins &&
 	grep test plugins &&
-	flux jobtap remove args &&
-	flux jobtap remove test
+	flux jobtap remove args* &&
+	flux jobtap remove test*
 '
 test_expect_success 'job-manager: plugins can be loaded by configuration' '
 	mkdir testconf &&
