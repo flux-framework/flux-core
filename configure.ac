@@ -431,6 +431,9 @@ AC_SUBST(fluxpylinkdir)
 AS_VAR_SET(fluxmoddir, $libdir/flux/modules)
 AC_SUBST(fluxmoddir)
 
+AS_VAR_SET(jobtap_plugindir, $libdir/flux/job-manager/plugins)
+AC_SUBST(jobtap_plugindir)
+
 AS_VAR_SET(fluxconnectordir, $libdir/flux/connectors)
 AC_SUBST(fluxconnectordir)
 

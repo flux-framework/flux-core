@@ -42,12 +42,7 @@ struct jobtap_builtin {
     flux_plugin_init_f init;
 };
 
-extern int default_priority_plugin_init (flux_plugin_t *p);
-extern int hold_priority_plugin_init (flux_plugin_t *p);
-
 static struct jobtap_builtin jobtap_builtins [] = {
-    { "builtin.priority.default", default_priority_plugin_init },
-    { "builtin.priority.hold", hold_priority_plugin_init },
     { 0 },
 };
 
@@ -367,9 +362,6 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
         goto error;
     }
     zlistx_set_destructor (jobtap->plugins, plugin_destroy);
-
-    if (jobtap_load (jobtap, "builtin.priority.default", NULL, NULL) < 0)
-        goto error;
 
     if (jobtap_parse_config (jobtap, flux_get_conf (ctx->h), &error) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s", error.text);

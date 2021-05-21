@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* builtins/hold.c - builtin plugin that holds all submitted jobs
+/* priority-hold.c - jobtap plugin that holds all submitted jobs
  *
  */
 
@@ -31,7 +31,9 @@ static int hold_cb (flux_plugin_t *p,
 }
 
 
-int hold_priority_plugin_init (flux_plugin_t *p)
+int flux_plugin_init (flux_plugin_t *p)
 {
+    if (flux_plugin_set_name (p, "hold") < 0)
+        return -1;
     return flux_plugin_add_handler (p, "job.state.priority", hold_cb, NULL);
 }

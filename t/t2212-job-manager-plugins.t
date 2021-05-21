@@ -16,16 +16,12 @@ id_byname() {
 	flux jobs -ano {name}:{id} | grep ^$1: | head -1 | cut -d: -f2
 }
 
-test_expect_success 'job-manager: builtin module loaded by default' '
-	flux jobtap list > list.out &&
-	test_debug "cat list.out" &&
-	grep "builtin.priority.default" list.out
-'
 test_expect_success 'job-manager: attempt to load invalid plugin fails' '
+	flux jobtap list >list1.out &&
 	test_must_fail flux jobtap load builtin.foo &&
 	flux jobtap list >list2.out &&
 	test_debug "cat list2.out" &&
-	grep "default" list2.out
+	test_cmp list1.out list2.out
 '
 test_expect_success 'job-manager: load with invalid conf fails' '
 	cat <<-EOF >badconf.py &&
@@ -59,13 +55,14 @@ test_expect_success 'job-manager: plugins can be loaded by configuration' '
 	grep args confplugins.out &&
 	grep test confplugins.out
 '
-test_expect_success 'job-manager: default plugin sets priority to urgency' '
+test_expect_success 'job-manager: default no plugin sets priority to urgency' '
+	flux jobtap remove all &&
 	jobid=$(flux mini submit --urgency=8 hostname) &&
 	flux job wait-event -v $jobid priority &&
 	test $(flux jobs -no {priority} $jobid) = 8 &&
 	flux job wait-event -v $jobid clean
 '
-test_expect_success 'job-manager: default plugin works with sched.prioritize' '
+test_expect_success 'job-manager: default works with sched.prioritize' '
 	ncores=$(flux resource list -s free -no {ncores}) &&
 	allcores=$(flux mini submit -n ${ncores} sleep 1000) &&
 	flux mini submit --cc=1-2 --flags=debug hostname >prio.jobids &&
@@ -82,20 +79,8 @@ test_expect_success 'job-manager: default plugin works with sched.prioritize' '
 	flux job cancelall -f &&
 	flux queue drain
 '
-test_expect_success 'job-manager: no plugin acts the same as default' '
-	flux jobtap remove all &&
-	flux queue stop &&
-	jobid=$(flux mini submit --urgency=22 hostname) &&
-	flux job wait-event -v $jobid priority &&
-	test $(flux jobs -no {priority} $jobid) = 22 &&
-	flux job urgency $jobid 7 &&
-	flux job wait-event --count=2 -v $jobid priority &&
-	test $(flux jobs -no {priority} $jobid) = 7 &&
-	flux queue start &&
-	flux job wait-event $jobid clean
-'
-test_expect_success HAVE_JQ 'job-manager: builtin hold plugin holds jobs' '
-	flux jobtap load --remove=all builtin.priority.hold &&
+test_expect_success HAVE_JQ 'job-manager: hold plugin holds jobs' '
+	flux jobtap load --remove=all priority-hold.so &&
 	flux mini bulksubmit --job-name=cc-{0} hostname ::: $(seq 1 4) \
 	    >hold.jobids &&
 	flux job wait-event -v $(cat hold.jobids | tail -1) priority &&
@@ -127,7 +112,7 @@ test_expect_success 'job-manager: add administrative hold to one job' '
 	test "$state" = "SCHED"
 '
 test_expect_success 'job-manager: held jobs get a priority on plugin load' '
-	flux jobtap load --remove=all builtin.priority.default &&
+	flux jobtap load --remove=all ${PLUGINPATH}/priority-default.so &&
 	jobid=$(id_byname cc-4) &&
 	flux job wait-event -v -t 5 $jobid clean
 '
