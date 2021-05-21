@@ -31,6 +31,12 @@ test_expect_success 'job-manager: load with invalid conf fails' '
 	EOF
 	test_must_fail flux python badconf.py
 '
+test_expect_success 'job-manager: jobtap remove with invalid plugin fails' '
+	test_must_fail flux jobtap remove notfound.so
+'
+test_expect_success 'job-manager: jobtap remove all does not error ' '
+	flux jobtap remove all
+'
 test_expect_success 'job-manager: multiple plugins can be loaded' '
 	flux jobtap load ${PLUGINPATH}/args.so &&
 	flux jobtap load ${PLUGINPATH}/test.so &&
@@ -54,6 +60,30 @@ test_expect_success 'job-manager: plugins can be loaded by configuration' '
 	test_debug "cat confplugins.out" &&
 	grep args confplugins.out &&
 	grep test confplugins.out
+'
+test_expect_success 'job-manager: bad plugins config is detected' '
+	mkdir -p badconf/a badconf/b badconf/c  &&
+	cat <<-EOF >badconf/a/job-manager.toml &&
+	[job-manager]
+	plugins = { load = "test.so" }
+	EOF
+	cat <<-EOF >badconf/b/job-manager.toml &&
+	[[job-manager.plugins]]
+	load = 42
+	EOF
+	cat <<-EOF >badconf/c/job-manager.toml &&
+	[[job-manager.plugins]]
+	remove = "notfound.so"
+	EOF
+	test_must_fail \
+	    flux mini bulksubmit -n1 --progress --watch --log=badconf.{}.log \
+	        flux start -o,-c$(pwd)/badconf/{} ::: a b c &&
+	test_debug "echo a:; cat badconf.a.log" &&
+	grep "config must be an array" badconf.a.log &&
+	test_debug "echo b:; cat badconf.b.log" &&
+	grep -i "expected string.*got integer" badconf.b.log &&
+	test_debug "echo c:; cat badconf.c.log" &&
+	grep -i "failed to find plugin to remove" badconf.c.log
 '
 test_expect_success 'job-manager: default no plugin sets priority to urgency' '
 	flux jobtap remove all &&
