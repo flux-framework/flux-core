@@ -10,6 +10,8 @@ test_under_flux 4 job
 
 flux setattr log-stderr-level 1
 
+PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
+
 id_byname() {
 	flux jobs -ano {name}:{id} | grep ^$1: | head -1 | cut -d: -f2
 }
@@ -32,6 +34,30 @@ test_expect_success 'job-manager: load with invalid conf fails' '
 	print(h.rpc("job-manager.jobtap", {"load": "none", "conf": 1}).get())
 	EOF
 	test_must_fail flux python badconf.py
+'
+test_expect_success 'job-manager: multiple plugins can be loaded' '
+	flux jobtap load ${PLUGINPATH}/args.so &&
+	flux jobtap load ${PLUGINPATH}/test.so &&
+	flux jobtap list > plugins &&
+	grep args plugins &&
+	grep test plugins &&
+	flux jobtap remove args &&
+	flux jobtap remove test
+'
+test_expect_success 'job-manager: plugins can be loaded by configuration' '
+	mkdir testconf &&
+	cat <<-EOF >testconf/job-manager.toml &&
+	[job-manager]
+	plugins = [
+	  { remove = "all" },
+	  { load = "${PLUGINPATH}/test.so" },
+	  { load = "${PLUGINPATH}/args.so" },
+	]
+	EOF
+	flux start -o,-c $(pwd)/testconf flux jobtap list > confplugins.out &&
+	test_debug "cat confplugins.out" &&
+	grep args confplugins.out &&
+	grep test confplugins.out
 '
 test_expect_success 'job-manager: default plugin sets priority to urgency' '
 	jobid=$(flux mini submit --urgency=8 hostname) &&
@@ -120,7 +146,6 @@ test_expect_success 'job-manager: release final held job' '
 	flux job urgency $jobid 1 &&
 	flux job wait-event -v $jobid clean
 '
-PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
 test_expect_success 'job-manager: test with random priority plugin' '
 	flux module reload sched-simple mode=unlimited &&
 	ncores=$(flux resource list -s free -no {ncores}) &&
