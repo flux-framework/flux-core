@@ -357,8 +357,10 @@ int main (int argc, char *argv[])
         "flux_cmd_setenvf (FOO=42)");
     is (flux_cmd_getenv (cmd, "FOO"), "42",
         "flux_cmd_getenv (FOO) == 42");
-    ok (flux_cmd_setenvf (cmd, 0, "FOO", "%d", 24) < 0,
-        "flux_cmd_setenvf (FOO=24) no overwrite fails");
+    ok (flux_cmd_setenvf (cmd, 0, "FOO", "%d", 24) == 0,
+        "flux_cmd_setenvf (FOO=24) no overwrite succeeds");
+    is (flux_cmd_getenv (cmd, "FOO"), "42",
+        "flux_cmd_getenv (FOO) == 42 (still)");
     ok (flux_cmd_setenvf (cmd, 1, "FOO", "%d", 24) >= 0,
         "flux_cmd_setenvf (FOO=24, overwrite=true)");
     is (flux_cmd_getenv (cmd, "FOO"), "24",
