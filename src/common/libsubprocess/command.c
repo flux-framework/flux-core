@@ -552,13 +552,11 @@ int flux_cmd_argv_append (flux_cmd_t *cmd, const char *arg)
 static int flux_cmd_setenv (flux_cmd_t *cmd, const char *k, const char *v,
                             int overwrite)
 {
-    if (!overwrite && envz_entry (cmd->envz, cmd->envz_len, k)) {
-        errno = EEXIST;
-        return -1;
-    }
-    if (envz_add (&cmd->envz, &cmd->envz_len, k, v) != 0) {
-        errno = ENOMEM;
-        return -1;
+    if (overwrite || !envz_entry (cmd->envz, cmd->envz_len, k)) {
+        if (envz_add (&cmd->envz, &cmd->envz_len, k, v) != 0) {
+            errno = ENOMEM;
+            return -1;
+        }
     }
     return 0;
 }
