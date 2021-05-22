@@ -121,6 +121,7 @@ static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
     kt->flags = flags;
     if (!(kt->missing_refs_list = zlist_new ()))
         goto error_enomem;
+    zlist_autofree (kt->missing_refs_list);
     if (!(kt->dirty_cache_entries_list = zlist_new ()))
         goto error_enomem;
     kt->ktm = ktm;
@@ -754,27 +755,11 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
 
 static int add_missing_ref (kvstxn_t *kt, const char *ref)
 {
-    char *refcpy = NULL;
-
-    if (!(refcpy = strdup (ref))) {
-        errno = errno;
-        goto err;
-    }
-
-    if (zlist_push (kt->missing_refs_list, (void *)refcpy) < 0) {
+    if (zlist_push (kt->missing_refs_list, (void *)ref) < 0) {
         errno = ENOMEM;
-        goto err;
+        return -1;
     }
-
-    if (! zlist_freefn (kt->missing_refs_list, (void *)refcpy,
-                        free, false))
-        goto err;
-
     return 0;
-
-err:
-    free (refcpy);
-    return -1;
 }
 
 /* normalize key for setroot, and add it to keys dict, if unique */
