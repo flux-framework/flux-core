@@ -1051,7 +1051,6 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
                                      void *data)
 {
     struct cache_entry *entry;
-    int saved_errno, rc = 0;
 
     if (kt->state != KVSTXN_STATE_PRE_FINISHED) {
         errno = EINVAL;
@@ -1061,18 +1060,13 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
     while ((entry = zlist_pop (kt->dirty_cache_entries_list))) {
         cache_entry_decref (entry);
         if (cb (kt, entry, data) < 0) {
-            saved_errno = errno;
-            rc = -1;
-            break;
+            int saved_errno = errno;
+            cleanup_dirty_cache_list (kt);
+            errno = saved_errno;
+            return -1;
         }
     }
-
-    if (rc < 0) {
-        cleanup_dirty_cache_list (kt);
-        errno = saved_errno;
-    }
-
-    return rc;
+    return 0;
 }
 
 kvstxn_mgr_t *kvstxn_mgr_create (struct cache *cache,
