@@ -46,6 +46,11 @@ test_expect_success 'job-manager: multiple plugins can be loaded' '
 	flux jobtap remove args* &&
 	flux jobtap remove test*
 '
+test_expect_success 'job-manager: loading duplicate plugins fails' '
+	flux jobtap load ${PLUGINPATH}/args.so &&
+	test_must_fail flux jobtap load ${PLUGINPATH}/args.so &&
+	flux jobtap remove args.so
+'
 test_expect_success 'job-manager: plugins can be loaded by configuration' '
 	mkdir testconf &&
 	cat <<-EOF >testconf/job-manager.toml &&
