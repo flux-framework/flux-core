@@ -615,7 +615,7 @@ int flux_job_id_encode (flux_jobid_t id,
     if (type == NULL || strcasecmp (type, "dec") == 0) {
         int len = snprintf (buf, bufsz, "%ju", (uintmax_t) id);
         if (len >= bufsz) {
-            errno = ENOSPC;
+            errno = EOVERFLOW;
             return -1;
         }
         return 0;
@@ -623,7 +623,7 @@ int flux_job_id_encode (flux_jobid_t id,
     if (strcasecmp (type, "hex") == 0) {
         int len = snprintf (buf, bufsz, "0x%jx", (uintmax_t) id);
         if (len >= bufsz) {
-            errno = ENOSPC;
+            errno = EOVERFLOW;
             return -1;
         }
         return 0;
@@ -636,7 +636,7 @@ int flux_job_id_encode (flux_jobid_t id,
          */
         int len = snprintf (buf, bufsz, "job.");
         if (len >= bufsz) {
-            errno = ENOSPC;
+            errno = EOVERFLOW;
             return -1;
         }
         buf += len;
