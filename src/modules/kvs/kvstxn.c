@@ -914,10 +914,8 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
         }
 
         if (kt->errnum != 0) {
-            char *ref;
             /* empty missing_refs_list to prevent mistakes later */
-            while ((ref = zlist_pop (kt->missing_refs_list)))
-                free (ref);
+            zlist_purge (kt->missing_refs_list);
             return KVSTXN_PROCESS_ERROR;
         }
 
@@ -1028,7 +1026,6 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
 int kvstxn_iter_missing_refs (kvstxn_t *kt, kvstxn_ref_f cb, void *data)
 {
     char *ref;
-    int saved_errno, rc = 0;
 
     if (kt->state != KVSTXN_STATE_LOAD_ROOT
         && kt->state != KVSTXN_STATE_APPLY_OPS) {
@@ -1038,21 +1035,15 @@ int kvstxn_iter_missing_refs (kvstxn_t *kt, kvstxn_ref_f cb, void *data)
 
     while ((ref = zlist_pop (kt->missing_refs_list))) {
         if (cb (kt, ref, data) < 0) {
+            int saved_errno = errno;
             free (ref);
-            saved_errno = errno;
-            rc = -1;
-            break;
+            zlist_purge (kt->missing_refs_list);
+            errno = saved_errno;
+            return -1;
         }
         free (ref);
     }
-
-    if (rc < 0) {
-        while ((ref = zlist_pop (kt->missing_refs_list)))
-            free (ref);
-        errno = saved_errno;
-    }
-
-    return rc;
+    return 0;
 }
 
 int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
