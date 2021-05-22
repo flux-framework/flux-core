@@ -603,7 +603,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
                 saved_errno = errno;
                 goto done;
             }
-            if (treeobj_insert_entry (dir, name, subdir) < 0) {
+            /* subdir just created above, no need to validate */
+            if (treeobj_insert_entry_novalidate (dir, name, subdir) < 0) {
                 saved_errno = errno;
                 json_decref (subdir);
                 goto done;
@@ -651,7 +652,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
                 goto done;
             }
 
-            if (treeobj_insert_entry (dir, name, subdir) < 0) {
+            /* copy from entry already in cache, assume novalidate ok */
+            if (treeobj_insert_entry_novalidate (dir, name, subdir) < 0) {
                 saved_errno = errno;
                 json_decref (subdir);
                 goto done;
@@ -698,7 +700,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
                 saved_errno = errno;
                 goto done;
             }
-            if (treeobj_insert_entry (dir, name, subdir) < 0) {
+            /* subdir just created above, no need to validate */
+            if (treeobj_insert_entry_novalidate (dir, name, subdir) < 0) {
                 saved_errno = errno;
                 json_decref (subdir);
                 goto done;
@@ -719,7 +722,12 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
             }
         }
         else {
-            /* if not append, it's a normal insertion */
+            /* if not append, it's a normal insertion
+             *
+             * N.B. this is the primary insertion and what is being
+             * inserted must be checked.  So we cannot use the
+             * novalidate alternative function.
+             */
             if (treeobj_insert_entry (dir, name, dirent) < 0) {
                 saved_errno = errno;
                 goto done;
