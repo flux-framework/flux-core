@@ -70,7 +70,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
                    const char *broker_path);
 int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
                  const char *broker_path);
-char *create_scratch_dir (void);
+char *create_rundir (void);
 void client_destroy (struct client *cli);
 char *find_broker (const char *searchpath);
 static void setup_profiling_env (void);
@@ -100,8 +100,8 @@ static struct optparse_option opts[] = {
       .usage = "After a broker exits, kill other brokers after DURATION", },
     { .name = "trace-pmi-server", .has_arg = 0, .arginfo = NULL,
       .usage = "Trace pmi simple server protocol exchange", },
-    { .name = "scratchdir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
-      .usage = "Use DIR as scratch directory", },
+    { .name = "rundir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
+      .usage = "Use DIR as broker run directory", },
     { .name = "noclique", .key = 'c', .has_arg = 0, .arginfo = NULL,
       .usage = "Don't set PMI_process_mapping in PMI KVS", },
 
@@ -177,8 +177,8 @@ int main (int argc, char *argv[])
     setup_profiling_env ();
 
     if (!optparse_hasopt (ctx.opts, "test-size")) {
-        if (optparse_hasopt (ctx.opts, "scratchdir"))
-            log_msg_exit ("--scratchdir only works with --test-size=N");
+        if (optparse_hasopt (ctx.opts, "rundir"))
+            log_msg_exit ("--rundir only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "noclique"))
             log_msg_exit ("--noclique only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "test-hosts"))
@@ -341,15 +341,15 @@ void add_args_list (char **argz, size_t *argz_len, optparse_t *opt, const char *
             log_err_exit ("argz_add");
 }
 
-char *create_scratch_dir (void)
+char *create_rundir (void)
 {
     char *tmpdir = getenv ("TMPDIR");
-    char *scratchdir = xasprintf ("%s/flux-XXXXXX", tmpdir ? tmpdir : "/tmp");
+    char *rundir = xasprintf ("%s/flux-XXXXXX", tmpdir ? tmpdir : "/tmp");
 
-    if (!mkdtemp (scratchdir))
-        log_err_exit ("mkdtemp %s", scratchdir);
-    cleanup_push_string (cleanup_directory_recursive, scratchdir);
-    return scratchdir;
+    if (!mkdtemp (rundir))
+        log_err_exit ("mkdtemp %s", rundir);
+    cleanup_push_string (cleanup_directory_recursive, rundir);
+    return rundir;
 }
 
 static int pmi_response_send (void *client, const char *buf)
@@ -437,11 +437,11 @@ error:
 }
 
 struct client *client_create (const char *broker_path,
-                              const char *scratch_dir,
+                              const char *rundir,
                               int rank,
                               const char *cmd_argz,
                               size_t cmd_argz_len,
-                              const char *h)
+                              const char *hostname)
 {
     struct client *cli = xzmalloc (sizeof (*cli));
     char *arg;
@@ -451,7 +451,7 @@ struct client *client_create (const char *broker_path,
     cli->rank = rank;
     add_args_list (&argz, &argz_len, ctx.opts, "wrap");
     argz_add (&argz, &argz_len, broker_path);
-    char *dir_arg = xasprintf ("--setattr=rundir=%s", scratch_dir);
+    char *dir_arg = xasprintf ("--setattr=rundir=%s", rundir);
     argz_add (&argz, &argz_len, dir_arg);
     free (dir_arg);
     add_args_list (&argz, &argz_len, ctx.opts, "broker-opts");
@@ -470,17 +470,13 @@ struct client *client_create (const char *broker_path,
 
     if (flux_cmd_add_channel (cli->cmd, "PMI_FD") < 0)
         log_err_exit ("flux_cmd_add_channel");
-    if (flux_cmd_setenvf (cli->cmd, 1, "PMI_RANK", "%d", rank) < 0)
-        log_err_exit ("flux_cmd_setenvf");
-    if (flux_cmd_setenvf (cli->cmd, 1, "PMI_SIZE", "%d", ctx.test_size) < 0)
-        log_err_exit ("flux_cmd_setenvf");
-    if (flux_cmd_setenvf (cli->cmd, 1, "FLUX_START_URI",
-                          "local://%s/start", scratch_dir) < 0)
-        log_err_exit ("flux_cmd_setenvf");
-    if (h) {
-        if (flux_cmd_setenvf (cli->cmd, 1, "FLUX_FAKE_HOSTNAME", "%s", h) < 0)
-            log_err_exit ("error setting fake hostname for rank %d", rank);
-    }
+    if (flux_cmd_setenvf (cli->cmd, 1, "PMI_RANK", "%d", rank) < 0
+        || flux_cmd_setenvf (cli->cmd, 1, "PMI_SIZE", "%d", ctx.test_size) < 0
+        || flux_cmd_setenvf (cli->cmd, 1, "FLUX_START_URI",
+                             "local://%s/start", rundir) < 0
+        || (hostname && flux_cmd_setenvf (cli->cmd, 1, "FLUX_FAKE_HOSTNAME",
+                                          "%s", hostname) < 0))
+            log_err_exit ("error setting up environment for rank %d", rank);
     return cli;
 fail:
     free (argz);
@@ -678,7 +674,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     struct client *cli;
     int rank;
     int flags = 0;
-    char *scratch_dir;
+    char *rundir;
     struct hostlist *hosts = NULL;
 
     if (isatty (STDIN_FILENO)) {
@@ -698,13 +694,12 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");
 
-    if (optparse_hasopt (ctx.opts, "scratchdir"))
-        scratch_dir = xstrdup (optparse_get_str (ctx.opts, "scratchdir", NULL));
+    if (optparse_hasopt (ctx.opts, "rundir"))
+        rundir = xstrdup (optparse_get_str (ctx.opts, "rundir", NULL));
     else
-        scratch_dir = create_scratch_dir ();
+        rundir = create_rundir ();
 
-    start_server_initialize (scratch_dir,
-                             optparse_hasopt (ctx.opts, "verbose"));
+    start_server_initialize (rundir, optparse_hasopt (ctx.opts, "verbose"));
 
     if (optparse_hasopt (ctx.opts, "trace-pmi-server"))
         flags |= PMI_SIMPLE_SERVER_TRACE;
@@ -721,7 +716,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
 
     for (rank = 0; rank < ctx.test_size; rank++) {
         if (!(cli = client_create (broker_path,
-                                   scratch_dir,
+                                   rundir,
                                    rank,
                                    cmd_argz,
                                    cmd_argz_len,
@@ -746,7 +741,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     start_server_finalize ();
 
     hostlist_destroy (hosts);
-    free (scratch_dir);
+    free (rundir);
 
     zlist_destroy (&ctx.clients);
     flux_watcher_destroy (ctx.timer);
