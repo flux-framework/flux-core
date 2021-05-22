@@ -347,6 +347,15 @@ static int jobtap_parse_config (struct jobtap *jobtap,
     return 0;
 }
 
+static int plugin_byname (const void *item1, const void *item2)
+{
+    const char *name1 = jobtap_plugin_name ((flux_plugin_t *) item1);
+    const char *name2 = item2;
+    if (!name1 || !name2)
+        return -1;
+    return strcmp (name1, name2);
+}
+
 struct jobtap *jobtap_create (struct job_manager *ctx)
 {
     const char *path;
@@ -363,6 +372,7 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
         goto error;
     }
     zlistx_set_destructor (jobtap->plugins, plugin_destroy);
+    zlistx_set_comparator (jobtap->plugins, plugin_byname);
 
     if (jobtap_parse_config (jobtap, flux_get_conf (ctx->h), &error) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s", error.text);
@@ -893,7 +903,8 @@ static int plugin_set_name (flux_plugin_t *p,
     return rc;
 }
 
-static int plugin_try_load (flux_plugin_t *p,
+static int plugin_try_load (struct jobtap *jobtap,
+                            flux_plugin_t *p,
                             const char *fullpath,
                             jobtap_error_t *errp)
 {
@@ -915,6 +926,11 @@ static int plugin_try_load (flux_plugin_t *p,
         return errprintf (errp,
                           "%s: unable to set a plugin name",
                            fullpath);
+    if (zlistx_find (jobtap->plugins, (void *) jobtap_plugin_name (p)))
+        return errprintf (errp,
+                          "%s: %s already loaded",
+                          fullpath,
+                          jobtap_plugin_name (p));
     return 0;
 }
 
@@ -928,14 +944,14 @@ int jobtap_plugin_load_first (struct jobtap *jobtap,
     char *fullpath;
 
     if (no_searchpath (jobtap->searchpath, path))
-        return plugin_try_load (p, path, errp);
+        return plugin_try_load (jobtap, p, path, errp);
 
     if (!(l = path_list (jobtap->searchpath, path)))
         return -1;
 
     fullpath = zlistx_first (l);
     while (fullpath) {
-        int rc = plugin_try_load (p, fullpath, errp);
+        int rc = plugin_try_load (jobtap, p, fullpath, errp);
         if (rc < 0 && errno != ENOENT) {
             ERRNO_SAFE_WRAP (zlistx_destroy , &l);
             return -1;
