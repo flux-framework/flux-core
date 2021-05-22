@@ -51,6 +51,7 @@ struct cache_entry {
     int errnum;
     char *blobref;
     int refcount;
+    struct list_node entries_node;
     struct list_head *notdirty_list;
     struct list_node notdirty_node;
     struct list_head *valid_list;
@@ -61,6 +62,9 @@ struct cache {
     flux_reactor_t *r;
     double fake_time;       /* -1. for invalid */
     zhashx_t *zhx;
+    /* entries_list is for fast iteration through entries, faster than
+     * using zhashx iterators or zhashx_keys() */
+    struct list_head entries_list;
     /* list of entries with notdirty & valid waitqueue's with messages
      * on them.  These lists are used to avoid excess iteration
      * through zhx */
@@ -94,6 +98,7 @@ struct cache_entry *cache_entry_create (const char *ref)
         return NULL;
     }
 
+    list_node_init (&entry->entries_node);
     list_node_init (&entry->notdirty_node);
     list_node_init (&entry->valid_node);
     return entry;
@@ -364,6 +369,7 @@ int cache_insert (struct cache *cache, struct cache_entry *entry)
 
     if (cache && entry) {
         rc = zhashx_insert (cache->zhx, entry->blobref, entry);
+        list_add (&cache->entries_list, &entry->entries_node);
         entry->notdirty_list = &cache->notdirty_list;
         entry->valid_list = &cache->valid_list;
         if (entry->waitlist_notdirty
@@ -387,6 +393,7 @@ int cache_remove_entry (struct cache *cache, const char *ref)
             || !wait_queue_length (entry->waitlist_notdirty))
         && (!entry->waitlist_valid
             || !wait_queue_length (entry->waitlist_valid))) {
+        list_del (&entry->entries_node);
         zhashx_delete (cache->zhx, ref);
         return 1;
     }
@@ -410,31 +417,21 @@ static int cache_entry_age (struct cache_entry *entry, struct cache *cache)
 
 int cache_expire_entries (struct cache *cache, double thresh)
 {
-    zlistx_t *keys;
-    char *ref;
-    struct cache_entry *entry;
+    struct cache_entry *entry = NULL;
+    struct cache_entry *next = NULL;
     int count = 0;
 
-    /* Do not use zhashx_first()/zhashx_next() or FOREACH_ZHASHX, as
-     * zhashx_delete() call below modifies hash */
-    if (!(keys = zhashx_keys (cache->zhx))) {
-        errno = ENOMEM;
-        return -1;
-    }
-    ref = zlistx_first (keys);
-    while (ref) {
-        if ((entry = zhashx_lookup (cache->zhx, ref))
-            && !cache_entry_get_dirty (entry)
+    list_for_each_safe (&cache->entries_list, entry, next, entries_node) {
+        if (!cache_entry_get_dirty (entry)
             && cache_entry_get_valid (entry)
             && !entry->refcount
             && (thresh == 0.
                     || cache_entry_age (entry, cache) > thresh)) {
-                zhashx_delete (cache->zhx, ref);
+                list_del (&entry->entries_node);
+                zhashx_delete (cache->zhx, entry->blobref);
                 count++;
         }
-        ref = zlistx_next (keys);
     }
-    zlistx_destroy (&keys);
     return count;
 }
 
@@ -521,6 +518,7 @@ struct cache *cache_create (flux_reactor_t *r)
     zhashx_set_key_destructor (cache->zhx, NULL);
     zhashx_set_key_duplicator (cache->zhx, NULL);
     zhashx_set_destructor (cache->zhx, cache_entry_destroy_wrapper);
+    list_head_init (&cache->entries_list);
     list_head_init (&cache->notdirty_list);
     list_head_init (&cache->valid_list);
     return cache;
