@@ -16,9 +16,9 @@ if ! test -x ${HELLO}; then
     test_done
 fi
 
-# rc1-job ensures there are 2 cores per node
+export TEST_UNDER_FLUX_CORES_PER_RANK=4
 SIZE=2
-MAX_MPI_SIZE=$(($SIZE*2))
+MAX_MPI_SIZE=$(($SIZE*$TEST_UNDER_FLUX_CORES_PER_RANK))
 test_under_flux $SIZE job
 
 hello_world() {
@@ -30,5 +30,10 @@ hello_world() {
 for size in $(seq 1 ${MAX_MPI_SIZE}); do
 	test_expect_success "mpi hello size=${size}" "hello_world ${size}"
 done
+
+# issue 3649 - try to get two size=2 jobs running concurrently on one broker
+test_expect_success 'mpi hello size=2 concurrent submit of 8 jobs' '
+	run_timeout 30 flux mini submit --cc=1-8 --watch -n2 ${HELLO}
+'
 
 test_done
