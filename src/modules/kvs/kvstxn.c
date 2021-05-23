@@ -121,6 +121,7 @@ static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
     kt->flags = flags;
     if (!(kt->missing_refs_list = zlist_new ()))
         goto error_enomem;
+    zlist_autofree (kt->missing_refs_list);
     if (!(kt->dirty_cache_entries_list = zlist_new ()))
         goto error_enomem;
     kt->ktm = ktm;
@@ -603,7 +604,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
                 saved_errno = errno;
                 goto done;
             }
-            if (treeobj_insert_entry (dir, name, subdir) < 0) {
+            /* subdir just created above, no need to validate */
+            if (treeobj_insert_entry_novalidate (dir, name, subdir) < 0) {
                 saved_errno = errno;
                 json_decref (subdir);
                 goto done;
@@ -651,7 +653,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
                 goto done;
             }
 
-            if (treeobj_insert_entry (dir, name, subdir) < 0) {
+            /* copy from entry already in cache, assume novalidate ok */
+            if (treeobj_insert_entry_novalidate (dir, name, subdir) < 0) {
                 saved_errno = errno;
                 json_decref (subdir);
                 goto done;
@@ -698,7 +701,8 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
                 saved_errno = errno;
                 goto done;
             }
-            if (treeobj_insert_entry (dir, name, subdir) < 0) {
+            /* subdir just created above, no need to validate */
+            if (treeobj_insert_entry_novalidate (dir, name, subdir) < 0) {
                 saved_errno = errno;
                 json_decref (subdir);
                 goto done;
@@ -719,7 +723,12 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
             }
         }
         else {
-            /* if not append, it's a normal insertion */
+            /* if not append, it's a normal insertion
+             *
+             * N.B. this is the primary insertion and what is being
+             * inserted must be checked.  So we cannot use the
+             * novalidate alternative function.
+             */
             if (treeobj_insert_entry (dir, name, dirent) < 0) {
                 saved_errno = errno;
                 goto done;
@@ -746,27 +755,11 @@ static int kvstxn_link_dirent (kvstxn_t *kt,
 
 static int add_missing_ref (kvstxn_t *kt, const char *ref)
 {
-    char *refcpy = NULL;
-
-    if (!(refcpy = strdup (ref))) {
-        errno = errno;
-        goto err;
-    }
-
-    if (zlist_push (kt->missing_refs_list, (void *)refcpy) < 0) {
+    if (zlist_push (kt->missing_refs_list, (void *)ref) < 0) {
         errno = ENOMEM;
-        goto err;
+        return -1;
     }
-
-    if (! zlist_freefn (kt->missing_refs_list, (void *)refcpy,
-                        free, false))
-        goto err;
-
     return 0;
-
-err:
-    free (refcpy);
-    return -1;
 }
 
 /* normalize key for setroot, and add it to keys dict, if unique */
@@ -914,10 +907,8 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
         }
 
         if (kt->errnum != 0) {
-            char *ref;
             /* empty missing_refs_list to prevent mistakes later */
-            while ((ref = zlist_pop (kt->missing_refs_list)))
-                free (ref);
+            zlist_purge (kt->missing_refs_list);
             return KVSTXN_PROCESS_ERROR;
         }
 
@@ -1028,7 +1019,6 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
 int kvstxn_iter_missing_refs (kvstxn_t *kt, kvstxn_ref_f cb, void *data)
 {
     char *ref;
-    int saved_errno, rc = 0;
 
     if (kt->state != KVSTXN_STATE_LOAD_ROOT
         && kt->state != KVSTXN_STATE_APPLY_OPS) {
@@ -1038,21 +1028,15 @@ int kvstxn_iter_missing_refs (kvstxn_t *kt, kvstxn_ref_f cb, void *data)
 
     while ((ref = zlist_pop (kt->missing_refs_list))) {
         if (cb (kt, ref, data) < 0) {
+            int saved_errno = errno;
             free (ref);
-            saved_errno = errno;
-            rc = -1;
-            break;
+            zlist_purge (kt->missing_refs_list);
+            errno = saved_errno;
+            return -1;
         }
         free (ref);
     }
-
-    if (rc < 0) {
-        while ((ref = zlist_pop (kt->missing_refs_list)))
-            free (ref);
-        errno = saved_errno;
-    }
-
-    return rc;
+    return 0;
 }
 
 int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
@@ -1060,7 +1044,6 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
                                      void *data)
 {
     struct cache_entry *entry;
-    int saved_errno, rc = 0;
 
     if (kt->state != KVSTXN_STATE_PRE_FINISHED) {
         errno = EINVAL;
@@ -1070,18 +1053,13 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
     while ((entry = zlist_pop (kt->dirty_cache_entries_list))) {
         cache_entry_decref (entry);
         if (cb (kt, entry, data) < 0) {
-            saved_errno = errno;
-            rc = -1;
-            break;
+            int saved_errno = errno;
+            cleanup_dirty_cache_list (kt);
+            errno = saved_errno;
+            return -1;
         }
     }
-
-    if (rc < 0) {
-        cleanup_dirty_cache_list (kt);
-        errno = saved_errno;
-    }
-
-    return rc;
+    return 0;
 }
 
 kvstxn_mgr_t *kvstxn_mgr_create (struct cache *cache,
