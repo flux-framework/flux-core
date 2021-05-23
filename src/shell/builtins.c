@@ -29,6 +29,7 @@ static struct shell_builtin builtin_list_end = { 0 };
  *  Then, the name should be added to the 'builtins' list
  *  to get the builtin automatically loaded at shell startup.
  */
+extern struct shell_builtin builtin_tmpdir;
 extern struct shell_builtin builtin_log_eventlog;
 extern struct shell_builtin builtin_pmi;
 extern struct shell_builtin builtin_input;
@@ -43,6 +44,7 @@ extern struct shell_builtin builtin_pty;
 extern struct shell_builtin builtin_batch;
 
 static struct shell_builtin * builtins [] = {
+    &builtin_tmpdir,
     &builtin_log_eventlog,
     &builtin_pmi,
     &builtin_input,

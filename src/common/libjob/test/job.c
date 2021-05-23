@@ -393,10 +393,10 @@ void check_jobid_parse_encode (void)
 
     ok (flux_job_id_encode (1234, NULL, NULL, 33) < 0 && errno == EINVAL,
         "flux_job_id_encode with NULL buffer returns EINVAL");
-    ok (flux_job_id_encode (1234, "dec", buf, 4) < 0 && errno == ENOSPC,
-        "flux_job_id_encode with too small buffer returns ENOSPC");
-    ok (flux_job_id_encode (1234, "dothex", buf, 19) < 0 && errno == ENOSPC,
-        "flux_job_id_encode with too small buffer returns ENOSPC");
+    ok (flux_job_id_encode (1234, "dec", buf, 4) < 0 && errno == EOVERFLOW,
+        "flux_job_id_encode with too small buffer returns EOVERFLOW");
+    ok (flux_job_id_encode (1234, "dothex", buf, 19) < 0 && errno == EOVERFLOW,
+        "flux_job_id_encode with too small buffer returns EOVERFLOW");
     ok (flux_job_id_encode (1234, "foo", buf, 1024) < 0 && errno == EPROTO,
         "flux_job_id_encode with unknown encode type returns EPROTO");
 }

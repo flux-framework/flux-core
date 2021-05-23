@@ -282,4 +282,37 @@ test_expect_success 'job-shell: creates missing TMPDIR by default' '
     test -d mytmpdir
 '
 
+test_expect_success 'job-shell: job fails if missing TMPDIR cannot be created' '
+    ! TMPDIR=/baddir flux mini run true 2>badtmp.err &&
+    grep exception badtmp.err
+'
+
+test_expect_success 'job-shell: FLUX_JOB_TMPDIR is set and is a directory' '
+    flux mini run sh -c "test -d \$FLUX_JOB_TMPDIR"
+'
+
+test_expect_success 'job-shell: FLUX_JOB_TMPDIR is cleaned up after job' '
+    jobtmp=$(flux mini run printenv FLUX_JOB_TMPDIR) &&
+    test_must_fail test -d $jobtmp
+'
+
+test_expect_success 'job-shell: make rundir temporarily unwritable' '
+    chmod 500 $(flux getattr rundir)
+'
+
+test_expect_success 'job-shell: FLUX_JOB_TMPDIR is created in TMPDIR' '
+    TMPDIR=$(pwd)/mytmpdir flux mini run printenv FLUX_JOB_TMPDIR >tmpdir.out &&
+    grep $(pwd)/mytmpdir tmpdir.out
+'
+
+test_expect_success 'job-shell: job fails if FLUX_JOB_TMPDIR cannot be created' '
+    chmod u-w mytmpdir &&
+    ! TMPDIR=$(pwd)/mytmpdir flux mini run /bin/true 2>badjobtmp.err &&
+    grep exception badjobtmp.err
+'
+
+test_expect_success 'job-shell: restore rundir writability' '
+    chmod 700 $(flux getattr rundir)
+'
+
 test_done
