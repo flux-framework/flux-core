@@ -364,13 +364,36 @@ static void pmi_fd_cb (flux_shell_task_t *task,
 
 /* Query broker to see if instance mapping is known, then use that information
  * to select whether process mapping should be "none", "single", or "pershell".
+ * If the instance mapping is unknown, use "pershell".  The choice of default
+ * was a process of trial and error:
+ *
+ * PMI_process_mapping originated with MPICH, which uses it to determine
+ * whether it can short circult the comms path between local ranks with shmem.
+ * MPICH allows the key to be missing or its value to be empty, and in those
+ * cases just skips the optimization.  Based on this, one might assume that
+ * either "none" or "pershell" would be valid defaults when the mapping is
+ * unknown.  However, note the following:
+ *
+ * - MVAPICH2 fails with an "Invalid tag" error in MPI_Init() if the key
+ *   does not exist (flux-framework/flux-core#3592) and an even more obscure
+ *   error if it exists but is empty
+ *
+ * - OpenMPI might select conflicting shmem names if the mapping indicates
+ *   that ranks are not co-located when they really are
+ *   (flux-framework/flux-core#3551)
+ *
+ * Least worse choice seems to be "pershell", and then use the openmpi shell
+ * plugin to cast the proper runes to avoid OpenMPI name collisions by
+ * redirecting shmem paths to FLUX_JOB_TMPDIR.  FLUX_JOB_TMPDIR includes
+ * the jobid and the shell rank in its path, so works as a unique path
+ * prefix even when there are multiple brokers/shells per node.
  */
 static const char *guess_clique_option (struct shell_pmi *pmi)
 {
     const char *val;
     struct pmi_map_block *blocks = NULL;
     int nblocks;
-    const char *opt = "none";
+    const char *opt = "pershell";
 
     if (pmi->shell->standalone)
         goto done;
