@@ -390,8 +390,8 @@ loop_issue2711_LDADD = \
 	$(test_ldadd) $(LIBDL)
 
 mpi_hello_SOURCES = mpi/hello.c
-mpi_hello_CPPFLAGS = $(MPI_CFLAGS)
-mpi_hello_LDADD = $(MPI_CLDFLAGS) $(LIBRT)
+mpi_hello_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
+mpi_hello_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
 
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)
