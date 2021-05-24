@@ -308,7 +308,7 @@ static void list_id_respond (struct list_ctx *ctx,
                              struct idsync_data *isd,
                              struct job *job)
 {
-    job_info_error_t err;
+    job_list_error_t err;
     json_t *o;
 
     if (!(o = job_to_json (job, isd->attrs, &err)))
