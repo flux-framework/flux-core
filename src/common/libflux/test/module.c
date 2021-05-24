@@ -47,8 +47,8 @@ void test_modname (void)
     errno = 0;
     errmsg_count = 0;
     name = flux_modname (FAKE2, errmsg_cb, NULL);
-    ok (name == NULL && errno == EINVAL && errmsg_count == 1,
-        "flux_modname path=module_fake2 fails with EINVAL and extended error");
+    ok (name == NULL && errno == EINVAL,
+        "flux_modname path=module_fake2 fails with EINVAL");
 
     errmsg_count = 0;
     name = flux_modname (FAKE2, NULL, NULL);
@@ -136,8 +136,8 @@ void test_modfind (void)
     errno = 0;
     errmsg_count = 0;
     path = flux_modfind (searchpath, "fake2", errmsg_cb, NULL);
-    ok (path == NULL && errno == ENOENT && errmsg_count == 1,
-        "flux_modfind modname=fake2 fails with ENOENT and extended error");
+    ok (path == NULL && errno == ENOENT,
+        "flux_modfind modname=fake2 fails with ENOENT");
 
     errno = 0;
     path = flux_modfind (searchpath, NULL, NULL, NULL);

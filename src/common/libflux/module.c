@@ -49,14 +49,7 @@ char *flux_modname (const char *path, flux_moderr_f *cb, void *arg)
         return NULL;
     }
     dlerror ();
-    if (!(np = dlsym (dso, "mod_name"))) {
-        char *errmsg;
-        if (cb && (errmsg = dlerror ()))
-            cb (errmsg, arg);
-        errno = EINVAL;
-        goto error;
-    }
-    if (!*np) {
+    if (!(np = dlsym (dso, "mod_name")) || !*np) {
         errno = EINVAL;
         goto error;
     }
