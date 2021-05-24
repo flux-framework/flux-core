@@ -40,35 +40,38 @@ static double time_since (struct timespec t0)
 int
 main(int argc, char *argv[])
 {
-        int id, ntasks;
-	struct timespec t;
+    int id, ntasks;
+    struct timespec t;
 
-	clock_gettime (CLOCK_MONOTONIC, &t);
-        MPI_Init(&argc, &argv);
-        MPI_Comm_rank(MPI_COMM_WORLD, &id);
-        MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
-        if (id == 0) {
-                printf("0: completed MPI_Init in %0.3fs.  There are %d tasks\n",
-		   time_since (t)/1000, ntasks);
-                fflush(stdout);
-        }
+    clock_gettime (CLOCK_MONOTONIC, &t);
+    MPI_Init(&argc, &argv);
+    MPI_Comm_rank(MPI_COMM_WORLD, &id);
+    MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
 
+    if (id == 0) {
+        printf("0: completed MPI_Init in %0.3fs.  There are %d tasks\n",
+               time_since (t)/1000, ntasks);
+        fflush(stdout);
+    }
 	if (id == 0)
 		clock_gettime (CLOCK_MONOTONIC, &t);
-        MPI_Barrier(MPI_COMM_WORLD);
-        if (id == 0) {
-                printf("0: completed first barrier in %0.3fs\n",
-				time_since (t) / 1000);
-                fflush(stdout);
-        }
+    MPI_Barrier(MPI_COMM_WORLD);
+    if (id == 0) {
+        printf("0: completed first barrier in %0.3fs\n",
+               time_since (t) / 1000);
+        fflush(stdout);
+    }
 
-	if (id == 0)
-		clock_gettime (CLOCK_MONOTONIC, &t);
-        MPI_Finalize();
-        if (id == 0) {
-                printf("0: completed MPI_Finalize in %0.3fs\n",
-				time_since (t) / 1000);
-                fflush(stdout);
-        }
-        return 0;
+    if (id == 0)
+        clock_gettime (CLOCK_MONOTONIC, &t);
+    MPI_Finalize();
+    if (id == 0) {
+        printf("0: completed MPI_Finalize in %0.3fs\n",
+               time_since (t) / 1000);
+        fflush(stdout);
+    }
+    return 0;
 }
+
+// vi: ts=4 sw=4 expandtab
+
