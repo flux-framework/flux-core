@@ -23,13 +23,19 @@ int main (int argc, char *argv[])
 {
     int id, ntasks;
     struct timespec t;
+    const char *label;
+
+    if (!(label = getenv ("FLUX_JOB_CC")))
+        if (!(label = getenv ("FLUX_JOB_ID")))
+            label = "0";
 
     monotime (&t);
     MPI_Init (&argc, &argv);
     MPI_Comm_rank (MPI_COMM_WORLD, &id);
     MPI_Comm_size (MPI_COMM_WORLD, &ntasks);
     if (id == 0) {
-        printf ("0: completed MPI_Init in %0.3fs.  There are %d tasks\n",
+        printf ("%s: completed MPI_Init in %0.3fs.  There are %d tasks\n",
+                label,
                 monotime_since (t) / 1000, ntasks);
         fflush (stdout);
     }
@@ -37,7 +43,8 @@ int main (int argc, char *argv[])
     monotime (&t);
     MPI_Barrier (MPI_COMM_WORLD);
     if (id == 0) {
-        printf ("0: completed first barrier in %0.3fs\n",
+        printf ("%s: completed first barrier in %0.3fs\n",
+                label,
                 monotime_since (t) / 1000);
         fflush (stdout);
     }
@@ -45,7 +52,8 @@ int main (int argc, char *argv[])
     monotime (&t);
     MPI_Finalize ();
     if (id == 0) {
-        printf ("0: completed MPI_Finalize in %0.3fs\n",
+        printf ("%s: completed MPI_Finalize in %0.3fs\n",
+                label,
                 monotime_since (t) / 1000);
         fflush (stdout);
     }
