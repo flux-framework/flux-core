@@ -718,7 +718,10 @@ static int jobtap_handle_load_req (struct job_manager *ctx,
 
     /*  Make plugin aware of all active jobs via job.new callback
      */
-    jobs = zhashx_values (ctx->active_jobs);
+    if (!(jobs = zhashx_values (ctx->active_jobs))) {
+        errstr = "zhashx_values() failed";
+        goto error;
+    }
     job = zlistx_first (jobs);
     while (job) {
         if (!(args = jobtap_args_create (ctx->jobtap, job))) {
