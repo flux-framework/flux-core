@@ -12,10 +12,6 @@ to assign job priorities using algorithms other than the default,
 assign job dependencies, aid in debugging of the flow of job states,
 or generically extend the functionality of the job manager.
 
-NOTE:
-   Currently only a single jobtap plugin may be loaded into the job manager
-   at a time.
-
 Jobtap plugins are defined using the Flux standard plugin format. Therefore
 a jobtap plugin should export the single symbol: ``flux_plugin_init()``,
 from which calls to ``flux_plugin_add_handler(3)`` should be used to
@@ -34,6 +30,12 @@ the *topic string* for the currently invoked callback, ``args`` contains
 a set of plugin arguments which may be unpacked with the
 ``flux_plugin_arg_unpack(3)`` call, and ``arg`` is any opaque argument
 passed along when registering the handler.
+
+Multiple plugins may be loaded in the job-manager simultaneously. In this
+case, all matching handlers are called in all loaded plugins in the order
+in which they were loaded. For more information about loading plugins
+see the :ref:`configuration` section below or the ``flux-jobtap(1)``
+manpage.
 
 JOBTAP PLUGIN ARGUMENTS
 =======================
@@ -168,6 +170,48 @@ job.priority.get
   priority in the SCHED state is an error and it will be logged, but
   otherwise ignored.
 
+.. _configuration:
+
+CONFIGURATION
+=============
+
+Job-manager plugin configuration is defined in the ``job-manager.plugins``
+section of the Flux TOML configuration file. This section is an array of
+plugin directives which include the following keys:
+
+load
+  Load a plugin matching the given filename into the job-manager. If the
+  path is not absolute, then the first plugin matching the job-manager
+  searchpath will be loaded.
+
+conf
+  With load only, pass an optional configuration table to the loaded plugin.
+
+remove
+  Remove all plugins matching the value. The value may be a glob(7). If
+  ``remove`` appears with ``load``, plugin removal is always handled first.
+  The special value ``all`` is a synonym for ``*``, but will not error when
+  no plugins match.
+
+For example
+
+::
+
+    [job-manager]
+    plugins = [
+       {
+         load = "priority-custom.so",
+         conf = {
+            job-limit = 100,
+            size-limit = 128
+         }
+       }
+    ]
+
+The list of loaded jobtap plugins may also be queried and controlled at
+runtime with the ``flux-jobtap(1)`` command
+
+
 RESOURCES
 =========
 
@@ -177,4 +221,5 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
+flux-jobtap(1)
 
