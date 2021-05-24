@@ -1,0 +1,41 @@
+==============
+flux-jobtap(1)
+==============
+
+
+SYNOPSIS
+========
+
+**flux** **jobtap** *COMMAND* [*OPTIONS*] ARGS...
+
+DESCRIPTION
+===========
+
+The flux-jobtap(1) command is used to query, load, and remove *jobtap*
+plugins from the Flux job-manager module at runtime.
+
+COMMANDS
+========
+
+**list**
+  Print the currently loaded list of plugins
+
+**load** [*-r*, *--remove=NAME*] PLUGIN [KEY=VAL, KEY=VAL...]
+  Load a new plugin into the job-manager, optionally removing plugin NAME
+  first. With *--remove* NAME may be a glob(7) pattern match. Optional
+  KEY=VAL occurring after PLUGIN will set config KEY to VAL for PLUGIN.
+
+**remove** NAME
+  Remove plugin NAME. NAME may be a glob(7) pattern in which case all
+  matching plugins are removed. The special value `all` may be used to
+  remove all loaded jobtap plugins.
+
+RESOURCES
+=========
+
+Github: http://github.com/flux-framework
+
+SEE ALSO
+========
+
+flux-jobtap-plugins(7)
