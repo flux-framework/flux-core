@@ -20,6 +20,8 @@
 extern "C" {
 #endif
 
+#define FLUX_JOBTAP_CURRENT_JOB FLUX_JOBID_ANY
+
 /*  Get a copy of the flux_t handle which may then be used to
  *   set timer, periodic, prep/check/idle watchers, etc.
  */
@@ -98,6 +100,37 @@ int flux_jobtap_dependency_remove (flux_plugin_t *p,
                                    flux_jobid_t id,
                                    const char *description);
 
+
+/*  Set plugin-specific data to an individual job by name.
+ *   The optional destructor, free_fn, will be called when `name` is
+ *   overwritten by a new value, or when the job is complete and its
+ *   underlying job object is destroyed.
+ *
+ *  If `id` is FLUX_JOBTAP_CURRENT_JOB, then the aux data will be attached
+ *   to the currently processed job, if any.
+ */
+int flux_jobtap_job_aux_set (flux_plugin_t *p,
+                             flux_jobid_t id,
+                             const char *name,
+                             void *val,
+                             flux_free_f free_fn);
+
+/*  Get plugin-specific data from a job.
+ *
+ *  If `id` is FLUX_JOBTAP_CURRENT_JOB, then the current job will be used.
+ */
+void * flux_jobtap_job_aux_get (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                const char *name);
+
+
+/*  Delete plugin specific data `val` from a job.
+ *
+ *  If `id` is FLUX_JOBTAP_CURRENT_JOB then the current job will be used.
+ */
+int flux_jobtap_job_aux_delete (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                void *val);
 #ifdef __cplusplus
 }
 #endif

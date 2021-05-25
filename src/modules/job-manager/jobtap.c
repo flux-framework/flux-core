@@ -1430,6 +1430,56 @@ static int job_emit_pending_dependencies (struct jobtap *jobtap,
     return 0;
 }
 
+static struct job * jobtap_lookup_jobid (flux_plugin_t *p, flux_jobid_t id)
+{
+    struct jobtap *jobtap;
+    if (p == NULL
+        || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (id == FLUX_JOBTAP_CURRENT_JOB
+        || (jobtap->current_job && id == jobtap->current_job->id)) {
+        errno = EINVAL;
+        return jobtap->current_job;
+    }
+    return lookup_job (jobtap->ctx, id);
+}
+
+int flux_jobtap_job_aux_set (flux_plugin_t *p,
+                             flux_jobid_t id,
+                             const char *name,
+                             void *val,
+                             flux_free_f free_fn)
+{
+    struct job *job;
+    if (!(job = jobtap_lookup_jobid (p, id)))
+        return -1;
+    return job_aux_set (job, name, val, free_fn);
+}
+
+void * flux_jobtap_job_aux_get (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                const char *name)
+{
+    struct job *job;
+    if (!(job = jobtap_lookup_jobid (p, id)))
+        return NULL;
+    return job_aux_get (job, name);
+}
+
+int flux_jobtap_job_aux_delete (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                void *val)
+{
+    struct job *job;
+    if (!(job = jobtap_lookup_jobid (p, id)))
+        return -1;
+    job_aux_delete (job, val);
+    return 0;
+}
+
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
