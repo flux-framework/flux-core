@@ -131,6 +131,15 @@ void * flux_jobtap_job_aux_get (flux_plugin_t *p,
 int flux_jobtap_job_aux_delete (flux_plugin_t *p,
                                 flux_jobid_t id,
                                 void *val);
+
+/*  Raise an exception for job 'id' or current job if FLUX_JOBTAP_CURRENT_JOB
+ */
+int flux_jobtap_raise_exception (flux_plugin_t *p,
+                                 flux_jobid_t id,
+                                 const char *type,
+                                 int severity,
+                                 const char *fmt,
+                                 ...);
 #ifdef __cplusplus
 }
 #endif

@@ -59,6 +59,12 @@ struct dependency {
     char *description;
 };
 
+static int jobtap_job_raise (struct jobtap *jobtap,
+                             struct job *job,
+                             const char *type,
+                             int severity,
+                             const char *fmt, ...);
+
 static int job_emit_pending_dependencies (struct jobtap *jobtap,
                                           struct job *job);
 
@@ -1403,20 +1409,14 @@ static int job_emit_pending_dependencies (struct jobtap *jobtap,
                                               job,
                                               dp->add,
                                               dp->description) < 0) {
-                char note [128];
-                (void) snprintf (note, sizeof (note),
-                                 "failed to %s dependency %s",
-                                 dp->add ? "add" : "remove",
-                                 dp->description);
-                if (event_job_post_pack (jobtap->ctx->event,
-                                         job, "exception", 0,
-                                         "{ s:s s:i s:i s:s }",
-                                         "type", "dependency",
-                                         "severity", 0,
-                                         "userid", FLUX_USERID_UNKNOWN,
-                                         "note", note) < 0) {
+                if (jobtap_job_raise (jobtap, job,
+                                      "dependency",
+                                      0,
+                                      "failed to %s dependency %s",
+                                      dp->add ? "add" : "remove",
+                                      dp->description) < 0) {
                     flux_log_error (jobtap->ctx->h,
-                                    "%s: event_job_post_pack: id=%ju",
+                                    "%s: jobtap_job_raise: id=%ju",
                                     __FUNCTION__, (uintmax_t) job->id);
                 }
                 /*  Proceed no further, job has exception and will proceed
@@ -1479,6 +1479,62 @@ int flux_jobtap_job_aux_delete (flux_plugin_t *p,
     return 0;
 }
 
+static int jobtap_job_vraise (struct jobtap *jobtap,
+                              struct job *job,
+                              const char *type,
+                              int severity,
+                              const char *fmt,
+                              va_list ap)
+{
+    char note [1024];
+    if (vsnprintf (note, sizeof (note), fmt, ap) >= sizeof (note))
+        note[sizeof(note) - 2] = '+';
+    return event_job_post_pack (jobtap->ctx->event,
+                                job, "exception", 0,
+                                "{ s:s s:i s:i s:s }",
+                                "type", type,
+                                "severity", severity,
+                                "userid", FLUX_USERID_UNKNOWN,
+                                "note", note);
+}
+
+static int jobtap_job_raise (struct jobtap *jobtap,
+                             struct job *job,
+                             const char *type,
+                             int severity,
+                             const char *fmt, ...)
+{
+    int rc;
+    va_list ap;
+    va_start (ap, fmt);
+    rc = jobtap_job_vraise (jobtap, job, type, severity, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
+int flux_jobtap_raise_exception (flux_plugin_t *p,
+                                 flux_jobid_t id,
+                                 const char *type,
+                                 int severity,
+                                 const char *fmt, ...)
+{
+    struct jobtap *jobtap;
+    struct job *job;
+    int rc;
+    va_list ap;
+
+    if (!p || !type || !fmt
+        || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job = jobtap_lookup_jobid (p, id)))
+        return -1;
+    va_start (ap, fmt);
+    rc = jobtap_job_vraise (jobtap, job, type, severity, fmt, ap);
+    va_end (ap);
+    return rc;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
