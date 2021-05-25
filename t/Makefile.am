@@ -168,6 +168,7 @@ TESTSCRIPTS = \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
 	t3002-pmi.t \
+	t3003-mpi-abort.t \
 	t4000-issues-test-driver.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
@@ -319,6 +320,8 @@ check_PROGRAMS = \
 if HAVE_MPI
 check_PROGRAMS += \
 	mpi/hello \
+	mpi/abort \
+	mpi/version \
 	mpi/mpich_basic/self \
 	mpi/mpich_basic/simple \
 	mpi/mpich_basic/sendrecv \
@@ -399,6 +402,14 @@ loop_issue2711_LDADD = \
 mpi_hello_SOURCES = mpi/hello.c
 mpi_hello_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
 mpi_hello_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+
+mpi_abort_SOURCES = mpi/abort.c
+mpi_abort_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
+mpi_abort_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+
+mpi_version_SOURCES = mpi/version.c
+mpi_version_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
+mpi_version_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
 
 mpi_mpich_basic_adapt_SOURCES = mpi/mpich_basic/adapt.c mpi/mpich_basic/GetOpt.c mpi/mpich_basic/GetOpt.h
 mpi_mpich_basic_adapt_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
