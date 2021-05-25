@@ -355,7 +355,8 @@ static void pmi_fd_cb (flux_shell_task_t *task,
     rc = pmi_simple_server_request (pmi->server, line, task, task->rank);
     if (rc < 0) {
         shell_trace ("%d: S: pmi request error", task->rank);
-        return;
+        shell_die (1, "PMI-1 wire protocol error");
+
     }
     if (rc == 1) {
         shell_trace ("%d: S: pmi finalized", task->rank);
