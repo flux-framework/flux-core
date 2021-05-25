@@ -188,6 +188,10 @@ test_expect_success 'job-manager: run args test plugin' '
 	test_debug "cat args-check.log" &&
 	test $(grep -c OK args-check.log) = 8
 '
+test_expect_success 'job-manager: run job_aux test plugin' '
+	flux jobtap load --remove=all ${PLUGINPATH}/job_aux.so &&
+	flux mini run hostname
+'
 test_expect_success 'job-manager: load test jobtap plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/test.so foo.test=1 &&
 	flux dmesg | grep "conf={\"foo\":{\"test\":1}}"
