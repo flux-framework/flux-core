@@ -38,4 +38,39 @@ test_expect_success 'mpi hello size=2 concurrent submit of 8 jobs' '
 	test $(grep "There are 2 tasks" hello2.out | wc -l) -eq 8
 '
 
+# Run some basic tests pulled from MPICH as a sanity check
+test_expect_success 'ANL self works' '
+	run_timeout 30 flux mini run $OPTS \
+		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/self
+'
+test_expect_success 'ANL simple works' '
+	run_timeout 30 flux mini run -n 2 $OPTS \
+		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/simple
+'
+test_expect_success 'ANL sendrecv works on 1 node' '
+	run_timeout 30 flux mini run -n 2 -N1 $OPTS \
+		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/sendrecv
+'
+test_expect_success 'ANL sendrecv works on 2 nodes' '
+	run_timeout 30 flux mini run -n 2 -N2 $OPTS \
+		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/sendrecv
+'
+test_expect_success LONGTEST 'ANL netpipe works' '
+	flux mini run -n 2 $OPTS \
+		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/netpipe
+'
+test_expect_success 'ANL patterns works 1 node' '
+	run_timeout 30 flux mini run -n 2 -N1 $OPTS \
+		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/patterns
+'
+test_expect_success 'ANL patterns works 2 nodes' '
+	run_timeout 30 flux mini run -n 2 -N2 $OPTS \
+		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/patterns
+'
+test_expect_success LONGTEST 'ANL adapt works' '
+	flux mini run -n 3 $OPTS \
+		${FLUX_BUILD_DIR}/t/mpi/mpich_basic/adapt
+'
+
+
 test_done

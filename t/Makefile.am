@@ -318,7 +318,14 @@ check_PROGRAMS = \
 
 if HAVE_MPI
 check_PROGRAMS += \
-	mpi/hello
+	mpi/hello \
+	mpi/mpich_basic/self \
+	mpi/mpich_basic/simple \
+	mpi/mpich_basic/sendrecv \
+	mpi/mpich_basic/srtest \
+	mpi/mpich_basic/netpipe \
+	mpi/mpich_basic/patterns \
+	mpi/mpich_basic/adapt
 endif
 
 check_LTLIBRARIES = \
@@ -392,6 +399,34 @@ loop_issue2711_LDADD = \
 mpi_hello_SOURCES = mpi/hello.c
 mpi_hello_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
 mpi_hello_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+
+mpi_mpich_basic_adapt_SOURCES = mpi/mpich_basic/adapt.c mpi/mpich_basic/GetOpt.c mpi/mpich_basic/GetOpt.h
+mpi_mpich_basic_adapt_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
+mpi_mpich_basic_adapt_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+
+mpi_mpich_basic_netpipe_SOURCES = mpi/mpich_basic/netmpi.c mpi/mpich_basic/GetOpt.c mpi/mpich_basic/GetOpt.h
+mpi_mpich_basic_netpipe_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
+mpi_mpich_basic_netpipe_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+
+mpi_mpich_basic_patterns_SOURCES = mpi/mpich_basic/patterns.c
+mpi_mpich_basic_patterns_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
+mpi_mpich_basic_patterns_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+
+mpi_mpich_basic_srtest_SOURCES = mpi/mpich_basic/srtest.c
+mpi_mpich_basic_srtest_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
+mpi_mpich_basic_srtest_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+
+mpi_mpich_basic_self_SOURCES = mpi/mpich_basic/self.c
+mpi_mpich_basic_self_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
+mpi_mpich_basic_self_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+
+mpi_mpich_basic_sendrecv_SOURCES = mpi/mpich_basic/sendrecv.c
+mpi_mpich_basic_sendrecv_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
+mpi_mpich_basic_sendrecv_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+
+mpi_mpich_basic_simple_SOURCES = mpi/mpich_basic/simple.c
+mpi_mpich_basic_simple_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
+mpi_mpich_basic_simple_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
 
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)
