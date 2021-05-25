@@ -200,6 +200,7 @@ test_expect_success 'job-manager: run all test plugin test modes' '
 	sched: priority unavail
 	sched: update priority
 	sched: dependency-add
+	sched: exception error
 	annotations error
 	EOF
 	COUNT=$(cat test-modes.txt | wc -l) &&
@@ -212,6 +213,12 @@ test_expect_success 'job-manager: run all test plugin test modes' '
 	flux jobs -ac $COUNT -no {annotations.test} | \
 	    sort >test-annotations.out &&
 	test_cmp test-modes.txt test-annotations.out
+'
+test_expect_success 'job-manager: jobtap plugin can raise job exception' '
+	id=$(flux mini submit \
+	     --setattr=system.jobtap.test-mode="sched: exception" \
+	     hostname) &&
+	flux job wait-event -v --match type=test $id exception
 '
 test_expect_success 'job-manager: run test plugin modes for priority.get' '
 	cat <<-EOF | sort >test-modes.priority.get &&
