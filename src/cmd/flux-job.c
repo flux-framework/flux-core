@@ -73,6 +73,7 @@ int cmd_list (optparse_t *p, int argc, char **argv);
 int cmd_list_inactive (optparse_t *p, int argc, char **argv);
 int cmd_status (optparse_t *p, int argc, char **argv);
 int cmd_list_ids (optparse_t *p, int argc, char **argv);
+int cmd_list_purge (optparse_t *p, int argc, char **argv);
 int cmd_submit (optparse_t *p, int argc, char **argv);
 int cmd_attach (optparse_t *p, int argc, char **argv);
 int cmd_id (optparse_t *p, int argc, char **argv);
@@ -125,6 +126,13 @@ static struct optparse_option list_inactive_opts[] =  {
     { .name = "since", .key = 's', .has_arg = 1, .arginfo = "T",
       .usage = "Limit output to jobs that entered the inactive state since"
                " timestamp T",
+    },
+    OPTPARSE_TABLE_END
+};
+
+static struct optparse_option list_purge_opts[] =  {
+    { .name = "count", .key = 'c', .has_arg = 1, .arginfo = "N",
+      .usage = "Limit jobs purged to N jobs",
     },
     OPTPARSE_TABLE_END
 };
@@ -346,6 +354,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_list_ids,
       0,
       NULL,
+    },
+    { "list-purge",
+      "[OPTIONS]",
+      "Purge inactive jobs from job-list cache",
+      cmd_list_purge,
+      0,
+      list_purge_opts,
     },
     { "urgency",
       "[OPTIONS] id urgency",
@@ -1197,6 +1212,35 @@ int cmd_list_ids (optparse_t *p, int argc, char **argv)
 
     flux_close (h);
 
+    return (0);
+}
+
+int cmd_list_purge (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    int count = optparse_get_int (p, "count", 0); // 0=purge all
+    flux_future_t *f;
+    flux_t *h;
+
+    if (optindex != argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    if (!(f = flux_rpc_pack (h,
+                             "job-list.purge",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:i}",
+                             "count", count)))
+        log_err_exit ("flux_rpc_pack");
+    if (flux_rpc_get (f, NULL) < 0)
+        log_msg_exit ("purge: %s", future_strerror (f, errno));
+
+    flux_future_destroy (f);
+    flux_close (h);
     return (0);
 }
 
