@@ -254,7 +254,7 @@ static int jobtap_remove (struct jobtap *jobtap,
     while (p) {
         const char *name = jobtap_plugin_name (p);
         if (all
-            || (isglob && fnmatch (arg, name, 0) == 0)
+            || (isglob && fnmatch (arg, name, FNM_PERIOD) == 0)
             || strcmp (arg, name) == 0) {
             zlistx_detach_cur (jobtap->plugins);
             flux_plugin_destroy (p);
