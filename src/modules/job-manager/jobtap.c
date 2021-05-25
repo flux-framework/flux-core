@@ -362,6 +362,27 @@ static int plugin_byname (const void *item1, const void *item2)
     return strcmp (name1, name2);
 }
 
+static int load_builtins (struct jobtap *jobtap)
+{
+    struct jobtap_builtin *builtin = jobtap_builtins;
+
+    while (builtin && builtin->name) {
+        /*  Yes, this will require re-scanning the builtin plugin list
+         *   in order to lookup the plugin init function by name for
+         *   each loaded plugin. However, this keeps code duplication
+         *   down since jobtap_load() does a lot of work. Plus, this
+         *   is only called once at job-manager startup.
+         *
+         *  If the size of the builtins list gets large this should be
+         *   revisited.
+         */
+        if (jobtap_load (jobtap, builtin->name, NULL, NULL) < 0)
+            return -1;
+        builtin++;
+    }
+    return 0;
+}
+
 struct jobtap *jobtap_create (struct job_manager *ctx)
 {
     const char *path;
@@ -379,6 +400,11 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
     }
     zlistx_set_destructor (jobtap->plugins, plugin_destroy);
     zlistx_set_comparator (jobtap->plugins, plugin_byname);
+
+    if (load_builtins (jobtap) < 0) {
+        flux_log (ctx->h, LOG_ERR, "jobtap: failed to init builtins");
+        goto error;
+    }
 
     if (jobtap_parse_config (jobtap, flux_get_conf (ctx->h), &error) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s", error.text);
