@@ -367,7 +367,7 @@ int pmi_simple_client_abort (struct pmi_simple_client *pmi,
     if (exit_code < 0)
         return PMI_ERR_INVALID_ARG;
     if (dprintf (pmi->fd,
-                 "cmd=abort exit_code=%d%s%s\n",
+                 "cmd=abort exitcode=%d%s%s\n",
                  exit_code,
                  msg ? " error_msg=" : "",
                  msg ? msg : "") < 0)

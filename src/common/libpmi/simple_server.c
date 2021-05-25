@@ -246,21 +246,17 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
     /* abort */
     else if (keyval_parse_isword (buf, "cmd", "abort") == 0) {
         unsigned int code;
-        char *msg = "aborted";
-        char error_msg[SIMPLE_KVS_VAL_MAX];
+        char msg[SIMPLE_KVS_VAL_MAX];
 
-        /*  mpich circa 2014 sends `exit_code` but not `error_msg`.
-         *  Flux implementation sends both.
-         *  Older mpich and derivatives just exit from the task,
-         *   sending nothing.
+        /*  RFC 13 does not define any parameters to cmd=abort,
+         *  but exitcode=N is sent by mpich, and older flux
+         *  sent exit_code=N and error_msg=STR so accept those optionally.
          */
-        if (keyval_parse_uint (buf, "exit_code", &code) < 0)
-            goto proto;
-        if (keyval_parse_string (buf,
-                                 "error_msg",
-                                 error_msg,
-                                 sizeof (error_msg)) == 0)
-            msg = error_msg;
+        if (keyval_parse_uint (buf, "exitcode", &code) < 0
+            && keyval_parse_uint (buf, "exit_code", &code) < 0)
+            code = 1;
+        if (keyval_parse_string (buf, "error_msg", msg, sizeof (msg)) < 0)
+            snprintf (msg, sizeof (msg), "%s", "aborted");
         if (pmi->ops.abort)
             pmi->ops.abort (pmi->arg, cli, code, msg);
 
