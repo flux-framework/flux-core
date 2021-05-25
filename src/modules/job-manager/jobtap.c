@@ -259,7 +259,7 @@ static int jobtap_remove (struct jobtap *jobtap,
     flux_plugin_t *p = zlistx_first (jobtap->plugins);
     while (p) {
         const char *name = jobtap_plugin_name (p);
-        if (all
+        if ((all && name[0] != '.')
             || (isglob && fnmatch (arg, name, FNM_PERIOD) == 0)
             || strcmp (arg, name) == 0) {
             zlistx_detach_cur (jobtap->plugins);
@@ -1011,7 +1011,7 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
         if (rc < 0)
             goto error;
     }
-    if (strncmp (path, "builtin.", 8) == 0) {
+    if (path[0] == '.') {
         if (jobtap_load_builtin (p, path) < 0)
             goto error;
     }
