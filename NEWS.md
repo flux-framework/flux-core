@@ -1,3 +1,64 @@
+flux-core version 0.27.0 - 2021-05-28
+-------------------------------------
+
+This release features additonal performance improvements that affect
+job throughput over time (see issue #3583).
+
+### Fixes
+ * shell/pmi: always populate `PMI_process_mapping` to avoid mvapich2
+   `MPI_Init` invalid tag error (#3673)
+ * openmpi: ensure that shmem segments for co-located jobs don't conflict
+   (#3672)
+ * python: fix FluxExecutorFuture cancellation bug (#3655)
+ * job-info, kvs-watch: support guest disconnect & credential checks (#3627)
+ * libflux: plugin: make `FLUX_PLUGIN_ARG_UPDATE` the default (#3685)
+
+### Performance
+ * kvs: reduce cache expiration overhead (#3664)
+ * kvs: remove client disconnect bottleneck (#3663)
+ * kvs: use json object to find duplicate keys (#3658)
+ * kvs: improve performance of transaction prep/check (#3654)
+ * content-cache: avoid linear search for dirty blobs (#3639)
+ * content-cache: make LRU purge more effective (#3632)
+ * flux-shell: add minor optimizations for single node jobs (#3626)
+ * libczmqcontainers: include zlistx, zhash, zlist, and convert internal
+   users (#3620)
+
+### New Features
+ * shell: add plugin to detect first task exit (#3681)
+ * job-manager: multiple jobtap plugin enhancements (#3687)
+ * job-manager: support a list of loaded jobtap plugins (#3667)
+ * shell: add tmpdir plugin to manage `FLUX_JOB_TMPDIR` (#3661)
+ * jobtap: support for `job.dependency.*` callbacks (#3660)
+ * flux-mini: avoid substitution without --cc/bcc, allow --setattr value
+   to be read from file (#3659)
+ * flux-start: add embedded server (#3650)
+ * flux-proxy: add flux-core version check (#3653)
+ * libflux: `msg_handler`: capture duplicate non-glob request handlers in a
+   stack (#3616)
+
+### Cleanup/Testing/Build System
+ * testsuite: add mvapich2 to centos8 CI image (#3686)
+ * testsuite: improve in-tree MPI testing (#3678)
+ * libflux: `flux_modfind`: ignore DSOs with no `mod_name` symbol (#3675)
+ * kvs: misc cleanup (#3671)
+ * flux-start: rename `--scratchdir` to `--rundir` (#3670)
+ * shell: misc environment-related fixes (#3669)
+ * testsuite: modify jobid capture logic (#3657)
+ * testsuite: handle hwloc issues and improve config file bootstrap test
+   (#3648)
+ * build: add and use autoconf variable for Flux plugin LDFLAGS (#3647)
+ * libutil: replace hand written hex conversion code with libccan (#3646)
+ * github: fixes for auto-release deployment (#3638)
+ * content-cache: general cleanup, small bug fixes, and test improvement
+   (#3645)
+ * kvs: add errmsg on namespace create failure (#3644)
+ * Use internal functions instead of zfile / zdigest (#3634)
+ * libutil: avoid `zmq_strerror()` (#3628)
+ * ci/test: switch to bulksubmit for inception tests, add throughput test,
+   dismiss reviews after PR updates (#3621)
+ * expand broker internal documentation to cover bootstrap phase (#3618)
+
 flux-core version 0.26.0 - 2021-04-22
 -------------------------------------
 
