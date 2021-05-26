@@ -8,67 +8,57 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
 #include <mpi.h>
 #include <stdio.h>
 #include <unistd.h>
 #include <stdlib.h>
 #include <time.h>
 
-static struct timespec diff (struct timespec start, struct timespec end)
+#include "src/common/libutil/monotime.h"
+
+int main (int argc, char *argv[])
 {
-    struct timespec temp;
-    if ((end.tv_nsec-start.tv_nsec)<0) {
-        temp.tv_sec = end.tv_sec-start.tv_sec-1;
-        temp.tv_nsec = 1000000000+end.tv_nsec-start.tv_nsec;
-    } else {
-        temp.tv_sec = end.tv_sec-start.tv_sec;
-        temp.tv_nsec = end.tv_nsec-start.tv_nsec;
+    int id, ntasks;
+    struct timespec t;
+    const char *label;
+
+    if (!(label = getenv ("FLUX_JOB_CC")))
+        if (!(label = getenv ("FLUX_JOB_ID")))
+            label = "0";
+
+    monotime (&t);
+    MPI_Init (&argc, &argv);
+    MPI_Comm_rank (MPI_COMM_WORLD, &id);
+    MPI_Comm_size (MPI_COMM_WORLD, &ntasks);
+    if (id == 0) {
+        printf ("%s: completed MPI_Init in %0.3fs.  There are %d tasks\n",
+                label,
+                monotime_since (t) / 1000, ntasks);
+        fflush (stdout);
     }
-    return temp;
+
+    monotime (&t);
+    MPI_Barrier (MPI_COMM_WORLD);
+    if (id == 0) {
+        printf ("%s: completed first barrier in %0.3fs\n",
+                label,
+                monotime_since (t) / 1000);
+        fflush (stdout);
+    }
+
+    monotime (&t);
+    MPI_Finalize ();
+    if (id == 0) {
+        printf ("%s: completed MPI_Finalize in %0.3fs\n",
+                label,
+                monotime_since (t) / 1000);
+        fflush (stdout);
+    }
+    return 0;
 }
 
-static double time_since (struct timespec t0)
-{
-    struct timespec ts, d;
-    clock_gettime (CLOCK_MONOTONIC, &ts);
+// vi: ts=4 sw=4 expandtab
 
-    d = diff (t0, ts);
-
-    return ((double) d.tv_sec * 1000 + (double) d.tv_nsec / 1000000);
-}
-
-int
-main(int argc, char *argv[])
-{
-        int id, ntasks;
-	struct timespec t;
-
-	clock_gettime (CLOCK_MONOTONIC, &t);
-        MPI_Init(&argc, &argv);
-        MPI_Comm_rank(MPI_COMM_WORLD, &id);
-        MPI_Comm_size(MPI_COMM_WORLD, &ntasks);
-        if (id == 0) {
-                printf("0: completed MPI_Init in %0.3fs.  There are %d tasks\n",
-		   time_since (t)/1000, ntasks);
-                fflush(stdout);
-        }
-
-	if (id == 0)
-		clock_gettime (CLOCK_MONOTONIC, &t);
-        MPI_Barrier(MPI_COMM_WORLD);
-        if (id == 0) {
-                printf("0: completed first barrier in %0.3fs\n",
-				time_since (t) / 1000);
-                fflush(stdout);
-        }
-
-	if (id == 0)
-		clock_gettime (CLOCK_MONOTONIC, &t);
-        MPI_Finalize();
-        if (id == 0) {
-                printf("0: completed MPI_Finalize in %0.3fs\n",
-				time_since (t) / 1000);
-                fflush(stdout);
-        }
-        return 0;
-}

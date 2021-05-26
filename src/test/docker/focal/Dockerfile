@@ -35,7 +35,6 @@ RUN apt-get update \
         ccache \
         lua5.2 \
         lua-posix \
-        mpich \
         valgrind \
         jq \
  && rm -rf /var/lib/apt/lists/*
@@ -86,7 +85,7 @@ RUN apt-get update \
         libsqlite3-dev \
         uuid-dev \
         libhwloc-dev \
-        libmpich-dev \
+        libopenmpi-dev \
         libs3-dev \
  && rm -rf /var/lib/apt/lists/*
 
