@@ -68,6 +68,19 @@ static int jobtap_job_raise (struct jobtap *jobtap,
 static int job_emit_pending_dependencies (struct jobtap *jobtap,
                                           struct job *job);
 
+static int dependencies_unpack (struct jobtap * jobtap,
+                                struct job * job,
+                                char **errp,
+                                json_t **resultp);
+
+static int jobtap_check_dependency (struct jobtap *jobtap,
+                                    flux_plugin_t *p,
+                                    struct job *job,
+                                    flux_plugin_arg_t *args,
+                                    int index,
+                                    json_t *entry,
+                                    char **errp);
+
 
 static int errprintf (jobtap_error_t *errp, const char *fmt, ...)
 {
@@ -186,6 +199,46 @@ error:
 }
 
 
+static int plugin_check_dependencies (struct jobtap *jobtap,
+                                      flux_plugin_t *p,
+                                      struct job *job,
+                                      flux_plugin_arg_t *args)
+{
+    json_t *dependencies = NULL;
+    json_t *entry = NULL;
+    size_t index;
+    char *error;
+
+    if (dependencies_unpack (jobtap, job, &error, &dependencies) < 0) {
+        flux_log (jobtap->ctx->h,
+                  LOG_ERR,
+                  "id=%ju: plugin_register_dependencies: %s",
+                  (uintmax_t) job->id,
+                  error);
+        free (error);
+        return -1;
+    }
+
+    if (dependencies == NULL)
+        return 0;
+
+    json_array_foreach (dependencies, index, entry) {
+        char *error;
+        if (jobtap_check_dependency (jobtap,
+                                     p,
+                                     job,
+                                     args,
+                                     index,
+                                     entry,
+                                     &error) < 0) {
+            flux_log (jobtap->ctx->h,
+                      LOG_ERR,
+                      "plugin_check_dependencies: %s", error);
+        }
+    }
+    return 0;
+}
+
 static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
                                            const char *path,
                                            json_t *conf,
@@ -221,8 +274,13 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
          *  Notify plugin of the DEPEND state assuming it needs to create
          *   some state in order to resolve the dependency.
          */
-        if (job->state == FLUX_JOB_STATE_DEPEND)
+        if (job->state == FLUX_JOB_STATE_DEPEND) {
+            if (plugin_check_dependencies (jobtap, p, job, args) < 0)
+                errprintf (errp,
+                           "failed to check dependencies for job %ju",
+                           job->id);
             (void) flux_plugin_call (p, "job.state.depend", args);
+        }
 
         flux_plugin_arg_destroy (args);
         jobtap->current_job = NULL;
@@ -609,7 +667,39 @@ int jobtap_validate (struct jobtap *jobtap,
     return rc;
 }
 
+static int make_dependency_topic (struct jobtap *jobtap,
+                                  struct job *job,
+                                  int index,
+                                  json_t *entry,
+                                  const char **schemep,
+                                  char *topic,
+                                  int topiclen,
+                                  char **errp)
+{
+    *schemep = NULL;
+    if (json_unpack (entry, "{s:s}", "scheme", schemep) < 0
+        || *schemep == NULL) {
+        error_asprintf (jobtap, job, errp,
+                        "dependency[%d] missing string scheme",
+                        index);
+        return -1;
+    }
+
+    if (snprintf (topic,
+                  topiclen,
+                  "job.dependency.%s",
+                  *schemep) > topiclen) {
+        error_asprintf (jobtap, job, errp,
+                        "rejecting absurdly long dependency scheme: %s",
+                        *schemep);
+        return -1;
+    }
+
+    return 0;
+}
+
 static int jobtap_check_dependency (struct jobtap *jobtap,
+                                    flux_plugin_t *p,
                                     struct job *job,
                                     flux_plugin_arg_t *args,
                                     int index,
@@ -620,23 +710,21 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
     char topic [128];
     const char *scheme = NULL;
 
-    if (json_unpack (entry, "{s:s}", "scheme", &scheme) < 0
-        || scheme == NULL) {
-        error_asprintf (jobtap, job, errp,
-                        "dependency[%d] missing string scheme",
-                        index);
+    if (make_dependency_topic (jobtap,
+                               job,
+                               index,
+                               entry,
+                               &scheme,
+                               topic,
+                               sizeof (topic),
+                               errp) < 0)
         return -1;
-    }
 
-    if (snprintf (topic,
-                  sizeof (topic),
-                  "job.dependency.%s",
-                  scheme) > sizeof (topic)) {
-        error_asprintf (jobtap, job, errp,
-                        "rejecting absurdly long dependency scheme: %s",
-                        scheme);
-        return -1;
-    }
+    /*  If we're only calling this topic for a single plugin, and there
+     *   is no matching handler, return without error immediately
+     */
+    if (p && !flux_plugin_match_handler (p, topic))
+        return 0;
 
     if (flux_plugin_arg_pack (args,
                               FLUX_PLUGIN_ARG_IN,
@@ -648,7 +736,11 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
         return -1;
     }
 
-    rc = jobtap_stack_call (jobtap, job, topic, args);
+    if (p)
+        rc = flux_plugin_call (p, topic, args);
+    else
+        rc = jobtap_stack_call (jobtap, job, topic, args);
+
     if (rc == 0) {
         /*  No handler for job.dependency.<scheme>. return an error.
          */
@@ -731,7 +823,13 @@ int jobtap_check_dependencies (struct jobtap *jobtap,
     }
 
     json_array_foreach (dependencies, index, entry) {
-        rc = jobtap_check_dependency (jobtap, job, args, index, entry, errp);
+        rc = jobtap_check_dependency (jobtap,
+                                      NULL,
+                                      job,
+                                      args,
+                                      index,
+                                      entry,
+                                      errp);
         if (rc < 0) {
             if (!raise_exception)
                 goto out;
