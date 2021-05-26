@@ -58,7 +58,7 @@ test_expect_success 'create dep-remove.py' '
 	EOF
 '
 test_expect_success 'job-manager: load dependency-test plugin' '
-	flux jobtap load ${PLUGINPATH}/dependency-test.so
+	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so
 '
 test_expect_success 'job-manager: dependency-test plugin is working' '
 	jobid=$(flux mini submit --dependency=test:deptest true) &&
@@ -147,7 +147,7 @@ test_expect_success 'dependencies are re-established after restart' '
 	flux jobs -o {id}:{dependencies} &&
 	flux module remove job-list &&
 	flux module reload job-manager &&
-	flux jobtap load ${PLUGINPATH}/dependency-test.so &&
+	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so &&
 	flux module load job-list &&
 	flux module reload -f sched-simple &&
 	flux module reload -f job-exec &&

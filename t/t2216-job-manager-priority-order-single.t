@@ -90,7 +90,7 @@ test_expect_success HAVE_JQ 'job-manager: annotations in job id 3-5 updated (RIS
 
 PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
 test_expect_success 'job-manager: load priority-invert plugin' '
-        flux jobtap load ${PLUGINPATH}/priority-invert.so
+        flux jobtap load --remove=all ${PLUGINPATH}/priority-invert.so
 '
 
 test_expect_success HAVE_JQ 'job-manager: job state RISRS' '

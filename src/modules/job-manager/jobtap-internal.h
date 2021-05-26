@@ -63,10 +63,10 @@ int jobtap_check_dependencies (struct jobtap *jobtap,
 /*  Load a new jobtap from `path`. Path may start with `builtin.` to
  *   attempt to load one of the builtin jobtap plugins.
  */
-int jobtap_load (struct jobtap *jobtap,
-                 const char *path,
-                 json_t *conf,
-                 jobtap_error_t *errp);
+flux_plugin_t * jobtap_load (struct jobtap *jobtap,
+                             const char *path,
+                             json_t *conf,
+                             jobtap_error_t *errp);
 
 /*  Job manager RPC handler for loading new jobtap plugins.
  */

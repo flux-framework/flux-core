@@ -17,6 +17,9 @@ fluxmod_LTLIBRARIES = \
 noinst_LTLIBRARIES = \
 	libjob-manager.la
 
+jobtap_plugin_LTLIBRARIES = \
+	plugins/priority-hold.la
+
 job_manager_la_SOURCES = \
 	job-manager.c \
 	job-manager.h
@@ -56,15 +59,14 @@ libjob_manager_la_SOURCES = \
 	prioritize.c \
 	jobtap-internal.h \
 	jobtap.h \
-	jobtap.c \
-	plugins/default.c \
-	plugins/hold.c
+	jobtap.c
 
 fluxinclude_HEADERS = \
 	jobtap.h
 
 job_manager_la_LDFLAGS = \
 	$(fluxlib_ldflags) \
+	-avoid-version \
 	-export-symbols-regex \
 	'^(flux_jobtap.*|mod_name|mod_service|mod_main)$$' \
 	-module
@@ -76,6 +78,13 @@ job_manager_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(ZMQ_LIBS)
+
+plugins_priority_hold_la_SOURCES = \
+	plugins/priority-hold.c
+plugins_priority_hold_la_LDFLAGS = \
+	$(fluxplugin_ldflags) \
+	-module
+
 
 TESTS = \
 	test_job.t \

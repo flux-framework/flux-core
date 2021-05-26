@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* builtins/priority.c - builtin basic job priority plugin
+/* priority-default.c - copy urgency to priority
  *
  */
 
@@ -47,12 +47,13 @@ static int priority_cb (flux_plugin_t *p,
     return 0;
 }
 
-int default_priority_plugin_init (flux_plugin_t *p)
+int flux_plugin_init (flux_plugin_t *p)
 {
-    if (flux_plugin_add_handler (p,
-                                 "job.state.priority",
-                                 priority_cb,
-                                 NULL) < 0
+    if (flux_plugin_set_name (p, "priority-default") < 0
+        || flux_plugin_add_handler (p,
+                                    "job.state.priority",
+                                    priority_cb,
+                                    NULL) < 0
         || flux_plugin_add_handler (p,
                                     "job.priority.get",
                                     priority_cb,
@@ -65,3 +66,4 @@ int default_priority_plugin_init (flux_plugin_t *p)
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
+

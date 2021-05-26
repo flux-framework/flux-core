@@ -15,6 +15,7 @@ man1
    flux-getattr
    flux-hwloc
    flux-jobs
+   flux-jobtap
    flux-keygen
    flux-kvs
    flux-logger

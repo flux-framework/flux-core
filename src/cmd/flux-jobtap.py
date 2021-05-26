@@ -9,7 +9,6 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
-import os
 import sys
 import logging
 import argparse
@@ -18,36 +17,36 @@ import flux
 from flux.util import TreedictAction
 
 
+def jobtap_remove(args):
+    """Remove jobtap plugin matching name"""
+    try:
+        flux.Flux().rpc("job-manager.jobtap", {"remove": args.plugin}).get()
+    except FileNotFoundError:
+        LOGGER.error("%s not found", args.plugin)
+        sys.exit(1)
+
+
 def jobtap_load(args):
     """Load a jobtap plugin into the job manager"""
-    if args.plugin == "none" or args.plugin.startswith("builtin."):
-        path = args.plugin
-    else:
-        path = os.path.abspath(args.plugin)
+
+    req = {"load": args.plugin}
+    if args.conf:
+        req["conf"] = args.conf
+    if args.remove:
+        req["remove"] = args.remove
 
     try:
-        resp = (
-            flux.Flux()
-            .rpc("job-manager.jobtap", {"load": path, "conf": args.conf})
-            .get()
-        )
+        flux.Flux().rpc("job-manager.jobtap", req).get()
     except FileNotFoundError:
         LOGGER.error(
             "%s not found",
             args.plugin,
         )
         sys.exit(1)
-    if not args.quiet:
-        print("Loaded:")
-        for name in resp["plugins"]:
-            print(name)
-        print("Previously loaded:")
-    for name in resp["previous"]:
-        print(name)
 
 
 def jobtap_list(_args):
-    """List currently loaded jobtap plugin"""
+    """List currently loaded jobtap plugins"""
     resp = flux.Flux().rpc("job-manager.jobtap", {"query_only": True}).get()
     for name in resp["plugins"]:
         print(name)
@@ -68,11 +67,12 @@ def main():
         "load", formatter_class=flux.util.help_formatter()
     )
     load_parser.add_argument(
-        "-q",
-        "--quiet",
-        action="count",
-        default=0,
-        help="Only print previously loaded plugin after success",
+        "-r",
+        "--remove",
+        metavar="NAME",
+        help="Remove plugin NAME before loading new plugin. "
+        + "NAME may optionally be a shell glob pattern which removes all "
+        + 'matching plugins. ("all" is a synonym for "*")',
     )
     load_parser.add_argument("plugin", help="Plugin path or builtin name")
     load_parser.add_argument(
@@ -82,6 +82,16 @@ def main():
         nargs=argparse.REMAINDER,
     )
     load_parser.set_defaults(func=jobtap_load)
+
+    remove_parser = subparsers.add_parser(
+        "remove", formatter_class=flux.util.help_formatter()
+    )
+    remove_parser.add_argument(
+        "plugin",
+        help="Plugin name or pattern to remove. "
+        + '"all" may be used to remove all loaded plugins',
+    )
+    remove_parser.set_defaults(func=jobtap_remove)
 
     list_parser = subparsers.add_parser(
         "list", formatter_class=flux.util.help_formatter()
