@@ -708,6 +708,7 @@ static int dependencies_unpack (struct jobtap * jobtap,
 
 int jobtap_check_dependencies (struct jobtap *jobtap,
                                struct job *job,
+                               bool raise_exception,
                                char **errp)
 {
     int rc = -1;
@@ -728,8 +729,20 @@ int jobtap_check_dependencies (struct jobtap *jobtap,
 
     json_array_foreach (dependencies, index, entry) {
         rc = jobtap_check_dependency (jobtap, job, args, index, entry, errp);
-        if (rc < 0)
-           goto out;
+        if (rc < 0) {
+            if (!raise_exception)
+                goto out;
+            if (jobtap_job_raise (jobtap, job,
+                                  "dependency",
+                                  4, /* LOG_WARNING */
+                                  "%s (job may be stuck in DEPEND state)",
+                                  *errp) < 0)
+                flux_log_error (jobtap->ctx->h,
+                                "id=%ju: failed to raise dependency exception",
+                                (uintmax_t) job->id);
+            free (*errp);
+            *errp = NULL;
+        }
     }
     rc = 0;
 out:

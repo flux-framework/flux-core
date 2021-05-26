@@ -51,12 +51,14 @@ int jobtap_validate (struct jobtap *jobtap,
 /*  Jobtap call to iterate attributes.system.dependencies dictionary
  *   and call job.dependency.<schema> for each entry.
  *
- *  If there is no plugin registered to handle a given schema then
- *   an error is returned. A plugin which handles a given schema
+ *  If there is no plugin registered to handle a given scheme, then
+ *   if raise_exception is true a nonfatal job exception is raised,
+ *   otherwise an error is returned. A plugin which handles a given schema
  *   may also reject the job if the dependency stanza has errors.
  */
 int jobtap_check_dependencies (struct jobtap *jobtap,
                                struct job *job,
+                               bool raise_exception,
                                char **errp);
 
 

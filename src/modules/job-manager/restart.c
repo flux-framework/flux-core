@@ -225,7 +225,10 @@ int restart_from_kvs (struct job_manager *ctx)
         if (job->state == FLUX_JOB_STATE_NEW
             || job->state == FLUX_JOB_STATE_DEPEND) {
             char *errmsg = NULL;
-            if (jobtap_check_dependencies (ctx->jobtap, job, &errmsg) < 0) {
+            if (jobtap_check_dependencies (ctx->jobtap,
+                                           job,
+                                           true,
+                                           &errmsg) < 0) {
                 flux_log (ctx->h, LOG_ERR,
                           "restart: id=%ju: dependency check failed: %s",
                           (uintmax_t) job->id, errmsg);
