@@ -86,7 +86,8 @@ flux_shell_SOURCES = \
 	mpir/mpir.c \
 	mpir/ptrace.c \
 	mustache.h \
-	mustache.c
+	mustache.c \
+	doom.c
 
 flux_shell_LDADD = \
 	$(builddir)/libshell.la \
