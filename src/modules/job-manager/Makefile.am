@@ -61,7 +61,8 @@ libjob_manager_la_SOURCES = \
 	jobtap.h \
 	jobtap.c \
 	plugins/priority-default.c \
-	plugins/dependency-after.c
+	plugins/dependency-after.c \
+	plugins/begin-time.c
 
 fluxinclude_HEADERS = \
 	jobtap.h
