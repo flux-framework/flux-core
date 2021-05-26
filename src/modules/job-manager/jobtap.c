@@ -208,6 +208,7 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
     }
     job = zlistx_first (jobs);
     while (job) {
+        jobtap->current_job = job_incref (job);
         if (!(args = jobtap_args_create (jobtap, job))) {
             errprintf (errp, "Failed to create args for job");
             goto error;
@@ -224,6 +225,8 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
             (void) flux_plugin_call (p, "job.state.depend", args);
 
         flux_plugin_arg_destroy (args);
+        jobtap->current_job = NULL;
+        job_decref (job);
         job = zlistx_next (jobs);
     }
     zlistx_destroy (&jobs);
