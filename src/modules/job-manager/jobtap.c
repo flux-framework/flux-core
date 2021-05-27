@@ -879,10 +879,16 @@ int jobtap_call (struct jobtap *jobtap,
                                 "{s?I s?o}",
                                 "priority", &priority,
                                 "annotations", &note) < 0) {
-        flux_log (jobtap->ctx->h, LOG_ERR,
-                  "jobtap: %s: arg_unpack: %s",
-                  topic,
-                  flux_plugin_arg_strerror (args));
+        if (jobtap_job_raise (jobtap, job,
+                              topic, 4,
+                              "arg_unpack: %s%s",
+                              flux_plugin_arg_strerror (args),
+                              job->state == FLUX_JOB_STATE_PRIORITY ?
+                              " (job may be stuck in PRIORITY state)" : "") < 0)
+            flux_log (jobtap->ctx->h, LOG_ERR,
+                      "%s: jobtap_job_raise: %s",
+                       topic,
+                       strerror (errno));
         rc = -1;
     }
     if (note != NULL) {
