@@ -32,6 +32,14 @@ if test -n $mpich_ver && ! version_gte $mpich_ver $mpich_min; then
     skip_all="skipping MPI abort test on MPICH $mpich_ver (< $mpich_min)"
     test_done
 fi
+#
+# mvapich2 2.3.6 also exits on MPI_Abort()
+# As there is no public git history for mvapich at this time, skip all versions.
+#
+if ${FLUX_BUILD_DIR}/t/mpi/version | grep -q MVAPICH2; then
+    skip_all="skipping MPI abort test on MVAPICH2"
+    test_done
+fi
 
 export TEST_UNDER_FLUX_CORES_PER_RANK=4
 SIZE=2
