@@ -19,7 +19,6 @@ RUN yum -y update \
 	munge \
 	ccache \
 	lua \
-	mpich \
 	valgrind \
 	jq \
 	which \
@@ -36,6 +35,8 @@ RUN yum -y update \
 	gcc-c++ \
 	make \
 	cmake \
+	bison \
+	flex \
 #  Python
 	python36 \
 	python3-devel \
@@ -54,7 +55,6 @@ RUN yum -y update \
 	sqlite-devel \
 	libuuid-devel \
 	hwloc-devel \
-	mpich-devel \
 	lua-devel \
 	valgrind-devel \
 	libs3-devel \
@@ -72,9 +72,6 @@ RUN yum -y update \
 #  Set default /usr/bin/python to python3
 RUN alternatives --set python /usr/bin/python3
 
-#  Add /usr/bin/mpicc link so MPI tests are built
-RUN alternatives --install /usr/bin/mpicc mpicc /usr/lib64/mpich/bin/mpicc 100
-
 # Install caliper by hand for now:
 RUN mkdir caliper \
  && cd caliper \
@@ -86,6 +83,16 @@ RUN mkdir caliper \
  && make install \
  && cd ../.. \
  && rm -rf caliper
+
+# Install mvapich2
+RUN mkdir mvapich2 \
+ && cd mvapich2 \
+ && wget -O - http://mvapich.cse.ohio-state.edu/download/mvapich/mv2/mvapich2-2.3.6.tar.gz | tar xvz --strip-components 1 \
+ && ./configure --with-device=ch3:sock --disable-fortran --prefix=/usr \
+ && make -j4 \
+ && make install \
+ && cd .. \
+ && rm -rf mvapich2
 
 ENV LANG=C.UTF-8
 RUN printf "LANG=C.UTF-8" > /etc/locale.conf
