@@ -138,7 +138,7 @@ const char *flux_plugin_arg_strerror (flux_plugin_arg_t *args);
 enum {
     FLUX_PLUGIN_ARG_IN =  0,    /* Operate on input args    */
     FLUX_PLUGIN_ARG_OUT = 1,    /* Operate on output args   */
-    FLUX_PLUGIN_ARG_UPDATE = 2  /* Update args for set/pack */
+    FLUX_PLUGIN_ARG_REPLACE = 2 /* Replace args for set/pack */
 };
 
 /*  Get/set arguments in plugin arg object using JSON encoded strings

@@ -44,7 +44,7 @@ static int next_level (flux_plugin_t *p, const char *s,
 {
     struct plugstack *st = arg;
     return flux_plugin_arg_pack (args,
-                                 FLUX_PLUGIN_ARG_OUT|FLUX_PLUGIN_ARG_UPDATE,
+                                 FLUX_PLUGIN_ARG_OUT,
                                  "{s:s}",
                                  "next_name", plugstack_current_name (st));
 }

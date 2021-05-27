@@ -170,7 +170,7 @@ static flux_plugin_arg_t *jobtap_args_vcreate (struct jobtap *jobtap,
 
     if (fmt
         && flux_plugin_arg_vpack (args,
-                                  FLUX_PLUGIN_ARG_IN|FLUX_PLUGIN_ARG_UPDATE,
+                                  FLUX_PLUGIN_ARG_IN,
                                   fmt, ap) < 0)
         goto error;
     return args;
@@ -604,7 +604,7 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
     }
 
     if (flux_plugin_arg_pack (args,
-                              FLUX_PLUGIN_ARG_IN|FLUX_PLUGIN_ARG_UPDATE,
+                              FLUX_PLUGIN_ARG_IN,
                               "{s:O}",
                               "dependency", entry) < 0
         || flux_plugin_arg_set (args, FLUX_PLUGIN_ARG_OUT, "{}") < 0) {
@@ -1241,7 +1241,7 @@ int flux_jobtap_priority_unavail (flux_plugin_t *p, flux_plugin_arg_t *args)
     /* Still todo: check valid state, etc.
      */
     return flux_plugin_arg_pack (args,
-                                 FLUX_PLUGIN_ARG_OUT|FLUX_PLUGIN_ARG_UPDATE,
+                                 FLUX_PLUGIN_ARG_OUT,
                                  "{s:I}",
                                  "priority", FLUX_JOBTAP_PRIORITY_UNAVAIL);
 }
@@ -1272,7 +1272,7 @@ int flux_jobtap_reject_job (flux_plugin_t *p,
         errmsg[len - 2] = '+';
     }
     if (flux_plugin_arg_pack (args,
-                              FLUX_PLUGIN_ARG_OUT|FLUX_PLUGIN_ARG_UPDATE,
+                              FLUX_PLUGIN_ARG_OUT,
                               "{s:s}",
                               "errmsg", errmsg) < 0) {
         flux_t *h = flux_jobtap_get_flux (p);
