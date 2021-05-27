@@ -17,8 +17,10 @@ plugins from the Flux job-manager module at runtime.
 COMMANDS
 ========
 
-**list**
-  Print the currently loaded list of plugins
+**list** [*-a, --all*]
+  Print the currently loaded list of plugins. Builtin plugins will only
+  be displayed when the *--all* option is used. Plugins built in to the
+  job manager have a leading ``.`` in the name, e.g. ``.priority-default``.
 
 **load** [*-r*, *--remove=NAME*] PLUGIN [KEY=VAL, KEY=VAL...]
   Load a new plugin into the job-manager, optionally removing plugin NAME
@@ -27,8 +29,10 @@ COMMANDS
 
 **remove** NAME
   Remove plugin NAME. NAME may be a glob(7) pattern in which case all
-  matching plugins are removed. The special value `all` may be used to
-  remove all loaded jobtap plugins.
+  matching, non-builtin plugins are removed. The special value `all` may
+  be used to remove all loaded jobtap plugins. Builtin plugins (those
+  starting with a leading ``.``) must be removed explicitly or by
+  preceding *NAME* with ``.``, e.g. ``.*``.
 
 RESOURCES
 =========
