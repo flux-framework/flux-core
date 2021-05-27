@@ -461,7 +461,7 @@ static int arg_set (flux_plugin_arg_t *args, int flags, json_t *o)
 {
     json_t **dstp;
     dstp = arg_get (args, flags);
-    if (flags & FLUX_PLUGIN_ARG_UPDATE && *dstp != NULL) {
+    if (!(flags & FLUX_PLUGIN_ARG_REPLACE) && *dstp != NULL) {
         /*  On update, the object 'o' is spiritually inherited by
          *   args, so decref this object after attempting the update.
          */

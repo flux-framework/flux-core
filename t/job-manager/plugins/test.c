@@ -67,7 +67,7 @@ static int cb (flux_plugin_t *p,
         }
         if (strcmp (test_mode, "priority type error") == 0) {
             flux_plugin_arg_pack (args,
-                                  FLUX_PLUGIN_ARG_OUT|FLUX_PLUGIN_ARG_UPDATE,
+                                  FLUX_PLUGIN_ARG_OUT,
                                   "{s:s}",
                                   "priority", "foo");
         }
@@ -79,7 +79,7 @@ static int cb (flux_plugin_t *p,
             return -1;
         if (strcmp (test_mode, "sched: update priority") == 0) {
             flux_plugin_arg_pack (args,
-                                  FLUX_PLUGIN_ARG_OUT|FLUX_PLUGIN_ARG_UPDATE,
+                                  FLUX_PLUGIN_ARG_OUT,
                                   "{s:i}",
                                   "priority", 42);
         }
@@ -94,7 +94,7 @@ static int cb (flux_plugin_t *p,
             return flux_jobtap_priority_unavail (p, args);
         if (strcmp (test_mode, "priority.get: bad arg") == 0) {
             flux_plugin_arg_pack (args,
-                                  FLUX_PLUGIN_ARG_OUT|FLUX_PLUGIN_ARG_UPDATE,
+                                  FLUX_PLUGIN_ARG_OUT,
                                   "{s:s}",
                                   "priority", "foo");
         }

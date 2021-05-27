@@ -78,7 +78,7 @@ static flux_plugin_arg_t *log_msg_args (int level,
                                         const char *msg)
 {
     int rc = -1;
-    int flags = FLUX_PLUGIN_ARG_IN | FLUX_PLUGIN_ARG_UPDATE;
+    int flags = FLUX_PLUGIN_ARG_IN;
     flux_plugin_arg_t *args = flux_plugin_arg_create ();
 
     if (!args)

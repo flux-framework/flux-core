@@ -70,7 +70,7 @@ entry      o    posted eventlog entry, including context
 ========== ==== ==========================================
 
 Return arguments can be packed using the ``FLUX_PLUGIN_ARG_OUT`` and
-optionally ``FLUX_PLUGIN_ARG_UPDATE`` flags. For example to return
+optionally ``FLUX_PLUGIN_ARG_REPLACE`` flags. For example to return
 a priority::
 
    rc = flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_OUT,
@@ -80,7 +80,7 @@ a priority::
 While a job is pending, *jobtap* plugin callbacks may also add job
 annotations by returning a value for the ``annotations`` key::
 
-   flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_OUT|FLUX_PLUGIN_ARG_UPDATE,
+   flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_OUT,
                          "{s:{s:s}}",
                          "annotations", "test", value);
 
