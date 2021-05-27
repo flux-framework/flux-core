@@ -36,11 +36,42 @@ static void remove_cb (flux_t *h,
     }
     if (flux_jobtap_dependency_remove (p, id, description) < 0)
         goto error;
+    if (flux_jobtap_job_aux_set (p, id, description, NULL, NULL) < 0)
+        goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "flux_respond");
     return;
 error:
     flux_respond_error (h, msg, errno, flux_msg_last_error (msg));
+}
+
+static void check_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
+{
+    flux_jobid_t id;
+    const char *name = NULL;
+    flux_plugin_t *p = arg;
+
+    if (flux_request_unpack (msg, NULL,
+                             "{s:I s:s}",
+                             "id", &id,
+                             "name", &name) < 0) {
+        flux_log_error (h, "failed to unpack dependency-test check msg");
+        goto error;
+    }
+    if (flux_jobtap_job_aux_get (p, id, name) != p) {
+        errno = ENOENT;
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0) {
+        flux_log_error (h, "flux_respond");
+        goto error;
+    }
+    return;
+error:
+    flux_respond_error (h, msg, errno, NULL);
 }
 
 static int depend_cb (flux_plugin_t *p,
@@ -64,17 +95,29 @@ static int depend_cb (flux_plugin_t *p,
                                        flux_plugin_arg_strerror (args));
     }
 
+    /* Associate some plugin state with the job so we can detect
+     *  successful plugin state creation in testing.
+     */
+    if (flux_jobtap_job_aux_set (p, id, name, p, NULL) < 0)
+        return flux_jobtap_reject_job (p, args,
+                                       "flux_jobap_job_aux_set failed: %s",
+                                        strerror (errno));
+
     if (flux_jobtap_dependency_add (p, id, name) < 0) {
         flux_log_error (flux_jobtap_get_flux (p),
                         "flux_jobtap_dependency_add (%s)",
                         name);
         return -1;
     }
-    if (remove && flux_jobtap_dependency_remove (p, id, name) < 0) {
-        flux_log_error (flux_jobtap_get_flux (p),
-                        "flux_jobtap_dependency_remove (%s)",
-                        name);
-        return -1;
+    if (remove) {
+        if (flux_jobtap_dependency_remove (p, id, name) < 0)
+            return flux_jobtap_reject_job (p, args,
+                                           "dependency_remove: %s",
+                                            strerror (errno));
+        if (flux_jobtap_job_aux_set (p, id, name, NULL, NULL) < 0)
+            return flux_jobtap_reject_job (p, args,
+                                           "flux_jobtap_job_aux_set: %s",
+                                            strerror (errno));
     }
     return 0;
 }
@@ -87,7 +130,8 @@ static const struct flux_plugin_handler tab[] = {
 int flux_plugin_init (flux_plugin_t *p)
 {
     if (flux_plugin_register (p, "dependency-test", tab) < 0
-        || flux_jobtap_service_register (p, "remove", remove_cb, p) < 0)
+        || flux_jobtap_service_register (p, "remove", remove_cb, p) < 0
+        || flux_jobtap_service_register (p, "check", check_cb, p) < 0)
         return -1;
     return 0;
 }
