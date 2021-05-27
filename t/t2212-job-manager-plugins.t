@@ -90,8 +90,9 @@ test_expect_success 'job-manager: bad plugins config is detected' '
 	test_debug "echo c:; cat badconf.c.log" &&
 	grep -i "failed to find plugin to remove" badconf.c.log
 '
-test_expect_success 'job-manager: default no plugin sets priority to urgency' '
+test_expect_success 'job-manager: default plugin sets priority to urgency' '
 	flux jobtap remove all &&
+	flux jobtap list -a | grep .priority-default &&
 	jobid=$(flux mini submit --urgency=8 hostname) &&
 	flux job wait-event -v $jobid priority &&
 	test $(flux jobs -no {priority} $jobid) = 8 &&
@@ -147,7 +148,8 @@ test_expect_success 'job-manager: add administrative hold to one job' '
 	test "$state" = "SCHED"
 '
 test_expect_success 'job-manager: held jobs get a priority on plugin load' '
-	flux jobtap load --remove=all ${PLUGINPATH}/priority-default.so &&
+	flux jobtap remove priority-hold.so &&
+	flux jobtap load --remove=.priority-default .priority-default &&
 	jobid=$(id_byname cc-4) &&
 	flux job wait-event -v -t 5 $jobid clean
 '
@@ -200,7 +202,6 @@ test_expect_success 'job-manager: run all test plugin test modes' '
 	cat <<-EOF | sort >test-modes.txt &&
 	priority unset
 	callback error
-	priority type error
 	sched: priority unavail
 	sched: update priority
 	sched: dependency-add
@@ -217,6 +218,16 @@ test_expect_success 'job-manager: run all test plugin test modes' '
 	flux jobs -ac $COUNT -no {annotations.test} | \
 	    sort >test-annotations.out &&
 	test_cmp test-modes.txt test-annotations.out
+'
+test_expect_success 'job-manager: priority type error generates nonfatal exception' '
+	id=$(flux mini submit \
+		--setattr=system.jobtap.test-mode="priority type error" \
+		hostname) &&
+	flux job wait-event -vm type=job.state.priority ${id} exception &&
+	test "$(flux jobs -no {annotations.test} ${id})" = "priority type error" &&
+	test $(flux jobs -no {state} ${id}) = "PRIORITY" &&
+	flux job cancel ${id} &&
+	flux job wait-event -v ${id} clean
 '
 test_expect_success 'job-manager: jobtap plugin can raise job exception' '
 	id=$(flux mini submit \
@@ -242,6 +253,7 @@ test_expect_success 'job-manager: run test plugin modes for priority.get' '
 	flux python ./reprioritize.py &&
 	flux queue start &&
 	test_debug "flux dmesg | grep jobtap\.test" &&
+	flux jobs -ac 3 -o {id}:{annotations.test}:{status} &&
 	run_timeout 20 flux job wait -v --all
 '
 test_expect_success 'job-manager: run test plugin modes for job.validate' '
