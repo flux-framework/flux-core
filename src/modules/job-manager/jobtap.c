@@ -37,12 +37,15 @@
 
 #define FLUX_JOBTAP_PRIORITY_UNAVAIL INT64_C(-2)
 
+extern int priority_default_plugin_init (flux_plugin_t *p);
+
 struct jobtap_builtin {
     const char *name;
     flux_plugin_init_f init;
 };
 
 static struct jobtap_builtin jobtap_builtins [] = {
+    { ".priority-default", priority_default_plugin_init },
     { 0 },
 };
 
@@ -537,20 +540,13 @@ int jobtap_get_priority (struct jobtap *jobtap,
 {
     int rc = -1;
     flux_plugin_arg_t *args;
-    int64_t priority = -1;
+    int64_t priority = FLUX_JOBTAP_PRIORITY_UNAVAIL;
 
     if (!jobtap || !job || !pprio) {
         errno = EINVAL;
         return -1;
     }
 
-    /*  Skip if no jobtap.priority.get handlers are active.
-     *   This avoids unnecessarily creating a flux_plugin_arg_t object.
-     */
-    if (jobtap_topic_match_count (jobtap, "job.priority.get")  == 0) {
-        *pprio = job->urgency;
-        return 0;
-    }
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
 
@@ -566,18 +562,11 @@ int jobtap_get_priority (struct jobtap *jobtap,
             flux_log (jobtap->ctx->h, LOG_ERR,
                       "jobtap: job.priority.get: arg_unpack: %s",
                       flux_plugin_arg_strerror (args));
+            /*  Note failure, but keep current priority */
+            priority = job->priority;
             rc = -1;
         }
-        if (priority == -1) {
-           /*
-            *  A plugin callback was called but didn't provide a
-            *   priority. This could be due to a loaded plugin that is
-            *   not a priority plugin. Therefore take the default action
-            *   and set priority to job->urgency.
-            */
-            priority = job->urgency;
-        }
-        else if (priority == FLUX_JOBTAP_PRIORITY_UNAVAIL) {
+        if (priority == FLUX_JOBTAP_PRIORITY_UNAVAIL) {
             /*
              *  Plugin cannot determine priority at this time. Set
              *   priority to the current job->priority so that a priority
@@ -598,14 +587,7 @@ int jobtap_get_priority (struct jobtap *jobtap,
          *   O/w, plugin provided a new priority.
          */
     }
-    else if (rc == 0) {
-        /*
-         *  No priority.get callback was run. Enable default behavior
-         *   (priority == urgency)
-         */
-        priority = job->urgency;
-    }
-    else {
+    else if (rc < 0) {
         /*
          *  priority.get callback was run and failed. Log the error
          *   and return the current priority.
@@ -860,7 +842,7 @@ int jobtap_call (struct jobtap *jobtap,
     int rc = -1;
     json_t *note = NULL;
     flux_plugin_arg_t *args;
-    int64_t priority = -1;
+    int64_t priority = FLUX_JOBTAP_PRIORITY_UNAVAIL;
     va_list ap;
 
     if (job->state == FLUX_JOB_STATE_DEPEND) {
@@ -872,17 +854,8 @@ int jobtap_call (struct jobtap *jobtap,
             return -1;
     }
 
-    if (jobtap_topic_match_count (jobtap, topic) == 0) {
-        /*
-         *  ensure job advances past PRIORITY state at job.state.priority
-         */
-        if (job->state == FLUX_JOB_STATE_PRIORITY
-           && reprioritize_job (jobtap->ctx, job, job->urgency) < 0)
-            flux_log (jobtap->ctx->h, LOG_ERR,
-                      "reprioritize_job: id=%ju: failed",
-                      (uintmax_t) job->id);
+    if (jobtap_topic_match_count (jobtap, topic) == 0)
         return 0;
-    }
 
     va_start (ap, fmt);
     if (!(args = jobtap_args_vcreate (jobtap, job, fmt, ap))) {
@@ -940,18 +913,6 @@ int jobtap_call (struct jobtap *jobtap,
          */
         if (reprioritize_job (jobtap->ctx, job, priority) < 0)
             flux_log_error (jobtap->ctx->h, "jobtap: reprioritize_job");
-    }
-    else if (job->state == FLUX_JOB_STATE_PRIORITY && priority == -1) {
-        /*
-         *  Plugin didn't return a priority value (not even
-         *   FLUX_JOBTAP_PRIORITY_UNAVAIL). Take default action
-         *   to prevent job from being stuck in PRIORITY state when
-         *   a non-priority plugin is loaded.
-         */
-        if (reprioritize_job (jobtap->ctx, job, job->urgency) < 0) {
-            flux_log_error (jobtap->ctx->h,
-                            "jobtap: setting priority to urgency failed");
-        }
     }
     /*  else: FLUX_JOBTAP_PRIORITY_UNAVAIL, job cannot yet be assigned a
      *   priority. This is a fall-through condiition. A job in PRIORITY

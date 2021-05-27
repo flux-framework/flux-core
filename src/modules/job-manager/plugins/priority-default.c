@@ -8,7 +8,9 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-/* priority-default.c - copy urgency to priority
+/* priority-default.c - builtin default priority plugin.
+ *
+ * Simply sets priority to current urgency.
  *
  */
 
@@ -47,13 +49,12 @@ static int priority_cb (flux_plugin_t *p,
     return 0;
 }
 
-int flux_plugin_init (flux_plugin_t *p)
+int priority_default_plugin_init (flux_plugin_t *p)
 {
-    if (flux_plugin_set_name (p, "priority-default") < 0
-        || flux_plugin_add_handler (p,
-                                    "job.state.priority",
-                                    priority_cb,
-                                    NULL) < 0
+    if (flux_plugin_add_handler (p,
+                                 "job.state.priority",
+                                 priority_cb,
+                                 NULL) < 0
         || flux_plugin_add_handler (p,
                                     "job.priority.get",
                                     priority_cb,
