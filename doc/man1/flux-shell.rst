@@ -252,6 +252,11 @@ options are supported by the builtin plugins of ``flux-shell``:
   or ``file``. Users should not need to set this option directly as it
   will be handled by options of higher level commands like ``flux-mini``.
 
+**exit-timeout**\ =\ *VALUE*
+  A fatal exception is raised on the job 30s after the first task exits.
+  The timeout period may be altered by providing a different value in
+  Flux Standard Duration form.  A value of ``none`` disables generation of
+  the exception.
 
 SHELL INITRC
 ============
