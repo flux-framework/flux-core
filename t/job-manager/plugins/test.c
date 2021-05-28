@@ -86,6 +86,18 @@ static int cb (flux_plugin_t *p,
         if (strcmp (test_mode, "sched: dependency-add") == 0) {
             return flux_jobtap_dependency_add (p, id, "foo");
         }
+        if (strcmp (test_mode, "sched: exception") == 0) {
+            flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                        "test", 0,
+                                        "sched: test exception");
+        }
+        if (strcmp (test_mode, "sched: exception error") == 0) {
+            if (flux_jobtap_raise_exception (NULL, 0, "test", 0, "") >= 0
+                || errno != EINVAL)
+                flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                            "test", 0,
+                                            "sched: exception error failed");
+        }
     }
     else if (strcmp (topic, "job.priority.get") == 0) {
         if (strcmp (test_mode, "priority.get: fail") == 0)

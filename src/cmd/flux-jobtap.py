@@ -45,11 +45,12 @@ def jobtap_load(args):
         sys.exit(1)
 
 
-def jobtap_list(_args):
+def jobtap_list(args):
     """List currently loaded jobtap plugins"""
     resp = flux.Flux().rpc("job-manager.jobtap", {"query_only": True}).get()
     for name in resp["plugins"]:
-        print(name)
+        if not name.startswith(".") or args.all:
+            print(name)
 
 
 LOGGER = logging.getLogger("flux-jobtap")
@@ -95,6 +96,12 @@ def main():
 
     list_parser = subparsers.add_parser(
         "list", formatter_class=flux.util.help_formatter()
+    )
+    list_parser.add_argument(
+        "-a",
+        "--all",
+        help="Do not ignore job-manager builtin plugins",
+        action="store_true",
     )
     list_parser.set_defaults(func=jobtap_list)
 

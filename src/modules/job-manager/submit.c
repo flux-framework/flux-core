@@ -196,7 +196,10 @@ static int submit_validate_jobs (struct job_manager *ctx,
         json_t *entry = NULL;
 
         if (jobtap_validate (ctx->jobtap, job, &errmsg) < 0
-            || jobtap_check_dependencies (ctx->jobtap, job, &errmsg) < 0) {
+            || jobtap_check_dependencies (ctx->jobtap,
+                                          job,
+                                          false,
+                                          &errmsg) < 0) {
             /*
              *  This job is rejected: append error to error payload and
              *   delete the job from newjobs list
