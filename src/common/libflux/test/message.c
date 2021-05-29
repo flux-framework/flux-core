@@ -34,8 +34,14 @@ void check_routes (void)
     ok (flux_msg_get_route_count (msg) < 0 && errno == EPROTO,
         "flux_msg_get_route_count returns -1 errno EPROTO on msg w/o delim");
     errno = 0;
+    ok ((flux_msg_get_route_first (msg, NULL) == -1 && errno == EINVAL),
+        "flux_msg_get_route_first returns -1 errno EINVAL on in-and-out param = NULL");
+    errno = 0;
     ok ((flux_msg_get_route_first (msg, &s) == -1 && errno == EPROTO),
         "flux_msg_get_route_first returns -1 errno EPROTO on msg w/o delim");
+    errno = 0;
+    ok ((flux_msg_get_route_last (msg, NULL) == -1 && errno == EINVAL),
+        "flux_msg_get_route_last returns -1 errno EINVAL on in-and-out param = NULL");
     errno = 0;
     ok ((flux_msg_get_route_last (msg, &s) == -1 && errno == EPROTO),
         "flux_msg_get_route_last returns -1 errno EPROTO on msg w/o delim");
@@ -110,6 +116,9 @@ void check_topic (void)
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "flux_msg_create works");
+    errno = 0;
+    ok (flux_msg_get_topic (msg, NULL) < 0 && errno == EINVAL,
+       "flux_msg_get_topic fails with EINVAL on in-and-out param = NULL");
     errno = 0;
     ok (flux_msg_get_topic (msg, &s) < 0 && errno == EPROTO,
        "flux_msg_get_topic fails with EPROTO on msg w/o topic");
@@ -321,6 +330,9 @@ void check_payload (void)
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "flux_msg_create works");
     errno = 0;
+    ok (flux_msg_get_payload (msg, NULL, NULL) < 0 && errno == EINVAL,
+       "flux_msg_get_payload fails with EINVAL on in-and-out params = NULL");
+    errno = 0;
     ok (flux_msg_get_payload (msg, &buf, &len) < 0 && errno == EPROTO,
        "flux_msg_get_payload fails with EPROTO on msg w/o payload");
     errno = 0;
@@ -399,7 +411,9 @@ void check_payload (void)
 
 /* flux_msg_set_type, flux_msg_get_type
  * flux_msg_set_nodeid, flux_msg_get_nodeid
- * flux_msg_set_errnum, flux_msg_get_errnum
+ * flux_msg_set_errnum, flux_msg_get_errnum,
+ * flux_msg_get_seq, flux_msg_get_status
+ *
  */
 void check_proto (void)
 {
@@ -441,6 +455,9 @@ void check_proto (void)
     errno = 0;
     ok (flux_msg_set_nodeid (msg, 0) < 0 && errno == EINVAL,
         "flux_msg_set_nodeid on non-request fails with errno == EINVAL");
+    errno = 0;
+    ok (flux_msg_get_errnum (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_errnum fails with EINVAL on in-and-out param = NULL");
     errnum = 0;
     ok (flux_msg_get_errnum (msg, &errnum) == 0 && errnum == 43,
         "flux_msg_get_errnum works and returns what we set");
@@ -452,6 +469,13 @@ void check_proto (void)
     ok (flux_msg_set_nodeid (msg, FLUX_NODEID_UPSTREAM) < 0
         && errno == EINVAL,
         "flux_msg_set_nodeid FLUX_NODEID_UPSTREAM fails with EINVAL");
+
+    errno = 0;
+    ok (flux_msg_get_seq (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_seq fails with EINVAL on in-and-out param = NULL");
+    errno = 0;
+    ok (flux_msg_get_status (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_status fails with EINVAL on in-and-out param = NULL");
 
     flux_msg_destroy (msg);
 }
@@ -467,6 +491,9 @@ void check_matchtag (void)
         "flux_msg_get_matchtag returns FLUX_MATCHTAG_NONE  when uninitialized");
     ok (flux_msg_set_matchtag (msg, 42) == 0,
         "flux_msg_set_matchtag works");
+    errno = 0;
+    ok (flux_msg_get_matchtag (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_matchtag fails with EINVAL on in-and-out param = NULL");
     ok (flux_msg_get_matchtag (msg, &t) == 0,
         "flux_msg_get_matchtag works");
     ok (t == 42,

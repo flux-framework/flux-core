@@ -668,6 +668,10 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
     int type;
     uint32_t xe;
 
+    if (!e) {
+        errno = EINVAL;
+        return -1;
+    }
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
             || proto_get_u32 (zframe_data (zf), zframe_size (zf),
@@ -699,6 +703,10 @@ int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
     zframe_t *zf = zmsg_last (msg->zmsg);
     int type;
 
+    if (!seq) {
+        errno = EINVAL;
+        return -1;
+    }
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_EVENT
             || proto_get_u32 (zframe_data (zf), zframe_size (zf),
@@ -729,6 +737,10 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
     zframe_t *zf = zmsg_last (msg->zmsg);
     int type;
 
+    if (!t) {
+        errno = EINVAL;
+        return -1;
+    }
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
             || proto_get_u32 (zframe_data (zf), zframe_size (zf),
@@ -760,6 +772,10 @@ int flux_msg_get_status (const flux_msg_t *msg, int *s)
     int type;
     uint32_t u;
 
+    if (!s) {
+        errno = EINVAL;
+        return -1;
+    }
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_KEEPALIVE
             || proto_get_u32 (zframe_data (zf), zframe_size (zf),
@@ -886,6 +902,10 @@ int flux_msg_pop_route (flux_msg_t *msg, char **id)
     uint8_t flags = 0;
     zframe_t *zf;
 
+    /* do not check 'id' for NULL, a "pop" is acceptable w/o returning
+     * data to the user.  Caller may wish to only "pop" and not look
+     * at the data.
+     */
     if (flux_msg_get_flags (msg, &flags) < 0)
         return -1;
     if (!(flags & FLUX_MSGFLAG_ROUTE) || !(zf = zmsg_first (msg->zmsg))) {
@@ -917,6 +937,10 @@ int flux_msg_get_route_last (const flux_msg_t *msg, char **id)
     zframe_t *zf;
     char *s = NULL;
 
+    if (!id) {
+        errno = EINVAL;
+        return -1;
+    }
     if (flux_msg_get_flags (msg, &flags) < 0)
         return -1;
     if (!(flags & FLUX_MSGFLAG_ROUTE) || !(zf = zmsg_first (msg->zmsg))) {
@@ -957,6 +981,10 @@ int flux_msg_get_route_first (const flux_msg_t *msg, char **id)
     zframe_t *zf;
     char *s = NULL;
 
+    if (!id) {
+        errno = EINVAL;
+        return -1;
+    }
     if (!(zf = find_route_first (msg))) {
         errno = EPROTO;
         return -1;
@@ -1214,6 +1242,10 @@ int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, int *size)
     zframe_t *zf;
     uint8_t flags = 0;
 
+    if (!buf && !size) {
+        errno = EINVAL;
+        return -1;
+    }
     if (flux_msg_get_flags (msg, &flags) < 0)
         return -1;
     if (!(flags & FLUX_MSGFLAG_PAYLOAD)) {
@@ -1428,6 +1460,10 @@ int flux_msg_get_topic (const flux_msg_t *msg, const char **topic)
     zframe_t *zf;
     const char *s;
 
+    if (!topic) {
+        errno = EINVAL;
+        return -1;
+    }
     if (zf_topic (msg, &zf) < 0)
         return -1;
     s = (const char *)zframe_data (zf);
