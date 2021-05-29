@@ -3,6 +3,23 @@
 
 test_description='Test that MPI_Abort works'
 
+# MPI behaviors WRT to MPI_Abort():
+#
+# mpich
+#   In versions < 3.2.0, MPI_Abort() prints error and exits from the task.
+#   In versions >= 3.2.0, MPI_Abort() sends a PMI-1 abort command using its
+#   built-in PMI-1 wire protocol client.
+# openmpi
+#   In Openmpi version 4, the flux MCA plugin dlopens the flux libpmi.so
+#   and calls PMI_Abort().  The current implementation sends a PMI-1 abort
+#   command.
+# mvapich
+#   In version 2.3.6, MPI_Abort() prints error and exits from the task.
+#   Other versions not checked.
+#
+# N.B. After an MPI_Abort(), the job might exit with
+# 1) the MPI_Abort() exit code
+# 2) (128 + sig) if other shells have to be cleaned up
 
 . `dirname $0`/sharness.sh
 
@@ -16,37 +33,12 @@ if ! test -x ${FLUX_BUILD_DIR}/t/mpi/abort; then
     test_done
 fi
 
-# Use convenient sort(1) option to determine if semantic version $1 >= $2
-version_gte() {
-    test "$( (echo $1; echo $2) | sort --version-sort | tail -1)" = $1
-}
-
-#
-# mpich < 3.2.0 simply exits on MPI_Abort() instead of sending the PMI-1
-# abort message.  Don't test this for now because of missing early exit
-# detection in Flux (flux-framework/flux-core#2238)
-#
-mpich_min=3.2.0
-mpich_ver=$(${FLUX_BUILD_DIR}/t/mpi/version | awk '/MPICH Version:/ {print $3}')
-if test -n $mpich_ver && ! version_gte $mpich_ver $mpich_min; then
-    skip_all="skipping MPI abort test on MPICH $mpich_ver (< $mpich_min)"
-    test_done
-fi
-#
-# mvapich2 2.3.6 also exits on MPI_Abort()
-# As there is no public git history for mvapich at this time, skip all versions.
-#
-if ${FLUX_BUILD_DIR}/t/mpi/version | grep -q MVAPICH2; then
-    skip_all="skipping MPI abort test on MVAPICH2"
-    test_done
-fi
-
 export TEST_UNDER_FLUX_CORES_PER_RANK=4
 SIZE=2
 MAX_MPI_SIZE=$(($SIZE*$TEST_UNDER_FLUX_CORES_PER_RANK))
 test_under_flux $SIZE job
 
-OPTS="-ocpu-affinity=off"
+OPTS="-ocpu-affinity=off -oexit-on-error"
 
 diag() {
 	echo "test failed: cat $1"
@@ -55,9 +47,8 @@ diag() {
 }
 
 # These tests use ! for expected failure rather than 'test_expect_code'
-# because (I think) we may alternately get the exit code passed to MPI_Abort(),
-# or an exit code that indicates tasks were signaled.  If we can ensure that
-# the exit code is deterministic, that should be fixed.
+# because the job exit code is not deterministic.  'test_must_fail' cannot be
+# used either because 128 + SIGNUM is not accepted as "failure".
 
 # get a PMI server trace in the CI output in case we need it to debug!
 test_expect_success 'MPI_Abort size=1 with PMI server tracing enabled' '
@@ -69,14 +60,14 @@ test_expect_success 'MPI_Abort size=1 with PMI server tracing enabled' '
 test_expect_success "MPI_Abort on size=${MAX_MPI_SIZE}, first rank triggers exception" '
 	! run_timeout 60 flux mini run -n${MAX_MPI_SIZE} $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/abort 0 2>abort0.err &&
-	(grep "exception.*MPI_Abort" abort0.err || diag abort0.err)
+	(grep exception abort0.err || diag abort0.err)
 '
 
 test_expect_success "MPI_Abort on size=${MAX_MPI_SIZE}, last rank triggers exception" '
 	! run_timeout 60 flux mini run -n${MAX_MPI_SIZE} $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/abort $(($MAX_MPI_SIZE-1)) \
 		2>abort1.err &&
-	(grep "exception.*MPI_Abort" abort1.err || diag abort1.err)
+	(grep exception abort1.err || diag abort1.err)
 '
 
 test_done
