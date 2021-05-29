@@ -1039,7 +1039,7 @@ char *flux_msg_get_route_string (const flux_msg_t *msg)
     zframe_t *zf;
     char *buf, *cp;
 
-    if (msg == NULL) {
+    if (!msg) {
         errno = EINVAL;
         return NULL;
     }
@@ -1350,7 +1350,7 @@ int flux_msg_unpack (const flux_msg_t *msg, const char *fmt, ...)
 
 const char *flux_msg_last_error (const flux_msg_t *msg)
 {
-    if (msg == NULL)
+    if (!msg)
         return "msg object is NULL";
     if (msg->lasterr == NULL)
         return "";
