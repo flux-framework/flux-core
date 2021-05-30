@@ -301,6 +301,10 @@ int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size)
     uint8_t *p = buf;
     zframe_t *zf;
 
+    if (!msg) {
+        errno = EINVAL;
+        return -1;
+    }
     zf = zmsg_first (msg->zmsg);
     while (zf) {
         size_t n = zframe_size (zf);
@@ -649,9 +653,14 @@ error:
 
 int flux_msg_set_errnum (flux_msg_t *msg, int e)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
+    zframe_t *zf;;
     int type;
 
+    if (!msg) {
+        errno = EINVAL;
+        return -1;
+    }
+    zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
             || proto_set_u32 (zframe_data (zf), zframe_size (zf),
@@ -664,14 +673,15 @@ int flux_msg_set_errnum (flux_msg_t *msg, int e)
 
 int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
+    zframe_t *zf;
     int type;
     uint32_t xe;
 
-    if (!e) {
+    if (!msg || !e) {
         errno = EINVAL;
         return -1;
     }
+    zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_RESPONSE && type != FLUX_MSGTYPE_KEEPALIVE)
             || proto_get_u32 (zframe_data (zf), zframe_size (zf),
@@ -685,9 +695,14 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
 
 int flux_msg_set_seq (flux_msg_t *msg, uint32_t seq)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
+    zframe_t *zf;
     int type;
 
+    if (!msg) {
+        errno = EINVAL;
+        return -1;
+    }
+    zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_EVENT
             || proto_set_u32 (zframe_data (zf), zframe_size (zf),
@@ -700,13 +715,14 @@ int flux_msg_set_seq (flux_msg_t *msg, uint32_t seq)
 
 int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
+    zframe_t *zf;
     int type;
 
-    if (!seq) {
+    if (!msg || !seq) {
         errno = EINVAL;
         return -1;
     }
+    zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_EVENT
             || proto_get_u32 (zframe_data (zf), zframe_size (zf),
@@ -719,9 +735,14 @@ int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
 
 int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t t)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
+    zframe_t *zf;
     int type;
 
+    if (!msg) {
+        errno = EINVAL;
+        return -1;
+    }
+    zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
             || proto_set_u32 (zframe_data (zf), zframe_size (zf),
@@ -734,13 +755,14 @@ int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t t)
 
 int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
+    zframe_t *zf;
     int type;
 
-    if (!t) {
+    if (!msg || !t) {
         errno = EINVAL;
         return -1;
     }
+    zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || (type != FLUX_MSGTYPE_REQUEST && type != FLUX_MSGTYPE_RESPONSE)
             || proto_get_u32 (zframe_data (zf), zframe_size (zf),
@@ -753,9 +775,14 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
 
 int flux_msg_set_status (flux_msg_t *msg, int s)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
+    zframe_t *zf;
     int type;
 
+    if (!msg) {
+        errno = EINVAL;
+        return -1;
+    }
+    zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_KEEPALIVE
             || proto_set_u32 (zframe_data (zf), zframe_size (zf),
@@ -768,14 +795,15 @@ int flux_msg_set_status (flux_msg_t *msg, int s)
 
 int flux_msg_get_status (const flux_msg_t *msg, int *s)
 {
-    zframe_t *zf = zmsg_last (msg->zmsg);
+    zframe_t *zf;
     int type;
     uint32_t u;
 
-    if (!s) {
+    if (!msg || !s) {
         errno = EINVAL;
         return -1;
     }
+    zf = zmsg_last (msg->zmsg);
     if (!zf || proto_get_type (zframe_data (zf), zframe_size (zf), &type) < 0
             || type != FLUX_MSGTYPE_KEEPALIVE
             || proto_get_u32 (zframe_data (zf), zframe_size (zf),
@@ -960,9 +988,10 @@ static zframe_t *find_route_first (const flux_msg_t *msg)
     uint8_t flags = 0;
     zframe_t *zf, *zf_next;
 
-    if (!msg
-        || flux_msg_get_flags (msg, &flags) < 0
-        || !(flags & FLUX_MSGFLAG_ROUTE)) {
+    if (flux_msg_get_flags (msg, &flags) < 0)
+        return NULL;
+    if (!(flags & FLUX_MSGFLAG_ROUTE)) {
+        errno = EPROTO;
         return NULL;
     }
     zf = zmsg_first (msg->zmsg);
@@ -985,10 +1014,8 @@ int flux_msg_get_route_first (const flux_msg_t *msg, char **id)
         errno = EINVAL;
         return -1;
     }
-    if (!(zf = find_route_first (msg))) {
-        errno = EPROTO;
+    if (!(zf = find_route_first (msg)))
         return -1;
-    }
     if (zframe_size (zf) > 0 && !(s = zframe_strdup (zf))) {
         errno = ENOMEM;
         return -1;
