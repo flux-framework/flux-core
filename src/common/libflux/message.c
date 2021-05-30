@@ -1077,20 +1077,17 @@ int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
 {
     zframe_t *zf;
     uint8_t flags;
-    int rc = -1;
 
     if (!msg) {
         errno = EINVAL;
-        goto done;
+        return -1;
     }
     json_decref (msg->json);            /* invalidate cached json object */
     msg->json = NULL;
     if (flux_msg_get_flags (msg, &flags) < 0)
-        goto done;
-    if (!(flags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0)) {
-        rc = 0;
-        goto done;
-    }
+        return -1;
+    if (!(flags & FLUX_MSGFLAG_PAYLOAD) && (buf == NULL || size == 0))
+        return 0;
     zf = zmsg_first (msg->zmsg);
     if ((flags & FLUX_MSGFLAG_ROUTE)) {
         while (zf && zframe_size (zf) > 0)
@@ -1104,7 +1101,7 @@ int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
     }
     if (!zf) {                          /* must at least have proto frame */
         errno = EPROTO;
-        goto done;
+        return -1;
     }
     /* Case #1: replace existing payload.
      */
@@ -1112,7 +1109,7 @@ int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
         if (zframe_data (zf) != buf || zframe_size (zf) != size) {
             if (payload_overlap (buf, zf)) {
                 errno = EINVAL;
-                goto done;
+                return -1;
             }
             zframe_reset (zf, buf, size);
         }
@@ -1123,7 +1120,7 @@ int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
         if (zmsg_addmem (msg->zmsg, buf, size) < 0
                                         || zmsg_append (msg->zmsg, &zf) < 0) {
             errno = ENOMEM;
-            goto done;
+            return -1;
         }
         flags |= FLUX_MSGFLAG_PAYLOAD;
     /* Case #3: remove payload.
@@ -1134,10 +1131,8 @@ int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
         flags &= ~(uint8_t)(FLUX_MSGFLAG_PAYLOAD);
     }
     if (flux_msg_set_flags (msg, flags) < 0)
-        goto done;
-    rc = 0;
-done:
-    return rc;
+        return -1;
+    return 0;
 }
 
 static inline void msg_lasterr_reset (flux_msg_t *msg)
@@ -1361,10 +1356,9 @@ int flux_msg_set_topic (flux_msg_t *msg, const char *topic)
 {
     zframe_t *zf, *zf2 = NULL;
     uint8_t flags;
-    int rc = -1;
 
     if (flux_msg_get_flags (msg, &flags) < 0)
-        goto done;
+        return -1;
     zf = zmsg_first (msg->zmsg);
     if ((flags & FLUX_MSGFLAG_ROUTE)) {   /* skip over routing frames, if any */
         while (zf && zframe_size (zf) > 0)
@@ -1374,7 +1368,7 @@ int flux_msg_set_topic (flux_msg_t *msg, const char *topic)
     }
     if (!zf) {                          /* must at least have proto frame */
         errno = EPROTO;
-        goto done;
+        return -1;
     }
     if ((flags & FLUX_MSGFLAG_TOPIC) && topic) {        /* case 1: repl topic */
         zframe_reset (zf, topic, strlen (topic) + 1);
@@ -1386,34 +1380,31 @@ int flux_msg_set_topic (flux_msg_t *msg, const char *topic)
                                     || zmsg_append (msg->zmsg, &zf) < 0
                                     || (zf2 && zmsg_append (msg->zmsg, &zf2) < 0)) {
             errno = ENOMEM;
-            goto done;
+            return -1;
         }
         flags |= FLUX_MSGFLAG_TOPIC;
         if (flux_msg_set_flags (msg, flags) < 0)
-            goto done;
+            return -1;
     } else if ((flags & FLUX_MSGFLAG_TOPIC) && !topic) { /* case 3: del topic */
         zmsg_remove (msg->zmsg, zf);
         zframe_destroy (&zf);
         flags &= ~(uint8_t)FLUX_MSGFLAG_TOPIC;
         if (flux_msg_set_flags (msg, flags) < 0)
-            goto done;
+            return -1;
     }
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 static int zf_topic (const flux_msg_t *msg, zframe_t **zfp)
 {
     uint8_t flags;
     zframe_t *zf = NULL;
-    int rc = -1;
 
     if (flux_msg_get_flags (msg, &flags) < 0)
-        goto done;
+        return -1;
     if (!(flags & FLUX_MSGFLAG_TOPIC)) {
         errno = EPROTO;
-        goto done;
+        return -1;
     }
     zf = zmsg_first (msg->zmsg);
     if ((flags & FLUX_MSGFLAG_ROUTE)) {
@@ -1424,31 +1415,26 @@ static int zf_topic (const flux_msg_t *msg, zframe_t **zfp)
     }
     if (!zf) {
         errno = EPROTO;
-        goto done;
+        return -1;
     }
     *zfp = zf;
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 int flux_msg_get_topic (const flux_msg_t *msg, const char **topic)
 {
     zframe_t *zf;
     const char *s;
-    int rc = -1;
 
     if (zf_topic (msg, &zf) < 0)
-        goto done;
+        return -1;
     s = (const char *)zframe_data (zf);
     if (s[zframe_size (zf) - 1] != '\0') {
         errno = EPROTO;
-        goto done;
+        return -1;
     }
     *topic = s;
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
@@ -1584,11 +1570,9 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
 
 int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)
 {
-    int rc = -1;
-
     if (!sock || !msg || !zmsg_is (msg->zmsg)) {
         errno = EINVAL;
-        goto done;
+        return -1;
     }
 
     void *handle = zsock_resolve (sock);
@@ -1603,12 +1587,10 @@ int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)
         if (++count == zmsg_size (msg->zmsg))
             flags &= ~ZFRAME_MORE;
         if (zframe_send (&zf, handle, flags) < 0)
-            goto done;
+            return -1;
         zf = zmsg_next (msg->zmsg);
     }
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 int flux_msg_sendzsock (void *sock, const flux_msg_t *msg)
