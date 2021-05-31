@@ -207,8 +207,10 @@ flux_msg_t *flux_msg_create (int type)
         errno = ENOMEM;
         goto error;
     }
-    if (zmsg_addmem (msg->zmsg, proto, PROTO_SIZE) < 0)
+    if (zmsg_addmem (msg->zmsg, proto, PROTO_SIZE) < 0) {
+        errno = ENOMEM;
         goto error;
+    }
     return msg;
 error:
     flux_msg_destroy (msg);
