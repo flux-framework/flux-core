@@ -1643,6 +1643,22 @@ int flux_jobtap_raise_exception (flux_plugin_t *p,
     return rc;
 }
 
+flux_plugin_arg_t * flux_jobtap_job_lookup (flux_plugin_t *p,
+                                            flux_jobid_t id)
+{
+    struct jobtap *jobtap;
+    struct job *job;
+    if (!p || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(job = jobtap_lookup_jobid (p, id))) {
+        errno = ENOENT;
+        return NULL;
+    }
+    return jobtap_args_create (jobtap, job);
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
