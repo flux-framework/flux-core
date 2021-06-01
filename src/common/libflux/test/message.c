@@ -713,6 +713,9 @@ void check_encode (void)
         "flux_msg_create works");
     ok (flux_msg_set_topic (msg, "foo.bar") == 0,
         "flux_msg_set_topic works");
+    errno = 0;
+    ok (flux_msg_encode_size (NULL) < 0 && errno == EINVAL,
+        "flux_msg_encode_size fails with EINVAL on msg = NULL");
     size = flux_msg_encode_size (msg);
     ok (size > 0,
         "flux_msg_encode_size works");
