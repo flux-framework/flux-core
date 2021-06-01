@@ -66,7 +66,31 @@ check_module_list() {
 #
 #  Reinvoke a test file under a flux instance
 #
-#  Usage: test_under_flux <size>
+#  Usage: test_under_flux <size> [personality]
+#
+#  where personality is one of:
+#
+#  full (default)
+#    Run with all services.
+#    The default broker rc scripts are executed.
+#
+#  minimal
+#    Run with only built-in services.
+#    No broker rc scripts are executed.
+#
+#  job
+#    Load minimum services needed to run jobs.
+#    Fake resources are loaded into the resource module.
+#    Environment variables:
+#    - TEST_UNDER_FLUX_CORES_PER_RANK
+#        Set the number of fake cores per fake node (default: 2).
+#    - TEST_UNDER_FLUX_NO_JOB_EXEC
+#        If set, skip loading job-exec module (default: load job-exec).
+#    - TEST_UNDER_FLUX_SCHED_SIMPLE_MODE
+#        Change mode argument to sched-simple (default: limited=8)
+#
+#  kvs
+#    Load minimum services needed for kvs.
 #
 test_under_flux() {
     size=${1:-1}
