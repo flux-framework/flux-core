@@ -277,11 +277,15 @@ void *flux_msg_aux_get (const flux_msg_t *msg, const char *name)
     return aux_get (msg->aux, name);
 }
 
-size_t flux_msg_encode_size (const flux_msg_t *msg)
+ssize_t flux_msg_encode_size (const flux_msg_t *msg)
 {
     zframe_t *zf;
-    size_t size = 0;
+    ssize_t size = 0;
 
+    if (!msg) {
+        errno = EINVAL;
+        return -1;
+    }
     zf = zmsg_first (msg->zmsg);
     while (zf) {
         size_t n = zframe_size (zf);

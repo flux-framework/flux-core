@@ -115,7 +115,7 @@ void flux_msg_decref (const flux_msg_t *msg);
 /* Encode a flux_msg_t to buffer (pre-sized by calling flux_msg_encode_size()).
  * Returns 0 on success, -1 on failure with errno set.
  */
-size_t flux_msg_encode_size (const flux_msg_t *msg);
+ssize_t flux_msg_encode_size (const flux_msg_t *msg);
 int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size);
 
 /* Get the number of message frames in 'msg'.
