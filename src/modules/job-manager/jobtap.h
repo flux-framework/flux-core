@@ -152,6 +152,11 @@ int flux_jobtap_raise_exception (flux_plugin_t *p,
  */
 flux_plugin_arg_t * flux_jobtap_job_lookup (flux_plugin_t *p,
                                             flux_jobid_t id);
+
+
+int flux_jobtap_get_job_result (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                flux_job_result_t *resultp);
 #ifdef __cplusplus
 }
 #endif

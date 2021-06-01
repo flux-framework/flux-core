@@ -1659,6 +1659,54 @@ flux_plugin_arg_t * flux_jobtap_job_lookup (flux_plugin_t *p,
     return jobtap_args_create (jobtap, job);
 }
 
+int flux_jobtap_get_job_result (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                flux_job_result_t *rp)
+{
+    struct jobtap *jobtap;
+    struct job *job;
+    json_error_t error;
+    const char *name = NULL;
+    int waitstatus = -1;
+    int exception_severity = -1;
+    const char *exception_type = NULL;
+    flux_job_result_t result = FLUX_JOB_RESULT_FAILED;
+
+    if (!p || !rp || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job = jobtap_lookup_jobid (p, id))) {
+        errno = ENOENT;
+        return -1;
+    }
+    if (job->state != FLUX_JOB_STATE_CLEANUP
+        && job->state != FLUX_JOB_STATE_INACTIVE) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (json_unpack_ex (job->end_event, &error, 0,
+                        "{s:s s:{s?i s?s s?i}}",
+                        "name", &name,
+                        "context",
+                        "status", &waitstatus,
+                        "type", &exception_type,
+                        "severity", &exception_severity) < 0)
+        return -1;
+    if (strcmp (name, "finish") == 0 && waitstatus == 0)
+        result = FLUX_JOB_RESULT_COMPLETED;
+    else if (strcmp (name, "exception") == 0) {
+        if (exception_type != NULL) {
+            if (strcmp (exception_type, "cancel") == 0)
+                result = FLUX_JOB_RESULT_CANCELED;
+            else if (strcmp (exception_type, "timeout") == 0)
+                result = FLUX_JOB_RESULT_TIMEOUT;
+        }
+    }
+    *rp = result;
+    return 0;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
