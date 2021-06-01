@@ -23,6 +23,10 @@ test_under_flux $SIZE job
 
 OPTS="-ocpu-affinity=off -overbose=1"
 
+test_expect_success 'show MPI version under test' '
+	${FLUX_BUILD_DIR}/t/mpi/version
+'
+
 test_expect_success 'mpi hello various sizes' '
 	run_timeout 30 flux mini submit --cc=1-$MAX_MPI_SIZE $OPTS \
 		--watch -n{cc} ${HELLO} >hello.out &&

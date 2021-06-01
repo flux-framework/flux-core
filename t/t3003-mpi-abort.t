@@ -46,6 +46,10 @@ diag() {
 	return 1
 }
 
+test_expect_success 'show MPI version under test' '
+        ${FLUX_BUILD_DIR}/t/mpi/version
+'
+
 # These tests use ! for expected failure rather than 'test_expect_code'
 # because the job exit code is not deterministic.  'test_must_fail' cannot be
 # used either because 128 + SIGNUM is not accepted as "failure".
