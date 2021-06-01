@@ -76,6 +76,15 @@ hwloc_topology_t rhwloc_local_topology_load (void)
 
     if (topo_init_common (&topo) < 0)
         goto err;
+#if HWLOC_API_VERSION >= 0x20100
+    /* gl probes the NV-CONTROL X server extension, and requires X auth
+     * to be properly set up or errors are emitted to stderr.
+     * Nvidia GPUs can still be discovered via opencl.
+     */
+    hwloc_topology_set_components (topo,
+                                   HWLOC_TOPOLOGY_COMPONENTS_FLAG_BLACKLIST,
+                                   "gl");
+#endif
     if (hwloc_topology_load (topo) < 0)
         goto err;
     if (!(rset = hwloc_bitmap_alloc ())
@@ -171,3 +180,5 @@ char * rhwloc_gpu_idset_string (hwloc_topology_t topo)
     return result;
 }
 
+/* vi: ts=4 sw=4 expandtab
+ */
