@@ -1534,33 +1534,47 @@ int flux_jobtap_dependency_remove (flux_plugin_t *p,
     return emit_dependency_event (p, id, false, description);
 }
 
+static void emit_pending_dependencies_type (struct jobtap *jobtap,
+                                            struct job *job,
+                                            zlistx_t *l,
+                                            bool add)
+{
+    struct dependency *dp;
+    FOREACH_ZLISTX (l, dp) {
+        if (dp->add != add)
+            continue;
+        if (jobtap_emit_dependency_event (jobtap,
+                                          job,
+                                          dp->add,
+                                          dp->description) < 0) {
+            if (jobtap_job_raise (jobtap, job,
+                                  "dependency",
+                                  0,
+                                  "failed to %s dependency %s",
+                                  dp->add ? "add" : "remove",
+                                  dp->description) < 0) {
+                flux_log_error (jobtap->ctx->h,
+                                "%s: jobtap_job_raise: id=%ju",
+                                __FUNCTION__, (uintmax_t) job->id);
+            }
+            /*  Proceed no further, job has exception and will proceed
+             *   to INACTIVE state
+             */
+            return;
+        }
+        /*  Shorten list for next iteration.
+         */
+        (void) zlistx_delete (l, zlistx_cursor (l));
+    }
+}
+
 static int job_emit_pending_dependencies (struct jobtap *jobtap,
                                           struct job *job)
 {
     zlistx_t *l = job_aux_get (job, "pending-dependencies");
     if (l) {
-        struct dependency *dp;
-        FOREACH_ZLISTX (l, dp) {
-            if (jobtap_emit_dependency_event (jobtap,
-                                              job,
-                                              dp->add,
-                                              dp->description) < 0) {
-                if (jobtap_job_raise (jobtap, job,
-                                      "dependency",
-                                      0,
-                                      "failed to %s dependency %s",
-                                      dp->add ? "add" : "remove",
-                                      dp->description) < 0) {
-                    flux_log_error (jobtap->ctx->h,
-                                    "%s: jobtap_job_raise: id=%ju",
-                                    __FUNCTION__, (uintmax_t) job->id);
-                }
-                /*  Proceed no further, job has exception and will proceed
-                 *   to INACTIVE state
-                 */
-                break;
-            }
-        }
+        emit_pending_dependencies_type (jobtap, job, l, true);
+        emit_pending_dependencies_type (jobtap, job, l, false);
         job_aux_delete (job, l);
     }
     return 0;
