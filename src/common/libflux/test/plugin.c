@@ -392,6 +392,7 @@ void test_register ()
 
 void test_load ()
 {
+    int rc;
     char *out;
     const char *result;
     flux_plugin_t *p = flux_plugin_create ();
@@ -414,8 +415,11 @@ void test_load ()
     ok (result != NULL,
         "conf = %s", result);
 
-    ok (flux_plugin_load_dso (p, "test/.libs/plugin_foo.so") == 0,
+    ok ((rc = flux_plugin_load_dso (p, "test/.libs/plugin_foo.so")) == 0,
         "flux_plugin_load worked");
+    if (rc < 0)
+        BAIL_OUT ("Failed to load test plugin: %s",
+                  flux_plugin_strerror (p));
     is (flux_plugin_get_name (p), "plugin-test",
         "loaded dso registered its own name");
 
