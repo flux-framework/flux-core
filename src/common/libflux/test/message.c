@@ -1038,7 +1038,7 @@ int main (int argc, char *argv[])
 
     check_refcount();
 
-    //check_print ();
+    check_print ();
 
     done_testing();
     return (0);
