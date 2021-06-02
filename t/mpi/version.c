@@ -20,7 +20,6 @@ int main (int argc, char *argv[])
     int len;
     int exit_rc = -1;
 
-    MPI_Init (&argc, &argv);
     MPI_Get_library_version (version, &len);
     if (len < 0) {
         fprintf (stderr, "MPI_Get_library_version failed\n");
@@ -29,7 +28,6 @@ int main (int argc, char *argv[])
     printf ("%s\n", version);
     exit_rc = 0;
 done:
-    MPI_Finalize ();
     return exit_rc;
 }
 

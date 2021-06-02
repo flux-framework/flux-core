@@ -29,8 +29,18 @@ test_expect_success 'flux-shell: run script with 2 tasks and 1s timeout' '
 
 test_expect_success 'flux-shell: run script with 2 nodes and 1s timeout' '
 	test_must_fail run_timeout 30 flux mini run \
-		-n2 -N2 -o exit-timeout=1s ./testscript.sh 2>tmout.err &&
-	grep "exception.*timeout" tmout.err
+		-n2 -N2 -o exit-timeout=1s ./testscript.sh 2>tmout2.err &&
+	grep "exception.*timeout" tmout2.err
+'
+
+test_expect_success 'flux-shell: run script with 2 tasks and exit-on-error' '
+	test_must_fail run_timeout 30 flux mini run \
+		-n2 -o exit-on-error ./testscript.sh
+'
+
+test_expect_success 'flux-shell: run script with 2 nodes and exit-on-error' '
+	test_must_fail run_timeout 30 flux mini run \
+		-n2 -N2 -o exit-on-error ./testscript.sh
 '
 
 test_expect_success 'flux-shell: exit-timeout=aaa is rejected' '

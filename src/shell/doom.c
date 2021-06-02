@@ -14,6 +14,15 @@
  * Shell-0 posts an event to the exec eventlog for the first one received.
  *
  * Shell-0 sets a timer and posts a fatal exception when the timer fires.
+ *
+ * Shell options to modify the default behavior:
+ *
+ * exit-timeout
+ *   Change the timeout value (FSD), or disable the timer with value "none".
+ *
+ * exit-on-error
+ *   Raise the fatal exception immediately if the first task fails,
+ *   e.g. calls exit with a nonzero value or is terminated by signal.
  */
 
 #if HAVE_CONFIG_H
@@ -39,7 +48,34 @@ struct shell_doom {
     bool done; // event already posted (shell rank 0) or message sent (> 0)
     flux_watcher_t *timer;
     double timeout;
+    bool exit_on_error;
+    int exit_rc;
+    int exit_rank;
 };
+
+static int get_exit_code (json_t *task_info)
+{
+    int status;
+
+    if (json_unpack (task_info, "{s:i}", "wait_status", &status) < 0)
+        goto error;
+    if (WIFEXITED (status))
+        return WEXITSTATUS (status);
+    if (WIFSIGNALED (status))
+        return 128 + WTERMSIG (status);
+error:
+    shell_log_error ("error decoding task wait status");
+    return 1;
+}
+
+static int get_exit_rank (json_t *task_info)
+{
+    int rank = -1;
+
+    if (json_unpack (task_info, "{s:i}", "rank", &rank) < 0)
+        shell_log_error ("error decoding task rank");
+    return rank;
+}
 
 static void doom_post (struct shell_doom *doom, json_t *task_info)
 {
@@ -63,7 +99,15 @@ static void doom_post (struct shell_doom *doom, json_t *task_info)
         || !(f = flux_kvs_commit (doom->shell->h, NULL, 0, txn)))
         shell_log_errno ("error posting task-exit eventlog entry");
 
-    if (f && doom->timeout != TIMEOUT_NONE)
+    doom->exit_rc = get_exit_code (task_info);
+    doom->exit_rank = get_exit_rank (task_info);
+
+    if (doom->exit_on_error && doom->exit_rc != 0) {
+        shell_die (doom->exit_rc,
+                   "rank %d failed and exit-on-error is set",
+                   doom->exit_rank);
+    }
+    else if (f && doom->timeout != TIMEOUT_NONE)
         flux_watcher_start (doom->timer);
 
     flux_future_destroy (f); // fire and forget
@@ -115,8 +159,12 @@ static void doom_timeout (flux_reactor_t *r,
 {
     struct shell_doom *doom = arg;
     char fsd[64];
+
     fsd_format_duration (fsd, sizeof (fsd), doom->timeout);
-    shell_die (1, "%s timeout after first task exit", fsd);
+    shell_die (doom->exit_rc,
+               "rank %d exited and exit-timeout=%s has expired",
+               doom->exit_rank,
+               fsd);
 }
 
 static int doom_task_exit (flux_plugin_t *p,
@@ -156,7 +204,9 @@ static void doom_destroy (struct shell_doom *doom)
     }
 }
 
-static int parse_args (flux_shell_t *shell, double *timeout)
+static int parse_args (flux_shell_t *shell,
+                       double *timeout,
+                       bool *exit_on_error)
 {
     json_t *val = NULL;
 
@@ -181,6 +231,9 @@ static int parse_args (flux_shell_t *shell, double *timeout)
         else
             goto error;
     }
+    *exit_on_error = (flux_shell_getopt (shell,
+                                         "exit-on-error",
+                                         NULL) == 1) ? true : false;
     return 0;
 error:
     shell_log_error ("exit-timeout is not a valid Flux Standard Duration");
@@ -195,7 +248,7 @@ static struct shell_doom *doom_create (flux_shell_t *shell)
         return NULL;
     doom->shell = shell;
     doom->timeout = default_timeout;
-    if (parse_args (shell, &doom->timeout) < 0)
+    if (parse_args (shell, &doom->timeout, &doom->exit_on_error) < 0)
         goto error;
     if (shell->info->shell_rank == 0) {
         if (flux_shell_service_register (shell,

@@ -258,6 +258,10 @@ options are supported by the builtin plugins of ``flux-shell``:
   Flux Standard Duration form.  A value of ``none`` disables generation of
   the exception.
 
+**exit-on-error**
+  If the first task to exit was signaled or exited with a nonzero status,
+  raise a fatal exception on the job immediately.
+
 SHELL INITRC
 ============
 
