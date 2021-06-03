@@ -49,7 +49,6 @@ static struct {
     zlist_t *clients;
     optparse_t *opts;
     int test_size;
-    int count;
     int exit_rc;
     struct {
         zhash_t *kvs;
@@ -63,6 +62,9 @@ struct client {
     int rank;
     flux_subprocess_t *p;
     flux_cmd_t *cmd;
+    int exit_rc;
+    const flux_msg_t *wait_request;
+    const flux_msg_t *run_request;
 };
 
 void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
@@ -74,6 +76,8 @@ char *create_rundir (void);
 void client_destroy (struct client *cli);
 char *find_broker (const char *searchpath);
 static void setup_profiling_env (void);
+static void client_wait_respond (struct client *cli);
+static void client_run_respond (struct client *cli, int errnum);
 
 #ifndef HAVE_CALIPER
 static int no_caliper_fatal_err (optparse_t *p, struct optparse_option *o,
@@ -250,36 +254,50 @@ void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 
     cli = zlist_first (ctx.clients);
     while (cli) {
-        flux_future_t *f = flux_subprocess_kill (cli->p, SIGKILL);
-        if (f)
+        if (cli->p) {
+            flux_future_t *f = flux_subprocess_kill (cli->p, SIGKILL);
             flux_future_destroy (f);
+        }
         cli = zlist_next (ctx.clients);
     }
+}
+
+void update_timer (void)
+{
+    struct client *cli;
+    int count = 0;
+
+    cli = zlist_first (ctx.clients);
+    while (cli) {
+        if (cli->p)
+            count++;
+        cli = zlist_next (ctx.clients);
+    }
+    if (count > 0 && count < ctx.test_size)
+        flux_watcher_start (ctx.timer);
+    else
+        flux_watcher_stop (ctx.timer);
 }
 
 static void completion_cb (flux_subprocess_t *p)
 {
     struct client *cli = flux_subprocess_aux_get (p, "cli");
-    int rc;
 
     assert (cli);
 
-    if ((rc = flux_subprocess_exit_code (p)) < 0) {
+    if ((cli->exit_rc = flux_subprocess_exit_code (p)) < 0) {
         /* bash standard, signals + 128 */
-        if ((rc = flux_subprocess_signaled (p)) >= 0)
-            rc += 128;
+        if ((cli->exit_rc = flux_subprocess_signaled (p)) >= 0)
+            cli->exit_rc += 128;
     }
 
-    if (rc > ctx.exit_rc)
-        ctx.exit_rc = rc;
+    if (cli->exit_rc > ctx.exit_rc)
+        ctx.exit_rc = cli->exit_rc;
 
-    if (--ctx.count > 0)
-        flux_watcher_start (ctx.timer);
-    else
-        flux_watcher_stop (ctx.timer);
-
-    zlist_remove (ctx.clients, cli);
-    client_destroy (cli);
+    flux_subprocess_destroy (cli->p);
+    cli->p = NULL;
+    client_wait_respond (cli);
+    update_timer ();
 }
 
 static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
@@ -288,26 +306,40 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
     assert (cli);
 
-    if (state == FLUX_SUBPROCESS_FAILED) {
-        log_errn (errno, "%d FAILED", cli->rank);
-        if (--ctx.count > 0)
-            flux_watcher_start (ctx.timer);
-        else
-            flux_watcher_stop (ctx.timer);
-        zlist_remove (ctx.clients, cli);
-        client_destroy (cli);
-    }
-    else if (state == FLUX_SUBPROCESS_EXITED) {
-        pid_t pid = flux_subprocess_pid (p);
-        int status;
+    switch (state) {
+        case FLUX_SUBPROCESS_INIT:
+        case FLUX_SUBPROCESS_EXEC_FAILED: // can't happen here - rexec only
+            break;
+        case FLUX_SUBPROCESS_RUNNING:
+            client_run_respond (cli, 0);
+            break;
+        case FLUX_SUBPROCESS_FAILED: { // completion will not be called
+            int errnum = flux_subprocess_fail_errno (p);
 
-        if ((status = flux_subprocess_status (p)) >= 0) {
-            if (WIFSIGNALED (status))
-                log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (WTERMSIG (status)));
-            else if (WIFEXITED (status) && WEXITSTATUS (status) != 0)
-                log_msg ("%d (pid %d) exited with rc=%d", cli->rank, pid, WEXITSTATUS (status));
-        } else
-            log_msg ("%d (pid %d) exited, unknown status", cli->rank, pid);
+            log_errn (errnum, "%d FAILED", cli->rank);
+            flux_subprocess_destroy (cli->p);
+            cli->p = NULL;
+            client_run_respond (cli, errnum);
+            update_timer ();
+            break;
+        }
+        case FLUX_SUBPROCESS_EXITED: {
+            pid_t pid = flux_subprocess_pid (p);
+            int status = flux_subprocess_status (p);
+
+            if (status >= 0) {
+                if (WIFSIGNALED (status)) {
+                    log_msg ("%d (pid %d) %s",
+                             cli->rank, pid, strsignal (WTERMSIG (status)));
+                }
+                else if (WIFEXITED (status) && WEXITSTATUS (status) != 0) {
+                    log_msg ("%d (pid %d) exited with rc=%d",
+                             cli->rank, pid, WEXITSTATUS (status));
+                }
+            } else
+                log_msg ("%d (pid %d) exited, unknown status", cli->rank, pid);
+            break;
+        }
     }
 }
 
@@ -557,6 +589,10 @@ int client_run (struct client *cli)
         .on_stdout = NULL,
         .on_stderr = NULL,
     };
+    if (cli->p) {
+        errno = EEXIST;
+        return -1;
+    }
     /* We want stdio fallthrough so subprocess can capture tty if
      * necessary (i.e. an interactive shell)
      */
@@ -611,6 +647,157 @@ nomem:
     json_decref (procs);
 }
 
+static struct client *client_lookup (int rank)
+{
+    struct client *cli;
+
+    cli = zlist_first (ctx.clients);
+    while (cli) {
+        if (cli->rank == rank)
+            return cli;
+        cli = zlist_next (ctx.clients);
+    }
+    errno = ESRCH;
+    return NULL;
+}
+
+/* Send 'signum' to 'cli'.  Since this is always a local operation,
+ * the future is immediately fulfilled, so just destroy it.
+ * If cli is not running, return success.
+ */
+static int client_kill (struct client *cli, int signum)
+{
+    flux_future_t *f;
+    if (!cli->p)
+        return 0;
+    if (!(f = flux_subprocess_kill (cli->p, signum)))
+        return -1;
+    flux_future_destroy (f);
+    return 0;
+}
+
+/* Respond with errum result to pending run request, if any.
+ */
+static void client_run_respond (struct client *cli, int errnum)
+{
+    if (cli->run_request) {
+        int rc;
+        if (errnum == 0)
+            rc = flux_respond (ctx.h, cli->run_request, NULL);
+        else
+            rc = flux_respond_error (ctx.h, cli->run_request, errnum, NULL);
+        if (rc < 0)
+            log_err ("error responding to start.run request");
+        flux_msg_decref (cli->run_request);
+        cli->run_request = NULL;
+    }
+}
+
+static void client_wait_respond (struct client *cli)
+{
+    if (cli->wait_request) {
+        if (flux_respond_pack (ctx.h,
+                               cli->wait_request,
+                               "{s:i}",
+                               "exit_rc", cli->exit_rc) < 0)
+            log_err ("error responding to wait request");
+        flux_msg_decref (cli->wait_request);
+        cli->wait_request = NULL;
+    }
+}
+
+/* Send signal to one broker by rank.
+ */
+void kill_cb (flux_t *h,
+              flux_msg_handler_t *mh,
+              const flux_msg_t *msg,
+              void *arg)
+{
+    int rank;
+    int signum;
+    struct client *cli;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i s:i}",
+                             "rank", &rank,
+                             "signum", &signum) < 0)
+        goto error;
+    if (!(cli = client_lookup (rank)))
+        goto error;
+    if (client_kill (cli, signum) < 0)
+        goto error;
+    if (flux_respond (h, msg, NULL) < 0)
+        log_err ("error responding to kill request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        log_err ("error responding to kill request");
+}
+
+/* Wait for one broker to complete and return its exit_rc.
+ * If the child is not running, return cli->exit_rc immediately.  Otherwise,
+ * the request is parked on the 'struct child' (one request allowed per child),
+ * and response is sent by completion handler upon broker completion.
+ */
+void wait_cb (flux_t *h,
+              flux_msg_handler_t *mh,
+              const flux_msg_t *msg,
+              void *arg)
+{
+    int rank;
+    struct client *cli;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i}",
+                             "rank", &rank) < 0)
+        goto error;
+    if (!(cli = client_lookup (rank)))
+        goto error;
+    if (cli->wait_request) {
+        errno = EEXIST;
+        goto error;
+    }
+    cli->wait_request = flux_msg_incref (msg);
+    if (!cli->p)
+        client_wait_respond (cli);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        log_err ("error responding to start request");
+}
+
+/* Run one broker by rank.
+ */
+void run_cb (flux_t *h,
+             flux_msg_handler_t *mh,
+             const flux_msg_t *msg,
+             void *arg)
+{
+    int rank;
+    struct client *cli;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i}",
+                             "rank", &rank) < 0)
+        goto error;
+    if (!(cli = client_lookup (rank)))
+        goto error;
+    if (cli->run_request) {
+        errno = EEXIST;
+        goto error;
+    }
+    if (client_run (cli) < 0)
+        goto error;
+    cli->run_request = flux_msg_incref (msg);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        log_err ("error responding to start request");
+}
+
 void disconnect_cb (flux_t *h,
                     flux_msg_handler_t *mh,
                     const flux_msg_t *msg,
@@ -628,6 +815,9 @@ done:
 
 const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "start.status", status_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "start.kill", kill_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "start.wait", wait_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "start.run", run_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "disconnect", disconnect_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -732,7 +922,6 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
             log_err_exit ("client_run");
         if (zlist_append (ctx.clients, cli) < 0)
             log_err_exit ("zlist_append");
-        ctx.count++;
     }
     if (flux_reactor_run (ctx.reactor, 0) < 0)
         log_err_exit ("flux_reactor_run");
@@ -743,7 +932,11 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     hostlist_destroy (hosts);
     free (rundir);
 
-    zlist_destroy (&ctx.clients);
+    if (ctx.clients) {
+        while ((cli = zlist_pop (ctx.clients)))
+            client_destroy (cli);
+        zlist_destroy (&ctx.clients);
+    }
     flux_watcher_destroy (ctx.timer);
     flux_reactor_destroy (ctx.reactor);
 

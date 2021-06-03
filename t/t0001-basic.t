@@ -103,7 +103,7 @@ test_expect_success 'flux-start --test-hosts with garbled hosts fails' "
 	test_must_fail flux start ${ARGS} -s2 --test-hosts=foo] /bin/true
 "
 test_expect_success 'flux-start embedded server works from initial program' "
-	flux start -v ${ARGS} -s1 flux python ${startctl} \
+	flux start -v ${ARGS} -s1 flux python ${startctl} status \
 		>startctl.out 2>startctl.err
 "
 test_expect_success HAVE_JQ 'flux-start embedded server status got JSON' "
