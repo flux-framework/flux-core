@@ -65,7 +65,7 @@ class Dependency:
     def entry(self):
         entry = {
             "scheme": self.scheme,
-            "value": self._try_number(self.path),
+            "value": self.path,
         }
         if self.uri.query:
             for key, val in parse_qs(self.uri.query).items():
