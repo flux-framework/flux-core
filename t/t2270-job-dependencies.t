@@ -147,6 +147,19 @@ test_expect_success 'dependency can be removed in job.dependency callback' '
 	flux job wait-event -t 15 -m description=bar ${id} dependency-remove &&
 	flux job wait-event -vt 15 ${id} clean
 '
+test_expect_success 'dependency add/remove in callback does not incorrectly release job' '
+	id=$(flux mini submit \
+		--dependency=test:bar?remove=1 \
+		--dependency=test:foo \
+		hostname) &&
+	flux job wait-event -t 15 -m description=bar ${id} dependency-add &&
+	flux job wait-event -t 15 -m description=bar ${id} dependency-remove &&
+	test "$(flux jobs -no {dependencies} ${id})" = "foo" &&
+	test "$(flux jobs -no {state} ${id})" = "DEPEND" &&
+	flux python dep-check.py ${id} foo &&
+	flux python dep-remove.py ${id} foo &&
+	flux job wait-event -vt 15 ${id} clean
+'
 test_expect_success 'invalid dependency-remove is ignored' '
 	jobid=$(flux mini submit \
 		--dependency=test:bar \
