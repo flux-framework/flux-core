@@ -140,6 +140,23 @@ int flux_jobtap_raise_exception (flux_plugin_t *p,
                                  int severity,
                                  const char *fmt,
                                  ...);
+
+/*  Return a flux_plugin_arg_t object for any active job.
+ *
+ *  The result can then be unpacked with flux_plugin_arg_unpack(3) to get
+ *   active job information such as userid, state, etc.
+ *
+ *  If `id` is not an active job then NULL is returned with ENOENT set.
+ *
+ *  Caller must free with flux_plugin_arg_destroy(3).
+ */
+flux_plugin_arg_t * flux_jobtap_job_lookup (flux_plugin_t *p,
+                                            flux_jobid_t id);
+
+
+int flux_jobtap_get_job_result (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                flux_job_result_t *resultp);
 #ifdef __cplusplus
 }
 #endif

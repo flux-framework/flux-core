@@ -194,6 +194,28 @@ test_expect_success 'job-manager: run job_aux test plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/job_aux.so &&
 	flux mini run hostname
 '
+test_expect_success 'job-manager: load jobtap_api test plugin' '
+	flux jobtap load --remove=all ${PLUGINPATH}/jobtap_api.so &&
+	id=$(flux mini submit sleep 1000) &&
+	flux mini run -vvv \
+		--setattr=system.lookup-id=$(flux job id $id) \
+		/bin/true &&
+	flux job cancel $id &&
+	id=$(flux mini submit \
+		--setattr=system.expected-result=failed \
+		/bin/false) &&
+	test_expect_code 1 flux job attach -vEX $id &&
+	test_must_fail flux job wait-event $id exception &&
+	id=$(flux mini submit -t 0.1 \
+		--setattr=system.expected-result=timeout \
+		sleep 10) &&
+	test_must_fail flux job wait-event -vm type=test $id exception &&
+	id=$(flux mini submit --urgency=hold \
+		--setattr=system.expected-result=canceled \
+		/bin/true) &&
+	flux job cancel $id &&
+	test_must_fail flux job wait-event -vm type=test $id exception
+'
 test_expect_success 'job-manager: load test jobtap plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/test.so foo.test=1 &&
 	flux dmesg | grep "conf={\"foo\":{\"test\":1}}"

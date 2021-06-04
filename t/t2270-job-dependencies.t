@@ -19,17 +19,19 @@ test_expect_success HAVE_JQ 'flux-mini: --dependency option works' '
 	flux mini run --dry-run \
 		--env=-* \
 		--dependency=foo:1234 \
+		--dependency=foo:3.1415 \
 		--dependency=foo:f1?val=bar \
 		--dependency="foo:f1?val=a&val=b" true | \
 		jq '.attributes.system.dependencies' > deps.json &&
 	test_debug "cat deps.json" &&
 	jq -e ".[0].scheme == \"foo\"" < deps.json &&
-	jq -e ".[0].value == 1234" < deps.json &&
-	jq -e ".[1].scheme == \"foo\"" < deps.json &&
-	jq -e ".[1].value == \"f1\""   < deps.json &&
-	jq -e ".[1].val == \"bar\""    < deps.json &&
-	jq -e ".[2].val[0] == \"a\""   < deps.json &&
-	jq -e ".[2].val[1] == \"b\""   < deps.json
+	jq -e ".[0].value == \"1234\"" < deps.json &&
+	jq -e ".[1].value == \"3.1415\"" < deps.json &&
+	jq -e ".[2].scheme == \"foo\"" < deps.json &&
+	jq -e ".[2].value == \"f1\""   < deps.json &&
+	jq -e ".[2].val == \"bar\""    < deps.json &&
+	jq -e ".[3].val[0] == \"a\""   < deps.json &&
+	jq -e ".[3].val[1] == \"b\""   < deps.json
 '
 test_expect_success 'submitted job with unknown dependency scheme is rejected' '
 	test_must_fail flux mini submit --dependency=invalid:value hostname
@@ -143,6 +145,19 @@ test_expect_success 'dependency can be removed in job.dependency callback' '
 		hostname) &&
 	flux job wait-event -t 15 -m description=bar ${id} dependency-add &&
 	flux job wait-event -t 15 -m description=bar ${id} dependency-remove &&
+	flux job wait-event -vt 15 ${id} clean
+'
+test_expect_success 'dependency add/remove in callback does not incorrectly release job' '
+	id=$(flux mini submit \
+		--dependency=test:bar?remove=1 \
+		--dependency=test:foo \
+		hostname) &&
+	flux job wait-event -t 15 -m description=bar ${id} dependency-add &&
+	flux job wait-event -t 15 -m description=bar ${id} dependency-remove &&
+	test "$(flux jobs -no {dependencies} ${id})" = "foo" &&
+	test "$(flux jobs -no {state} ${id})" = "DEPEND" &&
+	flux python dep-check.py ${id} foo &&
+	flux python dep-remove.py ${id} foo &&
 	flux job wait-event -vt 15 ${id} clean
 '
 test_expect_success 'invalid dependency-remove is ignored' '

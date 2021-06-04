@@ -53,7 +53,7 @@ struct jobtap {
     struct job_manager *ctx;
     char *searchpath;
     zlistx_t *plugins;
-    struct job *current_job;
+    zlistx_t *jobstack;
     char last_error [128];
 };
 
@@ -242,6 +242,25 @@ static int plugin_check_dependencies (struct jobtap *jobtap,
     return 0;
 }
 
+static struct job * current_job (struct jobtap *jobtap)
+{
+    return zlistx_head (jobtap->jobstack);
+}
+
+static int current_job_push (struct jobtap *jobtap, struct job *job)
+{
+    if (!zlistx_add_start (jobtap->jobstack, job)) {
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+static int current_job_pop (struct jobtap *jobtap)
+{
+    return zlistx_delete (jobtap->jobstack, NULL);
+}
+
 static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
                                            const char *path,
                                            json_t *conf,
@@ -264,7 +283,10 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
     }
     job = zlistx_first (jobs);
     while (job) {
-        jobtap->current_job = job_incref (job);
+        if (current_job_push (jobtap, job) < 0) {
+            errprintf (errp, "Out of memory adding to jobtap jobstack");
+            goto error;
+        }
         if (!(args = jobtap_args_create (jobtap, job))) {
             errprintf (errp, "Failed to create args for job");
             goto error;
@@ -286,8 +308,10 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
         }
 
         flux_plugin_arg_destroy (args);
-        jobtap->current_job = NULL;
-        job_decref (job);
+        if (current_job_pop (jobtap)) {
+            errprintf (errp, "Error popping current job off jobtap stack");
+            goto error;
+        }
         job = zlistx_next (jobs);
     }
     zlistx_destroy (&jobs);
@@ -458,12 +482,15 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
     if ((path = flux_conf_builtin_get ("jobtap_pluginpath", FLUX_CONF_AUTO))
         && !(jobtap->searchpath = strdup (path)))
         goto error;
-    if (!(jobtap->plugins = zlistx_new ())) {
+    if (!(jobtap->plugins = zlistx_new ())
+        || !(jobtap->jobstack = zlistx_new ())) {
         errno = ENOMEM;
         goto error;
     }
     zlistx_set_destructor (jobtap->plugins, plugin_destroy);
     zlistx_set_comparator (jobtap->plugins, plugin_byname);
+    zlistx_set_destructor (jobtap->jobstack, job_destructor);
+    zlistx_set_duplicator (jobtap->jobstack, job_duplicator);
 
     if (load_builtins (jobtap) < 0) {
         flux_log (ctx->h, LOG_ERR, "jobtap: failed to init builtins");
@@ -486,6 +513,7 @@ void jobtap_destroy (struct jobtap *jobtap)
     if (jobtap) {
         int saved_errno = errno;
         zlistx_destroy (&jobtap->plugins);
+        zlistx_destroy (&jobtap->jobstack);
         jobtap->ctx = NULL;
         free (jobtap->searchpath);
         free (jobtap);
@@ -514,7 +542,8 @@ static int jobtap_stack_call (struct jobtap *jobtap,
     int retcode = 0;
     flux_plugin_t *p = zlistx_first (jobtap->plugins);
 
-    jobtap->current_job = job_incref (job);
+    if (current_job_push (jobtap, job) < 0)
+        return -1;
     while (p) {
         int rc = flux_plugin_call (p, topic, args);
         if (rc < 0)  {
@@ -529,8 +558,8 @@ static int jobtap_stack_call (struct jobtap *jobtap,
         retcode += rc;
         p = zlistx_next (jobtap->plugins);
     }
-    jobtap->current_job = NULL;
-    job_decref (job);
+    if (current_job_pop (jobtap) < 0)
+        return -1;
     return retcode;
 }
 
@@ -1483,7 +1512,7 @@ static int emit_dependency_event (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
-    job = jobtap->current_job;
+    job = current_job (jobtap);
     if (!job || id != job->id) {
         if (!(job = lookup_job (jobtap->ctx, id)))
             return -1;
@@ -1505,33 +1534,47 @@ int flux_jobtap_dependency_remove (flux_plugin_t *p,
     return emit_dependency_event (p, id, false, description);
 }
 
+static void emit_pending_dependencies_type (struct jobtap *jobtap,
+                                            struct job *job,
+                                            zlistx_t *l,
+                                            bool add)
+{
+    struct dependency *dp;
+    FOREACH_ZLISTX (l, dp) {
+        if (dp->add != add)
+            continue;
+        if (jobtap_emit_dependency_event (jobtap,
+                                          job,
+                                          dp->add,
+                                          dp->description) < 0) {
+            if (jobtap_job_raise (jobtap, job,
+                                  "dependency",
+                                  0,
+                                  "failed to %s dependency %s",
+                                  dp->add ? "add" : "remove",
+                                  dp->description) < 0) {
+                flux_log_error (jobtap->ctx->h,
+                                "%s: jobtap_job_raise: id=%ju",
+                                __FUNCTION__, (uintmax_t) job->id);
+            }
+            /*  Proceed no further, job has exception and will proceed
+             *   to INACTIVE state
+             */
+            return;
+        }
+        /*  Shorten list for next iteration.
+         */
+        (void) zlistx_delete (l, zlistx_cursor (l));
+    }
+}
+
 static int job_emit_pending_dependencies (struct jobtap *jobtap,
                                           struct job *job)
 {
     zlistx_t *l = job_aux_get (job, "pending-dependencies");
     if (l) {
-        struct dependency *dp;
-        FOREACH_ZLISTX (l, dp) {
-            if (jobtap_emit_dependency_event (jobtap,
-                                              job,
-                                              dp->add,
-                                              dp->description) < 0) {
-                if (jobtap_job_raise (jobtap, job,
-                                      "dependency",
-                                      0,
-                                      "failed to %s dependency %s",
-                                      dp->add ? "add" : "remove",
-                                      dp->description) < 0) {
-                    flux_log_error (jobtap->ctx->h,
-                                    "%s: jobtap_job_raise: id=%ju",
-                                    __FUNCTION__, (uintmax_t) job->id);
-                }
-                /*  Proceed no further, job has exception and will proceed
-                 *   to INACTIVE state
-                 */
-                break;
-            }
-        }
+        emit_pending_dependencies_type (jobtap, job, l, true);
+        emit_pending_dependencies_type (jobtap, job, l, false);
         job_aux_delete (job, l);
     }
     return 0;
@@ -1540,15 +1583,16 @@ static int job_emit_pending_dependencies (struct jobtap *jobtap,
 static struct job * jobtap_lookup_jobid (flux_plugin_t *p, flux_jobid_t id)
 {
     struct jobtap *jobtap;
+    struct job *job;
     if (p == NULL
         || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
         errno = EINVAL;
         return NULL;
     }
-    if (id == FLUX_JOBTAP_CURRENT_JOB
-        || (jobtap->current_job && id == jobtap->current_job->id)) {
+    job = current_job (jobtap);
+    if (id == FLUX_JOBTAP_CURRENT_JOB || (job && id == job->id)) {
         errno = EINVAL;
-        return jobtap->current_job;
+        return job;
     }
     return lookup_job (jobtap->ctx, id);
 }
@@ -1641,6 +1685,70 @@ int flux_jobtap_raise_exception (flux_plugin_t *p,
     rc = jobtap_job_vraise (jobtap, job, type, severity, fmt, ap);
     va_end (ap);
     return rc;
+}
+
+flux_plugin_arg_t * flux_jobtap_job_lookup (flux_plugin_t *p,
+                                            flux_jobid_t id)
+{
+    struct jobtap *jobtap;
+    struct job *job;
+    if (!p || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(job = jobtap_lookup_jobid (p, id))) {
+        errno = ENOENT;
+        return NULL;
+    }
+    return jobtap_args_create (jobtap, job);
+}
+
+int flux_jobtap_get_job_result (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                flux_job_result_t *rp)
+{
+    struct jobtap *jobtap;
+    struct job *job;
+    json_error_t error;
+    const char *name = NULL;
+    int waitstatus = -1;
+    int exception_severity = -1;
+    const char *exception_type = NULL;
+    flux_job_result_t result = FLUX_JOB_RESULT_FAILED;
+
+    if (!p || !rp || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job = jobtap_lookup_jobid (p, id))) {
+        errno = ENOENT;
+        return -1;
+    }
+    if (job->state != FLUX_JOB_STATE_CLEANUP
+        && job->state != FLUX_JOB_STATE_INACTIVE) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (json_unpack_ex (job->end_event, &error, 0,
+                        "{s:s s:{s?i s?s s?i}}",
+                        "name", &name,
+                        "context",
+                        "status", &waitstatus,
+                        "type", &exception_type,
+                        "severity", &exception_severity) < 0)
+        return -1;
+    if (strcmp (name, "finish") == 0 && waitstatus == 0)
+        result = FLUX_JOB_RESULT_COMPLETED;
+    else if (strcmp (name, "exception") == 0) {
+        if (exception_type != NULL) {
+            if (strcmp (exception_type, "cancel") == 0)
+                result = FLUX_JOB_RESULT_CANCELED;
+            else if (strcmp (exception_type, "timeout") == 0)
+                result = FLUX_JOB_RESULT_TIMEOUT;
+        }
+    }
+    *rp = result;
+    return 0;
 }
 
 /*
