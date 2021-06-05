@@ -27,6 +27,9 @@ void check_routes (void)
     flux_msg_t *msg;
     char *s;
 
+    errno = 0;
+    ok (flux_msg_frames (NULL) < 0 && errno == EINVAL,
+        "flux_msg_frames returns -1 errno EINVAL on msg = NULL");
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL
         && flux_msg_frames (msg) == 1,
         "flux_msg_create works and creates msg with 1 frame");
@@ -178,6 +181,9 @@ void check_payload_json (void)
     /* RFC 3 - json payload must be an object
      * Encoding should return EINVAL.
      */
+    errno = 0;
+    ok (flux_msg_pack (NULL, "{s:i}", "foo", 42) < 0 && errno == EINVAL,
+       "flux_msg_pack msg=NULL fails with EINVAL");
     errno = 0;
     ok (flux_msg_pack (msg, "[1,2,3]") < 0 && errno == EINVAL,
        "flux_msg_pack array fails with EINVAL");

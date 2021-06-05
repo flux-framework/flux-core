@@ -1222,11 +1222,14 @@ static inline void msg_lasterr_set (flux_msg_t *msg,
 int flux_msg_vpack (flux_msg_t *msg, const char *fmt, va_list ap)
 {
     char *json_str = NULL;
-    json_t *json;
+    json_t *json = NULL;
     json_error_t err;
     int saved_errno;
 
     msg_lasterr_reset (msg);
+
+    if (!msg || !fmt || *fmt == '\0')
+        goto error_inval;
 
     if (!(json = json_vpack_ex (&err, 0, fmt, ap))) {
         msg_lasterr_set (msg, "%s", err.text);
@@ -1685,6 +1688,10 @@ flux_msg_t *flux_msg_recvzsock (void *sock)
 
 int flux_msg_frames (const flux_msg_t *msg)
 {
+    if (!msg) {
+        errno = EINVAL;
+        return -1;
+    }
     return zmsg_size (msg->zmsg);
 }
 
