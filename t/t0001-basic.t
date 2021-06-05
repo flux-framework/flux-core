@@ -90,8 +90,8 @@ test_expect_success 'flux-start -s1 works' "
 test_expect_success 'flux-start --rundir without --test-size fails' "
 	test_must_fail flux start ${ARGS} --rundir=$(pwd) /bin/true
 "
-test_expect_success 'flux-start --noclique without --test-size fails' "
-	test_must_fail flux start ${ARGS} --noclique /bin/true
+test_expect_success 'flux-start --test-pmi-clique without --test-size fails' "
+	test_must_fail flux start ${ARGS} --test-pmi-clique=none /bin/true
 "
 test_expect_success 'flux-start --test-hosts without --test-size fails' "
 	test_must_fail flux start ${ARGS} --test-hosts=foo /bin/true
@@ -197,7 +197,7 @@ test_expect_success 'tbon.endpoint uses ipc:// in standalone instance' '
 	grep "^ipc://" endpoint.out
 '
 test_expect_success 'tbon.endpoint uses tcp:// if process mapping unavailable' '
-	flux start ${ARGS} -s2 --noclique \
+	flux start ${ARGS} -s2 --test-pmi-clique=none \
 		flux getattr tbon.endpoint >endpoint2.out &&
 	grep "^tcp" endpoint2.out
 '

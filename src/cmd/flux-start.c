@@ -108,8 +108,8 @@ static struct optparse_option opts[] = {
       .usage = "After a broker exits, kill other brokers after timeout", },
     { .name = "rundir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
       .usage = "Use DIR as broker run directory", },
-    { .name = "noclique", .key = 'c', .has_arg = 0, .arginfo = NULL,
-      .usage = "Don't set PMI_process_mapping in PMI KVS", },
+    { .name = "test-pmi-clique", .has_arg = 1, .arginfo = "single|none",
+      .usage = "Set PMI_process_mapping mode (default=single)", },
 
 /* Option group 1, these options will be listed after those above */
     { .group = 1,
@@ -193,8 +193,8 @@ int main (int argc, char *argv[])
     if (!optparse_hasopt (ctx.opts, "test-size")) {
         if (optparse_hasopt (ctx.opts, "rundir"))
             log_msg_exit ("--rundir only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "noclique"))
-            log_msg_exit ("--noclique only works with --test-size=N");
+        if (optparse_hasopt (ctx.opts, "test-pmi-clique"))
+            log_msg_exit ("--test-pmi-clique only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "test-hosts"))
             log_msg_exit ("--test-hosts only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "test-exit-timeout"))
@@ -556,6 +556,7 @@ void client_dumpargs (struct client *cli)
 
 void pmi_server_initialize (int flags)
 {
+    const char *mode = optparse_get_str (ctx.opts, "test-pmi-clique", "single");
     struct pmi_simple_ops ops = {
         .kvs_put = pmi_kvs_put,
         .kvs_get = pmi_kvs_get,
@@ -565,10 +566,11 @@ void pmi_server_initialize (int flags)
     };
     int appnum = 0;
 
+
     if (!(ctx.pmi.kvs = zhash_new()))
         oom ();
 
-    if (!optparse_hasopt (ctx.opts, "noclique")) {
+    if (!strcmp (mode, "single")) {
         struct pmi_map_block mapblock = {
             .nodeid = 0,
             .nodes = 1,
@@ -579,6 +581,8 @@ void pmi_server_initialize (int flags)
             log_msg_exit ("error encoding PMI_process_mapping");
         zhash_update (ctx.pmi.kvs, "PMI_process_mapping", xstrdup (buf));
     }
+    else if (strcmp (mode, "none") != 0)
+        log_msg_exit ("unsupported test-pmi-clique mode: %s", mode);
 
     ctx.pmi.srv = pmi_simple_server_create (ops, appnum, ctx.test_size,
                                             ctx.test_size, "-", flags, NULL);
