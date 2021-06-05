@@ -27,14 +27,12 @@ causes flux-start to exit with a non-zero exit code.
 OPTIONS
 =======
 
-**-s, --test-size**\ =\ *N*
-   Launch an instance of size *N* on the local host.
-
 **-o, --broker-opts**\ =\ *option_string*
    Add options to the message broker daemon, separated by commas.
 
-**-v, --verbose**
-   Display commands before executing them.
+**-v, --verbose**\ =\ *[LEVEL]*
+   This option may be specified multiple times, or with a value, to
+   set a verbosity level.  See VERBOSITY LEVELS below.
 
 **-X, --noexec**
    Don't execute anything. This option is most useful with -v.
@@ -56,6 +54,45 @@ OPTIONS
 **--wrap**\ =\ *ARGS,…​*
    Wrap broker execution in a comma-separated list of arguments. This is
    useful for running flux-broker directly under debuggers or valgrind.
+
+**-s, --test-size**\ =\ *N*
+   Launch an instance of size *N* on the local host.
+
+**--test-hosts**\ =\ *HOSTLIST*
+   Set FLUX_FAKE_HOSTNAME in the environment of each broker so that the
+   broker can bootstrap from a config file instead of PMI.  HOSTLIST is
+   assumed to be in rank order.  The broker will use the fake hostname to
+   find its entry in the configured bootstrap host array.
+
+**--test-exit-timeout**\ =\ *FSD*
+   After a broker exits, kill the other brokers after a timeout (default 20s).
+
+**--test-exit-mode**\ =\ *MODE*
+   Set the mode for the exit timeout.  If set to ``leader``, the exit timeout
+   is only triggered upon exit of the leader broker, and the flux-start exit
+   code is that of the leader broker.  If set to ``any``, the exit timeout
+   is triggered upon exit of any broker, and the flux-start exit code is the
+   highest exit code of all brokers.  Default: ``any``.
+
+**--test-rundir**\ =\ *PATH*
+   Set the directory to be used as the broker rundir.  By default, a directory
+   is created in /tmp for the duration of the test and destroyed afterwards.
+   If specified beforehand with this option, the directory is not destroyed.
+
+**--test-pmi-clique**\ =\ *MODE*
+   Set the pmi clique mode, which determines how ``PMI_process_mapping`` is set
+   in the PMI server used to bootstrap the brokers.  If ``none``, the mapping
+   is not created.  If ``single``, all brokers are placed in one clique.
+   Default: ``single``.
+
+VERBOSITY LEVELS
+================
+
+level 1 and above
+   Display commands before executing them.
+
+level 2 and above
+   Trace PMI server requests (test mode only).
 
 
 EXAMPLES
