@@ -48,6 +48,7 @@ static struct {
     flux_watcher_t *timer;
     zlist_t *clients;
     optparse_t *opts;
+    int verbose;
     int test_size;
     int exit_rc;
     struct {
@@ -92,8 +93,8 @@ static int no_caliper_fatal_err (optparse_t *p, struct optparse_option *o,
 
 const char *usage_msg = "[OPTIONS] command ...";
 static struct optparse_option opts[] = {
-    { .name = "verbose",    .key = 'v', .has_arg = 0,
-      .usage = "Be annoyingly informative", },
+    { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
+      .usage = "Be annoyingly informative by degrees", },
     { .name = "noexec",     .key = 'X', .has_arg = 0,
       .usage = "Don't execute (useful with -v, --verbose)", },
     { .name = "test-size",       .key = 's', .has_arg = 1, .arginfo = "N",
@@ -170,6 +171,8 @@ int main (int argc, char *argv[])
     if (!optparse_hasopt (ctx.opts, "test-exit-timeout"))
         ctx.exit_timeout = optparse_get_duration (ctx.opts, "killer-timeout",
                                                   ctx.exit_timeout);
+
+    ctx.verbose = optparse_get_int (ctx.opts, "verbose", 0);
 
     if (optindex < argc) {
         if ((e = argz_create (argv + optindex, &command, &len)) != 0)
@@ -457,7 +460,7 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
         if (argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len) != 0)
             goto nomem;
     }
-    if (optparse_hasopt (ctx.opts, "verbose")) {
+    if (ctx.verbose >= 1) {
         char *cpy = malloc (argz_len);
         if (!cpy)
             goto nomem;
@@ -818,7 +821,7 @@ void disconnect_cb (flux_t *h,
 
     if (flux_msg_get_route_first (msg, &uuid) < 0)
         goto done;
-    if (optparse_hasopt (ctx.opts, "verbose"))
+    if (ctx.verbose >= 1)
         log_msg ("disconnect from %.5s", uuid);
 done:
     free (uuid);
@@ -900,7 +903,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     else
         rundir = create_rundir ();
 
-    start_server_initialize (rundir, optparse_hasopt (ctx.opts, "verbose"));
+    start_server_initialize (rundir, ctx.verbose >= 1 ? true : false);
 
     if (optparse_hasopt (ctx.opts, "trace-pmi-server"))
         flags |= PMI_SIMPLE_SERVER_TRACE;
@@ -923,7 +926,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
                                    cmd_argz_len,
                                    hosts ? hostlist_nth (hosts, rank) : NULL)))
             log_err_exit ("client_create");
-        if (optparse_hasopt (ctx.opts, "verbose"))
+        if (ctx.verbose >= 1)
             client_dumpargs (cli);
         if (optparse_hasopt (ctx.opts, "noexec")) {
             client_destroy (cli);
