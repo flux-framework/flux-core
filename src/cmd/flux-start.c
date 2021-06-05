@@ -44,6 +44,7 @@
 static struct {
     struct termios saved_termios;
     double exit_timeout;
+    const char *exit_mode;
     flux_reactor_t *reactor;
     flux_watcher_t *timer;
     zlist_t *clients;
@@ -126,6 +127,9 @@ static struct optparse_option opts[] = {
       .name = "test-exit-timeout", .has_arg = 1, .arginfo = "FSD",
       .usage = "After a broker exits, kill other brokers after timeout", },
     { .group = 2,
+      .name = "test-exit-mode", .has_arg = 1, .arginfo = "any|leader",
+      .usage = "Trigger exit timer on leader/any broker exit (default=any)", },
+    { .group = 2,
       .name = "test-rundir", .has_arg = 1, .arginfo = "DIR",
       .usage = "Use DIR as broker run directory", },
     { .group = 2,
@@ -175,6 +179,11 @@ int main (int argc, char *argv[])
         ctx.exit_timeout = optparse_get_duration (ctx.opts, "killer-timeout",
                                                   ctx.exit_timeout);
 
+    ctx.exit_mode = optparse_get_str (ctx.opts, "test-exit-mode", "any");
+    if (strcmp (ctx.exit_mode, "any") != 0
+        && strcmp (ctx.exit_mode, "leader") != 0)
+        log_msg_exit ("unknown --test-exit-mode: %s", ctx.exit_mode);
+
     ctx.verbose = optparse_get_int (ctx.opts, "verbose", 0);
 
     if (optindex < argc) {
@@ -204,6 +213,8 @@ int main (int argc, char *argv[])
             log_msg_exit ("--test-hosts only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "test-exit-timeout"))
             log_msg_exit ("--test-exit-timeout only works with --test-size=N");
+        if (optparse_hasopt (ctx.opts, "test-exit-mode"))
+            log_msg_exit ("--test-exit-mode only works with --test-size=N");
         status = exec_broker (command, len, broker_path);
     }
     else {
@@ -283,14 +294,26 @@ void update_timer (void)
 {
     struct client *cli;
     int count = 0;
+    bool leader_exit = false;
+    bool shutdown = false;
 
     cli = zlist_first (ctx.clients);
     while (cli) {
         if (cli->p)
             count++;
+        if (cli->rank == 0 && !cli->p)
+            leader_exit = true;
         cli = zlist_next (ctx.clients);
     }
-    if (count > 0 && count < ctx.test_size)
+    if (!strcmp (ctx.exit_mode, "any")) {
+        if (count > 0 && count < ctx.test_size)
+            shutdown = true;
+    }
+    else if (!strcmp (ctx.exit_mode, "leader")) {
+        if (count > 0 && leader_exit)
+            shutdown = true;
+    }
+    if (shutdown)
         flux_watcher_start (ctx.timer);
     else
         flux_watcher_stop (ctx.timer);
@@ -308,8 +331,18 @@ static void completion_cb (flux_subprocess_t *p)
             cli->exit_rc += 128;
     }
 
-    if (cli->exit_rc > ctx.exit_rc)
-        ctx.exit_rc = cli->exit_rc;
+    /* In 'any' mode, the higest of the broker exit codes is
+     * flux-start's exit code.  In 'leader' mode, the leader broker's
+     * exit code is flux-start's exit code.
+     */
+    if (!strcmp (ctx.exit_mode, "any")) {
+        if (cli->exit_rc > ctx.exit_rc)
+            ctx.exit_rc = cli->exit_rc;
+    }
+    else if (!strcmp (ctx.exit_mode, "leader")) {
+        if (cli->rank == 0)
+            ctx.exit_rc = cli->exit_rc;
+    }
 
     flux_subprocess_destroy (cli->p);
     cli->p = NULL;
