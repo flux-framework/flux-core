@@ -900,8 +900,14 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");
 
-    if (optparse_hasopt (ctx.opts, "test-rundir"))
+    if (optparse_hasopt (ctx.opts, "test-rundir")) {
+        struct stat sb;
         rundir = xstrdup (optparse_get_str (ctx.opts, "test-rundir", NULL));
+        if (stat (rundir, &sb) < 0)
+            log_err_exit ("%s", rundir);
+        if (!S_ISDIR (sb.st_mode))
+            log_msg_exit ("%s: not a directory", rundir);
+    }
     else
         rundir = create_rundir ();
 
