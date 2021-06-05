@@ -80,7 +80,10 @@ int sendfd (int fd, const flux_msg_t *msg, struct iobuf *iobuf)
     if (!iobuf)
         iobuf_init (&local);
     if (!io->buf) {
-        io->size = flux_msg_encode_size (msg) + 8;
+        ssize_t s;
+        if ((s = flux_msg_encode_size (msg)) < 0)
+            goto done;
+        io->size = s + 8;
         if (io->size <= sizeof (io->buf_fixed))
             io->buf = io->buf_fixed;
         else if (!(io->buf = malloc (io->size)))

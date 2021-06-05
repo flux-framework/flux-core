@@ -34,8 +34,17 @@ void check_routes (void)
     ok (flux_msg_get_route_count (msg) < 0 && errno == EPROTO,
         "flux_msg_get_route_count returns -1 errno EPROTO on msg w/o delim");
     errno = 0;
+    ok ((flux_msg_get_route_first (NULL, &s) == -1 && errno == EINVAL),
+        "flux_msg_get_route_first returns -1 errno EINVAL on msg = NULL");
+    errno = 0;
+    ok ((flux_msg_get_route_first (msg, NULL) == -1 && errno == EINVAL),
+        "flux_msg_get_route_first returns -1 errno EINVAL on in-and-out param = NULL");
+    errno = 0;
     ok ((flux_msg_get_route_first (msg, &s) == -1 && errno == EPROTO),
         "flux_msg_get_route_first returns -1 errno EPROTO on msg w/o delim");
+    errno = 0;
+    ok ((flux_msg_get_route_last (msg, NULL) == -1 && errno == EINVAL),
+        "flux_msg_get_route_last returns -1 errno EINVAL on in-and-out param = NULL");
     errno = 0;
     ok ((flux_msg_get_route_last (msg, &s) == -1 && errno == EPROTO),
         "flux_msg_get_route_last returns -1 errno EPROTO on msg w/o delim");
@@ -110,6 +119,9 @@ void check_topic (void)
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "flux_msg_create works");
+    errno = 0;
+    ok (flux_msg_get_topic (msg, NULL) < 0 && errno == EINVAL,
+       "flux_msg_get_topic fails with EINVAL on in-and-out param = NULL");
     errno = 0;
     ok (flux_msg_get_topic (msg, &s) < 0 && errno == EPROTO,
        "flux_msg_get_topic fails with EPROTO on msg w/o topic");
@@ -321,6 +333,9 @@ void check_payload (void)
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
        "flux_msg_create works");
     errno = 0;
+    ok (flux_msg_get_payload (msg, NULL, NULL) < 0 && errno == EINVAL,
+       "flux_msg_get_payload fails with EINVAL on in-and-out params = NULL");
+    errno = 0;
     ok (flux_msg_get_payload (msg, &buf, &len) < 0 && errno == EPROTO,
        "flux_msg_get_payload fails with EPROTO on msg w/o payload");
     errno = 0;
@@ -399,14 +414,18 @@ void check_payload (void)
 
 /* flux_msg_set_type, flux_msg_get_type
  * flux_msg_set_nodeid, flux_msg_get_nodeid
- * flux_msg_set_errnum, flux_msg_get_errnum
+ * flux_msg_set_errnum, flux_msg_get_errnum,
+ * flux_msg_set_seq, flux_msg_get_seq,
+ * flux_msg_set_status, flux_msg_get_status
+ *
  */
 void check_proto (void)
 {
     flux_msg_t *msg;
-    uint32_t nodeid;
+    uint32_t nodeid, seq;
     int errnum;
     int type;
+    int status;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)) != NULL,
         "flux_msg_create works");
@@ -430,6 +449,9 @@ void check_proto (void)
         "flux_msg_get_nodeid works and returns what we set");
 
     errno = 0;
+    ok (flux_msg_set_errnum (NULL, 42) < 0 && errno == EINVAL,
+        "flux_msg_set_errnum on fails with errno == EINVAL on msg = NULL");
+    errno = 0;
     ok (flux_msg_set_errnum (msg, 42) < 0 && errno == EINVAL,
         "flux_msg_set_errnum on non-response fails with errno == EINVAL");
     ok (flux_msg_set_type (msg, FLUX_MSGTYPE_RESPONSE) == 0,
@@ -441,6 +463,12 @@ void check_proto (void)
     errno = 0;
     ok (flux_msg_set_nodeid (msg, 0) < 0 && errno == EINVAL,
         "flux_msg_set_nodeid on non-request fails with errno == EINVAL");
+    errno = 0;
+    ok (flux_msg_get_errnum (NULL, &errnum) < 0 && errno == EINVAL,
+        "flux_msg_get_errnum fails with EINVAL on msg = NULL");
+    errno = 0;
+    ok (flux_msg_get_errnum (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_errnum fails with EINVAL on in-and-out param = NULL");
     errnum = 0;
     ok (flux_msg_get_errnum (msg, &errnum) == 0 && errnum == 43,
         "flux_msg_get_errnum works and returns what we set");
@@ -452,6 +480,25 @@ void check_proto (void)
     ok (flux_msg_set_nodeid (msg, FLUX_NODEID_UPSTREAM) < 0
         && errno == EINVAL,
         "flux_msg_set_nodeid FLUX_NODEID_UPSTREAM fails with EINVAL");
+
+    errno = 0;
+    ok (flux_msg_set_seq (NULL, 0) < 0 && errno == EINVAL,
+        "flux_msg_set_seq fails with EINVAL on msg = NULL");
+    errno = 0;
+    ok (flux_msg_get_seq (NULL, &seq) < 0 && errno == EINVAL,
+        "flux_msg_get_seq fails with EINVAL on msg = NULL");
+    errno = 0;
+    ok (flux_msg_get_seq (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_seq fails with EINVAL on in-and-out param = NULL");
+    errno = 0;
+    ok (flux_msg_set_status (NULL, 0) < 0 && errno == EINVAL,
+        "flux_msg_set_status fails with EINVAL on msg = NULL");
+    errno = 0;
+    ok (flux_msg_get_status (NULL, &status) < 0 && errno == EINVAL,
+        "flux_msg_get_status fails with EINVAL on msg = NULL");
+    errno = 0;
+    ok (flux_msg_get_status (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_status fails with EINVAL on in-and-out param = NULL");
 
     flux_msg_destroy (msg);
 }
@@ -465,8 +512,17 @@ void check_matchtag (void)
         "flux_msg_create works");
     ok (flux_msg_get_matchtag (msg, &t) == 0 && t == FLUX_MATCHTAG_NONE,
         "flux_msg_get_matchtag returns FLUX_MATCHTAG_NONE  when uninitialized");
+    errno = 0;
+    ok (flux_msg_set_matchtag (NULL, 42) < 0 && errno == EINVAL,
+        "flux_msg_set_matchtag fails with EINVAL on msg = NULL");
     ok (flux_msg_set_matchtag (msg, 42) == 0,
         "flux_msg_set_matchtag works");
+    errno = 0;
+    ok (flux_msg_get_matchtag (NULL, &t) < 0 && errno == EINVAL,
+        "flux_msg_get_matchtag fails with EINVAL on msg = NULL");
+    errno = 0;
+    ok (flux_msg_get_matchtag (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_matchtag fails with EINVAL on in-and-out param = NULL");
     ok (flux_msg_get_matchtag (msg, &t) == 0,
         "flux_msg_get_matchtag works");
     ok (t == 42,
@@ -657,11 +713,17 @@ void check_encode (void)
         "flux_msg_create works");
     ok (flux_msg_set_topic (msg, "foo.bar") == 0,
         "flux_msg_set_topic works");
+    errno = 0;
+    ok (flux_msg_encode_size (NULL) < 0 && errno == EINVAL,
+        "flux_msg_encode_size fails with EINVAL on msg = NULL");
     size = flux_msg_encode_size (msg);
     ok (size > 0,
         "flux_msg_encode_size works");
     buf = malloc (size);
     assert (buf != NULL);
+    errno = 0;
+    ok (flux_msg_encode (NULL, buf, size) < 0 && errno == EINVAL,
+        "flux_msg_encode fails on EINVAL with msg=NULL");
     ok (flux_msg_encode (msg, buf, size) == 0,
         "flux_msg_encode works");
     ok ((msg2 = flux_msg_decode (buf, size)) != NULL,
@@ -1038,7 +1100,7 @@ int main (int argc, char *argv[])
 
     check_refcount();
 
-    //check_print ();
+    check_print ();
 
     done_testing();
     return (0);
