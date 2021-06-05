@@ -106,8 +106,6 @@ static struct optparse_option opts[] = {
       .usage = "Add comma-separated broker options, e.g. \"-o,-v\"", },
     { .name = "test-exit-timeout", .has_arg = 1, .arginfo = "FSD",
       .usage = "After a broker exits, kill other brokers after timeout", },
-    { .name = "trace-pmi-server", .has_arg = 0, .arginfo = NULL,
-      .usage = "Trace pmi simple server protocol exchange", },
     { .name = "rundir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
       .usage = "Use DIR as broker run directory", },
     { .name = "noclique", .key = 'c', .has_arg = 0, .arginfo = NULL,
@@ -905,7 +903,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
 
     start_server_initialize (rundir, ctx.verbose >= 1 ? true : false);
 
-    if (optparse_hasopt (ctx.opts, "trace-pmi-server"))
+    if (ctx.verbose >= 2)
         flags |= PMI_SIMPLE_SERVER_TRACE;
 
     pmi_server_initialize (flags);
