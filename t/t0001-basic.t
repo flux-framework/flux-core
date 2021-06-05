@@ -87,8 +87,8 @@ test_expect_success 'flux-start with size 2 has rank 1 peer' '
 test_expect_success 'flux-start -s1 works' "
 	flux start ${ARGS} -s1 /bin/true
 "
-test_expect_success 'flux-start --rundir without --test-size fails' "
-	test_must_fail flux start ${ARGS} --rundir=$(pwd) /bin/true
+test_expect_success 'flux-start --test-rundir without --test-size fails' "
+	test_must_fail flux start ${ARGS} --test-rundir=$(pwd) /bin/true
 "
 test_expect_success 'flux-start --test-pmi-clique without --test-size fails' "
 	test_must_fail flux start ${ARGS} --test-pmi-clique=none /bin/true

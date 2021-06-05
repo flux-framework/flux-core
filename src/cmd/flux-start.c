@@ -106,7 +106,7 @@ static struct optparse_option opts[] = {
       .usage = "Add comma-separated broker options, e.g. \"-o,-v\"", },
     { .name = "test-exit-timeout", .has_arg = 1, .arginfo = "FSD",
       .usage = "After a broker exits, kill other brokers after timeout", },
-    { .name = "rundir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
+    { .name = "test-rundir", .has_arg = 1, .arginfo = "DIR",
       .usage = "Use DIR as broker run directory", },
     { .name = "test-pmi-clique", .has_arg = 1, .arginfo = "single|none",
       .usage = "Set PMI_process_mapping mode (default=single)", },
@@ -191,7 +191,7 @@ int main (int argc, char *argv[])
     setup_profiling_env ();
 
     if (!optparse_hasopt (ctx.opts, "test-size")) {
-        if (optparse_hasopt (ctx.opts, "rundir"))
+        if (optparse_hasopt (ctx.opts, "test-rundir"))
             log_msg_exit ("--rundir only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "test-pmi-clique"))
             log_msg_exit ("--test-pmi-clique only works with --test-size=N");
@@ -900,8 +900,8 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");
 
-    if (optparse_hasopt (ctx.opts, "rundir"))
-        rundir = xstrdup (optparse_get_str (ctx.opts, "rundir", NULL));
+    if (optparse_hasopt (ctx.opts, "test-rundir"))
+        rundir = xstrdup (optparse_get_str (ctx.opts, "test-rundir", NULL));
     else
         rundir = create_rundir ();
 
