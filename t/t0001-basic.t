@@ -457,7 +457,7 @@ test_expect_success 'create panic script' '
 
 test_expect_success 'flux-start: panic rank 1 of a size=2 instance' '
 	! flux start ${ARGS} \
-		--killer-timeout=0.2 -s2 \
+		--test-exit-timeout=0.2 -s2 \
 		bash -c "flux getattr rundir; flux exec -r 1 ./panic.sh; sleep 5" >panic.out 2>panic.err
 '
 test_expect_success 'flux-start: panic message reached stderr' '

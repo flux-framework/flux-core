@@ -39,11 +39,11 @@
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librouter/usock_service.h"
 
-#define DEFAULT_KILLER_TIMEOUT 20.0
+#define DEFAULT_EXIT_TIMEOUT 20.0
 
 static struct {
     struct termios saved_termios;
-    double killer_timeout;
+    double exit_timeout;
     flux_reactor_t *reactor;
     flux_watcher_t *timer;
     zlist_t *clients;
@@ -67,7 +67,10 @@ struct client {
     const flux_msg_t *run_request;
 };
 
-void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
+void exit_timeout (flux_reactor_t *r,
+                   flux_watcher_t *w,
+                   int revents,
+                   void *arg);
 int start_session (const char *cmd_argz, size_t cmd_argz_len,
                    const char *broker_path);
 int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
@@ -100,8 +103,8 @@ static struct optparse_option opts[] = {
     { .name = "broker-opts",.key = 'o', .has_arg = 1, .arginfo = "OPTS",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Add comma-separated broker options, e.g. \"-o,-v\"", },
-    { .name = "killer-timeout",.key = 'k', .has_arg = 1, .arginfo = "DURATION",
-      .usage = "After a broker exits, kill other brokers after DURATION", },
+    { .name = "test-exit-timeout", .has_arg = 1, .arginfo = "FSD",
+      .usage = "After a broker exits, kill other brokers after timeout", },
     { .name = "trace-pmi-server", .has_arg = 0, .arginfo = NULL,
       .usage = "Trace pmi simple server protocol exchange", },
     { .name = "rundir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
@@ -124,6 +127,9 @@ static struct optparse_option opts[] = {
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Wrap broker execution in comma-separated arguments"
     },
+    { .flags = OPTPARSE_OPT_HIDDEN,
+      .name = "killer-timeout", .has_arg = 1, .arginfo = "FSD",
+      .usage = "(deprecated)" },
     OPTPARSE_TABLE_END,
 };
 
@@ -158,10 +164,13 @@ int main (int argc, char *argv[])
         log_msg_exit ("optparse_set usage");
     if ((optindex = optparse_parse_args (ctx.opts, argc, argv)) < 0)
         exit (1);
-    ctx.killer_timeout = optparse_get_duration (ctx.opts, "killer-timeout",
-                                                DEFAULT_KILLER_TIMEOUT);
-    if (ctx.killer_timeout < 0.)
-        log_msg_exit ("--killer-timeout argument must be >= 0");
+
+    ctx.exit_timeout = optparse_get_duration (ctx.opts, "test-exit-timeout",
+                                              DEFAULT_EXIT_TIMEOUT);
+    if (!optparse_hasopt (ctx.opts, "test-exit-timeout"))
+        ctx.exit_timeout = optparse_get_duration (ctx.opts, "killer-timeout",
+                                                  ctx.exit_timeout);
+
     if (optindex < argc) {
         if ((e = argz_create (argv + optindex, &command, &len)) != 0)
             log_errn_exit (e, "argz_create");
@@ -187,6 +196,8 @@ int main (int argc, char *argv[])
             log_msg_exit ("--noclique only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "test-hosts"))
             log_msg_exit ("--test-hosts only works with --test-size=N");
+        if (optparse_hasopt (ctx.opts, "test-exit-timeout"))
+            log_msg_exit ("--test-exit-timeout only works with --test-size=N");
         status = exec_broker (command, len, broker_path);
     }
     else {
@@ -248,7 +259,7 @@ char *find_broker (const char *searchpath)
     return dir ? xstrdup (path) : NULL;
 }
 
-void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+void exit_timeout (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     struct client *cli;
 
@@ -878,8 +889,8 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (!(ctx.timer = flux_timer_watcher_create (ctx.reactor,
-                                                  ctx.killer_timeout, 0.,
-                                                  killer, NULL)))
+                                                  ctx.exit_timeout, 0.,
+                                                  exit_timeout, NULL)))
         log_err_exit ("flux_timer_watcher_create");
     if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");
