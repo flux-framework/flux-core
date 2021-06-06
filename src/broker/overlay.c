@@ -117,6 +117,28 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg);
             (child) - &(ov)->children[0] < (ov)->child_count; \
             (child)++)
 
+
+static __attribute__ ((format (printf, 3, 4)))
+void overlay_child_log (struct overlay *ov,
+                        struct child *child,
+                        const char *fmt, ...)
+{
+    va_list ap;
+    char buf[256];
+
+    va_start (ap, fmt);
+    snprintf (buf, sizeof(buf), fmt, ap);
+    va_end (ap);
+
+    flux_log (ov->h,
+              LOG_DEBUG,
+              "overlay child %lu %s connnected=%s %s",
+              (unsigned long)child->rank,
+              child->uuid,
+              child->connected ? "true" : "false",
+              buf);
+}
+
 static void overlay_monitor_notify (struct overlay *ov)
 {
     if (ov->child_monitor_cb)
@@ -514,8 +536,14 @@ static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
     foreach_overlay_child (ov, child) {
         if (child->connected) {
             if (overlay_mcast_child_one (ov, msg, child) < 0) {
+                /* N.B. ROUTER socket has ZMQ_ROUTER_MANDATORY set.
+                 * If peer has disconnected (id no longer valid), zmq_sendmsg()
+                 * should fail with EHOSTUNREACH per zmq_setsockopt(3).
+                 */
                 if (errno == EHOSTUNREACH) {
                     child->connected = false;
+                    overlay_child_log (ov, child,
+                                       "Mcast failed, child has disconnected");
                     zhashx_delete (ov->child_hash, child->uuid);
                     disconnects++;
                 }
@@ -563,6 +591,7 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
                 && status == KEEPALIVE_STATUS_DISCONNECT
                 && child->connected == true) {
                 child->connected = false;
+                overlay_child_log (ov, child, "Sent DISCONNECT");
                 zhashx_delete (ov->child_hash, child->uuid);
                 overlay_monitor_notify (ov);
             }
@@ -822,20 +851,17 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
         errno = EINVAL;
         goto error_log;
     }
-    if (child->connected) // crash
+    if (child->connected) { // crash
+        overlay_child_log (ov, child, "About to replace with fresh hello");
         zhashx_delete (ov->child_hash, child->uuid);
+    }
 
     snprintf (child->uuid, sizeof (child->uuid), "%s", uuid);
     zhashx_insert (ov->child_hash, child->uuid, child);
     child->connected = true;
     overlay_monitor_notify (ov);
 
-    flux_log (ov->h, LOG_DEBUG, "hello child %lu version %u.%u.%u %s",
-              (unsigned long)rank,
-              (version >> 16) & 0xff,
-              (version >> 8) & 0xff,
-              version & 0xff,
-              uuid);
+    overlay_child_log (ov, child, "Sent hello");
 
     if (!(response = flux_response_derive (msg, 0))
         || flux_msg_pack (response, "{s:s}", "uuid", ov->uuid) < 0
@@ -844,8 +870,9 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     flux_msg_destroy (response);
     return;
 error_log:
-    flux_log (ov->h, LOG_ERR, "overlay.hello from rank %lu rejected",
-              (unsigned long)rank);
+    flux_log (ov->h, LOG_ERR, "overlay hello child %lu %s rejected",
+              (unsigned long)rank,
+              uuid);
 error:
     if (!(response = flux_response_derive (msg, errno))
         || (errmsg && flux_msg_set_string (response, errmsg) < 0)
