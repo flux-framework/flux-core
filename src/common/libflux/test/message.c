@@ -102,7 +102,7 @@ void check_routes (void)
     ok (flux_msg_pop_route (msg, &s) == 0 && s != NULL,
         "flux_msg_pop_route works on msg w/routes");
     like (s, "router",
-        "flux_msg_pop_routet returns id2 on message with delim+id1+id2");
+        "flux_msg_pop_route returns id2 on message with delim+id1+id2");
     free (s);
 
     ok (flux_msg_clear_route (msg) == 0 && flux_msg_frames (msg) == 1,
