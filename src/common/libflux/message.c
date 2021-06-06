@@ -915,7 +915,10 @@ int flux_msg_clear_route (flux_msg_t *msg)
 int flux_msg_push_route (flux_msg_t *msg, const char *id)
 {
     uint8_t flags = 0;
-
+    if (!id) {
+        errno = EINVAL;
+        return -1;
+    }
     if (flux_msg_get_flags (msg, &flags) < 0)
         return -1;
     if (!(flags & FLUX_MSGFLAG_ROUTE)) {

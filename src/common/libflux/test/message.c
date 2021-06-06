@@ -67,6 +67,9 @@ void check_routes (void)
         "flux_msg_get_route_first returns 0, id=NULL on msg w/delim");
     ok (flux_msg_get_route_last (msg, &s) == 0 && s == NULL,
         "flux_msg_get_route_last returns 0, id=NULL on msg w/delim");
+    errno = 0;
+    ok (flux_msg_push_route (msg, NULL) == -1 && errno == EINVAL,
+        "flux_msg_push_route returns -1 errno EINVAL on id = NULL");
     ok (flux_msg_push_route (msg, "sender") == 0 && flux_msg_frames (msg) == 3,
         "flux_msg_push_route works and adds a frame");
     ok ((flux_msg_get_route_count (msg) == 1),
