@@ -392,6 +392,11 @@ int event_job_action (struct event *event, struct job *job)
         case FLUX_JOB_STATE_INACTIVE:
             if ((job->flags & FLUX_JOB_WAITABLE))
                 wait_notify_inactive (ctx->wait, job);
+            if (zhashx_insert (ctx->inactive_jobs, &job->id, job) < 0) {
+                flux_log_error (event->ctx->h,
+                                "%ju: error preserving inactive job",
+                                (uintmax_t) job->id);
+            }
             zhashx_delete (ctx->active_jobs, &job->id);
             drain_check (ctx->drain);
             break;

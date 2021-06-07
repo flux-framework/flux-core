@@ -17,6 +17,7 @@ struct job_manager {
     flux_t *h;
     flux_msg_handler_t **handlers;
     zhashx_t *active_jobs;
+    zhashx_t *inactive_jobs;
     int running_jobs; // count of jobs in RUN | CLEANUP state
     flux_jobid_t max_jobid; // largest jobid allocated thus far
     struct conf *conf;

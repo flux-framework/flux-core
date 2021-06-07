@@ -144,12 +144,15 @@ int mod_main (flux_t *h, int argc, char **argv)
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = h;
 
-    if (!(ctx.active_jobs = job_hash_create ())) {
-        flux_log_error (h, "error creating active_jobs hash");
+    if (!(ctx.active_jobs = job_hash_create ())
+        || !(ctx.inactive_jobs = job_hash_create ())) {
+        flux_log_error (h, "error creating jobs hash");
         goto done;
     }
     zhashx_set_destructor (ctx.active_jobs, job_destructor);
     zhashx_set_duplicator (ctx.active_jobs, job_duplicator);
+    zhashx_set_destructor (ctx.inactive_jobs, job_destructor);
+    zhashx_set_duplicator (ctx.inactive_jobs, job_duplicator);
     if (!(ctx.conf = conf_create (&ctx))) {
         flux_log_error (h, "error creating conf context");
         goto done;
@@ -230,6 +233,7 @@ done:
     jobtap_destroy (ctx.jobtap);
     conf_destroy (ctx.conf);
     zhashx_destroy (&ctx.active_jobs);
+    zhashx_destroy (&ctx.inactive_jobs);
     return rc;
 }
 
