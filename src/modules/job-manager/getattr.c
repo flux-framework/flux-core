@@ -96,7 +96,8 @@ void getattr_handle_request (flux_t *h,
                              "attrs", &attrs) < 0
                     || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
-    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))
+        && !(job = zhashx_lookup (ctx->inactive_jobs, &id))) {
         errstr = "unknown job";
         errno = EINVAL;
         goto error;
