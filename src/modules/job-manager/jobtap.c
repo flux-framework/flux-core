@@ -1735,8 +1735,10 @@ int flux_jobtap_get_job_result (flux_plugin_t *p,
                         "context",
                         "status", &waitstatus,
                         "type", &exception_type,
-                        "severity", &exception_severity) < 0)
+                        "severity", &exception_severity) < 0) {
+        errno = EINVAL;
         return -1;
+    }
     if (strcmp (name, "finish") == 0 && waitstatus == 0)
         result = FLUX_JOB_RESULT_COMPLETED;
     else if (strcmp (name, "exception") == 0) {
