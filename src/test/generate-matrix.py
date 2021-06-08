@@ -169,7 +169,12 @@ matrix.add_build(
 )
 
 # Ubuntu: coverage
-matrix.add_build(name="coverage", coverage=True, jobs=2, args="--enable-pmix-bootstrap")
+matrix.add_build(
+    name="coverage",
+    coverage=True,
+    jobs=2,
+    args="--with-flux-security --enable-pmix-bootstrap",
+)
 
 # Ubuntu: TEST_INSTALL
 matrix.add_build(

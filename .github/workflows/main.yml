@@ -161,7 +161,9 @@ jobs:
 
     - name: coverage report
       if: success() && matrix.coverage
-      run: DOCKER_REPO= bash <(curl -s https://codecov.io/bash)
+      env:
+        DOCKER_REPO:
+      uses: codecov/codecov-action@v1
 
     - name: docker deploy
       if: success() && matrix.docker_tag
