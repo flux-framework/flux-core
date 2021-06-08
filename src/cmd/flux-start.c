@@ -165,11 +165,12 @@ int main (int argc, char *argv[])
 
     sanity_check_working_directory ();
 
-    ctx.opts = optparse_create ("flux-start");
-    if (optparse_add_option_table (ctx.opts, opts) != OPTPARSE_SUCCESS)
-        log_msg_exit ("optparse_add_option_table");
-    if (optparse_set (ctx.opts, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
-        log_msg_exit ("optparse_set usage");
+    if (!(ctx.opts = optparse_create ("flux-start"))
+        || optparse_add_option_table (ctx.opts, opts) != OPTPARSE_SUCCESS
+        || optparse_set (ctx.opts,
+                         OPTPARSE_USAGE,
+                         usage_msg) != OPTPARSE_SUCCESS)
+        log_msg_exit ("error setting up option parsing");
     if ((optindex = optparse_parse_args (ctx.opts, argc, argv)) < 0)
         exit (1);
 
