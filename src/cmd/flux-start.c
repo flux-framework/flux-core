@@ -33,6 +33,7 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/setenvf.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/clique.h"
 #include "src/common/libpmi/dgetline.h"
@@ -216,7 +217,8 @@ int main (int argc, char *argv[])
             log_msg_exit ("--test-exit-timeout only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "test-exit-mode"))
             log_msg_exit ("--test-exit-mode only works with --test-size=N");
-        status = exec_broker (command, len, broker_path);
+        if (exec_broker (command, len, broker_path) < 0)
+            log_err_exit ("error execing broker");
     }
     else {
         status = start_session (command, len, broker_path);
@@ -365,13 +367,8 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
             client_run_respond (cli, 0);
             break;
         case FLUX_SUBPROCESS_FAILED: { // completion will not be called
-            int errnum = flux_subprocess_fail_errno (p);
-
-            log_errn (errnum, "%d FAILED", cli->rank);
-            flux_subprocess_destroy (cli->p);
-            cli->p = NULL;
-            client_run_respond (cli, errnum);
-            update_timer ();
+            log_errn_exit (flux_subprocess_fail_errno (p),
+                           "%d subprocess failed", cli->rank);
             break;
         }
         case FLUX_SUBPROCESS_EXITED: {
@@ -515,7 +512,7 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
 nomem:
     errno = ENOMEM;
 error:
-    free (argz);
+    ERRNO_SAFE_WRAP (free, argz);
     return -1;
 }
 
