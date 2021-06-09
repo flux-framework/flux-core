@@ -39,27 +39,31 @@
  *
  * path = "/path"
  *   Set path to resource object
+ *
+ * noverify = true
+ *   Skip verification that configured resources match local hwloc
  */
 static int parse_config (struct resource_ctx *ctx,
                          const flux_conf_t *conf,
                          const char **excludep,
                          json_t **R,
+                         bool *noverifyp,
                          char *errbuf,
                          int errbufsize)
 {
     flux_conf_error_t error;
     const char *exclude  = NULL;
     const char *path = NULL;
+    int noverify = 0;
     json_t *o = NULL;
 
     if (flux_conf_unpack (conf,
                           &error,
-                          "{s?:{s?:s s?:s !}}",
+                          "{s?:{s?:s s?:s s?:b !}}",
                           "resource",
-                            "path",
-                            &path,
-                            "exclude",
-                            &exclude) < 0) {
+                            "path", &path,
+                            "exclude", &exclude,
+                            "noverify", &noverify) < 0) {
         (void)snprintf (errbuf,
                         errbufsize,
                         "error parsing [resource] configuration: %s",
@@ -83,6 +87,8 @@ static int parse_config (struct resource_ctx *ctx,
     }
 
     *excludep = exclude;
+    if (noverifyp)
+        *noverifyp = noverify ? true : false;
     if (R)
         *R = o;
     return 0;
@@ -107,7 +113,13 @@ static void config_reload_cb (flux_t *h,
 
     if (flux_conf_reload_decode (msg, &conf) < 0)
         goto error;
-    if (parse_config (ctx, conf, &exclude, NULL, errbuf, sizeof (errbuf)) < 0) {
+    if (parse_config (ctx,
+                      conf,
+                      &exclude,
+                      NULL,
+                      NULL,
+                      errbuf,
+                      sizeof (errbuf)) < 0) {
         errstr = errbuf;
         goto error;
     }
@@ -383,8 +395,6 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     if (!(ctx = resource_ctx_create (h)))
         goto error;
-    if (parse_args (h, argc, argv, &monitor_force_up, &noverify) < 0)
-        goto error;
     if (flux_get_size (h, &ctx->size) < 0)
         goto error;
     if (flux_get_rank (h, &ctx->rank) < 0)
@@ -393,11 +403,14 @@ int mod_main (flux_t *h, int argc, char **argv)
                       flux_get_conf (h),
                       &exclude_idset,
                       &R_from_config,
+                      &noverify,
                       errbuf,
                       sizeof (errbuf)) < 0) {
         flux_log (h, LOG_ERR, "%s", errbuf);
         goto error;
     }
+    if (parse_args (h, argc, argv, &monitor_force_up, &noverify) < 0)
+        goto error;
     if (ctx->rank == 0) {
         if (!(ctx->reslog = reslog_create (h)))
             goto error;
