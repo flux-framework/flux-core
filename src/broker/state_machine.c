@@ -735,7 +735,7 @@ static void monitor_update (flux_t *h,
     msg = flux_msglist_first (requests);
     while (msg) {
         if (flux_respond_pack (h, msg, "{s:i}", "state", state) < 0) {
-            if (errno != EHOSTUNREACH)
+            if (errno != EHOSTUNREACH && errno != ENOSYS)
                 flux_log_error (h, "error responding to monitor request");
         }
         msg = flux_msglist_next (requests);
