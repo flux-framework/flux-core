@@ -84,10 +84,17 @@ make_bootstrap_config() {
 	        { host = "$fakehosts" },
 	    ]
 	EOT
+    flux R encode --hosts=$fakehosts -r$full >$workdir/R
+    cat >$workdir/conf.d/resource.toml <<-EOT2
+	[resource]
+	    path = "$workdir/R"
+	    noverify = true
+	EOT2
     echo "--test-hosts=$fakehosts -o,-c$workdir/conf.d"
     echo "--test-exit-mode=${TEST_UNDER_FLUX_EXIT_MODE:-leader}"
     echo "--test-exit-timeout=${TEST_UNDER_FLUX_EXIT_TIMEOUT:-0}"
     echo "-o,-Sbroker.quorum=${TEST_UNDER_FLUX_QUORUM:-$full}"
+    echo "--test-start-mode=${TEST_UNDER_FLUX_START_MODE:-all}"
 }
 
 #
@@ -139,6 +146,8 @@ remove_trashdir_wrapper() {
 #        Set the flux-start exit timeout (default: 0)
 #    - TEST_UNDER_FLUX_QUORUM
 #        Set the broker.quorum attribute (default: 0-<highest_rank>)
+#    - TEST_UNDER_FLUX_START_MODE
+#        Set the flux-start start mode (default: all)
 #
 test_under_flux() {
     size=${1:-1}
