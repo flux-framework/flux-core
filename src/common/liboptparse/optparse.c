@@ -1216,6 +1216,8 @@ static char * optstring_append (char *optstring, struct optparse_option *o)
      *   an option with no argument (has_arg = 0), 2 characters
      *   for a required argument (has_arg = 1), and 3 chars for
      *   an optional argument "o::" (has_arg = 2)
+     *  N.B.: optional argument is applied to short options only if
+     *   OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG is set on flags
      */
     len = strlen (optstring);
     n = len + o->has_arg + 1;
@@ -1224,7 +1226,7 @@ static char * optstring_append (char *optstring, struct optparse_option *o)
 
     if (o->has_arg == 1)
         colons = ":";
-    else if (o->has_arg == 2)
+    else if (o->has_arg == 2 && o->flags & OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG)
         colons = "::";
 
     sprintf (optstring+len, "%c%s", o->key, colons);

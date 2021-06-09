@@ -130,6 +130,12 @@ struct optparse_subcommand {
  */
 #define OPTPARSE_OPT_HIDDEN       0x2
 
+/*
+ *  Apply optional argument to short options as well as long. The default
+ *   is that optional arguments only apply to longopts.
+ */
+#define OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG 0x4
+
 /******************************************************************************
  *  Subcommand FLAGS:
  *****************************************************************************/
