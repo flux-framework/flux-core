@@ -529,3 +529,6 @@ jobtap
 unavail
 reprioritize
 reprioritization
+afterany
+afterok
+afternotok

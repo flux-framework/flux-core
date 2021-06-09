@@ -38,6 +38,7 @@
 #define FLUX_JOBTAP_PRIORITY_UNAVAIL INT64_C(-2)
 
 extern int priority_default_plugin_init (flux_plugin_t *p);
+extern int after_plugin_init (flux_plugin_t *p);
 
 struct jobtap_builtin {
     const char *name;
@@ -46,6 +47,7 @@ struct jobtap_builtin {
 
 static struct jobtap_builtin jobtap_builtins [] = {
     { ".priority-default", priority_default_plugin_init },
+    { ".dependency-after", after_plugin_init },
     { 0 },
 };
 
@@ -1735,8 +1737,10 @@ int flux_jobtap_get_job_result (flux_plugin_t *p,
                         "context",
                         "status", &waitstatus,
                         "type", &exception_type,
-                        "severity", &exception_severity) < 0)
+                        "severity", &exception_severity) < 0) {
+        errno = EINVAL;
         return -1;
+    }
     if (strcmp (name, "finish") == 0 && waitstatus == 0)
         result = FLUX_JOB_RESULT_COMPLETED;
     else if (strcmp (name, "exception") == 0) {

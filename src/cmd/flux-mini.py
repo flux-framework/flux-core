@@ -225,6 +225,7 @@ class Xcmd:
         "bcc": "--bcc=",
         "log": "--log=",
         "log_stderr": "--log-stderr=",
+        "dependency": "--dependency=",
     }
 
     class Xinput:
