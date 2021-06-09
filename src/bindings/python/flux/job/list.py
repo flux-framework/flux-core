@@ -124,6 +124,8 @@ class JobListIdsFuture(WaitAllFuture):
             except EnvironmentError as err:
                 if err.errno == errno.ENOENT:
                     msg = f"JobID {child.jobid.orig} unknown"
+                elif err.errno == errno.EFAULT:
+                    msg = f"JobID {child.jobid.orig} purged"
                 else:
                     msg = f"rpc: {err.strerror}"
                 self.errors.append(msg)
