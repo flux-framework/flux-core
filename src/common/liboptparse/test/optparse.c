@@ -400,20 +400,22 @@ void test_convenience_accessors (void)
      */
     dies_ok ({optparse_get_int (p, "no-exist", 0); },
             "get_int exits on unknown arg");
-    dies_ok ({optparse_get_int (p, "foo", 0); },
-            "get_int exits on option with no argument");
     dies_ok ({optparse_get_int (p, "baz", 0); },
             "get_int exits on option with wrong type argument (string)");
     dies_ok ({optparse_get_int (p, "dub", 0); },
             "get_int exits on option with wrong type argument (float)");
     lives_ok ({optparse_get_int (p, "bar", 0); },
             "get_int lives on known arg");
+    lives_ok ({optparse_get_int (p, "foo", 0); },
+            "get_int lives on option with no argument");
     ok (optparse_get_int (p, "bar", 42) == 42,
             "get_int returns default argument when arg not present");
     ok (optparse_get_int (p, "mnf", 42) == 7,
             "get_int returns arg when present");
     ok (optparse_get_int (p, "neg", 42) == -4,
             "get_int returns negative arg when present");
+    ok (optparse_get_int (p, "foo", 42) == 1,
+            "get_int returns option count with no arg");
 
     /* get_double
      */
@@ -1268,12 +1270,84 @@ static void test_optparse_get ()
     optparse_destroy (p);
 }
 
+static void test_optional_args ()
+{
+    char *av1[] = { "test-optional-args", "-xx", "-y2", NULL };
+    int ac1 =  sizeof (av1) / sizeof (av1[0]) - 1;
+
+    char *av2[] = { "test-optional-args", "--testx=2", "--testy=2", NULL };
+    int ac2 =  sizeof (av2) / sizeof (av2[0]) - 1;
+
+    char *av3[] = { "test-optional-args", "--testx", "--testy", NULL };
+    int ac3 =  sizeof (av3) / sizeof (av3[0]) - 1;
+
+    struct optparse_option opts [] = {
+        { .name = "testx",
+          .key  = 'x',
+          .has_arg = 2,
+          .arginfo = "N",
+          .usage = "optional arg on longopt only",
+          .flags = 0,
+        },
+        { .name = "testy",
+          .key  = 'y',
+          .has_arg = 2,
+          .arginfo = "N",
+          .usage = "optional arg on short and longopts",
+          .flags = OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG,
+        },
+        OPTPARSE_TABLE_END,
+    };
+    optparse_err_t e;
+    optparse_t *p = optparse_create ("test-optional-args");
+    if (!p)
+        BAIL_OUT ("optparse_create");
+
+    e = optparse_add_option_table (p, opts);
+    if (e != OPTPARSE_SUCCESS)
+        BAIL_OUT ("optparse_add_option_table");
+    ok (optparse_parse_args (p, ac1, av1) == ac1,
+        "optparse_parse_args");
+    ok (optparse_get_int (p, "testx", -1) == 2,
+        "shortopt with optional_arg: -xx works by default");
+    ok (optparse_get_int (p, "testy", -1) == 2,
+        "shortopt with optional_arg supported: -y2 works");
+    optparse_destroy (p);
+
+    p = optparse_create ("test-optional-args");
+    if (!p)
+        BAIL_OUT ("optparse_create");
+    e = optparse_add_option_table (p, opts);
+    if (e != OPTPARSE_SUCCESS)
+        BAIL_OUT ("optparse_add_option_table");
+    ok (optparse_parse_args (p, ac2, av2) == ac2,
+        "optparse_parse_args");
+    ok (optparse_get_int (p, "testx", -1) == 2,
+        "shortopt with optional_arg: --testx=2 works by default");
+    ok (optparse_get_int (p, "testy", -1) == 2,
+        "shortopt with optional_arg supported: ---testy=2 also works");
+    optparse_destroy (p);
+
+    p = optparse_create ("test-optional-args");
+    if (!p)
+        BAIL_OUT ("optparse_create");
+    e = optparse_add_option_table (p, opts);
+    if (e != OPTPARSE_SUCCESS)
+        BAIL_OUT ("optparse_add_option_table");
+    ok (optparse_parse_args (p, ac3, av3) == ac3,
+        "optparse_parse_args");
+    ok (optparse_get_int (p, "testx", -1) == 1,
+        "shortopt with optional_arg: --testx sets result to 1");
+    ok (optparse_get_int (p, "testy", -1) == 1,
+        "shortopt with optional_arg supported: ---testy also sets result to 1");
+    optparse_destroy (p);
+}
+
 int main (int argc, char *argv[])
 {
+    plan (296);
 
-    plan (286);
-
-    test_convenience_accessors (); /* 35 tests */
+    test_convenience_accessors (); /* 36 tests */
     test_usage_output (); /* 46 tests */
     test_option_cb ();  /* 16 tests */
     test_errors (); /* 9 tests */
@@ -1288,6 +1362,7 @@ int main (int argc, char *argv[])
     test_add_option_table_failure (); /* 4 tests */
     test_reg_subcommands (); /* 1 test */
     test_optparse_get (); /* 13 tests */
+    test_optional_args (); /* 9 tests */
 
     done_testing ();
     return (0);

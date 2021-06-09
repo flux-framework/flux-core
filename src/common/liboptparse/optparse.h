@@ -130,6 +130,12 @@ struct optparse_subcommand {
  */
 #define OPTPARSE_OPT_HIDDEN       0x2
 
+/*
+ *  Apply optional argument to short options as well as long. The default
+ *   is that optional arguments only apply to longopts.
+ */
+#define OPTPARSE_OPT_SHORTOPT_OPTIONAL_ARG 0x4
+
 /******************************************************************************
  *  Subcommand FLAGS:
  *****************************************************************************/
@@ -358,8 +364,10 @@ bool optparse_hasopt (optparse_t *p, const char *name);
 
 /*
  *   Return the option argument as an integer if 'name' was used,
- *    'default_value' if not.  If the option is unknown, or the argument
- *    could not be converted to an integer, call the fatal error function.
+ *    'default_value' if not.  If the option does not take an argument,
+ *    then returns the number of times the option was used.
+ *    If the option is unknown, or the argument could not be converted to
+ *    an integer, call the fatal error function.
  */
 int optparse_get_int (optparse_t *p, const char *name, int default_value);
 
