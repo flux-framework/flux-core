@@ -880,7 +880,9 @@ int optparse_get_int (optparse_t *p, const char *name, int default_value)
     }
     if (n == 0)
         return default_value;
-    if (s == NULL || strlen (s) == 0)
+    if (s == NULL)
+        return n;
+    if (strlen (s) == 0)
         goto badarg;
     errno = 0;
     l = strtol (s, &endptr, 10);

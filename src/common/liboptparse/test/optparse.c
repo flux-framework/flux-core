@@ -400,20 +400,22 @@ void test_convenience_accessors (void)
      */
     dies_ok ({optparse_get_int (p, "no-exist", 0); },
             "get_int exits on unknown arg");
-    dies_ok ({optparse_get_int (p, "foo", 0); },
-            "get_int exits on option with no argument");
     dies_ok ({optparse_get_int (p, "baz", 0); },
             "get_int exits on option with wrong type argument (string)");
     dies_ok ({optparse_get_int (p, "dub", 0); },
             "get_int exits on option with wrong type argument (float)");
     lives_ok ({optparse_get_int (p, "bar", 0); },
             "get_int lives on known arg");
+    lives_ok ({optparse_get_int (p, "foo", 0); },
+            "get_int lives on option with no argument");
     ok (optparse_get_int (p, "bar", 42) == 42,
             "get_int returns default argument when arg not present");
     ok (optparse_get_int (p, "mnf", 42) == 7,
             "get_int returns arg when present");
     ok (optparse_get_int (p, "neg", 42) == -4,
             "get_int returns negative arg when present");
+    ok (optparse_get_int (p, "foo", 42) == 1,
+            "get_int returns option count with no arg");
 
     /* get_double
      */
@@ -1271,9 +1273,9 @@ static void test_optparse_get ()
 int main (int argc, char *argv[])
 {
 
-    plan (286);
+    plan (287);
 
-    test_convenience_accessors (); /* 35 tests */
+    test_convenience_accessors (); /* 36 tests */
     test_usage_output (); /* 46 tests */
     test_option_cb ();  /* 16 tests */
     test_errors (); /* 9 tests */
