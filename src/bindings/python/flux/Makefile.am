@@ -38,7 +38,22 @@ nobase_fluxpy_PYTHON = \
 	resource/ResourceSet.py \
 	hostlist.py \
 	idset.py \
-	progress.py
+	progress.py \
+	utils/parsedatetime/__init__.py \
+	utils/parsedatetime/parsedatetime.py \
+	utils/parsedatetime/warns.py \
+	utils/parsedatetime/context.py \
+	utils/parsedatetime/pdt_locales/__init__.py \
+	utils/parsedatetime/pdt_locales/base.py \
+	utils/parsedatetime/pdt_locales/icu.py \
+	utils/parsedatetime/pdt_locales/de_DE.py \
+	utils/parsedatetime/pdt_locales/en_US.py \
+	utils/parsedatetime/pdt_locales/en_AU.py \
+	utils/parsedatetime/pdt_locales/es.py \
+	utils/parsedatetime/pdt_locales/fr_FR.py \
+	utils/parsedatetime/pdt_locales/nl_NL.py \
+	utils/parsedatetime/pdt_locales/pt_BR.py \
+	utils/parsedatetime/pdt_locales/ru_RU.py
 
 if HAVE_FLUX_SECURITY
 nobase_fluxpy_PYTHON += security.py
