@@ -85,14 +85,6 @@ static void setup_profiling_env (void);
 static void client_wait_respond (struct client *cli);
 static void client_run_respond (struct client *cli, int errnum);
 
-#ifndef HAVE_CALIPER
-static int no_caliper_fatal_err (optparse_t *p, struct optparse_option *o,
-                                 const char *optarg)
-{
-    log_msg_exit ("Error: --caliper-profile used but no Caliper support found");
-}
-#endif /* !HAVE_CALIPER */
-
 const char *usage_msg = "[OPTIONS] command ...";
 static struct optparse_option opts[] = {
     { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
@@ -103,21 +95,22 @@ static struct optparse_option opts[] = {
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Add comma-separated broker options, e.g. \"-o,-v\"", },
     /* Option group 1, these options will be listed after those above */
+#if HAVE_CALIPER
     { .group = 1,
       .name = "caliper-profile", .has_arg = 1,
       .arginfo = "PROFILE",
       .usage = "Enable profiling in brokers using Caliper configuration "
                "profile named `PROFILE'",
-#ifndef HAVE_CALIPER
-      .cb = no_caliper_fatal_err, /* Emit fatal err if not built w/ Caliper */
-#endif /* !HAVE_CALIPER */
     },
+#endif /* !HAVE_CALIPER */
     { .group = 1,
       .name = "wrap", .has_arg = 1, .arginfo = "ARGS,...",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Wrap broker execution in comma-separated arguments"
     },
     /* Option group 2 */
+    { .group = 2,
+      .usage = "\nOptions useful for testing:" },
     { .group = 2,
       .name = "test-size",       .key = 's', .has_arg = 1, .arginfo = "N",
       .usage = "Start a test instance by launching N brokers locally", },
@@ -168,6 +161,9 @@ int main (int argc, char *argv[])
 
     if (!(ctx.opts = optparse_create ("flux-start"))
         || optparse_add_option_table (ctx.opts, opts) != OPTPARSE_SUCCESS
+        || optparse_set (ctx.opts,
+                         OPTPARSE_OPTION_WIDTH,
+                         32) != OPTPARSE_SUCCESS
         || optparse_set (ctx.opts,
                          OPTPARSE_USAGE,
                          usage_msg) != OPTPARSE_SUCCESS)
