@@ -71,9 +71,20 @@ static int parse_config (struct resource_ctx *ctx,
         return -1;
     }
     if (path) {
+        FILE *f;
         json_error_t e;
 
-        if (!(o = json_load_file (path, 0, &e))) {
+        if (!(f = fopen (path, "r"))) {
+            (void)snprintf (errbuf,
+                            errbufsize,
+                            "%s: %s",
+                            path,
+                            strerror (errno));
+            return -1;
+        }
+        o = json_loadf (f, 0, &e);
+        fclose (f);
+        if (!o) {
             (void)snprintf (errbuf,
                             errbufsize,
                             "%s: %s on line %d",
