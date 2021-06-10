@@ -85,6 +85,21 @@ def dependency_array_create(uris):
     return dependencies
 
 
+class BeginTimeAction(argparse.Action):
+    """Convenience class to handle --begin-time file option
+
+    Append --begin-time options to the "dependency" list in namespace
+    """
+
+    def __call__(self, parser, namespace, values, option_string=None):
+        uri = "begin-time:" + str(util.parse_datetime(values).timestamp())
+        items = getattr(namespace, "dependency", [])
+        if items is None:
+            items = []
+        items.append(uri)
+        setattr(namespace, "dependency", items)
+
+
 def filter_dict(env, pattern, reverseMatch=True):
     """
     Filter out all keys that match "pattern" from dict 'env'
@@ -450,6 +465,12 @@ class MiniCmd:
             action="append",
             help="Set an RFC 26 dependency URI for this job",
             metavar="URI",
+        )
+        parser.add_argument(
+            "--begin-time",
+            action=BeginTimeAction,
+            metavar="TIME",
+            help="Set minimum begin time for job",
         )
         parser.add_argument(
             "--env",
