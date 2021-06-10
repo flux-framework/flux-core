@@ -52,23 +52,44 @@ bool entry_is_string (json_t *array, int index, const char *val)
 void check_env (void)
 {
     json_t *env;
+    char *bad_environ[2] = {NULL, NULL};
 
     if (!(env = specutil_env_create (environ)))
         BAIL_OUT ("specutil_env_create failed");
     ok (json_object_size (env) > 0,
         "specutil_env_create() works");
+    if (!(bad_environ[0] = strdup("TEST_BAR")))
+        BAIL_OUT ("initializing bad environ failed");
+    ok (specutil_env_create (bad_environ) == NULL && errno == EINVAL,
+        "specutil_env_create failed on bad environ");
+    errno = 0;
+    free(bad_environ[0]);
 
-    ok (specutil_env_set (env, "TEST_FOO", "42") == 0
+    ok (specutil_env_set (env, "TEST_FOO", "42", 1) == 0
         && object_is_string (env, "TEST_FOO", "42"),
         "specutil_env_set TEST_FOO=42 works");
 
-    ok (specutil_env_set (env, "TEST_FOO", "43") == 0
+    ok (specutil_env_set (env, "TEST_FOO", "43", 1) == 0
         && object_is_string (env, "TEST_FOO", "43"),
         "specutil_env_set TEST_FOO=43 works");
+
+    ok (specutil_env_set (env, "TEST_FOO", "44", 0) == 0
+        && object_is_string (env, "TEST_FOO", "43"),
+        "specutil_env_set TEST_FOO=44 fails when overwrite == 0");
 
     ok (specutil_env_put (env, "TEST_FOO=44") == 0
         && object_is_string (env, "TEST_FOO", "44"),
         "specutil_env_put TEST_FOO=44 works");
+
+    ok (specutil_env_put (env, "TEST_FOO2") < 0
+        && errno == EINVAL
+        && !json_object_get (env, "TEST_FOO2"),
+        "specutil_env_put TEST_FOO2 (no value) fails with EINVAL");
+    errno = 0;
+
+    ok (specutil_env_put (env, "=44") < 0,
+        "specutil_env_put =44 (no variable name) fails with EINVAL");
+    errno = 0;
 
     ok (specutil_env_unset (env, "TEST_FOO") == 0
         && !json_object_get (env, "TEST_FOO"),
@@ -97,6 +118,12 @@ void check_argv (void)
         "specutil_argv_create set correct array values");
 
     json_decref (av);
+
+    if (!(av = specutil_argv_create (-1, argv)))
+        BAIL_OUT ("specutil_argv_create failed");
+    ok (json_array_size (av) == 0,
+        "specutil_argv_create works when argc < 0");
+    json_decref (av);
 }
 
 void check_attr (void)
@@ -122,6 +149,25 @@ void check_attr (void)
         "specutil_attr_get a.b returns expected value");
     ok (specutil_attr_del (attr, "a.b") == 0,
         "specutil_attr_del a.b works");
+    errno = 0;
+    ok (specutil_attr_del (attr, "") < 0 && errno == EINVAL,
+        "specutil_attr_del on empty string fails with EINVAL");
+    errno = 0;
+    ok (specutil_attr_del (attr, ".a") < 0 && errno == EINVAL,
+        "specutil_attr_del on .a (leading period) fails with EINVAL");
+    errno = 0;
+    ok (specutil_attr_del (attr, "a.") < 0 && errno == EINVAL,
+        "specutil_attr_del on a. (trailing period) fails with EINVAL");
+
+    errno = 0;
+    ok (specutil_attr_get (attr, "") == NULL && errno == EINVAL,
+        "specutil_attr_get on empty string fails with EINVAL");
+    errno = 0;
+    ok (specutil_attr_get (attr, ".a") == NULL && errno == EINVAL,
+        "specutil_attr_get on .a (leading period) fails with EINVAL");
+    errno = 0;
+    ok (specutil_attr_get (attr, "a.") == NULL && errno == EINVAL,
+        "specutil_attr_get on a. (trailing period) fails with EINVAL");
     errno = 0;
     ok (specutil_attr_get (attr, "a.b") == NULL && errno == ENOENT,
         "specutil_attr_get a.b fails with ENOENT");
@@ -179,39 +225,128 @@ void check_attr (void)
     json_decref (attr);
 }
 
-void check_jobspec (void)
+void check_resources_create (void)
 {
-    char *argv[] = { "this", "is", "a", "test" };
-    int argc = sizeof (argv) / sizeof (argv[0]);
-    json_t *attr;
-    json_t *av;
-    json_t *spec;
+    json_t *resources;
+    json_t *mapping = NULL;
+    json_t *with_mapping = NULL;
     json_t *val;
-    struct resource_param p = { 0, 0, 0, 0 };
-    char errbuf[128];
 
-    if (!(attr = json_object ()))
-        BAIL_OUT ("json_object failed");
-    if (!(av = specutil_argv_create (argc, argv)))
-        BAIL_OUT ("specutil_argv_create failed");
+    // test with gpus_per_task but no nodes
+    if (!(resources = specutil_resources_create (5, 2, 3, 0))
+        || !(mapping = json_array_get (resources, 0))) {
+        BAIL_OUT ("specutil_resources_create failed");
+    }
+    ok (json_array_size (resources) == 1, "resources length is correct");
+    ok (object_is_string (mapping, "type", "slot"), "resources has type:slot");
+    ok (object_is_string (mapping, "label", "task"), "resources has label:task");
+    ok ((val = json_object_get (mapping, "count")) && json_is_integer (val)
+        && json_integer_value (val) == 5,
+        "resources has correct task count");
+    if (!(val = json_object_get (mapping, "with"))
+        || !(with_mapping = json_array_get (val, 0))){
+        BAIL_OUT ("resources has no 'with' mapping for cores_per_task");
+    }
+    ok (object_is_string (with_mapping, "type", "core"),
+        "resources has 'with' type:core");
+    ok ((val = json_object_get (with_mapping, "count")) && json_is_integer (val)
+        && json_integer_value (val) == 2,
+        "resources has correct cores_per_task count");
+    if (!(val = json_object_get (mapping, "with"))
+        || !(with_mapping = json_array_get (val, 1))){
+        BAIL_OUT ("resources has no 'with' mapping for gpus_per_task");
+    }
+    ok (object_is_string (with_mapping, "type", "gpu"),
+        "resources has 'with' type:core");
+    ok ((val = json_object_get (with_mapping, "count"))
+        && json_is_integer (val)
+        && json_integer_value (val) == 3,
+        "resources has correct gpus_per_task count");
+    json_decref (resources);
 
-    ok ((spec = specutil_jobspec_create (attr, av, &p,
-                                         errbuf, sizeof (errbuf))) != NULL,
-        "specutil_jobspec_create works");
-    ok (json_object_get (spec, "resources") != NULL,
-        "jobspec has resources section");
-    ok (json_object_get (spec, "tasks") != NULL,
-        "jobspec has tasks section");
-    ok (json_object_get (spec, "attributes") != NULL,
-        "jobspec has attributes section");
-    ok ((val = json_object_get (spec, "version")) != NULL
+    // test with neither gpus nor nodes
+    if (!(resources = specutil_resources_create (-1, -1, 0, 0))
+        || !(mapping = json_array_get (resources, 0))) {
+        BAIL_OUT ("specutil_resources_create failed");
+    }
+    ok (json_array_size (resources) == 1, "resources length is correct");
+    ok (object_is_string (mapping, "type", "slot"), "resources has type:slot");
+    ok (object_is_string (mapping, "label", "task"),
+        "resources has label:task");
+    ok ((val = json_object_get (mapping, "count"))
         && json_is_integer (val)
         && json_integer_value (val) == 1,
-        "jobspec has version 1");
+        "resources correctly sets tasks=0 when value is negative");
+    if (!(val = json_object_get (mapping, "with"))
+        || !(with_mapping = json_array_get (val, 0))){
+        BAIL_OUT ("resources has no 'with' mapping for cores_per_task");
+    }
+    ok (json_array_size (val) == 1,
+        "'with' array has only one entry when gpus_per_task == 0");
+    ok (object_is_string (with_mapping, "type", "core"),
+        "resources has 'with' type:core");
+    ok ((val = json_object_get (with_mapping, "count"))
+        && json_is_integer (val)
+        && json_integer_value (val) == 1,
+        "resources correctly sets cores_per_task=0 when value is negative");
+    json_decref (resources);
 
-    json_decref (attr);
-    json_decref (av);
-    json_decref (spec);
+    // test with gpus and nodes
+    if (!(resources = specutil_resources_create (20, 2, 1, 17))
+        || !(mapping = json_array_get (resources, 0))) {
+        BAIL_OUT ("specutil_resources_create failed");
+    }
+    ok (json_array_size (resources) == 1, "resources length is correct");
+
+    ok (object_is_string (mapping, "type", "node"), "resources has type:node");
+    ok ((val = json_object_get (mapping, "count")) && json_is_integer (val)
+            && json_integer_value (val) == 17,
+        "resources has correct node count");
+    if (!(val = json_object_get (mapping, "with"))
+        || !(with_mapping = json_array_get (val, 0))){
+        BAIL_OUT ("resources has no 'with' mapping for tasks when nodes > 0");
+    }
+    ok (json_array_size (val) == 1,
+        "'with' array has only one entry when nodes > 0");
+    ok (object_is_string (with_mapping, "type", "slot"),
+        "resources has type:slot");
+    ok (object_is_string (with_mapping, "label", "task"),
+        "resources has label:task");
+    ok ((val = json_object_get (with_mapping, "count"))
+        && json_is_integer (val)
+        && json_integer_value (val) == 20,
+        "resources has correct task count");
+    json_decref (resources);
+
+    // check nnodes > tasks
+    ok (specutil_resources_create (2, 2, 3, 17) == NULL && errno == EINVAL,
+        "caught nodes > tasks");
+    errno = 0;
+}
+
+void check_tasks_create (void)
+{
+    char *argv[] = {"this", "is", "a", "test"};
+    int argc = sizeof (argv) / sizeof (argv[0]);
+    json_t *tasks;
+    json_t *val;
+    json_t *mapping = NULL;
+
+    if (!(tasks = specutil_tasks_create (argc, argv))
+        || !(mapping = json_array_get (tasks, 0))) {
+        BAIL_OUT ("specutil_tasks_create failed");
+    }
+    ok (json_array_size (tasks) == 1, "tasks length is correct");
+    ok ((val = json_object_get (mapping, "command"))
+        && json_array_size (val) == argc,
+        "tasks has command section of correct length");
+    ok ((val = json_object_get (mapping, "count"))
+        && (val = json_object_get (val, "per_slot"))
+        && json_is_integer (val)
+        && json_integer_value (val) == 1,
+        "tasks has count: {per_slot: 1}");
+    ok (object_is_string (mapping, "slot", "task"), "tasks has slot:task");
+    json_decref (tasks);
 }
 
 void check_attr_check (void)
@@ -249,6 +384,15 @@ void check_attr_check (void)
         BAIL_OUT ("could not set system.duration=0.1");
     ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
         "specutil_attr_check system.duration=0.1 OK");
+
+    if (specutil_attr_pack (attr, "user", "{}") < 0)
+        BAIL_OUT ("could not set user={}");
+    errno = 0;
+    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
+        && errno==EINVAL,
+        "specutil_attr_check user={} failed with EINVAL");
+    if (specutil_attr_del (attr, "user") < 0)
+        BAIL_OUT ("could not remove user attribute dict");
 
     if (specutil_attr_pack (attr, "system.duration", "s", "x") < 0)
         BAIL_OUT ("could not set system.duration=x");
@@ -304,7 +448,8 @@ int main (int argc, char *argv[])
     check_env ();
     check_argv ();
     check_attr ();
-    check_jobspec ();
+    check_resources_create ();
+    check_tasks_create ();
     check_attr_check ();
 
     done_testing ();

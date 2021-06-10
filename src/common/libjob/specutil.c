@@ -19,6 +19,7 @@
 
 #include "specutil.h"
 
+/* Return a new reference to a json array of strings. */
 json_t *specutil_argv_create (int argc, char **argv)
 {
     int i;
@@ -28,20 +29,27 @@ json_t *specutil_argv_create (int argc, char **argv)
         goto nomem;
     for (i = 0; i < argc; i++) {
         if (!(o = json_string (argv[i])) || json_array_append_new (a, o) < 0) {
-            ERRNO_SAFE_WRAP (json_decref, o);
+            json_decref (o);
             goto nomem;
         }
     }
     return a;
 nomem:
-    ERRNO_SAFE_WRAP (json_decref, a);
+    json_decref (a);
+    errno = ENOMEM;
     return NULL;
 }
 
-int specutil_env_set (json_t *o, const char *name, const char *value)
+int specutil_env_set (json_t *o,
+                      const char *name,
+                      const char *value,
+                      int overwrite)
 {
     json_t *val;
 
+    if ((json_object_get (o, name)) && !overwrite) {
+        return 0;
+    }
     if (!(val = json_string (value)))
         goto nomem;
     if (json_object_set_new (o, name, val) < 0)
@@ -69,11 +77,11 @@ int specutil_env_put (json_t *o, const char *entry)
         return -1;
     if ((cp = strchr (cpy, '=')))
         *cp++ = '\0';
-    if (!cp || cp == cpy) {
+    if (!cp || cp == cpy + 1) {
         errno = EINVAL;
         goto done;
     }
-    rc = specutil_env_set (o, cpy, cp);
+    rc = specutil_env_set (o, cpy, cp, 1);
 done:
     ERRNO_SAFE_WRAP (free, cpy);
     return rc;
@@ -87,6 +95,9 @@ json_t *specutil_env_create (char **env)
     if (!(o = json_object ())) {
         errno = ENOMEM;
         return NULL;
+    }
+    if (!env){  // NULL accepted as empty environment
+        return o;
     }
     for (i = 0; env[i] != NULL; i++) {
         if (specutil_env_put (o, env[i]) < 0)
@@ -142,7 +153,7 @@ nomem:
  * If the target or path leading to it does not exist, return succces.
  * N.B. 'path' is modified.
  */
-int object_del_path (json_t *o, char *path)
+static int object_del_path (json_t *o, char *path)
 {
     char *cp;
     json_t *dir;
@@ -244,11 +255,10 @@ json_t *specutil_attr_get (json_t *o, const char *path)
     return val;
 }
 
-
-static int specutil_attr_vpack (json_t *o,
-                                const char *path,
-                                const char *fmt,
-                                va_list ap)
+int specutil_attr_vpack (json_t *o,
+                         const char *path,
+                         const char *fmt,
+                         va_list ap)
 {
     json_t *value;
     int rc;
@@ -337,62 +347,79 @@ error:
     return -1;
 }
 
-static json_t *specutil_tasks_create (json_t *argv)
+/* Create the 'tasks' section of a jobspec. */
+json_t *specutil_tasks_create (int argc, char **argv)
 {
     json_t *tasks;
+    json_t *argv_json;
 
-    if (!(tasks = json_pack ("[{s:O s:s s:{s:i}}]",
-                             "command", argv,
-                             "slot", "task",
+    if (!(argv_json = specutil_argv_create (argc, argv))) {
+        return NULL;
+    }
+    if (!(tasks = json_pack ("[{s:o s:s s:{s:i}}]",
+                             "command",
+                             argv_json,
+                             "slot",
+                             "task",
                              "count",
-                               "per_slot", 1))) {
+                             "per_slot",
+                             1))) {
+        json_decref (argv_json);
         errno = ENOMEM;
         return NULL;
     }
     return tasks;
 }
 
-static json_t *specutil_resources_create (struct resource_param *param)
+/* Create and return the 'resources' section of a jobspec.
+ * Return a new reference on success, NULL with errno set on error.
+ * Negative values of 'ntasks' and 'cores_per_task' are interpreted as 1.
+ * Negative values for 'gpus_per_task' and 'nnodes' are ignored.
+ */
+json_t *specutil_resources_create (int ntasks,
+                                   int cores_per_task,
+                                   int gpus_per_task,
+                                   int nnodes)
 {
     json_t *slot;
-    struct resource_param p = *param;
 
-    if (p.cores_per_task < 1)
-        p.cores_per_task = 1;
-    if (p.ntasks < 1)
-        p.ntasks = 1;
-    if (p.nodes > p.ntasks) {
+    if (cores_per_task < 1)
+        cores_per_task = 1;
+    if (ntasks < 1)
+        ntasks = 1;
+    if (nnodes > ntasks) {
         errno = EINVAL;
         return NULL;
     }
-    if (p.gpus_per_task > 0) {
+    if (gpus_per_task > 0) {
         if (!(slot = json_pack ("[{s:s s:i s:[{s:s s:i} {s:s s:i}] s:s}]",
                                 "type", "slot",
-                                "count", p.ntasks,
+                                "count", ntasks,
                                 "with",
-                                  "type", "core",
-                                  "count", p.cores_per_task,
-                                  "type", "gpu",
-                                  "count", p.gpus_per_task,
+                                "type", "core",
+                                "count", cores_per_task,
+                                "type", "gpu",
+                                "count", gpus_per_task,
                                 "label", "task")))
             goto nomem;
     }
     else {
         if (!(slot = json_pack ("[{s:s s:i s:[{s:s s:i}] s:s}]",
                                 "type", "slot",
-                                "count", p.ntasks,
+                                "count", ntasks,
                                 "with",
                                 "type", "core",
-                                "count", p.cores_per_task,
+                                "count", cores_per_task,
                                 "label", "task")))
             goto nomem;
     }
-    if (p.nodes > 0) {
+    if (nnodes > 0) {
         json_t *node;
         if (!(node = json_pack ("[{s:s s:i s:o}]",
                                 "type", "node",
-                                "count", p.nodes,
-                                "with", slot))) {
+                                "count", nnodes,
+                                "with",
+                                slot))) {
             json_decref (slot);
             goto nomem;
         }
@@ -401,42 +428,6 @@ static json_t *specutil_resources_create (struct resource_param *param)
     return slot;
 nomem:
     errno = ENOMEM;
-    return NULL;
-}
-
-json_t *specutil_jobspec_create (json_t *attributes,
-                                 json_t *argv,
-                                 struct resource_param *param,
-                                 char *errbuf,
-                                 int errbufsz)
-{
-    json_t *tasks = NULL;
-    json_t *resources = NULL;
-    json_t *jobspec;
-
-    if (specutil_attr_check (attributes, errbuf, errbufsz) < 0)
-        goto error;
-    if (!(tasks = specutil_tasks_create (argv))) {
-        snprintf (errbuf, errbufsz, "Error creating tasks object");
-        goto error;
-    }
-    if (!(resources = specutil_resources_create (param))) {
-        snprintf (errbuf, errbufsz, "Error creating resources object");
-        goto error;
-    }
-    if (!(jobspec = json_pack ("{s:o s:o s:O s:i}",
-                               "resources", resources,
-                               "tasks", tasks,
-                               "attributes", attributes, // incref
-                               "version", 1))) {
-        errno = ENOMEM;
-        snprintf (errbuf, errbufsz, "Error creating jobspec object");
-        goto error;
-    }
-    return jobspec;
-error:
-    ERRNO_SAFE_WRAP (json_decref, resources);
-    ERRNO_SAFE_WRAP (json_decref, tasks);
     return NULL;
 }
 
