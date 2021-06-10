@@ -19,10 +19,11 @@ import argparse
 import traceback
 import signal
 import threading
-from datetime import timedelta
+from datetime import datetime, timedelta
 from string import Formatter
 
 from flux.core.inner import ffi, raw
+from flux.utils.parsedatetime import Calendar
 
 __all__ = [
     "check_future_error",
@@ -228,6 +229,47 @@ def parse_fsd(fsd_string):
     if seconds < 0 or math.isnan(seconds) or math.isinf(seconds):
         raise ValueError("invalid Flux standard duration")
     return seconds
+
+
+def parse_datetime(string, now=None):
+    """Parse a possibly human readable datetime string or offset
+
+    If string starts with `+` or `-`, then the remainder of the string
+    is assumed to be a duration to add or subtract to `now` in Flux Standard
+    Duration.
+
+    Otherwise, the parsedatetime package will be used to parse the input
+    string.
+
+    Args:
+        string: The string to parse as datetime or offset
+        now: Optional: datetime object to use as starttime of any offset
+
+    Returns:
+        A datetime object
+
+    Raises:
+        ValueError: Input string could not be converted to datetime
+
+    """
+
+    if now is None:
+        now = datetime.now().astimezone()
+
+    if string.startswith("+"):
+        timestamp = now.timestamp() + parse_fsd(string[1:])
+        return datetime.fromtimestamp(timestamp).astimezone()
+
+    if string.startswith("-"):
+        timestamp = now.timestamp() - parse_fsd(string[1:])
+        return datetime.fromtimestamp(timestamp).astimezone()
+
+    cal = Calendar()
+    cal.ptc.StartHour = 0
+    time_struct, status = cal.parse(string, sourceTime=now.timetuple())
+    if status == 0:
+        raise ValueError(f'Invalid datetime: "{string}"')
+    return datetime(*time_struct[:6]).astimezone()
 
 
 class OutputFormat:
