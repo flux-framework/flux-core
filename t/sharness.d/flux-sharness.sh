@@ -91,6 +91,17 @@ make_bootstrap_config() {
 }
 
 #
+#  Remove any outer trash-directory wrapper used by "system"
+#   personality test_under_flux() tests.
+#
+remove_trashdir_wrapper() {
+    local trashdir=$(dirname $SHARNESS_TRASH_DIRECTORY)
+    case $trashdir in
+        */trash-directory.[!/]*) rm -rf $trashdir
+    esac
+}
+
+#
 #  Reinvoke a test file under a flux instance
 #
 #  Usage: test_under_flux <size> [personality]
@@ -134,6 +145,9 @@ test_under_flux() {
     personality=${2:-full}
     log_file="$TEST_NAME.broker.log"
     if test -n "$TEST_UNDER_FLUX_ACTIVE" ; then
+        if test "$TEST_UNDER_FLUX_PERSONALITY" = "system"; then
+            cleanup remove_trashdir_wrapper
+        fi
         test "$debug" = "t" || cleanup rm "${SHARNESS_TEST_DIRECTORY:-..}/$log_file"
         flux_module_list > module-list.initial
         cleanup check_module_list
@@ -190,6 +204,7 @@ test_under_flux() {
     logopts="-o -Slog-filename=${log_file},-Slog-forward-level=7"
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
+    TEST_UNDER_FLUX_PERSONALITY="${personality:-default}" \
       exec flux start --test-size=${size} \
                       ${RC1_PATH+-o -Sbroker.rc1_path=${RC1_PATH}} \
                       ${RC3_PATH+-o -Sbroker.rc3_path=${RC3_PATH}} \
