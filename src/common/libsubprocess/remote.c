@@ -711,7 +711,8 @@ static void remote_continuation_cb (flux_future_t *f, void *arg)
     if (flux_rpc_get_unpack (f, "{ s:s s:i }",
                              "type", &type,
                              "rank", &rank) < 0) {
-        flux_log_error (p->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
+        if (errno != EHOSTUNREACH) // broker is down, don't log
+            flux_log_error (p->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
         goto error;
     }
 
