@@ -84,14 +84,32 @@ test_expect_success 'flux-start with size 2 has rank 1 peer' '
 		flux module stats --parse=child-count overlay >child2.out &&
 	test_cmp child2.exp child2.out
 '
+test_expect_success 'flux-start fails with unknown option' "
+	test_must_fail flux start ${ARGS} --unknown /bin/true
+"
+test_expect_success 'flux-start fails with --verbose=badopt' "
+	test_must_fail flux start ${ARGS} --verbose=badopt /bin/true
+"
+test_expect_success 'create bad broker shell script' '
+	cat >flux-broker <<-EOT &&
+	#!/badinterp
+	EOT
+	chmod +x flux-broker
+'
+test_expect_success 'flux-start exec fails on bad broker shell script' "
+	test_must_fail bash -c 'FLUX_EXEC_PATH_PREPEND=. flux start /bin/true'
+"
+test_expect_success 'flux-start test exec fails on bad broker shell script' "
+	test_must_fail bash -c 'FLUX_EXEC_PATH_PREPEND=. flux start -s1 /bin/true'
+"
 test_expect_success 'flux-start -s1 works' "
 	flux start ${ARGS} -s1 /bin/true
 "
-test_expect_success 'flux-start --rundir without --test-size fails' "
-	test_must_fail flux start ${ARGS} --rundir=$(pwd) /bin/true
+test_expect_success 'flux-start --test-rundir without --test-size fails' "
+	test_must_fail flux start ${ARGS} --test-rundir=$(pwd) /bin/true
 "
-test_expect_success 'flux-start --noclique without --test-size fails' "
-	test_must_fail flux start ${ARGS} --noclique /bin/true
+test_expect_success 'flux-start --test-pmi-clique without --test-size fails' "
+	test_must_fail flux start ${ARGS} --test-pmi-clique=none /bin/true
 "
 test_expect_success 'flux-start --test-hosts without --test-size fails' "
 	test_must_fail flux start ${ARGS} --test-hosts=foo /bin/true
@@ -102,8 +120,50 @@ test_expect_success 'flux-start --test-hosts with insufficient hosts fails' "
 test_expect_success 'flux-start --test-hosts with garbled hosts fails' "
 	test_must_fail flux start ${ARGS} -s2 --test-hosts=foo] /bin/true
 "
+test_expect_success 'flux-start --test-exit-timeout without --test-size fails' "
+	test_must_fail flux start ${ARGS} --test-exit-timeout=10s /bin/true
+"
+test_expect_success 'flux-start --test-exit-timeout fails with bad FSD' "
+	test_must_fail flux start ${ARGS} -s1 --test-exit-timeout=-1 /bin/true
+"
+test_expect_success 'flux-start --test-exit-mode without --test-size fails' "
+	test_must_fail flux start ${ARGS} --test-exit-mode=any /bin/true
+"
+test_expect_success 'flux-start --test-exit-mode=leader is accepted' "
+	flux start ${ARGS} -s1 --test-exit-mode=leader /bin/true
+"
+test_expect_success 'flux-start --test-exit-mode=badmode fails' "
+	test_must_fail flux start ${ARGS} --test-exit-mode=badmode /bin/true
+"
+test_expect_success 'flux-start --verbose=2 enables PMI tracing' "
+	flux start ${ARGS} \
+		--test-size=1 --verbose=2 \
+		/bin/true 2>&1 | grep pmi_version
+"
+test_expect_success 'flux-start -vv also does' "
+	flux start ${ARGS} \
+		--test-size=1 -vv \
+		/bin/true 2>&1 | grep pmi_version
+"
+test_expect_success 'flux-start --test-pmi-clique=single works' "
+	flux start ${ARGS} \
+		--test-size=1 \
+		--test-pmi-clique=single \
+		/bin/true
+"
+test_expect_success 'flux-start --test-pmi-clique=none works' "
+	flux start ${ARGS} --test-size=1 \
+		--test-pmi-clique=single \
+		/bin/true
+"
+test_expect_success 'flux-start --test-pmi-clique=badmode fails' "
+	test_must_fail flux start ${ARGS} --test-size=1 \
+		--test-pmi-clique=badmode \
+		/bin/true 2>badmode.err &&
+	grep unsupported badmode.err
+"
 test_expect_success 'flux-start embedded server works from initial program' "
-	flux start -v ${ARGS} -s1 flux python ${startctl} \
+	flux start -v ${ARGS} -s1 flux python ${startctl} status \
 		>startctl.out 2>startctl.err
 "
 test_expect_success HAVE_JQ 'flux-start embedded server status got JSON' "
@@ -197,7 +257,7 @@ test_expect_success 'tbon.endpoint uses ipc:// in standalone instance' '
 	grep "^ipc://" endpoint.out
 '
 test_expect_success 'tbon.endpoint uses tcp:// if process mapping unavailable' '
-	flux start ${ARGS} -s2 --noclique \
+	flux start ${ARGS} -s2 --test-pmi-clique=none \
 		flux getattr tbon.endpoint >endpoint2.out &&
 	grep "^tcp" endpoint2.out
 '
@@ -231,6 +291,28 @@ test_expect_success 'flux start -s2 cleans up rundirs' '
 	RUNDIR=$(cat rundir_selfpmi2.out) &&
 	test -n "$RUNDIR" &&
 	test_must_fail test -d $RUNDIR
+'
+test_expect_success 'flux start --test-rundir works' '
+	RUNDIR=$(mktemp -d) &&
+	flux start ${ARGS} --test-size=1 \
+		--test-rundir=$RUNDIR \
+		flux getattr rundir >rundir_test.out &&
+	echo $RUNDIR >rundir_test.exp &&
+	test_cmp rundir_test.exp rundir_test.out &&
+	rmdir $RUNDIR
+'
+test_expect_success 'flux start --test-rundir with missing directory fails' '
+	test_must_fail flux start ${ARGS} --test-size=1 \
+		--test-rundir=/noexist \
+		/bin/true 2>noexist_rundir.err &&
+	grep "/noexist: No such file or directory" noexist_rundir.err
+'
+test_expect_success 'flux start --test-rundir with not-directory fails' '
+	touch notdir &&
+	test_must_fail flux start ${ARGS} --test-size=1 \
+		--test-rundir=notdir \
+		/bin/true 2>notdir_rundir.err &&
+	grep "notdir: not a directory" notdir_rundir.err
 '
 test_expect_success 'rundir override works' '
 	RUNDIR=`mktemp -d` &&
@@ -457,7 +539,7 @@ test_expect_success 'create panic script' '
 
 test_expect_success 'flux-start: panic rank 1 of a size=2 instance' '
 	! flux start ${ARGS} \
-		--killer-timeout=0.2 -s2 \
+		--test-exit-timeout=0.2 -s2 \
 		bash -c "flux getattr rundir; flux exec -r 1 ./panic.sh; sleep 5" >panic.out 2>panic.err
 '
 test_expect_success 'flux-start: panic message reached stderr' '

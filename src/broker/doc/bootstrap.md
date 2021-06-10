@@ -63,7 +63,7 @@ An instance of size N may be launched on a single node using
 `flux-start --test-size=N`.  In this case, the PMI server is embedded in
 the start command, and the PMI-1 wire protocol is used as described above.
 
-Debugging: use the `flux start --trace-pmi-server` option for a server side
+Debugging: use the `flux start --verbose=2` option for a server side
 trace on stderr from the start command.
 
 #### Booting Flux as a job in a foreign resource manager

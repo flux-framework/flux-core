@@ -171,6 +171,7 @@ TESTSCRIPTS = \
 	t3001-mpi-personalities.t \
 	t3002-pmi.t \
 	t3003-mpi-abort.t \
+	t3300-system-basic.t \
 	t4000-issues-test-driver.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \

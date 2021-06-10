@@ -64,15 +64,90 @@ check_module_list() {
 }
 
 #
+#  Generate configuration for test bootstrap and print args for flux-start
+#  Usage:  args=$(make_bootstrap_config workdir size)
+#
+make_bootstrap_config() {
+    local workdir=$1
+    local size=$2
+    local fakehosts="fake[0-$(($size-1))]"
+    local full="0-$(($size-1))"
+
+    mkdir $workdir/conf.d
+    flux keygen $workdir/cert
+    cat >$workdir/conf.d/bootstrap.toml <<-EOT
+	[bootstrap]
+	    curve_cert = "$workdir/cert"
+	    default_bind = "ipc://$workdir/tbon-%h"
+	    default_connect = "ipc://$workdir/tbon-%h"
+	    hosts = [
+	        { host = "$fakehosts" },
+	    ]
+	EOT
+    echo "--test-hosts=$fakehosts -o,-c$workdir/conf.d"
+    echo "--test-exit-mode=${TEST_UNDER_FLUX_EXIT_MODE:-leader}"
+    echo "--test-exit-timeout=${TEST_UNDER_FLUX_EXIT_TIMEOUT:-0}"
+    echo "-o,-Sbroker.quorum=${TEST_UNDER_FLUX_QUORUM:-$full}"
+}
+
+#
+#  Remove any outer trash-directory wrapper used by "system"
+#   personality test_under_flux() tests.
+#
+remove_trashdir_wrapper() {
+    local trashdir=$(dirname $SHARNESS_TRASH_DIRECTORY)
+    case $trashdir in
+        */trash-directory.[!/]*) rm -rf $trashdir
+    esac
+}
+
+#
 #  Reinvoke a test file under a flux instance
 #
-#  Usage: test_under_flux <size>
+#  Usage: test_under_flux <size> [personality]
+#
+#  where personality is one of:
+#
+#  full (default)
+#    Run with all services.
+#    The default broker rc scripts are executed.
+#
+#  minimal
+#    Run with only built-in services.
+#    No broker rc scripts are executed.
+#
+#  job
+#    Load minimum services needed to run jobs.
+#    Fake resources are loaded into the resource module.
+#    Environment variables:
+#    - TEST_UNDER_FLUX_CORES_PER_RANK
+#        Set the number of fake cores per fake node (default: 2).
+#    - TEST_UNDER_FLUX_NO_JOB_EXEC
+#        If set, skip loading job-exec module (default: load job-exec).
+#    - TEST_UNDER_FLUX_SCHED_SIMPLE_MODE
+#        Change mode argument to sched-simple (default: limited=8)
+#
+#  kvs
+#    Load minimum services needed for kvs.
+#
+#  system
+#    Like full, but bootstrap with a generated config file.
+#    Environment variables:
+#    - TEST_UNDER_FLUX_EXIT_MODE
+#        Set the flux-start exit mode (default: leader)
+#    - TEST_UNDER_FLUX_EXIT_TIMEOUT
+#        Set the flux-start exit timeout (default: 0)
+#    - TEST_UNDER_FLUX_QUORUM
+#        Set the broker.quorum attribute (default: 0-<highest_rank>)
 #
 test_under_flux() {
     size=${1:-1}
     personality=${2:-full}
     log_file="$TEST_NAME.broker.log"
     if test -n "$TEST_UNDER_FLUX_ACTIVE" ; then
+        if test "$TEST_UNDER_FLUX_PERSONALITY" = "system"; then
+            cleanup remove_trashdir_wrapper
+        fi
         test "$debug" = "t" || cleanup rm "${SHARNESS_TEST_DIRECTORY:-..}/$log_file"
         flux_module_list > module-list.initial
         cleanup check_module_list
@@ -98,6 +173,11 @@ test_under_flux() {
     if test "$personality" = "minimal"; then
         RC1_PATH=""
         RC3_PATH=""
+    elif test "$personality" = "system"; then
+        sysopts=$(make_bootstrap_config $SHARNESS_TRASH_DIRECTORY $size)
+        # Place the re-executed test script trash within the first invocation's
+        # trash to preserve config files for broker restart in test
+        flags="${flags} --root=$SHARNESS_TRASH_DIRECTORY"
     elif test "$personality" != "full"; then
         RC1_PATH=$FLUX_SOURCE_DIR/t/rc/rc1-$personality
         RC3_PATH=$FLUX_SOURCE_DIR/t/rc/rc3-$personality
@@ -107,6 +187,7 @@ test_under_flux() {
         unset RC1_PATH
         unset RC3_PATH
     fi
+
     if test -n "$FLUX_TEST_VALGRIND" ; then
         VALGRIND_SUPPRESSIONS=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind.supp
         valgrind="--wrap=libtool,e"
@@ -123,9 +204,11 @@ test_under_flux() {
     logopts="-o -Slog-filename=${log_file},-Slog-forward-level=7"
     TEST_UNDER_FLUX_ACTIVE=t \
     TERM=${ORIGINAL_TERM} \
+    TEST_UNDER_FLUX_PERSONALITY="${personality:-default}" \
       exec flux start --test-size=${size} \
                       ${RC1_PATH+-o -Sbroker.rc1_path=${RC1_PATH}} \
                       ${RC3_PATH+-o -Sbroker.rc3_path=${RC3_PATH}} \
+                      ${sysopts} \
                       ${logopts} \
                       ${valgrind} \
                      "sh $0 ${flags}"

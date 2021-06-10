@@ -33,23 +33,25 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/setenvf.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libpmi/simple_server.h"
 #include "src/common/libpmi/clique.h"
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librouter/usock_service.h"
 
-#define DEFAULT_KILLER_TIMEOUT 20.0
+#define DEFAULT_EXIT_TIMEOUT 20.0
 
 static struct {
     struct termios saved_termios;
-    double killer_timeout;
+    double exit_timeout;
+    const char *exit_mode;
     flux_reactor_t *reactor;
     flux_watcher_t *timer;
     zlist_t *clients;
     optparse_t *opts;
+    int verbose;
     int test_size;
-    int count;
     int exit_rc;
     struct {
         zhash_t *kvs;
@@ -63,9 +65,15 @@ struct client {
     int rank;
     flux_subprocess_t *p;
     flux_cmd_t *cmd;
+    int exit_rc;
+    const flux_msg_t *wait_request;
+    const flux_msg_t *run_request;
 };
 
-void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg);
+void exit_timeout (flux_reactor_t *r,
+                   flux_watcher_t *w,
+                   int revents,
+                   void *arg);
 int start_session (const char *cmd_argz, size_t cmd_argz_len,
                    const char *broker_path);
 int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
@@ -74,52 +82,56 @@ char *create_rundir (void);
 void client_destroy (struct client *cli);
 char *find_broker (const char *searchpath);
 static void setup_profiling_env (void);
-
-#ifndef HAVE_CALIPER
-static int no_caliper_fatal_err (optparse_t *p, struct optparse_option *o,
-                                 const char *optarg)
-{
-    log_msg_exit ("Error: --caliper-profile used but no Caliper support found");
-}
-#endif /* !HAVE_CALIPER */
+static void client_wait_respond (struct client *cli);
+static void client_run_respond (struct client *cli, int errnum);
 
 const char *usage_msg = "[OPTIONS] command ...";
 static struct optparse_option opts[] = {
-    { .name = "verbose",    .key = 'v', .has_arg = 0,
-      .usage = "Be annoyingly informative", },
+    { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
+      .usage = "Be annoyingly informative by degrees", },
     { .name = "noexec",     .key = 'X', .has_arg = 0,
       .usage = "Don't execute (useful with -v, --verbose)", },
-    { .name = "test-size",       .key = 's', .has_arg = 1, .arginfo = "N",
-      .usage = "Start a test instance by launching N brokers locally", },
-    { .name = "test-hosts", .has_arg = 1, .arginfo = "HOSTLIST",
-      .usage = "Set FLUX_FAKE_HOSTNAME in environment of each broker", },
     { .name = "broker-opts",.key = 'o', .has_arg = 1, .arginfo = "OPTS",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Add comma-separated broker options, e.g. \"-o,-v\"", },
-    { .name = "killer-timeout",.key = 'k', .has_arg = 1, .arginfo = "DURATION",
-      .usage = "After a broker exits, kill other brokers after DURATION", },
-    { .name = "trace-pmi-server", .has_arg = 0, .arginfo = NULL,
-      .usage = "Trace pmi simple server protocol exchange", },
-    { .name = "rundir", .key = 'D', .has_arg = 1, .arginfo = "DIR",
-      .usage = "Use DIR as broker run directory", },
-    { .name = "noclique", .key = 'c', .has_arg = 0, .arginfo = NULL,
-      .usage = "Don't set PMI_process_mapping in PMI KVS", },
-
-/* Option group 1, these options will be listed after those above */
+    /* Option group 1, these options will be listed after those above */
+#if HAVE_CALIPER
     { .group = 1,
       .name = "caliper-profile", .has_arg = 1,
       .arginfo = "PROFILE",
       .usage = "Enable profiling in brokers using Caliper configuration "
                "profile named `PROFILE'",
-#ifndef HAVE_CALIPER
-      .cb = no_caliper_fatal_err, /* Emit fatal err if not built w/ Caliper */
-#endif /* !HAVE_CALIPER */
     },
+#endif /* !HAVE_CALIPER */
     { .group = 1,
       .name = "wrap", .has_arg = 1, .arginfo = "ARGS,...",
       .flags = OPTPARSE_OPT_AUTOSPLIT,
       .usage = "Wrap broker execution in comma-separated arguments"
     },
+    /* Option group 2 */
+    { .group = 2,
+      .usage = "\nOptions useful for testing:" },
+    { .group = 2,
+      .name = "test-size",       .key = 's', .has_arg = 1, .arginfo = "N",
+      .usage = "Start a test instance by launching N brokers locally", },
+    { .group = 2,
+      .name = "test-hosts", .has_arg = 1, .arginfo = "HOSTLIST",
+      .usage = "Set FLUX_FAKE_HOSTNAME in environment of each broker", },
+    { .group = 2,
+      .name = "test-exit-timeout", .has_arg = 1, .arginfo = "FSD",
+      .usage = "After a broker exits, kill other brokers after timeout", },
+    { .group = 2,
+      .name = "test-exit-mode", .has_arg = 1, .arginfo = "any|leader",
+      .usage = "Trigger exit timer on leader/any broker exit (default=any)", },
+    { .group = 2,
+      .name = "test-rundir", .has_arg = 1, .arginfo = "DIR",
+      .usage = "Use DIR as broker run directory", },
+    { .group = 2,
+      .name = "test-pmi-clique", .has_arg = 1, .arginfo = "single|none",
+      .usage = "Set PMI_process_mapping mode (default=single)", },
+    { .flags = OPTPARSE_OPT_HIDDEN,
+      .name = "killer-timeout", .has_arg = 1, .arginfo = "FSD",
+      .usage = "(deprecated)" },
     OPTPARSE_TABLE_END,
 };
 
@@ -147,17 +159,31 @@ int main (int argc, char *argv[])
 
     sanity_check_working_directory ();
 
-    ctx.opts = optparse_create ("flux-start");
-    if (optparse_add_option_table (ctx.opts, opts) != OPTPARSE_SUCCESS)
-        log_msg_exit ("optparse_add_option_table");
-    if (optparse_set (ctx.opts, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
-        log_msg_exit ("optparse_set usage");
+    if (!(ctx.opts = optparse_create ("flux-start"))
+        || optparse_add_option_table (ctx.opts, opts) != OPTPARSE_SUCCESS
+        || optparse_set (ctx.opts,
+                         OPTPARSE_OPTION_WIDTH,
+                         32) != OPTPARSE_SUCCESS
+        || optparse_set (ctx.opts,
+                         OPTPARSE_USAGE,
+                         usage_msg) != OPTPARSE_SUCCESS)
+        log_msg_exit ("error setting up option parsing");
     if ((optindex = optparse_parse_args (ctx.opts, argc, argv)) < 0)
         exit (1);
-    ctx.killer_timeout = optparse_get_duration (ctx.opts, "killer-timeout",
-                                                DEFAULT_KILLER_TIMEOUT);
-    if (ctx.killer_timeout < 0.)
-        log_msg_exit ("--killer-timeout argument must be >= 0");
+
+    ctx.exit_timeout = optparse_get_duration (ctx.opts, "test-exit-timeout",
+                                              DEFAULT_EXIT_TIMEOUT);
+    if (!optparse_hasopt (ctx.opts, "test-exit-timeout"))
+        ctx.exit_timeout = optparse_get_duration (ctx.opts, "killer-timeout",
+                                                  ctx.exit_timeout);
+
+    ctx.exit_mode = optparse_get_str (ctx.opts, "test-exit-mode", "any");
+    if (strcmp (ctx.exit_mode, "any") != 0
+        && strcmp (ctx.exit_mode, "leader") != 0)
+        log_msg_exit ("unknown --test-exit-mode: %s", ctx.exit_mode);
+
+    ctx.verbose = optparse_get_int (ctx.opts, "verbose", 0);
+
     if (optindex < argc) {
         if ((e = argz_create (argv + optindex, &command, &len)) != 0)
             log_errn_exit (e, "argz_create");
@@ -177,13 +203,18 @@ int main (int argc, char *argv[])
     setup_profiling_env ();
 
     if (!optparse_hasopt (ctx.opts, "test-size")) {
-        if (optparse_hasopt (ctx.opts, "rundir"))
+        if (optparse_hasopt (ctx.opts, "test-rundir"))
             log_msg_exit ("--rundir only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "noclique"))
-            log_msg_exit ("--noclique only works with --test-size=N");
+        if (optparse_hasopt (ctx.opts, "test-pmi-clique"))
+            log_msg_exit ("--test-pmi-clique only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "test-hosts"))
             log_msg_exit ("--test-hosts only works with --test-size=N");
-        status = exec_broker (command, len, broker_path);
+        if (optparse_hasopt (ctx.opts, "test-exit-timeout"))
+            log_msg_exit ("--test-exit-timeout only works with --test-size=N");
+        if (optparse_hasopt (ctx.opts, "test-exit-mode"))
+            log_msg_exit ("--test-exit-mode only works with --test-size=N");
+        if (exec_broker (command, len, broker_path) < 0)
+            log_err_exit ("error execing broker");
     }
     else {
         status = start_session (command, len, broker_path);
@@ -244,42 +275,78 @@ char *find_broker (const char *searchpath)
     return dir ? xstrdup (path) : NULL;
 }
 
-void killer (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
+void exit_timeout (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
 {
     struct client *cli;
 
     cli = zlist_first (ctx.clients);
     while (cli) {
-        flux_future_t *f = flux_subprocess_kill (cli->p, SIGKILL);
-        if (f)
+        if (cli->p) {
+            flux_future_t *f = flux_subprocess_kill (cli->p, SIGKILL);
             flux_future_destroy (f);
+        }
         cli = zlist_next (ctx.clients);
     }
+}
+
+void update_timer (void)
+{
+    struct client *cli;
+    int count = 0;
+    bool leader_exit = false;
+    bool shutdown = false;
+
+    cli = zlist_first (ctx.clients);
+    while (cli) {
+        if (cli->p)
+            count++;
+        if (cli->rank == 0 && !cli->p)
+            leader_exit = true;
+        cli = zlist_next (ctx.clients);
+    }
+    if (!strcmp (ctx.exit_mode, "any")) {
+        if (count > 0 && count < ctx.test_size)
+            shutdown = true;
+    }
+    else if (!strcmp (ctx.exit_mode, "leader")) {
+        if (count > 0 && leader_exit)
+            shutdown = true;
+    }
+    if (shutdown)
+        flux_watcher_start (ctx.timer);
+    else
+        flux_watcher_stop (ctx.timer);
 }
 
 static void completion_cb (flux_subprocess_t *p)
 {
     struct client *cli = flux_subprocess_aux_get (p, "cli");
-    int rc;
 
     assert (cli);
 
-    if ((rc = flux_subprocess_exit_code (p)) < 0) {
+    if ((cli->exit_rc = flux_subprocess_exit_code (p)) < 0) {
         /* bash standard, signals + 128 */
-        if ((rc = flux_subprocess_signaled (p)) >= 0)
-            rc += 128;
+        if ((cli->exit_rc = flux_subprocess_signaled (p)) >= 0)
+            cli->exit_rc += 128;
     }
 
-    if (rc > ctx.exit_rc)
-        ctx.exit_rc = rc;
+    /* In 'any' mode, the higest of the broker exit codes is
+     * flux-start's exit code.  In 'leader' mode, the leader broker's
+     * exit code is flux-start's exit code.
+     */
+    if (!strcmp (ctx.exit_mode, "any")) {
+        if (cli->exit_rc > ctx.exit_rc)
+            ctx.exit_rc = cli->exit_rc;
+    }
+    else if (!strcmp (ctx.exit_mode, "leader")) {
+        if (cli->rank == 0)
+            ctx.exit_rc = cli->exit_rc;
+    }
 
-    if (--ctx.count > 0)
-        flux_watcher_start (ctx.timer);
-    else
-        flux_watcher_stop (ctx.timer);
-
-    zlist_remove (ctx.clients, cli);
-    client_destroy (cli);
+    flux_subprocess_destroy (cli->p);
+    cli->p = NULL;
+    client_wait_respond (cli);
+    update_timer ();
 }
 
 static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
@@ -288,26 +355,33 @@ static void state_cb (flux_subprocess_t *p, flux_subprocess_state_t state)
 
     assert (cli);
 
-    if (state == FLUX_SUBPROCESS_FAILED) {
-        log_errn (errno, "%d FAILED", cli->rank);
-        if (--ctx.count > 0)
-            flux_watcher_start (ctx.timer);
-        else
-            flux_watcher_stop (ctx.timer);
-        zlist_remove (ctx.clients, cli);
-        client_destroy (cli);
-    }
-    else if (state == FLUX_SUBPROCESS_EXITED) {
-        pid_t pid = flux_subprocess_pid (p);
-        int status;
+    switch (state) {
+        case FLUX_SUBPROCESS_INIT:
+        case FLUX_SUBPROCESS_EXEC_FAILED: // can't happen here - rexec only
+            break;
+        case FLUX_SUBPROCESS_RUNNING:
+            client_run_respond (cli, 0);
+            break;
+        case FLUX_SUBPROCESS_FAILED: { // completion will not be called
+            log_errn_exit (flux_subprocess_fail_errno (p),
+                           "%d subprocess failed", cli->rank);
+            break;
+        }
+        case FLUX_SUBPROCESS_EXITED: {
+            pid_t pid = flux_subprocess_pid (p);
+            int status = flux_subprocess_status (p);
 
-        if ((status = flux_subprocess_status (p)) >= 0) {
-            if (WIFSIGNALED (status))
-                log_msg ("%d (pid %d) %s", cli->rank, pid, strsignal (WTERMSIG (status)));
-            else if (WIFEXITED (status) && WEXITSTATUS (status) != 0)
-                log_msg ("%d (pid %d) exited with rc=%d", cli->rank, pid, WEXITSTATUS (status));
-        } else
-            log_msg ("%d (pid %d) exited, unknown status", cli->rank, pid);
+            assert (status >= 0);
+            if (WIFSIGNALED (status)) {
+                log_msg ("%d (pid %d) %s",
+                         cli->rank, pid, strsignal (WTERMSIG (status)));
+            }
+            else if (WIFEXITED (status) && WEXITSTATUS (status) != 0) {
+                log_msg ("%d (pid %d) exited with rc=%d",
+                         cli->rank, pid, WEXITSTATUS (status));
+            }
+            break;
+        }
     }
 }
 
@@ -414,7 +488,7 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
         if (argz_append (&argz, &argz_len, cmd_argz, cmd_argz_len) != 0)
             goto nomem;
     }
-    if (optparse_hasopt (ctx.opts, "verbose")) {
+    if (ctx.verbose >= 1) {
         char *cpy = malloc (argz_len);
         if (!cpy)
             goto nomem;
@@ -432,7 +506,7 @@ int exec_broker (const char *cmd_argz, size_t cmd_argz_len,
 nomem:
     errno = ENOMEM;
 error:
-    free (argz);
+    ERRNO_SAFE_WRAP (free, argz);
     return -1;
 }
 
@@ -512,6 +586,7 @@ void client_dumpargs (struct client *cli)
 
 void pmi_server_initialize (int flags)
 {
+    const char *mode = optparse_get_str (ctx.opts, "test-pmi-clique", "single");
     struct pmi_simple_ops ops = {
         .kvs_put = pmi_kvs_put,
         .kvs_get = pmi_kvs_get,
@@ -521,10 +596,11 @@ void pmi_server_initialize (int flags)
     };
     int appnum = 0;
 
+
     if (!(ctx.pmi.kvs = zhash_new()))
         oom ();
 
-    if (!optparse_hasopt (ctx.opts, "noclique")) {
+    if (!strcmp (mode, "single")) {
         struct pmi_map_block mapblock = {
             .nodeid = 0,
             .nodes = 1,
@@ -535,6 +611,8 @@ void pmi_server_initialize (int flags)
             log_msg_exit ("error encoding PMI_process_mapping");
         zhash_update (ctx.pmi.kvs, "PMI_process_mapping", xstrdup (buf));
     }
+    else if (strcmp (mode, "none") != 0)
+        log_msg_exit ("unsupported test-pmi-clique mode: %s", mode);
 
     ctx.pmi.srv = pmi_simple_server_create (ops, appnum, ctx.test_size,
                                             ctx.test_size, "-", flags, NULL);
@@ -557,6 +635,10 @@ int client_run (struct client *cli)
         .on_stdout = NULL,
         .on_stderr = NULL,
     };
+    if (cli->p) {
+        errno = EEXIST;
+        return -1;
+    }
     /* We want stdio fallthrough so subprocess can capture tty if
      * necessary (i.e. an interactive shell)
      */
@@ -611,6 +693,157 @@ nomem:
     json_decref (procs);
 }
 
+static struct client *client_lookup (int rank)
+{
+    struct client *cli;
+
+    cli = zlist_first (ctx.clients);
+    while (cli) {
+        if (cli->rank == rank)
+            return cli;
+        cli = zlist_next (ctx.clients);
+    }
+    errno = ESRCH;
+    return NULL;
+}
+
+/* Send 'signum' to 'cli'.  Since this is always a local operation,
+ * the future is immediately fulfilled, so just destroy it.
+ * If cli is not running, return success.
+ */
+static int client_kill (struct client *cli, int signum)
+{
+    flux_future_t *f;
+    if (!cli->p)
+        return 0;
+    if (!(f = flux_subprocess_kill (cli->p, signum)))
+        return -1;
+    flux_future_destroy (f);
+    return 0;
+}
+
+/* Respond with errum result to pending run request, if any.
+ */
+static void client_run_respond (struct client *cli, int errnum)
+{
+    if (cli->run_request) {
+        int rc;
+        if (errnum == 0)
+            rc = flux_respond (ctx.h, cli->run_request, NULL);
+        else
+            rc = flux_respond_error (ctx.h, cli->run_request, errnum, NULL);
+        if (rc < 0)
+            log_err ("error responding to start.run request");
+        flux_msg_decref (cli->run_request);
+        cli->run_request = NULL;
+    }
+}
+
+static void client_wait_respond (struct client *cli)
+{
+    if (cli->wait_request) {
+        if (flux_respond_pack (ctx.h,
+                               cli->wait_request,
+                               "{s:i}",
+                               "exit_rc", cli->exit_rc) < 0)
+            log_err ("error responding to wait request");
+        flux_msg_decref (cli->wait_request);
+        cli->wait_request = NULL;
+    }
+}
+
+/* Send signal to one broker by rank.
+ */
+void kill_cb (flux_t *h,
+              flux_msg_handler_t *mh,
+              const flux_msg_t *msg,
+              void *arg)
+{
+    int rank;
+    int signum;
+    struct client *cli;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i s:i}",
+                             "rank", &rank,
+                             "signum", &signum) < 0)
+        goto error;
+    if (!(cli = client_lookup (rank)))
+        goto error;
+    if (client_kill (cli, signum) < 0)
+        goto error;
+    if (flux_respond (h, msg, NULL) < 0)
+        log_err ("error responding to kill request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        log_err ("error responding to kill request");
+}
+
+/* Wait for one broker to complete and return its exit_rc.
+ * If the child is not running, return cli->exit_rc immediately.  Otherwise,
+ * the request is parked on the 'struct child' (one request allowed per child),
+ * and response is sent by completion handler upon broker completion.
+ */
+void wait_cb (flux_t *h,
+              flux_msg_handler_t *mh,
+              const flux_msg_t *msg,
+              void *arg)
+{
+    int rank;
+    struct client *cli;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i}",
+                             "rank", &rank) < 0)
+        goto error;
+    if (!(cli = client_lookup (rank)))
+        goto error;
+    if (cli->wait_request) {
+        errno = EEXIST;
+        goto error;
+    }
+    cli->wait_request = flux_msg_incref (msg);
+    if (!cli->p)
+        client_wait_respond (cli);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        log_err ("error responding to start request");
+}
+
+/* Run one broker by rank.
+ */
+void run_cb (flux_t *h,
+             flux_msg_handler_t *mh,
+             const flux_msg_t *msg,
+             void *arg)
+{
+    int rank;
+    struct client *cli;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i}",
+                             "rank", &rank) < 0)
+        goto error;
+    if (!(cli = client_lookup (rank)))
+        goto error;
+    if (cli->run_request) {
+        errno = EEXIST;
+        goto error;
+    }
+    if (client_run (cli) < 0)
+        goto error;
+    cli->run_request = flux_msg_incref (msg);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        log_err ("error responding to start request");
+}
+
 void disconnect_cb (flux_t *h,
                     flux_msg_handler_t *mh,
                     const flux_msg_t *msg,
@@ -620,7 +853,7 @@ void disconnect_cb (flux_t *h,
 
     if (flux_msg_get_route_first (msg, &uuid) < 0)
         goto done;
-    if (optparse_hasopt (ctx.opts, "verbose"))
+    if (ctx.verbose >= 1)
         log_msg ("disconnect from %.5s", uuid);
 done:
     free (uuid);
@@ -628,6 +861,9 @@ done:
 
 const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "start.status", status_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "start.kill", kill_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "start.wait", wait_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "start.run", run_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "disconnect", disconnect_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -688,20 +924,26 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     if (!(ctx.reactor = flux_reactor_create (FLUX_REACTOR_SIGCHLD)))
         log_err_exit ("flux_reactor_create");
     if (!(ctx.timer = flux_timer_watcher_create (ctx.reactor,
-                                                  ctx.killer_timeout, 0.,
-                                                  killer, NULL)))
+                                                  ctx.exit_timeout, 0.,
+                                                  exit_timeout, NULL)))
         log_err_exit ("flux_timer_watcher_create");
     if (!(ctx.clients = zlist_new ()))
         log_err_exit ("zlist_new");
 
-    if (optparse_hasopt (ctx.opts, "rundir"))
-        rundir = xstrdup (optparse_get_str (ctx.opts, "rundir", NULL));
+    if (optparse_hasopt (ctx.opts, "test-rundir")) {
+        struct stat sb;
+        rundir = xstrdup (optparse_get_str (ctx.opts, "test-rundir", NULL));
+        if (stat (rundir, &sb) < 0)
+            log_err_exit ("%s", rundir);
+        if (!S_ISDIR (sb.st_mode))
+            log_msg_exit ("%s: not a directory", rundir);
+    }
     else
         rundir = create_rundir ();
 
-    start_server_initialize (rundir, optparse_hasopt (ctx.opts, "verbose"));
+    start_server_initialize (rundir, ctx.verbose >= 1 ? true : false);
 
-    if (optparse_hasopt (ctx.opts, "trace-pmi-server"))
+    if (ctx.verbose >= 2)
         flags |= PMI_SIMPLE_SERVER_TRACE;
 
     pmi_server_initialize (flags);
@@ -722,7 +964,7 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
                                    cmd_argz_len,
                                    hosts ? hostlist_nth (hosts, rank) : NULL)))
             log_err_exit ("client_create");
-        if (optparse_hasopt (ctx.opts, "verbose"))
+        if (ctx.verbose >= 1)
             client_dumpargs (cli);
         if (optparse_hasopt (ctx.opts, "noexec")) {
             client_destroy (cli);
@@ -732,7 +974,6 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
             log_err_exit ("client_run");
         if (zlist_append (ctx.clients, cli) < 0)
             log_err_exit ("zlist_append");
-        ctx.count++;
     }
     if (flux_reactor_run (ctx.reactor, 0) < 0)
         log_err_exit ("flux_reactor_run");
@@ -743,7 +984,11 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     hostlist_destroy (hosts);
     free (rundir);
 
-    zlist_destroy (&ctx.clients);
+    if (ctx.clients) {
+        while ((cli = zlist_pop (ctx.clients)))
+            client_destroy (cli);
+        zlist_destroy (&ctx.clients);
+    }
     flux_watcher_destroy (ctx.timer);
     flux_reactor_destroy (ctx.reactor);
 
