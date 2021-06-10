@@ -25,12 +25,15 @@ libjob_la_SOURCES = \
 	job_hash.c \
 	job_hash.h \
 	specutil.c \
-	specutil.h
+	specutil.h \
+	jobspec1.c \
+	jobspec1.h
 
 TESTS = \
 	test_job.t \
 	test_sign_none.t \
-	test_specutil.t
+	test_specutil.t \
+	test_jobspec1.t
 
 check_PROGRAMS = \
         $(TESTS)
@@ -68,3 +71,7 @@ test_sign_none_t_LDADD = $(test_ldadd) $(LIBDL)
 test_specutil_t_SOURCES = test/specutil.c
 test_specutil_t_CPPFLAGS = $(test_cppflags)
 test_specutil_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_jobspec1_t_SOURCES = test/jobspec1.c
+test_jobspec1_t_CPPFLAGS = $(test_cppflags)
+test_jobspec1_t_LDADD = $(test_ldadd) $(LIBDL)
