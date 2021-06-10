@@ -155,7 +155,7 @@ test_under_flux() {
     log_file="$TEST_NAME.broker.log"
     if test -n "$TEST_UNDER_FLUX_ACTIVE" ; then
         if test "$TEST_UNDER_FLUX_PERSONALITY" = "system"; then
-            cleanup remove_trashdir_wrapper
+            test "$debug" = "t" || cleanup remove_trashdir_wrapper
         fi
         test "$debug" = "t" || cleanup rm "${SHARNESS_TEST_DIRECTORY:-..}/$log_file"
         flux_module_list > module-list.initial
