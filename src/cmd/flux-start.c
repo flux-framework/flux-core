@@ -46,6 +46,7 @@ static struct {
     struct termios saved_termios;
     double exit_timeout;
     const char *exit_mode;
+    const char *start_mode;
     flux_reactor_t *reactor;
     flux_watcher_t *timer;
     zlist_t *clients;
@@ -124,6 +125,9 @@ static struct optparse_option opts[] = {
       .name = "test-exit-mode", .has_arg = 1, .arginfo = "any|leader",
       .usage = "Trigger exit timer on leader/any broker exit (default=any)", },
     { .group = 2,
+      .name = "test-start-mode", .has_arg = 1, .arginfo = "all|leader",
+      .usage = "Start all brokers immediately or just leader (default=all)", },
+    { .group = 2,
       .name = "test-rundir", .has_arg = 1, .arginfo = "DIR",
       .usage = "Use DIR as broker run directory", },
     { .group = 2,
@@ -182,6 +186,11 @@ int main (int argc, char *argv[])
         && strcmp (ctx.exit_mode, "leader") != 0)
         log_msg_exit ("unknown --test-exit-mode: %s", ctx.exit_mode);
 
+    ctx.start_mode = optparse_get_str (ctx.opts, "test-start-mode", "all");
+    if (strcmp (ctx.start_mode, "all") != 0
+        && strcmp (ctx.start_mode, "leader") != 0)
+        log_msg_exit ("unknown --test-start-mode: %s", ctx.start_mode);
+
     ctx.verbose = optparse_get_int (ctx.opts, "verbose", 0);
 
     if (optindex < argc) {
@@ -213,6 +222,8 @@ int main (int argc, char *argv[])
             log_msg_exit ("--test-exit-timeout only works with --test-size=N");
         if (optparse_hasopt (ctx.opts, "test-exit-mode"))
             log_msg_exit ("--test-exit-mode only works with --test-size=N");
+        if (optparse_hasopt (ctx.opts, "test-start-mode"))
+            log_msg_exit ("--test-start-mode only works with --test-size=N");
         if (exec_broker (command, len, broker_path) < 0)
             log_err_exit ("error execing broker");
     }
@@ -970,10 +981,21 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
             client_destroy (cli);
             continue;
         }
-        if (client_run (cli) < 0)
-            log_err_exit ("client_run");
         if (zlist_append (ctx.clients, cli) < 0)
             log_err_exit ("zlist_append");
+    }
+    if (!strcmp (ctx.start_mode, "leader")) {
+        cli = zlist_first (ctx.clients);
+        if (client_run (cli) < 0)
+            log_err_exit ("client_run");
+    }
+    else if (!strcmp (ctx.start_mode, "all")) {
+        cli = zlist_first (ctx.clients);
+        while (cli) {
+            if (client_run (cli) < 0)
+                log_err_exit ("client_run");
+            cli = zlist_next (ctx.clients);
+        }
     }
     if (flux_reactor_run (ctx.reactor, 0) < 0)
         log_err_exit ("flux_reactor_run");

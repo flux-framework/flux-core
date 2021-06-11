@@ -133,7 +133,16 @@ test_expect_success 'flux-start --test-exit-mode=leader is accepted' "
 	flux start ${ARGS} -s1 --test-exit-mode=leader /bin/true
 "
 test_expect_success 'flux-start --test-exit-mode=badmode fails' "
-	test_must_fail flux start ${ARGS} --test-exit-mode=badmode /bin/true
+	test_must_fail flux start ${ARGS} -s1 --test-exit-mode=badmode /bin/true
+"
+test_expect_success 'flux-start --test-start-mode without --test-size fails' "
+	test_must_fail flux start ${ARGS} --test-start-mode=all /bin/true
+"
+test_expect_success 'flux-start --test-start-mode=all is accepted' "
+	flux start ${ARGS} -s1 --test-start-mode=all /bin/true
+"
+test_expect_success 'flux-start --test-start-mode=badmode fails' "
+	test_must_fail flux start ${ARGS} -s1 --test-start-mode=badmode /bin/true
 "
 test_expect_success 'flux-start --verbose=2 enables PMI tracing' "
 	flux start ${ARGS} \

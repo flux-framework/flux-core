@@ -220,4 +220,16 @@ test_expect_success 'unload resource module' '
 	flux exec -r all flux module remove resource
 '
 
+test_expect_success 'reconfig with bad R path' '
+	cat >resource.toml <<-EOT &&
+	[resource]
+	path = "/noexist"
+	EOT
+	flux config reload
+'
+
+test_expect_success 'load resource module fails due to bad R' '
+	test_must_fail flux module load resource
+'
+
 test_done
