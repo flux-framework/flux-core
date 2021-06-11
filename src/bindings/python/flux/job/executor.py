@@ -215,18 +215,24 @@ class FluxExecutorFuture(concurrent.futures.Future):
         :raises concurrent.futures.TimeoutError: If the jobid is not available
             before the given timeout.
         :raises concurrent.futures.CancelledError: If the future was cancelled.
+        :raises RuntimeError: If the job could not be submitted (e.g. if
+            the jobspec was invalid).
         """
         if self.__jobid is not None:
-            if self.cancelled():
-                raise concurrent.futures.CancelledError()
-            return self.__jobid
+            return self._get_jobid()
         with self.__jobid_condition:
             self.__jobid_condition.wait(timeout)
             if self.__jobid is not None:
-                if self.cancelled():
-                    raise concurrent.futures.CancelledError()
-                return self.__jobid
+                return self._get_jobid()
             raise concurrent.futures.TimeoutError()
+
+    def _get_jobid(self):
+        """Get the jobid, checking for cancellation and invalid job ids."""
+        if self.__jobid < 0:
+            if self.cancelled():
+                raise concurrent.futures.CancelledError()
+            raise RuntimeError(f"job could not be submitted due to {self.exception(0)}")
+        return self.__jobid
 
     def add_jobid_callback(self, callback):
         """Attaches a callable that will be called when the jobid is ready.
@@ -255,7 +261,7 @@ class FluxExecutorFuture(concurrent.futures.Future):
             )
 
     def exception(self, *args, **kwargs):  # pylint: disable=arguments-differ
-        """If this method is invoked from a jobid callback by an executor thread,
+        """If this method is invoked from a jobid/event callback by an executor thread,
         it will result in deadlock, since the current thread will wait
         for work that the same thread is meant to do.
 
@@ -268,7 +274,7 @@ class FluxExecutorFuture(concurrent.futures.Future):
     exception.__doc__ = concurrent.futures.Future.exception.__doc__
 
     def result(self, *args, **kwargs):  # pylint: disable=arguments-differ
-        """If this method is invoked from a jobid callback by an executor thread,
+        """If this method is invoked from a jobid/event callback by an executor thread,
         it will result in deadlock, since the current thread will wait
         for work that the same thread is meant to do.
 
@@ -279,6 +285,19 @@ class FluxExecutorFuture(concurrent.futures.Future):
         return super().result(*args, **kwargs)
 
     result.__doc__ = concurrent.futures.Future.result.__doc__
+
+    def set_exception(self, *args, **kwargs):  # pylint: disable=arguments-differ
+        """When setting an exception on the future, set the jobid if it hasn't
+        been set already. The jobid will already have been set unless the exception
+        was generated before the job could be successfully submitted.
+        """
+        try:
+            self.jobid(0)
+        except concurrent.futures.TimeoutError:
+            self._set_jobid(-1)  # set jobid to something negative
+        return super().set_exception(*args, **kwargs)
+
+    set_exception.__doc__ = concurrent.futures.Future.set_exception.__doc__
 
     def cancel(self, *args, **kwargs):  # pylint: disable=arguments-differ
         """If a thread is waiting for the future's jobid, and another
@@ -291,7 +310,7 @@ class FluxExecutorFuture(concurrent.futures.Future):
             return True
         cancelled = super().cancel(*args, **kwargs)
         if cancelled:
-            self._set_jobid(-1)
+            self._set_jobid(-1)  # set jobid to something negative
         return cancelled
 
     cancel.__doc__ = concurrent.futures.Future.cancel.__doc__

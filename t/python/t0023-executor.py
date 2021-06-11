@@ -83,6 +83,9 @@ class TestFluxExecutor(unittest.TestCase):
     def test_bad_jobspec(self):
         with FluxExecutor() as executor:
             future = executor.submit(None)  # not a valid jobspec
+        with self.assertRaisesRegex(RuntimeError, r"job could not be submitted.*"):
+            # trying to fetch jobid should raise an error
+            future.jobid()
         with self.assertRaises(OSError):
             # future should be fulfilled after shutdown
             future.result(timeout=0)
