@@ -59,6 +59,13 @@ test_expect_success 'flux-python command runs a python that finds flux' '
 	flux python -c "import flux"
 '
 
+test_expect_success 'flux-python command runs the configured python' '
+	define_line=$(grep "^#define PYTHON_INTERPRETER" ${FLUX_BUILD_DIR}/config/config.h) &&
+	expected=$(echo ${define_line} | sed -E '\''s~.*define PYTHON_INTERPRETER "(.*)"~\1~'\'') &&
+	actual=$(flux python -c "import sys; print(sys.executable)") &&
+	test "${expected}" = "${actual}"
+'
+
 # Minimal is sufficient for these tests, but test_under_flux unavailable
 # clear the RC paths
 ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
