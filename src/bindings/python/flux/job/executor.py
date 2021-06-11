@@ -40,6 +40,7 @@ class _FluxExecutorThread(threading.Thread):
     # pylint: disable=too-many-arguments
     def __init__(
         self,
+        broken_event,
         exit_event,
         jobspecs_to_submit,
         poll_interval,
@@ -48,13 +49,31 @@ class _FluxExecutorThread(threading.Thread):
         **kwargs,
     ):
         super().__init__(**kwargs)
+        self.__broken_event = broken_event
         self.__exit_event = exit_event
         self.__jobspecs_to_submit = jobspecs_to_submit
-        self.__remaining_flux_futures = 0  # number of unfulfilled futures
         self.__poll_interval = poll_interval
         self.__flux_handle = flux.Flux(*handle_args, **handle_kwargs)
+        self.__running_user_futures = set()  # unfulfilled futures
 
     def run(self):
+        try:
+            self.__run()
+        except Exception as exc:
+            self.__broken_event.set()
+            for fut in self.__running_user_futures:
+                if not fut.done():
+                    fut.set_exception(exc)
+            while self.__jobspecs_to_submit or not self.__exit_event.is_set():
+                try:
+                    _, _, user_future = self.__jobspecs_to_submit.popleft()
+                except IndexError:
+                    time.sleep(0.01)
+                else:
+                    user_future.set_exception(exc)
+            raise
+
+    def __run(self):
         """Loop indefinitely, submitting jobspecs and fetching jobids."""
         self.__flux_handle.timer_watcher_create(
             self.__poll_interval, self.__submit_new_jobs, repeat=self.__poll_interval
@@ -62,9 +81,7 @@ class _FluxExecutorThread(threading.Thread):
         while self.__work_remains():
             self.__submit_new_jobs(reactor_run=False)
             if self.__flux_handle.reactor_run() < 0:
-                msg = "reactor start failed"
-                self.__flux_handle.fatal_error(msg)
-                raise RuntimeError(msg)
+                raise RuntimeError("reactor start failed")
 
     def __work_remains(self):
         """Return True if and only if there is still work to be done.
@@ -74,7 +91,7 @@ class _FluxExecutorThread(threading.Thread):
         return (
             not self.__exit_event.is_set()
             or self.__jobspecs_to_submit
-            or self.__remaining_flux_futures > 0
+            or self.__running_user_futures
         )
 
     def __submit_new_jobs(self, *_, reactor_run=True):
@@ -85,7 +102,7 @@ class _FluxExecutorThread(threading.Thread):
         """
         if not self.__work_remains() and reactor_run:
             self.__flux_handle.reactor_stop()
-        if self.__remaining_flux_futures == 0 and not self.__jobspecs_to_submit:
+        if not self.__running_user_futures and not self.__jobspecs_to_submit:
             time.sleep(self.__poll_interval)
         while self.__jobspecs_to_submit:
             try:
@@ -100,7 +117,7 @@ class _FluxExecutorThread(threading.Thread):
                 except Exception as submit_exc:  # pylint: disable=broad-except
                     user_future.set_exception(submit_exc)
                 else:
-                    self.__remaining_flux_futures += 1
+                    self.__running_user_futures.add(user_future)
 
     def __submission_callback(self, submission_future, user_future):
         """Callback invoked when a jobid is ready for a submitted jobspec."""
@@ -129,7 +146,7 @@ class _FluxExecutorThread(threading.Thread):
                 elif event.name == "exception" and event.context["severity"] == 0:
                     user_future.set_exception(JobException(event))
         else:  # no more events
-            self.__remaining_flux_futures -= 1
+            self.__running_user_futures.discard(user_future)
 
 
 class FluxExecutorFuture(concurrent.futures.Future):
@@ -394,12 +411,14 @@ class FluxExecutor:
         self._submission_queues = [collections.deque() for i in range(threads)]
         self._next_thread = 0  # the next thread to give a job to
         self._shutdown_lock = threading.Lock()
+        self._broken_event = threading.Event()
         self._shutdown_event = threading.Event()
         thread_name_prefix = (
             thread_name_prefix or f"{type(self).__name__}-{self._counter()}"
         )
         self._executor_threads = [
             _FluxExecutorThread(
+                self._broken_event,
                 self._shutdown_event,
                 deque,
                 poll_interval,
@@ -472,8 +491,12 @@ class FluxExecutor:
             (default is False)
         :type pre_signed: bool
 
-        :raises RuntimeError: if ``shutdown`` has been called.
+        :raises RuntimeError: if ``shutdown`` has been called or if an error has
+            occurred and new jobs cannot be submitted (e.g. a remote Flux instance
+            can no longer be communicated with).
         """
+        if self._broken_event.is_set():
+            raise RuntimeError("Executor is broken, new jobs cannot be submitted")
         with self._shutdown_lock:
             if self._shutdown_event.is_set():
                 raise RuntimeError("cannot schedule new futures after shutdown")

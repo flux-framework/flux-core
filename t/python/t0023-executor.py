@@ -14,6 +14,7 @@ import unittest
 import collections
 import threading
 import os
+import types
 import itertools
 import concurrent.futures as cf
 
@@ -130,6 +131,12 @@ class TestFluxExecutor(unittest.TestCase):
             self.assertIsInstance(future.exception(), JobException)
             self.assertTrue(flag.is_set())
 
+    def test_broken_executor(self):
+        with FluxExecutor() as executor:
+            executor._broken_event.set()
+            with self.assertRaisesRegex(RuntimeError, "Executor is broken.*"):
+                executor.submit(JobspecV1.from_command(["/not/a/real/app"]))
+
 
 class TestFluxExecutorThread(unittest.TestCase):
     """Simple synchronous tests for _FluxExecutorThread."""
@@ -137,7 +144,7 @@ class TestFluxExecutorThread(unittest.TestCase):
     def test_exit_condition(self):
         deq = collections.deque()
         event = threading.Event()
-        thread = _FluxExecutorThread(event, deq, 0.01, (), {})
+        thread = _FluxExecutorThread(threading.Event(), event, deq, 0.01, (), {})
         self.assertTrue(thread._FluxExecutorThread__work_remains())
         event.set()
         self.assertFalse(thread._FluxExecutorThread__work_remains())
@@ -147,13 +154,13 @@ class TestFluxExecutorThread(unittest.TestCase):
     def test_bad_jobspecs(self):
         deq = collections.deque()
         event = threading.Event()
-        thread = _FluxExecutorThread(event, deq, 0.01, (), {})
+        thread = _FluxExecutorThread(threading.Event(), event, deq, 0.01, (), {})
         futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
         deq.extend(((None,), {}, f) for f in futures)  # send jobspec of None
         event.set()
         thread.run()
         self.assertFalse(deq)
-        self.assertEqual(0, thread._FluxExecutorThread__remaining_flux_futures)
+        self.assertFalse(thread._FluxExecutorThread__running_user_futures)
         for fut in futures:
             self.assertIsInstance(fut.exception(), OSError)
 
@@ -161,14 +168,14 @@ class TestFluxExecutorThread(unittest.TestCase):
         """send bad arguments to ``flux.job.submit``"""
         deq = collections.deque()
         event = threading.Event()
-        thread = _FluxExecutorThread(event, deq, 0.01, (), {})
+        thread = _FluxExecutorThread(threading.Event(), event, deq, 0.01, (), {})
         futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
         jobspec = JobspecV1.from_command(["false"])
         deq.extend(((jobspec,), {"not_an_arg": 42}, f) for f in futures)
         event.set()
         thread.run()
         self.assertFalse(deq)
-        self.assertEqual(0, thread._FluxExecutorThread__remaining_flux_futures)
+        self.assertFalse(thread._FluxExecutorThread__running_user_futures)
         for fut in futures:
             self.assertIsInstance(fut.exception(), TypeError)
 
@@ -176,7 +183,7 @@ class TestFluxExecutorThread(unittest.TestCase):
         deq = collections.deque()
         event = threading.Event()
         jobspec = JobspecV1.from_command(["false"])
-        thread = _FluxExecutorThread(event, deq, 0.01, (), {})
+        thread = _FluxExecutorThread(threading.Event(), event, deq, 0.01, (), {})
         futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
         for fut in futures:
             deq.append(((jobspec,), {}, fut))
@@ -192,7 +199,7 @@ class TestFluxExecutorThread(unittest.TestCase):
     def test_exception_completion(self):
         jobspec = JobspecV1.from_command(["false"])
         thread = _FluxExecutorThread(
-            threading.Event(), collections.deque(), 0.01, (), {}
+            threading.Event(), threading.Event(), collections.deque(), 0.01, (), {}
         )
         fut = FluxExecutorFuture(threading.get_ident())
         self.assertFalse(fut.done())
@@ -228,7 +235,7 @@ class TestFluxExecutorThread(unittest.TestCase):
 
     def test_finish_completion(self):
         thread = _FluxExecutorThread(
-            threading.Event(), collections.deque(), 0.01, (), {}
+            threading.Event(), threading.Event(), collections.deque(), 0.01, (), {}
         )
         for exit_status in (0, 1, 15, 120, 255):
             flag = threading.Event()
@@ -253,6 +260,56 @@ class TestFluxExecutorThread(unittest.TestCase):
                 self.assertEqual(fut.result(), os.WEXITSTATUS(exit_status))
             elif os.WIFSIGNALED(exit_status):
                 self.assertEqual(fut.result(), -os.WTERMSIG(exit_status))
+
+    def test_exception_catching(self):
+        """Test that the thread exits cleanly when __run() raises."""
+
+        def new_run(*args):
+            raise TypeError("foobar")
+
+        error_event = threading.Event()
+        stop_event = threading.Event()
+        stop_event.set()
+        futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
+        running_futures = set(
+            [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
+        )
+        deque = collections.deque([((None,), {}, fut) for fut in futures])
+        thread = _FluxExecutorThread(error_event, stop_event, deque, 0.01, (), {})
+        thread._FluxExecutorThread__running_user_futures.update(running_futures)
+        # replace the __run method
+        thread._FluxExecutorThread__run = types.MethodType(new_run, thread)
+        with self.assertRaisesRegex(TypeError, "foobar"):
+            thread.run()
+        self.assertTrue(error_event.is_set())
+        for fut in list(futures) + list(running_futures):
+            with self.assertRaisesRegex(TypeError, "foobar"):
+                fut.result()
+
+    def test_exception_catching_reactor_run(self):
+        """Test that the thread exits cleanly when reactor_run returns < 0"""
+
+        def new_reactor_run(*args, **kwargs):
+            # returning < 0 causes the thread to raise
+            return -1
+
+        jobspec = JobspecV1.from_command(["true"])
+        error_event = threading.Event()
+        stop_event = threading.Event()
+        stop_event.set()
+        futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
+        deque = collections.deque([((jobspec,), {}, fut) for fut in futures])
+        thread = _FluxExecutorThread(error_event, stop_event, deque, 0.01, (), {})
+        # replace the reactor_run method of the thread's flux handle
+        thread._FluxExecutorThread__flux_handle.reactor_run = types.MethodType(
+            new_reactor_run, thread._FluxExecutorThread__flux_handle
+        )
+        with self.assertRaisesRegex(RuntimeError, "reactor start failed"):
+            thread.run()
+        self.assertTrue(error_event.is_set())
+        for fut in list(futures):
+            with self.assertRaisesRegex(RuntimeError, "reactor start failed"):
+                fut.result()
 
 
 class TestFluxExecutorFuture(unittest.TestCase):
