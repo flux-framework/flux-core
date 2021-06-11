@@ -95,6 +95,7 @@ make_bootstrap_config() {
     echo "--test-exit-timeout=${TEST_UNDER_FLUX_EXIT_TIMEOUT:-0}"
     echo "-o,-Sbroker.quorum=${TEST_UNDER_FLUX_QUORUM:-$full}"
     echo "--test-start-mode=${TEST_UNDER_FLUX_START_MODE:-all}"
+    echo "-o,--k-ary=${TEST_UNDER_FLUX_FANOUT:-$size}"
 }
 
 #
@@ -148,6 +149,8 @@ remove_trashdir_wrapper() {
 #        Set the broker.quorum attribute (default: 0-<highest_rank>)
 #    - TEST_UNDER_FLUX_START_MODE
 #        Set the flux-start start mode (default: all)
+#    - TEST_UNDER_FLUX_FANOUT
+#        Set the TBON fanout (default: size (flat))
 #
 test_under_flux() {
     size=${1:-1}
