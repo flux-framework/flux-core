@@ -19,6 +19,8 @@ struct broker {
     uint32_t rank;
     uint32_t size;
 
+    bool online;
+
     struct broker_attr *attrs;
     struct flux_msg_cred cred;  /* instance owner */
 
