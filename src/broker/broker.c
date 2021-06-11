@@ -1540,13 +1540,13 @@ static void module_cb (module_t *p, void *arg)
             }
             /* Requests sent by the module on behalf of _its_ peers, e.g.
              * connector-local module with connected clients, will have a
-             * route count greater than one here.  If this broker is not yet
+             * route count greater than one here.  If this broker is not
              * "online" (entered INIT state), politely rebuff these requests.
              * Possible scenario for this message: user submitting a job on
              * a login node before cluster reboot is complete.
              */
             else if (count > 1 && !ctx->online) {
-                const char *errmsg = "Upstream Flux broker is not yet online."
+                const char *errmsg = "Upstream Flux broker is offline."
                                      " Try again later.";
 
                 if (flux_respond_error (ctx->h, msg, EAGAIN, errmsg) < 0)
