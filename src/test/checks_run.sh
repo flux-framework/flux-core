@@ -109,6 +109,9 @@ if test "$COVERAGE" = "t"; then
 	include = $(pwd)/src/*
 	parallel = True
 	relative_files = True
+	omit = src/bindings/python/flux/utils/*
+	[report]
+	omit = src/bindings/python/flux/utils/*
 	EOF
 
 	rm -f .coverage .coverage*

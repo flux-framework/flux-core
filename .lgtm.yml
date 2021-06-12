@@ -6,3 +6,7 @@ extraction:
         - python3-six
         - python3-yaml
         - python3-jsonschema
+
+path_classifiers:
+  vendor:
+    - "**/flux/utils/**/*.py"
