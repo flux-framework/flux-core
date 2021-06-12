@@ -167,6 +167,7 @@ static broker_state_t state_next (broker_state_t current, const char *event)
 
 static void action_init (struct state_machine *s)
 {
+    s->ctx->online = true;
     if (runat_is_defined (s->ctx->runat, "rc1")) {
         if (runat_start (s->ctx->runat, "rc1", runat_completion_cb, s) < 0) {
             flux_log_error (s->ctx->h, "runat_start rc1");

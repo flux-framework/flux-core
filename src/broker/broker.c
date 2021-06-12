@@ -1518,6 +1518,7 @@ static void module_cb (module_t *p, void *arg)
     flux_msg_t *msg = module_recvmsg (p);
     int type;
     int ka_errnum, ka_status;
+    int count;
 
     if (!msg)
         goto done;
@@ -1528,13 +1529,31 @@ static void module_cb (module_t *p, void *arg)
             (void)broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            broker_request_sendmsg (ctx, msg);
-            if (flux_msg_get_route_count (msg) == 1
-                && module_disconnect_arm (p, msg, disconnect_send_cb, ctx) < 0) {
-                    flux_log_error (ctx->h,
-                                    "%s: module_disconnect_arm",
-                                    module_get_name (p));
+            count = flux_msg_get_route_count (msg);
+            /* Requests originated by the broker module will have a route
+             * count of 1.  Ensure that, when the module is unloaded, a
+             * disconnect message is sent to all services used by broker module.
+             */
+            if (count == 1) {
+                if (module_disconnect_arm (p, msg, disconnect_send_cb, ctx) < 0)
+                    flux_log_error (ctx->h, "error arming module disconnect");
             }
+            /* Requests sent by the module on behalf of _its_ peers, e.g.
+             * connector-local module with connected clients, will have a
+             * route count greater than one here.  If this broker is not
+             * "online" (entered INIT state), politely rebuff these requests.
+             * Possible scenario for this message: user submitting a job on
+             * a login node before cluster reboot is complete.
+             */
+            else if (count > 1 && !ctx->online) {
+                const char *errmsg = "Upstream Flux broker is offline."
+                                     " Try again later.";
+
+                if (flux_respond_error (ctx->h, msg, EAGAIN, errmsg) < 0)
+                    flux_log_error (ctx->h, "send offline response message");
+                break;
+            }
+            broker_request_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
             if (broker_event_sendmsg (ctx, msg) < 0) {
