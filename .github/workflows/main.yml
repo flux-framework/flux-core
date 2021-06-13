@@ -120,7 +120,9 @@ jobs:
        fetch-depth: 0
 
     - name: fetch annotated tag
-      if: matrix.create_release || matrix.docker_tag
+      if: >
+        (matrix.create_release || matrix.docker_tag) &&
+        env.GITHUB_BRANCH != 'master'
       run: |
         # Ensure git-describe works on a tag.
         #  (checkout@v2 action may have left current tag as
