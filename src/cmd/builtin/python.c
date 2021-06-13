@@ -16,6 +16,13 @@
 
 static int cmd_python (optparse_t *p, int ac, char *av[])
 {
+    /*
+     *  Ensure av[0] matches the full path of the interpreter we're executing.
+     *  Other than just being good practice, this ensures that sys.executable
+     *  is correct (since python uses sys.argv[0] for sys.executable) and so
+     *  that symlink'd binaries in virtualenvs are respected.
+     */
+    av[0] = PYTHON_INTERPRETER;
     execv (PYTHON_INTERPRETER, av); /* no return if sucessful */
     log_err_exit ("execvp (%s)", PYTHON_INTERPRETER);
     return (0);
