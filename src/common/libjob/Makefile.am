@@ -23,11 +23,17 @@ libjob_la_SOURCES = \
 	sign_none.c \
 	sign_none.h \
 	job_hash.c \
-	job_hash.h
+	job_hash.h \
+	specutil.c \
+	specutil.h \
+	jobspec1.c \
+	jobspec1.h
 
 TESTS = \
 	test_job.t \
-	test_sign_none.t
+	test_sign_none.t \
+	test_specutil.t \
+	test_jobspec1.t
 
 check_PROGRAMS = \
         $(TESTS)
@@ -61,3 +67,11 @@ test_job_t_LDADD = $(test_ldadd) $(LIBDL)
 test_sign_none_t_SOURCES = test/sign_none.c
 test_sign_none_t_CPPFLAGS = $(test_cppflags)
 test_sign_none_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_specutil_t_SOURCES = test/specutil.c
+test_specutil_t_CPPFLAGS = $(test_cppflags)
+test_specutil_t_LDADD = $(test_ldadd) $(LIBDL)
+
+test_jobspec1_t_SOURCES = test/jobspec1.c
+test_jobspec1_t_CPPFLAGS = $(test_cppflags)
+test_jobspec1_t_LDADD = $(test_ldadd) $(LIBDL)
