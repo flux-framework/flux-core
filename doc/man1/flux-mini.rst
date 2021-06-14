@@ -105,7 +105,6 @@ following additional job parameters:
    ("s", "m", "h", or "d"). If unspecified, the job is subject to the
    system default time limit.
 
-
 STANDARD I/O
 ============
 
@@ -180,9 +179,16 @@ afternotok:JOBID
    This dependency is satisfied after JOBID enters the INACTIVE state
    with an unsuccessful result.
 
-In any of the above cases, if it is determined that the dependency cannot
-be satisfied (e.g. a job fails due to an exception with afterok), then
-a fatal exception of type=dependency is raised on the current job.
+begin-time:TIMESTAMP
+   This dependency is satisfied after TIMESTAMP, which is specified in
+   floating point seconds since the UNIX epoch. See the ``flux-mini``
+   ``--begin-time`` option below for a more user-friendly interface
+   to the ``begin-time`` dependency.
+
+In any of the above ``after*`` cases, if it is determined that the
+dependency cannot be satisfied (e.g. a job fails due to an exception
+with afterok), then a fatal exception of type=dependency is raised
+on the current job.
 
 ENVIRONMENT
 ===========
@@ -341,6 +347,16 @@ OTHER OPTIONS
    is interpreted as a string. If KEY starts with a ``^`` character, then
    VAL is interpreted as a file, which must be valid JSON, to use as the
    attribute value.
+
+**--begin-time=DATETIME**
+   Convenience option for setting a ``begin-time`` dependency for a job.
+   The job is guaranteed to start after the specified date and time.
+   If *DATETIME* begins with a ``+`` character, then the remainder is
+   considered to be an offset in Flux standard duration (RFC 23), otherwise,
+   any datetime expression accepted by the Python 
+   `parsedatetime <https://github.com/bear/parsedatetime>`_ module
+   is accepted, e.g. ``2021-06-21 8am``, ``in an hour``,
+   ``tomorrow morning``, etc.
 
 **--dry-run**
    Don't actually submit job. Just emit jobspec on stdout and exit for
