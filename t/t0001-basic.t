@@ -410,13 +410,16 @@ test_expect_success 'broker broker.pid attribute is immutable' '
 test_expect_success 'broker --verbose option works' '
 	flux start ${ARGS} -o,-v /bin/true
 '
-test_expect_success NO_CHAIN_LINT 'broker --k-ary option works' '
-	pids="" &&
-	flux start ${ARGS} -s4 -o,--k-ary=1 /bin/true & pids=$!
-	flux start ${ARGS} -s4 -o,--k-ary=2 /bin/true & pids="$pids $!"
-	flux start ${ARGS} -s4 -o,--k-ary=3 /bin/true & pids="$pids $!"
-	flux start ${ARGS} -s4 -o,--k-ary=4 /bin/true & pids="$pids $!" 
-	wait $pids
+test_expect_success 'broker --k-ary=4 option works' '
+	echo 4 >arity.exp &&
+	flux start ${ARGS} -o,--k-ary=4 flux getattr tbon.arity >arity.out &&
+	test_cmp arity.exp arity.out
+'
+test_expect_success 'broker --k-ary=0 fails' '
+	test_must_fail flux start ${ARGS} -o,--k-ary=0 /bin/true
+'
+test_expect_success 'broker fails on unknown option' '
+	test_must_fail flux start ${ARGS} -o,--not-an-option /bin/true
 '
 
 test_expect_success 'flux-help command list can be extended' '
