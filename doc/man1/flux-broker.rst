@@ -51,10 +51,6 @@ OPTIONS
    Set the branching factor of the tree based overlay
    network (default: 2).
 
-**-X, --module-path**\ =\ *PATH*
-   Override the compiled-in module search path (colon-separated).
-   The default is to search install paths.
-
 
 RESOURCES
 =========

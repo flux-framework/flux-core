@@ -104,10 +104,9 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "+vX:k:S:c:"
+#define OPTIONS "+vk:S:c:"
 static const struct option longopts[] = {
     {"verbose",         no_argument,        0, 'v'},
-    {"module-path",     required_argument,  0, 'X'},
     {"k-ary",           required_argument,  0, 'k'},
     {"setattr",         required_argument,  0, 'S'},
     {"config-path",     required_argument,  0, 'c'},
@@ -119,7 +118,6 @@ static void usage (void)
     fprintf (stderr,
 "Usage: flux-broker OPTIONS [initial-command ...]\n"
 " -v,--verbose                 Be annoyingly verbose\n"
-" -X,--module-path PATH        Set module search path (colon separated)\n"
 " -k,--k-ary K                 Wire up in a k-ary tree\n"
 " -S,--setattr ATTR=VAL        Set broker attribute\n"
 " -c,--config-path PATH        Set broker config directory (default: none)\n"
@@ -137,10 +135,6 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
         switch (c) {
         case 'v':   /* --verbose */
             ctx->verbose++;
-            break;
-        case 'X':   /* --module-path PATH */
-            if (attr_set (ctx->attrs, "conf.module_path", optarg, true) < 0)
-                log_err_exit ("setting conf.module_path attribute");
             break;
         case 'k':   /* --k-ary k */
             errno = 0;
