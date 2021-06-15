@@ -35,7 +35,7 @@ typedef int (*flux_plugin_f) (flux_plugin_t *p,
 typedef int (*flux_plugin_init_f) (flux_plugin_t *p);
 
 struct flux_plugin_handler {
-    char *topic;
+    const char *topic;
     flux_plugin_f cb;
     void *data;
 };

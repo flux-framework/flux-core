@@ -52,7 +52,7 @@ typedef const struct flux_plugin_handler *
 static void flux_plugin_handler_destroy (struct flux_plugin_handler *h)
 {
     if (h) {
-        free (h->topic);
+        free ((char *) h->topic);
         free (h);
     }
 }
