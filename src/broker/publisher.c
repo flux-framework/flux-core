@@ -22,50 +22,15 @@
 
 #include "publisher.h"
 
-struct sender {
-    publisher_send_f send;
-    void *arg;
-    char name[32];
-};
 
 struct publisher {
     flux_t *h;
     flux_msg_handler_t **handlers;
     int seq;
     zlist_t *senders;
+    publisher_send_f send;
+    void *arg;
 };
-
-void publisher_destroy (struct publisher *pub)
-{
-    if (pub) {
-        int saved_errno = errno;
-        flux_msg_handler_delvec (pub->handlers);
-        if (pub->senders) {
-            struct sender *sender;
-            while ((sender = zlist_pop (pub->senders)))
-                free (sender);
-            zlist_destroy (&pub->senders);
-        }
-        free (pub);
-        errno = saved_errno;
-    }
-}
-
-struct publisher *publisher_create (void)
-{
-    struct publisher *pub = calloc (1, sizeof (*pub));
-
-    if (!pub) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    if (!(pub->senders = zlist_new ())) {
-        publisher_destroy (pub);
-        errno = ENOMEM;
-        return NULL;
-    }
-    return pub;
-}
 
 static flux_msg_t *encode_event (const char *topic, int flags,
                                  struct flux_msg_cred cred,
@@ -120,15 +85,8 @@ error:
  */
 static void send_event (struct publisher *pub, const flux_msg_t *msg)
 {
-    struct sender *sender;
-
-    sender = zlist_first (pub->senders);
-    while (sender != NULL) {
-        if (sender->send (sender->arg, msg) < 0)
-            flux_log_error (pub->h, "%s: sender=%s",
-                            __FUNCTION__, sender->name);
-        sender = zlist_next (pub->senders);
-    }
+    if (pub->send (pub->arg, msg) < 0)
+        flux_log_error (pub->h, "error publishing event message");
 }
 
 void pub_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -192,32 +150,32 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-
-int publisher_set_flux (struct publisher *pub, flux_t *h)
+void publisher_destroy (struct publisher *pub)
 {
-    pub->h = h;
-    if (flux_msg_handler_addvec (h, htab, pub, &pub->handlers) < 0)
-        return -1;
-    return 0;
-}
-
-int publisher_set_sender (struct publisher *pub, const char *name,
-                          publisher_send_f cb, void *arg)
-{
-    struct sender *sender;
-
-    if (!(sender = calloc (1, sizeof (*sender))))
-        return -1;
-    sender->send = cb;
-    sender->arg = arg;
-    (void)snprintf (sender->name, sizeof (sender->name), "%s", name);
-    if (zlist_append (pub->senders, sender) < 0) {
-        free (sender);
-        errno = ENOMEM;
-        return -1;
+    if (pub) {
+        int saved_errno = errno;
+        flux_msg_handler_delvec (pub->handlers);
+        free (pub);
+        errno = saved_errno;
     }
-    return 0;
 }
+
+struct publisher *publisher_create (flux_t *h, publisher_send_f cb, void *arg)
+{
+    struct publisher *pub;
+
+    if (!(pub = calloc (1, sizeof (*pub))))
+        return NULL;
+    pub->h = h;
+    pub->send = cb;
+    pub->arg = arg;
+    if (flux_msg_handler_addvec (h, htab, pub, &pub->handlers) < 0) {
+        publisher_destroy (pub);
+        return NULL;
+    }
+    return pub;
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

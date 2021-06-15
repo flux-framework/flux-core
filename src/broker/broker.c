@@ -283,12 +283,9 @@ int main (int argc, char *argv[])
     /* Arrange for the publisher to route event messages.
      * handle_event - local subscribers (ctx.h)
      */
-    if (!(ctx.publisher = publisher_create ())
-        || publisher_set_flux (ctx.publisher, ctx.h) < 0
-        || publisher_set_sender (ctx.publisher,
-                                 "handle_event",
-                                 (publisher_send_f)handle_event,
-                                 &ctx) < 0) {
+    if (!(ctx.publisher = publisher_create (ctx.h,
+                                            (publisher_send_f)handle_event,
+                                            &ctx))) {
         log_err ("error setting up event publishing service");
         goto cleanup;
     }

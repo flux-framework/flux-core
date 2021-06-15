@@ -13,17 +13,8 @@
 
 typedef int (*publisher_send_f)(void *arg, const flux_msg_t *msg);
 
-struct publisher *publisher_create (void);
+struct publisher *publisher_create (flux_t *h, publisher_send_f cb, void *arg);
 void publisher_destroy (struct publisher *pub);
-
-int publisher_set_flux (struct publisher *pub, flux_t *h);
-
-/* Add a sender.  All senders are called when an event is published.
- * If a sender returns -1, an error will be logged but sending will continue.
- * Senders should return 0 on success.
- */
-int publisher_set_sender (struct publisher *pub, const char *name,
-                          publisher_send_f cb, void *arg);
 
 /* Publish an encoded event message, assigning sequence number.
  */
