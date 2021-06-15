@@ -6,15 +6,23 @@ test_description='Test event propagation'
 . `dirname $0`/sharness.sh
 SIZE=4
 LASTRANK=$(($SIZE-1))
-test_under_flux ${SIZE} kvs
+test_under_flux ${SIZE} minimal
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+
+test_expect_success 'load heartbeat module with fast rate' '
+        flux module load heartbeat period=0.1s
+'
 
 test_expect_success 'heartbeat is received on all ranks' '
 	run_timeout 5 \
           flux exec -n flux event sub --count=1 heartbeat.pulse >output_event_sub &&
 	hb_count=`grep "^heartbeat.pulse" output_event_sub | wc -l` &&
         test $hb_count -eq $SIZE
+'
+
+test_expect_success 'unload heartbeat module' '
+	flux module remove heartbeat
 '
 
 test_expect_success 'events from rank 0 received correctly on rank 0' '

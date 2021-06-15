@@ -5,13 +5,16 @@ test_description='Test ssh:// connector and flux-relay'
 
 . `dirname $0`/sharness.sh
 SIZE=4
-test_under_flux ${SIZE}
+test_under_flux ${SIZE} minimal
 
 export TEST_SOCKDIR=$(echo $FLUX_URI | sed -e "s!local://!!") &&
 
 export TEST_SSH=${SHARNESS_TEST_SRCDIR}/scripts/tssh
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
+test_expect_success 'load heartbeat module with fast rate' '
+        flux module load heartbeat period=0.1s
+'
 test_expect_success 'ssh:// with local sockdir works' '
 	FLUX_URI=ssh://localhost${TEST_SOCKDIR} FLUX_SSH=$TEST_SSH \
 	  flux getattr size 2>basic.err &&
@@ -45,7 +48,7 @@ test_expect_success 'ssh:// with local sockdir, user, and port works' '
 
 test_expect_success 'ssh:// can handle nontrivial message load' '
 	FLUX_URI=ssh://localhost$TEST_SOCKDIR FLUX_SSH=$TEST_SSH \
-	  flux kvs dir -R >dir.out
+	  flux ping --count=100 -i 0.001 broker
 '
 
 test_expect_success 'ssh:// can work with events' '
@@ -99,6 +102,10 @@ test_expect_success 'ssh:// with missing path component fails in flux_open()' '
 	! FLUX_URI=ssh://localhost FLUX_SSH=$TEST_SSH \
 	  flux getattr size 2>nopath.out &&
 	grep -q "flux_open:" nopath.out
+'
+
+test_expect_success 'remove heartbeat module' '
+        flux module remove heartbeat
 '
 
 test_done
