@@ -11,23 +11,12 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
 #include <assert.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
 #include <getopt.h>
 #include <libgen.h>
-#include <sys/types.h>
 #include <inttypes.h>
-#include <sys/stat.h>
 #include <sys/prctl.h>
-#include <sys/signalfd.h>
 #include <sys/resource.h>
-#include <unistd.h>
-#include <sys/param.h>
-#include <stdbool.h>
-#include <dlfcn.h>
 #include <argz.h>
 #include <flux/core.h>
 #include <czmq.h>
