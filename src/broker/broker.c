@@ -46,8 +46,6 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/oom.h"
-#include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/ipaddr.h"
@@ -164,7 +162,9 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
                 usage ();
             break;
         case 'S': { /* --setattr ATTR=VAL */
-            char *val, *attr = xstrdup (optarg);
+            char *val, *attr;
+            if (!(attr = strdup (optarg)))
+                log_err_exit ("out of memory duplicating optarg");
             if ((val = strchr (attr, '=')))
                 *val++ = '\0';
             if (attr_add (ctx->attrs, attr, val, 0) < 0)
@@ -564,15 +564,14 @@ static void init_attrs_from_environment (attr_t *attrs)
 static void init_attrs_broker_pid (attr_t *attrs, pid_t pid)
 {
     char *attrname = "broker.pid";
-    char *pidval;
+    char pidval[32];
 
-    pidval = xasprintf ("%u", pid);
+    snprintf (pidval, sizeof (pidval), "%u", pid);
     if (attr_add (attrs,
                   attrname,
                   pidval,
                   FLUX_ATTRFLAG_IMMUTABLE) < 0)
         log_err_exit ("attr_add %s", attrname);
-    free (pidval);
 }
 
 static void init_attrs_rc_paths (attr_t *attrs)
