@@ -34,7 +34,6 @@ struct broker {
     zlist_t *sigwatchers;
     struct service_switch *services;
     struct brokercfg *config;
-    const char *config_path;
     double heartbeat_rate;
     zlist_t *subscriptions;     /* subscripts for internal services */
     struct content_cache *cache;

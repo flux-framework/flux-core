@@ -131,7 +131,7 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
     if ((ctx->tbon_k = optparse_get_int (ctx->opts, "k-ary", 2)) < 1)
         log_msg_exit ("--k-ary value must be >= 1");
 
-    ctx->config_path = optparse_get_str (ctx->opts, "config-path", NULL);
+    optparse_get_str (ctx->opts, "config-path", NULL);
 
     while ((arg = optparse_getopt_next (ctx->opts, "setattr"))) {
         char *val, *attr;
@@ -257,7 +257,9 @@ int main (int argc, char *argv[])
     /* Parse config.
      */
     if (!(ctx.config = brokercfg_create (ctx.h,
-                                         ctx.config_path,
+                                         optparse_get_str (ctx.opts,
+                                                           "config-path",
+                                                           NULL),
                                          ctx.attrs,
                                          ctx.modhash)))
         goto cleanup;
