@@ -11,9 +11,12 @@
 #ifndef _BROKER_H
 #define _BROKER_H
 
+#include <flux/optparse.h>
+
 struct broker {
     flux_t *h;
     flux_reactor_t *reactor;
+    optparse_t *opts;
 
     struct overlay *overlay;
     uint32_t rank;
@@ -31,7 +34,6 @@ struct broker {
     zlist_t *sigwatchers;
     struct service_switch *services;
     struct brokercfg *config;
-    const char *config_path;
     double heartbeat_rate;
     zlist_t *subscriptions;     /* subscripts for internal services */
     struct content_cache *cache;

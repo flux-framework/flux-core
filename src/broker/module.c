@@ -11,20 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <stdio.h>
-#include <assert.h>
-#include <stdlib.h>
-#include <string.h>
-#include <errno.h>
-#include <libgen.h>
-#include <unistd.h>
-#include <sys/param.h>
-#include <stdbool.h>
-#include <sys/socket.h>
-#include <sys/time.h>
-#include <stdarg.h>
 #include <dlfcn.h>
-#include <inttypes.h>
 #include <argz.h>
 #include <czmq.h>
 #include <uuid.h>
