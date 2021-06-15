@@ -12,7 +12,6 @@
 #include "config.h"
 #endif
 #include <assert.h>
-#include <getopt.h>
 #include <libgen.h>
 #include <inttypes.h>
 #include <sys/prctl.h>
@@ -104,67 +103,51 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs);
 
 static const struct flux_handle_ops broker_handle_ops;
 
-#define OPTIONS "+vk:S:c:"
-static const struct option longopts[] = {
-    {"verbose",         no_argument,        0, 'v'},
-    {"k-ary",           required_argument,  0, 'k'},
-    {"setattr",         required_argument,  0, 'S'},
-    {"config-path",     required_argument,  0, 'c'},
-    {0, 0, 0, 0},
+static struct optparse_option opts[] = {
+    { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
+      .usage = "Be annoyingly informative by degrees", },
+    { .name = "k-ary",      .key = 'k', .has_arg = 1, .arginfo = "K",
+      .usage = "Wire up in a k-ary tree (default: 2)", },
+    { .name = "setattr",    .key = 'S', .has_arg = 1, .arginfo = "ATTR=VAL",
+      .usage = "Set broker attribute", },
+    { .name = "config-path",.key = 'c', .has_arg = 1, .arginfo = "PATH",
+      .usage = "Set broker config directory (default: none)", },
+    OPTPARSE_TABLE_END,
 };
-
-static void usage (void)
-{
-    fprintf (stderr,
-"Usage: flux-broker OPTIONS [initial-command ...]\n"
-" -v,--verbose                 Be annoyingly verbose\n"
-" -k,--k-ary K                 Wire up in a k-ary tree\n"
-" -S,--setattr ATTR=VAL        Set broker attribute\n"
-" -c,--config-path PATH        Set broker config directory (default: none)\n"
-);
-    exit (1);
-}
 
 void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
 {
-    int c;
-    int e;
-    char *endptr;
+    int optindex;
+    const char *arg;
 
-    while ((c = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
-        switch (c) {
-        case 'v':   /* --verbose */
-            ctx->verbose++;
-            break;
-        case 'k':   /* --k-ary k */
-            errno = 0;
-            ctx->tbon_k = strtoul (optarg, &endptr, 10);
-            if (errno || *endptr != '\0')
-                log_err_exit ("k-ary '%s'", optarg);
-            if (ctx->tbon_k < 1)
-                usage ();
-            break;
-        case 'S': { /* --setattr ATTR=VAL */
-            char *val, *attr;
-            if (!(attr = strdup (optarg)))
-                log_err_exit ("out of memory duplicating optarg");
-            if ((val = strchr (attr, '=')))
-                *val++ = '\0';
-            if (attr_add (ctx->attrs, attr, val, 0) < 0)
-                if (attr_set (ctx->attrs, attr, val, true) < 0)
-                    log_err_exit ("setattr %s=%s", attr, val);
-            free (attr);
-            break;
-        }
-        case 'c': /* --config-path PATH */
-            ctx->config_path = optarg;
-            break;
-        default:
-            usage ();
-        }
+    if (!(ctx->opts = optparse_create ("flux-broker"))
+        || optparse_add_option_table (ctx->opts, opts) != OPTPARSE_SUCCESS)
+        log_msg_exit ("error setting up option parsing");
+    if ((optindex = optparse_parse_args (ctx->opts, argc, argv)) < 0)
+        exit (1);
+
+    ctx->verbose = optparse_get_int (ctx->opts, "verbose", 0);
+
+    if ((ctx->tbon_k = optparse_get_int (ctx->opts, "k-ary", 2)) < 1)
+        log_msg_exit ("--k-ary value must be >= 1");
+
+    ctx->config_path = optparse_get_str (ctx->opts, "config-path", NULL);
+
+    while ((arg = optparse_getopt_next (ctx->opts, "setattr"))) {
+        char *val, *attr;
+        if (!(attr = strdup (arg)))
+            log_err_exit ("out of memory duplicating optarg");
+        if ((val = strchr (attr, '=')))
+            *val++ = '\0';
+        if (attr_add (ctx->attrs, attr, val, 0) < 0)
+            if (attr_set (ctx->attrs, attr, val, true) < 0)
+                log_err_exit ("setattr %s=%s", attr, val);
+        free (attr);
     }
-    if (optind < argc) {
-        if ((e = argz_create (argv + optind, &ctx->init_shell_cmd,
+
+    if (optindex < argc) {
+        int e;
+        if ((e = argz_create (argv + optindex, &ctx->init_shell_cmd,
                               &ctx->init_shell_cmd_len)) != 0)
             log_errn_exit (e, "argz_create");
     }
@@ -228,7 +211,6 @@ int main (int argc, char *argv[])
         || !(ctx.subscriptions = zlist_new ()))
         log_msg_exit ("Out of memory in early initialization");
 
-    ctx.tbon_k = 2; /* binary TBON is default */
     /* Record the instance owner: the effective uid of the broker. */
     ctx.cred.userid = getuid ();
     /* Set default rolemask for messages sent with flux_send()
@@ -505,6 +487,7 @@ cleanup:
     flux_reactor_destroy (ctx.reactor);
     zlist_destroy (&ctx.subscriptions);
     free (ctx.init_shell_cmd);
+    optparse_destroy (ctx.opts);
 
     return ctx.exit_rc;
 }

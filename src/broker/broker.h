@@ -11,9 +11,12 @@
 #ifndef _BROKER_H
 #define _BROKER_H
 
+#include <flux/optparse.h>
+
 struct broker {
     flux_t *h;
     flux_reactor_t *reactor;
+    optparse_t *opts;
 
     struct overlay *overlay;
     uint32_t rank;
