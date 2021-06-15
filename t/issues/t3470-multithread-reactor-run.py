@@ -19,8 +19,10 @@ def get_events(i, queue):
     f = flux.Flux()
     f.event_subscribe("test-event")
     queue.put(True)
-    f.msg_watcher_create(cb, topic_glob="test-event", args=i).start()
+    w = f.msg_watcher_create(cb, topic_glob="test-event", args=i)
+    w.start()
     f.reactor_run()
+    w.destroy()
 
 
 def main():
