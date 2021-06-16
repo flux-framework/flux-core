@@ -82,14 +82,6 @@ double get_timestamp (void)
     return ((double) tm.tv_sec + (tm.tv_nsec/1.0e9));
 }
 
-static void timeout_cb (flux_t *h, cron_task_t *t, void *arg)
-{
-    cron_entry_t *e = arg;
-    flux_log (h, LOG_INFO, "cron-%ju: task timeout at %.2fs. Killing",
-              e->id, e->timeout);
-    cron_task_kill (t, SIGTERM);
-}
-
 static int cron_entry_run_task (cron_entry_t *e)
 {
     flux_t *h = e->ctx->h;
@@ -126,7 +118,7 @@ int cron_entry_schedule_task (cron_entry_t *e)
     }
     cron_task_on_io (e->task, cron_entry_io_cb);
     if (e->timeout >= 0.0)
-        cron_task_set_timeout (e->task, e->timeout, timeout_cb);
+        cron_task_set_timeout (e->task, e->timeout, NULL);
 
     /*   if we've reached our (non-zero) repeat count, prematurely stop
      *     the current entry (i.e. remove it from event loop, but leave
