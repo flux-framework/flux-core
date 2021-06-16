@@ -58,6 +58,14 @@ def _validate_keys(expected, given, keys_optional=False, allow_additional=False)
             raise ValueError("Extraneous key ({})".format(extraneous_key))
 
 
+def _validate_dependency(dep):
+    _validate_keys(["scheme", "value"], dep.keys(), allow_additional=True)
+    if not isinstance(dep["scheme"], str):
+        raise TypeError("dependency scheme must be a string")
+    if not isinstance(dep["value"], str):
+        raise TypeError("dependency value must be a string")
+
+
 def validate_jobspec(jobspec, require_version=None):
     """
     Validates the jobspec by attempting to construct a Jobspec object.  If no
@@ -146,6 +154,9 @@ class Jobspec(object):
 
         if attributes is not None:
             self._validate_attributes(attributes)
+
+            if "system" in attributes:
+                self._validate_system_attributes(attributes["system"])
 
     @classmethod
     def from_yaml_stream(cls, yaml_stream):
@@ -244,6 +255,14 @@ class Jobspec(object):
     @staticmethod
     def _validate_attributes(attributes):
         _validate_keys(["system", "user"], attributes.keys(), keys_optional=True)
+
+    @staticmethod
+    def _validate_system_attributes(system):
+        if "dependencies" in system:
+            if not isinstance(system["dependencies"], abc.Sequence):
+                raise TypeError("attributes.system.dependencies must be a list")
+            for dependency in system["dependencies"]:
+                _validate_dependency(dependency)
 
     @staticmethod
     def _create_resource(res_type, count, with_child=None):
