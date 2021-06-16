@@ -163,8 +163,8 @@ test_expect_success 'job-exec: set kill-timeout to low value for testing' '
 test_must_fail_or_be_terminated() {
     "$@"
     exit_code=$?
-    # Allow death by SIGTERM
-    if test $exit_code = 143; then
+    # Allow death by SIGTERM or SIGKILL
+    if test $exit_code = 143 -o $exit_code = 137; then
         return 0
     elif test $exit_code = 0; then
         echo >&2 "test_must_fail: command succeeded: $*"
