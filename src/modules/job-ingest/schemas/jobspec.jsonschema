@@ -134,10 +134,10 @@
             "properties": {
               "environment": { "type" : "object"}
             },
-	        "additionalProperties": { "type": "string" }
+            "additionalProperties": { "type": "string" }
           }
         },
-	"additionalProperties": false
+        "additionalProperties": false
       }
     }
   }
