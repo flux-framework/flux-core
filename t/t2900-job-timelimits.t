@@ -27,22 +27,25 @@ test_expect_success 'result for expired jobs is TIMEOUT' '
 	flux jobs -ano {result} | grep -q TIMEOUT
 '
 sigalrm_sigkill_test() {
-	timeout=$1
-	kill_timeout=$2
+	scale=$1
+	timeout=$2
+	kill_timeout=$3
 	test_debug "echo testing with timeout=$timeout kill_timeout=$kill_timeout" &&
 	flux module reload job-exec kill-timeout=$kill_timeout &&
-	        test_expect_code 137 \
-            flux mini run -vvv --time-limit=${timeout} bash -c \
-               "trap \"echo got SIGALRM>>trap.out\" SIGALRM;sleep 10;sleep 15" \
-                   > trap.out 2> trap.err &&
+	ofile=trap.$scale.out &&
+	test_must_fail_or_be_terminated \
+           flux mini run -vvv --time-limit=${timeout} bash -xc \
+               "trap \"echo got SIGALRM>>$ofile\" SIGALRM;sleep 10;sleep 15" \
+                   > $ofile 2> trap.$scale.err &&
         test_debug "grep . trap.*" &&
-        grep "resource allocation expired" trap.err &&
-        grep "got SIGALRM" trap.out
+        grep "resource allocation expired" trap.$scale.err &&
+        grep "got SIGALRM" $ofile
 }
 test_expect_success 'expired jobs are sent SIGALRM, then SIGKILL' '
 	kill_timeout=$(test -z "$FLUX_TEST_VALGRIND" && echo 0.25 || echo 3) &&
         for scale in 1 2 4 8; do
 	    sigalrm_sigkill_test \
+	      $scale \
 	      $(perl -E "say $TIMEOUT*$scale") \
 	      $(perl -E "say $kill_timeout*$scale") && break
 	done
