@@ -99,7 +99,18 @@
           "properties": {
             "duration": { "type": "number", "minimum": 0 },
             "cwd": { "type": "string" },
-            "environment": { "type": "object" }
+            "environment": { "type": "object" },
+            "dependencies": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "required": ["scheme", "value"],
+                "properties": {
+                  "scheme": { "type": "string" },
+                  "value": { "type": "string" }
+                }
+              }
+            }
           }
         },
         "user": {
