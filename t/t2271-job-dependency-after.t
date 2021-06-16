@@ -44,11 +44,17 @@ test_expect_success FLUX_SECURITY 'dependency=after will not work on another use
 	grep "Permission denied" baduser.log &&
 	flux job cancel $jobid
 '
+test_expect_success 'disable ingest validator' '
+	flux module reload -f job-ingest disable-validator
+'
 test_expect_success HAVE_JQ 'dependency=after rejects invalid dependency' '
 	flux mini run --dry-run hostname | \
 	  jq ".attributes.system.dependencies[0] = \
 		{\"scheme\":\"after\", \"value\": 1}" >job.json &&
 	test_expect_code 1 flux job submit job.json
+'
+test_expect_success 'reenable ingest validator' '
+	flux module reload -f job-ingest
 '
 test_expect_success 'dependency=after works' '
 	jobid=$(flux mini submit --urgency=hold hostname) &&

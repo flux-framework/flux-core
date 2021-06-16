@@ -40,6 +40,9 @@ test_expect_success 'job with too long dependency scheme is rejected' '
 	test_must_fail flux mini submit \
 		--dependency=$(python -c "print \"x\"*156"):value hostname
 '
+test_expect_success 'reload ingest with disabled validator' '
+	flux module reload -f job-ingest disable-validator
+'
 test_expect_success 'submitted job with invalid dependencies is rejected' '
 	test_must_fail flux mini submit \
 		--setattr=system.dependencies={} \
@@ -51,6 +54,9 @@ test_expect_success 'submitted job with invalid dependencies is rejected' '
 		hostname > empty-object.out 2>&1 &&
 	test_debug "cat empty-object.out" &&
 	grep -q "missing" empty-object.out
+'
+test_expect_success 'reload ingest with default validator' '
+	flux module reload -f job-ingest
 '
 test_expect_success 'create dep-remove.py' '
 	cat <<-EOF >dep-remove.py

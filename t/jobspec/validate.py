@@ -50,8 +50,10 @@ try:
     schema = json.load(open(args.schema))
 except (OSError, IOError) as e:
     sys.exit("{}: {}".format(args.schema, e.strerror))
-except:
-    sys.exit("{}: unknown error".format(args.schema))
+except json.decoder.JSONDecodeError as e:
+    sys.exit("{}: JSONDecodeError: {}".format(args.schema, e))
+except Exception as e:
+    sys.exit("{}: unknown error: {}: {}".format(args.schema, type(e), e))
 
 # Validate each file on command line
 errors = 0
