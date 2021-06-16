@@ -1,0 +1,18 @@
+version: 999
+resources:
+  - type: slot
+    count: 1
+    label: foo
+    with:
+      - type: node
+        count: 1
+tasks:
+  - command: [ "app" ]
+    slot: foo
+    count:
+      per_slot: 1
+attributes:
+  system:
+    dependencies:
+      - scheme: foo
+        value: 1
