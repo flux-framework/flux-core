@@ -15,6 +15,7 @@ flux setattr log-stderr-level 1
 
 PLUGINPATH=${FLUX_BUILD_DIR}/t/job-manager/plugins/.libs
 
+
 test_expect_success HAVE_JQ 'flux-mini: --dependency option works' '
 	flux mini run --dry-run \
 		--env=-* \
