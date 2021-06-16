@@ -66,6 +66,10 @@ wait_states() {
 
 export FLUX_PYCLI_LOGLEVEL=10
 
+fj_wait_event() {
+  flux job wait-event --timeout=20 "$@"
+}
+
 listjobs() {
 	${FLUX_BUILD_DIR}/t/job-manager/list-jobs \
 	    | $jq .id \
@@ -73,71 +77,58 @@ listjobs() {
 }
 
 test_expect_success HAVE_JQ 'submit jobs for job list testing' '
-	#  Create `hostname` and `sleep 600` jobspec
+	#  Create `hostname` and `sleep` jobspec
+	#  N.B. Used w/ `flux job submit` for serial job submission
+	#  for efficiency (vs serial `flux mini submit`.
 	#
 	flux mini submit --dry-run hostname >hostname.json &&
-	flux mini submit --dry-run --time-limit=5m sleep 600 > sleep600.json &&
+	flux mini submit --dry-run --time-limit=5m sleep 600 > sleeplong.json &&
 	#
-	#  Stop the queue so that job-manager can be queried for correct job
-	#   queue order
+	#  Submit jobs that will complete
 	#
-	flux queue stop &&
 	for i in $(seq 0 3); do
-		flux job submit hostname.json >> inactive.ids
+		flux job submit hostname.json >> inactiveids
+		fj_wait_event `tail -n 1 inactiveids` clean
 	done &&
 	#
 	#  Currently all inactive ids are "completed"
 	#
-	cp inactive.ids completed.ids &&
-	#
-	#  Start queue and wait for all jobs to finish
-	#
-	flux queue start &&
-	flux queue idle &&
+	tac inactiveids > completed.ids &&
 	#
 	#  Run a job that will fail, copy its JOBID to both inactive and
 	#   failed lists.
 	#
-	jobid=`flux mini submit nosuchcommand` &&
-	flux job wait-event $jobid clean &&
-	echo $jobid >> inactive.ids &&
+	! jobid=`flux mini submit --wait nosuchcommand` &&
+	echo $jobid >> inactiveids &&
 	echo $jobid > failed.ids &&
 	#
 	#  Submit 8 sleep jobs to fill up resources
 	#
 	for i in $(seq 0 7); do
-		flux job submit sleep600.json >> runids
+		flux job submit sleeplong.json >> runids
 	done &&
 	tac runids > run.ids &&
 	#
 	#  Submit a set of jobs with non-default urgencies
-	#  N.B. Use `flux job submit` for efficiency
 	#
 	for u in 31 25 20 15 10 5; do
-		flux job submit --urgency=$u sleep600.json >> sched.ids
+		flux job submit --urgency=$u sleeplong.json >> sched.ids
 	done &&
 	listjobs > active.ids &&
 	#
 	#  Submit a job and cancel it
 	#
-	jobid=`flux mini submit canceledjob` &&
-	flux job wait-event $jobid depend &&
+	jobid=`flux mini submit --job-name=canceledjob sleep 30` &&
+	fj_wait_event $jobid depend &&
 	flux job cancel $jobid &&
-	flux job wait-event $jobid clean &&
-	echo $jobid >> inactive.ids &&
+	fj_wait_event $jobid clean &&
+	echo $jobid >> inactiveids &&
 	echo $jobid > canceled.ids &&
+	tac inactiveids > inactive.ids &&
 	cat inactive.ids active.ids >> all.ids &&
 	#
 	#  Synchronize all expected states
-	wait_states &&
-	#
-	#  Sort inactive.ids in expected order, since we cannot accurately
-	#   predict the order in which jobs went inactive (except by
-	#   running jobs back-to-back, which would slow the tests)
-	#
-	ids=$(cat inactive.ids) &&
-	flux jobs -no "{t_inactive}	{id}" ${ids} | \
-		sort -rn | cut -f2 >inactive.ids
+	wait_states
 '
 
 #
@@ -988,7 +979,7 @@ test_expect_success 'flux-jobs --stats-only works' '
 test_expect_success 'cleanup job listing jobs ' '
         for jobid in `cat active.ids`; do \
             flux job cancel $jobid; \
-            flux job wait-event $jobid clean; \
+            fj_wait_event $jobid clean; \
         done
 '
 
@@ -1020,7 +1011,7 @@ test_expect_success HAVE_JQ 'create illegal jobspec with empty command array' '
 # values below are set vs not set.
 test_expect_success HAVE_JQ 'flux jobs works on job with illegal jobspec' '
         jobid=`flux job submit bad_jobspec.json` &&
-	flux job wait-event $jobid clean &&
+        fj_wait_event $jobid clean &&
         i=0 &&
         while ! flux jobs --filter=inactive | grep $jobid > /dev/null \
                && [ $i -lt 5 ]
@@ -1042,8 +1033,7 @@ test_expect_success 'reload job-ingest with defaults' '
 # look it up
 test_expect_success HAVE_JQ 'flux jobs works on job with illegal R' '
 	${RPC} job-list.job-state-pause 0 </dev/null &&
-        jobid=`flux job submit hostname.json` &&
-        flux job wait-event $jobid clean >/dev/null &&
+        jobid=`flux mini submit --wait hostname` &&
         jobkvspath=`flux job id --to kvs $jobid` &&
         flux kvs put "${jobkvspath}.R=foobar" &&
 	${RPC} job-list.job-state-unpause 0 </dev/null &&
