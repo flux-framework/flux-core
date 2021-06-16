@@ -13,7 +13,7 @@ KVSTEST=${FLUX_BUILD_DIR}/src/common/libpmi/test_kvstest
 unset FLUX_URI
 
 test_expect_success 'flux-shell: generate 1-task jobspec and matching R' '
-	flux jobspec srun -N1 -n1 echo Hi >j1 &&
+	flux mini run --dry-run -N1 -n1 echo Hi >j1 &&
 	cat >R1 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
 		{ "children": { "core": "0" }, "rank": "0" }
@@ -71,7 +71,7 @@ test_expect_success 'flux-shell: unknown argument fails' '
 	grep -i unrecognized alien.err
 '
 test_expect_success 'flux-shell: generate 2-task jobspec and matching R' '
-	flux jobspec srun -N1 -n2 printenv >j2 &&
+	flux mini run -o cpu-affinity=off --dry-run -N1 -n2 printenv >j2 &&
 	cat >R2 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
 		{ "children": { "core": "0-1" }, "rank": "0" }
@@ -116,7 +116,8 @@ test_expect_success 'flux-shell: PMI_SIZE, PMI_FD set' '
 	grep PMI_FD= printenv.out
 '
 test_expect_success 'flux-shell: generate 8-task bash exit rank job' '
-	flux jobspec srun -N1 -n8 bash -c "exit \$FLUX_TASK_RANK" >j8 &&
+	flux mini run --dry-run -o cpu-affinity=off \
+	   -N1 -n8 bash -c "exit \$FLUX_TASK_RANK" >j8 &&
 	cat >R8 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
 		{ "children": { "core": "0-7" }, "rank": "0" }
@@ -124,13 +125,14 @@ test_expect_success 'flux-shell: generate 8-task bash exit rank job' '
 	EOT
 '
 test_expect_success 'flux-shell: environ in jobspec is set for task' '
-	flux jobspec srun --export ENVTEST=foo printenv >je &&
+	flux mini run --dry-run --env=ENVTEST=foo printenv >je &&
 	${FLUX_SHELL} -v -s -r 0 -j je -R R1 42 \
 		>printenv2.out 2>printenv2.err &&
 	grep ENVTEST=foo printenv2.out
 '
 test_expect_success 'flux-shell: shell PMI works' '
-	flux jobspec srun -N1 -n8 ${PMI_INFO} >j8pmi &&
+	flux mini run --dry-run -o cpu-affinity=off \
+	  -N1 -n8 ${PMI_INFO} >j8pmi &&
 	${FLUX_SHELL} -v -s -r 0 -j j8pmi -R R8 51 \
 		>pmi_info.out 2>pmi_info.err
 '
@@ -143,13 +145,15 @@ test_expect_success 'flux-shell: shell PMI exports clique info' '
 	test ${COUNT} -eq 8
 '
 test_expect_success 'flux-shell: shell PMI KVS works' '
-	flux jobspec srun -N1 -n8 ${KVSTEST} >j8kvs &&
+	flux mini run --dry-run -o cpu-affinity=off \
+	  -N1 -n8 ${KVSTEST} > j8kvs &&
 	${FLUX_SHELL} -v -s -r 0 -j j8kvs -R R8 52 \
 		>kvstest.out 2>kvstest.err
 '
 test_expect_success NO_ASAN 'flux-shell: shell can launch flux' '
-	flux jobspec srun -N1 -n8 flux start flux getattr size >j8flux &&
-	${FLUX_SHELL} -v -s -r 0 -j j8flux -R R8 39 \
+	flux mini run --dry-run -o cpu-affinity=off \
+	    -N1 -n8 flux start flux getattr size >j8flux &&
+	${FLUX_SHELL} -vv -s -r 0 -j j8flux -R R8 39 \
 		>flux.out 2>flux.err &&
 	grep -x "0: 8" flux.out
 '
@@ -160,7 +164,7 @@ test_expect_success 'flux-shell: shell exits with highest task exit value' '
 '
 
 test_expect_success 'flux-shell: shell forwards signals to tasks' '
-	flux jobspec srun -n1 bash -c "kill \$PPID; sleep 10" > j9 &&
+	flux mini run --dry-run -n1 bash -c "kill \$PPID; sleep 10" > j9 &&
 	test_expect_code  $((128+15)) \
 		${FLUX_SHELL} -v -s -r 0 -j j9 -R R8 69 \
 			>sigterm.out 2>sigterm.err &&
