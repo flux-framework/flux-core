@@ -156,29 +156,6 @@ test_expect_success 'job-exec: set kill-timeout to low value for testing' '
 	flux module reload job-exec kill-timeout=0.25
 '
 
-#  Fatal error tests below must exit with failure, but exit due to
-#  SIGTERM should also be allowed. Therefore adapt sharness `test_must_fail`
-#  to allow exit 1 or 143 for succcess.
-#
-test_must_fail_or_be_terminated() {
-    "$@"
-    exit_code=$?
-    # Allow death by SIGTERM or SIGKILL
-    if test $exit_code = 143 -o $exit_code = 137; then
-        return 0
-    elif test $exit_code = 0; then
-        echo >&2 "test_must_fail: command succeeded: $*"
-        return 1
-    elif test $exit_code -gt 129 -a $exit_code -le 192; then
-        echo >&2 "test_must_fail: died by non-SIGTERM signal: $*"
-        return 1
-    elif test $exit_code = 127; then
-        echo >&2 "test_must_fail: command not found: $*"
-        return 1
-    fi
-    return 0
-}
-
 dump_job_output_eventlog() {
     flux job eventlog -p guest.output $(sed -n 's/^jobid: //p' fatal-$1.out)
 }
