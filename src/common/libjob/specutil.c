@@ -301,6 +301,32 @@ static int specutil_attr_system_check (json_t *o, const char **errtxt)
                 return -1;
             }
         }
+        else if (!strcmp (key, "dependencies")) {
+            size_t index;
+            json_t *el;
+            const char *scheme;
+            const char *val;
+
+            if (!json_is_array (value)) {
+                *errtxt = "attributes.system.dependencies must be an array";
+                return -1;
+            }
+            json_array_foreach (value, index, el) {
+                if (!json_is_object (el)) {
+                    *errtxt = "attributes.system.dependencies elements"
+                              " must be an object";
+                    return -1;
+                }
+                if (json_unpack (el,
+                                 "{s:s s:s}",
+                                 "scheme", &scheme,
+                                 "value", &val) < 0) {
+                    *errtxt = "attributes.system.dependencies elements"
+                              " must contain scheme and value strings";
+                    return -1;
+                }
+            }
+        }
         else if (!strcmp (key, "shell")) {
             json_t *opt;
             if ((opt = json_object_get (value, "options"))
