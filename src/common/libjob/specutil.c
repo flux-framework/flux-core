@@ -297,7 +297,7 @@ static int specutil_attr_system_check (json_t *o, const char **errtxt)
         }
         else if (!strcmp (key, "environment")) {
             if (!(json_is_object (value))) {
-                *errtxt = "attributes.system.environment.must be a dictionary";
+                *errtxt = "attributes.system.environment must be a dictionary";
                 return -1;
             }
         }
