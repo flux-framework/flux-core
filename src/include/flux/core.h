@@ -18,5 +18,6 @@
 #include "src/common/libkvs/kvs.h"
 #include "src/common/libsubprocess/subprocess.h"
 #include "src/common/libjob/job.h"
+#include "src/common/libjob/jobspec1.h"
 
 #endif /* FLUX_CORE_H */
