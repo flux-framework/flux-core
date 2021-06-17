@@ -37,12 +37,12 @@ int flux_jobspec1_attr_unpack (flux_jobspec1_t *jobspec,
         errno = EINVAL;
         return -1;
     }
-    va_start (ap, fmt);
     if (!(root = specutil_attr_get (json_object_get (jobspec->obj,
                                                      "attributes"),
                                     path))) {
         return -1;
     }
+    va_start (ap, fmt);
     rc = json_vunpack_ex (root, NULL, 0, fmt, ap);
     va_end (ap);
     return rc;
