@@ -22,18 +22,6 @@
 
 extern char **environ;
 
-int free_wrapper (void *ptr)
-{
-    free (ptr);
-    return 1;
-}
-
-int decref_wrapper (json_t *ptr)
-{
-    json_decref (ptr);
-    return 1;
-}
-
 void check_stdio_cwd (void)
 {
     char *argv[] = {"this", "is", "a", "test"};
@@ -357,22 +345,25 @@ void check_encoding (void)
     json_t *dup = NULL;
     json_error_t err;
 
-    if (!(jobspec = flux_jobspec1_from_command (argc, argv, NULL, 5, 3, 2, 0, 0.0))
-        || !(encoded = flux_jobspec1_encode (jobspec, 0))) {
-        BAIL_OUT ("flux_jobspec1_from_command or subsequent encoding failed");
-    };
-    ok ((dup = json_loads (encoded, 0, &err)) && free_wrapper (encoded)
-            && decref_wrapper (dup),
+    if (!(jobspec = flux_jobspec1_from_command (argc, argv,
+                                                NULL, 5, 3, 2, 0, 0.0)))
+        BAIL_OUT ("flux_jobspec1_from_command failed");
+
+    ok ((encoded = flux_jobspec1_encode (jobspec, 0)) != NULL,
+        "flux_jobspec1_encode works");
+    ok ((dup = json_loads (encoded, 0, &err)) != NULL,
         "decoding works");
+    free (encoded);
+    json_decref (dup);
 
     errno = EINVAL;
     flux_jobspec1_destroy (jobspec);
-    ok (errno == EINVAL, "flux_jobspec1_destroy preserves errno");
-    errno = 0;
+    ok (errno == EINVAL,
+        "flux_jobspec1_destroy preserves errno");
 
+    errno = 0;
     ok (flux_jobspec1_encode (NULL, 0) == NULL && errno == EINVAL,
         "flux_jobspec1_encode catches NULL jobspec");
-    errno = 0;
 }
 
 void check_bad_args (void)
