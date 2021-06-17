@@ -194,6 +194,34 @@ char *flux_jobspec1_encode (flux_jobspec1_t *jobspec, size_t flags)
     return returnval;
 }
 
+flux_jobspec1_t *flux_jobspec1_decode (const char *s,
+                                       char *errbuf,
+                                       size_t errbufsz)
+{
+    flux_jobspec1_t *jobspec = NULL;
+    json_error_t error;
+
+    if (!s) {
+        errno = EINVAL;
+        goto error;
+    }
+    if (!(jobspec = calloc (1, sizeof (*jobspec))))
+        goto error;
+    if (!(jobspec->obj = json_loads (s, 0, &error))) {
+        if (errbuf)
+            (void)snprintf (errbuf, errbufsz, "%s", error.text);
+        errno = EINVAL;
+        goto error_nomsg;
+    }
+    return jobspec;
+error:
+    if (errbuf)
+        (void)snprintf (errbuf, errbufsz, "%s", strerror (errno));
+error_nomsg:
+    flux_jobspec1_destroy (jobspec);
+    return NULL;
+}
+
 flux_jobspec1_t *flux_jobspec1_from_command (int argc,
                                              char **argv,
                                              char **env,

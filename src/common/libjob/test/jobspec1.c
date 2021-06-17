@@ -342,8 +342,8 @@ void check_encoding (void)
     int argc = sizeof (argv) / sizeof (argv[0]);
     flux_jobspec1_t *jobspec;
     char *encoded;
-    json_t *dup = NULL;
-    json_error_t err;
+    flux_jobspec1_t *dup;
+    char err[128];
 
     if (!(jobspec = flux_jobspec1_from_command (argc, argv,
                                                 NULL, 5, 3, 2, 0, 0.0)))
@@ -351,10 +351,10 @@ void check_encoding (void)
 
     ok ((encoded = flux_jobspec1_encode (jobspec, 0)) != NULL,
         "flux_jobspec1_encode works");
-    ok ((dup = json_loads (encoded, 0, &err)) != NULL,
-        "decoding works");
+    ok ((dup = flux_jobspec1_decode (encoded, err, sizeof (err))) != NULL,
+        "flux_jobspec1_decode works");
     free (encoded);
-    json_decref (dup);
+    flux_jobspec1_destroy (dup);
 
     errno = EINVAL;
     flux_jobspec1_destroy (jobspec);
@@ -364,6 +364,21 @@ void check_encoding (void)
     errno = 0;
     ok (flux_jobspec1_encode (NULL, 0) == NULL && errno == EINVAL,
         "flux_jobspec1_encode catches NULL jobspec");
+
+    errno = 0;
+    err[0] = '\0';
+    ok (flux_jobspec1_decode ("{", err, sizeof (err)) == NULL
+        && errno == EINVAL
+        && err[0] != '\0',
+        "flux_jobspec1_decode on bad JSON fails with EINVAL and error buf set");
+    diag ("%s", err);
+
+    errno = 0;
+    err[0] = '\0';
+    ok (flux_jobspec1_decode (NULL, err, sizeof (err)) == NULL
+        && errno == EINVAL
+        && err[0] != '\0',
+        "flux_jobspec1_decode NULL fails with EINVAL and error buf set");
 }
 
 void check_bad_args (void)

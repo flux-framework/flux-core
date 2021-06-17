@@ -96,6 +96,13 @@ int flux_jobspec1_set_cwd (flux_jobspec1_t *jobspec, const char *cwd);
  */
 char *flux_jobspec1_encode (flux_jobspec1_t *jobspec, size_t flags);
 
+/* Decode a string to jobspec.
+ */
+flux_jobspec1_t *flux_jobspec1_decode (const char *s,
+                                       char *errbuf,
+                                       size_t errbufsz);
+
+
 /* Create and return a minimum viable V1 Jobspec.
  * The jobspec will have stdin, stdout, stderr all directed to the KVS,
  * and the environment will be empty.
