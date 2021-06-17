@@ -349,6 +349,19 @@ void check_tasks_create (void)
     json_decref (tasks);
 }
 
+void attr_check_fail (json_t *attr, const char *checkstr)
+{
+    char errbuf[128] = {0};
+    int rc;
+
+    errno = 0;
+    rc = specutil_attr_check (attr, errbuf, sizeof (errbuf));
+    ok (rc < 0 && errno == EINVAL && *errbuf != '\0',
+        "specutil_attr_check %s fails with expected error", checkstr);
+    if (rc < 0)
+        diag ("%s", errbuf);
+}
+
 void check_attr_check (void)
 {
     json_t *attr;
@@ -361,24 +374,12 @@ void check_attr_check (void)
 
     if (specutil_attr_pack (attr, "a.b", "s", "foo") < 0)
         BAIL_OUT ("could not set a.b");
-    errno = 0;
-    *errbuf = '\0';
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno == EINVAL
-        && strlen (errbuf) > 0,
-        "specutil_attr_check failed with EINVAL, errbuf");
-    diag ("errbuf=%s", errbuf);
+    attr_check_fail (attr, "a.b=\"foo\"");
     json_object_del (attr, "a");
 
     if (specutil_attr_pack (attr, "system", "{}") < 0)
         BAIL_OUT ("could not set system={}");
-    errno = 0;
-    *errbuf = '\0';
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno == EINVAL
-        && strlen (errbuf) > 0,
-        "specutil_attr_check attr= failed with EINVAL, errbuf");
-    diag ("errbuf=%s", errbuf);
+    attr_check_fail (attr, "system={}");
 
     if (specutil_attr_pack (attr, "system.duration", "f", 0.1) < 0)
         BAIL_OUT ("could not set system.duration=0.1");
@@ -387,56 +388,33 @@ void check_attr_check (void)
 
     if (specutil_attr_pack (attr, "user", "{}") < 0)
         BAIL_OUT ("could not set user={}");
-    errno = 0;
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno==EINVAL,
-        "specutil_attr_check user={} failed with EINVAL");
-    if (specutil_attr_del (attr, "user") < 0)
-        BAIL_OUT ("could not remove user attribute dict");
+    attr_check_fail (attr, "user={}");
+    json_object_del (attr, "user");
 
     if (specutil_attr_pack (attr, "system.duration", "s", "x") < 0)
-        BAIL_OUT ("could not set system.duration=x");
-    errno = 0;
-    *errbuf = '\0';
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno == EINVAL
-        && strlen (errbuf) > 0,
-        "specutil_attr_check system.duration=x failed with EINVAL, errbuf");
-    diag ("errbuf=%s", errbuf);
+        BAIL_OUT ("could not set system.duration");
+    attr_check_fail (attr, "system.duration=\"x\"");
+    json_object_del (attr, "system");
 
-    if (specutil_attr_del (attr, "system") < 0)
-        BAIL_OUT ("could not remove system attribute dict");
     if (specutil_attr_pack (attr, "system.environment", "{}") < 0)
-        BAIL_OUT ("could not set system.environment={}");
+        BAIL_OUT ("could not set system.environment");
     ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
         "specutil_attr_check system.environment={} OK");
 
     if (specutil_attr_pack (attr, "system.environment", "s", "x") < 0)
-        BAIL_OUT ("could not set system.environment=x");
-    errno = 0;
-    *errbuf = '\0';
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno == EINVAL
-        && strlen (errbuf) > 0,
-        "specutil_attr_check system.environment=x failed with EINVAL, errbuf");
-    diag ("errbuf=%s", errbuf);
+        BAIL_OUT ("could not set system.environment");
+    attr_check_fail (attr, "system.environment=\"x\"");
+    json_object_del (attr, "system");
 
-    if (specutil_attr_del (attr, "system") < 0)
-        BAIL_OUT ("could not remove system attribute dict");
     if (specutil_attr_pack (attr, "system.shell.options", "{}") < 0)
-        BAIL_OUT ("could not set system.shell.options={}");
+        BAIL_OUT ("could not set system.shell.options");
     ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
         "specutil_attr_check system.shell.options={} OK");
 
     if (specutil_attr_pack (attr, "system.shell.options", "s", "x") < 0)
-        BAIL_OUT ("could not set system.shell.options=x");
-    errno = 0;
-    *errbuf = '\0';
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno == EINVAL
-        && strlen (errbuf) > 0,
-        "specutil_attr_check system.shell.options=x failed with EINVAL, errbuf");
-    diag ("errbuf=%s", errbuf);
+        BAIL_OUT ("could not set system.shell.options");
+    attr_check_fail (attr, "system.shell.options=\"x\"");
+    json_object_del (attr, "system");
 
     json_decref (attr);
 }
