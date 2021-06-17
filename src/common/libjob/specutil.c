@@ -345,6 +345,10 @@ int specutil_attr_check (json_t *o, char *errbuf, int errbufsz)
     json_t *value;
     const char *errtxt;
 
+    if (!json_is_object (o)) {
+        errtxt = "attributes must be an object";
+        goto copy_error;
+    }
     json_object_foreach (o, key, value) {
         if (!strcmp (key, "user")) {
             if (json_object_size (value) == 0) {
