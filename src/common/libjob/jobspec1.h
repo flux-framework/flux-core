@@ -41,14 +41,21 @@ int flux_jobspec1_attr_unpack (flux_jobspec1_t *jobspec,
                                const char *fmt,
                                ...);
 
-/* Check the validity of the 'attributes' section of a jobspec,
- * writing an error message to 'errbuf'.
- * Return 0 on success, -1 on error with an error message written.
- * This function succeeding does not guarantee that the jobspec is valid.
+/* Check the validity of only the 'attributes' section of a jobspec,
+ * which may be sufficient verification, if the jobspec object was originally
+ * created by flux_jobspec1_from_command() and then modified with the other
+ * jobspec1 functions.
+ * Return 0 on success, -1 on error with an error message written to errbuf.
  */
 int flux_jobspec1_attr_check (flux_jobspec1_t *jobspec,
                               char *errbuf,
                               int errbufsz);
+
+/* Check the validity of the full jobspec, which may be necessary if the
+ * jobspec object was created by flux_jobspec1_decode().
+ * Return 0 on success, -1 on error with an error message written to errbuf.
+ */
+int flux_jobspec1_check (flux_jobspec1_t *jobspec, char *errbuf, int errbufsz);
 
 /* Remove an entry in a Jobspec's environment.
  * This function succeeds regardless of the presence of the variable.

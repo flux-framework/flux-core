@@ -349,6 +349,9 @@ void check_encoding (void)
                                                 NULL, 5, 3, 2, 0, 0.0)))
         BAIL_OUT ("flux_jobspec1_from_command failed");
 
+    ok (flux_jobspec1_check (jobspec, err, sizeof (err)) == 0,
+        "flux_jobspec1_check returns success on valid jobspec");
+
     ok ((encoded = flux_jobspec1_encode (jobspec, 0)) != NULL,
         "flux_jobspec1_encode works");
     ok ((dup = flux_jobspec1_decode (encoded, err, sizeof (err))) != NULL,
@@ -379,6 +382,11 @@ void check_encoding (void)
         && errno == EINVAL
         && err[0] != '\0',
         "flux_jobspec1_decode NULL fails with EINVAL and error buf set");
+
+    errno = 0;
+    err[0] = '\0';
+    ok (flux_jobspec1_check (NULL, err, sizeof (err)) < 0,
+        "flux_jobspec1_check NULL fails with EINVAL and error buf set");
 }
 
 void check_bad_args (void)
