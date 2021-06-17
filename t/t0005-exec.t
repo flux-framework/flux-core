@@ -172,13 +172,14 @@ test_expect_success 'I/O -- long lines' '
 	test_cmp output expected
 '
 
-
+waitfile=$SHARNESS_TEST_SRCDIR/scripts/waitfile.lua
 test_expect_success 'signal forwarding works' '
 	cat >test_signal.sh <<-EOF &&
 	#!/bin/bash
 	sig=\${1-INT}
-	flux exec -n sleep 100 </dev/null &
-	sleep 1 &&
+	stdbuf --output=L \
+	    flux exec -n sh -c "echo hi; sleep 100" >sleepready.out 2>&1 &
+	$waitfile -t 20 -p ^hi -c ${SIZE} sleepready.out &&
 	kill -\$sig %1 &&
 	wait %1
 	exit \$?

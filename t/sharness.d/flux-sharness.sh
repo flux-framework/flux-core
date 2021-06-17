@@ -34,6 +34,29 @@ test_size_large() {
 
 
 #
+#  Like test_must_fail(), but additionally allow process to be
+#   terminated by SIGKILL or SIGTERM
+#
+test_must_fail_or_be_terminated() {
+    "$@"
+    exit_code=$?
+    # Allow death by SIGTERM or SIGKILL
+    if test $exit_code = 143 -o $exit_code = 137; then
+        return 0
+    elif test $exit_code = 0; then
+        echo >&2 "test_must_fail: command succeeded: $*"
+        return 1
+    elif test $exit_code -gt 129 -a $exit_code -le 192; then
+        echo >&2 "test_must_fail: died by non-SIGTERM signal: $*"
+        return 1
+    elif test $exit_code = 127; then
+        echo >&2 "test_must_fail: command not found: $*"
+        return 1
+    fi
+    return 0
+}
+
+#
 #  Tests using test_under_flux() and which load their own modules should
 #   ensure those modules are unloaded at the end of the test for proper
 #   cleanup and test coverage (also as a general principle, module unload
