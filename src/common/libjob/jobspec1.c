@@ -38,8 +38,9 @@ int flux_jobspec1_attr_unpack (flux_jobspec1_t *jobspec,
         return -1;
     }
     va_start (ap, fmt);
-    if (!(root =
-              specutil_attr_get (json_object_get (jobspec->obj, "attributes"), path))) {
+    if (!(root = specutil_attr_get (json_object_get (jobspec->obj,
+                                                     "attributes"),
+                                    path))) {
         return -1;
     }
     rc = json_vunpack_ex (root, NULL, 0, fmt, ap);
@@ -53,7 +54,8 @@ int flux_jobspec1_attr_del (flux_jobspec1_t *jobspec, const char *path)
         errno = EINVAL;
         return -1;
     }
-    return specutil_attr_del (json_object_get (jobspec->obj, "attributes"), path);
+    return specutil_attr_del (json_object_get (jobspec->obj, "attributes"),
+                              path);
 }
 
 int flux_jobspec1_attr_pack (flux_jobspec1_t *jobspec,
@@ -78,7 +80,9 @@ int flux_jobspec1_attr_pack (flux_jobspec1_t *jobspec,
     return rc;
 }
 
-int flux_jobspec1_attr_check (flux_jobspec1_t *jobspec, char *errbuf, int errbufsz)
+int flux_jobspec1_attr_check (flux_jobspec1_t *jobspec,
+                              char *errbuf,
+                              int errbufsz)
 {
     if (!jobspec || !errbuf || errbufsz < 0) {
         errno = EINVAL;
@@ -97,8 +101,8 @@ int flux_jobspec1_unsetenv (flux_jobspec1_t *jobspec, const char *name)
         errno = EINVAL;
         return -1;
     }
-    if (!(environment =
-              specutil_attr_get (jobspec->obj, "attributes.system.environment"))) {
+    if (!(environment = specutil_attr_get (jobspec->obj,
+                                           "attributes.system.environment"))) {
         return -1;
     }
     return specutil_env_unset (environment, name);
@@ -115,14 +119,16 @@ int flux_jobspec1_setenv (flux_jobspec1_t *jobspec,
         errno = EINVAL;
         return -1;
     }
-    if (!(environment =
-              specutil_attr_get (jobspec->obj, "attributes.system.environment"))) {
+    if (!(environment = specutil_attr_get (jobspec->obj,
+                                           "attributes.system.environment"))) {
         return -1;
     }
     return specutil_env_set (environment, name, value, overwrite);
 }
 
-/* 'stdio_name' should be one of: 'output.stdout', 'output.stderr', or 'input.stdin'. */
+/* 'stdio_name' should be one of: 'output.stdout', 'output.stderr',
+ * or 'input.stdin'.
+ */
 static int flux_jobspec1_set_stdio (flux_jobspec1_t *jobspec,
                                     const char *stdio_name,
                                     const char *path)
