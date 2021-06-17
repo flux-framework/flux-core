@@ -416,6 +416,35 @@ void check_attr_check (void)
     attr_check_fail (attr, "system.shell.options=\"x\"");
     json_object_del (attr, "system");
 
+    if (specutil_attr_pack (attr, "system.dependencies", "{}") < 0)
+        BAIL_OUT ("could not set system.dependencies");
+    attr_check_fail (attr, "system.dependencies={}");
+
+    if (specutil_attr_pack (attr, "system.dependencies", "[{s:s s:s}]",
+                            "scheme", "foo",
+                            "value", "bar") < 0)
+        BAIL_OUT ("could not set system.dependencies");
+    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
+        "specutil_attr_check passes a good dependency");
+
+    if (specutil_attr_pack (attr, "system.dependencies", "[{s:s s:s s:i}]",
+                            "scheme", "foo",
+                            "value", "bar",
+                            "foo", 42) < 0)
+        BAIL_OUT ("could not set system.dependencies");
+    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
+        "specutil_attr_check passes a dependency with extra keys");
+
+    if (specutil_attr_pack (attr, "system.dependencies", "[{s:s s:i}]",
+                            "scheme", "foo",
+                            "value", 42) < 0)
+        BAIL_OUT ("could not set system.dependencies");
+    attr_check_fail (attr, "dependency with bad value type");
+
+    if (specutil_attr_pack (attr, "system.dependencies", "[i]", 42) < 0)
+        BAIL_OUT ("could not set system.dependencies");
+    attr_check_fail (attr, "non-object dependency");
+
     json_decref (attr);
 }
 
