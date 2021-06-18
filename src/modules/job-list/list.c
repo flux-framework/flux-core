@@ -25,7 +25,7 @@
 #include "job_state.h"
 
 json_t *get_job_by_id (struct list_ctx *ctx,
-                       job_info_error_t *errp,
+                       job_list_error_t *errp,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
                        json_t *attrs,
@@ -51,7 +51,7 @@ bool job_filter (struct job *job, uint32_t userid, int states, int results)
  * ENOMEM - out of memory
  */
 int get_jobs_from_list (json_t *jobs,
-                        job_info_error_t *errp,
+                        job_list_error_t *errp,
                         zlistx_t *list,
                         int max_entries,
                         json_t *attrs,
@@ -89,7 +89,7 @@ int get_jobs_from_list (json_t *jobs,
  * ENOMEM - out of memory
  */
 json_t *get_jobs (struct list_ctx *ctx,
-                  job_info_error_t *errp,
+                  job_list_error_t *errp,
                   int max_entries,
                   json_t *attrs,
                   uint32_t userid,
@@ -161,7 +161,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
               const flux_msg_t *msg, void *arg)
 {
     struct list_ctx *ctx = arg;
-    job_info_error_t err;
+    job_list_error_t err;
     json_t *jobs = NULL;
     json_t *attrs;
     int max_entries;
@@ -229,7 +229,7 @@ error:
  * ENOMEM - out of memory
  */
 json_t *get_inactive_jobs (struct list_ctx *ctx,
-                           job_info_error_t *errp,
+                           job_list_error_t *errp,
                            int max_entries,
                            double since,
                            json_t *attrs,
@@ -275,7 +275,7 @@ void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
                        const flux_msg_t *msg, void *arg)
 {
     struct list_ctx *ctx = arg;
-    job_info_error_t err = {{0}};
+    job_list_error_t err = {{0}};
     json_t *jobs = NULL;
     int max_entries;
     double since;
@@ -462,7 +462,7 @@ error:
  * ENOMEM - out of memory
  */
 json_t *get_job_by_id (struct list_ctx *ctx,
-                       job_info_error_t *errp,
+                       job_list_error_t *errp,
                        const flux_msg_t *msg,
                        flux_jobid_t id,
                        json_t *attrs,
@@ -505,7 +505,7 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
                   const flux_msg_t *msg, void *arg)
 {
     struct list_ctx *ctx = arg;
-    job_info_error_t err = {{0}};
+    job_list_error_t err = {{0}};
     json_t *job = NULL;
     flux_jobid_t id;
     json_t *attrs;

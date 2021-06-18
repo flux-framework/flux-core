@@ -22,7 +22,7 @@
 #include "job_util.h"
 #include "job_state.h"
 
-void seterror (job_info_error_t *errp, const char *fmt, ...)
+void seterror (job_list_error_t *errp, const char *fmt, ...)
 {
     if (errp) {
         va_list ap;
@@ -42,7 +42,7 @@ void seterror (job_info_error_t *errp, const char *fmt, ...)
  * EPROTO - malformed attrs array
  * ENOMEM - out of memory
  */
-json_t *job_to_json (struct job *job, json_t *attrs, job_info_error_t *errp)
+json_t *job_to_json (struct job *job, json_t *attrs, job_list_error_t *errp)
 {
     size_t index;
     json_t *value;

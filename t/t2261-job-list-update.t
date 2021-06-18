@@ -101,15 +101,17 @@ wait_states() {
 
 test_expect_success 'submit jobs for job list testing' '
         #  Create `hostname` and `sleep` jobspec
+        #  N.B. Used w/ `flux job submit` for serial job submission
+        #  for efficiency (vs serial `flux mini submit`.
         #
-        flux jobspec --format json srun -N1 hostname > hostname.json &&
-        flux jobspec --format json srun -N1 sleep 300 > sleeplong.json &&
+        flux mini submit --dry-run hostname >hostname.json &&
+        flux mini submit --dry-run --time-limit=5m sleep 600 > sleeplong.json &&
         #
         # submit jobs that will complete
         #
-        for i in $(seq 0 3); do \
-                flux job submit hostname.json >> inactiveids; \
-                fj_wait_event `tail -n 1 inactiveids` clean ; \
+        for i in $(seq 0 3); do
+                flux job submit hostname.json >> inactiveids
+                fj_wait_event `tail -n 1 inactiveids` clean
         done &&
         #
         #  Currently all inactive ids are "completed"
