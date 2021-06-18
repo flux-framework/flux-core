@@ -29,7 +29,7 @@ runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
 #
 
 # Return the expected jobids list in a given state:
-#   "all", "run", "sched", "active", "inactive",
+#   "all", "pending", "running", "inactive", "active",
 #   "completed", "canceled", "failed"
 #
 state_ids() {
@@ -45,23 +45,23 @@ state_count() {
 }
 
 wait_states() {
-	sched=$(state_count sched)
-	run=$(state_count run)
-	inactive=$(state_count inactive)
-	local i=0
-	printf >&2 "Waiting for sched=$sched run=$run inactive=$inactive\n"
-	while ( [ "$(flux jobs -n --filter=sched | wc -l)" != "$sched" ] \
-	     || [ "$(flux jobs -n --filter=run | wc -l)" != "$run" ] \
-	     || [ "$(flux jobs -n --filter=inactive | wc -l)" != "$inactive" ]) \
-	&& [ $i -lt 50 ]
-	do
-		sleep 0.1
-		i=$((i + 1))
-	done
-	if [ "$i" -eq "50" ]; then
-		return 1
-	fi
-	return 0
+        pending=$(state_count pending)
+        running=$(state_count running)
+        inactive=$(state_count inactive)
+        local i=0
+        while ( [ "$(flux job list --states=sched | wc -l)" != "$pending" ] \
+                || [ "$(flux job list --states=run | wc -l)" != "$running" ] \
+                || [ "$(flux job list --states=inactive | wc -l)" != "$inactive" ]) \
+               && [ $i -lt 50 ]
+        do
+                sleep 0.1
+                i=$((i + 1))
+        done
+        if [ "$i" -eq "50" ]
+        then
+            return 1
+        fi
+        return 0
 }
 
 export FLUX_PYCLI_LOGLEVEL=10
@@ -105,14 +105,14 @@ test_expect_success HAVE_JQ 'submit jobs for job list testing' '
 	#  Submit 8 sleep jobs to fill up resources
 	#
 	for i in $(seq 0 7); do
-		flux job submit sleeplong.json >> runids
+		flux job submit sleeplong.json >> runningids
 	done &&
-	tac runids > run.ids &&
+	tac runningids > running.ids &&
 	#
 	#  Submit a set of jobs with non-default urgencies
 	#
 	for u in 31 25 20 15 10 5; do
-		flux job submit --urgency=$u sleeplong.json >> sched.ids
+		flux job submit --urgency=$u sleeplong.json >> pending.ids
 	done &&
 	listjobs > active.ids &&
 	#
@@ -141,8 +141,8 @@ test_expect_success 'flux-jobs --suppress-header works' '
 test_expect_success 'flux-jobs default output works' '
 	flux jobs -n > default.out &&
 	test $(wc -l < default.out) -eq $(state_count active) &&
-	test $(grep -c " PD " default.out) -eq $(state_count sched) &&
-	test $(grep -c "  R " default.out) -eq $(state_count run) &&
+	test $(grep -c " PD " default.out) -eq $(state_count pending) &&
+	test $(grep -c "  R " default.out) -eq $(state_count running) &&
 	test $(grep -c " CD " default.out) -eq 0 &&
 	test $(grep -c " CA " default.out) -eq 0 &&
 	test $(grep -c "  F " default.out) -eq 0
@@ -171,33 +171,33 @@ test_expect_success 'flux-jobs --filter works (job states)' '
 	count=`flux jobs --suppress-header --filter=priority | wc -l` &&
 	test $count -eq 0 &&
 	count=`flux jobs --suppress-header --filter=sched | wc -l` &&
-	test $count -eq $(state_count sched) &&
+	test $count -eq $(state_count pending) &&
 	count=`flux jobs --suppress-header --filter=pending | wc -l` &&
-	test $count -eq $(state_count sched) &&
+	test $count -eq $(state_count pending) &&
 	count=`flux jobs --suppress-header --filter=run | wc -l` &&
-	test $count -eq $(state_count run) &&
+	test $count -eq $(state_count running) &&
 	count=`flux jobs --suppress-header --filter=cleanup | wc -l` &&
 	test $count -eq 0 &&
 	count=`flux jobs --suppress-header --filter=running | wc -l` &&
-	test $count -eq $(state_count run) &&
+	test $count -eq $(state_count running) &&
 	count=`flux jobs --suppress-header --filter=inactive | wc -l` &&
 	test $count -eq $(state_count inactive) &&
 	count=`flux jobs --suppress-header --filter=pending,running | wc -l` &&
-	test $count -eq $(state_count sched run) &&
+	test $count -eq $(state_count pending running) &&
 	count=`flux jobs --suppress-header --filter=sched,run | wc -l` &&
-	test $count -eq $(state_count sched run) &&
+	test $count -eq $(state_count pending running) &&
 	count=`flux jobs --suppress-header --filter=active | wc -l` &&
 	test $count -eq $(state_count active) &&
 	count=`flux jobs --suppress-header --filter=depend,priority,sched,run,cleanup | wc -l` &&
 	test $count -eq $(state_count active) &&
 	count=`flux jobs --suppress-header --filter=pending,inactive | wc -l` &&
-	test $count -eq $(state_count sched inactive) &&
+	test $count -eq $(state_count pending inactive) &&
 	count=`flux jobs --suppress-header --filter=sched,inactive | wc -l` &&
-	test $count -eq $(state_count sched inactive) &&
+	test $count -eq $(state_count pending inactive) &&
 	count=`flux jobs --suppress-header --filter=running,inactive | wc -l` &&
-	test $count -eq $(state_count run inactive) &&
+	test $count -eq $(state_count running inactive) &&
 	count=`flux jobs --suppress-header --filter=run,inactive | wc -l` &&
-	test $count -eq $(state_count run inactive) &&
+	test $count -eq $(state_count running inactive) &&
 	count=`flux jobs --suppress-header --filter=pending,running,inactive | wc -l` &&
 	test $count -eq $(state_count all) &&
 	count=`flux jobs --suppress-header --filter=active,inactive | wc -l` &&
@@ -220,17 +220,17 @@ test_expect_success 'flux-jobs --filter works (job results)' '
 	count=`flux jobs --suppress-header --filter=completed,failed,canceled | wc -l` &&
 	test $count -eq $(state_count completed failed canceled) &&
 	count=`flux jobs --suppress-header --filter=pending,completed | wc -l` &&
-	test $count -eq $(state_count sched completed) &&
+	test $count -eq $(state_count pending completed) &&
 	count=`flux jobs --suppress-header --filter=pending,failed | wc -l` &&
-	test $count -eq $(state_count sched failed) &&
+	test $count -eq $(state_count pending failed) &&
 	count=`flux jobs --suppress-header --filter=pending,canceled | wc -l` &&
-	test $count -eq $(state_count sched canceled) &&
+	test $count -eq $(state_count pending canceled) &&
 	count=`flux jobs --suppress-header --filter=running,completed | wc -l` &&
-	test $count -eq $(state_count run completed) &&
+	test $count -eq $(state_count running completed) &&
 	count=`flux jobs --suppress-header --filter=running,failed | wc -l` &&
-	test $count -eq $(state_count run failed) &&
+	test $count -eq $(state_count running failed) &&
 	count=`flux jobs --suppress-header --filter=running,canceled | wc -l` &&
-	test $count -eq $(state_count run canceled)
+	test $count -eq $(state_count running canceled)
 '
 
 
@@ -290,7 +290,7 @@ test_expect_success 'flux-jobs specific IDs works' '
 '
 
 test_expect_success 'flux jobs can take specific IDs in any form' '
-	id=$(head -1 run.ids) &&
+	id=$(head -1 running.ids) &&
 	for f in f58 hex dothex kvs words; do
 		flux job id --to=${f} ${id}
 	done > ids.specific.list &&
@@ -306,16 +306,16 @@ test_expect_success 'flux-jobs error on bad IDs' '
 '
 
 test_expect_success 'flux-jobs good and bad IDs works' '
-	ids=$(state_ids sched) &&
+	ids=$(state_ids pending) &&
 	flux jobs --suppress-header ${ids} 0 1 2 > ids.out 2> ids.err &&
 	count=`wc -l < ids.out` &&
-	test $count -eq $(state_count sched) &&
+	test $count -eq $(state_count pending) &&
 	count=`grep -i unknown ids.err | wc -l` &&
 	test $count -eq 3
 '
 
 test_expect_success 'flux-jobs ouputs warning on invalid options' '
-	ids=$(state_ids sched) &&
+	ids=$(state_ids pending) &&
 	flux jobs --suppress-header -A ${ids} > warn.out 2> warn.err &&
 	grep WARNING warn.err
 '
@@ -326,9 +326,9 @@ test_expect_success 'flux-jobs ouputs warning on invalid options' '
 
 test_expect_success 'flux-jobs --format={id} works' '
 	flux jobs --suppress-header --filter=pending --format="{id}" > idsP.out &&
-	test_cmp idsP.out sched.ids &&
+	test_cmp idsP.out pending.ids &&
 	flux jobs --suppress-header --filter=running --format="{id}" > idsR.out &&
-	test_cmp idsR.out run.ids &&
+	test_cmp idsR.out running.ids &&
 	flux jobs --suppress-header --filter=inactive --format="{id}" > idsI.out &&
 	test_cmp idsI.out inactive.ids
 '
@@ -366,7 +366,7 @@ test_expect_success 'flux-jobs --format={urgency},{priority} works' '
 	echo 15,15 >> urgency_priority.exp &&
 	echo 10,10 >> urgency_priority.exp &&
 	echo 5,5 >> urgency_priority.exp &&
-	for i in `seq 1 $(state_count run)`; do
+	for i in `seq 1 $(state_count running)`; do
 		echo "16,16" >> urgency_priority.exp
 	done &&
 	for i in `seq 1 $(state_count inactive)`; do
@@ -386,7 +386,7 @@ test_expect_success 'flux-jobs --format={state},{state_single} works' '
 
 test_expect_success 'flux-jobs --format={name} works' '
 	flux jobs --filter=pending,running -no "{name}" > jobnamePR.out &&
-	for i in `seq 1 $(state_count run sched)`; do
+	for i in `seq 1 $(state_count running pending)`; do
 		echo "sleep" >> jobnamePR.exp
 	done &&
 	test_cmp jobnamePR.out jobnamePR.exp &&
@@ -402,12 +402,12 @@ test_expect_success 'flux-jobs --format={name} works' '
 
 test_expect_success 'flux-jobs --format={ntasks},{nnodes},{nnodes:h} works' '
 	flux jobs --filter=pending -no "{ntasks},{nnodes},{nnodes:h}" > nodecountP.out &&
-	for i in `seq 1 $(state_count sched)`; do
+	for i in `seq 1 $(state_count pending)`; do
 		echo "1,,-" >> nodecountP.exp
 	done &&
 	test_cmp nodecountP.exp nodecountP.out &&
 	flux jobs --filter=running -no "{ntasks},{nnodes},{nnodes:h}" > nodecountR.out &&
-	for i in `seq 1 $(state_count run)`; do
+	for i in `seq 1 $(state_count running)`; do
 		echo "1,1,1" >> nodecountR.exp
 	done &&
 	test_cmp nodecountR.exp nodecountR.out &&
@@ -422,7 +422,7 @@ test_expect_success 'flux-jobs --format={ntasks},{nnodes},{nnodes:h} works' '
 
 test_expect_success 'flux-jobs --format={runtime:0.3f} works' '
 	flux jobs --filter=pending -no "{runtime:0.3f}" > runtime-dotP.out &&
-	for i in `seq 1 $(state_count sched)`;
+	for i in `seq 1 $(state_count pending)`;
 		do echo "0.000" >> runtime-dotP.exp;
 	done &&
 	test_cmp runtime-dotP.out runtime-dotP.exp &&
@@ -450,7 +450,7 @@ test_expect_success 'flux-jobs emits useful error on invalid format specifier' '
 
 test_expect_success 'flux-jobs --format={ranks},{ranks:h} works' '
 	flux jobs --filter=pending -no "{ranks},{ranks:h}" > ranksP.out &&
-	for i in `seq 1 $(state_count sched)`; do
+	for i in `seq 1 $(state_count pending)`; do
 		echo ",-" >> ranksP.exp
 	done &&
 	test_cmp ranksP.out ranksP.exp &&
@@ -471,12 +471,12 @@ test_expect_success 'flux-jobs --format={ranks},{ranks:h} works' '
 
 test_expect_success 'flux-jobs --format={nodelist},{nodelist:h} works' '
 	flux jobs --filter=pending -no "{nodelist},{nodelist:h}" > nodelistP.out &&
-	for i in `seq 1 $(state_count sched)`; do
+	for i in `seq 1 $(state_count pending)`; do
 		echo ",-" >> nodelistP.exp
 	done &&
 	test_cmp nodelistP.out nodelistP.exp &&
 	flux jobs --filter=running -no "{nodelist},{nodelist:h}" > nodelistR.out &&
-	for id in $(state_ids run); do
+	for id in $(state_ids running); do
 		nodes=`flux job info ${id} R | flux R decode --nodelist`
 		echo "${nodes},${nodes}" >> nodelistR.exp
 	done &&
@@ -508,11 +508,11 @@ test_expect_success 'flux-jobs --format={t_run} works' '
 	flux jobs --filter=running -no "{t_run}" > t_runR.out &&
 	flux jobs --filter=inactive -no "{t_run}" > t_runI.out &&
 	count=`cut -d, -f1 t_runP.out | grep "^0.0$" | wc -l` &&
-	test $count -eq $(state_count sched) &&
+	test $count -eq $(state_count pending) &&
 	count=`cut -d, -f2 t_runP.out | grep "^-$" | wc -l` &&
-	test $count -eq $(state_count sched) &&
+	test $count -eq $(state_count pending) &&
 	count=`cat t_runR.out | grep -v "^0.0$" | wc -l` &&
-	test $count -eq $(state_count run) &&
+	test $count -eq $(state_count running) &&
 	cat t_runI.out &&
 	count=`head -n 1 t_runI.out | grep "^0.0$" | wc -l` &&
 	test $count -eq 1 &&
@@ -523,15 +523,15 @@ test_expect_success 'flux jobs --format={t_cleanup/{in}active} works' '
 	flux jobs --filter=pending,running -no "{t_cleanup},{t_cleanup:h},{t_inactive},{t_inactive:h}" > t_cleanupPR.out &&
 	flux jobs --filter=inactive -no "{t_cleanup},{t_inactive}" > t_cleanupI.out &&
 	count=`cut -d, -f1 t_cleanupPR.out | grep "^0.0$" | wc -l` &&
-	test $count -eq $(state_count sched run) &&
+	test $count -eq $(state_count pending running) &&
 	count=`cut -d, -f2 t_cleanupPR.out | grep "^-$" | wc -l` &&
-	test $count -eq $(state_count sched run) &&
+	test $count -eq $(state_count pending running) &&
 	count=`cut -d, -f1 t_cleanupI.out | grep -v "^0.0$" | wc -l` &&
 	test $count -eq $(state_count inactive) &&
 	count=`cut -d, -f3 t_cleanupPR.out | grep "^0.0$" | wc -l` &&
-	test $count -eq $(state_count sched run) &&
+	test $count -eq $(state_count pending running) &&
 	count=`cut -d, -f4 t_cleanupPR.out | grep "^-$" | wc -l` &&
-	test $count -eq $(state_count sched run) &&
+	test $count -eq $(state_count pending running) &&
 	count=`cut -d, -f2 t_cleanupI.out | grep -v "^0.0$" | wc -l` &&
 	test $count -eq 6
 '
@@ -539,11 +539,11 @@ test_expect_success 'flux jobs --format={t_cleanup/{in}active} works' '
 test_expect_success 'flux-jobs --format={runtime},{runtime!F},{runtime!F:h},{runtime!H},{runtime!H:h} works' '
 	fmt="{runtime},{runtime!F},{runtime!H},{runtime!F:h},{runtime!H:h}" &&
 	flux jobs --filter=pending -no "${fmt}" > runtimeP.out &&
-	for i in `seq 1 $(state_count sched)`; do
+	for i in `seq 1 $(state_count pending)`; do
 		echo "0.0,0s,0:00:00,-,-" >> runtimeP.exp
 	done &&
 	test_cmp runtimeP.out runtimeP.exp &&
-	runcount=$(state_count run) &&
+	runcount=$(state_count running) &&
 	flux jobs --filter=running -no "${fmt}" > runtimeR.out &&
 	i=1 &&
 	for nomatch in 0.0 0s 0:00:00 - -; do
@@ -567,7 +567,7 @@ test_expect_success 'flux-jobs --format={runtime},{runtime!F},{runtime!F:h},{run
 
 test_expect_success 'flux-jobs --format={success},{success:h} works' '
 	flux jobs --filter=pending,running -no "{success},{success:h}" > successPR.out &&
-	for i in `seq 1 $(state_count sched run)`; do
+	for i in `seq 1 $(state_count pending running)`; do
 		echo ",-" >> successPR.exp;
 	done &&
 	test_cmp successPR.out successPR.exp &&
@@ -583,7 +583,7 @@ test_expect_success 'flux-jobs --format={exception.*},{exception.*:h} works' '
 	fmt="${fmt},{exception.note},{exception.note:h}" &&
 	flux jobs --filter=pending,running -no "$fmt" > exceptionPR.out &&
 	count=$(grep -c "^,-,,-,,-,,-$" exceptionPR.out) &&
-	test $count -eq $(state_count sched run) &&
+	test $count -eq $(state_count pending running) &&
 	flux jobs --filter=inactive -no "$fmt" > exceptionI.out &&
 	count=$(grep -c "^True,True,0,0,cancel,cancel,,-$" exceptionI.out) &&
 	test $count -eq $(state_count canceled) &&
@@ -599,7 +599,7 @@ test_expect_success 'flux-jobs --format={result},{result:h},{result_abbrev},{res
 	flux jobs --filter=pending,running -no "$fmt" > resultPR.out &&
 	count=$(grep -c "^,-,,-$" resultPR.out) &&
 	test_debug "echo checking sched+run got $count" &&
-	test $count -eq $(state_count sched run) &&
+	test $count -eq $(state_count pending running) &&
 	flux jobs  --filter=inactive -no "$fmt" > resultI.out &&
 	count=$(grep -c "CANCELED,CANCELED,CA,CA" resultI.out) &&
 	test_debug "echo checking canceled got $count" &&
@@ -617,9 +617,9 @@ test_expect_success 'flux-jobs --format={status},{status_abbrev} works' '
 	flux jobs --filter=running  -no "{status},{status_abbrev}" > statusR.out &&
 	flux jobs --filter=inactive -no "{status},{status_abbrev}" > statusI.out &&
 	count=$(grep -c "PENDING,PD" statusP.out) &&
-	test $count -eq $(state_count sched) &&
+	test $count -eq $(state_count pending) &&
 	count=$(grep -c "RUNNING,R" statusR.out) &&
-	test $count -eq $(state_count run) &&
+	test $count -eq $(state_count running) &&
 	count=$(grep -c "CANCELED,CA" statusI.out) &&
 	test $count -eq $(state_count canceled) &&
 	count=$(grep -c "FAILED,F" statusI.out) &&
@@ -635,8 +635,8 @@ test_expect_success 'flux-jobs --format={waitstatus},{returncode}' '
 	test_debug "echo active:; cat returncodePR.out" &&
 	test_debug "echo inactive:; cat returncodeI.out" &&
 	countPR=$(grep -c "^-,-$" returncodePR.out) &&
-	test_debug "echo active got $countPR, want $(state_count sched run)" &&
-	test $countPR -eq $(state_count sched run) &&
+	test_debug "echo active got $countPR, want $(state_count pending running)" &&
+	test $countPR -eq $(state_count pending running) &&
 	count=$(grep -c "^32512,127$" returncodeI.out) &&
 	test_debug "echo exit 127 got $count, want $(state_count failed)" &&
 	test $count -eq $(state_count failed) &&
@@ -708,7 +708,7 @@ test_expect_success 'flux-jobs annotation "sched" short hands work' '
 '
 
 test_expect_success 'flux-jobs annotation "user" short hands work' '
-	for id in $(state_ids sched); do
+	for id in $(state_ids pending); do
 		flux job annotate $id foo 42
 	done &&
 	fmt="{annotations.user},{annotations.user.foo}" &&
@@ -852,7 +852,7 @@ for opt in "" "--color=always" "--color=auto"; do
 		$runpty flux jobs ${opt} --suppress-header -a \
 		    | grep -v "version" > $outfile &&
 		count=$(no_color_lines $outfile) &&
-		test $count -eq $(state_count sched run) &&
+		test $count -eq $(state_count pending running) &&
 		count=$(green_line_count $outfile) &&
 		test $count -eq $(state_count completed) &&
 		count=$(red_line_count $outfile) &&
@@ -959,7 +959,7 @@ test_expect_success 'flux-jobs --stats works' '
 	flux jobs --stats -a >stats.output &&
 	test_debug "cat stats.output" &&
 	fail=$(state_count failed canceled) &&
-	run=$(state_count run) &&
+	run=$(state_count running) &&
 	inactive=$(state_count inactive) &&
 	active=$(state_count active) &&
 	comp=$((inactive - fail)) &&
