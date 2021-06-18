@@ -1,0 +1,18 @@
+version: 1
+resources:
+  - type: slot
+    label: foo
+    count: 1
+    with:
+      - type: piglets
+        count: 1
+      - type: mermaids
+        count: 1
+tasks:
+  - command: [ "app" ]
+    slot: foo
+    count:
+      per_slot: 1
+attributes:
+  system:
+    duration: 1
