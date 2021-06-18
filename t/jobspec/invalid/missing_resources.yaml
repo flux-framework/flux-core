@@ -5,3 +5,5 @@ tasks:
     count:
       per_slot: 1
 attributes:
+  system:
+    duration: 1
