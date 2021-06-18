@@ -14,6 +14,7 @@
 #include <string.h>
 #include <jansson.h>
 #include <errno.h>
+#include <stdbool.h>
 
 #include "src/common/libutil/errno_safe.h"
 
@@ -287,6 +288,7 @@ static int specutil_attr_system_check (json_t *o, const char **errtxt)
 {
     const char *key;
     json_t *value;
+    bool has_duration = false;
 
     json_object_foreach (o, key, value) {
         if (!strcmp (key, "duration")) {
@@ -294,6 +296,7 @@ static int specutil_attr_system_check (json_t *o, const char **errtxt)
                 *errtxt = "attributes.system.duration must be a number";
                 return -1;
             }
+            has_duration = true;
         }
         else if (!strcmp (key, "environment")) {
             if (!(json_is_object (value))) {
@@ -336,6 +339,10 @@ static int specutil_attr_system_check (json_t *o, const char **errtxt)
             }
         }
     }
+    if (!has_duration) {
+        *errtxt = "attributes.system.duration is required";
+        return -1;
+    }
     return 0;
 }
 
@@ -344,6 +351,7 @@ int specutil_attr_check (json_t *o, char *errbuf, int errbufsz)
     const char *key;
     json_t *value;
     const char *errtxt;
+    bool has_system = false;
 
     if (!json_is_object (o)) {
         errtxt = "attributes must be an object";
@@ -363,6 +371,7 @@ int specutil_attr_check (json_t *o, char *errbuf, int errbufsz)
             }
             if (specutil_attr_system_check (value, &errtxt) < 0)
                 goto copy_error;
+            has_system = true;
         }
         else {
             if (errbuf)
@@ -370,6 +379,10 @@ int specutil_attr_check (json_t *o, char *errbuf, int errbufsz)
                           "unknown attributes section %s", key);
             goto error;
         }
+    }
+    if (!has_system) {
+        errtxt = "attributes.system is required";
+        goto copy_error;
     }
     return 0;
 copy_error:

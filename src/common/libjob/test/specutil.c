@@ -369,32 +369,32 @@ void check_attr_check (void)
 
     if (!(attr = json_object ()))
         BAIL_OUT ("json_object failed");
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
-        "specutil_attr_check attr={} OK");
-
-    if (specutil_attr_pack (attr, "a.b", "s", "foo") < 0)
-        BAIL_OUT ("could not set a.b");
-    attr_check_fail (attr, "a.b=\"foo\"");
-    json_object_del (attr, "a");
+    attr_check_fail (attr, "attributes={}");
 
     if (specutil_attr_pack (attr, "system", "{}") < 0)
         BAIL_OUT ("could not set system={}");
-    attr_check_fail (attr, "system={}");
+    attr_check_fail (attr, "attributes.system={}");
+
+    if (specutil_attr_pack (attr, "system.duration", "s", "x") < 0)
+        BAIL_OUT ("could not set system.duration");
+    attr_check_fail (attr, "system.duration=\"x\"");
 
     if (specutil_attr_pack (attr, "system.duration", "f", 0.1) < 0)
         BAIL_OUT ("could not set system.duration=0.1");
     ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
         "specutil_attr_check system.duration=0.1 OK");
 
+    // Need to leave valid system.duration in (required for jobspec v1)
+
+    if (specutil_attr_pack (attr, "a.b", "s", "foo") < 0)
+        BAIL_OUT ("could not set a.b");
+    attr_check_fail (attr, "a.b=\"foo\"");
+    specutil_attr_del (attr, "a");
+
     if (specutil_attr_pack (attr, "user", "{}") < 0)
         BAIL_OUT ("could not set user={}");
     attr_check_fail (attr, "user={}");
-    json_object_del (attr, "user");
-
-    if (specutil_attr_pack (attr, "system.duration", "s", "x") < 0)
-        BAIL_OUT ("could not set system.duration");
-    attr_check_fail (attr, "system.duration=\"x\"");
-    json_object_del (attr, "system");
+    specutil_attr_del (attr, "user");
 
     if (specutil_attr_pack (attr, "system.environment", "{}") < 0)
         BAIL_OUT ("could not set system.environment");
@@ -404,7 +404,7 @@ void check_attr_check (void)
     if (specutil_attr_pack (attr, "system.environment", "s", "x") < 0)
         BAIL_OUT ("could not set system.environment");
     attr_check_fail (attr, "system.environment=\"x\"");
-    json_object_del (attr, "system");
+    specutil_attr_del (attr, "system.environment");
 
     if (specutil_attr_pack (attr, "system.shell.options", "{}") < 0)
         BAIL_OUT ("could not set system.shell.options");
@@ -414,7 +414,7 @@ void check_attr_check (void)
     if (specutil_attr_pack (attr, "system.shell.options", "s", "x") < 0)
         BAIL_OUT ("could not set system.shell.options");
     attr_check_fail (attr, "system.shell.options=\"x\"");
-    json_object_del (attr, "system");
+    specutil_attr_del (attr, "system.shell.options");
 
     if (specutil_attr_pack (attr, "system.dependencies", "{}") < 0)
         BAIL_OUT ("could not set system.dependencies");
