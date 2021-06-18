@@ -365,13 +365,16 @@ int specutil_attr_check (json_t *o, char *errbuf, int errbufsz)
                 goto copy_error;
         }
         else {
-            snprintf (errbuf, errbufsz, "unknown attributes section %s", key);
+            if (errbuf)
+                snprintf (errbuf, errbufsz,
+                          "unknown attributes section %s", key);
             goto error;
         }
     }
     return 0;
 copy_error:
-    snprintf (errbuf, errbufsz, "%s", errtxt);
+    if (errbuf)
+        snprintf (errbuf, errbufsz, "%s", errtxt);
 error:
     errno = EINVAL;
     return -1;
