@@ -279,6 +279,7 @@ dist_check_SCRIPTS = \
 	job-list/list-id.py \
 	job-list/list-rpc.py \
 	job-list/jobspec-permissive.jsonschema \
+	job-list/job-list-helper.sh \
 	ingest/bad-validate.py \
 	job-archive/query.py
 
