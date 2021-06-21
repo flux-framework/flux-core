@@ -13,6 +13,10 @@
 
 typedef struct flux_jobspec1 flux_jobspec1_t;
 
+typedef struct {
+    char text[160];
+} flux_jobspec1_error_t;
+
 /* Remove the value in the jobspec's attributes section at the given path,
  * where "." is treated as a path separator.
  * It is not an error if 'path' does not exist.
@@ -44,18 +48,18 @@ int flux_jobspec1_attr_unpack (flux_jobspec1_t *jobspec,
  * if the jobspec object was created by flux_jobspec1_from_command(), then
  * modified with the other jobspec1 functions.
  * Return 0 on success, -1 on error with errno set.
- * On error, write an error message written to errbuf, if non-NULL.
+ * On error, write an error message written to 'error', if non-NULL.
  */
 int flux_jobspec1_attr_check (flux_jobspec1_t *jobspec,
-                              char *errbuf,
-                              int errbufsz);
+                              flux_jobspec1_error_t *error);
 
 /* Check the validity of the full jobspec, which may be necessary if the
  * jobspec object was created by flux_jobspec1_decode().
  * Return 0 on success, -1 on error with errno set.
- * On error, write an error message written to errbuf, if non-NULL.
+ * On error, write an error message written to 'error', if non-NULL.
  */
-int flux_jobspec1_check (flux_jobspec1_t *jobspec, char *errbuf, int errbufsz);
+int flux_jobspec1_check (flux_jobspec1_t *jobspec,
+                         flux_jobspec1_error_t *error);
 
 /* Remove the variable 'name' from the environment.
  * This function succeeds if 'name' does not exist.
@@ -103,11 +107,10 @@ char *flux_jobspec1_encode (flux_jobspec1_t *jobspec, size_t flags);
 /* Decode a string to jobspec.  No validation is performed on the content.
  * The returned jobspec must be released with flux_jobspec1_destroy().
  * Return NULL on error with errno set.
- * On error, write an error message to errbuf, if non-NULL.
+ * On error, write an error message to 'error', if non-NULL.
  */
 flux_jobspec1_t *flux_jobspec1_decode (const char *s,
-                                       char *errbuf,
-                                       size_t errbufsz);
+                                       flux_jobspec1_error_t *error);
 
 
 /* Create and return a minimum viable V1 Jobspec.

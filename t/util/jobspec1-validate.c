@@ -25,7 +25,7 @@ int main (int ac, char **av)
 {
     void *buf;
     flux_jobspec1_t *jobspec;
-    char errbuf[128];
+    flux_jobspec1_error_t error;
 
     log_init ("jobspec1-validate");
 
@@ -37,10 +37,10 @@ int main (int ac, char **av)
     if (read_all (STDIN_FILENO, &buf) < 0)
         log_err_exit ("read stdin");
 
-    if (!(jobspec = flux_jobspec1_decode (buf, errbuf, sizeof (errbuf))))
-        log_msg_exit ("%s", errbuf);
-    if (flux_jobspec1_check (jobspec, errbuf, sizeof (errbuf)) < 0)
-        log_msg_exit ("%s", errbuf);
+    if (!(jobspec = flux_jobspec1_decode (buf, &error)))
+        log_msg_exit ("%s", error.text);
+    if (flux_jobspec1_check (jobspec, &error) < 0)
+        log_msg_exit ("%s", error.text);
 
     flux_jobspec1_destroy (jobspec);
     free (buf);
