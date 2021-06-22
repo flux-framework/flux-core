@@ -22,18 +22,6 @@
 
 extern char **environ;
 
-int free_wrapper (void *ptr)
-{
-    free (ptr);
-    return 1;
-}
-
-int decref_wrapper (json_t *ptr)
-{
-    json_decref (ptr);
-    return 1;
-}
-
 void check_stdio_cwd (void)
 {
     char *argv[] = {"this", "is", "a", "test"};
@@ -269,7 +257,7 @@ void check_jobspec (void)
     char *argv[] = {"this", "is", "a", "test"};
     int argc = sizeof (argv) / sizeof (argv[0]);
     flux_jobspec1_t *jobspec;
-    char errbuf[50];
+    flux_jobspec1_error_t error;
     char *str;
     json_t *val;
     double passed_duration = 5.0;
@@ -285,17 +273,13 @@ void check_jobspec (void)
                                                 passed_duration))) {
         BAIL_OUT ("flux_jobspec1_from_command failed");
     }
-    ok (flux_jobspec1_attr_check (NULL, errbuf, 5) < 0 && errno == EINVAL,
+    errno = 0;
+    ok (flux_jobspec1_attr_check (NULL, &error) < 0 && errno == EINVAL,
         "flux_jobspec1_attr_check catches NULL jobspec");
-    errno = 0;
-    ok (flux_jobspec1_attr_check (jobspec, NULL, 5) < 0 && errno == EINVAL,
-        "flux_jobspec1_attr_check catches NULL errbuf");
-    errno = 0;
-    ok (flux_jobspec1_attr_check (jobspec, errbuf, -1) < 0 && errno == EINVAL,
-        "flux_jobspec1_attr_check catches invalid errbuf size");
-    errno = 0;
+    ok (flux_jobspec1_attr_check (jobspec, NULL) == 0,
+        "flux_jobspec1_attr_check works with NULL error struct");
 
-    ok (flux_jobspec1_attr_check (jobspec, errbuf, sizeof (errbuf)) == 0,
+    ok (flux_jobspec1_attr_check (jobspec, &error) == 0,
         "flux_jobspec1_attr_check passed");
     ok (flux_jobspec1_attr_unpack (jobspec, "system", "o", &val) == 0,
         "jobspec has system attribute");
@@ -328,22 +312,22 @@ void check_jobspec (void)
     if (!(jobspec = flux_jobspec1_from_command (argc, argv, NULL, 5, 1, 1, 3, 0.0))) {
         BAIL_OUT ("flux_jobspec1_from_command failed when nnodes < ntasks");
     }
-    ok (flux_jobspec1_attr_check (jobspec, errbuf, sizeof (errbuf)) == 0,
+    ok (flux_jobspec1_attr_check (jobspec, &error) == 0,
         "flux_jobspec1_attr_check passed when nnodes < ntasks");
     ok (flux_jobspec1_attr_pack (jobspec, "system.duration", "s", "not a number") == 0
             && flux_jobspec1_attr_unpack (jobspec, "system.duration", "f", &duration)
                    < 0,
         "deleting system.duration works");
-    ok (flux_jobspec1_attr_check (jobspec, errbuf, sizeof (errbuf)) < 0,
+    ok (flux_jobspec1_attr_check (jobspec, &error) < 0,
         "flux_jobspec1_attr_check failed after changing system.duration to a string");
     flux_jobspec1_destroy (jobspec);
     if (!(jobspec = flux_jobspec1_from_command (argc, argv, NULL, 5, 1, 1, 5, 0.0))) {
         BAIL_OUT ("flux_jobspec1_from_command failed when nnodes == ntasks");
     }
-    ok (flux_jobspec1_attr_check (jobspec, errbuf, sizeof (errbuf)) == 0,
+    ok (flux_jobspec1_attr_check (jobspec, &error) == 0,
         "flux_jobspec1_attr_check passed when nnodes == ntasks");
     ok (flux_jobspec1_attr_pack (jobspec, "foo", "f", 19.5) == 0
-            && flux_jobspec1_attr_check (jobspec, errbuf, sizeof (errbuf)) < 0,
+            && flux_jobspec1_attr_check (jobspec, &error) < 0,
         "attr_check failed after adding spurious attribute");
     flux_jobspec1_destroy (jobspec);
 }
@@ -354,25 +338,53 @@ void check_encoding (void)
     int argc = sizeof (argv) / sizeof (argv[0]);
     flux_jobspec1_t *jobspec;
     char *encoded;
-    json_t *dup = NULL;
-    json_error_t err;
+    flux_jobspec1_t *dup;
+    flux_jobspec1_error_t error;
 
-    if (!(jobspec = flux_jobspec1_from_command (argc, argv, NULL, 5, 3, 2, 0, 0.0))
-        || !(encoded = flux_jobspec1_encode (jobspec, 0))) {
-        BAIL_OUT ("flux_jobspec1_from_command or subsequent encoding failed");
-    };
-    ok ((dup = json_loads (encoded, 0, &err)) && free_wrapper (encoded)
-            && decref_wrapper (dup),
-        "decoding works");
+    if (!(jobspec = flux_jobspec1_from_command (argc, argv,
+                                                NULL, 5, 3, 2, 0, 0.0)))
+        BAIL_OUT ("flux_jobspec1_from_command failed");
+
+    ok (flux_jobspec1_check (jobspec, &error) == 0,
+        "flux_jobspec1_check returns success on valid jobspec");
+
+    ok ((encoded = flux_jobspec1_encode (jobspec, 0)) != NULL,
+        "flux_jobspec1_encode works");
+    ok ((dup = flux_jobspec1_decode (encoded, &error)) != NULL,
+        "flux_jobspec1_decode works");
+    free (encoded);
+    flux_jobspec1_destroy (dup);
 
     errno = EINVAL;
     flux_jobspec1_destroy (jobspec);
-    ok (errno == EINVAL, "flux_jobspec1_destroy preserves errno");
-    errno = 0;
+    ok (errno == EINVAL,
+        "flux_jobspec1_destroy preserves errno");
 
+    errno = 0;
     ok (flux_jobspec1_encode (NULL, 0) == NULL && errno == EINVAL,
         "flux_jobspec1_encode catches NULL jobspec");
+
     errno = 0;
+    error.text[0] = '\0';
+    ok (flux_jobspec1_decode ("{", &error) == NULL
+        && errno == EINVAL
+        && error.text[0] != '\0',
+        "flux_jobspec1_decode on bad JSON fails with EINVAL and error buf set");
+    diag ("%s", error.text);
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok (flux_jobspec1_decode (NULL, &error) == NULL
+        && errno == EINVAL
+        && error.text[0] != '\0',
+        "flux_jobspec1_decode NULL fails with EINVAL and error buf set");
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok (flux_jobspec1_check (NULL, &error) < 0
+        && errno == EINVAL
+        && error.text[0] != '\0',
+        "flux_jobspec1_check NULL fails with EINVAL and error buf set");
 }
 
 void check_bad_args (void)

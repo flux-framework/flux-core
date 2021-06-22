@@ -4,8 +4,10 @@ resources:
     count: 1
     label: foo
     with:
-      - type: node
+      - type: core
         count: 1
 tasks:
   - foo
 attributes:
+  system:
+    duration: 1

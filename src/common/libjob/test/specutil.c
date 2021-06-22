@@ -349,6 +349,19 @@ void check_tasks_create (void)
     json_decref (tasks);
 }
 
+void attr_check_fail (json_t *attr, const char *checkstr)
+{
+    char errbuf[128] = {0};
+    int rc;
+
+    errno = 0;
+    rc = specutil_attr_check (attr, errbuf, sizeof (errbuf));
+    ok (rc < 0 && errno == EINVAL && *errbuf != '\0',
+        "specutil_attr_check %s fails with expected error", checkstr);
+    if (rc < 0)
+        diag ("%s", errbuf);
+}
+
 void check_attr_check (void)
 {
     json_t *attr;
@@ -356,87 +369,81 @@ void check_attr_check (void)
 
     if (!(attr = json_object ()))
         BAIL_OUT ("json_object failed");
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
-        "specutil_attr_check attr={} OK");
-
-    if (specutil_attr_pack (attr, "a.b", "s", "foo") < 0)
-        BAIL_OUT ("could not set a.b");
-    errno = 0;
-    *errbuf = '\0';
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno == EINVAL
-        && strlen (errbuf) > 0,
-        "specutil_attr_check failed with EINVAL, errbuf");
-    diag ("errbuf=%s", errbuf);
-    json_object_del (attr, "a");
+    attr_check_fail (attr, "attributes={}");
 
     if (specutil_attr_pack (attr, "system", "{}") < 0)
         BAIL_OUT ("could not set system={}");
-    errno = 0;
-    *errbuf = '\0';
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno == EINVAL
-        && strlen (errbuf) > 0,
-        "specutil_attr_check attr= failed with EINVAL, errbuf");
-    diag ("errbuf=%s", errbuf);
+    attr_check_fail (attr, "attributes.system={}");
+
+    if (specutil_attr_pack (attr, "system.duration", "s", "x") < 0)
+        BAIL_OUT ("could not set system.duration");
+    attr_check_fail (attr, "system.duration=\"x\"");
 
     if (specutil_attr_pack (attr, "system.duration", "f", 0.1) < 0)
         BAIL_OUT ("could not set system.duration=0.1");
     ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
         "specutil_attr_check system.duration=0.1 OK");
 
+    // Need to leave valid system.duration in (required for jobspec v1)
+
+    if (specutil_attr_pack (attr, "a.b", "s", "foo") < 0)
+        BAIL_OUT ("could not set a.b");
+    attr_check_fail (attr, "a.b=\"foo\"");
+    specutil_attr_del (attr, "a");
+
     if (specutil_attr_pack (attr, "user", "{}") < 0)
         BAIL_OUT ("could not set user={}");
-    errno = 0;
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno==EINVAL,
-        "specutil_attr_check user={} failed with EINVAL");
-    if (specutil_attr_del (attr, "user") < 0)
-        BAIL_OUT ("could not remove user attribute dict");
+    attr_check_fail (attr, "user={}");
+    specutil_attr_del (attr, "user");
 
-    if (specutil_attr_pack (attr, "system.duration", "s", "x") < 0)
-        BAIL_OUT ("could not set system.duration=x");
-    errno = 0;
-    *errbuf = '\0';
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno == EINVAL
-        && strlen (errbuf) > 0,
-        "specutil_attr_check system.duration=x failed with EINVAL, errbuf");
-    diag ("errbuf=%s", errbuf);
-
-    if (specutil_attr_del (attr, "system") < 0)
-        BAIL_OUT ("could not remove system attribute dict");
     if (specutil_attr_pack (attr, "system.environment", "{}") < 0)
-        BAIL_OUT ("could not set system.environment={}");
+        BAIL_OUT ("could not set system.environment");
     ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
         "specutil_attr_check system.environment={} OK");
 
     if (specutil_attr_pack (attr, "system.environment", "s", "x") < 0)
-        BAIL_OUT ("could not set system.environment=x");
-    errno = 0;
-    *errbuf = '\0';
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno == EINVAL
-        && strlen (errbuf) > 0,
-        "specutil_attr_check system.environment=x failed with EINVAL, errbuf");
-    diag ("errbuf=%s", errbuf);
+        BAIL_OUT ("could not set system.environment");
+    attr_check_fail (attr, "system.environment=\"x\"");
+    specutil_attr_del (attr, "system.environment");
 
-    if (specutil_attr_del (attr, "system") < 0)
-        BAIL_OUT ("could not remove system attribute dict");
     if (specutil_attr_pack (attr, "system.shell.options", "{}") < 0)
-        BAIL_OUT ("could not set system.shell.options={}");
+        BAIL_OUT ("could not set system.shell.options");
     ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
         "specutil_attr_check system.shell.options={} OK");
 
     if (specutil_attr_pack (attr, "system.shell.options", "s", "x") < 0)
-        BAIL_OUT ("could not set system.shell.options=x");
-    errno = 0;
-    *errbuf = '\0';
-    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) < 0
-        && errno == EINVAL
-        && strlen (errbuf) > 0,
-        "specutil_attr_check system.shell.options=x failed with EINVAL, errbuf");
-    diag ("errbuf=%s", errbuf);
+        BAIL_OUT ("could not set system.shell.options");
+    attr_check_fail (attr, "system.shell.options=\"x\"");
+    specutil_attr_del (attr, "system.shell.options");
+
+    if (specutil_attr_pack (attr, "system.dependencies", "{}") < 0)
+        BAIL_OUT ("could not set system.dependencies");
+    attr_check_fail (attr, "system.dependencies={}");
+
+    if (specutil_attr_pack (attr, "system.dependencies", "[{s:s s:s}]",
+                            "scheme", "foo",
+                            "value", "bar") < 0)
+        BAIL_OUT ("could not set system.dependencies");
+    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
+        "specutil_attr_check passes a good dependency");
+
+    if (specutil_attr_pack (attr, "system.dependencies", "[{s:s s:s s:i}]",
+                            "scheme", "foo",
+                            "value", "bar",
+                            "foo", 42) < 0)
+        BAIL_OUT ("could not set system.dependencies");
+    ok (specutil_attr_check (attr, errbuf, sizeof (errbuf)) == 0,
+        "specutil_attr_check passes a dependency with extra keys");
+
+    if (specutil_attr_pack (attr, "system.dependencies", "[{s:s s:i}]",
+                            "scheme", "foo",
+                            "value", 42) < 0)
+        BAIL_OUT ("could not set system.dependencies");
+    attr_check_fail (attr, "dependency with bad value type");
+
+    if (specutil_attr_pack (attr, "system.dependencies", "[i]", 42) < 0)
+        BAIL_OUT ("could not set system.dependencies");
+    attr_check_fail (attr, "non-object dependency");
 
     json_decref (attr);
 }

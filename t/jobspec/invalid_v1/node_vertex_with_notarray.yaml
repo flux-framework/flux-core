@@ -1,15 +1,17 @@
+version: 1
 resources:
-  - type: slot
+  - type: node
     count: 1
-    label: foo
     with:
-      - type: node
+      - type: slot
         count: 1
+        label: default
+        with: 2
 tasks:
   - command: [ "app" ]
-    slot: foo
+    slot: default
     count:
       per_slot: 1
 attributes:
   system:
-    duration: 1
+    duration: 3600.

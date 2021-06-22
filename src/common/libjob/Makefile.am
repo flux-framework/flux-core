@@ -16,7 +16,9 @@ AM_CPPFLAGS = \
 	$(LIBSODIUM_CFLAGS)
 
 noinst_LTLIBRARIES = libjob.la
-fluxcoreinclude_HEADERS = job.h
+fluxcoreinclude_HEADERS = \
+	job.h \
+	jobspec1.h
 
 libjob_la_SOURCES = \
 	job.c \
@@ -26,8 +28,7 @@ libjob_la_SOURCES = \
 	job_hash.h \
 	specutil.c \
 	specutil.h \
-	jobspec1.c \
-	jobspec1.h
+	jobspec1.c
 
 TESTS = \
 	test_job.t \

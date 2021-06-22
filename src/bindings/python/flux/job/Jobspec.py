@@ -235,6 +235,18 @@ class Jobspec(object):
         if not isinstance(task["count"], abc.Mapping):
             raise TypeError("count must be a mapping")
 
+        count = task["count"]
+        if "total" in count:
+            if not isinstance(count["total"], int):
+                raise TypeError("count total must be an int")
+            if count["total"] <= 0:
+                raise ValueError("count total must be > 0")
+        if "per_slot" in count:
+            if not isinstance(count["per_slot"], int):
+                raise TypeError("count per_slot must be an int")
+            if count["per_slot"] <= 0:
+                raise ValueError("count per_slot must be > 0")
+
         if not isinstance(task["slot"], str):
             raise TypeError("slot must be a string")
 

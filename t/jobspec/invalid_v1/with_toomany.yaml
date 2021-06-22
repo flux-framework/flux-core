@@ -1,9 +1,14 @@
+version: 1
 resources:
   - type: slot
-    count: 1
     label: foo
+    count: 1
     with:
-      - type: node
+      - type: core
+        count: 1
+      - type: gpu
+        count: 1
+      - type: smurf
         count: 1
 tasks:
   - command: [ "app" ]

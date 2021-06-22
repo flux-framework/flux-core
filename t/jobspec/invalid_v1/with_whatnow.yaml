@@ -1,9 +1,12 @@
+version: 1
 resources:
   - type: slot
-    count: 1
     label: foo
+    count: 1
     with:
-      - type: node
+      - type: piglets
+        count: 1
+      - type: mermaids
         count: 1
 tasks:
   - command: [ "app" ]

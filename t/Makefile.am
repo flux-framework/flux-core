@@ -78,6 +78,7 @@ TESTSCRIPTS = \
 	t0020-terminus.t \
 	t0021-flux-jobspec.t \
 	t0022-jj-reader.t \
+	t0023-jobspec1-validate.t \
 	t0026-flux-R.t \
 	t1000-kvs.t \
 	t1001-kvs-internals.t \
@@ -322,7 +323,8 @@ check_PROGRAMS = \
 	shell/mpir \
 	debug/stall \
 	hwloc/hwloc-convert \
-	hwloc/hwloc-version
+	hwloc/hwloc-version \
+	util/jobspec1-validate
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -794,3 +796,8 @@ hwloc_hwloc_version_SOURCES = hwloc/hwloc-version.c
 hwloc_hwloc_version_CPPFLAGS = $(HWLOC_CFLAGS) $(test_cppflags)
 hwloc_hwloc_version_LDADD = $(HWLOC_LIBS) \
 	$(test_ldadd)
+
+util_jobspec1_validate_SOURCES = util/jobspec1-validate.c
+util_jobspec1_validate_CPPFLAGS = $(test_cppflags)
+util_jobspec1_validate_LDADD = \
+	$(test_ldadd) $(LIBDL)
