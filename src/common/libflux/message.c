@@ -1358,7 +1358,6 @@ done:
  */
 int flux_msg_vunpack (const flux_msg_t *cmsg, const char *fmt, va_list ap)
 {
-    int rc = -1;
     const char *json_str;
     json_error_t err;
     flux_msg_t *msg = (flux_msg_t *)cmsg;
@@ -1367,37 +1366,35 @@ int flux_msg_vunpack (const flux_msg_t *cmsg, const char *fmt, va_list ap)
 
     if (!msg || !fmt || *fmt == '\0') {
         errno = EINVAL;
-        goto done;
+        return -1;
     }
     if (!msg->json) {
         if (flux_msg_get_string (msg, &json_str) < 0) {
             msg_lasterr_set (msg, "flux_msg_get_string: %s", strerror (errno));
-            goto done;
+            return -1;
         }
         if (!json_str) {
             msg_lasterr_set (msg, "message does not have a string payload");
             errno = EPROTO;
-            goto done;
+            return -1;
         }
         if (!(msg->json = json_loads (json_str, JSON_ALLOW_NUL, &err))) {
             msg_lasterr_set (msg, "%s", err.text);
             errno = EPROTO;
-            goto done;
+            return -1;
         }
         if (!json_is_object (msg->json)) {
             msg_lasterr_set (msg, "payload is not a JSON object");
             errno = EPROTO;
-            goto done;
+            return -1;
         }
     }
     if (json_vunpack_ex (msg->json, &err, 0, fmt, ap) < 0) {
         msg_lasterr_set (msg, "%s", err.text);
         errno = EPROTO;
-        goto done;
+        return -1;
     }
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 int flux_msg_unpack (const flux_msg_t *msg, const char *fmt, ...)
