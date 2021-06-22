@@ -166,6 +166,7 @@ matrix.add_build(
         TEST_CHECK_PREREQS="t",
     ),
     args="--with-flux-security",
+    command_args="--workdir=/usr/src/" + "workdir/" * 15,
 )
 
 # Ubuntu: coverage
