@@ -212,18 +212,16 @@ int main (int argc, char *argv[])
     setup_profiling_env ();
 
     if (!optparse_hasopt (ctx.opts, "test-size")) {
-        if (optparse_hasopt (ctx.opts, "test-rundir"))
-            log_msg_exit ("--rundir only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "test-pmi-clique"))
-            log_msg_exit ("--test-pmi-clique only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "test-hosts"))
-            log_msg_exit ("--test-hosts only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "test-exit-timeout"))
-            log_msg_exit ("--test-exit-timeout only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "test-exit-mode"))
-            log_msg_exit ("--test-exit-mode only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "test-start-mode"))
-            log_msg_exit ("--test-start-mode only works with --test-size=N");
+        int i;
+        for (i = 0; i < sizeof (opts) / sizeof (opts[0]); i++) {
+            if (opts[i].name
+                && !strncmp (opts[i].name, "test-", 5)
+                && optparse_hasopt (ctx.opts, opts[i].name))
+                log_msg_exit ("%s only works with --test-size", opts[0].name);
+        }
+    }
+
+    if (!optparse_hasopt (ctx.opts, "test-size")) {
         if (exec_broker (command, len, broker_path) < 0)
             log_err_exit ("error execing broker");
     }
