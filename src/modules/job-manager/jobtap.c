@@ -1757,6 +1757,30 @@ int flux_jobtap_get_job_result (flux_plugin_t *p,
     return 0;
 }
 
+int flux_jobtap_event_post_pack (flux_plugin_t *p,
+                                 flux_jobid_t id,
+                                 const char *name,
+                                 const char *fmt,
+                                 ...)
+{
+    int rc;
+    va_list ap;
+    struct jobtap *jobtap;
+    struct job *job;
+
+    if (!p || !name
+        || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job = jobtap_lookup_jobid (p, id)))
+        return -1;
+    va_start (ap, fmt);
+    rc = event_job_post_vpack (jobtap->ctx->event, job, name, 0, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

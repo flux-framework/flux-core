@@ -141,6 +141,18 @@ int flux_jobtap_raise_exception (flux_plugin_t *p,
                                  const char *fmt,
                                  ...);
 
+/*  Post event 'name' to job `id` with optional context defined by
+ *   args `fmt, ...`.
+ *
+ *  If `id` is FLUX_JOBTAP_CURRENT_JOB then the event will be posted to
+ *   the current job.
+ */
+int flux_jobtap_event_post_pack (flux_plugin_t *p,
+                                 flux_jobid_t id,
+                                 const char *name,
+                                 const char *fmt,
+                                 ...);
+
 /*  Return a flux_plugin_arg_t object for any active job.
  *
  *  The result can then be unpacked with flux_plugin_arg_unpack(3) to get
