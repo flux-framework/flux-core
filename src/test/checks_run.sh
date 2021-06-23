@@ -176,12 +176,13 @@ checks_group_end # Setup
 
 checks_group "autogen.sh" ./autogen.sh
 
+WORKDIR=$(pwd)
 if test -n "$BUILD_DIR" ; then
   mkdir -p "$BUILD_DIR"
   cd "$BUILD_DIR"
 fi
 
-checks_group "configure ${ARGS}"  /usr/src/configure ${ARGS} \
+checks_group "configure ${ARGS}"  ${WORKDIR}/configure ${ARGS} \
 	|| (printf "::error::configure failed\n"; cat config.log; exit 1)
 checks_group "make clean..." make clean
 

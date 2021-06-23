@@ -10,6 +10,7 @@
 PROJECT=flux-core
 BASE_DOCKER_REPO=fluxrm/testenv
 
+WORKDIR=/usr/src
 IMAGE=bionic
 JOBS=2
 MOUNT_HOME_ARGS="--volume=$HOME:/home/$USER -e HOME"
@@ -24,7 +25,7 @@ declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,inception,platform:"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,inception,platform:,workdir:"
 declare -r short_opts="hqIdi:S:j:t:D:Prup:"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
@@ -50,6 +51,7 @@ Options:\n\
  -u, --unit-test-only          Only run unit tests\n\
  -P, --no-poison               Do not install poison libflux and flux(1)\n\
  -D, --build-directory=DIRNAME Name of a subdir to build in, will be made\n\
+     --workdir=PATH            Use PATH as working directory for build\n\
  -I, --interactive             Instead of running ci build, run docker\n\
                                 image with interactive shell.\n\
 "
@@ -79,6 +81,7 @@ while true; do
       -r|--recheck)                RECHECK=t;                  shift   ;;
       -u|--unit-test-only)         UNIT_TEST_ONLY=t;           shift   ;;
       -D|--build-directory)        BUILD_DIR="$2";             shift 2 ;;
+      --workdir)                   WORKDIR="$2";               shift 2 ;;
       --no-cache)                  NO_CACHE="--no-cache";      shift   ;;
       --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
       --install-only)              INSTALL_ONLY=t;             shift   ;;
@@ -143,7 +146,7 @@ checks_group "Building image $IMAGE for user $USER $(id -u) group=$(id -g)" \
 if [[ -n "$MOUNT_HOME_ARGS" ]]; then
     echo "mounting $HOME as /home/$USER"
 fi
-echo "mounting $TOP as /usr/src"
+echo "mounting $TOP as $WORKDIR"
 
 export PROJECT
 export POISON
@@ -157,8 +160,8 @@ export chain_lint
 
 if [[ "$INSTALL_ONLY" == "t" ]]; then
     docker run --rm \
-        --workdir=/usr/src \
-        --volume=$TOP:/usr/src \
+        --workdir=$WORKDIR \
+        --volume=$TOP:$WORKDIR \
         ${PLATFORM} \
         ${BUILD_IMAGE} \
         sh -c "./autogen.sh &&
@@ -172,8 +175,8 @@ if [[ "$INSTALL_ONLY" == "t" ]]; then
     || (docker rm tmp.$$; die "docker run of 'make install' failed")
 else
     docker run --rm \
-        --workdir=/usr/src \
-        --volume=$TOP:/usr/src \
+        --workdir=$WORKDIR \
+        --volume=$TOP:$WORKDIR \
         ${PLATFORM} \
         $MOUNT_HOME_ARGS \
         -e CC \
@@ -222,8 +225,8 @@ if test -n "$TAG"; then
     # Re-run 'make install' in fresh image, otherwise we get all
     # the context from the build above
     docker run --name=tmp.$$ \
-	--workdir=/usr/src/${BUILD_DIR} \
-        --volume=$TOP:/usr/src \
+        --workdir=${WORKDIR}/${BUILD_DIR} \
+        --volume=$TOP:${WORKDIR} \
         --user="root" \
         ${PLATFORM} \
 	${BUILD_IMAGE} \
