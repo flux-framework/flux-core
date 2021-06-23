@@ -88,11 +88,12 @@ check_module_list() {
 
 #
 #  Generate configuration for test bootstrap and print args for flux-start
-#  Usage:  args=$(make_bootstrap_config workdir size)
+#  Usage:  args=$(make_bootstrap_config workdir sockdir size)
 #
 make_bootstrap_config() {
     local workdir=$1
-    local size=$2
+    local sockdir=$2
+    local size=$3
     local fakehosts="fake[0-$(($size-1))]"
     local full="0-$(($size-1))"
 
@@ -101,8 +102,8 @@ make_bootstrap_config() {
     cat >$workdir/conf.d/bootstrap.toml <<-EOT
 	[bootstrap]
 	    curve_cert = "$workdir/cert"
-	    default_bind = "ipc://$workdir/tbon-%h"
-	    default_connect = "ipc://$workdir/tbon-%h"
+	    default_bind = "ipc://$sockdir/tbon-%h"
+	    default_connect = "ipc://$sockdir/tbon-%h"
 	    hosts = [
 	        { host = "$fakehosts" },
 	    ]
@@ -209,7 +210,11 @@ test_under_flux() {
         RC1_PATH=""
         RC3_PATH=""
     elif test "$personality" = "system"; then
-        sysopts=$(make_bootstrap_config $SHARNESS_TRASH_DIRECTORY $size)
+        # Pre-create broker rundir so we know it in advance and
+        # make_bootstrap_config() can use it for ipc:// socket paths.
+        BROKER_RUNDIR=$(mktemp --directory --tmpdir flux-system-XXXXXX)
+        sysopts=$(make_bootstrap_config \
+          $SHARNESS_TRASH_DIRECTORY $BROKER_RUNDIR $size)
         # Place the re-executed test script trash within the first invocation's
         # trash to preserve config files for broker restart in test
         flags="${flags} --root=$SHARNESS_TRASH_DIRECTORY"
@@ -241,6 +246,8 @@ test_under_flux() {
     TERM=${ORIGINAL_TERM} \
     TEST_UNDER_FLUX_PERSONALITY="${personality:-default}" \
       exec flux start --test-size=${size} \
+                      ${BROKER_RUNDIR+--test-rundir=${BROKER_RUNDIR}} \
+                      ${BROKER_RUNDIR+--test-rundir-cleanup} \
                       ${RC1_PATH+-o -Sbroker.rc1_path=${RC1_PATH}} \
                       ${RC3_PATH+-o -Sbroker.rc3_path=${RC3_PATH}} \
                       ${sysopts} \

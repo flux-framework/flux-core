@@ -131,6 +131,9 @@ static struct optparse_option opts[] = {
       .name = "test-rundir", .has_arg = 1, .arginfo = "DIR",
       .usage = "Use DIR as broker run directory", },
     { .group = 2,
+      .name = "test-rundir-cleanup", .has_arg = 0,
+      .usage = "Clean up --test-rundir DIR upon flux-start completion", },
+    { .group = 2,
       .name = "test-pmi-clique", .has_arg = 1, .arginfo = "single|none",
       .usage = "Set PMI_process_mapping mode (default=single)", },
     { .flags = OPTPARSE_OPT_HIDDEN,
@@ -212,18 +215,16 @@ int main (int argc, char *argv[])
     setup_profiling_env ();
 
     if (!optparse_hasopt (ctx.opts, "test-size")) {
-        if (optparse_hasopt (ctx.opts, "test-rundir"))
-            log_msg_exit ("--rundir only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "test-pmi-clique"))
-            log_msg_exit ("--test-pmi-clique only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "test-hosts"))
-            log_msg_exit ("--test-hosts only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "test-exit-timeout"))
-            log_msg_exit ("--test-exit-timeout only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "test-exit-mode"))
-            log_msg_exit ("--test-exit-mode only works with --test-size=N");
-        if (optparse_hasopt (ctx.opts, "test-start-mode"))
-            log_msg_exit ("--test-start-mode only works with --test-size=N");
+        int i;
+        for (i = 0; i < sizeof (opts) / sizeof (opts[0]); i++) {
+            if (opts[i].name
+                && !strncmp (opts[i].name, "test-", 5)
+                && optparse_hasopt (ctx.opts, opts[i].name))
+                log_msg_exit ("%s only works with --test-size", opts[0].name);
+        }
+    }
+
+    if (!optparse_hasopt (ctx.opts, "test-size")) {
         if (exec_broker (command, len, broker_path) < 0)
             log_err_exit ("error execing broker");
     }
@@ -433,7 +434,6 @@ char *create_rundir (void)
 
     if (!mkdtemp (rundir))
         log_err_exit ("mkdtemp %s", rundir);
-    cleanup_push_string (cleanup_directory_recursive, rundir);
     return rundir;
 }
 
@@ -951,6 +951,12 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     }
     else
         rundir = create_rundir ();
+    /* Clean up rundir upon flux-start completion if we created it,
+     * or if cleanup was explicitly requested.
+     */
+    if (!optparse_hasopt (ctx.opts, "test-rundir")
+        || optparse_hasopt (ctx.opts, "test-rundir-cleanup"))
+        cleanup_push_string (cleanup_directory_recursive, rundir);
 
     start_server_initialize (rundir, ctx.verbose >= 1 ? true : false);
 

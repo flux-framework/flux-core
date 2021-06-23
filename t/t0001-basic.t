@@ -151,6 +151,9 @@ test_expect_success 'flux-start --test-start-mode=all is accepted' "
 test_expect_success 'flux-start --test-start-mode=badmode fails' "
 	test_must_fail flux start ${ARGS} -s1 --test-start-mode=badmode /bin/true
 "
+test_expect_success 'flux-start --test-rundir-cleanup without --test-size fails' "
+	test_must_fail flux start ${ARGS} --test-rundir-cleanup /bin/true
+"
 test_expect_success 'flux-start --verbose=2 enables PMI tracing' "
 	flux start ${ARGS} \
 		--test-size=1 --verbose=2 \
@@ -316,6 +319,16 @@ test_expect_success 'flux start --test-rundir works' '
 	echo $RUNDIR >rundir_test.exp &&
 	test_cmp rundir_test.exp rundir_test.out &&
 	rmdir $RUNDIR
+'
+test_expect_success 'flux start --test-rundir --test-rundir-cleanup works' '
+	RUNDIR=$(mktemp -d) &&
+	flux start ${ARGS} --test-size=1 \
+		--test-rundir=$RUNDIR \
+		--test-rundir-cleanup \
+		flux getattr rundir >rundir_test.out &&
+	echo $RUNDIR >rundir_test.exp &&
+	test_cmp rundir_test.exp rundir_test.out &&
+	test_must_fail test -d $RUNDIR
 '
 test_expect_success 'flux start --test-rundir with missing directory fails' '
 	test_must_fail flux start ${ARGS} --test-size=1 \

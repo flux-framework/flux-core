@@ -31,7 +31,7 @@
 #include "boot_config.h"
 
 
-/* Copy 'fmt' into 'buf', substuting the following tokens:
+/* Copy 'fmt' into 'buf', substituting the following tokens:
  * - %h  host
  * - %p  port
  * Returns 0 on success, or -1 on overflow.

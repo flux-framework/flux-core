@@ -81,9 +81,13 @@ OPTIONS
    the other brokers are online.  Default: ``all``.
 
 **--test-rundir**\ =\ *PATH*
-   Set the directory to be used as the broker rundir.  By default, a directory
-   is created in /tmp for the duration of the test and destroyed afterwards.
-   If specified beforehand with this option, the directory is not destroyed.
+   Set the directory to be used as the broker rundir instead of creating a
+   temporary one.  The directory must exist, and is not cleaned up unless
+   ``--test-rundir-cleanup`` is also specified.
+
+**--test-rundir-cleanup**
+   Recursively remove the directory specified with ``--test-rundir`` upon
+   completion of flux-start.
 
 **--test-pmi-clique**\ =\ *MODE*
    Set the pmi clique mode, which determines how ``PMI_process_mapping`` is set
