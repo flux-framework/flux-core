@@ -56,6 +56,13 @@ int event_job_post_pack (struct event *event,
                          const char *context_fmt,
                          ...);
 
+int event_job_post_vpack (struct event *event,
+                          struct job *job,
+                          const char *name,
+                          int flags,
+                          const char *context_fmt,
+                          va_list ap);
+
 void event_ctx_destroy (struct event *event);
 struct event *event_ctx_create (struct job_manager *ctx);
 

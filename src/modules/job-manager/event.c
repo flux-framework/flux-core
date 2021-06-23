@@ -653,22 +653,19 @@ static int event_jobtap_call (struct event *event,
     return 0;
 }
 
-
-int event_job_post_pack (struct event *event,
-                         struct job *job,
-                         const char *name,
-                         int flags,
-                         const char *context_fmt,
-                         ...)
+int event_job_post_vpack (struct event *event,
+                          struct job *job,
+                          const char *name,
+                          int flags,
+                          const char *context_fmt,
+                          va_list ap)
 {
-    va_list ap;
     json_t *entry = NULL;
     int saved_errno;
     double timestamp;
     flux_job_state_t old_state = job->state;
     int eventlog_seq = (flags & EVENT_JOURNAL_ONLY) ? -1 : job->eventlog_seq;
 
-    va_start (ap, context_fmt);
     if (get_timestamp_now (&timestamp) < 0)
         goto error;
     if (!(entry = eventlog_entry_vpack (timestamp, name, context_fmt, ap)))
@@ -718,14 +715,28 @@ int event_job_post_pack (struct event *event,
 
 out:
     json_decref (entry);
-    va_end (ap);
     return 0;
 error:
     saved_errno = errno;
     json_decref (entry);
-    va_end (ap);
     errno = saved_errno;
     return -1;
+}
+
+int event_job_post_pack (struct event *event,
+                         struct job *job,
+                         const char *name,
+                         int flags,
+                         const char *context_fmt,
+                         ...)
+{
+    int rc;
+    va_list ap;
+
+    va_start (ap, context_fmt);
+    rc = event_job_post_vpack (event, job, name, flags, context_fmt, ap);
+    va_end (ap);
+    return rc;
 }
 
 /* Finalizes in-flight batch KVS commits and event pubs (synchronously).
