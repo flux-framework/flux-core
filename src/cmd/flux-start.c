@@ -131,6 +131,9 @@ static struct optparse_option opts[] = {
       .name = "test-rundir", .has_arg = 1, .arginfo = "DIR",
       .usage = "Use DIR as broker run directory", },
     { .group = 2,
+      .name = "test-rundir-cleanup", .has_arg = 0,
+      .usage = "Clean up --test-rundir DIR upon flux-start completion", },
+    { .group = 2,
       .name = "test-pmi-clique", .has_arg = 1, .arginfo = "single|none",
       .usage = "Set PMI_process_mapping mode (default=single)", },
     { .flags = OPTPARSE_OPT_HIDDEN,
@@ -431,7 +434,6 @@ char *create_rundir (void)
 
     if (!mkdtemp (rundir))
         log_err_exit ("mkdtemp %s", rundir);
-    cleanup_push_string (cleanup_directory_recursive, rundir);
     return rundir;
 }
 
@@ -949,6 +951,12 @@ int start_session (const char *cmd_argz, size_t cmd_argz_len,
     }
     else
         rundir = create_rundir ();
+    /* Clean up rundir upon flux-start completion if we created it,
+     * or if cleanup was explicitly requested.
+     */
+    if (!optparse_hasopt (ctx.opts, "test-rundir")
+        || optparse_hasopt (ctx.opts, "test-rundir-cleanup"))
+        cleanup_push_string (cleanup_directory_recursive, rundir);
 
     start_server_initialize (rundir, ctx.verbose >= 1 ? true : false);
 
