@@ -1634,6 +1634,31 @@ int flux_jobtap_job_aux_delete (flux_plugin_t *p,
     return 0;
 }
 
+int flux_jobtap_job_set_flag (flux_plugin_t *p,
+                              flux_jobid_t id,
+                              const char *flag)
+{
+    struct jobtap *jobtap;
+    struct job *job;
+    if (!p || !flag || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job = jobtap_lookup_jobid (p, id))) {
+        errno = ENOENT;
+        return -1;
+    }
+    if (!job_flag_valid (job, flag))
+        return -1;
+    return event_job_post_pack (jobtap->ctx->event,
+                                job,
+                                "set-flags",
+                                0,
+                                "{s:[s]}",
+                                "flags",
+                                flag);
+}
+
 static int jobtap_job_vraise (struct jobtap *jobtap,
                               struct job *job,
                               const char *type,
