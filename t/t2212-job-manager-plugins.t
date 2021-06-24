@@ -216,6 +216,12 @@ test_expect_success 'job-manager: load jobtap_api test plugin' '
 	flux job cancel $id &&
 	test_must_fail flux job wait-event -vm type=test $id exception
 '
+test_expect_success 'job-manager: test that job flags can be set' '
+	id=$(flux mini submit \
+	       --setattr=system.depend.set_flag=debug hostname) &&
+	flux job wait-event -vt 20 $id debug.free-request &&
+	flux job wait-event -vt 20 $id clean
+'
 test_expect_success 'job-manager: load test jobtap plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/test.so foo.test=1 &&
 	flux dmesg | grep "conf={\"foo\":{\"test\":1}}"
