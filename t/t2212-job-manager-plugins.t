@@ -222,6 +222,14 @@ test_expect_success 'job-manager: test that job flags can be set' '
 	flux job wait-event -vt 20 $id debug.free-request &&
 	flux job wait-event -vt 20 $id clean
 '
+test_expect_success 'job-manager: jobtap plugin can emit events' '
+	for state in validate new depend priority run cleanup; do
+	    id=$(flux mini submit \
+	          --setattr system.${state}.post-event=testevent hostname) &&
+	    flux job wait-event -vt 20 $id testevent &&
+	    flux job wait-event -t 20 $id clean
+	done
+'
 test_expect_success 'job-manager: load test jobtap plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/test.so foo.test=1 &&
 	flux dmesg | grep "conf={\"foo\":{\"test\":1}}"
