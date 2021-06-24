@@ -92,20 +92,7 @@
    <issue_3640>
    Memcheck:Leak
    match-leak-kinds: possible
-   fun:calloc
-   obj:*/libnvidia-opencl.so.*
-   ...
-   fun:clGetPlatformIDs
-   obj:*/hwloc_opencl.so
-   obj:*/libhwloc.so.*
-   fun:hwloc_topology_load
-   ...
-}
-{
-   <issue_3640>
-   Memcheck:Leak
-   match-leak-kinds: possible
-   fun:malloc
+   fun:*alloc
    obj:*/libnvidia-opencl.so.*
    ...
    fun:clGetPlatformIDs
