@@ -690,6 +690,10 @@ int event_job_post_vpack (struct event *event,
     flux_job_state_t old_state = job->state;
     int eventlog_seq = (flags & EVENT_JOURNAL_ONLY) ? -1 : job->eventlog_seq;
 
+    if (job->state == FLUX_JOB_STATE_NEW) {
+        errno = EAGAIN;
+        return -1;
+    }
     if (get_timestamp_now (&timestamp) < 0)
         goto error;
     if (!(entry = eventlog_entry_vpack (timestamp, name, context_fmt, ap)))
