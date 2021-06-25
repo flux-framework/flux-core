@@ -19,6 +19,7 @@
 #include "src/common/libutil/errno_safe.h"
 
 #include "jobspec1.h"
+#include "jobspec1_private.h"
 
 struct flux_jobspec1 {
     json_t *obj;
@@ -436,29 +437,44 @@ char *flux_jobspec1_encode (flux_jobspec1_t *jobspec, size_t flags)
     return returnval;
 }
 
+flux_jobspec1_t *jobspec1_from_json (json_t *obj)
+{
+    flux_jobspec1_t *jobspec;
+
+    if (!obj) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(jobspec = calloc (1, sizeof (*jobspec))))
+        return NULL;
+    jobspec->obj = json_incref (obj);
+    return jobspec;
+}
+
 flux_jobspec1_t *flux_jobspec1_decode (const char *s,
                                        flux_jobspec1_error_t *error)
 {
-    flux_jobspec1_t *jobspec = NULL;
+    flux_jobspec1_t *jobspec;
+    json_t *obj;
     json_error_t json_error;
 
     if (!s) {
         errno = EINVAL;
-        goto error;
+        errprintf (error, "%s", strerror (errno));
+        return NULL;
     }
-    if (!(jobspec = calloc (1, sizeof (*jobspec))))
-        goto error;
-    if (!(jobspec->obj = json_loads (s, 0, &json_error))) {
-        errprintf (error, "%s", json_error.text);
+    if (!(obj = json_loads (s, 0, &json_error))) {
         errno = EINVAL;
-        goto error_nomsg;
+        errprintf (error, "%s", json_error.text);
+        return NULL;
     }
+    if (!(jobspec = jobspec1_from_json (obj))) {
+        ERRNO_SAFE_WRAP (json_decref, obj);
+        errprintf (error, "%s", strerror (errno));
+        return NULL;
+    }
+    json_decref (obj);
     return jobspec;
-error:
-    errprintf (error, "%s", strerror (errno));
-error_nomsg:
-    flux_jobspec1_destroy (jobspec);
-    return NULL;
 }
 
 flux_jobspec1_t *flux_jobspec1_from_command (int argc,
@@ -504,11 +520,11 @@ flux_jobspec1_t *flux_jobspec1_from_command (int argc,
         errno = ENOMEM;
         goto error;
     }
-    if (!(jobspec = malloc (sizeof (flux_jobspec1_t)))) {
+    if (!(jobspec = jobspec1_from_json (obj))) {
         ERRNO_SAFE_WRAP (json_decref, obj);
         return NULL;
     }
-    jobspec->obj = obj;
+    json_decref (obj);
     return jobspec;
 
 error:
@@ -527,6 +543,11 @@ void flux_jobspec1_destroy (flux_jobspec1_t *jobspec)
         free (jobspec);
         errno = saved_errno;
     }
+}
+
+json_t *jobspec1_get_json (flux_jobspec1_t *jobspec)
+{
+    return jobspec->obj;
 }
 
 /*

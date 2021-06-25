@@ -28,7 +28,8 @@ libjob_la_SOURCES = \
 	job_hash.h \
 	specutil.c \
 	specutil.h \
-	jobspec1.c
+	jobspec1.c \
+	jobspec1_private.h
 
 TESTS = \
 	test_job.t \
