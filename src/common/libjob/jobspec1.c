@@ -51,12 +51,16 @@ int flux_jobspec1_attr_unpack (flux_jobspec1_t *jobspec,
 
 int flux_jobspec1_attr_del (flux_jobspec1_t *jobspec, const char *path)
 {
+    json_t *attr;
+
     if (!jobspec) {  // 'path' checked by specutil_attr_del
         errno = EINVAL;
         return -1;
     }
-    return specutil_attr_del (json_object_get (jobspec->obj, "attributes"),
-                              path);
+
+    if (!(attr = json_object_get (jobspec->obj, "attributes")))
+        return 0;
+    return specutil_attr_del (attr, path);
 }
 
 int flux_jobspec1_attr_pack (flux_jobspec1_t *jobspec,
