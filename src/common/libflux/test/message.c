@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdbool.h>
 #include <czmq.h>
 #include <errno.h>
 #include <stdio.h>
@@ -18,6 +19,8 @@
 
 #include "src/common/libflux/message.h"
 #include "src/common/libtap/tap.h"
+
+static bool verbose = false;
 
 void check_cornercase (void)
 {
@@ -1076,7 +1079,7 @@ void check_print (void)
 {
     flux_msg_t *msg;
     char buf[] = "xxxxxxxx";
-    FILE *f = fopen ("/dev/null", "w");
+    FILE *f = verbose ? stderr : fopen ("/dev/null", "w");
     if (!f)
         BAIL_OUT ("cannot open /dev/null for writing");
 
@@ -1204,6 +1207,13 @@ void check_refcount (void)
 
 int main (int argc, char *argv[])
 {
+    int opt;
+
+    while ((opt = getopt (argc, argv, "v")) != -1) {
+        if (opt == 'v')
+            verbose = true;
+    }
+
     plan (NO_PLAN);
 
     check_cornercase ();
