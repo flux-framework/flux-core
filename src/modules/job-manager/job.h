@@ -87,6 +87,15 @@ bool job_dependency_event_valid (struct job *job,
                                  const char *event,
                                  const char *description);
 
+
+/*  Set a limited set of flags by name on job
+ */
+int job_flag_set (struct job *job, const char *flag);
+
+/*  Test if flag name 'flag' is a valid job flag
+ */
+bool job_flag_valid (struct job *job, const char *flag);
+
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 
 /*

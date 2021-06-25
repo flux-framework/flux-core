@@ -460,6 +460,26 @@ static int event_handle_dependency (struct job *job,
     return 0;
 }
 
+static int event_handle_set_flags (struct job *job,
+                                   json_t *context)
+{
+    json_t *o = NULL;
+    size_t index;
+    json_t *value;
+
+    if (json_unpack (context, "{s:o}", "flags", &o) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    json_array_foreach (o, index, value) {
+        if (job_flag_set (job, json_string_value (value)) < 0) {
+            errno = EPROTO;
+            return -1;
+        }
+    }
+    return 0;
+}
+
 /*  Return a callback topic string for the current job state
  *
  *   NOTE: 'job.state.new' and 'job.state.depend' are not currently used
@@ -515,6 +535,10 @@ int event_job_update (struct job *job, json_t *event)
         if (job->state != FLUX_JOB_STATE_DEPEND)
             goto inval;
         if (event_handle_dependency (job, name+11, context) < 0)
+            goto error;
+    }
+    else if (!strcmp (name, "set-flags")) {
+        if (event_handle_set_flags (job, context) < 0)
             goto error;
     }
     else if (!strcmp (name, "depend")) {

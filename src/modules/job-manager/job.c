@@ -104,6 +104,37 @@ bool job_dependency_event_valid (struct job *job,
     return true;
 }
 
+static int job_flag_set_internal (struct job *job,
+                                  const char *flag,
+                                  bool dry_run)
+{
+   if (strcmp (flag, "alloc-bypass") == 0) {
+        if (!dry_run)
+            job->alloc_bypass = 1;
+    }
+    else if (strcmp (flag, "debug") == 0) {
+        if (!dry_run)
+            job->flags |= FLUX_JOB_DEBUG;
+    }
+    else {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
+int job_flag_set (struct job *job, const char *flag)
+{
+    return job_flag_set_internal (job, flag, false);
+}
+
+bool job_flag_valid (struct job *job, const char *flag)
+{
+    if (job_flag_set_internal (job, flag, true) < 0)
+        return false;
+    return true;
+}
+
 int job_aux_set (struct job *job,
                  const char *name,
                  void *val,
