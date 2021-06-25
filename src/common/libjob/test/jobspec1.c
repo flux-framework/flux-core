@@ -178,18 +178,23 @@ void check_env (void)
             && (strcmp ("BAR2", val) == 0),
         "jobspec_setenv FOO2=BAR2 works");
 
+    // ensure empty ("") value works
+    ok (flux_jobspec1_setenv (jobspec, "empty", "", 1) == 0,
+        "flux_jobspec1_setenv accepts empty string value");
+    ok (flux_jobspec1_attr_unpack (jobspec,
+                                  "system.environment.empty",
+                                  "s",
+                                  &val) == 0
+        && val != NULL
+        && !strcmp (val, ""),
+        "empty string value was correctly represented in object");
     // test functions when environment object is deleted
     ok (flux_jobspec1_attr_del (jobspec, "system.environment") == 0,
         "deleting environment works");
-    ok (flux_jobspec1_setenv (jobspec, "FOO1", "BAR1", 1) < 0
-            && (flux_jobspec1_attr_unpack (jobspec,
-                                           "system.environment.FOO1",
-                                           "s",
-                                           &val)
-                < 0),
-        "can't set FOO1=BAR1 after deleting environment object");
-    ok (flux_jobspec1_unsetenv (jobspec, "FOO") < 0,
-        "flux_jobspec1_unsetenv fails after deleting environment");
+    ok (flux_jobspec1_setenv (jobspec, "FOO1", "BAR1", 1) == 0,
+        "flux_jobspec1_setenv works after deleting environment object");
+    ok (flux_jobspec1_unsetenv (jobspec, "FOO") == 0,
+        "flux_jobspec1_unsetenv works after deleting environment");
     flux_jobspec1_destroy (jobspec);
 }
 
