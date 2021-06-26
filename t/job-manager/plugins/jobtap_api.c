@@ -308,11 +308,11 @@ static int test_job_result (flux_plugin_t *p,
     if (rc < 0 || expected_result != result)
         return flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
                                            "test", 0,
-                                           "%s: %s: expected errno=%d got %d",
+                                           "%s: %s: expected result=%d got %d",
                                            topic,
                                            "flux_jobtap_get_job_result",
-                                           ENOENT,
-                                           errno);
+                                           expected_result,
+                                           result);
 
     return 0;
 }
