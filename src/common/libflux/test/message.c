@@ -228,6 +228,7 @@ void check_routes (void)
     errno = 0;
     ok ((flux_msg_get_route_last (msg, &s) == -1 && errno == EPROTO),
         "flux_msg_get_route_last returns -1 errno EPROTO on msg w/o delim");
+    errno = 0;
     ok ((flux_msg_pop_route (msg, &s) == -1 && errno == EPROTO),
         "flux_msg_pop_route returns -1 errno EPROTO on msg w/o delim");
 
@@ -342,6 +343,7 @@ void check_payload_json (void)
     errno = 0;
     ok (flux_msg_set_payload (msg, "fluffy", 6) == 0,
         "set invalid string payload on msg");
+    errno = 0;
     ok (flux_msg_unpack (msg, "{s:i}", "foo", &i) < 0 && errno == EPROTO,
         "flux_msg_unpack() on message with invalid payload returns EPROTO");
     is (flux_msg_last_error (msg),
