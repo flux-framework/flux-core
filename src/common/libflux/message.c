@@ -1003,55 +1003,27 @@ error:
 }
 
 /* replaces flux_msg_nexthop */
-int flux_msg_get_route_last (const flux_msg_t *msg, char **id)
+const char *flux_msg_get_route_last (const flux_msg_t *msg)
 {
     struct route_id *r;
 
-    if (!msg || !id) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
-        errno = EPROTO;
-        return -1;
-    }
-    if ((r = list_top (&msg->routes, struct route_id, route_id_node))) {
-        if (!((*id) = strdup (r->id)))
-            return -1;
-    }
-    else
-        (*id) = NULL;
-    return 0;
-}
-
-static int find_route_first (const flux_msg_t *msg, struct route_id **r)
-{
-    if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
-        errno = EPROTO;
-        return -1;
-    }
-    (*r) = list_tail (&msg->routes, struct route_id, route_id_node);
-    return 0;
+    if (!msg || !(msg->flags & FLUX_MSGFLAG_ROUTE))
+        return NULL;
+    if ((r = list_top (&msg->routes, struct route_id, route_id_node)))
+        return r->id;
+    return NULL;
 }
 
 /* replaces flux_msg_sender */
-int flux_msg_get_route_first (const flux_msg_t *msg, char **id)
+const char *flux_msg_get_route_first (const flux_msg_t *msg)
 {
-    struct route_id *r = NULL;
+    struct route_id *r;
 
-    if (!msg || !id) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (find_route_first (msg, &r) < 0)
-        return -1;
-    if (r) {
-        if (!((*id) = strdup (r->id)))
-            return -1;
-    }
-    else
-        (*id) = NULL;
-    return 0;
+    if (!msg || !(msg->flags & FLUX_MSGFLAG_ROUTE))
+        return NULL;
+    if ((r = list_tail (&msg->routes, struct route_id, route_id_node)))
+        return r->id;
+    return NULL;
 }
 
 int flux_msg_get_route_count (const flux_msg_t *msg)
@@ -1845,18 +1817,14 @@ int flux_match_asprintf (struct flux_match *m, const char *topic_glob_fmt, ...)
 
 bool flux_msg_match_route_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
 {
-    struct route_id *r1 = NULL;
-    struct route_id *r2 = NULL;
+    const char *id1;
+    const char *id2;
 
-    if (!msg1 || !msg2)
+    if (!(id1 = flux_msg_get_route_first (msg1)))
         return false;
-    if (find_route_first (msg1, &r1) < 0)
+    if (!(id2 = flux_msg_get_route_first (msg2)))
         return false;
-    if (find_route_first (msg2, &r2) < 0)
-        return false;
-    if (!r1 || !r2)
-        return false;
-    if (strcmp (r1->id, r2->id))
+    if (strcmp (id1, id2))
         return false;
     return true;
 }

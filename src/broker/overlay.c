@@ -378,7 +378,7 @@ int overlay_sendmsg (struct overlay *ov,
     int type;
     uint8_t flags;
     flux_msg_t *cpy = NULL;
-    char *uuid = NULL;
+    const char *uuid;
     uint32_t nodeid;
     struct child *child;
     int rc;
@@ -431,8 +431,7 @@ int overlay_sendmsg (struct overlay *ov,
              */
             if (where == OVERLAY_ANY) {
                 if (ov->rank > 0
-                    && flux_msg_get_route_last (msg, &uuid) == 0
-                    && uuid != NULL
+                    && (uuid = flux_msg_get_route_last (msg)) != NULL
                     && !strcmp (uuid, ov->parent.uuid))
                     where = OVERLAY_UPSTREAM;
                 else
@@ -466,13 +465,11 @@ int overlay_sendmsg (struct overlay *ov,
         default:
             goto inval;
     }
-    free (uuid);
     flux_msg_decref (cpy);
     return 0;
 inval:
     errno = EINVAL;
 error:
-    ERRNO_SAFE_WRAP (free, uuid);
     flux_msg_decref (cpy);
     return -1;
 }
@@ -567,15 +564,14 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_msg_t *msg;
     int type = -1;
     const char *topic = NULL;
-    char *sender = NULL;
+    const char *sender = NULL;
     struct child *child;
     int status;
 
     if (!(msg = flux_msg_recvzsock (ov->bind_zsock)))
         return;
     if (flux_msg_get_type (msg, &type) < 0
-        || flux_msg_get_route_last (msg, &sender) < 0
-        || sender == NULL)
+        || !(sender = flux_msg_get_route_last (msg)))
         goto drop;
     if (!(child = child_lookup (ov, sender)) || !child->connected) {
         if (type == FLUX_MSGTYPE_REQUEST
@@ -612,7 +608,6 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
     ov->recv_cb (msg, OVERLAY_DOWNSTREAM, ov->recv_arg);
 handled:
-    free (sender);
     flux_msg_decref (msg);
     return;
 drop:
@@ -623,7 +618,6 @@ drop:
               type != -1 ? flux_msg_typestr (type) : "message",
               topic ? topic : "-",
               sender != NULL ? sender : "unknown");
-    free (sender);
     flux_msg_decref (msg);
 }
 

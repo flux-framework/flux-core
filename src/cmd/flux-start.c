@@ -860,14 +860,12 @@ void disconnect_cb (flux_t *h,
                     const flux_msg_t *msg,
                     void *arg)
 {
-    char *uuid = NULL;
+    const char *uuid;
 
-    if (flux_msg_get_route_first (msg, &uuid) < 0)
-        goto done;
+    if (!(uuid = flux_msg_get_route_first (msg)))
+        return;
     if (ctx.verbose >= 1)
         log_msg ("disconnect from %.5s", uuid);
-done:
-    free (uuid);
 }
 
 const struct flux_msg_handler_spec htab[] = {

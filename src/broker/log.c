@@ -596,29 +596,25 @@ error:
 
 static int cmp_sender (const flux_msg_t *msg, const char *uuid)
 {
-    char *sender = NULL;
-    int rc = 0;
+    const char *sender;
 
-    if (flux_msg_get_route_first (msg, &sender) < 0)
-        goto done;
+    if (!(sender = flux_msg_get_route_first (msg)))
+        return 0;
     if (!sender || strcmp (sender, uuid) != 0)
-        goto done;
-    rc = 1;
-done:
-    free (sender);
-    return rc;
+        return 0;
+    return 1;
 }
 
 static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     logbuf_t *logbuf = arg;
-    char *sender = NULL;
+    const char *sender;
     const flux_msg_t *msgp;
     zlist_t *tmp = NULL;
 
     assert (logbuf->magic == LOGBUF_MAGIC);
-    if (flux_msg_get_route_first (msg, &sender) < 0 || !sender)
+    if (!(sender = flux_msg_get_route_first (msg)))
         goto done;
     msgp = zlist_first (logbuf->followers);
     while (msgp) {
@@ -635,7 +631,6 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
             zlist_remove (logbuf->followers, (flux_msg_t *)msgp);
     }
 done:
-    free (sender);
     zlist_destroy (&tmp);
     /* no response */
 }
