@@ -243,6 +243,7 @@ static int test_job_lookup (flux_plugin_t *p,
                                            "flux_jobtap_job_lookup",
                                            (uintmax_t) lookupid,
                                            strerror (errno));
+    flux_plugin_arg_destroy (oarg);
     return 0;
 }
 
