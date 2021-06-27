@@ -684,8 +684,8 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     cali_begin_int (h->prof.msg_match_tag, match.matchtag);
     cali_begin_string (h->prof.msg_match_glob,
                        match.topic_glob ? match.topic_glob : "NONE");
-    char *sender = NULL;
-    flux_msg_get_route_first (msg, &sender);
+    const char *sender;
+    sender = flux_msg_get_route_first (msg);
     if (sender)
         cali_begin_string (h->prof.msg_sender, sender);
     profiling_msg_snapshot (h, msg, flags, "recv");
@@ -694,8 +694,6 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     cali_end (h->prof.msg_match_type);
     cali_end (h->prof.msg_match_tag);
     cali_end (h->prof.msg_match_glob);
-
-    free (sender);
 #endif
     return msg;
 fatal:

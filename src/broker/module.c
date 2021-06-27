@@ -340,26 +340,20 @@ done:
 
 int module_response_sendmsg (modhash_t *mh, const flux_msg_t *msg)
 {
-    char *uuid = NULL;
-    int rc = -1;
+    const char *uuid;
     module_t *p;
 
     if (!msg)
         return 0;
-    if (flux_msg_get_route_last (msg, &uuid) < 0)
-        goto done;
-    if (!uuid) {
+    if (!(uuid = flux_msg_get_route_last (msg))) {
         errno = EPROTO;
-        goto done;
+        return -1;
     }
     if (!(p = zhash_lookup (mh->zh_byuuid, uuid))) {
         errno = ENOSYS;
-        goto done;
+        return -1;
     }
-    rc = module_sendmsg (p, msg);
-done:
-    free (uuid);
-    return rc;
+    return module_sendmsg (p, msg);
 }
 
 int module_disconnect_arm (module_t *p,

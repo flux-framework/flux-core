@@ -43,13 +43,11 @@ void msghand (flux_t *h, flux_msg_handler_t *mh,
 
 bool msgcmp (const flux_msg_t *msg, void *arg)
 {
-    char *id = NULL;
+    const char *id;
     bool match = false;
-    if (flux_msg_get_route_first (msg, &id) == 0
+    if ((id = flux_msg_get_route_first (msg))
         && (!strcmp (id, "19") || !strcmp (id, "18") || !strcmp (id, "17")))
         match = true;
-    if (id)
-        free (id);
     return match;
 }
 

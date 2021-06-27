@@ -256,7 +256,7 @@ void trio (flux_t *h)
     zsock_t *zsock_none;
     zsock_t *zsock_curve;
     zcert_t *cert;
-    char *sender;
+    const char *sender;
 
     ctx[0] = ctx_create (h, "trio", size, 0, recv_cb);
 
@@ -309,11 +309,9 @@ void trio (flux_t *h)
         "%s: request was received by overlay", ctx[0]->name);
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "meep"),
         "%s: received message has expected topic", ctx[0]->name);
-    sender = NULL;
-    ok (flux_msg_get_route_first (rmsg, &sender) == 0
-        && sender != NULL && !strcmp (sender, ctx[1]->uuid),
+    ok ((sender = flux_msg_get_route_first (rmsg)) != NULL
+        && !strcmp (sender, ctx[1]->uuid),
         "%s: received message sender is rank 1", ctx[0]->name);
-    free (sender);
 
     /* Send request 0->1
      * Side effect: during recvmsg_timeout(), reactor allows hello response
@@ -332,11 +330,9 @@ void trio (flux_t *h)
         "%s: request was received by overlay", ctx[1]->name);
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "errr"),
         "%s: request has expected topic", ctx[1]->name);
-    sender = NULL;
-    ok (flux_msg_get_route_first (rmsg, &sender) == 0
-        && sender != NULL && !strcmp (sender, ctx[0]->uuid),
+    ok ((sender = flux_msg_get_route_first (rmsg)) != NULL
+        && !strcmp (sender, ctx[0]->uuid),
         "%s: request sender is rank 0", ctx[1]->name);
-    free (sender);
 
     /* Response 1->0
      */

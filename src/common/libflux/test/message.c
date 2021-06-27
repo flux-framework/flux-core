@@ -33,7 +33,6 @@ void check_cornercase (void)
     int type, errnum, status;
     uint32_t tag;
     uint8_t flags;
-    char *route;
     const char *topic;
     const void *payload;
     int payload_size;
@@ -279,26 +278,18 @@ void check_cornercase (void)
     ok (flux_msg_delete_route (msg) == -1 && errno == EPROTO,
         "flux_msg_delete_route returns -1 errno EPROTO on msg "
         "w/o routes enabled");
-    ok (flux_msg_get_route_first (NULL, &route) == -1 && errno == EINVAL,
-        "flux_msg_get_route_first returns -1 errno EINVAL on msg = NULL");
+    ok (flux_msg_get_route_first (NULL) == NULL && errno == EINVAL,
+        "flux_msg_get_route_first returns NULL errno EINVAL on msg = NULL");
     errno = 0;
-    ok (flux_msg_get_route_first (msg, NULL) == -1 && errno == EINVAL,
-        "flux_msg_get_route_first returns -1 errno EINVAL on in-and-out "
-        "param = NULL");
-    errno = 0;
-    ok (flux_msg_get_route_first (msg, &route) == -1 && errno == EPROTO,
-        "flux_msg_get_route_first returns -1 errno EPROTO on msg "
+    ok (flux_msg_get_route_first (msg) == NULL && errno == EPROTO,
+        "flux_msg_get_route_first returns NULL errno EPROTO on msg "
         "w/o routes enabled");
     errno = 0;
-    ok (flux_msg_get_route_last (NULL, &route) == -1 && errno == EINVAL,
+    ok (flux_msg_get_route_last (NULL) == NULL && errno == EINVAL,
         "flux_msg_get_route_last returns -1 errno EINVAL on msg = NULL");
     errno = 0;
-    ok (flux_msg_get_route_last (msg, NULL) == -1 && errno == EINVAL,
-        "flux_msg_get_route_last returns -1 errno EINVAL on in-and-out "
-        "param = NULL");
-    errno = 0;
-    ok (flux_msg_get_route_last (msg, &route) == -1 && errno == EPROTO,
-        "flux_msg_get_route_last returns -1 errno EPROTO on msg "
+    ok (flux_msg_get_route_last (msg) == NULL && errno == EPROTO,
+        "flux_msg_get_route_last returns NULL errno EPROTO on msg "
         "w/o routes enabled");
     errno = 0;
     ok ((flux_msg_get_route_count (NULL) == -1 && errno == EINVAL),
@@ -325,6 +316,7 @@ void check_cornercase (void)
 void check_routes (void)
 {
     flux_msg_t *msg;
+    const char *route;
     char *s;
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL
@@ -340,26 +332,24 @@ void check_routes (void)
     ok (flux_msg_pop_route (msg, &s) == 0 && s == NULL,
         "flux_msg_pop_route works and sets id to NULL on msg w/o routes");
 
-    ok (flux_msg_get_route_first (msg, &s) == 0 && s == NULL,
-        "flux_msg_get_route_first returns 0, id=NULL on msg w/o routes");
-    ok (flux_msg_get_route_last (msg, &s) == 0 && s == NULL,
-        "flux_msg_get_route_last returns 0, id=NULL on msg w/o routes");
+    ok ((route = flux_msg_get_route_first (msg)) == NULL,
+        "flux_msg_get_route_first returns NULL on msg w/o routes");
+    ok ((route = flux_msg_get_route_last (msg)) == NULL,
+        "flux_msg_get_route_last returns NULL on msg w/o routes");
     ok (flux_msg_push_route (msg, "sender") == 0 && flux_msg_frames (msg) == 3,
         "flux_msg_push_route works and adds a frame");
     ok ((flux_msg_get_route_count (msg) == 1),
         "flux_msg_get_route_count returns 1 on msg w/ id1");
 
-    ok (flux_msg_get_route_first (msg, &s) == 0 && s != NULL,
+    ok ((route = flux_msg_get_route_first (msg)) != NULL,
         "flux_msg_get_route_first works");
-    like (s, "sender",
+    like (route, "sender",
         "flux_msg_get_route_first returns id on msg w/ id1");
-    free (s);
 
-    ok (flux_msg_get_route_last (msg, &s) == 0 && s != NULL,
+    ok ((route = flux_msg_get_route_last (msg)) != NULL,
         "flux_msg_get_route_last works");
-    like (s, "sender",
+    like (route, "sender",
         "flux_msg_get_route_last returns id on msg w/ id1");
-    free (s);
 
     ok ((s = flux_msg_get_route_string (msg)) != NULL,
         "flux_msg_get_route_string works");
@@ -372,17 +362,15 @@ void check_routes (void)
     ok ((flux_msg_get_route_count (msg) == 2),
         "flux_msg_get_route_count returns 2 on msg w/ id1+id2");
 
-    ok (flux_msg_get_route_first (msg, &s) == 0 && s != NULL,
+    ok ((route = flux_msg_get_route_first (msg)) != NULL,
         "flux_msg_get_route_first works");
-    like (s, "sender",
+    like (route, "sender",
         "flux_msg_get_route_first returns id1 on msg w/ id1+id2");
-    free (s);
 
-    ok (flux_msg_get_route_last (msg, &s) == 0 && s != NULL,
+    ok ((route = flux_msg_get_route_last (msg)) != NULL,
         "flux_msg_get_route_last works");
-    like (s, "router",
+    like (route, "router",
         "flux_msg_get_route_last returns id2 on message with id1+id2");
-    free (s);
 
     ok ((s = flux_msg_get_route_string (msg)) != NULL,
         "flux_msg_get_route_string works");
