@@ -315,61 +315,61 @@ void check_routes (void)
         "flux_msg_create works and creates msg with 1 frame");
 
     ok (flux_msg_clear_route (msg) == 0 && flux_msg_frames (msg) == 1,
-        "flux_msg_clear_route works, is no-op on msg w/o delim");
+        "flux_msg_clear_route works, is no-op on msg w/o routes enabled");
     ok (flux_msg_enable_route (msg) == 0 && flux_msg_frames (msg) == 2,
-        "flux_msg_enable_route works, adds one frame on msg w/o delim");
+        "flux_msg_enable_route works, adds one frame on msg w/ routes enabled");
     ok ((flux_msg_get_route_count (msg) == 0),
-        "flux_msg_get_route_count returns 0 on msg w/delim");
+        "flux_msg_get_route_count returns 0 on msg w/o routes");
     ok (flux_msg_pop_route (msg, &s) == 0 && s == NULL,
         "flux_msg_pop_route works and sets id to NULL on msg w/o routes");
 
     ok (flux_msg_get_route_first (msg, &s) == 0 && s == NULL,
-        "flux_msg_get_route_first returns 0, id=NULL on msg w/delim");
+        "flux_msg_get_route_first returns 0, id=NULL on msg w/o routes");
     ok (flux_msg_get_route_last (msg, &s) == 0 && s == NULL,
-        "flux_msg_get_route_last returns 0, id=NULL on msg w/delim");
+        "flux_msg_get_route_last returns 0, id=NULL on msg w/o routes");
     ok (flux_msg_push_route (msg, "sender") == 0 && flux_msg_frames (msg) == 3,
         "flux_msg_push_route works and adds a frame");
     ok ((flux_msg_get_route_count (msg) == 1),
-        "flux_msg_get_route_count returns 1 on msg w/delim+id");
+        "flux_msg_get_route_count returns 1 on msg w/ id1");
 
     ok (flux_msg_get_route_first (msg, &s) == 0 && s != NULL,
         "flux_msg_get_route_first works");
     like (s, "sender",
-        "flux_msg_get_route_first returns id on msg w/delim+id");
+        "flux_msg_get_route_first returns id on msg w/ id1");
     free (s);
 
     ok (flux_msg_get_route_last (msg, &s) == 0 && s != NULL,
         "flux_msg_get_route_last works");
     like (s, "sender",
-        "flux_msg_get_route_last returns id on msg w/delim+id");
+        "flux_msg_get_route_last returns id on msg w/ id1");
     free (s);
 
     ok (flux_msg_push_route (msg, "router") == 0 && flux_msg_frames (msg) == 4,
         "flux_msg_push_route works and adds a frame");
     ok ((flux_msg_get_route_count (msg) == 2),
-        "flux_msg_get_route_count returns 2 on msg w/delim+id1+id2");
+        "flux_msg_get_route_count returns 2 on msg w/ id1+id2");
 
     ok (flux_msg_get_route_first (msg, &s) == 0 && s != NULL,
         "flux_msg_get_route_first works");
     like (s, "sender",
-        "flux_msg_get_route_first returns id1 on msg w/delim+id1+id2");
+        "flux_msg_get_route_first returns id1 on msg w/ id1+id2");
     free (s);
 
     ok (flux_msg_get_route_last (msg, &s) == 0 && s != NULL,
         "flux_msg_get_route_last works");
     like (s, "router",
-        "flux_msg_get_route_last returns id2 on message with delim+id1+id2");
+        "flux_msg_get_route_last returns id2 on message with id1+id2");
     free (s);
 
     s = NULL;
     ok (flux_msg_pop_route (msg, &s) == 0 && s != NULL,
         "flux_msg_pop_route works on msg w/routes");
     like (s, "router",
-        "flux_msg_pop_route returns id2 on message with delim+id1+id2");
+        "flux_msg_pop_route returns id2 on message with id1+id2");
     free (s);
 
     ok (flux_msg_clear_route (msg) == 0 && flux_msg_frames (msg) == 1,
-        "flux_msg_clear_route strips routing frames and delim");
+        "flux_msg_clear_route clear routing frames");
     flux_msg_destroy (msg);
 }
 
