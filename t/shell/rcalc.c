@@ -29,6 +29,10 @@ static struct optparse_option opts[] = {
       .usage = "Assign tasks per-resource instead of distributing. "
                "NAME is name of resource (node or core)",
     },
+    { .name = "cores-per-slot", .key = 'c',
+      .has_arg = 1, .arginfo = "N",
+      .usage = "Explicitly set the number of cores per task",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -78,7 +82,9 @@ int main (int ac, char **av)
             exit (1);
         }
     }
-    else if (rcalc_distribute (r, ntasks, 0) < 0) {
+    else if (rcalc_distribute (r,
+                               ntasks,
+                               optparse_get_int (p, "cores-per-slot", 0)) < 0) {
         fprintf (stderr, "rcalc_distribute: %s\n", strerror (errno));
         exit (1);
     }
