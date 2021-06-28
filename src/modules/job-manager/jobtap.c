@@ -1058,8 +1058,7 @@ static int plugin_try_load (struct jobtap *jobtap,
 
     if (flux_plugin_load_dso (p, fullpath) < 0)
         return errprintf (errp,
-                          "%s: %s",
-                          fullpath,
+                          "%s",
                           flux_plugin_strerror (p));
     if (!(name = strdup (basename (fullpath)))
         || flux_plugin_aux_set (p, "jobtap::basename", name, free) < 0) {
