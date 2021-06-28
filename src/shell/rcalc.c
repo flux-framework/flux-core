@@ -375,17 +375,18 @@ static void rcalc_compute_taskids (rcalc_t *r)
  *   that first assigns a number of cores per task, then distributes
  *   over largest nodes first.
  */
-int rcalc_distribute (rcalc_t *r, int ntasks)
+int rcalc_distribute (rcalc_t *r, int ntasks, int cores_per_task)
 {
     struct allocinfo *ai;
     int assigned = 0;
-    int cores_per_task = 0;
     zlist_t *l = NULL;
 
-    /* Punt for now if there are more tasks than cores */
-    if ((cores_per_task = r->ncores/ntasks) == 0) {
-        errno = EINVAL;
-        return -1;
+    if (cores_per_task <= 0) {
+        /* Punt for now if there are more tasks than cores */
+        if ((cores_per_task = r->ncores/ntasks) == 0) {
+            errno = EINVAL;
+            return -1;
+        }
     }
 
     r->ntasks = ntasks;

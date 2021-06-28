@@ -227,7 +227,9 @@ struct shell_info *shell_info_create (flux_shell_t *shell)
             goto error;
         }
     }
-    else if (rcalc_distribute (info->rcalc, info->jobspec->task_count) < 0) {
+    else if (rcalc_distribute (info->rcalc,
+                               info->jobspec->task_count,
+                               info->jobspec->cores_per_slot) < 0) {
         shell_log_error ("error distributing %d tasks over R",
                          info->jobspec->task_count);
         goto error;

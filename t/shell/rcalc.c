@@ -78,7 +78,7 @@ int main (int ac, char **av)
             exit (1);
         }
     }
-    else if (rcalc_distribute (r, ntasks) < 0) {
+    else if (rcalc_distribute (r, ntasks, 0) < 0) {
         fprintf (stderr, "rcalc_distribute: %s\n", strerror (errno));
         exit (1);
     }
