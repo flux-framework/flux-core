@@ -28,6 +28,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/digest.h"
+#include "src/common/libutil/jpath.h"
 
 const int max_idle = 99;
 
@@ -556,17 +557,12 @@ static void parse_json (optparse_t *p, const char *json_str)
     /* If --parse OBJNAME was provided, walk to that
      * portion of the returned object.
      */
-    o = obj;
     if ((objname = optparse_get_str (p, "parse", NULL))) {
-        char *cpy = xstrdup (objname);
-        char *name, *saveptr = NULL, *a1 = cpy;
-        while ((name = strtok_r (a1, ".", &saveptr))) {
-            if (!(o = json_object_get (o, name)))
-                log_msg_exit ("`%s' not found in response", objname);
-            a1 = NULL;
-        }
-        free (cpy);
+        if (!(o = jpath_get (obj, objname)))
+            log_msg_exit ("`%s' not found in response", objname);
     }
+    else
+        o = obj;
 
     /* Display the resulting object/value, optionally forcing
      * the type to int or dobule, and optionally scaling the result.

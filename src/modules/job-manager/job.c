@@ -19,6 +19,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/grudgeset.h"
+#include "src/common/libutil/jpath.h"
 #include "src/common/libutil/aux.h"
 
 #include "job.h"
@@ -121,19 +122,6 @@ void job_aux_delete (struct job *job, const void *val)
     aux_delete (&job->aux, val);
 }
 
-/* Follow path (NULL terminated array of keys) through multiple JSON
- * object levels, and delete the final path component.
- */
-void delete_json_path (json_t *o, const char *path[])
-{
-    if (o && path && path[0]) {
-        if (path[1])
-            delete_json_path (json_object_get (o, path[0]), &path[1]);
-        else
-            json_object_del (o, path[0]);
-    }
-}
-
 struct job *job_create_from_eventlog (flux_jobid_t id,
                                       const char *eventlog,
                                       const char *jobspec)
@@ -142,7 +130,6 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
     json_t *a = NULL;
     size_t index;
     json_t *event;
-    const char *envpath[] = { "attributes", "system", "environment", NULL };
 
     if (!(job = job_create ()))
         return NULL;
@@ -150,7 +137,7 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
 
     if (!(job->jobspec_redacted = json_loads (jobspec, 0, NULL)))
         goto inval;
-    delete_json_path (job->jobspec_redacted, envpath);
+    jpath_del (job->jobspec_redacted, "attributes.system.environment");
 
     if (!(a = eventlog_decode (eventlog)))
         goto error;
