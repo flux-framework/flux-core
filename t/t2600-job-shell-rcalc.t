@@ -43,4 +43,17 @@ for file in ${OUTPUTDIR}/per-resource/*.expected; do
     '
 done
 
+#  More specific rcalc tests
+test_expect_success 'rcalc: distribute 5 slots of size 5 across 6 allocated' '
+	flux R encode -r 0-1 -c 0-14 | \
+	    ${rcalc} --cores-per-slot=5 5 > 55.out &&
+	cat >55.expected <<-EOF &&
+	Distributing 5 tasks across 2 nodes with 30 cores
+	Used 2 nodes
+	0: rank=0 ntasks=3 basis=0 cores=0-14
+	1: rank=1 ntasks=2 basis=3 cores=0-14
+	EOF
+	test_cmp 55.expected 55.out
+'
+
 test_done
