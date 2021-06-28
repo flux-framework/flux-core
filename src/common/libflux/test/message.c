@@ -22,11 +22,12 @@
 void check_cornercase (void)
 {
     flux_msg_t *msg;
+    flux_msg_t *req, *rsp, *evt;
     struct flux_msg_cred cred;
-    uint32_t seq;
+    uint32_t seq, nodeid;
     uint8_t encodebuf[64];
     size_t encodesize = 64;
-    int errnum, status;
+    int type, errnum, status;
     uint32_t tag;
     uint8_t flags;
     char *route;
@@ -34,7 +35,17 @@ void check_cornercase (void)
     const void *payload;
     int payload_size;
 
+    errno = 0;
+    ok (flux_msg_create (0xFFFF) == NULL && errno == EINVAL,
+        "flux_msg_create fails with EINVAL on invalid type");
+
     if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        BAIL_OUT ("flux_msg_create failed");
+    if (!(req = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
+        BAIL_OUT ("flux_msg_create failed");
+    if (!(rsp = flux_msg_create (FLUX_MSGTYPE_RESPONSE)))
+        BAIL_OUT ("flux_msg_create failed");
+    if (!(evt = flux_msg_create (FLUX_MSGTYPE_EVENT)))
         BAIL_OUT ("flux_msg_create failed");
 
     lives_ok ({flux_msg_destroy (NULL);},
@@ -46,6 +57,10 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_aux_get (NULL, "foo") == NULL && errno == EINVAL,
         "flux_msg_aux_get msg=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_msg_copy (NULL, true) == NULL && errno == EINVAL,
+        "flux_msg_copy msg=NULL fails with EINVAL");
 
     errno = 0;
     ok (flux_msg_incref (NULL) == NULL && errno == EINVAL,
@@ -64,6 +79,13 @@ void check_cornercase (void)
         "flux_msg_frames returns -1 errno EINVAL on msg = NULL");
 
     errno = 0;
+    ok (flux_msg_set_type (NULL, 0) < 0 && errno == EINVAL,
+        "flux_msg_set_type fails with EINVAL on msg = NULL");
+    errno = 0;
+    ok (flux_msg_get_type (NULL, &type) < 0 && errno == EINVAL,
+        "flux_msg_get_type fails with EINVAL on msg = NULL");
+
+    errno = 0;
     ok (flux_msg_set_private (NULL) < 0 && errno == EINVAL,
         "flux_msg_set_private msg=NULL fails with EINVAL");
     ok (flux_msg_is_private (NULL) == true,
@@ -80,14 +102,21 @@ void check_cornercase (void)
         "flux_msg_is_noresponse msg=NULL returns true");
 
     errno = 0;
-    ok (flux_msg_set_payload (NULL, NULL, 0) < 0 && errno == EINVAL,
-        "flux_msg_set_payload msg=NULL fails with EINVAL");
+    ok (flux_msg_set_topic (NULL, "foobar") < 0 && errno == EINVAL,
+       "flux_msg_set_topic fails with EINVAL on msg = NULL");
     errno = 0;
     ok (flux_msg_get_topic (msg, NULL) < 0 && errno == EINVAL,
        "flux_msg_get_topic fails with EINVAL on in-and-out param = NULL");
     errno = 0;
     ok (flux_msg_get_topic (msg, &topic) < 0 && errno == EPROTO,
        "flux_msg_get_topic fails with EPROTO on msg w/o topic");
+
+    errno = 0;
+    ok (flux_msg_set_payload (NULL, NULL, 0) < 0 && errno == EINVAL,
+        "flux_msg_set_payload msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_msg_get_payload (NULL, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_msg_get_payload msg=NULL fails with EINVAL");
     errno = 0;
     ok (flux_msg_get_payload (msg, NULL, NULL) < 0 && errno == EINVAL,
        "flux_msg_get_payload fails with EINVAL on in-and-out params = NULL");
@@ -95,6 +124,8 @@ void check_cornercase (void)
     ok (flux_msg_get_payload (msg, &payload, &payload_size) < 0
         && errno == EPROTO,
        "flux_msg_get_payload fails with EPROTO on msg w/o payload");
+    ok (flux_msg_has_payload (NULL) == false,
+        "flux_msg_has_payload returns false on msg = NULL");
 
     errno = 0;
     ok (flux_msg_get_flags (NULL, &flags) < 0 && errno == EINVAL,
@@ -118,9 +149,24 @@ void check_cornercase (void)
     ok (flux_msg_pack (NULL, "{s:i}", "foo", 42) < 0 && errno == EINVAL,
        "flux_msg_pack msg=NULL fails with EINVAL");
     errno = 0;
+    ok (flux_msg_pack (msg, NULL) < 0 && errno == EINVAL,
+        "flux_msg_pack fails with EINVAL with NULL format");
+    errno = 0;
+    ok (flux_msg_unpack (NULL, "{s:i}", "type", &type) < 0 && errno == EINVAL,
+       "flux_msg_unpack msg=NULL fails with EINVAL");
+    errno = 0;
     ok (flux_msg_unpack (msg, NULL) < 0 && errno == EINVAL,
         "flux_msg_unpack fails with EINVAL with NULL format");
 
+    errno = 0;
+    ok (flux_msg_set_nodeid (NULL, 0) < 0 && errno == EINVAL,
+                "flux_msg_set_nodeid fails with EINVAL on msg = NULL");
+    errno = 0;
+    ok (flux_msg_get_nodeid (NULL, &nodeid) < 0 && errno == EINVAL,
+        "flux_msg_get_nodeid fails with EINVAL on msg = NULL");
+    errno = 0;
+    ok (flux_msg_get_nodeid (rsp, &nodeid) < 0 && errno == EPROTO,
+        "flux_msg_get_nodeid fails with PROTO on msg != request type");
     errno = 0;
     ok (flux_msg_get_userid (NULL, &cred.userid) < 0 && errno == EINVAL,
         "flux_msg_get_userid msg=NULL fails with EINVAL");
@@ -163,6 +209,9 @@ void check_cornercase (void)
     ok (flux_msg_get_errnum (msg, NULL) < 0 && errno == EINVAL,
         "flux_msg_get_errnum fails with EINVAL on in-and-out param = NULL");
     errno = 0;
+    ok (flux_msg_get_errnum (req, &errnum) < 0 && errno == EPROTO,
+        "flux_msg_get_errnum fails with EPROTO on msg != response type");
+    errno = 0;
     ok (flux_msg_set_seq (NULL, 0) < 0 && errno == EINVAL,
         "flux_msg_set_seq fails with EINVAL on msg = NULL");
     errno = 0;
@@ -171,6 +220,9 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_get_seq (msg, NULL) < 0 && errno == EINVAL,
         "flux_msg_get_seq fails with EINVAL on in-and-out param = NULL");
+    errno = 0;
+    ok (flux_msg_get_seq (req, &seq) < 0 && errno == EPROTO,
+        "flux_msg_get_seq fails with EPROTO on msg != event type");
     errno = 0;
     ok (flux_msg_set_status (NULL, 0) < 0 && errno == EINVAL,
         "flux_msg_set_status fails with EINVAL on msg = NULL");
@@ -181,6 +233,9 @@ void check_cornercase (void)
     ok (flux_msg_get_status (msg, NULL) < 0 && errno == EINVAL,
         "flux_msg_get_status fails with EINVAL on in-and-out param = NULL");
     errno = 0;
+    ok (flux_msg_get_status (req, &status) < 0 && errno == EPROTO,
+        "flux_msg_get_status fails with EPROTO on msg != keepalive type");
+    errno = 0;
     ok (flux_msg_set_matchtag (NULL, 42) < 0 && errno == EINVAL,
         "flux_msg_set_matchtag fails with EINVAL on msg = NULL");
     errno = 0;
@@ -189,10 +244,31 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_get_matchtag (msg, NULL) < 0 && errno == EINVAL,
         "flux_msg_get_matchtag fails with EINVAL on in-and-out param = NULL");
+    errno = 0;
+    ok (flux_msg_get_matchtag (evt, &tag) < 0 && errno == EPROTO,
+        "flux_msg_get_matchtag fails with EPROTO on msg != req/rsp type");
 
+    errno = 0;
+    ok (flux_msg_enable_route (NULL) == -1 && errno == EINVAL,
+        "flux_msg_enable_route returns -1 errno EINVAL on msg = NULL");
+    errno = 0;
+    ok (flux_msg_clear_route (NULL) == -1 && errno == EINVAL,
+        "flux_msg_clear_route returns -1 errno EINVAL on msg = NULL");
+    errno = 0;
+    ok (flux_msg_push_route (NULL, "foo") == -1 && errno == EINVAL,
+        "flux_msg_push_route returns -1 errno EINVAL on msg = NULL");
     errno = 0;
     ok (flux_msg_push_route (msg, NULL) == -1 && errno == EINVAL,
         "flux_msg_push_route returns -1 errno EINVAL on id = NULL");
+    errno = 0;
+    ok (flux_msg_push_route (msg, "foo") == -1 && errno == EPROTO,
+        "flux_msg_push_route returns -1 errno EPROTO on msg w/o routes enabled");
+    errno = 0;
+    ok (flux_msg_pop_route (NULL, NULL) == -1 && errno == EINVAL,
+        "flux_msg_pop_route returns -1 errno EINVAL on id = NULL");
+    errno = 0;
+    ok (flux_msg_pop_route (msg, NULL) == -1 && errno == EPROTO,
+        "flux_msg_pop_route returns -1 errno EPROTO on msg w/o routes enabled");
     errno = 0;
     ok (flux_msg_get_route_first (NULL, &route) == -1 && errno == EINVAL,
         "flux_msg_get_route_first returns -1 errno EINVAL on msg = NULL");
@@ -201,9 +277,27 @@ void check_cornercase (void)
         "flux_msg_get_route_first returns -1 errno EINVAL on in-and-out "
         "param = NULL");
     errno = 0;
+    ok (flux_msg_get_route_first (msg, &route) == -1 && errno == EPROTO,
+        "flux_msg_get_route_first returns -1 errno EPROTO on msg "
+        "w/o routes enabled");
+    errno = 0;
+    ok (flux_msg_get_route_last (NULL, &route) == -1 && errno == EINVAL,
+        "flux_msg_get_route_last returns -1 errno EINVAL on msg = NULL");
+    errno = 0;
     ok (flux_msg_get_route_last (msg, NULL) == -1 && errno == EINVAL,
         "flux_msg_get_route_last returns -1 errno EINVAL on in-and-out "
         "param = NULL");
+    errno = 0;
+    ok (flux_msg_get_route_last (msg, &route) == -1 && errno == EPROTO,
+        "flux_msg_get_route_last returns -1 errno EPROTO on msg "
+        "w/o routes enabled");
+    errno = 0;
+    ok ((flux_msg_get_route_count (NULL) == -1 && errno == EINVAL),
+        "flux_msg_get_route_count returns -1 errno EINVAL on msg = NULL");
+    errno = 0;
+    ok ((flux_msg_get_route_count (msg) == -1 && errno == EPROTO),
+        "flux_msg_get_route_count returns -1 errno EPROTO on msg "
+        "w/o routes enabled");
 
     flux_msg_destroy (msg);
 }
@@ -219,75 +313,63 @@ void check_routes (void)
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL
         && flux_msg_frames (msg) == 1,
         "flux_msg_create works and creates msg with 1 frame");
-    errno = 0;
-    ok (flux_msg_get_route_count (msg) < 0 && errno == EPROTO,
-        "flux_msg_get_route_count returns -1 errno EPROTO on msg w/o delim");
-    errno = 0;
-    ok ((flux_msg_get_route_first (msg, &s) == -1 && errno == EPROTO),
-        "flux_msg_get_route_first returns -1 errno EPROTO on msg w/o delim");
-    errno = 0;
-    ok ((flux_msg_get_route_last (msg, &s) == -1 && errno == EPROTO),
-        "flux_msg_get_route_last returns -1 errno EPROTO on msg w/o delim");
-    errno = 0;
-    ok ((flux_msg_pop_route (msg, &s) == -1 && errno == EPROTO),
-        "flux_msg_pop_route returns -1 errno EPROTO on msg w/o delim");
 
     ok (flux_msg_clear_route (msg) == 0 && flux_msg_frames (msg) == 1,
-        "flux_msg_clear_route works, is no-op on msg w/o delim");
+        "flux_msg_clear_route works, is no-op on msg w/o routes enabled");
     ok (flux_msg_enable_route (msg) == 0 && flux_msg_frames (msg) == 2,
-        "flux_msg_enable_route works, adds one frame on msg w/o delim");
+        "flux_msg_enable_route works, adds one frame on msg w/ routes enabled");
     ok ((flux_msg_get_route_count (msg) == 0),
-        "flux_msg_get_route_count returns 0 on msg w/delim");
+        "flux_msg_get_route_count returns 0 on msg w/o routes");
     ok (flux_msg_pop_route (msg, &s) == 0 && s == NULL,
         "flux_msg_pop_route works and sets id to NULL on msg w/o routes");
 
     ok (flux_msg_get_route_first (msg, &s) == 0 && s == NULL,
-        "flux_msg_get_route_first returns 0, id=NULL on msg w/delim");
+        "flux_msg_get_route_first returns 0, id=NULL on msg w/o routes");
     ok (flux_msg_get_route_last (msg, &s) == 0 && s == NULL,
-        "flux_msg_get_route_last returns 0, id=NULL on msg w/delim");
+        "flux_msg_get_route_last returns 0, id=NULL on msg w/o routes");
     ok (flux_msg_push_route (msg, "sender") == 0 && flux_msg_frames (msg) == 3,
         "flux_msg_push_route works and adds a frame");
     ok ((flux_msg_get_route_count (msg) == 1),
-        "flux_msg_get_route_count returns 1 on msg w/delim+id");
+        "flux_msg_get_route_count returns 1 on msg w/ id1");
 
     ok (flux_msg_get_route_first (msg, &s) == 0 && s != NULL,
         "flux_msg_get_route_first works");
     like (s, "sender",
-        "flux_msg_get_route_first returns id on msg w/delim+id");
+        "flux_msg_get_route_first returns id on msg w/ id1");
     free (s);
 
     ok (flux_msg_get_route_last (msg, &s) == 0 && s != NULL,
         "flux_msg_get_route_last works");
     like (s, "sender",
-        "flux_msg_get_route_last returns id on msg w/delim+id");
+        "flux_msg_get_route_last returns id on msg w/ id1");
     free (s);
 
     ok (flux_msg_push_route (msg, "router") == 0 && flux_msg_frames (msg) == 4,
         "flux_msg_push_route works and adds a frame");
     ok ((flux_msg_get_route_count (msg) == 2),
-        "flux_msg_get_route_count returns 2 on msg w/delim+id1+id2");
+        "flux_msg_get_route_count returns 2 on msg w/ id1+id2");
 
     ok (flux_msg_get_route_first (msg, &s) == 0 && s != NULL,
         "flux_msg_get_route_first works");
     like (s, "sender",
-        "flux_msg_get_route_first returns id1 on msg w/delim+id1+id2");
+        "flux_msg_get_route_first returns id1 on msg w/ id1+id2");
     free (s);
 
     ok (flux_msg_get_route_last (msg, &s) == 0 && s != NULL,
         "flux_msg_get_route_last works");
     like (s, "router",
-        "flux_msg_get_route_last returns id2 on message with delim+id1+id2");
+        "flux_msg_get_route_last returns id2 on message with id1+id2");
     free (s);
 
     s = NULL;
     ok (flux_msg_pop_route (msg, &s) == 0 && s != NULL,
         "flux_msg_pop_route works on msg w/routes");
     like (s, "router",
-        "flux_msg_pop_route returns id2 on message with delim+id1+id2");
+        "flux_msg_pop_route returns id2 on message with id1+id2");
     free (s);
 
     ok (flux_msg_clear_route (msg) == 0 && flux_msg_frames (msg) == 1,
-        "flux_msg_clear_route strips routing frames and delim");
+        "flux_msg_clear_route clear routing frames");
     flux_msg_destroy (msg);
 }
 
@@ -798,6 +880,7 @@ void check_cmp (void)
 void check_encode (void)
 {
     flux_msg_t *msg, *msg2;
+    uint8_t smallbuf[1];
     void *buf;
     size_t size;
     const char *topic;
@@ -807,6 +890,9 @@ void check_encode (void)
         "flux_msg_create works");
     ok (flux_msg_set_topic (msg, "foo.bar") == 0,
         "flux_msg_set_topic works");
+    errno = 0;
+    ok (flux_msg_encode (msg, smallbuf, 1) < 0 && errno == EINVAL,
+        "flux_msg_encode fails on EINVAL with buffer too small");
     size = flux_msg_encode_size (msg);
     ok (size > 0,
         "flux_msg_encode_size works");

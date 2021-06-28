@@ -306,15 +306,14 @@ const char *flux_msg_typestr (int type);
  * routing.
  */
 
-/* Prepare a message for routing, which consists of pushing a nil delimiter
- * frame and setting FLUX_MSGFLAG_ROUTE.  This function is a no-op if the
- * flag is already set.
+/* Prepare a message for routing by setting FLUX_MSGFLAG_ROUTE.  This
+ * function is a no-op if the flag is already set.
  * Returns 0 on success, -1 with errno set on failure.
  */
 int flux_msg_enable_route (flux_msg_t *msg);
 
-/* Strip route frames, nil delimiter, and clear FLUX_MSGFLAG_ROUTE flag.
- * This function is a no-op if the flag is already clear.
+/* Clear routes from msg and clear FLUX_MSGFLAG_ROUTE flag.  This
+ * function is a no-op if the flag is already clear.
  * Returns 0 on success, -1 with errno set on failure.
  */
 int flux_msg_clear_route (flux_msg_t *msg);
@@ -331,14 +330,14 @@ int flux_msg_push_route (flux_msg_t *msg, const char *id);
  */
 int flux_msg_pop_route (flux_msg_t *msg, char **id);
 
-/* Copy the first routing frame (closest to delimiter) contents (or NULL)
+/* Copy the first route (e.g. first pushed route) contents (or NULL)
  * to 'id'.  Caller must free 'id'.
  * For requests, this is the sender; for responses, this is the recipient.
  * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
  */
 int flux_msg_get_route_first (const flux_msg_t *msg, char **id);
 
-/* Copy the last routing frame (farthest from delimiter) contents (or NULL)
+/* Copy the last route (e.g. most recent pushed route) contents (or NULL)
  * to 'id'.  Caller must free 'id'.
  * For requests, this is the last hop; for responses: this is the next hop.
  * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
