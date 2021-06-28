@@ -1,3 +1,47 @@
+flux-core version 0.28.0 - 2021-06-30
+-------------------------------------
+
+This release adds simple job dependencies - see the `flux_mini(1)`
+DEPENDENCIES section.
+
+### Fixes
+ * shell: fix segfault when more slots are allocated than requested (#3749)
+ * testsuite: avoid long `ipc://` paths in system test personality (#3739)
+ * cron: fix race in task timeouts (#3728)
+ * Python/FluxExecutor bug fixes (#3714)
+ * flux-python: fix use of virtualenv python (#3713)
+ * optparse: make `optional_argument` apply to long options only (#3706)
+ * librlist: skip loading hwloc 'gl' plugin (#3693)
+
+### New Features
+ * allow jobs to bypass scheduler with alloc-bypass jobtap plugin (#3740)
+ * libjob: add a library for constructing V1 jobspecs (#3662, #3734, #3748)
+ * python: validate dependencies in Jobspec constructor (#3727)
+ * libflux: make `flux_plugin_handler` topic member const (#3720)
+ * job-manager: add builtin begin-time dependency plugin (#3704)
+ * broker: send offline responses while broker is initializing (#3712)
+ * python: add `flux.util.parse_datetime` (#3711)
+ * job-manager: support simple `after*` job dependencies (#3696)
+ * jobtap: fixes and api enhancements to support dependency plugins (#3698)
+ * shell: add exit-on-error option (#3692)
+
+### Cleanup/Testing/Build System
+ * job-manager: minor cleanup and improvements for event handling (#3759)
+ * libflux: make `flux_msg_fprint()` output clearer (#3742)
+ * libflux: store fully decoded message in `flux_msg_t` (#3701, #3758)
+ * libflux: msg API cleanup, test cleanup, and test enhancement  (#3745, #3699)
+ * testsuite: generalize valgrind suppressions (#3743)
+ * ci: use long path for builddir in test build (#3738)
+ * job-list: cleanup & testsuite modernization & consistency updates (#3733)
+ * testsuite: fix several tests on slower systems (#3730)
+ * testsuite: fix intermittent test, speed up others (#3725)
+ * broker: misc cleanup (#3721)
+ * github: fix ci builds on master (#3716, #3717)
+ * testsuite: add tests for late joining broker (#3709)
+ * flux-start: build system instance test features (#3700)
+ * ci: minor coverage testing fixes (#3703)
+ * libflux: test: fix segfault of `test_plugin.t` under rpmbuild (#3695)
+
 flux-core version 0.27.0 - 2021-05-28
 -------------------------------------
 
