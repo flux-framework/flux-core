@@ -29,6 +29,7 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-cron.1 \
 	man1/flux-event.1 \
 	man1/flux-mini.1 \
+	man1/flux-job.1 \
 	man1/flux-version.1 \
 	man1/flux-jobs.1 \
 	man1/flux-shell.1 \
