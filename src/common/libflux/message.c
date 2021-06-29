@@ -932,7 +932,7 @@ int flux_msg_enable_route (flux_msg_t *msg)
     }
     if ((msg->flags & FLUX_MSGFLAG_ROUTE))
         return 0;
-    return flux_msg_set_flags (msg, msg->flags |= FLUX_MSGFLAG_ROUTE);
+    return flux_msg_set_flags (msg, msg->flags | FLUX_MSGFLAG_ROUTE);
 }
 
 int flux_msg_clear_route (flux_msg_t *msg)
