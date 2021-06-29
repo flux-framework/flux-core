@@ -584,7 +584,8 @@ int event_job_update (struct job *job, json_t *event)
             job->state = FLUX_JOB_STATE_RUN;
     }
     else if (!strcmp (name, "free")) {
-        if (job->state != FLUX_JOB_STATE_CLEANUP)
+        if (job->state != FLUX_JOB_STATE_CLEANUP
+            || !job->has_resources)
             goto inval;
         job->has_resources = 0;
     }
