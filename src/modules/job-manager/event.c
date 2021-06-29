@@ -693,7 +693,12 @@ int event_job_post_vpack (struct event *event,
     flux_job_state_t old_state = job->state;
     int eventlog_seq = (flags & EVENT_JOURNAL_ONLY) ? -1 : job->eventlog_seq;
 
-    if (job->state == FLUX_JOB_STATE_NEW) {
+    /* Events posted for jobs in the NEW state will be sent the journal
+     * _before_ the "submit" event for the job, which violates the invariant
+     * the "submit" event is the first job event.  Exception: allow the
+     * "submit" event itself to be posted by runjob.c.
+     */
+    if (job->state == FLUX_JOB_STATE_NEW && strcmp (name, "submit") != 0) {
         errno = EAGAIN;
         return -1;
     }
