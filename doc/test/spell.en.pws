@@ -533,3 +533,5 @@ afterany
 afterok
 afternotok
 parsedatetime
+cancelall
+raiseall

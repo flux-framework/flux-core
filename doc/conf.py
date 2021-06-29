@@ -131,6 +131,7 @@ man_pages = [
     ('man1/flux-kvs', 'flux-kvs', 'Flux key-value store utility', [author], 1),
     ('man1/flux-logger', 'flux-logger', 'create a Flux log entry', [author], 1),
     ('man1/flux-mini', 'flux-mini', 'Minimal Job Submission Tool', [author], 1),
+    ('man1/flux-job', 'flux-job', 'Job Housekeeping Tool', [author], 1),
     ('man1/flux-module', 'flux-module', 'manage Flux extension modules', [author], 1),
     ('man1/flux-ping', 'flux-ping', 'measure round-trip latency to Flux services', [author], 1),
     ('man1/flux-proxy', 'flux-proxy', 'create proxy environment for Flux instance', [author], 1),

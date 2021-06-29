@@ -14,6 +14,7 @@ man1
    flux-exec
    flux-getattr
    flux-hwloc
+   flux-job
    flux-jobs
    flux-jobtap
    flux-keygen
