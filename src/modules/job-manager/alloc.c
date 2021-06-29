@@ -538,7 +538,8 @@ int alloc_send_free_request (struct alloc *alloc, struct job *job)
 int alloc_enqueue_alloc_request (struct alloc *alloc, struct job *job)
 {
     assert (job->state == FLUX_JOB_STATE_SCHED);
-    if (!job->alloc_queued
+    if (!job->alloc_bypass
+        && !job->alloc_queued
         && !job->alloc_pending
         && job->priority != FLUX_JOB_PRIORITY_MIN) {
         bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);

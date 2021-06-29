@@ -352,11 +352,14 @@ int event_job_action (struct event *event, struct job *job)
              * response with final=true.  Thus once the flag is clear,
              * it is safe to release all resources to the scheduler.
              */
-            if (job->has_resources && !job->start_pending
-                                   && !job->free_pending) {
+            if (job->has_resources
+                && !job->alloc_bypass
+                && !job->start_pending
+                && !job->free_pending) {
                 if (alloc_send_free_request (ctx->alloc, job) < 0)
                     return -1;
             }
+
             /* Post cleanup event when cleanup is complete.
              */
             if (!job->alloc_queued && !job->alloc_pending
@@ -460,6 +463,26 @@ static int event_handle_dependency (struct job *job,
     return 0;
 }
 
+static int event_handle_set_flags (struct job *job,
+                                   json_t *context)
+{
+    json_t *o = NULL;
+    size_t index;
+    json_t *value;
+
+    if (json_unpack (context, "{s:o}", "flags", &o) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    json_array_foreach (o, index, value) {
+        if (job_flag_set (job, json_string_value (value)) < 0) {
+            errno = EPROTO;
+            return -1;
+        }
+    }
+    return 0;
+}
+
 /*  Return a callback topic string for the current job state
  *
  *   NOTE: 'job.state.new' and 'job.state.depend' are not currently used
@@ -515,6 +538,10 @@ int event_job_update (struct job *job, json_t *event)
         if (job->state != FLUX_JOB_STATE_DEPEND)
             goto inval;
         if (event_handle_dependency (job, name+11, context) < 0)
+            goto error;
+    }
+    else if (!strcmp (name, "set-flags")) {
+        if (event_handle_set_flags (job, context) < 0)
             goto error;
     }
     else if (!strcmp (name, "depend")) {
@@ -653,22 +680,23 @@ static int event_jobtap_call (struct event *event,
     return 0;
 }
 
-
-int event_job_post_pack (struct event *event,
-                         struct job *job,
-                         const char *name,
-                         int flags,
-                         const char *context_fmt,
-                         ...)
+int event_job_post_vpack (struct event *event,
+                          struct job *job,
+                          const char *name,
+                          int flags,
+                          const char *context_fmt,
+                          va_list ap)
 {
-    va_list ap;
     json_t *entry = NULL;
     int saved_errno;
     double timestamp;
     flux_job_state_t old_state = job->state;
     int eventlog_seq = (flags & EVENT_JOURNAL_ONLY) ? -1 : job->eventlog_seq;
 
-    va_start (ap, context_fmt);
+    if (job->state == FLUX_JOB_STATE_NEW) {
+        errno = EAGAIN;
+        return -1;
+    }
     if (get_timestamp_now (&timestamp) < 0)
         goto error;
     if (!(entry = eventlog_entry_vpack (timestamp, name, context_fmt, ap)))
@@ -718,14 +746,28 @@ int event_job_post_pack (struct event *event,
 
 out:
     json_decref (entry);
-    va_end (ap);
     return 0;
 error:
     saved_errno = errno;
     json_decref (entry);
-    va_end (ap);
     errno = saved_errno;
     return -1;
+}
+
+int event_job_post_pack (struct event *event,
+                         struct job *job,
+                         const char *name,
+                         int flags,
+                         const char *context_fmt,
+                         ...)
+{
+    int rc;
+    va_list ap;
+
+    va_start (ap, context_fmt);
+    rc = event_job_post_vpack (event, job, name, flags, context_fmt, ap);
+    va_end (ap);
+    return rc;
 }
 
 /* Finalizes in-flight batch KVS commits and event pubs (synchronously).

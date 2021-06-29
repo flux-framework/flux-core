@@ -56,7 +56,6 @@ int flux_jobtap_reprioritize_job (flux_plugin_t *p,
 int flux_jobtap_priority_unavail (flux_plugin_t *p,
                                   flux_plugin_arg_t *args);
 
-
 /*  Convenience function to be used in job.validate callback to reject a
  *   job with error message formatted by the fmt string.
  *   returns -1 to allow an idiom like:
@@ -132,12 +131,31 @@ int flux_jobtap_job_aux_delete (flux_plugin_t *p,
                                 flux_jobid_t id,
                                 void *val);
 
+/*  Set a named flag on job `id`.
+ */
+int flux_jobtap_job_set_flag (flux_plugin_t *p,
+                              flux_jobid_t id,
+                              const char *flag);
+
+
 /*  Raise an exception for job 'id' or current job if FLUX_JOBTAP_CURRENT_JOB
  */
 int flux_jobtap_raise_exception (flux_plugin_t *p,
                                  flux_jobid_t id,
                                  const char *type,
                                  int severity,
+                                 const char *fmt,
+                                 ...);
+
+/*  Post event 'name' to job `id` with optional context defined by
+ *   args `fmt, ...`.
+ *
+ *  If `id` is FLUX_JOBTAP_CURRENT_JOB then the event will be posted to
+ *   the current job.
+ */
+int flux_jobtap_event_post_pack (flux_plugin_t *p,
+                                 flux_jobid_t id,
+                                 const char *name,
                                  const char *fmt,
                                  ...);
 
@@ -157,6 +175,8 @@ flux_plugin_arg_t * flux_jobtap_job_lookup (flux_plugin_t *p,
 int flux_jobtap_get_job_result (flux_plugin_t *p,
                                 flux_jobid_t id,
                                 flux_job_result_t *resultp);
+
+
 #ifdef __cplusplus
 }
 #endif

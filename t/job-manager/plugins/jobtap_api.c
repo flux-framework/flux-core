@@ -13,6 +13,167 @@
 #include <flux/core.h>
 #include <flux/jobtap.h>
 
+static int test_event_post_pack (flux_plugin_t *p,
+                                 const char *topic,
+                                 flux_plugin_arg_t *args)
+{
+    const char *event = NULL;
+
+    errno = 0;
+    if (flux_jobtap_event_post_pack (NULL, 0, NULL, NULL) == 0
+        || errno != EINVAL)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s (%s): errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_event_post_pack",
+                                     " (NULL, ...)",
+                                     errno,
+                                     EINVAL);
+    errno = 0;
+    if (flux_jobtap_event_post_pack (p, 0, "foo", NULL) == 0
+        || errno != ENOENT)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s (%s): errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_event_post_pack",
+                                     " (NULL, ...)",
+                                     errno,
+                                     ENOENT);
+
+    if (strcmp (topic, "job.validate") == 0
+        || strcmp (topic, "job.new") == 0) {
+        /* Events may not be emitted before DEPEND state */
+        if (flux_jobtap_event_post_pack (p,
+                                         FLUX_JOBTAP_CURRENT_JOB,
+                                         "foo",
+                                         NULL) == 0
+            || errno != EAGAIN)
+            flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                         "test", 0,
+                                         "%s: %s (%s): errno=%d != %d",
+                                         topic,
+                                         "flux_jobtap_event_post_pack",
+                                         " (topic=%S)",
+                                         errno,
+                                         EINVAL);
+        return 0;
+    }
+
+    const char *state;
+    if (strncmp (topic, "job.state.", 10) == 0)
+        state = topic+10;
+    else
+        state = topic+4;
+    if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+                                "{s:{s:{s:{s?{s?s}}}}}",
+                                "jobspec",
+                                 "attributes",
+                                  "system",
+                                   state,
+                                    "post-event", &event) < 0)
+        return flux_jobtap_raise_exception (p,
+                                            FLUX_JOBTAP_CURRENT_JOB,
+                                            "test", 0,
+                                            "%s: %s: unpack_args: %s",
+                                            topic,
+                                            "test_event_post",
+                                            flux_plugin_arg_strerror (args));
+    if (event != NULL) {
+        if (flux_jobtap_event_post_pack (p,
+                                         FLUX_JOBTAP_CURRENT_JOB,
+                                         event,
+                                         "{s:s}",
+                                         "test_context", "yes") < 0)
+            flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                         "test", 0,
+                                         "%s: %s (event=%s): %s",
+                                         topic,
+                                         "flux_jobtap_event_post_pack",
+                                         event,
+                                         strerror (errno));
+    }
+
+    return 0;
+}
+
+static void set_flag_expect_error (const char *topic,
+                                   flux_plugin_t *p,
+                                   flux_jobid_t id,
+                                   char *flag,
+                                   char *msg,
+                                   int expected_errno)
+{
+    errno = 0;
+    int rc = flux_jobtap_job_set_flag (p, id, flag);
+    if (rc == 0 || errno != expected_errno)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s (%s): errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_job_set_flag",
+                                     msg,
+                                     errno,
+                                     expected_errno);
+}
+
+
+static int test_job_flags (flux_plugin_t *p,
+                           const char *topic,
+                           flux_plugin_arg_t *args)
+{
+    const char *flag = NULL;
+
+    if (strcmp (topic, "job.validate") == 0
+        || strcmp (topic, "job.new") == 0) {
+        /*  Flag cannot be set before job.state.depend (errno EAGAIN) */
+        set_flag_expect_error (topic, p, FLUX_JOBTAP_CURRENT_JOB, "foo",
+                               "p, CURRENT, foo", EAGAIN);
+        return 0;
+    }
+
+    set_flag_expect_error (topic, NULL, 0, NULL,    "NULL, 0, NULL", EINVAL);
+    set_flag_expect_error (topic, p,    0, NULL,    "p, 0, NULL",    EINVAL);
+    set_flag_expect_error (topic, p,    0, "debug", "p, 0, debug",   ENOENT);
+
+    set_flag_expect_error (topic, p,
+                           FLUX_JOBTAP_CURRENT_JOB,
+                           "foo",
+                           "p, FLUX_JOBTAP_CURRENT_JOB, foo",
+                           EINVAL);
+    const char *state;
+    if (strncmp (topic, "job.state.", 10) == 0)
+        state = topic+10;
+    else
+        state = topic+4;
+    if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+                                "{s:{s:{s:{s?{s?s}}}}}",
+                                "jobspec",
+                                "attributes",
+                                "system",
+                                state,
+                                "set_flag", &flag) < 0)
+        return flux_jobtap_raise_exception (p,
+                                            FLUX_JOBTAP_CURRENT_JOB,
+                                            "test", 0,
+                                            "%s: %s: unpack_args: %s",
+                                            topic,
+                                            "test_job_flags",
+                                            flux_plugin_arg_strerror (args));
+    if (flag != NULL) {
+        if (flux_jobtap_job_set_flag (p, FLUX_JOBTAP_CURRENT_JOB, flag) < 0)
+            flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                         "test", 0,
+                                         "%s: %s (flag=%s): %s",
+                                         topic,
+                                         "flux_jobtap_job_set_flag",
+                                         flag,
+                                         strerror (errno));
+    }
+    return 0;
+}
+
 static int test_job_lookup (flux_plugin_t *p,
                             const char *topic,
                             flux_plugin_arg_t *args)
@@ -82,6 +243,7 @@ static int test_job_lookup (flux_plugin_t *p,
                                            "flux_jobtap_job_lookup",
                                            (uintmax_t) lookupid,
                                            strerror (errno));
+    flux_plugin_arg_destroy (oarg);
     return 0;
 }
 
@@ -147,11 +309,11 @@ static int test_job_result (flux_plugin_t *p,
     if (rc < 0 || expected_result != result)
         return flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
                                            "test", 0,
-                                           "%s: %s: expected errno=%d got %d",
+                                           "%s: %s: expected result=%d got %d",
                                            topic,
                                            "flux_jobtap_get_job_result",
-                                           ENOENT,
-                                           errno);
+                                           expected_result,
+                                           result);
 
     return 0;
 }
@@ -169,6 +331,7 @@ static int cleanup_cb (flux_plugin_t *p,
                        flux_plugin_arg_t *args,
                        void *arg)
 {
+    test_event_post_pack (p, topic, args);
     return test_job_result (p, topic, args);
 }
 
@@ -179,6 +342,8 @@ static int run_cb (flux_plugin_t *p,
 {
     int rc;
     flux_job_result_t result;
+
+    test_job_flags (p, topic, args);
 
     /*  Test flux_jobtap_get_job_result(3) returns EINVAL here */
     errno = 0;
@@ -191,6 +356,7 @@ static int run_cb (flux_plugin_t *p,
                                            "flux_jobtap_get_job_result",
                                            EINVAL,
                                            errno);
+    test_event_post_pack (p, topic, args);
     return 0;
 }
 
@@ -199,6 +365,8 @@ static int sched_cb (flux_plugin_t *p,
                      flux_plugin_arg_t *args,
                      void *arg)
 {
+    test_job_flags (p, topic, args);
+    test_event_post_pack (p, topic, args);
     return 0;
 }
 
@@ -207,6 +375,8 @@ static int priority_cb (flux_plugin_t *p,
                         flux_plugin_arg_t *args,
                         void *arg)
 {
+    test_job_flags (p, topic, args);
+    test_event_post_pack (p, topic, args);
     return 0;
 }
 
@@ -215,6 +385,8 @@ static int depend_cb (flux_plugin_t *p,
                       flux_plugin_arg_t *args,
                       void *arg)
 {
+    test_job_flags (p, topic, args);
+    test_event_post_pack (p, topic, args);
     return test_job_lookup (p, topic, args);
 }
 
@@ -224,10 +396,21 @@ static int validate_cb (flux_plugin_t *p,
                         flux_plugin_arg_t *args,
                         void *arg)
 {
+    test_event_post_pack (p, topic, args);
     return test_job_lookup (p, topic, args);
 }
 
+static int new_cb (flux_plugin_t *p,
+                   const char *topic,
+                   flux_plugin_arg_t *args,
+                   void *arg)
+{
+    test_event_post_pack (p, topic, args);
+    return test_job_flags (p, topic, args);
+}
+
 static const struct flux_plugin_handler tab[] = {
+    { "job.new",            new_cb,      NULL },
     { "job.validate",       validate_cb, NULL },
     { "job.state.priority", priority_cb, NULL },
     { "job.state.depend",   depend_cb,   NULL },

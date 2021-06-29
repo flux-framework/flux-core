@@ -33,6 +33,7 @@ struct job {
 
     uint8_t alloc_queued:1; // queued for alloc, but alloc request not sent
     uint8_t alloc_pending:1;// alloc request sent to sched
+    uint8_t alloc_bypass:1; // alloc bypass enabled
     uint8_t free_pending:1; // free request sent to sched
     uint8_t has_resources:1;
     uint8_t start_pending:1;// start request sent to job-exec
@@ -86,6 +87,15 @@ int job_dependency_count (struct job *job);
 bool job_dependency_event_valid (struct job *job,
                                  const char *event,
                                  const char *description);
+
+
+/*  Set a limited set of flags by name on job
+ */
+int job_flag_set (struct job *job, const char *flag);
+
+/*  Test if flag name 'flag' is a valid job flag
+ */
+bool job_flag_valid (struct job *job, const char *flag);
 
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 
