@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdbool.h>
 #include <czmq.h>
 #include <errno.h>
 #include <stdio.h>
@@ -18,6 +19,8 @@
 
 #include "src/common/libflux/message.h"
 #include "src/common/libtap/tap.h"
+
+static bool verbose = false;
 
 void check_cornercase (void)
 {
@@ -1075,8 +1078,10 @@ void check_copy (void)
 void check_print (void)
 {
     flux_msg_t *msg;
+    char *strpayload = "a.special.payload";
     char buf[] = "xxxxxxxx";
-    FILE *f = fopen ("/dev/null", "w");
+    char buf_long[] = "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ";
+    FILE *f = verbose ? stderr : fopen ("/dev/null", "w");
     if (!f)
         BAIL_OUT ("cannot open /dev/null for writing");
 
@@ -1106,6 +1111,48 @@ void check_print (void)
         "added payload");
     lives_ok ({flux_msg_fprint (f, msg);},
         "flux_msg_fprint doesn't segfault on fully loaded request");
+    flux_msg_destroy (msg);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created test message");
+    ok (flux_msg_set_userid (msg, 42) == 0,
+        "set userid");
+    ok (flux_msg_set_rolemask (msg, FLUX_ROLE_OWNER) == 0,
+        "set rolemask");
+    ok (flux_msg_set_nodeid (msg, 42) == 0,
+        "set nodeid");
+    ok (flux_msg_set_string (msg, strpayload) == 0,
+        "added payload");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on request settings #1");
+    flux_msg_destroy (msg);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created test message");
+    ok (flux_msg_set_rolemask (msg, FLUX_ROLE_USER) == 0,
+        "set rolemask");
+    ok (flux_msg_set_flags (msg, FLUX_MSGFLAG_NORESPONSE | FLUX_MSGFLAG_UPSTREAM) == 0,
+        "set new flags");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on request settings #2");
+    flux_msg_destroy (msg);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created test message");
+    ok (flux_msg_set_rolemask (msg, FLUX_ROLE_ALL) == 0,
+        "set rolemask");
+    ok (flux_msg_set_flags (msg, FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING) == 0,
+        "set new flags");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on request settings #3");
+    flux_msg_destroy (msg);
+
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
+        "created test message");
+    ok (flux_msg_set_payload (msg, buf_long, strlen (buf_long)) == 0,
+        "added long payload");
+    lives_ok ({flux_msg_fprint (f, msg);},
+        "flux_msg_fprint doesn't segfault on long payload");
     flux_msg_destroy (msg);
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)) != NULL,
@@ -1204,6 +1251,13 @@ void check_refcount (void)
 
 int main (int argc, char *argv[])
 {
+    int opt;
+
+    while ((opt = getopt (argc, argv, "v")) != -1) {
+        if (opt == 'v')
+            verbose = true;
+    }
+
     plan (NO_PLAN);
 
     check_cornercase ();
