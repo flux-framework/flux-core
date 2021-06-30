@@ -359,8 +359,7 @@ static int overlay_keepalive_parent (struct overlay *ov, int status)
     if (ov->parent.zsock) {
         if (!(msg = flux_keepalive_encode (0, status)))
             return -1;
-        if (flux_msg_enable_route (msg) < 0)
-            goto error;
+        flux_msg_enable_route (msg);
         if (overlay_sendmsg_parent (ov, msg) < 0)
             goto error;
         flux_msg_destroy (msg);
@@ -454,8 +453,7 @@ int overlay_sendmsg (struct overlay *ov,
                 if (!(flags & FLUX_MSGFLAG_ROUTE)) {
                     if (!(cpy = flux_msg_copy (msg, true)))
                         goto error;
-                    if (flux_msg_enable_route (cpy) < 0)
-                        goto error;
+                    flux_msg_enable_route (cpy);
                     msg = cpy;
                 }
                 if (overlay_sendmsg_parent (ov, msg) < 0)
@@ -513,8 +511,7 @@ static int overlay_mcast_child_one (struct overlay *ov,
 
     if (!(cpy = flux_msg_copy (msg, true)))
         return -1;
-    if (flux_msg_enable_route (cpy) < 0)
-        goto done;
+    flux_msg_enable_route (cpy);
     if (flux_msg_push_route (cpy, child->uuid) < 0)
         goto done;
     if (overlay_sendmsg_child (ov, cpy) < 0)
@@ -642,11 +639,8 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
         hello_response_handler (ov, msg);
         goto handled;
     }
-    if (type == FLUX_MSGTYPE_EVENT) {
-        if (flux_msg_clear_route (msg) < 0) {
-            goto drop;
-        }
-    }
+    if (type == FLUX_MSGTYPE_EVENT)
+        flux_msg_clear_route (msg);
     ov->recv_cb (msg, OVERLAY_UPSTREAM, ov->recv_arg);
 handled:
     flux_msg_destroy (msg);

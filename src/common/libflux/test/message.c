@@ -250,12 +250,11 @@ void check_cornercase (void)
     ok (flux_msg_get_matchtag (evt, &tag) < 0 && errno == EPROTO,
         "flux_msg_get_matchtag fails with EPROTO on msg != req/rsp type");
 
-    errno = 0;
-    ok (flux_msg_enable_route (NULL) == -1 && errno == EINVAL,
-        "flux_msg_enable_route returns -1 errno EINVAL on msg = NULL");
-    errno = 0;
-    ok (flux_msg_clear_route (NULL) == -1 && errno == EINVAL,
-        "flux_msg_clear_route returns -1 errno EINVAL on msg = NULL");
+    lives_ok ({flux_msg_enable_route (NULL);},
+        "flux_msg_enable_route msg=NULL doesnt crash");
+    lives_ok ({flux_msg_clear_route (NULL);},
+        "flux_msg_clear_route msg=NULL doesnt crash");
+
     errno = 0;
     ok (flux_msg_push_route (NULL, "foo") == -1 && errno == EINVAL,
         "flux_msg_push_route returns -1 errno EINVAL on msg = NULL");
@@ -324,9 +323,11 @@ void check_routes (void)
         && flux_msg_frames (msg) == 1,
         "flux_msg_create works and creates msg with 1 frame");
 
-    ok (flux_msg_clear_route (msg) == 0 && flux_msg_frames (msg) == 1,
+    flux_msg_clear_route (msg);
+    ok (flux_msg_frames (msg) == 1,
         "flux_msg_clear_route works, is no-op on msg w/o routes enabled");
-    ok (flux_msg_enable_route (msg) == 0 && flux_msg_frames (msg) == 2,
+    flux_msg_enable_route (msg);
+    ok (flux_msg_frames (msg) == 2,
         "flux_msg_enable_route works, adds one frame on msg w/ routes enabled");
     ok ((flux_msg_get_route_count (msg) == 0),
         "flux_msg_get_route_count returns 0 on msg w/o routes");
@@ -397,7 +398,8 @@ void check_routes (void)
     ok (flux_msg_get_route_count (msg) == 1,
         "flux_msg_get_route_count returns 1 on message w/ id1");
 
-    ok (flux_msg_clear_route (msg) == 0 && flux_msg_frames (msg) == 1,
+    flux_msg_clear_route (msg);
+    ok (flux_msg_frames (msg) == 1,
         "flux_msg_clear_route clear routing frames");
     flux_msg_destroy (msg);
 }
@@ -418,8 +420,7 @@ void check_topic (void)
     like (s, "blorg",
        "and we got back the topic string we set");
 
-    ok (flux_msg_enable_route (msg) == 0,
-        "flux_msg_enable_route works");
+    flux_msg_enable_route (msg);
     ok (flux_msg_push_route (msg, "id1") == 0,
         "flux_msg_push_route works");
     ok (flux_msg_get_topic (msg, &s) == 0,
@@ -647,7 +648,8 @@ void check_payload (void)
     ok (flux_msg_set_topic (msg, NULL) == 0 && flux_msg_frames (msg) == 2,
        "flux_msg_set_topic NULL works");
 
-    ok (flux_msg_enable_route (msg) == 0 && flux_msg_frames (msg) == 3,
+    flux_msg_enable_route (msg);
+    ok (flux_msg_frames (msg) == 3,
         "flux_msg_enable_route works");
     ok (flux_msg_push_route (msg, "id1") == 0 && flux_msg_frames (msg) == 4,
         "flux_msg_push_route works");
@@ -1052,8 +1054,7 @@ void check_copy (void)
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
         "created request");
-    ok (flux_msg_enable_route (msg) == 0,
-        "enable routes");
+    flux_msg_enable_route (msg);
     ok (flux_msg_push_route (msg, "first") == 0,
         "added route 1");
     ok (flux_msg_push_route (msg, "second") == 0,
@@ -1127,8 +1128,7 @@ void check_print (void)
         "created test message");
     ok (flux_msg_set_topic (msg, "foo.bar") == 0,
         "set topic string");
-    ok (flux_msg_enable_route (msg) == 0,
-        "enabled routing");
+    flux_msg_enable_route (msg);
     ok (flux_msg_push_route (msg, "id1") == 0,
         "added one route");
     ok (flux_msg_set_payload (msg, buf, strlen (buf)) == 0,
@@ -1181,8 +1181,7 @@ void check_print (void)
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)) != NULL,
         "created test message");
-    ok (flux_msg_enable_route (msg) == 0,
-        "enabled routing");
+    flux_msg_enable_route (msg);
     lives_ok ({flux_msg_fprint (f, msg);},
         "flux_msg_fprint doesn't segfault on response with empty route stack");
     flux_msg_destroy (msg);
@@ -1248,8 +1247,8 @@ void check_flags (void)
         && (flags & FLUX_MSGFLAG_PAYLOAD),
         "flux_msg_set_payload sets FLUX_MSGFLAG_PAYLOAD");
 
-    ok (flux_msg_enable_route (msg) == 0
-        && flux_msg_get_flags (msg, &flags) == 0
+    flux_msg_enable_route (msg);
+    ok (flux_msg_get_flags (msg, &flags) == 0
         && (flags & FLUX_MSGFLAG_ROUTE),
         "flux_msg_enable_route sets FLUX_MSGFLAG_ROUTE");
 

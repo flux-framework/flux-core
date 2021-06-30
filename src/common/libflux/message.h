@@ -308,15 +308,13 @@ const char *flux_msg_typestr (int type);
 
 /* Prepare a message for routing by setting FLUX_MSGFLAG_ROUTE.  This
  * function is a no-op if the flag is already set.
- * Returns 0 on success, -1 with errno set on failure.
  */
-int flux_msg_enable_route (flux_msg_t *msg);
+void flux_msg_enable_route (flux_msg_t *msg);
 
 /* Clear routes from msg and clear FLUX_MSGFLAG_ROUTE flag.  This
  * function is a no-op if the flag is already clear.
- * Returns 0 on success, -1 with errno set on failure.
  */
-int flux_msg_clear_route (flux_msg_t *msg);
+void flux_msg_clear_route (flux_msg_t *msg);
 
 /* Push a route frame onto the message (mimic what dealer socket does).
  * 'id' is copied internally.

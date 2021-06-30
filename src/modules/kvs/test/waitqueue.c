@@ -255,7 +255,8 @@ int main (int argc, char *argv[])
         snprintf (s, sizeof (s), "%d", i);
         if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
             break;
-        if (flux_msg_enable_route (msg) < 0 || flux_msg_push_route (msg, s) < 0)
+        flux_msg_enable_route (msg);
+        if (flux_msg_push_route (msg, s) < 0)
             break;
         if (!(w = wait_create_msg_handler (NULL, NULL, msg, &count, msghand)))
             break;

@@ -131,8 +131,7 @@ int publisher_send (struct publisher *pub, const flux_msg_t *msg)
 
     if (!(cpy = flux_msg_copy (msg, true)))
         return -1;
-    if (flux_msg_clear_route (cpy) < 0)
-        goto error;
+    flux_msg_clear_route (cpy);
     if (flux_msg_set_seq (cpy, ++pub->seq) < 0)
         goto error_restore_seq;
     send_event (pub, cpy);
@@ -140,7 +139,6 @@ int publisher_send (struct publisher *pub, const flux_msg_t *msg)
     return 0;
 error_restore_seq:
     pub->seq--;
-error:
     flux_msg_destroy (cpy);
     return -1;
 }
