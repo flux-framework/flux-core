@@ -23,6 +23,7 @@ enum job_submit_flags {
     FLUX_JOB_PRE_SIGNED = 1,    // 'jobspec' is already signed
     FLUX_JOB_DEBUG = 2,
     FLUX_JOB_WAITABLE = 4,      // flux_job_wait() will be used on this job
+    FLUX_JOB_NOVALIDATE = 8,    // don't validate jobspec (instance owner only)
 };
 
 enum job_urgency {
