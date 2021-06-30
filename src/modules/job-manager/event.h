@@ -20,6 +20,7 @@
 
 enum job_manager_event_flags {
     EVENT_JOURNAL_ONLY = 1,
+    EVENT_NO_COMMIT =    2,  // Do not commit event to eventlog
 };
 
 /* Take any action for 'job' currently needed based on its internal state.

@@ -701,7 +701,8 @@ int event_job_post_entry (struct event *event,
     if (event_job_update (job, entry) < 0) // modifies job->state
         return -1;
     job->eventlog_seq++;
-    if (event_batch_commit_event (event, job, entry) < 0)
+    if (!(flags & EVENT_NO_COMMIT)
+        && event_batch_commit_event (event, job, entry) < 0)
         return -1;
     if (job->state != old_state) {
         double timestamp;

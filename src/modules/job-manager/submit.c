@@ -131,6 +131,7 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
     json_t *entry = NULL;
     int rv = -1;
 
+    /*  Encode entry by hand to get correct t_submit */
     entry = eventlog_entry_pack (job->t_submit,
                                  "submit",
                                  "{ s:i s:i s:i }",
@@ -138,39 +139,13 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
                                  "urgency", job->urgency,
                                  "flags", job->flags);
     if (!entry)
-        goto error;
+        return -1;
 
-    /* call before eventlog_seq increment below */
-    if (journal_process_event (ctx->journal,
-                               job->id,
-                               job->eventlog_seq,
+    rv = event_job_post_entry (ctx->event,
+                               job,
                                "submit",
-                               entry) < 0)
-        goto error;
-    if (event_job_update (job, entry) < 0) /* NEW -> DEPEND */
-        goto error;
-    job->eventlog_seq++;
-    if (event_batch_pub_state (ctx->event, job, job->t_submit) < 0)
-        goto error;
-
-    /*
-     *  This function skips event_job_post_pack() so call jobtap plugin
-     *   callbacks manually here. The job just transitioned to DEPEND
-     *   state, so topic is "job.state.depend":
-     *
-     *  Note: failure returned from plugin callbacks is currently ignored.
-     */
-    (void) jobtap_call (ctx->jobtap,
-                        job,
-                        "job.state.depend",
-                        "{s:O s:i}",
-                        "entry", entry,
-                        "prev_state", FLUX_JOB_STATE_NEW);
-
-    if (event_job_action (ctx->event, job) < 0)
-        goto error;
-    rv = 0;
- error:
+                               EVENT_NO_COMMIT,
+                               entry);
     json_decref (entry);
     return rv;
 }
