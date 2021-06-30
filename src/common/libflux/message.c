@@ -947,6 +947,7 @@ int flux_msg_clear_route (flux_msg_t *msg)
     while ((r = list_pop (&msg->routes, struct route_id, route_id_node)))
         route_id_destroy (r);
     list_head_init (&msg->routes);
+    msg->routes_len = 0;
     return flux_msg_set_flags (msg, msg->flags & ~(uint8_t)FLUX_MSGFLAG_ROUTE);
 }
 
