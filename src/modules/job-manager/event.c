@@ -318,11 +318,20 @@ int event_job_action (struct event *event, struct job *job)
             break;
         case FLUX_JOB_STATE_DEPEND:
             /*  Post the "depend" event when the job has no more dependency
-             *   references outstanding.
+             *   references outstanding and a depend event hasn't already
+             *   been posted.
+             *
+             *  The job->depend_posted flag is required in the case that
+             *   events are being queued and handled asynchronously, and
+             *   therefore the post of the "depend" event does not immediately
+             *   transition the job to the PRIORITY state.
              */
             if (job_dependency_count (job) == 0
-                && event_job_post_pack (event, job, "depend", 0, NULL) < 0)
-                return -1;
+                && !job->depend_posted) {
+                if (event_job_post_pack (event, job, "depend", 0, NULL) < 0)
+                    return -1;
+                job->depend_posted = 1;
+            }
             break;
         case FLUX_JOB_STATE_PRIORITY:
             /*

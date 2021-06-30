@@ -31,6 +31,7 @@ struct job {
     json_t *end_event;      // event that caused transition to CLEANUP state
     const flux_msg_t *waiter; // flux_job_wait() request
 
+    uint8_t depend_posted:1;// depend event already posted
     uint8_t alloc_queued:1; // queued for alloc, but alloc request not sent
     uint8_t alloc_pending:1;// alloc request sent to sched
     uint8_t alloc_bypass:1; // alloc bypass enabled
