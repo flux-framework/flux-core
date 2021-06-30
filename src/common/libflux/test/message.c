@@ -52,7 +52,7 @@ void check_cornercase (void)
         BAIL_OUT ("flux_msg_create failed");
 
     lives_ok ({flux_msg_destroy (NULL);},
-        "flux_msg_destroy msg=NULL doesnt crash crash");
+        "flux_msg_destroy msg=NULL doesnt crash");
 
     errno = 0;
     ok (flux_msg_aux_set (NULL, "foo", "bar", NULL) < 0 && errno == EINVAL,
@@ -69,7 +69,7 @@ void check_cornercase (void)
     ok (flux_msg_incref (NULL) == NULL && errno == EINVAL,
         "flux_msg_incref msg=NULL fails with EINVAL");
     lives_ok ({flux_msg_decref (NULL);},
-        "flux_msg_decref msg=NULL doesnt crash crash");
+        "flux_msg_decref msg=NULL doesnt crash");
 
     errno = 0;
     ok (flux_msg_encode_size (NULL) < 0 && errno == EINVAL,
@@ -268,7 +268,7 @@ void check_cornercase (void)
         "flux_msg_push_route returns -1 errno EPROTO on msg w/o routes enabled");
     errno = 0;
     ok (flux_msg_pop_route (NULL, NULL) == -1 && errno == EINVAL,
-        "flux_msg_pop_route returns -1 errno EINVAL on id = NULL");
+        "flux_msg_pop_route returns -1 errno EINVAL on msg = NULL");
     errno = 0;
     ok (flux_msg_pop_route (msg, NULL) == -1 && errno == EPROTO,
         "flux_msg_pop_route returns -1 errno EPROTO on msg w/o routes enabled");
@@ -305,8 +305,9 @@ void check_cornercase (void)
     flux_msg_destroy (msg);
 }
 
-/* flux_msg_get_route_first, flux_msg_get_route_last, _get_route_count
- *   on message with variable number of routing frames
+/* flux_msg_get_route_first, flux_msg_get_route_last,
+ *   flux_msg_get_route_count on message with variable number of
+ *   routing frames
  */
 void check_routes (void)
 {
