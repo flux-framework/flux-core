@@ -301,6 +301,13 @@ void check_cornercase (void)
     ok ((flux_msg_get_route_count (msg) == -1 && errno == EPROTO),
         "flux_msg_get_route_count returns -1 errno EPROTO on msg "
         "w/o routes enabled");
+    errno = 0;
+    ok ((flux_msg_get_route_string (NULL) == NULL && errno == EINVAL),
+        "flux_msg_get_route_string returns NULL errno EINVAL on msg = NULL");
+    errno = 0;
+    ok ((flux_msg_get_route_string (msg) == NULL && errno == EPROTO),
+        "flux_msg_get_route_string returns NULL errno EPROTO on msg "
+        "w/o routes enabled");
 
     flux_msg_destroy (msg);
 }
@@ -348,6 +355,12 @@ void check_routes (void)
         "flux_msg_get_route_last returns id on msg w/ id1");
     free (s);
 
+    ok ((s = flux_msg_get_route_string (msg)) != NULL,
+        "flux_msg_get_route_string works");
+    like (s, "sender",
+        "flux_msg_get_route_string returns correct string on msg w/ id1");
+    free (s);
+
     ok (flux_msg_push_route (msg, "router") == 0 && flux_msg_frames (msg) == 4,
         "flux_msg_push_route works and adds a frame");
     ok ((flux_msg_get_route_count (msg) == 2),
@@ -363,6 +376,12 @@ void check_routes (void)
         "flux_msg_get_route_last works");
     like (s, "router",
         "flux_msg_get_route_last returns id2 on message with id1+id2");
+    free (s);
+
+    ok ((s = flux_msg_get_route_string (msg)) != NULL,
+        "flux_msg_get_route_string works");
+    like (s, "sender!router",
+        "flux_msg_get_route_string returns correct string on msg w/ id1+id2");
     free (s);
 
     s = NULL;

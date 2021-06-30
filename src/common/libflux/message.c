@@ -1086,32 +1086,18 @@ static int flux_msg_get_route_size (const flux_msg_t *msg)
     return size;
 }
 
-static char *flux_msg_get_route_nth (const flux_msg_t *msg, int n)
-{
-    struct route_id *r = NULL;
-    int count = 0;
-
-    if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
-        errno = EPROTO;
-        return NULL;
-    }
-    list_for_each (&msg->routes, r, route_id_node) {
-        if (count == n)
-            return r->id;
-        count++;
-    }
-    errno = ENOENT;
-    return NULL;
-}
-
 char *flux_msg_get_route_string (const flux_msg_t *msg)
 {
+    struct route_id *r = NULL;
     int hops, len;
-    int n;
     char *buf, *cp;
 
     if (!msg) {
         errno = EINVAL;
+        return NULL;
+    }
+    if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
+        errno = EPROTO;
         return NULL;
     }
     if ((hops = flux_msg_get_route_count (msg)) < 0
@@ -1119,19 +1105,14 @@ char *flux_msg_get_route_string (const flux_msg_t *msg)
         return NULL;
     if (!(cp = buf = malloc (len + hops + 1)))
         return NULL;
-    for (n = hops - 1; n >= 0; n--) {
-        char *id;
+    list_for_each_rev (&msg->routes, r, route_id_node) {
         if (cp > buf)
             *cp++ = '!';
-        if (!(id = flux_msg_get_route_nth (msg, n))) {
-            ERRNO_SAFE_WRAP (free, buf);
-            return NULL;
-        }
-        int cpylen = strlen (id);
+        int cpylen = strlen (r->id);
         if (cpylen > 8) /* abbreviate long UUID */
             cpylen = 8;
         assert (cp - buf + cpylen < len + hops);
-        memcpy (cp, id, cpylen);
+        memcpy (cp, r->id, cpylen);
         cp += cpylen;
     }
     *cp = '\0';
