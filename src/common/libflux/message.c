@@ -1112,9 +1112,8 @@ char *flux_msg_get_route_string (const flux_msg_t *msg)
         return NULL;
     }
     if ((hops = flux_msg_get_route_count (msg)) < 0
-                    || (len = flux_msg_get_route_size (msg)) < 0) {
+                    || (len = flux_msg_get_route_size (msg)) < 0)
         return NULL;
-    }
     if (!(cp = buf = malloc (len + hops + 1)))
         return NULL;
     for (n = hops - 1; n >= 0; n--) {
