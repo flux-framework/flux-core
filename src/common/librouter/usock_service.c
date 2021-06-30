@@ -49,9 +49,13 @@ static void notify_disconnect (struct service *ss, const char *uuid)
 {
     flux_msg_t *msg;
 
+    /* flux_msg_enable_route() returns void.  To avoid creating an
+     * extra branch, call with C trick to avoid breaking up single if
+     * statement into multiple.
+     */
     if (!(msg = flux_request_encode ("disconnect", NULL))
         || flux_msg_set_noresponse (msg) < 0
-        || flux_msg_enable_route (msg) < 0
+        || (flux_msg_enable_route (msg), false)
         || flux_msg_set_cred (msg, ss->cred) < 0
         || flux_msg_push_route (msg, uuid) < 0
         || flux_requeue (ss->h, msg, FLUX_RQ_TAIL) < 0) {
@@ -87,9 +91,13 @@ static void service_recv (struct usock_conn *uconn, flux_msg_t *msg, void *arg)
     struct service *ss = arg;
     int type = 0;
 
+    /* flux_msg_enable_route() returns void.  To avoid creating an
+     * extra branch, call with C trick to avoid breaking up single if
+     * statement into multiple.
+     */
     if (flux_msg_get_type (msg, &type) < 0
         || type != FLUX_MSGTYPE_REQUEST
-        || flux_msg_enable_route (msg) < 0
+        || (flux_msg_enable_route (msg), false)
         || flux_msg_set_cred (msg, ss->cred) < 0
         || flux_msg_push_route (msg, uuid) < 0
         || flux_requeue (ss->h, msg, FLUX_RQ_TAIL) < 0)

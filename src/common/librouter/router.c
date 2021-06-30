@@ -188,8 +188,7 @@ void router_entry_recv (struct router_entry *entry, flux_msg_t *msg)
                 service_remove_request (entry, msg);
                 break;
             }
-            if (flux_msg_enable_route (msg) < 0)
-                return;
+            flux_msg_enable_route (msg);
             if (flux_msg_push_route (msg, entry->uuid) < 0)
                 return;
             if (disconnect_arm (entry->dcon, msg) < 0)

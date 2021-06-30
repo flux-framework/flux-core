@@ -213,7 +213,8 @@ void basic_remove_tests (void)
         snprintf (s, sizeof (s), "%d", i);
         if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
             break;
-        if (flux_msg_enable_route (msg) < 0 || flux_msg_push_route (msg, s) < 0)
+        flux_msg_enable_route (msg);
+        if (flux_msg_push_route (msg, s) < 0)
             break;
         ok (!kvssync_add (root, cb, NULL, NULL, msg, NULL, i),
             "kvssync_add w/ seq = %d works", i);
