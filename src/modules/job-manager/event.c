@@ -681,44 +681,37 @@ static int event_jobtap_call (struct event *event,
     return 0;
 }
 
-int event_job_post_vpack (struct event *event,
+int event_job_post_entry (struct event *event,
                           struct job *job,
                           const char *name,
                           int flags,
-                          const char *context_fmt,
-                          va_list ap)
+                          json_t *entry)
 {
-    json_t *entry = NULL;
-    int saved_errno;
-    double timestamp;
     flux_job_state_t old_state = job->state;
     int eventlog_seq = (flags & EVENT_JOURNAL_ONLY) ? -1 : job->eventlog_seq;
 
-    if (job->state == FLUX_JOB_STATE_NEW) {
-        errno = EAGAIN;
-        return -1;
-    }
-    if (get_timestamp_now (&timestamp) < 0)
-        goto error;
-    if (!(entry = eventlog_entry_vpack (timestamp, name, context_fmt, ap)))
-        return -1;
     /* call before eventlog_seq increment below */
     if (journal_process_event (event->ctx->journal,
                                job->id,
                                eventlog_seq,
                                name,
                                entry) < 0)
-        goto error;
+        return -1;
     if ((flags & EVENT_JOURNAL_ONLY))
-        goto out;
+        return 0;
     if (event_job_update (job, entry) < 0) // modifies job->state
-        goto error;
+        return -1;
     job->eventlog_seq++;
     if (event_batch_commit_event (event, job, entry) < 0)
-        goto error;
+        return -1;
     if (job->state != old_state) {
+        double timestamp;
+        if (json_unpack (entry, "{s:f}", "timestamp", &timestamp) < 0) {
+            errno = EINVAL;
+            return -1;
+        }
         if (event_batch_pub_state (event, job, timestamp) < 0)
-            goto error;
+            return -1;
     }
 
     /*  Ensure jobtap call happens after the current state is published,
@@ -742,17 +735,35 @@ int event_job_post_vpack (struct event *event,
              && (old_state & FLUX_JOB_STATE_RUNNING))
         event->ctx->running_jobs--;
 
-    if (event_job_action (event, job) < 0)
-        goto error;
+    return event_job_action (event, job);
+}
 
-out:
-    json_decref (entry);
-    return 0;
-error:
+int event_job_post_vpack (struct event *event,
+                          struct job *job,
+                          const char *name,
+                          int flags,
+                          const char *context_fmt,
+                          va_list ap)
+{
+    json_t *entry = NULL;
+    int saved_errno;
+    int rc;
+    double timestamp;
+
+    if (job->state == FLUX_JOB_STATE_NEW) {
+        errno = EAGAIN;
+        return -1;
+    }
+    if (get_timestamp_now (&timestamp) < 0)
+        return -1;
+    if (!(entry = eventlog_entry_vpack (timestamp, name, context_fmt, ap)))
+        return -1;
+    rc = event_job_post_entry (event, job, name, flags, entry);
+
     saved_errno = errno;
     json_decref (entry);
     errno = saved_errno;
-    return -1;
+    return rc;
 }
 
 int event_job_post_pack (struct event *event,
