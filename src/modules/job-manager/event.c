@@ -631,16 +631,6 @@ error:
     return -1;
 }
 
-static int get_timestamp_now (double *timestamp)
-{
-    struct timespec ts;
-    if (clock_gettime (CLOCK_REALTIME, &ts) < 0)
-        return -1;
-    *timestamp = (1E-9 * ts.tv_nsec) + ts.tv_sec;
-    return 0;
-}
-
-
 /*  Call jobtap plugin for event if necessary.
  *  Currently jobtap plugins are called only on state transitions or
  *   update of job urgency via "urgency" event.
@@ -748,15 +738,12 @@ int event_job_post_vpack (struct event *event,
     json_t *entry = NULL;
     int saved_errno;
     int rc;
-    double timestamp;
 
     if (job->state == FLUX_JOB_STATE_NEW) {
         errno = EAGAIN;
         return -1;
     }
-    if (get_timestamp_now (&timestamp) < 0)
-        return -1;
-    if (!(entry = eventlog_entry_vpack (timestamp, name, context_fmt, ap)))
+    if (!(entry = eventlog_entry_vpack (0., name, context_fmt, ap)))
         return -1;
     rc = event_job_post_entry (event, job, name, flags, entry);
 
