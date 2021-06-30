@@ -20,6 +20,7 @@
 
 enum job_manager_event_flags {
     EVENT_JOURNAL_ONLY = 1,
+    EVENT_NO_COMMIT =    2,  // Do not commit event to eventlog
 };
 
 /* Take any action for 'job' currently needed based on its internal state.
@@ -62,6 +63,12 @@ int event_job_post_vpack (struct event *event,
                           int flags,
                           const char *context_fmt,
                           va_list ap);
+
+int event_job_post_entry (struct event *event,
+                          struct job *job,
+                          const char *name,
+                          int flags,
+                          json_t *entry);
 
 void event_ctx_destroy (struct event *event);
 struct event *event_ctx_create (struct job_manager *ctx);
