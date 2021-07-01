@@ -1002,6 +1002,24 @@ error:
     return rv;
 }
 
+int flux_msg_delete_route (flux_msg_t *msg)
+{
+    struct route_id *r;
+    if (!msg) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
+        errno = EPROTO;
+        return -1;
+    }
+    if ((r = list_pop (&msg->routes, struct route_id, route_id_node))) {
+        route_id_destroy (r);
+        msg->routes_len--;
+    }
+    return 0;
+}
+
 /* replaces flux_msg_nexthop */
 int flux_msg_get_route_last (const flux_msg_t *msg, char **id)
 {
