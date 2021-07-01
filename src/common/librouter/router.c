@@ -375,13 +375,11 @@ static void response_cb (flux_t *h,
     struct router *rtr = arg;
     struct router_entry *entry = NULL;
     flux_msg_t *cpy;
-    char *uuid = NULL;
+    const char *uuid = NULL;
 
     if (!(cpy = flux_msg_copy (msg, true)))
         goto error;
-    if (flux_msg_pop_route (cpy, &uuid) < 0) // may set uuid=NULL on success
-        goto error;
-    if (!uuid) {
+    if (!(uuid = flux_msg_get_route_last (cpy))) { // may set uuid=NULL no routes
         errno = EINVAL;
         goto error;
     }
@@ -389,16 +387,15 @@ static void response_cb (flux_t *h,
         errno = EHOSTUNREACH;
         goto error;
     }
+    if (flux_msg_delete_route_last (cpy) < 0)
+        goto error;
     if (entry->send (cpy, entry->arg) < 0) {
         flux_log_error (h, "router: response > client=%.5s", entry->uuid);
         goto error;
     }
-    free (uuid);
+error:
     flux_msg_destroy (cpy);
     return;
-error:
-    ERRNO_SAFE_WRAP (free, uuid);
-    flux_msg_destroy (cpy);
 }
 
 /* Receive event from broker.

@@ -132,7 +132,7 @@ static int service_handle_send (void *impl, const flux_msg_t *msg, int flags)
     struct service *ss = impl;
     int type = 0;
     flux_msg_t *cpy = NULL;
-    char *uuid = NULL;
+    const char *uuid;
     struct usock_conn *uconn;
 
     if (flux_msg_get_type (msg, &type) < 0)
@@ -143,22 +143,24 @@ static int service_handle_send (void *impl, const flux_msg_t *msg, int flags)
     }
     if (!(cpy = flux_msg_copy (msg, true)))
         return -1;
-    if (flux_msg_pop_route (cpy, &uuid) < 0)
+    if (!(uuid = flux_msg_get_route_last (cpy))) {
+        errno = EPROTO;
         goto error;
+    }
     if (flux_msg_set_cred (cpy, ss->cred) < 0)
         goto error;
     if (!(uconn = zhashx_lookup (ss->connections, uuid))) {
         errno = ENOENT;
         goto error;
     }
+    if (flux_msg_delete_route_last (cpy) < 0)
+        goto error;
     if (usock_conn_send (uconn, cpy) < 0)
         goto error;
     flux_msg_decref (cpy);
-    free (uuid);
     return 0;
 error:
     flux_msg_decref (cpy);
-    ERRNO_SAFE_WRAP (free, uuid);
     return -1;
 }
 

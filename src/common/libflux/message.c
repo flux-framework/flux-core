@@ -967,41 +967,6 @@ int flux_msg_push_route (flux_msg_t *msg, const char *id)
     return 0;
 }
 
-int flux_msg_pop_route (flux_msg_t *msg, char **id)
-{
-    struct route_id *r;
-    int rv = -1;
-
-    /* do not check 'id' for NULL, a "pop" is acceptable w/o returning
-     * data to the user.  Caller may wish to only "pop" and not look
-     * at the data.
-     */
-    if (!msg) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
-        errno = EPROTO;
-        return -1;
-    }
-    if (list_empty (&msg->routes)) {
-        if (id)
-            (*id) = NULL;
-        return 0;
-    }
-    r = list_pop (&msg->routes, struct route_id, route_id_node);
-    assert (r);
-    if (id) {
-        if (!((*id) = strdup (r->id)))
-            goto error;
-    }
-    rv = 0;
-error:
-    route_id_destroy (r);
-    msg->routes_len--;
-    return rv;
-}
-
 int flux_msg_delete_route_last (flux_msg_t *msg)
 {
     struct route_id *r;
