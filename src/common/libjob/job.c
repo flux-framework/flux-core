@@ -68,22 +68,6 @@ error:
     flux_security_destroy (sec);
     return NULL;
 }
-
-static int attr_get_u32 (flux_t *h, const char *name, uint32_t *val)
-{
-    const char *s;
-    uint32_t v;
-
-    if (!(s = flux_attr_get (h, name)))
-        return -1;
-    errno = 0;
-    v = strtoul (s, NULL, 10);
-    if (errno != 0)
-        return -1;
-    *val = v;
-    return 0;
-}
-
 #endif
 
 flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int urgency,
@@ -107,12 +91,12 @@ flux_future_t *flux_job_submit (flux_t *h, const char *jobspec, int urgency,
         /* Security note:
          * Instance owner jobs do not need a cryptographic signature since
          * they do not require the IMP to be executed.  Force the signing
-         * mechanism to 'none' if the 'security.owner' broker attribute
-         * == getuid() to side-step the requirement that the munge daemon
-         * is running for single user instances compiled --with-flux-security,
-         * as described in flux-framework/flux-core#3305.
+         * mechanism to 'none' if the connector can provide owner userid and
+         * owner == getuid().  This side-steps the requirement that the
+         * munge daemon is running for single user instances compiled
+         * --with-flux-security, as described in flux-framework/flux-core#3305.
          */
-        if (attr_get_u32 (h, "security.owner", &owner) == 0
+        if (flux_opt_get (h, "flux::owner", &owner, sizeof (owner)) == 0
                 && getuid () == owner)
             mech = "none";
         if (!(sec = get_security_ctx (h, &f)))

@@ -385,11 +385,15 @@ void usock_server_destroy (struct usock_server *server)
     }
 }
 
-static int get_socket_peercred (int fd, struct flux_msg_cred *cred)
+int usock_get_cred (int fd, struct flux_msg_cred *cred)
 {
     struct ucred ucred;
     socklen_t crlen;
 
+    if (fd < 0 || !cred) {
+        errno = EINVAL;
+        return -1;
+    }
     crlen = sizeof (ucred);
     if (getsockopt (fd,
                     SOL_SOCKET,
@@ -459,7 +463,7 @@ static struct usock_conn *server_accept (struct usock_server *server,
     if ((cfd = accept4 (server->fd, NULL, NULL, SOCK_CLOEXEC)) < 0)
         return NULL;
     if (!(conn = usock_conn_create (r, cfd, cfd))
-                        || get_socket_peercred (cfd, &conn->cred) < 0) {
+                        || usock_get_cred (cfd, &conn->cred) < 0) {
         ERRNO_SAFE_WRAP (close, cfd);
         return NULL;
     }

@@ -94,6 +94,7 @@ TESTSCRIPTS = \
 	t1105-proxy.t \
 	t1106-ssh-connector.t \
 	t1107-heartbeat.t \
+	t1108-local-opt.t \
 	t2004-hydra.t \
 	t2005-hwloc-basic.t \
 	t2006-hwloc-versions.t \
@@ -325,7 +326,8 @@ check_PROGRAMS = \
 	debug/stall \
 	hwloc/hwloc-convert \
 	hwloc/hwloc-version \
-	util/jobspec1-validate
+	util/jobspec1-validate \
+	util/handle
 
 if HAVE_MPI
 check_PROGRAMS += \
@@ -801,4 +803,9 @@ hwloc_hwloc_version_LDADD = $(HWLOC_LIBS) \
 util_jobspec1_validate_SOURCES = util/jobspec1-validate.c
 util_jobspec1_validate_CPPFLAGS = $(test_cppflags)
 util_jobspec1_validate_LDADD = \
+	$(test_ldadd) $(LIBDL)
+
+util_handle_SOURCES = util/handle.c
+util_handle_CPPFLAGS = $(test_cppflags)
+util_handle_LDADD = \
 	$(test_ldadd) $(LIBDL)
