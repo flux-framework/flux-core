@@ -61,7 +61,7 @@ enum {
     FLUX_POLLERR = 4,
 };
 
-/* Options for flux_setopt().
+/* Options for flux_opt_set().
  * (Connectors may define custom option names)
  */
 #define FLUX_OPT_TESTING_USERID     "flux::testing_userid"
