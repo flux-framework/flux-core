@@ -266,11 +266,12 @@ void check_cornercase (void)
     ok (flux_msg_push_route (msg, "foo") == -1 && errno == EPROTO,
         "flux_msg_push_route returns -1 errno EPROTO on msg w/o routes enabled");
     errno = 0;
-    ok (flux_msg_pop_route (NULL, NULL) == -1 && errno == EINVAL,
-        "flux_msg_pop_route returns -1 errno EINVAL on msg = NULL");
+    ok (flux_msg_pop_route (NULL) == NULL && errno == EINVAL,
+        "flux_msg_pop_route returns NULL errno EINVAL on msg = NULL");
     errno = 0;
-    ok (flux_msg_pop_route (msg, NULL) == -1 && errno == EPROTO,
-        "flux_msg_pop_route returns -1 errno EPROTO on msg w/o routes enabled");
+    ok (flux_msg_pop_route (msg) == NULL && errno == EPROTO,
+        "flux_msg_pop_route returns NULL errno EPROTO on msg "
+        "w/o routes enabled");
     errno = 0;
     ok (flux_msg_delete_route (NULL) == -1 && errno == EINVAL,
         "flux_msg_delete_route returns -1 errno EINVAL on id = NULL");
@@ -329,8 +330,8 @@ void check_routes (void)
         "flux_msg_enable_route works, adds one frame on msg w/ routes enabled");
     ok ((flux_msg_get_route_count (msg) == 0),
         "flux_msg_get_route_count returns 0 on msg w/o routes");
-    ok (flux_msg_pop_route (msg, &s) == 0 && s == NULL,
-        "flux_msg_pop_route works and sets id to NULL on msg w/o routes");
+    ok (flux_msg_pop_route (msg) == NULL,
+        "flux_msg_pop_route returns NULL on msg w/o routes");
 
     ok ((route = flux_msg_get_route_first (msg)) == NULL,
         "flux_msg_get_route_first returns NULL on msg w/o routes");
@@ -378,8 +379,7 @@ void check_routes (void)
         "flux_msg_get_route_string returns correct string on msg w/ id1+id2");
     free (s);
 
-    s = NULL;
-    ok (flux_msg_pop_route (msg, &s) == 0 && s != NULL,
+    ok ((s = flux_msg_pop_route (msg)) != NULL,
         "flux_msg_pop_route works on msg w/routes");
     like (s, "router",
         "flux_msg_pop_route returns id2 on message with id1+id2");
@@ -1073,15 +1073,13 @@ void check_copy (void)
              && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
         "copy is request: w/routes, topic, and payload");
 
-    s = NULL;
-    ok (flux_msg_pop_route (cpy, &s) == 0 && s != NULL,
+    ok ((s = flux_msg_pop_route (cpy)) != NULL,
         "flux_msg_pop_route pops route from copy");
     like (s, "second",
           "flux_msg_pop_route returns correct second route");
     free (s);
 
-    s = NULL;
-    ok (flux_msg_pop_route (cpy, &s) == 0 && s != NULL,
+    ok ((s = flux_msg_pop_route (cpy)) != NULL,
         "flux_msg_pop_route pops route from copy");
     like (s, "first",
           "flux_msg_pop_route returns correct first route");

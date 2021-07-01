@@ -143,8 +143,10 @@ static int service_handle_send (void *impl, const flux_msg_t *msg, int flags)
     }
     if (!(cpy = flux_msg_copy (msg, true)))
         return -1;
-    if (flux_msg_pop_route (cpy, &uuid) < 0)
+    if (!(uuid = flux_msg_pop_route (cpy))) {
+        errno = EPROTO;
         goto error;
+    }
     if (flux_msg_set_cred (cpy, ss->cred) < 0)
         goto error;
     if (!(uconn = zhashx_lookup (ss->connections, uuid))) {

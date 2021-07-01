@@ -379,9 +379,7 @@ static void response_cb (flux_t *h,
 
     if (!(cpy = flux_msg_copy (msg, true)))
         goto error;
-    if (flux_msg_pop_route (cpy, &uuid) < 0) // may set uuid=NULL on success
-        goto error;
-    if (!uuid) {
+    if (!(uuid = flux_msg_pop_route (cpy))) { // may set uuid=NULL no routes
         errno = EINVAL;
         goto error;
     }

@@ -324,11 +324,12 @@ int flux_msg_clear_route (flux_msg_t *msg);
  */
 int flux_msg_push_route (flux_msg_t *msg, const char *id);
 
-/* Pop a route frame off the message and return identity (or NULL) in 'id'.
- * Caller must free 'id'.
- * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
+/* Pop a route frame off the message and return identity.  Or NULL if no routes exist.
+ * Caller must free the returned id.
+ * Returns id on success, NULL for no route or error with errno set
+ * (e.g. EPROTO) on failure.
  */
-int flux_msg_pop_route (flux_msg_t *msg, char **id);
+char *flux_msg_pop_route (flux_msg_t *msg);
 
 /* Delete route frame off the message.  Similar to
  * flux_msg_pop_route(), but avoids the extra memory allocation/free.
