@@ -199,9 +199,7 @@ void flux_msg_destroy (flux_msg_t *msg)
 {
     if (msg && --msg->refcount == 0) {
         int saved_errno = errno;
-        struct route_id *r;
-        while ((r = list_pop (&msg->routes, struct route_id, route_id_node)))
-            route_id_destroy (r);
+        (void) flux_msg_clear_route (msg);
         free (msg->topic);
         free (msg->payload);
         json_decref (msg->json);
