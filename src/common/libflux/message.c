@@ -972,6 +972,7 @@ int flux_msg_push_route (flux_msg_t *msg, const char *id)
 int flux_msg_pop_route (flux_msg_t *msg, char **id)
 {
     struct route_id *r;
+    int rv = -1;
 
     /* do not check 'id' for NULL, a "pop" is acceptable w/o returning
      * data to the user.  Caller may wish to only "pop" and not look
@@ -994,11 +995,13 @@ int flux_msg_pop_route (flux_msg_t *msg, char **id)
     assert (r);
     if (id) {
         if (!((*id) = strdup (r->id)))
-            return -1;
+            goto error;
     }
+    rv = 0;
+error:
     route_id_destroy (r);
     msg->routes_len--;
-    return 0;
+    return rv;
 }
 
 /* replaces flux_msg_nexthop */
