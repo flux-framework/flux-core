@@ -31,6 +31,7 @@ struct local_connector {
     struct usock_client *uclient;
     uint32_t testing_userid;
     uint32_t testing_rolemask;
+    uint32_t owner;
     flux_t *h;
     int fd;
 };
@@ -165,6 +166,29 @@ done:
     return rc;
 }
 
+static int op_getopt (void *impl, const char *option,
+                      void *val, size_t size)
+{
+    struct local_connector *ctx = impl;
+    size_t val_size;
+    int rc = -1;
+
+    if (option && !strcmp (option, "flux::owner")) {
+        val_size = sizeof (ctx->owner);
+        if (size != val_size) {
+            errno = EINVAL;
+            goto done;
+        }
+        memcpy (val, &ctx->owner, val_size);
+    } else {
+        errno = EINVAL;
+        goto done;
+    }
+    rc = 0;
+done:
+    return rc;
+}
+
 static void op_fini (void *impl)
 {
     struct local_connector *ctx = impl;
@@ -204,6 +228,7 @@ flux_t *connector_init (const char *path, int flags)
 {
     struct local_connector *ctx;
     struct usock_retry_params retry = USOCK_RETRY_DEFAULT;
+    struct flux_msg_cred server_cred;
 
     if (!path || override_retry_count (&retry) < 0) {
         errno = EINVAL;
@@ -214,10 +239,14 @@ flux_t *connector_init (const char *path, int flags)
 
     ctx->testing_userid = FLUX_USERID_UNKNOWN;
     ctx->testing_rolemask = FLUX_ROLE_NONE;
+    ctx->owner = FLUX_USERID_UNKNOWN;
 
     ctx->fd = usock_client_connect (path, retry);
     if (ctx->fd < 0)
         goto error;
+    if (usock_get_cred (ctx->fd, &server_cred) < 0)
+        goto error;
+    ctx->owner = server_cred.userid;
     if (!(ctx->uclient = usock_client_create (ctx->fd)))
         goto error;
     if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))
@@ -236,7 +265,7 @@ static const struct flux_handle_ops handle_ops = {
     .event_subscribe = op_event_subscribe,
     .event_unsubscribe = op_event_unsubscribe,
     .setopt = op_setopt,
-    .getopt = NULL,
+    .getopt = op_getopt,
     .impl_destroy = op_fini,
 };
 
