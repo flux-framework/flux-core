@@ -38,7 +38,7 @@ void test_server_environment_init (const char *test_name);
 
 
 /* Create a loopback connector for testing.
- * The net effect is much the same as flux_open("local://") except
+ * The net effect is much the same as flux_open("loop://") except
  * the implementation is self contained here.  Close with flux_close().
  *
  * Like loop://, this support test manipulation of credentials:
