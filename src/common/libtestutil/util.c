@@ -237,7 +237,7 @@ static int test_connector_send (void *impl, const flux_msg_t *msg, int flags)
                 goto error;
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            if (flux_msg_pop_route (cpy, NULL) < 0)
+            if (flux_msg_delete_route_last (cpy) < 0)
                 goto error;
             break;
     }

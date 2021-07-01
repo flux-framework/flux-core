@@ -271,6 +271,13 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_pop_route (msg, NULL) == -1 && errno == EPROTO,
         "flux_msg_pop_route returns -1 errno EPROTO on msg w/o routes enabled");
+    errno = 0;
+    ok (flux_msg_delete_route_last (NULL) == -1 && errno == EINVAL,
+        "flux_msg_delete_route_last returns -1 errno EINVAL on id = NULL");
+    errno = 0;
+    ok (flux_msg_delete_route_last (msg) == -1 && errno == EPROTO,
+        "flux_msg_delete_route_last returns -1 errno EPROTO on msg "
+        "w/o routes enabled");
     ok (flux_msg_get_route_first (NULL) == NULL,
         "flux_msg_get_route_first returns NULL on msg = NULL");
     ok (flux_msg_get_route_first (msg) == NULL,
@@ -372,6 +379,18 @@ void check_routes (void)
     like (s, "router",
         "flux_msg_pop_route returns id2 on message with id1+id2");
     free (s);
+    ok (flux_msg_get_route_count (msg) == 1,
+        "flux_msg_get_route_count returns 1 on message w/ id1");
+
+    ok (flux_msg_push_route (msg, "router2") == 0 && flux_msg_frames (msg) == 4,
+        "flux_msg_push_route works and adds a frame");
+    ok ((flux_msg_get_route_count (msg) == 2),
+        "flux_msg_get_route_count returns 2 on msg w/ id1+id2");
+
+    ok (flux_msg_delete_route_last (msg) == 0 && flux_msg_frames (msg) == 3,
+        "flux_msg_delete_route_last works and removed a frame");
+    ok (flux_msg_get_route_count (msg) == 1,
+        "flux_msg_get_route_count returns 1 on message w/ id1");
 
     ok (flux_msg_clear_route (msg) == 0 && flux_msg_frames (msg) == 1,
         "flux_msg_clear_route clear routing frames");

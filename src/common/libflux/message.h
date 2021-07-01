@@ -331,6 +331,13 @@ int flux_msg_push_route (flux_msg_t *msg, const char *id);
  */
 int flux_msg_pop_route (flux_msg_t *msg, char **id);
 
+/* Delete last route frame off the message.  Similar to
+ * flux_msg_pop_route(), but avoids the extra memory allocation/free.
+ *
+ * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
+ */
+int flux_msg_delete_route_last (flux_msg_t *msg);
+
 /* Return the first route (e.g. first pushed route) or NULL if there
  * are no routes.
  * For requests, this is the sender; for responses, this is the recipient.

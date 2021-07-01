@@ -600,8 +600,8 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
              * were a request, but the effect we want for responses is to have
              * a route popped off at each router hop.
              */
-            (void)flux_msg_pop_route (msg, NULL); // child id from ROUTER
-            (void)flux_msg_pop_route (msg, NULL); // my id
+            (void)flux_msg_delete_route_last (msg); // child id from ROUTER
+            (void)flux_msg_delete_route_last (msg); // my id
             break;
         case FLUX_MSGTYPE_EVENT:
             break;
