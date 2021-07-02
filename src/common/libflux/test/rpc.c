@@ -316,7 +316,7 @@ void test_service (flux_t *h)
         && (cred.rolemask & FLUX_ROLE_OWNER),
         "response has cred.userid=UID, cred.rolemask including OWNER");
     errno = 0;
-    rc = flux_msg_get_route_count (msg);
+    rc = flux_msg_route_count (msg);
     ok ((rc == -1 && errno == EINVAL) || (rc == 0),
         "response has no residual route stack");
     flux_future_destroy (r);

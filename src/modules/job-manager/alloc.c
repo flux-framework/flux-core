@@ -420,7 +420,7 @@ static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EPROTO;
         goto error;
     }
-    if (!(sender = flux_msg_get_route_first (msg))) {
+    if (!(sender = flux_msg_route_first (msg))) {
         flux_log (h, LOG_ERR, "%s: flux_msg_get_route_first: sender is NULL",
                   __FUNCTION__);
         goto error;
@@ -774,7 +774,7 @@ void alloc_disconnect_rpc (flux_t *h,
 
     if (alloc->sched_sender) {
         const char *sender;
-        if ((sender = flux_msg_get_route_first (msg))
+        if ((sender = flux_msg_route_first (msg))
             && !strcmp (sender, alloc->sched_sender))
             interface_teardown (ctx->alloc, "disconnect", 0);
     }

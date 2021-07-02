@@ -167,7 +167,7 @@ bool msgcmp (const flux_msg_t *msg, void *arg)
 {
     const char *id;
     bool match = false;
-    if ((id = flux_msg_get_route_first (msg))
+    if ((id = flux_msg_route_first (msg))
         && (!strcmp (id, "1")
             || !strcmp (id, "2")
             || !strcmp (id, "3")
@@ -213,8 +213,8 @@ void basic_remove_tests (void)
         snprintf (s, sizeof (s), "%d", i);
         if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
             break;
-        flux_msg_enable_route (msg);
-        if (flux_msg_push_route (msg, s) < 0)
+        flux_msg_route_enable (msg);
+        if (flux_msg_route_push (msg, s) < 0)
             break;
         ok (!kvssync_add (root, cb, NULL, NULL, msg, NULL, i),
             "kvssync_add w/ seq = %d works", i);

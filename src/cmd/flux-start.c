@@ -862,7 +862,7 @@ void disconnect_cb (flux_t *h,
 {
     const char *uuid;
 
-    if (!(uuid = flux_msg_get_route_first (msg)))
+    if (!(uuid = flux_msg_route_first (msg)))
         return;
     if (ctx.verbose >= 1)
         log_msg ("disconnect from %.5s", uuid);

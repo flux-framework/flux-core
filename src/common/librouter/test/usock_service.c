@@ -64,7 +64,7 @@ void disconnect_cb (flux_t *h,
                     void *arg)
 {
     const char *uuid;
-    if ((uuid = flux_msg_get_route_first (msg)))
+    if ((uuid = flux_msg_route_first (msg)))
         diag ("disconnect from %.5s", uuid);
     flux_reactor_stop (flux_get_reactor (h));
 }

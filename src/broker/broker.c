@@ -1081,7 +1081,7 @@ static void broker_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     const char *sender;
 
-    if ((sender = flux_msg_get_route_first (msg)))
+    if ((sender = flux_msg_route_first (msg)))
         exec_terminate_subprocesses_by_uuid (h, sender);
     /* no response */
 }
@@ -1095,7 +1095,7 @@ static void broker_sub_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         goto error;
-    if (!(uuid = flux_msg_get_route_first (msg))) {
+    if (!(uuid = flux_msg_route_first (msg))) {
         errno = EPROTO;
         goto error;
     }
@@ -1122,7 +1122,7 @@ static void broker_unsub_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
         goto error;
-    if (!(uuid = flux_msg_get_route_first (msg))) {
+    if (!(uuid = flux_msg_route_first (msg))) {
         errno = EPROTO;
         goto error;
     }
@@ -1182,7 +1182,7 @@ static void service_add_cb (flux_t *h, flux_msg_handler_t *w,
         goto error;
     if (service_allow (cred, name) < 0)
         goto error;
-    if (!(sender = flux_msg_get_route_first (msg))) {
+    if (!(sender = flux_msg_route_first (msg))) {
         errno = EPROTO;
         goto error;
     }
@@ -1214,7 +1214,7 @@ static void service_remove_cb (flux_t *h, flux_msg_handler_t *w,
         goto error;
     if (service_allow (cred, name) < 0)
         goto error;
-    if (!(sender = flux_msg_get_route_first (msg))) {
+    if (!(sender = flux_msg_route_first (msg))) {
         errno = EPROTO;
         goto error;
     }
@@ -1468,7 +1468,7 @@ static void module_cb (module_t *p, void *arg)
             (void)broker_response_sendmsg (ctx, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
-            count = flux_msg_get_route_count (msg);
+            count = flux_msg_route_count (msg);
             /* Requests originated by the broker module will have a route
              * count of 1.  Ensure that, when the module is unloaded, a
              * disconnect message is sent to all services used by broker module.
@@ -1693,7 +1693,7 @@ static int broker_response_sendmsg (broker_ctx_t *ctx, const flux_msg_t *msg)
     int rc;
     const char *uuid;
 
-    if (!(uuid = flux_msg_get_route_last (msg)))
+    if (!(uuid = flux_msg_route_last (msg)))
         rc = flux_requeue (ctx->h, msg, FLUX_RQ_TAIL);
     else if (overlay_uuid_is_parent (ctx->overlay, uuid))
         rc = overlay_sendmsg (ctx->overlay, msg, OVERLAY_UPSTREAM);

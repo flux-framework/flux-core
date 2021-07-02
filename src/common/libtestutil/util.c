@@ -231,12 +231,12 @@ static int test_connector_send (void *impl, const flux_msg_t *msg, int flags)
         goto error;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            flux_msg_enable_route (cpy);
-            if (flux_msg_push_route (cpy, "test") < 0)
+            flux_msg_route_enable (cpy);
+            if (flux_msg_route_push (cpy, "test") < 0)
                 goto error;
             break;
         case FLUX_MSGTYPE_RESPONSE:
-            if (flux_msg_delete_route (cpy) < 0)
+            if (flux_msg_route_delete (cpy) < 0)
                 goto error;
             break;
     }
