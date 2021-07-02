@@ -39,48 +39,9 @@
 
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/errno_safe.h"
-/* czmq and ccan both define streq */
-#ifdef streq
-#undef streq
-#endif
-#include "src/common/libccan/ccan/list/list.h"
 
 #include "message.h"
-
-struct flux_msg {
-    // optional route list, if FLUX_MSGFLAG_ROUTE
-    struct list_head routes;
-    int routes_len;     /* to avoid looping */
-
-    // optional topic frame, if FLUX_MSGFLAG_TOPIC
-    char *topic;
-
-    // optional payload frame, if FLUX_MSGFLAG_PAYLOAD
-    void *payload;
-    size_t payload_size;
-
-    // required proto frame data
-    uint8_t type;
-    uint8_t flags;
-    uint32_t userid;
-    uint32_t rolemask;
-    union {
-        uint32_t nodeid;  // request
-        uint32_t sequence; // event
-        uint32_t errnum; // response, keepalive
-        uint32_t aux1; // common accessor
-    };
-    union {
-        uint32_t matchtag; // request, response
-        uint32_t status; // keepalive
-        uint32_t aux2; // common accessor
-    };
-
-    json_t *json;
-    char *lasterr;
-    struct aux_item *aux;
-    int refcount;
-};
+#include "message_private.h"
 
 struct route_id {
     struct list_node route_id_node;
