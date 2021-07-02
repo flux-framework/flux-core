@@ -1427,15 +1427,14 @@ error:
 
 struct typemap {
     const char *name;
-    const char *sname;
     int type;
 };
 
 static struct typemap typemap[] = {
-    { "request", ">", FLUX_MSGTYPE_REQUEST },
-    { "response", "<", FLUX_MSGTYPE_RESPONSE},
-    { "event", "e", FLUX_MSGTYPE_EVENT},
-    { "keepalive", "k", FLUX_MSGTYPE_KEEPALIVE},
+    { "request", FLUX_MSGTYPE_REQUEST },
+    { "response", FLUX_MSGTYPE_RESPONSE},
+    { "event", FLUX_MSGTYPE_EVENT},
+    { "keepalive", FLUX_MSGTYPE_KEEPALIVE},
 };
 static const int typemap_len = sizeof (typemap) / sizeof (typemap[0]);
 
@@ -1449,13 +1448,21 @@ const char *flux_msg_typestr (int type)
     return "unknown";
 }
 
+static struct typemap stypemap[] = {
+    { ">", FLUX_MSGTYPE_REQUEST },
+    { "<", FLUX_MSGTYPE_RESPONSE},
+    { "e", FLUX_MSGTYPE_EVENT},
+    { "k", FLUX_MSGTYPE_KEEPALIVE},
+};
+static const int stypemap_len = sizeof (stypemap) / sizeof (stypemap[0]);
+
 static const char *type2prefix (int type)
 {
     int i;
 
     for (i = 0; i < typemap_len; i++)
-        if ((type & typemap[i].type))
-            return typemap[i].sname;
+        if ((type & stypemap[i].type))
+            return stypemap[i].name;
     return "?";
 }
 
