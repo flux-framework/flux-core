@@ -703,7 +703,7 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     cali_begin_string (h->prof.msg_match_glob,
                        match.topic_glob ? match.topic_glob : "NONE");
     const char *sender;
-    sender = flux_msg_get_route_first (msg);
+    sender = flux_msg_route_first (msg);
     if (sender)
         cali_begin_string (h->prof.msg_sender, sender);
     profiling_msg_snapshot (h, msg, flags, "recv");

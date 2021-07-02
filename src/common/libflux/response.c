@@ -139,7 +139,7 @@ static flux_msg_t *response_encode (const char *topic, int errnum)
         goto error;
     if (flux_msg_set_topic (msg, topic) < 0)
         goto error;
-    flux_msg_enable_route (msg);
+    flux_msg_route_enable (msg);
     if (flux_msg_set_errnum (msg, errnum) < 0)
         goto error;
     return msg;

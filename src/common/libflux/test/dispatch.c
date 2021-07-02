@@ -114,8 +114,8 @@ void test_fastpath (flux_t *h)
     ok (cb_called == 1,
         "message handler was called after being started");
 
-    flux_msg_enable_route (msg);
-    ok (flux_msg_push_route (msg, "myuuid") == 0,
+    flux_msg_route_enable (msg);
+    ok (flux_msg_route_push (msg, "myuuid") == 0,
         "added route to message");
     ok (flux_send (h, msg, 0) == 0,
         "sent response message on loop connector");
@@ -351,9 +351,9 @@ void test_response_with_routes (flux_t *h)
         "foo.bar RPC response created");
     if (flux_msg_set_matchtag (msg, mtag) < 0)
         BAIL_OUT ("flux_msg_set_matchtag failed");
-    flux_msg_enable_route (msg);
-    if (flux_msg_push_route (msg, "9") < 0)
-        BAIL_OUT ("flux_msg_push_route failed");
+    flux_msg_route_enable (msg);
+    if (flux_msg_route_push (msg, "9") < 0)
+        BAIL_OUT ("flux_msg_route_push failed");
 
     /* register RPC response handler */
     match.matchtag = mtag;

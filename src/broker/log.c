@@ -598,7 +598,7 @@ static int cmp_sender (const flux_msg_t *msg, const char *uuid)
 {
     const char *sender;
 
-    if (!(sender = flux_msg_get_route_first (msg)))
+    if (!(sender = flux_msg_route_first (msg)))
         return 0;
     if (!sender || strcmp (sender, uuid) != 0)
         return 0;
@@ -614,7 +614,7 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
     zlist_t *tmp = NULL;
 
     assert (logbuf->magic == LOGBUF_MAGIC);
-    if (!(sender = flux_msg_get_route_first (msg)))
+    if (!(sender = flux_msg_route_first (msg)))
         goto done;
     msgp = zlist_first (logbuf->followers);
     while (msgp) {

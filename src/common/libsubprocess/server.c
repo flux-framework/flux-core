@@ -530,7 +530,7 @@ const char *subprocess_sender (flux_subprocess_t *p)
     struct rexec *rex = flux_subprocess_aux_get (p, auxkey);
     const char *sender;
 
-    if (!rex || !(sender = flux_msg_get_route_first (rex->msg)))
+    if (!rex || !(sender = flux_msg_route_first (rex->msg)))
         return NULL;
 
     return sender;

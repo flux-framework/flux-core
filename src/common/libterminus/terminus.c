@@ -758,7 +758,7 @@ static void disconnect_cb (flux_t *h,
     struct terminus_session *s;
     const char *sender;
 
-    if (!(sender = flux_msg_get_route_first (msg))) {
+    if (!(sender = flux_msg_route_first (msg))) {
         llog_error (ts, "flux_msg_get_route_first: uuid is NULL!");
         return;
     }

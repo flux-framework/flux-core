@@ -329,7 +329,7 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
                              "name", &name,
                              "nprocs", &nprocs) < 0)
         goto error;
-    if (!(sender = flux_msg_get_route_first (msg))) {
+    if (!(sender = flux_msg_route_first (msg))) {
         errno = EPROTO;
         goto error;
     }
@@ -367,7 +367,7 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_msg_get_cred (msg, &cred) < 0)
         goto error;
-    if (!(sender = flux_msg_get_route_first (msg))) {
+    if (!(sender = flux_msg_route_first (msg))) {
         errno = EPROTO;
         goto error;
     }

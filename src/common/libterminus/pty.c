@@ -102,7 +102,7 @@ static struct pty_client *pty_client_create (const flux_msg_t *msg)
 
     if (!(c = calloc (1, sizeof (*c))))
         return NULL;
-    if (!(uuid = flux_msg_get_route_first (msg))) {
+    if (!(uuid = flux_msg_route_first (msg))) {
         errno = EPROTO;
         goto error;
     }
@@ -133,7 +133,7 @@ static struct pty_client *pty_client_find_sender (struct flux_pty *pty,
     struct pty_client *c = NULL;
     const char *uuid;
 
-    if (!(uuid = flux_msg_get_route_first (msg))) {
+    if (!(uuid = flux_msg_route_first (msg))) {
         llog_error (pty, "flux_msg_get_route_first: uuid is NULL!");
         return NULL;
     }
