@@ -352,7 +352,7 @@ int flux_msg_get_route_last (const flux_msg_t *msg, char **id);
 int flux_msg_get_route_count (const flux_msg_t *msg);
 
 /* Return a string representing the route stack in message.
- * Return NULL if there is no route delimiter; empty string if
+ * Return NULL if routes are not enabled; empty string if
  * the route stack contains no route frames).
  * Caller must free the returned string.
  */
