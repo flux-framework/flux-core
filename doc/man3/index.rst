@@ -67,6 +67,7 @@ man3
    flux_shell_task_subprocess
    flux_signal_watcher_create
    flux_stat_watcher_create
+   flux_sync_create
    flux_timer_watcher_create
    flux_watcher_start
    flux_zmq_watcher_create

@@ -147,7 +147,7 @@ static struct optparse_option cancelall_opts[] =  {
     { .name = "force", .key = 'f', .has_arg = 0,
       .usage = "Confirm the command",
     },
-    { .name = "quiet", .key = 'f', .has_arg = 0,
+    { .name = "quiet", .key = 'q', .has_arg = 0,
       .usage = "Suppress output if no jobs match",
     },
     OPTPARSE_TABLE_END
