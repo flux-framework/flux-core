@@ -291,10 +291,6 @@ bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag);
  */
 bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match);
 
-/* Print a Flux message on specified output stream.
- */
-void flux_msg_fprint (FILE *f, const flux_msg_t *msg);
-
 /* Convert a numeric FLUX_MSGTYPE value to string,
  * or "unknown" if unrecognized.
  */

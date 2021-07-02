@@ -100,6 +100,7 @@ libflux_la_SOURCES = \
 	msg_handler.c \
 	message.c \
 	message_private.h \
+	message_fprint.c \
 	msglist.c \
 	request.c \
 	response.c \

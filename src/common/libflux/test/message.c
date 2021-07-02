@@ -18,6 +18,7 @@
 #include <jansson.h>
 
 #include "src/common/libflux/message.h"
+#include "src/common/libflux/message_private.h"
 #include "src/common/libtap/tap.h"
 
 static bool verbose = false;
@@ -1113,16 +1114,16 @@ void check_print (void)
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)) != NULL,
         "created test message");
-    lives_ok ({flux_msg_fprint (f, msg);},
-        "flux_msg_fprint doesn't segfault on keepalive");
+    lives_ok ({msg_fprint (f, msg);},
+        "msg_fprint doesn't segfault on keepalive");
     flux_msg_destroy (msg);
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_EVENT)) != NULL,
         "created test message");
     ok (flux_msg_set_topic (msg, "foo.bar") == 0,
         "set topic string");
-    lives_ok ({flux_msg_fprint (f, msg);},
-        "flux_msg_fprint doesn't segfault on event with topic");
+    lives_ok ({msg_fprint (f, msg);},
+        "msg_fprint doesn't segfault on event with topic");
     flux_msg_destroy (msg);
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
@@ -1134,8 +1135,8 @@ void check_print (void)
         "added one route");
     ok (flux_msg_set_payload (msg, buf, strlen (buf)) == 0,
         "added payload");
-    lives_ok ({flux_msg_fprint (f, msg);},
-        "flux_msg_fprint doesn't segfault on fully loaded request");
+    lives_ok ({msg_fprint (f, msg);},
+        "msg_fprint doesn't segfault on fully loaded request");
     flux_msg_destroy (msg);
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
@@ -1148,8 +1149,8 @@ void check_print (void)
         "set nodeid");
     ok (flux_msg_set_string (msg, strpayload) == 0,
         "added payload");
-    lives_ok ({flux_msg_fprint (f, msg);},
-        "flux_msg_fprint doesn't segfault on request settings #1");
+    lives_ok ({msg_fprint (f, msg);},
+        "msg_fprint doesn't segfault on request settings #1");
     flux_msg_destroy (msg);
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
@@ -1158,8 +1159,8 @@ void check_print (void)
         "set rolemask");
     ok (flux_msg_set_flags (msg, FLUX_MSGFLAG_NORESPONSE | FLUX_MSGFLAG_UPSTREAM) == 0,
         "set new flags");
-    lives_ok ({flux_msg_fprint (f, msg);},
-        "flux_msg_fprint doesn't segfault on request settings #2");
+    lives_ok ({msg_fprint (f, msg);},
+        "msg_fprint doesn't segfault on request settings #2");
     flux_msg_destroy (msg);
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
@@ -1168,23 +1169,23 @@ void check_print (void)
         "set rolemask");
     ok (flux_msg_set_flags (msg, FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING) == 0,
         "set new flags");
-    lives_ok ({flux_msg_fprint (f, msg);},
-        "flux_msg_fprint doesn't segfault on request settings #3");
+    lives_ok ({msg_fprint (f, msg);},
+        "msg_fprint doesn't segfault on request settings #3");
     flux_msg_destroy (msg);
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
         "created test message");
     ok (flux_msg_set_payload (msg, buf_long, strlen (buf_long)) == 0,
         "added long payload");
-    lives_ok ({flux_msg_fprint (f, msg);},
-        "flux_msg_fprint doesn't segfault on long payload");
+    lives_ok ({msg_fprint (f, msg);},
+        "msg_fprint doesn't segfault on long payload");
     flux_msg_destroy (msg);
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)) != NULL,
         "created test message");
     flux_msg_route_enable (msg);
-    lives_ok ({flux_msg_fprint (f, msg);},
-        "flux_msg_fprint doesn't segfault on response with empty route stack");
+    lives_ok ({msg_fprint (f, msg);},
+        "msg_fprint doesn't segfault on response with empty route stack");
     flux_msg_destroy (msg);
 
     fclose (f);
@@ -1304,6 +1305,7 @@ int main (int argc, char *argv[])
 
     check_refcount();
 
+    /* message private tests */
     check_print ();
 
     done_testing();

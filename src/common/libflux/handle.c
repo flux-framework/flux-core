@@ -35,6 +35,7 @@
 #include "reactor.h"
 #include "connector.h"
 #include "message.h"
+#include "message_private.h"
 #include "tagpool.h"
 #include "msg_handler.h" // for flux_sleep_on ()
 #include "flog.h"
@@ -587,7 +588,7 @@ int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
     flags |= h->flags;
     update_tx_stats (h, msg);
     if (flags & FLUX_O_TRACE)
-        flux_msg_fprint (stderr, msg);
+        msg_fprint (stderr, msg);
     if (h->ops->send (h->impl, msg, flags) < 0)
         goto fatal;
 #if HAVE_CALIPER
@@ -675,7 +676,7 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     } while (!msg);
     update_rx_stats (h, msg);
     if ((flags & FLUX_O_TRACE))
-        flux_msg_fprint (stderr, msg);
+        msg_fprint (stderr, msg);
     if (defer_requeue (&l, h) < 0)
         goto fatal;
     defer_destroy (&l);
