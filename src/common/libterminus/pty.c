@@ -103,10 +103,13 @@ static struct pty_client *pty_client_create (const flux_msg_t *msg)
     if (!(c = calloc (1, sizeof (*c))))
         return NULL;
     if (flux_msg_get_route_first (msg, &uuid) < 0)
-        return NULL;
+        goto error;
     c->req = flux_msg_incref (msg);
     c->uuid = uuid;
     return c;
+error:
+    pty_client_destroy (c);
+    return NULL;
 }
 
 static struct pty_client *pty_client_find (struct flux_pty *pty,

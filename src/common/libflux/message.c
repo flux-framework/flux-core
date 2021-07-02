@@ -199,9 +199,7 @@ void flux_msg_destroy (flux_msg_t *msg)
 {
     if (msg && --msg->refcount == 0) {
         int saved_errno = errno;
-        struct route_id *r;
-        while ((r = list_pop (&msg->routes, struct route_id, route_id_node)))
-            route_id_destroy (r);
+        (void) flux_msg_clear_route (msg);
         free (msg->topic);
         free (msg->payload);
         json_decref (msg->json);
@@ -932,7 +930,7 @@ int flux_msg_enable_route (flux_msg_t *msg)
     }
     if ((msg->flags & FLUX_MSGFLAG_ROUTE))
         return 0;
-    return flux_msg_set_flags (msg, msg->flags |= FLUX_MSGFLAG_ROUTE);
+    return flux_msg_set_flags (msg, msg->flags | FLUX_MSGFLAG_ROUTE);
 }
 
 int flux_msg_clear_route (flux_msg_t *msg)
@@ -972,6 +970,7 @@ int flux_msg_push_route (flux_msg_t *msg, const char *id)
 int flux_msg_pop_route (flux_msg_t *msg, char **id)
 {
     struct route_id *r;
+    int rv = -1;
 
     /* do not check 'id' for NULL, a "pop" is acceptable w/o returning
      * data to the user.  Caller may wish to only "pop" and not look
@@ -994,11 +993,13 @@ int flux_msg_pop_route (flux_msg_t *msg, char **id)
     assert (r);
     if (id) {
         if (!((*id) = strdup (r->id)))
-            return -1;
+            goto error;
     }
+    rv = 0;
+error:
     route_id_destroy (r);
     msg->routes_len--;
-    return 0;
+    return rv;
 }
 
 /* replaces flux_msg_nexthop */
@@ -1083,53 +1084,33 @@ static int flux_msg_get_route_size (const flux_msg_t *msg)
     return size;
 }
 
-static char *flux_msg_get_route_nth (const flux_msg_t *msg, int n)
-{
-    struct route_id *r = NULL;
-    int count = 0;
-
-    if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
-        errno = EPROTO;
-        return NULL;
-    }
-    list_for_each (&msg->routes, r, route_id_node) {
-        if (count == n)
-            return r->id;
-        count++;
-    }
-    errno = ENOENT;
-    return NULL;
-}
-
 char *flux_msg_get_route_string (const flux_msg_t *msg)
 {
+    struct route_id *r = NULL;
     int hops, len;
-    int n;
     char *buf, *cp;
 
     if (!msg) {
         errno = EINVAL;
         return NULL;
     }
-    if ((hops = flux_msg_get_route_count (msg)) < 0
-                    || (len = flux_msg_get_route_size (msg)) < 0) {
+    if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
+        errno = EPROTO;
         return NULL;
     }
+    if ((hops = flux_msg_get_route_count (msg)) < 0
+                    || (len = flux_msg_get_route_size (msg)) < 0)
+        return NULL;
     if (!(cp = buf = malloc (len + hops + 1)))
         return NULL;
-    for (n = hops - 1; n >= 0; n--) {
-        char *id;
+    list_for_each_rev (&msg->routes, r, route_id_node) {
         if (cp > buf)
             *cp++ = '!';
-        if (!(id = flux_msg_get_route_nth (msg, n))) {
-            ERRNO_SAFE_WRAP (free, buf);
-            return NULL;
-        }
-        int cpylen = strlen (id);
+        int cpylen = strlen (r->id);
         if (cpylen > 8) /* abbreviate long UUID */
             cpylen = 8;
         assert (cp - buf + cpylen < len + hops);
-        memcpy (cp, id, cpylen);
+        memcpy (cp, r->id, cpylen);
         cp += cpylen;
     }
     *cp = '\0';

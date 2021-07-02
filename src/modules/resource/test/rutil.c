@@ -23,49 +23,6 @@
 
 #include "src/modules/resource/rutil.h"
 
-void test_match_request_sender (void)
-{
-    flux_msg_t *msg1, *msg2;
-
-    if (!(msg1 = flux_request_encode ("fubar.baz", NULL)))
-        BAIL_OUT ("flux_request_encode failed");
-    if (!(msg2 = flux_request_encode ("fubaz.bar", NULL)))
-        BAIL_OUT ("flux_request_encode failed");
-
-    ok (rutil_match_request_sender (msg1, NULL) == false,
-        "rutil_match_request_sender msg2=NULL = false");
-    ok (rutil_match_request_sender (NULL, msg2) == false,
-        "rutil_match_request_sender msg1=NULL = false");
-
-    ok (rutil_match_request_sender (msg1, msg2) == false,
-        "rutil_match_request_sender msg1=(no sender) = false");
-
-    if (flux_msg_push_route (msg1, "foo") < 0)
-        BAIL_OUT ("flux_msg_push_route failed");
-
-    ok (rutil_match_request_sender (msg1, msg2) == false,
-        "rutil_match_request_sender msg2=(no sender) = false");
-
-    if (flux_msg_push_route (msg2, "bar") < 0)
-        BAIL_OUT ("flux_msg_push_route failed");
-
-    ok (rutil_match_request_sender (msg1, msg2) == false,
-        "rutil_match_request_sender different senders = false");
-
-    char *id;
-    if (flux_msg_pop_route (msg2, &id) < 0)
-        BAIL_OUT ("flux_msg_clear_route failed");
-    free (id);
-    if (flux_msg_push_route (msg2, "foo") < 0)
-        BAIL_OUT ("flux_msg_push_route failed");
-
-    ok (rutil_match_request_sender (msg1, msg2) == true,
-        "rutil_match_request_sender same senders = true");
-
-    flux_msg_decref (msg1);
-    flux_msg_decref (msg2);
-}
-
 void test_idset_sub (void)
 {
     struct idset *ids1;
@@ -568,7 +525,6 @@ int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
-    test_match_request_sender ();
     test_idset_sub ();
     test_idset_add ();
     test_idset_diff ();

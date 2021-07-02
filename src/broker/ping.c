@@ -120,7 +120,7 @@ int ping_initialize (flux_t *h, const char *service, const char *uuid)
         goto error;
     /* The uuid is tacked onto the route string constructed for
      * ping responses.  Truncate the uuid to 8 chars to match policy
-     * of flux_msg_get_route_str().
+     * of flux_msg_get_route_string().
      */
     if (!(p->uuid = strdup (uuid)))
         goto error;

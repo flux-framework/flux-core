@@ -52,7 +52,7 @@ void check_cornercase (void)
         BAIL_OUT ("flux_msg_create failed");
 
     lives_ok ({flux_msg_destroy (NULL);},
-        "flux_msg_destroy msg=NULL doesnt crash crash");
+        "flux_msg_destroy msg=NULL doesnt crash");
 
     errno = 0;
     ok (flux_msg_aux_set (NULL, "foo", "bar", NULL) < 0 && errno == EINVAL,
@@ -69,7 +69,7 @@ void check_cornercase (void)
     ok (flux_msg_incref (NULL) == NULL && errno == EINVAL,
         "flux_msg_incref msg=NULL fails with EINVAL");
     lives_ok ({flux_msg_decref (NULL);},
-        "flux_msg_decref msg=NULL doesnt crash crash");
+        "flux_msg_decref msg=NULL doesnt crash");
 
     errno = 0;
     ok (flux_msg_encode_size (NULL) < 0 && errno == EINVAL,
@@ -268,7 +268,7 @@ void check_cornercase (void)
         "flux_msg_push_route returns -1 errno EPROTO on msg w/o routes enabled");
     errno = 0;
     ok (flux_msg_pop_route (NULL, NULL) == -1 && errno == EINVAL,
-        "flux_msg_pop_route returns -1 errno EINVAL on id = NULL");
+        "flux_msg_pop_route returns -1 errno EINVAL on msg = NULL");
     errno = 0;
     ok (flux_msg_pop_route (msg, NULL) == -1 && errno == EPROTO,
         "flux_msg_pop_route returns -1 errno EPROTO on msg w/o routes enabled");
@@ -301,12 +301,20 @@ void check_cornercase (void)
     ok ((flux_msg_get_route_count (msg) == -1 && errno == EPROTO),
         "flux_msg_get_route_count returns -1 errno EPROTO on msg "
         "w/o routes enabled");
+    errno = 0;
+    ok ((flux_msg_get_route_string (NULL) == NULL && errno == EINVAL),
+        "flux_msg_get_route_string returns NULL errno EINVAL on msg = NULL");
+    errno = 0;
+    ok ((flux_msg_get_route_string (msg) == NULL && errno == EPROTO),
+        "flux_msg_get_route_string returns NULL errno EPROTO on msg "
+        "w/o routes enabled");
 
     flux_msg_destroy (msg);
 }
 
-/* flux_msg_get_route_first, flux_msg_get_route_last, _get_route_count
- *   on message with variable number of routing frames
+/* flux_msg_get_route_first, flux_msg_get_route_last,
+ *   flux_msg_get_route_count on message with variable number of
+ *   routing frames
  */
 void check_routes (void)
 {
@@ -347,6 +355,12 @@ void check_routes (void)
         "flux_msg_get_route_last returns id on msg w/ id1");
     free (s);
 
+    ok ((s = flux_msg_get_route_string (msg)) != NULL,
+        "flux_msg_get_route_string works");
+    like (s, "sender",
+        "flux_msg_get_route_string returns correct string on msg w/ id1");
+    free (s);
+
     ok (flux_msg_push_route (msg, "router") == 0 && flux_msg_frames (msg) == 4,
         "flux_msg_push_route works and adds a frame");
     ok ((flux_msg_get_route_count (msg) == 2),
@@ -362,6 +376,12 @@ void check_routes (void)
         "flux_msg_get_route_last works");
     like (s, "router",
         "flux_msg_get_route_last returns id2 on message with id1+id2");
+    free (s);
+
+    ok ((s = flux_msg_get_route_string (msg)) != NULL,
+        "flux_msg_get_route_string works");
+    like (s, "sender!router",
+        "flux_msg_get_route_string returns correct string on msg w/ id1+id2");
     free (s);
 
     s = NULL;

@@ -38,13 +38,6 @@ int rutil_set_json_idset (json_t *o,
                           const char *key,
                           const struct idset *ids);
 
-/* Return true if requests have the same sender.
- * Messages can be NULL or have no sender (returns false).
- */
-bool rutil_match_request_sender (const flux_msg_t *msg1,
-                                 const flux_msg_t *msg2);
-
-
 /* Load data by path:
  * - rutil_read_file() returns data as a NULL-terminated string.
  * - rutil_load_file() parses data as a JSON object and returns it.
