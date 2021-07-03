@@ -1488,7 +1488,7 @@ const char *flux_msg_typestr (int type)
     return "unknown";
 }
 
-static const char *msgtype_shortstr (int type)
+static const char *type2prefix (int type)
 {
     int i;
 
@@ -1590,7 +1590,7 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
         fprintf (f, "NULL");
         return;
     }
-    prefix = msgtype_shortstr (msg->type);
+    prefix = type2prefix (msg->type);
     /* Topic (keepalive has none)
      */
     if (msg->topic)
