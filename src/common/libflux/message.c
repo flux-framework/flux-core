@@ -1494,7 +1494,7 @@ const char *flux_msg_typestr (int type)
     return "unknown";
 }
 
-static const char *msgtype_shortstr (int type)
+static const char *type2prefix (int type)
 {
     int i;
 
@@ -1596,7 +1596,7 @@ void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)
         fprintf (f, "NULL");
         return;
     }
-    prefix = msgtype_shortstr (msg->type);
+    prefix = type2prefix (msg->type);
     /* Timestamp
      */
     if (timestamp >= 0.)
