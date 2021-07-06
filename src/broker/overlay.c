@@ -640,7 +640,7 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
         goto handled;
     }
     if (type == FLUX_MSGTYPE_EVENT)
-        flux_msg_clear_route (msg);
+        flux_msg_disable_route (msg);
     ov->recv_cb (msg, OVERLAY_UPSTREAM, ov->recv_arg);
 handled:
     flux_msg_destroy (msg);

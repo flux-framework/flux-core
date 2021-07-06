@@ -307,13 +307,19 @@ const char *flux_msg_typestr (int type);
  * routing.
  */
 
-/* Prepare a message for routing by setting FLUX_MSGFLAG_ROUTE.  This
+/* Enable routes on a message by setting FLUX_MSGFLAG_ROUTE.  This
  * function is a no-op if the flag is already set.
  */
 void flux_msg_enable_route (flux_msg_t *msg);
 
-/* Clear routes from msg and clear FLUX_MSGFLAG_ROUTE flag.  This
- * function is a no-op if the flag is already clear.
+/* Disable routes on a message by clearing the FLUX_MSGFLAG_ROUTE
+ * flag.  In addition, clear all presently stored routes.  This
+ * function is a no-op if the flag is already set.
+ */
+void flux_msg_disable_route (flux_msg_t *msg);
+
+/* Clear all routes stored in a message.  This function is a no-op if
+ * routes are not enabled.
  */
 void flux_msg_clear_route (flux_msg_t *msg);
 

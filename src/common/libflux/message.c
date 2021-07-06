@@ -929,6 +929,14 @@ void flux_msg_enable_route (flux_msg_t *msg)
     (void) flux_msg_set_flags (msg, msg->flags | FLUX_MSGFLAG_ROUTE);
 }
 
+void flux_msg_disable_route (flux_msg_t *msg)
+{
+    if (!msg || (!(msg->flags & FLUX_MSGFLAG_ROUTE)))
+        return;
+    flux_msg_clear_route (msg);
+    (void) flux_msg_set_flags (msg, msg->flags & ~(uint8_t)FLUX_MSGFLAG_ROUTE);
+}
+
 void flux_msg_clear_route (flux_msg_t *msg)
 {
     struct route_id *r;
@@ -938,7 +946,6 @@ void flux_msg_clear_route (flux_msg_t *msg)
         route_id_destroy (r);
     list_head_init (&msg->routes);
     msg->routes_len = 0;
-    (void) flux_msg_set_flags (msg, msg->flags & ~(uint8_t)FLUX_MSGFLAG_ROUTE);
 }
 
 int flux_msg_push_route (flux_msg_t *msg, const char *id)

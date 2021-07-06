@@ -68,7 +68,6 @@ static flux_msg_t *request_copy_clear_routes (const flux_msg_t *msg)
     if (!(cpy = flux_msg_copy (msg, true)))
         return NULL;
     flux_msg_clear_route (cpy);
-    flux_msg_enable_route (cpy);
     return cpy;
 }
 

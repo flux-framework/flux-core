@@ -252,6 +252,8 @@ void check_cornercase (void)
 
     lives_ok ({flux_msg_enable_route (NULL);},
         "flux_msg_enable_route msg=NULL doesnt crash");
+    lives_ok ({flux_msg_disable_route (NULL);},
+        "flux_msg_disable_route msg=NULL doesnt crash");
     lives_ok ({flux_msg_clear_route (NULL);},
         "flux_msg_clear_route msg=NULL doesnt crash");
 
@@ -314,6 +316,9 @@ void check_routes (void)
     flux_msg_clear_route (msg);
     ok (flux_msg_frames (msg) == 1,
         "flux_msg_clear_route works, is no-op on msg w/o routes enabled");
+    flux_msg_disable_route (msg);
+    ok (flux_msg_frames (msg) == 1,
+        "flux_msg_disable_route works, is no-op on msg w/o routes enabled");
     flux_msg_enable_route (msg);
     ok (flux_msg_frames (msg) == 2,
         "flux_msg_enable_route works, adds one frame on msg w/ routes enabled");
@@ -372,8 +377,23 @@ void check_routes (void)
         "flux_msg_get_route_count returns 1 on message w/ id1");
 
     flux_msg_clear_route (msg);
-    ok (flux_msg_frames (msg) == 1,
+    ok (flux_msg_get_route_count (msg) == 0,
         "flux_msg_clear_route clear routing frames");
+    ok (flux_msg_frames (msg) == 2,
+        "flux_msg_clear_route did not disable routing frames");
+
+    ok (flux_msg_push_route (msg, "foobar") == 0 && flux_msg_frames (msg) == 3,
+        "flux_msg_push_route works and adds a frame after flux_msg_clear_route()");
+    ok ((flux_msg_get_route_count (msg) == 1),
+        "flux_msg_get_route_count returns 1 on msg w/ id1");
+
+    flux_msg_disable_route (msg);
+    ok (flux_msg_frames (msg) == 1,
+        "flux_msg_disable_route clear routing frames");
+
+    ok (flux_msg_push_route (msg, "boobar") < 0 && errno == EPROTO,
+        "flux_msg_push_route fails with EPROTO after flux_msg_disable_route()");
+
     flux_msg_destroy (msg);
 }
 
