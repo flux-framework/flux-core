@@ -34,6 +34,11 @@ test_expect_success 'request: load req module on rank 1' '
 test_expect_success 'request: simple rpc with no payload' '
 	${FLUX_BUILD_DIR}/t/request/treq null
 '
+test_expect_success 'request: simple rpc with no payload (traced)' '
+	FLUX_HANDLE_TRACE=1 \
+		${FLUX_BUILD_DIR}/t/request/treq null 2>trace.out &&
+	grep ">" trace.out
+'
 
 test_expect_success 'request: simple rpc to rank 0' '
 	${FLUX_BUILD_DIR}/t/request/treq --rank 0 null

@@ -30,6 +30,7 @@
 #include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/monotime.h"
 
 #include "handle.h"
 #include "reactor.h"
@@ -577,6 +578,23 @@ static void update_rx_stats (flux_t *h, const flux_msg_t *msg)
         errno = 0;
 }
 
+static void handle_trace (flux_t *h, const flux_msg_t *msg)
+{
+    const char *auxkey = "flux::trace_start";
+    struct timespec *ts;
+
+    if (!(ts = flux_aux_get (h, auxkey))) {
+        if ((ts = calloc (1, sizeof (*ts)))) {
+            monotime (ts);
+            if (flux_aux_set (h, auxkey, ts, free) < 0) {
+                free (ts);
+                ts = NULL;
+            }
+        }
+    }
+    flux_msg_fprint_ts (stderr, msg, ts ? monotime_since (*ts)/1000 : -1);
+}
+
 int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
 {
     h = lookup_clone_ancestor (h);
@@ -586,8 +604,8 @@ int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
     }
     flags |= h->flags;
     update_tx_stats (h, msg);
-    if (flags & FLUX_O_TRACE)
-        flux_msg_fprint (stderr, msg);
+    if ((flags & FLUX_O_TRACE))
+        handle_trace (h, msg);
     if (h->ops->send (h->impl, msg, flags) < 0)
         goto fatal;
 #if HAVE_CALIPER
@@ -675,7 +693,7 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     } while (!msg);
     update_rx_stats (h, msg);
     if ((flags & FLUX_O_TRACE))
-        flux_msg_fprint (stderr, msg);
+        handle_trace (h, msg);
     if (defer_requeue (&l, h) < 0)
         goto fatal;
     defer_destroy (&l);

@@ -1107,8 +1107,8 @@ void check_print (void)
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)) != NULL,
         "created test message");
-    lives_ok ({flux_msg_fprint (f, msg);},
-        "flux_msg_fprint doesn't segfault on keepalive");
+    lives_ok ({flux_msg_fprint_ts (f, msg, 0.);},
+        "flux_msg_fprint_ts doesn't segfault on keepalive");
     flux_msg_destroy (msg);
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_EVENT)) != NULL,
