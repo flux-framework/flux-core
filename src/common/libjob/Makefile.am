@@ -22,6 +22,14 @@ fluxcoreinclude_HEADERS = \
 
 libjob_la_SOURCES = \
 	job.c \
+	submit.c \
+	wait.c \
+	list.c \
+	result.c \
+	kvs.c \
+	info.c \
+	id.c \
+	state.c \
 	sign_none.c \
 	sign_none.h \
 	job_hash.c \
