@@ -1582,7 +1582,7 @@ static void nodeid2str (uint32_t nodeid, char *buf, int buflen)
     assert (n < buflen);
 }
 
-void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
+void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)
 {
     int hops;
     const char *prefix;
@@ -1597,6 +1597,10 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
         return;
     }
     prefix = msgtype_shortstr (msg->type);
+    /* Timestamp
+     */
+    if (timestamp >= 0.)
+        fprintf (f, "%s %.5f\n", prefix, timestamp);
     /* Topic (keepalive has none)
      */
     if (msg->topic)
@@ -1676,6 +1680,11 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
         else
             fprintf (f, "malformed payload\n");
     }
+}
+
+void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
+{
+    flux_msg_fprint_ts (f, msg, -1);
 }
 
 static zmsg_t *msg_to_zmsg (const flux_msg_t *msg)

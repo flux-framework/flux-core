@@ -294,6 +294,7 @@ bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match);
 /* Print a Flux message on specified output stream.
  */
 void flux_msg_fprint (FILE *f, const flux_msg_t *msg);
+void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp);
 
 /* Convert a numeric FLUX_MSGTYPE value to string,
  * or "unknown" if unrecognized.
