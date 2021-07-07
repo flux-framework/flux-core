@@ -24,6 +24,7 @@
 struct wait_result {
     bool success;
     char errbuf[128];
+    int exit_rc;
 };
 
 static int decode_job_result (json_t *event, struct wait_result *result)
@@ -53,6 +54,7 @@ static int decode_job_result (json_t *event, struct wait_result *result)
                         type,
                         note ? note : "");
         result->success = false;
+        result->exit_rc = 1;
     }
     /* Shells exited - set errbuf=decoded status byte,
      * set success=true if all shells exited with 0, otherwise false.
@@ -68,6 +70,7 @@ static int decode_job_result (json_t *event, struct wait_result *result)
                             "task(s) %s",
                             strsignal (WTERMSIG (status)));
             result->success = false;
+            result->exit_rc = 128 + WTERMSIG (status);
         }
         else if (WIFEXITED (status)) {
             (void)snprintf (result->errbuf,
@@ -75,6 +78,7 @@ static int decode_job_result (json_t *event, struct wait_result *result)
                             "task(s) exited with exit code %d",
                             WEXITSTATUS (status));
             result->success = WEXITSTATUS (status) == 0 ? true : false;
+            result->exit_rc = WEXITSTATUS (status);
         }
         else {
             (void)snprintf (result->errbuf,
@@ -82,6 +86,7 @@ static int decode_job_result (json_t *event, struct wait_result *result)
                             "unexpected wait(2) status %d",
                             status);
             result->success = false;
+            result->exit_rc = 1;
         }
     }
     else
@@ -104,16 +109,14 @@ flux_future_t *flux_job_wait (flux_t *h, flux_jobid_t id)
                           id);
 }
 
-int flux_job_wait_get_status (flux_future_t *f,
-                              bool *successp,
-                              const char **errstrp)
+static const struct wait_result *wait_get_result (flux_future_t *f)
 {
     const char *auxkey = "flux::wait_result";
     struct wait_result *result;
 
     if (!f) {
         errno = EINVAL;
-        return -1;
+        return NULL;
     }
     if (!(result = flux_future_aux_get (f, auxkey))) {
         json_t *event;
@@ -122,23 +125,45 @@ int flux_job_wait_get_status (flux_future_t *f,
                                  "{s:o}",
                                  "event",
                                  &event) < 0)
-            return -1;
+            return NULL;
         if (!(result = calloc (1, sizeof (*result))))
-            return -1;
+            return NULL;
         if (decode_job_result (event, result) < 0) {
-            free (result);
             errno = EPROTO;
-            return -1;
+            goto error;
         }
-        if (flux_future_aux_set (f, auxkey, result, free) < 0) {
-            ERRNO_SAFE_WRAP (free, result);
-            return -1;
-        }
+        if (flux_future_aux_set (f, auxkey, result, free) < 0)
+            goto error;
     }
+    return result;
+error:
+    ERRNO_SAFE_WRAP (free, result);
+    return NULL;
+}
+
+int flux_job_wait_get_status (flux_future_t *f,
+                              bool *successp,
+                              const char **errstrp)
+{
+    const struct wait_result *result;
+
+    if (!(result = wait_get_result (f)))
+        return -1;
     if (successp)
         *successp = result->success;
     if (errstrp)
         *errstrp = result->errbuf;
+    return 0;
+}
+
+int flux_job_wait_get_exit_code (flux_future_t *f, int *exit_rc)
+{
+    const struct wait_result *result;
+
+    if (!(result = wait_get_result (f)))
+        return -1;
+    if (exit_rc)
+        *exit_rc = result->exit_rc;
     return 0;
 }
 

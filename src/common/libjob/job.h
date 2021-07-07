@@ -123,6 +123,7 @@ int flux_job_wait_get_status (flux_future_t *f,
                               bool *success,
                               const char **errstr);
 int flux_job_wait_get_id (flux_future_t *f, flux_jobid_t *id);
+int flux_job_wait_get_exit_code (flux_future_t *f, int *exit_rc);
 
 /* Request a list of jobs.
  * If 'max_entries' > 0, fetch at most that many jobs.
