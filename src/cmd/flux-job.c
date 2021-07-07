@@ -2897,9 +2897,11 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
     flux_t *h;
     int optindex = optparse_option_index (p);
     flux_future_t *f;
-    flux_jobid_t id = FLUX_JOBID_ANY;
+    flux_jobid_t opt_id = FLUX_JOBID_ANY;
+    flux_jobid_t id;
     bool success;
     const char *errstr;
+    int exit_rc;
     char buf[32];
     int rc = 0;
 
@@ -2908,7 +2910,7 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
         exit (1);
     }
     if (optindex < argc) {
-        id = parse_jobid (argv[optindex++]);
+        opt_id = parse_jobid (argv[optindex++]);
         if (optparse_hasopt (p, "all"))
             log_err_exit ("jobid not supported with --all");
     }
@@ -2919,22 +2921,21 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
         for (;;) {
             if (!(f = flux_job_wait (h, FLUX_JOBID_ANY)))
                 log_err_exit ("flux_job_wait");
-            if (flux_job_wait_get_status (f, &success, &errstr) < 0) {
+            if (flux_job_wait_get_status (f, &success, &errstr) < 0
+                || flux_job_wait_get_id (f, &id) < 0
+                || flux_job_wait_get_exit_code (f, &exit_rc) < 0) {
                 if (errno == ECHILD) { // no more waitable jobs
                     flux_future_destroy (f);
                     break;
                 }
-                log_msg_exit ("flux_job_wait_get_status: %s",
-                              future_strerror (f, errno));
+                log_msg_exit ("%s", flux_future_error_string (f));
             }
-            if (flux_job_wait_get_id (f, &id) < 0)
-                log_msg_exit ("flux_job_wait_get_id: %s",
-                              future_strerror (f, errno));
             if (!success) {
                 fprintf (stderr, "%s: %s\n",
                          to_f58 (id, buf, sizeof (buf)),
                          errstr);
-                rc = 1;
+                if (rc < exit_rc)
+                    rc = exit_rc;
             }
             else {
                 if (optparse_hasopt (p, "verbose"))
@@ -2946,17 +2947,18 @@ int cmd_wait (optparse_t *p, int argc, char **argv)
         }
     }
     else {
-        if (!(f = flux_job_wait (h, id)))
+        if (!(f = flux_job_wait (h, opt_id)))
             log_err_exit ("flux_job_wait");
-        if (flux_job_wait_get_status (f, &success, &errstr) < 0)
+        if (flux_job_wait_get_status (f, &success, &errstr) < 0
+            || flux_job_wait_get_id (f, &id) < 0
+            || flux_job_wait_get_exit_code (f, &exit_rc) < 0)
             log_msg_exit ("%s", flux_future_error_string (f));
-        if (id == FLUX_JOBID_ANY) {
-            if (flux_job_wait_get_id (f, &id) < 0)
-                log_err_exit ("flux_job_wait_get_id");
+        if (opt_id == FLUX_JOBID_ANY)
             printf ("%s\n", to_f58 (id, buf, sizeof (buf)));
+        if (!success) {
+            log_msg ("%s", errstr);
+            rc = exit_rc;
         }
-        if (!success)
-            log_msg_exit ("%s", errstr);
         flux_future_destroy (f);
     }
     flux_close (h);

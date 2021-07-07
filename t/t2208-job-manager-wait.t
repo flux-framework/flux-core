@@ -113,7 +113,7 @@ test_expect_success "wait FLUX_JOBID_ANY fails with no waitable jobs" '
 test_expect_success "wait works when job terminated by exception" '
 	JOBID=$(flux mini submit --flags waitable sleep 120) &&
 	flux job raise --severity=0 ${JOBID} my-exception-message &&
-	test_must_fail flux job wait ${JOBID} 2>exception.out &&
+	test_expect_code 1 flux job wait ${JOBID} 2>exception.out &&
 	grep my-exception-message exception.out
 '
 
@@ -214,5 +214,18 @@ test_expect_success "guest cannot wait on a job" '
 	JOBID=$(flux mini submit --flags waitable /bin/true) &&
 	! FLUX_HANDLE_ROLEMASK=0x2 flux job wait ${JOBID}
 '
+
+test_expect_success "wait returns job exit code" '
+	JOBID=$(flux mini submit --flags waitable bash -c "exit 42") &&
+	test_expect_code 42 flux job wait ${JOBID}
+'
+
+test_expect_success 'wait returns signal + 128' '
+        JOBID=$(flux mini submit --flags waitable sleep 600) &&
+        flux job wait-event ${JOBID} start &&
+        flux job kill --signal 15 ${JOBID} &&
+        test_expect_code 143 flux job wait ${JOBID}
+'
+
 
 test_done
