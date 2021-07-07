@@ -29,6 +29,7 @@ def submit_async(
     waitable=False,
     debug=False,
     pre_signed=False,
+    novalidate=False,
 ):
     """Ask Flux to run a job, without waiting for a response
 
@@ -53,6 +54,10 @@ def submit_async(
     :param pre_signed: jobspec argument is already signed
         (default is False)
     :type pre_signed: bool
+    :param novalidate: jobspec does not need to be validated.
+        (default is False) novalidate=True is restricted to the
+        instance owner.
+    :type novalidate: bool
     :returns: a Flux Future object for obtaining the assigned jobid
     :rtype: Future
     """
@@ -64,6 +69,8 @@ def submit_async(
         flags |= constants.FLUX_JOB_DEBUG
     if pre_signed:
         flags |= constants.FLUX_JOB_PRE_SIGNED
+    if novalidate:
+        flags |= constants.FLUX_JOB_NOVALIDATE
     future_handle = RAW.submit(flux_handle, jobspec, urgency, flags)
     return SubmitFuture(future_handle)
 
