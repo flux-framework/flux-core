@@ -70,74 +70,6 @@ struct waitjob {
     struct flux_msglist *requests; // requests to wait in FLUX_JOBID_ANY
 };
 
-static int decode_job_result (struct job *job,
-                              bool *success,
-                              char *errbuf,
-                              int errbufsz)
-{
-    const char *name;
-    json_t *context;
-
-    if (!job->end_event)
-        return -1;
-    if (eventlog_entry_parse (job->end_event, NULL, &name, &context) < 0)
-        return -1;
-
-    /* Exception - set errbuf=description, set success=false
-     */
-    if (!strcmp (name, "exception")) {
-        const char *type;
-        const char *note = NULL;
-
-        if (json_unpack (context,
-                         "{s:s s?:s}",
-                         "type",
-                         &type,
-                         "note",
-                         &note) < 0)
-            return -1;
-        (void)snprintf (errbuf,
-                        errbufsz,
-                        "Fatal exception type=%s %s",
-                        type,
-                        note ? note : "");
-        *success = false;
-    }
-    /* Shells exited - set errbuf=decoded status byte,
-     * set success=true if all shells exited with 0, otherwise false.
-     */
-    else if (!strcmp (name, "finish")) {
-        int status;
-
-        if (json_unpack (context, "{s:i}", "status", &status) < 0)
-            return -1;
-        if (WIFSIGNALED (status)) {
-            (void)snprintf (errbuf,
-                            errbufsz,
-                            "task(s) %s",
-                            strsignal (WTERMSIG (status)));
-            *success = false;
-        }
-        else if (WIFEXITED (status)) {
-            (void)snprintf (errbuf,
-                            errbufsz,
-                            "task(s) exited with exit code %d",
-                            WEXITSTATUS (status));
-            *success = WEXITSTATUS (status) == 0 ? true : false;
-        }
-        else {
-            (void)snprintf (errbuf,
-                            errbufsz,
-                            "unexpected wait(2) status %d",
-                            status);
-            *success = false;
-        }
-    }
-    else
-        return -1;
-    return 0;
-}
-
 /* Respond to wait request 'msg' with completion info from 'job'.
  */
 static void wait_respond (struct waitjob *wait,
@@ -145,29 +77,20 @@ static void wait_respond (struct waitjob *wait,
                           struct job *job)
 {
     flux_t *h = wait->ctx->h;
-    char errbuf[1024];
-    bool success;
 
-    if (decode_job_result (job, &success, errbuf, sizeof (errbuf)) < 0) {
-        flux_log (h,
-                  LOG_ERR,
-                  "wait_respond id=%ju: result decode failure",
-                  (uintmax_t)job->id);
+    if (!job->end_event)
         goto error;
-    }
     if (flux_respond_pack (h,
                            msg,
-                           "{s:I s:b s:s}",
+                           "{s:I s:O}",
                            "id",
                            job->id,
-                           "success",
-                           success ? 1 : 0,
-                           "errstr",
-                           errbuf) < 0)
+                           "event",
+                           job->end_event) < 0)
         flux_log_error (h, "wait_respond id=%ju", (uintmax_t)job->id);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, "Flux job wait internal error") < 0)
+    if (flux_respond_error (h, msg, EINVAL, "Flux job wait internal error") < 0)
         flux_log_error (h, "wait_respond id=%ju", (uintmax_t)job->id);
 }
 
