@@ -115,6 +115,11 @@ test_expect_success 'job-ingest: guest cannot submit urgency=17' '
 		flux job submit --urgency=17 basic.json"
 '
 
+test_expect_success 'job-ingest: guest cannot submit --flags=novalidate' '
+        test_must_fail bash -c "FLUX_HANDLE_ROLEMASK=0x2 \
+                flux job submit --flags=novalidate basic.json"
+'
+
 test_expect_success NO_ASAN 'job-ingest: submit job 100 times' '
 	${SUBMITBENCH} -r 100 use_case_2.6.json
 '
