@@ -257,7 +257,7 @@ void *flux_msg_aux_get (const flux_msg_t *msg, const char *name)
     return aux_get (msg->aux, name);
 }
 
-void encode_count (ssize_t *size, size_t len)
+static void encode_count (ssize_t *size, size_t len)
 {
     if (len < 255)
         (*size) += 1;
