@@ -111,7 +111,8 @@ test_expect_success 'job-ingest: urgency range is enforced' '
 '
 
 test_expect_success 'job-ingest: guest cannot submit urgency=17' '
-	! FLUX_HANDLE_ROLEMASK=0x2 flux job submit --urgency=17 basic.json
+	test_must_fail bash -c "FLUX_HANDLE_ROLEMASK=0x2 \
+		flux job submit --urgency=17 basic.json"
 '
 
 test_expect_success NO_ASAN 'job-ingest: submit job 100 times' '
@@ -123,13 +124,14 @@ test_expect_success NO_ASAN 'job-ingest: submit job 100 times, reuse signature' 
 '
 
 test_expect_success HAVE_FLUX_SECURITY 'job-ingest: submit user != signed user fails' '
-	! FLUX_HANDLE_USERID=9999 flux job submit basic.json 2>baduser.out &&
+	test_must_fail bash -c "FLUX_HANDLE_USERID=9999 \
+		flux job submit basic.json" 2>baduser.out &&
 	grep -q "signer=$(id -u) != requestor=9999" baduser.out
 '
 
 test_expect_success HAVE_FLUX_SECURITY 'job-ingest: non-owner mech=none fails' '
-	! FLUX_HANDLE_ROLEMASK=0x2 flux job submit \
-		--sign-type=none basic.json 2>badrole.out &&
+	test_must_fail bash -c "FLUX_HANDLE_ROLEMASK=0x2 flux job submit \
+		--sign-type=none basic.json" 2>badrole.out &&
 	grep -q "only instance owner" badrole.out
 '
 
