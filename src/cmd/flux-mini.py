@@ -535,7 +535,7 @@ class MiniCmd:
             "--flags",
             action="append",
             help="Set comma separated list of job submission flags. Possible "
-            + "flags:  debug, waitable",
+            + "flags:  debug, waitable, novalidate",
             metavar="FLAGS",
         )
         parser.add_argument(
@@ -639,6 +639,7 @@ class MiniCmd:
 
         arg_debug = False
         arg_waitable = False
+        arg_novalidate = False
         if args.flags is not None:
             for tmp in args.flags:
                 for flag in tmp.split(","):
@@ -646,6 +647,8 @@ class MiniCmd:
                         arg_debug = True
                     elif flag == "waitable":
                         arg_waitable = True
+                    elif flag == "novalidate":
+                        arg_novalidate = True
                     else:
                         raise ValueError("--flags: Unknown flag " + flag)
 
@@ -667,6 +670,7 @@ class MiniCmd:
             urgency=urgency,
             waitable=arg_waitable,
             debug=arg_debug,
+            novalidate=arg_novalidate,
         )
 
     def submit(self, args, jobspec=None):

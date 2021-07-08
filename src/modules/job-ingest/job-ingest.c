@@ -630,7 +630,7 @@ error:
 
 static int valid_flags (int flags)
 {
-    int allowed = FLUX_JOB_DEBUG | FLUX_JOB_WAITABLE;
+    int allowed = FLUX_JOB_DEBUG | FLUX_JOB_WAITABLE | FLUX_JOB_NOVALIDATE;
     if ((flags & ~allowed)) {
         errno = EPROTO;
         return -1;
@@ -666,6 +666,14 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
      */
     if (valid_flags (job->flags) < 0)
         goto error;
+    if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
+        && (job->flags & FLUX_JOB_NOVALIDATE)) {
+        snprintf (errbuf, sizeof (errbuf),
+                "only the instance owner can submit with FLUX_JOB_NOVALIDATE");
+        errmsg = errbuf;
+        errno = EPERM;
+        goto error;
+    }
     /* Validate requested job urgency.
      */
     if (job->urgency < FLUX_JOB_URGENCY_MIN
@@ -755,7 +763,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EINVAL;
         goto error;
     }
-    if (ctx->validate) {
+    if (ctx->validate && !(job->flags & FLUX_JOB_NOVALIDATE)) {
         /* Validate jobspec asynchronously.
          * Continue submission process in validate_continuation().
          */
