@@ -13,9 +13,7 @@
  * Handle flux_job_wait (id) requests.
  *
  * The call blocks until the job transitions to INACTIVE, then
- * a summary of the job result is returned:
- * - a boolean success
- * - a textual error string
+ * a summary of the job result is returned.
  *
  * The event that transitions a waitable job to the CLEANUP state is
  * captured in job->end_event.  RFC 21 dictates it must be a finish event
@@ -82,11 +80,12 @@ static void wait_respond (struct waitjob *wait,
         goto error;
     if (flux_respond_pack (h,
                            msg,
-                           "{s:I s:O}",
-                           "id",
-                           job->id,
-                           "event",
-                           job->end_event) < 0)
+                           "{s:I s:f s:f s:f s:O}",
+                           "id", job->id,
+                           "t_submit", job->t_submit,
+                           "t_alloc", job->t_alloc,
+                           "t_finish", job->t_finish,
+                           "event", job->end_event) < 0)
         flux_log_error (h, "wait_respond id=%ju", (uintmax_t)job->id);
     return;
 error:
