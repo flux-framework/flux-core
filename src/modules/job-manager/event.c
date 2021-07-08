@@ -591,6 +591,7 @@ int event_job_update (struct job *job, json_t *event)
         job->has_resources = 1;
         if (job->state == FLUX_JOB_STATE_SCHED)
             job->state = FLUX_JOB_STATE_RUN;
+        job->t_alloc = timestamp;
     }
     else if (!strcmp (name, "free")) {
         if (job->state != FLUX_JOB_STATE_CLEANUP
@@ -608,6 +609,7 @@ int event_job_update (struct job *job, json_t *event)
 
             job->state = FLUX_JOB_STATE_CLEANUP;
         }
+        job->t_finish = timestamp;
     }
     else if (!strcmp (name, "release")) {
         int final;

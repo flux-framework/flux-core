@@ -24,6 +24,8 @@ struct job {
     int urgency;
     int64_t priority;
     double t_submit;
+    double t_alloc;         // SCHED->RUN transtion
+    double t_finish;        // RUN->CLEANUP transition
     int flags;
     json_t *jobspec_redacted;
     int eventlog_seq;           // eventlog count / sequence number
