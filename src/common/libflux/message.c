@@ -1735,10 +1735,11 @@ error:
 int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)
 {
     void *handle;
-    int flags = ZFRAME_REUSE | ZFRAME_MORE;
+    int flags = ZFRAME_MORE;
     zmsg_t *zmsg = NULL;
     zframe_t *zf;
     size_t count = 0;
+    size_t frames;
     int rc = -1;
 
     if (!sock || !msg) {
@@ -1753,13 +1754,16 @@ int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)
         flags |= ZFRAME_DONTWAIT;
 
     handle = zsock_resolve (sock);
-    zf = zmsg_first (zmsg);
+    frames = zmsg_size (zmsg);
+    zf = zmsg_pop (zmsg);
     while (zf) {
-        if (++count == zmsg_size (zmsg))
+        if (++count == frames)
             flags &= ~ZFRAME_MORE;
-        if (zframe_send (&zf, handle, flags) < 0)
+        if (zframe_send (&zf, handle, flags) < 0) {
+            zframe_destroy (&zf);
             goto error;
-        zf = zmsg_next (zmsg);
+        }
+        zf = zmsg_pop (zmsg);
     }
     rc = 0;
 error:
