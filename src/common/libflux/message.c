@@ -1685,7 +1685,7 @@ error:
 int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)
 {
     void *handle;
-    int flags = ZFRAME_MORE;
+    int flags = ZMQ_SNDMORE;
     zmsg_t *zmsg = NULL;
     zframe_t *zf;
     size_t count = 0;
@@ -1701,19 +1701,20 @@ int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)
         return -1;
 
     if (nonblock)
-        flags |= ZFRAME_DONTWAIT;
+        flags |= ZMQ_DONTWAIT;
 
     handle = zsock_resolve (sock);
     frames = zmsg_size (zmsg);
-    zf = zmsg_pop (zmsg);
+    zf = zmsg_first (zmsg);
     while (zf) {
         if (++count == frames)
-            flags &= ~ZFRAME_MORE;
-        if (zframe_send (&zf, handle, flags) < 0) {
-            zframe_destroy (&zf);
+            flags &= ~ZMQ_SNDMORE;
+        if (zmq_send (handle,
+                      zframe_data (zf),
+                      zframe_size (zf),
+                      flags) < 0)
             goto error;
-        }
-        zf = zmsg_pop (zmsg);
+        zf = zmsg_next (zmsg);
     }
     rc = 0;
 error:
@@ -1726,30 +1727,61 @@ int flux_msg_sendzsock (void *sock, const flux_msg_t *msg)
     return flux_msg_sendzsock_ex (sock, msg, false);
 }
 
+static int recvzsock_frame (void *handle, zmsg_t *zmsg)
+{
+    zframe_t *zf = NULL;
+    zmq_msg_t zmqmsg;
+    int rv = -1;
+
+    zmq_msg_init (&zmqmsg);
+    if (zmq_recvmsg (handle, &zmqmsg, 0) < 0)
+        goto error;
+    if (!(zf = zframe_new (zmq_msg_data (&zmqmsg), zmq_msg_size (&zmqmsg))))
+        goto error;
+    zframe_set_more (zf, zsock_rcvmore (handle));
+    if (zmsg_append (zmsg, &zf))
+        goto error;
+    rv = 0;
+error:
+    if (rv < 0)
+        zframe_destroy (&zf);
+    zmq_msg_close (&zmqmsg);
+    return rv;
+}
+
 flux_msg_t *flux_msg_recvzsock (void *sock)
 {
-    zmsg_t *zmsg;
+    void *handle;
+    zmsg_t *zmsg = NULL;
     flux_msg_t *msg;
+    flux_msg_t *rv = NULL;
 
     if (!sock) {
         errno = EINVAL;
         return NULL;
     }
-    if (!(zmsg = zmsg_recv (sock)))
-        return NULL;
-    if (!(msg = flux_msg_create_common ())) {
-        zmsg_destroy (&zmsg);
+    if (!(zmsg = zmsg_new ())) {
         errno = ENOMEM;
         return NULL;
     }
-    if (zmsg_to_msg (msg, zmsg) < 0) {
-        int save_errno = errno;
-        zmsg_destroy (&zmsg);
-        errno = save_errno;
-        return NULL;
+    handle = zsock_resolve (sock);
+    while (true) {
+        if (recvzsock_frame (handle, zmsg) < 0)
+            goto error;
+        if (!zsock_rcvmore (handle))
+            break;
     }
+
+    if (!(msg = flux_msg_create_common ())) {
+        errno = ENOMEM;
+        goto error;
+    }
+    if (zmsg_to_msg (msg, zmsg) < 0)
+        goto error;
+    rv = msg;
+error:
     zmsg_destroy (&zmsg);
-    return msg;
+    return rv;
 }
 
 int flux_msg_frames (const flux_msg_t *msg)
