@@ -501,7 +501,7 @@ static int zmsg_to_msg (flux_msg_t *msg, zmsg_t *zmsg)
 flux_msg_t *flux_msg_decode (const void *buf, size_t size)
 {
     flux_msg_t *msg;
-    uint8_t const *p = buf;
+    const uint8_t *p = buf;
     zmsg_t *zmsg = NULL;
     zframe_t *zf;
 
