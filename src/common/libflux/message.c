@@ -47,6 +47,8 @@
 
 #include "message.h"
 
+#define IOVECINCR 4
+
 struct flux_msg {
     // optional route list, if FLUX_MSGFLAG_ROUTE
     struct list_head routes;
@@ -85,6 +87,16 @@ struct flux_msg {
 struct route_id {
     struct list_node route_id_node;
     char id[0];                 /* variable length id stored at end of struct */
+};
+
+/* 'transport_data' is for any auxiliary transport data user may wish
+ * to associate with iovec, user is responsible to free/destroy the
+ * field
+ */
+struct msg_iovec {
+    const void *data;
+    size_t size;
+    void *transport_data;
 };
 
 /* PROTO consists of 4 byte prelude followed by a fixed length
@@ -393,7 +405,7 @@ int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size)
     return 0;
 }
 
-static void proto_get_u32 (uint8_t *data, int index, uint32_t *val)
+static void proto_get_u32 (const uint8_t *data, int index, uint32_t *val)
 {
     uint32_t x;
     int offset = PROTO_OFF_U32_ARRAY + index * 4;
@@ -416,18 +428,25 @@ static int msg_append_route (flux_msg_t *msg,
     return 0;
 }
 
-static int zmsg_to_msg (flux_msg_t *msg, zmsg_t *zmsg)
+static int iovec_to_msg (flux_msg_t *msg,
+                         struct msg_iovec *iov,
+                         int iovcnt)
 {
-    uint8_t *proto_data;
+    unsigned int index = 0;
+    const uint8_t *proto_data;
     size_t proto_size;
-    zframe_t *zf;
 
-    if (!(zf = zmsg_last (zmsg))) {
+    assert (msg);
+    assert (iov);
+
+    if (!iovcnt) {
         errno = EPROTO;
         return -1;
     }
-    proto_data = zframe_data (zf);
-    proto_size = zframe_size (zf);
+
+    /* proto frame is last frame */
+    proto_data = iov[iovcnt - 1].data;
+    proto_size = iov[iovcnt - 1].size;
     if (proto_size < PROTO_SIZE
         || proto_data[PROTO_OFF_MAGIC] != PROTO_MAGIC
         || proto_data[PROTO_OFF_VERSION] != PROTO_VERSION) {
@@ -444,48 +463,48 @@ static int zmsg_to_msg (flux_msg_t *msg, zmsg_t *zmsg)
     }
     msg->flags = proto_data[PROTO_OFF_FLAGS];
 
-    zf = zmsg_first (zmsg);
     if ((msg->flags & FLUX_MSGFLAG_ROUTE)) {
-        if (!zf) {
-            errno = EPROTO;
-            return -1;
-        }
-        while (zf && zframe_size (zf) > 0) {
+        /* On first access index == 0 && iovcnt > 0 guaranteed
+         * Re-add check if code changes. */
+        /* if (index == iovcnt) { */
+        /*     errno = EPROTO; */
+        /*     return -1; */
+        /* } */
+        while ((index < iovcnt) && iov[index].size > 0) {
             if (msg_append_route (msg,
-                                  (char *)zframe_data (zf),
-                                  zframe_size (zf)) < 0)
+                                  (char *)iov[index].data,
+                                  iov[index].size) < 0)
                 return -1;
-            zf = zmsg_next (zmsg);
+            index++;
         }
-        if (zf)
-            zf = zmsg_next (zmsg);
+        if (index < iovcnt)
+            index++;
     }
     if ((msg->flags & FLUX_MSGFLAG_TOPIC)) {
-        if (!zf) {
+        if (index == iovcnt) {
             errno = EPROTO;
             return -1;
         }
-        if (!(msg->topic = zframe_strdup (zf))) {
-            errno = ENOMEM;
+        if (!(msg->topic = strndup ((char *)iov[index].data,
+                                    iov[index].size)))
             return -1;
-        }
-        if (zf)
-            zf = zmsg_next (zmsg);
+        if (index < iovcnt)
+            index++;
     }
     if ((msg->flags & FLUX_MSGFLAG_PAYLOAD)) {
-        if (!zf) {
+        if (index == iovcnt) {
             errno = EPROTO;
             return -1;
         }
-        msg->payload_size = zframe_size (zf);
+        msg->payload_size = iov[index].size;
         if (!(msg->payload = malloc (msg->payload_size)))
             return -1;
-        memcpy (msg->payload, zframe_data (zf), msg->payload_size);
-        if (zf)
-            zf = zmsg_next (zmsg);
+        memcpy (msg->payload, iov[index].data, msg->payload_size);
+        if (index < iovcnt)
+            index++;
     }
     /* proto frame required */
-    if (!zf) {
+    if (index == iovcnt) {
         errno = EPROTO;
         return -1;
     }
@@ -500,13 +519,12 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size)
 {
     flux_msg_t *msg;
     const uint8_t *p = buf;
-    zmsg_t *zmsg = NULL;
-    zframe_t *zf;
+    struct msg_iovec *iov = NULL;
+    int iovlen = 0;
+    int iovcnt = 0;
 
     if (!(msg = flux_msg_create_common ()))
         return NULL;
-    if (!(zmsg = zmsg_new ()))
-        goto nomem;
     while (p - (uint8_t *)buf < size) {
         size_t n = *p++;
         if (n == 0xff) {
@@ -521,20 +539,24 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size)
             errno = EINVAL;
             goto error;
         }
-        if (!(zf = zframe_new (p, n)))
-            goto nomem;
-        if (zmsg_append (zmsg, &zf) < 0)
-            goto nomem;
+        if (iovlen <= iovcnt) {
+            struct msg_iovec *tmp;
+            iovlen += IOVECINCR;
+            if (!(tmp = realloc (iov, sizeof (*iov) * iovlen)))
+                goto error;
+            iov = tmp;
+        }
+        iov[iovcnt].data = p;
+        iov[iovcnt].size = n;
+        iovcnt++;
         p += n;
     }
-    if (zmsg_to_msg (msg, zmsg) < 0)
+    if (iovec_to_msg (msg, iov, iovcnt) < 0)
         goto error;
-    zmsg_destroy (&zmsg);
+    free (iov);
     return msg;
-nomem:
-    errno = ENOMEM;
 error:
-    zmsg_destroy (&zmsg);
+    ERRNO_SAFE_WRAP (free, iov);
     flux_msg_destroy (msg);
     return NULL;
 }
@@ -1637,59 +1659,69 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
     flux_msg_fprint_ts (f, msg, -1);
 }
 
-static zmsg_t *msg_to_zmsg (const flux_msg_t *msg)
+static int msg_to_iovec (const flux_msg_t *msg,
+                         uint8_t *proto,
+                         int proto_len,
+                         struct msg_iovec **iovp,
+                         int *iovcntp)
 {
-    uint8_t proto[PROTO_SIZE];
-    zmsg_t *zmsg = NULL;
+    struct msg_iovec *iov = NULL;
+    int index;
+    int frame_count;
 
-    if (!(zmsg = zmsg_new ())) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    msg_proto_setup (msg, proto, PROTO_SIZE);
-    if (zmsg_addmem (zmsg, proto, PROTO_SIZE) < 0) {
-        errno = ENOMEM;
-        goto error;
-    }
+    if ((frame_count = flux_msg_frames (msg)) < 0)
+        return -1;
+
+    assert (frame_count);
+
+    if (!(iov = malloc (frame_count * sizeof (*iov))))
+        return -1;
+
+    index = frame_count - 1;
+
+    assert (proto_len >= PROTO_SIZE);
+    msg_proto_setup (msg, proto, proto_len);
+    iov[index].data = proto;
+    iov[index].size = PROTO_SIZE;
     if (msg->flags & FLUX_MSGFLAG_PAYLOAD) {
-        if (zmsg_pushmem (zmsg, msg->payload, msg->payload_size) < 0) {
-            errno = ENOMEM;
-            goto error;
-        }
+        index--;
+        assert (index >= 0);
+        iov[index].data = msg->payload;
+        iov[index].size = msg->payload_size;
     }
     if (msg->flags & FLUX_MSGFLAG_TOPIC) {
-        if (zmsg_pushmem (zmsg, msg->topic, strlen (msg->topic)) < 0) {
-            errno = ENOMEM;
-            goto error;
-        }
+        index--;
+        assert (index >= 0);
+        iov[index].data = msg->topic;
+        iov[index].size = strlen (msg->topic);
     }
     if (msg->flags & FLUX_MSGFLAG_ROUTE) {
         struct route_id *r = NULL;
-        if (zmsg_pushmem (zmsg, NULL, 0) < 0) {
-            errno = ENOMEM;
-            goto error;
-        }
+        /* delimeter */
+        index--;
+        assert (index >= 0);
+        iov[index].data = NULL;
+        iov[index].size = 0;
         list_for_each_rev (&msg->routes, r, route_id_node) {
-            if (zmsg_pushstr (zmsg, r->id) < 0) {
-                errno = ENOMEM;
-                goto error;
-            }
+            index--;
+            assert (index >= 0);
+            iov[index].data = r->id;
+            iov[index].size = strlen (r->id);
         }
     }
-    return zmsg;
-error:
-    zmsg_destroy (&zmsg);
-    return NULL;
+    (*iovp) = iov;
+    (*iovcntp) = frame_count;
+    return 0;
 }
 
 int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)
 {
     void *handle;
     int flags = ZMQ_SNDMORE;
-    zmsg_t *zmsg = NULL;
-    zframe_t *zf;
-    size_t count = 0;
-    size_t frames;
+    struct msg_iovec *iov = NULL;
+    int iovcnt;
+    uint8_t proto[PROTO_SIZE];
+    int count = 0;
     int rc = -1;
 
     if (!sock || !msg) {
@@ -1697,28 +1729,26 @@ int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)
         return -1;
     }
 
-    if (!(zmsg = msg_to_zmsg (msg)))
-        return -1;
+    if (msg_to_iovec (msg, proto, PROTO_SIZE, &iov, &iovcnt) < 0)
+        goto error;
 
     if (nonblock)
         flags |= ZMQ_DONTWAIT;
 
     handle = zsock_resolve (sock);
-    frames = zmsg_size (zmsg);
-    zf = zmsg_first (zmsg);
-    while (zf) {
-        if (++count == frames)
+    while (count < iovcnt) {
+        if ((count + 1) == iovcnt)
             flags &= ~ZMQ_SNDMORE;
         if (zmq_send (handle,
-                      zframe_data (zf),
-                      zframe_size (zf),
+                      iov[count].data,
+                      iov[count].size,
                       flags) < 0)
             goto error;
-        zf = zmsg_next (zmsg);
+        count++;
     }
     rc = 0;
 error:
-    zmsg_destroy (&zmsg);
+    ERRNO_SAFE_WRAP (free, iov);
     return rc;
 }
 
@@ -1727,32 +1757,12 @@ int flux_msg_sendzsock (void *sock, const flux_msg_t *msg)
     return flux_msg_sendzsock_ex (sock, msg, false);
 }
 
-static int recvzsock_frame (void *handle, zmsg_t *zmsg)
-{
-    zframe_t *zf = NULL;
-    zmq_msg_t zmqmsg;
-    int rv = -1;
-
-    zmq_msg_init (&zmqmsg);
-    if (zmq_recvmsg (handle, &zmqmsg, 0) < 0)
-        goto error;
-    if (!(zf = zframe_new (zmq_msg_data (&zmqmsg), zmq_msg_size (&zmqmsg))))
-        goto error;
-    zframe_set_more (zf, zsock_rcvmore (handle));
-    if (zmsg_append (zmsg, &zf))
-        goto error;
-    rv = 0;
-error:
-    if (rv < 0)
-        zframe_destroy (&zf);
-    zmq_msg_close (&zmqmsg);
-    return rv;
-}
-
 flux_msg_t *flux_msg_recvzsock (void *sock)
 {
     void *handle;
-    zmsg_t *zmsg = NULL;
+    struct msg_iovec *iov = NULL;
+    int iovlen = 0;
+    int iovcnt = 0;
     flux_msg_t *msg;
     flux_msg_t *rv = NULL;
 
@@ -1760,14 +1770,36 @@ flux_msg_t *flux_msg_recvzsock (void *sock)
         errno = EINVAL;
         return NULL;
     }
-    if (!(zmsg = zmsg_new ())) {
-        errno = ENOMEM;
-        return NULL;
-    }
+
+    /* N.B. we need to store a zmq_msg_t for each iovec entry so that
+     * the memory is available during the call to iovec_to_msg().  We
+     * use the msg_iovec's "transport_data" field to store the entry
+     * and then clear/free it later.
+     */
     handle = zsock_resolve (sock);
     while (true) {
-        if (recvzsock_frame (handle, zmsg) < 0)
+        zmq_msg_t *msgdata;
+        if (iovlen <= iovcnt) {
+            struct msg_iovec *tmp;
+            iovlen += IOVECINCR;
+            if (!(tmp = realloc (iov, sizeof (*iov) * iovlen)))
+                goto error;
+            iov = tmp;
+        }
+        if (!(msgdata = malloc (sizeof (zmq_msg_t))))
             goto error;
+        zmq_msg_init (msgdata);
+        if (zmq_recvmsg (handle, msgdata, 0) < 0) {
+            int save_errno = errno;
+            zmq_msg_close (msgdata);
+            free (msgdata);
+            errno = save_errno;
+            goto error;
+        }
+        iov[iovcnt].transport_data = msgdata;
+        iov[iovcnt].data = zmq_msg_data (msgdata);
+        iov[iovcnt].size = zmq_msg_size (msgdata);
+        iovcnt++;
         if (!zsock_rcvmore (handle))
             break;
     }
@@ -1776,11 +1808,21 @@ flux_msg_t *flux_msg_recvzsock (void *sock)
         errno = ENOMEM;
         goto error;
     }
-    if (zmsg_to_msg (msg, zmsg) < 0)
+    if (iovec_to_msg (msg, iov, iovcnt) < 0)
         goto error;
     rv = msg;
 error:
-    zmsg_destroy (&zmsg);
+    if (iov) {
+        int save_errno = errno;
+        int i;
+        for (i = 0; i < iovcnt; i++) {
+            zmq_msg_t *msgdata = iov[i].transport_data;
+            zmq_msg_close (msgdata);
+            free (msgdata);
+        }
+        free (iov);
+        errno = save_errno;
+    }
     return rv;
 }
 
