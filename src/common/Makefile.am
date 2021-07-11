@@ -34,6 +34,7 @@ fluxinclude_HEADERS = core.h schedutil.h
 noinst_LTLIBRARIES = libflux-internal.la
 libflux_internal_la_SOURCES =
 libflux_internal_la_LIBADD = \
+	$(builddir)/libflux/libmessage.la \
 	$(builddir)/liblsd/liblsd.la \
 	$(builddir)/libccan/libccan.la \
 	$(builddir)/libutil/libutil.la \

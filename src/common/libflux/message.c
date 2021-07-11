@@ -39,119 +39,13 @@
 
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/errno_safe.h"
-/* czmq and ccan both define streq */
-#ifdef streq
-#undef streq
-#endif
-#include "src/common/libccan/ccan/list/list.h"
 
 #include "message.h"
 
-#define IOVECINCR 4
-
-struct flux_msg {
-    // optional route list, if FLUX_MSGFLAG_ROUTE
-    struct list_head routes;
-    int routes_len;     /* to avoid looping */
-
-    // optional topic frame, if FLUX_MSGFLAG_TOPIC
-    char *topic;
-
-    // optional payload frame, if FLUX_MSGFLAG_PAYLOAD
-    void *payload;
-    size_t payload_size;
-
-    // required proto frame data
-    uint8_t type;
-    uint8_t flags;
-    uint32_t userid;
-    uint32_t rolemask;
-    union {
-        uint32_t nodeid;  // request
-        uint32_t sequence; // event
-        uint32_t errnum; // response, keepalive
-        uint32_t aux1; // common accessor
-    };
-    union {
-        uint32_t matchtag; // request, response
-        uint32_t status; // keepalive
-        uint32_t aux2; // common accessor
-    };
-
-    json_t *json;
-    char *lasterr;
-    struct aux_item *aux;
-    int refcount;
-};
-
-struct route_id {
-    struct list_node route_id_node;
-    char id[0];                 /* variable length id stored at end of struct */
-};
-
-/* 'transport_data' is for any auxiliary transport data user may wish
- * to associate with iovec, user is responsible to free/destroy the
- * field
- */
-struct msg_iovec {
-    const void *data;
-    size_t size;
-    void *transport_data;
-};
-
-/* PROTO consists of 4 byte prelude followed by a fixed length
- * array of u32's in network byte order.
- */
-#define PROTO_MAGIC         0x8e
-#define PROTO_VERSION       1
-
-#define PROTO_OFF_MAGIC     0 /* 1 byte */
-#define PROTO_OFF_VERSION   1 /* 1 byte */
-#define PROTO_OFF_TYPE      2 /* 1 byte */
-#define PROTO_OFF_FLAGS     3 /* 1 byte */
-#define PROTO_OFF_U32_ARRAY 4
-
-/* aux1
- *
- * request - nodeid
- * response - errnum
- * event - sequence
- * keepalive - errnum
- *
- * aux2
- *
- * request - matchtag
- * response - matchtag
- * event - not used
- * keepalive - status
- */
-#define PROTO_IND_USERID    0
-#define PROTO_IND_ROLEMASK  1
-#define PROTO_IND_AUX1      2
-#define PROTO_IND_AUX2      3
-
-#define PROTO_U32_COUNT     4
-#define PROTO_SIZE          4 + (PROTO_U32_COUNT * 4)
-
-static void route_id_destroy (void *data)
-{
-    if (data) {
-        struct route_id *r = data;
-        free (r);
-    }
-}
-
-static struct route_id *route_id_create (const char *id, unsigned int id_len)
-{
-    struct route_id *r;
-    if (!(r = calloc (1, sizeof (*r) + id_len + 1)))
-        return NULL;
-    if (id && id_len) {
-        memcpy (r->id, id, id_len);
-        list_node_init (&(r->route_id_node));
-    }
-    return r;
-}
+#include "message_private.h"
+#include "message_iovec.h"
+#include "message_route.h"
+#include "message_proto.h"
 
 static void msg_setup_type (flux_msg_t *msg)
 {
@@ -295,28 +189,6 @@ ssize_t flux_msg_encode_size (const flux_msg_t *msg)
     return size;
 }
 
-static void proto_set_u32 (uint8_t *data, int index, uint32_t val)
-{
-    uint32_t x = htonl (val);
-    int offset = PROTO_OFF_U32_ARRAY + index * 4;
-    memcpy (&data[offset], &x, sizeof (x));
-}
-
-static void msg_proto_setup (const flux_msg_t *msg, uint8_t *data, int len)
-{
-    assert (len >= PROTO_SIZE);
-    assert (msg->type != FLUX_MSGTYPE_ANY);
-    memset (data, 0, len);
-    data[PROTO_OFF_MAGIC] = PROTO_MAGIC;
-    data[PROTO_OFF_VERSION] = PROTO_VERSION;
-    data[PROTO_OFF_TYPE] = msg->type;
-    data[PROTO_OFF_FLAGS] = msg->flags;
-    proto_set_u32 (data, PROTO_IND_USERID, msg->userid);
-    proto_set_u32 (data, PROTO_IND_ROLEMASK, msg->rolemask);
-    proto_set_u32 (data, PROTO_IND_AUX1, msg->aux1);
-    proto_set_u32 (data, PROTO_IND_AUX2, msg->aux2);
-}
-
 static ssize_t encode_frame (uint8_t *buf,
                              size_t buf_len,
                              void *frame,
@@ -401,116 +273,6 @@ int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size)
                            PROTO_SIZE)) < 0)
         return -1;
     total += n;
-    return 0;
-}
-
-static void proto_get_u32 (const uint8_t *data, int index, uint32_t *val)
-{
-    uint32_t x;
-    int offset = PROTO_OFF_U32_ARRAY + index * 4;
-    memcpy (&x, &data[offset], sizeof (x));
-    *val = ntohl (x);
-}
-
-static int msg_route_append (flux_msg_t *msg,
-                             const char *id,
-                             unsigned int id_len)
-{
-    struct route_id *r;
-    assert (msg);
-    assert ((msg->flags & FLUX_MSGFLAG_ROUTE));
-    assert (id);
-    if (!(r = route_id_create (id, id_len)))
-        return -1;
-    list_add_tail (&msg->routes, &r->route_id_node);
-    msg->routes_len++;
-    return 0;
-}
-
-static int iovec_to_msg (flux_msg_t *msg,
-                         struct msg_iovec *iov,
-                         int iovcnt)
-{
-    unsigned int index = 0;
-    const uint8_t *proto_data;
-    size_t proto_size;
-
-    assert (msg);
-    assert (iov);
-
-    if (!iovcnt) {
-        errno = EPROTO;
-        return -1;
-    }
-
-    /* proto frame is last frame */
-    proto_data = iov[iovcnt - 1].data;
-    proto_size = iov[iovcnt - 1].size;
-    if (proto_size < PROTO_SIZE
-        || proto_data[PROTO_OFF_MAGIC] != PROTO_MAGIC
-        || proto_data[PROTO_OFF_VERSION] != PROTO_VERSION) {
-        errno = EPROTO;
-        return -1;
-    }
-    msg->type = proto_data[PROTO_OFF_TYPE];
-    if (msg->type != FLUX_MSGTYPE_REQUEST
-        && msg->type != FLUX_MSGTYPE_RESPONSE
-        && msg->type != FLUX_MSGTYPE_EVENT
-        && msg->type != FLUX_MSGTYPE_KEEPALIVE) {
-        errno = EPROTO;
-        return -1;
-    }
-    msg->flags = proto_data[PROTO_OFF_FLAGS];
-
-    if ((msg->flags & FLUX_MSGFLAG_ROUTE)) {
-        /* On first access index == 0 && iovcnt > 0 guaranteed
-         * Re-add check if code changes. */
-        /* if (index == iovcnt) { */
-        /*     errno = EPROTO; */
-        /*     return -1; */
-        /* } */
-        while ((index < iovcnt) && iov[index].size > 0) {
-            if (msg_route_append (msg,
-                                  (char *)iov[index].data,
-                                  iov[index].size) < 0)
-                return -1;
-            index++;
-        }
-        if (index < iovcnt)
-            index++;
-    }
-    if ((msg->flags & FLUX_MSGFLAG_TOPIC)) {
-        if (index == iovcnt) {
-            errno = EPROTO;
-            return -1;
-        }
-        if (!(msg->topic = strndup ((char *)iov[index].data,
-                                    iov[index].size)))
-            return -1;
-        if (index < iovcnt)
-            index++;
-    }
-    if ((msg->flags & FLUX_MSGFLAG_PAYLOAD)) {
-        if (index == iovcnt) {
-            errno = EPROTO;
-            return -1;
-        }
-        msg->payload_size = iov[index].size;
-        if (!(msg->payload = malloc (msg->payload_size)))
-            return -1;
-        memcpy (msg->payload, iov[index].data, msg->payload_size);
-        if (index < iovcnt)
-            index++;
-    }
-    /* proto frame required */
-    if (index == iovcnt) {
-        errno = EPROTO;
-        return -1;
-    }
-    proto_get_u32 (proto_data, PROTO_IND_USERID, &msg->userid);
-    proto_get_u32 (proto_data, PROTO_IND_ROLEMASK, &msg->rolemask);
-    proto_get_u32 (proto_data, PROTO_IND_AUX1, &msg->aux1);
-    proto_get_u32 (proto_data, PROTO_IND_AUX2, &msg->aux2);
     return 0;
 }
 
@@ -963,34 +725,11 @@ void flux_msg_route_disable (flux_msg_t *msg)
     (void) flux_msg_set_flags (msg, msg->flags & ~(uint8_t)FLUX_MSGFLAG_ROUTE);
 }
 
-static void msg_route_clear (flux_msg_t *msg)
-{
-    struct route_id *r;
-    assert (msg);
-    assert ((msg->flags & FLUX_MSGFLAG_ROUTE));
-    while ((r = list_pop (&msg->routes, struct route_id, route_id_node)))
-        route_id_destroy (r);
-    list_head_init (&msg->routes);
-    msg->routes_len = 0;
-}
-
 void flux_msg_route_clear (flux_msg_t *msg)
 {
     if (!msg || (!(msg->flags & FLUX_MSGFLAG_ROUTE)))
         return;
     msg_route_clear (msg);
-}
-
-static int msg_route_push (flux_msg_t *msg,
-                           const char *id,
-                           unsigned int id_len)
-{
-    struct route_id *r;
-    if (!(r = route_id_create (id, strlen (id))))
-        return -1;
-    list_add (&msg->routes, &r->route_id_node);
-    msg->routes_len++;
-    return 0;
 }
 
 int flux_msg_route_push (flux_msg_t *msg, const char *id)
@@ -1004,18 +743,6 @@ int flux_msg_route_push (flux_msg_t *msg, const char *id)
         return -1;
     }
     return msg_route_push (msg, id, strlen (id));
-}
-
-static int msg_route_delete_last (flux_msg_t *msg)
-{
-    struct route_id *r;
-    assert (msg);
-    assert ((msg->flags & FLUX_MSGFLAG_ROUTE));
-    if ((r = list_pop (&msg->routes, struct route_id, route_id_node))) {
-        route_id_destroy (r);
-        msg->routes_len--;
-    }
-    return 0;
 }
 
 int flux_msg_route_delete_last (flux_msg_t *msg)
@@ -1684,67 +1411,6 @@ void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)
 void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
 {
     flux_msg_fprint_ts (f, msg, -1);
-}
-
-static int msg_to_iovec (const flux_msg_t *msg,
-                         uint8_t *proto,
-                         int proto_len,
-                         struct msg_iovec **iovp,
-                         int *iovcntp)
-{
-    struct msg_iovec *iov = NULL;
-    int index;
-    int frame_count;
-
-    /* msg never completed initial setup */
-    if (msg->type == FLUX_MSGTYPE_ANY) {
-        errno = EPROTO;
-        return -1;
-    }
-
-    if ((frame_count = flux_msg_frames (msg)) < 0)
-        return -1;
-
-    assert (frame_count);
-
-    if (!(iov = malloc (frame_count * sizeof (*iov))))
-        return -1;
-
-    index = frame_count - 1;
-
-    assert (proto_len >= PROTO_SIZE);
-    msg_proto_setup (msg, proto, proto_len);
-    iov[index].data = proto;
-    iov[index].size = PROTO_SIZE;
-    if (msg->flags & FLUX_MSGFLAG_PAYLOAD) {
-        index--;
-        assert (index >= 0);
-        iov[index].data = msg->payload;
-        iov[index].size = msg->payload_size;
-    }
-    if (msg->flags & FLUX_MSGFLAG_TOPIC) {
-        index--;
-        assert (index >= 0);
-        iov[index].data = msg->topic;
-        iov[index].size = strlen (msg->topic);
-    }
-    if (msg->flags & FLUX_MSGFLAG_ROUTE) {
-        struct route_id *r = NULL;
-        /* delimeter */
-        index--;
-        assert (index >= 0);
-        iov[index].data = NULL;
-        iov[index].size = 0;
-        list_for_each_rev (&msg->routes, r, route_id_node) {
-            index--;
-            assert (index >= 0);
-            iov[index].data = r->id;
-            iov[index].size = strlen (r->id);
-        }
-    }
-    (*iovp) = iov;
-    (*iovcntp) = frame_count;
-    return 0;
 }
 
 int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)

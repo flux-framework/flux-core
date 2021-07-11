@@ -88,7 +88,8 @@ nodist_fluxcoreinclude_HEADERS = \
 	version.h
 
 noinst_LTLIBRARIES = \
-	libflux.la
+	libflux.la \
+	libmessage.la
 
 libflux_la_SOURCES = \
 	flog.c \
@@ -133,6 +134,19 @@ libflux_la_CPPFLAGS = \
 	$(AM_CPPFLAGS)
 libflux_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
 
+libmessage_la_SOURCES = \
+	message_private.h \
+	message_iovec.h \
+	message_iovec.c \
+	message_route.h \
+	message_route.c \
+	message_proto.h \
+	message_proto.c
+
+
+libmessage_la_CPPFLAGS = $(AM_CPPFLAGS)
+libmessage_la_LDFLAGS = -avoid-version -module -shared -export-dynamic
+
 TESTS = test_message.t \
 	test_msglist.t \
 	test_request.t \
@@ -164,14 +178,9 @@ TESTS = test_message.t \
 test_ldadd = \
 	$(top_builddir)/src/common/libtestutil/libtestutil.la \
 	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(top_builddir)/src/common/libidset/libidset.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
-	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(top_builddir)/src/common/libtomlc99/libtomlc99.la \
-	$(top_builddir)/src/common/libev/libev.la \
-	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
-	$(top_builddir)/src/common/libccan/libccan.la \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
