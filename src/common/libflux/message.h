@@ -89,7 +89,9 @@ int flux_match_asprintf (struct flux_match *m,
     NULL \
 )
 
-/* Create a new Flux message.
+/* Create a new Flux message.  If the type of the message is not yet
+ * known at creation time, FLUX_MSGTYPE_ANY can be used.
+ *
  * Returns new message or null on failure, with errno set (e.g. ENOMEM, EINVAL)
  * Caller must destroy message with flux_msg_destroy() or equivalent.
  */

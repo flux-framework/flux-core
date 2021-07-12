@@ -153,20 +153,9 @@ static struct route_id *route_id_create (const char *id, unsigned int id_len)
     return r;
 }
 
-static flux_msg_t *flux_msg_create_common (void)
+static void msg_setup_type (flux_msg_t *msg)
 {
-    flux_msg_t *msg;
-
-    if (!(msg = calloc (1, sizeof (*msg))))
-        return NULL;
-    list_head_init (&msg->routes);
-    msg->refcount = 1;
-    return msg;
-}
-
-static int msg_setup_type (flux_msg_t *msg, int type)
-{
-    switch (type) {
+    switch (msg->type) {
         case FLUX_MSGTYPE_REQUEST:
             msg->nodeid = FLUX_NODEID_ANY;
             msg->matchtag = FLUX_MATCHTAG_NONE;
@@ -183,28 +172,32 @@ static int msg_setup_type (flux_msg_t *msg, int type)
             msg->errnum = 0;
             msg->status = 0;
             break;
-        default:
-            errno = EINVAL;
-            return -1;
     }
-    msg->type = type;
-    return 0;
 }
 
 flux_msg_t *flux_msg_create (int type)
 {
     flux_msg_t *msg;
 
-    if (!(msg = flux_msg_create_common ()))
+    if (type != FLUX_MSGTYPE_REQUEST
+        && type != FLUX_MSGTYPE_RESPONSE
+        && type != FLUX_MSGTYPE_EVENT
+        && type != FLUX_MSGTYPE_KEEPALIVE
+        && type != FLUX_MSGTYPE_ANY) {
+        errno = EINVAL;
         return NULL;
+    }
+
+    if (!(msg = calloc (1, sizeof (*msg))))
+        return NULL;
+    list_head_init (&msg->routes);
+    msg->type = type;
+    if (msg->type != FLUX_MSGTYPE_ANY)
+        msg_setup_type (msg);
     msg->userid = FLUX_USERID_UNKNOWN;
     msg->rolemask = FLUX_ROLE_NONE;
-    if (msg_setup_type (msg, type) < 0)
-        goto error;
+    msg->refcount = 1;
     return msg;
-error:
-    flux_msg_destroy (msg);
-    return NULL;
 }
 
 void flux_msg_destroy (flux_msg_t *msg)
@@ -312,6 +305,7 @@ static void proto_set_u32 (uint8_t *data, int index, uint32_t val)
 static void msg_proto_setup (const flux_msg_t *msg, uint8_t *data, int len)
 {
     assert (len >= PROTO_SIZE);
+    assert (msg->type != FLUX_MSGTYPE_ANY);
     memset (data, 0, len);
     data[PROTO_OFF_MAGIC] = PROTO_MAGIC;
     data[PROTO_OFF_VERSION] = PROTO_VERSION;
@@ -359,6 +353,11 @@ int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size)
 
     if (!msg) {
         errno = EINVAL;
+        return -1;
+    }
+    /* msg never completed initial setup */
+    if (msg->type == FLUX_MSGTYPE_ANY) {
+        errno = EPROTO;
         return -1;
     }
     if (msg->flags & FLUX_MSGFLAG_ROUTE) {
@@ -523,7 +522,7 @@ flux_msg_t *flux_msg_decode (const void *buf, size_t size)
     int iovlen = 0;
     int iovcnt = 0;
 
-    if (!(msg = flux_msg_create_common ()))
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_ANY)))
         return NULL;
     while (p - (uint8_t *)buf < size) {
         size_t n = *p++;
@@ -567,8 +566,15 @@ int flux_msg_set_type (flux_msg_t *msg, int type)
         errno = EINVAL;
         return -1;
     }
-    if (msg_setup_type (msg, type) < 0)
+    if (type != FLUX_MSGTYPE_REQUEST
+        && type != FLUX_MSGTYPE_RESPONSE
+        && type != FLUX_MSGTYPE_EVENT
+        && type != FLUX_MSGTYPE_KEEPALIVE) {
+        errno = EINVAL;
         return -1;
+    }
+    msg->type = type;
+    msg_setup_type (msg);
     return 0;
 }
 
@@ -1403,7 +1409,7 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
         return NULL;
     }
 
-    if (!(cpy = flux_msg_create_common ()))
+    if (!(cpy = flux_msg_create (FLUX_MSGTYPE_ANY)))
         return NULL;
 
     cpy->type = msg->type;
@@ -1669,6 +1675,12 @@ static int msg_to_iovec (const flux_msg_t *msg,
     int index;
     int frame_count;
 
+    /* msg never completed initial setup */
+    if (msg->type == FLUX_MSGTYPE_ANY) {
+        errno = EPROTO;
+        return -1;
+    }
+
     if ((frame_count = flux_msg_frames (msg)) < 0)
         return -1;
 
@@ -1804,10 +1816,8 @@ flux_msg_t *flux_msg_recvzsock (void *sock)
             break;
     }
 
-    if (!(msg = flux_msg_create_common ())) {
-        errno = ENOMEM;
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_ANY)))
         goto error;
-    }
     if (iovec_to_msg (msg, iov, iovcnt) < 0)
         goto error;
     rv = msg;

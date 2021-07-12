@@ -25,7 +25,7 @@ static bool verbose = false;
 void check_cornercase (void)
 {
     flux_msg_t *msg;
-    flux_msg_t *req, *rsp, *evt;
+    flux_msg_t *req, *rsp, *evt, *any;
     struct flux_msg_cred cred;
     uint32_t seq, nodeid;
     uint8_t encodebuf[64];
@@ -48,6 +48,8 @@ void check_cornercase (void)
     if (!(rsp = flux_msg_create (FLUX_MSGTYPE_RESPONSE)))
         BAIL_OUT ("flux_msg_create failed");
     if (!(evt = flux_msg_create (FLUX_MSGTYPE_EVENT)))
+        BAIL_OUT ("flux_msg_create failed");
+    if (!(any = flux_msg_create (FLUX_MSGTYPE_ANY)))
         BAIL_OUT ("flux_msg_create failed");
 
     lives_ok ({flux_msg_destroy (NULL);},
@@ -76,6 +78,9 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_encode (NULL, encodebuf, encodesize) < 0 && errno == EINVAL,
         "flux_msg_encode fails on EINVAL with msg=NULL");
+    errno = 0;
+    ok (flux_msg_encode (any, encodebuf, encodesize) < 0 && errno == EPROTO,
+        "flux_msg_encode fails on EPROTO with msg type ANY");
     errno = 0;
     ok (flux_msg_frames (NULL) < 0 && errno == EINVAL,
         "flux_msg_frames returns -1 errno EINVAL on msg = NULL");
@@ -697,6 +702,12 @@ void check_proto (void)
     int errnum;
     int type;
 
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_ANY)) != NULL,
+        "flux_msg_create works");
+    ok (flux_msg_get_type (msg, &type) == 0 && type == FLUX_MSGTYPE_ANY,
+        "flux_msg_get_type works with type FLUX_MSGTYPE_ANY");
+    flux_msg_destroy (msg);
+
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_RESPONSE)) != NULL,
         "flux_msg_create works");
     ok (flux_msg_get_type (msg, &type) == 0 && type == FLUX_MSGTYPE_RESPONSE,
@@ -941,7 +952,7 @@ void check_encode (void)
 void check_sendzsock (void)
 {
     zsock_t *zsock[2] = { NULL, NULL };
-    flux_msg_t *msg, *msg2;
+    flux_msg_t *any, *msg, *msg2;
     const char *topic;
     int type;
     const char *uri = "inproc://test";
@@ -961,6 +972,9 @@ void check_sendzsock (void)
                     && (zsock[1] = zsock_new_pair (uri)) != NULL,
         "got inproc socket pair");
 
+    if (!(any = flux_msg_create (FLUX_MSGTYPE_ANY)))
+        BAIL_OUT ("flux_msg_create failed");
+
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL
             && flux_msg_set_topic (msg, "foo.bar") == 0,
         "created test message");
@@ -968,8 +982,12 @@ void check_sendzsock (void)
     /* corner case tests */
     ok (flux_msg_sendzsock (NULL, msg) < 0 && errno == EINVAL,
         "flux_msg_sendzsock returns < 0 and EINVAL on dest = NULL");
+    ok (flux_msg_sendzsock (zsock[1], any) < 0 && errno == EPROTO,
+        "flux_msg_sendzsock returns < 0 and EPROTO on msg w/ type = ANY");
     ok (flux_msg_sendzsock_ex (NULL, msg, true) < 0 && errno == EINVAL,
         "flux_msg_sendzsock_ex returns < 0 and EINVAL on dest = NULL");
+    ok (flux_msg_sendzsock_ex (zsock[1], any, true) < 0 && errno == EPROTO,
+        "flux_msg_sendzsock_ex returns < 0 and EPROTO on msg w/ type = ANY");
     ok (flux_msg_recvzsock (NULL) == NULL && errno == EINVAL,
         "flux_msg_recvzsock returns NULL and EINVAL on dest = NULL");
 
