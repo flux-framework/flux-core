@@ -257,7 +257,7 @@ void *flux_msg_aux_get (const flux_msg_t *msg, const char *name)
     return aux_get (msg->aux, name);
 }
 
-void encode_count (ssize_t *size, size_t len)
+static void encode_count (ssize_t *size, size_t len)
 {
     if (len < 255)
         (*size) += 1;
@@ -501,7 +501,7 @@ static int zmsg_to_msg (flux_msg_t *msg, zmsg_t *zmsg)
 flux_msg_t *flux_msg_decode (const void *buf, size_t size)
 {
     flux_msg_t *msg;
-    uint8_t const *p = buf;
+    const uint8_t *p = buf;
     zmsg_t *zmsg = NULL;
     zframe_t *zf;
 
@@ -1494,7 +1494,7 @@ const char *flux_msg_typestr (int type)
     return "unknown";
 }
 
-static const char *msgtype_shortstr (int type)
+static const char *type2prefix (int type)
 {
     int i;
 
@@ -1596,7 +1596,7 @@ void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)
         fprintf (f, "NULL");
         return;
     }
-    prefix = msgtype_shortstr (msg->type);
+    prefix = type2prefix (msg->type);
     /* Timestamp
      */
     if (timestamp >= 0.)
@@ -1735,10 +1735,11 @@ error:
 int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)
 {
     void *handle;
-    int flags = ZFRAME_REUSE | ZFRAME_MORE;
+    int flags = ZFRAME_MORE;
     zmsg_t *zmsg = NULL;
     zframe_t *zf;
     size_t count = 0;
+    size_t frames;
     int rc = -1;
 
     if (!sock || !msg) {
@@ -1753,13 +1754,16 @@ int flux_msg_sendzsock_ex (void *sock, const flux_msg_t *msg, bool nonblock)
         flags |= ZFRAME_DONTWAIT;
 
     handle = zsock_resolve (sock);
-    zf = zmsg_first (zmsg);
+    frames = zmsg_size (zmsg);
+    zf = zmsg_pop (zmsg);
     while (zf) {
-        if (++count == zmsg_size (zmsg))
+        if (++count == frames)
             flags &= ~ZFRAME_MORE;
-        if (zframe_send (&zf, handle, flags) < 0)
+        if (zframe_send (&zf, handle, flags) < 0) {
+            zframe_destroy (&zf);
             goto error;
-        zf = zmsg_next (zmsg);
+        }
+        zf = zmsg_pop (zmsg);
     }
     rc = 0;
 error:
@@ -1777,6 +1781,10 @@ flux_msg_t *flux_msg_recvzsock (void *sock)
     zmsg_t *zmsg;
     flux_msg_t *msg;
 
+    if (!sock) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!(zmsg = zmsg_recv (sock)))
         return NULL;
     if (!(msg = flux_msg_create_common ())) {

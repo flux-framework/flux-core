@@ -964,6 +964,14 @@ void check_sendzsock (void)
             && flux_msg_set_topic (msg, "foo.bar") == 0,
         "created test message");
 
+    /* corner case tests */
+    ok (flux_msg_sendzsock (NULL, msg) < 0 && errno == EINVAL,
+        "flux_msg_sendzsock returns < 0 and EINVAL on dest = NULL");
+    ok (flux_msg_sendzsock_ex (NULL, msg, true) < 0 && errno == EINVAL,
+        "flux_msg_sendzsock_ex returns < 0 and EINVAL on dest = NULL");
+    ok (flux_msg_recvzsock (NULL) == NULL && errno == EINVAL,
+        "flux_msg_recvzsock returns NULL and EINVAL on dest = NULL");
+
     ok (flux_msg_sendzsock (zsock[1], msg) == 0,
         "flux_msg_sendzsock works");
     ok ((msg2 = flux_msg_recvzsock (zsock[0])) != NULL,
@@ -1047,11 +1055,11 @@ void check_copy (void)
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)) != NULL,
         "created request");
     ok (flux_msg_enable_route (msg) == 0,
-        "added route delim");
+        "enable routes");
     ok (flux_msg_push_route (msg, "first") == 0,
-        "added route delim");
+        "added route 1");
     ok (flux_msg_push_route (msg, "second") == 0,
-        "added route delim");
+        "added route 2");
     ok (flux_msg_set_topic (msg, "foo") == 0,
         "set topic string");
     ok (flux_msg_set_payload (msg, buf, sizeof (buf)) == 0,
@@ -1065,7 +1073,7 @@ void check_copy (void)
              && cpylen == sizeof (buf) && memcmp (cpybuf, buf, cpylen) == 0
              && flux_msg_get_route_count (cpy) == 2
              && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
-        "copy is request: w/route delim, topic, and payload");
+        "copy is request: w/routes, topic, and payload");
 
     s = NULL;
     ok (flux_msg_pop_route (cpy, &s) == 0 && s != NULL,
@@ -1090,7 +1098,7 @@ void check_copy (void)
              && !flux_msg_has_payload (cpy)
              && flux_msg_get_route_count (cpy) == 2
              && flux_msg_get_topic (cpy, &topic) == 0 && !strcmp (topic,"foo"),
-        "copy is request: w/route delim, topic, and no payload");
+        "copy is request: w/routes, topic, and no payload");
     flux_msg_destroy (cpy);
     flux_msg_destroy (msg);
 }
