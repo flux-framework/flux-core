@@ -964,6 +964,14 @@ void check_sendzsock (void)
             && flux_msg_set_topic (msg, "foo.bar") == 0,
         "created test message");
 
+    /* corner case tests */
+    ok (flux_msg_sendzsock (NULL, msg) < 0 && errno == EINVAL,
+        "flux_msg_sendzsock returns < 0 and EINVAL on dest = NULL");
+    ok (flux_msg_sendzsock_ex (NULL, msg, true) < 0 && errno == EINVAL,
+        "flux_msg_sendzsock_ex returns < 0 and EINVAL on dest = NULL");
+    ok (flux_msg_recvzsock (NULL) == NULL && errno == EINVAL,
+        "flux_msg_recvzsock returns NULL and EINVAL on dest = NULL");
+
     ok (flux_msg_sendzsock (zsock[1], msg) == 0,
         "flux_msg_sendzsock works");
     ok ((msg2 = flux_msg_recvzsock (zsock[0])) != NULL,

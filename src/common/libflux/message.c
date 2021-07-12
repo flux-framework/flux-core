@@ -1777,6 +1777,10 @@ flux_msg_t *flux_msg_recvzsock (void *sock)
     zmsg_t *zmsg;
     flux_msg_t *msg;
 
+    if (!sock) {
+        errno = EINVAL;
+        return NULL;
+    }
     if (!(zmsg = zmsg_recv (sock)))
         return NULL;
     if (!(msg = flux_msg_create_common ())) {
