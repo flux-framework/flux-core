@@ -43,13 +43,11 @@ void msghand (flux_t *h, flux_msg_handler_t *mh,
 
 bool msgcmp (const flux_msg_t *msg, void *arg)
 {
-    char *id = NULL;
+    const char *id;
     bool match = false;
-    if (flux_msg_get_route_first (msg, &id) == 0
+    if ((id = flux_msg_route_first (msg))
         && (!strcmp (id, "19") || !strcmp (id, "18") || !strcmp (id, "17")))
         match = true;
-    if (id)
-        free (id);
     return match;
 }
 
@@ -257,7 +255,8 @@ int main (int argc, char *argv[])
         snprintf (s, sizeof (s), "%d", i);
         if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
             break;
-        if (flux_msg_enable_route (msg) < 0 || flux_msg_push_route (msg, s) < 0)
+        flux_msg_route_enable (msg);
+        if (flux_msg_route_push (msg, s) < 0)
             break;
         if (!(w = wait_create_msg_handler (NULL, NULL, msg, &count, msghand)))
             break;

@@ -165,17 +165,15 @@ void basic_api_tests (void)
 
 bool msgcmp (const flux_msg_t *msg, void *arg)
 {
-    char *id = NULL;
+    const char *id;
     bool match = false;
-    if (flux_msg_get_route_first (msg, &id) == 0
+    if ((id = flux_msg_route_first (msg))
         && (!strcmp (id, "1")
             || !strcmp (id, "2")
             || !strcmp (id, "3")
             || !strcmp (id, "4")
             || !strcmp (id, "5")))
         match = true;
-    if (id)
-        free (id);
     return match;
 }
 
@@ -215,7 +213,8 @@ void basic_remove_tests (void)
         snprintf (s, sizeof (s), "%d", i);
         if (!(msg = flux_msg_create (FLUX_MSGTYPE_REQUEST)))
             break;
-        if (flux_msg_enable_route (msg) < 0 || flux_msg_push_route (msg, s) < 0)
+        flux_msg_route_enable (msg);
+        if (flux_msg_route_push (msg, s) < 0)
             break;
         ok (!kvssync_add (root, cb, NULL, NULL, msg, NULL, i),
             "kvssync_add w/ seq = %d works", i);

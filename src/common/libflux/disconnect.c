@@ -21,7 +21,7 @@ bool flux_disconnect_match (const flux_msg_t *msg1, const flux_msg_t *msg2)
     struct flux_msg_cred cred;
     uint32_t userid;
 
-    if (!flux_msg_match_route_first (msg1, msg2))
+    if (!flux_msg_route_match_first (msg1, msg2))
         return false;
 
     if (flux_msg_get_cred (msg1, &cred) < 0)

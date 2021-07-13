@@ -259,12 +259,12 @@ flux_msg_t *module_recvmsg (module_t *p)
         goto error;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            if (flux_msg_pop_route (msg, NULL) < 0)
+            if (flux_msg_route_delete_last (msg) < 0)
                 goto error;
             break;
         case FLUX_MSGTYPE_REQUEST:
         case FLUX_MSGTYPE_EVENT:
-            if (flux_msg_push_route (msg, p->uuid_str) < 0)
+            if (flux_msg_route_push (msg, p->uuid_str) < 0)
                 goto error;
             break;
         default:
@@ -312,7 +312,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
         case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
             if (!(cpy = flux_msg_copy (msg, true)))
                 goto done;
-            if (flux_msg_push_route (cpy, p->modhash->uuid_str) < 0)
+            if (flux_msg_route_push (cpy, p->modhash->uuid_str) < 0)
                 goto done;
             if (flux_msg_sendzsock (p->sock, cpy) < 0)
                 goto done;
@@ -321,7 +321,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
         case FLUX_MSGTYPE_RESPONSE: { /* simulate ROUTER socket */
             if (!(cpy = flux_msg_copy (msg, true)))
                 goto done;
-            if (flux_msg_pop_route (cpy, NULL) < 0)
+            if (flux_msg_route_delete_last (cpy) < 0)
                 goto done;
             if (flux_msg_sendzsock (p->sock, cpy) < 0)
                 goto done;
@@ -340,26 +340,20 @@ done:
 
 int module_response_sendmsg (modhash_t *mh, const flux_msg_t *msg)
 {
-    char *uuid = NULL;
-    int rc = -1;
+    const char *uuid;
     module_t *p;
 
     if (!msg)
         return 0;
-    if (flux_msg_get_route_last (msg, &uuid) < 0)
-        goto done;
-    if (!uuid) {
+    if (!(uuid = flux_msg_route_last (msg))) {
         errno = EPROTO;
-        goto done;
+        return -1;
     }
     if (!(p = zhash_lookup (mh->zh_byuuid, uuid))) {
         errno = ENOSYS;
-        goto done;
+        return -1;
     }
-    rc = module_sendmsg (p, msg);
-done:
-    free (uuid);
-    return rc;
+    return module_sendmsg (p, msg);
 }
 
 int module_disconnect_arm (module_t *p,

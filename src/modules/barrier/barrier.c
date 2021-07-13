@@ -158,7 +158,7 @@ error:
 }
 
 static int barrier_add_client (struct barrier *b,
-                               char *sender,
+                               const char *sender,
                                const flux_msg_t *msg)
 {
     if (zhash_insert (b->clients, sender, (void *)flux_msg_incref (msg)) < 0) {
@@ -318,7 +318,7 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct barrier_ctx *ctx = arg;
     struct barrier *b;
-    char *sender = NULL;
+    const char *sender;
     const char *name;
     int nprocs;
     uint32_t owner;
@@ -329,8 +329,10 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
                              "name", &name,
                              "nprocs", &nprocs) < 0)
         goto error;
-    if (flux_msg_get_route_first (msg, &sender) < 0)
+    if (!(sender = flux_msg_route_first (msg))) {
+        errno = EPROTO;
         goto error;
+    }
     if (flux_msg_get_userid (msg, &owner) < 0)
         goto error;
     if (!(b = barrier_lookup_create (ctx, name, nprocs, owner)))
@@ -346,11 +348,9 @@ static void enter_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     if (barrier_update (b, 1) < 0)
         goto error;
-    free (sender);
     return;
 error:
     flux_respond_error (ctx->h, msg, errno, NULL);
-    free (sender);
 }
 
 /* Upon client disconnect, abort any pending barriers it was
@@ -360,15 +360,17 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
                                    const flux_msg_t *msg, void *arg)
 {
     struct barrier_ctx *ctx = arg;
-    char *sender = NULL;
+    const char *sender;
     const char *key;
     struct barrier *b;
     struct flux_msg_cred cred;
 
     if (flux_msg_get_cred (msg, &cred) < 0)
         goto error;
-    if (flux_msg_get_route_first (msg, &sender) < 0)
+    if (!(sender = flux_msg_route_first (msg))) {
+        errno = EPROTO;
         goto error;
+    }
     FOREACH_ZHASH (ctx->barriers, key, b) {
         if (zhash_lookup (b->clients, sender)) {
             if (flux_msg_cred_authorize (cred, b->owner) < 0) {
@@ -382,11 +384,9 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
                 flux_log_error (h, "exit_event_send");
         }
     }
-    free (sender);
     return;
 error:
     flux_log_error (h, "barrier.disconnect");
-    free (sender);
 }
 
 static int exit_event_send (flux_t *h,

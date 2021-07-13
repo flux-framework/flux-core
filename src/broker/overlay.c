@@ -359,8 +359,7 @@ static int overlay_keepalive_parent (struct overlay *ov, int status)
     if (ov->parent.zsock) {
         if (!(msg = flux_keepalive_encode (0, status)))
             return -1;
-        if (flux_msg_enable_route (msg) < 0)
-            goto error;
+        flux_msg_route_enable (msg);
         if (overlay_sendmsg_parent (ov, msg) < 0)
             goto error;
         flux_msg_destroy (msg);
@@ -378,7 +377,7 @@ int overlay_sendmsg (struct overlay *ov,
     int type;
     uint8_t flags;
     flux_msg_t *cpy = NULL;
-    char *uuid = NULL;
+    const char *uuid;
     uint32_t nodeid;
     struct child *child;
     int rc;
@@ -406,9 +405,9 @@ int overlay_sendmsg (struct overlay *ov,
                         }
                         if (!(cpy = flux_msg_copy (msg, true)))
                             goto error;
-                        if (flux_msg_push_route (cpy, ov->uuid) < 0)
+                        if (flux_msg_route_push (cpy, ov->uuid) < 0)
                             goto error;
-                        if (flux_msg_push_route (cpy, child->uuid) < 0)
+                        if (flux_msg_route_push (cpy, child->uuid) < 0)
                             goto error;
                         msg = cpy;
                         where = OVERLAY_DOWNSTREAM;
@@ -431,8 +430,7 @@ int overlay_sendmsg (struct overlay *ov,
              */
             if (where == OVERLAY_ANY) {
                 if (ov->rank > 0
-                    && flux_msg_get_route_last (msg, &uuid) == 0
-                    && uuid != NULL
+                    && (uuid = flux_msg_route_last (msg)) != NULL
                     && !strcmp (uuid, ov->parent.uuid))
                     where = OVERLAY_UPSTREAM;
                 else
@@ -455,8 +453,7 @@ int overlay_sendmsg (struct overlay *ov,
                 if (!(flags & FLUX_MSGFLAG_ROUTE)) {
                     if (!(cpy = flux_msg_copy (msg, true)))
                         goto error;
-                    if (flux_msg_enable_route (cpy) < 0)
-                        goto error;
+                    flux_msg_route_enable (cpy);
                     msg = cpy;
                 }
                 if (overlay_sendmsg_parent (ov, msg) < 0)
@@ -466,13 +463,11 @@ int overlay_sendmsg (struct overlay *ov,
         default:
             goto inval;
     }
-    free (uuid);
     flux_msg_decref (cpy);
     return 0;
 inval:
     errno = EINVAL;
 error:
-    ERRNO_SAFE_WRAP (free, uuid);
     flux_msg_decref (cpy);
     return -1;
 }
@@ -516,9 +511,8 @@ static int overlay_mcast_child_one (struct overlay *ov,
 
     if (!(cpy = flux_msg_copy (msg, true)))
         return -1;
-    if (flux_msg_enable_route (cpy) < 0)
-        goto done;
-    if (flux_msg_push_route (cpy, child->uuid) < 0)
+    flux_msg_route_enable (cpy);
+    if (flux_msg_route_push (cpy, child->uuid) < 0)
         goto done;
     if (overlay_sendmsg_child (ov, cpy) < 0)
         goto done;
@@ -567,15 +561,14 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_msg_t *msg;
     int type = -1;
     const char *topic = NULL;
-    char *sender = NULL;
+    const char *sender = NULL;
     struct child *child;
     int status;
 
     if (!(msg = flux_msg_recvzsock (ov->bind_zsock)))
         return;
     if (flux_msg_get_type (msg, &type) < 0
-        || flux_msg_get_route_last (msg, &sender) < 0
-        || sender == NULL)
+        || !(sender = flux_msg_route_last (msg)))
         goto drop;
     if (!(child = child_lookup (ov, sender)) || !child->connected) {
         if (type == FLUX_MSGTYPE_REQUEST
@@ -604,15 +597,14 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
              * were a request, but the effect we want for responses is to have
              * a route popped off at each router hop.
              */
-            (void)flux_msg_pop_route (msg, NULL); // child id from ROUTER
-            (void)flux_msg_pop_route (msg, NULL); // my id
+            (void)flux_msg_route_delete_last (msg); // child id from ROUTER
+            (void)flux_msg_route_delete_last (msg); // my id
             break;
         case FLUX_MSGTYPE_EVENT:
             break;
     }
     ov->recv_cb (msg, OVERLAY_DOWNSTREAM, ov->recv_arg);
 handled:
-    free (sender);
     flux_msg_decref (msg);
     return;
 drop:
@@ -623,7 +615,6 @@ drop:
               type != -1 ? flux_msg_typestr (type) : "message",
               topic ? topic : "-",
               sender != NULL ? sender : "unknown");
-    free (sender);
     flux_msg_decref (msg);
 }
 
@@ -648,11 +639,8 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
         hello_response_handler (ov, msg);
         goto handled;
     }
-    if (type == FLUX_MSGTYPE_EVENT) {
-        if (flux_msg_clear_route (msg) < 0) {
-            goto drop;
-        }
-    }
+    if (type == FLUX_MSGTYPE_EVENT)
+        flux_msg_route_disable (msg);
     ov->recv_cb (msg, OVERLAY_UPSTREAM, ov->recv_arg);
 handled:
     flux_msg_destroy (msg);

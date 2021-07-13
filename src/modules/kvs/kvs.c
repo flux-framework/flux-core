@@ -2061,7 +2061,7 @@ static void setroot_event_cb (flux_t *h, flux_msg_handler_t *mh,
 static bool disconnect_cmp (const flux_msg_t *msg, void *arg)
 {
     flux_msg_t *msgreq = arg;
-    return flux_msg_match_route_first (msgreq, msg);
+    return flux_msg_route_match_first (msgreq, msg);
 }
 
 static int disconnect_request_root_cb (struct kvsroot *root, void *arg)

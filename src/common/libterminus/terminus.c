@@ -756,19 +756,17 @@ static void disconnect_cb (flux_t *h,
 {
     struct flux_terminus_server *ts = arg;
     struct terminus_session *s;
-    char *sender = NULL;
+    const char *sender;
 
-    if (flux_msg_get_route_first (msg, &sender) < 0) {
-        llog_error (ts, "flux_msg_get_route_first: %s", strerror (errno));
-        goto out;
+    if (!(sender = flux_msg_route_first (msg))) {
+        llog_error (ts, "flux_msg_get_route_first: uuid is NULL!");
+        return;
     }
     s = zlist_first (ts->sessions);
     while (s) {
         flux_pty_disconnect_client (s->pty, sender);
         s = zlist_next (ts->sessions);
     }
-out:
-    free (sender);
 }
 
 static const struct flux_msg_handler_spec handler_tab[] = {

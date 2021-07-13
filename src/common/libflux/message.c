@@ -199,7 +199,7 @@ void flux_msg_destroy (flux_msg_t *msg)
 {
     if (msg && --msg->refcount == 0) {
         int saved_errno = errno;
-        (void) flux_msg_clear_route (msg);
+        flux_msg_route_clear (msg);
         free (msg->topic);
         free (msg->payload);
         json_decref (msg->json);
@@ -869,7 +869,7 @@ bool flux_msg_cmp_matchtag (const flux_msg_t *msg, uint32_t matchtag)
 {
     uint32_t tag;
 
-    if (flux_msg_get_route_count (msg) > 0)
+    if (flux_msg_route_count (msg) > 0)
         return false; /* don't match in foreign matchtag domain */
     if (flux_msg_get_matchtag (msg, &tag) < 0)
         return false;
@@ -922,34 +922,33 @@ bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match)
     return true;
 }
 
-int flux_msg_enable_route (flux_msg_t *msg)
+void flux_msg_route_enable (flux_msg_t *msg)
 {
-    if (!msg) {
-        errno = EINVAL;
-        return -1;
-    }
-    if ((msg->flags & FLUX_MSGFLAG_ROUTE))
-        return 0;
-    return flux_msg_set_flags (msg, msg->flags | FLUX_MSGFLAG_ROUTE);
+    if (!msg || (msg->flags & FLUX_MSGFLAG_ROUTE))
+        return;
+    (void) flux_msg_set_flags (msg, msg->flags | FLUX_MSGFLAG_ROUTE);
 }
 
-int flux_msg_clear_route (flux_msg_t *msg)
+void flux_msg_route_disable (flux_msg_t *msg)
+{
+    if (!msg || (!(msg->flags & FLUX_MSGFLAG_ROUTE)))
+        return;
+    flux_msg_route_clear (msg);
+    (void) flux_msg_set_flags (msg, msg->flags & ~(uint8_t)FLUX_MSGFLAG_ROUTE);
+}
+
+void flux_msg_route_clear (flux_msg_t *msg)
 {
     struct route_id *r;
-    if (!msg) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!(msg->flags & FLUX_MSGFLAG_ROUTE))
-        return 0;
+    if (!msg || (!(msg->flags & FLUX_MSGFLAG_ROUTE)))
+        return;
     while ((r = list_pop (&msg->routes, struct route_id, route_id_node)))
         route_id_destroy (r);
     list_head_init (&msg->routes);
     msg->routes_len = 0;
-    return flux_msg_set_flags (msg, msg->flags & ~(uint8_t)FLUX_MSGFLAG_ROUTE);
 }
 
-int flux_msg_push_route (flux_msg_t *msg, const char *id)
+int flux_msg_route_push (flux_msg_t *msg, const char *id)
 {
     struct route_id *r;
     if (!msg || !id) {
@@ -967,15 +966,9 @@ int flux_msg_push_route (flux_msg_t *msg, const char *id)
     return 0;
 }
 
-int flux_msg_pop_route (flux_msg_t *msg, char **id)
+int flux_msg_route_delete_last (flux_msg_t *msg)
 {
     struct route_id *r;
-    int rv = -1;
-
-    /* do not check 'id' for NULL, a "pop" is acceptable w/o returning
-     * data to the user.  Caller may wish to only "pop" and not look
-     * at the data.
-     */
     if (!msg) {
         errno = EINVAL;
         return -1;
@@ -984,77 +977,38 @@ int flux_msg_pop_route (flux_msg_t *msg, char **id)
         errno = EPROTO;
         return -1;
     }
-    if (list_empty (&msg->routes)) {
-        if (id)
-            (*id) = NULL;
-        return 0;
+    if ((r = list_pop (&msg->routes, struct route_id, route_id_node))) {
+        route_id_destroy (r);
+        msg->routes_len--;
     }
-    r = list_pop (&msg->routes, struct route_id, route_id_node);
-    assert (r);
-    if (id) {
-        if (!((*id) = strdup (r->id)))
-            goto error;
-    }
-    rv = 0;
-error:
-    route_id_destroy (r);
-    msg->routes_len--;
-    return rv;
+    return 0;
 }
 
 /* replaces flux_msg_nexthop */
-int flux_msg_get_route_last (const flux_msg_t *msg, char **id)
+const char *flux_msg_route_last (const flux_msg_t *msg)
 {
     struct route_id *r;
 
-    if (!msg || !id) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
-        errno = EPROTO;
-        return -1;
-    }
-    if ((r = list_top (&msg->routes, struct route_id, route_id_node))) {
-        if (!((*id) = strdup (r->id)))
-            return -1;
-    }
-    else
-        (*id) = NULL;
-    return 0;
-}
-
-static int find_route_first (const flux_msg_t *msg, struct route_id **r)
-{
-    if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
-        errno = EPROTO;
-        return -1;
-    }
-    (*r) = list_tail (&msg->routes, struct route_id, route_id_node);
-    return 0;
+    if (!msg || !(msg->flags & FLUX_MSGFLAG_ROUTE))
+        return NULL;
+    if ((r = list_top (&msg->routes, struct route_id, route_id_node)))
+        return r->id;
+    return NULL;
 }
 
 /* replaces flux_msg_sender */
-int flux_msg_get_route_first (const flux_msg_t *msg, char **id)
+const char *flux_msg_route_first (const flux_msg_t *msg)
 {
-    struct route_id *r = NULL;
+    struct route_id *r;
 
-    if (!msg || !id) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (find_route_first (msg, &r) < 0)
-        return -1;
-    if (r) {
-        if (!((*id) = strdup (r->id)))
-            return -1;
-    }
-    else
-        (*id) = NULL;
-    return 0;
+    if (!msg || !(msg->flags & FLUX_MSGFLAG_ROUTE))
+        return NULL;
+    if ((r = list_tail (&msg->routes, struct route_id, route_id_node)))
+        return r->id;
+    return NULL;
 }
 
-int flux_msg_get_route_count (const flux_msg_t *msg)
+int flux_msg_route_count (const flux_msg_t *msg)
 {
     if (!msg) {
         errno = EINVAL;
@@ -1069,7 +1023,7 @@ int flux_msg_get_route_count (const flux_msg_t *msg)
 
 /* Get sum of size in bytes of route frames
  */
-static int flux_msg_get_route_size (const flux_msg_t *msg)
+static int flux_msg_route_size (const flux_msg_t *msg)
 {
     struct route_id *r = NULL;
     int size = 0;
@@ -1084,7 +1038,7 @@ static int flux_msg_get_route_size (const flux_msg_t *msg)
     return size;
 }
 
-char *flux_msg_get_route_string (const flux_msg_t *msg)
+char *flux_msg_route_string (const flux_msg_t *msg)
 {
     struct route_id *r = NULL;
     int hops, len;
@@ -1098,8 +1052,8 @@ char *flux_msg_get_route_string (const flux_msg_t *msg)
         errno = EPROTO;
         return NULL;
     }
-    if ((hops = flux_msg_get_route_count (msg)) < 0
-                    || (len = flux_msg_get_route_size (msg)) < 0)
+    if ((hops = flux_msg_route_count (msg)) < 0
+                    || (len = flux_msg_route_size (msg)) < 0)
         return NULL;
     if (!(cp = buf = malloc (len + hops + 1)))
         return NULL;
@@ -1441,10 +1395,10 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
     cpy->aux1 = msg->aux1;
     cpy->aux2 = msg->aux2;
 
-    if (flux_msg_get_route_count (msg) > 0) {
+    if (flux_msg_route_count (msg) > 0) {
         struct route_id *r = NULL;
         list_for_each_rev (&msg->routes, r, route_id_node) {
-            if (flux_msg_push_route (cpy, r->id) < 0)
+            if (flux_msg_route_push (cpy, r->id) < 0)
                 goto error;
         }
     }
@@ -1641,9 +1595,9 @@ void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)
     }
     /* Route stack
      */
-    hops = flux_msg_get_route_count (msg); /* -1 if no route stack */
+    hops = flux_msg_route_count (msg); /* -1 if no route stack */
     if (hops > 0) {
-        char *rte = flux_msg_get_route_string (msg);
+        char *rte = flux_msg_route_string (msg);
         assert (rte != NULL);
         fprintf (f, "%s |%s|\n", prefix, rte);
         free (rte);
@@ -1843,20 +1797,16 @@ int flux_match_asprintf (struct flux_match *m, const char *topic_glob_fmt, ...)
     return res;
 }
 
-bool flux_msg_match_route_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
+bool flux_msg_route_match_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
 {
-    struct route_id *r1 = NULL;
-    struct route_id *r2 = NULL;
+    const char *id1;
+    const char *id2;
 
-    if (!msg1 || !msg2)
+    if (!(id1 = flux_msg_route_first (msg1)))
         return false;
-    if (find_route_first (msg1, &r1) < 0)
+    if (!(id2 = flux_msg_route_first (msg2)))
         return false;
-    if (find_route_first (msg2, &r2) < 0)
-        return false;
-    if (!r1 || !r2)
-        return false;
-    if (strcmp (r1->id, r2->id))
+    if (strcmp (id1, id2))
         return false;
     return true;
 }

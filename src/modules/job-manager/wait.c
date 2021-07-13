@@ -307,7 +307,7 @@ void wait_disconnect_rpc (flux_t *h,
     job = zhashx_first (ctx->active_jobs);
     while (job && wait->waiters > 0) {
         if (job->waiter) {
-            if (flux_msg_match_route_first (job->waiter, msg)) {
+            if (flux_msg_route_match_first (job->waiter, msg)) {
                 flux_msg_decref (job->waiter);
                 job->waiter = NULL;
                 wait->waiters--;

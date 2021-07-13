@@ -188,9 +188,8 @@ void router_entry_recv (struct router_entry *entry, flux_msg_t *msg)
                 service_remove_request (entry, msg);
                 break;
             }
-            if (flux_msg_enable_route (msg) < 0)
-                return;
-            if (flux_msg_push_route (msg, entry->uuid) < 0)
+            flux_msg_route_enable (msg);
+            if (flux_msg_route_push (msg, entry->uuid) < 0)
                 return;
             if (disconnect_arm (entry->dcon, msg) < 0)
                 return;
@@ -375,13 +374,11 @@ static void response_cb (flux_t *h,
     struct router *rtr = arg;
     struct router_entry *entry = NULL;
     flux_msg_t *cpy;
-    char *uuid = NULL;
+    const char *uuid = NULL;
 
     if (!(cpy = flux_msg_copy (msg, true)))
         goto error;
-    if (flux_msg_pop_route (cpy, &uuid) < 0) // may set uuid=NULL on success
-        goto error;
-    if (!uuid) {
+    if (!(uuid = flux_msg_route_last (cpy))) { // may set uuid=NULL no routes
         errno = EINVAL;
         goto error;
     }
@@ -389,16 +386,15 @@ static void response_cb (flux_t *h,
         errno = EHOSTUNREACH;
         goto error;
     }
+    if (flux_msg_route_delete_last (cpy) < 0)
+        goto error;
     if (entry->send (cpy, entry->arg) < 0) {
         flux_log_error (h, "router: response > client=%.5s", entry->uuid);
         goto error;
     }
-    free (uuid);
+error:
     flux_msg_destroy (cpy);
     return;
-error:
-    ERRNO_SAFE_WRAP (free, uuid);
-    flux_msg_destroy (cpy);
 }
 
 /* Receive event from broker.

@@ -525,12 +525,12 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-char *subprocess_sender (flux_subprocess_t *p)
+const char *subprocess_sender (flux_subprocess_t *p)
 {
     struct rexec *rex = flux_subprocess_aux_get (p, auxkey);
-    char *sender;
+    const char *sender;
 
-    if (!rex || flux_msg_get_route_first (rex->msg, &sender) < 0)
+    if (!rex || !(sender = flux_msg_route_first (rex->msg)))
         return NULL;
 
     return sender;
@@ -540,7 +540,7 @@ static json_t *process_info (flux_subprocess_t *p)
 {
     flux_cmd_t *cmd;
     char *cmd_str = NULL;
-    char *sender = NULL;
+    const char *sender;
     json_t *info = NULL;
 
     if (!(cmd = flux_subprocess_get_cmd (p)))
@@ -563,7 +563,6 @@ static json_t *process_info (flux_subprocess_t *p)
     }
 
 cleanup:
-    free (sender);
     free (cmd_str);
     return info;
 }
@@ -682,15 +681,13 @@ int server_terminate_subprocesses (flux_subprocess_server_t *s)
 
 static void terminate_uuid (flux_subprocess_t *p, const char *id)
 {
-    char *sender;
+    const char *sender;
 
     if (!(sender = subprocess_sender (p)))
         return;
 
     if (!strcmp (id, sender))
         server_signal_subprocess (p, SIGKILL);
-
-    free (sender);
 }
 
 int server_terminate_by_uuid (flux_subprocess_server_t *s,

@@ -307,61 +307,66 @@ const char *flux_msg_typestr (int type);
  * routing.
  */
 
-/* Prepare a message for routing by setting FLUX_MSGFLAG_ROUTE.  This
+/* Enable routes on a message by setting FLUX_MSGFLAG_ROUTE.  This
  * function is a no-op if the flag is already set.
- * Returns 0 on success, -1 with errno set on failure.
  */
-int flux_msg_enable_route (flux_msg_t *msg);
+void flux_msg_route_enable (flux_msg_t *msg);
 
-/* Clear routes from msg and clear FLUX_MSGFLAG_ROUTE flag.  This
- * function is a no-op if the flag is already clear.
- * Returns 0 on success, -1 with errno set on failure.
+/* Disable routes on a message by clearing the FLUX_MSGFLAG_ROUTE
+ * flag.  In addition, clear all presently stored routes.  This
+ * function is a no-op if the flag is already set.
  */
-int flux_msg_clear_route (flux_msg_t *msg);
+void flux_msg_route_disable (flux_msg_t *msg);
+
+/* Clear all routes stored in a message.  This function is a no-op if
+ * routes are not enabled.
+ */
+void flux_msg_route_clear (flux_msg_t *msg);
 
 /* Push a route frame onto the message (mimic what dealer socket does).
  * 'id' is copied internally.
  * Returns 0 on success, -1 with errno set (e.g. EINVAL) on failure.
  */
-int flux_msg_push_route (flux_msg_t *msg, const char *id);
+int flux_msg_route_push (flux_msg_t *msg, const char *id);
 
-/* Pop a route frame off the message and return identity (or NULL) in 'id'.
- * Caller must free 'id'.
+/* Delete last route frame off the message.  Effectively performs the
+ * "opposite" of flux_msg_route_push().
+ *
  * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
  */
-int flux_msg_pop_route (flux_msg_t *msg, char **id);
+int flux_msg_route_delete_last (flux_msg_t *msg);
 
-/* Copy the first route (e.g. first pushed route) contents (or NULL)
- * to 'id'.  Caller must free 'id'.
+/* Return the first route (e.g. first pushed route) or NULL if there
+ * are no routes.
  * For requests, this is the sender; for responses, this is the recipient.
- * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
+ * Returns route id on success, NULL for no route or error.
  */
-int flux_msg_get_route_first (const flux_msg_t *msg, char **id);
+const char *flux_msg_route_first (const flux_msg_t *msg);
 
-/* Copy the last route (e.g. most recent pushed route) contents (or NULL)
- * to 'id'.  Caller must free 'id'.
+/* Return the last route (e.g. most recent pushed route) or NULL if there
+ * are no routes.
  * For requests, this is the last hop; for responses: this is the next hop.
- * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
+ * Returns route id on success, NULL for no route or error.
  */
-int flux_msg_get_route_last (const flux_msg_t *msg, char **id);
+const char *flux_msg_route_last (const flux_msg_t *msg);
 
 /* Return the number of route frames in the message.
  * It is an EPROTO error if there is no route stack.
  * Returns 0 on success, -1 with errno set (e.g. EPROTO) on failure.
  */
-int flux_msg_get_route_count (const flux_msg_t *msg);
+int flux_msg_route_count (const flux_msg_t *msg);
 
 /* Return a string representing the route stack in message.
  * Return NULL if routes are not enabled; empty string if
  * the route stack contains no route frames).
  * Caller must free the returned string.
  */
-char *flux_msg_get_route_string (const flux_msg_t *msg);
+char *flux_msg_route_string (const flux_msg_t *msg);
 
 /* Return true if messages have the same first routing frame.
  * (For requests, the sender)
  */
-bool flux_msg_match_route_first (const flux_msg_t *msg1,
+bool flux_msg_route_match_first (const flux_msg_t *msg1,
                                  const flux_msg_t *msg2);
 
 #ifdef __cplusplus

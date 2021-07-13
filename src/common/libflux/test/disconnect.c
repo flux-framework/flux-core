@@ -29,7 +29,7 @@ flux_msg_t *create_request (int sender,
     if (!(msg = flux_request_encode ("foo", NULL)))
         return NULL;
     snprintf (id, sizeof (id), "%d", sender);
-    if (flux_msg_push_route (msg, id) < 0)
+    if (flux_msg_route_push (msg, id) < 0)
         return NULL;
     if (flux_msg_set_rolemask (msg, rolemask) < 0)
         return NULL;
@@ -51,7 +51,7 @@ flux_msg_t *create_cancel (int sender,
     if (!(msg = flux_request_encode ("foo", NULL)))
         return NULL;
     snprintf (id, sizeof (id), "%d", sender);
-    if (flux_msg_push_route (msg, id) < 0)
+    if (flux_msg_route_push (msg, id) < 0)
         return NULL;
     if (flux_msg_set_rolemask (msg, rolemask) < 0)
         return NULL;

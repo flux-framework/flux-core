@@ -135,8 +135,7 @@ static flux_msg_t *flux_event_create (const char *topic)
         goto error;
     if (flux_msg_set_topic (msg, topic) < 0)
         goto error;
-    if (flux_msg_enable_route (msg) < 0)
-        goto error;
+    flux_msg_route_enable (msg);
     return msg;
 error:
     flux_msg_destroy (msg);
