@@ -12,7 +12,6 @@
 #define HAVE_ZMSG_LUA_H
 
 #include <lua.h>
-#include <zmq.h>
 #include <jansson.h>
 
 #include "flux/core.h"

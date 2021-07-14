@@ -8,7 +8,7 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#include <zmq.h>
+#include <stddef.h>
 #include <stdbool.h>
 
 #include "handle.h"
