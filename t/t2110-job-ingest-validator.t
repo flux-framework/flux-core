@@ -63,6 +63,11 @@ test_expect_success 'flux job-validator --require-version rejects invalid arg' '
 		test_expect_code 1 \
 		flux job-validator --jobspec-only --require-version=0
 '
+test_expect_success HAVE_JQ 'flux job-validator rejects non-V1 jobspec' '
+	flux mini run --dry-run hostname | jq -c ".version = 2" | \
+		test_expect_code 1 \
+		flux job-validator --jobspec-only --require-version=1
+'
 test_expect_success 'flux job-validator --schema rejects invalid arg' '
 	flux mini run --dry-run hostname | \
 		test_expect_code 1 \
