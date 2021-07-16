@@ -86,6 +86,8 @@ def main():
         LOGGER.critical(exc)
         sys.exit(1)
 
+    exitcode = 0
+
     # Ensure stdin is line buffered, with proper encoding
     for line in os.fdopen(
         sys.stdin.fileno(), "r", buffering=1, encoding="utf-8", errors="surrogateescape"
@@ -100,9 +102,15 @@ def main():
                     "urgency": 16,
                 }
             )
+            #  In --jobspec-only mode, exit with nonzero exit code
+            #   if validation failed:
+            if result.errnum != 0:
+                exitcode = 1
         else:
             result = validator.validate(line)
         print(result, flush=True)
+
+    sys.exit(exitcode)
 
 
 if __name__ == "__main__":
