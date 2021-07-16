@@ -56,15 +56,15 @@ test_expect_success 'flux job-validator errors on invalid plugin' '
 	test_expect_code 1 flux job-validator --plugin=/tmp </dev/null
 '
 test_expect_success 'flux job-validator --require-version rejects invalid arg' '
-	flux mini run hostname | \
+	flux mini run --dry-run hostname | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only --require-version=99 &&
-	flux mini run hostname | \
+	flux mini run --dry-run hostname | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only --require-version=0
 '
 test_expect_success 'flux job-validator --schema rejects invalid arg' '
-	flux mini run hostname | \
+	flux mini run --dry-run hostname | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only \
 			--plugins=schema \
