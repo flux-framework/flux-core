@@ -16,11 +16,11 @@
 #include "config.h"
 #endif
 #include <jansson.h>
-#include <czmq.h>
 #include <flux/core.h>
 #include <flux/jobtap.h>
 
 #include "src/common/libutil/iterators.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 /* Types of "after*" dependencies:
  */

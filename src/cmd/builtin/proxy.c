@@ -26,7 +26,6 @@
 #include <stdbool.h>
 #include <argz.h>
 #include <glob.h>
-#include <czmq.h>
 #include <inttypes.h>
 
 #include "src/common/libutil/cleanup.h"
