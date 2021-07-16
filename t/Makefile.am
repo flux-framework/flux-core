@@ -253,6 +253,7 @@ dist_check_SCRIPTS = \
 	issues/t3429-python-future-ref.py \
 	issues/t3470-multithread-reactor-run.py \
 	issues/t3503-nofiles-limit.sh \
+	issues/t3775-binary-io.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
