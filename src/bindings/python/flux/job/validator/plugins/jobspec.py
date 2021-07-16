@@ -26,21 +26,25 @@ class Validator(ValidatorPlugin):
         parser.add_argument(
             "--require-version",
             metavar="V",
-            type=int,
             default=1,
-            help="Require jobspec version V",
+            help="Require jobspec version V (or any)",
         )
 
     def configure(self, args):
-        self.require_version = args.require_version
-        if args.require_version < 1:
-            raise ValueError(
-                f"Required jobspec version too low: {args.require_version} is < 1"
-            )
-        elif args.require_version > 1:
-            raise ValueError(
-                f"Required jobspec version too high: {args.require_version} is > 1"
-            )
+        try:
+            self.require_version = int(args.require_version)
+            if self.require_version < 1:
+                raise ValueError(
+                    f"Required jobspec version too low: {args.require_version} is < 1"
+                )
+            elif self.require_version > 1:
+                raise ValueError(
+                    f"Required jobspec version too high: {args.require_version} is > 1"
+                )
+        except ValueError:
+            if args.require_version != "any":
+                raise ValueError(f"Invalid argument to --require-version")
+            self.require_version = None
 
     def validate(self, args):
-        validate_jobspec(json.dumps(args.jobspec))
+        validate_jobspec(json.dumps(args.jobspec), self.require_version)
