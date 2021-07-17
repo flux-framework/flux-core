@@ -9,8 +9,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
-	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS)
+	-I$(top_builddir)/src/common/libflux
 
 fluxmod_LTLIBRARIES = kvs.la
 
@@ -34,8 +33,7 @@ kvs_la_SOURCES = \
 kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
 kvs_la_LIBADD = $(top_builddir)/src/common/libkvs/libkvs.la \
 		$(top_builddir)/src/common/libflux-internal.la \
-		$(top_builddir)/src/common/libflux-core.la \
-		$(ZMQ_LIBS)
+		$(top_builddir)/src/common/libflux-core.la
 
 TESTS = \
 	test_waitqueue.t \
@@ -51,7 +49,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
-        $(ZMQ_LIBS) $(LIBPTHREAD)
+        $(LIBPTHREAD)
 
 test_ldflags = \
 	-no-install

@@ -8,8 +8,7 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS)
+	-I$(top_builddir)/src/common/libflux
 
 noinst_LTLIBRARIES = liboptparse.la
 fluxinclude_HEADERS = optparse.h
@@ -37,4 +36,4 @@ test_optparse_t_LDADD = \
 	$(top_builddir)/src/common/liboptparse/liboptparse.la \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD)
+	$(LIBPTHREAD)

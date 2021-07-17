@@ -8,8 +8,7 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS)
+	-I$(top_builddir)/src/common/libflux
 
 #  Always set LUA_PATH such that builddir/?.lua is first so that the
 #   build version of fluxometer.lua is found.
@@ -388,7 +387,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD)
+	$(LIBPTHREAD)
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \

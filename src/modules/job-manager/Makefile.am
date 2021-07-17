@@ -9,7 +9,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) $(JANSSON_CFLAGS)
+	$(JANSSON_CFLAGS)
 
 fluxmod_LTLIBRARIES = \
 	job-manager.la
@@ -79,8 +79,7 @@ job_manager_la_LIBADD = \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-optparse.la \
-	$(ZMQ_LIBS)
+	$(top_builddir)/src/common/libflux-optparse.la
 
 plugins_priority_hold_la_SOURCES = \
 	plugins/priority-hold.c
@@ -112,7 +111,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(ZMQ_LIBS) $(LIBPTHREAD) $(JANSSON_LIBS)
+	$(LIBPTHREAD) $(JANSSON_LIBS)
 
 test_cppflags = \
 	$(AM_CPPFLAGS)

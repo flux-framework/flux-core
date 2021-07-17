@@ -9,7 +9,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) \
 	$(HWLOC_CFLAGS)
 
 fluxmod_LTLIBRARIES = resource.la
@@ -39,7 +38,6 @@ resource_la_LIBADD = \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(ZMQ_LIBS) \
 	$(HWLOC_LIBS)
 
 TESTS = test_rutil.t
@@ -49,7 +47,6 @@ test_ldadd = \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
         $(top_builddir)/src/common/libtap/libtap.la \
-        $(ZMQ_LIBS) \
 	$(HWLOC_LIBS) \
 	$(LIBPTHREAD)
 

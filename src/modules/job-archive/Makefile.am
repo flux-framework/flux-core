@@ -9,7 +9,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) $(SQLITE_CFLAGS) \
+	$(SQLITE_CFLAGS) \
 	$(FLUX_SECURITY_CFLAGS)
 
 fluxmod_LTLIBRARIES = job-archive.la
@@ -23,4 +23,4 @@ job_archive_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
-	$(SQLITE_LIBS) $(ZMQ_LIBS)
+	$(SQLITE_LIBS)

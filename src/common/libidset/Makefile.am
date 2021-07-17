@@ -8,8 +8,7 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS)
+	-I$(top_builddir)/src/common/libflux
 
 noinst_LTLIBRARIES = libidset.la
 fluxinclude_HEADERS = idset.h
@@ -41,13 +40,11 @@ test_idset_t_CPPFLAGS = $(AM_CPPFLAGS)
 test_idset_t_LDADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(ZMQ_LIBS)
+	$(top_builddir)/src/common/libutil/libutil.la
 
 test_idsetutil_SOURCES = test/idsetutil.c
 test_idsetutil_CPPFLAGS = $(AM_CPPFLAGS)
 test_idsetutil_LDADD = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
-	$(top_builddir)/src/common/libutil/libutil.la \
-	$(ZMQ_LIBS)
+	$(top_builddir)/src/common/libutil/libutil.la

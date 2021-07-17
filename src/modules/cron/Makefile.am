@@ -8,8 +8,7 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS)
+	-I$(top_builddir)/src/common/libflux
 
 fluxmod_LTLIBRARIES = cron.la
 
@@ -26,5 +25,4 @@ cron_la_SOURCES = \
 
 cron_la_LDFLAGS = $(fluxmod_ldflags) -module
 cron_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
-		 $(top_builddir)/src/common/libflux-core.la \
-		 $(ZMQ_LIBS)
+		 $(top_builddir)/src/common/libflux-core.la
