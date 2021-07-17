@@ -10,7 +10,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
 	$(FLUX_SECURITY_CFLAGS) \
-	$(LIBSODIUM_CFLAGS) \
 	$(HWLOC_CFLAGS) \
 	$(PMIX_CFLAGS)
 
@@ -23,8 +22,7 @@ fluxcmd_ldadd = \
 	$(FLUX_SECURITY_LIBS) \
 	$(LIBPTHREAD) \
 	$(LIBDL) \
-	$(HWLOC_LIBS) \
-	$(LIBSODIUM_LIBS)
+	$(HWLOC_LIBS)
 
 LDADD = $(fluxcmd_ldadd)
 
