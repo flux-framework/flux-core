@@ -55,8 +55,10 @@ test_expect_success 'job-ingest: job-ingest fails with bad option' '
 	test_must_fail flux module load job-ingest badopt=xyz
 '
 
-test_expect_success 'job-ingest: load job-ingest' '
-	ingest_module load validator-plugins=jobspec
+test_expect_success 'job-ingest: load job-ingest: require-version=any' '
+	ingest_module load \
+		validator-plugins=jobspec \
+		validator-args=--require-version=any
 '
 
 test_expect_success HAVE_JQ 'job-ingest: dummy job-manager has expected max_jobid' '

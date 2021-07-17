@@ -56,15 +56,20 @@ test_expect_success 'flux job-validator errors on invalid plugin' '
 	test_expect_code 1 flux job-validator --plugin=/tmp </dev/null
 '
 test_expect_success 'flux job-validator --require-version rejects invalid arg' '
-	flux mini run hostname | \
+	flux mini run --dry-run hostname | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only --require-version=99 &&
-	flux mini run hostname | \
+	flux mini run --dry-run hostname | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only --require-version=0
 '
+test_expect_success HAVE_JQ 'flux job-validator rejects non-V1 jobspec' '
+	flux mini run --dry-run hostname | jq -c ".version = 2" | \
+		test_expect_code 1 \
+		flux job-validator --jobspec-only --require-version=1
+'
 test_expect_success 'flux job-validator --schema rejects invalid arg' '
-	flux mini run hostname | \
+	flux mini run --dry-run hostname | \
 		test_expect_code 1 \
 		flux job-validator --jobspec-only \
 			--plugins=schema \
@@ -80,19 +85,19 @@ test_expect_success HAVE_JQ 'flux job-validator --feasibility-service works ' '
 			--feasibility-service=kvs.ping \
 		| jq -e ".errnum == 0"
 '
-test_expect_success 'job-ingest: valid jobspecs accepted' '
+test_expect_success 'job-ingest: v1 jobspecs accepted by default' '
+	test_valid ${JOBSPEC}/valid_v1/*
+'
+test_expect_success 'job-ingest: test jobspec validator with any version' '
+	ingest_module reload \
+		validator-plugins=jobspec \
+		validator-args="--require-version=any"
+'
+test_expect_success 'job-ingest: all valid jobspecs accepted' '
 	test_valid ${JOBSPEC}/valid/*
 '
 test_expect_success 'job-ingest: invalid jobs rejected' '
 	test_invalid ${JOBSPEC}/invalid/*
-'
-test_expect_success 'job-ingest: test jobspec validator with version 1' '
-	ingest_module reload \
-		validator-plugins=jobspec \
-		validator-args="--require-version,1"
-'
-test_expect_success 'job-ingest: v1 jobspecs accepted with v1 requirement' '
-	test_valid ${JOBSPEC}/valid_v1/*
 '
 test_expect_success 'job-ingest: test python jsonschema validator' '
 	ingest_module reload \
