@@ -8,8 +8,7 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_builddir)/src/common/libflux \
-	$(LIBUUID_CFLAGS)
+	-I$(top_builddir)/src/common/libflux
 
 noinst_LTLIBRARIES = \
 	libpmi_client.la \
@@ -58,7 +57,6 @@ test_ldadd = \
 	$(top_builddir)/src/common/libev/libev.la \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
 	$(ZMQ_LIBS) \
-	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
 	$(LIBPTHREAD) \
 	$(LIBRT) \

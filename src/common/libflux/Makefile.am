@@ -13,7 +13,6 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	$(JANSSON_CFLAGS) \
 	$(ZMQ_CFLAGS) \
-	$(LIBUUID_CFLAGS) \
 	$(LIBSODIUM_CFLAGS)
 
 installed_conf_cppflags = \

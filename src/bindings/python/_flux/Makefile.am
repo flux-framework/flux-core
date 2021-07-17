@@ -4,7 +4,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) -I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libflux \
 	-I$(top_builddir)/src/common/libflux \
-	$(LIBUUID_CFLAGS) \
 	$(PYTHON_CPPFLAGS) \
 	$(CODE_COVERAGE_CFLAGS)
 
@@ -19,7 +18,6 @@ common_libs = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libdebugged/libdebugged.la \
-	$(LIBUUID_LIBS) \
 	$(PYTHON_LDFLAGS)
 
 PREPROC_FLAGS = \

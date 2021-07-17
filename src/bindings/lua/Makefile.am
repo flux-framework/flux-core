@@ -1,5 +1,4 @@
 AM_CFLAGS =	$(WARNING_CFLAGS) $(CODE_COVERAGE_CFLAGS) \
-		$(LIBUUID_CFLAGS) \
 		-Wno-parentheses -Wno-error=parentheses
 AM_LDFLAGS =	$(CODE_COVERAGE_LIBS)
 AM_CPPFLAGS =	\
@@ -44,7 +43,7 @@ luamod_ldflags = \
 luamod_libadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(LUA_LIB) $(LIBUUID_LIBS)
+	$(LUA_LIB)
 
 flux_la_LDFLAGS = \
 	$(luamod_ldflags)

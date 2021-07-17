@@ -355,13 +355,12 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_builddir)/src/common/libflux \
-	$(LIBUUID_CFLAGS)
+	-I$(top_builddir)/src/common/libflux
 
 LDADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(LIBUUID_CFLAGS) $(LIBPTHREAD)
+	$(LIBPTHREAD)
 
 check_PROGRAMS = \
 	man3/topen \
