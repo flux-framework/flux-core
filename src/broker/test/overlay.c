@@ -18,6 +18,7 @@
 #include <czmq.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libzmqutil/msg_zsock.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libtestutil/util.h"
 #include "src/common/libutil/stdlog.h"
@@ -436,7 +437,7 @@ void trio (flux_t *h)
     zsock_set_identity (zsock_none, "2");
     ok (zsock_connect (zsock_none, "%s", parent_uri) == 0,
         "none-2: zsock_connect %s (no security) works", parent_uri);
-    ok (flux_msg_sendzsock (zsock_none, msg) == 0,
+    ok (zmqutil_msg_send (zsock_none, msg) == 0,
         "none-2: zsock_msg_sendzsock works");
 
     /* 2) Curve, and correct server publc key, but client public key
@@ -453,8 +454,8 @@ void trio (flux_t *h)
     zcert_destroy (&cert);
     ok (zsock_connect (zsock_curve, "%s", parent_uri) == 0,
         "curve-2: zsock_connect %s works", parent_uri);
-    ok (flux_msg_sendzsock (zsock_curve, msg) == 0,
-        "curve-2: flux_msg_sendzsock works");
+    ok (zmqutil_msg_send (zsock_curve, msg) == 0,
+        "curve-2: zmqutil_msg_send works");
 
     /* Neither of the above attempts should have gotten a message through.
      */

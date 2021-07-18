@@ -19,6 +19,7 @@
 
 #include "util.h"
 
+#include "src/common/libzmqutil/msg_zsock.h"
 #include "src/common/libtap/tap.h"
 
 #ifndef UUID_STR_LEN
@@ -240,7 +241,7 @@ static int test_connector_send (void *impl, const flux_msg_t *msg, int flags)
                 goto error;
             break;
     }
-    if (flux_msg_sendzsock (tcon->sock, cpy) < 0)
+    if (zmqutil_msg_send (tcon->sock, cpy) < 0)
         goto error;
     flux_msg_destroy (cpy);
     return 0;
@@ -267,7 +268,7 @@ static flux_msg_t *test_connector_recv (void *impl, int flags)
             return NULL;
         }
     }
-    return flux_msg_recvzsock (tcon->sock);
+    return zmqutil_msg_recv (tcon->sock);
 }
 
 static void test_connector_fini (void *impl)
