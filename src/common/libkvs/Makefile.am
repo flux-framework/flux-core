@@ -63,8 +63,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(JANSSON_LIBS) \
-	$(LIBPTHREAD) \
-	$(LIBRT)
+	$(LIBPTHREAD)
 
 test_cppflags = \
 	$(AM_CPPFLAGS) \
