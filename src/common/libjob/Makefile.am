@@ -56,7 +56,6 @@ test_ldadd = \
 	$(LIBPTHREAD) \
 	$(LIBRT) \
         $(FLUX_SECURITY_LIBS) \
-	$(LIBDL) \
 	$(LIBSODIUM_LIBS)
 
 test_cppflags = \
@@ -65,12 +64,12 @@ test_cppflags = \
 
 test_job_t_SOURCES = test/job.c
 test_job_t_CPPFLAGS = $(test_cppflags)
-test_job_t_LDADD = $(test_ldadd) $(LIBDL)
+test_job_t_LDADD = $(test_ldadd)
 
 test_sign_none_t_SOURCES = test/sign_none.c
 test_sign_none_t_CPPFLAGS = $(test_cppflags)
-test_sign_none_t_LDADD = $(test_ldadd) $(LIBDL)
+test_sign_none_t_LDADD = $(test_ldadd)
 
 test_jobspec1_t_SOURCES = test/jobspec1.c
 test_jobspec1_t_CPPFLAGS = $(test_cppflags)
-test_jobspec1_t_LDADD = $(test_ldadd) $(LIBDL)
+test_jobspec1_t_LDADD = $(test_ldadd)

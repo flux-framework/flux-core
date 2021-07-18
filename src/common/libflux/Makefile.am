@@ -177,7 +177,8 @@ test_ldadd = \
 	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
 	$(LIBPTHREAD) \
-	$(LIBSODIUM_LIBS)
+	$(LIBSODIUM_LIBS) \
+	$(LIBDL)
 
 test_cppflags = \
         -I$(top_srcdir)/src/common/libtap \
@@ -198,105 +199,105 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 
 test_message_t_SOURCES = test/message.c
 test_message_t_CPPFLAGS = $(test_cppflags)
-test_message_t_LDADD = $(test_ldadd) $(LIBDL)
+test_message_t_LDADD = $(test_ldadd)
 
 test_msglist_t_SOURCES = test/msglist.c
 test_msglist_t_CPPFLAGS = $(test_cppflags)
-test_msglist_t_LDADD = $(test_ldadd) $(LIBDL)
+test_msglist_t_LDADD = $(test_ldadd)
 
 test_event_t_SOURCES = test/event.c
 test_event_t_CPPFLAGS = $(test_cppflags)
-test_event_t_LDADD = $(test_ldadd) $(LIBDL)
+test_event_t_LDADD = $(test_ldadd)
 
 test_tagpool_t_SOURCES = test/tagpool.c
 test_tagpool_t_CPPFLAGS = $(test_cppflags)
-test_tagpool_t_LDADD = $(test_ldadd) $(LIBDL)
+test_tagpool_t_LDADD = $(test_ldadd)
 
 test_request_t_SOURCES = test/request.c
 test_request_t_CPPFLAGS = $(test_cppflags)
-test_request_t_LDADD = $(test_ldadd) $(LIBDL)
+test_request_t_LDADD = $(test_ldadd)
 
 test_response_t_SOURCES = test/response.c
 test_response_t_CPPFLAGS = $(test_cppflags)
-test_response_t_LDADD = $(test_ldadd) $(LIBDL)
+test_response_t_LDADD = $(test_ldadd)
 
 test_reactor_t_SOURCES = test/reactor.c
 test_reactor_t_CPPFLAGS = $(test_cppflags)
-test_reactor_t_LDADD = $(test_ldadd) $(LIBDL)
+test_reactor_t_LDADD = $(test_ldadd)
 
 test_future_t_SOURCES = test/future.c
 test_future_t_CPPFLAGS = $(test_cppflags)
-test_future_t_LDADD = $(test_ldadd) $(LIBDL)
+test_future_t_LDADD = $(test_ldadd)
 
 test_composite_future_t_SOURCES = test/composite_future.c
 test_composite_future_t_CPPFLAGS = $(test_cppflags)
-test_composite_future_t_LDADD = $(test_ldadd) $(LIBDL)
+test_composite_future_t_LDADD = $(test_ldadd)
 
 test_conf_t_SOURCES = test/conf.c
 test_conf_t_CPPFLAGS = $(test_cppflags)
-test_conf_t_LDADD = $(test_ldadd) $(LIBDL)
+test_conf_t_LDADD = $(test_ldadd)
 
 test_buffer_t_SOURCES = test/buffer.c
 test_buffer_t_CPPFLAGS = $(test_cppflags)
-test_buffer_t_LDADD = $(test_ldadd) $(LIBDL)
+test_buffer_t_LDADD = $(test_ldadd)
 
 test_handle_t_SOURCES = test/handle.c
 test_handle_t_CPPFLAGS = $(test_cppflags)
-test_handle_t_LDADD = $(test_ldadd) $(LIBDL)
+test_handle_t_LDADD = $(test_ldadd)
 
 test_msg_handler_t_SOURCES = test/msg_handler.c
 test_msg_handler_t_CPPFLAGS = $(test_cppflags)
-test_msg_handler_t_LDADD = $(test_ldadd) $(LIBDL)
+test_msg_handler_t_LDADD = $(test_ldadd)
 
 test_version_t_SOURCES = test/version.c
 test_version_t_CPPFLAGS = $(test_cppflags)
-test_version_t_LDADD = $(test_ldadd) $(LIBDL)
+test_version_t_LDADD = $(test_ldadd)
 
 test_rpc_t_SOURCES = test/rpc.c
 test_rpc_t_CPPFLAGS = $(test_cppflags)
-test_rpc_t_LDADD = $(test_ldadd) $(LIBDL)
+test_rpc_t_LDADD = $(test_ldadd)
 
 test_rpc_chained_t_SOURCES = test/rpc_chained.c
 test_rpc_chained_t_CPPFLAGS = $(test_cppflags)
-test_rpc_chained_t_LDADD = $(test_ldadd) $(LIBDL)
+test_rpc_chained_t_LDADD = $(test_ldadd)
 
 test_dispatch_t_SOURCES = test/dispatch.c
 test_dispatch_t_CPPFLAGS = $(test_cppflags)
-test_dispatch_t_LDADD = $(test_ldadd) $(LIBDL)
+test_dispatch_t_LDADD = $(test_ldadd)
 
 test_log_t_SOURCES = test/log.c
 test_log_t_CPPFLAGS = $(test_cppflags)
-test_log_t_LDADD = $(test_ldadd) $(LIBDL)
+test_log_t_LDADD = $(test_ldadd)
 
 test_reactor_loop_t_SOURCES = test/reactor_loop.c
 test_reactor_loop_t_CPPFLAGS = $(test_cppflags)
-test_reactor_loop_t_LDADD = $(test_ldadd) $(LIBDL)
+test_reactor_loop_t_LDADD = $(test_ldadd)
 
 test_rpc_security_t_SOURCES = test/rpc_security.c
 test_rpc_security_t_CPPFLAGS = $(test_cppflags)
-test_rpc_security_t_LDADD = $(test_ldadd) $(LIBDL)
+test_rpc_security_t_LDADD = $(test_ldadd)
 
 test_panic_t_SOURCES = test/panic.c
 test_panic_t_CPPFLAGS = $(test_cppflags)
-test_panic_t_LDADD = $(test_ldadd) $(LIBDL)
+test_panic_t_LDADD = $(test_ldadd)
 
 test_attr_t_SOURCES = test/attr.c
 test_attr_t_CPPFLAGS = $(test_cppflags)
-test_attr_t_LDADD = $(test_ldadd) $(LIBDL)
+test_attr_t_LDADD = $(test_ldadd)
 
 test_sync_t_SOURCES = test/sync.c
 test_sync_t_CPPFLAGS = $(test_cppflags)
-test_sync_t_LDADD = $(test_ldadd) $(LIBDL)
+test_sync_t_LDADD = $(test_ldadd)
 
 test_disconnect_t_SOURCES = test/disconnect.c
 test_disconnect_t_CPPFLAGS = $(test_cppflags)
-test_disconnect_t_LDADD = $(test_ldadd) $(LIBDL)
+test_disconnect_t_LDADD = $(test_ldadd)
 
 test_module_t_SOURCES = test/module.c
 test_module_t_CPPFLAGS = $(test_cppflags) \
 	-DFAKE1=\"$(abs_builddir)/test/.libs/module_fake1.so\" \
 	-DFAKE2=\"$(abs_builddir)/test/.libs/module_fake2.so\"
-test_module_t_LDADD = $(test_ldadd) $(LIBDL)
+test_module_t_LDADD = $(test_ldadd)
 
 test_module_fake1_la_SOURCES = test/module_fake1.c
 test_module_fake1_la_CPPFLAGS = $(test_cppflags)
@@ -308,14 +309,14 @@ test_module_fake2_la_LDFLAGS = $(fluxmod_ldflags) -module -rpath /nowhere
 
 test_plugin_t_SOURCES = test/plugin.c
 test_plugin_t_CPPFLAGS = $(test_cppflags)
-test_plugin_t_LDADD = $(test_ldadd) $(LIBDL)
+test_plugin_t_LDADD = $(test_ldadd)
 
 test_plugin_foo_la_SOURCES = test/plugin_foo.c
 test_plugin_foo_la_CPPFLAGS = $(test_cppflags)
 test_plugin_foo_la_LDFLAGS = -module -rpath /nowhere
-test_plugin_foo_la_LIBADD = $(test_ldadd) $(LIBDL)
+test_plugin_foo_la_LIBADD = $(test_ldadd)
 
 test_plugin_bar_la_SOURCES = test/plugin_bar.c
 test_plugin_bar_la_CPPFLAGS = $(test_cppflags)
 test_plugin_bar_la_LDFLAGS = -module -rpath /nowhere
-test_plugin_bar_la_LIBADD = $(test_ldadd) $(LIBDL)
+test_plugin_bar_la_LIBADD = $(test_ldadd)
