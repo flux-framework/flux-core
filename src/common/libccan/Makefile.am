@@ -18,5 +18,7 @@ libccan_la_SOURCES = \
 	ccan/str/hex/hex.c \
 	ccan/list/list.c \
 	ccan/list/list.h \
+	ccan/base64/base64.c \
+	ccan/base64/base64.h \
 	ccan/build_assert/build_assert.h \
 	ccan/container_of/container_of.h

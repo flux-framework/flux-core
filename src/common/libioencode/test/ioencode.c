@@ -78,12 +78,46 @@ void basic (void)
     json_decref (o);
 }
 
+static void binary_data (void)
+{
+    json_t *o = NULL;
+    const char *stream;
+    const char *rank;
+    char *data;
+    char *encoding = NULL;
+    int len;
+    bool eof;
+
+    /*  \xed\xbf\xbf is not a valid utf-8 codepoint */
+    const char buffer[15] = "\xed\xbf\xbf\x4\x5\x6\x7\x8\x9\xa\xb\xc\xd\xe\xf";
+
+    ok ((o = ioencode ("stdout", "1", buffer, sizeof (buffer), false)) != NULL,
+        "ioencode of binary data works");
+    ok (json_unpack (o, "{s:s}", "encoding", &encoding) == 0,
+        "ioencode used alternate encoding");
+    is (encoding, "base64",
+        "ioencode encoded data as base64");
+    ok (iodecode (o, &stream, &rank, &data, &len, &eof) == 0,
+        "iodecode success");
+    is (rank, "1",
+        "rank is correct");
+    ok (len == sizeof (buffer),
+        "len is correct");
+    ok (eof == false,
+        "eof is correct");
+    ok (memcmp (data, buffer, len) == 0,
+        "data matches");
+    free (data);
+    json_decref (o);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
     basic_corner_case ();
     basic ();
+    binary_data ();
 
     done_testing ();
 

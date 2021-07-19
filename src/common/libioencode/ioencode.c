@@ -20,8 +20,32 @@
 #include <jansson.h>
 
 #include "src/common/libutil/macros.h"
+#include "src/common/libccan/ccan/base64/base64.h"
 
 #include "ioencode.h"
+
+
+static json_t *data_encode_base64 (const char *stream,
+                                   const char *rank,
+                                   const char *data,
+                                   int len)
+{
+    ssize_t n;
+    json_t *o = NULL;
+    char *dest = NULL;
+    size_t destlen = base64_encoded_length (len) + 1; /* +1 for NUL */
+
+    if ((dest = calloc (1, destlen))
+        && (n = base64_encode (dest, destlen, data, len)) >= 0) {
+            o = json_pack ("{s:s s:s s:s s:s#}",
+                           "stream", stream,
+                           "rank", rank,
+                           "encoding", "base64",
+                           "data", dest, n);
+    }
+    free (dest);
+    return o;
+}
 
 json_t *ioencode (const char *stream,
                   const char *rank,
@@ -46,8 +70,15 @@ json_t *ioencode (const char *stream,
         if (!(o = json_pack ("{s:s s:s s:s#}",
                              "stream", stream,
                              "rank", rank,
-                             "data", data, len)))
-            goto error;
+                             "data", data, len))) {
+            /*
+             *  json_pack() may fail if there are bytes that cannot
+             *   be encoded as UTF-8 - try again, this time
+             *   encoding the data in base64:
+             */
+            if (!(o = data_encode_base64 (stream, rank, data, len)))
+                goto error;
+        }
     }
     else {
         if (!(o = json_pack ("{s:s s:s}",
@@ -64,6 +95,22 @@ error:
     return rv;
 }
 
+static int decode_data_base64 (char *src,
+                               size_t srclen,
+                               char **datap,
+                               size_t *lenp)
+{
+    ssize_t rc;
+    size_t size = base64_decoded_length (srclen);
+    if (!(*datap = calloc (1, size)))
+        return -1;
+    if ((rc = base64_decode (*datap, size, src, srclen)) < 0)
+        return -1;
+    *lenp = rc;
+    return 0;
+}
+
+
 int iodecode (json_t *o,
               const char **streamp,
               const char **rankp,
@@ -73,8 +120,10 @@ int iodecode (json_t *o,
 {
     const char *stream;
     const char *rank;
-    char *bin_data = NULL;
+    const char *encoding = NULL;
     size_t bin_len = 0;
+    char *data = NULL;
+    size_t len = 0;
     int eof = 0;
     bool has_data = false;
     bool has_eof = false;
@@ -85,11 +134,12 @@ int iodecode (json_t *o,
         return -1;
     }
 
-    if (json_unpack (o, "{s:s s:s}",
+    if (json_unpack (o, "{s:s s:s s?s}",
                      "stream", &stream,
-                     "rank", &rank) < 0)
+                     "rank", &rank,
+                     "encoding", &encoding) < 0)
         goto cleanup;
-    if (json_unpack (o, "{s:s%}", "data", &bin_data, &bin_len) == 0) {
+    if (json_unpack (o, "{s:s%}", "data", &data, &len) == 0) {
         has_data = true;
     }
     if (json_unpack (o, "{s:b}", "eof", &eof) == 0)
@@ -106,11 +156,17 @@ int iodecode (json_t *o,
         (*rankp) = rank;
     if (datap) {
         *datap = NULL;
-        if (bin_data) {
-            if (!(*datap = malloc (bin_len)))
-                goto cleanup;
-            memcpy (*datap, bin_data, bin_len);
-            bin_data = NULL;
+        if (data) {
+            if (encoding && strcmp (encoding, "base64") == 0) {
+                if (decode_data_base64 (data, len, datap, &bin_len) < 0)
+                    goto cleanup;
+            }
+            else {
+                bin_len = len;
+                if (!(*datap = malloc (bin_len)))
+                    goto cleanup;
+                memcpy (*datap, data, bin_len);
+            }
         }
     }
     if (lenp)

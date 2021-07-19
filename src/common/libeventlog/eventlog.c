@@ -174,7 +174,7 @@ static json_t *eventlog_entry_decode_common (const char *entry,
             goto einval;
     }
 
-    if (!(o = json_loads (entry, 0, NULL)))
+    if (!(o = json_loads (entry, JSON_ALLOW_NUL, NULL)))
         goto einval;
 
     if (!eventlog_entry_validate (o)) {
