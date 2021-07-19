@@ -18,8 +18,6 @@
 #include <errno.h>
 #include <assert.h>
 
-#include <sodium.h>
-
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
