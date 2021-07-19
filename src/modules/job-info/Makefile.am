@@ -3,7 +3,8 @@ AM_CFLAGS = \
 	$(CODE_COVERAGE_CFLAGS)
 
 AM_LDFLAGS = \
-	$(CODE_COVERAGE_LIBS)
+	$(CODE_COVERAGE_LIBS) \
+	$(JANSSON_CFLAGS)
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
@@ -32,4 +33,5 @@ job_info_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
+	$(JANSSON_LIBS) \
 	$(HWLOC_LIBS)

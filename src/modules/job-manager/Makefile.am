@@ -79,7 +79,8 @@ job_manager_la_LIBADD = \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
-	$(top_builddir)/src/common/libflux-optparse.la
+	$(top_builddir)/src/common/libflux-optparse.la \
+	$(JANSSON_LIBS)
 
 plugins_priority_hold_la_SOURCES = \
 	plugins/priority-hold.c

@@ -9,7 +9,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(FLUX_SECURITY_CFLAGS)
+	$(FLUX_SECURITY_CFLAGS) \
+	$(JANSSON_CFLAGS)
 
 fluxmod_LTLIBRARIES = job-list.la
 
@@ -34,4 +35,5 @@ job_list_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
+	$(JANSSON_LIBS) \
 	$(HWLOC_LIBS)

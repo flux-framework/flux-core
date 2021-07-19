@@ -28,6 +28,7 @@ job_ingest_la_LIBADD = \
 		    $(top_builddir)/src/common/libflux-internal.la \
 		    $(top_builddir)/src/common/libflux-core.la \
 		    $(top_builddir)/src/common/libflux-optparse.la \
+		    $(JANSSON_LIBS) \
 		    $(FLUX_SECURITY_LIBS)
 
 fluxschemadir = $(datadir)/flux/schema/jobspec/

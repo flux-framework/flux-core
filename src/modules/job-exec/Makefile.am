@@ -40,6 +40,7 @@ job_exec_la_LIBADD = \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
+	$(JANSSON_LIBS) \
 	libbulk-exec.la
 
 bulk_exec_SOURCES = \

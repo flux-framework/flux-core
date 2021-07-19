@@ -10,7 +10,8 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux \
 	$(VALGRIND_CFLAGS) \
 	$(LUA_INCLUDE) \
-	$(HWLOC_CFLAGS)
+	$(HWLOC_CFLAGS) \
+	$(JANSSON_CFLAGS)
 
 shellrcdir = \
 	$(fluxrcdir)/shell
@@ -101,7 +102,8 @@ flux_shell_LDADD = \
 	$(top_builddir)/src/common/libterminus/libterminus.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(LUA_LIB) \
-	$(HWLOC_LIBS)
+	$(HWLOC_LIBS) \
+	$(JANSSON_LIBS)
 
 flux_shell_LDFLAGS = \
 	-export-dynamic \

@@ -35,4 +35,5 @@ sched_simple_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
+	$(JANSSON_LIBS) \
 	$(HWLOC_LIBS)
