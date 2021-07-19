@@ -12,6 +12,7 @@ AM_CPPFLAGS = \
 	$(PMIX_CFLAGS) \
 	$(ZMQ_CFLAGS) \
 	$(LIBUUID_CFLAGS) \
+	$(LIBSODIUM_CFLAGS) \
 	$(VALGRIND_CFLAGS)
 
 fluxcmd_PROGRAMS = flux-broker
@@ -70,6 +71,7 @@ flux_broker_LDADD = \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
+	$(LIBSODIUM_LIBS) \
 	$(PMIX_LIBS)
 
 flux_broker_LDFLAGS =
