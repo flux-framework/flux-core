@@ -69,6 +69,7 @@ flux_broker_LDADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(ZMQ_LIBS) \
+	$(LIBUUID_LIBS) \
 	$(PMIX_LIBS)
 
 flux_broker_LDFLAGS =
