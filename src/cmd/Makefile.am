@@ -10,7 +10,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
 	$(FLUX_SECURITY_CFLAGS) \
-	$(ZMQ_CFLAGS) \
 	$(LIBUUID_CFLAGS) \
 	$(LIBSODIUM_CFLAGS) \
 	$(HWLOC_CFLAGS) \
@@ -115,7 +114,13 @@ flux_R_LDADD = \
 	$(HWLOC_LIBS) \
 	$(JANSSON_LIBS)
 
+flux_keygen_CPPFLAGS = \
+	$(AM_CPPFLAGS) \
+	$(ZMQ_CFLAGS)
 
+flux_keygen_LDADD = \
+	$(fluxcmd_ldadd) \
+	$(ZMQ_LIBS)
 #
 # Automatically build list of flux(1) builtins from
 #  builtin/*.c:
