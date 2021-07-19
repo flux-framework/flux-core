@@ -18,7 +18,7 @@ job_archive_la_SOURCES = \
 	job-archive.c
 
 job_archive_la_LDFLAGS = $(fluxmod_ldflags) -module
-job_archive_la_LIBADD = $(fluxmod_libadd) \
+job_archive_la_LIBADD = \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \

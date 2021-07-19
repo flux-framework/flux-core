@@ -76,7 +76,6 @@ job_manager_la_LDFLAGS = \
 	-module
 job_manager_la_LIBADD = \
 	libjob-manager.la \
-	$(fluxmod_libadd) \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \

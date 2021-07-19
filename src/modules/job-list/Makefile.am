@@ -28,7 +28,7 @@ job_list_la_SOURCES = \
 	stats.c
 
 job_list_la_LDFLAGS = $(fluxmod_ldflags) -module
-job_list_la_LIBADD = $(fluxmod_libadd) \
+job_list_la_LIBADD = \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \

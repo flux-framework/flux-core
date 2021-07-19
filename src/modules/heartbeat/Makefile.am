@@ -19,7 +19,6 @@ heartbeat_la_SOURCES = \
 
 heartbeat_la_LDFLAGS = $(fluxmod_ldflags) -module
 heartbeat_la_LIBADD = \
-	$(fluxmod_libadd) \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(ZMQ_LIBS)

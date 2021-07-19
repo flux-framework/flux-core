@@ -29,7 +29,6 @@ sched_simple_la_LDFLAGS = \
 	-module
 
 sched_simple_la_LIBADD = \
-	$(fluxmod_libadd) \
 	libjj.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libschedutil/libschedutil.la \

@@ -15,7 +15,6 @@ fluxmod_LTLIBRARIES = barrier.la
 
 barrier_la_SOURCES = barrier.c
 barrier_la_LDFLAGS = $(fluxmod_ldflags) -module
-barrier_la_LIBADD = $(fluxmod_libadd) \
-		    $(top_builddir)/src/common/libflux-internal.la \
+barrier_la_LIBADD = $(top_builddir)/src/common/libflux-internal.la \
 		    $(top_builddir)/src/common/libflux-core.la \
 		    $(ZMQ_LIBS)

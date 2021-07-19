@@ -18,7 +18,7 @@ kvs_watch_la_SOURCES = \
 
 
 kvs_watch_la_LDFLAGS = $(fluxmod_ldflags) -module
-kvs_watch_la_LIBADD = $(fluxmod_libadd) \
+kvs_watch_la_LIBADD = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \

@@ -26,7 +26,7 @@ job_info_la_SOURCES = \
 	guest_watch.c
 
 job_info_la_LDFLAGS = $(fluxmod_ldflags) -module
-job_info_la_LIBADD = $(fluxmod_libadd) \
+job_info_la_LIBADD = \
 	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
