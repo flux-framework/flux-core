@@ -72,7 +72,8 @@ flux_broker_LDADD = \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(LIBSODIUM_LIBS) \
-	$(PMIX_LIBS)
+	$(PMIX_LIBS) \
+	$(LIBDL)
 
 flux_broker_LDFLAGS =
 
