@@ -51,7 +51,7 @@ test_expect_success "flux --parent --parent works in subinstance" '
 	test_cmp guest2.test.exp guest2.test
 '
 
-test_expect_success "instance-level attribute = 0 in new stanalone instance" '
+test_expect_success "instance-level attribute = 0 in new standalone instance" '
 	flux start ${ARGS} flux getattr instance-level >level_new.out &&
 	echo 0 >level_new.exp &&
 	test_cmp level_new.exp level_new.out
