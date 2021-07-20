@@ -9,8 +9,6 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) \
-	$(LIBUUID_CFLAGS) \
 	$(JANSSON_CFLAGS) \
 	$(FLUX_SECURITY_CFLAGS) \
 	$(LIBSODIUM_CFLAGS)
@@ -54,13 +52,9 @@ test_ldadd = \
         $(top_builddir)/src/common/libflux/libflux.la \
         $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libtap/libtap.la \
-        $(ZMQ_LIBS) \
-	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
 	$(LIBPTHREAD) \
-	$(LIBRT) \
         $(FLUX_SECURITY_LIBS) \
-	$(LIBDL) \
 	$(LIBSODIUM_LIBS)
 
 test_cppflags = \
@@ -69,12 +63,12 @@ test_cppflags = \
 
 test_job_t_SOURCES = test/job.c
 test_job_t_CPPFLAGS = $(test_cppflags)
-test_job_t_LDADD = $(test_ldadd) $(LIBDL)
+test_job_t_LDADD = $(test_ldadd)
 
 test_sign_none_t_SOURCES = test/sign_none.c
 test_sign_none_t_CPPFLAGS = $(test_cppflags)
-test_sign_none_t_LDADD = $(test_ldadd) $(LIBDL)
+test_sign_none_t_LDADD = $(test_ldadd)
 
 test_jobspec1_t_SOURCES = test/jobspec1.c
 test_jobspec1_t_CPPFLAGS = $(test_cppflags)
-test_jobspec1_t_LDADD = $(test_ldadd) $(LIBDL)
+test_jobspec1_t_LDADD = $(test_ldadd)

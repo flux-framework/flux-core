@@ -10,7 +10,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS)
+	$(LIBSODIUM_CFLAGS) \
+	$(JANSSON_CFLAGS)
 
 fluxmod_LTLIBRARIES = kvs.la
 
@@ -35,7 +36,8 @@ kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
 kvs_la_LIBADD = $(top_builddir)/src/common/libkvs/libkvs.la \
 		$(top_builddir)/src/common/libflux-internal.la \
 		$(top_builddir)/src/common/libflux-core.la \
-		$(ZMQ_LIBS)
+		$(JANSSON_LIBS) \
+		$(LIBSODIUM_LIBS)
 
 TESTS = \
 	test_waitqueue.t \
@@ -51,14 +53,16 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
-        $(ZMQ_LIBS) $(LIBPTHREAD)
+	$(JANSSON_LIBS) \
+        $(LIBPTHREAD)
 
 test_ldflags = \
 	-no-install
 
 test_cppflags = \
         $(AM_CPPFLAGS) \
-        -I$(top_srcdir)/src/common/libtap
+        -I$(top_srcdir)/src/common/libtap \
+	$(JANSSON_CFLAGS)
 
 check_PROGRAMS = $(TESTS)
 

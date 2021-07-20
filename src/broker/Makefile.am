@@ -12,6 +12,8 @@ AM_CPPFLAGS = \
 	$(PMIX_CFLAGS) \
 	$(ZMQ_CFLAGS) \
 	$(LIBUUID_CFLAGS) \
+	$(LIBSODIUM_CFLAGS) \
+	$(JANSSON_CFLAGS) \
 	$(VALGRIND_CFLAGS)
 
 fluxcmd_PROGRAMS = flux-broker
@@ -68,7 +70,12 @@ flux_broker_LDADD = \
 	$(top_builddir)/src/common/libpmi/libpmi_client.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
-	$(PMIX_LIBS)
+	$(ZMQ_LIBS) \
+	$(LIBUUID_LIBS) \
+	$(LIBSODIUM_LIBS) \
+	$(JANSSON_LIBS) \
+	$(PMIX_LIBS) \
+	$(LIBDL)
 
 flux_broker_LDFLAGS =
 
@@ -87,6 +94,8 @@ test_ldadd = \
 	$(top_builddir)/src/common/libpmi/libpmi_client.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
+	$(ZMQ_LIBS) \
+	$(JANSSON_LIBS) \
 	$(PMIX_LIBS)
 
 test_ldflags = \

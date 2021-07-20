@@ -9,8 +9,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) \
-	$(LIBUUID_CFLAGS)
+	$(JANSSON_CFLAGS) \
+	$(LIBSODIUM_CFLAGS)
 
 noinst_LTLIBRARIES = libkvs.la
 
@@ -63,12 +63,8 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
-	$(ZMQ_LIBS) \
-	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
-	$(LIBPTHREAD) \
-	$(LIBRT) \
-	$(LIBDL)
+	$(LIBPTHREAD)
 
 test_cppflags = \
 	$(AM_CPPFLAGS) \
@@ -76,43 +72,42 @@ test_cppflags = \
 
 test_kvs_t_SOURCES = test/kvs.c
 test_kvs_t_CPPFLAGS = $(test_cppflags)
-test_kvs_t_LDADD = $(test_ldadd) $(LIBDL)
+test_kvs_t_LDADD = $(test_ldadd)
 
 test_kvs_txn_t_SOURCES = test/kvs_txn.c
 test_kvs_txn_t_CPPFLAGS = $(test_cppflags)
-test_kvs_txn_t_LDADD = $(test_ldadd) $(LIBDL)
+test_kvs_txn_t_LDADD = $(test_ldadd)
 
 test_kvs_txn_compact_t_SOURCES = test/kvs_txn_compact.c
 test_kvs_txn_compact_t_CPPFLAGS = $(test_cppflags)
-test_kvs_txn_compact_t_LDADD = $(test_ldadd) $(LIBDL)
+test_kvs_txn_compact_t_LDADD = $(test_ldadd)
 
 test_kvs_lookup_t_SOURCES = test/kvs_lookup.c
 test_kvs_lookup_t_CPPFLAGS = $(test_cppflags)
 test_kvs_lookup_t_LDADD = \
 	$(top_builddir)/src/common/libkvs/kvs_txn.o \
-	$(test_ldadd) \
-	$(LIBDL)
+	$(test_ldadd)
 
 test_kvs_dir_t_SOURCES = test/kvs_dir.c
 test_kvs_dir_t_CPPFLAGS = $(test_cppflags)
-test_kvs_dir_t_LDADD = $(test_ldadd) $(LIBDL)
+test_kvs_dir_t_LDADD = $(test_ldadd)
 
 test_kvs_commit_t_SOURCES = test/kvs_commit.c
 test_kvs_commit_t_CPPFLAGS = $(test_cppflags)
-test_kvs_commit_t_LDADD = $(test_ldadd) $(LIBDL)
+test_kvs_commit_t_LDADD = $(test_ldadd)
 
 test_kvs_getroot_t_SOURCES = test/kvs_getroot.c
 test_kvs_getroot_t_CPPFLAGS = $(test_cppflags)
-test_kvs_getroot_t_LDADD = $(test_ldadd) $(LIBDL)
+test_kvs_getroot_t_LDADD = $(test_ldadd)
 
 test_treeobj_t_SOURCES = test/treeobj.c
 test_treeobj_t_CPPFLAGS = $(test_cppflags)
-test_treeobj_t_LDADD = $(test_ldadd) $(LIBDL)
+test_treeobj_t_LDADD = $(test_ldadd)
 
 test_kvs_copy_t_SOURCES = test/kvs_copy.c
 test_kvs_copy_t_CPPFLAGS = $(test_cppflags)
-test_kvs_copy_t_LDADD = $(test_ldadd) $(LIBDL)
+test_kvs_copy_t_LDADD = $(test_ldadd)
 
 test_kvs_util_t_SOURCES = test/kvs_util.c
 test_kvs_util_t_CPPFLAGS = $(test_cppflags)
-test_kvs_util_t_LDADD = $(test_ldadd) $(LIBDL)
+test_kvs_util_t_LDADD = $(test_ldadd)

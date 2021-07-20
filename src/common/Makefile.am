@@ -83,7 +83,7 @@ libflux_optparse_la_LIBADD = \
 	$(builddir)/libczmqcontainers/libczmqcontainers.la \
 	$(builddir)/liblsd/liblsd.la \
 	$(builddir)/libutil/fsd.lo \
-	$(ZMQ_LIBS) $(LIBUUID_LIBS) $(LIBPTHREAD)
+	$(LIBPTHREAD)
 libflux_optparse_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libflux-optparse.map \
 	-version-info @LIBFLUX_OPTPARSE_VERSION_INFO@ \

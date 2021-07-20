@@ -9,7 +9,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) $(JANSSON_CFLAGS)
+	$(JANSSON_CFLAGS)
 
 fluxmod_LTLIBRARIES = \
 	sched-simple.la
@@ -29,12 +29,11 @@ sched_simple_la_LDFLAGS = \
 	-module
 
 sched_simple_la_LIBADD = \
-	$(fluxmod_libadd) \
 	libjj.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libschedutil/libschedutil.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
-	$(ZMQ_LIBS) \
+	$(JANSSON_LIBS) \
 	$(HWLOC_LIBS)

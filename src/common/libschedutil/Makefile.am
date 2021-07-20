@@ -8,8 +8,7 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS)
+	-I$(top_builddir)/src/common/libflux
 
 noinst_LTLIBRARIES = \
 	libschedutil.la
@@ -35,6 +34,3 @@ libschedutil_la_SOURCES = \
 	alloc.c \
 	free.h \
 	free.c
-
-libschedutil_la_LIBADD = \
-	$(ZMQ_LIBS)

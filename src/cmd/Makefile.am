@@ -10,11 +10,9 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
 	$(FLUX_SECURITY_CFLAGS) \
-	$(ZMQ_CFLAGS) \
-	$(LIBUUID_CFLAGS) \
-	$(LIBSODIUM_CFLAGS) \
 	$(HWLOC_CFLAGS) \
-	$(PMIX_CFLAGS)
+	$(PMIX_CFLAGS) \
+	$(JANSSON_CFLAGS)
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
@@ -23,12 +21,9 @@ fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(FLUX_SECURITY_LIBS) \
-	$(ZMQ_LIBS) \
-	$(LIBUUID_LIBS) \
 	$(LIBPTHREAD) \
-	$(LIBDL) \
 	$(HWLOC_LIBS) \
-	$(LIBSODIUM_LIBS)
+	$(JANSSON_LIBS)
 
 LDADD = $(fluxcmd_ldadd)
 
@@ -104,8 +99,7 @@ flux_terminus_LDADD = \
 	$(top_builddir)/src/common/libterminus/libterminus.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(fluxcmd_ldadd) \
-	$(ZMQ_LIBS)
+	$(fluxcmd_ldadd)
 
 flux_R_LDADD = \
 	$(fluxcmd_ldadd) \
@@ -114,11 +108,16 @@ flux_R_LDADD = \
 	$(top_builddir)/src/common/libhostlist/libhostlist.la \
 	$(top_builddir)/src/common/libidset/libidset.la \
 	$(top_builddir)/src/common/libutil/libutil.la \
-	$(ZMQ_LIBS) \
 	$(HWLOC_LIBS) \
 	$(JANSSON_LIBS)
 
+flux_keygen_CPPFLAGS = \
+	$(AM_CPPFLAGS) \
+	$(ZMQ_CFLAGS)
 
+flux_keygen_LDADD = \
+	$(fluxcmd_ldadd) \
+	$(ZMQ_LIBS)
 #
 # Automatically build list of flux(1) builtins from
 #  builtin/*.c:

@@ -8,7 +8,6 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	$(ZMQ_CFLAGS) \
 	$(JANSSON_CFLAGS) \
 	$(HWLOC_CFLAGS)
 
@@ -26,7 +25,6 @@ librlist_la_SOURCES = \
 test_ldadd = \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(ZMQ_LIBS) \
 	$(LIBPTHREAD) \
 	$(JANSSON_LIBS) \
 	$(HWLOC_LIBS)

@@ -8,9 +8,7 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
-	-I$(top_builddir)/src/common/libflux \
-	$(ZMQ_CFLAGS) \
-	$(HWLOC_CFLAGS)
+	-I$(top_builddir)/src/common/libflux
 
 fluxmod_LTLIBRARIES = heartbeat.la
 
@@ -19,7 +17,5 @@ heartbeat_la_SOURCES = \
 
 heartbeat_la_LDFLAGS = $(fluxmod_ldflags) -module
 heartbeat_la_LIBADD = \
-	$(fluxmod_libadd) \
 	$(top_builddir)/src/common/libflux-internal.la \
-	$(top_builddir)/src/common/libflux-core.la \
-	$(ZMQ_LIBS)
+	$(top_builddir)/src/common/libflux-core.la
