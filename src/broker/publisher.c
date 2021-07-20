@@ -15,10 +15,9 @@
 #endif
 #include <errno.h>
 #include <flux/core.h>
-#include <sodium.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
-#include "src/common/libutil/macros.h"
+#include "src/common/libccan/ccan/base64/base64.h"
 
 #include "publisher.h"
 
@@ -37,7 +36,7 @@ static flux_msg_t *encode_event (const char *topic, int flags,
                                  uint32_t seq, const char *src)
 {
     flux_msg_t *msg;
-    void *dst = NULL;
+    char *dst = NULL;
     int saved_errno;
 
     if (!(msg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
@@ -54,13 +53,12 @@ static flux_msg_t *encode_event (const char *topic, int flags,
     }
     if (src) { // optional payload
         int srclen = strlen (src);
-        size_t dstlen = BASE64_DECODE_SIZE (srclen);
+        size_t dstbuflen = base64_decoded_length (srclen);
+        ssize_t dstlen;
 
-        if (!(dst = malloc (dstlen)))
+        if (!(dst = malloc (dstbuflen)))
             goto error;
-        if (sodium_base642bin ((unsigned char *)dst, dstlen, src, srclen,
-                               NULL, &dstlen, NULL,
-                               sodium_base64_VARIANT_ORIGINAL) < 0) {
+        if ((dstlen = base64_decode (dst, dstbuflen, src, srclen)) < 0) {
             errno = EPROTO;
             goto error;
         }

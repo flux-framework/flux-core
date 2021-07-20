@@ -20,10 +20,10 @@
 #include <ctype.h>
 #include <flux/core.h>
 #include <jansson.h>
-#include <sodium.h>
 #include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libccan/ccan/base64/base64.h"
 #include "src/common/libutil/macros.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libkvs/treeobj.h"
@@ -275,20 +275,19 @@ static int store_cache (kvstxn_t *kt, json_t *o,
     int saved_errno, rc;
     const char *xdata;
     char *data = NULL;
-    size_t xlen, len;
+    size_t xlen, databuflen;
+    ssize_t datalen = 0;
 
     if (is_raw) {
         xdata = json_string_value (o);
         xlen = strlen (xdata);
-        len = BASE64_DECODE_SIZE (xlen);
-        if (len > 0) {
-            if (!(data = malloc (len))) {
+        databuflen = base64_decoded_length (xlen);
+        if (databuflen > 0) {
+            if (!(data = malloc (databuflen))) {
                 flux_log_error (kt->ktm->h, "malloc");
                 goto error;
             }
-            if (sodium_base642bin ((unsigned char *)data, len, xdata, xlen,
-                                   NULL, &len, NULL,
-                                   sodium_base64_VARIANT_ORIGINAL) < 0) {
+            if ((datalen = base64_decode (data, databuflen, xdata, xlen)) < 0) {
                 errno = EPROTO;
                 goto error;
             }
@@ -299,9 +298,9 @@ static int store_cache (kvstxn_t *kt, json_t *o,
             flux_log_error (kt->ktm->h, "%s: treeobj_encode", __FUNCTION__);
             goto error;
         }
-        len = strlen (data);
+        datalen = strlen (data);
     }
-    if (blobref_hash (kt->ktm->hash_name, data, len, ref, ref_len) < 0) {
+    if (blobref_hash (kt->ktm->hash_name, data, datalen, ref, ref_len) < 0) {
         flux_log_error (kt->ktm->h, "%s: blobref_hash", __FUNCTION__);
         goto error;
     }
@@ -321,7 +320,7 @@ static int store_cache (kvstxn_t *kt, json_t *o,
         rc = 0;
     }
     else {
-        if (cache_entry_set_raw (entry, data, len) < 0) {
+        if (cache_entry_set_raw (entry, data, datalen) < 0) {
             int ret;
             ret = cache_remove_entry (kt->ktm->cache, ref);
             assert (ret == 1);
