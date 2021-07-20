@@ -478,10 +478,8 @@ static int zmsg_to_msg (flux_msg_t *msg, zmsg_t *zmsg)
             return -1;
         }
         msg->payload_size = zframe_size (zf);
-        if (!(msg->payload = malloc (msg->payload_size))) {
-            errno = ENOMEM;
+        if (!(msg->payload = malloc (msg->payload_size)))
             return -1;
-        }
         memcpy (msg->payload, zframe_data (zf), msg->payload_size);
         if (zf)
             zf = zmsg_next (zmsg);
@@ -1114,10 +1112,8 @@ int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
      */
     } else if (!(flags & FLUX_MSGFLAG_PAYLOAD) && (buf != NULL && size > 0)) {
         assert (!msg->payload);
-        if (!(msg->payload = malloc (size))) {
-            errno = ENOMEM;
+        if (!(msg->payload = malloc (size)))
             return -1;
-        }
         msg->payload_size = size;
         memcpy (msg->payload, buf, size);
         flags |= FLUX_MSGFLAG_PAYLOAD;
@@ -1410,7 +1406,7 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
         if (payload) {
             cpy->payload_size = msg->payload_size;
             if (!(cpy->payload = malloc (cpy->payload_size)))
-                goto nomem;
+                goto error;
             memcpy (cpy->payload, msg->payload, msg->payload_size);
         }
         else
