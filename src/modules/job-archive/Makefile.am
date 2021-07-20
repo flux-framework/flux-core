@@ -10,7 +10,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
 	$(ZMQ_CFLAGS) $(SQLITE_CFLAGS) \
-	$(FLUX_SECURITY_CFLAGS) $(YAMLCPP_CFLAGS)
+	$(FLUX_SECURITY_CFLAGS)
 
 fluxmod_LTLIBRARIES = job-archive.la
 
