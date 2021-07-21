@@ -512,10 +512,8 @@ json_t *treeobj_create_val (const void *data, int len)
     json_t *obj = NULL;
 
     xlen = sodium_base64_encoded_len (len, sodium_base64_VARIANT_ORIGINAL);
-    if (!(xdata = malloc (xlen))) {
-        errno = ENOMEM;
+    if (!(xdata = malloc (xlen)))
         goto done;
-    }
     sodium_bin2base64 (xdata, xlen, (const unsigned char *)data, len,
                               sodium_base64_VARIANT_ORIGINAL);
 
