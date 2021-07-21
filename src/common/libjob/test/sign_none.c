@@ -16,10 +16,10 @@
 #if HAVE_FLUX_SECURITY
 #include <flux/security/sign.h>
 #endif
-#include <sodium.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libjob/sign_none.h"
+#include "src/common/libccan/ccan/base64/base64.h"
 
 void simple (void)
 {
@@ -48,18 +48,18 @@ void simple (void)
     free (s);
 }
 
-char *encode_base64 (const void *src, int srclen)
+char *encode_base64 (const char *src, int srclen)
 {
-    int dstlen = sodium_base64_encoded_len (srclen,
-                                            sodium_base64_VARIANT_ORIGINAL);
-    char *dst = calloc (1, dstlen);
+    size_t dstbuflen = base64_encoded_length (srclen) + 1; /* +1 for NUL */
+    char *dst = malloc (dstbuflen);
     if (!dst)
         BAIL_OUT ("calloc failed");
-    return sodium_bin2base64 (dst, dstlen, (unsigned char *)src, srclen,
-                              sodium_base64_VARIANT_ORIGINAL);
+    if (base64_encode (dst, dstbuflen, src, srclen) < 0)
+        BAIL_OUT ("base64_encode");
+    return dst;
 }
 
-char *wrap (const char *header, int headerlen, void *payload, int payloadlen)
+char *wrap (const char *header, int headerlen, char *payload, int payloadlen)
 {
     char *h = encode_base64 (header, headerlen);
     char *p = encode_base64 (payload, payloadlen);

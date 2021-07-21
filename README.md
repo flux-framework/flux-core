@@ -44,7 +44,6 @@ automake          | automake          |                   |
 libtool           | libtool           |                   |
 make              | make              |                   |
 pkgconfig         | pkg-config        |                   |
-libsodium-devel   | libsodium-dev     | >= 1.0.14         |
 zeromq4-devel     | libzmq3-dev       | >= 4.0.4          |
 czmq-devel        | libczmq-dev       | >= 3.0.1          |
 jansson-devel     | libjansson-dev    | >= 2.6            |
@@ -78,12 +77,12 @@ jq                | jq                |
 
 ##### Installing RedHat/CentOS Packages
 ```
-yum install autoconf automake libtool make pkgconfig libsodium-devel zeromq4-devel czmq-devel libuuid-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python36-devel python36-cffi python36-yaml python36-jsonschema python3-sphinx aspell aspell-en valgrind-devel mpich-devel jq
+yum install autoconf automake libtool make pkgconfig zeromq4-devel czmq-devel libuuid-devel jansson-devel lz4-devel hwloc-devel sqlite-devel lua lua-devel lua-posix python36-devel python36-cffi python36-yaml python36-jsonschema python3-sphinx aspell aspell-en valgrind-devel mpich-devel jq
 ```
 
 ##### Installing Ubuntu Packages
 ```
-apt install autoconf automake libtool make pkg-config libsodium-dev libzmq3-dev libczmq-dev uuid-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python3-dev python3-cffi python3-yaml python3-jsonschema python3-sphinx aspell aspell-en valgrind libmpich-dev jq
+apt install autoconf automake libtool make pkg-config libzmq3-dev libczmq-dev uuid-dev libjansson-dev liblz4-dev libhwloc-dev libsqlite3-dev lua5.1 liblua5.1-dev lua-posix python3-dev python3-cffi python3-yaml python3-jsonschema python3-sphinx aspell aspell-en valgrind libmpich-dev jq
 ```
 
 ##### Building from Source

@@ -77,7 +77,7 @@ local response, err = f:rpc ("event.pub", request);
 is (err, "Protocol error", "event.pub: no flags, fails with EPROTO")
 
 -- mangled base64 payload
-local request = { topic = "foo", flags = 0, payload = "aGVsbG8gd29ybGQ" }
+local request = { topic = "foo", flags = 0, payload = "aGVsbG8gd29ybGQ%" }
 local response, err = f:rpc ("event.pub", request);
 is (err, "Protocol error", "event.pub: bad base64, fails with EPROTO")
 

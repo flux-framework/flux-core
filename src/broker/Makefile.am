@@ -12,7 +12,6 @@ AM_CPPFLAGS = \
 	$(PMIX_CFLAGS) \
 	$(ZMQ_CFLAGS) \
 	$(LIBUUID_CFLAGS) \
-	$(LIBSODIUM_CFLAGS) \
 	$(JANSSON_CFLAGS) \
 	$(VALGRIND_CFLAGS)
 
@@ -72,7 +71,6 @@ flux_broker_LDADD = \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
-	$(LIBSODIUM_LIBS) \
 	$(JANSSON_LIBS) \
 	$(PMIX_LIBS) \
 	$(LIBDL)

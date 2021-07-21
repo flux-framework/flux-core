@@ -21,7 +21,6 @@
 #include <unistd.h>
 #include <stdbool.h>
 #include <flux/core.h>
-#include <sodium.h>
 #include <jansson.h>
 #include <sqlite3.h>
 

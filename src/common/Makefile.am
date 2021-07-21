@@ -52,8 +52,7 @@ libflux_internal_la_LIBADD = \
 	$(LIBPTHREAD) \
 	$(LIBDL) \
 	$(LIBRT) \
-	$(FLUX_SECURITY_LIBS) \
-	$(LIBSODIUM_LIBS)
+	$(FLUX_SECURITY_LIBS)
 libflux_internal_la_LDFLAGS = $(san_ld_zdef_flag)
 
 lib_LTLIBRARIES = libflux-core.la \

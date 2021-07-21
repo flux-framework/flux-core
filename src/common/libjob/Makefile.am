@@ -10,8 +10,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
 	$(JANSSON_CFLAGS) \
-	$(FLUX_SECURITY_CFLAGS) \
-	$(LIBSODIUM_CFLAGS)
+	$(FLUX_SECURITY_CFLAGS)
 
 noinst_LTLIBRARIES = libjob.la
 fluxcoreinclude_HEADERS = \
@@ -41,25 +40,24 @@ TESTS = \
 	test_jobspec1.t
 
 check_PROGRAMS = \
-        $(TESTS)
+	$(TESTS)
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
-        $(top_srcdir)/config/tap-driver.sh
+	$(top_srcdir)/config/tap-driver.sh
 
 test_ldadd = \
-        $(top_builddir)/src/common/libjob/libjob.la \
-        $(top_builddir)/src/common/libflux/libflux.la \
-        $(top_builddir)/src/common/libflux-internal.la \
-        $(top_builddir)/src/common/libtap/libtap.la \
+	$(top_builddir)/src/common/libjob/libjob.la \
+	$(top_builddir)/src/common/libflux/libflux.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libtap/libtap.la \
 	$(JANSSON_LIBS) \
 	$(LIBPTHREAD) \
-        $(FLUX_SECURITY_LIBS) \
-	$(LIBSODIUM_LIBS)
+	$(FLUX_SECURITY_LIBS)
 
 test_cppflags = \
-        $(AM_CPPFLAGS) \
-        -I$(top_srcdir)/src/common/libtap
+	$(AM_CPPFLAGS) \
+	-I$(top_srcdir)/src/common/libtap
 
 test_job_t_SOURCES = test/job.c
 test_job_t_CPPFLAGS = $(test_cppflags)

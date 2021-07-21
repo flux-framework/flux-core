@@ -35,7 +35,7 @@ static json_t *data_encode_base64 (const char *stream,
     char *dest = NULL;
     size_t destlen = base64_encoded_length (len) + 1; /* +1 for NUL */
 
-    if ((dest = calloc (1, destlen))
+    if ((dest = malloc (destlen))
         && (n = base64_encode (dest, destlen, data, len)) >= 0) {
             o = json_pack ("{s:s s:s s:s s:s#}",
                            "stream", stream,
@@ -102,7 +102,7 @@ static int decode_data_base64 (char *src,
 {
     ssize_t rc;
     size_t size = base64_decoded_length (srclen);
-    if (!(*datap = calloc (1, size)))
+    if (!(*datap = malloc (size)))
         return -1;
     if ((rc = base64_decode (*datap, size, src, srclen)) < 0)
         return -1;

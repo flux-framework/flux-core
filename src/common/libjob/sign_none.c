@@ -17,15 +17,15 @@
 #include <assert.h>
 #include <errno.h>
 #include <argz.h>
-#include <sodium.h>
 
-#include "src/common/libutil/macros.h"
+#include "src/common/libccan/ccan/base64/base64.h"
 
 #include "sign_none.h"
 
 int header_decode (const char *src, int srclen, uint32_t *useridp)
 {
-    size_t dstlen = BASE64_DECODE_SIZE (srclen);
+    size_t dstbuflen = base64_decoded_length (srclen) + 1; /* +1 for NUL */
+    ssize_t dstlen;
     char *dst;
     char *entry = NULL;
     char *key;
@@ -36,13 +36,9 @@ int header_decode (const char *src, int srclen, uint32_t *useridp)
     uint32_t userid;
     char *endptr;
 
-    if (!(dst = calloc (1, dstlen)))
+    if (!(dst = malloc (dstbuflen)))
         return -1;
-    if (sodium_base642bin ((unsigned char *)dst, dstlen, src, srclen,
-                           NULL, &dstlen, NULL,
-                           sodium_base64_VARIANT_ORIGINAL) < 0)
-        goto error_inval;
-    if (dst[dstlen - 1] != '\0')
+    if ((dstlen = base64_decode (dst, dstbuflen, src, srclen)) < 0)
         goto error_inval;
     while ((key = entry = argz_next (dst, dstlen, entry))) {
         if (!(val = entry = argz_next (dst, dstlen, entry)))
@@ -81,7 +77,7 @@ static char *header_encode (uint32_t userid)
     char src[128];
     int srclen;
     char *dst;
-    int dstlen;
+    size_t dstbuflen;
     int i;
 
     srclen = snprintf (src, sizeof (src), "version:i1:userid:i%lu:mechanism:snone:",
@@ -91,37 +87,39 @@ static char *header_encode (uint32_t userid)
         if (src[i] == ':')
             src[i] = '\0';
     }
-    dstlen = sodium_base64_encoded_len (srclen, sodium_base64_VARIANT_ORIGINAL);
-    if (!(dst = calloc (1, dstlen)))
+    dstbuflen = base64_encoded_length (srclen) + 1; /* +1 for NUL */
+    if (!(dst = malloc (dstbuflen)))
         return NULL;
-
-    return sodium_bin2base64 (dst, dstlen, (unsigned char *)src, srclen,
-                              sodium_base64_VARIANT_ORIGINAL);
+    if (base64_encode (dst, dstbuflen, src, srclen) < 0)
+        return NULL;
+    return dst;
 }
 
-static char *payload_encode (const void *src, int srclen)
+static char *payload_encode (const char *src, int srclen)
 {
     char *dst;
-    int dstlen;
+    size_t dstbuflen;
 
-    dstlen = sodium_base64_encoded_len (srclen, sodium_base64_VARIANT_ORIGINAL);
-    if (!(dst = calloc (1, dstlen)))
+    dstbuflen = base64_encoded_length (srclen) + 1; /* +1 for NUL */
+    if (!(dst = malloc (dstbuflen)))
         return NULL;
-    return sodium_bin2base64 (dst, dstlen, (unsigned char *)src, srclen,
-                              sodium_base64_VARIANT_ORIGINAL);
+    if (base64_encode (dst, dstbuflen, src, srclen) < 0) {
+        free (dst);
+        return NULL;
+    }
+    return dst;
 }
 
 static int payload_decode (const void *src, int srclen,
                            void **payload, int *payloadsz)
 {
-    size_t dstlen = BASE64_DECODE_SIZE (srclen);
-    void *dst;
+    size_t dstbuflen = base64_decoded_length (srclen) + 1; /* +1 for NUL */
+    ssize_t dstlen;
+    char *dst;
 
-    if (!(dst = calloc (1, dstlen)))
+    if (!(dst = malloc (dstbuflen)))
         return -1;
-    if (sodium_base642bin ((unsigned char *)dst, dstlen, src, srclen,
-                           NULL, &dstlen, NULL,
-                           sodium_base64_VARIANT_ORIGINAL) < 0)
+    if ((dstlen = base64_decode (dst, dstbuflen, src, srclen)) < 0)
         goto error_inval;
     *payload = dst;
     *payloadsz = dstlen;

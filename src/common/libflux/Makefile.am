@@ -12,8 +12,7 @@ AM_CPPFLAGS = \
 	-I$(top_builddir) \
 	-I$(top_builddir)/src/common/libflux \
 	$(JANSSON_CFLAGS) \
-	$(ZMQ_CFLAGS) \
-	$(LIBSODIUM_CFLAGS)
+	$(ZMQ_CFLAGS)
 
 installed_conf_cppflags = \
 	-DINSTALLED_MODULE_PATH=\"$(fluxmoddir)\" \
@@ -177,7 +176,6 @@ test_ldadd = \
 	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
 	$(LIBPTHREAD) \
-	$(LIBSODIUM_LIBS) \
 	$(LIBDL)
 
 test_cppflags = \
