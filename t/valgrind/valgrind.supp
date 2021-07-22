@@ -112,3 +112,14 @@
    fun:hwloc_topology_load
    ...
 }
+{
+   <issue_3793>
+   Memcheck:Addr1
+   obj:*/libnvidia-opencl.so.*
+   ...
+   fun:clGetPlatformIDs
+   obj:*/hwloc_opencl.so
+   obj:*/libhwloc.so.*
+   fun:hwloc_topology_load
+   ...
+}
