@@ -106,8 +106,6 @@ static const struct flux_handle_ops broker_handle_ops;
 static struct optparse_option opts[] = {
     { .name = "verbose",    .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
       .usage = "Be annoyingly informative by degrees", },
-    { .name = "k-ary",      .key = 'k', .has_arg = 1, .arginfo = "K",
-      .usage = "Wire up in a k-ary tree (default: 2)", },
     { .name = "setattr",    .key = 'S', .has_arg = 1, .arginfo = "ATTR=VAL",
       .usage = "Set broker attribute", },
     { .name = "config-path",.key = 'c', .has_arg = 1, .arginfo = "PATH",
@@ -127,9 +125,6 @@ void parse_command_line_arguments (int argc, char *argv[], broker_ctx_t *ctx)
         exit (1);
 
     ctx->verbose = optparse_get_int (ctx->opts, "verbose", 0);
-
-    if ((ctx->tbon_k = optparse_get_int (ctx->opts, "k-ary", 2)) < 1)
-        log_msg_exit ("--k-ary value must be >= 1");
 
     optparse_get_str (ctx->opts, "config-path", NULL);
 
@@ -275,7 +270,10 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    if (!(ctx.overlay = overlay_create (ctx.h, overlay_recv_cb, &ctx))) {
+    if (!(ctx.overlay = overlay_create (ctx.h,
+                                        ctx.attrs,
+                                        overlay_recv_cb,
+                                        &ctx))) {
         log_err ("overlay_create");
         goto cleanup;
     }
@@ -299,13 +297,13 @@ int main (int argc, char *argv[])
      */
     monotime (&boot_start_time);
     if (flux_conf_unpack (conf, NULL, "{s:{}}", "bootstrap") == 0) {
-        if (boot_config (ctx.h, ctx.overlay, ctx.attrs, ctx.tbon_k) < 0) {
+        if (boot_config (ctx.h, ctx.overlay, ctx.attrs) < 0) {
             log_msg ("bootstrap failed");
             goto cleanup;
         }
     }
     else { // PMI
-        if (boot_pmi (ctx.overlay, ctx.attrs, ctx.tbon_k) < 0) {
+        if (boot_pmi (ctx.overlay, ctx.attrs) < 0) {
             log_msg ("bootstrap failed");
             goto cleanup;
         }
@@ -318,7 +316,7 @@ int main (int argc, char *argv[])
     assert (ctx.size > 0);
 
     /* Must be called after overlay setup */
-    if (overlay_register_attrs (ctx.overlay, ctx.attrs) < 0) {
+    if (overlay_register_attrs (ctx.overlay) < 0) {
         log_err ("registering overlay attributes");
         goto cleanup;
     }

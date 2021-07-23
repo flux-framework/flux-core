@@ -78,7 +78,11 @@ void ctx_destroy (struct context *ctx)
     free (ctx);
 }
 
-struct context *ctx_create (flux_t *h, const char *name, int size, int rank,
+struct context *ctx_create (flux_t *h,
+                            const char *name,
+                            int size,
+                            int rank,
+                            int fanout,
                             overlay_recv_f cb)
 {
     struct context *ctx;
@@ -88,16 +92,20 @@ struct context *ctx_create (flux_t *h, const char *name, int size, int rank,
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         BAIL_OUT ("calloc failed");
+    if (!(ctx->attrs = attr_create ()))
+        BAIL_OUT ("attr_create failed");
+    if (fanout != 2) {
+        if (attr_add_int (ctx->attrs, "tbon.fanout", fanout, 0) < 0)
+            BAIL_OUT ("could not add tbon.fanout attribute");
+    }
     ctx->h = h;
     ctx->size = size;
     ctx->rank = rank;
     snprintf (ctx->name, sizeof (ctx->name), "%s-%d", name, rank);
-    if (!(ctx->ov = overlay_create (h, cb, ctx)))
+    if (!(ctx->ov = overlay_create (h, ctx->attrs, cb, ctx)))
         BAIL_OUT ("overlay_create");
     if (!(ctx->uuid = overlay_get_uuid (ctx->ov)))
         BAIL_OUT ("overlay_get_uuid failed");
-    if (!(ctx->attrs = attr_create ()))
-        BAIL_OUT ("attr_create failed");
     diag ("created %s: rank %d size %d uuid %s",
           ctx->name, ctx->rank, ctx->size, ctx->uuid);
 
@@ -106,23 +114,23 @@ struct context *ctx_create (flux_t *h, const char *name, int size, int rank,
 
 void single (flux_t *h)
 {
-    struct context *ctx = ctx_create (h, "single", 1, 0, NULL);
+    struct context *ctx = ctx_create (h, "single", 1, 0, 2, NULL);
     flux_msg_t *msg;
 
-    ok (overlay_set_geometry (ctx->ov, 1, 0, 2) == 0,
-        "%s: overlay_set_geometry size=1 rank=0 tbon_k=2 works", ctx->name);
+    ok (overlay_set_geometry (ctx->ov, 1, 0) == 0,
+        "%s: overlay_set_geometry size=1 rank=0 works", ctx->name);
 
     ok (overlay_get_size (ctx->ov) == 1,
         "%s: overlay_get_size returns 1", ctx->name);
     ok (overlay_get_rank (ctx->ov) == 0,
         "%s: overlay_get_rank returns 0", ctx->name);
 
-    ok (overlay_register_attrs (ctx->ov, ctx->attrs) == 0,
+    ok (overlay_register_attrs (ctx->ov) == 0,
         "%s: overlay_register_attrs works", ctx->name);
     check_attr (ctx, "tbon.parent-endpoint", NULL);
     check_attr (ctx, "rank", "0");
     check_attr (ctx, "size", "1");
-    check_attr (ctx, "tbon.arity", "2");
+    check_attr (ctx, "tbon.fanout", "2");
     check_attr (ctx, "tbon.level", "0");
     check_attr (ctx, "tbon.maxlevel", "0");
     check_attr (ctx, "tbon.descendants", "0");
@@ -245,7 +253,6 @@ void trio (flux_t *h)
 {
     struct context *ctx[2];
     int size = 3;
-    int k_ary = 2;
     char parent_uri[64];
     const char *server_pubkey;
     const char *client_pubkey;
@@ -258,9 +265,9 @@ void trio (flux_t *h)
     zcert_t *cert;
     const char *sender;
 
-    ctx[0] = ctx_create (h, "trio", size, 0, recv_cb);
+    ctx[0] = ctx_create (h, "trio", size, 0, 2, recv_cb);
 
-    ok (overlay_set_geometry (ctx[0]->ov, size, 0, k_ary) == 0,
+    ok (overlay_set_geometry (ctx[0]->ov, size, 0) == 0,
         "%s: overlay_set_geometry works", ctx[0]->name);
 
     ok ((server_pubkey = overlay_cert_pubkey (ctx[0]->ov)) != NULL,
@@ -270,9 +277,9 @@ void trio (flux_t *h)
     ok (overlay_bind (ctx[0]->ov, parent_uri) == 0,
         "%s: overlay_bind %s works", ctx[0]->name, parent_uri);
 
-    ctx[1] = ctx_create (h, "trio", size, 1, recv_cb);
+    ctx[1] = ctx_create (h, "trio", size, 1, 2, recv_cb);
 
-    ok (overlay_set_geometry (ctx[1]->ov, size, 1, k_ary) == 0,
+    ok (overlay_set_geometry (ctx[1]->ov, size, 1) == 0,
         "%s: overlay_init works", ctx[1]->name);
 
     ok ((client_pubkey = overlay_cert_pubkey (ctx[1]->ov)) != NULL,
@@ -468,13 +475,13 @@ void test_create (flux_t *h,
                   int size,
                   struct context *ctx[])
 {
-    int k_ary = size - 1;
+    int fanout = size - 1;
     char uri[64] = { 0 };
     int rank;
 
     for (rank = 0; rank < size; rank++) {
-        ctx[rank] = ctx_create (h, name, size, rank, recv_cb);
-        if (overlay_set_geometry (ctx[rank]->ov, size, rank, k_ary) < 0)
+        ctx[rank] = ctx_create (h, name, size, rank, fanout, recv_cb);
+        if (overlay_set_geometry (ctx[rank]->ov, size, rank) < 0)
             BAIL_OUT ("%s: overlay_set_geometry failed", ctx[rank]->name);
         if (rank == 0)
             snprintf (uri, sizeof (uri), "ipc://@%s", ctx[0]->name);
@@ -593,12 +600,21 @@ void check_monitor (flux_t *h)
 void wrongness (flux_t *h)
 {
     struct overlay *ov;
+    attr_t *attrs;
 
+    if (!(attrs = attr_create ()))
+        BAIL_OUT ("attr_create failed");
     errno = 0;
-    ok (overlay_create (NULL, NULL, NULL) == NULL && errno == EINVAL,
+    ok (overlay_create (NULL, attrs, NULL, NULL) == NULL && errno == EINVAL,
         "overlay_create h=NULL fails with EINVAL");
+    errno = 0;
+    ok (overlay_create (h, NULL, NULL, NULL) == NULL && errno == EINVAL,
+        "overlay_create attrs=NULL fails with EINVAL");
+    attr_destroy (attrs);
 
-    if (!(ov = overlay_create (h, NULL, NULL)))
+    if (!(attrs = attr_create ()))
+        BAIL_OUT ("attr_create failed");
+    if (!(ov = overlay_create (h, attrs, NULL, NULL)))
         BAIL_OUT ("overlay_create failed");
 
     errno = 0;
@@ -606,6 +622,7 @@ void wrongness (flux_t *h)
         "overlay_bind fails if called before rank is known");
 
     overlay_destroy (ov);
+    attr_destroy (attrs);
 }
 
 void diag_logger (const char *buf, int len, void *arg)

@@ -36,6 +36,8 @@
 #define FLUX_ZAP_DOMAIN "flux"
 #define ZAP_ENDPOINT "inproc://zeromq.zap.01"
 
+#define DEFAULT_FANOUT 2
+
 enum {
     KEEPALIVE_STATUS_NORMAL = 0,
     KEEPALIVE_STATUS_DISCONNECT = 1,
@@ -78,13 +80,14 @@ struct overlay {
     flux_watcher_t *zap_w;
 
     flux_t *h;
+    attr_t *attrs;
     flux_reactor_t *reactor;
     flux_msg_handler_t **handlers;
     flux_future_t *f_sync;
 
     uint32_t size;
     uint32_t rank;
-    int tbon_k;
+    int fanout;
     char uuid[UUID_STR_LEN];
     int version;
 
@@ -153,15 +156,11 @@ static int child_count (uint32_t rank, uint32_t size, int k)
     return count;
 }
 
-int overlay_set_geometry (struct overlay *ov,
-                          uint32_t size,
-                          uint32_t rank,
-                          int tbon_k)
+int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank)
 {
     ov->size = size;
     ov->rank = rank;
-    ov->tbon_k = tbon_k;
-    ov->child_count = child_count (rank, size, tbon_k);
+    ov->child_count = child_count (rank, size, ov->fanout);
     if (ov->child_count > 0) {
         int i;
 
@@ -173,14 +172,19 @@ int overlay_set_geometry (struct overlay *ov,
         zhashx_set_key_destructor (ov->child_hash, NULL);
         for (i = 0; i < ov->child_count; i++) {
             struct child *child = &ov->children[i];
-            child->rank = kary_childof (tbon_k, size, rank, i);
+            child->rank = kary_childof (ov->fanout, size, rank, i);
         }
     }
     if (rank > 0) {
-        ov->parent.rank = kary_parentof (tbon_k, rank);
+        ov->parent.rank = kary_parentof (ov->fanout, rank);
     }
 
     return 0;
+}
+
+int overlay_get_fanout (struct overlay *ov)
+{
+    return ov->fanout;
 }
 
 uint32_t overlay_get_rank (struct overlay *ov)
@@ -284,7 +288,7 @@ static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank)
     uint32_t first;
     int i;
 
-    if ((first = kary_childof (ov->tbon_k, ov->size, ov->rank, 0)) == KARY_NONE
+    if ((first = kary_childof (ov->fanout, ov->size, ov->rank, 0)) == KARY_NONE
         || (i = rank - first) < 0
         || i >= ov->child_count)
         return NULL;
@@ -297,7 +301,7 @@ static struct child *child_lookup_route (struct overlay *ov, uint32_t rank)
 {
     uint32_t child_rank;
 
-    child_rank = kary_child_route (ov->tbon_k, ov->size, ov->rank, rank);
+    child_rank = kary_child_route (ov->fanout, ov->size, ov->rank, rank);
     if (child_rank == KARY_NONE)
         return NULL;
     return child_lookup_byrank (ov, child_rank);
@@ -1012,34 +1016,39 @@ done:
     return rc;
 }
 
-int overlay_register_attrs (struct overlay *overlay, attr_t *attrs)
+int overlay_register_attrs (struct overlay *overlay)
 {
-    int tbon_level = kary_levelof (overlay->tbon_k, overlay->rank);
-    int tbon_maxlevel = kary_levelof (overlay->tbon_k, overlay->size - 1);
-    int tbon_descendants = kary_sum_descendants (overlay->tbon_k,
-                                                 overlay->size,
-                                                 overlay->rank);
-
-    if (attr_add_active (attrs, "tbon.parent-endpoint",
+    if (attr_add_active (overlay->attrs,
+                         "tbon.parent-endpoint",
                          FLUX_ATTRFLAG_READONLY,
-                         overlay_attr_get_cb, NULL, overlay) < 0)
+                         overlay_attr_get_cb,
+                         NULL,
+                         overlay) < 0)
         return -1;
-    if (attr_add_uint32 (attrs, "rank", overlay->rank,
+    if (attr_add_uint32 (overlay->attrs,
+                         "rank",
+                         overlay->rank,
                          FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_uint32 (attrs, "size", overlay->size,
+    if (attr_add_uint32 (overlay->attrs,
+                         "size", overlay->size,
                          FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_int (attrs, "tbon.arity", overlay->tbon_k,
+    if (attr_add_int (overlay->attrs,
+                      "tbon.level",
+                      kary_levelof (overlay->fanout, overlay->rank),
                       FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_int (attrs, "tbon.level", tbon_level,
+    if (attr_add_int (overlay->attrs,
+                      "tbon.maxlevel",
+                      kary_levelof (overlay->fanout, overlay->size - 1),
                       FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    if (attr_add_int (attrs, "tbon.maxlevel", tbon_maxlevel,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
-        return -1;
-    if (attr_add_int (attrs, "tbon.descendants", tbon_descendants,
+    if (attr_add_int (overlay->attrs,
+                      "tbon.descendants",
+                      kary_sum_descendants (overlay->fanout,
+                                            overlay->size,
+                                            overlay->rank),
                       FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
 
@@ -1130,6 +1139,35 @@ int overlay_authorize (struct overlay *ov, const char *name, const char *pubkey)
     return 0;
 }
 
+/* Set tbon.fanout attribute and return fanout value or -1 on error.
+ * Allow the value to be set on the broker command line, but no changes
+ * after this function is called.
+ */
+static int overlay_configure_fanout (attr_t *attrs)
+{
+    int fanout = DEFAULT_FANOUT;
+    const char *val;
+    char *endptr;
+
+    if (attr_get (attrs, "tbon.fanout", &val, NULL) == 0) {
+        errno = 0;
+        fanout = strtol (val, &endptr, 10);
+        if (errno != 0 || fanout <= 0 || *endptr != '\0') {
+            log_msg ("tbon.fanout value must be a positive integer");
+            errno = EINVAL;
+            return -1;
+        }
+        if (attr_delete (attrs, "tbon.fanout", true) < 0)
+            return -1;
+    }
+    if (attr_add_int (attrs,
+                      "tbon.fanout",
+                      fanout,
+                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+    return fanout;
+}
+
 void overlay_destroy (struct overlay *ov)
 {
     if (ov) {
@@ -1173,13 +1211,17 @@ static const struct flux_msg_handler_spec htab[] = {
     FLUX_MSGHANDLER_TABLE_END,
 };
 
-struct overlay *overlay_create (flux_t *h, overlay_recv_f cb, void *arg)
+struct overlay *overlay_create (flux_t *h,
+                                attr_t *attrs,
+                                overlay_recv_f cb,
+                                void *arg)
 {
     struct overlay *ov;
     uuid_t uuid;
 
     if (!(ov = calloc (1, sizeof (*ov))))
         return NULL;
+    ov->attrs = attrs;
     ov->rank = FLUX_NODEID_ANY;
     ov->parent.lastsent = -1;
     ov->h = h;
@@ -1189,6 +1231,8 @@ struct overlay *overlay_create (flux_t *h, overlay_recv_f cb, void *arg)
     ov->version = FLUX_CORE_VERSION_HEX;
     uuid_generate (uuid);
     uuid_unparse (uuid, ov->uuid);
+    if ((ov->fanout = overlay_configure_fanout (ov->attrs)) < 0)
+        goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;
     if (!(ov->f_sync = flux_sync_create (h, sync_min))
