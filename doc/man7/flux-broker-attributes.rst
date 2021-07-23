@@ -40,7 +40,7 @@ content.backing-path
 TOPOLOGY ATTRIBUTES
 ===================
 
-tbon.arity
+tbon.fanout
    Branching factor of the tree based overlay network.
 
 tbon.descendants

@@ -47,10 +47,6 @@ OPTIONS
 **-S, --setattr**\ =\ *ATTR=VAL*
    Set initial value for broker attribute.
 
-**-k, --k-ary**\ =\ *N*
-   Set the branching factor of the tree based overlay
-   network (default: 2).
-
 
 RESOURCES
 =========
