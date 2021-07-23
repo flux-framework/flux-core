@@ -26,7 +26,7 @@
 #include "buffer_private.h"
 
 #include "src/common/libev/ev.h"
-#include "src/common/libutil/ev_zmq.h"
+#include "src/common/libzmqutil/ev_zmq.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdutils.h"
 

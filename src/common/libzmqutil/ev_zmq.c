@@ -36,7 +36,7 @@
 #include <stdbool.h>
 
 #include "src/common/libev/ev.h"
-#include "src/common/libutil/ev_zmq.h"
+#include "ev_zmq.h"
 
 static void prepare_cb (struct ev_loop *loop, ev_prepare *w, int revents)
 {

@@ -49,7 +49,6 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/libhostlist/libhostlist.la \
 	$(builddir)/libczmqcontainers/libczmqcontainers.la \
 	$(JANSSON_LIBS) \
-	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(LIBPTHREAD) \
 	$(LIBDL) \
@@ -71,7 +70,9 @@ libflux_core_la_LIBADD = \
 	$(builddir)/libkvs/libkvs.la \
 	$(builddir)/libjob/libjob.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
-	libflux-internal.la
+	$(builddir)/libzmqutil/libzmqutil.la \
+	libflux-internal.la \
+	$(ZMQ_LIBS)
 libflux_core_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libflux-core.map \
 	-version-info @LIBFLUX_CORE_VERSION_INFO@ \

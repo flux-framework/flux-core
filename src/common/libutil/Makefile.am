@@ -1,7 +1,6 @@
 AM_CFLAGS = \
 	$(WARNING_CFLAGS) \
 	$(CODE_COVERAGE_CFLAGS) \
-	$(ZMQ_CFLAGS) \
 	-Wno-strict-aliasing -Wno-error=strict-aliasing \
 	-Wno-parentheses -Wno-error=parentheses
 
@@ -34,8 +33,6 @@ libutil_la_SOURCES = \
 	veb.h \
 	read_all.c \
 	read_all.h \
-	ev_zmq.c \
-	ev_zmq.h \
 	cleanup.c \
 	cleanup.h \
 	unlink_recursive.c \
@@ -95,8 +92,7 @@ libutil_la_SOURCES = \
 
 EXTRA_DIST = veb_mach.c
 
-TESTS = test_ev.t \
-	test_sha1.t \
+TESTS = test_sha1.t \
 	test_sha256.t \
 	test_popen2.t \
 	test_kary.t \
@@ -126,11 +122,9 @@ test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/liblsd/liblsd.la \
-	$(top_builddir)/src/common/libev/libev.la \
 	$(top_builddir)/src/common/libtomlc99/libtomlc99.la \
 	$(top_builddir)/src/common/libczmqcontainers/libczmqcontainers.la \
 	$(top_builddir)/src/common/libccan/libccan.la \
-	$(ZMQ_LIBS) \
 	$(LIBPTHREAD) \
 	$(LIBRT) \
 	$(JANSSON_LIBS)
@@ -144,10 +138,6 @@ check_PROGRAMS = $(TESTS)
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
        $(top_srcdir)/config/tap-driver.sh
-
-test_ev_t_SOURCES = test/ev.c
-test_ev_t_CPPFLAGS = $(test_cppflags)
-test_ev_t_LDADD = $(test_ldadd)
 
 test_sha1_t_SOURCES = test/sha1.c
 test_sha1_t_CPPFLAGS = $(test_cppflags)

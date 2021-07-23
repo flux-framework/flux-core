@@ -17,9 +17,12 @@ noinst_LTLIBRARIES = \
 
 libzmqutil_la_SOURCES = \
 	msg_zsock.h \
-	msg_zsock.c
+	msg_zsock.c \
+	ev_zmq.h \
+	ev_zmq.c
 
-TESTS = test_msg_zsock.t
+TESTS = test_msg_zsock.t \
+	test_ev.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -46,3 +49,8 @@ test_msg_zsock_t_SOURCES = test/msg_zsock.c
 test_msg_zsock_t_CPPFLAGS = $(test_cppflags)
 test_msg_zsock_t_LDADD = $(test_ldadd)
 test_msg_zsock_t_LDFLAGS = $(test_ldflags)
+
+test_ev_t_SOURCES = test/ev.c
+test_ev_t_CPPFLAGS = $(test_cppflags)
+test_ev_t_LDADD = $(test_ldadd)
+test_ev_t_LDFLAGS = $(test_ldflags)
