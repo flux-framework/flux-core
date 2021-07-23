@@ -23,6 +23,7 @@
 #endif
 
 #include "src/common/libzmqutil/msg_zsock.h"
+#include "src/common/libzmqutil/reactor.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
@@ -613,13 +614,13 @@ module_t *module_add (modhash_t *mh, const char *path)
         log_err ("zsock_bind inproc://%s", module_get_uuid (p));
         goto cleanup;
     }
-    if (!(p->broker_w = flux_zmq_watcher_create (
+    if (!(p->broker_w = zmqutil_watcher_create (
                                         flux_get_reactor (p->modhash->broker_h),
                                         p->sock,
                                         FLUX_POLLIN,
                                         module_cb,
                                         p))) {
-        log_err ("flux_zmq_watcher_create");
+        log_err ("zmqutil_watcher_create");
         goto cleanup;
     }
     /* Set creds for connection.

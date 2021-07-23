@@ -20,6 +20,7 @@
 #include <uuid.h>
 
 #include "src/common/libzmqutil/msg_zsock.h"
+#include "src/common/libzmqutil/reactor.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/kary.h"
@@ -771,11 +772,11 @@ static int overlay_zap_init (struct overlay *ov)
         log_err ("could not bind to %s", ZAP_ENDPOINT);
         return -1;
     }
-    if (!(ov->zap_w = flux_zmq_watcher_create (ov->reactor,
-                                               ov->zap,
-                                               FLUX_POLLIN,
-                                               overlay_zap_cb,
-                                               ov)))
+    if (!(ov->zap_w = zmqutil_watcher_create (ov->reactor,
+                                              ov->zap,
+                                              FLUX_POLLIN,
+                                              overlay_zap_cb,
+                                              ov)))
         return -1;
     flux_watcher_start (ov->zap_w);
     return 0;
@@ -944,11 +945,11 @@ int overlay_connect (struct overlay *ov)
         zsock_set_identity (ov->parent.zsock, ov->uuid);
         if (zsock_connect (ov->parent.zsock, "%s", ov->parent.uri) < 0)
             goto nomem;
-        if (!(ov->parent.w = flux_zmq_watcher_create (ov->reactor,
-                                                      ov->parent.zsock,
-                                                      FLUX_POLLIN,
-                                                      parent_cb,
-                                                      ov)))
+        if (!(ov->parent.w = zmqutil_watcher_create (ov->reactor,
+                                                     ov->parent.zsock,
+                                                     FLUX_POLLIN,
+                                                     parent_cb,
+                                                     ov)))
             return -1;
         flux_watcher_start (ov->parent.w);
         if (hello_request_send (ov, ov->rank, FLUX_CORE_VERSION_HEX) < 0)
@@ -983,11 +984,11 @@ int overlay_bind (struct overlay *ov, const char *uri)
      */
     if (!(ov->bind_uri = zsock_last_endpoint (ov->bind_zsock)))
         return -1;
-    if (!(ov->bind_w = flux_zmq_watcher_create (ov->reactor,
-                                                ov->bind_zsock,
-                                                FLUX_POLLIN,
-                                                child_cb,
-                                                ov)))
+    if (!(ov->bind_w = zmqutil_watcher_create (ov->reactor,
+                                               ov->bind_zsock,
+                                               FLUX_POLLIN,
+                                               child_cb,
+                                               ov)))
         return -1;
     flux_watcher_start (ov->bind_w);
     /* Ensure that ipc files are removed when the broker exits.

@@ -11,8 +11,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir) \
 	-I$(top_builddir)/src/common/libflux \
-	$(JANSSON_CFLAGS) \
-	$(ZMQ_CFLAGS)
+	$(JANSSON_CFLAGS)
 
 installed_conf_cppflags = \
 	-DINSTALLED_MODULE_PATH=\"$(fluxmoddir)\" \

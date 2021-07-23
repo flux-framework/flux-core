@@ -70,9 +70,7 @@ libflux_core_la_LIBADD = \
 	$(builddir)/libkvs/libkvs.la \
 	$(builddir)/libjob/libjob.la \
 	$(builddir)/libsubprocess/libsubprocess.la \
-	$(builddir)/libzmqutil/libzmqutil.la \
-	libflux-internal.la \
-	$(ZMQ_LIBS)
+	libflux-internal.la
 libflux_core_la_LDFLAGS = \
 	-Wl,--version-script=$(srcdir)/libflux-core.map \
 	-version-info @LIBFLUX_CORE_VERSION_INFO@ \
