@@ -948,7 +948,7 @@ int overlay_connect (struct overlay *ov)
                                                       FLUX_POLLIN,
                                                       parent_cb,
                                                       ov)))
-        return -1;
+            return -1;
         flux_watcher_start (ov->parent.w);
         if (hello_request_send (ov, ov->rank, FLUX_CORE_VERSION_HEX) < 0)
             return -1;
