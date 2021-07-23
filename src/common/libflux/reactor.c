@@ -30,19 +30,7 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fdutils.h"
 
-struct flux_reactor {
-    struct ev_loop *loop;
-    int usecount;
-    unsigned int errflag:1;
-};
-
-struct flux_watcher {
-    flux_reactor_t *r;
-    flux_watcher_f fn;
-    void *arg;
-    struct flux_watcher_ops *ops;
-    void *data;
-};
+#include "reactor_private.h"
 
 static void reactor_usecount_decr (flux_reactor_t *r)
 {
@@ -164,30 +152,6 @@ void flux_reactor_active_decref (flux_reactor_t *r)
 {
     if (r)
         ev_unref (r->loop);
-}
-
-static int events_to_libev (int events)
-{
-    int e = 0;
-    if (events & FLUX_POLLIN)
-        e |= EV_READ;
-    if (events & FLUX_POLLOUT)
-        e |= EV_WRITE;
-    if (events & FLUX_POLLERR)
-        e |= EV_ERROR;
-    return e;
-}
-
-static int libev_to_events (int events)
-{
-    int e = 0;
-    if (events & EV_READ)
-        e |= FLUX_POLLIN;
-    if (events & EV_WRITE)
-        e |= FLUX_POLLOUT;
-    if (events & EV_ERROR)
-        e |= FLUX_POLLERR;
-    return e;
 }
 
 /**
