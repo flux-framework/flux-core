@@ -89,7 +89,7 @@ int attr_add (attr_t *attrs, const char *name, const char *val, int flags)
 {
     struct entry *e;
 
-    if (name == NULL || (flags & FLUX_ATTRFLAG_ACTIVE)) {
+    if (attrs == NULL || name == NULL || (flags & FLUX_ATTRFLAG_ACTIVE)) {
         errno = EINVAL;
         return -1;
     }
@@ -109,6 +109,10 @@ int attr_add_active (attr_t *attrs, const char *name, int flags,
     struct entry *e;
     int rc = -1;
 
+    if (!attrs) {
+        errno = EINVAL;
+        goto done;
+    }
     if ((e = zhash_lookup (attrs->hash, name))) {
         if (!set) {
             errno = EEXIST;
@@ -134,6 +138,10 @@ int attr_get (attr_t *attrs, const char *name, const char **val, int *flags)
     struct entry *e;
     int rc = -1;
 
+    if (!attrs || !name) {
+        errno = EINVAL;
+        goto done;
+    }
     if (!(e = zhash_lookup (attrs->hash, name))) {
         errno = ENOENT;
         goto done;
