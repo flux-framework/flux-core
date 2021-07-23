@@ -80,7 +80,6 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_reactor_create.3 \
 	man3/flux_fd_watcher_create.3 \
 	man3/flux_watcher_start.3 \
-	man3/flux_zmq_watcher_create.3 \
 	man3/flux_handle_watcher_create.3 \
 	man3/flux_timer_watcher_create.3 \
 	man3/flux_periodic_watcher_create.3 \
@@ -163,7 +162,6 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_watcher_stop.3 \
 	man3/flux_watcher_destroy.3 \
 	man3/flux_watcher_next_wakeup.3 \
-	man3/flux_zmq_watcher_get_zsock.3 \
 	man3/flux_handle_watcher_get_flux.3 \
 	man3/flux_timer_watcher_reset.3 \
 	man3/flux_periodic_watcher_reset.3 \

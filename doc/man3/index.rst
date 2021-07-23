@@ -70,7 +70,6 @@ man3
    flux_sync_create
    flux_timer_watcher_create
    flux_watcher_start
-   flux_zmq_watcher_create
    idset_create
    idset_encode
    flux_jobtap_get_flux
