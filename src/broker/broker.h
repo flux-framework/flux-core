@@ -38,7 +38,6 @@ struct broker {
     zlist_t *subscriptions;     /* subscripts for internal services */
     struct content_cache *cache;
     struct publisher *publisher;
-    int tbon_k;
 
     struct runat *runat;
     struct state_machine *state_machine;

@@ -148,8 +148,9 @@ overflow:
     return -1;
 }
 
-int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
+int boot_pmi (struct overlay *overlay, attr_t *attrs)
 {
+    int fanout = overlay_get_fanout (overlay);
     int rank;
     char key[64];
     char val[1024];
@@ -184,8 +185,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
     }
     if (overlay_set_geometry (overlay,
                               pmi_params.size,
-                              pmi_params.rank,
-                              tbon_k) < 0)
+                              pmi_params.rank) < 0)
         goto error;
 
     /* A size=1 instance has no peers, so skip the PMI exchange.
@@ -198,7 +198,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
      * N.B. there are no downstream peers if the 0th child of this rank
      * in k-ary tree does not exist.
      */
-    if (kary_childof (tbon_k,
+    if (kary_childof (fanout,
                       pmi_params.size,
                       pmi_params.rank,
                       0) != KARY_NONE) {
@@ -259,7 +259,7 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
     if (pmi_params.rank > 0) {
         char *cp;
 
-        rank = kary_parentof (tbon_k, pmi_params.rank);
+        rank = kary_parentof (fanout, pmi_params.rank);
         if (snprintf (key, sizeof (key), "%d", rank) >= sizeof (key)) {
             log_msg ("pmi key string overflow");
             goto error;
@@ -288,10 +288,10 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs, int tbon_k)
 
     /* Fetch the business card of children and inform overlay of public keys.
      */
-    for (i = 0; i < tbon_k; i++) {
+    for (i = 0; i < fanout; i++) {
         char *cp;
 
-        rank = kary_childof (tbon_k, pmi_params.size, pmi_params.rank, i);
+        rank = kary_childof (fanout, pmi_params.size, pmi_params.rank, i);
         if (rank == KARY_NONE)
             break;
         if (snprintf (key, sizeof (key), "%d", rank) >= sizeof (key)) {

@@ -439,11 +439,12 @@ int boot_config_geturibyrank (json_t *hosts,
     return 0;
 }
 
-int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k)
+int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
 {
     struct boot_conf conf;
     uint32_t rank;
     uint32_t size;
+    int fanout = overlay_get_fanout (overlay);
     json_t *hosts = NULL;
 
     /* Ingest the [bootstrap] stanza.
@@ -476,10 +477,10 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k)
         rank = 0;
     }
 
-    /* Tell overlay network this broker's rank, size, and branching factor.
+    /* Tell overlay network this broker's rank and size.
      * If a curve certificate was provided, load it.
      */
-    if (overlay_set_geometry (overlay, size, rank, tbon_k) < 0)
+    if (overlay_set_geometry (overlay, size, rank) < 0)
         goto error;
     if (conf.curve_cert) {
         if (overlay_cert_load (overlay, conf.curve_cert) < 0)
@@ -491,7 +492,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k)
      * attribute to the URI peers will connect to.  If broker has no
      * downstream peers, set tbon.endpoint to NULL.
      */
-    if (kary_childof (tbon_k, size, rank, 0) != KARY_NONE) {
+    if (kary_childof (fanout, size, rank, 0) != KARY_NONE) {
         char bind_uri[MAX_URI + 1];
         char my_uri[MAX_URI + 1];
 
@@ -543,7 +544,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k)
         char parent_uri[MAX_URI + 1];
         if (boot_config_geturibyrank (hosts,
                                       &conf,
-                                      kary_parentof (tbon_k, rank),
+                                      kary_parentof (fanout, rank),
                                       parent_uri,
                                       sizeof (parent_uri)) < 0)
             goto error;

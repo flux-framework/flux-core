@@ -423,13 +423,14 @@ test_expect_success 'broker broker.pid attribute is immutable' '
 test_expect_success 'broker --verbose option works' '
 	flux start ${ARGS} -o,-v /bin/true
 '
-test_expect_success 'broker --k-ary=4 option works' '
-	echo 4 >arity.exp &&
-	flux start ${ARGS} -o,--k-ary=4 flux getattr tbon.arity >arity.out &&
-	test_cmp arity.exp arity.out
+test_expect_success 'broker -Stbon.fanout=4 option works' '
+	echo 4 >fanout.exp &&
+	flux start ${ARGS} -o,-Stbon.fanout=4 \
+		flux getattr tbon.fanout >fanout.out &&
+	test_cmp fanout.exp fanout.out
 '
-test_expect_success 'broker --k-ary=0 fails' '
-	test_must_fail flux start ${ARGS} -o,--k-ary=0 /bin/true
+test_expect_success 'broker -Stbon.fanout=0 fails' '
+	test_must_fail flux start ${ARGS} -o,-Stbon.fanout=0 /bin/true
 '
 test_expect_success 'broker fails on unknown option' '
 	test_must_fail flux start ${ARGS} -o,--not-an-option /bin/true

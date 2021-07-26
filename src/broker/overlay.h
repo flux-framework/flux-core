@@ -29,15 +29,15 @@ typedef void (*overlay_recv_f)(const flux_msg_t *msg,
 /* Create overlay network, registering 'cb' to be called with each
  * received message.
  */
-struct overlay *overlay_create (flux_t *h, overlay_recv_f cb, void *arg);
+struct overlay *overlay_create (flux_t *h,
+                                attr_t *attrs,
+                                overlay_recv_f cb,
+                                void *arg);
 void overlay_destroy (struct overlay *ov);
 
-/* Set the overlay network size, rank, and TBON branching factor.
+/* Set the overlay network size and rank of this broker.
  */
-int overlay_set_geometry (struct overlay *ov,
-                          uint32_t size,
-                          uint32_t rank,
-                          int tbon_k);
+int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank);
 
 /* Send a message on the overlay network.
  * 'where' determines whether the message is routed upstream or downstream.
@@ -65,6 +65,7 @@ int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey);
 
 /* Misc. accessors
  */
+int overlay_get_fanout (struct overlay *ov);
 uint32_t overlay_get_rank (struct overlay *ov);
 void overlay_set_rank (struct overlay *ov, uint32_t rank); // test only
 uint32_t overlay_get_size (struct overlay *ov);
@@ -100,7 +101,7 @@ void overlay_set_monitor_cb (struct overlay *ov,
 
 /* Register overlay-related broker attributes.
  */
-int overlay_register_attrs (struct overlay *overlay, attr_t *attrs);
+int overlay_register_attrs (struct overlay *overlay);
 
 #endif /* !_BROKER_OVERLAY_H */
 

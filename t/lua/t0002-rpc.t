@@ -14,7 +14,7 @@ is (err, nil, "error is nil")
 
 is (f.rank, 0, "running on rank 0")
 is (f.size, 2, "session size is 2")
-is (f.arity, 2, "session arity is 2")
+is (f.fanout, 2, "session fanout is 2")
 
 --
 --  Use 'ping' packet to test rpc

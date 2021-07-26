@@ -20,7 +20,7 @@
  *   tbon.endpoint (w)
  *   instance-level (w)
  */
-int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs, int tbon_k);
+int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs);
 
 /* The following is exported for unit testing.
  */
