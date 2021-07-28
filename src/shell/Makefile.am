@@ -53,6 +53,9 @@ fluxinclude_HEADERS = \
 
 fluxlibexec_PROGRAMS = flux-shell
 
+shell_plugin_LTLIBRARIES = \
+        plugins/pals.la
+
 flux_shell_SOURCES = \
 	shell.c \
 	shell.h \
@@ -108,6 +111,13 @@ flux_shell_LDADD = \
 flux_shell_LDFLAGS = \
 	-export-dynamic \
 	-Wl,--version-script=$(srcdir)/flux-shell.map
+
+plugins_pals_la_SOURCES = plugins/pals.c
+plugins_pals_la_CPPFLAGS = $(AM_CPPFLAGS)
+plugins_pals_la_LIBADD = $(top_builddir)/src/common/libflux-hostlist.la \
+	$(top_builddir)/src/common/libflux-core.la
+plugins_pals_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module
 
 EXTRA_DIST = \
 	flux-shell.map
