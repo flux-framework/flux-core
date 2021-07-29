@@ -412,7 +412,7 @@ static void proto_get_u32 (const uint8_t *data, int index, uint32_t *val)
     *val = ntohl (x);
 }
 
-static int msg_append_route (flux_msg_t *msg,
+static int msg_route_append (flux_msg_t *msg,
                              const char *id,
                              unsigned int id_len)
 {
@@ -470,7 +470,7 @@ static int iovec_to_msg (flux_msg_t *msg,
         /*     return -1; */
         /* } */
         while ((index < iovcnt) && iov[index].size > 0) {
-            if (msg_append_route (msg,
+            if (msg_route_append (msg,
                                   (char *)iov[index].data,
                                   iov[index].size) < 0)
                 return -1;
