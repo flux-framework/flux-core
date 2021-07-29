@@ -781,9 +781,26 @@ static void cache_purge (struct content_cache *cache)
     }
 }
 
+static void update_stats (struct content_cache *cache)
+{
+    flux_stats_gauge_set (cache->h, "content-cache.count",
+        (int) zhashx_size (cache->entries));
+    flux_stats_gauge_set (cache->h, "content-cache.valid",
+        cache->acct_valid);
+    flux_stats_gauge_set (cache->h, "content-cache.dirty",
+        cache->acct_dirty);
+    flux_stats_gauge_set (cache->h, "content-cache.size",
+        cache->acct_size);
+    flux_stats_gauge_set (cache->h, "content-cache.flush-batch-count",
+        cache->flush_batch_count);
+}
+
 static void sync_cb (flux_future_t *f, void *arg)
 {
     struct content_cache *cache = arg;
+
+    if (flux_stats_enabled (cache->h, NULL))
+        update_stats (cache);
 
     cache_purge (cache);
 
@@ -918,25 +935,6 @@ void content_cache_destroy (struct content_cache *cache)
         free (cache);
         errno = saved_errno;
     }
-}
-
-static void timer_cb (flux_reactor_t *r, 
-                      flux_watcher_t *w, 
-                      int revents, 
-                      void *arg)
-{
-    struct content_cache *cache = arg;
-
-    flux_stats_gauge (cache->h, "flux.content-cache.count",
-        (int) zhashx_size (cache->entries), false);
-    flux_stats_gauge (cache->h, "flux.content-cache.valid",
-        cache->acct_valid, false);
-    flux_stats_gauge (cache->h, "flux.content-cache.dirty",
-        cache->acct_dirty, false);
-    flux_stats_gauge (cache->h, "flux.content-cache.size",
-        cache->acct_size, false);
-    flux_stats_gauge (cache->h, "flux.content-cache.flush-batch-count",
-        cache->flush_batch_count, false);
 }
 
 struct content_cache *content_cache_create (flux_t *h, attr_t *attrs)
