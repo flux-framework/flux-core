@@ -963,20 +963,38 @@ void flux_msg_route_disable (flux_msg_t *msg)
     (void) flux_msg_set_flags (msg, msg->flags & ~(uint8_t)FLUX_MSGFLAG_ROUTE);
 }
 
-void flux_msg_route_clear (flux_msg_t *msg)
+static void msg_route_clear (flux_msg_t *msg)
 {
     struct route_id *r;
-    if (!msg || (!(msg->flags & FLUX_MSGFLAG_ROUTE)))
-        return;
+    assert (msg);
+    assert ((msg->flags & FLUX_MSGFLAG_ROUTE));
     while ((r = list_pop (&msg->routes, struct route_id, route_id_node)))
         route_id_destroy (r);
     list_head_init (&msg->routes);
     msg->routes_len = 0;
 }
 
-int flux_msg_route_push (flux_msg_t *msg, const char *id)
+void flux_msg_route_clear (flux_msg_t *msg)
+{
+    if (!msg || (!(msg->flags & FLUX_MSGFLAG_ROUTE)))
+        return;
+    msg_route_clear (msg);
+}
+
+static int msg_route_push (flux_msg_t *msg,
+                           const char *id,
+                           unsigned int id_len)
 {
     struct route_id *r;
+    if (!(r = route_id_create (id, strlen (id))))
+        return -1;
+    list_add (&msg->routes, &r->route_id_node);
+    msg->routes_len++;
+    return 0;
+}
+
+int flux_msg_route_push (flux_msg_t *msg, const char *id)
+{
     if (!msg || !id) {
         errno = EINVAL;
         return -1;
@@ -985,16 +1003,23 @@ int flux_msg_route_push (flux_msg_t *msg, const char *id)
         errno = EPROTO;
         return -1;
     }
-    if (!(r = route_id_create (id, strlen (id))))
-        return -1;
-    list_add (&msg->routes, &r->route_id_node);
-    msg->routes_len++;
+    return msg_route_push (msg, id, strlen (id));
+}
+
+static int msg_route_delete_last (flux_msg_t *msg)
+{
+    struct route_id *r;
+    assert (msg);
+    assert ((msg->flags & FLUX_MSGFLAG_ROUTE));
+    if ((r = list_pop (&msg->routes, struct route_id, route_id_node))) {
+        route_id_destroy (r);
+        msg->routes_len--;
+    }
     return 0;
 }
 
 int flux_msg_route_delete_last (flux_msg_t *msg)
 {
-    struct route_id *r;
     if (!msg) {
         errno = EINVAL;
         return -1;
@@ -1003,11 +1028,7 @@ int flux_msg_route_delete_last (flux_msg_t *msg)
         errno = EPROTO;
         return -1;
     }
-    if ((r = list_pop (&msg->routes, struct route_id, route_id_node))) {
-        route_id_destroy (r);
-        msg->routes_len--;
-    }
-    return 0;
+    return msg_route_delete_last (msg);
 }
 
 /* replaces flux_msg_nexthop */
