@@ -130,14 +130,6 @@ int flux_buffer_write_watcher_close (flux_watcher_t *w);
 /* Returns 1 if write watcher is closed, errnum from close in close_err */
 int flux_buffer_write_watcher_is_closed (flux_watcher_t *w, int *close_err);
 
-/* zmq socket
- */
-
-flux_watcher_t *flux_zmq_watcher_create (flux_reactor_t *r,
-                                         void *zsock, int events,
-                                         flux_watcher_f cb, void *arg);
-void *flux_zmq_watcher_get_zsock (flux_watcher_t *w);
-
 /* timer
  */
 

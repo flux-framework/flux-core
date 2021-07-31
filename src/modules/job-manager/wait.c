@@ -346,7 +346,7 @@ void wait_ctx_destroy (struct waitjob *wait)
 
         /* Iterate through active jobs, sending ENOSYS response to
          * any pending wait requests, indicating that the module is unloading.
-         * Use wait->waiters count to avoid unncessary scanning.
+         * Use wait->waiters count to avoid unnecessary scanning.
          */
         job = zhashx_first (wait->ctx->active_jobs);
         while (job && wait->waiters > 0) {

@@ -89,7 +89,9 @@ int flux_match_asprintf (struct flux_match *m,
     NULL \
 )
 
-/* Create a new Flux message.
+/* Create a new Flux message.  If the type of the message is not yet
+ * known at creation time, FLUX_MSGTYPE_ANY can be used.
+ *
  * Returns new message or null on failure, with errno set (e.g. ENOMEM, EINVAL)
  * Caller must destroy message with flux_msg_destroy() or equivalent.
  */
@@ -127,17 +129,6 @@ int flux_msg_frames (const flux_msg_t *msg);
  * Caller must destroy message with flux_msg_destroy().
  */
 flux_msg_t *flux_msg_decode (const void *buf, size_t size);
-
-/* Send message to zeromq socket.
- * Returns 0 on success, -1 on failure with errno set.
- */
-int flux_msg_sendzsock (void *dest, const flux_msg_t *msg);
-int flux_msg_sendzsock_ex (void *dest, const flux_msg_t *msg, bool nonblock);
-
-/* Receive a message from zeromq socket.
- * Returns message on success, NULL on failure with errno set.
- */
-flux_msg_t *flux_msg_recvzsock (void *dest);
 
 /* Get/set message type
  * For FLUX_MSGTYPE_REQUEST: set_type initializes nodeid to FLUX_NODEID_ANY

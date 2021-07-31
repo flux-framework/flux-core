@@ -116,7 +116,6 @@ SEE ALSO
 ========
 
 flux_fd_watcher_create(3), flux_handle_watcher_create(3),
-flux_zmq_watcher_create(3), flux_timer_watcher_create(3),
-flux_watcher_start(3)
+flux_timer_watcher_create(3), flux_watcher_start(3)
 
 `libev home page <http://software.schmorp.de/pkg/libev.html>`__

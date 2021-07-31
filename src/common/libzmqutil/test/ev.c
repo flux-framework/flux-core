@@ -14,10 +14,9 @@
 #include <poll.h>
 #include <czmq.h>
 
+#include "src/common/libzmqutil/ev_zmq.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/oom.h"
-#include "src/common/libev/ev.h"
-#include "src/common/libutil/ev_zmq.h"
 #include "src/common/libtap/tap.h"
 
 void timer_arg_cb (struct ev_loop *loop, ev_timer *w, int revents)

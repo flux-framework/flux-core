@@ -22,6 +22,8 @@
 #include <sys/syscall.h>
 #endif
 
+#include "src/common/libzmqutil/msg_zsock.h"
+#include "src/common/libzmqutil/reactor.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/iterators.h"
@@ -253,7 +255,7 @@ flux_msg_t *module_recvmsg (module_t *p)
     int type;
     struct flux_msg_cred cred;
 
-    if (!(msg = flux_msg_recvzsock (p->sock)))
+    if (!(msg = zmqutil_msg_recv (p->sock)))
         goto error;
     if (flux_msg_get_type (msg, &type) < 0)
         goto error;
@@ -314,7 +316,7 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
                 goto done;
             if (flux_msg_route_push (cpy, p->modhash->uuid_str) < 0)
                 goto done;
-            if (flux_msg_sendzsock (p->sock, cpy) < 0)
+            if (zmqutil_msg_send (p->sock, cpy) < 0)
                 goto done;
             break;
         }
@@ -323,12 +325,12 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
                 goto done;
             if (flux_msg_route_delete_last (cpy) < 0)
                 goto done;
-            if (flux_msg_sendzsock (p->sock, cpy) < 0)
+            if (zmqutil_msg_send (p->sock, cpy) < 0)
                 goto done;
             break;
         }
         default:
-            if (flux_msg_sendzsock (p->sock, msg) < 0)
+            if (zmqutil_msg_send (p->sock, msg) < 0)
                 goto done;
             break;
     }
@@ -612,13 +614,13 @@ module_t *module_add (modhash_t *mh, const char *path)
         log_err ("zsock_bind inproc://%s", module_get_uuid (p));
         goto cleanup;
     }
-    if (!(p->broker_w = flux_zmq_watcher_create (
+    if (!(p->broker_w = zmqutil_watcher_create (
                                         flux_get_reactor (p->modhash->broker_h),
                                         p->sock,
                                         FLUX_POLLIN,
                                         module_cb,
                                         p))) {
-        log_err ("flux_zmq_watcher_create");
+        log_err ("zmqutil_watcher_create");
         goto cleanup;
     }
     /* Set creds for connection.

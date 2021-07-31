@@ -11,6 +11,8 @@
 #ifndef _EV_ZMQ_H
 #define _EV_ZMQ_H
 
+#include "src/common/libev/ev.h"
+
 typedef struct ev_zmq_struct ev_zmq;
 typedef void (*ev_zmq_cb)(struct ev_loop *loop, ev_zmq *w, int revents);
 

@@ -332,8 +332,6 @@ man_pages = [
     ('man3/flux_watcher_start', 'flux_watcher_destroy', 'start/stop/destroy/query reactor watcher', [author], 3),
     ('man3/flux_watcher_start', 'flux_watcher_next_wakeup', 'start/stop/destroy/query reactor watcher', [author], 3),
     ('man3/flux_watcher_start', 'flux_watcher_start', 'start/stop/destroy/query reactor watcher', [author], 3),
-    ('man3/flux_zmq_watcher_create', 'flux_zmq_watcher_get_zsock', 'create ZeroMQ watcher', [author], 3),
-    ('man3/flux_zmq_watcher_create', 'flux_zmq_watcher_create', 'create ZeroMQ watcher', [author], 3),
     ('man3/idset_create', 'idset_create', 'Manipulate numerically sorted sets of non-negative integers', [author], 3),
     ('man3/idset_create', 'idset_destroy', 'Manipulate numerically sorted sets of non-negative integers', [author], 3),
     ('man3/idset_create', 'idset_set', 'Manipulate numerically sorted sets of non-negative integers', [author], 3),
