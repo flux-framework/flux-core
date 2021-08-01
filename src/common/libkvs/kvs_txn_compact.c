@@ -210,7 +210,7 @@ int txn_compact (flux_kvs_txn_t *txn)
     }
 
     len = json_array_size (txn->ops);
-    if (!len)
+    if (len < 2)
         return 0;
 
     if (!(ops_new = json_array ())) {
