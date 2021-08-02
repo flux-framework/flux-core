@@ -123,3 +123,13 @@
    fun:hwloc_topology_load
    ...
 }
+{
+   <issue_3808>
+   Memcheck:Param
+   epoll_ctl(event)
+   fun:epoll_ctl
+   fun:epoll_modify
+   fun:fd_reify
+   fun:ev_run
+   ...
+}
