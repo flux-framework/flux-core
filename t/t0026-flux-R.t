@@ -75,6 +75,14 @@ test_expect_success 'flux R append works' '
     test_debug "echo $result" &&
     test "$result" = "rank0/core[0-1] rank1/core[0-3] rank2/core[2-3]"
 '
+test_expect_success 'flux R append works when only some nodes have gpus' '
+    result=$( (flux R encode -r 0-1 -c 0-1 && \
+	       flux R encode -r 2-3 -c 0-1 -g 0-1) \
+        | flux R append | flux R decode --short) &&
+    test_debug "echo $result" &&
+    test "$result" = "rank[0-1]/core[0-1] rank[2-3]/core[0-1],gpu[0-1]"
+'
+
 test_expect_success 'flux R diff works' '
     result=$( (flux R encode -r 0-1 -c 0-1 && flux R encode -r 0-1 -c 0) \
         | flux R diff | flux R decode --short) &&
