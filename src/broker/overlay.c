@@ -1184,6 +1184,46 @@ error:
         flux_log_error (h, "error responding to overlay.stats.get");
 }
 
+static void overlay_health_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
+{
+    struct overlay *ov = arg;
+    struct child *child;
+    json_t *array = NULL;
+    json_t *entry;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!(array = json_array ()))
+        goto nomem;
+    foreach_overlay_child (ov, child) {
+        if (!(entry = json_pack ("{s:i s:s}",
+                                 "rank", child->rank,
+                                 "status", subtree_status_str (child->status))))
+            goto nomem;
+        if (json_array_append_new (array, entry) < 0) {
+            json_decref (entry);
+            goto nomem;
+        }
+    }
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:s s:O}",
+                           "status", subtree_status_str (ov->status),
+                           "children", array) < 0)
+        flux_log_error (h, "error responding to overlay.health");
+    json_decref (array);
+    return;
+nomem:
+    errno = ENOMEM;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to overlay.health");
+    json_decref (array);
+}
+
 int overlay_cert_load (struct overlay *ov, const char *path)
 {
     struct stat sb;
@@ -1306,6 +1346,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "overlay.stats.get",
         overlay_stats_get_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.health",
+        overlay_health_cb,
         0
     },
     FLUX_MSGHANDLER_TABLE_END,
