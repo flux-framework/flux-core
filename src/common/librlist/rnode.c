@@ -659,8 +659,15 @@ int rnode_cmp (const struct rnode *a, const struct rnode *b)
 {
     int rv = 0;
     /*  All avail idsets must match */
-    struct rnode_child *ca = zhashx_first (a->children);
+    struct rnode_child *ca;
     struct rnode_child *cb;
+
+    /* If two nodes do not have the same number of children types,
+     *  then they are not identical. Order doesn't matter here...
+     */
+    if (zhashx_size (a->children) != zhashx_size (b->children))
+        return -1;
+    ca = zhashx_first (a->children);
     while (ca) {
         if (!(cb = zhashx_lookup (b->children, ca->name)))
             return -1;

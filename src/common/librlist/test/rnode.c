@@ -152,6 +152,58 @@ static void test_add_child ()
     rnode_destroy (a);
 }
 
+void test_copy ()
+{
+    struct rnode *n = NULL;
+    struct rnode *b = NULL;
+
+    if (!(n = rnode_create ("foo", 0, "0-3")))
+        BAIL_OUT ("failed to create an rnode object");
+    ok (rnode_add_child (n, "gpu", "0-1") != NULL,
+        "add two gpus to rnode");
+
+    ok ((b = rnode_copy (n)) != NULL,
+        "copy rnode");
+    ok (rnode_count_type (b, "core") == 4,
+        "rnode_count_type (gpu) == 4");
+    ok (rnode_count_type (b, "gpu") == 2,
+        "rnode_count_type (gpu) == 2");
+
+    rnode_destroy (b);
+    ok ((b = rnode_copy_avail (n)) != NULL,
+        "rnode_copy_avail");
+    ok (rnode_count_type (b, "core") == 4,
+        "rnode_count_type (gpu) == 4");
+    ok (rnode_count_type (b, "gpu") == 2,
+        "rnode_count_type (gpu) == 2");
+
+    rnode_destroy (b);
+    rnode_destroy (n);
+}
+
+void test_rnode_cmp ()
+{
+    struct rnode *a = NULL;
+    struct rnode *b = NULL;
+
+    if (!(a = rnode_create ("foo", 0, "0-3"))
+        || !(b = rnode_create ("foo", 1, "0-3")))
+        BAIL_OUT ("failed to create rnode objects");
+
+    ok (rnode_cmp (a, b) == 0,
+        "rnode_cmp returns zero for nodes with identical children");
+
+    /*  Add gpus to rnode b only */
+    ok (rnode_add_child (b, "gpu", "0-1") != NULL,
+        "add two gpus to rnode");
+
+    ok (rnode_cmp (a, b) != 0,
+        "rnode_cmp returns nonzero for nodes with differing children");
+
+    rnode_destroy (a);
+    rnode_destroy (b);
+}
+
 int main (int ac, char *av[])
 {
     struct idset *ids = NULL;
@@ -266,6 +318,7 @@ int main (int ac, char *av[])
     test_diff ();
     test_intersect ();
     test_add_child ();
+    test_copy ();
     done_testing ();
 }
 
