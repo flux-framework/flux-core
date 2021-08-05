@@ -9,6 +9,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
+	-I$(top_srcdir)/src/common/libccan \
 	$(FLUX_SECURITY_CFLAGS) \
 	$(HWLOC_CFLAGS) \
 	$(PMIX_CFLAGS) \
@@ -50,6 +51,7 @@ flux_SOURCES = \
 	builtin/hwloc.c \
 	builtin/heaptrace.c \
 	builtin/proxy.c \
+	builtin/overlay.c \
 	builtin/relay.c \
 	builtin/python.c
 nodist_flux_SOURCES = \
