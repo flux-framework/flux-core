@@ -94,6 +94,7 @@ TESTSCRIPTS = \
 	t1106-ssh-connector.t \
 	t1107-heartbeat.t \
 	t1108-local-opt.t \
+	t1200-stats-basic.t \
 	t2004-hydra.t \
 	t2005-hwloc-basic.t \
 	t2006-hwloc-versions.t \
@@ -265,6 +266,7 @@ dist_check_SCRIPTS = \
 	scripts/sign-as.py \
 	scripts/runpty.py \
 	scripts/dmesg-grep.py \
+	scripts/stats-listen.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
 	kvs/kvs-helper.sh \
@@ -366,7 +368,9 @@ check_LTLIBRARIES = \
 	job-manager/plugins/jobtap_api.la \
 	job-manager/plugins/random.la \
 	job-manager/plugins/validate.la \
-	job-manager/plugins/dependency-test.la
+	job-manager/plugins/dependency-test.la \
+	stats/stats-basic.la \
+	stats/stats-immediate.la
 
 check-prep:
 	$(MAKE) $(check_PROGRAMS) $(check_LTLIBRARIES)
@@ -768,3 +772,19 @@ util_jobspec1_validate_LDADD = $(test_ldadd)
 util_handle_SOURCES = util/handle.c
 util_handle_CPPFLAGS = $(test_cppflags)
 util_handle_LDADD = $(test_ldadd)
+
+stats_stats_basic_la_SOURCES = stats/stats-basic.c
+stats_stats_basic_la_CPPFLAGS = $(test_cppflags)
+stats_stats_basic_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+stats_stats_basic_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la
+
+stats_stats_immediate_la_SOURCES = stats/stats-immediate.c
+stats_stats_immediate_la_CPPFLAGS = $(test_cppflags)
+stats_stats_immediate_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+stats_stats_immediate_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libflux-core.la
