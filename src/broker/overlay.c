@@ -575,6 +575,27 @@ const char *overlay_get_bind_uri (struct overlay *ov)
     return ov->bind_uri;
 }
 
+/* When sending to a TBON child, zmq_sendmsg() failed with EHOSTUNREACH.
+ * Since ROUTER socket has ZMQ_ROUTER_MANDATORY set, EHOSTUNREACH on a
+ * connected peer signifies a disconnect.  See zmq_setsockopt(3).
+ */
+static void overlay_sendmsg_child_noroute (struct overlay *ov,
+                                           const flux_msg_t *msg)
+{
+    const char *uuid;
+    struct child *child;
+
+    if ((uuid = flux_msg_route_last (msg))
+        && (child = child_lookup (ov, uuid))
+        && subtree_is_online (child->status)) {
+        child->status = SUBTREE_STATUS_LOST;
+        subtree_status_update (ov);
+        overlay_child_log (ov, child, "send failed, child has disconnected");
+        zhashx_delete (ov->child_hash, child->uuid);
+        overlay_monitor_notify (ov);
+    }
+}
+
 static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
 {
     int rc = -1;
@@ -584,6 +605,8 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
         goto done;
     }
     rc = zmqutil_msg_send_ex (ov->bind_zsock, msg, true);
+    if (rc < 0 && errno == EHOSTUNREACH)
+        overlay_sendmsg_child_noroute (ov, msg); // handle child state change
 done:
     return rc;
 }
@@ -611,32 +634,18 @@ done:
 static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
 {
     struct child *child;
-    int disconnects = 0;
 
     foreach_overlay_child (ov, child) {
         if (subtree_is_online (child->status)) {
             if (overlay_mcast_child_one (ov, msg, child) < 0) {
-                /* N.B. ROUTER socket has ZMQ_ROUTER_MANDATORY set.
-                 * If peer has disconnected (id no longer valid), zmq_sendmsg()
-                 * should fail with EHOSTUNREACH per zmq_setsockopt(3).
-                 */
-                if (errno == EHOSTUNREACH) {
-                    child->status = SUBTREE_STATUS_LOST;
-                    subtree_status_update (ov);
-                    overlay_child_log (ov, child,
-                                       "Mcast failed, child has disconnected");
-                    zhashx_delete (ov->child_hash, child->uuid);
-                    disconnects++;
-                }
-                else
+                if (errno != EHOSTUNREACH) {
                     flux_log_error (ov->h,
                                     "mcast error to child rank %lu",
                                     (unsigned long)child->rank);
+                }
             }
         }
     }
-    if (disconnects)
-        overlay_monitor_notify (ov);
 }
 
 /* Handle a message received from TBON child (downstream).
