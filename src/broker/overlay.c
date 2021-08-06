@@ -1317,6 +1317,77 @@ static void disconnect_cb (flux_t *h,
         flux_log (h, LOG_DEBUG, "overlay: goodbye to %d health clients", count);
 }
 
+/* Recursive function to build subtree topology object.
+ * Right now the tree is regular.  In the future support the configuration
+ * of irregular tree topologies.
+ */
+static json_t *get_subtree_topo (struct overlay *ov, int rank)
+{
+    json_t *o;
+    json_t *children;
+    json_t *child;
+    int i, r;
+    int size;
+
+    if (!(children = json_array()))
+        goto nomem;
+    for (i = 0; i < ov->fanout; i++) {
+        r = kary_childof (ov->fanout, ov->size, rank, i);
+        if (r == KARY_NONE)
+            break;
+        if (!(child = get_subtree_topo (ov, r)))
+            goto error;
+        if (json_array_append_new (children, child) < 0) {
+            json_decref (child);
+            goto nomem;
+        }
+    }
+    size = kary_sum_descendants (ov->fanout, ov->size, rank) + 1;
+    if (!(o = json_pack ("{s:i s:i s:O}",
+                         "rank", rank,
+                         "size", size,
+                         "children", children)))
+        goto nomem;
+    json_decref (children);
+    return o;
+nomem:
+    errno = ENOMEM;
+error:
+    ERRNO_SAFE_WRAP (json_decref, children);
+    return NULL;
+}
+
+/* Get the topology of the subtree rooted here.
+ */
+static void overlay_topology_cb (flux_t *h,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 void *arg)
+{
+    struct overlay *ov = arg;
+    json_t *topo = NULL;
+    int rank;
+    const char *errstr = NULL;
+
+    if (flux_request_unpack (msg, NULL, "{s:i}", "rank", &rank) < 0)
+        goto error;
+    if (rank != ov->rank && !child_lookup_byrank (ov, rank)) {
+        errstr = "requested rank is not this broker or its direct child";
+        errno = ENOENT;
+        goto error;
+    }
+    if (!(topo = get_subtree_topo (ov, rank)))
+        goto error;
+    if (flux_respond_pack (h, msg, "O", topo) < 0)
+        flux_log_error (h, "error responding to overlay.topology");
+    json_decref (topo);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to overlay.topology");
+    json_decref (topo);
+}
+
 int overlay_cert_load (struct overlay *ov, const char *path)
 {
     struct stat sb;
@@ -1453,6 +1524,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "overlay.disconnect",
         disconnect_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.topology",
+        overlay_topology_cb,
         0
     },
     FLUX_MSGHANDLER_TABLE_END,
