@@ -130,6 +130,8 @@ struct overlay {
 
     overlay_recv_f recv_cb;
     void *recv_arg;
+
+    struct flux_msglist *health_requests;
 };
 
 static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg);
@@ -138,6 +140,7 @@ static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
 static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg);
 static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg);
 static int overlay_keepalive_parent (struct overlay *ov, int status);
+static int overlay_health_respond (struct overlay *ov, const flux_msg_t *msg);
 
 /* Convenience iterator for ov->children
  */
@@ -151,6 +154,17 @@ static const char *subtree_status_str (enum subtree_status status)
     if (status > SUBTREE_STATUS_MAXIMUM)
         return "unknown";
     return subtree_status_names[status];
+}
+
+static enum subtree_status subtree_status_num (const char *name)
+{
+    int i;
+
+    for (i = 0; i <= SUBTREE_STATUS_MAXIMUM; i++) {
+        if (streq (subtree_status_names[i], name))
+            return i;
+    }
+    return SUBTREE_STATUS_UNKNOWN;
 }
 
 static bool subtree_is_online (enum subtree_status status)
@@ -168,7 +182,7 @@ static bool subtree_is_online (enum subtree_status status)
 /* Call this function after a child->status changes.
  * It calculates a new subtree status based on the state of children,
  * then if the status has changed, the parent is informed with a
- * keepalive message.
+ * keepalive message and any waiting health requests are processed.
  */
 static void subtree_status_update (struct overlay *ov)
 {
@@ -194,8 +208,28 @@ static void subtree_status_update (struct overlay *ov)
         }
     }
     if (ov->status != status) {
+        const flux_msg_t *msg;
+        const char *wait;
+
         ov->status = status;
         overlay_keepalive_parent (ov, ov->status);
+
+        /* Process waiting health requests, in case this broker
+         * transitioned into the state that is being waited for
+         */
+        msg = flux_msglist_first (ov->health_requests);
+        while (msg) {
+            if (flux_request_unpack (msg, NULL, "{s:s}", "wait", &wait) == 0
+                && subtree_status_num (wait) == ov->status) {
+                if (overlay_health_respond (ov, msg) < 0) {
+                    if (flux_respond_error (ov->h, msg, errno, NULL) < 0)
+                        flux_log_error (ov->h,
+                                        "error responding to overlay.health");
+                }
+                flux_msglist_delete (ov->health_requests);
+            }
+            msg = flux_msglist_next (ov->health_requests);
+        }
     }
 }
 
@@ -1184,18 +1218,12 @@ error:
         flux_log_error (h, "error responding to overlay.stats.get");
 }
 
-static void overlay_health_cb (flux_t *h,
-                               flux_msg_handler_t *mh,
-                               const flux_msg_t *msg,
-                               void *arg)
+static int overlay_health_respond (struct overlay *ov, const flux_msg_t *msg)
 {
-    struct overlay *ov = arg;
     struct child *child;
     json_t *array = NULL;
     json_t *entry;
 
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
     if (!(array = json_array ()))
         goto nomem;
     foreach_overlay_child (ov, child) {
@@ -1208,20 +1236,68 @@ static void overlay_health_cb (flux_t *h,
             goto nomem;
         }
     }
-    if (flux_respond_pack (h,
+    if (flux_respond_pack (ov->h,
                            msg,
                            "{s:s s:O}",
                            "status", subtree_status_str (ov->status),
                            "children", array) < 0)
-        flux_log_error (h, "error responding to overlay.health");
+        flux_log_error (ov->h, "error responding to overlay.health");
     json_decref (array);
-    return;
+    return 0;
 nomem:
     errno = ENOMEM;
+    return -1;
+}
+
+static void overlay_health_cb (flux_t *h,
+                               flux_msg_handler_t *mh,
+                               const flux_msg_t *msg,
+                               void *arg)
+{
+    struct overlay *ov = arg;
+    const char *wait = NULL; // optional wait for state before responding
+    char errbuf[128];
+    const char *errstr = NULL;
+
+    if (flux_request_unpack (msg, NULL, "{s?s}", "wait", &wait) < 0)
+        goto error;
+    if (wait) {
+        int state = subtree_status_num (wait);
+
+        if (state == SUBTREE_STATUS_UNKNOWN) {
+            snprintf (errbuf, sizeof (errbuf), "unknown state: '%s'", wait);
+            errstr = errbuf;
+            errno = EPROTO;
+            goto error;
+        }
+        if (state != ov->status) {
+            flux_msglist_append (ov->health_requests, msg);
+            return;
+        }
+    }
+    if (overlay_health_respond (ov, msg) < 0)
+        goto error;
+    return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to overlay.health");
-    json_decref (array);
+}
+
+/* If a disconnect is received for waiting health request,
+ * drop the request.
+ */
+static void disconnect_cb (flux_t *h,
+                           flux_msg_handler_t *mh,
+                           const flux_msg_t *msg,
+                           void *arg)
+{
+    struct overlay *ov = arg;
+    int count;
+
+    if ((count = flux_msglist_disconnect (ov->health_requests, msg)) < 0)
+        flux_log_error (h, "error handling overlay.disconnect");
+    if (count > 0)
+        flux_log (h, LOG_DEBUG, "overlay: goodbye to %d health clients", count);
 }
 
 int overlay_cert_load (struct overlay *ov, const char *path)
@@ -1312,6 +1388,8 @@ void overlay_destroy (struct overlay *ov)
     if (ov) {
         int saved_errno = errno;
 
+        flux_msglist_destroy (ov->health_requests);
+
         zcert_destroy (&ov->cert);
         flux_watcher_destroy (ov->zap_w);
         if (ov->zap) {
@@ -1354,6 +1432,12 @@ static const struct flux_msg_handler_spec htab[] = {
         overlay_health_cb,
         0
     },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.disconnect",
+        disconnect_cb,
+        0
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -1388,6 +1472,8 @@ struct overlay *overlay_create (flux_t *h,
         goto nomem;
     if (!(ov->certstore = zcertstore_new (NULL)))
         goto nomem;
+    if (!(ov->health_requests = flux_msglist_create ()))
+        goto error;
     return ov;
 nomem:
     errno = ENOMEM;
