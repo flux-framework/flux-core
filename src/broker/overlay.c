@@ -1253,7 +1253,8 @@ static int overlay_health_respond (struct overlay *ov, const flux_msg_t *msg)
     duration = monotime_since (ov->status_timestamp) / 1000.0;
     if (flux_respond_pack (ov->h,
                            msg,
-                           "{s:s s:f s:O}",
+                           "{s:i s:s s:f s:O}",
+                           "rank", ov->rank,
                            "status", subtree_status_str (ov->status),
                            "duration", duration,
                            "children", array) < 0)
