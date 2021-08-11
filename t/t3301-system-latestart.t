@@ -21,6 +21,10 @@ test_expect_success HAVE_JQ 'startctl shows rank 1 pids as -1' '
 	test $($startctl status | jq -r ".procs[1].pid") = "-1"
 '
 
+test_expect_success 'overlay status is partial' '
+        test "$(flux overlay status)" = "partial"
+'
+
 test_expect_success 'resource list shows one down nodes' '
 	echo 1 >down.exp &&
 	flux resource list -n -s down -o {nnodes} >down.out &&
@@ -52,6 +56,10 @@ test_expect_success 'start rank 1' '
 
 test_expect_success HAVE_JQ 'startctl shows rank 1 pid not -1' '
 	test $($startctl status | jq -r ".procs[1].pid") != "-1"
+'
+
+test_expect_success 'wait for overlay status to be full' '
+        flux overlay status --wait full --timeout 10s
 '
 
 # Side effect: this test blocks until the rank 1 broker has a chance to
