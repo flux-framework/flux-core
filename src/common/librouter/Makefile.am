@@ -9,6 +9,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
+	-I$(top_srcdir)/src/common/libccan \
 	$(LIBUUID_CFLAGS)
 
 noinst_LTLIBRARIES = \
@@ -30,7 +31,11 @@ librouter_la_SOURCES = \
 	router.h \
 	router.c \
 	usock_service.h \
-	usock_service.c
+	usock_service.c \
+	msg_hash.h \
+	msg_hash.c \
+	rpc_track.h \
+	rpc_track.c
 
 TESTS = \
 	test_sendfd.t \
@@ -43,7 +48,9 @@ TESTS = \
 	test_subhash.t \
 	test_router.t \
 	test_servhash.t \
-	test_usock_service.t
+	test_usock_service.t \
+	test_msg_hash.t \
+	test_rpc_track.t
 
 check_PROGRAMS = \
         $(TESTS)
@@ -129,3 +136,13 @@ test_usock_service_t_SOURCES = test/usock_service.c
 test_usock_service_t_CPPFLAGS = $(test_cppflags)
 test_usock_service_t_LDADD = $(test_ldadd)
 test_usock_service_t_LDFLAGS = $(test_ldflags)
+
+test_msg_hash_t_SOURCES = test/msg_hash.c
+test_msg_hash_t_CPPFLAGS = $(test_cppflags)
+test_msg_hash_t_LDADD = $(test_ldadd)
+test_msg_hash_t_LDFLAGS = $(test_ldflags)
+
+test_rpc_track_t_SOURCES = test/rpc_track.c
+test_rpc_track_t_CPPFLAGS = $(test_cppflags)
+test_rpc_track_t_LDADD = $(test_ldadd)
+test_rpc_track_t_LDFLAGS = $(test_ldflags)
