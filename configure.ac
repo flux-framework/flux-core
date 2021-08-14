@@ -433,6 +433,9 @@ AC_SUBST(fluxmoddir)
 AS_VAR_SET(jobtap_plugindir, $libdir/flux/job-manager/plugins)
 AC_SUBST(jobtap_plugindir)
 
+AS_VAR_SET(shell_plugindir, $libdir/flux/shell/plugins)
+AC_SUBST(shell_plugindir)
+
 AS_VAR_SET(fluxconnectordir, $libdir/flux/connectors)
 AC_SUBST(fluxconnectordir)
 
