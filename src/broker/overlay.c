@@ -621,24 +621,24 @@ const char *overlay_get_bind_uri (struct overlay *ov)
     return ov->bind_uri;
 }
 
-/* When sending to a TBON child, zmq_sendmsg() failed with EHOSTUNREACH.
- * Since ROUTER socket has ZMQ_ROUTER_MANDATORY set, EHOSTUNREACH on a
- * connected peer signifies a disconnect.  See zmq_setsockopt(3).
- */
-static void overlay_sendmsg_child_noroute (struct overlay *ov,
-                                           const flux_msg_t *msg)
+static void overlay_child_status_update (struct overlay *ov,
+                                         struct child *child,
+                                         int status)
 {
-    const char *uuid;
-    struct child *child;
+    if (child->status != status) {
+        if (subtree_is_online (child->status)
+            && !subtree_is_online (status)) {
+            zhashx_delete (ov->child_hash, child->uuid);
+        }
+        else if (!subtree_is_online (child->status)
+            && subtree_is_online (status)) {
+            zhashx_insert (ov->child_hash, child->uuid, child);
+        }
 
-    if ((uuid = flux_msg_route_last (msg))
-        && (child = child_lookup (ov, uuid))
-        && subtree_is_online (child->status)) {
-        child->status = SUBTREE_STATUS_LOST;
+        child->status = status;
         monotime (&child->status_timestamp);
+
         subtree_status_update (ov);
-        overlay_child_log (ov, child, "send failed, child has disconnected");
-        zhashx_delete (ov->child_hash, child->uuid);
         overlay_monitor_notify (ov);
     }
 }
@@ -652,8 +652,21 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
         goto done;
     }
     rc = zmqutil_msg_send_ex (ov->bind_zsock, msg, true);
-    if (rc < 0 && errno == EHOSTUNREACH)
-        overlay_sendmsg_child_noroute (ov, msg); // handle child state change
+    /* Since ROUTER socket has ZMQ_ROUTER_MANDATORY set, EHOSTUNREACH on a
+     * connected peer signifies a disconnect.  See zmq_setsockopt(3).
+     */
+    if (rc < 0 && errno == EHOSTUNREACH) {
+        int saved_errno = errno;
+        const char *uuid;
+        struct child *child;
+
+        if ((uuid = flux_msg_route_last (msg))
+            && (child = child_lookup (ov, uuid))
+            && subtree_is_online (child->status)) {
+            overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
+        }
+        errno = saved_errno;
+    }
 done:
     return rc;
 }
@@ -724,19 +737,8 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     child->lastseen = flux_reactor_now (ov->reactor);
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
-            if (flux_keepalive_decode (msg, NULL, &status) == 0) {
-                if (status != child->status) {
-                    child->status = status;
-                    monotime (&child->status_timestamp);
-                    subtree_status_update (ov);
-                }
-                /* A child is being shutdown nicely, transitioning to OFFLINE.
-                 */
-                if (child->status == SUBTREE_STATUS_OFFLINE) {
-                    zhashx_delete (ov->child_hash, child->uuid);
-                    overlay_monitor_notify (ov);
-                }
-            }
+            if (flux_keepalive_decode (msg, NULL, &status) == 0)
+                overlay_child_status_update (ov, child, status);
             goto handled;
         case FLUX_MSGTYPE_REQUEST:
             break;
@@ -996,11 +998,7 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     }
 
     snprintf (child->uuid, sizeof (child->uuid), "%s", uuid);
-    zhashx_insert (ov->child_hash, child->uuid, child);
-    child->status = status;
-    monotime (&child->status_timestamp);
-    subtree_status_update (ov);
-    overlay_monitor_notify (ov);
+    overlay_child_status_update (ov, child, status);
 
     overlay_child_log (ov, child, "Sent hello");
 
