@@ -168,8 +168,10 @@ test_expect_success 'kill broker 14' '
 '
 
 # Ensure an EHOSTUNREACH is encountered to trigger connected state change.
-test_expect_success 'ping to rank 14 fails' '
-        test_must_fail flux ping 14
+test_expect_success 'ping to rank 14 fails with EHOSTUNREACH' '
+	echo "flux-ping: 14!broker.ping: No route to host" >ping.exp &&
+	test_must_fail flux ping 14 2>ping.err &&
+	test_cmp ping.exp ping.err
 '
 
 test_expect_success 'wait for rank 0 subtree to be degraded' '
