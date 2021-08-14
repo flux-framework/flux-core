@@ -28,6 +28,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/librouter/rpc_track.h"
 
 #include "overlay.h"
 #include "attr.h"
@@ -75,6 +76,7 @@ struct child {
     enum subtree_status status;
     struct timespec status_timestamp;
     bool idle;
+    struct rpc_track *tracker;
 };
 
 struct parent {
@@ -292,6 +294,9 @@ int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank)
             child->rank = kary_childof (ov->fanout, size, rank, i);
             child->status = SUBTREE_STATUS_OFFLINE;
             monotime (&child->status_timestamp);
+            child->tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG);
+            if (!child->tracker)
+                return -1;
         }
         ov->status = SUBTREE_STATUS_PARTIAL;
     }
@@ -511,7 +516,7 @@ int overlay_sendmsg (struct overlay *ov,
     flux_msg_t *cpy = NULL;
     const char *uuid;
     uint32_t nodeid;
-    struct child *child;
+    struct child *child = NULL;
     int rc;
 
     if (flux_msg_get_type (msg, &type) < 0
@@ -550,8 +555,17 @@ int overlay_sendmsg (struct overlay *ov,
             }
             if (where == OVERLAY_UPSTREAM)
                 rc = overlay_sendmsg_parent (ov, msg);
-            else
+            else {
                 rc = overlay_sendmsg_child (ov, msg);
+                if (rc == 0) {
+                    if (!child) {
+                        if ((uuid = flux_msg_route_last (msg)))
+                            child = child_lookup (ov, ov->uuid);
+                    }
+                    if (child)
+                        rpc_track_update (child->tracker, msg);
+                }
+            }
             if (rc < 0)
                 goto error;
             break;
@@ -621,6 +635,19 @@ const char *overlay_get_bind_uri (struct overlay *ov)
     return ov->bind_uri;
 }
 
+static void fail_child_rpcs (const flux_msg_t *msg, void *arg)
+{
+    struct overlay *ov = arg;
+    flux_msg_t *rep;
+
+    if (!(rep = flux_response_derive (msg, EHOSTUNREACH))
+        || flux_msg_route_delete_last (rep) < 0
+        || flux_msg_route_delete_last (rep) < 0
+        || flux_send (ov->h, rep, 0) < 0)
+        flux_log_error (ov->h, "tracker: error sending EHOSTUNREACH response");
+    flux_msg_destroy (rep);
+}
+
 static void overlay_child_status_update (struct overlay *ov,
                                          struct child *child,
                                          int status)
@@ -629,6 +656,7 @@ static void overlay_child_status_update (struct overlay *ov,
         if (subtree_is_online (child->status)
             && !subtree_is_online (status)) {
             zhashx_delete (ov->child_hash, child->uuid);
+            rpc_track_purge (child->tracker, fail_child_rpcs, ov);
         }
         else if (!subtree_is_online (child->status)
             && subtree_is_online (status)) {
@@ -750,6 +778,7 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
              */
             (void)flux_msg_route_delete_last (msg); // child id from ROUTER
             (void)flux_msg_route_delete_last (msg); // my id
+            rpc_track_update (child->tracker, msg);
             break;
         case FLUX_MSGTYPE_EVENT:
             break;
@@ -1224,6 +1253,15 @@ void overlay_set_monitor_cb (struct overlay *ov,
     ov->child_monitor_arg = arg;
 }
 
+static int child_rpc_track_count (struct overlay *ov)
+{
+    int count = 0;
+    int i;
+    for (i = 0; i < ov->child_count; i++)
+        count += rpc_track_count (ov->children[i].tracker);
+    return count;
+}
+
 static void overlay_stats_get_cb (flux_t *h,
                                   flux_msg_handler_t *mh,
                                   const flux_msg_t *msg,
@@ -1235,10 +1273,11 @@ static void overlay_stats_get_cb (flux_t *h,
         goto error;
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:i s:i}",
+                           "{s:i s:i s:i s:i}",
                            "child-count", ov->child_count,
                            "child-connected", overlay_get_child_peer_count (ov),
-                           "parent-count", ov->rank > 0 ? 1 : 0) < 0)
+                           "parent-count", ov->rank > 0 ? 1 : 0,
+                           "child-rpc", child_rpc_track_count (ov)) < 0)
         flux_log_error (h, "error responding to overlay.stats.get");
     return;
 error:
@@ -1518,7 +1557,12 @@ void overlay_destroy (struct overlay *ov)
         flux_watcher_destroy (ov->bind_w);
 
         zhashx_destroy (&ov->child_hash);
-        free (ov->children);
+        if (ov->children) {
+            int i;
+            for (i = 0; i < ov->child_count; i++)
+                rpc_track_destroy (ov->children[i].tracker);
+            free (ov->children);
+        }
         free (ov);
         errno = saved_errno;
     }
