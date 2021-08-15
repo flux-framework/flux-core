@@ -179,6 +179,7 @@ TESTSCRIPTS = \
 	t3301-system-latestart.t \
 	t3302-system-offline.t \
 	t3303-system-healthcheck.t \
+	t3304-system-rpctrack.t \
 	t4000-issues-test-driver.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
