@@ -1114,12 +1114,17 @@ int overlay_bind (struct overlay *ov, const char *uri)
 {
     if (!ov->h || ov->rank == FLUX_NODEID_ANY || ov->bind_zsock) {
         errno = EINVAL;
+        log_err ("overlay_bind: invalid arguments");
         return -1;
     }
-    if (!ov->zap && overlay_zap_init (ov) < 0)
+    if (!ov->zap && overlay_zap_init (ov) < 0) {
+        log_err ("error initializing ZAP server");
         return -1;
-    if (!(ov->bind_zsock = zsock_new_router (NULL)))
+    }
+    if (!(ov->bind_zsock = zsock_new_router (NULL))) {
+        log_err ("error creating zmq ROUTER socket");
         return -1;
+    }
     zsock_set_router_mandatory (ov->bind_zsock, 1);
     zsock_set_ipv6 (ov->bind_zsock, ov->enable_ipv6);
 
@@ -1127,19 +1132,25 @@ int overlay_bind (struct overlay *ov, const char *uri)
     zcert_apply (ov->cert, ov->bind_zsock);
     zsock_set_curve_server (ov->bind_zsock, 1);
 
-    if (zsock_bind (ov->bind_zsock, "%s", uri) < 0)
+    if (zsock_bind (ov->bind_zsock, "%s", uri) < 0) {
+        log_err ("error binding to %s", uri);
         return -1;
+    }
     /* Capture URI after zsock_bind() processing, so it reflects expanded
      * wildcards and normalized addresses.
      */
-    if (!(ov->bind_uri = zsock_last_endpoint (ov->bind_zsock)))
+    if (!(ov->bind_uri = zsock_last_endpoint (ov->bind_zsock))) {
+        log_err ("error obtaining concretized bind URI");
         return -1;
+    }
     if (!(ov->bind_w = zmqutil_watcher_create (ov->reactor,
                                                ov->bind_zsock,
                                                FLUX_POLLIN,
                                                child_cb,
-                                               ov)))
+                                               ov))) {
+        log_err ("error creating watcher for bind socket");
         return -1;
+    }
     flux_watcher_start (ov->bind_w);
     /* Ensure that ipc files are removed when the broker exits.
      */

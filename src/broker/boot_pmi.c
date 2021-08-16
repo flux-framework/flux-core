@@ -210,10 +210,8 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
 
         if (format_bind_uri (buf, sizeof (buf), attrs, pmi_params.rank) < 0)
             goto error;
-        if (overlay_bind (overlay, buf) < 0) {
-            log_err ("error binding to %s", buf);
+        if (overlay_bind (overlay, buf) < 0)
             goto error;
-        }
         uri = overlay_get_bind_uri (overlay);
     }
     else {

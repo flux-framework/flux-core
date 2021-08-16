@@ -510,10 +510,8 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
                                        bind_uri,
                                        sizeof (bind_uri)) < 0)
             goto error;
-        if (overlay_bind (overlay, bind_uri) < 0) {
-            log_err ("overlay_bind");
+        if (overlay_bind (overlay, bind_uri) < 0)
             goto error;
-        }
         if (overlay_authorize (overlay,
                                overlay_cert_name (overlay),
                                overlay_cert_pubkey (overlay)) < 0) {
