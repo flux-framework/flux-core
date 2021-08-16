@@ -193,6 +193,10 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     if (pmi_params.size == 1)
         goto done;
 
+    /* Enable ipv6 for maximum flexibility in address selection.
+     */
+    overlay_set_ipv6 (overlay, 1);
+
     /* If there are to be downstream peers, then bind to socket and extract
      * the concretized URI for sharing with other ranks.
      * N.B. there are no downstream peers if the 0th child of this rank

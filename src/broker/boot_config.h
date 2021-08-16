@@ -32,6 +32,7 @@ struct boot_conf {
     char default_bind[MAX_URI + 1];
     char default_connect[MAX_URI + 1];
     json_t *hosts;
+    int enable_ipv6;
 };
 
 int boot_config_geturibyrank (json_t *hosts,

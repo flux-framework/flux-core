@@ -104,6 +104,7 @@ struct overlay {
     zcertstore_t *certstore;
     zsock_t *zap;
     flux_watcher_t *zap_w;
+    int enable_ipv6;
 
     flux_t *h;
     attr_t *attrs;
@@ -356,6 +357,11 @@ int overlay_get_child_peer_count (struct overlay *ov)
             count++;
     }
     return count;
+}
+
+void overlay_set_ipv6 (struct overlay *ov, int enable)
+{
+    ov->enable_ipv6 = enable;
 }
 
 void overlay_log_idle_children (struct overlay *ov)
@@ -1081,6 +1087,7 @@ int overlay_connect (struct overlay *ov)
         }
         if (!(ov->parent.zsock = zsock_new_dealer (NULL)))
             goto nomem;
+        zsock_set_ipv6 (ov->parent.zsock, ov->enable_ipv6);
         zsock_set_zap_domain (ov->parent.zsock, FLUX_ZAP_DOMAIN);
         zcert_apply (ov->cert, ov->parent.zsock);
         zsock_set_curve_serverkey (ov->parent.zsock, ov->parent.pubkey);
@@ -1114,6 +1121,7 @@ int overlay_bind (struct overlay *ov, const char *uri)
     if (!(ov->bind_zsock = zsock_new_router (NULL)))
         return -1;
     zsock_set_router_mandatory (ov->bind_zsock, 1);
+    zsock_set_ipv6 (ov->bind_zsock, ov->enable_ipv6);
 
     zsock_set_zap_domain (ov->bind_zsock, FLUX_ZAP_DOMAIN);
     zcert_apply (ov->cert, ov->bind_zsock);

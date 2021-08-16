@@ -529,6 +529,31 @@ void test_curve_cert (const char *dir)
     flux_conf_decref (cf);
 }
 
+void test_ipv6 (const char *dir)
+{
+    char path[PATH_MAX + 1];
+    json_t *hosts;
+    flux_conf_t *cf;
+    struct boot_conf conf;
+    const char *input = \
+"[bootstrap]\n" \
+"enable_ipv6 = true\n";
+
+    create_test_file (dir, "boot", path, sizeof (path), input);
+    if (!(cf = flux_conf_parse (dir, NULL)))
+        BAIL_OUT ("flux_conf_parse failed");
+
+    ok (boot_config_parse (cf, &conf, &hosts) == 0 && hosts == NULL,
+        "boot_config_parse works with enable_ipv6");
+    ok (conf.enable_ipv6 != 0,
+        "and enable_ipv6 has expected value");
+
+    if (unlink (path) < 0)
+        BAIL_OUT ("could not cleanup test file %s", path);
+
+    flux_conf_decref (cf);
+}
+
 int main (int argc, char **argv)
 {
     char dir[PATH_MAX + 1];
@@ -551,6 +576,7 @@ int main (int argc, char **argv)
     test_toml_mixed_array (dir);
     test_attr (dir);
     test_curve_cert (dir);
+    test_ipv6 (dir);
 
     if (rmdir (dir) < 0)
         BAIL_OUT ("could not cleanup test dir %s", dir);
