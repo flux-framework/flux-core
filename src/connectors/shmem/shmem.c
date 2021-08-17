@@ -188,6 +188,7 @@ flux_t *connector_init (const char *path, int flags)
     if (!(ctx->sock = zsock_new_pair (NULL)))
         goto error;
     zsock_set_unbounded (ctx->sock);
+    zsock_set_linger (ctx->sock, 5);
     if (bind_socket) {
         if (zsock_bind (ctx->sock, "inproc://%s", ctx->uuid) < 0)
             goto error;

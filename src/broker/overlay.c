@@ -941,6 +941,8 @@ static int overlay_zap_init (struct overlay *ov)
 {
     if (!(ov->zap = zsock_new (ZMQ_REP)))
         return -1;
+    zsock_set_unbounded (ov->zap);
+    zsock_set_linger (ov->zap, 5);
     if (zsock_bind (ov->zap, ZAP_ENDPOINT) < 0) {
         errno = EINVAL;
         log_err ("could not bind to %s", ZAP_ENDPOINT);
@@ -1114,6 +1116,8 @@ int overlay_connect (struct overlay *ov)
         }
         if (!(ov->parent.zsock = zsock_new_dealer (NULL)))
             goto nomem;
+        zsock_set_unbounded (ov->parent.zsock);
+        zsock_set_linger (ov->parent.zsock, 5);
         zsock_set_ipv6 (ov->parent.zsock, ov->enable_ipv6);
         zsock_set_zap_domain (ov->parent.zsock, FLUX_ZAP_DOMAIN);
         zcert_apply (ov->cert, ov->parent.zsock);
@@ -1152,6 +1156,8 @@ int overlay_bind (struct overlay *ov, const char *uri)
         log_err ("error creating zmq ROUTER socket");
         return -1;
     }
+    zsock_set_unbounded (ov->bind_zsock);
+    zsock_set_linger (ov->bind_zsock, 5);
     zsock_set_router_mandatory (ov->bind_zsock, 1);
     zsock_set_ipv6 (ov->bind_zsock, ov->enable_ipv6);
 

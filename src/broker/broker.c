@@ -234,9 +234,6 @@ int main (int argc, char *argv[])
     zsys_set_logstream (stderr);
     zsys_set_logident ("flux-broker");
     zsys_handler_set (NULL);
-    zsys_set_linger (5);
-    zsys_set_rcvhwm (0);
-    zsys_set_sndhwm (0);
 
     /* Set up the flux reactor with support for child watchers.
      * Associate an internal flux_t handle with the reactor.
