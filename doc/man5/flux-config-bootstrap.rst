@@ -29,6 +29,11 @@ expected to bootstrap from an identical config file.
 KEYWORDS
 ========
 
+enable_ipv6
+   (optional) Boolean value for enabling IPv6.  By default only IPv4 is
+   enabled.  Note that setting this to true prevents binding to a named
+   interface that only supports IPv4.
+
 curve_cert
    (optional) Path to a CURVE certificate generated with flux-keygen(1).
    The certificate should be identical on all broker ranks.

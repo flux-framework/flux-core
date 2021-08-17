@@ -183,13 +183,14 @@ int boot_config_parse (const flux_conf_t *cf,
     memset (conf, 0, sizeof (*conf));
     if (flux_conf_unpack (cf,
                           &error,
-                          "{s:{s?s s?i s?s s?s s?o}}",
+                          "{s:{s?s s?i s?s s?s s?o s?b}}",
                           "bootstrap",
                             "curve_cert", &conf->curve_cert,
                             "default_port", &conf->default_port,
                             "default_bind", &default_bind,
                             "default_connect", &default_connect,
-                            "hosts", &conf->hosts) < 0) {
+                            "hosts", &conf->hosts,
+                            "enable_ipv6", &conf->enable_ipv6) < 0) {
         log_msg ("Config file error [bootstrap]: %s", error.errbuf);
         return -1;
     }
@@ -487,6 +488,11 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
             goto error; // prints error
     }
 
+    /* If user requested ipv6, enable it here.
+     * N.B. this prevents binding from interfaces that are IPv4 only (#3824).
+     */
+    overlay_set_ipv6 (overlay, conf.enable_ipv6);
+
     /* If broker has "downstream" peers, determine the URI to bind to
      * from the config and tell overlay.  Also, set the tbon.endpoint
      * attribute to the URI peers will connect to.  If broker has no
@@ -504,10 +510,8 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
                                        bind_uri,
                                        sizeof (bind_uri)) < 0)
             goto error;
-        if (overlay_bind (overlay, bind_uri) < 0) {
-            log_err ("overlay_bind");
+        if (overlay_bind (overlay, bind_uri) < 0)
             goto error;
-        }
         if (overlay_authorize (overlay,
                                overlay_cert_name (overlay),
                                overlay_cert_pubkey (overlay)) < 0) {

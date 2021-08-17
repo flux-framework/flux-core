@@ -79,6 +79,7 @@ void overlay_set_version (struct overlay *ov, int version); // test only
 const char *overlay_get_uuid (struct overlay *ov);
 bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid);
 bool overlay_uuid_is_child (struct overlay *ov, const char *uuid);
+void overlay_set_ipv6 (struct overlay *ov, int enable);
 
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they
