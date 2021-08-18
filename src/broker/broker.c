@@ -225,7 +225,19 @@ int main (int argc, char *argv[])
         || sigaction (SIGTERM, NULL, &old_sigact_term) < 0)
         log_err_exit ("error setting signal mask");
 
-    /* Initailize zeromq context
+    /* Initialize libczmq zsys class.
+     *
+     * zsys_init() creates a global 0MQ context and starts the 0MQ I/O thread.
+     * The context is implicitly shared by users of the zsock class within
+     * the broker, including shmem connector, overlay.c, and module.c.
+     * libczmq tracks 0MQ sockets created with zsock, and any left open are
+     * closed by an atexit() handler to prevent zmq_ctx_term() from hanging.
+     *
+     * If something goes wrong, such as unclosed sockets in the atexit handler,
+     * czmq sends messages to its log class, which we redirect to stderr here.
+     *
+     * Disable czmq's internal signal handlers for SIGINT and SIGTERM, since
+     * the broker will install its own.
      */
     if (!zsys_init ()) {
         log_err ("zsys_init");
