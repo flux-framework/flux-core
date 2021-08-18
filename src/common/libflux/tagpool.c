@@ -56,19 +56,19 @@ static void pool_set (Veb veb, uint32_t from, uint32_t to, uint8_t value)
 
 struct tagpool *tagpool_create (void)
 {
-    struct tagpool *t = calloc (1, sizeof (*t));
-    if (!t)
-        goto nomem;
+    struct tagpool *t;
+
+    if (!(t = calloc (1, sizeof (*t))))
+        return NULL;
     t->magic = TAGPOOL_MAGIC;
     t->veb = vebnew (TAGPOOL_START, 1);
-    if (!t->veb.D)
-        goto nomem;
+    if (!t->veb.D) // vebnew() calls malloc which sets errno on failure
+        goto error;
     vebdel (t->veb, FLUX_MATCHTAG_NONE); /* allocate reserved value */
     t->avail = TAGPOOL_COUNT - 1;
     return t;
-nomem:
+error:
     tagpool_destroy (t);
-    errno = ENOMEM;
     return NULL;
 }
 
