@@ -320,44 +320,39 @@ void flux_close (flux_t *h)
 
 flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int flags)
 {
-    flux_t *h = malloc (sizeof (*h));
-    if (!h)
-        goto nomem;
-    memset (h, 0, sizeof (*h));
+    flux_t *h;
+
+    if (!(h = calloc (1, sizeof (*h))))
+        return NULL;
     h->usecount = 1;
     h->flags = flags;
     h->ops = ops;
     h->impl = impl;
     if (!(h->tagpool = tagpool_create ()))
-        goto nomem;
+        goto error;
     tagpool_set_grow_cb (h->tagpool, tagpool_grow_notify, h);
     if (!(h->queue = flux_msglist_create ()))
-        goto nomem;
+        goto error;
     h->pollfd = -1;
     return h;
-nomem:
+error:
     flux_handle_destroy (h);
-    errno = ENOMEM;
     return NULL;
 }
 
 flux_t *flux_clone (flux_t *orig)
 {
+    flux_t *h;
     if (!orig) {
         errno = EINVAL;
         return NULL;
     }
-    flux_t *h = calloc (1, sizeof (*h));
-    if (!h)
-        goto nomem;
+    if (!(h = calloc (1, sizeof (*h))))
+        return NULL;
     h->parent = flux_incref (orig);
     h->usecount = 1;
     h->flags = orig->flags | FLUX_O_CLONE;
     return h;
-nomem:
-    free (h);
-    errno = ENOMEM;
-    return NULL;
 }
 
 static void report_leaked_matchtags (struct tagpool *tp)
