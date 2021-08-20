@@ -54,10 +54,9 @@ int fripp_timing (struct fripp_ctx *ctx, const char *name, double ms);
  */
 void fripp_set_agg_period (struct fripp_ctx *ctx, double period);
 
-/* Check whether fripp collection is enabled. If 'metric' is non-NULL
- *check if it is currently being tracked.
+/* Check whether fripp collection is enabled.
  */
-bool fripp_enabled (struct fripp_ctx *ctx, const char *metric);
+bool fripp_enabled (struct fripp_ctx *ctx);
 
 /* Set the prefix to be preprended to all metrics sent from the handle.
  * The prefix has a max limit of 127 characters. The default prefix is

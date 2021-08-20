@@ -64,14 +64,15 @@ struct fripp_ctx {
     zlist_t *done;
     flux_watcher_t *w;
     double period;
+
+    bool enabled;
 };
 
-bool fripp_enabled (struct fripp_ctx *ctx, const char *metric)
+bool fripp_enabled (struct fripp_ctx *ctx)
 {
-    if (ctx && metric)
-        return zhashx_lookup (ctx->metrics, metric) != NULL;
-
-    return getenv ("FLUX_FRIPP_STATSD") != NULL;
+    if (ctx && ctx->enabled)
+        return true;
+    return false;
 }
 
 void fripp_set_prefix (struct fripp_ctx *ctx, const char *prefix)
@@ -120,11 +121,14 @@ static int fripp_send_metrics (struct fripp_ctx *ctx)
 int fripp_packet_appendf (struct fripp_ctx *ctx, const char *fmt, ...)
 {
     va_list ap, cpy;
-    va_start (ap, fmt);
-    va_copy (cpy, ap);
-
     char buf[INTERNAL_BUFFSIZE];
     int len, rc = 0;
+
+    if (!fripp_enabled (ctx))
+        return 0;
+
+    va_start (ap, fmt);
+    va_copy (cpy, ap);
 
     if ((len = vsnprintf (buf, INTERNAL_BUFFSIZE, fmt, ap))
             >= INTERNAL_BUFFSIZE) {
@@ -157,6 +161,10 @@ done:
 int fripp_sendf (struct fripp_ctx *ctx, const char *fmt, ...)
 {
     va_list ap, cpy;
+
+    if (!fripp_enabled (ctx))
+        return 0;
+
     va_start (ap, fmt);
     va_copy (cpy, ap);
 
@@ -189,6 +197,9 @@ int fripp_count (struct fripp_ctx *ctx,
                  const char *name,
                  ssize_t count)
 {
+    if (!fripp_enabled (ctx))
+        return 0;
+
     if (ctx->period == 0)
         return fripp_sendf (ctx, "%s.%s:%zd|C\n", ctx->prefix, name, count);
 
@@ -216,6 +227,9 @@ int fripp_gauge (struct fripp_ctx *ctx,
                  ssize_t value,
                  bool inc)
 {
+    if (!fripp_enabled (ctx))
+        return 0;
+
     if (ctx->period == 0)
         return fripp_sendf (ctx, inc && value > 0 ?
                             "%s.%s:+%zd|g\n" : "%s.%s:%zd|g\n",
@@ -244,6 +258,9 @@ int fripp_timing (struct fripp_ctx *ctx,
                   const char *name,
                   double ms)
 {
+    if (!fripp_enabled (ctx))
+        return 0;
+
     if (ctx->period == 0)
         return fripp_sendf (ctx, "%s.%s:%lf|ms\n", ctx->prefix, name, ms);
 
@@ -282,6 +299,11 @@ static void timer_cb (flux_reactor_t *r,
     struct fripp_ctx *ctx = arg;
     const char *name;
     struct metric *m;
+
+    if (!fripp_enabled (ctx)) {
+        flux_watcher_stop (w);
+        return;
+    }
 
     int rc = 0;
 
@@ -346,6 +368,9 @@ static void timer_cb (flux_reactor_t *r,
 
 void fripp_set_agg_period (struct fripp_ctx *ctx, double period)
 {
+    if (!fripp_enabled (ctx))
+        return;
+
     if (period <= 0) {
         flux_watcher_stop (ctx->w);
         ctx->period = 0;
@@ -353,6 +378,7 @@ void fripp_set_agg_period (struct fripp_ctx *ctx, double period)
     }
 
     ctx->period = period;
+
     double after = flux_watcher_next_wakeup (ctx->w) - (double) time (NULL);
 
     flux_timer_watcher_reset (ctx->w, after, ctx->period);
@@ -424,13 +450,15 @@ struct fripp_ctx *fripp_ctx_create (flux_t *h)
     if (!(ctx = calloc (1, sizeof (*ctx))))
         goto error;
     ctx->sock = -1;
-    if (!(addr = getenv ("FLUX_FRIPP_STATSD"))) {
-        errno = EINVAL;
-        goto error;
-    }
+    /* If envirnoment variable is unset, or it is set wrong, let the context
+     * be created with disabled status so we don't repeatedly try to create
+     * it "on demand" in the flux_stats_*() functions.
+     */
+    if (!(addr = getenv ("FLUX_FRIPP_STATSD")))
+        return ctx;
     if (parse_address (&ctx->addrinfo, addr, errbuf, sizeof (errbuf)) < 0) {
         flux_log (h, LOG_ERR, "FLUX_FRIPP_STATSD parse error: %s", errbuf);
-        goto error;
+        return ctx;
     }
     if ((ctx->sock = socket (ctx->addrinfo->ai_family,
                              ctx->addrinfo->ai_socktype,
@@ -464,6 +492,8 @@ struct fripp_ctx *fripp_ctx_create (flux_t *h)
 
     ctx->period = DEFAULT_AGG_PERIOD;
     flux_watcher_start (ctx->w);
+
+    ctx->enabled = true;
 
     return ctx;
 nomem:

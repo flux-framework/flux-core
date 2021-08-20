@@ -22,10 +22,8 @@
 
 static struct fripp_ctx *get_fripp_ctx (flux_t *h)
 {
-    if (!fripp_enabled (NULL, NULL))
-        return NULL;
-
     struct fripp_ctx *ctx;
+
     if (!(ctx = flux_aux_get (h, FRIPP_AUX_TAG))) {
         if (!(ctx = fripp_ctx_create (h)))
             return NULL;
@@ -35,8 +33,7 @@ static struct fripp_ctx *get_fripp_ctx (flux_t *h)
             return NULL;
         }
     }
-
-    return ctx;
+    return fripp_enabled (ctx) ? ctx : NULL;
 }
 
 void flux_stats_count (flux_t *h, const char *name, ssize_t count)
@@ -106,7 +103,7 @@ done:
 
 bool flux_stats_enabled (flux_t *h, const char *metric)
 {
-    return fripp_enabled (get_fripp_ctx (h), metric);
+    return fripp_enabled (get_fripp_ctx (h));
 }
 
 /*
