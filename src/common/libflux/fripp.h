@@ -18,7 +18,7 @@
 struct fripp_ctx;
 
 struct fripp_ctx *fripp_ctx_create (flux_t *h);
-void fripp_ctx_destroy (void *arg);
+void fripp_ctx_destroy (struct fripp_ctx *ctx);
 
 /* Format and append a packet to the internal queue to be sent on the
  * next flush.

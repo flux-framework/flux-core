@@ -358,26 +358,21 @@ void fripp_set_agg_period (struct fripp_ctx *ctx, double period)
     flux_timer_watcher_reset (ctx->w, after, ctx->period);
 }
 
-void fripp_ctx_destroy (void *arg)
+void fripp_ctx_destroy (struct fripp_ctx *ctx)
 {
-    struct fripp_ctx *ctx = arg;
-
-    if (ctx->w) {
-        flux_watcher_stop (ctx->w);
+    if (ctx) {
+        int saved_errno = errno;
         flux_watcher_destroy (ctx->w);
-    }
-    if (ctx->metrics) {
-        zhashx_purge (ctx->metrics);
         zhashx_destroy (&ctx->metrics);
-    }
-    if (ctx->done) {
         zlist_destroy (&ctx->done);
+        if (ctx->sock != -1)
+            close (ctx->sock);
+        free (ctx->buf);
+        if (ctx->addrinfo)
+            freeaddrinfo (ctx->addrinfo);
+        free (ctx);
+        errno = saved_errno;
     }
-    close (ctx->sock);
-    free (ctx->buf);
-    if (ctx->addrinfo)
-        freeaddrinfo (ctx->addrinfo);
-    free (ctx);
 }
 
 static int parse_address (struct addrinfo **aip,
@@ -426,12 +421,11 @@ struct fripp_ctx *fripp_ctx_create (flux_t *h)
     char *addr;
     char errbuf[128];
 
-    if (!(ctx = calloc (1, sizeof (*ctx)))) {
-        flux_log_error (h, "fripp_ctx_create");
+    if (!(ctx = calloc (1, sizeof (*ctx))))
         goto error;
-    }
+    ctx->sock = -1;
     if (!(addr = getenv ("FLUX_FRIPP_STATSD"))) {
-        flux_log_error (h, "FLUX_FRIPP_STATSD env var not set");
+        errno = EINVAL;
         goto error;
     }
     if (parse_address (&ctx->addrinfo, addr, errbuf, sizeof (errbuf)) < 0) {
@@ -440,15 +434,10 @@ struct fripp_ctx *fripp_ctx_create (flux_t *h)
     }
     if ((ctx->sock = socket (ctx->addrinfo->ai_family,
                              ctx->addrinfo->ai_socktype,
-                             ctx->addrinfo->ai_protocol)) == -1) {
-        flux_log_error (h, "error opening socket");
+                             ctx->addrinfo->ai_protocol)) == -1)
         goto error;
-    }
-    if (!(ctx->buf = calloc (1, INTERNAL_BUFFSIZE))) {
-        flux_log_error (h, "calloc");
-        close (ctx->sock);
+    if (!(ctx->buf = calloc (1, INTERNAL_BUFFSIZE)))
         goto error;
-    }
 
     ctx->buf_len = INTERNAL_BUFFSIZE;
     ctx->tail = 0;
@@ -459,37 +448,28 @@ struct fripp_ctx *fripp_ctx_create (flux_t *h)
     sprintf (buf, "flux.%d", rank);
     fripp_set_prefix (ctx, buf);
 
-    if (!(ctx->metrics = zhashx_new ())) {
-        fripp_ctx_destroy (ctx);
-        return NULL;
-    }
-
+    if (!(ctx->metrics = zhashx_new ()))
+        goto nomem;
     zhashx_set_destructor (ctx->metrics, metric_destroy);
 
-
-    if (!(ctx->done = zlist_new ())) {
-        fripp_ctx_destroy (ctx);
-        return NULL;
-    }
+    if (!(ctx->done = zlist_new ()))
+        goto nomem;
     if (!(ctx->w = flux_timer_watcher_create (
               flux_get_reactor(h),
               DEFAULT_AGG_PERIOD,
               DEFAULT_AGG_PERIOD,
               timer_cb,
-              ctx))) {
-        fripp_ctx_destroy (ctx);
-        return NULL;
-    }
-
+              ctx)))
+        goto error;
 
     ctx->period = DEFAULT_AGG_PERIOD;
     flux_watcher_start (ctx->w);
 
     return ctx;
-
+nomem:
+    errno = ENOMEM;
 error:
-    if (ctx)
-        free (ctx);
+    fripp_ctx_destroy (ctx);
     return NULL;
 }
 
