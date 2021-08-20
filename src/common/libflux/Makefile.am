@@ -81,7 +81,8 @@ fluxcoreinclude_HEADERS = \
 	service.h \
 	plugin.h \
 	sync.h \
-	disconnect.h
+	disconnect.h \
+	stats.h
 
 nodist_fluxcoreinclude_HEADERS = \
 	version.h
@@ -126,7 +127,10 @@ libflux_la_SOURCES = \
 	version.c \
 	plugin.c \
 	sync.c \
-	disconnect.c
+	disconnect.c \
+	stats.c \
+	fripp.h \
+	fripp.c
 
 libflux_la_CPPFLAGS = \
 	$(installed_conf_cppflags) \
