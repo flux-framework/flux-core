@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 
+#include <netdb.h>
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <stdbool.h>
@@ -52,7 +53,7 @@ struct metric {
 };
 
 struct fripp_ctx {
-    struct sockaddr_in si_server;
+    struct addrinfo *addrinfo;
     int sock;
     int buf_len;
     int tail;
@@ -92,7 +93,7 @@ static int split_packet (char *packet, int len)
 
 static int fripp_send_metrics (struct fripp_ctx *ctx)
 {
-    int len, sock_len = sizeof (ctx->si_server);
+    int len;
     bool split;
     char *packet = ctx->buf;
 
@@ -105,8 +106,12 @@ static int fripp_send_metrics (struct fripp_ctx *ctx)
         if ((len = split_packet (packet, len > FRIPP_MAX_PACKET_LEN ?
                 FRIPP_MAX_PACKET_LEN : len)) == -1)
             return -1;
-        (void) sendto (ctx->sock, packet, len, 0,
-                    (void *) &ctx->si_server, sock_len);
+        (void)sendto (ctx->sock,
+                      packet,
+                      len,
+                      0,
+                      ctx->addrinfo->ai_addr,
+                      ctx->addrinfo->ai_addrlen);
     } while (split && (packet = &packet[len + 1]));
 
     return 0;
@@ -370,47 +375,72 @@ void fripp_ctx_destroy (void *arg)
     }
     close (ctx->sock);
     free (ctx->buf);
+    if (ctx->addrinfo)
+        freeaddrinfo (ctx->addrinfo);
     free (ctx);
+}
+
+static int parse_address (struct addrinfo **aip,
+                          const char *s,
+                          char *errbuf,
+                          int errbufsz)
+{
+    char *node;
+    char *service;
+    struct addrinfo hints, *res = NULL;
+    int e;
+
+    if (!(node = strdup (s))) {
+        snprintf (errbuf, errbufsz, "out of memory");
+        return -1;
+    }
+    if (!(service = strchr (node, ':'))) {
+        snprintf (errbuf, errbufsz, "missing colon delimiter");
+        goto error;
+    }
+    *service++ = '\0';
+
+    memset (&hints, 0, sizeof (hints));
+    hints.ai_family = AF_INET;
+    hints.ai_socktype = SOCK_DGRAM;
+    hints.ai_protocol = IPPROTO_UDP;
+
+    if ((e = getaddrinfo (node, service, &hints, &res)) != 0) {
+        snprintf (errbuf, errbufsz, "%s", gai_strerror (e));
+        goto error;
+    }
+    free (node);
+    *aip = res;
+    return 0;
+error:
+    if (res)
+        freeaddrinfo (res);
+    free (node);
+    errno = EINVAL;
+    return -1;
 }
 
 struct fripp_ctx *fripp_ctx_create (flux_t *h)
 {
     struct fripp_ctx *ctx;
-    char *uri, *port_s = NULL, *host = NULL;
+    char *addr;
+    char errbuf[128];
 
     if (!(ctx = calloc (1, sizeof (*ctx)))) {
         flux_log_error (h, "fripp_ctx_create");
         goto error;
     }
-    if (!(uri = getenv ("FLUX_FRIPP_STATSD"))) {
+    if (!(addr = getenv ("FLUX_FRIPP_STATSD"))) {
         flux_log_error (h, "FLUX_FRIPP_STATSD env var not set");
         goto error;
     }
-    if (!(port_s = strrchr (uri, ':'))) {
-        flux_log_error (h, "FLUX_FRIPP_STATSD env var no port");
+    if (parse_address (&ctx->addrinfo, addr, errbuf, sizeof (errbuf)) < 0) {
+        flux_log (h, LOG_ERR, "FLUX_FRIPP_STATSD parse error: %s", errbuf);
         goto error;
     }
-    if (!(host = calloc (1, port_s - uri + 1))) {
-        flux_log_error (h, "fripp_ctx_create");
-        goto error;
-    }
-
-    strncpy (host, uri, port_s - uri);
-    uint16_t port = (uint16_t) atoi (++port_s);
-
-    memset (&ctx->si_server, 0, sizeof (ctx->si_server));
-    ctx->si_server.sin_family = AF_INET;
-    ctx->si_server.sin_port = htons (port);
-
-    if (!inet_aton (host, &ctx->si_server.sin_addr)) {
-        flux_log_error (h, "error creating server address");
-        free (host);
-        goto error;
-    }
-
-    free (host);
-
-    if ((ctx->sock = socket(AF_INET, SOCK_DGRAM, 0)) == -1) {
+    if ((ctx->sock = socket (ctx->addrinfo->ai_family,
+                             ctx->addrinfo->ai_socktype,
+                             ctx->addrinfo->ai_protocol)) == -1) {
         flux_log_error (h, "error opening socket");
         goto error;
     }
