@@ -45,7 +45,7 @@ s = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
 s.bind(("127.0.0.1", 0))
 
 if not args.no_set_host:
-    os.environ["FLUX_FRIPP_STATSD"] = f"0.0.0.0:{s.getsockname()[1]}"
+    os.environ["FLUX_FRIPP_STATSD"] = f"127.0.0.1:{s.getsockname()[1]}"
 
 f = subprocess.Popen(args.cmd, env=dict(os.environ))
 f.wait()

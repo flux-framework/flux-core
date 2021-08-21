@@ -43,4 +43,16 @@ test_expect_success 'nothing received with no endpoint' '
 	unset FLUX_FRIPP_STATSD && test_expect_code 137 $timeout 5 flux python $udp -n flux start
 '
 
+test_expect_success 'FLUX_FRIPP_STATSD with colectomy' '
+	FLUX_FRIPP_STATSD=localhost \
+		flux start /bin/true sleep 1 2>colon.err &&
+	grep "parse error" colon.err
+'
+
+test_expect_success 'FLUX_FRIPP_STATSD with invalid hostname' '
+	FLUX_FRIPP_STATSD=thiscantpossiblybevalid:9000 \
+		flux start /bin/true sleep 1 2>host.err &&
+	grep "parse error" host.err
+'
+
 test_done
