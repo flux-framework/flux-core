@@ -315,6 +315,37 @@ void test_hashable (void)
     rpc_track_destroy (rt);
 }
 
+void test_nilarg (void)
+{
+    struct rpc_track *rt;
+    flux_msg_t *msg;
+
+    if (!(rt = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG)))
+        BAIL_OUT ("rpc_track_create failed");
+    msg = create_request (1, 0, true);
+    rpc_track_update (rt, msg);
+
+    ok (rpc_track_count (NULL) == 0,
+        "rpc_track_count rt=NULL returns 0");
+
+    lives_ok ({rpc_track_update (NULL, msg);},
+              "rpc_track_update rt=NULL doesn't crash");
+    lives_ok ({rpc_track_update (rt, NULL);},
+              "rpc_track_update msg=NULL doesn't crash");
+
+    lives_ok ({rpc_track_purge (NULL, purge, NULL);},
+              "rpc_track_purge rt=NULL doesn't crash");
+
+    lives_ok ({rpc_track_purge (rt, NULL, NULL);},
+              "rpc_track_purge func=NULL doesn't crash");
+    lives_ok ({rpc_track_destroy (NULL);},
+              "rpc_track_destroy rt=NULL doesn't crash");
+
+
+    flux_msg_decref (msg);
+    rpc_track_destroy (rt);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -324,6 +355,7 @@ int main (int argc, char *argv[])
     test_disconnect ();
     test_badarg ();
     test_hashable ();
+    test_nilarg ();
 
     done_testing();
     return (0);

@@ -108,7 +108,7 @@ void rpc_track_update (struct rpc_track *rt, const flux_msg_t *msg)
 {
     int type;
 
-    if (flux_msg_get_type (msg, &type) < 0)
+    if (!rt || !msg || flux_msg_get_type (msg, &type) < 0)
         return;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
@@ -132,17 +132,20 @@ void rpc_track_purge (struct rpc_track *rt, rpc_respond_f fun, void *arg)
 {
     const flux_msg_t *msg;
 
-    msg = zhashx_first (rt->hash);
-    while (msg) {
-        fun (msg, arg);
-        msg = zhashx_next (rt->hash);
+    if (rt) {
+        msg = zhashx_first (rt->hash);
+        while (msg) {
+            if (fun)
+                fun (msg, arg);
+            msg = zhashx_next (rt->hash);
+        }
+        zhashx_purge (rt->hash);
     }
-    zhashx_purge (rt->hash);
 }
 
 int rpc_track_count (struct rpc_track *rt)
 {
-    return zhashx_size (rt->hash);
+    return rt ? zhashx_size (rt->hash) : 0;
 }
 
 // vi:ts=4 sw=4 expandtab
