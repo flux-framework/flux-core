@@ -89,6 +89,7 @@ struct parent {
     char uuid[UUID_STR_LEN];
     bool hello_error;
     bool hello_responded;
+    struct rpc_track *tracker;
 };
 
 /* Wake up periodically (between 'sync_min' and 'sync_max' seconds) and:
@@ -305,6 +306,7 @@ int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank)
     monotime (&ov->status_timestamp);
     if (rank > 0) {
         ov->parent.rank = kary_parentof (ov->fanout, rank);
+        ov->parent.tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG);
     }
 
     return 0;
@@ -553,8 +555,11 @@ int overlay_sendmsg (struct overlay *ov,
                         where = OVERLAY_UPSTREAM;
                 }
             }
-            if (where == OVERLAY_UPSTREAM)
+            if (where == OVERLAY_UPSTREAM) {
                 rc = overlay_sendmsg_parent (ov, msg);
+                if (rc == 0)
+                    rpc_track_update (ov->parent.tracker, msg);
+            }
             else {
                 rc = overlay_sendmsg_child (ov, msg);
                 if (rc == 0) {
@@ -819,8 +824,21 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
         hello_response_handler (ov, msg);
         goto handled;
     }
-    if (type == FLUX_MSGTYPE_EVENT)
-        flux_msg_route_disable (msg);
+    switch (type) {
+        case FLUX_MSGTYPE_RESPONSE:
+            rpc_track_update (ov->parent.tracker, msg);
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            /* Upstream broker enables routing and pushes our uuid, then
+             * router socket pops it off, but leaves routing enabled.
+             * An event type message should not have routing enabled
+             * under normal circumstances, so turn it off here.
+             */
+            flux_msg_route_disable (msg);
+            break;
+        default:
+            break;
+    }
     ov->recv_cb (msg, OVERLAY_UPSTREAM, ov->recv_arg);
 handled:
     flux_msg_destroy (msg);
@@ -1279,10 +1297,11 @@ static void overlay_stats_get_cb (flux_t *h,
         goto error;
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:i s:i s:i}",
+                           "{s:i s:i s:i s:i s:i}",
                            "child-count", ov->child_count,
                            "child-connected", overlay_get_child_peer_count (ov),
                            "parent-count", ov->rank > 0 ? 1 : 0,
+                           "parent-rpc", rpc_track_count (ov->parent.tracker),
                            "child-rpc", child_rpc_track_count (ov)) < 0)
         flux_log_error (h, "error responding to overlay.stats.get");
     return;
@@ -1569,6 +1588,7 @@ void overlay_destroy (struct overlay *ov)
                 rpc_track_destroy (ov->children[i].tracker);
             free (ov->children);
         }
+        rpc_track_destroy (ov->parent.tracker);
         free (ov);
         errno = saved_errno;
     }
