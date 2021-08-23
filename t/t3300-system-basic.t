@@ -74,10 +74,6 @@ test_expect_success 'ping to rank 2 fails' '
 	test_must_fail flux ping 2
 '
 
-test_expect_success 'dmesg shows failed send from ping' '
-	flux dmesg |grep "send failed"
-'
-
 test_expect_success 'wait for overlay status to be degraded' '
 	flux overlay status --wait degraded --timeout 10s
 '
