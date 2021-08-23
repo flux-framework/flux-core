@@ -52,7 +52,7 @@ flux_msg_t *create_response (const flux_msg_t *req, int errnum)
     return rep;
 }
 
-flux_msg_t *create_request (uint32_t matchtag, int setflags)
+flux_msg_t *create_request (uint32_t matchtag, int setflags, bool add_uuid)
 {
     flux_msg_t *msg;
     uint8_t flags;
@@ -70,11 +70,13 @@ flux_msg_t *create_request (uint32_t matchtag, int setflags)
     if (flux_msg_set_flags (msg, flags) < 0)
         BAIL_OUT ("flux_msg_set_flags failed");
 
-    uuid_generate (uuid);
-    uuid_unparse (uuid, uuid_str);
     flux_msg_route_enable (msg);
-    if (flux_msg_route_push (msg, uuid_str) < 0)
-        BAIL_OUT ("flux_msg_route_push failed");
+    if (add_uuid) {
+        uuid_generate (uuid);
+        uuid_unparse (uuid, uuid_str);
+        if (flux_msg_route_push (msg, uuid_str) < 0)
+            BAIL_OUT ("flux_msg_route_push failed");
+        }
     return msg;
 }
 
@@ -91,8 +93,8 @@ void test_purge (void)
     flux_msg_t *msg[2];
     int i;
 
-    msg[0] = create_request (1, 0);
-    msg[1] = create_request (2, FLUX_MSGFLAG_STREAMING);
+    msg[0] = create_request (1, 0, true);
+    msg[1] = create_request (2, FLUX_MSGFLAG_STREAMING, true);
 
     if (!(rt = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG)))
         BAIL_OUT ("rpc_track_create failed");
@@ -127,9 +129,9 @@ void test_basic (void)
     flux_msg_t *rep[3];
     int i;
 
-    req[0] = create_request (0, FLUX_MSGFLAG_NORESPONSE); // won't track
-    req[1] = create_request (1, 0);
-    req[2] = create_request (2, FLUX_MSGFLAG_STREAMING);
+    req[0] = create_request (0, FLUX_MSGFLAG_NORESPONSE, true); // won't track
+    req[1] = create_request (1, 0, true);
+    req[2] = create_request (2, FLUX_MSGFLAG_STREAMING, true);
     req[3] = flux_msg_copy (req[2], true); // same as 2 except new matchtag
     if (!req[3])
         BAIL_OUT ("flux_msg_copy failed");
@@ -171,9 +173,9 @@ void test_disconnect (void)
     flux_msg_t *dis;
     int i;
 
-    req[0] = create_request (0, FLUX_MSGFLAG_NORESPONSE); // won't track
-    req[1] = create_request (1, 0);
-    req[2] = create_request (2, FLUX_MSGFLAG_STREAMING);
+    req[0] = create_request (0, FLUX_MSGFLAG_NORESPONSE, true); // won't track
+    req[1] = create_request (1, 0, true);
+    req[2] = create_request (2, FLUX_MSGFLAG_STREAMING, true);
     req[3] = flux_msg_copy (req[2], true); // same as 2 except new matchtag
     if (!req[3])
         BAIL_OUT ("flux_msg_copy failed");
@@ -275,6 +277,44 @@ void test_badarg (void)
     rpc_track_destroy (rt);
 }
 
+/* Will it hash?
+ */
+void test_hashable (void)
+{
+    struct rpc_track *rt;
+    flux_msg_t *msg;
+    int count;
+
+    if (!(rt = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG)))
+        BAIL_OUT ("rpc_track_create failed");
+
+    count = rpc_track_count (rt);
+    msg = create_request (1, 0, false);
+    rpc_track_update (rt, msg);
+    ok (rpc_track_count (rt) - count == 1,
+        "message 1 with valid matchtag, missing uuid is tracked");
+    flux_msg_decref (msg);
+
+    count = rpc_track_count (rt);
+    msg = create_request (2, 0, false);
+    rpc_track_update (rt, msg);
+    ok (rpc_track_count (rt) - count == 1,
+        "message 2 with new matchtag, missing uuid is tracked");
+    flux_msg_decref (msg);
+
+    /* This one is like RFC 27 sched alloc RPC, which sets matchtag to
+     * FLUX_MATCHTAG_NONE, but does not set FLUX_MSGFLAG_NORESPONSE flag.
+     */
+    count = rpc_track_count (rt);
+    msg = create_request (FLUX_MATCHTAG_NONE, 0, true);
+    rpc_track_update (rt, msg);
+    ok (rpc_track_count (rt) - count == 0,
+        "message with no matchtag, valid uuid is not tracked");
+    flux_msg_decref (msg);
+
+    rpc_track_destroy (rt);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -283,6 +323,7 @@ int main (int argc, char *argv[])
     test_purge ();
     test_disconnect ();
     test_badarg ();
+    test_hashable ();
 
     done_testing();
     return (0);
