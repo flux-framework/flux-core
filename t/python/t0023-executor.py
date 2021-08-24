@@ -59,6 +59,7 @@ class TestFluxExecutor(unittest.TestCase):
             for attach_fut in cf.as_completed(attach_futures):
                 self.assertEqual(attach_fut.result(timeout=0), 0)
                 self.assertIsNone(attach_fut.exception())
+        self.assertFalse(executor._broken_event.is_set())
 
     def test_failed_job(self):
         with FluxExecutor(thread_name_prefix="foobar") as executor:
@@ -77,6 +78,7 @@ class TestFluxExecutor(unittest.TestCase):
             self.assertEqual(jobid, future.jobid())
             self.assertEqual(future.result(), 1)
             self.assertIsNone(future.exception())
+        self.assertFalse(executor._broken_event.is_set())
 
     def test_cancel_submit(self):
         with FluxExecutor() as executor:
@@ -93,6 +95,7 @@ class TestFluxExecutor(unittest.TestCase):
                 else:
                     self.assertEqual(future.result(), 1)
                     self.assertIsNone(future.exception())
+        self.assertFalse(executor._broken_event.is_set())
 
     def test_cancel_attach(self):
         with FluxExecutor() as executor:
@@ -109,18 +112,20 @@ class TestFluxExecutor(unittest.TestCase):
                 else:
                     self.assertEqual(future.result(), 0)
                     self.assertIsNone(future.exception())
+        self.assertFalse(executor._broken_event.is_set())
 
     def test_bad_arguments(self):
         with FluxExecutor() as executor:
             submit_future = executor.submit(None)  # not a valid jobspec
             attach_future = executor.attach(None)  # not a valid job ID
-            attach_future2 = executor.attach(-1)  # not a valid job ID
-            attach_future3 = executor.attach(0)  # not a valid job ID
+            attach_future2 = executor.attach(-1)  # invalid, immediately rejected
+            # invalid job IDs but rejected only in callback
+            zero_jobids = [executor.attach(0) for _ in range(5)]
+        # all futures should be fulfilled after exiting context manager
         with self.assertRaisesRegex(RuntimeError, r"job could not be submitted.*"):
             # trying to fetch jobid should raise an error
             submit_future.jobid()
         with self.assertRaises(OSError):
-            # submit_future should be fulfilled after shutdown
             submit_future.result(timeout=0)
         self.assertIsInstance(submit_future.exception(), OSError)
         self.assertEqual(attach_future.jobid(), None)
@@ -129,8 +134,11 @@ class TestFluxExecutor(unittest.TestCase):
         self.assertEqual(attach_future2.jobid(), -1)
         with self.assertRaises(OverflowError):
             attach_future2.result(timeout=0)
-        with self.assertRaisesRegex(ValueError, r".*does not match any job.*"):
-            attach_future3.result(timeout=0)
+        for future in zero_jobids:
+            self.assertEqual(future.jobid(), 0)
+            with self.assertRaisesRegex(ValueError, r".*does not match any job.*"):
+                future.result(timeout=0)
+        self.assertFalse(executor._broken_event.is_set())
 
     def test_submit_after_shutdown(self):
         executor = FluxExecutor()
@@ -143,6 +151,7 @@ class TestFluxExecutor(unittest.TestCase):
             executor.attach(5)
         with self.assertRaises(RuntimeError):
             executor.attach(None)
+        self.assertFalse(executor._broken_event.is_set())
 
     def test_wait(self):
         with FluxExecutor(threads=3) as executor:
@@ -155,6 +164,7 @@ class TestFluxExecutor(unittest.TestCase):
             done, not_done = cf.wait(futures)
             self._check_done(done)
             self.assertEqual(len(not_done), 0)
+        self.assertFalse(executor._broken_event.is_set())
 
     def _check_done(self, done_futures):
         self.assertGreater(len(done_futures), 0)
@@ -170,6 +180,7 @@ class TestFluxExecutor(unittest.TestCase):
                     event, lambda fut, event: expected_events.discard(event.name)
                 )
         self.assertFalse(expected_events)  # no more expected events
+        self.assertFalse(executor._broken_event.is_set())
 
     def test_exception_event(self):
         with FluxExecutor() as executor:
@@ -186,6 +197,7 @@ class TestFluxExecutor(unittest.TestCase):
             future.add_event_callback("exception", lambda fut, event: flag.set())
             self.assertIsInstance(future.exception(), JobException)
             self.assertTrue(flag.is_set())
+        self.assertFalse(executor._broken_event.is_set())
 
     def test_broken_executor(self):
         with FluxExecutor() as executor:
@@ -244,13 +256,22 @@ class TestFluxExecutorThread(unittest.TestCase):
         event = threading.Event()
         thread = _FluxExecutorThread(threading.Event(), event, deq, 0.01, (), {})
         futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
-        deq.extend(_AttachPackage(None, f) for f in futures)  # send jobspec of None
+        deq.extend(_AttachPackage(None, f) for f in futures)  # send jobid of None
         event.set()
         thread.run()
         self.assertFalse(deq)
         self.assertFalse(thread._FluxExecutorThread__running_user_futures)
         for fut in futures:
             self.assertIsInstance(fut.exception(), TypeError)
+        futures = [FluxExecutorFuture(threading.get_ident()) for _ in range(5)]
+        deq.extend(_AttachPackage(0, f) for f in futures)  # send jobid of None
+        event.set()
+        thread.run()
+        self.assertFalse(deq)
+        self.assertFalse(thread._FluxExecutorThread__running_user_futures)
+        for fut in futures:
+            with self.assertRaisesRegex(ValueError, r".*does not match any job.*"):
+                fut.result(timeout=0)
 
     def test_cancel(self):
         deq = collections.deque()
