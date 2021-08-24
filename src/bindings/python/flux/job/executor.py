@@ -163,6 +163,7 @@ class _FluxExecutorThread(threading.Thread):
 
     def __event_update(self, event_future, user_future):
         """Callback invoked when a job has an event update."""
+        event = None
         try:
             event = event_future.get_event()
         except FileNotFoundError:  # job ID was not accepted
