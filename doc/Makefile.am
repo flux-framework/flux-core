@@ -53,6 +53,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_shell_current_task.3 \
 	man3/flux_shell_get_flux.3 \
 	man3/flux_shell_get_info.3 \
+	man3/flux_shell_get_jobspec_info.3 \
 	man3/flux_shell_getenv.3 \
 	man3/flux_shell_getopt.3 \
 	man3/flux_shell_killall.3 \
@@ -123,6 +124,7 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_shell_task_first.3 \
 	man3/flux_shell_task_next.3 \
 	man3/flux_shell_info_unpack.3 \
+	man3/flux_shell_jobspec_info_unpack.3 \
 	man3/flux_shell_get_rank_info.3 \
 	man3/flux_shell_rank_info_unpack.3 \
 	man3/flux_shell_get_environ.3 \

@@ -55,6 +55,7 @@ man3
    flux_shell_current_task
    flux_shell_get_flux
    flux_shell_get_info
+   flux_shell_get_jobspec_info
    flux_shell_getenv
    flux_shell_getopt
    flux_shell_killall
