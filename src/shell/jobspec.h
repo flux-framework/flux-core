@@ -16,6 +16,7 @@
 
 struct jobspec {
     json_t *jobspec;
+    int version;                // jobspec version
     int task_count;             // number of tasks in job
     int slot_count;             // number of task slots
     int cores_per_slot;         // number of cores per task slot

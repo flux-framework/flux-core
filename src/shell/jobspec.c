@@ -213,7 +213,6 @@ static int recursive_parse_jobspec_resources (struct jobspec *job,
 struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
 {
     struct jobspec *job;
-    int version;
     json_t *tasks;
     json_t *resources;
 
@@ -236,7 +235,7 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
      */
     if (json_unpack_ex (job->jobspec, error, 0,
                         "{s:i s:o s:o s:{s:{s?:s s?:O s?:{s?:O}}}}",
-                        "version", &version,
+                        "version", &job->version,
                         "resources", &resources,
                         "tasks", &tasks,
                         "attributes",
@@ -246,9 +245,9 @@ struct jobspec *jobspec_parse (const char *jobspec, json_error_t *error)
                                 "shell", "options", &job->options) < 0) {
         goto error;
     }
-    if (version != 1) {
+    if (job->version != 1) {
         set_error (error, "Invalid jobspec version: expected 1 got %d",
-                   version);
+                   job->version);
         goto error;
     }
     if (job->environment && !json_is_object (job->environment)) {
