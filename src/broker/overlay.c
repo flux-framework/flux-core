@@ -1211,33 +1211,15 @@ int overlay_bind (struct overlay *ov, const char *uri)
     return 0;
 }
 
-/* A callback of type attr_get_f to allow retrieving some information
- * from an struct overlay through attr_get().
+/* Call after overlay bootstrap (bind/connect),
+ * to get concretized 0MQ endpoints.
  */
-static int overlay_attr_get_cb (const char *name, const char **val, void *arg)
-{
-    struct overlay *overlay = arg;
-    int rc = -1;
-
-    if (!strcmp (name, "tbon.parent-endpoint"))
-        *val = overlay_get_parent_uri (overlay);
-    else {
-        errno = ENOENT;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
 int overlay_register_attrs (struct overlay *overlay)
 {
-    if (attr_add_active (overlay->attrs,
-                         "tbon.parent-endpoint",
-                         FLUX_ATTRFLAG_READONLY,
-                         overlay_attr_get_cb,
-                         NULL,
-                         overlay) < 0)
+    if (attr_add (overlay->attrs,
+                  "tbon.parent-endpoint",
+                  overlay->parent.uri,
+                  FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
     if (attr_add_uint32 (overlay->attrs,
                          "rank",
