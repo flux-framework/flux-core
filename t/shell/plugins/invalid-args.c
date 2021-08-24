@@ -96,6 +96,16 @@ static int shell_cb (flux_plugin_t *p,
     ok (flux_shell_info_unpack (shell, NULL) < 0 && errno == EINVAL,
         "flux_shell_info_unpack with NULL fmt returns EINVAL");
 
+    ok (flux_shell_get_jobspec_info (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_shell_get_info with NULL arg returns EINVAL");
+    ok (flux_shell_get_jobspec_info (shell, NULL) < 0 && errno == EINVAL,
+        "flux_shell_get_info with NULL json_str returns EINVAL");
+
+    ok (flux_shell_jobspec_info_unpack (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_shell_info_unpack with NULL arg returns EINVAL");
+    ok (flux_shell_jobspec_info_unpack (shell, NULL) < 0 && errno == EINVAL,
+        "flux_shell_info_unpack with NULL fmt returns EINVAL");
+
     ok (flux_shell_get_rank_info (NULL, -1, NULL) < 0 && errno == EINVAL,
         "flux_shell_get_rank_info (NULL, ..) returns EINVAL");
     ok (flux_shell_get_rank_info (shell, -1, NULL) < 0 && errno == EINVAL,

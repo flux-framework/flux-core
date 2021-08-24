@@ -246,6 +246,20 @@ test_expect_success 'flux-shell: plugins can use setopt with empty options' '
 	test_debug "cat ${name}.log"
 '
 
+test_expect_success HAVE_JQ 'flux-shell: initrc: jobspec-info plugin works' '
+	name=jobspec-info &&
+	cat >${name}.lua <<-EOF &&
+	plugin.searchpath = "${INITRC_PLUGINPATH}"
+	plugin.load { file = "jobspec-info.so" }
+	EOF
+	cat j1 | \
+	  jq ".attributes.system.shell.options.jobspec_info = \
+		{ ntasks: 1, nnodes: 1, nslots: 1, \
+		  cores_per_slot: 1, \
+		  slots_per_node: 1 }" \
+		>j.${name} &&
+	${FLUX_SHELL} -v -s -r 0 -j j.${name} -R R1 --initrc=${name}.lua 0
+'
 test_expect_success 'flux-shell: initrc: shell log functions available' '
 	name=shell.log &&
 	cat >${name}.lua <<-EOF &&
