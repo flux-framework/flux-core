@@ -164,6 +164,8 @@ export FLUX_TEST_MPI=t
 export FLUX_TESTS_LOGFILE=t
 export DISTCHECK_CONFIGURE_FLAGS="${ARGS}"
 
+# Force enable valgrind test
+export FLUX_ENABLE_VALGRIND_TEST=t
 
 if test "$CPPCHECK" = "t"; then
     sh -x src/test/cppcheck.sh
