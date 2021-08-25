@@ -6,6 +6,13 @@ test_description='Run broker under valgrind with a small workload'
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
+#  Do not run valgrind test by default unless FLUX_ENABLE_VALGRIND_TEST
+#   is set in environment (e.g. by CI), or the test run run with -d, --debug
+#
+if test -z "$FLUX_ENABLE_VALGRIND_TEST" && test "$debug" = ""; then
+    skip_all='skipping valgrind tests since FLUX_ENABLE_VALGRIND_TEST not set'
+    test_done
+fi
 if ! which valgrind >/dev/null; then
     skip_all='skipping valgrind tests since no valgrind executable found'
     test_done
