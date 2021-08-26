@@ -42,6 +42,14 @@
 
 #define DEFAULT_FANOUT 2
 
+/* Overlay keepalives set PROTO aux1 to the keepalive type.
+ * The meaning of PROTO aux2 depends on the type.
+ */
+enum keepalive_type {
+    KEEPALIVE_HEARTBEAT = 0, // child sends when connection is idle
+    KEEPALIVE_STATUS = 1,    // child tells parent of subtree status change
+};
+
 /* Numerical values for "subtree health" so we can send them in keepalive
  * messages.  Textual values below will be used for communication with front
  * end diagnostic tool.
@@ -146,7 +154,9 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
 static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
 static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg);
 static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg);
-static int overlay_keepalive_parent (struct overlay *ov, int status);
+static int overlay_keepalive_parent (struct overlay *ov,
+                                     enum keepalive_type ktype,
+                                     int arg);
 static int overlay_health_respond (struct overlay *ov, const flux_msg_t *msg);
 
 /* Convenience iterator for ov->children
@@ -220,7 +230,7 @@ static void subtree_status_update (struct overlay *ov)
 
         ov->status = status;
         monotime (&ov->status_timestamp);
-        overlay_keepalive_parent (ov, ov->status);
+        overlay_keepalive_parent (ov, KEEPALIVE_STATUS, ov->status);
 
         /* Process waiting health requests, in case this broker
          * transitioned into the state that is being waited for
@@ -491,12 +501,14 @@ done:
     return rc;
 }
 
-static int overlay_keepalive_parent (struct overlay *ov, int status)
+static int overlay_keepalive_parent (struct overlay *ov,
+                                     enum keepalive_type ktype,
+                                     int arg)
 {
     flux_msg_t *msg = NULL;
 
     if (ov->parent.zsock) {
-        if (!(msg = flux_keepalive_encode (0, status)))
+        if (!(msg = flux_keepalive_encode (ktype, arg)))
             return -1;
         flux_msg_route_enable (msg);
         if (overlay_sendmsg_parent (ov, msg) < 0)
@@ -629,7 +641,7 @@ static void sync_cb (flux_future_t *f, void *arg)
     double now = flux_reactor_now (ov->reactor);
 
     if (now - ov->parent.lastsent > idle_min)
-        overlay_keepalive_parent (ov, ov->status);
+        overlay_keepalive_parent (ov, KEEPALIVE_HEARTBEAT, 0);
     overlay_log_idle_children (ov);
 
     flux_future_reset (f);
@@ -783,7 +795,6 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     const char *topic = NULL;
     const char *sender = NULL;
     struct child *child;
-    int status;
 
     if (!(msg = zmqutil_msg_recv (ov->bind_zsock)))
         return;
@@ -808,10 +819,13 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
     child->lastseen = flux_reactor_now (ov->reactor);
     switch (type) {
-        case FLUX_MSGTYPE_KEEPALIVE:
-            if (flux_keepalive_decode (msg, NULL, &status) == 0)
+        case FLUX_MSGTYPE_KEEPALIVE: {
+            int ktype, status;
+            if (flux_keepalive_decode (msg, &ktype, &status) == 0
+                && ktype == KEEPALIVE_STATUS)
                 overlay_child_status_update (ov, child, status);
             goto done;
+        }
         case FLUX_MSGTYPE_REQUEST:
             break;
         case FLUX_MSGTYPE_RESPONSE:
@@ -1578,7 +1592,7 @@ void overlay_destroy (struct overlay *ov)
         flux_future_destroy (ov->f_sync);
         flux_msg_handler_delvec (ov->handlers);
         ov->status = SUBTREE_STATUS_OFFLINE;
-        overlay_keepalive_parent (ov, ov->status);
+        overlay_keepalive_parent (ov, KEEPALIVE_STATUS, ov->status);
 
         zsock_destroy (&ov->parent.zsock);
         free (ov->parent.uri);
