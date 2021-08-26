@@ -741,6 +741,37 @@ static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
     }
 }
 
+static void logdrop (struct overlay *ov,
+                     overlay_where_t where,
+                     const flux_msg_t *msg,
+                     const char *fmt, ...)
+{
+    char reason[128];
+    va_list ap;
+    const char *topic = NULL;
+    int type = -1;
+    const char *child_uuid = NULL;
+
+    (void)flux_msg_get_type (msg, &type);
+    (void)flux_msg_get_topic (msg, &topic);
+    if (where == OVERLAY_DOWNSTREAM)
+        child_uuid = flux_msg_route_last (msg);
+
+    va_start (ap, fmt);
+    (void)vsnprintf (reason, sizeof (reason), fmt, ap);
+    va_end (ap);
+
+    flux_log (ov->h,
+              LOG_ERR,
+              "DROP %s %s topic %s %s%s: %s",
+              where == OVERLAY_UPSTREAM ? "upstream" : "downstream",
+              type != -1 ? flux_msg_typestr (type) : "message",
+              topic ? topic : "-",
+              child_uuid ? "from " : "",
+              child_uuid ? child_uuid : "",
+              reason);
+}
+
 /* Handle a message received from TBON child (downstream).
  */
 static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -757,22 +788,30 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (!(msg = zmqutil_msg_recv (ov->bind_zsock)))
         return;
     if (flux_msg_get_type (msg, &type) < 0
-        || !(sender = flux_msg_route_last (msg)))
-        goto drop;
+        || !(sender = flux_msg_route_last (msg))) {
+        logdrop (ov, OVERLAY_DOWNSTREAM, msg, "malformed message");
+        goto done;
+    }
     if (!(child = child_lookup (ov, sender))
         || !subtree_is_online (child->status)) {
+        /* process hello request */
         if (type == FLUX_MSGTYPE_REQUEST
             && flux_msg_get_topic (msg, &topic) == 0
-            && !strcmp (topic, "overlay.hello"))
+            && streq (topic, "overlay.hello")) {
             hello_request_handler (ov, msg);
-        goto handled; // don't log drops until hello completes successfully
+        }
+        else {
+            logdrop (ov, OVERLAY_DOWNSTREAM, msg, "message from %s peer",
+                     child ? subtree_status_str (child->status) : "unknown");
+        }
+        goto done;
     }
     child->lastseen = flux_reactor_now (ov->reactor);
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE:
             if (flux_keepalive_decode (msg, NULL, &status) == 0)
                 overlay_child_status_update (ov, child, status);
-            goto handled;
+            goto done;
         case FLUX_MSGTYPE_REQUEST:
             break;
         case FLUX_MSGTYPE_RESPONSE:
@@ -789,17 +828,7 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
             break;
     }
     ov->recv_cb (msg, OVERLAY_DOWNSTREAM, ov->recv_arg);
-handled:
-    flux_msg_decref (msg);
-    return;
-drop:
-    if (!topic && type != FLUX_MSGTYPE_KEEPALIVE)
-        (void)flux_msg_get_topic (msg, &topic);
-    flux_log (ov->h,
-              LOG_ERR, "DROP downstream %s topic %s from %s",
-              type != -1 ? flux_msg_typestr (type) : "message",
-              topic ? topic : "-",
-              sender != NULL ? sender : "unknown");
+done:
     flux_msg_decref (msg);
 }
 
@@ -814,15 +843,21 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (!(msg = zmqutil_msg_recv (ov->parent.zsock)))
         return;
     if (flux_msg_get_type (msg, &type) < 0) {
-        goto drop;
+        logdrop (ov, OVERLAY_UPSTREAM, msg, "malformed message");
+        goto done;
     }
     if (!ov->parent.hello_responded) {
-        if (type != FLUX_MSGTYPE_RESPONSE
-            || flux_msg_get_topic (msg, &topic) < 0
-            || strcmp (topic, "overlay.hello") != 0)
-            goto drop;
-        hello_response_handler (ov, msg);
-        goto handled;
+        /* process hello response */
+        if (type == FLUX_MSGTYPE_RESPONSE
+            && flux_msg_get_topic (msg, &topic) == 0
+            && streq (topic, "overlay.hello")) {
+            hello_response_handler (ov, msg);
+        }
+        else {
+            logdrop (ov, OVERLAY_UPSTREAM, msg,
+                     "message received before hello handshake completed");
+        }
+        goto done;
     }
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
@@ -840,16 +875,7 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
             break;
     }
     ov->recv_cb (msg, OVERLAY_UPSTREAM, ov->recv_arg);
-handled:
-    flux_msg_destroy (msg);
-    return;
-drop:
-    if (!topic && type != FLUX_MSGTYPE_KEEPALIVE)
-        (void)flux_msg_get_topic (msg, &topic);
-    flux_log (ov->h,
-              LOG_ERR, "DROP upstream %s topic %s",
-              type != -1 ? flux_msg_typestr (type) : "message",
-              topic ? topic : "-");
+done:
     flux_msg_destroy (msg);
 }
 
