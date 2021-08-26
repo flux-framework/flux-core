@@ -48,6 +48,7 @@
 enum keepalive_type {
     KEEPALIVE_HEARTBEAT = 0, // child sends when connection is idle
     KEEPALIVE_STATUS = 1,    // child tells parent of subtree status change
+    KEEPALIVE_DISCONNECT = 2,// parent tells child to immediately disconnect
 };
 
 /* Numerical values for "subtree health" so we can send them in keepalive
@@ -97,6 +98,7 @@ struct parent {
     char uuid[UUID_STR_LEN];
     bool hello_error;
     bool hello_responded;
+    bool offline;           // set upon receipt of KEEPALIVE_DISCONNECT
     struct rpc_track *tracker;
 };
 
@@ -490,7 +492,7 @@ static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg)
 {
     int rc = -1;
 
-    if (!ov->parent.zsock) {
+    if (!ov->parent.zsock || ov->parent.offline) {
         errno = EHOSTUNREACH;
         goto done;
     }
@@ -515,6 +517,27 @@ static int overlay_keepalive_parent (struct overlay *ov,
             goto error;
         flux_msg_destroy (msg);
     }
+    return 0;
+error:
+    flux_msg_destroy (msg);
+    return -1;
+}
+
+static int overlay_keepalive_child (struct overlay *ov,
+                                    const char *uuid,
+                                    enum keepalive_type ktype,
+                                    int arg)
+{
+    flux_msg_t *msg;
+
+    if (!(msg = flux_keepalive_encode (ktype, arg)))
+        return -1;
+    flux_msg_route_enable (msg);
+    if (flux_msg_route_push (msg, uuid) < 0)
+        goto error;
+    if (overlay_sendmsg_child (ov, msg) < 0)
+        goto error;
+    flux_msg_destroy (msg);
     return 0;
 error:
     flux_msg_destroy (msg);
@@ -846,6 +869,14 @@ done:
     flux_msg_decref (msg);
 }
 
+static void fail_parent_rpc (const flux_msg_t *msg, void *arg)
+{
+    struct overlay *ov = arg;
+
+    if (flux_respond_error (ov->h, msg, EHOSTUNREACH, "overlay disconnect") < 0)
+        flux_log_error (ov->h, "tracker: error sending EHOSTUNREACH response");
+}
+
 static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
                        int revents, void *arg)
 {
@@ -885,6 +916,21 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
              */
             flux_msg_route_disable (msg);
             break;
+        case FLUX_MSGTYPE_KEEPALIVE: {
+            int ktype, reason;
+            if (flux_keepalive_decode (msg, &ktype, &reason) < 0) {
+                logdrop (ov, OVERLAY_UPSTREAM, msg, "malformed keepalive");
+            }
+            else if (ktype == KEEPALIVE_DISCONNECT) {
+                flux_log (ov->h, LOG_ERR, "parent disconnect");
+                (void)zsock_disconnect (ov->parent.zsock, "%s", ov->parent.uri);
+                ov->parent.offline = true;
+                rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
+            }
+            else
+                logdrop (ov, OVERLAY_UPSTREAM, msg, "unknown keepalive type");
+            goto done;
+        }
         default:
             break;
     }
@@ -1491,6 +1537,47 @@ error:
     json_decref (topo);
 }
 
+/* Administratively force a disconnect of subtree rooted at 'rank'.
+ */
+static void overlay_disconnect_subtree_cb (flux_t *h,
+                                           flux_msg_handler_t *mh,
+                                           const flux_msg_t *msg,
+                                           void *arg)
+{
+    struct overlay *ov = arg;
+    const char *errstr = NULL;
+    char errbuf[128];
+    int rank;
+    struct child *child;
+
+    if (flux_request_unpack (msg, NULL, "{s:i}", "rank", &rank) < 0)
+        goto error;
+    if (!(child = child_lookup_byrank (ov, rank))) {
+        errstr = "requested rank is not this broker's direct child";
+        errno = ENOENT;
+        goto error;
+    }
+    if (!subtree_is_online (child->status)) {
+        snprintf (errbuf, sizeof (errbuf), "rank %d is already %s", rank,
+                  subtree_status_str (child->status));
+        errstr = errbuf;
+        errno = EINVAL;
+        goto error;
+    }
+    if (overlay_keepalive_child (ov,
+                                 child->uuid,
+                                 KEEPALIVE_DISCONNECT, 0) < 0) {
+        errstr = "failed to send KEEPALIVE_DISCONNECT message";
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to overlay.disconnect-subtree");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to overlay.disconnect-subtree");
+}
+
 int overlay_cert_load (struct overlay *ov, const char *path)
 {
     struct stat sb;
@@ -1639,6 +1726,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "overlay.topology",
         overlay_topology_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.disconnect-subtree",
+        overlay_disconnect_subtree_cb,
         0
     },
     FLUX_MSGHANDLER_TABLE_END,
