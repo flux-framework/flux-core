@@ -736,8 +736,10 @@ static void monitor_update (flux_t *h,
     msg = flux_msglist_first (requests);
     while (msg) {
         if (flux_respond_pack (h, msg, "{s:i}", "state", state) < 0) {
-            if (errno != EHOSTUNREACH && errno != ENOSYS)
-                flux_log_error (h, "error responding to monitor request");
+            if (errno != EHOSTUNREACH && errno != ENOSYS) {
+                flux_log_error (h,
+                        "error responding to state-machine.monitor request");
+            }
         }
         msg = flux_msglist_next (requests);
     }
@@ -752,16 +754,20 @@ static void monitor_cb (flux_t *h,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (flux_respond_pack (h, msg, "{s:i}", "state", s->state) < 0)
-        flux_log_error (h, "error responding to monitor request");
+    if (flux_respond_pack (h, msg, "{s:i}", "state", s->state) < 0) {
+        flux_log_error (h,
+                        "error responding to state-machine.monitor request");
+    }
     if (flux_msg_is_streaming (msg)) {
         if (flux_msglist_append (s->monitor.requests, msg) < 0)
             goto error;
     }
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "error responding to monitor request");
+    if (flux_respond_error (h, msg, errno, NULL) < 0) {
+        flux_log_error (h,
+                        "error responding to state-machine.monitor request");
+    }
 }
 
 static void monitor_continuation (flux_future_t *f, void *arg)
@@ -771,7 +777,7 @@ static void monitor_continuation (flux_future_t *f, void *arg)
     int state;
 
     if (flux_rpc_get_unpack (f, "{s:i}", "state", &state) < 0) {
-        flux_log_error (h, "monitor");
+        flux_log_error (h, "state-machine.monitor");
         s->monitor.parent_error = 1;
         return;
     }
