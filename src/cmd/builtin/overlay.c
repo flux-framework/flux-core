@@ -18,8 +18,14 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libhostlist/hostlist.h"
+#include "src/common/librlist/rlist.h"
 
 #include "builtin.h"
+
+/* Wait a short time for resource.R to appear in the KVS
+ * if we need it to map hostnames to ranks.
+ */
+static const double resource_timeout = 2.0;
 
 static const char *ansi_default = "\033[39m";
 static const char *ansi_red = "\033[31m";
@@ -72,7 +78,6 @@ struct status {
     flux_t *h;
     int verbose;
     double timeout;
-    struct hostlist *hl;
     optparse_t *opt;
     struct timespec start;
     const char *wait;
@@ -85,10 +90,58 @@ struct status_node {
     bool ghost;
 };
 
+static struct hostlist *overlay_hostmap;
+
 typedef bool (*map_f)(struct status *ctx,
                       struct status_node *node,
                       bool parent,
                       int level);
+
+/* Fetch hostmap from the KVS.
+ * Use the WAITCREATE flag in case the resource inventory is being
+ * dynamically discovered, but do it under a relatively short timeout.
+ */
+static struct hostlist *get_hostmap_R (flux_t *h)
+{
+    flux_future_t *f;
+    const char *R;
+    struct rlist *rl;
+    struct hostlist *hl;
+
+    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WAITCREATE, "resource.R"))
+        || flux_future_wait_for (f, resource_timeout) < 0
+        || flux_kvs_lookup_get (f, &R) < 0
+        || !(rl = rlist_from_R (R))
+        || !(hl = rlist_nodelist (rl)))
+        log_err_exit ("error fetching resource.R from KVS");
+    rlist_destroy (rl);
+    flux_future_destroy (f);
+    return hl;
+}
+
+static struct hostlist *get_hostmap_attr (flux_t *h)
+{
+    const char *s;
+    struct hostlist *hl;
+
+    if (!(s = flux_attr_get (h, "config.hostlist"))) {
+        if (errno != ENOENT)
+            log_err_exit ("error fetching config.hostlist attribute");
+        return NULL;
+    }
+    if (!(hl = hostlist_decode (s)))
+        log_err_exit ("config.hostlist value could not be decoded");
+    return hl;
+}
+
+static struct hostlist *get_hostmap (flux_t *h)
+{
+    if (!overlay_hostmap) {
+        if (!(overlay_hostmap = get_hostmap_attr (h)))
+            overlay_hostmap = get_hostmap_R (h);
+    }
+    return overlay_hostmap;
+}
 
 static const char *status_duration (struct status *ctx, double since)
 {
@@ -148,9 +201,12 @@ static const char *status_indent (struct status *ctx, int n)
 static const char *status_getname (struct status *ctx, int rank)
 {
     static char buf[128];
+    struct hostlist *hl;
     const char *s;
 
-    if (ctx->hl && (s = hostlist_nth (ctx->hl, rank)) != NULL)
+    if (optparse_hasopt (ctx->opt, "hostnames")
+        && (hl = get_hostmap (ctx->h))
+        && (s = hostlist_nth (hl, rank)) != NULL)
         snprintf (buf, sizeof (buf), "%s", s);
     else
         snprintf (buf, sizeof (buf), "%d", rank);
@@ -416,17 +472,8 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
     ctx.h = builtin_get_flux_handle (p);
     ctx.verbose = optparse_get_int (p, "verbose", 0);
     ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
-    ctx.hl = NULL;
     ctx.opt = p;
     ctx.wait = optparse_get_str (p, "wait", NULL);
-
-    if (optparse_hasopt (p, "hostnames")) {
-        const char *s = flux_attr_get (ctx.h, "config.hostlist");
-        if (!s)
-            log_err_exit ("config.hostlist attribute is not set");
-        if (!(ctx.hl = hostlist_decode (s)))
-            log_err_exit ("config.hostlist value could not be decoded");
-    }
 
     if (ctx.verbose <= 0)
         fun = show_top;
@@ -439,7 +486,45 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
 
     status_healthwalk (&ctx, rank, 0, fun);
 
-    hostlist_destroy (ctx.hl);
+    return 0;
+}
+
+static int subcmd_gethostbyrank (optparse_t *p, int ac, char *av[])
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h = builtin_get_flux_handle (p);
+    struct hostlist *hostmap = get_hostmap (h);
+    struct hostlist *hosts;
+    struct idset *ranks;
+    unsigned int rank;
+    char *s;
+
+    if (optindex != ac - 1)
+        log_msg_exit ("IDSET is required");
+    if (!(ranks = idset_decode (av[optindex++])))
+        log_err_exit ("IDSET could not be decoded");
+
+    if (!(hosts = hostlist_create ()))
+        log_err_exit ("failed to create hostlist");
+
+    rank = idset_first (ranks);
+    while (rank != IDSET_INVALID_ID) {
+        const char *host;
+        if (!(host = hostlist_nth (hostmap, rank)))
+            log_msg_exit ("rank %u is not found in host map", rank);
+        if (hostlist_append (hosts, host) < 0)
+            log_err_exit ("error appending to hostlist");
+        rank = idset_next (ranks, rank);
+    }
+    if (!(s = hostlist_encode (hosts)))
+        log_err_exit ("error encoding hostlist");
+
+    printf ("%s\n", s);
+
+    free (s);
+    hostlist_destroy (hosts);
+    idset_destroy (ranks);
+
     return 0;
 }
 
@@ -449,6 +534,9 @@ int cmd_overlay (optparse_t *p, int argc, char *argv[])
 
     if (optparse_run_subcommand (p, argc, argv) != OPTPARSE_SUCCESS)
         exit (1);
+
+    hostlist_destroy (overlay_hostmap);
+
     return (0);
 }
 
@@ -459,6 +547,13 @@ static struct optparse_subcommand overlay_subcmds[] = {
       subcmd_status,
       0,
       status_opts,
+    },
+    { "gethostbyrank",
+      "[OPTIONS] IDSET",
+      "lookup hostname(s) for rank(s), if available",
+      subcmd_gethostbyrank,
+      0,
+      NULL,
     },
     OPTPARSE_SUBCMD_END
 };
