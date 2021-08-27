@@ -131,6 +131,33 @@ int flux_shell_rank_info_unpack (flux_shell_t *shell,
                                  int shell_rank,
                                  const char *fmt, ...);
 
+/*  Return summary information about jobspec
+ *
+ *  The only required member of the JSON object is a version number,
+ *   indicating the version of the jobspec for the current job:
+ *
+ *  {
+ *   "version":i         # jobspec version number
+ *  }
+ *
+ *  For jobspec version 1, the following keys are also provided:
+ *  {
+ *   "ntasks":i,         # number of tasks requested
+ *   "nslots":i,         # number of task slots
+ *   "cores_per_slot":i  # number of cores per task slot
+ *   "nnodes":i          # number of nodes requested, -1 if unset
+ *   "slots_per_node":i  # number of slots per node, -1 if unavailable
+ *  }
+ *
+ */
+int flux_shell_get_jobspec_info (flux_shell_t *shell, char **json_str);
+
+
+/*  Access jobspec info object with Jansson-style unpack args
+ */
+int flux_shell_jobspec_info_unpack (flux_shell_t *shell,
+                                    const char *fmt, ...);
+
 /*
  *  Take a "completion reference" on the shell object `shell`.
  *  This function takes a named reference on the shell so that it will

@@ -138,8 +138,14 @@ int flux_shell_getopt (flux_shell_t *shell, const char *name, char **json_str)
      *   just a fragment of the shell.options object, and these options
      *   themselves do not have a requirement of being JSON objects.
      */
-    if (json_str)
-        *json_str = json_dumps (o, JSON_COMPACT|JSON_ENCODE_ANY);
+    if (json_str) {
+        char *s = json_dumps (o, JSON_COMPACT|JSON_ENCODE_ANY);
+        if (!s) {
+            errno = ENOMEM;
+            return -1;
+        }
+        *json_str = s;
+    }
     return 1;
 }
 
@@ -279,11 +285,16 @@ const char * flux_shell_getenv (flux_shell_t *shell, const char *name)
 
 int flux_shell_get_environ (flux_shell_t *shell, char **json_str)
 {
+    char *s;
     if (!shell || !json_str) {
         errno = EINVAL;
         return -1;
     }
-    *json_str = json_dumps (shell->info->jobspec->environment, JSON_COMPACT);
+    if (!(s = json_dumps (shell->info->jobspec->environment, JSON_COMPACT))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    *json_str = s;
     return 0;
 }
 
@@ -380,14 +391,20 @@ static json_t *flux_shell_get_info_object (flux_shell_t *shell)
 int flux_shell_get_info (flux_shell_t *shell, char **json_str)
 {
     json_t *o;
+    char *s;
+
     if (!shell || !json_str) {
         errno = EINVAL;
         return -1;
     }
     if (!(o = flux_shell_get_info_object (shell)))
         return -1;
-    *json_str = json_dumps (o, JSON_COMPACT);
-    return (*json_str ? 0 : -1);
+    if (!(s = json_dumps (o, JSON_COMPACT))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    *json_str = s;
+    return 0;
 }
 
 int flux_shell_info_vunpack (flux_shell_t *shell, const char *fmt, va_list ap)
@@ -455,6 +472,7 @@ int flux_shell_get_rank_info (flux_shell_t *shell,
                               char **json_str)
 {
     json_t *o = NULL;
+    char *s;
 
     if (!shell || !json_str || shell_rank < -1) {
         errno = EINVAL;
@@ -462,8 +480,12 @@ int flux_shell_get_rank_info (flux_shell_t *shell,
     }
     if (!(o = flux_shell_get_rank_info_object (shell, shell_rank)))
         return -1;
-    *json_str = json_dumps (o, JSON_COMPACT);
-    return (*json_str ? 0 : -1);
+    if (!(s = json_dumps (o, JSON_COMPACT))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    *json_str = s;
+    return 0;
 }
 
 int flux_shell_rank_info_vunpack (flux_shell_t *shell,
@@ -491,6 +513,90 @@ int flux_shell_rank_info_unpack (flux_shell_t *shell,
 
     va_start (ap, fmt);
     rc = flux_shell_rank_info_vunpack (shell, shell_rank, fmt, ap);
+    va_end (ap);
+    return rc;
+}
+
+static json_t *flux_shell_get_jobspec_info_object (flux_shell_t *shell)
+{
+    json_t *o = NULL;
+    struct jobspec *jobspec;
+    if (!(jobspec = shell->info->jobspec))
+        return NULL;
+
+    if ((o = flux_shell_aux_get (shell, "shell::jobspec_info")))
+        return o;
+
+    /*  Only v1 supported for now:
+     */
+    if (jobspec->version == 1) {
+        o = json_pack ("{s:i s:i s:i s:i s:i s:i}",
+                       "version", jobspec->version,
+                       "ntasks", jobspec->task_count,
+                       "nslots", jobspec->slot_count,
+                       "cores_per_slot", jobspec->cores_per_slot,
+                       "nnodes", jobspec->node_count,
+                       "slots_per_node", jobspec->slots_per_node);
+    }
+    else
+        o = json_pack ("{s:i}", "version", jobspec->version);
+
+    if (o == NULL)
+        return NULL;
+
+    if (flux_shell_aux_set (shell,
+                            "shell::jobspec_info",
+                            o,
+                            (flux_free_f) json_decref) < 0) {
+        json_decref (o);
+        return NULL;
+    }
+    return o;
+}
+
+int flux_shell_get_jobspec_info (flux_shell_t *shell, char **json_str)
+{
+    json_t *o;
+    char *s;
+
+    if (!shell || !json_str) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(o = flux_shell_get_jobspec_info_object (shell)))
+        return -1;
+    if (!(s = json_dumps (o, JSON_COMPACT))) {
+        errno = ENOMEM;
+        return -1;
+    }
+    *json_str = s;
+    return 0;
+}
+
+int flux_shell_jobspec_info_vunpack (flux_shell_t *shell,
+                                     const char *fmt,
+                                     va_list ap)
+{
+    json_t *o;
+    json_error_t err;
+    if (!shell || !fmt) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(o = flux_shell_get_jobspec_info_object (shell)))
+        return -1;
+    return json_vunpack_ex (o, &err, 0, fmt, ap);
+}
+
+
+int flux_shell_jobspec_info_unpack (flux_shell_t *shell,
+                                    const char *fmt, ...)
+{
+    int rc;
+    va_list ap;
+
+    va_start (ap, fmt);
+    rc = flux_shell_jobspec_info_vunpack (shell, fmt, ap);
     va_end (ap);
     return rc;
 }
