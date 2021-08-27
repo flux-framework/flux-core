@@ -819,6 +819,12 @@ static void overlay_monitor_cb (struct overlay *overlay, void *arg)
                 state_machine_post (s, "parent-fail");
             }
             break;
+        case STATE_RUN:
+            if (overlay_parent_error (overlay)) {
+                s->ctx->exit_rc = 1;
+                state_machine_post (s, "rc2-abort");
+            }
+            break;
         /* In SHUTDOWN state, post exit event if children have disconnected.
          * If there are no children on entry to SHUTDOWN state (e.g. leaf
          * node) the exit event is posted immediately in action_shutdown().

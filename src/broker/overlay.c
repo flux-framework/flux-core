@@ -351,8 +351,8 @@ const char *overlay_get_uuid (struct overlay *ov)
 
 bool overlay_parent_error (struct overlay *ov)
 {
-    return (ov->parent.hello_responded
-            && ov->parent.hello_error);
+    return ((ov->parent.hello_responded && ov->parent.hello_error)
+            || ov->parent.offline);
 }
 
 bool overlay_parent_success (struct overlay *ov)
@@ -926,6 +926,7 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
                 (void)zsock_disconnect (ov->parent.zsock, "%s", ov->parent.uri);
                 ov->parent.offline = true;
                 rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
+                overlay_monitor_notify (ov);
             }
             else
                 logdrop (ov, OVERLAY_UPSTREAM, msg, "unknown keepalive type");
