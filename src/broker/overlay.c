@@ -1570,6 +1570,7 @@ static void overlay_disconnect_subtree_cb (flux_t *h,
         errstr = "failed to send KEEPALIVE_DISCONNECT message";
         goto error;
     }
+    overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to overlay.disconnect-subtree");
     return;

@@ -74,6 +74,13 @@ static struct optparse_option status_opts[] = {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option disconnect_opts[] = {
+    { .name = "parent", .key = 'r', .has_arg = 1, .arginfo = "NODEID",
+      .usage = "Set parent rank to NODEID (default: determine from topology)",
+    },
+    OPTPARSE_TABLE_END
+};
+
 struct status {
     flux_t *h;
     int verbose;
@@ -90,12 +97,32 @@ struct status_node {
     bool ghost;
 };
 
+static json_t *overlay_topology;
 static struct hostlist *overlay_hostmap;
 
 typedef bool (*map_f)(struct status *ctx,
                       struct status_node *node,
                       bool parent,
                       int level);
+
+static json_t *get_topology (flux_t *h)
+{
+    if (!overlay_topology) {
+        flux_future_t *f;
+
+        if (!(f = flux_rpc_pack (h,
+                                 "overlay.topology",
+                                 0,
+                                 0,
+                                 "{s:i}",
+                                 "rank", 0))
+            || flux_rpc_get_unpack (f, "O", &overlay_topology) < 0)
+            log_err_exit ("error fetching overlay topology");
+
+        flux_future_destroy (f);
+    }
+    return overlay_topology;
+}
 
 /* Fetch hostmap from the KVS.
  * Use the WAITCREATE flag in case the resource inventory is being
@@ -528,6 +555,104 @@ static int subcmd_gethostbyrank (optparse_t *p, int ac, char *av[])
     return 0;
 }
 
+/* Recursively search 'topo' for the parent of 'rank'.
+ * Return the parent of rank, or -1 on error.
+ */
+static int parentof (json_t *topo, int rank)
+{
+    int parent, child;
+    json_t *children;
+    size_t index;
+    json_t *value;
+
+    if (json_unpack (topo,
+                     "{s:i s:o}",
+                     "rank", &parent,
+                     "children", &children) < 0)
+        log_msg_exit ("error parsing topology");
+
+    json_array_foreach (children, index, value) {
+        if (json_unpack (value, "{s:i}", "rank", &child) < 0)
+            log_msg_exit ("error parsing topology");
+        if (child == rank)
+            return parent;
+    }
+    json_array_foreach (children, index, value) {
+        if ((parent = parentof (value, rank)) >= 0)
+            return parent;
+    }
+    return -1;
+}
+
+/* Lookup instance topology from rank 0, then search for the parent of 'rank'.
+ * Return parent or -1 on error.
+ */
+static int lookup_parentof (flux_t *h, int rank)
+{
+    json_t *topo = get_topology (h);
+    int parent, size;
+
+    /* Validate 'rank'.
+     */
+    if (json_unpack (topo,
+                     "{s:i s:i}",
+                     "rank", &parent,
+                     "size", &size) < 0)
+        log_msg_exit ("error parsing topology");
+    if (rank < 0 || rank >= size)
+        log_msg_exit ("%d is not a valid rank in this instance", rank);
+    if (rank == 0)
+        log_msg_exit ("%d has no parent", rank);
+
+    return parentof (topo, rank);
+}
+
+static int subcmd_parentof (optparse_t *p, int ac, char *av[])
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h = builtin_get_flux_handle (p);
+    int rank;
+
+    if (optindex != ac - 1)
+        log_msg_exit ("RANK is required");
+    rank = strtoul (av[optindex++], NULL, 10);
+
+    printf ("%d\n", lookup_parentof (h, rank));
+
+    return 0;
+}
+
+static int subcmd_disconnect (optparse_t *p, int ac, char *av[])
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h = builtin_get_flux_handle (p);
+    int parent = optparse_get_int (p, "parent", -1);
+    int rank;
+    flux_future_t *f;
+
+    if (optindex != ac - 1)
+        log_msg_exit ("RANK is required");
+    rank = strtoul (av[optindex++], NULL, 10);
+    if (parent == -1)
+        parent = lookup_parentof (h, rank); // might return -1 (unlikely)
+
+    log_msg ("asking rank %d to disconnect child rank %d", parent, rank);
+
+    if (!(f = flux_rpc_pack (h,
+                             "overlay.disconnect-subtree",
+                             parent,
+                             0,
+                             "{s:i}",
+                             "rank", rank)))
+        log_err_exit ("overlay.disconnect-subtree");
+    if (flux_rpc_get (f, NULL) < 0) {
+        log_msg_exit ("overlay.disconnect-subtree: %s",
+                      future_strerror (f, errno));
+    }
+    flux_future_destroy (f);
+
+    return 0;
+}
 int cmd_overlay (optparse_t *p, int argc, char *argv[])
 {
     log_init ("flux-overlay");
@@ -554,6 +679,20 @@ static struct optparse_subcommand overlay_subcmds[] = {
       subcmd_gethostbyrank,
       0,
       NULL,
+    },
+    { "parentof",
+      "[OPTIONS] RANK",
+      "show the parent of RANK",
+      subcmd_parentof,
+      0,
+      NULL,
+    },
+    { "disconnect",
+      "[OPTIONS] RANK",
+      "disconnect a subtree rooted at RANK",
+      subcmd_disconnect,
+      0,
+      disconnect_opts,
     },
     OPTPARSE_SUBCMD_END
 };
