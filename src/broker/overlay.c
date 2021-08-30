@@ -22,6 +22,7 @@
 #include "src/common/libzmqutil/msg_zsock.h"
 #include "src/common/libzmqutil/reactor.h"
 #include "src/common/libzmqutil/zap.h"
+#include "src/common/libzmqutil/monitor.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/kary.h"
@@ -100,6 +101,7 @@ struct parent {
     bool hello_responded;
     bool offline;           // set upon receipt of KEEPALIVE_DISCONNECT
     struct rpc_track *tracker;
+    struct zmqutil_monitor *monitor;
 };
 
 /* Wake up periodically (between 'sync_min' and 'sync_max' seconds) and:
@@ -139,6 +141,7 @@ struct overlay {
     zhashx_t *child_hash;
     enum subtree_status status;
     struct timespec status_timestamp;
+    struct zmqutil_monitor *bind_monitor;
 
     overlay_monitor_f child_monitor_cb;
     void *child_monitor_arg;
@@ -1087,6 +1090,37 @@ static int hello_request_send (struct overlay *ov,
     return 0;
 }
 
+static void bind_monitor_cb (struct zmqutil_monitor *mon, void *arg)
+{
+    struct overlay *ov = arg;
+    struct monitor_event event;
+
+    if (zmqutil_monitor_get (mon, &event) == 0) {
+        flux_log (ov->h,
+                  zmqutil_monitor_iserror (&event) ? LOG_ERR : LOG_DEBUG,
+                  "child sockevent %s %s%s%s",
+                  event.endpoint,
+                  event.event_str,
+                  *event.value_str ? ": " : "",
+                  event.value_str);
+    }
+}
+static void parent_monitor_cb (struct zmqutil_monitor *mon, void *arg)
+{
+    struct overlay *ov = arg;
+    struct monitor_event event;
+
+    if (zmqutil_monitor_get (mon, &event) == 0) {
+        flux_log (ov->h,
+                  zmqutil_monitor_iserror (&event) ? LOG_ERR : LOG_DEBUG,
+                  "parent sockevent %s %s%s%s",
+                  event.endpoint,
+                  event.event_str,
+                  *event.value_str ? ": " : "",
+                  event.value_str);
+    }
+}
+
 int overlay_connect (struct overlay *ov)
 {
     if (ov->rank > 0) {
@@ -1096,6 +1130,13 @@ int overlay_connect (struct overlay *ov)
         }
         if (!(ov->parent.zsock = zsock_new_dealer (NULL)))
             goto nomem;
+        /* Ignore any errors setting up socket monitor, as it's
+         * only used for logging, and only succeeds on recent libzmq.
+         */
+        ov->parent.monitor = zmqutil_monitor_create (ov->parent.zsock,
+                                                     ov->reactor,
+                                                     parent_monitor_cb,
+                                                     ov);
         zsock_set_unbounded (ov->parent.zsock);
         zsock_set_linger (ov->parent.zsock, 5);
         zsock_set_ipv6 (ov->parent.zsock, ov->enable_ipv6);
@@ -1147,6 +1188,13 @@ int overlay_bind (struct overlay *ov, const char *uri)
         log_err ("error creating zmq ROUTER socket");
         return -1;
     }
+    /* Ignore any errors setting up socket monitor, as it's
+     * only used for logging, and only succeeds on recent libzmq.
+     */
+    ov->bind_monitor = zmqutil_monitor_create (ov->bind_zsock,
+                                               ov->reactor,
+                                               bind_monitor_cb,
+                                               ov);
     zsock_set_unbounded (ov->bind_zsock);
     zsock_set_linger (ov->bind_zsock, 5);
     zsock_set_router_mandatory (ov->bind_zsock, 1);
@@ -1559,10 +1607,12 @@ void overlay_destroy (struct overlay *ov)
         free (ov->parent.uri);
         flux_watcher_destroy (ov->parent.w);
         free (ov->parent.pubkey);
+        zmqutil_monitor_destroy (ov->parent.monitor);
 
         zsock_destroy (&ov->bind_zsock);
         free (ov->bind_uri);
         flux_watcher_destroy (ov->bind_w);
+        zmqutil_monitor_destroy (ov->bind_monitor);
 
         zhashx_destroy (&ov->child_hash);
         if (ov->children) {
