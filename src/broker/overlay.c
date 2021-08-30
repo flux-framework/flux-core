@@ -467,7 +467,7 @@ bool overlay_uuid_is_child (struct overlay *ov, const char *uuid)
 
 bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid)
 {
-    if (ov->rank > 0 && !strcmp (uuid, ov->parent.uuid))
+    if (ov->rank > 0 && streq (uuid, ov->parent.uuid))
         return true;
     return false;
 }
@@ -621,7 +621,7 @@ int overlay_sendmsg (struct overlay *ov,
             if (where == OVERLAY_ANY) {
                 if (ov->rank > 0
                     && (uuid = flux_msg_route_last (msg)) != NULL
-                    && !strcmp (uuid, ov->parent.uuid))
+                    && streq (uuid, ov->parent.uuid))
                     where = OVERLAY_UPSTREAM;
                 else
                     where = OVERLAY_DOWNSTREAM;
