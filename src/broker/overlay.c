@@ -421,7 +421,10 @@ void overlay_log_idle_children (struct overlay *ov)
     }
 }
 
-static struct child *child_lookup (struct overlay *ov, const char *id)
+/* N.B. overlay_child_status_update() ensures child_lookup() only
+ * succeeds for online peers.
+ */
+static struct child *child_lookup_online (struct overlay *ov, const char *id)
 {
     return ov->child_hash ?  zhashx_lookup (ov->child_hash, id) : NULL;
 }
@@ -457,7 +460,7 @@ static struct child *child_lookup_route (struct overlay *ov, uint32_t rank)
 
 bool overlay_uuid_is_child (struct overlay *ov, const char *uuid)
 {
-    if (child_lookup (ov, uuid) != NULL)
+    if (child_lookup_online (ov, uuid) != NULL)
         return true;
     return false;
 }
@@ -601,7 +604,7 @@ int overlay_sendmsg (struct overlay *ov,
                 if (rc == 0) {
                     if (!child) {
                         if ((uuid = flux_msg_route_last (msg)))
-                            child = child_lookup (ov, ov->uuid);
+                            child = child_lookup_online (ov, ov->uuid);
                     }
                     if (child)
                         rpc_track_update (child->tracker, msg);
@@ -730,8 +733,7 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
         struct child *child;
 
         if ((uuid = flux_msg_route_last (msg))
-            && (child = child_lookup (ov, uuid))
-            && subtree_is_online (child->status)) {
+            && (child = child_lookup_online (ov, uuid))) {
             overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
         }
         errno = saved_errno;
@@ -827,8 +829,7 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
         logdrop (ov, OVERLAY_DOWNSTREAM, msg, "malformed message");
         goto done;
     }
-    if (!(child = child_lookup (ov, sender))
-        || !subtree_is_online (child->status)) {
+    if (!(child = child_lookup_online (ov, sender))) {
         /* process hello request */
         if (type == FLUX_MSGTYPE_REQUEST
             && flux_msg_get_topic (msg, &topic) == 0
@@ -841,6 +842,8 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
         }
         goto done;
     }
+    assert (subtree_is_online (child->status));
+
     child->lastseen = flux_reactor_now (ov->reactor);
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE: {
