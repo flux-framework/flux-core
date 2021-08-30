@@ -102,8 +102,8 @@ test_expect_success 'wait broker rank=42 fails' '
 	test_must_fail $startctl wait 42
 '
 
-test_expect_success 'dump overlay child logs from leader broker' '
-	flux dmesg|grep broker.debug|grep "overlay child"
+test_expect_success 'dump broker logs from leader broker' '
+	flux dmesg | grep "broker\..*\[0\]"
 '
 
 test_done

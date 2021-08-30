@@ -254,27 +254,6 @@ static void subtree_status_update (struct overlay *ov)
     }
 }
 
-static __attribute__ ((format (printf, 3, 4)))
-void overlay_child_log (struct overlay *ov,
-                        struct child *child,
-                        const char *fmt, ...)
-{
-    va_list ap;
-    char buf[256];
-
-    va_start (ap, fmt);
-    snprintf (buf, sizeof(buf), fmt, ap);
-    va_end (ap);
-
-    flux_log (ov->h,
-              LOG_DEBUG,
-              "overlay child %lu %s status=%s %s",
-              (unsigned long)child->rank,
-              child->uuid,
-              subtree_status_str (child->status),
-              buf);
-}
-
 static void overlay_monitor_notify (struct overlay *ov)
 {
     if (ov->child_monitor_cb)
@@ -1018,6 +997,7 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     flux_msg_t *response;
     const char *uuid;
     int status;
+    int hello_log_level = LOG_INFO;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -1038,20 +1018,34 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
         errno = EINVAL;
         goto error_log;
     }
+    /* Oops, child was previously online, but is now saying hello.
+     * Update the (old) child's subtree status to LOST.  If the hello
+     * request is successful, another update will immediately follow.
+     */
+    if (subtree_is_online (child->status)) { // crash
+        flux_log (ov->h, LOG_ERR,
+                  "rank %lu uuid %s lost, to be superceded by new hello",
+                  (unsigned long)child->rank,
+                  child->uuid);
+        overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
+        hello_log_level = LOG_ERR; // want hello log to stand out in this case
+    }
+
     if (!version_check (version, ov->version, errbuf, sizeof (errbuf))) {
         errmsg = errbuf;
         errno = EINVAL;
         goto error_log;
     }
-    if (subtree_is_online (child->status)) { // crash
-        overlay_child_log (ov, child, "About to replace with fresh hello");
-        zhashx_delete (ov->child_hash, child->uuid);
-    }
 
     snprintf (child->uuid, sizeof (child->uuid), "%s", uuid);
     overlay_child_status_update (ov, child, status);
 
-    overlay_child_log (ov, child, "Sent hello");
+    flux_log (ov->h,
+              hello_log_level,
+              "hello from rank %lu uuid %s status %s",
+              (unsigned long)child->rank,
+              child->uuid,
+              subtree_status_str (child->status));
 
     if (!(response = flux_response_derive (msg, 0))
         || flux_msg_pack (response, "{s:s}", "uuid", ov->uuid) < 0
