@@ -819,17 +819,17 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_msg_t *msg;
     int type = -1;
     const char *topic = NULL;
-    const char *sender = NULL;
+    const char *uuid = NULL;
     struct child *child;
 
     if (!(msg = zmqutil_msg_recv (ov->bind_zsock)))
         return;
     if (flux_msg_get_type (msg, &type) < 0
-        || !(sender = flux_msg_route_last (msg))) {
+        || !(uuid = flux_msg_route_last (msg))) {
         logdrop (ov, OVERLAY_DOWNSTREAM, msg, "malformed message");
         goto done;
     }
-    if (!(child = child_lookup_online (ov, sender))) {
+    if (!(child = child_lookup_online (ov, uuid))) {
         /* process hello request */
         if (type == FLUX_MSGTYPE_REQUEST
             && flux_msg_get_topic (msg, &topic) == 0
