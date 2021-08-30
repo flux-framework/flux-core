@@ -964,12 +964,10 @@ static bool version_check (int v1, int v2, char *errbuf, int errbufsz)
 
 /* Handle overlay.hello request from downstream (child) TBON peer.
  * The peer may be rejected here if it is improperly configured.
- * If successful the peer is marked 'connected' and the state machine is
- * notified.
- *
- * N.B. use overlay sockets directly to handle this message instead of higher
- * level API to allow child->connected to gate the flow of messages from a
- * peer, and to avoid complicating the standalone overlay unit test,
+ * If successful the child's status is updated to reflect its online
+ * state and the state machine is notified.
+ * N.B. respond using overlay_sendmsg_child() to avoid the main message path
+ * during initialization.
  */
 static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
 {
@@ -1038,7 +1036,6 @@ error:
  * If the response indicates an error, set in motion a clean broker exit by
  * printing the error message to stderr and notifying the state machine
  * that it should check overlay_parent_error() / overlay_parent_success().
- * N.B. see note in hello_request_handler() on direct use of overlay sockets.
  */
 static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
 {
