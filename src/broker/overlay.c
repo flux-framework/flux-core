@@ -429,6 +429,19 @@ static struct child *child_lookup_online (struct overlay *ov, const char *id)
     return ov->child_hash ?  zhashx_lookup (ov->child_hash, id) : NULL;
 }
 
+/* Slow path to look up child regardless of its status.
+ */
+static struct child *child_lookup (struct overlay *ov, const char *id)
+{
+    struct child *child;
+
+    foreach_overlay_child (ov, child) {
+        if (streq (child->uuid, id))
+            return child;
+    }
+    return NULL;
+}
+
 /* Given a rank, find a (direct) child peer.
  * Since child ranks are numerically contiguous, perform a range check
  * and index into the child array directly.
@@ -830,15 +843,38 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
         goto done;
     }
     if (!(child = child_lookup_online (ov, uuid))) {
-        /* process hello request */
-        if (type == FLUX_MSGTYPE_REQUEST
+        /* If child is not online but we know this uuid, message is from a
+         * child that transitioned to offline/lost.  Don't log the drop if
+         * LOST, since message was probably sent before child received
+         * KEEPALIVE_DISCONNECT and that is not interesting.
+         */
+        if ((child = child_lookup (ov, uuid))) {
+            if (child->status != SUBTREE_STATUS_LOST) {
+                logdrop (ov, OVERLAY_DOWNSTREAM, msg,
+                         "message from %s rank %lu",
+                         subtree_status_str (child->status),
+                         (unsigned long)child->rank);
+            }
+        }
+        /* Hello new peer!
+         * hello_request_handler() completes the handshake.
+         */
+        else if (type == FLUX_MSGTYPE_REQUEST
             && flux_msg_get_topic (msg, &topic) == 0
             && streq (topic, "overlay.hello")) {
             hello_request_handler (ov, msg);
         }
+        /* New peer is trying to communicate without first saying hello.
+         * This likely means that *this broker* restarted without getting a
+         * message through to the child, and the child still thinks it is
+         * communicating with the same broker (since 0MQ hides reconnects).
+         * Send KEEPALIVE_DISCONNECT to force subtree panic.
+         */
         else {
-            logdrop (ov, OVERLAY_DOWNSTREAM, msg, "message from %s peer",
-                     child ? subtree_status_str (child->status) : "unknown");
+            logdrop (ov, OVERLAY_DOWNSTREAM, msg,
+                     "didn't say hello, sending disconnect");
+            if (overlay_keepalive_child (ov, uuid, KEEPALIVE_DISCONNECT, 0) < 0)
+                flux_log_error (ov->h, "failed to send KEEPALIVE_DISCONNECT");
         }
         goto done;
     }
