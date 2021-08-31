@@ -10,6 +10,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
 	-I$(top_builddir)/src/common/libflux \
+	$(LIBUUID_CFLAGS) \
 	$(ZMQ_CFLAGS)
 
 noinst_LTLIBRARIES = \
@@ -23,12 +24,15 @@ libzmqutil_la_SOURCES = \
 	ev_zmq.h \
 	ev_zmq.c \
 	zap.h \
-	zap.c
+	zap.c \
+	monitor.h \
+	monitor.c
 
 TESTS = test_msg_zsock.t \
 	test_reactor.t \
 	test_ev.t \
-	test_zap.t
+	test_zap.t \
+	test_monitor.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -42,6 +46,7 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
+	$(LIBUUID_LIBS) \
 	$(ZMQ_LIBS)
 
 test_cppflags = \
@@ -70,3 +75,8 @@ test_zap_t_SOURCES = test/zap.c
 test_zap_t_CPPFLAGS = $(test_cppflags)
 test_zap_t_LDADD = $(test_ldadd)
 test_zap_t_LDFLAGS = $(test_ldflags)
+
+test_monitor_t_SOURCES = test/monitor.c
+test_monitor_t_CPPFLAGS = $(test_cppflags)
+test_monitor_t_LDADD = $(test_ldadd)
+test_monitor_t_LDFLAGS = $(test_ldflags)
