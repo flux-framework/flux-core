@@ -21,11 +21,14 @@ libzmqutil_la_SOURCES = \
 	reactor.h \
 	reactor.c \
 	ev_zmq.h \
-	ev_zmq.c
+	ev_zmq.c \
+	zap.h \
+	zap.c
 
 TESTS = test_msg_zsock.t \
 	test_reactor.t \
-	test_ev.t
+	test_ev.t \
+	test_zap.t
 
 check_PROGRAMS = \
 	$(TESTS)
@@ -35,8 +38,8 @@ T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
 	$(top_srcdir)/config/tap-driver.sh
 
 test_ldadd = \
-	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
+	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(ZMQ_LIBS)
@@ -62,3 +65,8 @@ test_ev_t_SOURCES = test/ev.c
 test_ev_t_CPPFLAGS = $(test_cppflags)
 test_ev_t_LDADD = $(test_ldadd)
 test_ev_t_LDFLAGS = $(test_ldflags)
+
+test_zap_t_SOURCES = test/zap.c
+test_zap_t_CPPFLAGS = $(test_cppflags)
+test_zap_t_LDADD = $(test_ldadd)
+test_zap_t_LDFLAGS = $(test_ldflags)
