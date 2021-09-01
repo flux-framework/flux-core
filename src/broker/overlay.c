@@ -42,6 +42,15 @@
 
 #define DEFAULT_FANOUT 2
 
+/* Overlay keepalives set PROTO aux1 to the keepalive type.
+ * The meaning of PROTO aux2 depends on the type.
+ */
+enum keepalive_type {
+    KEEPALIVE_HEARTBEAT = 0, // child sends when connection is idle
+    KEEPALIVE_STATUS = 1,    // child tells parent of subtree status change
+    KEEPALIVE_DISCONNECT = 2,// parent tells child to immediately disconnect
+};
+
 /* Numerical values for "subtree health" so we can send them in keepalive
  * messages.  Textual values below will be used for communication with front
  * end diagnostic tool.
@@ -89,6 +98,8 @@ struct parent {
     char uuid[UUID_STR_LEN];
     bool hello_error;
     bool hello_responded;
+    bool offline;           // set upon receipt of KEEPALIVE_DISCONNECT
+    struct rpc_track *tracker;
 };
 
 /* Wake up periodically (between 'sync_min' and 'sync_max' seconds) and:
@@ -145,7 +156,9 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
 static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
 static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg);
 static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg);
-static int overlay_keepalive_parent (struct overlay *ov, int status);
+static int overlay_keepalive_parent (struct overlay *ov,
+                                     enum keepalive_type ktype,
+                                     int arg);
 static int overlay_health_respond (struct overlay *ov, const flux_msg_t *msg);
 
 /* Convenience iterator for ov->children
@@ -219,7 +232,7 @@ static void subtree_status_update (struct overlay *ov)
 
         ov->status = status;
         monotime (&ov->status_timestamp);
-        overlay_keepalive_parent (ov, ov->status);
+        overlay_keepalive_parent (ov, KEEPALIVE_STATUS, ov->status);
 
         /* Process waiting health requests, in case this broker
          * transitioned into the state that is being waited for
@@ -305,6 +318,7 @@ int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank)
     monotime (&ov->status_timestamp);
     if (rank > 0) {
         ov->parent.rank = kary_parentof (ov->fanout, rank);
+        ov->parent.tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG);
     }
 
     return 0;
@@ -337,8 +351,8 @@ const char *overlay_get_uuid (struct overlay *ov)
 
 bool overlay_parent_error (struct overlay *ov)
 {
-    return (ov->parent.hello_responded
-            && ov->parent.hello_error);
+    return ((ov->parent.hello_responded && ov->parent.hello_error)
+            || ov->parent.offline);
 }
 
 bool overlay_parent_success (struct overlay *ov)
@@ -478,7 +492,7 @@ static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg)
 {
     int rc = -1;
 
-    if (!ov->parent.zsock) {
+    if (!ov->parent.zsock || ov->parent.offline) {
         errno = EHOSTUNREACH;
         goto done;
     }
@@ -489,18 +503,41 @@ done:
     return rc;
 }
 
-static int overlay_keepalive_parent (struct overlay *ov, int status)
+static int overlay_keepalive_parent (struct overlay *ov,
+                                     enum keepalive_type ktype,
+                                     int arg)
 {
     flux_msg_t *msg = NULL;
 
     if (ov->parent.zsock) {
-        if (!(msg = flux_keepalive_encode (0, status)))
+        if (!(msg = flux_keepalive_encode (ktype, arg)))
             return -1;
         flux_msg_route_enable (msg);
         if (overlay_sendmsg_parent (ov, msg) < 0)
             goto error;
         flux_msg_destroy (msg);
     }
+    return 0;
+error:
+    flux_msg_destroy (msg);
+    return -1;
+}
+
+static int overlay_keepalive_child (struct overlay *ov,
+                                    const char *uuid,
+                                    enum keepalive_type ktype,
+                                    int arg)
+{
+    flux_msg_t *msg;
+
+    if (!(msg = flux_keepalive_encode (ktype, arg)))
+        return -1;
+    flux_msg_route_enable (msg);
+    if (flux_msg_route_push (msg, uuid) < 0)
+        goto error;
+    if (overlay_sendmsg_child (ov, msg) < 0)
+        goto error;
+    flux_msg_destroy (msg);
     return 0;
 error:
     flux_msg_destroy (msg);
@@ -553,8 +590,11 @@ int overlay_sendmsg (struct overlay *ov,
                         where = OVERLAY_UPSTREAM;
                 }
             }
-            if (where == OVERLAY_UPSTREAM)
+            if (where == OVERLAY_UPSTREAM) {
                 rc = overlay_sendmsg_parent (ov, msg);
+                if (rc == 0)
+                    rpc_track_update (ov->parent.tracker, msg);
+            }
             else {
                 rc = overlay_sendmsg_child (ov, msg);
                 if (rc == 0) {
@@ -624,7 +664,7 @@ static void sync_cb (flux_future_t *f, void *arg)
     double now = flux_reactor_now (ov->reactor);
 
     if (now - ov->parent.lastsent > idle_min)
-        overlay_keepalive_parent (ov, ov->status);
+        overlay_keepalive_parent (ov, KEEPALIVE_HEARTBEAT, 0);
     overlay_log_idle_children (ov);
 
     flux_future_reset (f);
@@ -736,6 +776,37 @@ static void overlay_mcast_child (struct overlay *ov, const flux_msg_t *msg)
     }
 }
 
+static void logdrop (struct overlay *ov,
+                     overlay_where_t where,
+                     const flux_msg_t *msg,
+                     const char *fmt, ...)
+{
+    char reason[128];
+    va_list ap;
+    const char *topic = NULL;
+    int type = -1;
+    const char *child_uuid = NULL;
+
+    (void)flux_msg_get_type (msg, &type);
+    (void)flux_msg_get_topic (msg, &topic);
+    if (where == OVERLAY_DOWNSTREAM)
+        child_uuid = flux_msg_route_last (msg);
+
+    va_start (ap, fmt);
+    (void)vsnprintf (reason, sizeof (reason), fmt, ap);
+    va_end (ap);
+
+    flux_log (ov->h,
+              LOG_ERR,
+              "DROP %s %s topic %s %s%s: %s",
+              where == OVERLAY_UPSTREAM ? "upstream" : "downstream",
+              type != -1 ? flux_msg_typestr (type) : "message",
+              topic ? topic : "-",
+              child_uuid ? "from " : "",
+              child_uuid ? child_uuid : "",
+              reason);
+}
+
 /* Handle a message received from TBON child (downstream).
  */
 static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -747,27 +818,37 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     const char *topic = NULL;
     const char *sender = NULL;
     struct child *child;
-    int status;
 
     if (!(msg = zmqutil_msg_recv (ov->bind_zsock)))
         return;
     if (flux_msg_get_type (msg, &type) < 0
-        || !(sender = flux_msg_route_last (msg)))
-        goto drop;
+        || !(sender = flux_msg_route_last (msg))) {
+        logdrop (ov, OVERLAY_DOWNSTREAM, msg, "malformed message");
+        goto done;
+    }
     if (!(child = child_lookup (ov, sender))
         || !subtree_is_online (child->status)) {
+        /* process hello request */
         if (type == FLUX_MSGTYPE_REQUEST
             && flux_msg_get_topic (msg, &topic) == 0
-            && !strcmp (topic, "overlay.hello"))
+            && streq (topic, "overlay.hello")) {
             hello_request_handler (ov, msg);
-        goto handled; // don't log drops until hello completes successfully
+        }
+        else {
+            logdrop (ov, OVERLAY_DOWNSTREAM, msg, "message from %s peer",
+                     child ? subtree_status_str (child->status) : "unknown");
+        }
+        goto done;
     }
     child->lastseen = flux_reactor_now (ov->reactor);
     switch (type) {
-        case FLUX_MSGTYPE_KEEPALIVE:
-            if (flux_keepalive_decode (msg, NULL, &status) == 0)
+        case FLUX_MSGTYPE_KEEPALIVE: {
+            int ktype, status;
+            if (flux_keepalive_decode (msg, &ktype, &status) == 0
+                && ktype == KEEPALIVE_STATUS)
                 overlay_child_status_update (ov, child, status);
-            goto handled;
+            goto done;
+        }
         case FLUX_MSGTYPE_REQUEST:
             break;
         case FLUX_MSGTYPE_RESPONSE:
@@ -784,18 +865,16 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
             break;
     }
     ov->recv_cb (msg, OVERLAY_DOWNSTREAM, ov->recv_arg);
-handled:
+done:
     flux_msg_decref (msg);
-    return;
-drop:
-    if (!topic && type != FLUX_MSGTYPE_KEEPALIVE)
-        (void)flux_msg_get_topic (msg, &topic);
-    flux_log (ov->h,
-              LOG_ERR, "DROP downstream %s topic %s from %s",
-              type != -1 ? flux_msg_typestr (type) : "message",
-              topic ? topic : "-",
-              sender != NULL ? sender : "unknown");
-    flux_msg_decref (msg);
+}
+
+static void fail_parent_rpc (const flux_msg_t *msg, void *arg)
+{
+    struct overlay *ov = arg;
+
+    if (flux_respond_error (ov->h, msg, EHOSTUNREACH, "overlay disconnect") < 0)
+        flux_log_error (ov->h, "tracker: error sending EHOSTUNREACH response");
 }
 
 static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -809,29 +888,55 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
     if (!(msg = zmqutil_msg_recv (ov->parent.zsock)))
         return;
     if (flux_msg_get_type (msg, &type) < 0) {
-        goto drop;
+        logdrop (ov, OVERLAY_UPSTREAM, msg, "malformed message");
+        goto done;
     }
     if (!ov->parent.hello_responded) {
-        if (type != FLUX_MSGTYPE_RESPONSE
-            || flux_msg_get_topic (msg, &topic) < 0
-            || strcmp (topic, "overlay.hello") != 0)
-            goto drop;
-        hello_response_handler (ov, msg);
-        goto handled;
+        /* process hello response */
+        if (type == FLUX_MSGTYPE_RESPONSE
+            && flux_msg_get_topic (msg, &topic) == 0
+            && streq (topic, "overlay.hello")) {
+            hello_response_handler (ov, msg);
+        }
+        else {
+            logdrop (ov, OVERLAY_UPSTREAM, msg,
+                     "message received before hello handshake completed");
+        }
+        goto done;
     }
-    if (type == FLUX_MSGTYPE_EVENT)
-        flux_msg_route_disable (msg);
+    switch (type) {
+        case FLUX_MSGTYPE_RESPONSE:
+            rpc_track_update (ov->parent.tracker, msg);
+            break;
+        case FLUX_MSGTYPE_EVENT:
+            /* Upstream broker enables routing and pushes our uuid, then
+             * router socket pops it off, but leaves routing enabled.
+             * An event type message should not have routing enabled
+             * under normal circumstances, so turn it off here.
+             */
+            flux_msg_route_disable (msg);
+            break;
+        case FLUX_MSGTYPE_KEEPALIVE: {
+            int ktype, reason;
+            if (flux_keepalive_decode (msg, &ktype, &reason) < 0) {
+                logdrop (ov, OVERLAY_UPSTREAM, msg, "malformed keepalive");
+            }
+            else if (ktype == KEEPALIVE_DISCONNECT) {
+                flux_log (ov->h, LOG_ERR, "parent disconnect");
+                (void)zsock_disconnect (ov->parent.zsock, "%s", ov->parent.uri);
+                ov->parent.offline = true;
+                rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
+                overlay_monitor_notify (ov);
+            }
+            else
+                logdrop (ov, OVERLAY_UPSTREAM, msg, "unknown keepalive type");
+            goto done;
+        }
+        default:
+            break;
+    }
     ov->recv_cb (msg, OVERLAY_UPSTREAM, ov->recv_arg);
-handled:
-    flux_msg_destroy (msg);
-    return;
-drop:
-    if (!topic && type != FLUX_MSGTYPE_KEEPALIVE)
-        (void)flux_msg_get_topic (msg, &topic);
-    flux_log (ov->h,
-              LOG_ERR, "DROP upstream %s topic %s",
-              type != -1 ? flux_msg_typestr (type) : "message",
-              topic ? topic : "-");
+done:
     flux_msg_destroy (msg);
 }
 
@@ -941,6 +1046,8 @@ static int overlay_zap_init (struct overlay *ov)
 {
     if (!(ov->zap = zsock_new (ZMQ_REP)))
         return -1;
+    zsock_set_unbounded (ov->zap);
+    zsock_set_linger (ov->zap, 5);
     if (zsock_bind (ov->zap, ZAP_ENDPOINT) < 0) {
         errno = EINVAL;
         log_err ("could not bind to %s", ZAP_ENDPOINT);
@@ -1114,6 +1221,8 @@ int overlay_connect (struct overlay *ov)
         }
         if (!(ov->parent.zsock = zsock_new_dealer (NULL)))
             goto nomem;
+        zsock_set_unbounded (ov->parent.zsock);
+        zsock_set_linger (ov->parent.zsock, 5);
         zsock_set_ipv6 (ov->parent.zsock, ov->enable_ipv6);
         zsock_set_zap_domain (ov->parent.zsock, FLUX_ZAP_DOMAIN);
         zcert_apply (ov->cert, ov->parent.zsock);
@@ -1152,6 +1261,8 @@ int overlay_bind (struct overlay *ov, const char *uri)
         log_err ("error creating zmq ROUTER socket");
         return -1;
     }
+    zsock_set_unbounded (ov->bind_zsock);
+    zsock_set_linger (ov->bind_zsock, 5);
     zsock_set_router_mandatory (ov->bind_zsock, 1);
     zsock_set_ipv6 (ov->bind_zsock, ov->enable_ipv6);
 
@@ -1187,33 +1298,15 @@ int overlay_bind (struct overlay *ov, const char *uri)
     return 0;
 }
 
-/* A callback of type attr_get_f to allow retrieving some information
- * from an struct overlay through attr_get().
+/* Call after overlay bootstrap (bind/connect),
+ * to get concretized 0MQ endpoints.
  */
-static int overlay_attr_get_cb (const char *name, const char **val, void *arg)
-{
-    struct overlay *overlay = arg;
-    int rc = -1;
-
-    if (!strcmp (name, "tbon.parent-endpoint"))
-        *val = overlay_get_parent_uri (overlay);
-    else {
-        errno = ENOENT;
-        goto done;
-    }
-    rc = 0;
-done:
-    return rc;
-}
-
 int overlay_register_attrs (struct overlay *overlay)
 {
-    if (attr_add_active (overlay->attrs,
-                         "tbon.parent-endpoint",
-                         FLUX_ATTRFLAG_READONLY,
-                         overlay_attr_get_cb,
-                         NULL,
-                         overlay) < 0)
+    if (attr_add (overlay->attrs,
+                  "tbon.parent-endpoint",
+                  overlay->parent.uri,
+                  FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
     if (attr_add_uint32 (overlay->attrs,
                          "rank",
@@ -1273,10 +1366,11 @@ static void overlay_stats_get_cb (flux_t *h,
         goto error;
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:i s:i s:i}",
+                           "{s:i s:i s:i s:i s:i}",
                            "child-count", ov->child_count,
                            "child-connected", overlay_get_child_peer_count (ov),
                            "parent-count", ov->rank > 0 ? 1 : 0,
+                           "parent-rpc", rpc_track_count (ov->parent.tracker),
                            "child-rpc", child_rpc_track_count (ov)) < 0)
         flux_log_error (h, "error responding to overlay.stats.get");
     return;
@@ -1444,6 +1538,48 @@ error:
     json_decref (topo);
 }
 
+/* Administratively force a disconnect of subtree rooted at 'rank'.
+ */
+static void overlay_disconnect_subtree_cb (flux_t *h,
+                                           flux_msg_handler_t *mh,
+                                           const flux_msg_t *msg,
+                                           void *arg)
+{
+    struct overlay *ov = arg;
+    const char *errstr = NULL;
+    char errbuf[128];
+    int rank;
+    struct child *child;
+
+    if (flux_request_unpack (msg, NULL, "{s:i}", "rank", &rank) < 0)
+        goto error;
+    if (!(child = child_lookup_byrank (ov, rank))) {
+        errstr = "requested rank is not this broker's direct child";
+        errno = ENOENT;
+        goto error;
+    }
+    if (!subtree_is_online (child->status)) {
+        snprintf (errbuf, sizeof (errbuf), "rank %d is already %s", rank,
+                  subtree_status_str (child->status));
+        errstr = errbuf;
+        errno = EINVAL;
+        goto error;
+    }
+    if (overlay_keepalive_child (ov,
+                                 child->uuid,
+                                 KEEPALIVE_DISCONNECT, 0) < 0) {
+        errstr = "failed to send KEEPALIVE_DISCONNECT message";
+        goto error;
+    }
+    overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to overlay.disconnect-subtree");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to overlay.disconnect-subtree");
+}
+
 int overlay_cert_load (struct overlay *ov, const char *path)
 {
     struct stat sb;
@@ -1545,7 +1681,7 @@ void overlay_destroy (struct overlay *ov)
         flux_future_destroy (ov->f_sync);
         flux_msg_handler_delvec (ov->handlers);
         ov->status = SUBTREE_STATUS_OFFLINE;
-        overlay_keepalive_parent (ov, ov->status);
+        overlay_keepalive_parent (ov, KEEPALIVE_STATUS, ov->status);
 
         zsock_destroy (&ov->parent.zsock);
         free (ov->parent.uri);
@@ -1563,6 +1699,7 @@ void overlay_destroy (struct overlay *ov)
                 rpc_track_destroy (ov->children[i].tracker);
             free (ov->children);
         }
+        rpc_track_destroy (ov->parent.tracker);
         free (ov);
         errno = saved_errno;
     }
@@ -1591,6 +1728,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "overlay.topology",
         overlay_topology_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "overlay.disconnect-subtree",
+        overlay_disconnect_subtree_cb,
         0
     },
     FLUX_MSGHANDLER_TABLE_END,

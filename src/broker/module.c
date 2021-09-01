@@ -610,6 +610,8 @@ module_t *module_add (modhash_t *mh, const char *path)
         log_err ("zsock_new_pair");
         goto cleanup;
     }
+    zsock_set_unbounded (p->sock);
+    zsock_set_linger (p->sock, 5);
     if (zsock_bind (p->sock, "inproc://%s", module_get_uuid (p)) < 0) {
         log_err ("zsock_bind inproc://%s", module_get_uuid (p));
         goto cleanup;

@@ -70,12 +70,16 @@ static bool request_is_disconnect (const flux_msg_t *msg)
     return true;
 }
 
-static bool message_has_hashkey (const flux_msg_t *msg)
+/* Avoid putting messages in the hash that have ambiguous hash keys;
+ * specifically, avoid RFC 27 sched alloc RPCs, which are regular RPCs
+ * that don't use the matchtag field (setting it to FLUX_MATCHTAG_NONE),
+ * instead using payload elements to match requests and responses.
+ */
+static bool message_is_hashable (const flux_msg_t *msg)
 {
     uint32_t matchtag;
 
-    if (flux_msg_route_count (msg) < 1
-        || flux_msg_get_matchtag (msg, &matchtag) < 0
+    if (flux_msg_get_matchtag (msg, &matchtag) < 0
         || matchtag == FLUX_MATCHTAG_NONE)
         return false;
     return true;
@@ -92,7 +96,8 @@ static void rpc_track_disconnect (struct rpc_track *rt, const flux_msg_t *msg)
         return;
     req = zlistx_first (values);
     while (req) {
-        if (streq (uuid, flux_msg_route_first (req)))
+        const char *uuid2 = flux_msg_route_first (req);
+        if (uuid2 && streq (uuid, uuid2))
             zhashx_delete (rt->hash, req);
         req = zlistx_next (values);
     }
@@ -103,17 +108,17 @@ void rpc_track_update (struct rpc_track *rt, const flux_msg_t *msg)
 {
     int type;
 
-    if (flux_msg_get_type (msg, &type) < 0)
+    if (!rt || !msg || flux_msg_get_type (msg, &type) < 0)
         return;
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            if (message_has_hashkey (msg)
+            if (message_is_hashable (msg)
                 && (!flux_msg_is_streaming (msg) || response_is_error (msg)))
                 zhashx_delete (rt->hash, msg);
             break;
         case FLUX_MSGTYPE_REQUEST:
             if (!flux_msg_is_noresponse (msg)
-                && message_has_hashkey (msg))
+                && message_is_hashable (msg))
                 zhashx_insert (rt->hash, msg, (flux_msg_t *)msg);
             else if (request_is_disconnect (msg))
                 rpc_track_disconnect (rt, msg);
@@ -127,17 +132,20 @@ void rpc_track_purge (struct rpc_track *rt, rpc_respond_f fun, void *arg)
 {
     const flux_msg_t *msg;
 
-    msg = zhashx_first (rt->hash);
-    while (msg) {
-        fun (msg, arg);
-        msg = zhashx_next (rt->hash);
+    if (rt) {
+        msg = zhashx_first (rt->hash);
+        while (msg) {
+            if (fun)
+                fun (msg, arg);
+            msg = zhashx_next (rt->hash);
+        }
+        zhashx_purge (rt->hash);
     }
-    zhashx_purge (rt->hash);
 }
 
 int rpc_track_count (struct rpc_track *rt)
 {
-    return zhashx_size (rt->hash);
+    return rt ? zhashx_size (rt->hash) : 0;
 }
 
 // vi:ts=4 sw=4 expandtab

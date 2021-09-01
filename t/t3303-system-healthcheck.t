@@ -61,15 +61,20 @@ test_expect_success 'flux overlay fails on bad subcommand' '
 	test_must_fail flux overlay notcommand
 '
 
-test_expect_success 'flux overlay status --hostnames fails on PMI instance' '
-	test_must_fail flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
-		flux overlay status --hostnames
+test_expect_success 'flux overlay status --hostnames works on PMI instance' '
+	flux start flux overlay status -vvv --hostnames
+'
+
+test_expect_success 'flux overlay status --hostnames fails on PMI instance without R' '
+	test_must_fail flux start \
+		"flux kvs get --waitcreate resource.R && \
+		flux kvs unlink resource.R && \
+		flux overlay status -vvv --hostnames"
 '
 
 test_expect_success 'flux overlay status --hostnames fails on bad hostlist' '
-	test_must_fail flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
-		-o,-Sconfig.hostlist="[-badlist" \
-		flux overlay status --hostnames
+	test_must_fail flux start -o,-Sconfig.hostlist="[-badlist" \
+		flux overlay status -vvv --hostnames
 '
 
 test_expect_success 'overlay status is full' '
@@ -194,6 +199,30 @@ test_expect_success 'flux overlay status -vvgpc' '
 '
 test_expect_success 'flux overlay status -vvvgpc' '
 	flux overlay status -vvv --ghost --pretty --color
+'
+
+test_expect_success 'flux overlay gethostbyrank with no rank fails' '
+	test_must_fail flux overlay gethostbyrank
+'
+
+test_expect_success 'flux overlay gethostbyrank 0 works' '
+	echo fake0 >host.0.exp &&
+	flux overlay gethostbyrank 0 >host.0.out &&
+	test_cmp host.0.exp host.0.out
+'
+
+test_expect_success 'flux overlay gethostbyrank 0-14 works' '
+	echo "fake[0-14]" >host.0-14.exp &&
+	flux overlay gethostbyrank 0-14 >host.0-14.out &&
+	test_cmp host.0-14.exp host.0-14.out
+'
+
+test_expect_success 'flux overlay gethostbyrank fails on invalid idset' '
+	test_must_fail flux overlay gethostbyrank -- -1
+'
+
+test_expect_success 'flux overlay gethostbyrank fails on out of range rank' '
+	test_must_fail flux overlay gethostbyrank 100
 '
 
 test_done

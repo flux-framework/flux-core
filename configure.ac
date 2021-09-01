@@ -322,6 +322,7 @@ AM_CONDITIONAL([ENABLE_PYLINT], [test "x$PYLINT" = "xpylint"])
 AX_PROG_LUA([5.1],[5.5])
 AX_LUA_HEADERS
 AX_LUA_LIBS
+# N.B oldest in CI are bionic=libzmq-4.2.5, centos7=zeromq-4.1.4
 PKG_CHECK_MODULES([ZMQ], [libczmq >= 3.0.0 libzmq >= 4.0.4])
 X_AC_JANSSON
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.11.1], [], [])

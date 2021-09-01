@@ -8,6 +8,14 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+/* Note:
+ * This connector creates a 0MQ inproc socket that communicates with another
+ * inproc socket in the same process (normally the flux broker).  Pairs of
+ * inproc sockets must share a common 0MQ context.  This connector uses the
+ * libczmq zsock class, which hides creation/sharing of the 0MQ context;
+ * therefore, the other inproc socket should be created with zsock also.
+ */
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -188,6 +196,7 @@ flux_t *connector_init (const char *path, int flags)
     if (!(ctx->sock = zsock_new_pair (NULL)))
         goto error;
     zsock_set_unbounded (ctx->sock);
+    zsock_set_linger (ctx->sock, 5);
     if (bind_socket) {
         if (zsock_bind (ctx->sock, "inproc://%s", ctx->uuid) < 0)
             goto error;
