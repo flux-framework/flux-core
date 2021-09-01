@@ -484,8 +484,16 @@ void test_create (flux_t *h,
         ctx[rank] = ctx_create (h, name, size, rank, fanout, recv_cb);
         if (overlay_set_geometry (ctx[rank]->ov, size, rank) < 0)
             BAIL_OUT ("%s: overlay_set_geometry failed", ctx[rank]->name);
-        if (rank == 0)
+        if (rank == 0) {
             snprintf (uri, sizeof (uri), "ipc://@%s", ctx[0]->name);
+            /* Call overlay_bind() before overlay_authorize() is called
+             * for the other ranks, since overlay_bind() creates the ZAP
+             * handler, and overlay_authorize() will fail if it doesn't
+             * exist.
+             */
+            if (overlay_bind (ctx[0]->ov, uri) < 0)
+                BAIL_OUT ("%s: overlay_bind failed", ctx[0]->name);
+        }
         else {
             if (overlay_authorize (ctx[0]->ov,
                                    ctx[rank]->name,
@@ -499,8 +507,6 @@ void test_create (flux_t *h,
         }
     }
 
-    if (overlay_bind (ctx[0]->ov, uri) < 0)
-        BAIL_OUT ("%s: overlay_bind failed", ctx[0]->name);
 }
 
 void test_destroy (int size, struct context *ctx[])
