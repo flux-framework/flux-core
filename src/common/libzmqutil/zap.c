@@ -211,10 +211,8 @@ struct zmqutil_zap *zmqutil_zap_create (flux_reactor_t *r)
         goto error;
     if (!(zap->sock = zsock_new (ZMQ_REP)))
         goto error;
-    if (zsock_bind (zap->sock, ZAP_ENDPOINT) < 0) {
-        errno = EINVAL;
+    if (zsock_bind (zap->sock, ZAP_ENDPOINT) < 0)
         goto error;
-    }
     if (!(zap->w = zmqutil_watcher_create (r,
                                            zap->sock,
                                            FLUX_POLLIN,

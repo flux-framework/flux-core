@@ -407,10 +407,12 @@ void trio (flux_t *h)
     ok (flux_msg_get_topic (rmsg, &topic) == 0 && !strcmp (topic, "eeeb"),
         "%s: received message has expected topic", ctx[1]->name);
 
-
+    /* Cover some error code in overlay_bind() where the ZAP handler
+     * fails to initialize because its endpoint is already bound.
+     */
     errno = 0;
-    ok (overlay_bind (ctx[1]->ov, "ipc://@foo") < 0 && errno == EINVAL,
-        "%s: second overlay_bind in proc fails with EINVAL", ctx[0]->name);
+    ok (overlay_bind (ctx[1]->ov, "ipc://@foo") < 0 && errno == EADDRINUSE,
+        "%s: second overlay_bind in proc fails with EADDRINUSE", ctx[0]->name);
 
     /* Various tests of rank 2 without proper authorization.
      * First a baseline - resend 1->0 and make sure timed recv works.

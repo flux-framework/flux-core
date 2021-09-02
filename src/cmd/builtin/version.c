@@ -15,6 +15,7 @@
 # include <pmix.h>
 #endif
 #include <hwloc.h>
+#include <zmq.h>
 
 #include "builtin.h"
 #if HAVE_FLUX_SECURITY_VERSION_H
@@ -74,6 +75,10 @@ static int cmd_version (optparse_t *p, int ac, char *av[])
             HWLOC_API_VERSION >>  8 & 0x000000ff,
             HWLOC_API_VERSION       & 0x000000ff
             );
+    printf ("+zmq==%d.%d.%d",
+            ZMQ_VERSION_MAJOR,
+            ZMQ_VERSION_MINOR,
+            ZMQ_VERSION_PATCH);
     printf ("\n");
     return (0);
 }
