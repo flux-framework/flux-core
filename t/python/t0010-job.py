@@ -514,11 +514,13 @@ class TestJob(unittest.TestCase):
             event = future.get_event()
             if event is None:
                 return
-            if event.name == "start":
+            if event.name == "shell.start":
                 job.cancel(self.fh, jobid)
                 future.cancel()
 
-        job.event_watch_async(self.fh, ids[3]).then(cancel_on_start, ids[3])
+        job.event_watch_async(self.fh, ids[3], eventlog="guest.exec.eventlog").then(
+            cancel_on_start, ids[3]
+        )
 
         self.fh.reactor_run()
         self.assertEqual(len(result.keys()), len(ids))
@@ -580,7 +582,7 @@ class TestJob(unittest.TestCase):
                     "t_submit": 1.0,
                     "t_run": 2.0,
                     "t_cleanup": 3.0,
-                    "waitstatus": 15,
+                    "waitstatus": 36608,  # 143<<8
                     "exception_occurred": True,
                     "exception_type": "cancel",
                     "exception_note": "",
