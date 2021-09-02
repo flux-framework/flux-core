@@ -68,10 +68,10 @@ test_expect_success 'rank 6 exited with rc=1' '
 	test_expect_code 1 $startctl wait 6
 '
 test_expect_success 'rank 13 exited' '
-	($startctl wait 13 || /bin/true)
+	test_might_fail $startctl wait 13
 '
 test_expect_success 'rank 14 exited' '
-	($startctl wait 14 || /bin/true)
+	test_might_fail $startctl wait 14
 '
 
 # The important thing is that the RPC fails.
