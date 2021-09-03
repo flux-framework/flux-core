@@ -1,3 +1,52 @@
+flux-core version 0.28.0 - 2021-09-03
+-------------------------------------
+
+This release of Flux includes a new fault mechanism which ensures that
+unanswered RPCs receive error responses when the overlay network is
+disrupted. Also included is a new `flux overlay` utility which can be
+used to manage and report the status of the overlay network.
+
+### Fixes
+ * shell: fix in-tree pluginpath, add `shell_plugindir` (#3841)
+ * python: fix bug in FluxExecutor.attach method (#3839)
+ * rlist: fix erroneous collapse of nodes with different resource children
+   when emitting R (#3814)
+ * libkvs: compact only if ops len > 1 (#3807)
+ * python: allow executor to attach to jobs (#3790)
+ * python: fix version requirement in jobspec validator plugin (#3784)
+ * broker: ensure subtree restart upon loss of router node (#3845)
+ * broker: drop -k-ary option, rename tbon.arity attr to tbon.fanout (#3796)
+ * add flux-job(1) manual page, plus minor fixes (#3763)
+ * libjob: improve method for determining instance owner (#3761)
+
+### New Features
+ * add flux overlay status command (#3816)
+ * broker: improve logging of 0MQ socket events (#3846)
+ * broker: fail pending RPCs when TBON parent goes down (#3843)
+ * broker: fail pending RPCs when TBON child goes down (#3822)
+ * add `bootstrap.ipv6_enable = true` config option (#3827)
+ * shell: add functions to access jobspec summary information (#3835)
+ * add stats api for internal metric collection (#3806, #3824)
+ * support io encode/decode of binary data (#3778)
+ * add flag to bypass jobspec validation (#3766)
+ * libflux: add time stamp to message trace (#3765)
+
+### Cleanup
+ * libzmqutil: generalize the zeromq authentication protocol server (#3847)
+ * libflux: use iovec-like array over zmsg (#3773)
+ * libflux: update flux msg route functions (#3746)
+ * libflux: message API fixes and cleanup (#3771)
+ * libjob: break up job.c (#3768)
+ * build: consistently use CFLAGS / LIBS in Makefiles (#3785)
+ * use CCAN base64 library over libsodium base64 library (#3789)
+ * drop unnecessary 0MQ includes (#3782)
+ * various other cleanup (#3762)
+
+### Testsuite
+ * udate to flux-security v0.5.0 in docker images (#3849)
+ * make valgrind test opt-in (#3840)
+ * add valgrind suppression for opencl and libev on aarch64 (#3794, #3809)
+
 flux-core version 0.28.0 - 2021-06-30
 -------------------------------------
 
