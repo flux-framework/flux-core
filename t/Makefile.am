@@ -182,6 +182,7 @@ TESTSCRIPTS = \
 	t3304-system-rpctrack-down.t \
 	t3305-system-rpctrack-up.t \
 	t3306-system-routercrash.t \
+	t3307-system-leafcrash.t \
 	t4000-issues-test-driver.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
