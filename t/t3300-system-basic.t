@@ -1,7 +1,12 @@
 #!/bin/sh
 #
 
-test_description='Test system personality'
+test_description='Test the tools used to test the system instance.
+
+Before we begin testing the system instance, verify that the
+system test personality behaves as it should, and that the
+startctl tool and flux-start support for its RPCs work as expected.
+'
 
 . `dirname $0`/sharness.sh
 

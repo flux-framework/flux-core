@@ -1,7 +1,13 @@
 #!/bin/sh
 #
 
-test_description='Test overlay diagnostic tool'
+test_description='Verify subtree health transitions and tools
+
+Ensure that the overlay subtree health status transitions
+appropriately as brokers are taken offline or lost, and also
+put flux overlay status tool and related RPCs and subcommands
+through their paces.
+'
 
 . `dirname $0`/sharness.sh
 
