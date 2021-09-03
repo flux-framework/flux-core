@@ -254,27 +254,6 @@ static void subtree_status_update (struct overlay *ov)
     }
 }
 
-static __attribute__ ((format (printf, 3, 4)))
-void overlay_child_log (struct overlay *ov,
-                        struct child *child,
-                        const char *fmt, ...)
-{
-    va_list ap;
-    char buf[256];
-
-    va_start (ap, fmt);
-    snprintf (buf, sizeof(buf), fmt, ap);
-    va_end (ap);
-
-    flux_log (ov->h,
-              LOG_DEBUG,
-              "overlay child %lu %s status=%s %s",
-              (unsigned long)child->rank,
-              child->uuid,
-              subtree_status_str (child->status),
-              buf);
-}
-
 static void overlay_monitor_notify (struct overlay *ov)
 {
     if (ov->child_monitor_cb)
@@ -421,9 +400,25 @@ void overlay_log_idle_children (struct overlay *ov)
     }
 }
 
-static struct child *child_lookup (struct overlay *ov, const char *id)
+/* N.B. overlay_child_status_update() ensures child_lookup() only
+ * succeeds for online peers.
+ */
+static struct child *child_lookup_online (struct overlay *ov, const char *id)
 {
     return ov->child_hash ?  zhashx_lookup (ov->child_hash, id) : NULL;
+}
+
+/* Slow path to look up child regardless of its status.
+ */
+static struct child *child_lookup (struct overlay *ov, const char *id)
+{
+    struct child *child;
+
+    foreach_overlay_child (ov, child) {
+        if (streq (child->uuid, id))
+            return child;
+    }
+    return NULL;
 }
 
 /* Given a rank, find a (direct) child peer.
@@ -457,14 +452,14 @@ static struct child *child_lookup_route (struct overlay *ov, uint32_t rank)
 
 bool overlay_uuid_is_child (struct overlay *ov, const char *uuid)
 {
-    if (child_lookup (ov, uuid) != NULL)
+    if (child_lookup_online (ov, uuid) != NULL)
         return true;
     return false;
 }
 
 bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid)
 {
-    if (ov->rank > 0 && !strcmp (uuid, ov->parent.uuid))
+    if (ov->rank > 0 && streq (uuid, ov->parent.uuid))
         return true;
     return false;
 }
@@ -601,7 +596,7 @@ int overlay_sendmsg (struct overlay *ov,
                 if (rc == 0) {
                     if (!child) {
                         if ((uuid = flux_msg_route_last (msg)))
-                            child = child_lookup (ov, ov->uuid);
+                            child = child_lookup_online (ov, ov->uuid);
                     }
                     if (child)
                         rpc_track_update (child->tracker, msg);
@@ -618,7 +613,7 @@ int overlay_sendmsg (struct overlay *ov,
             if (where == OVERLAY_ANY) {
                 if (ov->rank > 0
                     && (uuid = flux_msg_route_last (msg)) != NULL
-                    && !strcmp (uuid, ov->parent.uuid))
+                    && streq (uuid, ov->parent.uuid))
                     where = OVERLAY_UPSTREAM;
                 else
                     where = OVERLAY_DOWNSTREAM;
@@ -730,8 +725,7 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
         struct child *child;
 
         if ((uuid = flux_msg_route_last (msg))
-            && (child = child_lookup (ov, uuid))
-            && subtree_is_online (child->status)) {
+            && (child = child_lookup_online (ov, uuid))) {
             overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
         }
         errno = saved_errno;
@@ -817,30 +811,54 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     flux_msg_t *msg;
     int type = -1;
     const char *topic = NULL;
-    const char *sender = NULL;
+    const char *uuid = NULL;
     struct child *child;
 
     if (!(msg = zmqutil_msg_recv (ov->bind_zsock)))
         return;
     if (flux_msg_get_type (msg, &type) < 0
-        || !(sender = flux_msg_route_last (msg))) {
+        || !(uuid = flux_msg_route_last (msg))) {
         logdrop (ov, OVERLAY_DOWNSTREAM, msg, "malformed message");
         goto done;
     }
-    if (!(child = child_lookup (ov, sender))
-        || !subtree_is_online (child->status)) {
-        /* process hello request */
-        if (type == FLUX_MSGTYPE_REQUEST
+    if (!(child = child_lookup_online (ov, uuid))) {
+        /* If child is not online but we know this uuid, message is from a
+         * child that transitioned to offline/lost.  Don't log the drop if
+         * LOST, since message was probably sent before child received
+         * KEEPALIVE_DISCONNECT and that is not interesting.
+         */
+        if ((child = child_lookup (ov, uuid))) {
+            if (child->status != SUBTREE_STATUS_LOST) {
+                logdrop (ov, OVERLAY_DOWNSTREAM, msg,
+                         "message from %s rank %lu",
+                         subtree_status_str (child->status),
+                         (unsigned long)child->rank);
+            }
+        }
+        /* Hello new peer!
+         * hello_request_handler() completes the handshake.
+         */
+        else if (type == FLUX_MSGTYPE_REQUEST
             && flux_msg_get_topic (msg, &topic) == 0
             && streq (topic, "overlay.hello")) {
             hello_request_handler (ov, msg);
         }
+        /* New peer is trying to communicate without first saying hello.
+         * This likely means that *this broker* restarted without getting a
+         * message through to the child, and the child still thinks it is
+         * communicating with the same broker (since 0MQ hides reconnects).
+         * Send KEEPALIVE_DISCONNECT to force subtree panic.
+         */
         else {
-            logdrop (ov, OVERLAY_DOWNSTREAM, msg, "message from %s peer",
-                     child ? subtree_status_str (child->status) : "unknown");
+            logdrop (ov, OVERLAY_DOWNSTREAM, msg,
+                     "didn't say hello, sending disconnect");
+            if (overlay_keepalive_child (ov, uuid, KEEPALIVE_DISCONNECT, 0) < 0)
+                flux_log_error (ov->h, "failed to send KEEPALIVE_DISCONNECT");
         }
         goto done;
     }
+    assert (subtree_is_online (child->status));
+
     child->lastseen = flux_reactor_now (ov->reactor);
     switch (type) {
         case FLUX_MSGTYPE_KEEPALIVE: {
@@ -964,12 +982,10 @@ static bool version_check (int v1, int v2, char *errbuf, int errbufsz)
 
 /* Handle overlay.hello request from downstream (child) TBON peer.
  * The peer may be rejected here if it is improperly configured.
- * If successful the peer is marked 'connected' and the state machine is
- * notified.
- *
- * N.B. use overlay sockets directly to handle this message instead of higher
- * level API to allow child->connected to gate the flow of messages from a
- * peer, and to avoid complicating the standalone overlay unit test,
+ * If successful the child's status is updated to reflect its online
+ * state and the state machine is notified.
+ * N.B. respond using overlay_sendmsg_child() to avoid the main message path
+ * during initialization.
  */
 static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
 {
@@ -981,6 +997,7 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     flux_msg_t *response;
     const char *uuid;
     int status;
+    int hello_log_level = LOG_INFO;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -1001,20 +1018,34 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
         errno = EINVAL;
         goto error_log;
     }
+    /* Oops, child was previously online, but is now saying hello.
+     * Update the (old) child's subtree status to LOST.  If the hello
+     * request is successful, another update will immediately follow.
+     */
+    if (subtree_is_online (child->status)) { // crash
+        flux_log (ov->h, LOG_ERR,
+                  "rank %lu uuid %s lost, to be superceded by new hello",
+                  (unsigned long)child->rank,
+                  child->uuid);
+        overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
+        hello_log_level = LOG_ERR; // want hello log to stand out in this case
+    }
+
     if (!version_check (version, ov->version, errbuf, sizeof (errbuf))) {
         errmsg = errbuf;
         errno = EINVAL;
         goto error_log;
     }
-    if (subtree_is_online (child->status)) { // crash
-        overlay_child_log (ov, child, "About to replace with fresh hello");
-        zhashx_delete (ov->child_hash, child->uuid);
-    }
 
     snprintf (child->uuid, sizeof (child->uuid), "%s", uuid);
     overlay_child_status_update (ov, child, status);
 
-    overlay_child_log (ov, child, "Sent hello");
+    flux_log (ov->h,
+              hello_log_level,
+              "hello from rank %lu uuid %s status %s",
+              (unsigned long)child->rank,
+              child->uuid,
+              subtree_status_str (child->status));
 
     if (!(response = flux_response_derive (msg, 0))
         || flux_msg_pack (response, "{s:s}", "uuid", ov->uuid) < 0
@@ -1038,7 +1069,6 @@ error:
  * If the response indicates an error, set in motion a clean broker exit by
  * printing the error message to stderr and notifying the state machine
  * that it should check overlay_parent_error() / overlay_parent_success().
- * N.B. see note in hello_request_handler() on direct use of overlay sockets.
  */
 static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
 {

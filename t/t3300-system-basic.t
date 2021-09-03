@@ -1,7 +1,12 @@
 #!/bin/sh
 #
 
-test_description='Test system personality'
+test_description='Test the tools used to test the system instance.
+
+Before we begin testing the system instance, verify that the
+system test personality behaves as it should, and that the
+startctl tool and flux-start support for its RPCs work as expected.
+'
 
 . `dirname $0`/sharness.sh
 
@@ -102,8 +107,8 @@ test_expect_success 'wait broker rank=42 fails' '
 	test_must_fail $startctl wait 42
 '
 
-test_expect_success 'dump overlay child logs from leader broker' '
-	flux dmesg|grep broker.debug|grep "overlay child"
+test_expect_success 'dump broker logs from leader broker' '
+	flux dmesg | grep "broker\..*\[0\]"
 '
 
 test_done

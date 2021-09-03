@@ -1,7 +1,13 @@
 #!/bin/sh
 #
 
-test_description='Test system instance with one offline router broker'
+test_description='Test job submission when upstream is down
+
+Start up only the leader broker and a leaf node, but not the
+router node between them to simulate a login node without its
+upstream router.  Try to submit a job on the leaf node and
+confirm that the user gets a reasonable error.
+'
 
 . `dirname $0`/sharness.sh
 

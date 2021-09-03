@@ -1,7 +1,12 @@
 #!/bin/sh
 #
 
-test_description='Test overlay RPC tracking'
+test_description='Test downstream RPC tracking
+
+Test that RPCs from rank 0 broker to other ranks receive
+broker-generated EHOSTUNREACH responses when the next hop in
+the RPC goes down, either nicely, or a hard crash.
+'
 
 . `dirname $0`/sharness.sh
 

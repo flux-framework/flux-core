@@ -1,7 +1,15 @@
 #!/bin/sh
 #
 
-test_description='Test overlay parent disconnect'
+test_description='Test upstream RPC tracking and disconnect command
+
+Test that RPCs from a leaf broker to rank 0 receive broker-generated
+EHOSTUNREACH responses when a broker along the path to rank 0 is
+taken offline administratively, or if the subtree panics.
+
+Also put the flux overlay disconnect comamnd/RPC and related
+commands/RPCs through their paces.
+'
 
 . `dirname $0`/sharness.sh
 
@@ -54,11 +62,11 @@ test_expect_success 'construct FLUX_URI for rank 13 (child of 6)' '
 '
 
 test_expect_success NO_CHAIN_LINT 'start background RPC to rank 0 via 13' '
-	FLUX_URI=$(cat uri13) flux overlay status --wait=lost 2>health.err &
+	(FLUX_URI=$(cat uri13) flux overlay status --wait=lost) &
 	echo $! >health.pid
 '
 test_expect_success 'ensure background request was received on rank 0' '
-        FLUX_URI=$(cat uri13) flux overlay status
+        (FLUX_URI=$(cat uri13) flux overlay status)
 '
 
 test_expect_success 'disconnect rank 6' '
@@ -68,17 +76,20 @@ test_expect_success 'rank 6 exited with rc=1' '
 	test_expect_code 1 $startctl wait 6
 '
 test_expect_success 'rank 13 exited' '
-	($startctl wait 13 || /bin/true)
+	test_might_fail $startctl wait 13
 '
 test_expect_success 'rank 14 exited' '
-	($startctl wait 14 || /bin/true)
+	test_might_fail $startctl wait 14
 '
 
-test_expect_success NO_CHAIN_LINT 'background RPC fails with overlay disconnect (tracker response from 6)' '
+# The important thing is that the RPC fails.
+# It may fail with EHOSTUNREACH "overlay disconnect" (tracker from rank 6).
+# But this response may race with the chain of broker exits,
+# so other errors are possible such as ECONNRESET.
+test_expect_success NO_CHAIN_LINT 'background RPC fails' '
         pid=$(cat health.pid) &&
         echo waiting for pid $pid &&
-        test_expect_code 1 wait $pid &&
-        grep "overlay disconnect" health.err
+        test_expect_code 1 wait $pid
 '
 
 test_expect_success 'report health status' '

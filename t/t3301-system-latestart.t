@@ -1,7 +1,12 @@
 #!/bin/sh
 #
 
-test_description='Test system instance with late joining broker'
+test_description='Test system instance with late joining broker
+
+Start up only the leader broker and verify that the system is
+functional without a leaf node.  Then start the leaf node
+and ensure that it wires up.
+'
 
 . `dirname $0`/sharness.sh
 
