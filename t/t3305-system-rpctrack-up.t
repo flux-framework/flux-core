@@ -62,11 +62,11 @@ test_expect_success 'construct FLUX_URI for rank 13 (child of 6)' '
 '
 
 test_expect_success NO_CHAIN_LINT 'start background RPC to rank 0 via 13' '
-	FLUX_URI=$(cat uri13) flux overlay status --wait=lost &
+	(FLUX_URI=$(cat uri13) flux overlay status --wait=lost) &
 	echo $! >health.pid
 '
 test_expect_success 'ensure background request was received on rank 0' '
-        FLUX_URI=$(cat uri13) flux overlay status
+        (FLUX_URI=$(cat uri13) flux overlay status)
 '
 
 test_expect_success 'disconnect rank 6' '
