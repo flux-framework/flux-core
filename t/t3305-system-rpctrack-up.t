@@ -1,7 +1,15 @@
 #!/bin/sh
 #
 
-test_description='Test overlay parent disconnect'
+test_description='Test upstream RPC tracking and disconnect command
+
+Test that RPCs from a leaf broker to rank 0 receive broker-generated
+EHOSTUNREACH responses when a broker along the path to rank 0 is
+taken offline administratively, or if the subtree panics.
+
+Also put the flux overlay disconnect comamnd/RPC and related
+commands/RPCs through their paces.
+'
 
 . `dirname $0`/sharness.sh
 
