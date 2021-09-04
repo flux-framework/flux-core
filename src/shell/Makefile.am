@@ -110,6 +110,46 @@ flux_shell_LDFLAGS = \
 	-export-dynamic \
 	-Wl,--version-script=$(srcdir)/flux-shell.map
 
+if SHELL_PMIX
+shell_plugin_LTLIBRARIES = \
+	plugins/pmix/pmix.la
+endif
+
+plugins_pmix_pmix_la_SOURCES = \
+	plugins/pmix/pmix.c \
+	plugins/pmix/server.h \
+	plugins/pmix/server.c \
+	plugins/pmix/codec.h \
+	plugins/pmix/codec.c \
+	plugins/pmix/synchro.h \
+	plugins/pmix/synchro.c \
+	plugins/pmix/infovec.h \
+	plugins/pmix/infovec.c \
+	plugins/pmix/map.h \
+	plugins/pmix/map.c \
+	plugins/pmix/dmodex.h \
+	plugins/pmix/dmodex.c \
+	plugins/pmix/socketpair.h \
+	plugins/pmix/socketpair.c \
+	pmi/pmi_exchange.c \
+	pmi/pmi_exchange.h
+plugins_pmix_pmix_la_CPPFLAGS = \
+	$(AM_CPPFLAGS) \
+	$(PMIX_CFLAGS) \
+	$(ZMQ_CFLAGS)
+plugins_pmix_pmix_la_LIBADD = \
+	$(builddir)/libshell.la \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(PMIX_LIBS) \
+	$(ZMQ_LIBS)
+plugins_pmix_pmix_la_LDFLAGS = \
+	$(AM_LDFLAGS) \
+	$(fluxplugin_ldflags) \
+	-module
+
+
 EXTRA_DIST = \
 	flux-shell.map
 

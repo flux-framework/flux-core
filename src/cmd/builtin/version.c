@@ -11,7 +11,7 @@
 #if HAVE_CONFIG_H
 # include <config.h>
 #endif
-#ifdef BROKER_PMIX
+#if defined (BROKER_PMIX) || defined (SHELL_PMIX)
 # include <pmix.h>
 #endif
 #include <hwloc.h>
@@ -64,7 +64,7 @@ static int cmd_version (optparse_t *p, int ac, char *av[])
 #if HAVE_CALIPER
     printf ("+caliper");
 #endif
-#ifdef BROKER_PMIX
+#if defined (BROKER_PMIX) || defined (SHELL_PMIX)
     printf ("+pmix==%ld.%ld.%ld",
             PMIX_VERSION_MAJOR,
             PMIX_VERSION_MINOR,
