@@ -216,6 +216,14 @@ matrix.add_build(
     docker_tag=True,
 )
 
+# Fedora 34
+matrix.add_build(
+    name="fedora34 - gcc-11.2,py3.9",
+    image="fedora34",
+    docker_tag=True,
+)
+
+
 # inception
 matrix.add_build(
     name="inception",

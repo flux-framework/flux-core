@@ -503,7 +503,7 @@ int Setup(ArgStruct * p)
 
 void Sync(ArgStruct * p)
 {
-    char ch;
+    char ch = 0;
     MPI_Status status;
     if (p->tr) {
         MPI_Send(&ch, 0, MPI_BYTE, p->prot.nbor, 1, MPI_COMM_WORLD);
