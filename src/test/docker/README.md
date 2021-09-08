@@ -48,7 +48,7 @@ pushed to DockerHub at `fluxrm/testenv:bionic` and
 script still runs against the new `testenv` images, e.g.:
 
 ```
-$ for i in bionic focal centos7 centos8 fedora33; do
+$ for i in bionic focal centos7 centos8 fedora33 fedora34; do
     make clean &&
     docker build --no-cache -t fluxrm/testenv:$i src/test/docker/$i &&
     src/test/docker/docker-run-checks.sh -j 4 --image=$i &&
