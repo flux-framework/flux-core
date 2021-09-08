@@ -207,9 +207,11 @@ class TestHandle(unittest.TestCase):
         watcher.start()
 
         arg = {"count": 0, "target": 3}
-        self.f.rpc("rpctest.multi", {"count": arg["target"]}).then(
-            continuation_cb, arg=arg
-        )
+        self.f.rpc(
+            "rpctest.multi",
+            {"count": arg["target"]},
+            flags=flux.constants.FLUX_RPC_STREAMING,
+        ).then(continuation_cb, arg=arg)
         ret = self.f.reactor_run()
         self.assertEqual(arg["count"], arg["target"])
 

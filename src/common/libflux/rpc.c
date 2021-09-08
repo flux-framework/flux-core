@@ -179,6 +179,7 @@ static void response_cb (flux_t *h, flux_msg_handler_t *mh,
                          const flux_msg_t *msg, void *arg)
 {
     flux_future_t *f = arg;
+    struct flux_rpc *rpc = flux_future_aux_get (f, "flux::rpc");
     flux_msg_t *cpy;
     int saved_errno;
     const char *errstr;
@@ -194,6 +195,9 @@ static void response_cb (flux_t *h, flux_msg_handler_t *mh,
     if (!(cpy = flux_msg_copy (msg, true)))
         goto error;
     flux_future_fulfill (f, cpy, (flux_free_f)flux_msg_destroy);
+
+    if (!(rpc->flags & FLUX_RPC_STREAMING))
+        flux_msg_handler_stop (mh);
     return;
 error:
     saved_errno = errno;
@@ -204,6 +208,7 @@ error:
         flux_future_fulfill_error (f, saved_errno, errstr);
     else
         flux_future_fulfill_error (f, saved_errno, NULL);
+    flux_msg_handler_stop (mh);
 }
 
 /* Callback to initialize future in main or alternate reactor contexts.

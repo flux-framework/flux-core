@@ -756,7 +756,7 @@ int remote_exec (flux_subprocess_t *p)
      * internally in this code.  But output callbacks are optional, we
      * don't care if user doesn't want it.
      */
-    if (!(f = flux_rpc_pack (p->h, "broker.rexec", p->rank, 0,
+    if (!(f = flux_rpc_pack (p->h, "broker.rexec", p->rank, FLUX_RPC_STREAMING,
                              "{s:s s:i s:i s:i}",
                              "cmd", cmd_str,
                              "on_channel_out", p->ops.on_channel_out ? 1 : 0,

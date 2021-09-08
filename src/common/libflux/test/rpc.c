@@ -732,6 +732,104 @@ void test_multi_response_then_chain (flux_t *h)
         BAIL_OUT ("flux_reactor_run failed");
 }
 
+static void then_nodestroy_cb (flux_future_t *f, void *arg)
+{
+    int *pdone = arg;
+    *pdone = 1;
+}
+
+void test_rpc_active_count (flux_t *h)
+{
+    flux_future_t *f;
+    int rc;
+    int done = 0;
+    int loopcount = 0;
+
+    f = flux_rpc (h, "rpctest.echo", NULL, FLUX_NODEID_ANY, 0);
+    if (!f)
+        BAIL_OUT ("flux_rpc_pack failed");
+    ok (flux_future_then (f, -1., then_nodestroy_cb, &done) == 0,
+        "rpc_active_count: flux_future_then works");
+     while ((rc = flux_reactor_run (flux_get_reactor (h),
+                                   FLUX_REACTOR_NOWAIT))) {
+        if (done == 1 && loopcount++ > 1) {
+            diag ("rpc complete but reactor active count = %d", rc);
+            break;
+        }
+    }
+    ok (rc == 0,
+        "rpc_active_count: rpc active count is 0 after future fulfilled");
+    flux_future_destroy (f);
+
+    /* active count is also decremented on error */
+    done = 0;
+    loopcount = 0;
+    f = flux_rpc (h, "foo", NULL, FLUX_NODEID_ANY, 0);
+    if (!f)
+        BAIL_OUT ("flux_rpc_pack failed");
+    ok (flux_future_then (f, -1., then_nodestroy_cb, &done) == 0,
+        "rpc_active_count: flux_future_then works");
+    while ((rc = flux_reactor_run (flux_get_reactor (h),
+                                   FLUX_REACTOR_NOWAIT))) {
+        if (done == 1 && loopcount++ > 1) {
+            diag ("rpc complete but reactor active count = %d", rc);
+            break;
+        }
+    }
+    ok (rc == 0,
+        "rpc_active_count: rpc active count is 0 after future error");
+    flux_future_destroy (f);
+}
+
+static void multi_then_nodestroy_cb (flux_future_t *f, void *arg)
+{
+    int *pdone = arg;
+    int seq = 0;
+    static int count = 0;
+
+    errno = 0;
+    if (flux_rpc_get_unpack (f, "{s:i}", "seq", &seq) == 0) {
+        flux_future_reset (f);
+        count++;
+        return;
+    }
+    ok (errno == ENODATA,
+        "multi-then: got ENODATA as EOF in continuation");
+    ok (count == 3,
+        "multi-then: received 3 valid responses");
+    *pdone = 1;
+}
+
+void test_multi_rpc_active_count (flux_t *h)
+{
+    flux_future_t *f;
+    int rc;
+    int done = 0;
+    int loopcount = 0;
+
+    f = flux_rpc_pack (h,
+                       "rpctest.multi",
+                        FLUX_NODEID_ANY,
+                        FLUX_RPC_STREAMING,
+                        "{s:i s:i}",
+                        "count", 3,
+                        "noterm", 0);
+    if (!f)
+        BAIL_OUT ("flux_rpc_pack failed");
+    ok (flux_future_then (f, -1., multi_then_nodestroy_cb, &done) == 0,
+        "multi-rpc-active-count: flux_future_then works");
+    while ((rc = flux_reactor_run (flux_get_reactor (h),
+                                   FLUX_REACTOR_NOWAIT))) {
+        if (done == 1 && loopcount++ > 1) {
+            diag ("multi-rpc complete but reactor active count = %d", rc);
+            break;
+        }
+    }
+    ok (rc == 0,
+        "mult-rpc: flux_reactor_run() returns 0 after streaming rpc complete");
+    flux_future_destroy (f);
+}
+
 /* Try flux_rpc_message() with various bad arguments
  */
 void test_rpc_message_inval (flux_t *h)
@@ -868,6 +966,9 @@ int main (int argc, char *argv[])
     test_multi_response_then_chain (h);
     test_rpc_message_inval (h);
     test_rpc_message (h);
+
+    test_rpc_active_count (h);
+    test_multi_rpc_active_count (h);
 
     ok (test_server_stop (h) == 0,
         "stopped test server thread");
