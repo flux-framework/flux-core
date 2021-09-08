@@ -16,6 +16,7 @@ pull_request_rules:
       - status-success="centos7"
       - status-success="centos8 - py3.7"
       - status-success="fedora33 - gcc-10,py3.9"
+      - status-success="fedora34 - gcc-11.2,py3.9"
       - status-success="coverage"
       - status-success="address-sanitizer check"
       - label="merge-when-passing"
