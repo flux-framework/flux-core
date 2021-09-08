@@ -66,7 +66,7 @@ flux_msg_t *create_request (uint32_t matchtag, int setflags, bool add_uuid)
 
     if (flux_msg_get_flags (msg, &flags) < 0)
         BAIL_OUT ("flux_msg_get_flags failed");
-        flags |= setflags;
+    flags |= setflags;
     if (flux_msg_set_flags (msg, flags) < 0)
         BAIL_OUT ("flux_msg_set_flags failed");
 
