@@ -60,6 +60,18 @@ test_expect_success NO_ASAN "spectrum mpi only enabled with option" '
   grep /opt/ibm/spectrum spectrum.out
 '
 
+test_expect_success NO_ASAN "spectrum mpi also enabled with spectrum@version" '
+  LD_PRELOAD_saved=${LD_PRELOAD} &&
+  unset LD_PRELOAD &&
+  test_when_finished "export LD_PRELOAD=${LD_PRELOAD_saved}" &&
+  flux mini run -n${SIZE} -N${SIZE} \
+    -o mpi=spectrum@10.4 --dry-run printenv LD_PRELOAD > j.spectrum &&
+  test_expect_code 1 run_program 15 ${SIZE} ${SIZE} printenv LD_PRELOAD &&
+  jobid=$(flux job submit j.spectrum) &&
+  flux job attach ${jobid} > spectrum.out &&
+  grep /opt/ibm/spectrum spectrum.out
+'
+
 test_expect_success 'spectrum mpi sets OMPI_COMM_WORLD_RANK' '
   flux mini run -n${SIZE} -N${SIZE} \
     -o mpi=spectrum --dry-run printenv OMPI_COMM_WORLD_RANK > j.spectrum &&
