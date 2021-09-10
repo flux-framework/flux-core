@@ -515,6 +515,7 @@ AC_CONFIG_FILES( \
   src/common/libcontent/Makefile \
   src/common/libjob/Makefile \
   src/common/libsubprocess/Makefile \
+  src/common/libsdprocess/Makefile \
   src/common/liboptparse/Makefile \
   src/common/libidset/Makefile \
   src/common/libtomlc99/Makefile \
