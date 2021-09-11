@@ -1,4 +1,4 @@
-flux-core version 0.28.0 - 2021-09-03
+flux-core version 0.29.0 - 2021-09-03
 -------------------------------------
 
 This release of Flux includes a new fault mechanism which ensures that
