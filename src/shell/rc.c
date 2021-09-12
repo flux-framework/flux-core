@@ -301,7 +301,7 @@ static int plugin_load (lua_State *L)
             lua_value_to_json_string (L, -1, &conf);
     }
     else
-        return -1;
+        return luaL_error (L, "plugin.load: invalid argument");
 
     if ((rc = plugstack_load (rc_shell->plugstack, pattern, conf)) < 0)
         luaL_error (L, "plugin.load: %s: %s", pattern, strerror (errno));
