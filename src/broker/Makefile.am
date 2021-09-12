@@ -73,8 +73,11 @@ flux_broker_LDADD = \
 	$(ZMQ_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(JANSSON_LIBS) \
-	$(PMIX_LIBS) \
 	$(LIBDL)
+
+if BROKER_PMIX
+flux_broker_LDADD += $(PMIX_LIBS)
+endif
 
 flux_broker_LDFLAGS =
 
@@ -95,8 +98,11 @@ test_ldadd = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(ZMQ_LIBS) \
-	$(JANSSON_LIBS) \
-	$(PMIX_LIBS)
+	$(JANSSON_LIBS)
+
+if BROKER_PMIX
+test_ldadd += $(PMIX_LIBS)
+endif
 
 test_ldflags = \
 	-no-install

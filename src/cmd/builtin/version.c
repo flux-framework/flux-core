@@ -11,7 +11,7 @@
 #if HAVE_CONFIG_H
 # include <config.h>
 #endif
-#if HAVE_LIBPMIX
+#ifdef BROKER_PMIX
 # include <pmix.h>
 #endif
 #include <hwloc.h>
@@ -64,8 +64,8 @@ static int cmd_version (optparse_t *p, int ac, char *av[])
 #if HAVE_CALIPER
     printf ("+caliper");
 #endif
-#if HAVE_LIBPMIX
-    printf ("+pmix-bootstrap==%ld.%ld.%ld",
+#ifdef BROKER_PMIX
+    printf ("+pmix==%ld.%ld.%ld",
             PMIX_VERSION_MAJOR,
             PMIX_VERSION_MINOR,
             PMIX_VERSION_RELEASE);

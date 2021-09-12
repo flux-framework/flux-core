@@ -65,7 +65,7 @@ static const char *env_blocklist[] = {
     "PMI_FD",
     "PMI_RANK",
     "PMI_SIZE",
-#ifdef HAVE_LIBPMIX
+#ifdef BROKER_PMIX
     "PMIX_NAMESPACE",
     "PMIX_VERSION",
     "PMIX_SERVER_URI41",
