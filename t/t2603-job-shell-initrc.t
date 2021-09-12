@@ -165,6 +165,7 @@ test_expect_success 'flux-shell: initrc: loads single .so successfully' '
 	test_debug "cat ${name}.log" &&
 	grep "dummy: OK result=0" ${name}.log
 '
+
 test_expect_success 'flux-shell: initrc: script fails on plugin.load failure' '
 	name=conftest-failure &&
 	cat >${name}.lua <<-EOT &&
@@ -196,6 +197,27 @@ test_expect_success 'flux-shell: initrc: plugin nonpattern nomatch fatal' '
 	test_debug "cat ${name}.log" &&
 	grep "nofile.so: File not found" ${name}.log
 '
+test_expect_success 'flux-shell: initrc: plugin.load accepts string arg' '
+	name=string-arg-nomatch &&
+	cat >${name}.lua <<-EOT &&
+	plugin.load "nomatch-again.so"
+	EOT
+	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
+		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_debug "cat ${name}.log" &&
+	grep "nomatch-again.so: File not found" ${name}.log
+'
+test_expect_success 'flux-shell: initrc: plugin.load bad argument fatal' '
+	name=load-bad-arg &&
+	cat >${name}.lua <<-EOT &&
+	plugin.load (true)
+	EOT
+	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j1 -R R1 \
+		--initrc=${name}.lua 0 > ${name}.log 2>&1 &&
+	test_debug "cat ${name}.log" &&
+	grep "plugin.load: invalid argument" ${name}.log
+'
+
 test_expect_success 'flux-shell: initrc: plugin.load passes conf to plugin' '
 	name=conftest &&
 	cat >${name}.lua <<-EOT &&

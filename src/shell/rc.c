@@ -290,15 +290,18 @@ static int plugin_load (lua_State *L)
     int t = lua_gettop (L);
     int rc = -1;
 
-    if (!lua_istable (L, t))
-        return -1;
+    if (lua_isstring (L, t))
+        pattern = lua_tostring (L, -1);
+    else if (lua_istable (L, t)) {
+        lua_getfield (L, t, "file");
 
-    lua_getfield (L, t, "file");
-
-    pattern = lua_tostring (L, -1);
-    lua_getfield (L, t, "conf");
-    if (lua_istable (L, -1))
-        lua_value_to_json_string (L, -1, &conf);
+        pattern = lua_tostring (L, -1);
+        lua_getfield (L, t, "conf");
+        if (lua_istable (L, -1))
+            lua_value_to_json_string (L, -1, &conf);
+    }
+    else
+        return luaL_error (L, "plugin.load: invalid argument");
 
     if ((rc = plugstack_load (rc_shell->plugstack, pattern, conf)) < 0)
         luaL_error (L, "plugin.load: %s: %s", pattern, strerror (errno));

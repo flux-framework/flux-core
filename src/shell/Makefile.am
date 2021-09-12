@@ -209,3 +209,31 @@ test_mustache_t_LDADD = \
 	$(test_ldadd)
 test_mustache_t_LDFLAGS = \
 	$(test_ldflags)
+
+
+.PHONY: link-shell-plugins clean-shell-plugins
+
+link-shell-plugins: $(shell_plugin_LTLIBRARIES)
+	@for f in $^; do \
+	 soname=`$(GREP) "^dlname=" $$f | $(SED) -e "s|^dlname='\(.*\)'|\1|"`; \
+	 dirname=`dirname $(abs_builddir)/$$f `; \
+	 target=$$dirname/.libs/$$soname; link=$$dirname/$$soname; \
+	 shortdir=`echo $$f | $(SED) -e 's|[^/]*.la||'`; \
+	 shorttarget="$${shortdir}.libs/$$soname"; \
+	 echo "  LN       $$shortdir$$soname -> $$shorttarget"; \
+	 rm -f  $$link; \
+	 $(LN_S) $$target $$link; \
+	done
+
+clean-shell-plugin-links:
+	@for f in $(shell_plugin_LTLIBRARIES); do \
+	 soname=`$(GREP) "^dlname=" $$f | $(SED) -e "s|^dlname='\(.*\)'|\1|"`; \
+	 dirname=`echo $(abs_builddir)/$$f | $(SED) -e 's|/[^/]*.la||'`; \
+	 target=$$dirname/.libs/$$soname; link=$$dirname/$$soname; \
+	 echo "  RM       $$link"; \
+	 rm -f $$link; \
+	done
+
+all-local:: link-shell-plugins
+
+clean-local:: clean-shell-plugin-links
