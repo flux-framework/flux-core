@@ -161,6 +161,12 @@ TESTS = \
 	mpir/test_nodelist.t \
 	mpir/test_proctable.t
 
+if SHELL_PMIX
+TESTS += \
+	plugins/pmix/test/codec.t
+endif
+
+
 test_ldadd = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
@@ -250,6 +256,17 @@ test_mustache_t_LDADD = \
 test_mustache_t_LDFLAGS = \
 	$(test_ldflags)
 
+plugins_pmix_test_codec_t_SOURCES = \
+	plugins/pmix/codec.c \
+	plugins/pmix/test/codec.c
+plugins_pmix_test_codec_t_CPPFLAGS = \
+	$(PMIX_CFLAGS) \
+	$(test_cppflags)
+plugins_pmix_test_codec_t_LDADD = \
+	$(JANSSON_LIBS) \
+	$(test_ldadd)
+plugins_pmix_test_codec_t_LDFLAGS = \
+	$(test_ldflags)
 
 .PHONY: link-shell-plugins clean-shell-plugins
 
