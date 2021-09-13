@@ -163,7 +163,7 @@ TESTS = \
 
 if SHELL_PMIX
 TESTS += \
-	plugins/pmix/test/codec.t
+	plugins/pmix/test_codec.t
 endif
 
 
@@ -182,6 +182,12 @@ test_cppflags = \
 
 
 check_PROGRAMS = $(TESTS)
+
+if SHELL_PMIX
+check_PROGRAMS += \
+	plugins/pmix/test_barrier \
+	plugins/pmix/test_bizcard
+endif
 
 check_LTLIBRARIES = \
 	test/a/plugin.la \
@@ -267,6 +273,29 @@ plugins_pmix_test_codec_t_LDADD = \
 	$(test_ldadd)
 plugins_pmix_test_codec_t_LDFLAGS = \
 	$(test_ldflags)
+
+plugins_pmix_test_barrier_SOURCES = \
+	plugins/pmix/test/barrier.c
+plugins_pmix_test_barrier_CPPFLAGS = \
+	$(PMIX_CFLAGS) \
+	$(test_cppflags)
+plugins_pmix_test_barrier_LDADD = \
+	$(PMIX_LIBS) \
+	$(test_ldadd)
+plugins_pmix_test_barrier_LDFLAGS = \
+	$(test_ldflags)
+
+plugins_pmix_test_bizcard_SOURCES = \
+	plugins/pmix/test/bizcard.c
+plugins_pmix_test_bizcard_CPPFLAGS = \
+	$(PMIX_CFLAGS) \
+	$(test_cppflags)
+plugins_pmix_test_bizcard_LDADD = \
+	$(PMIX_LIBS) \
+	$(test_ldadd)
+plugins_pmix_test_bizcard_LDFLAGS = \
+	$(test_ldflags)
+
 
 .PHONY: link-shell-plugins clean-shell-plugins
 
