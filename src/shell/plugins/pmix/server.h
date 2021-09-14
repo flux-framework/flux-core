@@ -11,8 +11,12 @@
 #ifndef _PMIX_PP_SERVER_H
 #define _PMIX_PP_SERVER_H
 
+#include <flux/core.h>
+#include <pmix_server.h>
+#include "infovec.h"
+
 struct psrv *pp_server_create (flux_reactor_t *r,
-                               const char *tmpdir,
+                               struct infovec *iv,
                                pmix_server_module_t *callbacks,
                                pmix_notification_fn_t error_cb,
                                void *arg);

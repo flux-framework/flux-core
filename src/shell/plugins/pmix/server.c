@@ -762,13 +762,12 @@ void pp_server_destroy (struct psrv *psrv)
 }
 
 struct psrv *pp_server_create (flux_reactor_t *r,
-                               const char *tmpdir,
+                               struct infovec *iv,
                                pmix_server_module_t *callbacks,
                                pmix_notification_fn_t error_cb,
                                void *callback_arg)
 {
     struct psrv *psrv;
-    struct infovec *iv = NULL;
     int rc;
 
     if (!(psrv = calloc (1, sizeof (*psrv))))
@@ -781,13 +780,6 @@ struct psrv *pp_server_create (flux_reactor_t *r,
      */
     if (!(psrv->sp = pp_socketpair_create (r))
         || pp_socketpair_recv_register (psrv->sp, recv_cb, psrv) < 0)
-        goto error;
-
-    /* Prepare info array to pass to PMIX_server_init
-     */
-    if (!(iv = pp_infovec_create ()))
-        goto error;
-    if (pp_infovec_set_str (iv, PMIX_SERVER_TMPDIR, tmpdir) < 0)
         goto error;
 
     /* Start server thread
@@ -807,10 +799,8 @@ struct psrv *pp_server_create (flux_reactor_t *r,
     PMIx_Register_event_handler (NULL, 0, NULL, 0, send_error_cb, NULL, NULL);
 
     global_server_ctx = psrv;
-    pp_infovec_destroy (iv);
     return psrv;
 error:
-    pp_infovec_destroy (iv);
     pp_server_destroy (psrv);
     return NULL;
 }

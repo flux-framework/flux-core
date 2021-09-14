@@ -208,7 +208,11 @@ static int fence_nb_cb (const pmix_proc_t procs[],
     int rc = PMIX_ERROR;
     int i;
 
-    /* Implementation requires full proc participation.
+    /* Internal exchange implementation participation of all shells,
+     * therefore all procs must participate since o/w a shell with no
+     * participation from local procs would not get the upcall.
+     * N.B. A user call to PMIx_Fence (NULL, ...) is converted to wildcard
+     * before we see it.
      */
     if (nprocs > 1 || procs[0].rank != PMIX_RANK_WILDCARD) {
         shell_warn ("pmix: fence over proc subset is not supported by flux");
@@ -217,12 +221,19 @@ static int fence_nb_cb (const pmix_proc_t procs[],
     }
 
     /* Process any info options from the server upcall.
+     * Ensure that all required attributes are accepted,
+     * even if we do nothing about them at this point.
      */
     for (i = 0; i < ninfo; i++) {
-        if (!strcmp (info[i].key, "pmix.collect")) {
-            if (info[i].value.type != PMIX_BOOL
-                || !info[i].value.data.flag)
+        if (!strcmp (info[i].key, PMIX_COLLECT_DATA)) {
+            if (info[i].value.type != PMIX_BOOL)
                 goto error;
+            shell_debug ("pmix: ignoring fence_nb %s", info[i].key);
+        }
+        else if (!strcmp (info[i].key, PMIX_COLLECT_GENERATED_JOB_INFO)) {
+            if (info[i].value.type != PMIX_BOOL)
+                goto error;
+            shell_debug ("pmix: ignoring fence_nb %s", info[i].key);
         }
         else {
             int required = (info[i].flags & PMIX_INFO_REQD);
@@ -499,21 +510,38 @@ done:
     return ret;
 }
 
-static int initialize_pmix_server (struct pp *pp)
+static struct psrv *initialize_pmix_server (struct pp *pp)
 {
     const char *tmpdir;
+    struct infovec *iv = NULL;
+    struct psrv *srv = NULL;
 
     if (!(tmpdir = flux_shell_getenv (pp->shell, "FLUX_JOB_TMPDIR"))) {
         shell_warn ("pmix: FLUX_JOB_TMPDIR is not set");
-        return -1;
+        return NULL;
     }
-    if (!(pp->psrv = pp_server_create (flux_get_reactor (pp->shell->h),
-                                       tmpdir,
-                                       &callbacks,
-                                       error_cb,
-                                       pp)))
-        return -1;
-    return 0;
+    if (!(iv = pp_infovec_create ())
+        || pp_infovec_set_str (iv, PMIX_SERVER_NSPACE, PP_NSPACE_NAME) < 0
+        || pp_infovec_set_rank (iv, PMIX_SERVER_RANK,
+                                pp->shell->info->shell_rank) < 0
+        || pp_infovec_set_str (iv, PMIX_SYSTEM_TMPDIR, tmpdir) < 0
+        || pp_infovec_set_bool (iv, PMIX_SERVER_TOOL_SUPPORT, false) < 0
+        || pp_infovec_set_bool (iv, PMIX_SERVER_SYSTEM_SUPPORT, false) < 0
+        || pp_infovec_set_bool (iv, PMIX_SERVER_SESSION_SUPPORT, false) < 0
+        || pp_infovec_set_bool (iv, PMIX_SERVER_GATEWAY, false) < 0
+        || pp_infovec_set_bool (iv, PMIX_SERVER_SCHEDULER, false) < 0
+        || pp_infovec_set_str (iv, PMIX_SERVER_TMPDIR, tmpdir) < 0) {
+        shell_warn ("pmix: error setting up info array");
+        goto done;
+    }
+    srv = pp_server_create (flux_get_reactor (pp->shell->h),
+                            iv,
+                            &callbacks,
+                            error_cb,
+                            pp);
+done:
+    pp_infovec_destroy (iv);
+    return srv;
 }
 
 static struct pp *pp_create (flux_shell_t *shell)
@@ -525,7 +553,7 @@ static struct pp *pp_create (flux_shell_t *shell)
     pp->shell = shell;
     if (!(pp->clients = zlist_new ()))
         goto error;
-    if (initialize_pmix_server (pp) < 0) {
+    if (!(pp->psrv = initialize_pmix_server (pp))) {
         shell_warn ("pmix: could not initialize pmix server");
         goto error;
     }
