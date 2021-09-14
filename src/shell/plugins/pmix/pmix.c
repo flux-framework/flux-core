@@ -354,7 +354,11 @@ static int direct_modex_cb (const pmix_proc_t *proc,
                 goto error;
         }
     }
-
+    if (proc->rank >= pp->shell->info->total_ntasks
+        || strcmp (proc->nspace, PP_NSPACE_NAME) != 0) {
+        rc = PMIX_ERR_PROC_ENTRY_NOT_FOUND;
+        goto error;
+    }
     if (!(f = pp_dmodex (pp->shell, proc))
         || !(ctx = modex_ctx_create (cbfunc, cbdata))
         || flux_future_then (f, timeout, direct_modex_continuation, pp) < 0
