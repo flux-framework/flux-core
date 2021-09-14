@@ -17,6 +17,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/grudgeset.h"
+#include "src/common/libflux/plugin.h"
 
 struct job {
     flux_jobid_t id;
@@ -42,6 +43,8 @@ struct job {
     json_t *annotations;
 
     struct grudgeset *dependencies;
+
+    zlistx_t *subscribers;  // list of plugins subscribed to all job events
 
     void *handle;           // zlistx_t handle
     int refcount;           // private to job.c
@@ -97,6 +100,12 @@ int job_flag_set (struct job *job, const char *flag);
 /*  Test if flag name 'flag' is a valid job flag
  */
 bool job_flag_valid (struct job *job, const char *flag);
+
+/*  Allow a flux_plugin_t to subscribe to all job events
+ */
+int job_events_subscribe (struct job *job, flux_plugin_t *p);
+
+void job_events_unsubscribe (struct job *job, flux_plugin_t *p);
 
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 
