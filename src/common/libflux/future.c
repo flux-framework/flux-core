@@ -442,7 +442,7 @@ static bool future_is_ready (flux_future_t *f)
 
 /* Block until future is fulfilled or timeout expires.
  * This function can be called multiple times, with different timeouts.
- * If timeout <= 0., there is no timeout.
+ * If timeout < 0., there is no timeout.
  * If timeout == 0., time out immediately if future has not been fulfilled.
  * If timeout > 0., lazily set up the "now" reactor context (first call)
  * and run that reactor until fulfilled or error.  If timer expires,
