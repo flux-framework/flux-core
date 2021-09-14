@@ -240,12 +240,61 @@ void test_create_from_eventlog (void)
 
 }
 
+static void test_subscribe (void)
+{
+    flux_plugin_t *p = flux_plugin_create ();
+    flux_plugin_t *p2 = flux_plugin_create ();
+    struct job * job = job_create ();
+    struct job * job2 = job_create ();
+    if (!job || !job2 || !p || !p2)
+        BAIL_OUT ("failed to create jobs and/or plugins");
+
+    ok (job->subscribers == NULL && job2->subscribers == NULL,
+        "job->subscribers is NULL with no subscribers");
+    ok (job_events_subscribe (job, p) == 0,
+        "job_events_subscribe works");
+    ok (job->subscribers && zlistx_size (job->subscribers) == 1,
+        "job now has one subscription");
+    ok (zlistx_head (job->subscribers) == p,
+        "plugin is first subscriber on list");
+
+    ok (job_events_subscribe (job, p2) == 0,
+        "2nd job_events_subscribe works");
+    ok (job->subscribers && zlistx_size (job->subscribers) == 2,
+        "job now has two subscribers");
+
+    ok (job_events_subscribe (job2, p2) == 0,
+        "subscribe plugin 2 to a second job");
+    ok (job2->subscribers && zlistx_size (job2->subscribers) == 1,
+        "job2 now has one subscriber");
+    ok (zlistx_head (job2->subscribers) == p2,
+        "plugin 2 is first subscriber on job2 subscriber list");
+
+    flux_plugin_destroy (p);
+    pass ("destroy first plugin");
+
+    ok (job->subscribers && zlistx_size (job->subscribers) == 1,
+        "after plugin destruction, job has 1 subscriber");
+    ok (zlistx_head (job->subscribers) == p2,
+        "plugin 2 is now first subscriber on list");
+
+    /*  Now destroy job before plugin
+     */
+    job_decref (job);
+    pass ("destroy job before plugin");
+    job_decref (job2);
+    pass ("destroy job2 before plugin");
+    flux_plugin_destroy (p2);
+    pass ("destroy 2nd plugin after all jobs");
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
     test_create ();
     test_create_from_eventlog ();
+    test_subscribe ();
 
     done_testing ();
 }
