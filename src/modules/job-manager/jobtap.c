@@ -539,12 +539,13 @@ static int jobtap_topic_match_count (struct jobtap *jobtap,
 }
 
 static int jobtap_stack_call (struct jobtap *jobtap,
+                              zlistx_t *plugins,
                               struct job *job,
                               const char *topic,
                               flux_plugin_arg_t *args)
 {
     int retcode = 0;
-    flux_plugin_t *p = zlistx_first (jobtap->plugins);
+    flux_plugin_t *p = zlistx_first (plugins);
 
     if (current_job_push (jobtap, job) < 0)
         return -1;
@@ -560,7 +561,7 @@ static int jobtap_stack_call (struct jobtap *jobtap,
             break;
         }
         retcode += rc;
-        p = zlistx_next (jobtap->plugins);
+        p = zlistx_next (plugins);
     }
     if (current_job_pop (jobtap) < 0)
         return -1;
@@ -583,7 +584,11 @@ int jobtap_get_priority (struct jobtap *jobtap,
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
 
-    rc = jobtap_stack_call (jobtap, job, "job.priority.get", args);
+    rc = jobtap_stack_call (jobtap,
+                            jobtap->plugins,
+                            job,
+                            "job.priority.get",
+                            args);
 
     if (rc >= 1) {
         /*
@@ -662,7 +667,11 @@ int jobtap_validate (struct jobtap *jobtap,
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
 
-    rc = jobtap_stack_call (jobtap, job, "job.validate", args);
+    rc = jobtap_stack_call (jobtap,
+                            jobtap->plugins,
+                            job,
+                            "job.validate",
+                            args);
 
     if (rc < 0) {
         /*
@@ -754,7 +763,7 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
     if (p)
         rc = flux_plugin_call (p, topic, args);
     else
-        rc = jobtap_stack_call (jobtap, job, topic, args);
+        rc = jobtap_stack_call (jobtap, jobtap->plugins, job, topic, args);
 
     if (rc == 0) {
         /*  No handler for job.dependency.<scheme>. return an error.
@@ -902,7 +911,7 @@ int jobtap_call (struct jobtap *jobtap,
     if (!args)
         return -1;
 
-    rc = jobtap_stack_call (jobtap, job, topic, args);
+    rc = jobtap_stack_call (jobtap, jobtap->plugins, job, topic, args);
     if (rc < 0) {
         flux_log (jobtap->ctx->h, LOG_ERR,
                   "jobtap: %s: callback returned error",
