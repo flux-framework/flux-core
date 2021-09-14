@@ -650,6 +650,20 @@ static int event_jobtap_call (struct event *event,
                               json_t *entry,
                               flux_job_state_t old_state)
 {
+
+    /*  Notify any subscribers of all events, separately from
+     *   special cases for state change and urgency events below.
+     */
+    if (jobtap_notify_subscribers (event->ctx->jobtap,
+                                   job,
+                                   name,
+                                   "{s:O}",
+                                   "entry", entry) < 0)
+            flux_log (event->ctx->h, LOG_ERR,
+                      "jobtap: event.%s callback failed for job %ju",
+                      name,
+                      (uintmax_t) job->id);
+
     if (job->state != old_state) {
         /*
          *  Call plugin callback on state change

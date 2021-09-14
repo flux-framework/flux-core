@@ -177,6 +177,18 @@ int flux_jobtap_get_job_result (flux_plugin_t *p,
                                 flux_job_result_t *resultp);
 
 
+/*
+ *  This function subscribes plugin 'p' to extra callbacks for job 'id'
+ *   such as job.event.<name> for each job event. The plugin must have a
+ *   handler registered that matches one or more of these callbacks.
+ */
+int flux_jobtap_job_subscribe (flux_plugin_t *p, flux_jobid_t id);
+
+
+/*  Unsubscribe plugin 'p' from extra callbacks for job 'id'
+ */
+void flux_jobtap_job_unsubscribe (flux_plugin_t *p, flux_jobid_t id);
+
 #ifdef __cplusplus
 }
 #endif

@@ -875,6 +875,45 @@ out:
     return rc;
 }
 
+int jobtap_notify_subscribers (struct jobtap *jobtap,
+                               struct job *job,
+                               const char *name,
+                               const char *fmt,
+                               ...)
+{
+    flux_plugin_arg_t *args;
+    char topic [64];
+    int topiclen = 64;
+    va_list ap;
+    int rc;
+
+    if (!job->subscribers)
+        return 0;
+
+    if (snprintf (topic, topiclen, "job.event.%s", name) >= topiclen) {
+        flux_log (jobtap->ctx->h, LOG_ERR,
+                  "jobtap: %s: %ju: event topic name too long",
+                  name,
+                  (uintmax_t) job->id);
+        return -1;
+    }
+
+    va_start (ap, fmt);
+    args = jobtap_args_vcreate (jobtap, job, fmt, ap);
+    va_end (ap);
+    if (!args) {
+        flux_log (jobtap->ctx->h, LOG_ERR,
+                  "jobtap: %s: %ju: failed to create plugin args",
+                  topic,
+                  (uintmax_t) job->id);
+        return -1;
+    }
+
+    rc = jobtap_stack_call (jobtap, job->subscribers, job, topic, args);
+    flux_plugin_arg_destroy (args);
+    return rc;
+}
+
 int jobtap_call (struct jobtap *jobtap,
                  struct job *job,
                  const char *topic,
@@ -1812,6 +1851,21 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
     rc = event_job_post_vpack (jobtap->ctx->event, job, name, 0, fmt, ap);
     va_end (ap);
     return rc;
+}
+
+int flux_jobtap_job_subscribe (flux_plugin_t *p, flux_jobid_t id)
+{
+    struct job *job;
+    if (!(job = jobtap_lookup_jobid (p, id)))
+        return -1;
+    return job_events_subscribe (job, p);
+}
+
+void flux_jobtap_job_unsubscribe (flux_plugin_t *p, flux_jobid_t id)
+{
+    struct job *job;
+    if ((job = jobtap_lookup_jobid (p, id)))
+        job_events_unsubscribe (job, p);
 }
 
 /*
