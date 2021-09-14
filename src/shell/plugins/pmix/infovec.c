@@ -93,6 +93,32 @@ int pp_infovec_set_u32 (struct infovec *iv, const char *key, uint32_t value)
     return 0;
 }
 
+int pp_infovec_set_bool (struct infovec *iv, const char *key, bool value)
+{
+    pmix_info_t *info;
+
+    if (!(info = alloc_slot (iv)))
+        return -1;
+    strncpy (info->key, key, PMIX_MAX_KEYLEN);
+    info->value.type = PMIX_BOOL;
+    info->value.data.flag = value;
+    return 0;
+}
+
+int pp_infovec_set_rank (struct infovec *iv,
+                         const char *key,
+                         pmix_rank_t value)
+{
+    pmix_info_t *info;
+
+    if (!(info = alloc_slot (iv)))
+        return -1;
+    strncpy (info->key, key, PMIX_MAX_KEYLEN);
+    info->value.type = PMIX_PROC_RANK;
+    info->value.data.rank = value;
+    return 0;
+}
+
 struct infovec *pp_infovec_create (void)
 {
     struct infovec *iv;

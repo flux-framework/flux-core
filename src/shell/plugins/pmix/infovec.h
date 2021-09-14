@@ -11,7 +11,7 @@
 #ifndef _PMIX_PP_CODEC
 #define _PMIX_PP_CODEC
 
-#include <pmix_server.h>
+#include <pmix.h>
 #include <jansson.h>
 
 struct infovec *pp_infovec_create (void);
@@ -20,6 +20,8 @@ void pp_infovec_destroy (struct infovec *iv);
 
 int pp_infovec_set_u32 (struct infovec *iv, const char *key, uint32_t val);
 int pp_infovec_set_str (struct infovec *iv, const char *key, const char *str);
+int pp_infovec_set_bool (struct infovec *iv, const char *key, bool val);
+int pp_infovec_set_rank (struct infovec *iv, const char *key, pmix_rank_t val);
 
 int pp_infovec_count (struct infovec *iv);
 pmix_info_t *pp_infovec_info (struct infovec *iv);
