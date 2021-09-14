@@ -311,9 +311,7 @@ static int dependency_after_cb (flux_plugin_t *p,
      *   lists below
      */
     if (type == AFTER_START
-        && (target_state == FLUX_JOB_STATE_RUN
-            || target_state == FLUX_JOB_STATE_CLEANUP
-            || target_state == FLUX_JOB_STATE_INACTIVE)) {
+        && flux_jobtap_job_event_posted (p, afterid, "start") == 1) {
         if (flux_jobtap_dependency_remove (p, id, after->description) < 0)
             flux_log_error (flux_jobtap_get_flux (p),
                             "flux_jobtap_dependency_remove");
@@ -340,6 +338,18 @@ static int dependency_after_cb (flux_plugin_t *p,
         after_info_destroy (after);
         after_ref_destroy (ref);
         return flux_jobtap_reject_job (p, args, "failed to create ref");
+    }
+
+    /*  If the target is AFTER_START, subscribe to events for the target
+     *   jobid so this plugin gets the job.event.start callback for the
+     *   target job.
+     */
+    if (type == AFTER_START
+        && flux_jobtap_job_subscribe (p, afterid) < 0) {
+        after_info_destroy (after);
+        after_ref_destroy (ref);
+        return flux_jobtap_reject_job (p, args, "failed to subscribe to %ju",
+                                       (uintmax_t) id);
     }
 
     return 0;
@@ -511,14 +521,20 @@ static int priority_cb (flux_plugin_t *p,
     return 0;
 }
 
-/*  In RUN state release all AFTER_START dependencies
+/*  On start event, release all AFTER_START dependencies
  */
-static int run_cb (flux_plugin_t *p,
-                   const char *topic,
-                   flux_plugin_arg_t *args,
-                   void *data)
+static int start_cb (flux_plugin_t *p,
+                     const char *topic,
+                     flux_plugin_arg_t *args,
+                     void *data)
 {
     release_all (p, after_list_check (p, 0), AFTER_START);
+
+    /*  This is the only job event we care about, unsubscribe from
+     *   future job events
+     */
+    flux_jobtap_job_unsubscribe (p, FLUX_JOBTAP_CURRENT_JOB);
+
     return 0;
 }
 
@@ -548,8 +564,8 @@ static const struct flux_plugin_handler tab[] = {
     { "job.dependency.afterany",   dependency_after_cb, NULL },
     { "job.dependency.afternotok", dependency_after_cb, NULL },
     { "job.state.priority",        priority_cb,         NULL },
-    { "job.state.run",             run_cb,              NULL },
     { "job.state.inactive",        inactive_cb,         NULL },
+    { "job.event.start",           start_cb,            NULL },
     { 0 }
 };
 
