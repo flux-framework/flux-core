@@ -82,4 +82,17 @@ test_expect_success 'spectrum mpi sets OMPI_COMM_WORLD_RANK' '
   test_cmp spectrum.rank.expected spectrum.rank.out
 '
 
+# openmpi loads by default currently, so -ompi=openmpi is not actually needed
+test_expect_success 'openmpi sets OMPI_MCA_pmix=flux OMPI_MCA_schizo=flux' '
+  flux mini run -ompi=openmpi printenv >env.out &&
+  grep OMPI_MCA_pmix=flux env.out &&
+  grep OMPI_MCA_schizo=flux env.out
+'
+
+test_expect_success 'openmpi@5 eschews flux plugins' '
+  flux mini run -ompi=openmpi@5 printenv >env5.out &&
+  grep OMPI_MCA_pmix=^flux env5.out &&
+  grep OMPI_MCA_schizo=^flux env5.out
+'
+
 test_done
