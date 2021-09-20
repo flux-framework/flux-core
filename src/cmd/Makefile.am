@@ -69,7 +69,8 @@ dist_fluxcmd_SCRIPTS = \
 	flux-resource.py \
 	flux-admin.py \
 	flux-jobtap.py \
-	flux-job-validator.py
+	flux-job-validator.py \
+	flux-job-exec-override.py
 
 fluxcmd_PROGRAMS = \
 	flux-terminus \
