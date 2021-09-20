@@ -1097,6 +1097,18 @@ static int configure_implementations (flux_t *h, int argc, char **argv)
     return 0;
 }
 
+static int unload_implementations (void)
+{
+    struct exec_implementation *impl;
+    int i = 0;
+    while ((impl = implementations[i]) && impl->name) {
+        if (impl->unload)
+             (*impl->unload) ();
+        i++;
+    }
+    return 0;
+}
+
 static const struct flux_msg_handler_spec htab[]  = {
     { FLUX_MSGTYPE_REQUEST, "job-exec.start", start_cb,     0 },
     { FLUX_MSGTYPE_EVENT,   "job-exception",  exception_cb, 0 },
@@ -1128,6 +1140,8 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     rc = flux_reactor_run (flux_get_reactor (h), 0);
 out:
+    unload_implementations ();
+
     saved_errno = errno;
     if (flux_event_unsubscribe (h, "job-exception") < 0)
         flux_log_error (h, "flux_event_unsubscribe ('job-exception')");

@@ -27,6 +27,8 @@ struct jobinfo;
  *
  *   - config:  (optional) called once at module load for configuraiton
  *
+ *   - unload:  (optional) called once at module unload
+ *
  *   - init:    allow selection and initialization of an exec implementation
  *              from jobspec and/or R. An implementation should return 0 to
  *              "pass" on handling this job, > 0 to denote successful
@@ -46,6 +48,7 @@ struct jobinfo;
 struct exec_implementation {
     const char *name;
     int  (*config)  (flux_t *h, int argc, char **argv);
+    void (*unload)  (void);
     int  (*init)    (struct jobinfo *job);
     void (*exit)    (struct jobinfo *job);
     int  (*start)   (struct jobinfo *job);
