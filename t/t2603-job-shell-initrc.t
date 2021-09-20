@@ -42,6 +42,15 @@ test_expect_success 'flux-shell: initrc: plugin.searchpath set via broker attr' 
 	flux setattr conf.shell_pluginpath "${old_pluginpath}"
 	
 '
+test_expect_success 'flux-shell: default initrc obeys FLUX_SHELL_RC_PATH' '
+	mkdir test-dir.d &&
+	cat >test-dir.d/test.lua <<-EOF &&
+	shell.log ("plugin loaded from test-dir.d")
+	EOF
+	FLUX_SHELL_RC_PATH=$(pwd)/test-dir.d \
+	  flux mini run hostname >rcpath.log 2>&1 &&
+	grep "plugin loaded from test-dir.d" rcpath.log
+'
 test_expect_success 'flux-shell: initrc: generate 1-task jobspec and matching R' '
 	flux jobspec srun -N1 -n1 echo Hi >j1 &&
 	cat >R1 <<-EOT
