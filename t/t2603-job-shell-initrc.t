@@ -4,6 +4,8 @@ test_description='Test flux-shell initrc.lua implementation'
 
 . `dirname $0`/sharness.sh
 
+test_under_flux 1
+
 FLUX_SHELL="${FLUX_BUILD_DIR}/src/shell/flux-shell"
 
 INITRC_TESTDIR="${SHARNESS_TEST_SRCDIR}/shell/initrc"
@@ -13,27 +15,32 @@ INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
 export LUA_PATH="${SHARNESS_TEST_DIRECTORY}/?.lua;$(lua -e 'print(package.path)')"
 
 test_expect_success 'flux-shell: initrc: conf.shell_* attributes are set' '
-	flux broker flux getattr conf.shell_initrc &&
-	flux broker flux getattr conf.shell_pluginpath
+	flux getattr conf.shell_initrc &&
+	flux getattr conf.shell_pluginpath
 '
 test_expect_success 'flux-shell: initrc: conf.shell_initrc can be set' '
 	cat <<-EOF >test-initrc.lua &&
 	shell.log("loaded test-initrc")
 	EOF
-	flux broker -Sconf.shell_initrc=$(pwd)/test-initrc.lua \
-		flux mini run /bin/true > test-initrc.output 2>&1 &&
+	initrc_old=$(flux getattr conf.shell_initrc) &&
+	flux setattr conf.shell_initrc $(pwd)/test-initrc.lua &&
+	flux mini run /bin/true > test-initrc.output 2>&1 &&
 	test_debug "cat test-initrc.output" &&
-	grep "loaded test-initrc" test-initrc.output
+	grep "loaded test-initrc" test-initrc.output &&
+	flux setattr conf.shell_initrc "${initrc_old}"
 '
 test_expect_success 'flux-shell: initrc: plugin.searchpath set via broker attr' '
 	cat <<-EOF >print-searchpath.lua &&
 	shell.log("plugin.searchpath = "..plugin.searchpath)
 	EOF
-	flux broker -Sconf.shell_pluginpath=/test/foo \
-		flux mini run -o initrc=$(pwd)/print-searchpath.lua /bin/true \
+	old_pluginpath=$(flux getattr conf.shell_pluginpath) &&
+	flux setattr conf.shell_pluginpath /test/foo &&
+	flux mini run -o initrc=$(pwd)/print-searchpath.lua /bin/true \
 		>print-searchpath.out 2>&1 &&
 	test_debug "cat print-searchpath.out" &&
-	grep "plugin.searchpath = /test/foo" print-searchpath.out
+	grep "plugin.searchpath = /test/foo" print-searchpath.out &&
+	flux setattr conf.shell_pluginpath "${old_pluginpath}"
+	
 '
 test_expect_success 'flux-shell: initrc: generate 1-task jobspec and matching R' '
 	flux jobspec srun -N1 -n1 echo Hi >j1 &&
