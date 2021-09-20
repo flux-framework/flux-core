@@ -28,6 +28,10 @@
  *   "wait_status":i        - report this value as status in the "finish" resp
  *   "mock_exception":s     - mock an exception during this phase of job
  *                             execution (currently "init" and "run")
+ *   "override":i           - exec override mode: wait for RPC to emit start
+ *                             event a testexec job. If job has unlimited
+ *                             duration, then also wait for finish RPC or
+ *                             job exception for job finish event.
  * }
  *
  */
@@ -37,26 +41,43 @@
 #endif
 
 #include "src/common/libutil/fsd.h"
+#include "src/common/libjob/job_hash.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "job-exec.h"
+
+struct testexec_ctx {
+    flux_t *h;
+    flux_msg_handler_t *mh;  /* testexec RPC handler */
+    flux_msg_handler_t *dh;  /* disconnect handler */
+    zhashx_t *jobs;
+};
 
 struct testconf {
     bool                  enabled;          /* test execution enabled       */
+    int                   override;         /* wait for RPC for start event */
     double                run_duration;     /* duration of fake job in sec  */
     int                   wait_status;      /* reported status for "finish" */
     const char *          mock_exception;   /* fake excetion at this site   */
 };
 
 struct testexec {
+    struct jobinfo *job;
     struct testconf conf;
     struct idset *ranks;
     flux_watcher_t *timer;
 };
 
-static struct testexec * testexec_create (struct testconf conf)
+
+static struct testexec_ctx *testexec_ctx = NULL;
+
+
+static struct testexec * testexec_create (struct jobinfo *job,
+                                          struct testconf conf)
 {
     struct testexec *te = calloc (1, sizeof (*te));
     if (te == NULL)
         return NULL;
+    te->job = job;
     te->conf = conf;
     return (te);
 }
@@ -86,6 +107,7 @@ static int init_testconf (flux_t *h, struct testconf *conf, json_t *jobspec)
 
     /* get/set defaults */
     conf->run_duration = jobspec_duration (h, jobspec);
+    conf->override = 0;
     conf->wait_status = 0;
     conf->mock_exception = NULL;
     conf->enabled = false;
@@ -97,8 +119,9 @@ static int init_testconf (flux_t *h, struct testconf *conf, json_t *jobspec)
         return 0;
     conf->enabled = true;
     if (json_unpack_ex (test, &err, 0,
-                        "{s?s s?i s?s}",
+                        "{s?s s?i s?i s?s}",
                         "run_duration", &trun,
+                        "override", &conf->override,
                         "wait_status", &conf->wait_status,
                         "mock_exception", &conf->mock_exception) < 0) {
         flux_log (h, LOG_ERR, "init_testconf: %s", err.text);
@@ -123,13 +146,12 @@ static void timer_cb (flux_reactor_t *r,
                       flux_watcher_t *w,
                       int revents, void *arg)
 {
-    struct jobinfo *job = arg;
-    struct testexec *te = job->data;
+    struct testexec *te = arg;
 
     /* Notify job-exec that tasks have completed:
      */
-    jobinfo_tasks_complete (job,
-                            resource_set_ranks (job->R),
+    jobinfo_tasks_complete (te->job,
+                            resource_set_ranks (te->job->R),
                             te->conf.wait_status);
 }
 
@@ -138,7 +160,7 @@ static void timer_cb (flux_reactor_t *r,
  *   is sent when the timer fires (simulating the exit of the final
  *   job shell.)
  */
-static int start_timer (flux_t *h, struct testexec *te, struct jobinfo *job)
+static int start_timer (flux_t *h, struct testexec *te)
 {
     flux_reactor_t *r = flux_get_reactor (h);
     double t = te->conf.run_duration;
@@ -150,14 +172,17 @@ static int start_timer (flux_t *h, struct testexec *te, struct jobinfo *job)
         t = 1.e-5;
     if (t >= 0.) {
         char timebuf[256];
-        te->timer = flux_timer_watcher_create (r, t, 0., timer_cb, job);
-        if (!te->timer) {
-            flux_log_error (h, "jobinfo_start: timer_create");
-            return -1;
-        }
-        flux_watcher_start (te->timer);
-        snprintf (timebuf, sizeof (timebuf), "%.6fs", t);
-        jobinfo_started (job, "{ s:s }", "timer", timebuf);
+        if (t > 0.) {
+            te->timer = flux_timer_watcher_create (r, t, 0., timer_cb, te);
+            if (!te->timer) {
+                flux_log_error (h, "jobinfo_start: timer_create");
+                return -1;
+            }
+            flux_watcher_start (te->timer);
+            snprintf (timebuf, sizeof (timebuf), "%.6fs", t);
+        } else
+            strncpy (timebuf, "inf", sizeof (timebuf));
+        jobinfo_started (te->job, "{ s:s }", "timer", timebuf);
     }
     else
         return -1;
@@ -176,13 +201,18 @@ static int testexec_init (struct jobinfo *job)
     }
     else if (!conf.enabled)
         return 0;
-    if (!(te = testexec_create (conf))) {
+    if (!(te = testexec_create (job, conf))) {
         jobinfo_fatal_error (job, errno, "failed to init test exec module");
         return -1;
     }
     job->data = (void *) te;
     if (testconf_mock_exception (&te->conf, "init")) {
         jobinfo_fatal_error (job, 0, "mock initialization exception generated");
+        testexec_destroy (te);
+        return -1;
+    }
+    if (zhashx_insert (testexec_ctx->jobs, &job->id, te) < 0) {
+        jobinfo_fatal_error (job, 0, "testexec: zhashx_insert failed");
         testexec_destroy (te);
         return -1;
     }
@@ -193,7 +223,7 @@ static int testexec_start (struct jobinfo *job)
 {
     struct testexec *te = job->data;
 
-    if (start_timer (job->h, te, job) < 0) {
+    if (!te->conf.override && start_timer (job->h, te) < 0) {
         jobinfo_fatal_error (job, errno, "unable to start test exec timer");
         return -1;
     }
@@ -215,20 +245,150 @@ static int testexec_kill (struct jobinfo *job, int signum)
      *  sent to all ranks would terminate processes that would exit and
      *  report wait status through normal channels.
      */
-    if (job->running)
+    if (job->started)
         jobinfo_tasks_complete (job, te->ranks, signum);
     return 0;
 }
 
 static void testexec_exit (struct jobinfo *job)
 {
-    struct testexec *te = job->data;
-    testexec_destroy (te);
+    zhashx_delete (testexec_ctx->jobs, &job->id);
     job->data = NULL;
+}
+
+static void testexec_request_cb (flux_t *h,
+                                 flux_msg_handler_t *mh,
+                                 const flux_msg_t *msg,
+                                 void *arg)
+{
+    const char *errmsg = NULL;
+    struct testexec_ctx *ctx = arg;
+    struct testexec *te;
+    const char *event;
+    flux_jobid_t id;
+    uint32_t owner;
+    int code = 0;
+
+    if (flux_request_unpack (msg, NULL,
+                             "{s:s s:I s?i}",
+                             "event", &event,
+                             "jobid", &id,
+                             "status", &code) < 0)
+        goto error;
+    if (!(te = zhashx_lookup (ctx->jobs, &id))) {
+        errmsg = "Job not found";
+        errno = ENOENT;
+        goto error;
+    }
+    if (flux_msg_get_userid (msg, &owner) < 0
+        || owner != te->job->userid) {
+        errmsg = "Permission denied";
+        errno = EPERM;
+        goto error;
+    }
+    if (!te->conf.override) {
+        errmsg = "Job not in exec override mode";
+        errno = EINVAL;
+        goto error;
+    }
+    if (strcmp (event, "start") == 0) {
+        if (te->job->running) {
+            errmsg = "Job already running";
+            errno = EINVAL;
+            goto error;
+        }
+        if (start_timer (h, te) < 0)
+            goto error;
+    }
+    else if (strcmp (event, "finish") == 0) {
+        if (!te->job->running) {
+            errmsg = "Job not running";
+            errno = EINVAL;
+            goto error;
+        }
+        flux_watcher_stop (te->timer);
+        jobinfo_tasks_complete (te->job, te->ranks, code);
+    }
+    else {
+        errmsg = "Invalid event";
+        errno = EINVAL;
+        goto error;
+    }
+
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+}
+
+static void testexec_ctx_destroy (struct testexec_ctx *ctx)
+{
+    if (ctx) {
+        int saved_errno = errno;
+        flux_msg_handler_destroy (ctx->mh);
+        flux_msg_handler_destroy (ctx->dh);
+        zhashx_destroy (&ctx->jobs);
+        free (ctx);
+        errno = saved_errno;
+    }
+}
+
+static void testexec_destructor (void **item)
+{
+    if (item) {
+        struct testexec *te = *item;
+        testexec_destroy (te);
+        *item = NULL;
+    }
+}
+
+static struct testexec_ctx *testexec_ctx_create (flux_t *h)
+{
+    struct flux_match match = FLUX_MATCH_REQUEST;
+    struct testexec_ctx *ctx = calloc (1, sizeof (*ctx));
+    if (!ctx)
+        return NULL;
+    ctx->h = h;
+
+    match.topic_glob = "job-exec.override";
+    ctx->mh = flux_msg_handler_create (h,
+                                       match,
+                                       testexec_request_cb,
+                                       ctx);
+    if (!ctx->mh
+        || !(ctx->jobs = job_hash_create ()))
+        goto error;
+    zhashx_set_destructor (ctx->jobs, testexec_destructor);
+
+    flux_msg_handler_allow_rolemask (ctx->mh, FLUX_ROLE_USER);
+    flux_msg_handler_start (ctx->mh);
+
+    return ctx;
+
+error:
+    testexec_ctx_destroy (ctx);
+    return NULL;
+}
+
+static int testexec_config (flux_t *h, int argc, char **argv)
+{
+    if (!(testexec_ctx = testexec_ctx_create (h)))
+        return -1;
+    return 0;
+}
+
+static void testexec_unload (void)
+{
+    testexec_ctx_destroy (testexec_ctx);
 }
 
 struct exec_implementation testexec = {
     .name =     "testexec",
+    .config =   testexec_config,
+    .unload =   testexec_unload,
     .init =     testexec_init,
     .exit =     testexec_exit,
     .start =    testexec_start,
