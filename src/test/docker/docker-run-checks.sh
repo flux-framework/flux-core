@@ -81,6 +81,7 @@ while true; do
       -r|--recheck)                RECHECK=t;                  shift   ;;
       -u|--unit-test-only)         UNIT_TEST_ONLY=t;           shift   ;;
       -D|--build-directory)        BUILD_DIR="$2";             shift 2 ;;
+      --build-arg)                 BUILD_ARG=" --build-arg $2" shift 2 ;;
       --workdir)                   WORKDIR="$2";               shift 2 ;;
       --no-cache)                  NO_CACHE="--no-cache";      shift   ;;
       --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
@@ -139,6 +140,7 @@ checks_group "Building image $IMAGE for user $USER $(id -u) group=$(id -g)" \
     --build-arg UID=$(id -u) \
     --build-arg GID=$(id -g) \
     --build-arg FLUX_SECURITY_VERSION=$FLUX_SECURITY_VERSION \
+    ${BUILD_ARG:- } \
     -t ${BUILD_IMAGE} \
     ${DOCKERFILE} \
     || die "docker build failed"
