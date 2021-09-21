@@ -42,6 +42,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "ccan/ptrint/ptrint.h"
 
 #include "alloc.h"
 #include "start.h"
@@ -61,6 +62,7 @@ struct event {
     flux_watcher_t *timer;
     zlist_t *pending;
     zlist_t *pub_futures;
+    zhashx_t *evindex;
 };
 
 struct event_batch {
@@ -817,6 +819,7 @@ void event_ctx_destroy (struct event *event)
             }
         }
         zlist_destroy (&event->pub_futures);
+        zhashx_destroy (&event->evindex);
         free (event);
         errno = saved_errno;
     }
@@ -839,6 +842,8 @@ struct event *event_ctx_create (struct job_manager *ctx)
         goto nomem;
     if (!(event->pub_futures = zlist_new ()))
         goto nomem;
+    if (!(event->evindex = zhashx_new ()))
+        goto nomem;
 
     return event;
 nomem:
@@ -846,6 +851,25 @@ nomem:
 error:
     event_ctx_destroy (event);
     return NULL;
+}
+
+int event_index (struct event *event, const char *name)
+{
+    void *entry = zhashx_lookup (event->evindex, name);
+    if (!entry) {
+        entry = int2ptr (((int) zhashx_size (event->evindex) + 1));
+        if (zhashx_insert (event->evindex, name, entry) < 0) {
+            /*
+             *  insertion only fails on duplicate entry, which we know
+             *   is not possible in this case. However, cover ENOMEM
+             *   case here in case assert-on-malloc failure is fixed
+             *   in the future for zhashx.
+             */
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+    return ptr2int (entry);
 }
 
 /*
