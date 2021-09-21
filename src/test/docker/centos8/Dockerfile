@@ -58,6 +58,7 @@ RUN yum -y update \
 	lua-devel \
 	valgrind-devel \
 	libs3-devel \
+	systemd-devel \
 #  Other deps
 	perl-Time-HiRes \
 	lua-posix \
