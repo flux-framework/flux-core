@@ -165,7 +165,10 @@ AC_CHECK_HEADERS( \
 ##
 # Checks for typedefs, structures, and compiler characteristics
 ##
-AC_C_BIGENDIAN
+AC_C_BIGENDIAN(
+  [AC_DEFINE([HAVE_BIG_ENDIAN], [1], [big endian])],
+  [AC_DEFINE([HAVE_LITTLE_ENDIAN], [1], [little endian])]
+)
 AC_C_CONST
 AC_TYPE_SIZE_T
 AX_COMPILE_CHECK_SIZEOF(int)
