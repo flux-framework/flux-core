@@ -25,6 +25,8 @@
 #include "job.h"
 #include "event.h"
 
+#define EVENTS_BITMAP_SIZE 64
+
 static void subscribers_destroy (struct job *job);
 
 void job_decref (struct job *job)
@@ -37,6 +39,7 @@ void job_decref (struct job *job)
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
         subscribers_destroy (job);
+        free (job->events);
         aux_destroy (&job->aux);
         free (job);
         errno = saved_errno;
@@ -57,6 +60,10 @@ struct job *job_create (void)
 
     if (!(job = calloc (1, sizeof (*job))))
         return NULL;
+    if (!(job->events = bitmap_alloc0 (EVENTS_BITMAP_SIZE))) {
+        free (job);
+        return NULL;
+    }
     job->refcount = 1;
     job->userid = FLUX_USERID_UNKNOWN;
     job->urgency = FLUX_JOB_URGENCY_DEFAULT;
@@ -360,6 +367,31 @@ int job_events_subscribe (struct job *job, flux_plugin_t *p)
         return -1;
     }
 
+    return 0;
+}
+
+int job_event_id_set (struct job *job, int id)
+{
+    if (id < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (id >= EVENTS_BITMAP_SIZE) {
+        errno = ENOSPC;
+        return -1;
+    }
+    bitmap_set_bit (job->events, id);
+    return 0;
+}
+
+int job_event_id_test (struct job *job, int id)
+{
+    if (id < 0 || id >= EVENTS_BITMAP_SIZE) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (bitmap_test_bit (job->events, id))
+        return 1;
     return 0;
 }
 
