@@ -23,5 +23,7 @@ libccan_la_SOURCES = \
 	ccan/bitmap/bitmap.h \
 	ccan/bitmap/bitmap.c \
 	ccan/endian/endian.h \
+	ccan/compiler/compiler.h \
+	ccan/ptrint/ptrint.h \
 	ccan/build_assert/build_assert.h \
 	ccan/container_of/container_of.h
