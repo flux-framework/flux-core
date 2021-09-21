@@ -696,6 +696,17 @@ static int event_jobtap_call (struct event *event,
     return 0;
 }
 
+static int event_job_cache (struct event *event,
+                            struct job *job,
+                            const char *name)
+{
+    int id;
+    /*  Get a unique event id for event 'name' and stash it with the job */
+    if ((id = event_index (event, name)) < 0)
+        return -1;
+    return job_event_id_set (job, id);
+}
+
 int event_job_post_entry (struct event *event,
                           struct job *job,
                           const char *name,
@@ -717,6 +728,8 @@ int event_job_post_entry (struct event *event,
     if (event_job_update (job, entry) < 0) // modifies job->state
         return -1;
     job->eventlog_seq++;
+    if (event_job_cache (event, job, name) < 0)
+        return -1;
     if (!(flags & EVENT_NO_COMMIT)
         && event_batch_commit_event (event, job, entry) < 0)
         return -1;
