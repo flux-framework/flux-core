@@ -288,6 +288,45 @@ static void test_subscribe (void)
     pass ("destroy 2nd plugin after all jobs");
 }
 
+static void test_event_id_cache (void)
+{
+    struct job *job = job_create ();
+    ok (job_event_id_set (job, 1024) < 0 && errno == ENOSPC,
+        "job_event_id_set 1024 returns ENOSPC");
+    ok (job_event_id_set (job, -1) < 0 && errno == EINVAL,
+        "job_event_id_set -1 returns EINVAL");
+
+    ok (job_event_id_test (job, 1024) < 0 && errno == EINVAL,
+        "job_event_id_test 1024 returns EINVAL");
+    ok (job_event_id_test (job, -1) < 0 && errno == EINVAL,
+        "job_event_id_test -1 returns EINVAL");
+
+    ok (job_event_id_test (job, 0) == 0,
+        "job_event_id_test 0 returns 0");
+    ok (job_event_id_test (job, 63) == 0,
+        "job_event_id_test 63 returns 0");
+
+    ok (job_event_id_set (job, 0) == 0,
+        "job_event_id_set works");
+    ok (job_event_id_test (job, 0) == 1,
+        "job_event_id_test 0 now returns 1");
+    ok (job_event_id_set (job, 3) == 0,
+        "job_event_id_set works");
+    ok (job_event_id_test (job, 3) == 1,
+        "job_event_id_test 3 now returns 1");
+    ok (job_event_id_set (job, 63) == 0,
+        "job_event_id_set works");
+    ok (job_event_id_test (job, 63) == 1,
+        "job_event_id_test 63 now returns 1");
+
+    ok (job_event_id_set (job, 3) == 0,
+        "job_event_id_set of the same event works");
+    ok (job_event_id_test (job, 3) == 1,
+        "job_event_id_test of multiple set event works");
+
+    job_decref (job);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -295,6 +334,7 @@ int main (int argc, char *argv[])
     test_create ();
     test_create_from_eventlog ();
     test_subscribe ();
+    test_event_id_cache ();
 
     done_testing ();
 }

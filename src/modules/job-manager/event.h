@@ -78,6 +78,10 @@ void event_listeners_disconnect_rpc (flux_t *h,
                                      const flux_msg_t *msg,
                                      void *arg);
 
+
+/*  Return globally unique index for event name */
+int event_index (struct event *event, const char *name);
+
 #endif /* _FLUX_JOB_MANAGER_EVENT_H */
 
 /*

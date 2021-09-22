@@ -1868,6 +1868,28 @@ void flux_jobtap_job_unsubscribe (flux_plugin_t *p, flux_jobid_t id)
         job_events_unsubscribe (job, p);
 }
 
+int flux_jobtap_job_event_posted (flux_plugin_t *p,
+                                  flux_jobid_t id,
+                                  const char *name)
+{
+    int index;
+    struct job * job;
+    struct jobtap *jobtap;
+
+    if (!p
+        || !name
+        || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job = jobtap_lookup_jobid (p, id))
+        || (index = event_index (jobtap->ctx->event, name)) < 0)
+        return -1;
+    if (job_event_id_test (job, index))
+        return 1;
+    return 0;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

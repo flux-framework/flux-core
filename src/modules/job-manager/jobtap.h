@@ -176,6 +176,11 @@ int flux_jobtap_get_job_result (flux_plugin_t *p,
                                 flux_jobid_t id,
                                 flux_job_result_t *resultp);
 
+/*  Return 1 if event 'name' has been posted to job 'id', 0 if not.
+ */
+int flux_jobtap_job_event_posted (flux_plugin_t *p,
+                                  flux_jobid_t id,
+                                  const char *name);
 
 /*
  *  This function subscribes plugin 'p' to extra callbacks for job 'id'

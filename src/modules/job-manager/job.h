@@ -18,6 +18,7 @@
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libflux/plugin.h"
+#include "ccan/bitmap/bitmap.h"
 
 struct job {
     flux_jobid_t id;
@@ -45,6 +46,8 @@ struct job {
     struct grudgeset *dependencies;
 
     zlistx_t *subscribers;  // list of plugins subscribed to all job events
+
+    struct bitmap *events;  // set of events by id posted to this job
 
     void *handle;           // zlistx_t handle
     int refcount;           // private to job.c
@@ -106,6 +109,12 @@ bool job_flag_valid (struct job *job, const char *flag);
 int job_events_subscribe (struct job *job, flux_plugin_t *p);
 
 void job_events_unsubscribe (struct job *job, flux_plugin_t *p);
+
+/*  Add and test for events posted to jobs by a global event id.
+ *  (Event names are translated to id by the event class)
+ */
+int job_event_id_set (struct job *job, int id);
+int job_event_id_test (struct job *job, int id);
 
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 
