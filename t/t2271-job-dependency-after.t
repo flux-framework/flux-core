@@ -65,6 +65,23 @@ test_expect_success 'dependency=after works' '
 	flux job urgency $jobid default &&
 	flux job wait-event -vt 15 $depid clean 
 '
+test_expect_success 'dependency=after does not release job until start event' '
+	jobid=$(flux mini submit \
+		--setattr=system.exec.test.override=1 \
+		--setattr=system.exec.test.run_duration=0.001s true) &&
+	depid=$(flux mini submit --dependency=after:$jobid hostname) &&
+	flux job wait-event -t 15 $depid dependency-add &&
+	flux job wait-event -t 15 $jobid alloc &&
+	test_debug "echo antecedent in RUN state, but no start event" &&
+	test_must_fail flux job wait-event -t 0.25 $depid dependency-remove &&
+	test_debug "echo dependency not yet removed" &&
+	flux job-exec-override start $jobid &&
+	flux job wait-event -t 15 $jobid start &&
+	test_debug "echo antecedent now started" &&
+	flux job wait-event -t 15 $depid dependency-remove &&
+	flux job wait-event -t 15 $depid clean &&
+	flux job wait-event -t 15 $jobid clean
+'
 test_expect_success 'dependency=after works when antecedent is running' '
 	jobid=$(flux mini submit sleep 300) &&
 	flux job wait-event -vt 15 $jobid start &&
