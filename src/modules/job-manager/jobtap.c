@@ -539,12 +539,13 @@ static int jobtap_topic_match_count (struct jobtap *jobtap,
 }
 
 static int jobtap_stack_call (struct jobtap *jobtap,
+                              zlistx_t *plugins,
                               struct job *job,
                               const char *topic,
                               flux_plugin_arg_t *args)
 {
     int retcode = 0;
-    flux_plugin_t *p = zlistx_first (jobtap->plugins);
+    flux_plugin_t *p = zlistx_first (plugins);
 
     if (current_job_push (jobtap, job) < 0)
         return -1;
@@ -560,7 +561,7 @@ static int jobtap_stack_call (struct jobtap *jobtap,
             break;
         }
         retcode += rc;
-        p = zlistx_next (jobtap->plugins);
+        p = zlistx_next (plugins);
     }
     if (current_job_pop (jobtap) < 0)
         return -1;
@@ -583,7 +584,11 @@ int jobtap_get_priority (struct jobtap *jobtap,
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
 
-    rc = jobtap_stack_call (jobtap, job, "job.priority.get", args);
+    rc = jobtap_stack_call (jobtap,
+                            jobtap->plugins,
+                            job,
+                            "job.priority.get",
+                            args);
 
     if (rc >= 1) {
         /*
@@ -662,7 +667,11 @@ int jobtap_validate (struct jobtap *jobtap,
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
 
-    rc = jobtap_stack_call (jobtap, job, "job.validate", args);
+    rc = jobtap_stack_call (jobtap,
+                            jobtap->plugins,
+                            job,
+                            "job.validate",
+                            args);
 
     if (rc < 0) {
         /*
@@ -754,7 +763,7 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
     if (p)
         rc = flux_plugin_call (p, topic, args);
     else
-        rc = jobtap_stack_call (jobtap, job, topic, args);
+        rc = jobtap_stack_call (jobtap, jobtap->plugins, job, topic, args);
 
     if (rc == 0) {
         /*  No handler for job.dependency.<scheme>. return an error.
@@ -866,6 +875,45 @@ out:
     return rc;
 }
 
+int jobtap_notify_subscribers (struct jobtap *jobtap,
+                               struct job *job,
+                               const char *name,
+                               const char *fmt,
+                               ...)
+{
+    flux_plugin_arg_t *args;
+    char topic [64];
+    int topiclen = 64;
+    va_list ap;
+    int rc;
+
+    if (!job->subscribers)
+        return 0;
+
+    if (snprintf (topic, topiclen, "job.event.%s", name) >= topiclen) {
+        flux_log (jobtap->ctx->h, LOG_ERR,
+                  "jobtap: %s: %ju: event topic name too long",
+                  name,
+                  (uintmax_t) job->id);
+        return -1;
+    }
+
+    va_start (ap, fmt);
+    args = jobtap_args_vcreate (jobtap, job, fmt, ap);
+    va_end (ap);
+    if (!args) {
+        flux_log (jobtap->ctx->h, LOG_ERR,
+                  "jobtap: %s: %ju: failed to create plugin args",
+                  topic,
+                  (uintmax_t) job->id);
+        return -1;
+    }
+
+    rc = jobtap_stack_call (jobtap, job->subscribers, job, topic, args);
+    flux_plugin_arg_destroy (args);
+    return rc;
+}
+
 int jobtap_call (struct jobtap *jobtap,
                  struct job *job,
                  const char *topic,
@@ -902,7 +950,7 @@ int jobtap_call (struct jobtap *jobtap,
     if (!args)
         return -1;
 
-    rc = jobtap_stack_call (jobtap, job, topic, args);
+    rc = jobtap_stack_call (jobtap, jobtap->plugins, job, topic, args);
     if (rc < 0) {
         flux_log (jobtap->ctx->h, LOG_ERR,
                   "jobtap: %s: callback returned error",
@@ -1803,6 +1851,21 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
     rc = event_job_post_vpack (jobtap->ctx->event, job, name, 0, fmt, ap);
     va_end (ap);
     return rc;
+}
+
+int flux_jobtap_job_subscribe (flux_plugin_t *p, flux_jobid_t id)
+{
+    struct job *job;
+    if (!(job = jobtap_lookup_jobid (p, id)))
+        return -1;
+    return job_events_subscribe (job, p);
+}
+
+void flux_jobtap_job_unsubscribe (flux_plugin_t *p, flux_jobid_t id)
+{
+    struct job *job;
+    if ((job = jobtap_lookup_jobid (p, id)))
+        job_events_unsubscribe (job, p);
 }
 
 /*

@@ -374,6 +374,7 @@ check_LTLIBRARIES = \
 	job-manager/plugins/random.la \
 	job-manager/plugins/validate.la \
 	job-manager/plugins/dependency-test.la \
+	job-manager/plugins/subscribe.la \
 	stats/stats-basic.la \
 	stats/stats-immediate.la
 
@@ -711,6 +712,15 @@ job_manager_plugins_args_la_CPPFLAGS = \
 job_manager_plugins_args_la_LDFLAGS = \
 	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_args_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_subscribe_la_SOURCES = \
+	job-manager/plugins/subscribe.c
+job_manager_plugins_subscribe_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_subscribe_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_subscribe_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
 job_manager_plugins_test_la_SOURCES = \

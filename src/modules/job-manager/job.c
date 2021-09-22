@@ -25,6 +25,8 @@
 #include "job.h"
 #include "event.h"
 
+static void subscribers_destroy (struct job *job);
+
 void job_decref (struct job *job)
 {
     if (job && --job->refcount == 0) {
@@ -34,6 +36,7 @@ void job_decref (struct job *job)
         json_decref (job->jobspec_redacted);
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
+        subscribers_destroy (job);
         aux_destroy (&job->aux);
         free (job);
         errno = saved_errno;
@@ -225,6 +228,139 @@ int job_comparator (const void *a1, const void *a2)
     if ((rc = (-1)*NUMCMP (j1->priority, j2->priority)) == 0)
         rc = NUMCMP (j1->id, j2->id);
     return rc;
+}
+
+
+/*  This structure is stashed in a plugin which has subscribed to
+ *   job events. The reference to the plugin itself is required so
+ *   that the aux_item destructor can remove the plugin itself from
+ *   the subscribers list of any active jobs to which it had an
+ *   active subscription. (See plugin_job_subscriptions_destroy()).
+ */
+struct plugin_job_subscriptions {
+    flux_plugin_t *p;
+    zlistx_t *jobs;
+};
+
+static struct plugin_job_subscriptions *
+plugin_job_subscriptions_create (flux_plugin_t *p)
+{
+    struct plugin_job_subscriptions *ps = malloc (sizeof (*ps));
+    if (!ps || !(ps->jobs = zlistx_new ())) {
+        free (ps);
+        return NULL;
+    }
+    ps->p = p;
+    return ps;
+}
+
+static void plugin_job_subscriptions_destroy (void *arg)
+{
+    struct plugin_job_subscriptions *ps = arg;
+    if (ps) {
+        struct job *job = zlistx_first (ps->jobs);
+        while (job) {
+            job_events_unsubscribe (job, ps->p);
+            job = zlistx_next (ps->jobs);
+        }
+        zlistx_destroy (&ps->jobs);
+        free (ps);
+    }
+}
+
+/*  Clear the subscription of a plugin from a job
+ */
+static void plugin_clear_subscription (flux_plugin_t *p, struct job *job)
+{
+    struct plugin_job_subscriptions *ps;
+    if ((ps = flux_plugin_aux_get (p, "flux::job-subscriptions"))) {
+        void *handle = zlistx_find (ps->jobs, job);
+        if (handle)
+            zlistx_delete (ps->jobs, handle);
+    }
+}
+
+/*  Unsubscribe plugin p from job events.
+ *
+ *  Clear plugin p from this job's list of subscribers as well as
+ *   the job from the plugin's list of subscriptions.
+ */
+void job_events_unsubscribe (struct job *job, flux_plugin_t *p)
+{
+    void *handle;
+    if (job->subscribers
+        && (handle = zlistx_find (job->subscribers, p))) {
+
+        /*  Remove plugin from job */
+        zlistx_delete (job->subscribers, handle);
+
+        /*  Remove job from plugin */
+        plugin_clear_subscription (p, job);
+    }
+}
+
+/*  Destroy this job's plugin subscribers list.
+ *
+ *  This can't be done with a zlist destructor because we need
+ *   a reference to the struct job during destruction in order to remove
+ *   the job from all subscribed plugins subscription lists.
+ *
+ */
+static void subscribers_destroy (struct job *job)
+{
+    if (job->subscribers) {
+        flux_plugin_t *p = zlistx_first (job->subscribers);
+        while (p) {
+            plugin_clear_subscription (p, job);
+            p = zlistx_next (job->subscribers);
+        }
+    }
+    zlistx_destroy (&job->subscribers);
+}
+
+/*  Add a plugin to a job's subscribers list.
+ */
+int job_events_subscribe (struct job *job, flux_plugin_t *p)
+{
+    struct plugin_job_subscriptions *ps;
+
+    /*  Create a subscribers list for the job if it does not already exist
+     */
+    if (!job->subscribers && !(job->subscribers = zlistx_new())) {
+        errno = ENOMEM;
+        return -1;
+    }
+
+    /*  Create a subscriptions list for the plugin if it does not already
+     *   exist. Ensure that when the plugin is unloaded it is unsubscribed
+     *   from all current job events subscriptions.
+     */
+    if (!(ps = flux_plugin_aux_get (p, "flux::job-subscriptions"))) {
+        if (!(ps = plugin_job_subscriptions_create (p))
+            || flux_plugin_aux_set (p,
+                                    "flux::job-subscriptions",
+                                    ps,
+                                    plugin_job_subscriptions_destroy) < 0) {
+            plugin_job_subscriptions_destroy (ps);
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+
+    /*  Add the job to the plugin subscriptions list, and the plugin to the
+     *   the job's subscribers list. If either fails, attempt to clean up.
+     *   This may leave empty lists on the job and plugin, but those will
+     *   be ultimately destroyed when the job is inactive or theplugin is
+     *   unloaded.
+     */
+    if (!zlistx_add_end (ps->jobs, job)
+        || !zlistx_add_end (job->subscribers, p)) {
+        plugin_clear_subscription (p, job);
+        errno = ENOMEM;
+        return -1;
+    }
+
+    return 0;
 }
 
 /*

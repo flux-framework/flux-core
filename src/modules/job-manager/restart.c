@@ -14,8 +14,6 @@
 #include "config.h"
 #endif
 #include <stdlib.h>
-#include <argz.h>
-#include <envz.h>
 #include <flux/core.h>
 
 #include "src/common/libutil/fluid.h"

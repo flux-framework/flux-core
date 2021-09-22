@@ -78,6 +78,12 @@ void jobtap_handler (flux_t *h,
                      void *arg);
 
 
+int jobtap_notify_subscribers (struct jobtap *jobtap,
+                               struct job *job,
+                               const char *event_name,
+                               const char *fmt,
+                               ...);
+
 #endif /* _FLUX_JOB_MANAGER_JOBTAP_H */
 
 /*

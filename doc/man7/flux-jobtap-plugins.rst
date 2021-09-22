@@ -161,6 +161,14 @@ job.state.*
   eventlog, but before any action has been taken on that state (since the
   action could involve immediately transitioning to a new state)
 
+job.event.*
+  The ``job.event.*`` callbacks are only made for plugins that have explicitly
+  subscribed to a job with ``flux_jobtap_job_subscribe()``. In this case,
+  all job events result in this callback being invoked on all subscribed
+  plugins. This may be useful for plugins to get notification of events
+  that do not necessarily result in a state transition, e.g. the ``start``
+  event or a non-fatal ``exception``.
+
 job.state.depend
   The callback for ``FLUX_JOB_STATE_DEPEND`` is the final place from which
   a plugin may add dependencies to a job. Dependencies are added via

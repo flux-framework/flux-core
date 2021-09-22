@@ -50,6 +50,16 @@ static int cb (flux_plugin_t *p,
         return -1;
     }
 
+    if (strcmp (topic, "job.new") == 0) {
+        /*  Subscribe to events so we get all job.event.* callbacks */
+        if (flux_jobtap_job_subscribe (p, FLUX_JOBTAP_CURRENT_JOB) < 0) {
+            flux_log (h,
+                      LOG_ERR,
+                      "%s: jobtap_job_subscribe: %s",
+                       topic,
+                       strerror (errno));
+        }
+    }
     if (strncmp (topic, "job.state.", 10) == 0) {
         if (entry == NULL
             || state == 4096
