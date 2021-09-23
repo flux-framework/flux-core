@@ -57,6 +57,9 @@ type_ok (rankinfo.resources, "table",
     "rankinfo.resources is a table")
 is (rankinfo.resources.cores, "0,1",
     "rankinfo.resources.cores is expected value")
+type_ok (rankinfo.taskids, "string",
+    "rankinfo.taskids is a string")
+diag ("  rankinfo.taskids is "..rankinfo.taskids)
 
 error_like ("i = task.info", "access task",
     "trying to access task causes error")
