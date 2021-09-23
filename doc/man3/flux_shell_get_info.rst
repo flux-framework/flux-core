@@ -60,7 +60,14 @@ string with the following layout:
 
    "broker_rank":i,
    "ntasks":i
+   "taskids":s
    "resources": { "cores":s, ... }
+
+where ``broker_rank`` is the broker rank on which the target shell rank
+of the query is running, ``ntasks`` is the number of tasks running under
+that shell rank, ``taskids`` is a list of task id assignments for those
+tasks (an RFC 22 idset string), and ``resources`` is a dictionary of
+resource name to resource ids assigned to the shell rank.
 
 ``flux_shell_info_unpack()`` and ``flux_shell_rank_info_unpack()``
 accomplished the same thing with Jansson-style formatting arguments.
