@@ -118,6 +118,7 @@ int flux_shell_info_unpack (flux_shell_t *shell,
  *  {
  *   "broker_rank":i,
  *   "ntasks":i
+ *   "taskids": s // task id list for this rank in RFC 22 idset form.
  *   "resources": { "cores":s, ... }
  *  }
  */

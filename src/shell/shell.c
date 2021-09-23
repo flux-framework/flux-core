@@ -22,6 +22,7 @@
 #include <jansson.h>
 #include <flux/core.h>
 #include <flux/shell.h>
+#include <flux/idset.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/liboptparse/optparse.h"
@@ -431,10 +432,32 @@ int flux_shell_info_unpack (flux_shell_t *shell, const char *fmt, ...)
     return rc;
 }
 
+static char *get_rank_task_idset (struct rcalc_rankinfo *ri)
+{
+    struct idset *ids;
+    char *result = NULL;
+
+    /*  Note: assumes taskids are always mapped using "block" allocation
+     */
+    int first = ri->global_basis;
+    int last = ri->global_basis + ri->ntasks - 1;
+
+    if (!(ids = idset_create (last+1, 0))
+        || idset_range_set (ids, first, last) < 0)
+        goto out;
+
+    result = idset_encode (ids, IDSET_FLAG_RANGE);
+out:
+    idset_destroy (ids);
+    return result;
+}
+
 static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
 {
     json_t *o;
+    json_error_t error;
     char key [128];
+    char *taskids = NULL;
     struct rcalc_rankinfo ri;
 
     if (!shell->info)
@@ -451,12 +474,19 @@ static json_t *flux_shell_get_rank_info_object (flux_shell_t *shell, int rank)
     if ((o = flux_shell_aux_get (shell, key)))
         return o;
 
-    if (!(o = json_pack ("{ s:i s:i s:{s:s s:s?}}",
-                         "broker_rank", ri.rank,
-                         "ntasks", ri.ntasks,
-                         "resources",
-                           "cores", shell->info->rankinfo.cores,
-                           "gpus",  shell->info->rankinfo.gpus)))
+    if (!(taskids = get_rank_task_idset (&ri)))
+        return NULL;
+
+    o = json_pack_ex (&error, 0, "{ s:i s:i s:s s:{s:s s:s?}}",
+                   "broker_rank", ri.rank,
+                   "ntasks", ri.ntasks,
+                   "taskids", taskids,
+                   "resources",
+                     "cores", shell->info->rankinfo.cores,
+                     "gpus",  shell->info->rankinfo.gpus);
+    free (taskids);
+
+    if (o == NULL)
         return NULL;
 
     if (flux_shell_aux_set (shell, key, o, (flux_free_f) json_decref) < 0) {
