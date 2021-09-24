@@ -61,7 +61,8 @@ test_expect_success 'flux-python command runs a python that finds flux' '
 
 test_expect_success 'flux-python command runs the configured python' '
 	define_line=$(grep "^#define PYTHON_INTERPRETER" ${FLUX_BUILD_DIR}/config/config.h) &&
-	expected=$(echo ${define_line} | sed -E '\''s~.*define PYTHON_INTERPRETER "(.*)"~\1~'\'') &&
+	pypath=$(echo ${define_line} | sed -E '\''s~.*define PYTHON_INTERPRETER "(.*)"~\1~'\'') &&
+	expected=$(${pypath} -c "import sys; print(sys.executable)") &&
 	actual=$(flux python -c "import sys; print(sys.executable)") &&
 	test "${expected}" = "${actual}"
 '
