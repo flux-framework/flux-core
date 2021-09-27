@@ -208,6 +208,12 @@ int main (int argc, char *argv[])
                           "FLUX_PMI_LIBRARY_PATH",
                           flux_conf_builtin_get ("pmi_library_path", flags), 0);
 
+    /*  Deduplicate any other FLUX_* PATH-type environment variables by
+     *   calling enviornment_from_env() on them
+     */
+    environment_from_env (env, "FLUX_RC_EXTRA", NULL, ':');
+    environment_from_env (env, "FLUX_SHELL_RC_PATH", NULL, ':');
+
     environment_apply (env);
 
     /* If --parent, push parent environment for each occurence
