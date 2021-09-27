@@ -146,7 +146,8 @@ void environment_unset (struct environment *e, const char *key);
  * @param e the environment to act on
  * @param key the key to initialize
  * @param default_base the default value to use if the environment variable is
- * unset
+ *  unset. If default_base == NULL then do not set a default (if the key
+ *  is unset, leave it unset).
  * @param separator the separator between tokens in the value
  */
 void environment_from_env (struct environment *e,

@@ -208,6 +208,8 @@ void environment_from_env (struct environment *e,
                            char separator)
 {
     const char *env = getenv (key);
+    if (!env && !default_base)
+        return;
     if (!env)
         env = default_base;
     environment_set (e, key, env, separator);
