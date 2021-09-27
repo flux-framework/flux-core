@@ -493,6 +493,12 @@ test_expect_success 'flux appends colon to missing or unset MANPATH' '
       (unset MANPATH && flux /usr/bin/printenv | grep "MANPATH=.*:$") &&
       MANPATH= flux /usr/bin/printenv | grep "MANPATH=.*:$"
 '
+test_expect_success 'flux deduplicates FLUX_RC_EXTRA & FLUX_SHELL_RC_PATH' '
+    FLUX_RC_EXTRA=/foo:/bar:/foo \
+        flux /usr/bin/printenv FLUX_RC_EXTRA | grep "^/foo:/bar$" &&
+    FLUX_SHELL_RC_PATH=/foo:/bar:/foo \
+        flux /usr/bin/printenv FLUX_SHELL_RC_PATH | grep "^/foo:/bar$"
+'
 test_expect_success 'builtin test_size_large () works' '
     size=$(test_size_large)  &&
     test -n "$size" &&
