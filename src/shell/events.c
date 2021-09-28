@@ -11,6 +11,7 @@
 /*  Shell exec.eventlog event emitter
  *  Allows context for shell events to be added from multiple sources.
  */
+#define FLUX_SHELL_PLUGIN_NAME NULL
 
 #if HAVE_CONFIG_H
 #include "config.h"

@@ -7,6 +7,7 @@
  *
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
+#define FLUX_SHELL_PLUGIN_NAME NULL
 
 /* Load and run shell rc script
  *
@@ -547,7 +548,7 @@ static int call_shell_log (int level, lua_State *L)
     const char *s = lua_tostring (L, 1);
 
     get_lua_sourceinfo (L, &ar, &file, &line);
-    flux_shell_log (level, file, line, "%s", s);
+    flux_shell_log (NULL, level, file, line, "%s", s);
     return 0;
 }
 
@@ -582,7 +583,7 @@ static int l_shell_die (lua_State *L)
     const char *s = lua_tostring (L, 1);
 
     get_lua_sourceinfo (L, &ar, &file, &line);
-    flux_shell_fatal (file, line, 0, 1, "%s", s);
+    flux_shell_fatal (NULL, file, line, 0, 1, "%s", s);
     return 0;
 }
 

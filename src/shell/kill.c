@@ -12,6 +12,7 @@
  *
  * Handle 'shell-<id>.kill' events by forwarding signal to local tasks
  */
+#define FLUX_SHELL_PLUGIN_NAME "kill_event_handler"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -49,7 +50,7 @@ static int kill_event_init (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_kill = {
-    .name = "kill_event_handler",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = kill_event_init,
 };
 

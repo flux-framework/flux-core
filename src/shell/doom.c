@@ -24,6 +24,7 @@
  *   Raise the fatal exception immediately if the first task fails,
  *   e.g. calls exit with a nonzero value or is terminated by signal.
  */
+#define FLUX_SHELL_PLUGIN_NAME "doom"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -288,7 +289,7 @@ static int doom_init (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_doom = {
-    .name = "doom",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = doom_init,
     .task_exit = doom_task_exit,
 };

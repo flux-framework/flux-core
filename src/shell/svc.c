@@ -25,6 +25,7 @@
  * - Services should not be used until after the shells exit the init barrier,
  *   to ensure service registration has completed.
  */
+#define FLUX_SHELL_PLUGIN_NAME NULL
 
 #if HAVE_CONFIG_H
 #include "config.h"

@@ -10,6 +10,8 @@
 
 /* batch script handler
  */
+#define FLUX_SHELL_PLUGIN_NAME "batch"
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -216,7 +218,7 @@ static int batch_init (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_batch = {
-    .name = "batch",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = batch_init,
 };
 

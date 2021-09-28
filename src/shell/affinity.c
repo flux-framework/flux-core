@@ -10,6 +10,8 @@
 
 /* builtin cpu-affinity processing
  */
+#define FLUX_SHELL_PLUGIN_NAME "cpu-affinity"
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -314,7 +316,7 @@ static int affinity_init (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_affinity = {
-    .name = "affinity",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = affinity_init,
 };
 

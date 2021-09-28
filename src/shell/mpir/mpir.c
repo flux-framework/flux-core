@@ -11,10 +11,12 @@
 /* MPIR_proctable service for job shell
  *
  */
+#define FLUX_SHELL_PLUGIN_NAME "mpir"
 
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+
 #include <unistd.h>
 #include <stdio.h>
 #include <string.h>
@@ -386,7 +388,7 @@ static int mpir_service_init (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_mpir = {
-    .name = "mpir",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = mpir_service_init,
 };
 
