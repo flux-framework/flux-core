@@ -7,6 +7,7 @@
  *
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
+#define FLUX_SHELL_PLUGIN_NAME "getopt"
 
 #if HAVE_CONFIG_H
 #include "config.h"

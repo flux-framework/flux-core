@@ -7,6 +7,7 @@
  *
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
+#define FLUX_SHELL_PLUGIN_NAME "event-test"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -47,7 +48,7 @@ static int check_event_context (flux_plugin_t *p,
 
 int flux_plugin_init (flux_plugin_t *p)
 {
-    flux_plugin_set_name (p, "event-test");
+    flux_plugin_set_name (p, FLUX_SHELL_PLUGIN_NAME);
     return flux_plugin_add_handler (p,
                                     "shell.init",
                                     check_event_context,

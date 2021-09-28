@@ -7,6 +7,7 @@
  *
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
+#define FLUX_SHELL_PLUGIN_NAME "log"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -85,7 +86,7 @@ static void destructor (void *arg)
 int flux_plugin_init (flux_plugin_t *p)
 {
     plan (NO_PLAN);
-    flux_plugin_set_name (p, "log");
+    flux_plugin_set_name (p, FLUX_SHELL_PLUGIN_NAME);
 
     /*  Set a dummy aux item to force our destructor to be called */
     flux_plugin_aux_set (p, NULL, p, destructor);
