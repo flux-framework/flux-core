@@ -38,7 +38,6 @@ struct plugstack {
     zhashx_t *aux;      /* aux items to propagate to loaded plugins        */
     zlistx_t *plugins;  /* Ordered list of loaded plugins                  */
     zhashx_t *names;    /* Hash for lookup of plugins by name              */
-    zlistx_t *current;  /* stack holding current plugin in plugstack_call  */
 };
 
 void plugstack_unload_name (struct plugstack *st, const char *name)
@@ -109,7 +108,6 @@ void plugstack_destroy (struct plugstack *st)
     if (st) {
         int saved_errno = errno;
         zlistx_destroy (&st->plugins);
-        zlistx_destroy (&st->current);
         zhashx_destroy (&st->names);
         zhashx_destroy (&st->aux);
         free (st->searchpath);
@@ -129,7 +127,6 @@ struct plugstack * plugstack_create (void)
     struct plugstack *st = calloc (1, sizeof (*st));
     if (!st
         || !(st->plugins = zlistx_new ())
-        || !(st->current = zlistx_new ())
         || !(st->names = zhashx_new ())
         || !(st->aux = zhashx_new ())) {
         plugstack_destroy (st);
@@ -137,17 +134,6 @@ struct plugstack * plugstack_create (void)
     }
     zlistx_set_destructor (st->plugins, (zlistx_destructor_fn *) plugin_destroy);
     return (st);
-}
-
-const char *plugstack_current_name (struct plugstack *st)
-{
-    if (!st) {
-        errno = EINVAL;
-        return NULL;
-    }
-    if (!st->current)
-        return NULL;
-    return flux_plugin_get_name (zlistx_first (st->current));
 }
 
 /*  Copy the plugin list, unsetting the destructor so plugins aren't
@@ -176,16 +162,12 @@ int plugstack_call (struct plugstack *st,
 
     p = zlistx_first (l);
     while (p) {
-        /*  Push plugin onto the current plugin stack */
-        void * item = zlistx_add_start (st->current, p);
         if (flux_plugin_call (p, name, args) < 0) {
             shell_log_error ("plugin '%s': %s failed",
-                             plugstack_current_name (st),
+                             flux_plugin_get_name (p),
                              name);
             rc = -1;
         }
-        /* Pop plugin from the current plugin stack */
-        zlistx_detach (st->current, item);
         p = zlistx_next (l);
     }
     zlistx_destroy (&l);
