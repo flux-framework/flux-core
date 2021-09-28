@@ -141,9 +141,12 @@ static int log_event (int level,
     return rc;
 }
 
-static void send_logmsg (const char *buf, int level, const char *file, int line)
+static void send_logmsg (const char *buf,
+                         int level,
+                         const char *component,
+                         const char *file,
+                         int line)
 {
-    const char *component = plugstack_current_name (logger.shell->plugstack);
     if (logger.rank < 0 && logger.shell->info)
         logger.rank = logger.shell->info->shell_rank;
     if (log_event (level, logger.rank, component, file, line, buf) < 0)
@@ -190,7 +193,8 @@ static int msgfmt (char *buf,
     return 0;
 }
 
-void flux_shell_log (int level,
+void flux_shell_log (const char *component,
+                     int level,
                      const char *file,
                      int line,
                      const char *fmt, ...)
@@ -199,7 +203,7 @@ void flux_shell_log (int level,
     va_list ap;
     va_start (ap, fmt);
     if (msgfmt (buf, sizeof (buf), 0, fmt, ap) == 0)
-        send_logmsg (buf, level, file, line);
+        send_logmsg (buf, level, component, file, line);
     va_end (ap);
 }
 
@@ -221,25 +225,27 @@ void shell_llog (void *arg,
         buf[buflen-1] = '\0';
         buf[buflen-2] = '+';
     }
-    flux_shell_log (level, file, line, "%s", buf);
+    flux_shell_log (subsys, level, file, line, "%s", buf);
 }
 
-int flux_shell_err (const char *file,
-                   int line,
-                   int errnum,
-                   const char *fmt, ...)
+int flux_shell_err (const char *component,
+                    const char *file,
+                    int line,
+                    int errnum,
+                    const char *fmt, ...)
 {
     char buf [4096];
     va_list ap;
     va_start (ap, fmt);
     if (msgfmt (buf, sizeof (buf), errnum, fmt, ap) == 0)
-        send_logmsg (buf, FLUX_SHELL_ERROR, file, line);
+        send_logmsg (buf, FLUX_SHELL_ERROR, component, file, line);
     va_end (ap);
     errno = errnum;
     return -1;
 }
 
-void flux_shell_fatal (const char *file,
+void flux_shell_fatal (const char *component,
+                       const char *file,
                        int line,
                        int errnum,
                        int exit_code,
@@ -254,7 +260,7 @@ void flux_shell_fatal (const char *file,
     if (msgfmt (buf, sizeof (buf), errnum, fmt, ap) < 0)
         sprintf (buf, "flux-shell: fatal error");
     else
-        send_logmsg (buf, FLUX_SHELL_FATAL, file, line);
+        send_logmsg (buf, FLUX_SHELL_FATAL, component, file, line);
     va_end (ap);
 
     /*  Attempt to kill any running tasks
