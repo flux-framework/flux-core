@@ -13,7 +13,8 @@ SYNOPSIS
 
 ::
 
-   void flux_shell_log (int level,
+   void flux_shell_log (const char *component,
+                        int level,
                         const char *file,
                         int line,
                         const char *fmt,
@@ -21,7 +22,8 @@ SYNOPSIS
 
 ::
 
-   int flux_shell_err (const char *file,
+   int flux_shell_err (const char *component,
+                       const char *file,
                        int line,
                        int errnum,
                        const char *fmt,
@@ -29,7 +31,8 @@ SYNOPSIS
 
 ::
 
-   void flux_shell_fatal (const char *file,
+   void flux_shell_fatal (const char *component,
+                          const char *file,
                           int line,
                           int errnum,
                           int exit_code,
@@ -45,9 +48,15 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_shell_log()`` logs a message at ``level`` to all loggers registered
-to receive messages at that severity or greater. See ``flux_log`` for a
-list of supported levels. The following macros handle common levels.
+``flux_shell_log()`` logs a message at for shell component or plugin
+``component`` at ``level`` to all loggers registered to receive messages
+at that severity or greater. See ``flux_log`` for a list of supported levels.
+
+
+The following macros handle common levels. For external shell plugins,
+the required macro ``FLUX_SHELL_PLUGIN_NAME`` is automatically substituted
+for the ``component`` in all macros.
+
 
 ::
 

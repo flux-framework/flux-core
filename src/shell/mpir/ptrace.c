@@ -18,6 +18,8 @@
  *   3. Add "sync=true" to the emitted `shell.start` event
  *       to indicate all tasks are now stopped in exec().
  */
+#define FLUX_SHELL_PLUGIN_NAME "ptrace"
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -140,7 +142,7 @@ static int ptrace_init (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_ptrace = {
-    .name =      "ptrace",
+    .name =      FLUX_SHELL_PLUGIN_NAME,
     .init =      ptrace_init,
 };
 

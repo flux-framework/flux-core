@@ -17,6 +17,7 @@
  * SIGTERM - forward
  *
  */
+#define FLUX_SHELL_PLUGIN_NAME "signals"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -65,7 +66,7 @@ static int signals_init (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_signals = {
-    .name = "sighandler",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = signals_init,
 };
 

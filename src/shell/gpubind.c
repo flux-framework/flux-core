@@ -13,6 +13,7 @@
  * Builtin GPU binding for flux-shell. Spread CUDA_VISIBLE_DEVICES
  *  across tasks depending on number in slot.
  */
+#define FLUX_SHELL_PLUGIN_NAME "gpu-affinity"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -151,7 +152,7 @@ static int gpubind_init (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_gpubind = {
-    .name = "gpu-affinity",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = gpubind_init
 };
 

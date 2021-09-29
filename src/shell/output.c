@@ -39,6 +39,7 @@
  * - The number of in-flight write requests on each shell is limited to
  *   shell_output_hwm, to avoid matchtag exhaustion, etc. for chatty tasks.
  */
+#define FLUX_SHELL_PLUGIN_NAME "output"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -1151,7 +1152,7 @@ static int shell_output_init (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_output = {
-    .name = "output",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = shell_output_init,
     .task_init = shell_output_task_init
 };

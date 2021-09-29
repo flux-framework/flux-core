@@ -299,32 +299,47 @@ enum {
     FLUX_SHELL_TRACE  = 7,  /* LOG_DEBUG   */
 };
 
+#ifndef FLUX_SHELL_PLUGIN_NAME
+# error "FLUX_SHELL_PLUGIN_NAME must be defined"
+#endif
+
 #define shell_trace(...) \
-    flux_shell_log (FLUX_SHELL_TRACE, __FILE__, __LINE__, __VA_ARGS__)
+    flux_shell_log (FLUX_SHELL_PLUGIN_NAME, \
+                    FLUX_SHELL_TRACE, __FILE__, __LINE__, __VA_ARGS__)
 
 #define shell_debug(...) \
-    flux_shell_log (FLUX_SHELL_DEBUG, __FILE__, __LINE__, __VA_ARGS__)
+    flux_shell_log (FLUX_SHELL_PLUGIN_NAME, \
+                    FLUX_SHELL_DEBUG, __FILE__, __LINE__, __VA_ARGS__)
 
 #define shell_log(...) \
-    flux_shell_log (FLUX_SHELL_NOTICE, __FILE__, __LINE__, __VA_ARGS__)
+    flux_shell_log (FLUX_SHELL_PLUGIN_NAME, \
+                    FLUX_SHELL_NOTICE, __FILE__, __LINE__, __VA_ARGS__)
 
 #define shell_warn(...) \
-    flux_shell_log (FLUX_SHELL_WARN, __FILE__, __LINE__, __VA_ARGS__)
+    flux_shell_log (FLUX_SHELL_PLUGIN_NAME, \
+                    FLUX_SHELL_WARN, __FILE__, __LINE__, __VA_ARGS__)
 
 #define shell_log_error(...) \
-    flux_shell_log (FLUX_SHELL_ERROR, __FILE__, __LINE__, __VA_ARGS__)
+    flux_shell_log (FLUX_SHELL_PLUGIN_NAME, \
+                    FLUX_SHELL_ERROR, __FILE__, __LINE__, __VA_ARGS__)
 
 #define shell_log_errn(errn, ...) \
-    flux_shell_err (__FILE__, __LINE__, errn, __VA_ARGS__)
+    flux_shell_err (FLUX_SHELL_PLUGIN_NAME, \
+                    __FILE__, __LINE__, errn, __VA_ARGS__)
 
 #define shell_log_errno(...) \
-    flux_shell_err (__FILE__, __LINE__, errno, __VA_ARGS__)
+    flux_shell_err (FLUX_SHELL_PLUGIN_NAME, \
+                    __FILE__, __LINE__, errno, __VA_ARGS__)
 
 #define shell_die(code,...) \
-    flux_shell_fatal (__FILE__, __LINE__, 0, code, __VA_ARGS__)
+    flux_shell_fatal (FLUX_SHELL_PLUGIN_NAME, \
+                      __FILE__, __LINE__, \
+                      0, code, __VA_ARGS__)
 
 #define shell_die_errno(code,...) \
-    flux_shell_fatal (__FILE__, __LINE__, errno, code, __VA_ARGS__)
+    flux_shell_fatal (FLUX_SHELL_PLUGIN_NAME, \
+                      __FILE__, __LINE__, \
+                      errno, code, __VA_ARGS__)
 
 #define shell_set_verbose(n) \
     flux_shell_log_setlevel(FLUX_SHELL_NOTICE+n, NULL)
@@ -334,11 +349,12 @@ enum {
 
 /*  Log a message at level to all registered loggers at level or above
  */
-void flux_shell_log (int level,
+void flux_shell_log (const char *component,
+                     int level,
                      const char *file,
                      int line,
                      const char *fmt, ...)
-                     __attribute__ ((format (printf, 4, 5)));
+                     __attribute__ ((format (printf, 5, 6)));
 
 /*  Log a message at FLUX_SHELL_ERROR level, additionally appending the
  *   result of strerror (errnum) for convenience.
@@ -346,22 +362,24 @@ void flux_shell_log (int level,
  *  Returns -1 with errno = errnum, so that the function can be used as
  *   return flux_shell_err (...);
  */
-int flux_shell_err (const char *file,
+int flux_shell_err (const char *component,
+                    const char *file,
                     int line,
                     int errnum,
                     const char *fmt, ...)
-                    __attribute__ ((format (printf, 4, 5)));
+                    __attribute__ ((format (printf, 5, 6)));
 
 /*  Log a message at FLUX_SHELL_FATAL level and schedule termination of
  *   the job shell. May generate an exception if tasks are already
  *   running. Exits with exit_code.
  */
-void flux_shell_fatal (const char *file,
-                      int line,
-                      int errnum,
-                      int exit_code,
-                      const char *fmt, ...)
-                      __attribute__ ((format (printf, 5, 6)));
+void flux_shell_fatal (const char *component,
+                       const char *file,
+                       int line,
+                       int errnum,
+                       int exit_code,
+                       const char *fmt, ...)
+                       __attribute__ ((format (printf, 6, 7)));
 
 /*  Set default severity of logging destination 'dest' to level.
  *   If dest == NULL then set the internal log dispatch level --

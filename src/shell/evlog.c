@@ -28,6 +28,7 @@
  *   plugins to be set independently of the main shell log
  *   facility level.
  */
+#define FLUX_SHELL_PLUGIN_NAME "evlog"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -213,7 +214,7 @@ err:
 }
 
 struct shell_builtin builtin_log_eventlog = {
-    .name = "evlog",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .connect = log_eventlog_start,
 };
 

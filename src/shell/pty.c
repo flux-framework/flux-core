@@ -8,6 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#define FLUX_SHELL_PLUGIN_NAME "pty"
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -188,7 +190,7 @@ static int pty_task_exit (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_pty = {
-    .name = "pty",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = pty_init,
     .task_exec = pty_task_exec,
     .task_exit = pty_task_exit,

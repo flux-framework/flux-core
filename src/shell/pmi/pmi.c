@@ -50,6 +50,7 @@
  * - Teardown of the subprocess channel is deferred until task completion,
  *   although client closes its end after PMI_Finalize().
  */
+#define FLUX_SHELL_PLUGIN_NAME "pmi"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -673,7 +674,7 @@ static int shell_pmi_task_init (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_pmi = {
-    .name = "pmi",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = shell_pmi_init,
     .task_init = shell_pmi_task_init,
 };

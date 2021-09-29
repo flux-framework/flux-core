@@ -39,31 +39,6 @@ static int bar (flux_plugin_t *p, const char *s,
                                  "{s:s}", "result", "called bar");
 }
 
-static int next_level (flux_plugin_t *p, const char *s,
-                       flux_plugin_arg_t *args, void *arg)
-{
-    struct plugstack *st = arg;
-    return flux_plugin_arg_pack (args,
-                                 FLUX_PLUGIN_ARG_OUT,
-                                 "{s:s}",
-                                 "next_name", plugstack_current_name (st));
-}
-
-static int check_name (flux_plugin_t *p, const char *s,
-                       flux_plugin_arg_t *args, void *arg)
-{
-    struct plugstack *st = arg;
-    int rc = flux_plugin_arg_pack (args,
-                                   FLUX_PLUGIN_ARG_OUT,
-                                   "{s:s}",
-                                   "name", plugstack_current_name (st));
-    ok (rc == 0,
-        "in check_name: flux_plugin_arg_pack worked");
-
-    /* Check a recursive call to plugstack_call () */
-    return plugstack_call (st, "next.level", args);
-}
-
 void test_invalid_args (struct plugstack *st, flux_plugin_t *p)
 {
     ok (plugstack_push (NULL, p) < 0 && errno == EINVAL,
@@ -85,8 +60,6 @@ void test_invalid_args (struct plugstack *st, flux_plugin_t *p)
         "plugstack_plugin_aux_set (NULL, ...) returns EINVAL");
     ok (plugstack_plugin_aux_set (st, NULL, NULL) < 0 && errno == EINVAL,
         "plugstack_plugin_aux_set (NULL, ...) returns EINVAL");
-    ok (plugstack_current_name (NULL) == NULL && errno == EINVAL,
-        "plugstack_current_name (NULL) returns EINVAL");
 }
 
 void test_load (void)
@@ -184,14 +157,10 @@ int main (int argc, char **argv)
 
     ok (flux_plugin_add_handler (p1, "callback", foo, NULL) == 0,
         "flux_plugin_add_handler (p1, 'callback', &foo)");
-    ok (flux_plugin_add_handler (p1, "check.name", check_name, st) == 0,
-        "flux_plugin_add_handler (p1, 'check.name', &check_name)");
     ok (flux_plugin_add_handler (p2, "callback", bar, NULL) == 0,
         "flux_plugin_add_handler (p2, 'callback', &bar)");
     ok (flux_plugin_add_handler (p3, "callback", bar, NULL) == 0,
         "flux_plugin_add_handler (p3, 'callback', &bar)");
-    ok (flux_plugin_add_handler (p3, "next.level", next_level, st) == 0,
-        "flux_plugin_add_handler (p3, 'next.level', &next_level)");
 
     if (!(args = flux_plugin_arg_create ()))
         BAIL_OUT ("flux_plugin_args_create");
@@ -221,26 +190,6 @@ int main (int argc, char **argv)
         "flux_plugin_arg_unpack");
     is (result, "called bar",
         "plugstack_call called bar() last");
-
-    /*  Check plugin_current_name() and recursive plugstack_call()
-     *   between two plugins.
-     */
-    ok (plugstack_call (st, "check.name", args) == 0,
-        "plugstack_call (st, 'check.name')");
-    ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
-                                "{s:s}", "name", &result) == 0,
-        "flux_plugin_arg_unpack");
-    is (result, "mikey",
-        "plugstack_current_name() worked");
-
-    ok (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_OUT,
-                                "{s:s}", "next_name", &result) == 0,
-        "flux_plugin_arg_unpack");
-    is (result, "joey",
-        "plugstack_current_name() worked");
-
-    ok (plugstack_current_name (st) == NULL,
-        "plugstack_current_name() outside of plugstack_call returns NULL");
 
     called_foo = 0;
     called_bar = 0;

@@ -14,6 +14,7 @@
  * stdin from front-end command or file is read for redirected
  * standard input.
  */
+#define FLUX_SHELL_PLUGIN_NAME "input"
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -598,7 +599,7 @@ static int shell_input_task_exit (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_input = {
-    .name = "input",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = shell_input_init,
     .task_init = shell_input_task_init,
     .task_exit = shell_input_task_exit

@@ -8,6 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#define FLUX_SHELL_PLUGIN_NAME "tmpdir"
+
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
@@ -110,7 +112,7 @@ static int tmpdir_init (flux_plugin_t *p,
 }
 
 struct shell_builtin builtin_tmpdir = {
-    .name = "tmpdir",
+    .name = FLUX_SHELL_PLUGIN_NAME,
     .init = tmpdir_init,
 };
 

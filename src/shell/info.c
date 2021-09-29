@@ -9,6 +9,7 @@
 \************************************************************/
 
 /* job shell info */
+#define FLUX_SHELL_PLUGIN_NAME NULL
 
 #if HAVE_CONFIG_H
 #include "config.h"
