@@ -25,7 +25,7 @@ struct jobinfo;
  *
  *  An exec implementation must include the methods below:
  *
- *   - config:  (optional) called once at module load for configuraiton
+ *   - config:  (optional) called once at module load for configuration
  *
  *   - unload:  (optional) called once at module unload
  *
