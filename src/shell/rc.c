@@ -326,8 +326,12 @@ static int shell_run_rcfile (flux_shell_t *shell,
                              const char *rcfile)
 {
     struct stat sb;
+
     if (!shell || !L || !rcfile)
         return -1;
+
+    shell_trace ("trying to load %s", rcfile);
+
     if (stat (rcfile, &sb) < 0)
         return -1;
     file_stack_push (rcfile);
