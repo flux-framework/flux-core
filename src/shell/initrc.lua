@@ -4,6 +4,9 @@ plugin.load { file = "*.so", conf = {} }
 -- Source all rc files under shell.rcpath/lua.d/*.lua of shell rcpath:
 shell.source_rcpath ("*.lua")
 
+-- Attempt to load an mpi version specific rc from rcpath:
+shell.source_rcpath_option ("mpi")
+
 -- If userrc is set in shell options, then load the user supplied initrc here:
 if shell.options.userrc then source (shell.options.userrc) end
 
