@@ -142,11 +142,13 @@ static int sched_cb (flux_plugin_t *p,
 
     if (flux_jobtap_job_set_flag (p,
                                   FLUX_JOBTAP_CURRENT_JOB,
-                                  "alloc-bypass") < 0)
-        return flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
-                                            "alloc", 0,
-                                            "Failed to set alloc-bypass: %s",
-                                            strerror (errno));
+                                  "alloc-bypass") < 0) {
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "alloc", 0,
+                                     "Failed to set alloc-bypass: %s",
+                                     strerror (errno));
+        return -1;
+    }
     return 0;
 }
 
