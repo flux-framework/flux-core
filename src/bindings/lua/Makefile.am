@@ -15,6 +15,7 @@ nobase_dist_lua_SCRIPTS = \
 	flux/timer.lua \
 	flux/alt_getopt.lua \
 	flux/posix.lua \
+	flux/shell.lua \
 	flux/Subcommander.lua
 
 nobase_dist_fluxometer_SCRIPTS = \

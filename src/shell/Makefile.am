@@ -22,7 +22,6 @@ dist_shellrc_SCRIPTS = \
 	initrc.lua
 
 dist_shelllua_SCRIPTS = \
-	lua.d/00-lib.lua \
 	lua.d/mvapich.lua \
 	lua.d/intel_mpi.lua \
 	lua.d/openmpi.lua \
