@@ -61,34 +61,51 @@ done:
     flux_future_destroy (f);
 }
 
+static flux_future_t *commit_R (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                const char *R)
+{
+    flux_future_t *f = NULL;
+    flux_kvs_txn_t *txn = NULL;
+    flux_t *h = flux_jobtap_get_flux (p);
+    char key[64];
+
+    if (!h
+        || flux_job_kvs_key (key, sizeof (key), id, "R") < 0
+        || !(txn = flux_kvs_txn_create ()))
+        return NULL;
+
+    if (flux_kvs_txn_put (txn, 0, key, R) < 0)
+        goto out;
+
+    f = flux_kvs_commit (h, NULL, 0, txn);
+out:
+    flux_kvs_txn_destroy (txn);
+    return f;
+}
+
 static int alloc_start (flux_plugin_t *p,
                         flux_jobid_t id,
                         const char *R)
 {
-    flux_t *h;
-    char key[64];
     flux_future_t *f = NULL;
-    flux_kvs_txn_t *txn = NULL;
     flux_jobid_t *idptr = NULL;
 
-    if (!(h = flux_jobtap_get_flux (p))
-        || flux_job_kvs_key (key, sizeof (key), id, "R") < 0
-        || !(txn = flux_kvs_txn_create ())
-        || flux_kvs_txn_put (txn, 0, key, R) < 0
-        || !(f = flux_kvs_commit (h, NULL, 0, txn))
-        || flux_future_then (f, -1, alloc_continuation, p)
-        || !(idptr = calloc (1, sizeof (*idptr)))
-        || flux_future_aux_set (f, "jobid", idptr, free) < 0) {
-        flux_kvs_txn_destroy (txn);
-        flux_future_destroy (f);
-        free (idptr);
-        return -1;
-    }
-    *idptr = id;
-    flux_kvs_txn_destroy (txn);
-    return 0;
-}
+    if (!(f = commit_R (p, id, R))
+        || flux_future_then (f, -1, alloc_continuation, p) < 0)
+        goto error;
 
+    if (!(idptr = malloc (sizeof (*idptr)))
+        || flux_future_aux_set (f, "jobid", idptr, free) < 0)
+        goto error;
+
+    *idptr = id;
+    return 0;
+error:
+    flux_future_destroy (f);
+    free (idptr);
+    return -1;
+}
 
 static int sched_cb (flux_plugin_t *p,
                      const char *topic,
