@@ -40,12 +40,14 @@ static void alloc_continuation (flux_future_t *f, void *arg)
                                      *idptr,
                                      "alloc",
                                      "{s:b}",
-                                     "bypass", true) < 0)
+                                     "bypass", true) < 0) {
         flux_jobtap_raise_exception (p,
                                      *idptr,
                                      "alloc", 0,
                                      "failed to post alloc event: %s",
                                      strerror (errno));
+        goto done;
+    }
 
     /*  Set "needs-free" so that alloc-bypass knows that a "free"
      *   event needs to be emitted for this node.
