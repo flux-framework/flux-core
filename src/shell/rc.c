@@ -889,6 +889,17 @@ int shell_rc (flux_shell_t *shell, const char *rcfile)
     /* Save shell global */
     rc_shell = shell;
     free (copy);
+
+    /* Load any flux.shell Lua library */
+    lua_getglobal (L, "require");
+    lua_pushstring (L, "flux.shell");
+    if (lua_pcall (L, 1, LUA_MULTRET, 0) != 0) {
+        shell_debug ("Error loading flux.shell module: %s",
+                     lua_tostring (L, -1));
+    }
+    else
+        shell_trace ("Sucessfully loaded flux.shell module");
+    lua_settop (L, 0);
     return shell_run_rcfile (shell, L, rcfile);
 }
 
