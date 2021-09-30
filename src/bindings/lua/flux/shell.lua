@@ -8,6 +8,10 @@
 -- SPDX-License-Identifier: LGPL-3.0
 -------------------------------------------------------------
 
+if shell == nil then
+    error ("This module can only be imported from the Flux job shell")
+end
+
 --  Useful functions shared by all subsequently loaded
 --   shell Lua plugins
 
