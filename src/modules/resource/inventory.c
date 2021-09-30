@@ -470,6 +470,31 @@ done:
     return rc;
 }
 
+static int check_broker_quorum (flux_t *h, bool *is_subset)
+{
+    const char *quorum;
+    uint32_t size;
+    char buf[32] = "0";
+
+    if (!(quorum = flux_attr_get (h, "broker.quorum"))
+        || flux_get_size (h, &size) < 0)
+        return -1;
+    if (size > 1) {
+        if (snprintf (buf,
+                      sizeof (buf),
+                      "0-%d",
+                      (int)size - 1) >= sizeof (buf)) {
+            errno = EOVERFLOW;
+            return -1;
+        }
+    }
+    if (strcmp (buf, quorum) == 0)
+        *is_subset = false;
+    else
+        *is_subset = true;
+    return 0;
+}
+
 /* If xml collection is still in progress, this function delays responding
  * until it completes.
  */
@@ -489,7 +514,20 @@ static void resource_get_xml (flux_t *h,
         errstr = "this RPC only works on rank 0";
         goto error;
     }
+    /* xml is still being collected.  If broker.quorum is not the entire
+     * instance, then this may never complete, so fail the request in that
+     * case; otherwise save the request in inv->waiters for later response.
+     */
     if (!inv->xml) {
+        bool is_subset;
+        if (check_broker_quorum (h, &is_subset) < 0)
+            goto error;
+        if (is_subset) {
+            errno = EINVAL;
+            errstr = "Request may block forever. "
+                     "If R is incomplete, there may be a config error.";
+            goto error;
+        }
         if (zlist_append (inv->waiters, (void *)flux_msg_incref (msg)) < 0) {
             flux_msg_decref (msg);
             errno = ENOMEM;
