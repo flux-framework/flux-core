@@ -70,5 +70,36 @@ function shell.env_strip (...)
     end
 end
 
+--- Set rcpath to the path to the loaded initrc.lua (shell.rcpath) with
+--   "/lua.d" appended, plus `FLUX_SHELL_RC_PATH` if set in environment
+--   of the  job.
+--
+local rcpath = shell.rcpath .. "/lua.d"
+               .. ":"
+               .. (shell.getenv ("FLUX_SHELL_RC_PATH") or "")
+
+--- Source all files matching pattern from rcpath
+--
+function shell.source_rcpath (pattern)
+    for path in rcpath:gmatch ("[^:]+") do
+        source (path .. "/" .. pattern)
+    end
+end
+
+--- Source all files matching value[@version].lua from rcpath
+--   for option `opt`
+--
+function shell.source_rcpath_option (opt)
+    local name, version = shell.getopt_with_version (opt)
+    if name then
+        for path in rcpath:gmatch ("[^:]+") do
+            local basename = path .. "/" .. opt .. "/" .. name
+            source_if_exists (basename .. ".lua")
+            if version then
+                source_if_exists (basename .. "@" .. version .. ".lua")
+            end
+        end
+    end
+end
 -- vi: ts=4 sw=4 expandtab
 -- 
