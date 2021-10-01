@@ -98,5 +98,46 @@ test_expect_success 'openmpi@5 eschews flux plugins' '
 	grep OMPI_MCA_schizo=^flux env5.out
 '
 
-
+export FLUX_SHELL_RC_PATH=$(pwd)/shellrc
+test_expect_success 'create test mpi plugins in $FLUX_SHELL_RC_PATH' '
+	mkdir -p shellrc/mpi &&
+	cat <<-EOF >shellrc/mpi/test.lua &&
+	shell.setenv ("MPI_TEST_NOVERSION", "t")
+	EOF
+	cat <<-EOF >shellrc/mpi/test@1.lua &&
+	shell.setenv ("MPI_TEST_VERSION", "1")
+	EOF
+	cat <<-EOF >shellrc/mpi/test@2.lua
+	shell.setenv ("MPI_TEST_VERSION", "2")
+	EOF
+'
+test_expect_success '-ompi=name loads path/mpi/name.lua' '
+	name=mpi-test &&
+	flux mini run -o mpi=test env | grep MPI_TEST > ${name}.out &&
+	test_debug "cat ${name}.out" &&
+	cat <<-EOF >${name}.expected &&
+	MPI_TEST_NOVERSION=t
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success '-ompi=name loads path/mpi/name.lua' '
+	name=mpi-test1 &&
+	flux mini run -o mpi=test@1 env | grep MPI_TEST > ${name}.out &&
+	test_debug "cat ${name}.out" &&
+	cat <<-EOF >${name}.expected &&
+	MPI_TEST_NOVERSION=t
+	MPI_TEST_VERSION=1
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
+test_expect_success '-ompi=name loads path/mpi/name.lua' '
+	name=mpi-test2 &&
+	flux mini run -o mpi=test@2 env | grep MPI_TEST > ${name}.out &&
+	test_debug "cat ${name}.out" &&
+	cat <<-EOF >${name}.expected &&
+	MPI_TEST_NOVERSION=t
+	MPI_TEST_VERSION=2
+	EOF
+	test_cmp ${name}.expected ${name}.out
+'
 test_done
