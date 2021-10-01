@@ -15,17 +15,13 @@ AM_CPPFLAGS = \
 
 shellrcdir = \
 	$(fluxrcdir)/shell
-shellluadir = \
-	$(shellrcdir)/lua.d
 
-dist_shellrc_SCRIPTS = \
-	initrc.lua
-
-dist_shelllua_SCRIPTS = \
+nobase_dist_shellrc_SCRIPTS = \
+	initrc.lua \
 	lua.d/mvapich.lua \
 	lua.d/intel_mpi.lua \
 	lua.d/openmpi.lua \
-	lua.d/spectrum.lua
+	lua.d/mpi/spectrum.lua
 
 noinst_LTLIBRARIES = \
 	libshell.la \
