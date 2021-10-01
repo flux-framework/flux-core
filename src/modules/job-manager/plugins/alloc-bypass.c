@@ -40,12 +40,14 @@ static void alloc_continuation (flux_future_t *f, void *arg)
                                      *idptr,
                                      "alloc",
                                      "{s:b}",
-                                     "bypass", true) < 0)
+                                     "bypass", true) < 0) {
         flux_jobtap_raise_exception (p,
                                      *idptr,
                                      "alloc", 0,
                                      "failed to post alloc event: %s",
                                      strerror (errno));
+        goto done;
+    }
 
     /*  Set "needs-free" so that alloc-bypass knows that a "free"
      *   event needs to be emitted for this node.
@@ -59,34 +61,54 @@ done:
     flux_future_destroy (f);
 }
 
+static flux_future_t *commit_R (flux_plugin_t *p,
+                                flux_jobid_t id,
+                                const char *R)
+{
+    flux_future_t *f = NULL;
+    flux_kvs_txn_t *txn = NULL;
+    flux_t *h = flux_jobtap_get_flux (p);
+    char key[64];
+
+    if (!h
+        || flux_job_kvs_key (key, sizeof (key), id, "R") < 0
+        || !(txn = flux_kvs_txn_create ()))
+        return NULL;
+
+    if (flux_kvs_txn_put (txn, 0, key, R) < 0)
+        goto out;
+
+    f = flux_kvs_commit (h, NULL, 0, txn);
+out:
+    flux_kvs_txn_destroy (txn);
+    return f;
+}
+
 static int alloc_start (flux_plugin_t *p,
                         flux_jobid_t id,
                         const char *R)
 {
-    flux_t *h;
-    char key[64];
+    int saved_errno;
     flux_future_t *f = NULL;
-    flux_kvs_txn_t *txn = NULL;
     flux_jobid_t *idptr = NULL;
 
-    if (!(h = flux_jobtap_get_flux (p))
-        || flux_job_kvs_key (key, sizeof (key), id, "R") < 0
-        || !(txn = flux_kvs_txn_create ())
-        || flux_kvs_txn_put (txn, 0, key, R) < 0
-        || !(f = flux_kvs_commit (h, NULL, 0, txn))
-        || flux_future_then (f, -1, alloc_continuation, p)
-        || !(idptr = calloc (1, sizeof (*idptr)))
-        || flux_future_aux_set (f, "jobid", idptr, free) < 0) {
-        flux_kvs_txn_destroy (txn);
-        flux_future_destroy (f);
-        free (idptr);
-        return -1;
-    }
-    *idptr = id;
-    flux_kvs_txn_destroy (txn);
-    return 0;
-}
+    if (!(f = commit_R (p, id, R))
+        || flux_future_then (f, -1, alloc_continuation, p) < 0)
+        goto error;
 
+    if (!(idptr = malloc (sizeof (*idptr)))
+        || flux_future_aux_set (f, "jobid", idptr, free) < 0)
+        goto error;
+
+    *idptr = id;
+    return 0;
+error:
+    saved_errno = errno;
+    flux_future_destroy (f);
+    free (idptr);
+    errno = saved_errno;
+    return -1;
+}
 
 static int sched_cb (flux_plugin_t *p,
                      const char *topic,
@@ -123,11 +145,13 @@ static int sched_cb (flux_plugin_t *p,
 
     if (flux_jobtap_job_set_flag (p,
                                   FLUX_JOBTAP_CURRENT_JOB,
-                                  "alloc-bypass") < 0)
-        return flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
-                                            "alloc", 0,
-                                            "Failed to set alloc-bypass: %s",
-                                            strerror (errno));
+                                  "alloc-bypass") < 0) {
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "alloc", 0,
+                                     "Failed to set alloc-bypass: %s",
+                                     strerror (errno));
+        return -1;
+    }
     return 0;
 }
 
@@ -206,11 +230,12 @@ static int validate_cb (flux_plugin_t *p,
                                     "alloc-bypass::R",
                                     s,
                                     free) < 0) {
+        int saved_errno = errno;
         free (s);
         return flux_jobtap_reject_job (p,
                                        args,
                                        "failed to capture alloc-bypass R: %s",
-                                       strerror (errno));
+                                       strerror (saved_errno));
     }
     return 0;
 }

@@ -12,6 +12,7 @@
 
 import unittest
 import errno
+import sys
 
 import flux
 from flux.message import Message
@@ -45,7 +46,7 @@ class TestServiceAddRemove(unittest.TestCase):
             self.assertEqual(rc, 0)
 
         self.f.watcher = self.f.msg_watcher_create(
-            service_cb, FLUX_MSGTYPE_REQUEST, "foo.*"
+            service_cb, FLUX_MSGTYPE_REQUEST, "foo.echo"
         )
         self.assertIsNotNone(self.f.watcher)
         self.f.watcher.start()
@@ -76,12 +77,39 @@ class TestServiceAddRemove(unittest.TestCase):
         w2.stop()
         w2.destroy()
 
+    def test_003_add_service_message_watcher_respond_error(self):
+        def error_service_cb(f, t, msg, arg):
+            rc = f.respond_error(msg, errno.EINVAL, "Test error response")
+            self.assertEqual(rc, 0)
+
+        self.f.error_watcher = self.f.msg_watcher_create(
+            error_service_cb, FLUX_MSGTYPE_REQUEST, "foo.error"
+        )
+        self.assertIsNotNone(self.f.error_watcher)
+        self.f.error_watcher.start()
+
+    def test_004_service_rpc_error(self):
+        cb_called = [False]  # So that cb_called[0] is mutable in inner function
+
+        def then_cb(future):
+            cb_called[0] = True
+            with self.assertRaises(OSError) as error:
+                future.get()
+            future.get_flux().reactor_stop()
+
+        self.f.rpc("foo.error").then(then_cb)
+
+        ret = self.f.reactor_run()
+        self.assertTrue(ret >= 0)
+        self.assertTrue(cb_called[0])
+
     def test_005_unregister_service(self):
         rc = self.f.service_unregister("foo").get()
         self.assertEqual(rc, None)
 
         # done with message handler
         self.f.watcher.destroy()
+        self.f.error_watcher.destroy()
 
     def test_006_unregister_service_enoent(self):
         with self.assertRaises(EnvironmentError) as e:
