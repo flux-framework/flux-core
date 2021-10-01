@@ -11,10 +11,6 @@
 -- Set environment specific to spectrum_mpi (derived from openmpi)
 --
 
-local mpi, version = shell.getopt_with_version ("mpi")
-
-if mpi ~= "spectrum" then return end
-
 local posix = require 'posix'
 
 -- Clear all existing PMIX_ and OMPI_ values before setting our own
