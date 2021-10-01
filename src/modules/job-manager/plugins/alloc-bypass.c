@@ -88,6 +88,7 @@ static int alloc_start (flux_plugin_t *p,
                         flux_jobid_t id,
                         const char *R)
 {
+    int saved_errno;
     flux_future_t *f = NULL;
     flux_jobid_t *idptr = NULL;
 
@@ -102,8 +103,10 @@ static int alloc_start (flux_plugin_t *p,
     *idptr = id;
     return 0;
 error:
+    saved_errno = errno;
     flux_future_destroy (f);
     free (idptr);
+    errno = saved_errno;
     return -1;
 }
 
@@ -227,11 +230,12 @@ static int validate_cb (flux_plugin_t *p,
                                     "alloc-bypass::R",
                                     s,
                                     free) < 0) {
+        int saved_errno = errno;
         free (s);
         return flux_jobtap_reject_job (p,
                                        args,
                                        "failed to capture alloc-bypass R: %s",
-                                       strerror (errno));
+                                       strerror (saved_errno));
     }
     return 0;
 }
