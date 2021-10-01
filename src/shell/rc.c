@@ -165,6 +165,7 @@ static int lua_plugin_cb (flux_plugin_t *p,
         if (!success)
             return -1;
     }
+    lua_settop (L, 0);
     return 0;
 }
 
@@ -347,6 +348,7 @@ static int shell_run_rcfile (flux_shell_t *shell,
         return -1;
     }
     file_stack_pop ();
+    lua_settop (L, 0);
     return 0;
 }
 
