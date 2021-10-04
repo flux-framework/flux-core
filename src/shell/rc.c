@@ -165,6 +165,7 @@ static int lua_plugin_cb (flux_plugin_t *p,
         if (!success)
             return -1;
     }
+    lua_settop (L, 0);
     return 0;
 }
 
@@ -326,8 +327,12 @@ static int shell_run_rcfile (flux_shell_t *shell,
                              const char *rcfile)
 {
     struct stat sb;
+
     if (!shell || !L || !rcfile)
         return -1;
+
+    shell_trace ("trying to load %s", rcfile);
+
     if (stat (rcfile, &sb) < 0)
         return -1;
     file_stack_push (rcfile);
@@ -343,6 +348,7 @@ static int shell_run_rcfile (flux_shell_t *shell,
         return -1;
     }
     file_stack_pop ();
+    lua_settop (L, 0);
     return 0;
 }
 
@@ -883,6 +889,17 @@ int shell_rc (flux_shell_t *shell, const char *rcfile)
     /* Save shell global */
     rc_shell = shell;
     free (copy);
+
+    /* Load any flux.shell Lua library */
+    lua_getglobal (L, "require");
+    lua_pushstring (L, "flux.shell");
+    if (lua_pcall (L, 1, LUA_MULTRET, 0) != 0) {
+        shell_debug ("Error loading flux.shell module: %s",
+                     lua_tostring (L, -1));
+    }
+    else
+        shell_trace ("Sucessfully loaded flux.shell module");
+    lua_settop (L, 0);
     return shell_run_rcfile (shell, L, rcfile);
 }
 

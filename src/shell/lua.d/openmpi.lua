@@ -8,15 +8,8 @@
 -- SPDX-License-Identifier: LGPL-3.0
 -------------------------------------------------------------
 
-local mpi, version = shell.getopt_with_version ("mpi")
-
-if mpi == "openmpi" and version and tonumber (version) >= 5 then
-    shell.setenv ("OMPI_MCA_pmix", "^flux")
-    shell.setenv ("OMPI_MCA_schizo", "^flux")
-else
-    shell.setenv ("OMPI_MCA_pmix", "flux")
-    shell.setenv ("OMPI_MCA_schizo", "flux")
-end
+shell.setenv ("OMPI_MCA_pmix", "flux")
+shell.setenv ("OMPI_MCA_schizo", "flux")
 
 -- OpenMPI needs a job-unique directory for vader shmem paths, otherwise
 -- multiple jobs per node may conflict (see flux-framework/flux-core#3649).
