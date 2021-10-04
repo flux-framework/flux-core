@@ -152,6 +152,7 @@ TESTSCRIPTS = \
 	t2402-job-exec-dummy.t \
 	t2403-job-exec-conf.t \
 	t2404-job-exec-multiuser.t \
+	t2410-exec-systemd.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
 	t2600-job-shell-rcalc.t \
@@ -367,6 +368,12 @@ check_PROGRAMS += \
 	mpi/mpich_basic/netpipe \
 	mpi/mpich_basic/patterns \
 	mpi/mpich_basic/adapt
+endif
+
+if HAVE_LIBSYSTEMD
+check_PROGRAMS += \
+	sdprocess/sim-broker \
+	sdprocess/job-signal-exit
 endif
 
 check_LTLIBRARIES = \
@@ -904,3 +911,13 @@ stats_stats_immediate_la_LDFLAGS = \
 stats_stats_immediate_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la
+
+sdprocess_sim_broker_SOURCES = sdprocess/sim-broker.c
+sdprocess_sim_broker_CPPFLAGS = $(test_cppflags)
+sdprocess_sim_broker_LDADD = \
+	$(top_builddir)/src/common/libsdprocess/libsdprocess.la \
+	$(test_ldadd)
+
+sdprocess_job_signal_exit_SOURCES = sdprocess/job-signal-exit.c
+sdprocess_job_signal_exit_CPPFLAGS = $(test_cppflags)
+sdprocess_job_signal_exit_LDADD = $(test_ldadd)
