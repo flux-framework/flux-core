@@ -244,6 +244,38 @@ int flux_shell_err (const char *component,
     return -1;
 }
 
+void flux_shell_raise (const char *type,
+                      int severity,
+                      const char *fmt, ...)
+{
+    flux_shell_t *shell = logger.shell;
+    flux_future_t *f;
+    char buf [4096];
+    va_list ap;
+
+    if (!shell || !shell->h || logger.exception_logged)
+        return;
+
+    va_start (ap, fmt);
+    if (msgfmt (buf, sizeof (buf), 0, fmt, ap) < 0)
+        sprintf (buf, "flux-shell: fatal error");
+    va_end (ap);
+
+    if (!(f = flux_job_raise (shell->h,
+                              shell->info->jobid,
+                              "exec",
+                              0,
+                              buf))
+       || flux_future_get (f, NULL) < 0) {
+        fprintf (stderr,
+                 "flux-shell: failed to raise job exception: %s\n",
+                 flux_future_error_string (f));
+    }
+    else
+        shell_log_set_exception_logged ();
+    flux_future_destroy (f);
+}
+
 void flux_shell_fatal (const char *component,
                        const char *file,
                        int line,
@@ -252,7 +284,6 @@ void flux_shell_fatal (const char *component,
                        const char *fmt, ...)
 {
     flux_shell_t *shell = logger.shell;
-    flux_future_t *f = NULL;
     char buf [4096];
     va_list ap;
 
@@ -267,28 +298,9 @@ void flux_shell_fatal (const char *component,
      */
     flux_shell_killall (shell, SIGKILL);
 
-    /*
-     *  Only need to generate an exception if we have a broker connection
-     *   and are not in standalone mode. O/w, exits immediately below.
-     */
-    if (shell->h && !shell->standalone && !logger.exception_logged) {
-        /*  Raise an exec exception.
-         *  Wait synchronously for response to ensure exception is
-         *   received by job-manager before shell potentially exits.
-         */
-        if (!(f = flux_job_raise (shell->h,
-                                  shell->info->jobid,
-                                  "exec",
-                                  0,
-                                  buf))
-           || flux_future_get (f, NULL) < 0) {
-            fprintf (stderr,
-                     "flux-shell: failed to raise job exception: %s\n",
-                     flux_future_error_string (f));
-        }
-        else
-            shell_log_set_exception_logged ();
-    }
+    if (shell && !shell->standalone)
+        flux_shell_raise ("exec", 0, buf);
+
     exit (exit_code);
 }
 

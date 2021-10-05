@@ -381,6 +381,8 @@ void flux_shell_fatal (const char *component,
                        const char *fmt, ...)
                        __attribute__ ((format (printf, 6, 7)));
 
+void flux_shell_raise (const char *type, int severity, const char *fmt, ...);
+
 /*  Set default severity of logging destination 'dest' to level.
  *   If dest == NULL then set the internal log dispatch level --
  *   (i.e. no messages above severity level will be logged to any
