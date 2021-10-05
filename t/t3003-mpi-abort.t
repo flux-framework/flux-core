@@ -38,7 +38,7 @@ SIZE=2
 MAX_MPI_SIZE=$(($SIZE*$TEST_UNDER_FLUX_CORES_PER_RANK))
 test_under_flux $SIZE job
 
-OPTS="-ocpu-affinity=off -oexit-on-error"
+OPTS="-ocpu-affinity=off"
 
 diag() {
 	echo "test failed: cat $1"
@@ -64,14 +64,18 @@ test_expect_success 'MPI_Abort size=1 with PMI server tracing enabled' '
 test_expect_success "MPI_Abort on size=${MAX_MPI_SIZE}, first rank triggers exception" '
 	! run_timeout 60 flux mini run -n${MAX_MPI_SIZE} $OPTS \
 		${FLUX_BUILD_DIR}/t/mpi/abort 0 2>abort0.err &&
-	(grep exception abort0.err || diag abort0.err)
+	(grep exception abort0.err || diag abort0.err) &&
+	test_debug "cat abort0.err" &&
+	grep "Rank 0 is going to MPI_Abort now" abort0.err
 '
 
 test_expect_success "MPI_Abort on size=${MAX_MPI_SIZE}, last rank triggers exception" '
+	rank=$(($MAX_MPI_SIZE-1)) &&
 	! run_timeout 60 flux mini run -n${MAX_MPI_SIZE} $OPTS \
-		${FLUX_BUILD_DIR}/t/mpi/abort $(($MAX_MPI_SIZE-1)) \
+		${FLUX_BUILD_DIR}/t/mpi/abort $rank \
 		2>abort1.err &&
-	(grep exception abort1.err || diag abort1.err)
+	(grep exception abort1.err || diag abort1.err) &&
+	grep "Rank $rank is going to MPI_Abort now" abort1.err
 '
 
 test_done

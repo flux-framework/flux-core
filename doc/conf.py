@@ -315,6 +315,7 @@ man_pages = [
     ('man3/flux_shell_killall', 'flux_shell_killall', 'Send the specified signal to all processes in the shell', [author], 3),
     ('man3/flux_shell_log', 'flux_shell_err', 'Log shell plugin messages to registered shell loggers', [author], 3),
     ('man3/flux_shell_log', 'flux_shell_fatal', 'Log shell plugin messages to registered shell loggers', [author], 3),
+    ('man3/flux_shell_log', 'flux_shell_raise', 'Log shell plugin messages to registered shell loggers', [author], 3),
     ('man3/flux_shell_log', 'flux_shell_log_setlevel', 'Log shell plugin messages to registered shell loggers', [author], 3),
     ('man3/flux_shell_log', 'flux_shell_log', 'Log shell plugin messages to registered shell loggers', [author], 3),
     ('man3/flux_shell_plugstack_call', 'flux_shell_plugstack_call', 'Calls the function referenced by topic.', [author], 3),

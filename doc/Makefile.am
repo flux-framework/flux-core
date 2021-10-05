@@ -135,6 +135,7 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_shell_setopt_pack.3 \
 	man3/flux_shell_err.3 \
 	man3/flux_shell_fatal.3 \
+	man3/flux_shell_raise.3 \
 	man3/flux_shell_log_setlevel.3 \
 	man3/flux_shell_task_info_unpack.3 \
 	man3/flux_shell_task_cmd.3 \

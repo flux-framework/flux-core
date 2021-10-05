@@ -38,7 +38,12 @@ SYNOPSIS
                           int exit_code,
                           const char *fmt,
                           ...)
+::
 
+   void flux_shell_raise (const char *type,
+                          int severity,
+                          const char *fmt,
+                          ...)
 ::
 
    int flux_shell_log_setlevel (int level,
@@ -106,6 +111,10 @@ note that the choices of ``errnum`` are either 0 or ``errno``.
 ::
 
    #define shell_die_errno(code,...) \
+
+``flux_shell_raise()`` explicitly raises an exception for the current
+job of the given ``type`` and ``severity``. Exceptions of severity 0
+will result in termination of the job by the execution system.
 
 ``flux_shell_log_setlevel()`` sets default severity of logging
 destination ``dest`` to ``level``. If ``dest`` is NULL then the internal

@@ -12,6 +12,7 @@
 #include "config.h"
 #endif
 #include <stdlib.h>
+#include <stdio.h>
 #include <mpi.h>
 
 int main (int argc, char *argv[])
@@ -26,8 +27,12 @@ int main (int argc, char *argv[])
     MPI_Comm_rank (MPI_COMM_WORLD, &id);
     MPI_Comm_size (MPI_COMM_WORLD, &ntasks);
 
-    if (id == abort_rank)
+    printf ("Hello World from rank %d\n", id);
+
+    if (id == abort_rank) {
+        fprintf (stderr, "Rank %d is going to MPI_Abort now\n", id);
         MPI_Abort (MPI_COMM_WORLD, 42);
+    }
     MPI_Barrier (MPI_COMM_WORLD);
 
     MPI_Finalize ();
