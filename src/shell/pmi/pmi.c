@@ -86,11 +86,14 @@ static void shell_pmi_abort (void *arg,
                              int exit_code,
                              const char *msg)
 {
-    /* Generate job exception (exit_code ignored for now) */
-    shell_die (exit_code,
-               "MPI_Abort%s%s",
-               msg ? ": " : "",
-               msg ? msg : "");
+    /*  Attempt to raise job exception and return to the shell's reactor.
+     *   This allows the shell to continue to process events and stdio
+     *   until the exec system terminates the job due to the exception.
+     */
+    flux_shell_raise ("exec", 0,
+                      "MPI_Abort%s%s",
+                      msg ? ": " : "",
+                      msg ? msg : "");
 }
 
 static int put_dict (json_t *dict, const char *key, const char *val)
