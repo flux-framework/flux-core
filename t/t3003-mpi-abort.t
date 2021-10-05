@@ -38,7 +38,7 @@ SIZE=2
 MAX_MPI_SIZE=$(($SIZE*$TEST_UNDER_FLUX_CORES_PER_RANK))
 test_under_flux $SIZE job
 
-OPTS="-ocpu-affinity=off -oexit-on-error"
+OPTS="-ocpu-affinity=off"
 
 diag() {
 	echo "test failed: cat $1"
