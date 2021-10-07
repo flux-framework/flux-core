@@ -1,3 +1,45 @@
+flux-core version 0.30.0 - 2021-10-06
+-------------------------------------
+
+### Fixes
+
+ * job-manager: small fixes for the alloc-bypass plugin (#3889)
+ * job-manager: release after:JOBID dependencies after "start" instead of
+   "alloc" event (#3865)
+ * shell: avoid dropping stderr after a PMI abort (#3898)
+ * shell: require `FLUX_SHELL_PLUGIN_NAME` in plugins to fix logging component
+   discovery (#3879)
+ * libflux: deactivate RPC message handlers after final response (#3853)
+ * remove duplicate directories from `FLUX_RC_EXTRA`, `FLUX_SHELL_RC_PATH`
+   (#3878)
+ * t: fix incorrect method call in test-terminal.perl (#3888)
+ * Fix a couple build and test issues on ppc64le with clang 6.0+ (#3875)
+
+### New Features
+
+ * jobtap: allow jobtap plugins to query posted events for jobs (#3863)
+ * jobtap: allow jobtap plugins to subscribe to job events (#3861)
+ * job-exec: enable manual override option for mock execution jobs (#3868)
+ * shell: improve initrc extensibility, support version specific mpi plugin
+   loading (#3890)
+ * shell: fixes and enhancements for plugin loading (#3859)
+ * shell: allow default rc path to be extended via `FLUX_SHELL_RC_PATH` (#3869)
+ * shell: add taskids idset to `flux_shell_get_rank_info(3)` (#3873)
+ * shell: add library of Lua convenience functions for use in plugins (#3856)
+ * resource: fail get-xml request on quorum subset (#3885)
+
+### Cleanup
+
+ * libflux/future: fix comment typo (#3860)
+ * NEWS.md: Fix typo for v0.29.0 (#3857)
+
+### Testsuite
+
+ * docker: add --build-arg to docker-run-checks, systemd-devel to centos8
+   (#3871)
+ * ci: add fedora 34 build and fix compiler errors from gcc 11.2 (#3854)
+
+
 flux-core version 0.29.0 - 2021-09-03
 -------------------------------------
 
