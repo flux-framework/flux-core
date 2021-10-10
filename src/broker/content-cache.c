@@ -170,11 +170,9 @@ static void cache_entry_destroy (struct cache_entry *e)
 {
     if (e) {
         int saved_errno = errno;
-        assert (e->load_requests == 0);
-        assert (e->store_requests == 0);
+        assert (e->load_requests == NULL);
+        assert (e->store_requests == NULL);
         free (e->data);
-        msgstack_destroy (&e->load_requests);
-        msgstack_destroy (&e->store_requests);
         free (e);
         errno = saved_errno;
     }
