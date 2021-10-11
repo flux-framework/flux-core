@@ -80,6 +80,9 @@ COPY job-exec.toml /etc/flux/system/conf.d/exec.toml
 COPY access.toml /etc/flux/system/conf.d/access.toml
 
 RUN chmod 4755 /usr/libexec/flux/flux-imp \
+ && chmod 0644 /etc/flux/imp/conf.d/imp.toml \
+ && chmod 0644 /etc/flux/system/conf.d/exec.toml \
+ && chmod 0644 /etc/flux/system/conf.d/access.toml \
  && systemctl enable flux.service \
  && systemctl enable munge.service \
  && systemctl enable ttyd.service
