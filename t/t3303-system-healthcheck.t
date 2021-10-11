@@ -39,9 +39,6 @@ wait_connected() {
 	return 1
 }
 
-bad_health_request() {
-        flux python -c "import flux; print(flux.Flux().rpc(\"overlay.health\",nodeid=0).get_str())"
-}
 bad_topo_request() {
         flux python -c "import flux; print(flux.Flux().rpc(\"overlay.topology\",nodeid=0).get_str())"
 }
@@ -49,9 +46,6 @@ bad_topo_request_rank99() {
         flux python -c "import flux; print(flux.Flux().rpc(\"overlay.topology\",{\"rank\":99},nodeid=0).get_str())"
 }
 
-test_expect_success 'overlay.health RPC with no payload fails' '
-	test_must_fail bad_health_request
-'
 test_expect_success 'overlay.topology RPC with no payload fails' '
 	test_must_fail bad_topo_request
 '

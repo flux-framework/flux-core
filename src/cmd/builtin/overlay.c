@@ -339,26 +339,42 @@ static void status_ghostwalk (struct status *ctx,
     }
 }
 
-static flux_future_t *health_rpc (struct status *ctx, int rank)
+static double time_now (struct status *ctx)
+{
+    return flux_reactor_now (flux_get_reactor (ctx->h));
+}
+
+static flux_future_t *health_rpc (struct status *ctx,
+                                  int rank,
+                                  const char *wait,
+                                  double timeout)
 {
     flux_future_t *f;
+    double start = time_now (ctx);
+    const char *status;
+    int rpc_flags = 0;
 
-    if (ctx->wait) {
-        f = flux_rpc_pack (ctx->h,
-                           "overlay.health",
-                           rank,
-                           0,
-                           "{s:s}",
-                           "wait", ctx->wait);
-        ctx->wait = NULL; // only wait on --rank, not subsequent probing
-    }
-    else {
-        f = flux_rpc_pack (ctx->h,
-                           "overlay.health",
-                           rank,
-                           0,
-                           "{}");
-    }
+    if (wait)
+        rpc_flags |= FLUX_RPC_STREAMING;
+
+    if (!(f = flux_rpc (ctx->h,
+                        "overlay.health",
+                        NULL,
+                        rank,
+                        rpc_flags)))
+        return NULL;
+
+    do {
+        if (flux_future_wait_for (f, timeout - (time_now (ctx) - start)) < 0
+            || flux_rpc_get_unpack (f, "{s:s}", "status", &status) < 0) {
+            flux_future_destroy (f);
+            return NULL;
+        }
+        if (!wait || strcmp (wait, status) == 0)
+            break;
+        flux_future_reset (f);
+    } while (1);
+
     return f;
 }
 
@@ -378,8 +394,7 @@ static int status_healthwalk (struct status *ctx,
 
     monotime (&ctx->start);
 
-    if (!(f = health_rpc (ctx, rank))
-        || flux_future_wait_for (f, ctx->timeout) < 0
+    if (!(f = health_rpc (ctx, rank, ctx->wait, ctx->timeout))
         || flux_rpc_get_unpack (f,
                                 "{s:i s:s s:f s:o}",
                                 "rank", &node.rank,
@@ -490,6 +505,18 @@ static bool show_all (struct status *ctx,
     return true;
 }
 
+static bool validate_wait (const char *wait)
+{
+    if (wait
+        && strcmp (wait, "full") != 0
+        && strcmp (wait, "partial") != 0
+        && strcmp (wait, "degraded") != 0
+        && strcmp (wait, "lost") != 0
+        && strcmp (wait, "offline") != 0)
+        return false;
+    return true;
+}
+
 static int subcmd_status (optparse_t *p, int ac, char *av[])
 {
     int rank = optparse_get_int (p, "rank", 0);
@@ -501,6 +528,8 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
     ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
     ctx.opt = p;
     ctx.wait = optparse_get_str (p, "wait", NULL);
+    if (!validate_wait (ctx.wait))
+        log_msg_exit ("invalid --wait state");
 
     if (ctx.verbose <= 0)
         fun = show_top;
