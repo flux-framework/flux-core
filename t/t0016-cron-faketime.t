@@ -8,9 +8,11 @@ if ! test_have_prereq NO_ASAN; then
     test_done
 fi
 
-# allow libfaketime to be found on ubuntu
+# allow libfaketime to be found on ubuntu, centos
 if test -d /usr/lib/x86_64-linux-gnu/faketime ; then
   export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib/x86_64-linux-gnu/faketime"
+elif test -d /usr/lib64/faketime ; then
+  export LD_LIBRARY_PATH="$LD_LIBRARY_PATH:/usr/lib64/faketime"
 fi
 
 #  Check for libfaketimeMT using known epoch with /bin/date:
@@ -37,6 +39,10 @@ cron_entry_check() {
     test -n $key || return 1
     test -n "$expected" || return 1
     local result="$(flux cron dump --key=${key} ${id})" || return 1
+    if test "$key" = "typedata.next_wakeup"; then
+        # convert result to an integer:
+        result=$(printf "%.0f" $result)
+    fi
     echo "cron-${id}: ${key}=${result}, wanted ${expected}" >&2
     test "${result}" = "${expected}"
 }
