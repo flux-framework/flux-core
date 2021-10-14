@@ -173,8 +173,10 @@ if [[ "$INSTALL_ONLY" == "t" ]]; then
                 --with-flux-security \
                 --enable-caliper &&
                make clean &&
-               make -j${JOBS}" \
-    || (docker rm tmp.$$; die "docker run of 'make install' failed")
+               make -j${JOBS}"
+    RC=$?
+    docker rm tmp.$$
+    test $RC -ne 0 &&  die "docker run of 'make install' failed"
 else
     docker run --rm \
         --workdir=$WORKDIR \
