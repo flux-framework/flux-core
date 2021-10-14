@@ -121,7 +121,8 @@ if test "$COVERAGE" = "t"; then
 	ENABLE_USER_SITE=1 \
 	COVERAGE_PROCESS_START=$(pwd)/coverage.rc \
 	${MAKE} -j $JOBS check-code-coverage && \
-	lcov -l flux*-coverage.info && \
+	(lcov -l flux*-coverage.info || :) && \
+	rm -f coverage.xml && \
 	coverage combine .coverage* && \
 	coverage html && coverage xml &&
 	chmod 444 coverage.xml &&
