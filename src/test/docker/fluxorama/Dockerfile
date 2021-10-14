@@ -1,4 +1,5 @@
-FROM fluxrm/flux-core:centos8 AS systest
+ARG IMAGE=fluxrm/flux-core:centos8
+FROM $IMAGE AS systest
 
 # Default container user.
 # "fluxuser" should match fluxrm/flux-core image
@@ -65,10 +66,10 @@ WORKDIR /home/$USER
 EXPOSE 7681
 CMD [ "init" ]
 
+FROM systest AS fluxorama
+
 RUN dnf install -y psmisc tmux \
  && dnf clean all
-
-FROM systest AS fluxorama
 
 #
 #  Install ttyd
