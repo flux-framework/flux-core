@@ -209,6 +209,16 @@ matrix.add_build(
     docker_tag=True,
 )
 
+# Centos8, system, coverage
+matrix.add_build(
+    name="centos8 - system,coverage",
+    image="centos8",
+    coverage=True,
+    jobs=2,
+    command_args="--system",
+    args="--with-flux-security --enable-caliper",
+)
+
 # Fedora 33
 matrix.add_build(
     name="fedora33 - gcc-10,py3.9",
