@@ -80,7 +80,7 @@ static const char *subtree_status_names[] = {
 };
 
 struct child {
-    int lastseen;
+    double lastseen;
     uint32_t rank;
     char uuid[UUID_STR_LEN];
     enum subtree_status status;
@@ -362,7 +362,7 @@ void overlay_log_idle_children (struct overlay *ov)
     struct child *child;
     double now = flux_reactor_now (ov->reactor);
     char fsd[64];
-    int idle;
+    double idle;
 
     if (idle_max > 0) {
         foreach_overlay_child (ov, child) {
