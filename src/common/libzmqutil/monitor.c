@@ -149,7 +149,6 @@ bool zmqutil_monitor_iserror (struct monitor_event *mevent)
 {
     if (mevent) {
         switch (mevent->event) {
-            case ZMQ_EVENT_BIND_FAILED:
             case ZMQ_EVENT_ACCEPT_FAILED:
             case ZMQ_EVENT_CLOSE_FAILED:
 #ifdef ZMQ_EVENT_HANDSHAKE_FAILED_NO_DETAIL
