@@ -672,6 +672,24 @@ const char *overlay_get_bind_uri (struct overlay *ov)
     return ov->bind_uri;
 }
 
+/* Log a failure to send tracker EHOSTUNREACH response.  Suppress logging
+ * ENOSYS failures, which happen if sending module unloads before completing
+ * all RPCs.
+ */
+static void log_tracker_error (flux_t *h, const flux_msg_t *msg, int errnum)
+{
+    if (errnum != ENOSYS) {
+        const char *topic = "unknown";
+        (void)flux_msg_get_topic (msg, &topic);
+        flux_log_error (h,
+                        "tracker: error sending %s EHOSTUNREACH response",
+                        topic);
+    }
+}
+
+/* Child endpoint disconnected, so any pending RPCs going that way
+ * get EHOSTUNREACH responses so they can fail fast.
+ */
 static void fail_child_rpcs (const flux_msg_t *msg, void *arg)
 {
     struct overlay *ov = arg;
@@ -681,7 +699,7 @@ static void fail_child_rpcs (const flux_msg_t *msg, void *arg)
         || flux_msg_route_delete_last (rep) < 0
         || flux_msg_route_delete_last (rep) < 0
         || flux_send (ov->h, rep, 0) < 0)
-        flux_log_error (ov->h, "tracker: error sending EHOSTUNREACH response");
+        log_tracker_error (ov->h, rep, errno);
     flux_msg_destroy (rep);
 }
 
@@ -889,12 +907,18 @@ done:
     flux_msg_decref (msg);
 }
 
+/* Parent endpoint disconnected, so any pending RPCs going that way
+ * get EHOSTUNREACH responses so they can fail fast.
+ */
 static void fail_parent_rpc (const flux_msg_t *msg, void *arg)
 {
     struct overlay *ov = arg;
 
-    if (flux_respond_error (ov->h, msg, EHOSTUNREACH, "overlay disconnect") < 0)
-        flux_log_error (ov->h, "tracker: error sending EHOSTUNREACH response");
+    if (flux_respond_error (ov->h,
+                            msg,
+                            EHOSTUNREACH,
+                            "overlay disconnect") < 0)
+        log_tracker_error (ov->h, msg, errno);
 }
 
 static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
