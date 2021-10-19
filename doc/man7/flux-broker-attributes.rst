@@ -58,6 +58,16 @@ tbon.maxlevel
 tbon.endpoint
    The endpoint for the tree based overlay network to communicate over.
 
+tbon.zmqdebug
+   If set to an non-zero integer value, 0MQ socket event logging is enabled,
+   if available.  This is potentially useful for debugging overlay
+   connectivity problems.  The attribute may not be changed during runtime.
+
+tbon.prefertcp
+   If set to an integer value other than zero, and the broker is bootstrapping
+   with PMI, tcp:// endpoints will be used instead of ipc://, even if all
+   brokers are on a single node.
+
 
 SOCKET ATTRIBUTES
 =================
