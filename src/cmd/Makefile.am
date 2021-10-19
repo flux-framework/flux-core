@@ -10,6 +10,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
 	-I$(top_srcdir)/src/common/libccan \
+	$(ZMQ_CFLAGS) \
 	$(FLUX_SECURITY_CFLAGS) \
 	$(HWLOC_CFLAGS) \
 	$(PMIX_CFLAGS) \
