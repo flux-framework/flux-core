@@ -208,6 +208,10 @@ class ProgressBar(Bottombar):
         before (str, optional): A string to place before the progress bar.
         after  (str, optional): A string to place after the progress bar.
                                 default=" {percent:5.1f}%"
+        autostop (bool, optional): If True, ProgressBar instance will be
+                                   automatically stopped when count == total.
+                                   Otherwise, terminal reset will be deferred
+                                   to an atexit handler.
         kwargs (optional): Extra keyword args are saved and passed as args
                            when formatting the ``before`` and ``after``
                            strings.
@@ -245,6 +249,7 @@ class ProgressBar(Bottombar):
         style="vertbars",
         before="",
         after=" {percent:5.1f}%",
+        autostop=False,
         **kwargs,
     ):
         super().__init__(self._formatter, **kwargs)
@@ -253,6 +258,7 @@ class ProgressBar(Bottombar):
         self.before = before
         self.after = after
         self.style = self.bar_style[style]
+        self.autostop = autostop
 
     def __getattr__(self, attr):
         if attr == "total":
@@ -305,8 +311,8 @@ class ProgressBar(Bottombar):
         """Update the state of a ProgressBar
 
         Update the state of a ProgressBar and redraw if the progress bar is
-        currently running. If ``count == total``, the progress bar will be
-        automatically stopped.
+        currently running. If ``count == total`` and autostop is set, the
+        progress bar will be automatically stopped.
 
         When the progress bar is stopped, the terminal will be reset and
         the final state of the bar will be left on the last line of output.
@@ -317,5 +323,5 @@ class ProgressBar(Bottombar):
         """
         self.count += advance
         super().update(**kwargs)
-        if self.count == self.total:
+        if self.count == self.total and self.autostop:
             self.stop()
