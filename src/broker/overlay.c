@@ -1733,6 +1733,8 @@ struct overlay *overlay_create (flux_t *h,
                                     0,
                                     &ov->zmqdebug) < 0)
         goto error;
+    if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
+        goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;
     if (!(ov->f_sync = flux_sync_create (h, sync_min))

@@ -287,6 +287,11 @@ test_expect_success 'tbon.endpoint uses tcp:// if process mapping unavailable' '
 		flux getattr tbon.endpoint >endpoint2.out &&
 	grep "^tcp" endpoint2.out
 '
+test_expect_success 'tbon.endpoint uses tcp:// if tbon.prefertcp is set' '
+	flux start ${ARGS} -s2 -o,-Stbon.prefertcp=1 \
+		flux getattr tbon.endpoint >endpoint2.out &&
+	grep "^tcp" endpoint2.out
+'
 test_expect_success 'tbon.endpoint cannot be set' '
 	test_must_fail flux start ${ARGS} -s2 \
 		-o,--setattr=tbon.endpoint=ipc:///tmp/customflux /bin/true
