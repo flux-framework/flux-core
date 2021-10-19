@@ -267,7 +267,6 @@ CZMQ_EXPORT zhashx_t *
 //  Self test of this class.
 CZMQ_EXPORT void
     zhashx_test (bool verbose);
-#endif // CZMQ_BUILD_EXTRA
 
 #ifdef CZMQ_BUILD_DRAFT_API
 //  *** Draft method, for development use, may change without warning ***
@@ -284,6 +283,7 @@ CZMQ_EXPORT zframe_t *
     zhashx_pack_own (zhashx_t *self, zhashx_serializer_fn serializer);
 
 #endif // CZMQ_BUILD_DRAFT_API
+#endif // CZMQ_BUILD_EXTRA
 //  @end
 
 #ifdef __cplusplus
