@@ -440,7 +440,7 @@ void jobinfo_log_output (struct jobinfo *job,
                                  "rank", buf,
                                  "data", data, len) < 0)
         flux_log_error (job->h,
-                        "evenlog_append failed: %ju: message=%s",
+                        "eventlog_append failed: %ju: message=%s",
                         (uintmax_t) job->id,
                         data);
 }
