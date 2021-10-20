@@ -102,7 +102,40 @@ size_t idset_count (const struct idset *idset);
 /* Return true if the two idsets set1, set2 are equal, i.e. they both
  * have the same integers set.
  */
-bool idset_equal (const struct idset *set1, const struct idset *set2);
+bool idset_equal (const struct idset *a, const struct idset *);
+
+/* Return a new set = a union b on success,
+ * NULL on failure with errno set.
+ */
+struct idset *idset_union (const struct idset *a, const struct idset *b);
+
+/* Perform a += b.
+ * Return 0 on success, -1 on failure with errno set.
+ */
+int idset_add (struct idset *a, const struct idset *b);
+
+/* Return a new set = a - b on success,
+ * NULL on failure with errno set.
+ */
+struct idset *idset_difference (const struct idset *a, const struct idset *b);
+
+/* Perform a -= b.
+ * Return 0 on success, -1 on failure with errno set.
+ */
+int idset_subtract (struct idset *a, const struct idset *b);
+
+/* Remove all elements from set x.
+ */
+#define idset_clear_all(x)  idset_subtract ((x), (x))
+
+/* Return a new set = a intersect b on success,
+ * NULL on failure with errno set.
+ */
+struct idset *idset_intersect (const struct idset *, const struct idset *b);
+
+/* Return true if set a intersects set b.
+ */
+bool idset_has_intersection (const struct idset *a, const struct idset *b);
 
 #ifdef __cplusplus
 }
