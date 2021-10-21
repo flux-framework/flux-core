@@ -466,43 +466,6 @@ static void join_check_parent (struct state_machine *s)
     }
 }
 
-/* Empty an idset.
- */
-static int clear_idset (struct idset *idset)
-{
-    unsigned int id;
-
-    id = idset_first (idset);
-    while (id != IDSET_INVALID_ID) {
-        if (idset_clear (idset, id) < 0)
-            return -1;
-        id = idset_next (idset, id);
-    }
-    return 0;
-}
-
-/* Decode 's' as an idset, then merge its ids into 'idset1'.
- */
-static int merge_idset (struct idset *idset1, const char *s)
-{
-    struct idset *idset2;
-    unsigned int id;
-    int rc = -1;
-
-    if (!(idset2 = idset_decode (s)))
-        return -1;
-    id = idset_first (idset2);
-    while (id != IDSET_INVALID_ID) {
-        if (idset_set (idset1, id) < 0)
-            goto done;
-        id = idset_next (idset2, id);
-    }
-    rc = 0;
-done:
-    idset_destroy (idset2);
-    return rc;
-}
-
 /* Assumes local state is STATE_QUORUM.
  * If parent has left STATE_QUORUM, post quorum-full or quorum-fail.
  */
@@ -563,7 +526,7 @@ static void quorum_batch (flux_reactor_t *r,
             goto error;
         }
         flux_future_destroy (f);
-        clear_idset (s->quorum.have);
+        idset_clear_all (s->quorum.have);
         free (tmp);
     }
     return;
@@ -595,8 +558,15 @@ static void quorum_cb (flux_t *h,
                              "rank",
                              &rank) < 0)
         goto error;
-    if (idset && merge_idset (s->quorum.have, idset) < 0)
-        goto error;
+    if (idset) {
+        struct idset *tmp;
+        if (!(tmp = idset_decode (idset))
+            || idset_add (s->quorum.have, tmp) < 0) {
+            idset_destroy (tmp);
+            goto error;
+        }
+        idset_destroy (tmp);
+    }
     if (rank != FLUX_NODEID_ANY && idset_set (s->quorum.have, rank) < 0)
         goto error;
     flux_watcher_start (s->quorum.batch_timer);

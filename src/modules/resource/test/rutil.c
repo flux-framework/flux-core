@@ -23,74 +23,6 @@
 
 #include "src/modules/resource/rutil.h"
 
-void test_idset_sub (void)
-{
-    struct idset *ids1;
-    struct idset *ids2;
-
-    if (!(ids1 = idset_create (1024, 0)))
-        BAIL_OUT ("idset_create failed");
-    if (!(ids2 = idset_create (1024, 0)))
-        BAIL_OUT ("idset_create failed");
-
-    errno = 0;
-    ok (rutil_idset_sub (NULL, ids2) < 0 && errno == EINVAL,
-        "rutil_idset_sub ids1=NULL fails with EINVAL");
-
-    ok (rutil_idset_sub (ids1, NULL) == 0 && idset_count (ids1) == 0,
-        "rutil_idset_sub ids2=NULL has no effect");
-
-    if (idset_set (ids1, 2) < 0)
-        BAIL_OUT ("idset_set failed");
-    if (idset_set (ids2, 42) < 0)
-        BAIL_OUT ("idset_set failed");
-
-    ok (rutil_idset_sub (ids1, ids2) == 0 && idset_count (ids1) == 1,
-        "rutil_idset_sub non-overlapping idsets has no effect");
-
-    if (idset_set (ids1, 42) < 0)
-        BAIL_OUT ("idset_set failed");
-    if (idset_set (ids2, 2) < 0)
-        BAIL_OUT ("idset_set failed");
-
-    ok (rutil_idset_sub (ids1, ids2) == 0 && idset_count (ids1) == 0,
-        "rutil_idset_sub with overlap works");
-
-    idset_destroy (ids1);
-    idset_destroy (ids2);
-}
-
-void test_idset_add (void)
-{
-    struct idset *ids1;
-    struct idset *ids2;
-
-    if (!(ids1 = idset_create (1024, 0)))
-        BAIL_OUT ("idset_create failed");
-    if (!(ids2 = idset_create (1024, 0)))
-        BAIL_OUT ("idset_create failed");
-
-    errno = 0;
-    ok (rutil_idset_add (NULL, ids2) < 0 && errno == EINVAL,
-        "rutil_idset_add ids1=NULL fails with EINVAL");
-
-    ok (rutil_idset_add (ids1, NULL) == 0 && idset_count (ids1) == 0,
-        "rutil_idset_add ids2=NULL has no effect");
-
-    if (idset_set (ids1, 2) < 0)
-        BAIL_OUT ("idset_set failed");
-    if (idset_set (ids2, 42) < 0)
-        BAIL_OUT ("idset_set failed");
-
-    ok (rutil_idset_add (ids1, ids2) == 0 && idset_count (ids1) == 2,
-        "rutil_idset_add of non-overlapping idset works");
-    ok (rutil_idset_add (ids1, ids2) == 0 && idset_count (ids1) == 2,
-        "rutil_idset_add of overlapping idset has no effect");
-
-    idset_destroy (ids1);
-    idset_destroy (ids2);
-}
-
 void test_idset_diff (void)
 {
     struct idset *ids1;
@@ -525,8 +457,6 @@ int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
-    test_idset_sub ();
-    test_idset_add ();
     test_idset_diff ();
     test_set_json_idset ();
     test_idset_decode_test ();

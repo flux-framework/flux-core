@@ -30,28 +30,19 @@ void resource_set_destroy (struct resource_set *r)
     }
 }
 
-static int idset_add_set (struct idset *set, struct idset *new)
+static int util_idset_set_string (struct idset *idset, const char *ids)
 {
-    unsigned int i = idset_first (new);
-    while (i != IDSET_INVALID_ID) {
-        if (idset_test (set, i)) {
-            errno = EEXIST;
-            return -1;
-        }
-        if (idset_set (set, i) < 0)
-            return -1;
-        i = idset_next (new, i);
-    }
-    return 0;
-}
+    struct idset *new;
+    int rc = -1;
 
-static int idset_set_string (struct idset *idset, const char *ids)
-{
-    int rc;
-    struct idset *new = idset_decode (ids);
-    if (!new)
+    if (!(new = idset_decode (ids)))
         return -1;
-    rc = idset_add_set (idset, new);
+    if (idset_has_intersection (idset, new)) {
+        errno = EEXIST;
+        goto done;
+    }
+    rc = idset_add (idset, new);
+done:
     idset_destroy (new);
     return rc;
 }
@@ -71,7 +62,7 @@ static struct idset *rset_ranks (struct resource_set *r)
         return NULL;
     json_array_foreach (r->R_lite, i, entry) {
         if ((json_unpack_ex (entry, NULL, 0, "{s:s}", "rank", &ranks) < 0)
-            || (idset_set_string (idset, ranks) < 0))
+            || (util_idset_set_string (idset, ranks) < 0))
             goto err;
     }
     return idset;

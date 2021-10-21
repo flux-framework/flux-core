@@ -24,57 +24,14 @@
 
 #include "rnode.h"
 
-static int idset_subtract (struct idset *from, struct idset *ids)
+static struct idset *util_idset_add_check (const struct idset *a,
+                                           const struct idset *b)
 {
-    unsigned int i = idset_first (ids);
-    while (i != IDSET_INVALID_ID) {
-        idset_clear (from, i);
-        i = idset_next (ids, i);
-    }
-    return 0;
-}
-
-struct idset * idset_intersect (const struct idset *a,
-                                const struct idset *b)
-{
-    unsigned int i;
-    struct idset *result = idset_create (0, IDSET_FLAG_AUTOGROW);
-    i = idset_first (b);
-    while (i != IDSET_INVALID_ID) {
-        if (idset_test (a, i))
-            idset_set (result, i);
-        i = idset_next (b, i);
-    }
-    return result;
-}
-
-/*  Return a new idset that is the result of adding ids in 'new' to
- *   the existing set 'set'. It is an error if any of the ids in 'new'
- *   are already set in 'set'.
- */
-static struct idset * idset_add_set (const struct idset *set,
-                                     const struct idset *new)
-{
-    unsigned int i;
-    struct idset *result = idset_copy (set);
-
-    if (!result)
+    if (idset_has_intersection (a, b)) {
+        errno = EEXIST;
         return NULL;
-
-    i = idset_first (new);
-    while (i != IDSET_INVALID_ID) {
-        if (idset_test (result, i)) {
-            errno = EEXIST;
-            goto fail;
-        }
-        if (idset_set (result, i) < 0)
-            goto fail;
-        i = idset_next (new, i);
     }
-    return result;
-fail:
-    idset_destroy (result);
-    return NULL;
+    return idset_union (a, b);
 }
 
 void rnode_destroy (struct rnode *n)
@@ -140,8 +97,8 @@ static int rnode_child_add_idset (struct rnode_child *c,
     struct idset *avail = NULL;
     int rc = -1;
 
-    if (!(ids = idset_add_set (c->ids, new))
-        || !(avail = idset_add_set (c->avail, new)))
+    if (!(ids = util_idset_add_check (c->ids, new))
+        || !(avail = util_idset_add_check (c->avail, new)))
         goto out;
 
     tmp = c->ids;

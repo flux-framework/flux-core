@@ -12,7 +12,6 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
-#include <flux/idset.h>
 #include <flux/schedutil.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"

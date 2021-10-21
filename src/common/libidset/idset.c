@@ -74,17 +74,13 @@ static Veb vebdup (Veb T)
     return cpy;
 }
 
-struct idset *idset_copy (const struct idset *idset)
+static struct idset *idset_copy_flags (const struct idset *idset, int flags)
 {
     struct idset *cpy;
 
-    if (!idset) {
-        errno = EINVAL;
-        return NULL;
-    }
     if (!(cpy = malloc (sizeof (*idset))))
         return NULL;
-    cpy->flags = idset->flags;
+    cpy->flags = flags;
     cpy->T = vebdup (idset->T);
     if (!cpy->T.D) {
         idset_destroy (cpy);
@@ -92,6 +88,15 @@ struct idset *idset_copy (const struct idset *idset)
     }
     cpy->count = idset->count;
     return cpy;
+}
+
+struct idset *idset_copy (const struct idset *idset)
+{
+    if (!idset) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return idset_copy_flags (idset, idset->flags);
 }
 
 static bool valid_id (unsigned int id)
@@ -286,6 +291,114 @@ bool idset_equal (const struct idset *idset1,
         id = vebsucc (idset2->T, id + 1);
     }
     return true;
+}
+
+bool idset_has_intersection (const struct idset *a, const struct idset *b)
+{
+    if (a && b) {
+        unsigned int id;
+
+        id = idset_first (b);
+        while (id != IDSET_INVALID_ID) {
+            if (idset_test (a, id))
+                return true;
+            id = idset_next (b, id);
+        }
+    }
+    return false;
+}
+
+int idset_add (struct idset *a, const struct idset *b)
+{
+    if (!a) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (b) {
+        unsigned int id;
+        id = idset_first (b);
+        while (id != IDSET_INVALID_ID) {
+            if (idset_set (a, id) < 0)
+                return -1;
+            id = idset_next (b, id);
+        }
+    }
+    return 0;
+}
+
+struct idset *idset_union (const struct idset *a, const struct idset *b)
+{
+    struct idset *result;
+
+    if (!a) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(result = idset_copy_flags (a, IDSET_FLAG_AUTOGROW)))
+        return NULL;
+    if (idset_add (result, b) < 0) {
+        idset_destroy (result);
+        return NULL;
+    }
+    return result;
+}
+
+int idset_subtract (struct idset *a, const struct idset *b)
+{
+    if (!a) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (b) {
+        unsigned int id;
+
+        id = idset_first (b);
+        while (id != IDSET_INVALID_ID) {
+            if (idset_clear (a, id) < 0)
+                return -1;
+            id = idset_next (b, id);
+        }
+    }
+    return 0;
+}
+
+struct idset *idset_difference (const struct idset *a, const struct idset *b)
+{
+    struct idset *result;
+
+    if (!a) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(result = idset_copy (a)))
+        return NULL;
+    if (idset_subtract (result, b) < 0) {
+        idset_destroy (result);
+        return NULL;
+    }
+    return result;
+}
+
+struct idset *idset_intersect (const struct idset *a, const struct idset *b)
+{
+    struct idset *result;
+    unsigned int id;
+
+    if (!a || !b) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if (!(result = idset_copy (a)))
+        return NULL;
+    id = idset_first (a);
+    while (id != IDSET_INVALID_ID) {
+        if (!idset_test (b, id) && idset_clear (result, id) < 0) {
+            idset_destroy (result);
+            return NULL;
+        }
+        id = idset_next (a, id);
+    }
+    return result;
 }
 
 /*

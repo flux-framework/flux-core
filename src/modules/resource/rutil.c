@@ -27,42 +27,6 @@
 
 #include "rutil.h"
 
-int rutil_idset_sub (struct idset *ids1, const struct idset *ids2)
-{
-    if (!ids1) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (ids2) {
-        unsigned int id;
-        id = idset_first (ids2);
-        while (id != IDSET_INVALID_ID) {
-            if (idset_clear (ids1, id) < 0)
-                return -1;
-            id = idset_next (ids2, id);
-        }
-    }
-    return 0;
-}
-
-int rutil_idset_add (struct idset *ids1, const struct idset *ids2)
-{
-    if (!ids1) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (ids2) {
-        unsigned int id;
-        id = idset_first (ids2);
-        while (id != IDSET_INVALID_ID) {
-            if (idset_set (ids1, id) < 0)
-                return -1;
-            id = idset_next (ids2, id);
-        }
-    }
-    return 0;
-}
-
 int rutil_idset_diff (const struct idset *ids1,
                       const struct idset *ids2,
                       struct idset **addp,
@@ -343,7 +307,7 @@ int rutil_idkey_insert_idset (json_t *obj, struct idset *new_ids, json_t *val)
     if (found) {
         if (!(ids = idset_decode (orig_key)))
             return -1;
-        if (rutil_idset_add (ids, new_ids) < 0)
+        if (idset_add (ids, new_ids) < 0)
             goto error;
         if (!(key = idset_encode (ids, IDSET_FLAG_RANGE)))
             goto error;

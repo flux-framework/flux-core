@@ -73,6 +73,7 @@ man3
    flux_watcher_start
    idset_create
    idset_encode
+   idset_add
    flux_jobtap_get_flux
 
 .. toctree::

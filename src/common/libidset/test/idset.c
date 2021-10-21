@@ -490,6 +490,137 @@ void test_equal (void)
     idset_destroy (set2);
 }
 
+typedef enum { OP_UNION, OP_DIFF, OP_INTER, OP_ADD, OP_SUB} op_t;
+struct testop {
+    const char *a;
+    op_t op;
+    const char *b;
+    const char *result; // a if OP_ADD or OP_SUB, else return value
+    int xrc;            // ignored unless OP_ADD or OP_SUB
+    int errnum;
+};
+
+static struct testop optab[] = {
+    { NULL,     OP_UNION,   "[0]",      NULL,       0,  EINVAL },
+    { "[0]",    OP_UNION,   NULL,       "[0]",      0,  0 },
+    { "[0]",    OP_UNION,   "[0]",      "[0]",      0,  0 },
+    { "[0]",    OP_UNION,   "[1]",      "[0-1]",    0,  0 },
+    { NULL,     OP_DIFF,    "[0]",      NULL,       0,  EINVAL },
+    { "[0]",    OP_DIFF,    NULL,       "[0]",      0,  0 },
+    { "[0]",    OP_DIFF,    "[0]",      "[]",       0,  0 },
+    { "[0-1]",  OP_DIFF,    "[0]",      "[1]",      0,  0 },
+    { NULL,     OP_INTER,   "[0]",      NULL,       0,  EINVAL },
+    { "[0]",    OP_INTER,   NULL,       NULL,       0,  EINVAL },
+    { "[0-1]",  OP_INTER,   "[2-3]",    "[]",       0,  0 },
+    { "[0-1]",  OP_INTER,   "[1-2]",    "[1]",      0,  0 },
+    { "[0-1]",  OP_INTER,   "[0-1]",    "[0-1]",    0,  0 },
+    { NULL,     OP_ADD,     "[0]",      NULL,       -1, EINVAL },
+    { "[0]",    OP_ADD,     NULL,       "[0]",      0,  0 },
+    { "[0]",    OP_ADD,     "[0]",      "[0]",      0,  0 },
+    { "[0]",    OP_ADD,     "[1]",      "[0,1]",    0,  0 },
+    { NULL,     OP_SUB,     "[0]",      NULL,       -1, EINVAL },
+    { "[0]",    OP_SUB,     NULL,       "[0]",      0,  0 },
+    { "[0,1]",  OP_SUB,     "[1]",      "[0]",      0,  0 },
+    { "[0,1]",  OP_SUB,     "[2]",      "[0,1]",    0,  0 },
+};
+
+static void tryop (const char *s1,
+                   op_t op,
+                   const char *s2,
+                   const char *s3,
+                   int xrc,
+                   int errnum)
+{
+    struct idset *a = NULL;
+    struct idset *b = NULL;
+    struct idset *expect = NULL;
+    struct idset *result = NULL;
+    int rc = -1;
+
+    if (s1) {
+        if (!(a = idset_decode (s1)))
+            BAIL_OUT ("tryop failed to decode %s", s1);
+    }
+    if (s2) {
+        if (!(b = idset_decode (s2)))
+            BAIL_OUT ("tryop failed to decode %s", s2);
+    }
+    if (s3) {
+        if (!(expect = idset_decode (s3)))
+            BAIL_OUT ("tryop failed to decode %s", s3);
+    }
+    errno = 0;
+    switch (op) {
+        case OP_UNION:
+            result = idset_union (a, b);
+            break;
+        case OP_DIFF:
+            result = idset_difference (a, b);
+            break;
+        case OP_INTER:
+            result = idset_intersect (a, b);
+            break;
+        case OP_ADD:
+            rc = idset_add (a, b);
+            break;
+        case OP_SUB:
+            rc = idset_subtract (a, b);
+            break;
+    }
+    /* a in add and subtract is in/out arg, and returns -1 or 0.
+     */
+    if (op == OP_ADD || op == OP_SUB) {
+        ok (((xrc < 0 && xrc == rc && errno == errnum)
+            || idset_equal (expect, a)),
+            "idset_%s %s %s leaves arg1=%s%s%s",
+            op == OP_ADD ? "add" : "subtract",
+            s1 ? s1 : "NULL",
+            s2 ? s2 : "NULL",
+            s3 ? s3 : "NULL",
+            xrc < 0 ? ", fails with " : "",
+            xrc < 0 ? (errnum == EINVAL ? "EINVAL" : "expected errno") : "");
+    }
+    /* Other funcs return a new idset.
+     */
+    else {
+        ok (((expect == result && errno == errnum)
+            || idset_equal (expect, result)),
+            "idset_%s %s %s %s%s%s",
+            op == OP_UNION ? "union" : op == OP_DIFF
+                           ? "difference" : "intersect",
+            s1 ? s1 : "NULL",
+            s2 ? s2 : "NULL",
+            s3 ? "= " : "",
+            s3 ? s3 : "fails with ",
+            errnum > 0 ? (errnum == EINVAL ? "EINVAL" : "expected errno") : "");
+    }
+
+    idset_destroy (a);
+    idset_destroy (b);
+    idset_destroy (expect);
+    idset_destroy (result);
+}
+
+void test_ops (void)
+{
+    for (int i = 0; i < sizeof (optab) / sizeof (optab[0]); i++) {
+        tryop (optab[i].a,
+               optab[i].op,
+               optab[i].b,
+               optab[i].result,
+               optab[i].xrc,
+               optab[i].errnum);
+    }
+    struct idset *a;
+
+    if (!(a = idset_decode ("1-10")))
+        BAIL_OUT ("idset_decode [1-10] failed");
+    idset_clear_all (a);
+    ok (idset_count (a) == 0,
+        "idset_clear_all results in empty set");
+    idset_destroy (a);
+}
+
 void test_copy (void)
 {
     struct idset *idset;
@@ -652,6 +783,7 @@ int main (int argc, char *argv[])
     test_format_first ();
     issue_1974 ();
     issue_2336 ();
+    test_ops ();
 
     done_testing ();
 }

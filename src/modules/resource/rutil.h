@@ -11,13 +11,6 @@
 #ifndef _FLUX_RESOURCE_RUTIL_H
 #define _FLUX_RESOURCE_RUTIL_H
 
-/* Clear/set all the ids from 'ids2' in 'ids1'.
- * If ids2 == NULL, do nothing.
- * Return 0 on success, -1 on failure with errno set.
- */
-int rutil_idset_sub (struct idset *ids1, const struct idset *ids2);
-int rutil_idset_add (struct idset *ids1, const struct idset *ids2);
-
 /* Compare 'old_set' to 'new_set'.
  * Create '*add' for ids in new_set but not in old_set (sets NULL if n/a).
  * Create '*sub' for ids in old_set but not in new_set (sets NULL if n/a).
