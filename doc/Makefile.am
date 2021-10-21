@@ -112,6 +112,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_core_version.3 \
 	man3/idset_create.3 \
 	man3/idset_encode.3 \
+	man3/idset_add.3 \
 	man3/flux_jobtap_get_flux.3 \
 	man3/flux_sync_create.3
 
@@ -259,6 +260,13 @@ MAN3_FILES_SECONDARY = \
 	man3/idset_next.3 \
 	man3/idset_count.3 \
 	man3/idset_equal.3 \
+	man3/idset_add.3 \
+	man3/idset_subtract.3 \
+	man3/idset_union.3 \
+	man3/idset_difference.3 \
+	man3/idset_intersect.3 \
+	man3/idset_has_intersection.3 \
+	man3/idset_clear_all.3 \
 	man3/flux_jobtap_service_register.3 \
 	man3/flux_jobtap_reprioritize_all.3 \
 	man3/flux_jobtap_reprioritize_job.3 \
