@@ -39,7 +39,7 @@ pull_request_rules:
     actions:
       queue:
         name: default
-        method: rebase
+        method: merge
         update_method: rebase
   - name: remove outdated approved reviews
     conditions:
