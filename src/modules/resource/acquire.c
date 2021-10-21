@@ -131,9 +131,9 @@ static int acquire_request_init (struct acquire_request *ar,
         goto error;
     if (!(drain = drain_get (ctx->drain)))
         goto error;
-    if (rutil_idset_sub (ar->up, drain) < 0)
+    if (idset_subtract (ar->up, drain) < 0)
         goto error;
-    if (rutil_idset_sub (ar->up, monitor_get_down (ctx->monitor)) < 0)
+    if (idset_subtract (ar->up, monitor_get_down (ctx->monitor)) < 0)
         goto error;
     rlist_destroy (rl);
     idset_destroy (drain);
@@ -165,11 +165,11 @@ static int acquire_request_update (struct acquire_request *ar,
         return -1;
     if (!(drain = drain_get (ctx->drain)))
         goto error;
-    if (rutil_idset_sub (new_up, drain) < 0)
+    if (idset_subtract (new_up, drain) < 0)
         goto error;
-    if (rutil_idset_sub (new_up, monitor_get_down (ctx->monitor)) < 0)
+    if (idset_subtract (new_up, monitor_get_down (ctx->monitor)) < 0)
         goto error;
-    if (rutil_idset_sub (new_up, exclude_get (ctx->exclude)) < 0)
+    if (idset_subtract (new_up, exclude_get (ctx->exclude)) < 0)
         goto error;
     if (rutil_idset_diff (ar->up, new_up, up, dn) < 0)
         goto error;

@@ -137,14 +137,14 @@ static int batch_timeout_leader (struct monitor *monitor)
         if (!(online = idset_encode (b->up, IDSET_FLAG_RANGE)))
             goto done;
         flux_log (h, LOG_DEBUG, "monitor-batch: up %s", online);
-        if (rutil_idset_add (monitor->up, b->up) < 0)
+        if (idset_add (monitor->up, b->up) < 0)
             goto done;
     }
     if (idset_count (b->down) > 0) {
         if (!(offline = idset_encode (b->down, IDSET_FLAG_RANGE)))
             goto done;
         flux_log (h, LOG_DEBUG, "monitor-batch: down %s", offline);
-        if (rutil_idset_sub (monitor->up, b->down) < 0)
+        if (idset_subtract (monitor->up, b->down) < 0)
             goto done;
     }
     if (!idset_equal (monitor->up, cpy)) {
@@ -223,13 +223,13 @@ static void reduce_cb (flux_t *h,
         if (!(monitor->batch = batch_create (monitor)))
             goto error;
     }
-    if (rutil_idset_sub (monitor->batch->up, dn) < 0)
+    if (idset_subtract (monitor->batch->up, dn) < 0)
         goto error;
-    if (rutil_idset_sub (monitor->batch->down, up) < 0)
+    if (idset_subtract (monitor->batch->down, up) < 0)
         goto error;
-    if (rutil_idset_add (monitor->batch->down, dn) < 0)
+    if (idset_add (monitor->batch->down, dn) < 0)
         goto error;
-    if (rutil_idset_add (monitor->batch->up, up) < 0)
+    if (idset_add (monitor->batch->up, up) < 0)
         goto error;
     idset_destroy (up);
     idset_destroy (dn);
