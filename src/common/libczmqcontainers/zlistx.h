@@ -197,7 +197,6 @@ CZMQ_EXPORT void
 //  Self test of this class.
 CZMQ_EXPORT void
     zlistx_test (bool verbose);
-#endif // CZMQ_BUILD_EXTRA
 
 #ifdef CZMQ_BUILD_DRAFT_API
 //  *** Draft method, for development use, may change without warning ***
@@ -225,6 +224,7 @@ CZMQ_EXPORT zframe_t *
     zlistx_pack (zlistx_t *self);
 
 #endif // CZMQ_BUILD_DRAFT_API
+#endif // CZMQ_BUILD_EXTRA
 //  @end
 
 
