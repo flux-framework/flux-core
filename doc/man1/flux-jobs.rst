@@ -144,6 +144,10 @@ substitutions for *annotations.sched* and *annotations.user*.  For
 example, a reason pending status can be retrieved via
 "{sched.reason_pending}".
 
+As a reminder to the reader, some shells may interpret special
+characters in Python's string format syntax.  The format may need to
+be quoted or escaped to work under certain shells.
+
 The field names that can be specified are:
 
 **id**
