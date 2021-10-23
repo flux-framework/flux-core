@@ -1393,10 +1393,16 @@ static void overlay_recv_cb (const flux_msg_t *msg,
         default:
             break;
     }
-    if (dropped) {
-        flux_log_error (ctx->h, "DROP %s %s",
+    /* Suppress logging if a response could not be sent due to ENOSYS,
+     * which happens if sending module unloads before finishing all RPCs.
+     */
+    if (dropped && (type != FLUX_MSGTYPE_RESPONSE || errno != ENOSYS)) {
+        const char *topic = "unknown";
+        (void)flux_msg_get_topic (msg, &topic);
+        flux_log_error (ctx->h, "DROP %s %s topic=%s",
                         where == OVERLAY_UPSTREAM ? "upstream" : "downstream",
-                        flux_msg_typestr (type));
+                        flux_msg_typestr (type),
+                        topic);
     }
 }
 

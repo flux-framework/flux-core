@@ -101,6 +101,9 @@ static bool use_ipc (attr_t *attrs)
     int nblocks;
     const char *val;
 
+    if (attr_get (attrs, "tbon.prefertcp", &val, NULL) == 0
+        && strcmp (val, "0") != 0)
+        goto done;
     if (attr_get (attrs, "broker.mapping", &val, NULL) < 0 || !val)
         goto done;
     if (pmi_process_mapping_parse (val, &blocks, &nblocks) < 0)

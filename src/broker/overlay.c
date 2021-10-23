@@ -130,6 +130,7 @@ struct overlay {
     int fanout;
     char uuid[UUID_STR_LEN];
     int version;
+    int zmqdebug;
 
     struct parent parent;
 
@@ -671,6 +672,24 @@ const char *overlay_get_bind_uri (struct overlay *ov)
     return ov->bind_uri;
 }
 
+/* Log a failure to send tracker EHOSTUNREACH response.  Suppress logging
+ * ENOSYS failures, which happen if sending module unloads before completing
+ * all RPCs.
+ */
+static void log_tracker_error (flux_t *h, const flux_msg_t *msg, int errnum)
+{
+    if (errnum != ENOSYS) {
+        const char *topic = "unknown";
+        (void)flux_msg_get_topic (msg, &topic);
+        flux_log_error (h,
+                        "tracker: error sending %s EHOSTUNREACH response",
+                        topic);
+    }
+}
+
+/* Child endpoint disconnected, so any pending RPCs going that way
+ * get EHOSTUNREACH responses so they can fail fast.
+ */
 static void fail_child_rpcs (const flux_msg_t *msg, void *arg)
 {
     struct overlay *ov = arg;
@@ -680,7 +699,7 @@ static void fail_child_rpcs (const flux_msg_t *msg, void *arg)
         || flux_msg_route_delete_last (rep) < 0
         || flux_msg_route_delete_last (rep) < 0
         || flux_send (ov->h, rep, 0) < 0)
-        flux_log_error (ov->h, "tracker: error sending EHOSTUNREACH response");
+        log_tracker_error (ov->h, rep, errno);
     flux_msg_destroy (rep);
 }
 
@@ -888,12 +907,18 @@ done:
     flux_msg_decref (msg);
 }
 
+/* Parent endpoint disconnected, so any pending RPCs going that way
+ * get EHOSTUNREACH responses so they can fail fast.
+ */
 static void fail_parent_rpc (const flux_msg_t *msg, void *arg)
 {
     struct overlay *ov = arg;
 
-    if (flux_respond_error (ov->h, msg, EHOSTUNREACH, "overlay disconnect") < 0)
-        flux_log_error (ov->h, "tracker: error sending EHOSTUNREACH response");
+    if (flux_respond_error (ov->h,
+                            msg,
+                            EHOSTUNREACH,
+                            "overlay disconnect") < 0)
+        log_tracker_error (ov->h, msg, errno);
 }
 
 static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
@@ -1160,13 +1185,17 @@ int overlay_connect (struct overlay *ov)
         }
         if (!(ov->parent.zsock = zsock_new_dealer (NULL)))
             goto nomem;
-        /* Ignore any errors setting up socket monitor, as it's
-         * only used for logging, and only succeeds on recent libzmq.
+        /* The socket monitor is only used for logging.
+         * Setup may fail if libzmq is too old.
          */
-        ov->parent.monitor = zmqutil_monitor_create (ov->parent.zsock,
-                                                     ov->reactor,
-                                                     parent_monitor_cb,
-                                                     ov);
+        if (ov->zmqdebug) {
+            ov->parent.monitor = zmqutil_monitor_create (ov->parent.zsock,
+                                                         ov->reactor,
+                                                         parent_monitor_cb,
+                                                         ov);
+            if (!ov->parent.monitor)
+                log_err ("error enabling tbon connect zmq event logging");
+        }
         zsock_set_unbounded (ov->parent.zsock);
         zsock_set_linger (ov->parent.zsock, 5);
         zsock_set_ipv6 (ov->parent.zsock, ov->enable_ipv6);
@@ -1218,13 +1247,17 @@ int overlay_bind (struct overlay *ov, const char *uri)
         log_err ("error creating zmq ROUTER socket");
         return -1;
     }
-    /* Ignore any errors setting up socket monitor, as it's
-     * only used for logging, and only succeeds on recent libzmq.
+    /* The socket monitor is only used for logging.
+     * Setup may fail if libzmq is too old.
      */
-    ov->bind_monitor = zmqutil_monitor_create (ov->bind_zsock,
-                                               ov->reactor,
-                                               bind_monitor_cb,
-                                               ov);
+    if (attr_get (ov->attrs, "tbon.zmqdebug", NULL, NULL) == 0) {
+        ov->bind_monitor = zmqutil_monitor_create (ov->bind_zsock,
+                                                   ov->reactor,
+                                                   bind_monitor_cb,
+                                                   ov);
+        if (!ov->bind_monitor)
+            log_err ("error enabling tbon bind zmq event logging");
+    }
     zsock_set_unbounded (ov->bind_zsock);
     zsock_set_linger (ov->bind_zsock, 5);
     zsock_set_router_mandatory (ov->bind_zsock, 1);
@@ -1589,33 +1622,31 @@ int overlay_authorize (struct overlay *ov,
     return zmqutil_zap_authorize (ov->zap, name, pubkey);
 }
 
-/* Set tbon.fanout attribute and return fanout value or -1 on error.
- * Allow the value to be set on the broker command line, but no changes
- * after this function is called.
- */
-static int overlay_configure_fanout (attr_t *attrs)
+static int overlay_configure_attr_int (attr_t *attrs,
+                                       const char *name,
+                                       int default_value,
+                                       int *valuep)
 {
-    int fanout = DEFAULT_FANOUT;
+    int value = default_value;
     const char *val;
     char *endptr;
 
-    if (attr_get (attrs, "tbon.fanout", &val, NULL) == 0) {
+    if (attr_get (attrs, name, &val, NULL) == 0) {
         errno = 0;
-        fanout = strtol (val, &endptr, 10);
-        if (errno != 0 || fanout <= 0 || *endptr != '\0') {
-            log_msg ("tbon.fanout value must be a positive integer");
+        value = strtol (val, &endptr, 10);
+        if (errno != 0 || *endptr != '\0') {
+            log_msg ("%s value must be an integer", name);
             errno = EINVAL;
             return -1;
         }
-        if (attr_delete (attrs, "tbon.fanout", true) < 0)
+        if (attr_delete (attrs, name, true) < 0)
             return -1;
     }
-    if (attr_add_int (attrs,
-                      "tbon.fanout",
-                      fanout,
-                      FLUX_ATTRFLAG_IMMUTABLE) < 0)
+    if (attr_add_int (attrs, name, value, FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
-    return fanout;
+    if (valuep)
+        *valuep = value;
+    return 0;
 }
 
 void overlay_destroy (struct overlay *ov)
@@ -1711,7 +1742,22 @@ struct overlay *overlay_create (flux_t *h,
     ov->version = FLUX_CORE_VERSION_HEX;
     uuid_generate (uuid);
     uuid_unparse (uuid, ov->uuid);
-    if ((ov->fanout = overlay_configure_fanout (ov->attrs)) < 0)
+    if (overlay_configure_attr_int (ov->attrs,
+                                    "tbon.fanout",
+                                    DEFAULT_FANOUT,
+                                    &ov->fanout) < 0)
+        goto error;
+    if (ov->fanout < 1) {
+        log_msg ("tbon.fanout must be >= 1");
+        errno = EINVAL;
+        goto error;
+    }
+    if (overlay_configure_attr_int (ov->attrs,
+                                    "tbon.zmqdebug",
+                                    0,
+                                    &ov->zmqdebug) < 0)
+        goto error;
+    if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;

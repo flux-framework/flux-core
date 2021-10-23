@@ -92,6 +92,12 @@ test_expect_success 'flux-start with size 2 has rank 1 peer' '
 		flux module stats --parse=child-count overlay >child2.out &&
 	test_cmp child2.exp child2.out
 '
+test_expect_success 'flux-start with size 2 works with tbon.zmqdebug' '
+	flux start ${ARGS} -o,-Stbon.zmqdebug=1 -s2 /bin/true
+'
+test_expect_success 'flux-start with non-integer tbon.zmqdebug fails' '
+	test_must_fail flux start ${ARGS} -o,-Stbon.zmqdebug=foo /bin/true
+'
 test_expect_success 'flux-start fails with unknown option' "
 	test_must_fail flux start ${ARGS} --unknown /bin/true
 "
@@ -278,6 +284,11 @@ test_expect_success 'tbon.endpoint uses ipc:// in standalone instance' '
 '
 test_expect_success 'tbon.endpoint uses tcp:// if process mapping unavailable' '
 	flux start ${ARGS} -s2 --test-pmi-clique=none \
+		flux getattr tbon.endpoint >endpoint2.out &&
+	grep "^tcp" endpoint2.out
+'
+test_expect_success 'tbon.endpoint uses tcp:// if tbon.prefertcp is set' '
+	flux start ${ARGS} -s2 -o,-Stbon.prefertcp=1 \
 		flux getattr tbon.endpoint >endpoint2.out &&
 	grep "^tcp" endpoint2.out
 '
