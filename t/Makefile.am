@@ -67,6 +67,7 @@ TESTSCRIPTS = \
 	t0012-content-sqlite.t \
 	t0024-content-s3.t \
 	t0025-broker-state-machine.t \
+	t0027-broker-groups.t \
 	t0013-config-file.t \
 	t0014-runlevel.t \
 	t0015-cron.t \
@@ -238,6 +239,7 @@ EXTRA_DIST= \
 	flux-jobs/tests \
 	scripts/run_timeout.py \
 	scripts/startctl.py \
+	scripts/groups.py \
 	jobspec \
 	flux-resource \
 	resource/get-xml-test.py \
