@@ -200,8 +200,15 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
     if (!strcmp (type, "start")) {
-        if (event_job_post_pack (ctx->event, job, "start", 0, NULL) < 0)
-            goto error_post;
+        if (job->reattach)
+            flux_log (h,
+                      LOG_ERR,
+                      "start response: id=%ju should not get start event",
+                      (uintmax_t)id);
+        else {
+            if (event_job_post_pack (ctx->event, job, "start", 0, NULL) < 0)
+                goto error_post;
+        }
     }
     else if (!strcmp (type, "release")) {
         const char *idset;
@@ -275,10 +282,11 @@ int start_send_request (struct start *start, struct job *job)
     if (!job->start_pending && start->topic != NULL) {
         if (!(msg = flux_request_encode (start->topic, NULL)))
             return -1;
-        if (flux_msg_pack (msg, "{s:I s:i s:O}",
+        if (flux_msg_pack (msg, "{s:I s:i s:O s:b}",
                                 "id", job->id,
                                 "userid", job->userid,
-                                "jobspec", job->jobspec_redacted) < 0)
+                                "jobspec", job->jobspec_redacted,
+                                "reattach", job->reattach) < 0)
             goto error;
         if (flux_send (ctx->h, msg, 0) < 0)
             goto error;

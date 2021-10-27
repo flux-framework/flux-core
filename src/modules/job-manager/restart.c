@@ -266,8 +266,10 @@ int restart_from_kvs (struct job_manager *ctx)
                                 __FUNCTION__, (uintmax_t)job->id);
             }
         }
-        else if ((job->state & FLUX_JOB_STATE_RUNNING) != 0)
+        else if ((job->state & FLUX_JOB_STATE_RUNNING) != 0) {
             ctx->running_jobs++;
+            job->reattach = 1;
+        }
         job = zhashx_next (ctx->active_jobs);
     }
     flux_log (ctx->h, LOG_INFO, "restart: %d running jobs", ctx->running_jobs);
