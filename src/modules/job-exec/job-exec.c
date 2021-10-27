@@ -290,7 +290,7 @@ static int jobinfo_send_release (struct jobinfo *job,
 }
 
 static int jobinfo_respond (flux_t *h, struct jobinfo *job,
-                            const char *event, int status)
+                            const char *event)
 {
     return flux_respond_pack (h, job->req, "{s:I s:s s:{}}",
                                            "id", job->id,
@@ -327,7 +327,7 @@ void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
         va_start (ap, fmt);
         job->running = 1;
         va_end (ap);
-        if (jobinfo_respond (h, job, "start", 0) < 0)
+        if (jobinfo_respond (h, job, "start") < 0)
             flux_log_error (h, "jobinfo_started: flux_respond");
     }
 }
