@@ -319,14 +319,11 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
     }
 }
 
-void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
+void jobinfo_started (struct jobinfo *job)
 {
     flux_t *h = job->ctx->h;
     if (h && job->req) {
-        va_list ap;
-        va_start (ap, fmt);
         job->running = 1;
-        va_end (ap);
         if (jobinfo_respond (h, job, "start") < 0)
             flux_log_error (h, "jobinfo_started: flux_respond");
     }

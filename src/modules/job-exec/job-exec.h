@@ -102,8 +102,8 @@ int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
                                      const char *name,
                                      const char *fmt, ...);
 
-/* Emit  start event with optional note in jansson pack format */
-void jobinfo_started (struct jobinfo *job, const char *fmt, ...);
+/* Emit  start event */
+void jobinfo_started (struct jobinfo *job);
 
 /* Notify job-exec that ranks in idset `ranks` have completed
  *  with the given wait status
