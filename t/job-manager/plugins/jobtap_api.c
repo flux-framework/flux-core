@@ -13,6 +13,180 @@
 #include <flux/core.h>
 #include <flux/jobtap.h>
 
+static int test_prolog_start_finish (flux_plugin_t *p,
+                                     const char *topic,
+                                     flux_plugin_arg_t *args)
+{
+    errno = 0;
+    if (flux_jobtap_prolog_start (NULL, NULL) == 0
+        || errno != EINVAL)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s: errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_prolog_start (NULL NULL)",
+                                     errno,
+                                     EINVAL);
+    errno = 0;
+    if (flux_jobtap_prolog_start (p, NULL) == 0
+        || errno != EINVAL)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s: errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_prolog_start (p, NULL)",
+                                     errno,
+                                     EINVAL);
+
+    errno = 0;
+    if (strcmp (topic, "job.state.cleanup") == 0) {
+        if (flux_jobtap_prolog_start (p, "test") == 0
+            || errno != EINVAL)
+            flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                         "test", 0,
+                                         "%s: %s: errno=%d != %d",
+                                         topic,
+                                         "flux_jobtap_prolog_start ",
+                                         "after start request should fail",
+                                         errno,
+                                         EINVAL);
+
+
+    }
+    errno = 0;
+    if (flux_jobtap_prolog_finish (NULL, FLUX_JOBTAP_CURRENT_JOB, NULL, 0) == 0
+        || errno != EINVAL)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s: errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_prolog_finish (NULL, ...)",
+                                     errno,
+                                     EINVAL);
+    errno = 0;
+    if (flux_jobtap_prolog_finish (p, FLUX_JOBTAP_CURRENT_JOB, NULL, 0) == 0
+        || errno != EINVAL)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s: errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_prolog_finish (p, NULL...)",
+                                     errno,
+                                     EINVAL);
+    errno = 0;
+    if (flux_jobtap_prolog_finish (NULL, FLUX_JOBTAP_CURRENT_JOB, NULL, 0) == 0
+        || errno != EINVAL)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s: errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_prolog_finish (p, 1)",
+                                     errno,
+                                     EINVAL);
+    errno = 0;
+    if (flux_jobtap_prolog_finish (p, 1, "test", 0) == 0
+        || errno != ENOENT)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s (%s): errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_prolog_finish",
+                                     "p, 1, \"test\", 0",
+                                     errno,
+                                     EINVAL);
+
+
+    return 0;
+}
+
+
+static int test_epilog_start_finish (flux_plugin_t *p,
+                                     const char *topic,
+                                     flux_plugin_arg_t *args)
+{
+    errno = 0;
+    if (flux_jobtap_epilog_start (NULL, NULL) == 0
+        || errno != EINVAL)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s: errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_epilog_start (NULL NULL)",
+                                     errno,
+                                     EINVAL);
+    errno = 0;
+    if (flux_jobtap_epilog_start (p, NULL) == 0
+        || errno != EINVAL)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s: errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_epilog_start (p, NULL)",
+                                     errno,
+                                     EINVAL);
+
+    errno = 0;
+    if (strcmp (topic, "job.state.run") == 0) {
+        if (flux_jobtap_epilog_start (p, "test") == 0
+            || errno != EINVAL)
+            flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                         "test", 0,
+                                         "%s: %s: errno=%d != %d",
+                                         topic,
+                                         "flux_jobtap_epilog_start ",
+                                         "after start request should fail",
+                                         errno,
+                                         EINVAL);
+
+
+    }
+    errno = 0;
+    if (flux_jobtap_epilog_finish (NULL, FLUX_JOBTAP_CURRENT_JOB, NULL, 0) == 0
+        || errno != EINVAL)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s: errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_epilog_finish (NULL, ...)",
+                                     errno,
+                                     EINVAL);
+    errno = 0;
+    if (flux_jobtap_epilog_finish (p, FLUX_JOBTAP_CURRENT_JOB, NULL, 0) == 0
+        || errno != EINVAL)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s: errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_epilog_finish (p, NULL...)",
+                                     errno,
+                                     EINVAL);
+    errno = 0;
+    if (flux_jobtap_epilog_finish (NULL, FLUX_JOBTAP_CURRENT_JOB, NULL, 0) == 0
+        || errno != EINVAL)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s: errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_epilog_finish (p, 1)",
+                                     errno,
+                                     EINVAL);
+    errno = 0;
+    if (flux_jobtap_epilog_finish (p, 1, "test", 0) == 0
+        || errno != ENOENT)
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "test", 0,
+                                     "%s: %s (%s): errno=%d != %d",
+                                     topic,
+                                     "flux_jobtap_epilog_finish",
+                                     "p, 1, \"test\", 0",
+                                     errno,
+                                     EINVAL);
+
+
+    return 0;
+}
+
+
 static int test_event_post_pack (flux_plugin_t *p,
                                  const char *topic,
                                  flux_plugin_arg_t *args)
@@ -332,6 +506,8 @@ static int cleanup_cb (flux_plugin_t *p,
                        void *arg)
 {
     test_event_post_pack (p, topic, args);
+    test_prolog_start_finish (p, topic, args);
+    test_epilog_start_finish (p, topic, args);
     return test_job_result (p, topic, args);
 }
 
@@ -357,6 +533,8 @@ static int run_cb (flux_plugin_t *p,
                                            EINVAL,
                                            errno);
     test_event_post_pack (p, topic, args);
+    test_prolog_start_finish (p, topic, args);
+    test_epilog_start_finish (p, topic, args);
     return 0;
 }
 

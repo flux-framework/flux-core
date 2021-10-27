@@ -377,6 +377,7 @@ check_LTLIBRARIES = \
 	job-manager/plugins/dependency-test.la \
 	job-manager/plugins/subscribe.la \
 	job-manager/plugins/cleanup-event.la \
+	job-manager/plugins/perilog-test.la \
 	stats/stats-basic.la \
 	stats/stats-immediate.la
 
@@ -787,6 +788,15 @@ job_manager_plugins_cleanup_event_la_CPPFLAGS = \
 job_manager_plugins_cleanup_event_la_LDFLAGS = \
 	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_cleanup_event_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_perilog_test_la_SOURCES = \
+	job-manager/plugins/perilog-test.c
+job_manager_plugins_perilog_test_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_perilog_test_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_perilog_test_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
 hwloc_hwloc_convert_SOURCES = hwloc/hwloc-convert.c
