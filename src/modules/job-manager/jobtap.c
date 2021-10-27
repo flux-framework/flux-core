@@ -545,10 +545,17 @@ static int jobtap_stack_call (struct jobtap *jobtap,
                               flux_plugin_arg_t *args)
 {
     int retcode = 0;
-    flux_plugin_t *p = zlistx_first (plugins);
+    flux_plugin_t *p = NULL;
+
+    /* Duplicate list to make jobtap_stack_call reentrant */
+    zlistx_t *l = zlistx_dup (plugins);
+    if (!l)
+        return -1;
+    zlistx_set_destructor (l, NULL);
 
     if (current_job_push (jobtap, job) < 0)
         return -1;
+    p = zlistx_first (l);
     while (p) {
         int rc = flux_plugin_call (p, topic, args);
         if (rc < 0)  {
@@ -561,8 +568,9 @@ static int jobtap_stack_call (struct jobtap *jobtap,
             break;
         }
         retcode += rc;
-        p = zlistx_next (plugins);
+        p = zlistx_next (l);
     }
+    zlistx_destroy (&l);
     if (current_job_pop (jobtap) < 0)
         return -1;
     return retcode;
