@@ -349,7 +349,12 @@ int event_job_action (struct event *event, struct job *job)
                 return -1;
             break;
         case FLUX_JOB_STATE_RUN:
-            if (start_send_request (ctx->start, job) < 0)
+            /*
+             *  If job->request_refcount is nonzero then a prolog action
+             *   is still in progress so do not send start request.
+             */
+            if (!job->perilog_active
+                && start_send_request (ctx->start, job) < 0)
                 return -1;
             break;
         case FLUX_JOB_STATE_CLEANUP:
@@ -364,6 +369,7 @@ int event_job_action (struct event *event, struct job *job)
              * it is safe to release all resources to the scheduler.
              */
             if (job->has_resources
+                && !job->perilog_active
                 && !job->alloc_bypass
                 && !job->start_pending
                 && !job->free_pending) {
@@ -493,6 +499,31 @@ static int event_handle_set_flags (struct job *job,
     }
     return 0;
 }
+
+/*  Handle an prolog-* or epilog-* event
+ */
+static int event_handle_perilog (struct job *job,
+                                 const char *cmd,
+                                 json_t *context)
+{
+    if (strcmp (cmd, "start") == 0) {
+        if (job->perilog_active == UINT8_MAX) {
+            errno = EOVERFLOW;
+            return -1;
+        }
+        job->perilog_active++;
+    }
+    else if (strcmp (cmd, "finish") == 0) {
+        if (job->perilog_active > 0)
+            job->perilog_active--;
+    }
+    else {
+        errno = EPROTO;
+        return -1;
+    }
+    return 0;
+}
+
 
 /*  Return a callback topic string for the current job state
  *
@@ -625,6 +656,18 @@ int event_job_update (struct job *job, json_t *event)
         if (job->state != FLUX_JOB_STATE_CLEANUP)
             goto inval;
         job->state = FLUX_JOB_STATE_INACTIVE;
+    }
+    else if (!strncmp (name, "prolog-", 7)) {
+        if (job->start_pending)
+            goto inval;
+        if (event_handle_perilog (job, name+7, context) < 0)
+            goto error;
+    }
+    else if (!strncmp (name, "epilog-", 7)) {
+        if (job->state != FLUX_JOB_STATE_CLEANUP)
+            goto inval;
+        if (event_handle_perilog (job, name+7, context) < 0)
+            goto error;
     }
     else if (!strcmp (name, "flux-restart")) {
         /* The flux-restart event is currently only posted to jobs in

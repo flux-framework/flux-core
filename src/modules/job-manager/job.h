@@ -41,6 +41,8 @@ struct job {
     uint8_t has_resources:1;
     uint8_t start_pending:1;// start request sent to job-exec
 
+    uint8_t perilog_active; // if nonzero, prolog/epilog active
+
     json_t *annotations;
 
     struct grudgeset *dependencies;
