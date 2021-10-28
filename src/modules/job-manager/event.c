@@ -743,6 +743,16 @@ int event_job_post_entry (struct event *event,
             return -1;
     }
 
+    /* Keep track of running job count.
+     * If queue reaches idle state, event_job_action() triggers any waiters.
+     */
+    if ((job->state & FLUX_JOB_STATE_RUNNING)
+        && !(old_state & FLUX_JOB_STATE_RUNNING))
+        event->ctx->running_jobs++;
+    else if (!(job->state & FLUX_JOB_STATE_RUNNING)
+             && (old_state & FLUX_JOB_STATE_RUNNING))
+        event->ctx->running_jobs--;
+
     /*  Ensure jobtap call happens after the current state is published,
      *   in case any plugin callback causes a transition to a new state,
      *   but the call needs to occur before event_job_action() which may
@@ -753,16 +763,6 @@ int event_job_post_entry (struct event *event,
      *   errors at some point (perhaps raise a job exception).
      */
     (void) event_jobtap_call (event, job, name, entry, old_state);
-
-    /* Keep track of running job count.
-     * If queue reaches idle state, event_job_action() triggers any waiters.
-     */
-    if ((job->state & FLUX_JOB_STATE_RUNNING)
-        && !(old_state & FLUX_JOB_STATE_RUNNING))
-        event->ctx->running_jobs++;
-    else if (!(job->state & FLUX_JOB_STATE_RUNNING)
-             && (old_state & FLUX_JOB_STATE_RUNNING))
-        event->ctx->running_jobs--;
 
     return event_job_action (event, job);
 }
