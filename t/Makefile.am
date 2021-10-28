@@ -259,6 +259,7 @@ dist_check_SCRIPTS = \
 	issues/t3470-multithread-reactor-run.py \
 	issues/t3503-nofiles-limit.sh \
 	issues/t3775-binary-io.sh \
+	issues/t3920-running-underflow.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
@@ -375,6 +376,7 @@ check_LTLIBRARIES = \
 	job-manager/plugins/validate.la \
 	job-manager/plugins/dependency-test.la \
 	job-manager/plugins/subscribe.la \
+	job-manager/plugins/cleanup-event.la \
 	stats/stats-basic.la \
 	stats/stats-immediate.la
 
@@ -776,6 +778,15 @@ job_manager_plugins_dependency_test_la_CPPFLAGS = \
 job_manager_plugins_dependency_test_la_LDFLAGS = \
 	$(fluxplugin_ldflags) -module -rpath /nowhere
 job_manager_plugins_dependency_test_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
+
+job_manager_plugins_cleanup_event_la_SOURCES = \
+	job-manager/plugins/cleanup-event.c
+job_manager_plugins_cleanup_event_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_cleanup_event_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_cleanup_event_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
 hwloc_hwloc_convert_SOURCES = hwloc/hwloc-convert.c
