@@ -260,7 +260,6 @@ MAN3_FILES_SECONDARY = \
 	man3/idset_next.3 \
 	man3/idset_count.3 \
 	man3/idset_equal.3 \
-	man3/idset_add.3 \
 	man3/idset_subtract.3 \
 	man3/idset_union.3 \
 	man3/idset_difference.3 \
