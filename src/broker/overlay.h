@@ -11,6 +11,9 @@
 #ifndef _BROKER_OVERLAY_H
 #define _BROKER_OVERLAY_H
 
+#include <jansson.h>
+#include <stdint.h>
+
 #include "attr.h"
 
 typedef enum {
@@ -24,6 +27,11 @@ struct overlay;
 typedef void (*overlay_monitor_f)(struct overlay *ov, void *arg);
 typedef void (*overlay_recv_f)(const flux_msg_t *msg,
                                overlay_where_t from,
+                               void *arg);
+typedef void (*overlay_loss_f)(struct overlay *ov,
+                               uint32_t rank,
+                               const char *status,
+                               json_t *topology,
                                void *arg);
 
 /* Create overlay network, registering 'cb' to be called with each
@@ -99,6 +107,10 @@ int overlay_connect (struct overlay *ov);
 void overlay_set_monitor_cb (struct overlay *ov,
                              overlay_monitor_f cb,
                              void *arg);
+
+void overlay_set_loss_cb (struct overlay *ov,
+                          overlay_loss_f cb,
+                          void *arg);
 
 /* Register overlay-related broker attributes.
  */

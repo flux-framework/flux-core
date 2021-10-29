@@ -147,6 +147,9 @@ struct overlay {
     overlay_monitor_f child_monitor_cb;
     void *child_monitor_arg;
 
+    overlay_loss_f loss_cb;
+    void *loss_arg;
+
     overlay_recv_f recv_cb;
     void *recv_arg;
 
@@ -162,6 +165,7 @@ static int overlay_keepalive_parent (struct overlay *ov,
                                      enum keepalive_type ktype,
                                      int arg);
 static int overlay_health_respond (struct overlay *ov, const flux_msg_t *msg);
+static json_t *get_subtree_topo (struct overlay *ov, int rank);
 
 /* Convenience iterator for ov->children
  */
@@ -267,6 +271,25 @@ static int child_count (uint32_t rank, uint32_t size, int k)
     for (count = 0; kary_childof (k, size, rank, count) != KARY_NONE; count++)
         ;
     return count;
+}
+
+static void overlay_loss_notify (struct overlay *ov,
+                                 struct child *child,
+                                 int status)
+{
+    if (ov->loss_cb) {
+        json_t *topo;
+        if (!(topo = get_subtree_topo (ov, child->rank))) {
+            flux_log_error (ov->h, "overlay_loss_notify failed");
+            return;
+        }
+        ov->loss_cb (ov,
+                     child->rank,
+                     subtree_status_str (status),
+                     topo,
+                     ov->loss_arg);
+        json_decref (topo);
+    }
 }
 
 int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank)
@@ -712,6 +735,7 @@ static void overlay_child_status_update (struct overlay *ov,
             && !subtree_is_online (status)) {
             zhashx_delete (ov->child_hash, child->uuid);
             rpc_track_purge (child->tracker, fail_child_rpcs, ov);
+            overlay_loss_notify (ov, child, status);
         }
         else if (!subtree_is_online (child->status)
             && subtree_is_online (status)) {
@@ -1337,6 +1361,14 @@ void overlay_set_monitor_cb (struct overlay *ov,
 {
     ov->child_monitor_cb = cb;
     ov->child_monitor_arg = arg;
+}
+
+void overlay_set_loss_cb (struct overlay *ov,
+                          overlay_loss_f cb,
+                          void *arg)
+{
+    ov->loss_cb = cb;
+    ov->loss_arg = arg;
 }
 
 static int child_rpc_track_count (struct overlay *ov)
