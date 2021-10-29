@@ -76,8 +76,10 @@ static void trim_end (char *s, int ch)
 static int liblist_append_from_ldconfig (zlist_t *libs, const char *libname)
 {
     FILE *f;
-    const char *cmd = "ldconfig -p | sed -e 's/([^(]*)[\t ]*//'" \
-                      "            | awk -F\" => \" '{print $1 \":\" $2};'";
+    const char *cmd = "ldconfig=$(command -v ldconfig)" \
+                      " && $ldconfig -p" \
+                      "  | sed -e 's/([^(]*)[\t ]*//'" \
+                      "  | awk -F\" => \" '{print $1 \":\" $2};'";
     char line[1024];
     int rc = -1;
 
