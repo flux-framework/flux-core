@@ -251,6 +251,74 @@ or via configuration (See :ref:`configuration` below)
    ]
 
 
+.. _perilogs:
+
+PROLOG AND EPILOG ACTIONS
+=========================
+
+Plugins that need to perform asynchronous tasks for jobs after an ``alloc``
+event but before the job is running, or after a ``finish`` event but before
+resources are freed to the scheduler can make use of job manager prolog or
+epilog actions.
+
+Prolog and epilog actions are delineated by the following functions:
+
+::
+
+   int flux_jobtap_prolog_start (flux_plugin_t *p,
+                                 const char *description);
+
+   int flux_jobtap_prolog_finish (flux_plugin_t *p,
+                                  flux_jobid_t id,
+                                  const char *description,
+                                  int status);
+
+   int flux_jobtap_epilog_start (flux_plugin_t *p,
+                                 const char *description);
+
+   int flux_jobtap_epilog_finish (flux_plugin_t *p,
+                                  flux_jobid_t id,
+                                  const char *description,
+                                  int status);
+
+To initiate a prolog action, a plugin should call the function
+``flux_jobtap_prolog_start()``. This will block the job from starting
+even after resources have been assigned until a corresponding call to
+``flux_jobtap_prolog_finish()`` has been called. While the status of the
+prolog action is passed to ``flux_jobtap_prolog_finish()`` so it can be
+captured in the eventlog, the action itself is responsible for raising
+a job exception or taking other action on failure. That is, a non-zero
+prolog finish status does not cause any automated behavior on the part of
+the job manager. Similarly, the prolog ``description`` is used for
+informational purposes only, so that multiple actions in an eventlog
+may be differentiated.
+
+Similarly, an epilog action is initiated with ``flux_jobtap_epilog_start()``,
+and prevents resources from being released to the scheduler until a
+corresponding call to ``flux_jobtap_epilog_finish()``. The same caveats
+described for prolog actions regarding description and completion status
+of epilog actions apply.
+
+The ``flux_jobtap_prolog_start()`` function may be initiated anytime
+before the ``start`` request is made to the execution system, though most
+often from the ``job.state.run`` or ``job.event.alloc`` callbacks,
+since this is the point at which a job has been allocated resources.
+(Note: plugins will only receive the ``job.event.*`` callbacks for
+jobs to which they have subscribed with a call to
+``flux_jobtap_job_subscribe()``). A prolog action cannot be started
+after a job enters the CLEANUP state.
+
+The ``flux_jobtap_epilog_start()`` function may only be called after a
+job is in the CLEANUP state, but before the ``free`` request has been
+sent to the scheduler, for example from the ``job.state.cleanup``
+or ``job.event.finish`` callbacks.
+
+If ``flux_jobtap_prolog_start()``, ``flux_jobtap_prolog_finish()``,
+``flux_jobtap_epilog_start()`` or ``flux_jobtap_epilog_finish()`` are
+called for a job in an invaid state, these function will return -1 with
+``errno`` set to ``EINVAL``.
+
+Multiple prolog or epilog actions can be active at the same time.
 
 .. _configuration:
 

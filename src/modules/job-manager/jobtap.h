@@ -194,6 +194,38 @@ int flux_jobtap_job_subscribe (flux_plugin_t *p, flux_jobid_t id);
  */
 void flux_jobtap_job_unsubscribe (flux_plugin_t *p, flux_jobid_t id);
 
+
+/*  Post an event to the current job eventlog indicating that a prolog
+ *   action has started. This will block the start request to the
+ *   execution system until `flux_jobtap_prolog_finish()` is called.
+ */
+int flux_jobtap_prolog_start (flux_plugin_t *p, const char *description);
+
+/*  Post an event to the eventlog for job id indicating that a prolog
+ *   action has finished. The description should match the description
+ *   of an outstanding prolog start event. `status` is informational
+ *   and should be 0 to indicate success, non-zero for failure.
+ */
+int flux_jobtap_prolog_finish (flux_plugin_t *p,
+                               flux_jobid_t id,
+                               const char *description,
+                               int status);
+
+/*  Post an event to the current job eventlog indicating that an epilog
+ *   action has started. This will block the free request to the
+ *   scheduler until `flux_jobtap_epilog_finish()` is called.
+ */
+int flux_jobtap_epilog_start (flux_plugin_t *p, const char *description);
+
+/*  Post an event to the eventlog for job id indicating that an epilog
+ *   action has finished. The description should match the description
+ *   of an outstanding epilog start event. `status` is informational
+ *   and should be 0 to indicate success, non-zero for failure.
+ */
+int flux_jobtap_epilog_finish (flux_plugin_t *p,
+                               flux_jobid_t id,
+                               const char *description,
+                               int status);
 #ifdef __cplusplus
 }
 #endif

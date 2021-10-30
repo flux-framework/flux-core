@@ -545,10 +545,17 @@ static int jobtap_stack_call (struct jobtap *jobtap,
                               flux_plugin_arg_t *args)
 {
     int retcode = 0;
-    flux_plugin_t *p = zlistx_first (plugins);
+    flux_plugin_t *p = NULL;
+
+    /* Duplicate list to make jobtap_stack_call reentrant */
+    zlistx_t *l = zlistx_dup (plugins);
+    if (!l)
+        return -1;
+    zlistx_set_destructor (l, NULL);
 
     if (current_job_push (jobtap, job) < 0)
         return -1;
+    p = zlistx_first (l);
     while (p) {
         int rc = flux_plugin_call (p, topic, args);
         if (rc < 0)  {
@@ -561,8 +568,9 @@ static int jobtap_stack_call (struct jobtap *jobtap,
             break;
         }
         retcode += rc;
-        p = zlistx_next (plugins);
+        p = zlistx_next (l);
     }
+    zlistx_destroy (&l);
     if (current_job_pop (jobtap) < 0)
         return -1;
     return retcode;
@@ -1889,6 +1897,124 @@ int flux_jobtap_job_event_posted (flux_plugin_t *p,
         return 1;
     return 0;
 }
+
+static int jobtap_emit_perilog_event (struct jobtap *jobtap,
+                                      struct job *job,
+                                      bool prolog,
+                                      bool start,
+                                      const char *description,
+                                      int status)
+{
+    int flags = 0;
+    const char *event = prolog ? start ? "prolog-start" : "prolog-finish" :
+                                 start ? "epilog-start" : "epilog-finish";
+
+    if (!description) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    /*  prolog events cannot be emitted after a start request is pending.
+     *
+     *  epilog events cannot be emitted outside of CLEANUP state
+     *   and must be emitted before free request is pending.
+     */
+    if ((prolog && job->start_pending)
+        || (prolog && job->state == FLUX_JOB_STATE_CLEANUP)
+        || (!prolog && job->state != FLUX_JOB_STATE_CLEANUP)
+        || (!prolog && job->free_pending)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (start)
+        return event_job_post_pack (jobtap->ctx->event,
+                                    job,
+                                    event,
+                                    flags,
+                                    "{s:s}",
+                                    "description", description);
+    else
+        return event_job_post_pack (jobtap->ctx->event,
+                                    job,
+                                    event,
+                                    flags,
+                                    "{s:s s:i}",
+                                    "description", description,
+                                    "status", status);
+}
+
+int flux_jobtap_prolog_start (flux_plugin_t *p, const char *description)
+{
+    struct job * job;
+    struct jobtap *jobtap;
+
+    if (!p
+        || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))
+        || !(job = current_job (jobtap))) {
+        errno = EINVAL;
+        return -1;
+    }
+    return jobtap_emit_perilog_event (jobtap, job, true, true, description, 0);
+}
+
+int flux_jobtap_prolog_finish (flux_plugin_t *p,
+                               flux_jobid_t id,
+                               const char *description,
+                               int status)
+{
+    struct job * job;
+    struct jobtap *jobtap;
+
+    if (!p || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job = jobtap_lookup_jobid (p, id)))
+        return -1;
+    return jobtap_emit_perilog_event (jobtap,
+                                      job,
+                                      true,
+                                      false,
+                                      description,
+                                      status);
+}
+
+int flux_jobtap_epilog_start (flux_plugin_t *p, const char *description)
+{
+    struct job * job;
+    struct jobtap *jobtap;
+
+    if (!p
+        || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))
+        || !(job = current_job (jobtap))) {
+        errno = EINVAL;
+        return -1;
+    }
+    return jobtap_emit_perilog_event (jobtap, job, false, true, description, 0);
+}
+
+int flux_jobtap_epilog_finish (flux_plugin_t *p,
+                               flux_jobid_t id,
+                               const char *description,
+                               int status)
+{
+    struct job * job;
+    struct jobtap *jobtap;
+
+    if (!p || !(jobtap = flux_plugin_aux_get (p, "flux::jobtap"))) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (!(job = jobtap_lookup_jobid (p, id)))
+        return -1;
+    return jobtap_emit_perilog_event (jobtap,
+                                      job,
+                                      false,
+                                      false,
+                                      description,
+                                      status);
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

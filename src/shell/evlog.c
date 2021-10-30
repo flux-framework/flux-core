@@ -175,7 +175,7 @@ static int evlog_shell_exit (flux_plugin_t *p,
     return 0;
 }
 
-/*  Start the evenlog-based logger during shell.connect, just after the
+/*  Start the eventlog-based logger during shell.connect, just after the
  *   shell has obtained a flux_t handle. This allows more early log
  *   messages to make it into the eventlog, but some data (such as
  *   the current shell_rank) is not available at this time.
