@@ -10,35 +10,29 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SRPC=${FLUX_BUILD_DIR}/t/request/rpc_stream
 ARGS="-o,-Sbroker.rc1_path=,-Sbroker.rc3_path="
-
-test_expect_success 'create qget.sh script to query quorum' '
-	cat >qget.sh <<-EOT &&
-	$RPC state-machine.quorum-get | jq -r .idset
-	EOT
-	chmod +x qget.sh
-'
+GROUPSCMD="flux python ${SHARNESS_TEST_SRCDIR}/scripts/groups.py"
 
 test_expect_success HAVE_JQ 'quorum reached on instance with 1 TBON level' '
-	echo "[0-2]" >full1.exp &&
-	flux start -s3 ${ARGS} ./qget.sh >full1.out &&
+	echo "0-2" >full1.exp &&
+	flux start -s3 ${ARGS} ${GROUPSCMD} get broker.online >full1.out &&
 	test_cmp full1.exp full1.out
 '
 
 test_expect_success HAVE_JQ 'quorum reached on instance with 2 TBON levels' '
-	echo "[0-3]" >full2.exp &&
-	flux start -s4 ${ARGS} ./qget.sh >full2.out &&
+	echo "0-3" >full2.exp &&
+	flux start -s4 ${ARGS} ${GROUPSCMD} get broker.online >full2.out &&
 	test_cmp full2.exp full2.out
 '
 
 test_expect_success HAVE_JQ 'quorum reached on instance with 3 TBON levels' '
-	echo "[0-7]" >full3.exp &&
-	flux start -s8 ${ARGS} ./qget.sh >full3.out &&
+	echo "0-7" >full3.exp &&
+	flux start -s8 ${ARGS} ${GROUPSCMD} get broker.online >full3.out &&
 	test_cmp full3.exp full3.out
 '
 
 test_expect_success HAVE_JQ 'broker.quorum can be set on the command line' '
 	flux start -s3 ${ARGS} -o,-Sbroker.quorum="0-2" \
-		./qget.sh >full1_explicit.out &&
+		${GROUPSCMD} get broker.online >full1_explicit.out &&
 	test_cmp full1.exp full1_explicit.out
 '
 
@@ -66,7 +60,7 @@ test_expect_success 'create rc1 that blocks on FIFO for rank != 0' '
 test_expect_success HAVE_JQ 'create rc2 that unblocks FIFO' '
 	cat <<-EOT >rc2_unblock &&
 	#!/bin/bash
-	./qget.sh
+	${GROUPSCMD} get broker.online
 	echo UNBLOCKED! >>fifo
 	EOT
 	chmod +x rc2_unblock
@@ -88,16 +82,9 @@ test_expect_success HAVE_JQ 'instance functions with late-joiner' '
 	test_cmp late.exp late.out
 '
 
-test_expect_success HAVE_JQ 'quorum-get RPC works' '
-	flux start ${ARGS} \
-		$RPC state-machine.quorum-get \
-		</dev/null >qm0.out &&
-	jq -cea .idset qm0.out
-'
-
 test_expect_success 'quorum-get RPC fails on rank > 0' '
 	test_must_fail flux start -s2 ${ARGS} \
-		flux exec -r1 $RPC state-machine.quorum-get \
+		flux exec -r1 ${GROUPSCMD} get --rank 1 broker.online \
 		</dev/null 2>qm1.err &&
 	grep "only available on rank 0" qm1.err
 '

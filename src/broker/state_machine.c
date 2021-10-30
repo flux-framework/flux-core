@@ -581,35 +581,6 @@ static void broker_online_cb (flux_future_t *f, void *arg)
     }
 }
 
-static void quorum_get_cb (flux_t *h,
-                           flux_msg_handler_t *mh,
-                           const flux_msg_t *msg,
-                           void *arg)
-{
-    struct state_machine *s = arg;
-    const char *errstr = NULL;
-    char *tmp = NULL;
-
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
-    if (s->ctx->rank != 0) {
-        errstr = "quorum-get RPC is only available on rank 0";
-        errno = EPROTO;
-        goto error;
-    }
-    if (!(tmp = idset_encode (s->quorum.have,
-                              IDSET_FLAG_RANGE | IDSET_FLAG_BRACKETS)))
-        goto error;
-    if (flux_respond_pack (h, msg, "{s:s}", "idset", tmp) < 0)
-        goto error;
-    free (tmp);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to quorum-get request");
-    free (tmp);
-}
-
 static void monitor_update (flux_t *h,
                             struct flux_msglist *requests,
                             broker_state_t state)
@@ -754,7 +725,6 @@ static void disconnect_cb (flux_t *h,
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "state-machine.monitor", monitor_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "state-machine.quorum-get", quorum_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "state-machine.disconnect", disconnect_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
