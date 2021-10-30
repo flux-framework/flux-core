@@ -242,8 +242,7 @@ EXTRA_DIST= \
 	scripts/groups.py \
 	jobspec \
 	flux-resource \
-	resource/get-xml-test.py \
-	resource/waitup.py
+	resource/get-xml-test.py
 
 dist_check_SCRIPTS = \
 	$(TESTSCRIPTS) \
