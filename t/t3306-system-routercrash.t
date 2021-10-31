@@ -18,6 +18,27 @@ export TEST_UNDER_FLUX_FANOUT=1
 test_under_flux 3 system
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
+groups="flux python ${SHARNESS_TEST_SRCDIR}/scripts/groups.py"
+
+# Usage: waitup N
+#   where N is a count of online ranks
+waitup () {
+        run_timeout 5 flux python -c "import flux; print(flux.Flux().rpc(\"resource.monitor-waitup\",{\"up\":$1}).get())"
+}
+
+test_expect_success 'wait for all brokers to be online' '
+	${groups} waitfor --count 3 broker.online
+'
+
+test_expect_success 'wait for resource module to catch up' '
+	waitup 3
+'
+
+test_expect_success 'resource status shows no offline nodes' '
+        echo 0 >offline0.exp &&
+        flux resource status -s offline -no {nnodes} >offline0.out &&
+        test_cmp offline0.exp offline0.out
+'
 
 test_expect_success 'tell each broker to log to stderr' '
 	flux exec flux setattr log-stderr-mode local
@@ -33,8 +54,32 @@ test_expect_success 'kill -9 broker 1' '
 	test_expect_code 137 $startctl wait 1
 '
 
+test_expect_success 'wait broker.online to reach count of one' '
+	${groups} waitfor --count 1 broker.online
+'
+test_expect_success 'wait for resource module to catch up' '
+	waitup 1
+'
+test_expect_success 'resource status shows 2 offline nodes' '
+        echo 2 >offline2.exp &&
+        flux resource status -s offline -no {nnodes} >offline2.out &&
+        test_cmp offline2.exp offline2.out
+'
+
 test_expect_success 'restart broker 1' '
 	$startctl run 1
+'
+
+test_expect_success 'wait broker.online to reach count of two' '
+	${groups} waitfor --count=2 broker.online
+'
+test_expect_success 'wait for resource module to catch up' '
+	waitup 2
+'
+test_expect_success 'resource status shows 1 offline nodes' '
+        echo 1 >offline1.exp &&
+        flux resource status -s offline -no {nnodes} >offline1.out &&
+        test_cmp offline1.exp offline1.out
 '
 
 test_expect_success 'ping broker 1 via broker 2' '
@@ -47,6 +92,17 @@ test_expect_success 'broker 2 was disconnected' '
 
 test_expect_success 'restart broker 2' '
 	$startctl run 2
+'
+
+test_expect_success 'wait broker.online to reach count of three' '
+	${groups} waitfor --count=3 broker.online
+'
+test_expect_success 'wait for resource module to catch up' '
+	waitup 3
+'
+test_expect_success 'resource status shows 0 offline nodes' '
+        flux resource status -s offline -no {nnodes} >offline00.out &&
+        test_cmp offline0.exp offline00.out
 '
 
 test_expect_success 'wait for rank 0 to report subtree status of full' '
