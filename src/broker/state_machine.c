@@ -165,6 +165,21 @@ static broker_state_t state_next (broker_state_t current, const char *event)
     return current;
 }
 
+/* return true if a is a subset of b */
+static bool is_subset_of (const struct idset *a, const struct idset *b)
+{
+    struct idset *ids;
+    int count;
+
+    if (!(ids = idset_difference (a, b)))
+        return false;
+    count = idset_count (ids);
+    idset_destroy (ids);
+    if (count > 0)
+        return false;
+    return true;
+}
+
 static void action_init (struct state_machine *s)
 {
     s->ctx->online = true;
@@ -193,7 +208,7 @@ static void action_quorum (struct state_machine *s)
         return;
     }
     if (s->ctx->rank == 0) {
-        if (idset_equal (s->quorum.want, s->quorum.have))
+        if (is_subset_of (s->quorum.want, s->quorum.have))
             state_machine_post (s, "quorum-full");
     }
     else
