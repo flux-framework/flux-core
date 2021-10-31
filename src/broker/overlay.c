@@ -1193,8 +1193,6 @@ int overlay_connect (struct overlay *ov)
                                                          ov->reactor,
                                                          parent_monitor_cb,
                                                          ov);
-            if (!ov->parent.monitor)
-                log_err ("error enabling tbon connect zmq event logging");
         }
         zsock_set_unbounded (ov->parent.zsock);
         zsock_set_linger (ov->parent.zsock, 5);
@@ -1255,8 +1253,6 @@ int overlay_bind (struct overlay *ov, const char *uri)
                                                    ov->reactor,
                                                    bind_monitor_cb,
                                                    ov);
-        if (!ov->bind_monitor)
-            log_err ("error enabling tbon bind zmq event logging");
     }
     zsock_set_unbounded (ov->bind_zsock);
     zsock_set_linger (ov->bind_zsock, 5);
