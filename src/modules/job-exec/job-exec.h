@@ -77,6 +77,7 @@ struct jobinfo {
     uint8_t               running:1;     /* all shells are running */
     uint8_t               finalizing:1;  /* in process of cleanup */
 
+    int                   reattach;      /* job-manager reattach attempt */
     int                   wait_status;
 
     struct eventlogger *  ev;           /* event batcher */
@@ -104,6 +105,9 @@ int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
 
 /* Emit  start event */
 void jobinfo_started (struct jobinfo *job);
+
+/* Emit  reattached event */
+void jobinfo_reattached (struct jobinfo *job);
 
 /* Notify job-exec that ranks in idset `ranks` have completed
  *  with the given wait status

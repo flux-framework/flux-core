@@ -330,6 +330,16 @@ void jobinfo_started (struct jobinfo *job)
     }
 }
 
+void jobinfo_reattached (struct jobinfo *job)
+{
+    flux_t *h = job->ctx->h;
+    if (h && job->req) {
+        job->running = 1;
+        if (jobinfo_respond (h, job, "reattached") < 0)
+            flux_log_error (h, "jobinfo_reattach: flux_respond");
+    }
+}
+
 static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
                            int revents, void *arg)
 {
@@ -592,7 +602,10 @@ error_release:
 
 static int jobinfo_start_execution (struct jobinfo *job)
 {
-    jobinfo_emit_event_pack_nowait (job, "starting", NULL);
+    if (job->reattach)
+        jobinfo_emit_event_pack_nowait (job, "re-starting", NULL);
+    else
+        jobinfo_emit_event_pack_nowait (job, "starting", NULL);
     /* Set started flag before calling 'start' method because we want to
      *  be sure to clean up properly if an exception occurs
      */
@@ -806,7 +819,9 @@ static void namespace_link (flux_future_t *fprev, void *arg)
         goto error;
     }
     flux_future_set_flux (cf, h);
-    if (!(f = jobinfo_emit_event_pack (job, "init", NULL))
+    if (!(f = jobinfo_emit_event_pack (job,
+                                       job->reattach ? "reattach" : "init",
+                                       NULL))
         || flux_future_push (cf, "emit event", f) < 0)
         goto error;
 
@@ -914,10 +929,11 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
 
     job->ctx = ctx;
 
-    if (flux_request_unpack (job->req, NULL, "{s:I s:i s:O}",
+    if (flux_request_unpack (job->req, NULL, "{s:I s:i s:O s:b}",
                                              "id", &job->id,
                                              "userid", &job->userid,
-                                             "jobspec", &job->jobspec) < 0) {
+                                             "jobspec", &job->jobspec,
+                                             "reattach", &job->reattach) < 0) {
         flux_log_error (ctx->h, "start: flux_request_unpack");
         jobinfo_decref (job);
         return -1;

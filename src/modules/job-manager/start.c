@@ -210,6 +210,9 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
                 goto error_post;
         }
     }
+    else if (!strcmp (type, "reattached")) {
+        /* nothing to do yet */
+    }
     else if (!strcmp (type, "release")) {
         const char *idset;
         int final;
