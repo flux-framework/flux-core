@@ -26,13 +26,12 @@
 #include "runat.h"
 #include "overlay.h"
 #include "attr.h"
-
-static const double quorum_batch_timeout = 0.1;
+#include "groups.h"
 
 struct quorum {
     struct idset *want;
     struct idset *have; // cumulative on rank 0, batch buffer on rank > 0
-    flux_watcher_t *batch_timer;
+    flux_future_t *f;
 };
 
 struct monitor {
@@ -90,7 +89,6 @@ static void monitor_update (flux_t *h,
                             struct flux_msglist *requests,
                             broker_state_t state);
 static void join_check_parent (struct state_machine *s);
-static int quorum_add_self (struct state_machine *s);
 static void quorum_check_parent (struct state_machine *s);
 static void run_check_parent (struct state_machine *s);
 
@@ -201,17 +199,31 @@ static void action_join (struct state_machine *s)
         join_check_parent (s);
 }
 
+static void action_quorum_continuation (flux_future_t *f, void *arg)
+{
+    struct state_machine *s = arg;
+
+    if (flux_rpc_get (f, NULL) < 0)
+        state_machine_post (s, "quorum-fail");
+    flux_future_destroy (f);
+}
+
 static void action_quorum (struct state_machine *s)
 {
-    if (quorum_add_self (s) < 0) {
+    flux_future_t *f;
+
+    if (!(f = flux_rpc_pack (s->ctx->h,
+                             "groups.join",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:s}",
+                             "name", "broker.online"))
+        || flux_future_then (f, -1, action_quorum_continuation, s)) {
+        flux_future_destroy (f);
         state_machine_post (s, "quorum-fail");
         return;
     }
-    if (s->ctx->rank == 0) {
-        if (is_subset_of (s->quorum.want, s->quorum.have))
-            state_machine_post (s, "quorum-full");
-    }
-    else
+    if (s->ctx->rank > 0)
         quorum_check_parent (s);
 }
 
@@ -508,119 +520,6 @@ static void quorum_check_parent (struct state_machine *s)
     }
 }
 
-/* Batch timer has expired.
- * If rank 0, post event if quorum has been achieved.
- * If rank > 0, send aggregated request upstream.
- */
-static void quorum_batch (flux_reactor_t *r,
-                          flux_watcher_t *w,
-                          int revents,
-                          void *arg)
-{
-    struct state_machine *s = arg;
-
-    if (s->ctx->rank == 0) {
-        if (s->state == STATE_QUORUM
-                && idset_equal (s->quorum.want, s->quorum.have))
-            state_machine_post (s, "quorum-full");
-    }
-    else {
-        flux_future_t *f;
-        char *tmp;
-        if (!(tmp = idset_encode (s->quorum.have, IDSET_FLAG_RANGE)))
-            goto error;
-        flux_log (s->ctx->h, LOG_DEBUG, "quorum send %s", tmp);
-        if (!(f = flux_rpc_pack (s->ctx->h,
-                                 "state-machine.quorum",
-                                 FLUX_NODEID_UPSTREAM,
-                                 FLUX_RPC_NORESPONSE,
-                                 "{s:s}",
-                                 "idset",
-                                 tmp))) {
-            ERRNO_SAFE_WRAP (free, tmp);
-            goto error;
-        }
-        flux_future_destroy (f);
-        idset_clear_all (s->quorum.have);
-        free (tmp);
-    }
-    return;
-error:
-    flux_log_error (s->ctx->h, "quorum_batch failed");
-    if (s->state == STATE_QUORUM)
-        state_machine_post (s, "quorum-fail");
-}
-
-/* A downstream peer adds ranks to quorum.  This message comes in waves as
- * each TBON level reports in.  The short 'quorum_batch_timeout" is intended
- * to allow messages from peers at the same level to be aggregated into one
- * message that is passed upstream.
- */
-static void quorum_cb (flux_t *h,
-                       flux_msg_handler_t *mh,
-                       const flux_msg_t *msg,
-                       void *arg)
-{
-    struct state_machine *s = arg;
-    const char *idset = NULL;
-    unsigned int rank = FLUX_NODEID_ANY;
-
-    if (flux_request_unpack (msg,
-                             NULL,
-                             "{s?s s?i}",
-                             "idset",
-                             &idset,
-                             "rank",
-                             &rank) < 0)
-        goto error;
-    if (idset) {
-        struct idset *tmp;
-        if (!(tmp = idset_decode (idset))
-            || idset_add (s->quorum.have, tmp) < 0) {
-            idset_destroy (tmp);
-            goto error;
-        }
-        idset_destroy (tmp);
-    }
-    if (rank != FLUX_NODEID_ANY && idset_set (s->quorum.have, rank) < 0)
-        goto error;
-    flux_watcher_start (s->quorum.batch_timer);
-    return;
-error:
-    flux_log_error (s->ctx->h, "error handling quorum request");
-}
-
-/* Add this broker rank to quorum, if its rank is in the 'want' set.
- * On rank == 0, add my rank directly to the 'have' idset.
- * On rank > 0, send a fire-and-forget RPC to parent containing my rank.
- */
-static int quorum_add_self (struct state_machine *s)
-{
-    if (idset_test (s->quorum.want, s->ctx->rank)) {
-        if (s->ctx->rank == 0) {
-            if (idset_set (s->quorum.have, s->ctx->rank) < 0)
-                return -1;
-        }
-        else {
-            flux_future_t *f;
-            flux_log (s->ctx->h,
-                      LOG_DEBUG,
-                      "quorum send %lu",
-                      (long unsigned)s->ctx->rank);
-            if (!(f = flux_rpc_pack (s->ctx->h,
-                                     "state-machine.quorum",
-                                     FLUX_NODEID_UPSTREAM,
-                                     FLUX_RPC_NORESPONSE,
-                                     "{s:i}",
-                                     "rank",
-                                     s->ctx->rank)))
-                return -1;
-            flux_future_destroy (f);
-        }
-    }
-    return 0;
-}
-
 /* Configure the set of broker ranks needed for quorum (default=all).
  */
 static int quorum_configure (struct state_machine *s)
@@ -661,19 +560,25 @@ static int quorum_configure (struct state_machine *s)
     return 0;
 }
 
-/* Create the batch timer.
- * Timer is started on first receipt of quorum RPC.
- * When timer fires, quorum.have is forwarded upstream and cleared.
- * The timer is rearmed at that time, for the next wave.
- * Tune the timeout by adjusting 'quorum_batch_timeout'.
- */
-static flux_watcher_t *quorum_create_batch_timer (struct state_machine *s)
+/* called on rank 0 only */
+static void broker_online_cb (flux_future_t *f, void *arg)
 {
-    return flux_timer_watcher_create (s->ctx->reactor,
-                                      quorum_batch_timeout,
-                                      0,
-                                      quorum_batch,
-                                      s);
+    struct state_machine *s = arg;
+    const char *members;
+    struct idset *ids;
+
+    if (flux_rpc_get_unpack (f, "{s:s}", "members", &members) < 0
+        || !(ids = idset_decode (members))) {
+        flux_log_error (s->ctx->h, "groups.get failed");
+        state_machine_post (s, "quorum-fail");
+    }
+    else {
+        idset_destroy (s->quorum.have);
+        s->quorum.have = ids;
+        if (is_subset_of (s->quorum.want, s->quorum.have))
+            state_machine_post (s, "quorum-full");
+        flux_future_reset (f);
+    }
 }
 
 static void quorum_get_cb (flux_t *h,
@@ -849,7 +754,6 @@ static void disconnect_cb (flux_t *h,
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "state-machine.monitor", monitor_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "state-machine.quorum", quorum_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "state-machine.quorum-get", quorum_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST,  "state-machine.disconnect", disconnect_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
@@ -868,7 +772,7 @@ void state_machine_destroy (struct state_machine *s)
         flux_msglist_destroy (s->monitor.requests);
         idset_destroy (s->quorum.want);
         idset_destroy (s->quorum.have);
-        flux_watcher_destroy (s->quorum.batch_timer);
+        flux_future_destroy (s->quorum.f);
         free (s);
         errno = saved_errno;
     }
@@ -906,10 +810,18 @@ struct state_machine *state_machine_create (struct broker *ctx)
         goto error;
     if (quorum_configure (s) < 0)
         goto error;
-    if (!(s->quorum.batch_timer = quorum_create_batch_timer (s)))
-        goto error;
     s->child_count = overlay_get_child_peer_count (ctx->overlay);
     overlay_set_monitor_cb (ctx->overlay, overlay_monitor_cb, s);
+    if (s->ctx->rank == 0) {
+        if (!(s->quorum.f = flux_rpc_pack (ctx->h,
+                                           "groups.get",
+                                           FLUX_NODEID_ANY,
+                                           FLUX_RPC_STREAMING,
+                                           "{s:s}",
+                                           "name", "broker.online"))
+            || flux_future_then (s->quorum.f, -1, broker_online_cb, s) < 0)
+            goto error;
+    }
     return s;
 nomem:
     errno = ENOMEM;
