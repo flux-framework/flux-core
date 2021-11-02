@@ -20,7 +20,8 @@ noinst_LTLIBRARIES = \
 
 jobtap_plugin_LTLIBRARIES = \
 	plugins/priority-hold.la \
-	plugins/alloc-bypass.la
+	plugins/alloc-bypass.la \
+	plugins/perilog.la
 
 job_manager_la_SOURCES = \
 	job-manager.c \
@@ -97,6 +98,17 @@ plugins_alloc_bypass_la_LIBADD = \
 plugins_alloc_bypass_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
+
+plugins_perilog_la_SOURCES = \
+	plugins/perilog.c
+plugins_perilog_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-internal.la \
+	$(top_builddir)/src/common/librlist/librlist.la \
+	$(top_builddir)/src/common/libjob/libjob.la
+plugins_perilog_la_LDFLAGS = \
+	$(fluxplugin_ldflags) \
+	-module
+
 
 TESTS = \
 	test_job.t \
