@@ -569,6 +569,25 @@ test_expect_success 'passing NULL to flux_log functions logs to stderr (#1191)' 
         grep "err: world: No such file or directory" std.err
 '
 
+# tests for issue #3925
+test_expect_success 'setting rundir to a long directory fails (#3925)' '
+	longdir=rundir-01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789 &&
+	mkdir -p $longdir &&
+	test_must_fail flux start ${ARGS} \
+		-o,-Srundir=$longdir \
+		/bin/true 2>longrun.err &&
+	grep "exceeds max" longrun.err
+'
+
+test_expect_success 'setting local-uri to a long path fails (#3925)' '
+	longdir=rundir-01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789 &&
+	mkdir -p $longdir &&
+	test_must_fail flux start ${ARGS} \
+		-o,-Slocal-uri=local://$longdir/local-0 \
+		/bin/true 2>longuri.err &&
+	grep "exceeds max" longuri.err
+'
+
 reactorcat=${SHARNESS_TEST_DIRECTORY}/reactor/reactorcat
 test_expect_success 'reactor: reactorcat example program works' '
 	dd if=/dev/urandom bs=1024 count=4 >reactorcat.in &&
