@@ -722,13 +722,6 @@ static int checkdir (const char *name, const char *path)
 
 
 /*  Handle global rundir attribute.
- *
- *  If not set, create a temporary directory and use it as the rundir.
- *  If set, attempt to create it if it doesn't exist. In either case,
- *  validate directory persmissions and set the rundir attribute
- *  immutable. If the rundir is created by this function it will be
- *  scheduled for later cleanup at broker exit. Pre-existing directories
- *  are left intact.
  */
 static int create_rundir (attr_t *attrs)
 {
@@ -775,6 +768,19 @@ static int create_rundir (attr_t *attrs)
      */
     if (checkdir ("rundir", run_dir) < 0)
         goto done;
+
+    /*  Ensure that AF_UNIX sockets can be created in rundir - see #3925.
+     */
+    struct sockaddr_un sa;
+    size_t path_limit = sizeof (sa.sun_path) - sizeof ("/local-9999");
+    size_t path_length = strlen (run_dir);
+    if (path_length > path_limit) {
+        log_msg ("rundir length of %zu bytes exceeds max %zu"
+                 " to allow for AF_UNIX socket creation.",
+                 path_length,
+                 path_limit);
+        goto done;
+    }
 
     /*  rundir is now fixed, so make the attribute immutable, and
      *   schedule the dir for cleanup at exit if we created it here.
@@ -826,6 +832,18 @@ static int init_local_uri_attr (struct overlay *ov, attr_t *attrs)
         }
         if (checkdir ("local-uri directory", dirname (path)) < 0)
             return -1;
+
+        /* see #3925 */
+        struct sockaddr_un sa;
+        size_t path_limit = sizeof (sa.sun_path) - 1;
+        size_t path_length = strlen (uri + 8);
+        if (path_length > path_limit) {
+            log_msg ("local-uri length of %zu bytes exceeds max %zu"
+                     " AF_UNIX socket path length",
+                     path_length,
+                     path_limit);
+            return -1;
+        }
     }
     return 0;
 }

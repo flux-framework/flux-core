@@ -362,8 +362,9 @@ test_expect_success 'rundir override works' '
 	test -d $RUNDIR &&
 	rm -rf $RUNDIR
 '
-test_expect_success 'rundir override creates nonexistent dirs' '
-	RUNDIR="$(pwd)/rundir" &&
+test_expect_success 'rundir override creates nonexistent dirs and cleans up' '
+	RUNDIR=`mktemp -d` &&
+	rmdir $RUNDIR &&
 	flux start ${ARGS} -o,--setattr=rundir=$RUNDIR sh -c "test -d $RUNDIR" &&
 	test_expect_code 1 test -d $RUNDIR
 '
@@ -396,7 +397,12 @@ test_expect_success 'broker broker.pid attribute is readable' '
 	test "$BROKERPID" -eq "$BROKERPID"
 '
 test_expect_success 'local-uri override works' '
-	flux start ${ARGS} -o,-Slocal-uri=local://$(pwd)/meep printenv FLUX_URI
+	newsock=local:///tmp/meep &&
+	echo $newsock >uri.exp &&
+	flux start ${ARGS} \
+		-o,-Slocal-uri=$newsock \
+		printenv FLUX_URI >uri.out &&
+	test_cmp uri.exp uri.out
 '
 test_expect_success 'broker fails gracefully when local-uri is malformed' '
 	test_must_fail flux start ${ARGS} -o,-Slocal-uri=baduri \
@@ -567,6 +573,25 @@ test_expect_success 'passing NULL to flux_log functions logs to stderr (#1191)' 
         ${FLUX_BUILD_DIR}/t/loop/logstderr > std.out 2> std.err &&
         grep "warning: hello" std.err &&
         grep "err: world: No such file or directory" std.err
+'
+
+# tests for issue #3925
+test_expect_success 'setting rundir to a long directory fails (#3925)' '
+	longdir=rundir-01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789 &&
+	mkdir -p $longdir &&
+	test_must_fail flux start ${ARGS} \
+		-o,-Srundir=$longdir \
+		/bin/true 2>longrun.err &&
+	grep "exceeds max" longrun.err
+'
+
+test_expect_success 'setting local-uri to a long path fails (#3925)' '
+	longdir=rundir-01234567890123456789012345678901234567890123456789012345678901234567890123456789012345678901234567890123456789 &&
+	mkdir -p $longdir &&
+	test_must_fail flux start ${ARGS} \
+		-o,-Slocal-uri=local://$longdir/local-0 \
+		/bin/true 2>longuri.err &&
+	grep "exceeds max" longuri.err
 '
 
 reactorcat=${SHARNESS_TEST_DIRECTORY}/reactor/reactorcat
