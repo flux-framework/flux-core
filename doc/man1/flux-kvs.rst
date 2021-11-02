@@ -48,10 +48,12 @@ arguments are described below.
 COMMANDS
 ========
 
-**namespace create** [-o owner] *name* [*name* ...]
+**namespace create** [-o owner] [-r rootref] *name* [*name* ...]
    Create a new kvs namespace. User may specify an alternate userid of a
    user that owns the namespace via *-o*. Specifying an alternate owner
    would allow a non-instance owner to read/write to a namespace.
+   User may specify an initial root reference for the namespace via
+   *-r*.
 
 **namespace remove** *name* [*name...*]
    Remove a kvs namespace.

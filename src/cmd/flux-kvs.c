@@ -439,6 +439,7 @@ int cmd_namespace_create (optparse_t *p, int argc, char **argv)
     int optindex, i;
     uint32_t owner = FLUX_USERID_UNKNOWN;
     const char *str;
+    const char *rootref;
 
     optindex = optparse_option_index (p);
     if ((optindex - argc) == 0) {
@@ -453,13 +454,19 @@ int cmd_namespace_create (optparse_t *p, int argc, char **argv)
             log_msg_exit ("--owner requires an unsigned integer argument");
     }
 
+    rootref = optparse_get_str (p, "rootref", NULL);
+
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
     for (i = optindex; i < argc; i++) {
         const char *name = argv[i];
         int flags = 0;
-        if (!(f = flux_kvs_namespace_create (h, name, owner, flags)))
+        if (rootref)
+            f = flux_kvs_namespace_create_with (h, name, rootref, owner, flags);
+        else
+            f = flux_kvs_namespace_create (h, name, owner, flags);
+        if (!f)
             log_err_exit ("%s", name);
         if (flux_future_get (f, NULL) < 0)
             log_msg_exit ("%s: %s", name, future_strerror (f, errno));
@@ -548,12 +555,15 @@ static struct optparse_option namespace_create_opts[] =  {
     { .name = "owner", .key = 'o', .has_arg = 1,
       .usage = "Specify alternate namespace owner via userid",
     },
+    { .name = "rootref", .key = 'r', .has_arg = 1,
+      .usage = "Initialize namespace with specific root reference",
+    },
     OPTPARSE_TABLE_END
 };
 
 static struct optparse_subcommand namespace_subcommands[] = {
     { "create",
-      "[-o owner] name [name...]",
+      "[-o owner] [-r rootref] name [name...]",
       "Create a KVS namespace",
       cmd_namespace_create,
       0,
