@@ -23,11 +23,14 @@ size
    The number of broker ranks in the flux instance
 
 rundir
-   A temporary directory available for scratch storage within the session.
-   By default, a temporary directory is created for each broker rank, but
-   if rundir is set on the command line, this directory may be shared by
-   all broker ranks running on the same node.  If rundir is created by the
-   broker, it is removed during session exit.
+   A temporary directory where UNIX domain sockets and the default
+   content.backing-path are located (see below).  By default, each broker
+   rank creates a unique rundir in $TMPDIR and removes it on exit.  If
+   rundir is set on the command line, beware exceeding the UNIX domain socket
+   path limit described in unix(7), as low as 92 bytes on some systems.
+   If rundir is set to a pre-existing directory, the directory is not removed
+   on exit;  if the broker has to create the directory, it is removed.
+   In most cases this attribute should not be set by users.
 
 content.backing-path
    The path to the content backing store file(s). If this is set on the
