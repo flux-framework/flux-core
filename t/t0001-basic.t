@@ -362,8 +362,9 @@ test_expect_success 'rundir override works' '
 	test -d $RUNDIR &&
 	rm -rf $RUNDIR
 '
-test_expect_success 'rundir override creates nonexistent dirs' '
-	RUNDIR="$(pwd)/rundir" &&
+test_expect_success 'rundir override creates nonexistent dirs and cleans up' '
+	RUNDIR=`mktemp -d` &&
+	rmdir $RUNDIR &&
 	flux start ${ARGS} -o,--setattr=rundir=$RUNDIR sh -c "test -d $RUNDIR" &&
 	test_expect_code 1 test -d $RUNDIR
 '
@@ -396,7 +397,12 @@ test_expect_success 'broker broker.pid attribute is readable' '
 	test "$BROKERPID" -eq "$BROKERPID"
 '
 test_expect_success 'local-uri override works' '
-	flux start ${ARGS} -o,-Slocal-uri=local://$(pwd)/meep printenv FLUX_URI
+	newsock=local:///tmp/meep &&
+	echo $newsock >uri.exp &&
+	flux start ${ARGS} \
+		-o,-Slocal-uri=$newsock \
+		printenv FLUX_URI >uri.out &&
+	test_cmp uri.exp uri.out
 '
 test_expect_success 'broker fails gracefully when local-uri is malformed' '
 	test_must_fail flux start ${ARGS} -o,-Slocal-uri=baduri \
