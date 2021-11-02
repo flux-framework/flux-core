@@ -722,13 +722,6 @@ static int checkdir (const char *name, const char *path)
 
 
 /*  Handle global rundir attribute.
- *
- *  If not set, create a temporary directory and use it as the rundir.
- *  If set, attempt to create it if it doesn't exist. In either case,
- *  validate directory persmissions and set the rundir attribute
- *  immutable. If the rundir is created by this function it will be
- *  scheduled for later cleanup at broker exit. Pre-existing directories
- *  are left intact.
  */
 static int create_rundir (attr_t *attrs)
 {
