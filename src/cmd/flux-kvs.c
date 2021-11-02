@@ -550,7 +550,7 @@ static struct optparse_option namespace_create_opts[] =  {
 
 static struct optparse_subcommand namespace_subcommands[] = {
     { "create",
-      "name [name...]",
+      "[-o owner] name [name...]",
       "Create a KVS namespace",
       cmd_namespace_create,
       0,
