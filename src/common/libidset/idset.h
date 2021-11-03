@@ -131,7 +131,7 @@ int idset_subtract (struct idset *a, const struct idset *b);
 /* Return a new set = a intersect b on success,
  * NULL on failure with errno set.
  */
-struct idset *idset_intersect (const struct idset *, const struct idset *b);
+struct idset *idset_intersect (const struct idset *a, const struct idset *b);
 
 /* Return true if set a intersects set b.
  */

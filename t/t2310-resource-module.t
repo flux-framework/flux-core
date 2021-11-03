@@ -52,8 +52,8 @@ test_expect_success HAVE_JQ 'resource-init context says restart=false' '
 	test "$(grep_event resource-init <eventlog.out|jq .restart)" = "false"
 '
 
-test_expect_success HAVE_JQ 'resource-init context says online=0' '
-	test "$(grep_event resource-init <eventlog.out|jq .online)" = "\"0\""
+test_expect_success HAVE_JQ 'resource-init context says online is empty set' '
+	test "$(grep_event resource-init <eventlog.out|jq .online)" = "\"\""
 '
 
 test_expect_success HAVE_JQ 'wait until resource-define event is posted' '

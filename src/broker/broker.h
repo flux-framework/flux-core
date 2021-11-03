@@ -13,6 +13,8 @@
 
 #include <flux/optparse.h>
 
+#include "src/common/libczmqcontainers/czmq_containers.h"
+
 struct broker {
     flux_t *h;
     flux_reactor_t *reactor;
@@ -38,6 +40,7 @@ struct broker {
     zlist_t *subscriptions;     /* subscripts for internal services */
     struct content_cache *cache;
     struct publisher *publisher;
+    struct groups *groups;
 
     struct runat *runat;
     struct state_machine *state_machine;

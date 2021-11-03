@@ -46,6 +46,7 @@
 
 #include "module.h"
 #include "brokercfg.h"
+#include "groups.h"
 #include "overlay.h"
 #include "service.h"
 #include "attr.h"
@@ -351,6 +352,11 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
+    if (!(ctx.groups = groups_create (&ctx))) {
+        log_err ("groups_create");
+        goto cleanup;
+    }
+
     /* Create content cache.
      */
     if (!(ctx.cache = content_cache_create (ctx.h, ctx.attrs))) {
@@ -483,6 +489,7 @@ cleanup:
     zlist_destroy (&ctx.sigwatchers);
     state_machine_destroy (ctx.state_machine);
     overlay_destroy (ctx.overlay);
+    groups_destroy (ctx.groups);
     service_switch_destroy (ctx.services);
     broker_remove_services (handlers);
     publisher_destroy (ctx.publisher);
@@ -1335,6 +1342,7 @@ static struct internal_service services[] = {
     { "config",             NULL },
     { "runat",              NULL },
     { "state-machine",      NULL },
+    { "groups",             NULL },
     { NULL, NULL, },
 };
 

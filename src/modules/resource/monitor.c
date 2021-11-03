@@ -10,15 +10,29 @@
 
 /* monitor.c - track execution targets joining/leaving the instance
  *
- * On rank 0 only:
- * - post 'online' / 'offline' events to resource.eventlog on 'up' set changes,
- *   relative to initial 'online' set posted with 'restart' event.
- * - publish 'resource.monitor-restart' event.
+ * Watches the broker.online group and posts online/offline events as
+ * the broker.online set changes.
  *
- * On other ranks:
- * - send up to rank 0 at startup, and on receipt of monitor-restart event.
- * - send down to rank 0 at teardown.
- * - messages are batched and reduced on the way to rank 0.
+ * The initial online set used in the restart event will be empty as
+ * the initial response to the request to watch broker.online cannot
+ * be processed until the reactor runs.
+ *
+ * Some synchronization notes:
+ * - rc1 completes on rank 0 before any other ranks can join broker.online,
+ *   therefore the scheduler must allow flux module load to complete with
+ *   potentially all node resources offline, or deadlock will result.
+ * - it is racy to read broker.online and assume that online events have
+ *   been posted for those ranks, as the resource module needs time to
+ *   receive notification from the broker and process it.
+ * - the initial program starts once broker.online reaches the configured
+ *   quorum (all ranks unless configured otherwise, e.g. system instance).
+ *   It is racy to assume that online events have been posted for the quorum
+ *   ranks in the initial program for the same reason as above.
+ * - the 'resource.monitor-waitup' RPC allows a test to wait for some number
+ *   of ranks to be up, where "up" is defined as having had an online event
+ *   posted.  Thus, after waiting, resource.status (flux resource status)
+ *   should show those ranks up, while sched.resource-status
+ *   (flux resource list command) may still show them down.
  */
 
 #if HAVE_CONFIG_H
@@ -36,33 +50,16 @@
 #include "monitor.h"
 #include "rutil.h"
 
-/* This is a simple batching monitor RPCs to avoid a storm at rank 0.
- * They will tend to come in waves as rc1 completes at each tree level,
- * and again in reverse for rc3, but ranks within a level
- * that complete relatively close in time can can be batched.
- */
-static const double batch_timeout_seconds = 0.1;
-
-struct batch {
-    struct idset *up;
-    struct idset *down;
-};
-
 struct monitor {
     struct resource_ctx *ctx;
-    struct batch *batch;
-    flux_watcher_t *batch_timer;
-
+    flux_future_t *f;
     struct idset *up;
-
-    zlist_t *waiters;
-    flux_msg_handler_t **handlers;
-
     struct idset *down; // cached result of monitor_get_down()
+    flux_msg_handler_t **handlers;
+    struct flux_msglist *waitup_requests;
 };
 
-static int monitor_reduce (flux_t *h, struct idset *up, struct idset *dn);
-static bool notify_waiters (struct monitor *monitor);
+static void notify_waitup (struct monitor *monitor);
 
 const struct idset *monitor_get_up (struct monitor *monitor)
 {
@@ -87,244 +84,92 @@ const struct idset *monitor_get_down (struct monitor *monitor)
     return monitor->down;
 }
 
-static void batch_destroy (struct batch *batch)
-{
-    if (batch) {
-        int saved_errno = errno;
-        idset_destroy (batch->up);
-        idset_destroy (batch->down);
-        free (batch);
-        errno = saved_errno;
-    }
-}
-
-static struct batch *batch_create (struct monitor *monitor)
-{
-    struct batch *b;
-
-    if (!(b = calloc (1, sizeof (*b))))
-        return NULL;
-    if (!(b->up = idset_create (monitor->ctx->size, 0)))
-        goto error;
-    if (!(b->down = idset_create (monitor->ctx->size, 0)))
-        goto error;
-    flux_timer_watcher_reset (monitor->batch_timer, batch_timeout_seconds, 0.);
-    flux_watcher_start (monitor->batch_timer);
-    return b;
-error:
-    batch_destroy (b);
-    return NULL;
-}
-
-
-/* Leader: batch contains up/down info from one or more downstream peers.
+/* Leader: set of online brokers has changed.
  * Update monitor->up and post online/offline events to resource.eventlog.
- * Avoid posting event if nothing changed, e.g. if 'monitor-force-up' option
- * pre-set all targets up.
+ * Avoid posting events if nothing changed.
  */
-static int batch_timeout_leader (struct monitor *monitor)
+static void broker_online_cb (flux_future_t *f, void *arg)
 {
-    struct batch *b = monitor->batch;
+    struct monitor *monitor = arg;
     flux_t *h = monitor->ctx->h;
-    struct idset *cpy;
-    int rc = -1;
+    const char *members;
+    struct idset *new_up = NULL;
+    struct idset *join = NULL;
+    struct idset *leave = NULL;
     char *online = NULL;
     char *offline = NULL;
 
-    if (!(cpy = idset_copy (monitor->up)))
-        return -1;
-    if (idset_count (b->up) > 0) {
-        if (!(online = idset_encode (b->up, IDSET_FLAG_RANGE)))
-            goto done;
-        flux_log (h, LOG_DEBUG, "monitor-batch: up %s", online);
-        if (idset_add (monitor->up, b->up) < 0)
-            goto done;
+    if (flux_rpc_get_unpack (f, "{s:s}", "members", &members) < 0) {
+        flux_log_error (h, "monitor: group.get failed");
+        return;
     }
-    if (idset_count (b->down) > 0) {
-        if (!(offline = idset_encode (b->down, IDSET_FLAG_RANGE)))
-            goto done;
-        flux_log (h, LOG_DEBUG, "monitor-batch: down %s", offline);
-        if (idset_subtract (monitor->up, b->down) < 0)
-            goto done;
-    }
-    if (!idset_equal (monitor->up, cpy)) {
-        if (online && reslog_post_pack (monitor->ctx->reslog,
-                                       NULL,
-                                       0.,
-                                       "online",
-                                       "{s:s}",
-                                       "idset",
-                                       online) < 0) {
-            flux_log_error (h, "monitor-batch: error posting online event");
+    if (!(new_up = idset_decode (members))
+        || !(join = idset_difference (new_up, monitor->up))
+        || !(leave = idset_difference (monitor->up, new_up)))
+        goto done;
+    if (idset_count (join) > 0) {
+        if (!(online = idset_encode (join, IDSET_FLAG_RANGE))
+            || reslog_post_pack (monitor->ctx->reslog,
+                                 NULL,
+                                 0.,
+                                 "online",
+                                 "{s:s}",
+                                 "idset",
+                                 online) < 0) {
+            flux_log_error (h, "monitor: error posting online event");
             goto done;
         }
-        if (offline && reslog_post_pack (monitor->ctx->reslog,
-                                         NULL,
-                                         0.,
-                                         "offline",
-                                         "{s:s}",
-                                         "idset",
-                                         offline) < 0) {
-            flux_log_error (h, "monitor-batch: error posting offline event");
+    }
+    if (idset_count (leave) > 0) {
+        if (!(offline = idset_encode (leave, IDSET_FLAG_RANGE))
+            || reslog_post_pack (monitor->ctx->reslog,
+                                 NULL,
+                                 0.,
+                                 "offline",
+                                 "{s:s}",
+                                 "idset",
+                                 offline) < 0) {
+            flux_log_error (h, "monitor: error posting offline event");
             goto done;
         }
-        while (notify_waiters (monitor))
-            ;
     }
-    rc = 0;
+    idset_destroy (monitor->up);
+    monitor->up = new_up;
+    new_up = NULL;
+    notify_waitup (monitor);
 done:
     free (online);
     free (offline);
-    idset_destroy (cpy);
-    return rc;
+    idset_destroy (join);
+    idset_destroy (leave);
+    idset_destroy (new_up);
+    flux_future_reset (f);
 }
 
-/* The batch timer has expired.
- */
-static void batch_timeout (flux_reactor_t *r,
-                           flux_watcher_t *w,
-                           int revents,
-                           void *arg)
+static void notify_waitup (struct monitor *monitor)
 {
-    struct monitor *monitor = arg;
-    flux_t *h = monitor->ctx->h;
-    int rc;
+    const flux_msg_t *msg;
+    int upcount = idset_count (monitor->up);
 
-    if (monitor->batch) {
-        if (monitor->ctx->rank == 0)
-            rc = batch_timeout_leader (monitor);
+    msg = flux_msglist_first (monitor->waitup_requests);
+    while (msg) {
+        int upwant;
+        int rc;
+        if (flux_request_unpack (msg, NULL, "{s:i}", "up", &upwant) < 0)
+            rc = flux_respond_error (monitor->ctx->h, msg, errno, NULL);
+        else if (upwant == upcount)
+            rc = flux_respond (monitor->ctx->h, msg, NULL);
         else
-            rc = monitor_reduce (h, monitor->batch->up, monitor->batch->down);
+            goto next;
         if (rc < 0)
-            flux_log_error (h, "monitor-batch");
-        batch_destroy (monitor->batch);
-        monitor->batch = NULL;
+            flux_log_error (monitor->ctx->h,
+                            "error responding to monitor-waitup request");
+        flux_msglist_delete (monitor->waitup_requests);
+next:
+        msg = flux_msglist_next (monitor->waitup_requests);
     }
 }
 
-static void reduce_cb (flux_t *h,
-                       flux_msg_handler_t *mh,
-                       const flux_msg_t *msg,
-                       void *arg)
-{
-    struct monitor *monitor = arg;
-    const char *u;
-    const char *d;
-    struct idset *up = NULL;
-    struct idset *dn = NULL;
-
-    if (flux_request_unpack (msg, NULL, "{s:s s:s}", "up", &u, "down", &d) < 0)
-        goto error;
-    if (!(up = idset_decode (u)))
-        goto error;
-    if (!(dn = idset_decode (d)))
-        goto error;
-    if (!monitor->batch) {
-        if (!(monitor->batch = batch_create (monitor)))
-            goto error;
-    }
-    if (idset_subtract (monitor->batch->up, dn) < 0)
-        goto error;
-    if (idset_subtract (monitor->batch->down, up) < 0)
-        goto error;
-    if (idset_add (monitor->batch->down, dn) < 0)
-        goto error;
-    if (idset_add (monitor->batch->up, up) < 0)
-        goto error;
-    idset_destroy (up);
-    idset_destroy (dn);
-    return;
-error:
-    flux_log_error (h, "goodbye: error processing request");
-    idset_destroy (up);
-    idset_destroy (dn);
-}
-
-static int monitor_reduce (flux_t *h, struct idset *up, struct idset *dn)
-{
-    flux_future_t *f = NULL;
-    char *u = NULL;
-    char *d = NULL;
-    int rc = -1;
-
-    if (up && !(u = idset_encode (up, IDSET_FLAG_RANGE)))
-        goto done;
-    if (dn && !(d = idset_encode (dn, IDSET_FLAG_RANGE)))
-        goto done;
-    if (!(f = flux_rpc_pack (h,
-                             "resource.monitor-reduce",
-                             FLUX_NODEID_UPSTREAM,
-                             FLUX_RPC_NORESPONSE,
-                             "{s:s s:s}",
-                             "up",
-                             u ? u : "",
-                             "down",
-                             d ? d : "")))
-        goto done;
-    rc = 0;
-done:
-    ERRNO_SAFE_WRAP (free, u);
-    ERRNO_SAFE_WRAP (free, d);
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int monitor_reduce_self (struct monitor *monitor, bool up)
-{
-    struct idset *ids;
-    int rc = -1;
-
-    if (!(ids = idset_create (monitor->ctx->size, 0)))
-        goto done;
-    if (idset_set (ids, monitor->ctx->rank) < 0)
-        goto done;
-    if (up)
-        rc = monitor_reduce (monitor->ctx->h, ids, NULL);
-    else
-        rc = monitor_reduce (monitor->ctx->h, NULL, ids);
-done:
-    idset_destroy (ids);
-    return rc;
-}
-
-static bool notify_one_waiter (flux_t *h, int count, const flux_msg_t *msg)
-{
-    int up;
-
-    if (flux_request_unpack (msg, NULL, "{s:i}", "up", &up) < 0) {
-        if (flux_respond_error (h, msg, errno, NULL) < 0)
-            flux_log_error (h, "error responding to monitor-waitup request");
-        return true;
-    }
-    if (up == count) {
-        if (flux_respond (h, msg, NULL) < 0)
-            flux_log_error (h, "error responding to monitor-waitup request");
-        return true;
-    }
-    return false;
-}
-
-static bool notify_waiters (struct monitor *monitor)
-{
-    if (monitor->waiters) {
-        const flux_msg_t *msg = NULL;
-        int count = idset_count (monitor->up);
-
-        msg = zlist_first (monitor->waiters);
-        while (msg) {
-            if (notify_one_waiter (monitor->ctx->h, count, msg)) {
-                zlist_remove (monitor->waiters, (void *)msg);
-                flux_msg_decref (msg);
-                return true;
-            }
-            msg = zlist_next (monitor->waiters);
-        }
-    }
-    return false;
-}
-
-/* RPC to wait for some number of up ranks - useful in test
- */
 static void waitup_cb (flux_t *h,
                        flux_msg_handler_t *mh,
                        const flux_msg_t *msg,
@@ -344,60 +189,23 @@ static void waitup_cb (flux_t *h,
     if (up > monitor->ctx->size || up < 0) {
         errno = EPROTO;
         errstr = "up value is out of range";
+        goto error;
     }
     if (idset_count (monitor->up) != up) {
-        if (!monitor->waiters && !(monitor->waiters = zlist_new ()))
-            goto nomem;
-        if (zlist_append (monitor->waiters,
-                          (void *)flux_msg_incref (msg)) < 0) {
-            flux_msg_decref (msg);
-            goto nomem;
-        }
+        if (flux_msglist_append (monitor->waitup_requests, msg) < 0)
+            goto error;
         return; // response deferred
     }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to monitor-waitup request");
     return;
-nomem:
-    errno = ENOMEM;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to monitor-waitup request");
 }
 
-/* Start reduction (again) when requested by rank 0.
- */
-static void reload_cb (flux_t *h,
-                       flux_msg_handler_t *mh,
-                       const flux_msg_t *msg,
-                       void *arg)
-{
-    struct monitor *monitor = arg;
-
-    if (flux_event_decode (msg, NULL, NULL) < 0) {
-        flux_log_error (h, "monitor-reload: error parsing event message");
-        return;
-    }
-    if (monitor_reduce_self (monitor, true) < 0)
-        flux_log_error (h, "monitor-reload: error sending reduce message");
-}
-
-/* Tell any loaded ranks to restart monitor reduction.
- */
-static int publish_reload (flux_t *h)
-{
-    flux_future_t *f;
-
-    if (!(f = flux_event_publish (h, "resource.monitor-reload", 0, NULL)))
-        return -1;
-    flux_future_destroy (f);
-    return 0;
-}
-
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "resource.monitor-waitup", waitup_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "resource.monitor-reduce", reduce_cb, 0 },
-    { FLUX_MSGTYPE_EVENT,    "resource.monitor-reload", reload_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -405,21 +213,11 @@ void monitor_destroy (struct monitor *monitor)
 {
     if (monitor) {
         int saved_errno = errno;
-        if (monitor->ctx->rank > 0) {
-            if (monitor_reduce_self (monitor, false) < 0)
-                flux_log_error (monitor->ctx->h, "monitor-reduce failed");
-        }
-        if (monitor->waiters) {
-            const flux_msg_t *msg;
-            while ((msg = zlist_pop (monitor->waiters)))
-                flux_msg_decref (msg);
-            zlist_destroy (&monitor->waiters);
-        }
-        batch_destroy (monitor->batch);
-        flux_watcher_destroy (monitor->batch_timer);
         flux_msg_handler_delvec (monitor->handlers);
         idset_destroy (monitor->up);
         idset_destroy (monitor->down);
+        flux_future_destroy (monitor->f);
+        flux_msglist_destroy (monitor->waitup_requests);
         free (monitor);
         errno = saved_errno;
     }
@@ -435,21 +233,10 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
     monitor->ctx = ctx;
     if (flux_msg_handler_addvec (ctx->h, htab, monitor, &monitor->handlers) < 0)
         goto error;
-    if (!(monitor->batch_timer = flux_timer_watcher_create (
-                                                flux_get_reactor (ctx->h),
-                                                batch_timeout_seconds,
-                                                0.,
-                                                batch_timeout,
-                                                monitor)))
+    if (!(monitor->waitup_requests = flux_msglist_create ()))
         goto error;
-    if (monitor->ctx->rank > 0) {
-        if (monitor_reduce_self (monitor, true) < 0)
-            goto error;
-        if (flux_event_subscribe (ctx->h, "resource.monitor-reload") < 0)
-            goto error;
-    }
-    else {
-        /* Initialize up to "0" unless 'monitor_force_up' is true.
+    if (ctx->rank == 0) {
+        /* Initialize up to the empty set unless 'monitor_force_up' is true.
          * N.B. Initial up value will appear in 'restart' event posted
          * to resource.eventlog.
          */
@@ -460,11 +247,18 @@ struct monitor *monitor_create (struct resource_ctx *ctx,
                 goto error;
         }
         else {
-            if (idset_set (monitor->up, 0) < 0)
+            if (!(monitor->f = flux_rpc_pack (ctx->h,
+                                              "groups.get",
+                                               FLUX_NODEID_ANY,
+                                               FLUX_RPC_STREAMING,
+                                               "{s:s}",
+                                               "name", "broker.online"))
+                || flux_future_then (monitor->f,
+                                     -1,
+                                     broker_online_cb,
+                                     monitor) < 0)
                 goto error;
         }
-        if (publish_reload (ctx->h) < 0)
-            goto error;
     }
     return monitor;
 error:
