@@ -62,6 +62,9 @@ OPTIONS
 **-v, --verbose**
    Run with more verbosity.
 
+**-q, --quiet**
+   Suppress extraneous output (e.g. per-rank error exit status).
+
 
 NODESET FORMAT
 ==============
