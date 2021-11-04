@@ -116,9 +116,17 @@ to something else than an empty string.
 	#
 	if test -n "$1"; then
 		AC_MSG_CHECKING([for a version of Python $1])
-		ac_supports_python_ver=`$PYTHON -c "import sys; \
-			ver = sys.version.split ()[[0]]; \
-			print (ver $1)"`
+		ac_supports_python_ver=`$PYTHON -c "\
+import re, sys;
+test = re.search(r'([[<>=]]+)', sys.argv[[1]])[[0]]
+ver = re.search(r'([[\d.]]+)', sys.argv[[1]])[[0]]
+l = list(map(int, ver.split('.'))) + [[0, 0, 0]]
+vhex = 0
+for i in range(4):
+    vhex = (vhex << 8) + l[[i]]
+code = '{} {} {}'.format(sys.hexversion, test, vhex)
+print (eval (code))
+" "$1"`
 		if test "$ac_supports_python_ver" = "True"; then
 		   AC_MSG_RESULT([yes])
 		else
