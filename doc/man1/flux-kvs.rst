@@ -171,11 +171,11 @@ COMMANDS
    reads version, sends version to node B. Node B waits for version, gets
    value.
 
-**getroot** [-N ns] [-s \| -o]
+**getroot** [-N ns] [-s \| -o \| -b]
    Retrieve the current KVS root, displaying it as an RFC 11 dirref object.
    Specify an alternate namespace to retrieve from via *-N*. If *-o* is
    specified, display the namespace owner. If *-s* is specified, display
-   the root sequence number.
+   the root sequence number.  If *-b* is specified, display the root blobref.
 
 **eventlog get** [-N ns] [-W] [-w] [-c count] [-u] *key*
    Display the contents of an RFC 18 KVS eventlog referred to by *key*.

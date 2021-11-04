@@ -205,6 +205,9 @@ static struct optparse_option getroot_opts[] =  {
     { .name = "owner", .key = 'o', .has_arg = 0,
       .usage = "Show owner",
     },
+    { .name = "blobref", .key = 'b', .has_arg = 0,
+      .usage = "Show blobref",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -355,7 +358,7 @@ static struct optparse_subcommand subcommands[] = {
       namespace_opt
     },
     { "getroot",
-      "[-N ns] [-s|-o]",
+      "[-N ns] [-s|-o|-b]",
       "Get KVS root treeobj",
       cmd_getroot,
       0,
@@ -1740,6 +1743,13 @@ void getroot_continuation (flux_future_t *f, void *arg)
         if (flux_kvs_getroot_get_sequence (f, &sequence) < 0)
             log_err_exit ("flux_kvs_getroot_get_sequence");
         printf ("%d\n", sequence);
+    }
+    else if (optparse_hasopt (p, "blobref")) {
+        const char *blobref;
+
+        if (flux_kvs_getroot_get_blobref (f, &blobref) < 0)
+            log_err_exit ("flux_kvs_getroot_get_blobref");
+        printf ("%s\n", blobref);
     }
     else {
         const char *treeobj;
