@@ -9,8 +9,8 @@
 #   definitely cause the broker to run over the artificially lowered
 #   fd limit.
 #
-ulimit -n 110
-ulimit -Hn 110
+ulimit -n 113
+ulimit -Hn 113
 flux start \
     sh -c '
 flux mini submit --cc=1-12 hostname &&
