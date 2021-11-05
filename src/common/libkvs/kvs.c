@@ -65,6 +65,24 @@ cleanup:
     return rv;
 }
 
+flux_future_t *flux_kvs_namespace_create_with (flux_t *h, const char *ns,
+                                               const char *rootref,
+                                               uint32_t owner, int flags)
+{
+    if (!ns || !rootref || flags) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    /* N.B. owner cast to int */
+    return flux_rpc_pack (h, "kvs.namespace-create", 0, 0,
+                          "{ s:s s:s s:i s:i }",
+                          "namespace", ns,
+                          "rootref", rootref,
+                          "owner", owner,
+                          "flags", flags);
+}
+
 flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns)
 {
     if (!ns) {
