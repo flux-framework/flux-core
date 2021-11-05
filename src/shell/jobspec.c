@@ -40,6 +40,7 @@ static int parse_res_level (json_t *o,
 {
     json_error_t loc_error;
     struct res_level res;
+    json_t *cnt_o = NULL;
 
     if (o == NULL) {
         set_error (error, "level %d: missing", level);
@@ -49,13 +50,22 @@ static int parse_res_level (json_t *o,
     /* For jobspec version 1, expect exactly one array element per level.
      */
     if (json_unpack_ex (o, &loc_error, 0,
-                        "{s:s s:i s?o}",
+                        "{s:s s:o s?o}",
                         "type", &res.type,
-                        "count", &res.count,
+                        "count", &cnt_o,
                         "with", &res.with) < 0) {
         set_error (error, "level %d: %s", level, loc_error.text);
         return -1;
     }
+    if (json_is_integer (cnt_o))
+        res.count = json_integer_value (cnt_o);
+    else if (json_unpack_ex (cnt_o, &loc_error, 0,
+                             "{s:i}",
+                             "min", &res.count)) {
+        set_error (error, "level %d (count): %s", level, loc_error.text);
+        return -1;
+    }
+
     *resp = res;
     return 0;
 }

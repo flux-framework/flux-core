@@ -357,20 +357,32 @@ static int parse_res_level (struct list_ctx *ctx,
 {
     json_error_t error;
     struct res_level res;
+    json_t *cnt_o = NULL;
 
     res.with = NULL;
     /* For jobspec version 1, expect exactly one array element per level.
      */
     if (json_unpack_ex (o, &error, 0,
-                        "[{s:s s:i s?o}]",
+                        "[{s:s s:o s?o}]",
                         "type", &res.type,
-                        "count", &res.count,
+                        "count", &cnt_o,
                         "with", &res.with) < 0) {
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
         return -1;
     }
+    if (json_is_integer (cnt_o))
+        res.count = json_integer_value (cnt_o);
+    else if (json_unpack_ex (cnt_o, &error, 0,
+                             "{s:i}",
+                             "min", &res.count)) {
+        flux_log (ctx->h, LOG_ERR,
+                  "%s: job %ju invalid count format in jobspec: %s",
+                  __FUNCTION__, (uintmax_t)job->id, error.text);
+        return -1;
+    }
+
     *resp = res;
     return 0;
 }
