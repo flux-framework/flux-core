@@ -176,6 +176,7 @@ TESTSCRIPTS = \
 	t3001-mpi-personalities.t \
 	t3002-pmi.t \
 	t3003-mpi-abort.t \
+	t3201-crontabs.t \
 	t3300-system-basic.t \
 	t3301-system-latestart.t \
 	t3302-system-offline.t \
