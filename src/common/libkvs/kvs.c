@@ -16,20 +16,69 @@
 #include <jansson.h>
 #include <flux/core.h>
 
+#include "src/common/libutil/blobref.h"
+
+#include "treeobj.h"
 #include "kvs_util_private.h"
 
 flux_future_t *flux_kvs_namespace_create (flux_t *h, const char *ns,
                                           uint32_t owner, int flags)
 {
+    flux_future_t *rv = NULL;
+    const char *hash_name;
+    json_t *rootdir = NULL;
+    char rootref[BLOBREF_MAX_STRING_SIZE];
+    void *data = NULL;
+    int len;
+
     if (!ns || flags) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (!(hash_name = flux_attr_get (h, "content.hash")))
+        goto cleanup;
+
+    if (!(rootdir = treeobj_create_dir ()))
+        goto cleanup;
+
+    if (!(data = treeobj_encode (rootdir)))
+        goto cleanup;
+    len = strlen (data);
+
+    /* N.B. blobref of empty treeobj dir guaranteed to be in content store
+     * b/c that is how the primary KVS is initialized.
+     */
+    if (blobref_hash (hash_name, data, len, rootref, sizeof (rootref)) < 0)
+        goto cleanup;
+
+    /* N.B. owner cast to int */
+    rv = flux_rpc_pack (h, "kvs.namespace-create", 0, 0,
+                           "{ s:s s:s s:i s:i }",
+                           "namespace", ns,
+                           "rootref", rootref,
+                           "owner", owner,
+                           "flags", flags);
+cleanup:
+    json_decref (rootdir);
+    free (data);
+    return rv;
+}
+
+flux_future_t *flux_kvs_namespace_create_with (flux_t *h, const char *ns,
+                                               const char *rootref,
+                                               uint32_t owner, int flags)
+{
+    if (!ns || !rootref || flags) {
         errno = EINVAL;
         return NULL;
     }
 
     /* N.B. owner cast to int */
     return flux_rpc_pack (h, "kvs.namespace-create", 0, 0,
-                          "{ s:s s:i s:i }",
+                          "{ s:s s:s s:i s:i }",
                           "namespace", ns,
+                          "rootref", rootref,
                           "owner", owner,
                           "flags", flags);
 }

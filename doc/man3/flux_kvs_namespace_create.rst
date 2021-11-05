@@ -19,6 +19,14 @@ SYNOPSIS
 
 ::
 
+   flux_future_t *flux_kvs_namespace_create_with (flux_t *h,
+                                                  const char *namespace,
+                                                  const char *rootref,
+                                                  uint32_t owner,
+                                                  int flags);
+
+::
+
    flux_future_t *flux_kvs_namespace_remove (flux_t *h,
                                              const char *namespace);
 
@@ -31,6 +39,11 @@ namespace, users can get/put KVS values completely independent of
 other KVS namespaces. An owner of the namespace other than the
 instance owner can be chosen by setting *owner*. Otherwise, *owner*
 can be set to FLUX_USERID_UNKNOWN.
+
+``flux_kvs_namespace_create_with()`` is identical to
+``flux_kvs_namespace_create()`` but will initialize the namespace to
+the specified *rootref*.  This may be useful in several circumstances,
+such as initializing a namespace to an earlier checkpoint.
 
 ``flux_kvs_namespace_remove()`` removes a KVS namespace.
 

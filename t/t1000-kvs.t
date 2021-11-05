@@ -1195,6 +1195,13 @@ test_expect_success 'flux kvs getroot --owner returns instance owner' '
 	test $OWNER -eq $(id -u)
 '
 
+test_expect_success 'flux kvs getroot --blobref returns changing blobrefs' '
+	BLOBREF1=$(flux kvs getroot --blobref) &&
+	flux kvs put test.c=barf &&
+	BLOBREF2=$(flux kvs getroot --blobref) &&
+	test $BLOBREF1 != $BLOBREF2
+'
+
 test_expect_success 'flux kvs getroot works on alt namespace' '
 	flux kvs namespace create testns1 &&
 	SEQ=$(flux kvs getroot --namespace=testns1 --sequence) &&
