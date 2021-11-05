@@ -18,7 +18,7 @@ common_libs = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libdebugged/libdebugged.la \
-	$(PYTHON_LDFLAGS)
+	$(PYTHON_LIBS)
 
 PREPROC_FLAGS = \
 	-E '-D__attribute__(...)='
