@@ -7,7 +7,8 @@ dist_fluxrc_SCRIPTS = \
         rc3
 
 dist_fluxrc1_SCRIPTS = \
-        rc1.d/01-enclosing-instance
+        rc1.d/01-enclosing-instance \
+        rc1.d/02-cron
 
 fluxhelpdir = $(datadir)/flux/help.d
 fluxhelp_DATA = flux/help.d/core.json

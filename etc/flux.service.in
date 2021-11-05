@@ -7,6 +7,7 @@ TimeoutStopSec=90
 KillMode=mixed
 ExecStart=@X_BINDIR@/flux broker \
   --config-path=@X_SYSCONFDIR@/flux/system/conf.d \
+  -Scron.directory=@X_SYSCONFDIR@/flux/system/cron.d \
   -Stbon.fanout=256 \
   -Srundir=@X_RUNSTATEDIR@/flux \
   -Slocal-uri=local://@X_RUNSTATEDIR@/flux/local \
