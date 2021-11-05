@@ -87,6 +87,27 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+static void config_reload_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
+{
+    const flux_conf_t *conf;
+    const char *errstr = NULL;
+
+    if (flux_conf_reload_decode (msg, &conf) < 0)
+        goto error;
+    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
+        errstr = "error updating cached configuration";
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+}
 
 static const struct flux_msg_handler_spec htab[] = {
     {
@@ -130,6 +151,12 @@ static const struct flux_msg_handler_spec htab[] = {
         "job-manager.stats.get",
         stats_cb,
         0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.config-reload",
+        config_reload_cb,
+        0,
     },
 
     FLUX_MSGHANDLER_TABLE_END,

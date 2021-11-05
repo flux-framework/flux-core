@@ -134,6 +134,7 @@ TESTSCRIPTS = \
 	t2271-job-dependency-after.t \
 	t2272-job-begin-time.t \
 	t2273-job-alloc-bypass.t \
+	t2274-manager-perilog.t \
 	t2300-sched-simple.t \
 	t2302-sched-simple-up-down.t \
 	t2310-resource-module.t \

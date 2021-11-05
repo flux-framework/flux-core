@@ -41,6 +41,8 @@ static struct optparse_option cmdopts[] = {
       .usage = "Redirect stdin from /dev/null" },
     { .name = "verbose", .key = 'v', .has_arg = 0,
       .usage = "Run with more verbosity." },
+    { .name = "quiet", .key = 'q', .has_arg = 0,
+      .usage = "Suppress extraneous output." },
     OPTPARSE_TABLE_END
 };
 
@@ -456,7 +458,7 @@ int main (int argc, char *argv[])
                  monotime_since (t0), exited, exit_code);
 
     /* output message on any tasks that exited non-zero */
-    if (zhashx_size (exitsets) > 0) {
+    if (!optparse_hasopt (opts, "quiet") && zhashx_size (exitsets) > 0) {
         struct id_set *idset = zhashx_first (exitsets);
         while (idset) {
             const char *key = zhashx_cursor (exitsets);
