@@ -1,3 +1,42 @@
+flux-core version 0.31.0 - 2021-11-05
+-------------------------------------
+
+This release includes two noteworthy system instance improvements:
+crashed/offline nodes now marked offline for scheduling, and support
+has been added for prolog/epilog scripts that run as root.
+
+For prolog/epilog setup info, see the Flux Admin Guide:
+
+https://flux-framework.readthedocs.io/en/latest/adminguide.html
+
+### Fixes
+ * build: allow python 3.10.0 to satisfy version check (#3939)
+ * resource: avoid scheduling on nodes that have crashed (#3930)
+ * broker: fail gracefully when rundir or local-uri exceed `AF_UNIX` path
+   limits (#3932)
+ * broker: ignore missing ldconfig when searching for libpmi.so (#3926)
+ * job-manager: fix running job count underflow and use-after-free when an
+   event is emitted in CLEANUP state (#3922)
+ * fix problems building flux when 0MQ is not installed as a system package
+   (#3917)
+ * python: do not auto-stop ProgressBar by default (#3914)
+
+### New Features
+ * support job prolog/epilog commands (#3934)
+ * job-manager: add prolog/epilog support for jobtap plugins (#3924)
+ * libidset: add high level set functions (#3915)
+ * kvs: optionally initialize namespace to a root reference (#3941)
+ * rc: load job-archive module in default rc (#3942)
+
+### Cleanup
+ * improve broker overlay logging and debugging capability (#3913)
+ * man: Add note about shell quoting/escaping (#3918)
+
+### Test
+ * mergify: set queue method to merge, not rebase (#3916)
+ * mergify: replace strict merge with queue+rebase (#3907)
+ * testsuite: fix non-bourne shell test failure (#3937)
+
 flux-core version 0.30.0 - 2021-10-06
 -------------------------------------
 
