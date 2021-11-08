@@ -99,6 +99,7 @@
 #include "src/common/libutil/errno_safe.h"
 
 #include "job-exec.h"
+#include "checkpoint.h"
 
 static double kill_timeout=5.0;
 
@@ -1100,10 +1101,12 @@ static int configure_implementations (flux_t *h, int argc, char **argv)
     return 0;
 }
 
-static int unload_implementations (void)
+static int unload_implementations (struct job_exec_ctx *ctx)
 {
     struct exec_implementation *impl;
     int i = 0;
+    if (ctx && ctx->jobs)
+        checkpoint_running (ctx->h, ctx->jobs);
     while ((impl = implementations[i]) && impl->name) {
         if (impl->unload)
              (*impl->unload) ();
@@ -1143,7 +1146,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     rc = flux_reactor_run (flux_get_reactor (h), 0);
 out:
-    unload_implementations ();
+    unload_implementations (ctx);
 
     saved_errno = errno;
     if (flux_event_unsubscribe (h, "job-exception") < 0)
