@@ -16,6 +16,9 @@
  * primary KVS.  This will allow the namespaces to be recreated if
  * a job manager is brought down than back up.
  *
+ * Also provide helper functions to get rootrefs from the checkpointed
+ * object.
+ *
  * OPERATION
  *
  * Get the KVS rootrefs for all running jobs and commit to
@@ -28,12 +31,76 @@
 #endif
 #include <assert.h>
 #include <unistd.h>
+#include <errno.h>
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "job-exec.h"
 #include "checkpoint.h"
+
+flux_future_t *checkpoint_get_rootrefs (flux_t *h)
+{
+    if (!h) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    return flux_kvs_lookup (h,
+                            NULL,
+                            0,
+                            "job-exec.kvs-namespaces");
+}
+
+char *checkpoint_find_rootref (flux_future_t *f,
+                               flux_jobid_t id,
+                               uint32_t owner)
+{
+    int saved_errno;
+    flux_t *h = flux_future_get_flux (f);
+    char *rv = NULL;
+    const char *rootrefs;
+    json_error_t error;
+    json_t *o = NULL;
+    size_t index;
+    json_t *value;
+
+    if (flux_kvs_lookup_get (f, &rootrefs) < 0) {
+        flux_log_error (h, "checkpoint_get_rootref: flux_kvs_lookup_get");
+        goto cleanup;
+    }
+
+    if (!(o = json_loads (rootrefs, 0, &error))) {
+        flux_log (h, LOG_ERR, "json_loads rootrefs: %s", error.text);
+        goto cleanup;
+    }
+
+    json_array_foreach (o, index, value) {
+        flux_jobid_t l_id;
+        uint32_t l_owner;
+        const char *rootref;
+
+        if (json_unpack (value,
+                         "{s:I s:i s:s}",
+                         "id", &l_id,
+                         "owner", &l_owner,
+                         "kvsroot", &rootref) < 0) {
+            flux_log (h, LOG_ERR, "json_unpack rootref: %s", error.text);
+            goto cleanup;
+        }
+        if (l_id == id && l_owner == owner) {
+            if (!(rv = strdup (rootref)))
+                goto cleanup;
+            break;
+        }
+    }
+
+cleanup:
+    saved_errno = errno;
+    json_decref (o);
+    errno = saved_errno;
+    return rv;
+}
 
 static int lookup_nsroots (flux_t *h, zhashx_t *jobs, flux_future_t **fp)
 {

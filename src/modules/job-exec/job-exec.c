@@ -139,6 +139,7 @@ void jobinfo_decref (struct jobinfo *job)
         free (job->J);
         resource_set_destroy (job->R);
         json_decref (job->jobspec);
+        free (job->rootref);
         free (job);
         errno = saved_errno;
     }
@@ -845,9 +846,65 @@ static flux_future_t *ns_create_and_link (flux_t *h,
     flux_future_t *f = NULL;
     flux_future_t *f2 = NULL;
 
-    if (!(f = flux_kvs_namespace_create (h, job->ns, job->userid, flags))
-        || !(f2 = flux_future_and_then (f, namespace_link, job))) {
+    if (job->reattach && job->rootref)
+        f = flux_kvs_namespace_create_with (h,
+                                            job->ns,
+                                            job->rootref,
+                                            job->userid,
+                                            flags);
+    else
+        f = flux_kvs_namespace_create (h, job->ns, job->userid, flags);
+
+    if (!f || !(f2 = flux_future_and_then (f, namespace_link, job))) {
         flux_log_error (h, "namespace_move: flux_future_and_then");
+        flux_future_destroy (f);
+        return NULL;
+    }
+    return f2;
+}
+
+static void get_rootref_cb (flux_future_t *fprev, void *arg)
+{
+    int saved_errno;
+    flux_t *h = flux_future_get_flux (fprev);
+    struct jobinfo *job = arg;
+    flux_future_t *f = NULL;
+
+    if (!(job->rootref = checkpoint_find_rootref (fprev,
+                                                  job->id,
+                                                  job->userid)))
+        flux_log (job->h,
+                  LOG_DEBUG,
+                  "checkpoint rootref not found: %ju",
+                  (uintmax_t)job->id);
+
+    /* if rootref not found, still create namespace */
+    if (!(f = ns_create_and_link (h, job, 0)))
+        goto error;
+
+    flux_future_continue (fprev, f);
+    flux_future_destroy (fprev);
+    return;
+error:
+    saved_errno = errno;
+    flux_future_destroy (f);
+    flux_future_continue_error (fprev, saved_errno, NULL);
+    flux_future_destroy (fprev);
+}
+
+static flux_future_t *ns_get_rootref (flux_t *h,
+                                      struct jobinfo *job,
+                                      int flags)
+{
+    flux_future_t *f = NULL;
+    flux_future_t *f2 = NULL;
+
+    if (!(f = checkpoint_get_rootrefs (h))) {
+        flux_log_error (h, "ns_get_rootref: checkpoint_get_rootrefs");
+        return NULL;
+    }
+    if (!f || !(f2 = flux_future_and_then (f, get_rootref_cb, job))) {
+        flux_log_error (h, "ns_get_rootref: flux_future_and_then");
         flux_future_destroy (f);
         return NULL;
     }
@@ -871,8 +928,12 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
         || flux_future_push (f, "J", f_kvs) < 0)) {
         goto err;
     }
-    if (!(f_kvs = ns_create_and_link (h, job, 0))
-        || flux_future_push (f, "ns", f_kvs))
+    if (job->reattach)
+        f_kvs = ns_get_rootref (h, job, 0);
+    else
+        f_kvs = ns_create_and_link (h, job, 0);
+
+    if (flux_future_push (f, "ns", f_kvs) < 0)
         goto err;
 
     return f;

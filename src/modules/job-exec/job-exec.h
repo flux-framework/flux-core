@@ -61,6 +61,7 @@ struct jobinfo {
     flux_t *              h;
     flux_jobid_t          id;
     char                  ns [64];   /* namespace string */
+    char                * rootref;   /* ns rootref if restart */
     const flux_msg_t *    req;       /* initial request */
     uint32_t              userid;    /* requesting userid */
     int                   flags;     /* job flags */
