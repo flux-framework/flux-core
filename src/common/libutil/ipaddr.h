@@ -25,7 +25,7 @@
  *
  * FLUX_IPADDR_IPV6
  *   if set, IPv6 addresses are preferred, with fallback to IPv4
- *   if unset, IPv4 addresses are preferred, wtih fallback to IPv6
+ *   if unset, IPv4 addresses are preferred, with fallback to IPv6
  * FLUX_IPADDR_HOSTNAME
  *   if set, only method 2 is tried above
  *   if unset, first method 1 is tried, then if that fails, method 2 is tried

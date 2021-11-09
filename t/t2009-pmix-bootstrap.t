@@ -37,7 +37,7 @@ find_mpirun() {
 }
 
 if ! flux version | grep -q +pmix-bootstrap; then
-	skip_all='skipping: not configured wtih --enable-pmix-bootstrap'
+	skip_all='skipping: not configured with --enable-pmix-bootstrap'
 	test_done
 fi
 
