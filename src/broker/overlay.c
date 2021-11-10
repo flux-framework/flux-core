@@ -366,7 +366,7 @@ void overlay_log_idle_children (struct overlay *ov)
 
     if (idle_max > 0) {
         foreach_overlay_child (ov, child) {
-            if (subtree_is_online (child->status)) {
+            if (subtree_is_online (child->status) && child->lastseen > 0) {
                 idle = now - child->lastseen;
 
                 if (idle >= idle_max) {
