@@ -35,6 +35,30 @@ struct input good_input[] = {
         "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": [\"hostname\"], \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"version\": 1, \"resources\": [{\"count\": 1, \"with\": [{\"count\": 1, \"type\": \"core\"}], \"type\": \"slot\", \"label\": \"task\"}]}",
     },
     {
+        "flux jobspec srun hostname (slot->core[>=1])",
+        "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": [\"hostname\"], \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"version\": 1, \"resources\": [{\"count\": 1, \"with\": [{\"count\": {\"min\": 1}, \"type\": \"core\"}], \"type\": \"slot\", \"label\": \"task\"}]}",
+    },
+    {
+        "flux jobspec srun hostname (slot->core[>=1,<=8])",
+        "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": [\"hostname\"], \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"version\": 1, \"resources\": [{\"count\": 1, \"with\": [{\"count\": {\"min\": 1, \"max\": 8}, \"type\": \"core\"}], \"type\": \"slot\", \"label\": \"task\"}]}",
+    },
+    {
+        "flux jobspec srun hostname (slot->core[>=1,<=8,oper=+])",
+        "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": [\"hostname\"], \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"version\": 1, \"resources\": [{\"count\": 1, \"with\": [{\"count\": {\"min\": 1, \"max\": 8, \"operator\": \"+\"}, \"type\": \"core\"}], \"type\": \"slot\", \"label\": \"task\"}]}",
+    },
+    {
+        "flux jobspec srun hostname (slot->core[>=1,<=8,oper=+,op=2])",
+        "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": [\"hostname\"], \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"version\": 1, \"resources\": [{\"count\": 1, \"with\": [{\"count\": {\"min\": 1, \"max\": 8, \"operator\": \"+\", \"operand\": 2}, \"type\": \"core\"}], \"type\": \"slot\", \"label\": \"task\"}]}",
+    },
+    {
+        "flux jobspec srun hostname (slot->core[>=1,<=8,oper=*,op=3])",
+        "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": [\"hostname\"], \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"version\": 1, \"resources\": [{\"count\": 1, \"with\": [{\"count\": {\"min\": 1, \"max\": 8, \"operator\": \"*\", \"operand\": 3}, \"type\": \"core\"}], \"type\": \"slot\", \"label\": \"task\"}]}",
+    },
+    {
+        "flux jobspec srun hostname (slot->core[>=1,<=8,oper=^,op=2])",
+        "{\"tasks\": [{\"slot\": \"task\", \"count\": {\"per_slot\": 1}, \"command\": [\"hostname\"], \"attributes\": {}}], \"attributes\": {\"system\": {\"cwd\": \"/home/garlick/proj/flux-core/src/cmd\"}}, \"version\": 1, \"resources\": [{\"count\": 1, \"with\": [{\"count\": {\"min\": 1, \"max\": 8, \"operator\": \"^\", \"operand\": 2}, \"type\": \"core\"}], \"type\": \"slot\", \"label\": \"task\"}]}",
+    },
+    {
         "node->socket->slot->core",
         "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"socket\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 1}], \"label\": \"task\"}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}}}, \"version\": 1}",
     },
@@ -49,6 +73,14 @@ struct input good_input[] = {
     {
         "node->socket->slot->(core[2],gpu)",
         "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"socket\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"task\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": 2}, {\"type\": \"gpu\", \"count\": 1}]}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}}}, \"version\": 1}",
+    },
+    {
+        "node->socket->slot->(core[>=2],gpu[>=1])",
+        "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"socket\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"task\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": {\"min\": 2}}, {\"type\": \"gpu\", \"count\": {\"min\": 1}}]}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}}}, \"version\": 1}",
+    },
+    {
+        "node->socket->slot->(core[>=2,<=8],gpu[>=1,<=2])",
+        "{\"resources\": [{\"type\": \"node\", \"count\": 1, \"with\": [{\"type\": \"socket\", \"count\": 1, \"with\": [{\"type\": \"slot\", \"label\": \"task\", \"count\": 1, \"with\": [{\"type\": \"core\", \"count\": {\"min\": 2, \"max\": 8}}, {\"type\": \"gpu\", \"count\": {\"min\": 1, \"max\": 2}}]}]}]}], \"tasks\": [{\"command\": [\"hostname\"], \"slot\": \"task\", \"count\": {\"per_slot\": 1}}], \"attributes\": {\"system\": {\"duration\": 0, \"cwd\": \"/usr/libexec/flux\", \"environment\": {}}}, \"version\": 1}",
     },
     {
         "node->socket->slot->(gpu,core)",
@@ -75,9 +107,17 @@ struct input good_input[] = {
 struct output good_output[] =
     {
      {1, 1, 1, -1},
+     {1, 1, 1, -1},
+     {1, 1, 1, -1},
+     {1, 1, 1, -1},
+     {1, 1, 1, -1},
+     {1, 1, 1, -1},
+     {1, 1, 1, -1},
      {1, 1, 1, 1},
      {30, 30, 3, 15},
      {5, 5, 6, -1},
+     {1, 1, 2, 1},
+     {1, 1, 2, 1},
      {1, 1, 2, 1},
      {1, 1, 1, 1},
      {1, 1, 2, 1},
