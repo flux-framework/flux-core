@@ -458,12 +458,16 @@ static void join_request_cb (flux_t *h,
     if (groups_join (g, name) < 0)
         goto error;
     group->join_request = flux_msg_incref (msg);
-    if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to groups.leave request");
+    if (flux_respond (h, msg, NULL) < 0) {
+        if (errno != ENOSYS)
+            flux_log_error (h, "error responding to groups.leave request");
+    }
     return;
 error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "error responding to groups.leave request");
+    if (flux_respond_error (h, msg, errno, errmsg) < 0) {
+        if (errno != ENOSYS)
+            flux_log_error (h, "error responding to groups.leave request");
+    }
 }
 
 /* A client wishes to LEAVE a group.
