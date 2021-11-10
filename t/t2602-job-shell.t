@@ -14,9 +14,8 @@ LPTEST=${SHARNESS_TEST_DIRECTORY}/shell/lptest
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
 
 test_expect_success 'job-shell: execute across all ranks' '
-	id=$(flux jobspec srun -N4 bash -c \
-		"flux kvs put test1.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID" \
-		| flux job submit) &&
+	id=$(flux mini submit -n4 -N4 bash -c \
+		"flux kvs put test1.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID") &&
 	flux job attach --show-events $id &&
 	kvsdir=$(flux job id --to=kvs $id) &&
 	sort >test1.exp <<-EOT &&
@@ -29,9 +28,8 @@ test_expect_success 'job-shell: execute across all ranks' '
 	test_cmp test1.exp test1.out
 '
 test_expect_success 'job-shell: execute 2 tasks per rank' '
-	id=$(flux jobspec srun -N4 -n8 bash -c \
-		"flux kvs put test2.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID" \
-		| flux job submit) &&
+	id=$(flux mini submit -N4 -n8 bash -c \
+		"flux kvs put test2.\$FLUX_TASK_RANK=\$FLUX_TASK_LOCAL_ID") &&
 	flux job attach --show-events $id &&
 	kvsdir=$(flux job id --to=kvs $id) &&
 	sort >test2.exp <<-EOT &&
@@ -48,17 +46,17 @@ test_expect_success 'job-shell: execute 2 tasks per rank' '
 	test_cmp test2.exp test2.out
 '
 test_expect_success 'job-shell: /bin/true exit code propagated' '
-	id=$(flux jobspec srun -n1 /bin/true | flux job submit) &&
+	id=$(flux mini submit /bin/true) &&
 	flux job wait-event $id finish >true.finish.out &&
 	grep status=0 true.finish.out
 '
 test_expect_success 'job-shell: /bin/false exit code propagated' '
-	id=$(flux jobspec srun -n1 /bin/false | flux job submit) &&
+	id=$(flux mini submit /bin/false) &&
 	flux job wait-event $id finish >false.finish.out &&
 	grep status=256 false.finish.out
 '
 test_expect_success 'job-shell: PMI works' '
-	id=$(flux jobspec srun -N4 ${PMI_INFO} | flux job submit) &&
+	id=$(flux mini submit -n4 -N4 ${PMI_INFO}) &&
 	flux job attach $id >pmi_info.out 2>pmi_info.err &&
 	grep size=4 pmi_info.out
 '
@@ -106,7 +104,7 @@ test_expect_success 'pmi-shell: PMI cliques are correct for irregular ppn' '
 	test_cmp pmi_cliquex.exp pmi_cliquex.out
 '
 test_expect_success 'job-shell: PMI KVS works' '
-	id=$(flux jobspec srun -N4 ${KVSTEST} | flux job submit) &&
+	id=$(flux mini submit -n4 -N4 ${KVSTEST}) &&
 	flux job attach $id >kvstest.out &&
 	grep "t phase" kvstest.out
 '
@@ -128,7 +126,7 @@ test_expect_success 'job-shell: create expected I/O output' '
 	done) >lptest4.exp
 '
 test_expect_success 'job-shell: verify output of 1-task lptest job' '
-	id=$(flux jobspec srun -n1 ${LPTEST} | flux job submit) &&
+	id=$(flux mini submit ${LPTEST}) &&
 	flux job wait-event $id finish &&
 	flux job attach -l $id >lptest.out &&
 	test_cmp lptest.exp lptest.out
@@ -141,7 +139,7 @@ test_expect_success 'job-shell: verify output of 1-task lptest job' '
 #
 
 test_expect_success HAVE_JQ 'job-shell: verify output of 1-task lptest job on stderr' '
-	flux jobspec srun -n1 bash -c "${LPTEST} >&2" \
+	flux mini run --dry-run bash -c "${LPTEST} >&2" \
 		| $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
 		> 1task_lptest.json &&
 	id=$(cat 1task_lptest.json | flux job submit) &&
@@ -150,13 +148,13 @@ test_expect_success HAVE_JQ 'job-shell: verify output of 1-task lptest job on st
 	test_cmp lptest.exp lptest.err
 '
 test_expect_success 'job-shell: verify output of 4-task lptest job' '
-	id=$(flux jobspec srun -N4 ${LPTEST} | flux job submit) &&
+	id=$(flux mini submit -n4 -N4 ${LPTEST}) &&
 	flux job attach -l $id >lptest4_raw.out &&
 	sort -snk1 <lptest4_raw.out >lptest4.out &&
 	test_cmp lptest4.exp lptest4.out
 '
 test_expect_success HAVE_JQ 'job-shell: verify output of 4-task lptest job on stderr' '
-	flux jobspec srun -N4 bash -c "${LPTEST} 1>&2" \
+	flux mini run --dry-run -n4 -N4 bash -c "${LPTEST} 1>&2" \
 		| $jq ".attributes.system.shell.options.output.stderr.buffer.type = \"line\"" \
 		> 4task_lptest.json &&
 	id=$(cat 4task_lptest.json | flux job submit) &&
@@ -167,33 +165,33 @@ test_expect_success HAVE_JQ 'job-shell: verify output of 4-task lptest job on st
 '
 test_expect_success LONGTEST 'job-shell: verify 10K line lptest output works' '
 	${LPTEST} 79 10000 | sed -e "s/^/0: /" >lptestXXL.exp &&
-	id=$(flux jobspec srun -n1 ${LPTEST} 79 10000 | flux job submit) &&
+	id=$(flux mini submit ${LPTEST} 79 10000) &&
 	flux job attach -l $id >lptestXXL.out &&
 	test_cmp lptestXXL.exp lptestXXL.out
 '
 test_expect_success 'job-shell: test shell kill event handling' '
-	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
+	id=$(flux mini submit -n4 -N4 sleep 60) &&
 	flux job wait-event $id start &&
 	flux job kill $id &&
 	flux job wait-event $id finish >kill1.finish.out &&
 	grep status=$((15+128<<8)) kill1.finish.out
 '
 test_expect_success 'job-shell: test shell kill event handling: SIGKILL' '
-	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
+	id=$(flux mini submit -n4 -N4 sleep 60) &&
 	flux job wait-event $id start &&
 	flux job kill -s SIGKILL $id &&
 	flux job wait-event $id finish >kill2.finish.out &&
 	grep status=$((9+128<<8)) kill2.finish.out
 '
 test_expect_success 'job-shell: test shell kill event handling: numeric signal' '
-	id=$(flux jobspec srun -N4 sleep 60 | flux job submit) &&
+	id=$(flux mini submit -n4 -N4 sleep 60) &&
 	flux job wait-event $id start &&
 	flux job kill -s 2 $id &&
 	flux job wait-event $id finish >kill3.finish.out &&
 	grep status=$((2+128<<8)) kill3.finish.out
 '
 test_expect_success 'job-shell: mangled shell kill event logged' '
-	id=$(flux jobspec srun -N4 sleep 60 | flux job submit | flux job id) &&
+	id=$(flux mini submit -n4 -N4 sleep 60 | flux job id) &&
 	flux job wait-event $id start &&
 	flux event pub shell-${id}.kill "{}" &&
 	flux job kill ${id} &&
@@ -203,7 +201,7 @@ test_expect_success 'job-shell: mangled shell kill event logged' '
 	grep "ignoring malformed event" kill4.log
 '
 test_expect_success 'job-shell: shell kill event: kill(2) failure logged' '
-	id=$(flux jobspec srun -N4 sleep 60 | flux job submit | flux job id) &&
+	id=$(flux mini submit -n4 -N4 sleep 60 | flux job id) &&
 	flux job wait-event $id start &&
 	flux event pub shell-${id}.kill "{\"signum\":199}" &&
 	flux job kill ${id} &&

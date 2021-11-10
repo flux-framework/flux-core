@@ -40,7 +40,7 @@ test_expect_success 'sched-simple: reload ingest module with lax validator' '
 		validator-plugins=schema
 '
 test_expect_success 'sched-simple: generate jobspec for simple test job' '
-	flux jobspec srun -n1 hostname >basic.json
+	flux mini run --dry-run hostname >basic.json
 '
 
 test_expect_success 'job-manager: load sched-simple w/ an illegal mode' '
@@ -59,7 +59,7 @@ test_expect_success 'sched-simple: reload sched-simple with default resource.R' 
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
 test_expect_success 'sched-simple: unsatisfiable request is canceled' '
-	flux jobspec srun -c 3 hostname | flux job submit >job0.id &&
+	flux mini submit -n1 -c 3 hostname >job0.id &&
 	job0id=$(cat job0.id) &&
 	flux job wait-event --timeout=5.0 $job0id exception &&
 	flux job eventlog $job0id | grep "unsatisfiable request"

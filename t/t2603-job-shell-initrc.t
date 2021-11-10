@@ -52,7 +52,7 @@ test_expect_success 'flux-shell: default initrc obeys FLUX_SHELL_RC_PATH' '
 	grep "plugin loaded from test-dir.d" rcpath.log
 '
 test_expect_success 'flux-shell: initrc: generate 1-task jobspec and matching R' '
-	flux jobspec srun -N1 -n1 echo Hi >j1 &&
+	flux mini run --dry-run -N1 -n1 echo Hi >j1 &&
 	cat >R1 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
 		{ "children": { "core": "0,1" }, "rank": "0" }
@@ -71,7 +71,7 @@ test_expect_success 'flux-shell: initrc: specifying initrc of /dev/null works' '
 	grep "Loading /dev/null" devnull.log
 '
 test_expect_success HAVE_JQ 'flux-shell: initrc: bad initrc in jobspec fails' '
-	flux jobspec srun -N1 -n1 echo Hi \
+	flux mini run --dry-run -N1 -n1 echo Hi \
 	    | jq ".attributes.system.shell.options.initrc = \"nosuchfile\"" \
 	    > j2 &&
 	test_expect_code 1 ${FLUX_SHELL} -v -s -r 0 -j j2 -R R1 0
@@ -81,7 +81,7 @@ test_expect_success HAVE_JQ 'flux-shell: initrc: in jobspec works' '
 	cat >${name}.lua <<-EOT &&
 	    print ("jobspec initrc OK")
 	EOT
-	flux jobspec srun -N1 -n1 echo Hi \
+	flux mini run --dry-run -N1 -n1 echo Hi \
 	    | jq ".attributes.system.shell.options.initrc = \"${name}.lua\"" \
 	    > j3 &&
 	${FLUX_SHELL} -v -s -r 0 -j j3 -R R1 0 > ${name}.log 2>&1 &&

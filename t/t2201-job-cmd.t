@@ -34,7 +34,7 @@ test_expect_success 'unload job-exec,sched-simple modules' '
 '
 
 test_expect_success 'flux-job: generate jobspec for simple test job' '
-	flux jobspec srun -n1 hostname >basic.json
+	flux mini run --dry-run -n1 hostname >basic.json
 '
 
 test_expect_success 'flux-job: submit one job to get one valid job in queue' '

@@ -43,7 +43,8 @@ test_expect_success 'debugger: submitting under debugger via flux-mini works' '
 '
 
 test_expect_success HAVE_JQ 'debugger: submitting under debugger via flux-job works' '
-	flux jobspec srun -N2 -n 2 hostname | stop_tasks_test > stop_tasks.json &&
+	flux mini run --dry-run -N2 -n 2 hostname \
+		| stop_tasks_test > stop_tasks.json &&
 	jobid=$(flux job submit stop_tasks.json) &&
 	flux job wait-event -vt ${TIMEOUT}  ${jobid} start &&
 	flux job attach --debug-emulate ${jobid} &&
@@ -58,7 +59,7 @@ test_expect_success 'debugger: SIGCONT can unlock a job in stop-tasks-in-exec' '
 '
 
 test_expect_success 'debugger: attaching to a running job works' '
-	jobid=$(flux jobspec srun -n 1 ${stall} done 10 | flux job submit) &&
+	jobid=$(flux mini submit ${stall} done 10) &&
 	flux job wait-event -vt ${TIMEOUT} ${jobid} start &&
 	${waitfile} -v -t ${TIMEOUT} done &&
 	flux job attach -v --debug-emulate ${jobid} &&
@@ -66,19 +67,19 @@ test_expect_success 'debugger: attaching to a running job works' '
 '
 
 test_expect_success 'debugger: attaching to a finished job must fail' '
-	jobid=$(flux jobspec srun -n 2 hostname | flux job submit) &&
+	jobid=$(flux mini submit -n 2 hostname) &&
 	flux job wait-event -vt ${TIMEOUT} ${jobid} finish &&
 	test_must_fail flux job attach --debug-emulate ${jobid}
 '
 
 test_expect_success 'debug-emulate: attaching to a failed job must fail' '
-	jobid=$(flux jobspec srun -n 2 ./bad_cmd | flux job submit) &&
+	jobid=$(flux mini submit -n 2 ./bad_cmd) &&
 	flux job wait-event -vt ${TIMEOUT} ${jobid} finish &&
 	test_must_fail flux job attach --debug-emulate ${jobid}
 '
 
 test_expect_success 'debugger: totalview_jobid is set for attach mode' '
-	jobid=$(flux jobspec srun -n 1 ${stall} done2 10 | flux job submit) &&
+	jobid=$(flux mini submit ${stall} done2 10) &&
 	jobid=$(flux job id ${jobid}) &&
 	flux job wait-event -vt ${TIMEOUT} ${jobid} start &&
 	${waitfile} -v -t ${TIMEOUT} done2 &&
@@ -95,7 +96,7 @@ flux_job_attach() {
 
 # flux job attach --debug JOBID must not continue target processes
 test_expect_success 'debugger: job attach --debug must not continue target' '
-	jobid=$(flux jobspec srun -n 1 ${stall} done3 100 | flux job submit) &&
+	jobid=$(flux mini submit ${stall} done3 100) &&
 	jobid=$(flux job id ${jobid}) &&
 	flux job wait-event -vt ${TIMEOUT} ${jobid} start &&
 	${waitfile} -v -t ${TIMEOUT} done3 &&

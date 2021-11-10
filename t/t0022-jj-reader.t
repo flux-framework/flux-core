@@ -8,7 +8,8 @@ jj=${FLUX_BUILD_DIR}/t/sched-simple/jj-reader
 y2j="flux python ${SHARNESS_TEST_SRCDIR}/jobspec/y2j.py"
 
 test_expect_success HAVE_JQ 'jj-reader: unexpected version throws error' '
-	flux jobspec srun hostname | jq ".version = 2" >input.$test_count &&
+	flux mini run --dry-run hostname \
+		| jq ".version = 2" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
 	jj-reader: Invalid version: expected 1, got 2
@@ -16,7 +17,8 @@ test_expect_success HAVE_JQ 'jj-reader: unexpected version throws error' '
 	test_cmp expected.$test_count out.$test_count
 '
 test_expect_success HAVE_JQ 'jj-reader: no version throws error' '
-	flux jobspec srun hostname | jq "del(.version)" >input.$test_count &&
+	flux mini run --dry-run hostname \
+		| jq "del(.version)" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
 	jj-reader: at top level: Object item not found: version
@@ -24,7 +26,7 @@ test_expect_success HAVE_JQ 'jj-reader: no version throws error' '
 	test_cmp expected.$test_count out.$test_count
 '
 test_expect_success HAVE_JQ 'jj-reader: bad count throws error' '
-	flux jobspec srun hostname | \
+	flux mini run --dry-run hostname | \
 		jq ".resources[0].with[0].count = -1" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
@@ -33,7 +35,7 @@ test_expect_success HAVE_JQ 'jj-reader: bad count throws error' '
 	test_cmp expected.$test_count out.$test_count
 '
 test_expect_success HAVE_JQ 'jj-reader: bad type throws error' '
-	flux jobspec srun hostname | \
+	flux mini run --dry-run hostname | \
 		jq --arg f beans ".resources[0].type = \$f" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
@@ -42,7 +44,7 @@ test_expect_success HAVE_JQ 'jj-reader: bad type throws error' '
 	test_cmp expected.$test_count out.$test_count
 '
 test_expect_success HAVE_JQ 'jj-reader: missing count throws error' '
-	flux jobspec srun hostname | \
+	flux mini run --dry-run hostname | \
 		jq "del(.resources[0].with[0].count)" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
@@ -51,7 +53,7 @@ test_expect_success HAVE_JQ 'jj-reader: missing count throws error' '
 	test_cmp expected.$test_count out.$test_count
 '
 test_expect_success HAVE_JQ 'jj-reader: wrong count type throws error' '
-	flux jobspec srun hostname | \
+	flux mini run --dry-run hostname | \
 		jq ".resources[0].with[0].count = 1.5" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
@@ -101,17 +103,17 @@ done <invalid.txt
 # <jobspec command args> == <expected result>
 #
 cat <<EOF >inputs.txt
-srun              ==nnodes=0 nslots=1 slot_size=1 duration=0.0
-srun -N1          ==nnodes=1 nslots=1 slot_size=1 duration=0.0
-srun -N1 -n4      ==nnodes=1 nslots=4 slot_size=1 duration=0.0
-srun -N1 -n4 -c4  ==nnodes=1 nslots=4 slot_size=4 duration=0.0
-srun -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 duration=0.0
-srun -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 duration=0.0
-srun -n4 -c1      ==nnodes=0 nslots=4 slot_size=1 duration=0.0
-srun -N4 -n4 -c4  ==nnodes=4 nslots=4 slot_size=4 duration=0.0
-srun -t 1 -N4     ==nnodes=4 nslots=4 slot_size=1 duration=60.0
-srun -t 0:5 -N4   ==nnodes=4 nslots=4 slot_size=1 duration=5.0
-srun -t 1:0:0 -N4 ==nnodes=4 nslots=4 slot_size=1 duration=3600.0
+run              ==nnodes=0 nslots=1 slot_size=1 duration=0.0
+run -N1 -n1      ==nnodes=1 nslots=1 slot_size=1 duration=0.0
+run -N1 -n4      ==nnodes=1 nslots=4 slot_size=1 duration=0.0
+run -N1 -n4 -c4  ==nnodes=1 nslots=4 slot_size=4 duration=0.0
+run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 duration=0.0
+run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 duration=0.0
+run -n4 -c1      ==nnodes=0 nslots=4 slot_size=1 duration=0.0
+run -N4 -n4 -c4  ==nnodes=4 nslots=4 slot_size=4 duration=0.0
+run -t 1m -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 duration=60.0
+run -t 5s -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 duration=5.0
+run -t 1h -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 duration=3600.0
 EOF
 
 while read line; do
@@ -121,7 +123,7 @@ while read line; do
 
 	test_expect_success "jj-reader: $args returns $expected" '
 		echo $expected >expected.$test_count &&
-		flux jobspec $args hostname | $jj > output.$test_count &&
+		flux mini $args --dry-run hostname | $jj > output.$test_count &&
 		test_cmp expected.$test_count output.$test_count
 	'
 done < inputs.txt

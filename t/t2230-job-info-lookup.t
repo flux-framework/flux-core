@@ -30,7 +30,7 @@ get_timestamp_field() {
 }
 
 test_expect_success 'job-info: generate jobspec for simple test job' '
-	flux jobspec --format json srun -N1 sleep 300 > sleeplong.json
+	flux mini run --dry-run -n1 -N1 sleep 300 > sleeplong.json
 '
 
 #

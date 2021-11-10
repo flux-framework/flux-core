@@ -15,7 +15,7 @@ INITRC_PLUGINPATH="${SHARNESS_TEST_DIRECTORY}/shell/plugins/.libs"
 export LUA_PATH="$LUA_PATH;${SHARNESS_TEST_DIRECTORY}/?.lua"
 
 test_expect_success 'flux-shell: log: generate 1-task jobspec and matching R' '
-	flux jobspec srun -N1 -n1 echo Hi >j1 &&
+	flux mini run --dry-run -N1 -n1 echo Hi >j1 &&
 	cat >R1 <<-EOT
 	{"version": 1, "execution":{ "R_lite":[
 		{ "children": { "core": "0,1" }, "rank": "0" }

@@ -40,7 +40,7 @@ SIGN_AS=${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py
 #
 test_expect_success HAVE_JQ 'job-exec: job as guest tries to run IMP' '
 	FAKE_USERID=42 &&
-	flux jobspec srun -n1 id -u | \
+	flux mini run --dry-run -n1 id -u | \
 		flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
 	id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
 		flux job submit --flags=signed job.signed) &&
@@ -54,7 +54,7 @@ test_expect_success HAVE_JQ 'job-exec: large jobspec does not get truncated' '
 		for i in `seq 0 2048`; \
 			do export ENV${i}=xxxxxyyyyyyyyyzzzzzzz; \
 		done &&
-		flux jobspec srun -n1 id -u | \
+		flux mini run --dry-run -n1 id -u | \
 			flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
 		id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
 		flux job submit --flags=signed job.signed) &&
