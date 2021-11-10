@@ -650,7 +650,6 @@ event \
 exec \
 job \
 jobs \
-jobspec \
 jobtap \
 keygen \
 kvs \
