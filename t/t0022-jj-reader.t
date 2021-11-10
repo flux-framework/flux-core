@@ -25,7 +25,7 @@ test_expect_success HAVE_JQ 'jj-reader: no version throws error' '
 '
 test_expect_success HAVE_JQ 'jj-reader: bad count throws error' '
 	flux jobspec srun hostname | \
-	  jq ".resources[0].with[0].count = -1" >input.$test_count &&
+		jq ".resources[0].with[0].count = -1" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
 	jj-reader: Invalid count -1 for type '\''core'\''
@@ -34,7 +34,7 @@ test_expect_success HAVE_JQ 'jj-reader: bad count throws error' '
 '
 test_expect_success HAVE_JQ 'jj-reader: bad type throws error' '
 	flux jobspec srun hostname | \
-	  jq --arg f beans ".resources[0].type = \$f" >input.$test_count &&
+		jq --arg f beans ".resources[0].type = \$f" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
 	jj-reader: Unsupported resource type '\''beans'\''
@@ -43,7 +43,7 @@ test_expect_success HAVE_JQ 'jj-reader: bad type throws error' '
 '
 test_expect_success HAVE_JQ 'jj-reader: missing count throws error' '
 	flux jobspec srun hostname | \
-	  jq "del(.resources[0].with[0].count)" >input.$test_count &&
+		jq "del(.resources[0].with[0].count)" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
 	jj-reader: level 1: Object item not found: count
@@ -52,7 +52,7 @@ test_expect_success HAVE_JQ 'jj-reader: missing count throws error' '
 '
 test_expect_success HAVE_JQ 'jj-reader: wrong count type throws error' '
 	flux jobspec srun hostname | \
-	  jq ".resources[0].with[0].count = 1.5" >input.$test_count &&
+		jq ".resources[0].with[0].count = 1.5" >input.$test_count &&
 	test_expect_code 1 $jj<input.$test_count >out.$test_count 2>&1 &&
 	cat >expected.$test_count <<-EOF &&
 	jj-reader: level 1: Expected integer, got real
@@ -85,15 +85,15 @@ EOF
 # of tests to retain that coverage.  --Jim G.
 #
 while read line; do
-  yaml=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
-  expected=$(echo $line | awk -F== '{print $2}')
+	yaml=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+	expected=$(echo $line | awk -F== '{print $2}')
 
-  test_expect_success "jj-reader: $(basename $yaml) gets expected error" '
-	echo $expected >expected.$test_count &&
-	sed -e 's/999/1/' $SHARNESS_TEST_SRCDIR/$yaml |$y2j >$test_count.json &&
-	test_expect_code 1 $jj<$test_count.json > out.$test_count 2>&1 &&
-	test_cmp expected.$test_count out.$test_count
-  '
+	test_expect_success "jj-reader: $(basename $yaml) gets expected error" '
+		echo $expected >expected.$test_count &&
+		sed -e 's/999/1/' $SHARNESS_TEST_SRCDIR/$yaml |$y2j >$test_count.json &&
+		test_expect_code 1 $jj<$test_count.json > out.$test_count 2>&1 &&
+		test_cmp expected.$test_count out.$test_count
+	'
 done <invalid.txt
 
 
@@ -116,14 +116,14 @@ EOF
 
 while read line; do
 
-  args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
-  expected=$(echo $line | awk -F== '{print $2}')
+	args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+	expected=$(echo $line | awk -F== '{print $2}')
 
-  test_expect_success "jj-reader: $args returns $expected" '
-	echo $expected >expected.$test_count &&
-	flux jobspec $args hostname | $jj > output.$test_count &&
-	test_cmp expected.$test_count output.$test_count
-  '
+	test_expect_success "jj-reader: $args returns $expected" '
+		echo $expected >expected.$test_count &&
+		flux jobspec $args hostname | $jj > output.$test_count &&
+		test_cmp expected.$test_count output.$test_count
+	'
 done < inputs.txt
 
 
@@ -136,15 +136,15 @@ run -N1 -n2 -c2 -g1 ==jj-reader: Unsupported resource type 'gpu'
 EOF
 
 while read line; do
-  args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
-  expected=$(echo $line | awk -F== '{print $2}')
+	args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
+	expected=$(echo $line | awk -F== '{print $2}')
 
-  test_expect_success "jj-reader: flux mini $args gets expected error" '
-	echo $expected >expected.$test_count &&
-	flux mini $args --dry-run hostname >$test_count.json &&
-	test_expect_code 1 $jj<$test_count.json > out.$test_count 2>&1 &&
-	test_cmp expected.$test_count out.$test_count
-  '
+	test_expect_success "jj-reader: flux mini $args gets expected error" '
+		echo $expected >expected.$test_count &&
+		flux mini $args --dry-run hostname >$test_count.json &&
+		test_expect_code 1 $jj<$test_count.json > out.$test_count 2>&1 &&
+		test_cmp expected.$test_count out.$test_count
+	'
 done <mini-invalid.txt
 
 

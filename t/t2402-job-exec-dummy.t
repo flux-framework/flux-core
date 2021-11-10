@@ -25,8 +25,8 @@ exec_eventlog() { flux kvs get -r $(job_kvsdir $1).guest.exec.eventlog; }
 
 test_expect_success 'job-exec: execute dummy job shell across all ranks' '
 	id=$(flux jobspec srun -N4 \
-	    "flux kvs put test1.\$BROKER_RANK=\$JOB_SHELL_RANK" \
-	    | flux job submit) &&
+		"flux kvs put test1.\$BROKER_RANK=\$JOB_SHELL_RANK" \
+		| flux job submit) &&
 	flux job wait-event $id clean &&
 	kvsdir=$(flux job id --to=kvs $id).guest &&
 	test $(flux kvs get ${kvsdir}.test1.0) = 0 &&
@@ -36,13 +36,13 @@ test_expect_success 'job-exec: execute dummy job shell across all ranks' '
 '
 test_expect_success 'job-exec: job shell output available in flux-job attach' '
 	id=$(flux jobspec srun -n 1 "echo Hello from job \$JOBID" \
-	     | flux job submit) &&
+		| flux job submit) &&
 	flux job attach -vEX $id &&
 	flux job attach $id 2>&1 | grep "dummy.sh.*Hello from job"
 '
 test_expect_success 'job-exec: job shell failure recorded' '
 	id=$(flux jobspec srun -N4  "test \$JOB_SHELL_RANK = 0 && exit 1" \
-	     | flux job submit) &&
+		| flux job submit) &&
 	flux job wait-event -vt 10 $id finish | grep status=256
 '
 test_expect_success 'job-exec: status is maximum job shell exit codes' '
@@ -69,7 +69,7 @@ test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
 	EOF
 	chmod +x trap-sigterm.sh &&
 	id=$(TRAP=15 flux jobspec srun -N4 ./trap-sigterm.sh \
-	        | flux job submit) &&
+		| flux job submit) &&
 	flux job wait-event -vt 5 $id start &&
 	flux kvs get --waitcreate \
 		--namespace=$(flux job namespace $id) \
@@ -82,20 +82,20 @@ test_expect_success 'job-exec: job exception uses SIGKILL after kill-timeout' '
 '
 test_expect_success 'job-exec: invalid job shell generates exception' '
 	id=$(flux jobspec srun -N1 /bin/true \
-	     | $jq ".attributes.system.exec.job_shell = \"/notthere\"" \
-	     | flux job submit) &&
+		| $jq ".attributes.system.exec.job_shell = \"/notthere\"" \
+		| flux job submit) &&
 	flux job wait-event -vt 5 $id clean
 '
 test_expect_success 'job-exec: exception during init terminates job' '
 	id=$(flux jobspec srun -N2 sleep 30 \
-	     | $jq ".attributes.system.exec.bulkexec.mock_exception = \"init\"" \
-	     | flux job submit) &&
+		| $jq ".attributes.system.exec.bulkexec.mock_exception = \"init\"" \
+		| flux job submit) &&
 	flux job wait-event -vt 5 $id clean
 '
 test_expect_success 'job-exec: exception while starting terminates job' '
 	id=$(flux jobspec srun -N2 sleep 30 \
-	     | $jq ".attributes.system.exec.bulkexec.mock_exception = \"starting\"" \
-	     | flux job submit) &&
+		| $jq ".attributes.system.exec.bulkexec.mock_exception = \"starting\"" \
+		| flux job submit) &&
 	flux job wait-event -vt 5 $id clean
 '
 test_done

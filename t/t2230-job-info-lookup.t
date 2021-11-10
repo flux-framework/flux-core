@@ -9,28 +9,28 @@ test_under_flux 4 job
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
 fj_wait_event() {
-  flux job wait-event --timeout=20 "$@"
+	flux job wait-event --timeout=20 "$@"
 }
 
 # Usage: submit_job
 # To ensure robustness of tests despite future job manager changes,
 # cancel the job, and wait for clean event.
 submit_job() {
-        local jobid=$(flux job submit sleeplong.json) &&
-        fj_wait_event $jobid start >/dev/null &&
-        flux job cancel $jobid &&
-        fj_wait_event $jobid clean >/dev/null &&
-        echo $jobid
+	local jobid=$(flux job submit sleeplong.json) &&
+	fj_wait_event $jobid start >/dev/null &&
+	flux job cancel $jobid &&
+	fj_wait_event $jobid clean >/dev/null &&
+	echo $jobid
 }
 
 get_timestamp_field() {
-        local field=$1
-        local file=$2
-        grep $field $file | awk '{print $1}'
+	local field=$1
+	local file=$2
+	grep $field $file | awk '{print $1}'
 }
 
 test_expect_success 'job-info: generate jobspec for simple test job' '
-        flux jobspec --format json srun -N1 sleep 300 > sleeplong.json
+	flux jobspec --format json srun -N1 sleep 300 > sleeplong.json
 '
 
 #
@@ -38,19 +38,19 @@ test_expect_success 'job-info: generate jobspec for simple test job' '
 #
 
 test_expect_success 'flux job info fails without jobid' '
-        test_must_fail flux job info
+	test_must_fail flux job info
 '
 
 test_expect_success 'flux job info listing of keys works' '
-        jobid=$(submit_job) &&
-        flux job info $jobid > list_keys.err 2>&1 &&
-        grep "^J" list_keys.err &&
-        grep "^R" list_keys.err &&
-        grep "^eventlog" list_keys.err &&
-        grep "^jobspec" list_keys.err &&
-        grep "^guest.exec.eventlog" list_keys.err &&
-        grep "^guest.input" list_keys.err &&
-        grep "^guest.output" list_keys.err
+	jobid=$(submit_job) &&
+	flux job info $jobid > list_keys.err 2>&1 &&
+	grep "^J" list_keys.err &&
+	grep "^R" list_keys.err &&
+	grep "^eventlog" list_keys.err &&
+	grep "^jobspec" list_keys.err &&
+	grep "^guest.exec.eventlog" list_keys.err &&
+	grep "^guest.input" list_keys.err &&
+	grep "^guest.output" list_keys.err
 '
 
 #
@@ -58,9 +58,9 @@ test_expect_success 'flux job info listing of keys works' '
 #
 
 test_expect_success 'flux job info eventlog works' '
-        jobid=$(submit_job) &&
+	jobid=$(submit_job) &&
 	flux job info $jobid eventlog > eventlog_info_a.out &&
-        grep submit eventlog_info_a.out
+	grep submit eventlog_info_a.out
 '
 
 test_expect_success 'flux job info eventlog fails on bad id' '
@@ -68,9 +68,9 @@ test_expect_success 'flux job info eventlog fails on bad id' '
 '
 
 test_expect_success 'flux job info jobspec works' '
-        jobid=$(submit_job) &&
+	jobid=$(submit_job) &&
 	flux job info $jobid jobspec > jobspec_a.out &&
-        grep sleep jobspec_a.out
+	grep sleep jobspec_a.out
 '
 
 test_expect_success 'flux job info jobspec fails on bad id' '
@@ -82,10 +82,10 @@ test_expect_success 'flux job info jobspec fails on bad id' '
 #
 
 test_expect_success 'flux job info multiple keys works' '
-        jobid=$(submit_job) &&
+	jobid=$(submit_job) &&
 	flux job info $jobid eventlog jobspec J > all_info_a.out &&
-        grep submit all_info_a.out &&
-        grep sleep all_info_a.out
+	grep submit all_info_a.out &&
+	grep sleep all_info_a.out
 '
 
 test_expect_success 'flux job info multiple keys fails on bad id' '
@@ -93,16 +93,16 @@ test_expect_success 'flux job info multiple keys fails on bad id' '
 '
 
 test_expect_success 'flux job info multiple keys fails on 1 bad entry (include eventlog)' '
-        jobid=$(submit_job) &&
-        kvsdir=$(flux job id --to=kvs $jobid) &&
-        flux kvs unlink ${kvsdir}.jobspec &&
+	jobid=$(submit_job) &&
+	kvsdir=$(flux job id --to=kvs $jobid) &&
+	flux kvs unlink ${kvsdir}.jobspec &&
 	test_must_fail flux job info $jobid eventlog jobspec J > all_info_b.out
 '
 
 test_expect_success 'flux job info multiple keys fails on 1 bad entry (no eventlog)' '
-        jobid=$(submit_job) &&
-        kvsdir=$(flux job id --to=kvs $jobid) &&
-        flux kvs unlink ${kvsdir}.jobspec &&
+	jobid=$(submit_job) &&
+	kvsdir=$(flux job id --to=kvs $jobid) &&
+	flux kvs unlink ${kvsdir}.jobspec &&
 	test_must_fail flux job info $jobid jobspec J > all_info_b.out
 '
 
@@ -111,14 +111,14 @@ test_expect_success 'flux job info multiple keys fails on 1 bad entry (no eventl
 #
 
 test_expect_success 'flux job eventlog works' '
-        jobid=$(submit_job) &&
+	jobid=$(submit_job) &&
 	flux job eventlog $jobid > eventlog_a.out &&
-        grep submit eventlog_a.out
+	grep submit eventlog_a.out
 '
 
 test_expect_success 'flux job eventlog works on multiple entries' '
-        jobid=$(submit_job) &&
-        kvsdir=$(flux job id --to=kvs $jobid) &&
+	jobid=$(submit_job) &&
+	kvsdir=$(flux job id --to=kvs $jobid) &&
 	flux kvs eventlog append ${kvsdir}.eventlog foo &&
 	flux job eventlog $jobid >eventlog_b.out &&
 	grep -q submit eventlog_b.out &&
@@ -130,63 +130,63 @@ test_expect_success 'flux job eventlog fails on bad id' '
 '
 
 test_expect_success 'flux job eventlog --format=json works' '
-        jobid=$(submit_job) &&
+	jobid=$(submit_job) &&
 	flux job eventlog --format=json $jobid > eventlog_format1.out &&
-        grep -q "\"name\":\"submit\"" eventlog_format1.out &&
-        grep -q "\"userid\":$(id -u)" eventlog_format1.out
+	grep -q "\"name\":\"submit\"" eventlog_format1.out &&
+	grep -q "\"userid\":$(id -u)" eventlog_format1.out
 '
 
 test_expect_success 'flux job eventlog --format=text works' '
-        jobid=$(submit_job) &&
+	jobid=$(submit_job) &&
 	flux job eventlog --format=text $jobid > eventlog_format2.out &&
-        grep -q "submit" eventlog_format2.out &&
-        grep -q "userid=$(id -u)" eventlog_format2.out
+	grep -q "submit" eventlog_format2.out &&
+	grep -q "userid=$(id -u)" eventlog_format2.out
 '
 
 test_expect_success 'flux job eventlog --format=invalid fails' '
-        jobid=$(submit_job) &&
+	jobid=$(submit_job) &&
 	test_must_fail flux job eventlog --format=invalid $jobid
 '
 
 test_expect_success 'flux job eventlog --time-format=raw works' '
-        jobid=$(submit_job) &&
+	jobid=$(submit_job) &&
 	flux job eventlog --time-format=raw $jobid > eventlog_time_format1.out &&
-        get_timestamp_field submit eventlog_time_format1.out | grep "\."
+	get_timestamp_field submit eventlog_time_format1.out | grep "\."
 '
 
 test_expect_success 'flux job eventlog --time-format=iso works' '
-        jobid=$(submit_job) &&
+	jobid=$(submit_job) &&
 	flux job eventlog --time-format=iso $jobid > eventlog_time_format2.out &&
-        get_timestamp_field submit eventlog_time_format2.out | grep T | grep Z
+	get_timestamp_field submit eventlog_time_format2.out | grep T | grep Z
 '
 
 test_expect_success 'flux job eventlog --time-format=offset works' '
-        jobid=$(submit_job) &&
+	jobid=$(submit_job) &&
 	flux job eventlog --time-format=offset $jobid > eventlog_time_format3.out &&
-        get_timestamp_field submit eventlog_time_format3.out | grep "0.000000" &&
-        get_timestamp_field exception eventlog_time_format3.out | grep -v "0.000000"
+	get_timestamp_field submit eventlog_time_format3.out | grep "0.000000" &&
+	get_timestamp_field exception eventlog_time_format3.out | grep -v "0.000000"
 '
 
 test_expect_success 'flux job eventlog --time-format=invalid fails works' '
-        jobid=$(submit_job) &&
+	jobid=$(submit_job) &&
 	test_must_fail flux job eventlog --time-format=invalid $jobid
 '
 
 test_expect_success 'flux job eventlog -p works' '
-        jobid=$(submit_job) &&
-        flux job eventlog -p "eventlog" $jobid > eventlog_path1.out &&
-        grep submit eventlog_path1.out
+	jobid=$(submit_job) &&
+	flux job eventlog -p "eventlog" $jobid > eventlog_path1.out &&
+	grep submit eventlog_path1.out
 '
 
 test_expect_success 'flux job eventlog -p works (guest.exec.eventlog)' '
-        jobid=$(submit_job) &&
-        flux job eventlog -p "guest.exec.eventlog" $jobid > eventlog_path2.out &&
-        grep done eventlog_path2.out
+	jobid=$(submit_job) &&
+	flux job eventlog -p "guest.exec.eventlog" $jobid > eventlog_path2.out &&
+	grep done eventlog_path2.out
 '
 
 test_expect_success 'flux job eventlog -p fails on invalid path' '
-        jobid=$(submit_job) &&
-        test_must_fail flux job eventlog -p "foobar" $jobid
+	jobid=$(submit_job) &&
+	test_must_fail flux job eventlog -p "foobar" $jobid
 '
 
 #
@@ -194,7 +194,7 @@ test_expect_success 'flux job eventlog -p fails on invalid path' '
 #
 
 test_expect_success 'job-info lookup stats works' '
-        flux module stats --parse lookups job-info
+	flux module stats --parse lookups job-info
 '
 
 test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '

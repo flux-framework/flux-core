@@ -4,7 +4,7 @@ test_description='Test flux job command'
 . $(dirname $0)/sharness.sh
 
 if flux job submit --help 2>&1 | grep -q sign-type; then
-    test_set_prereq HAVE_FLUX_SECURITY
+	test_set_prereq HAVE_FLUX_SECURITY
 fi
 
 # 2^64 - 1
@@ -34,7 +34,7 @@ test_expect_success 'unload job-exec,sched-simple modules' '
 '
 
 test_expect_success 'flux-job: generate jobspec for simple test job' '
-        flux jobspec srun -n1 hostname >basic.json
+	flux jobspec srun -n1 hostname >basic.json
 '
 
 test_expect_success 'flux-job: submit one job to get one valid job in queue' '
@@ -71,22 +71,22 @@ test_expect_success 'flux-job: submit with bad broker connection fails' '
 
 test_expect_success HAVE_FLUX_SECURITY 'flux-job: submit with bad security config fails' '
 	test_must_fail flux job submit \
-            --security-config=/nonexist \
-	    basic.json
+		--security-config=/nonexist \
+		basic.json
 '
 
 test_expect_success HAVE_FLUX_SECURITY 'flux-job: submit with bad sign type fails' '
 	test_must_fail flux job submit \
-	    --sign-type=notvalid \
-	    basic.json
+		--sign-type=notvalid \
+		basic.json
 '
 
 test_expect_success 'flux-job: can submit jobspec on stdin with -' '
-        flux job submit - <basic.json
+	flux job submit - <basic.json
 '
 
 test_expect_success 'flux-job: can submit jobspec on stdin without -' '
-        flux job submit <basic.json
+	flux job submit <basic.json
 '
 
 test_expect_success 'flux-job: id without to arg is dec to dec' '
@@ -108,16 +108,16 @@ test_expect_success 'flux-job: fails with no input and no args' '
 '
 
 test_expect_success 'flux-job: id works with min/max jobids' '
-    for max in $MAXJOBIDS_LIST; do
-        jobid=$(flux job id $max) &&
-        test_debug "echo flux jobid $max -> $jobid" &&
-        test "$jobid" = "$MAXJOBID_DEC"
-    done &&
-    for min in $MINJOBIDS_LIST; do
-        jobid=$(flux job id $min) &&
-        test_debug "echo flux jobid $min -> $jobid" &&
-        test "$jobid" = "$MINJOBID_DEC"
-    done
+	for max in $MAXJOBIDS_LIST; do
+		jobid=$(flux job id $max) &&
+		test_debug "echo flux jobid $max -> $jobid" &&
+		test "$jobid" = "$MAXJOBID_DEC"
+	done &&
+	for min in $MINJOBIDS_LIST; do
+		jobid=$(flux job id $min) &&
+		test_debug "echo flux jobid $min -> $jobid" &&
+		test "$jobid" = "$MINJOBID_DEC"
+	done
 '
 
 test_expect_success 'flux-job: id --to=dec works' '
@@ -318,8 +318,8 @@ runas() {
 }
 
 test_expect_success 'flux-job: kill fails for wrong userid' '
-        test_expect_code 1 \
-		runas 9999 flux job kill ${validjob} 2> kill.guest.err&&
+	test_expect_code 1 \
+		runas 9999 flux job kill ${validjob} 2> kill.guest.err &&
 	cat <<-EOF >kill.guest.expected &&
 	flux-job: kill ${validjob}: guests may only send signals to their own jobs
 	EOF
@@ -368,7 +368,7 @@ test_expect_success 'flux job: killall fails for invalid signal name' '
 
 test_expect_success 'flux-job: killall --user all fails for guest' '
 	id=$(($(id -u)+1)) &&
-        test_must_fail runas ${id} \
+	test_must_fail runas ${id} \
 		flux job killall --user all 2> killall_all_guest.err &&
 	cat <<-EOF >killall_all_guest.exp &&
 	flux-job: killall: guests can only kill their own jobs
@@ -378,7 +378,7 @@ test_expect_success 'flux-job: killall --user all fails for guest' '
 
 test_expect_success 'flux-job: killall --user <guest_uid> works for guest' '
 	id=$(($(id -u)+1)) &&
-        runas ${id} \
+	runas ${id} \
 		flux job killall --user ${id} 2> killall_guest.err
 '
 
@@ -420,7 +420,7 @@ test_expect_success 'flux job: the queue is empty' '
 
 test_expect_success 'flux-job: cancelall --user all fails for guest' '
 	id=$(($(id -u)+1)) &&
-        test_must_fail runas ${id} \
+	test_must_fail runas ${id} \
 		flux job cancelall --user all 2> cancelall_all_guest.err &&
 	cat <<-EOF >cancelall_all_guest.exp &&
 	flux-job: raiseall: guests can only raise exceptions on their own jobs
@@ -430,7 +430,7 @@ test_expect_success 'flux-job: cancelall --user all fails for guest' '
 
 test_expect_success 'flux-job: cancelall --user <guest uid> works for guest' '
 	id=$(($(id -u)+1)) &&
-        runas ${id} \
+	runas ${id} \
 		flux job cancelall --user ${id} 2> cancelall_guest.err
 '
 
@@ -512,7 +512,7 @@ test_expect_success 'flux job: raiseall with invalid type fails' '
 
 test_expect_success 'flux-job: raiseall --user all fails for guest' '
 	id=$(($(id -u)+1)) &&
-        test_must_fail runas ${id} \
+	test_must_fail runas ${id} \
 		flux job raiseall --user all test 2> raiseall_all_guest.err &&
 	cat <<-EOT >raiseall_all_guest.exp &&
 	flux-job: raiseall: guests can only raise exceptions on their own jobs
@@ -522,7 +522,7 @@ test_expect_success 'flux-job: raiseall --user all fails for guest' '
 
 test_expect_success 'flux-job: raiseall --user <guest_uid> works for guest' '
 	id=$(($(id -u)+1)) &&
-        runas ${id} \
+	runas ${id} \
 		flux job raiseall --user ${id} test 2> raiseall_guest.err
 '
 
@@ -581,14 +581,14 @@ test_expect_success 'flux-job: fatal cancel exception was raised' '
 '
 
 test_expect_success 'flux-job: load modules for live killall test' '
-        flux module load sched-simple &&
-        flux module load job-exec
+	flux module load sched-simple &&
+	flux module load job-exec
 '
 
 test_expect_success 'flux job: killall -f kills one job' '
-        id=$(flux mini submit sleep 600) &&
-        flux job wait-event $id start &&
-        flux job killall -f &&
+	id=$(flux mini submit sleep 600) &&
+	flux job wait-event $id start &&
+	flux job killall -f &&
 	run_timeout 60 flux queue drain
 '
 

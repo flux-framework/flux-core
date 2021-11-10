@@ -28,8 +28,8 @@ test_expect_success "flux subinstance leaves local_uri, remote_uri in KVS" '
 
 test_expect_success "flux --parent works in subinstance" '
 	id=$(flux jobspec srun -n1 \
-               flux start ${ARGS} flux --parent kvs put test=ok \
-               | flux job submit) &&
+		flux start ${ARGS} flux --parent kvs put test=ok \
+		| flux job submit) &&
 	flux job attach $id &&
 	flux job info $id guest.test > guest.test &&
 	cat <<-EOF >guest.test.exp &&
@@ -40,9 +40,9 @@ test_expect_success "flux --parent works in subinstance" '
 
 test_expect_success "flux --parent --parent works in subinstance" '
 	id=$(flux jobspec srun -n1 \
-              flux start ${ARGS} \
-	      flux start ${ARGS} flux --parent --parent kvs put test=ok \
-	      | flux job submit) &&
+		flux start ${ARGS} \
+		flux start ${ARGS} flux --parent --parent kvs put test=ok \
+		| flux job submit) &&
 	flux job attach $id &&
 	flux job info $id guest.test > guest2.test &&
 	cat <<-EOF >guest2.test.exp &&
@@ -64,15 +64,15 @@ test_expect_success "instance-level attribute = 0 in test instance" '
 '
 
 test_expect_success "instance-level attribute = 1 in first subinstance" '
-        flux mini run flux start ${ARGS} \
-            flux getattr instance-level >level1.out &&
+	flux mini run flux start ${ARGS} \
+		flux getattr instance-level >level1.out &&
 	echo 1 >level1.exp &&
 	test_cmp level1.exp level1.out
 '
 
 test_expect_success "instance-level attribute = 2 in second subinstance" '
-        flux mini run flux start \
-	    flux mini run flux start ${ARGS} \
+	flux mini run flux start \
+		flux mini run flux start ${ARGS} \
 		flux getattr instance-level >level2.out &&
 	echo 2 >level2.exp &&
 	test_cmp level2.exp level2.out

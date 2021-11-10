@@ -7,8 +7,8 @@ test_description='Sanity checks for job-exec multiuser exec'
 flux version | grep -q libflux-security && test_set_prereq FLUX_SECURITY
 
 if ! test_have_prereq FLUX_SECURITY; then
-    skip_all='skipping multiuser exec tests, libflux-security or IMP not found'
-    test_done
+	skip_all='skipping multiuser exec tests, libflux-security or IMP not found'
+	test_done
 fi
 
 IMP=${SHARNESS_TEST_SRCDIR}/job-exec/imp.sh
@@ -41,35 +41,37 @@ SIGN_AS=${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py
 test_expect_success HAVE_JQ 'job-exec: job as guest tries to run IMP' '
 	FAKE_USERID=42 &&
 	flux jobspec srun -n1 id -u | \
-	    flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
+		flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
 	id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
-	    flux job submit --flags=signed job.signed) &&
+		flux job submit --flags=signed job.signed) &&
 	flux job attach ${id} &&
 	flux job list-ids ${id} > ${id}.json &&
 	jq -e ".userid == 42" < ${id}.json &&
 	flux job attach ${id} 2>&1 | grep "test-imp: Running.*$(flux job id ${id})"
 '
 test_expect_success HAVE_JQ 'job-exec: large jobspec does not get truncated' '
-	( FAKE_USERID=42 &&
-	  for i in `seq 0 2048`; do export ENV${i}=xxxxxyyyyyyyyyzzzzzzz; done &&
-	  flux jobspec srun -n1 id -u | \
-	    flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
-	  id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
-	  flux job submit --flags=signed job.signed) &&
-	  flux job attach ${id} &&
-	  actual=imp-$(flux job id $id).input &&
-	  test_debug "echo expecting J of size $(wc -c < job.signed)B" &&
-	  test_debug "echo input to IMP was $(wc -c < $actual)B" &&
-	  jq -j .J ${actual} > J.input &&
-	  test_cmp job.signed J.input
-    )
+	(FAKE_USERID=42 &&
+		for i in `seq 0 2048`; \
+			do export ENV${i}=xxxxxyyyyyyyyyzzzzzzz; \
+		done &&
+		flux jobspec srun -n1 id -u | \
+			flux python ${SIGN_AS} ${FAKE_USERID} > job.signed &&
+		id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
+		flux job submit --flags=signed job.signed) &&
+		flux job attach ${id} &&
+		actual=imp-$(flux job id $id).input &&
+		test_debug "echo expecting J of size $(wc -c < job.signed)B" &&
+		test_debug "echo input to IMP was $(wc -c < $actual)B" &&
+		jq -j .J ${actual} > J.input &&
+		test_cmp job.signed J.input
+	)
 '
 test_expect_success HAVE_JQ,NO_ASAN 'job-exec: kill multiuser job uses the IMP' '
 	FAKE_USERID=42 &&
 	flux mini run --dry-run -n2 -N2 sleep 1000 | \
-	    flux python ${SIGN_AS} ${FAKE_USERID} > sleep-job.signed &&
+		flux python ${SIGN_AS} ${FAKE_USERID} > sleep-job.signed &&
 	id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
-	    flux job submit --flags=signed sleep-job.signed) &&
+		flux job submit --flags=signed sleep-job.signed) &&
 	flux job list-ids ${id} > ${id}.json &&
 	jq -e ".userid == 42" < ${id}.json &&
 	flux job wait-event -p guest.exec.eventlog -vt 30 ${id} shell.start &&
