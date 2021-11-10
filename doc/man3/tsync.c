@@ -25,7 +25,7 @@ int main (int argc, char **argv)
         log_err_exit ("error registering continuation");
 
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
-        log_err_exit ("reactor returned wtih error");
+        log_err_exit ("reactor returned with error");
 
     flux_future_destroy (f);
 
