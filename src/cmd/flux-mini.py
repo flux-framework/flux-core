@@ -386,7 +386,7 @@ class Xcmd:
 
             #  For better verbose and dry-run output, capture mutable
             #   args that were actually changed:
-            if val != newval:
+            if val != newval or attr == "cc":
                 self.modified[attr] = True
 
     def __getattr__(self, attr):
