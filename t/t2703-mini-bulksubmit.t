@@ -302,4 +302,14 @@ test_expect_success 'flux-mini bulksubmit preserves {cc} in args' '
 	    grep ^${id}=c preserve-${id}.out
 	done
 '
+test_expect_success 'flux-mini bulksubmit --dry-run works with --cc' '
+	flux mini bulksubmit --dry-run --cc=1-2 echo {} ::: 1 2 3 \
+	  >dry-run-cc.out 2>&1 &&
+	cat <<-EOF >dry-run-cc.expected &&
+	flux-mini: submit --cc=1-2 echo 1
+	flux-mini: submit --cc=1-2 echo 2
+	flux-mini: submit --cc=1-2 echo 3
+	EOF
+	test_cmp dry-run-cc.expected dry-run-cc.out
+'
 test_done
