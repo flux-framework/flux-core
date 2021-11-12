@@ -8,8 +8,7 @@ test_description='Test resource module'
 # Then we will reload after adding TOML to cwd
 export FLUX_CONF_DIR=$(pwd)
 
-# min SIZE=4
-SIZE=$(test_size_large)
+SIZE=4
 test_under_flux $SIZE kvs
 
 # Usage: grep_event event-name <in >out
@@ -40,8 +39,20 @@ test_expect_success 'load resource module with bad option fails' '
 	test_must_fail flux module load resource badoption
 '
 
-test_expect_success 'load resource module' '
-	load_resource
+#   0
+#  1 2
+# 3
+
+test_expect_success 'load resource module on ranks 0,2' '
+	flux module load resource &&
+	flux exec -r2 flux module load resource
+'
+test_expect_success 'reload module on rank 2 to trigger dup topo-reduce' '
+	flux exec -r2 flux module reload resource
+'
+test_expect_success 'load resource module on ranks 1,3' '
+	flux exec -r1 flux module load resource &&
+	flux exec -r3 flux module load resource
 '
 
 test_expect_success HAVE_JQ 'resource.eventlog exists' '
