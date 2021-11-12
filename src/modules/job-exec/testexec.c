@@ -32,6 +32,9 @@
  *                             event a testexec job. If job has unlimited
  *                             duration, then also wait for finish RPC or
  *                             job exception for job finish event.
+ *   "reattach_finish":i    - if reattached, assume job has finished
+ *                             and no longer has remaining time to run.
+ *                             Useful for testing job reattach.
  * }
  *
  */
@@ -59,6 +62,7 @@ struct testexec_ctx {
 struct testconf {
     bool                  enabled;          /* test execution enabled       */
     int                   override;         /* wait for RPC for start event */
+    int                   reattach_finish;  /* if reattached, just finish job */
     double                run_duration;     /* duration of fake job in sec  */
     int                   wait_status;      /* reported status for "finish" */
     const char *          mock_exception;   /* fake excetion at this site   */
@@ -112,6 +116,7 @@ static int init_testconf (flux_t *h, struct testconf *conf, json_t *jobspec)
     /* get/set defaults */
     conf->run_duration = jobspec_duration (h, jobspec);
     conf->override = 0;
+    conf->reattach_finish = 0;
     conf->wait_status = 0;
     conf->mock_exception = NULL;
     conf->enabled = false;
@@ -123,9 +128,10 @@ static int init_testconf (flux_t *h, struct testconf *conf, json_t *jobspec)
         return 0;
     conf->enabled = true;
     if (json_unpack_ex (test, &err, 0,
-                        "{s?s s?i s?i s?s}",
+                        "{s?s s?i s?i s?i s?s}",
                         "run_duration", &trun,
                         "override", &conf->override,
+                        "reattach_finish", &conf->reattach_finish,
                         "wait_status", &conf->wait_status,
                         "mock_exception", &conf->mock_exception) < 0) {
         flux_log (h, LOG_ERR, "init_testconf: %s", err.text);
@@ -283,10 +289,12 @@ static int testexec_reattach (struct testexec *te)
     }
     if (testexec_reattach_starttime (te->job, value, &start) < 0)
         goto cleanup;
-    /* just use seconds, we approximate runtime left */
-    clock_gettime (CLOCK_REALTIME, &now);
-    if ((now.tv_sec - start) <= te->conf.run_duration)
-        runtimeleft = (start + te->conf.run_duration) - now.tv_sec;
+    if (!te->conf.reattach_finish) {
+        /* just use seconds, we approximate runtime left */
+        clock_gettime (CLOCK_REALTIME, &now);
+        if ((now.tv_sec - start) <= te->conf.run_duration)
+            runtimeleft = (start + te->conf.run_duration) - now.tv_sec;
+    }
     if (start_timer (te->job->h,
                      te,
                      runtimeleft) < 0) {

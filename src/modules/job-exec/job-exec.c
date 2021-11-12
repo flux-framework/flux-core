@@ -743,6 +743,7 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
     }
     job->has_namespace = 1;
 
+
     /*  If an exception was received during startup, no need to continue
      *   with startup
      */
