@@ -54,7 +54,8 @@ if test $RANK -eq 0 -a "${FLUX_SCHED_MODULE}" != "none" \
     flux module load ${FLUX_SCHED_MODULE:-sched-simple}
 fi
 
-test $RANK -ne 0 || flux admin cleanup-push <<-EOT
+test $RANK -ne 0 -o "${FLUX_INSTANCE_RESTART}" = "t" \
+     || flux admin cleanup-push <<-EOT
 	flux queue stop --quiet
 	flux job cancelall --user=all --quiet -f --states RUN
 	flux queue idle --quiet
