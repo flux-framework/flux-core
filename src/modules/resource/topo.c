@@ -169,7 +169,6 @@ error:
 }
 
 /* Accept reduction input from downstream ranks.
- * Ignore it if reduction has already completed (node may have restarted).
  */
 static void topo_reduce_cb (flux_t *h,
                             flux_msg_handler_t *mh,
@@ -190,35 +189,27 @@ static void topo_reduce_cb (flux_t *h,
                              "resource",
                              &resobj,
                              "xml",
-                             &xml) < 0)
-        goto error;
-    if (topo->reduce.count + count <= topo->reduce.descendants + 1) {
-        json_error_t e;
-
-        if (!(rl = rlist_from_json (resobj, &e))) {
-            flux_log (h, LOG_ERR, "error reducing resource object: %s", e.text);
-            errno = EINVAL;
-            goto error;
-        }
-        if (rlist_append (topo->reduce.rl, rl) < 0) {
-            errno = ENOMEM;
-            goto error;
-        }
-        if (rutil_idkey_merge (topo->reduce.xml, xml) < 0)
-            goto error;
-
-        topo->reduce.count += count;
-
-        if (topo->reduce.count == topo->reduce.descendants + 1) {
-            if (topo_reduce_finalize (topo) < 0)
-                goto error;
-        }
+                             &xml) < 0
+        || !(rl = rlist_from_json (resobj, NULL))) {
+        flux_log (h, LOG_ERR, "error decoding topo-reduce request");
+        return;
     }
-    rlist_destroy (rl);
-    return;
-error:
-    flux_log_error (h, "resource.topo-reduce");
-    flux_reactor_stop_error (flux_get_reactor (h));
+    if (rlist_append (topo->reduce.rl, rl) < 0) {
+        /* N.B. log nothing in this case as this error will occur naturally
+         * when the resource module is reloaded and resource object is a dup.
+         */
+        goto done;
+    }
+    if (rutil_idkey_merge (topo->reduce.xml, xml) < 0) {
+        flux_log (h, LOG_ERR, "error merging topo-reduce XML");
+        goto done;
+    }
+    topo->reduce.count += count;
+    if (topo->reduce.count == topo->reduce.descendants + 1) {
+        if (topo_reduce_finalize (topo) < 0) // logs its own errors
+            goto done;
+    }
+done:
     rlist_destroy (rl);
 }
 
