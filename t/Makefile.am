@@ -76,7 +76,6 @@ TESTSCRIPTS = \
 	t0018-content-files.t \
 	t0019-jobspec-schema.t \
 	t0020-terminus.t \
-	t0021-flux-jobspec.t \
 	t0022-jj-reader.t \
 	t0023-jobspec1-validate.t \
 	t0026-flux-R.t \

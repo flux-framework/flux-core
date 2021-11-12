@@ -4,7 +4,7 @@ set -x
 
 # Test info fetch
 
-id=$(flux jobspec srun -t 1 -n 1 /bin/true | flux job submit)
+id=$(flux mini submit -t 1 -n 1 /bin/true)
 flux job attach ${id}
 
 flux job info ${id} eventlog jobspec R >/dev/null

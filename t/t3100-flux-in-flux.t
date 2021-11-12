@@ -19,17 +19,15 @@ test_expect_success "flux can run flux instance as a job" '
 '
 
 test_expect_success "flux subinstance leaves local_uri, remote_uri in KVS" '
-	flux jobspec srun -n1 -N1 flux start /bin/true >j &&
-	id=$(flux job submit j) &&
+	id=$(flux mini submit flux start /bin/true) &&
 	flux job wait-event $id finish &&
 	flux job info $id guest.flux.local_uri &&
 	flux job info $id guest.flux.remote_uri
 '
 
 test_expect_success "flux --parent works in subinstance" '
-	id=$(flux jobspec srun -n1 \
-               flux start ${ARGS} flux --parent kvs put test=ok \
-               | flux job submit) &&
+	id=$(flux mini submit \
+		flux start ${ARGS} flux --parent kvs put test=ok) &&
 	flux job attach $id &&
 	flux job info $id guest.test > guest.test &&
 	cat <<-EOF >guest.test.exp &&
@@ -39,10 +37,9 @@ test_expect_success "flux --parent works in subinstance" '
 '
 
 test_expect_success "flux --parent --parent works in subinstance" '
-	id=$(flux jobspec srun -n1 \
-              flux start ${ARGS} \
-	      flux start ${ARGS} flux --parent --parent kvs put test=ok \
-	      | flux job submit) &&
+	id=$(flux mini submit \
+		flux start ${ARGS} \
+		flux start ${ARGS} flux --parent --parent kvs put test=ok) &&
 	flux job attach $id &&
 	flux job info $id guest.test > guest2.test &&
 	cat <<-EOF >guest2.test.exp &&
@@ -64,24 +61,23 @@ test_expect_success "instance-level attribute = 0 in test instance" '
 '
 
 test_expect_success "instance-level attribute = 1 in first subinstance" '
-        flux mini run flux start ${ARGS} \
-            flux getattr instance-level >level1.out &&
+	flux mini run flux start ${ARGS} \
+		flux getattr instance-level >level1.out &&
 	echo 1 >level1.exp &&
 	test_cmp level1.exp level1.out
 '
 
 test_expect_success "instance-level attribute = 2 in second subinstance" '
-        flux mini run flux start \
-	    flux mini run flux start ${ARGS} \
+	flux mini run flux start \
+		flux mini run flux start ${ARGS} \
 		flux getattr instance-level >level2.out &&
 	echo 2 >level2.exp &&
 	test_cmp level2.exp level2.out
 '
 
 test_expect_success "flux sets jobid attribute" '
-	id=$(flux jobspec srun -n1 \
-		flux start ${ARGS} flux getattr jobid \
-		| flux job submit) &&
+	id=$(flux mini submit \
+		flux start ${ARGS} flux getattr jobid) &&
 	echo "$id" >jobid.exp &&
 	flux job attach $id >jobid.out &&
 	test_cmp jobid.exp jobid.out

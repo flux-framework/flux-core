@@ -40,16 +40,16 @@ test_expect_success 'sched-simple: reload ingest module with lax validator' '
 		validator-plugins=schema
 '
 test_expect_success 'sched-simple: generate jobspec for simple test job' '
-        flux jobspec srun -n1 hostname >basic.json
+	flux mini run --dry-run hostname >basic.json
 '
 
 test_expect_success 'job-manager: load sched-simple w/ an illegal mode' '
-        flux module unload sched-simple &&
-        flux module load sched-simple mode=foobar
+	flux module unload sched-simple &&
+	flux module load sched-simple mode=foobar
 '
 test_expect_success 'job-manager: load sched-simple w/ an illegal limited range' '
-        flux module unload sched-simple &&
-        flux module load sched-simple mode=limited=-1
+	flux module unload sched-simple &&
+	flux module load sched-simple mode=limited=-1
 '
 test_expect_success 'sched-simple: reload sched-simple with default resource.R' '
 	flux module unload sched-simple &&
@@ -59,9 +59,9 @@ test_expect_success 'sched-simple: reload sched-simple with default resource.R' 
 	test "$($query)" = "rank[0-1]/core[0-1]"
 '
 test_expect_success 'sched-simple: unsatisfiable request is canceled' '
-	flux jobspec srun -c 3 hostname | flux job submit >job0.id &&
+	flux mini submit -n1 -c 3 hostname >job0.id &&
 	job0id=$(cat job0.id) &&
-        flux job wait-event --timeout=5.0 $job0id exception &&
+	flux job wait-event --timeout=5.0 $job0id exception &&
 	flux job eventlog $job0id | grep "unsatisfiable request"
 '
 test_expect_success 'sched-simple: gpu request is canceled' '
@@ -74,7 +74,7 @@ SPEC=${SHARNESS_TEST_SRCDIR}/jobspec/valid/basic.yaml
 test_expect_success HAVE_JQ 'sched-simple: invalid minimal jobspec is canceled' '
 	${Y2J}<${SPEC} | jq ".version = 1" | flux job submit >job00.id &&
 	jobid=$(cat job00.id) &&
-        flux job wait-event --timeout=5.0 $jobid exception &&
+	flux job wait-event --timeout=5.0 $jobid exception &&
 	flux job eventlog $jobid | grep "Unable to determine slot size"
 '
 test_expect_success 'sched-simple: submit 5 jobs' '
@@ -83,8 +83,8 @@ test_expect_success 'sched-simple: submit 5 jobs' '
 	flux job submit basic.json >job3.id &&
 	flux job submit basic.json >job4.id &&
 	flux job submit basic.json >job5.id &&
-        flux job wait-event --timeout=5.0 $(cat job4.id) alloc &&
-        flux job wait-event --timeout=5.0 $(cat job5.id) submit
+	flux job wait-event --timeout=5.0 $(cat job4.id) alloc &&
+	flux job wait-event --timeout=5.0 $(cat job5.id) submit
 '
 test_expect_success 'sched-simple: check allocations for running jobs' '
 	list_R $(cat job1.id job2.id job3.id job4.id) > allocs.out &&
@@ -101,11 +101,11 @@ test_expect_success 'sched-simple: no remaining resources' '
 '
 test_expect_success 'sched-simple: cancel one job' '
 	flux job cancel $(cat job3.id) &&
-        flux job wait-event --timeout=5.0 $(cat job3.id) exception &&
-        flux job wait-event --timeout=5.0 $(cat job3.id) free
+	flux job wait-event --timeout=5.0 $(cat job3.id) exception &&
+	flux job wait-event --timeout=5.0 $(cat job3.id) free
 '
 test_expect_success 'sched-simple: waiting job now has alloc event' '
-        flux job wait-event --timeout=5.0 $(cat job5.id) alloc &&
+	flux job wait-event --timeout=5.0 $(cat job5.id) alloc &&
 	test "$(list_R $(cat job5.id))" = "annotations={\"sched\":{\"resource_summary\":\"rank0/core1\"}}"
 '
 test_expect_success 'sched-simple: cancel all jobs' '
@@ -153,9 +153,9 @@ test_expect_success 'sched-simple: cancel remaining jobs' '
 	flux job wait-event --timeout=5.0 $(cat job9.id) free
 '
 test_expect_success 'sched-simple: reload in first-fit alloc-mode' '
-        flux module remove sched-simple &&
+	flux module remove sched-simple &&
 	flux resource reload R.test.first_fit &&
-        flux module load sched-simple alloc-mode=first-fit &&
+	flux module load sched-simple alloc-mode=first-fit &&
 	test_debug "echo result=\"$($query)\"" &&
 	test "$($query)" = "rank0/core[0-1] rank1/core0"
 '

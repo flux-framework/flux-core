@@ -64,7 +64,6 @@ nodist_flux_SOURCES = \
 
 dist_fluxcmd_SCRIPTS = \
 	flux-cron \
-	flux-jobspec.py \
 	flux-mini.py \
 	flux-jobs.py \
 	flux-resource.py \

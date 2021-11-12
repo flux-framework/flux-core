@@ -16,7 +16,7 @@ LIST_JOBS=${FLUX_BUILD_DIR}/t/job-manager/list-jobs
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 
 test_expect_success 'job-manager: generate jobspec for simple test job' '
-        flux jobspec srun -n1 hostname >basic.json
+	flux mini run --dry-run -n1 hostname >basic.json
 '
 
 test_expect_success 'job-manager: load job-ingest, job-info, job-manager' '
@@ -76,7 +76,7 @@ test_expect_success HAVE_JQ 'job-manager: queue list job with correct priority' 
 test_expect_success 'job-manager: raise non-fatal exception on job' '
 	jobid=$(cat list1_jobid.out) &&
 	flux job raise --severity=1 --type=testing ${jobid} Mumble grumble &&
-        flux job wait-event --timeout=5.0 --match-context=type=testing ${jobid} exception &&
+	flux job wait-event --timeout=5.0 --match-context=type=testing ${jobid} exception &&
 	flux job eventlog $jobid \
 		| grep exception >list1_exception.out &&
 	grep -q "type=\"testing\"" list1_exception.out &&
@@ -96,7 +96,7 @@ test_expect_success 'job-manager: queue contains 1 jobs' '
 test_expect_success 'job-manager: cancel job' '
 	jobid=$(cat list1_jobid.out) &&
 	flux job cancel ${jobid} &&
-        flux job wait-event --timeout=5.0 --match-context=type=cancel ${jobid} exception &&
+	flux job wait-event --timeout=5.0 --match-context=type=cancel ${jobid} exception &&
 	flux job eventlog $jobid | grep exception \
 		| grep severity=0 | grep "type=\"cancel\""
 '
@@ -137,7 +137,7 @@ test_expect_success HAVE_JQ 'job-manager: list-jobs --count shows highest priori
 
 test_expect_success HAVE_JQ 'job-manager: priority listed as priority=4294967295 in KVS' '
 	jobid=$(head -n 1 list3.out | $jq .id) &&
-        flux job wait-event --timeout=5.0 ${jobid} priority &&
+	flux job wait-event --timeout=5.0 ${jobid} priority &&
 	flux job eventlog $jobid | grep priority=4294967295
 '
 
@@ -148,7 +148,7 @@ test_expect_success HAVE_JQ 'job-manager: cancel jobs' '
 '
 
 test_expect_success 'job-manager: queue contains 0 jobs' '
-       test $(${LIST_JOBS} | wc -l) -eq 0
+	test $(${LIST_JOBS} | wc -l) -eq 0
 '
 
 test_expect_success 'job-manager: submit 10 jobs of equal urgency' '
@@ -171,7 +171,7 @@ test_expect_success 'job-manager: flux job urgency sets last job urgency=31' '
 
 test_expect_success 'job-manager: urgency was updated in KVS' '
 	jobid=$(tail -1 <list10_ids.out) &&
-        flux job wait-event --timeout=5.0 ${jobid} urgency &&
+	flux job wait-event --timeout=5.0 ${jobid} urgency &&
 	flux job eventlog $jobid \
 		| cut -d" " -f2- | grep ^urgency >urgency.out &&
 	grep -q urgency=31 urgency.out
@@ -179,7 +179,7 @@ test_expect_success 'job-manager: urgency was updated in KVS' '
 
 test_expect_success 'job-manager: priority was updated in KVS' '
 	jobid=$(tail -1 <list10_ids.out) &&
-        flux job wait-event --timeout=5.0 -c 2 ${jobid} priority &&
+	flux job wait-event --timeout=5.0 -c 2 ${jobid} priority &&
 	flux job eventlog $jobid | grep ^priority | tail -n 1 | priority=4294967295
 '
 
@@ -192,7 +192,7 @@ test_expect_success HAVE_JQ 'job-manager: that job is now the first job' '
 
 test_expect_success HAVE_JQ 'job-manager: jobs in state S w/ no scheduler' '
 	for id in $(cat submit10.out); do \
-            jmgr_check_state ${id} S; \
+		jmgr_check_state ${id} S; \
 	done
 '
 
@@ -377,8 +377,8 @@ test_expect_success 'submit request with empty payload fails with EPROTO(71)' '
 '
 
 test_expect_success HAVE_JQ 'job-manager stats works' '
-        flux module stats job-manager > stats.out &&
-        cat stats.out | $jq -e .journal.listeners
+	flux module stats job-manager > stats.out &&
+	cat stats.out | $jq -e .journal.listeners
 '
 
 test_expect_success 'job-manager: remove job-info, job-manager, job-ingest' '

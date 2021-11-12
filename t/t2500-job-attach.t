@@ -9,7 +9,7 @@ test_under_flux 4
 flux setattr log-stderr-level 1
 
 test_expect_success 'attach: submit one job' '
-	flux jobspec srun -n1 echo foo | flux job submit >jobid1
+	flux mini submit echo foo >jobid1
 '
 
 test_expect_success 'attach: job ran successfully' '
@@ -32,7 +32,7 @@ test_expect_success 'attach: shows output from job' '
 '
 
 test_expect_success 'attach: submit a job and cancel it' '
-	flux jobspec srun -n1 sleep 30 | flux job submit >jobid2 &&
+	flux mini submit sleep 30 >jobid2 &&
 	flux job cancel $(cat jobid2)
 '
 
@@ -48,7 +48,7 @@ test_expect_success 'attach: exit code reflects cancellation' '
 run_attach() {
 	local seq=$1
 
-	flux jobspec srun -n1 sleep 30 | flux job submit >jobid${seq}
+	flux mini submit sleep 30 >jobid${seq}
 	flux job attach -E $(cat jobid${seq}) 2>attach${seq}.err &
 	echo $! >pid${seq}
 	while ! test -s attach${seq}.err; do sleep 0.1; done
@@ -84,15 +84,15 @@ test_expect_success 'attach: detached job was not canceled' '
 # To deal with racyness, script will output an event, which we can
 # wait on
 test_expect_success NO_CHAIN_LINT 'attach: output appears before cancel' '
-        script=$SHARNESS_TEST_SRCDIR/job-attach/outputsleep.sh &&
-	jobid=$(flux jobspec srun -n1 ${script} | flux job submit)
+	script=$SHARNESS_TEST_SRCDIR/job-attach/outputsleep.sh &&
+	jobid=$(flux mini submit ${script})
 	flux job attach -E ${jobid} 1>attach5.out 2>attach5.err &
-        waitpid=$! &&
-        flux job wait-event --timeout=10.0 -p guest.exec.eventlog ${jobid} test-output-ready &&
-        flux job cancel ${jobid} &&
+	waitpid=$! &&
+	flux job wait-event --timeout=10.0 -p guest.exec.eventlog ${jobid} test-output-ready &&
+	flux job cancel ${jobid} &&
 	! wait ${waitpid} &&
-        grep before attach5.out &&
-        ! grep after attach5.out
+	grep before attach5.out &&
+	! grep after attach5.out
 '
 
 test_expect_success 'attach: output events processed after shell.init failure' '
@@ -106,14 +106,14 @@ test_expect_success 'attach: output events processed after shell.init failure' '
 
 # use a shell function to make sane quoting possible
 filter_log_context() {
-    jq -c '. | select(.name == "log") | .context'
+	jq -c '. | select(.name == "log") | .context'
 }
 
 test_expect_success HAVE_JQ 'attach: -v option displays file and line info in logs' '
 	jobid=$(flux mini submit -o verbose=2 hostname) &&
 	flux job wait-event ${jobid} clean &&
 	flux job eventlog --format=json -p guest.output ${jobid} \
-	    | filter_log_context >verbose.json &&
+		| filter_log_context >verbose.json &&
 	file=$(head -1 verbose.json | jq -r .file) &&
 	line=$(head -1 verbose.json | jq -r .line) &&
 	msg=$(head -1 verbose.json | jq -r .message) &&
@@ -122,9 +122,9 @@ test_expect_success HAVE_JQ 'attach: -v option displays file and line info in lo
 '
 
 test_expect_success 'attach: cannot attach to pty when --read-only specified' '
-        jobid=$(flux mini submit -o pty bash) &&
-        test_must_fail flux job attach --read-only $jobid &&
-        flux job cancel $jobid
+	jobid=$(flux mini submit -o pty bash) &&
+	test_must_fail flux job attach --read-only $jobid &&
+	flux job cancel $jobid
 '
 
 test_done
