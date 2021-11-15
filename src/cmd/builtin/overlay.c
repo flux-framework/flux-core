@@ -12,6 +12,7 @@
 # include <config.h>
 #endif
 #include <jansson.h>
+#include <unistd.h>
 #include <flux/core.h>
 
 #include "src/common/libccan/ccan/str/str.h"
@@ -22,10 +23,9 @@
 
 #include "builtin.h"
 
-/* Wait a short time for resource.R to appear in the KVS
- * if we need it to map hostnames to ranks.
+/* Retry after 'ivl' seconds, if fetching broker.hostlist fails.
  */
-static const double resource_timeout = 2.0;
+static const double broker_hostlist_retry_ivl = 2;
 
 static const char *ansi_default = "\033[39m";
 static const char *ansi_red = "\033[31m";
@@ -124,49 +124,34 @@ static json_t *get_topology (flux_t *h)
     return overlay_topology;
 }
 
-/* Fetch hostmap from the KVS.
- * Use the WAITCREATE flag in case the resource inventory is being
- * dynamically discovered, but do it under a relatively short timeout.
- */
-static struct hostlist *get_hostmap_R (flux_t *h)
-{
-    flux_future_t *f;
-    const char *R;
-    struct rlist *rl;
-    struct hostlist *hl;
-
-    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WAITCREATE, "resource.R"))
-        || flux_future_wait_for (f, resource_timeout) < 0
-        || flux_kvs_lookup_get (f, &R) < 0
-        || !(rl = rlist_from_R (R))
-        || !(hl = rlist_nodelist (rl)))
-        log_err_exit ("error fetching resource.R from KVS");
-    rlist_destroy (rl);
-    flux_future_destroy (f);
-    return hl;
-}
-
 static struct hostlist *get_hostmap_attr (flux_t *h)
 {
     const char *s;
-    struct hostlist *hl;
+    struct hostlist *hl = NULL;
+    flux_future_t *f;
+    int max_tries = 2;
 
-    if (!(s = flux_attr_get (h, "broker.hostlist"))) {
-        if (errno != ENOENT)
-            log_err_exit ("error fetching broker.hostlist attribute");
-        return NULL;
+    while (!hl && --max_tries > 0) {
+        if (!(f = flux_getattr (h, "broker.hostlist", FLUX_ATTR_LEADER)))
+            log_err_exit ("error requesting broker.hostlist attribute");
+        if (flux_getattr_value (f, &s) < 0) {
+            if (errno != ENOENT)
+                log_err_exit ("error fetching broker.hostlist attribute");
+            sleep (broker_hostlist_retry_ivl);
+            goto next;
+        }
+        if (!(hl = hostlist_decode (s)))
+            log_err_exit ("broker.hostlist value could not be decoded");
+next:
+        flux_future_destroy (f);
     }
-    if (!(hl = hostlist_decode (s)))
-        log_err_exit ("broker.hostlist value could not be decoded");
     return hl;
 }
 
 static struct hostlist *get_hostmap (flux_t *h)
 {
-    if (!overlay_hostmap) {
-        if (!(overlay_hostmap = get_hostmap_attr (h)))
-            overlay_hostmap = get_hostmap_R (h);
-    }
+    if (!overlay_hostmap)
+        overlay_hostmap = get_hostmap_attr (h);
     return overlay_hostmap;
 }
 
