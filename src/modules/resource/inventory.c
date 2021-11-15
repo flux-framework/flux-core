@@ -126,6 +126,50 @@ struct inventory {
 
 static int rank_from_key (const char *key);
 
+
+static void hostlist_continuation (flux_future_t *f, void *arg)
+{
+    flux_t *h = flux_future_get_flux (f);
+
+    if (flux_future_get (f, NULL) < 0) {
+        if (errno != EPERM)
+            flux_log (h, LOG_ERR, "error setting broker.hostlist");
+    }
+    flux_future_destroy (f);
+}
+
+/* Set the 'broker.hostlist' broker attribute from R's nodelist.
+ * If the attribute is already set, ignore that error
+ * (e.g. broker already set it from configuration).
+ */
+static void inventory_put_hostlist (flux_t *h, json_t *o)
+{
+    char *R;
+    struct rlist *rl = NULL;
+    struct hostlist *hl = NULL;
+    char *val = NULL;
+    flux_future_t *f;
+
+    if (!(R = json_dumps (o, JSON_COMPACT))
+        || !(rl = rlist_from_R (R))
+        || !(hl = rlist_nodelist (rl))
+        || !(val = hostlist_encode (hl))) {
+        flux_log (h, LOG_ERR, "could not derive broker.hostlist from R");
+        goto done;
+    }
+    if (!(f = flux_setattr (h, "broker.hostlist", val, 0))
+        || flux_future_then (f, -1, hostlist_continuation, NULL) < 0) {
+        flux_future_destroy (f);
+        goto done;
+    }
+done:
+    free (val);
+    hostlist_destroy (hl);
+    rlist_destroy (rl);
+    free (R);
+}
+
+
 static int inventory_put_finalize (struct inventory *inv)
 {
     const char *method = flux_future_aux_get (inv->f, "method");
@@ -262,6 +306,7 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method)
     inv->method = cpy;
     inv->R = json_incref (R);
     flux_kvs_txn_destroy (txn);
+    inventory_put_hostlist (inv->ctx->h, inv->R);
     return 0;
 error:
     flux_kvs_txn_destroy (txn);
