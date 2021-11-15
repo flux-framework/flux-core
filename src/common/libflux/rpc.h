@@ -52,6 +52,10 @@ int flux_rpc_get_raw (flux_future_t *f, const void **data, int *len);
  */
 uint32_t flux_rpc_get_matchtag (flux_future_t *f);
 
+/* Accessor for original nodeid target of flux_rpc()
+ */
+uint32_t flux_rpc_get_nodeid (flux_future_t *f);
+
 #ifdef __cplusplus
 }
 #endif
