@@ -190,7 +190,7 @@ hello.hwm
 CONFIG ATTRIBUTES
 =================
 
-config.hostlist
+broker.hostlist
    The rank-ordered hosts specified in the ``bootstrap`` section of
    the Flux configuration.  Hosts are listed in RFC29 hostlist format.
 

@@ -151,13 +151,13 @@ static struct hostlist *get_hostmap_attr (flux_t *h)
     const char *s;
     struct hostlist *hl;
 
-    if (!(s = flux_attr_get (h, "config.hostlist"))) {
+    if (!(s = flux_attr_get (h, "broker.hostlist"))) {
         if (errno != ENOENT)
-            log_err_exit ("error fetching config.hostlist attribute");
+            log_err_exit ("error fetching broker.hostlist attribute");
         return NULL;
     }
     if (!(hl = hostlist_decode (s)))
-        log_err_exit ("config.hostlist value could not be decoded");
+        log_err_exit ("broker.hostlist value could not be decoded");
     return hl;
 }
 

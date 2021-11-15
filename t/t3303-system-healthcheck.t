@@ -73,7 +73,7 @@ test_expect_success 'flux overlay status --hostnames fails on PMI instance witho
 '
 
 test_expect_success 'flux overlay status --hostnames fails on bad hostlist' '
-	test_must_fail flux start -o,-Sconfig.hostlist="[-badlist" \
+	test_must_fail flux start -o,-Sbroker.hostlist="[-badlist" \
 		flux overlay status -vvv --hostnames
 '
 

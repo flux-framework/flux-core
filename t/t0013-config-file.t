@@ -108,7 +108,7 @@ test_expect_success 'create initial program for testing' '
 	cat <<-EOT >attrdump.sh &&
 	#!/bin/sh
 	flux getattr size
-	flux getattr config.hostlist
+	flux getattr broker.hostlist
 	EOT
 	chmod +x attrdump.sh
 '

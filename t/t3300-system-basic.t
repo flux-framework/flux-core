@@ -18,9 +18,9 @@ overlay_connected_children() {
 	flux python -c "import flux; print(flux.Flux().rpc(\"overlay.stats.get\",nodeid=0).get_str())" | jq -r '.["child-connected"]'
 }
 
-test_expect_success 'broker config.hostlist has fake hostlist' '
+test_expect_success 'broker broker.hostlist has fake hostlist' '
 	echo "fake[0-2]" >hostlist.exp &&
-	flux getattr config.hostlist >hostlist.out &&
+	flux getattr broker.hostlist >hostlist.out &&
 	test_cmp hostlist.exp hostlist.out
 '
 

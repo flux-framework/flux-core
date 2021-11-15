@@ -25,7 +25,7 @@
  * Case 1 (method=configuration)
  * -----------------------------
  * TOML config specifies [resource] path, pointing to R.  R is parsed
- * and is "re-ranked" if the 'config.hostlist' broker attribute defines a
+ * and is "re-ranked" if the 'broker.hostlist' broker attribute defines a
  * different mapping of ranks to hostnames.  (This attribute derives from the
  * [bootstrap] config, which we assume is the definitive mapping).
  *
@@ -336,7 +336,7 @@ static int convert_R_conf (flux_t *h, json_t *conf_R, json_t **Rp)
         errno = EINVAL;
         return -1;
     }
-    if ((hosts = flux_attr_get (h, "config.hostlist"))) {
+    if ((hosts = flux_attr_get (h, "broker.hostlist"))) {
         if (rlist_rerank (rl, hosts) < 0) { // sets errno
             flux_log (h, LOG_ERR, "error reranking R");
             goto error;
