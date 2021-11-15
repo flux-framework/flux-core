@@ -11,6 +11,12 @@
 #ifndef _FLUX_CORE_ATTR_H
 #define _FLUX_CORE_ATTR_H
 
+#include "future.h"
+
+enum {
+    FLUX_ATTR_LEADER = 1,   // getattr/setattr/rmattr on the rank 0 broker
+};
+
 /* broker attributes
  *
  * Brokers have configuration attributes.
@@ -60,6 +66,20 @@ int flux_get_rank (flux_t *h, uint32_t *rank);
  * Returns 0 on success, or -1 on failure with errno set.
  */
 int flux_get_size (flux_t *h, uint32_t *size);
+
+
+/* Asynchronous get/set/rmattr functions that return futures.
+ * These functions do not update the cache.
+ */
+flux_future_t *flux_getattr (flux_t *h, const char *name, int flags);
+int flux_getattr_value (flux_future_t *f, const char **value);
+flux_future_t *flux_setattr (flux_t *h,
+                             const char *name,
+                             const char *value,
+                             int flags);
+flux_future_t *flux_rmattr (flux_t *h,
+                            const char *name,
+                            int flags);
 
 #ifdef __cplusplus
 }

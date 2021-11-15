@@ -29,6 +29,8 @@ struct attr_cache {
     zhashx_t *temp;         // values that stay valid until next lookup
 };
 
+static int flux_getattr_flags (flux_future_t *f, int *flags);
+
 static void attr_cache_destroy (struct attr_cache *c)
 {
     if (c) {
@@ -97,11 +99,10 @@ const char *flux_attr_get (flux_t *h, const char *name)
         return NULL;
     if ((val = zhashx_lookup (c->cache, name)))
         return val;
-    if (!(f = flux_rpc_pack (h, "attr.get", FLUX_NODEID_ANY, 0, "{s:s}",
-                                                                "name", name)))
+    if (!(f = flux_getattr (h, name, 0)))
         return NULL;
-    if (flux_rpc_get_unpack (f, "{s:s s:i}", "value", &val,
-                                             "flags", &flags) < 0)
+    if (flux_getattr_value (f, &val) < 0
+        || flux_getattr_flags (f, &flags) < 0)
         goto done;
     if (!(cpy = strdup (val)))
         goto done;
@@ -123,12 +124,9 @@ int flux_attr_set (flux_t *h, const char *name, const char *val)
         return -1;
     }
     if (val)
-        f = flux_rpc_pack (h, "attr.set", FLUX_NODEID_ANY, 0, "{s:s s:s}",
-                                                              "name", name,
-                                                              "value", val);
+        f = flux_setattr (h, name, val, 0);
     else
-        f = flux_rpc_pack (h, "attr.rm", FLUX_NODEID_ANY, 0, "{s:s}",
-                                                             "name", name);
+        f = flux_rmattr (h, name, 0);
     if (!f)
         return -1;
     if (flux_future_get (f, NULL) < 0) {
@@ -182,6 +180,85 @@ int flux_get_rank (flux_t *h, uint32_t *rank)
         return -1;
     *rank = strtoul (val, NULL, 10);
     return 0;
+}
+
+flux_future_t *flux_getattr (flux_t *h, const char *name, int flags)
+{
+    flux_future_t *f;
+    uint32_t rank = FLUX_NODEID_ANY;
+
+    if (!h || !name) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if ((flags & FLUX_ATTR_LEADER))
+        rank = 0;
+    if (!(f = flux_rpc_pack (h,
+                             "attr.get",
+                             rank,
+                             0,
+                             "{s:s}",
+                             "name", name)))
+        return NULL;
+    return f;
+}
+
+int flux_getattr_value (flux_future_t *f, const char **value)
+{
+    return flux_rpc_get_unpack (f, "{s:s}", "value", value);
+}
+
+static int flux_getattr_flags (flux_future_t *f, int *flags)
+{
+    return flux_rpc_get_unpack (f, "{s:i}", "flags", flags);
+}
+
+flux_future_t *flux_setattr (flux_t *h,
+                             const char *name,
+                             const char *value,
+                             int flags)
+{
+    flux_future_t *f;
+    uint32_t rank = FLUX_NODEID_ANY;
+
+    if (!h || !name || !value) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if ((flags & FLUX_ATTR_LEADER))
+        rank = 0;
+    if (!(f = flux_rpc_pack (h,
+                             "attr.set",
+                             rank,
+                             0,
+                             "{s:s s:s}",
+                             "name", name,
+                             "value", value)))
+        return NULL;
+    return f;
+}
+
+flux_future_t *flux_rmattr (flux_t *h,
+                            const char *name,
+                            int flags)
+{
+    flux_future_t *f;
+    uint32_t rank = FLUX_NODEID_ANY;
+
+    if (!h || !name) {
+        errno = EINVAL;
+        return NULL;
+    }
+    if ((flags & FLUX_ATTR_LEADER))
+        rank = 0;
+    if (!(f = flux_rpc_pack (h,
+                             "attr.rm",
+                             rank,
+                             0,
+                             "{s:s}",
+                             "name", name)))
+        return NULL;
+    return f;
 }
 
 /*
