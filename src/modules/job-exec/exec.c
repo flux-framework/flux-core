@@ -303,7 +303,7 @@ static void exec_kill_cb (flux_future_t *f, void *arg)
 {
     struct jobinfo *job = arg;
     if (flux_future_get (f, NULL) < 0 && errno != ENOENT)
-        flux_log_error (job->h, "%ju: exec_kill", (uintmax_t) job->id);
+        bulk_exec_kill_log_error (f, job->id);
     jobinfo_decref (job);
     flux_future_destroy (f);
 }
