@@ -263,6 +263,7 @@ dist_check_SCRIPTS = \
 	issues/t3775-binary-io.sh \
 	issues/t3920-running-underflow.sh \
 	issues/t3960-job-exec-ehostunreach.sh \
+	issues/t3906-job-exec-exception.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
