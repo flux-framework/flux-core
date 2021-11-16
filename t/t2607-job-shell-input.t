@@ -72,31 +72,17 @@ test_expect_success NO_CHAIN_LINT 'flux-shell: attach twice, one with data' '
         test_cmp input_stdin_file pipe4B.out
 '
 
-test_expect_success NO_CHAIN_LINT 'flux-shell: multiple jobs, each want stdin' '
-        id1=$(flux mini submit -n1 \
-              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
-        id2=$(flux mini submit -n1 \
-              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
-        id3=$(flux mini submit -n1 \
-              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
-        id4=$(flux mini submit -n1 \
-              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
-        flux job attach $id1 < input_stdin_file > pipe5_1.out 2> pipe5_1.err &
-        pid1=$!
-        flux job attach $id2 < input_stdin_file > pipe5_2.out 2> pipe5_2.err &
-        pid2=$!
-        flux job attach $id3 < input_stdin_file > pipe5_3.out 2> pipe5_3.err &
-        pid3=$!
-        flux job attach $id4 < input_stdin_file > pipe5_4.out 2> pipe5_4.err &
-        pid4=$!
-        wait $pid1 &&
-        wait $pid2 &&
-        wait $pid3 &&
-        wait $pid4 &&
-        test_cmp input_stdin_file pipe5_1.out &&
-        test_cmp input_stdin_file pipe5_2.out &&
-        test_cmp input_stdin_file pipe5_3.out &&
-        test_cmp input_stdin_file pipe5_4.out
+test_expect_success 'flux-shell: multiple jobs, each want stdin' '
+	flux mini submit --cc=1-4 -n1 -t 15 \
+	    ${TEST_SUBPROCESS_DIR}/test_echo -O -n >pipe5.jobids &&
+	test_debug "cat pipe5.jobids" &&
+	i=1 &&
+	for id in $(cat pipe5.jobids); do
+	    flux job attach $id \
+	        <input_stdin_file >pipe5_${i}.out 2>pipe5_${i}.err &&
+            test_cmp input_stdin_file pipe5_${i}.out &&
+	    i=$((i+1))
+	done
 '
 
 test_expect_success NO_CHAIN_LINT 'flux-shell: no stdin desired in job' '
@@ -164,31 +150,16 @@ test_expect_success 'flux-shell: run 2-task input file as stdin job' '
         grep "1: doh" file1.out
 '
 
-test_expect_success NO_CHAIN_LINT 'flux-shell: multiple jobs, each want stdin via file' '
-        id1=$(flux mini submit -n1 --input=input_stdin_file \
-              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
-        id2=$(flux mini submit -n1 --input=input_stdin_file \
-              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
-        id3=$(flux mini submit -n1 --input=input_stdin_file \
-              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
-        id4=$(flux mini submit -n1 --input=input_stdin_file \
-              ${TEST_SUBPROCESS_DIR}/test_echo -O -n)
-        flux job attach $id1 > file2_1.out 2> file2_1.err &
-        pid1=$!
-        flux job attach $id2 > file2_2.out 2> file2_2.err &
-        pid2=$!
-        flux job attach $id3 > file2_3.out 2> file2_3.err &
-        pid3=$!
-        flux job attach $id4 > file2_4.out 2> file2_4.err &
-        pid4=$!
-        wait $pid1 &&
-        wait $pid2 &&
-        wait $pid3 &&
-        wait $pid4 &&
-        test_cmp input_stdin_file file2_1.out &&
-        test_cmp input_stdin_file file2_2.out &&
-        test_cmp input_stdin_file file2_3.out &&
-        test_cmp input_stdin_file file2_4.out
+test_expect_success 'flux-shell: multiple jobs, each want stdin via file' '
+	flux mini submit --cc=1-4 -n1 -t 15 --input=input_stdin_file \
+	    ${TEST_SUBPROCESS_DIR}/test_echo -O -n >file2.jobids &&
+	test_debug "cat file2.jobids" &&
+	i=1 &&
+	for id in $(cat file2.jobids); do
+	    flux job attach $id >file2_${i}.out 2>file2_${i}.err &&
+            test_cmp input_stdin_file file2_${i}.out &&
+	    i=$((i+1))
+	done
 '
 
 test_expect_success LONGTEST 'flux-shell: 10K line lptest input works' '
