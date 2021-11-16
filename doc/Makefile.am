@@ -224,6 +224,8 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_rpc_get.3 \
 	man3/flux_rpc_get_unpack.3 \
 	man3/flux_rpc_get_raw.3 \
+	man3/flux_rpc_get_matchtag.3 \
+	man3/flux_rpc_get_nodeid.3 \
 	man3/flux_kvs_lookupat.3 \
 	man3/flux_kvs_lookup_get.3 \
 	man3/flux_kvs_lookup_get_unpack.3 \

@@ -299,6 +299,8 @@ void test_service (flux_t *h)
     r = flux_rpc (h, "rpctest.hello", NULL, FLUX_NODEID_ANY, 0);
     ok (r != NULL,
         "flux_rpc sent request to rpctest.hello service");
+    ok (flux_rpc_get_nodeid (r) == FLUX_NODEID_ANY,
+        "flux_rpc_get_nodeid works");
     ok (flux_matchtag_avail (h) == count - 1,
         "flux_rpc allocated one matchtag");
     msg = flux_recv (h, FLUX_MATCH_RESPONSE, 0);
@@ -930,6 +932,24 @@ void test_fake_server (void)
     flux_close (h);
 }
 
+static void test_rpc_get_nodeid (flux_t *h)
+{
+    flux_future_t *f;
+
+    errno = 0;
+    f = flux_rpc (h, "rpctest.hello", NULL, 0, 0);
+    ok (f != NULL,
+        "flux_rpc sent request to rpctest.hello service");
+    ok (flux_rpc_get_nodeid (f) == 0,
+        "flux_rpc_get_nodeid works");
+    ok (flux_future_get (f, NULL) == 0,
+        "flux_future_get works");
+    ok (flux_rpc_get_nodeid (f) == 0,
+        "flux_rpc_get_nodeid still works after future_get()");
+
+    flux_future_destroy (f);
+}
+
 static void fatal_err (const char *message, void *arg)
 {
     BAIL_OUT ("fatal error: %s", message);
@@ -969,6 +989,8 @@ int main (int argc, char *argv[])
 
     test_rpc_active_count (h);
     test_multi_rpc_active_count (h);
+
+    test_rpc_get_nodeid (h);
 
     ok (test_server_stop (h) == 0,
         "stopped test server thread");

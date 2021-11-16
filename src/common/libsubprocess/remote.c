@@ -541,7 +541,10 @@ static int remote_state (flux_subprocess_t *p, flux_future_t *f,
     int status = 0;
 
     if (flux_rpc_get_unpack (f, "{ s:i }", "state", &state) < 0) {
-        flux_log_error (p->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
+        flux_log_error (p->h,
+                        "%s: flux_rpc_get_unpack: rank %u",
+                        __FUNCTION__,
+                        flux_rpc_get_nodeid (f));
         return -1;
     }
 
@@ -648,7 +651,10 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
     if (flux_rpc_get_unpack (f, "{ s:s s:i }",
                              "type", &type,
                              "rank", &rank) < 0) {
-        flux_log_error (p->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
+        flux_log_error (p->h,
+                        "%s: flux_rpc_get_unpack: rank %u",
+                        __FUNCTION__,
+                        flux_rpc_get_nodeid (f));
         goto error;
     }
 
@@ -689,7 +695,10 @@ error:
     if (p->state == FLUX_SUBPROCESS_RUNNING) {
         flux_future_t *fkill;
         if (!(fkill = remote_kill (p, SIGKILL)))
-            flux_log_error (p->h, "%s: remote_kill", __FUNCTION__);
+            flux_log_error (p->h,
+                            "%s: remote_kill: rank %u",
+                            __FUNCTION__,
+                            flux_rpc_get_nodeid (fkill));
         else
             flux_future_destroy (fkill);
     }
@@ -710,7 +719,10 @@ static void remote_continuation_cb (flux_future_t *f, void *arg)
                              "type", &type,
                              "rank", &rank) < 0) {
         if (errno != EHOSTUNREACH) // broker is down, don't log
-            flux_log_error (p->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
+            flux_log_error (p->h,
+                            "%s: flux_rpc_get_unpack: rank %u",
+                            __FUNCTION__,
+                            flux_rpc_get_nodeid (f));
         goto error;
     }
 

@@ -163,21 +163,30 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
 {
     struct jobinfo *job = arg;
     flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
+    int errnum = flux_subprocess_fail_errno (p);
 
     /*  cmd may be NULL here if exec implementation failed to
      *   create flux_cmd_t
      */
     if (cmd) {
-        const char *arg0 = flux_cmd_arg (flux_subprocess_get_cmd (p), 0);
+        const char *errmsg = "job shell execution error";
+        if (errnum == EHOSTUNREACH) {
+            errmsg = "lost contact with job shell";
+            errnum = 0;
+        }
+        else
+            errmsg = "job shell exec error";
+
         jobinfo_fatal_error (job,
-                              flux_subprocess_fail_errno (p),
-                             "cmd=%s: rank=%d exec failed",
-                             arg0, flux_subprocess_rank (p));
+                             errnum,
+                             "%s on broker rank %d",
+                             errmsg,
+                             flux_subprocess_rank (p));
     }
     else
         jobinfo_fatal_error (job,
                              flux_subprocess_fail_errno (p),
-                             "rank=%d exec failed",
+                             "job shell exec error on rank %d",
                              flux_subprocess_rank (p));
 }
 
@@ -303,7 +312,7 @@ static void exec_kill_cb (flux_future_t *f, void *arg)
 {
     struct jobinfo *job = arg;
     if (flux_future_get (f, NULL) < 0 && errno != ENOENT)
-        flux_log_error (job->h, "%ju: exec_kill", (uintmax_t) job->id);
+        bulk_exec_kill_log_error (f, job->id);
     jobinfo_decref (job);
     flux_future_destroy (f);
 }

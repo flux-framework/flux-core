@@ -257,7 +257,7 @@ static void subprocess_destroy_finish (flux_future_t *f, void *arg)
         flux_t *h = flux_subprocess_aux_get (p, "flux_t");
         flux_log_error (h, "subprocess_kill: %ju: %s",
                         (uintmax_t) flux_subprocess_pid (p),
-                        flux_strerror (errno));
+                        future_strerror (f, errno));
     }
     flux_subprocess_destroy (p);
     flux_future_destroy (f);
@@ -466,6 +466,23 @@ int bulk_exec_cancel (struct bulk_exec *exec)
             (*exec->handlers->on_complete) (exec, exec->arg);
     }
     return 0;
+}
+
+/*  Loop through all child futures and print rank-specific errors
+ */
+void bulk_exec_kill_log_error (flux_future_t *f, flux_jobid_t id)
+{
+    flux_t *h = flux_future_get_flux (f);
+    const char *name = flux_future_first_child (f);
+    while (name) {
+        flux_future_t *cf = flux_future_get_child (f, name);
+        if (flux_future_get (cf, NULL) < 0)
+            flux_log_error (h,
+                            "%ju: exec_kill: rank %u",
+                            (uintmax_t) id,
+                            flux_rpc_get_nodeid (cf));
+        name = flux_future_next_child (f);
+    }
 }
 
 flux_future_t *bulk_exec_kill (struct bulk_exec *exec, int signum)

@@ -286,6 +286,8 @@ man_pages = [
     ('man3/flux_rpc', 'flux_rpc_get_unpack', 'perform a remote procedure call to a Flux service', [author], 3),
     ('man3/flux_rpc', 'flux_rpc_get_raw', 'perform a remote procedure call to a Flux service', [author], 3),
     ('man3/flux_rpc', 'flux_rpc', 'perform a remote procedure call to a Flux service', [author], 3),
+    ('man3/flux_rpc', 'flux_rpc_get_matchtag', 'perform a remote procedure call to a Flux service', [author], 3),
+    ('man3/flux_rpc', 'flux_rpc_get_nodeid', 'perform a remote procedure call to a Flux service', [author], 3),
     ('man3/flux_send', 'flux_send', 'send message using Flux Message Broker', [author], 3),
     ('man3/flux_shell_add_completion_ref', 'flux_shell_remove_completion_ref', 'Manipulate conditions for job completion.', [author], 3),
     ('man3/flux_shell_add_completion_ref', 'flux_shell_add_completion_ref', 'Manipulate conditions for job completion.', [author], 3),

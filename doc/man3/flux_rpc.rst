@@ -47,6 +47,14 @@ SYNOPSIS
    int flux_rpc_get_raw (flux_future_t *f,
                          const void **data, int *len);
 
+::
+
+   uint32_t flux_rpc_get_matchtag (flux_future_t *f);
+
+::
+
+   uint32_t flux_rpc_get_nodeid (flux_future_t *f);
+
 
 DESCRIPTION
 ===========
@@ -73,6 +81,10 @@ decode the RPC result. Internally, they call ``flux_future_get()``
 to access the response message stored in the future. If the response
 message has not yet been received, these functions block until it is,
 or an error occurs.
+
+``flux_rpc_get_matchtag()`` and ``flux_rpc_get_nodeid()`` are accessors
+which allow access to the RPC matchtag and target nodeid from the
+future returned from ``flux_rpc(3)``.
 
 
 REQUEST OPTIONS
@@ -178,6 +190,13 @@ object on success. On error, NULL is returned, and errno is set appropriately.
 ``flux_rpc_get()``, ``flux_rpc_get_unpack()``, and ``flux_rpc_get_raw()`` return
 zero on success. On error, -1 is returned, and errno is set appropriately.
 
+``flux_rpc_get_matchtag()`` returns the matchtag allocated to the particular
+RPC request, or ``FLUX_MATCHTAG_NONE`` if no matchtag was allocated (e.g. no
+response is expected), or the future argument does not correspond to an RPC.
+
+``flux_rpc_get_nodeid()`` returns the original ``nodeid`` target of the
+``flux_rpc()`` request, including if the RPC was targetted to
+``FLUX_NODEID_ANY`` or ``FLUX_NODEID_UPSTREAM``.
 
 ERRORS
 ======

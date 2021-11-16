@@ -248,6 +248,12 @@ static int jobid_exception (flux_t *h, flux_jobid_t id,
                                         strerror (errnum));
     else
         snprintf (note, sizeof (note), "%s", text ? text : "");
+
+    flux_log (h,
+              LOG_INFO,
+              "job-exception: id=%ju: %s",
+              (uintmax_t) id,
+              note);
     return flux_respond_pack (h, msg, "{s:I s:s s:{s:i s:s s:s}}",
                                       "id", id,
                                       "type", "exception",

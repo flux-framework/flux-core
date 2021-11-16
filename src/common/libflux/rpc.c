@@ -35,6 +35,7 @@
 
 struct flux_rpc {
     uint32_t matchtag;
+    uint32_t nodeid;
     int flags;
     flux_future_t *f;
     bool sent;
@@ -93,13 +94,17 @@ static void rpc_destroy (struct flux_rpc *rpc)
     }
 }
 
-static struct flux_rpc *rpc_create (flux_t *h, flux_future_t *f, int flags)
+static struct flux_rpc *rpc_create (flux_t *h,
+                                    flux_future_t *f,
+                                    uint32_t nodeid,
+                                    int flags)
 {
     struct flux_rpc *rpc;
 
     if (!(rpc = calloc (1, sizeof (*rpc))))
         return NULL;
     rpc->f = f;
+    rpc->nodeid = nodeid;
     rpc->flags = flags;
     if ((flags & FLUX_RPC_NORESPONSE)) {
         rpc->matchtag = FLUX_MATCHTAG_NONE;
@@ -247,7 +252,7 @@ static flux_future_t *flux_rpc_message_nocopy (flux_t *h,
 
     if (!(f = flux_future_create (initialize_cb, NULL)))
         goto error;
-    if (!(rpc = rpc_create (h, f, flags)))
+    if (!(rpc = rpc_create (h, f, nodeid, flags)))
         goto error;
     if (flux_future_aux_set (f, "flux::rpc", rpc,
                              (flux_free_f)rpc_destroy) < 0) {
@@ -416,6 +421,12 @@ uint32_t flux_rpc_get_matchtag (flux_future_t *f)
 {
     struct flux_rpc *rpc = flux_future_aux_get (f, "flux::rpc");
     return rpc ? rpc->matchtag : FLUX_MATCHTAG_NONE;
+}
+
+uint32_t flux_rpc_get_nodeid (flux_future_t *f)
+{
+    struct flux_rpc *rpc = flux_future_aux_get (f, "flux::rpc");
+    return rpc ? rpc->nodeid : FLUX_NODEID_ANY;
 }
 
 /*
