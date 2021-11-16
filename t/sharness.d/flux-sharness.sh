@@ -375,4 +375,9 @@ fi
 for var in $(env | grep ^PMI); do unset ${var%%=*}; done
 for var in $(env | grep ^SLURM); do unset ${var%%=*}; done
 
+# Sanitize Flux environment variables that should not be inherited by
+#  tests
+unset FLUX_SHELL_RC_PATH
+unset FLUX_RC_EXTRA
+
 # vi: ts=4 sw=4 expandtab
