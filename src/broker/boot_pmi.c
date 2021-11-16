@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <jansson.h>
 #include <assert.h>
+#include <flux/hostlist.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/cleanup.h"
@@ -160,7 +161,9 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     char val[1024];
     char hostname[MAXHOSTNAMELEN + 1];
     char *bizcard = NULL;
+    struct hostlist *hl = NULL;
     json_t *o;
+    char *s;
     struct pmi_handle *pmi;
     struct pmi_params pmi_params;
     int result;
@@ -198,11 +201,20 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
         log_err ("gethostname");
         goto error;
     }
+    if (!(hl = hostlist_create ())) {
+        log_err ("hostlist_create");
+        goto error;
+    }
 
     /* A size=1 instance has no peers, so skip the PMI exchange.
      */
-    if (pmi_params.size == 1)
+    if (pmi_params.size == 1) {
+        if (hostlist_append (hl, hostname) < 0) {
+            log_err ("hostlist_append");
+            goto error;
+        }
         goto done;
+    }
 
     /* Enable ipv6 for maximum flexibility in address selection.
      */
@@ -340,6 +352,37 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
         json_decref (o);
     }
 
+    /* Fetch the business card of all ranks and build hostlist.
+     * The hostlist is built indepenedently (and in parallel) on all ranks.
+     */
+    for (i = 0; i < pmi_params.size; i++) {
+        const char *peer_hostname;
+
+        if (snprintf (key, sizeof (key), "%d", i) >= sizeof (key)) {
+            log_msg ("pmi key string overflow");
+            goto error;
+        }
+        result = broker_pmi_kvs_get (pmi, pmi_params.kvsname,
+                                     key, val, sizeof (val), i);
+
+        if (result != PMI_SUCCESS) {
+            log_msg ("broker_pmi_kvs_get %s: %s", key, pmi_strerror (result));
+            goto error;
+        }
+        if (!(o = json_loads (val, 0, NULL))
+            || json_unpack (o, "{s:s}", "hostname", &peer_hostname) < 0) {
+            log_msg ("error decoding rank %d pmi business card", i);
+            json_decref (o);
+            goto error;
+        }
+        if (hostlist_append (hl, peer_hostname) < 0) {
+            log_err ("hostlist_append");
+            json_decref (o);
+            goto error;
+        }
+        json_decref (o);
+    }
+
     /* One more barrier before allowing connects to commence.
      * Need to ensure that all clients are "allowed".
      */
@@ -355,12 +398,22 @@ done:
         log_msg ("broker_pmi_finalize: %s", pmi_strerror (result));
         goto error;
     }
+    if (!(s = hostlist_encode (hl)))
+        goto error;
+    if (attr_add (attrs, "hostlist", s, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("attr_add hostlist %s", s);
+        free (s);
+        goto error;
+    }
+    free (s);
     free (bizcard);
     broker_pmi_destroy (pmi);
+    hostlist_destroy (hl);
     return 0;
 error:
     free (bizcard);
     broker_pmi_destroy (pmi);
+    hostlist_destroy (hl);
     return -1;
 }
 
