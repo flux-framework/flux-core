@@ -522,8 +522,12 @@ static int get_respond_one (struct groups *g,
 
     if (!(s = idset_encode (group->members, IDSET_FLAG_RANGE)))
         return -1;
-    if (flux_respond_pack (g->ctx->h, msg, "{s:s}", "members", s) < 0)
-        flux_log_error (g->ctx->h, "error responding to groups.get request");
+    if (flux_respond_pack (g->ctx->h, msg, "{s:s}", "members", s) < 0) {
+        if (errno != ENOSYS) {
+            flux_log_error (g->ctx->h,
+                            "error responding to groups.get request");
+        }
+    }
     free (s);
     return 0;
 }
@@ -579,8 +583,10 @@ static void get_request_cb (flux_t *h,
     }
     return;
 error:
-    if (flux_respond_error (h, msg, errno, errmsg) < 0)
-        flux_log_error (h, "error responding to groups.get request");
+    if (flux_respond_error (h, msg, errno, errmsg) < 0) {
+        if (errno != ENOSYS)
+            flux_log_error (h, "error responding to groups.get request");
+    }
 }
 
 /* A client has disconnected.  Find any groups with a cached JOIN request
