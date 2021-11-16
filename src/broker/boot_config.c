@@ -277,10 +277,10 @@ int boot_config_attr (attr_t *attrs, json_t *hosts)
         goto error;
 
     if (attr_add (attrs,
-                  "config.hostlist",
+                  "hostlist",
                   s,
                   FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("attr_add config.hostlist %s", s);
+        log_err ("attr_add hostlist %s", s);
         goto error;
     }
 

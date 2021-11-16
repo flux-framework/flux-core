@@ -466,9 +466,9 @@ void test_attr (const char *dir)
     ok (rc == 0,
         "boot_config_attr works NULL hosts");
     errno = 0;
-    ok (attr_get (attrs, "config.hostlist", NULL, NULL) < 0
+    ok (attr_get (attrs, "hostlist", NULL, NULL) < 0
         && errno == ENOENT,
-        "attr_get cannot find config.hostlist after NULL hosts");
+        "attr_get cannot find hostlist after NULL hosts");
 
     hosts = json_array ();
     if (hosts == NULL)
@@ -476,9 +476,9 @@ void test_attr (const char *dir)
     rc = boot_config_attr (attrs, hosts);
     ok (rc == 0,
         "boot_config_attr works empty hosts");
-    ok (attr_get (attrs, "config.hostlist", NULL, NULL) < 0
+    ok (attr_get (attrs, "hostlist", NULL, NULL) < 0
         && errno == ENOENT,
-        "attr_get cannot find config.hostlist after hosts");
+        "attr_get cannot find hostlist after hosts");
     json_decref (hosts);
     hosts = NULL;
 
@@ -491,7 +491,7 @@ void test_attr (const char *dir)
     rc = boot_config_attr (attrs, hosts);
     ok (rc == 0,
         "boot_config_attr works on input hosts");
-    ok (attr_get (attrs, "config.hostlist", &val, &flags) == 0
+    ok (attr_get (attrs, "hostlist", &val, &flags) == 0
         && !strcmp (val, "foo[0,4,1-5,14,6-9]")
         && flags == FLUX_ATTRFLAG_IMMUTABLE,
         "attr_get returns correct value and flags");
