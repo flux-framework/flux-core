@@ -105,6 +105,25 @@ int fake_spawn (int fd)
     return 0;
 }
 
+int fake_init (int fd, int version, int subversion)
+{
+    char buf[SIMPLE_MAX_PROTO_LINE];
+    int rc;
+
+    if (dprintf (fd,
+                 "cmd=init pmi_version=%d pmi_subversion=%d\n",
+                 version,
+                 subversion) < 0)
+        return -1;
+    if (dgetline (fd, buf, sizeof (buf)) < 0)
+        return -1;
+    if (keyval_parse_isword (buf, "cmd", "response_to_init") < 0)
+        return -1;
+    if (keyval_parse_int (buf, "rc", &rc) == 0 && rc != 0)
+        return rc;
+    return 0;
+}
+
 int main (int argc, char *argv[])
 {
     struct pmi_simple_client *cli;
@@ -121,6 +140,17 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     srv = pmi_server_create (cfd, 1);
+
+    /* N.B. server allows multiple inits, so we take advantage
+     * of this to beat on its version negotiation without any
+     * setup/teardown of the server.
+     */
+    ok (fake_init (cfd[0], 1, 0) == -1,
+        "fake init for protocol 1.0 fails");
+    ok (fake_init (cfd[0], 2, 0) == -1,
+        "fake init for protocol 2.0 fails");
+    ok (fake_init (cfd[0], 1, 1) == 0,
+        "fake init for protocol 1.1 succeeds");
 
     /* create/init
      */

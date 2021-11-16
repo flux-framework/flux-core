@@ -231,7 +231,7 @@ int pmi_simple_server_request (struct pmi_simple_server *pmi,
             goto proto;
         if (keyval_parse_uint (buf, "pmi_subversion", &pmi_subversion) < 0)
             goto proto;
-        if (pmi_version < 1 || (pmi_version == 1 && pmi_subversion < 1))
+        if (pmi_version != 1 || (pmi_version == 1 && pmi_subversion < 1))
             snprintf (resp, sizeof (resp), "cmd=response_to_init rc=-1\n");
         else
             snprintf (resp, sizeof (resp), "cmd=response_to_init rc=0 "
