@@ -1016,6 +1016,7 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     int version;
     const char *errmsg = NULL;
     char errbuf[128];
+    const char *reason = "";
     flux_msg_t *response;
     const char *uuid;
     int status;
@@ -1038,6 +1039,7 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
                   (unsigned long)ov->parent.rank);
         errmsg = errbuf;
         errno = EINVAL;
+        reason = "not a peer of this broker - mismatched config?";
         goto error_log;
     }
     /* Oops, child was previously online, but is now saying hello.
@@ -1046,7 +1048,8 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
      */
     if (subtree_is_online (child->status)) { // crash
         flux_log (ov->h, LOG_ERR,
-                  "rank %lu uuid %s lost, to be superceded by new hello",
+                  "%s (rank %lu) reconnected after crash, dropping old uuid %s",
+                  flux_get_hostbyrank (ov->h, child->rank),
                   (unsigned long)child->rank,
                   child->uuid);
         overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
@@ -1056,6 +1059,7 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     if (!version_check (version, ov->version, errbuf, sizeof (errbuf))) {
         errmsg = errbuf;
         errno = EINVAL;
+        reason = "flux-core version mismatch - needs software update?";
         goto error_log;
     }
 
@@ -1064,7 +1068,8 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
 
     flux_log (ov->h,
               hello_log_level,
-              "hello from rank %lu uuid %s status %s",
+              "accepting connection from %s (rank %lu) uuid %s status %s",
+              flux_get_hostbyrank (ov->h, child->rank),
               (unsigned long)child->rank,
               child->uuid,
               subtree_status_str (child->status));
@@ -1076,9 +1081,12 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     flux_msg_destroy (response);
     return;
 error_log:
-    flux_log (ov->h, LOG_ERR, "overlay hello child %lu %s rejected",
+    flux_log (ov->h, LOG_ERR,
+              "rejecting connection from %s (rank %lu) uuid %s: %s",
+              flux_get_hostbyrank (ov->h, rank),
               (unsigned long)rank,
-              uuid);
+              uuid,
+              reason);
 error:
     if (!(response = flux_response_derive (msg, errno))
         || (errmsg && flux_msg_set_string (response, errmsg) < 0)
