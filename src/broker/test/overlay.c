@@ -670,6 +670,8 @@ int main (int argc, char *argv[])
         BAIL_OUT ("loopback_create failed");
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
         BAIL_OUT ("flux_attr_set_cacheonly rank failed");
+    if (flux_attr_set_cacheonly (h, "hostlist", "test") < 0)
+        BAIL_OUT ("flux_attr_set_cacheonly hostlist failed");
     flux_log_set_redirect (h, diag_logger, NULL);
     flux_log (h, LOG_INFO, "test log message");
 
