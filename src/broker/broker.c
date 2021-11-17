@@ -92,7 +92,6 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
 static void set_proctitle (uint32_t rank);
 
 static int create_rundir (attr_t *attrs);
-static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size);
 
 static int create_runat_phases (broker_ctx_t *ctx);
 
@@ -347,8 +346,8 @@ int main (int argc, char *argv[])
 
     /* Allow flux_get_rank() and flux_get_size() to work in the broker.
      */
-    if (create_dummyattrs (ctx.h, ctx.rank, ctx.size) < 0) {
-        log_err ("creating dummy attributes");
+    if (attr_cache_immutables (ctx.attrs, ctx.h) < 0) {
+        log_err ("error priming broker attribute cache");
         goto cleanup;
     }
 
@@ -681,29 +680,6 @@ static int create_runat_phases (broker_ctx_t *ctx)
         }
     }
     return 0;
-}
-
-static int create_dummyattrs (flux_t *h, uint32_t rank, uint32_t size)
-{
-    char *rank_str = NULL;
-    char *size_str = NULL;
-    int rc = -1;
-
-    if (asprintf (&rank_str, "%"PRIu32, rank) < 0)
-        goto cleanup;
-    if (flux_attr_set_cacheonly (h, "rank", rank_str) < 0)
-        goto cleanup;
-
-    if (asprintf (&size_str, "%"PRIu32, size) < 0)
-        goto cleanup;
-    if (flux_attr_set_cacheonly (h, "size", size_str) < 0)
-        goto cleanup;
-
-    rc = 0;
-cleanup:
-    free (rank_str);
-    free (size_str);
-    return rc;
 }
 
 static int checkdir (const char *name, const char *path)

@@ -324,6 +324,21 @@ const char *attr_next (attr_t *attrs)
     return e ? e->name : NULL;
 }
 
+int attr_cache_immutables (attr_t *attrs, flux_t *h)
+{
+    struct entry *e;
+
+    e = zhash_first (attrs->hash);
+    while (e) {
+        if ((e->flags & FLUX_ATTRFLAG_IMMUTABLE)) {
+            if (flux_attr_set_cacheonly (h, e->name, e->val) < 0)
+                return -1;
+        }
+        e = zhash_next (attrs->hash);
+    }
+    return 0;
+}
+
 /**
  ** Service
  **/
