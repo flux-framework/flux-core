@@ -16,6 +16,7 @@
 #include <jansson.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libhostlist/hostlist.h"
 
 #include "attr.h"
 #include "rpc.h"
@@ -27,6 +28,8 @@ enum {
 struct attr_cache {
     zhashx_t *cache;        // immutable values
     zhashx_t *temp;         // values that stay valid until next lookup
+
+    struct hostlist *hostlist;
 };
 
 static void attr_cache_destroy (struct attr_cache *c)
@@ -35,6 +38,7 @@ static void attr_cache_destroy (struct attr_cache *c)
         int saved_errno = errno;
         zhashx_destroy (&c->cache);
         zhashx_destroy (&c->temp);
+        hostlist_destroy (c->hostlist);
         free (c);
         errno = saved_errno;
     }
@@ -182,6 +186,30 @@ int flux_get_rank (flux_t *h, uint32_t *rank)
         return -1;
     *rank = strtoul (val, NULL, 10);
     return 0;
+}
+
+const char *flux_get_hostbyrank (flux_t *h, uint32_t rank)
+{
+    struct attr_cache *c;
+    const char *result;
+
+    if (rank == FLUX_NODEID_ANY)
+        return "any";
+    if (rank == FLUX_NODEID_UPSTREAM)
+        return "upstream";
+    if (!(c = get_attr_cache (h)))
+        goto error;
+    if (!c->hostlist) {
+        const char *val;
+        if (!(val = flux_attr_get (h, "hostlist"))
+            || !(c->hostlist = hostlist_decode (val)))
+            goto error;
+    }
+    if (!(result = hostlist_nth (c->hostlist, rank)))
+        goto error;
+    return result;
+error:
+    return "(null)";
 }
 
 /*

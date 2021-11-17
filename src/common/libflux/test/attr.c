@@ -25,12 +25,14 @@ struct entry {
     int flags;
 };
 
+// FLUX_ATTRFLAG_IMMUTABLE = 1
 static struct entry hardwired[] = {
     { .key = "cow",     .val = "moo",   .flags = 1 },
     { .key = "duck",    .val = "quack", .flags = 1 },
     { .key = "chick",   .val = "peep",  .flags = 1  },
     { .key = "fox",     .val = "-",     .flags = 1  },
     { .key = "bear",    .val = "roar",  .flags = 1  },
+    { .key = "hostlist", .val = "foo[0-2]", .flags = 1 },
     { .key = NULL,      .val = NULL,    .flags = 1  },
 };
 
@@ -284,6 +286,23 @@ int main (int argc, char *argv[])
     errno = 0;
     ok (flux_attr_set_cacheonly (h, NULL, "bar") < 0 && errno == EINVAL,
         "flux_attr_set_cacheonly name=NULL fails with EINVAL");
+
+    /* test flux_get_hostbyrank () */
+    ok ((value = flux_get_hostbyrank (NULL, 42)) != NULL
+        && !strcmp (value, "(null)"),
+        "flux_get_hostbyrank h=NULL returns (null)");
+    ok ((value = flux_get_hostbyrank (h, FLUX_NODEID_ANY)) != NULL
+        && !strcmp (value, "any"),
+        "flux_get_hostbyrank FLUX_NODEID_ANY returns any");
+    ok ((value = flux_get_hostbyrank (h, FLUX_NODEID_UPSTREAM)) != NULL
+        && !strcmp (value, "upstream"),
+        "flux_get_hostbyrank FLUX_NODEID_UPSTREAMreturns upstream");
+    ok ((value = flux_get_hostbyrank (h, 2)) != NULL
+        && !strcmp (value, "foo2"),
+        "flux_get_hostbyrank 2 returns foo2");
+    ok ((value = flux_get_hostbyrank (h, 3)) != NULL
+        && !strcmp (value, "(null)"),
+        "flux_get_hostbyrank 3 returns (null)");
 
     test_server_stop (h);
     flux_close (h);
