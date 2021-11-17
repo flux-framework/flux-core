@@ -303,6 +303,23 @@ test_expect_success 'tbon.parent-endpoint can be read on not rank 0' '
 	NUM=`flux start ${ARGS} -s4 flux exec -n flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
 	test $NUM -eq 3
 '
+
+test_expect_success 'hostlist attr is set on size 1 instance' '
+	hn=$(hostname) &&
+	cat >hostlist1.exp <<-EOT &&
+	$hn
+	EOT
+	flux start ${ARGS} flux exec flux getattr hostlist >hostlist1.out &&
+	test_cmp hostlist1.exp hostlist1.out
+'
+test_expect_success 'hostlist attr is set on all ranks of size 4 instance' '
+	flux start ${ARGS} -s4 flux exec flux getattr hostlist
+'
+test_expect_success 'setting hostlist on command line fails' '
+	test_must_fail flux start ${ARGS} -o,-Shostlist=xxx 2>hostlist.err &&
+	grep "failed to set hostlist attribute" hostlist.err
+'
+
 test_expect_success 'flux start (singlton) cleans up rundir' '
 	flux start ${ARGS} \
 		flux getattr rundir >rundir_pmi.out &&
