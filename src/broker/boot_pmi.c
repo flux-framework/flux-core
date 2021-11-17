@@ -401,7 +401,7 @@ done:
     if (!(s = hostlist_encode (hl)))
         goto error;
     if (attr_add (attrs, "hostlist", s, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("attr_add hostlist %s", s);
+        log_err ("failed to set hostlist attribute to PMI-derived value");
         free (s);
         goto error;
     }
