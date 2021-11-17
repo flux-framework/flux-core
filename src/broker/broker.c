@@ -429,7 +429,10 @@ int main (int argc, char *argv[])
      */
     if (ctx.verbose > 1)
         log_msg ("initializing modules");
-    modhash_initialize (ctx.modhash, ctx.h, overlay_get_uuid (ctx.overlay));
+    modhash_initialize (ctx.modhash,
+                        ctx.h,
+                        overlay_get_uuid (ctx.overlay),
+                        ctx.attrs);
 
     /* Configure broker state machine
      */

@@ -28,7 +28,10 @@ typedef void (*module_status_cb_f)(module_t *p, int prev_status, void *arg);
 modhash_t *modhash_create (void);
 void modhash_destroy (modhash_t *mh);
 
-void modhash_initialize (modhash_t *mh, flux_t *h, const char *uuid);
+void modhash_initialize (modhash_t *mh,
+                         flux_t *h,
+                         const char *uuid,
+                         attr_t *attrs);
 
 /* Prepare module at 'path' for starting.
  */
