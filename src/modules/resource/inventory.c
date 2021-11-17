@@ -25,9 +25,10 @@
  * Case 1 (method=configuration)
  * -----------------------------
  * TOML config specifies [resource] path, pointing to R.  R is parsed
- * and is "re-ranked" if the 'config.hostlist' broker attribute defines a
- * different mapping of ranks to hostnames.  (This attribute derives from the
- * [bootstrap] config, which we assume is the definitive mapping).
+ * and is "re-ranked" if the 'hostlist' broker attribute defines a
+ * mapping of ranks to hostnames AND there exists a [bootstrap] config.
+ * (Sys admins are not required to regenerate R when they reassign broker
+ * ranks via [bootstrap]).
  *
  * R is configured on all ranks during resource module load.  On rank 0,
  * resource.R is committed to the KVS, and the resource-define event is
@@ -324,6 +325,22 @@ struct idset *inventory_targets_to_ranks (struct inventory *inv,
     return ids;
 }
 
+/* Test if [bootstrap] table exists in the configuration.
+ * If it does then we can assume that the 'hostlist' attribute was
+ * derived from the TOML config, and may be used to re-rank a configured R.
+ */
+static bool conf_has_bootstrap (flux_t *h)
+{
+    json_t *o;
+
+    if (flux_conf_unpack (flux_get_conf (h),
+                          NULL,
+                          "{s:o}",
+                          "bootstrap", &o) < 0)
+        return false;
+    return true;
+}
+
 static int convert_R_conf (flux_t *h, json_t *conf_R, json_t **Rp)
 {
     json_error_t e;
@@ -336,8 +353,9 @@ static int convert_R_conf (flux_t *h, json_t *conf_R, json_t **Rp)
         errno = EINVAL;
         return -1;
     }
-    if ((hosts = flux_attr_get (h, "config.hostlist"))) {
-        if (rlist_rerank (rl, hosts) < 0) { // sets errno
+    if (conf_has_bootstrap (h)) {
+        if (!(hosts = flux_attr_get (h, "hostlist"))
+            || rlist_rerank (rl, hosts) < 0) { // sets errno
             flux_log (h, LOG_ERR, "error reranking R");
             goto error;
         }

@@ -39,6 +39,9 @@ content.backing-path
    If file exists, its content is imported into the instance.
    If it doesn't exist, it is created.
 
+hostlist
+   An RFC29 hostlist in broker rank order.
+
 
 TOPOLOGY ATTRIBUTES
 ===================
@@ -185,14 +188,6 @@ hello.hwm
    The reduction high water mark for the broker wireup protocol,
    normally calculated based on the topology.
    Set to 0 to disable the high water mark.
-
-
-CONFIG ATTRIBUTES
-=================
-
-config.hostlist
-   The rank-ordered hosts specified in the ``bootstrap`` section of
-   the Flux configuration.  Hosts are listed in RFC29 hostlist format.
 
 
 RESOURCES

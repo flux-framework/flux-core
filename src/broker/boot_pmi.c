@@ -13,7 +13,9 @@
 #endif
 #include <sys/param.h>
 #include <unistd.h>
+#include <jansson.h>
 #include <assert.h>
+#include <flux/hostlist.h>
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/cleanup.h"
@@ -157,6 +159,11 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     int rank;
     char key[64];
     char val[1024];
+    char hostname[MAXHOSTNAMELEN + 1];
+    char *bizcard = NULL;
+    struct hostlist *hl = NULL;
+    json_t *o;
+    char *s;
     struct pmi_handle *pmi;
     struct pmi_params pmi_params;
     int result;
@@ -190,11 +197,24 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
                               pmi_params.size,
                               pmi_params.rank) < 0)
         goto error;
+    if (gethostname (hostname, sizeof (hostname)) < 0) {
+        log_err ("gethostname");
+        goto error;
+    }
+    if (!(hl = hostlist_create ())) {
+        log_err ("hostlist_create");
+        goto error;
+    }
 
     /* A size=1 instance has no peers, so skip the PMI exchange.
      */
-    if (pmi_params.size == 1)
+    if (pmi_params.size == 1) {
+        if (hostlist_append (hl, hostname) < 0) {
+            log_err ("hostlist_append");
+            goto error;
+        }
         goto done;
+    }
 
     /* Enable ipv6 for maximum flexibility in address selection.
      */
@@ -225,24 +245,24 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
         goto error;
     }
 
-    /* Each broker writes a "business card" consisting of (currently):
-     * pubkey[,URI].  The URI and separator are omitted if broker is
-     * a leaf in the TBON and won't be creating its own endpoint.
+    /* Each broker writes a "business card" consisting of hostname,
+     * public key, and URI (empty string for leaf node).
      */
     if (snprintf (key, sizeof (key), "%d", pmi_params.rank) >= sizeof (key)) {
         log_msg ("pmi key string overflow");
         goto error;
     }
-    if (snprintf (val,
-                  sizeof (val),
-                  "%s%s%s",
-                  overlay_cert_pubkey (overlay),
-                  uri ? "," : "",
-                  uri ? uri : "") >= sizeof (val)) {
-        log_msg ("pmi val string overflow");
+    if (!(o = json_pack ("{s:s s:s s:s}",
+                         "hostname", hostname,
+                         "pubkey", overlay_cert_pubkey (overlay),
+                         "uri", uri ? uri : ""))
+        || !(bizcard = json_dumps (o, JSON_COMPACT))) {
+        log_msg ("error encoding pmi business card object");
+        json_decref (o);
         goto error;
     }
-    result = broker_pmi_kvs_put (pmi, pmi_params.kvsname, key, val);
+    json_decref (o);
+    result = broker_pmi_kvs_put (pmi, pmi_params.kvsname, key, bizcard);
     if (result != PMI_SUCCESS) {
         log_msg ("broker_pmi_kvs_put: %s", pmi_strerror (result));
         goto error;
@@ -262,7 +282,8 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
      * and public key.
      */
     if (pmi_params.rank > 0) {
-        char *cp;
+        const char *peer_pubkey;
+        const char *peer_uri;
 
         rank = kary_parentof (fanout, pmi_params.rank);
         if (snprintf (key, sizeof (key), "%d", rank) >= sizeof (key)) {
@@ -275,26 +296,33 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
             log_msg ("broker_pmi_kvs_get %s: %s", key, pmi_strerror (result));
             goto error;
         }
-        if ((cp = strchr (val, ',')))
-            *cp++ = '\0';
-        if (!cp) {
-            log_msg ("rank %d business card has no URI", rank);
+        if (!(o = json_loads (val, 0, NULL))
+            || json_unpack (o,
+                            "{s:s s:s}",
+                            "pubkey", &peer_pubkey,
+                            "uri", &peer_uri) < 0
+            || strlen (peer_uri) == 0) {
+            log_msg ("error decoding rank %d business card", rank);
+            json_decref (o);
             goto error;
         }
-        if (overlay_set_parent_uri (overlay, cp) < 0) {
+        if (overlay_set_parent_uri (overlay, peer_uri) < 0) {
             log_err ("overlay_set_parent_uri");
+            json_decref (o);
             goto error;
         }
-        if (overlay_set_parent_pubkey (overlay, val) < 0) {
+        if (overlay_set_parent_pubkey (overlay, peer_pubkey) < 0) {
             log_err ("overlay_set_parent_pubkey");
+            json_decref (o);
             goto error;
         }
+        json_decref (o);
     }
 
     /* Fetch the business card of children and inform overlay of public keys.
      */
     for (i = 0; i < fanout; i++) {
-        char *cp;
+        const char *peer_pubkey;
 
         rank = kary_childof (fanout, pmi_params.size, pmi_params.rank, i);
         if (rank == KARY_NONE)
@@ -310,12 +338,49 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
             log_msg ("broker_pmi_kvs_get %s: %s", key, pmi_strerror (result));
             goto error;
         }
-        if ((cp = strchr (val, ',')))
-            *cp = '\0';
-        if (overlay_authorize (overlay, key, val) < 0) {
-            log_err ("overlay_authorize %s=%s", key, val);
+        if (!(o = json_loads (val, 0, NULL))
+            || json_unpack (o, "{s:s}", "pubkey", &peer_pubkey) < 0) {
+            log_msg ("error decoding rank %d business card", rank);
+            json_decref (o);
             goto error;
         }
+        if (overlay_authorize (overlay, key, peer_pubkey) < 0) {
+            log_err ("overlay_authorize %s=%s", key, peer_pubkey);
+            json_decref (o);
+            goto error;
+        }
+        json_decref (o);
+    }
+
+    /* Fetch the business card of all ranks and build hostlist.
+     * The hostlist is built indepenedently (and in parallel) on all ranks.
+     */
+    for (i = 0; i < pmi_params.size; i++) {
+        const char *peer_hostname;
+
+        if (snprintf (key, sizeof (key), "%d", i) >= sizeof (key)) {
+            log_msg ("pmi key string overflow");
+            goto error;
+        }
+        result = broker_pmi_kvs_get (pmi, pmi_params.kvsname,
+                                     key, val, sizeof (val), i);
+
+        if (result != PMI_SUCCESS) {
+            log_msg ("broker_pmi_kvs_get %s: %s", key, pmi_strerror (result));
+            goto error;
+        }
+        if (!(o = json_loads (val, 0, NULL))
+            || json_unpack (o, "{s:s}", "hostname", &peer_hostname) < 0) {
+            log_msg ("error decoding rank %d pmi business card", i);
+            json_decref (o);
+            goto error;
+        }
+        if (hostlist_append (hl, peer_hostname) < 0) {
+            log_err ("hostlist_append");
+            json_decref (o);
+            goto error;
+        }
+        json_decref (o);
     }
 
     /* One more barrier before allowing connects to commence.
@@ -333,11 +398,22 @@ done:
         log_msg ("broker_pmi_finalize: %s", pmi_strerror (result));
         goto error;
     }
-
+    if (!(s = hostlist_encode (hl)))
+        goto error;
+    if (attr_add (attrs, "hostlist", s, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+        log_err ("attr_add hostlist %s", s);
+        free (s);
+        goto error;
+    }
+    free (s);
+    free (bizcard);
     broker_pmi_destroy (pmi);
+    hostlist_destroy (hl);
     return 0;
 error:
+    free (bizcard);
     broker_pmi_destroy (pmi);
+    hostlist_destroy (hl);
     return -1;
 }
 
