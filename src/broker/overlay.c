@@ -963,7 +963,10 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
                 logdrop (ov, OVERLAY_UPSTREAM, msg, "malformed keepalive");
             }
             else if (ktype == KEEPALIVE_DISCONNECT) {
-                flux_log (ov->h, LOG_ERR, "parent disconnect");
+                flux_log (ov->h, LOG_CRIT,
+                          "%s (rank %lu) sent disconnect control message",
+                          flux_get_hostbyrank (ov->h, ov->parent.rank),
+                          (unsigned long)ov->parent.rank);
                 (void)zsock_disconnect (ov->parent.zsock, "%s", ov->parent.uri);
                 ov->parent.offline = true;
                 rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
