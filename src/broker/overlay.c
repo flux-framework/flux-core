@@ -374,7 +374,8 @@ void overlay_log_idle_children (struct overlay *ov)
                     if (!child->idle) {
                         flux_log (ov->h,
                                   LOG_ERR,
-                                  "child %lu idle for %s",
+                        "broker on %s (rank %lu) has been unresponsive for %s",
+                                  flux_get_hostbyrank (ov->h, child->rank),
                                   (unsigned long)child->rank,
                                   fsd);
                         child->idle = true;
@@ -384,7 +385,8 @@ void overlay_log_idle_children (struct overlay *ov)
                     if (child->idle) {
                         flux_log (ov->h,
                                   LOG_ERR,
-                                  "child %lu no longer idle",
+                                  "broker on %s (rank %lu) is responsive now",
+                                  flux_get_hostbyrank (ov->h, child->rank),
                                   (unsigned long)child->rank);
                         child->idle = false;
                     }
