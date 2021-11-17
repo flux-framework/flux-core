@@ -164,6 +164,8 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
     struct jobinfo *job = arg;
     flux_cmd_t *cmd = flux_subprocess_get_cmd (p);
     int errnum = flux_subprocess_fail_errno (p);
+    int rank = flux_subprocess_rank (p);
+    const char *hostname = flux_get_hostbyrank (job->h, rank);
 
     /*  cmd may be NULL here if exec implementation failed to
      *   create flux_cmd_t
@@ -179,15 +181,17 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
 
         jobinfo_fatal_error (job,
                              errnum,
-                             "%s on broker rank %d",
+                             "%s on broker %s (rank %d)",
                              errmsg,
-                             flux_subprocess_rank (p));
+                             hostname,
+                             rank);
     }
     else
         jobinfo_fatal_error (job,
                              flux_subprocess_fail_errno (p),
-                             "job shell exec error on rank %d",
-                             flux_subprocess_rank (p));
+                             "job shell exec error on %s (rank %d)",
+                             hostname,
+                             rank);
 }
 
 static struct bulk_exec_ops exec_ops = {
