@@ -760,6 +760,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
 
         #  dictionary of open logfiles for --log, --log-stderr:
         self._logfiles = {}
+        self.t0 = None
 
         super().__init__()
         self.parser.add_argument(
@@ -866,6 +867,14 @@ class SubmitBulkCmd(SubmitBaseCmd):
         self.progress_update(jobinfo, event=event)
         if event is None:
             return
+
+        # Capture first timestamp if not already set
+        if not self.t0 or event.timestamp < self.t0:
+            self.t0 = event.timestamp
+        if args.verbose > 2:
+            ts = event.timestamp - self.t0
+            print(f"{jobid}: {ts:.3f}s {event.name}", file=sys.stderr)
+
         if args.wait and args.wait == event.name:
             # Done with this job: update progress bar if necessary
             #  and cancel future
