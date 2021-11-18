@@ -211,7 +211,14 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         }
     }
     else if (!strcmp (type, "reattached")) {
-        /* nothing to do yet */
+        if ((job->flags & FLUX_JOB_DEBUG)) {
+            if (event_job_post_pack (ctx->event,
+                                     job,
+                                     "debug.exec-reattach-finish",
+                                     0,
+                                     NULL) < 0)
+                goto error_post;
+        }
     }
     else if (!strcmp (type, "release")) {
         const char *idset;
