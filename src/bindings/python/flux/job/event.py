@@ -112,10 +112,16 @@ class JobEventWatchFuture(Future):
             self.reset()
         return event
 
-    def cancel(self):
-        """Cancel a streaming job.event_watch_async() future"""
+    def cancel(self, stop=False):
+        """Cancel a streaming job.event_watch_async() future
+
+        If stop=True, then deactivate the multi-response future so no
+        further callbacks are called.
+        """
         RAW.event_watch_cancel(self.pimpl)
         self.needs_cancel = False
+        if stop:
+            self.stop()
 
 
 def event_watch_async(flux_handle, jobid, eventlog="eventlog"):
