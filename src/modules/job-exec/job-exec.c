@@ -26,7 +26,7 @@
  *
  * JOB INIT:
  *
- * On reciept of a start request, the exec service enters initialization
+ * On receipt of a start request, the exec service enters initialization
  * phase of the job, where the jobspec and R are fetched from the KVS,
  * and the guest namespace is created and linked from the primary
  * namespace. A guest.exec.eventlog is created with an initial "init"
