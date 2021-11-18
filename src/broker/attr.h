@@ -80,6 +80,10 @@ int attr_add_active_uint32 (attr_t *attrs, const char *name, uint32_t *val,
 const char *attr_first (attr_t *attrs);
 const char *attr_next (attr_t *attrs);
 
+/* Cache all immutable attributes present in attrs at this point in time.
+ */
+int attr_cache_immutables (attr_t *attrs, flux_t *h);
+
 #endif /* BROKER_ATTR_H */
 
 /*

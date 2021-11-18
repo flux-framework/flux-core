@@ -249,8 +249,8 @@ test_expect_success 'flux-start dies gracefully when run from removed dir' '
 # too slow under ASAN
 test_expect_success NO_ASAN 'test_under_flux works' '
 	echo >&2 "$(pwd)" &&
-        mkdir -p test-under-flux && (
-        cd test-under-flux &&
+	mkdir -p test-under-flux && (
+	cd test-under-flux &&
 	SHARNESS_TEST_DIRECTORY=`pwd` &&
 	export SHARNESS_TEST_SRCDIR SHARNESS_TEST_DIRECTORY FLUX_BUILD_DIR debug &&
 	run_timeout 10 "$SHARNESS_TEST_SRCDIR"/test-under-flux/test.t --verbose --debug >out 2>err
@@ -259,8 +259,8 @@ test_expect_success NO_ASAN 'test_under_flux works' '
 '
 
 test_expect_success NO_ASAN 'test_under_flux fails if loaded modules are not unloaded' '
-        mkdir -p test-under-flux && (
-        cd test-under-flux &&
+	mkdir -p test-under-flux && (
+	cd test-under-flux &&
 	SHARNESS_TEST_DIRECTORY=`pwd` &&
 	export SHARNESS_TEST_SRCDIR SHARNESS_TEST_DIRECTORY FLUX_BUILD_DIR debug &&
 	test_expect_code 1 "$SHARNESS_TEST_SRCDIR"/test-under-flux/t_modcheck.t 2>err.modcheck \
@@ -300,9 +300,26 @@ test_expect_success 'tbon.parent-endpoint cannot be read on rank 0' '
 	test_must_fail flux start ${ARGS} -s2 flux getattr tbon.parent-endpoint
 '
 test_expect_success 'tbon.parent-endpoint can be read on not rank 0' '
-       NUM=`flux start ${ARGS} -s4 flux exec -n flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
-       test $NUM -eq 3
+	NUM=`flux start ${ARGS} -s4 flux exec -n flux getattr tbon.parent-endpoint | grep ipc | wc -l` &&
+	test $NUM -eq 3
 '
+
+test_expect_success 'hostlist attr is set on size 1 instance' '
+	hn=$(hostname) &&
+	cat >hostlist1.exp <<-EOT &&
+	$hn
+	EOT
+	flux start ${ARGS} flux exec flux getattr hostlist >hostlist1.out &&
+	test_cmp hostlist1.exp hostlist1.out
+'
+test_expect_success 'hostlist attr is set on all ranks of size 4 instance' '
+	flux start ${ARGS} -s4 flux exec flux getattr hostlist
+'
+test_expect_success 'setting hostlist on command line fails' '
+	test_must_fail flux start ${ARGS} -o,-Shostlist=xxx 2>hostlist.err &&
+	grep "failed to set hostlist attribute" hostlist.err
+'
+
 test_expect_success 'flux start (singlton) cleans up rundir' '
 	flux start ${ARGS} \
 		flux getattr rundir >rundir_pmi.out &&
@@ -499,30 +516,30 @@ test_expect_success 'flux-help command can display manpages for api calls' '
 '
 missing_man_code()
 {
-        man notacommand >/dev/null 2>&1
-        echo $?
+	man notacommand >/dev/null 2>&1
+	echo $?
 }
 test_expect_success 'flux-help returns nonzero exit code from man(1)' '
-        test_expect_code $(missing_man_code) \
-                         eval FLUX_IGNORE_NO_DOCS=y flux help notacommand
+	test_expect_code $(missing_man_code) \
+		eval FLUX_IGNORE_NO_DOCS=y flux help notacommand
 '
 test_expect_success 'flux appends colon to missing or unset MANPATH' '
-      (unset MANPATH && flux /usr/bin/printenv | grep "MANPATH=.*:$") &&
-      MANPATH= flux /usr/bin/printenv | grep "MANPATH=.*:$"
+	(unset MANPATH && flux /usr/bin/printenv | grep "MANPATH=.*:$") &&
+	MANPATH= flux /usr/bin/printenv | grep "MANPATH=.*:$"
 '
 test_expect_success 'flux deduplicates FLUX_RC_EXTRA & FLUX_SHELL_RC_PATH' '
-    FLUX_RC_EXTRA=/foo:/bar:/foo \
-        flux /usr/bin/printenv FLUX_RC_EXTRA | grep "^/foo:/bar$" &&
-    FLUX_SHELL_RC_PATH=/foo:/bar:/foo \
-        flux /usr/bin/printenv FLUX_SHELL_RC_PATH | grep "^/foo:/bar$"
+	FLUX_RC_EXTRA=/foo:/bar:/foo \
+		flux /usr/bin/printenv FLUX_RC_EXTRA | grep "^/foo:/bar$" &&
+	FLUX_SHELL_RC_PATH=/foo:/bar:/foo \
+		flux /usr/bin/printenv FLUX_SHELL_RC_PATH | grep "^/foo:/bar$"
 '
 test_expect_success 'builtin test_size_large () works' '
-    size=$(test_size_large)  &&
-    test -n "$size" &&
-    size=$(FLUX_TEST_SIZE_MAX=2 test_size_large) &&
-    test "$size" = "2" &&
-    size=$(FLUX_TEST_SIZE_MIN=12345 FLUX_TEST_SIZE_MAX=23456 test_size_large) &&
-    test "$size" = "12345"
+	size=$(test_size_large)  &&
+	test -n "$size" &&
+	size=$(FLUX_TEST_SIZE_MAX=2 test_size_large) &&
+	test "$size" = "2" &&
+	size=$(FLUX_TEST_SIZE_MIN=12345 FLUX_TEST_SIZE_MAX=23456 test_size_large) &&
+	test "$size" = "12345"
 '
 
 waitfile=${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua
@@ -552,7 +569,7 @@ test_expect_success 'scripts/waitfile works after 1s' '
 	-- Wait 250ms and create file, at .5s write a line, at 1.1s write pattern:
 	f:timer{ timeout = 250,
 	         handler = function () tf = io.open ("waitfile.test.3", "w") end
-               }
+	       }
 	f:timer{ timeout = 500,
 	         handler = function () tf:write ("line one"); tf:flush()  end
 	       }
@@ -570,9 +587,9 @@ test_expect_success 'instance can stop cleanly with subscribers (#1025)' '
 
 # test for issue #1191
 test_expect_success 'passing NULL to flux_log functions logs to stderr (#1191)' '
-        ${FLUX_BUILD_DIR}/t/loop/logstderr > std.out 2> std.err &&
-        grep "warning: hello" std.err &&
-        grep "err: world: No such file or directory" std.err
+	${FLUX_BUILD_DIR}/t/loop/logstderr > std.out 2> std.err &&
+	grep "warning: hello" std.err &&
+	grep "err: world: No such file or directory" std.err
 '
 
 # tests for issue #3925
@@ -665,11 +682,11 @@ terminus \
 
 test_cmd_help ()
 {
-    local rc=0
-    for cmd in ${CMDS}; do
-        flux ${cmd} --help 2>&1 | grep -i usage || rc=1
-    done
-    return ${rc}
+	local rc=0
+	for cmd in ${CMDS}; do
+		flux ${cmd} --help 2>&1 | grep -i usage || rc=1
+	done
+	return ${rc}
 }
 
 KVS_SUBCMDS="\
@@ -679,17 +696,17 @@ eventlog \
 
 test_kvs_subcmd_help ()
 {
-    local rc=0
-    for subcmd in ${KVS_SUBCMDS}; do
-        flux kvs ${subcmd} --help 2>&1 | grep -i usage || rc=1
-    done
-    return ${rc}
+	local rc=0
+	for subcmd in ${KVS_SUBCMDS}; do
+		flux kvs ${subcmd} --help 2>&1 | grep -i usage || rc=1
+	done
+	return ${rc}
 }
 
 test_expect_success 'command --help works outside of flux instance' '
-        flux --help 2>&1 | grep -i usage &&
-        test_cmd_help &&
-        test_kvs_subcmd_help
+	flux --help 2>&1 | grep -i usage &&
+	test_cmd_help &&
+	test_kvs_subcmd_help
 '
 
 # Note: flux-start auto-removes rundir

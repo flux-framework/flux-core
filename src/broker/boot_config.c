@@ -280,7 +280,7 @@ int boot_config_attr (attr_t *attrs, json_t *hosts)
                   "hostlist",
                   s,
                   FLUX_ATTRFLAG_IMMUTABLE) < 0) {
-        log_err ("attr_add hostlist %s", s);
+        log_err ("failed to set hostlist attribute to config derived value");
         goto error;
     }
 

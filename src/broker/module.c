@@ -80,6 +80,7 @@ struct modhash {
     zhash_t *zh_byuuid;
     uint32_t rank;
     flux_t *broker_h;
+    attr_t *attrs;
     char uuid_str[UUID_STR_LEN];
 };
 
@@ -136,7 +137,6 @@ static void *module_thread (void *arg)
     int errnum;
     char *uri = NULL;
     char **av = NULL;
-    const char *rankstr;
     int ac;
     int mod_main_errno = 0;
     flux_msg_t *msg;
@@ -154,9 +154,8 @@ static void *module_thread (void *arg)
         log_err ("flux_open %s", uri);
         goto done;
     }
-    if (!(rankstr = flux_attr_get (p->modhash->broker_h, "rank"))
-        || flux_attr_set_cacheonly (p->h, "rank", rankstr) < 0) {
-        log_err ("%s: error duplicating rank attribute", p->name);
+    if (attr_cache_immutables (p->modhash->attrs, p->h) < 0) {
+        log_err ("%s: error priming broker attribute cache", p->name);
         goto done;
     }
     flux_log_set_appname (p->h, p->name);
@@ -686,9 +685,13 @@ void modhash_destroy (modhash_t *mh)
     errno = saved_errno;
 }
 
-void modhash_initialize (modhash_t *mh, flux_t *h, const char *uuid)
+void modhash_initialize (modhash_t *mh,
+                         flux_t *h,
+                         const char *uuid,
+                         attr_t *attrs)
 {
     mh->broker_h = h;
+    mh->attrs = attrs;
     flux_get_rank (h, &mh->rank);
     strncpy (mh->uuid_str, uuid, sizeof (mh->uuid_str) - 1);
 }

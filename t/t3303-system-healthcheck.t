@@ -65,11 +65,6 @@ test_expect_success 'flux overlay status --hostnames works on PMI instance' '
 	flux start flux overlay status -vvv --hostnames
 '
 
-test_expect_success 'flux overlay status --hostnames fails on bad hostlist' '
-	test_must_fail flux start -o,-Shostlist="[-badlist" \
-		flux overlay status -vvv --hostnames
-'
-
 test_expect_success 'overlay status is full' '
 	test "$(flux overlay status)" = "full"
 '

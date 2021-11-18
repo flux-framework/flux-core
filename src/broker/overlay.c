@@ -374,7 +374,8 @@ void overlay_log_idle_children (struct overlay *ov)
                     if (!child->idle) {
                         flux_log (ov->h,
                                   LOG_ERR,
-                                  "child %lu idle for %s",
+                        "broker on %s (rank %lu) has been unresponsive for %s",
+                                  flux_get_hostbyrank (ov->h, child->rank),
                                   (unsigned long)child->rank,
                                   fsd);
                         child->idle = true;
@@ -384,7 +385,8 @@ void overlay_log_idle_children (struct overlay *ov)
                     if (child->idle) {
                         flux_log (ov->h,
                                   LOG_ERR,
-                                  "child %lu no longer idle",
+                                  "broker on %s (rank %lu) is responsive now",
+                                  flux_get_hostbyrank (ov->h, child->rank),
                                   (unsigned long)child->rank);
                         child->idle = false;
                     }
@@ -961,7 +963,10 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
                 logdrop (ov, OVERLAY_UPSTREAM, msg, "malformed keepalive");
             }
             else if (ktype == KEEPALIVE_DISCONNECT) {
-                flux_log (ov->h, LOG_ERR, "parent disconnect");
+                flux_log (ov->h, LOG_CRIT,
+                          "%s (rank %lu) sent disconnect control message",
+                          flux_get_hostbyrank (ov->h, ov->parent.rank),
+                          (unsigned long)ov->parent.rank);
                 (void)zsock_disconnect (ov->parent.zsock, "%s", ov->parent.uri);
                 ov->parent.offline = true;
                 rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
@@ -1014,6 +1019,7 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     int version;
     const char *errmsg = NULL;
     char errbuf[128];
+    const char *reason = "";
     flux_msg_t *response;
     const char *uuid;
     int status;
@@ -1036,6 +1042,7 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
                   (unsigned long)ov->parent.rank);
         errmsg = errbuf;
         errno = EINVAL;
+        reason = "not a peer of this broker - mismatched config?";
         goto error_log;
     }
     /* Oops, child was previously online, but is now saying hello.
@@ -1044,7 +1051,8 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
      */
     if (subtree_is_online (child->status)) { // crash
         flux_log (ov->h, LOG_ERR,
-                  "rank %lu uuid %s lost, to be superceded by new hello",
+                  "%s (rank %lu) reconnected after crash, dropping old uuid %s",
+                  flux_get_hostbyrank (ov->h, child->rank),
                   (unsigned long)child->rank,
                   child->uuid);
         overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
@@ -1054,6 +1062,7 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     if (!version_check (version, ov->version, errbuf, sizeof (errbuf))) {
         errmsg = errbuf;
         errno = EINVAL;
+        reason = "flux-core version mismatch - needs software update?";
         goto error_log;
     }
 
@@ -1062,7 +1071,8 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
 
     flux_log (ov->h,
               hello_log_level,
-              "hello from rank %lu uuid %s status %s",
+              "accepting connection from %s (rank %lu) uuid %s status %s",
+              flux_get_hostbyrank (ov->h, child->rank),
               (unsigned long)child->rank,
               child->uuid,
               subtree_status_str (child->status));
@@ -1074,9 +1084,12 @@ static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg)
     flux_msg_destroy (response);
     return;
 error_log:
-    flux_log (ov->h, LOG_ERR, "overlay hello child %lu %s rejected",
+    flux_log (ov->h, LOG_ERR,
+              "rejecting connection from %s (rank %lu) uuid %s: %s",
+              flux_get_hostbyrank (ov->h, rank),
               (unsigned long)rank,
-              uuid);
+              uuid,
+              reason);
 error:
     if (!(response = flux_response_derive (msg, errno))
         || (errmsg && flux_msg_set_string (response, errmsg) < 0)

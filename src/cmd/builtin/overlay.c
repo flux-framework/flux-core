@@ -22,11 +22,6 @@
 
 #include "builtin.h"
 
-/* Wait a short time for resource.R to appear in the KVS
- * if we need it to map hostnames to ranks.
- */
-static const double resource_timeout = 2.0;
-
 static const char *ansi_default = "\033[39m";
 static const char *ansi_red = "\033[31m";
 static const char *ansi_yellow = "\033[33m";
@@ -124,48 +119,16 @@ static json_t *get_topology (flux_t *h)
     return overlay_topology;
 }
 
-/* Fetch hostmap from the KVS.
- * Use the WAITCREATE flag in case the resource inventory is being
- * dynamically discovered, but do it under a relatively short timeout.
- */
-static struct hostlist *get_hostmap_R (flux_t *h)
-{
-    flux_future_t *f;
-    const char *R;
-    struct rlist *rl;
-    struct hostlist *hl;
-
-    if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WAITCREATE, "resource.R"))
-        || flux_future_wait_for (f, resource_timeout) < 0
-        || flux_kvs_lookup_get (f, &R) < 0
-        || !(rl = rlist_from_R (R))
-        || !(hl = rlist_nodelist (rl)))
-        log_err_exit ("error fetching resource.R from KVS");
-    rlist_destroy (rl);
-    flux_future_destroy (f);
-    return hl;
-}
-
-static struct hostlist *get_hostmap_attr (flux_t *h)
-{
-    const char *s;
-    struct hostlist *hl;
-
-    if (!(s = flux_attr_get (h, "hostlist"))) {
-        if (errno != ENOENT)
-            log_err_exit ("error fetching hostlist attribute");
-        return NULL;
-    }
-    if (!(hl = hostlist_decode (s)))
-        log_err_exit ("hostlist value could not be decoded");
-    return hl;
-}
-
 static struct hostlist *get_hostmap (flux_t *h)
 {
     if (!overlay_hostmap) {
-        if (!(overlay_hostmap = get_hostmap_attr (h)))
-            overlay_hostmap = get_hostmap_R (h);
+        const char *s;
+        struct hostlist *hl;
+
+        if (!(s = flux_attr_get (h, "hostlist"))
+            || !(hl = hostlist_decode (s)))
+            log_err_exit ("could not fetch/decode hostlist");
+        overlay_hostmap = hl;
     }
     return overlay_hostmap;
 }

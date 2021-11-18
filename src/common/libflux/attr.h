@@ -61,6 +61,11 @@ int flux_get_rank (flux_t *h, uint32_t *rank);
  */
 int flux_get_size (flux_t *h, uint32_t *size);
 
+/* Look up hostname of broker rank, by consulting "hostlist" attribute.
+ * This function always returns a printable string, though it may be "(null)".
+ */
+const char *flux_get_hostbyrank (flux_t *h, uint32_t rank);
+
 #ifdef __cplusplus
 }
 #endif
