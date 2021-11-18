@@ -241,6 +241,7 @@ class Xcmd:
         "log": "--log=",
         "log_stderr": "--log-stderr=",
         "dependency": "--dependency=",
+        "wait": "--wait-event=",
     }
 
     class Xinput:
@@ -781,9 +782,17 @@ class SubmitBulkCmd(SubmitBaseCmd):
             help="Like --cc, but FLUX_JOB_CC is not set",
         )
         self.parser.add_argument(
+            "--wait-event",
+            metavar="NAME",
+            dest="wait",
+            help="Wait for event NAME for all jobs after submission",
+        )
+        self.parser.add_argument(
             "--wait",
-            action="store_true",
-            help="Wait for all jobs to complete after submission",
+            action="store_const",
+            const="clean",
+            help="Wait for all jobs to complete after submission "
+            "(same as --wait-event=clean)",
         )
         self.parser.add_argument(
             "--watch",
@@ -857,6 +866,12 @@ class SubmitBulkCmd(SubmitBaseCmd):
         self.progress_update(jobinfo, event=event)
         if event is None:
             return
+        if args.wait and args.wait == event.name:
+            # Done with this job: update progress bar if necessary
+            #  and cancel future
+            #
+            self.progress_update(jobinfo, event=None)
+            future.cancel(stop=True)
         if event.name == "exception":
             #
             #  Handle an exception: update global exitcode and print
