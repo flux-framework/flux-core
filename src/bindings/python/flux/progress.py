@@ -294,6 +294,7 @@ class ProgressBar(Bottombar):
         length = width - len(before) - len(after) - 2
 
         #  Calculate amount of bar fully filled and buil string
+        fraction = min(fraction, 1.0)
         fill = int(length * fraction)
         filled = style[-1] * fill
 
