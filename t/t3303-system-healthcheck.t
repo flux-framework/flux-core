@@ -61,10 +61,6 @@ test_expect_success 'flux overlay fails on bad subcommand' '
 	test_must_fail flux overlay notcommand
 '
 
-test_expect_success 'flux overlay status --hostnames works on PMI instance' '
-	flux start flux overlay status -vvv --hostnames
-'
-
 test_expect_success 'overlay status is full' '
 	test "$(flux overlay status)" = "full"
 '
@@ -91,11 +87,11 @@ test_expect_success HAVE_JQ 'wait for rank 1 to lose connection with rank 3' '
 '
 
 test_expect_success 'flux overlay status -vv and gaudy options works' '
-	flux overlay status -vv --pretty --times --hostnames --ghost
+	flux overlay status -vv --pretty --times --ghost
 '
 
 test_expect_success 'flux overlay status -v shows rank 3 offline' '
-	echo "3: offline" >health_v.exp &&
+	echo "3 fake3: offline" >health_v.exp &&
 	flux overlay status -v >health_v.out &&
 	test_cmp health_v.exp health_v.out
 '
@@ -114,9 +110,9 @@ test_expect_success 'flux overlay status -vvv --ghost --color' '
 
 test_expect_success 'flux overlay status -vv: 0,1:partial, 3:offline' '
 	cat >health_vv.exp <<-EOT &&
-	0: partial
-	1: partial
-	3: offline
+	0 fake0: partial
+	1 fake1: partial
+	3 fake3: offline
 	EOT
 	flux overlay status -vv >health_vv.out &&
 	test_cmp health_vv.exp health_vv.out
@@ -124,11 +120,11 @@ test_expect_success 'flux overlay status -vv: 0,1:partial, 3:offline' '
 
 test_expect_success 'flux overlay status -vvg: 0-1:partial, 3,7-8:offline' '
 	cat >health_vvg.exp <<-EOT &&
-	0: partial
-	1: partial
-	3: offline
-	7: offline
-	8: offline
+	0 fake0: partial
+	1 fake1: partial
+	3 fake3: offline
+	7 fake7: offline
+	8 fake8: offline
 	EOT
 	flux overlay status -vvg >health_vvg.out &&
 	test_cmp health_vvg.exp health_vvg.out
@@ -136,21 +132,21 @@ test_expect_success 'flux overlay status -vvg: 0-1:partial, 3,7-8:offline' '
 
 test_expect_success 'flux overlay status -vvvg: 0,1:partial, 3,7-8:offline, rest:full' '
 	cat >health_vvvg.exp <<-EOT &&
-	0: partial
-	1: partial
-	3: offline
-	7: offline
-	8: offline
-	4: full
-	9: full
-	10: full
-	2: full
-	5: full
-	11: full
-	12: full
-	6: full
-	13: full
-	14: full
+	0 fake0: partial
+	1 fake1: partial
+	3 fake3: offline
+	7 fake7: offline
+	8 fake8: offline
+	4 fake4: full
+	9 fake9: full
+	10 fake10: full
+	2 fake2: full
+	5 fake5: full
+	11 fake11: full
+	12 fake12: full
+	6 fake6: full
+	13 fake13: full
+	14 fake14: full
 	EOT
 	flux overlay status -vvvg >health_vvvg.out &&
 	test_cmp health_vvvg.exp health_vvvg.out

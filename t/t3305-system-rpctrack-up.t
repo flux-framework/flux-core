@@ -96,7 +96,7 @@ test_expect_success 'report health status' '
 	flux overlay status -vvv --pretty --ghost --color
 '
 test_expect_success 'health status for rank 6 is lost' '
-	echo "6: lost" >status.exp &&
+	echo "6 fake6: lost" >status.exp &&
 	flux overlay status -v >status.out &&
 	test_cmp status.exp status.out
 '

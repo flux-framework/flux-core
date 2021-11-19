@@ -42,9 +42,6 @@ static struct optparse_option status_opts[] = {
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "FSD",
       .usage = "Set RPC timeout (default none)",
     },
-    { .name = "hostnames", .key = 'H', .has_arg = 0,
-      .usage = "Display hostnames instead of ranks",
-    },
     { .name = "times", .key = 'T', .has_arg = 0,
       .usage = "Show round trip RPC times",
     },
@@ -184,22 +181,17 @@ static const char *status_indent (struct status *ctx, int n)
     return buf;
 }
 
-/* Return string containing the "best" name for node.
- * If --hostnames, look up the hostname.
- * Otherwise, just make a string out of the rank.
+/* Return string containing hostname and rank.
  */
 static const char *status_getname (struct status *ctx, int rank)
 {
     static char buf[128];
-    struct hostlist *hl;
-    const char *s;
 
-    if (optparse_hasopt (ctx->opt, "hostnames")
-        && (hl = get_hostmap (ctx->h))
-        && (s = hostlist_nth (hl, rank)) != NULL)
-        snprintf (buf, sizeof (buf), "%s", s);
-    else
-        snprintf (buf, sizeof (buf), "%d", rank);
+    snprintf (buf,
+              sizeof (buf),
+              "%d %s",
+              rank,
+              flux_get_hostbyrank (ctx->h, rank));
     return buf;
 }
 
