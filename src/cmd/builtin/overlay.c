@@ -36,28 +36,29 @@ static struct optparse_option status_opts[] = {
       .usage = "Check health of subtree rooted at NODEID (default 0)",
     },
     { .name = "verbose", .key = 'v', .has_arg = 2, .arginfo = "[LEVEL]",
-      .usage = "Increase reporting detail"
-               " (1=lost/offline nodes, 2=degraded/partial trees, 3=full)",
+      .usage = "Increase reporting detail:"
+               " 1=show time since current state was entered,"
+               " 2=show round-trip RPC times."
     },
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "FSD",
       .usage = "Set RPC timeout (default none)",
     },
-    { .name = "times", .key = 'T', .has_arg = 0,
-      .usage = "Show round trip RPC times",
+    { .name = "summary", .has_arg = 0,
+      .usage = "Show only the root subtree status."
     },
-    { .name = "pretty", .key = 'p', .has_arg = 0,
-      .usage = "Indent entries and use line drawing characters"
+    { .name = "down", .has_arg = 0,
+      .usage = "Show only the partial/degraded subtrees."
+    },
+    { .name = "no-pretty", .has_arg = 0,
+      .usage = "Do not indent entries and use line drawing characters"
                " to show overlay tree structure",
     },
-    { .name = "ghost", .key = 'g', .has_arg = 0,
-      .usage = "Fill in presumed state of nodes that are"
+    { .name = "no-ghost", .has_arg = 0,
+      .usage = "Do not fill in presumed state of nodes that are"
                " inaccessible behind offline/lost overlay parents",
     },
-    { .name = "color", .key = 'c', .has_arg = 0,
-      .usage = "Use color to highlight offline/lost nodes",
-    },
-    { .name = "since", .key = 's', .has_arg = 0,
-      .usage = "Show time since current state was entered",
+    { .name = "no-color", .has_arg = 0,
+      .usage = "Do not use color to highlight offline/lost nodes",
     },
     { .name = "wait", .key = 'w', .has_arg = 1, .arginfo = "STATE",
       .usage = "Wait until subtree enters STATE before reporting"
@@ -135,7 +136,7 @@ static const char *status_duration (struct status *ctx, double since)
     char dbuf[128];
     static char buf[256];
 
-    if (!optparse_hasopt (ctx->opt, "since")
+    if (ctx->verbose < 1
         || since <= 0.
         || fsd_format_duration (dbuf, sizeof (dbuf), since) < 0)
         return "";
@@ -149,7 +150,7 @@ static const char *status_colorize (struct status *ctx,
 {
     static char buf[128];
 
-    if (optparse_hasopt (ctx->opt, "color")) {
+    if (!optparse_hasopt (ctx->opt, "no-color")) {
         if (streq (status, "lost") && !ghost) {
             snprintf (buf, sizeof (buf), "%s%s%s",
                       ansi_red, status, ansi_default);
@@ -172,7 +173,7 @@ static const char *status_colorize (struct status *ctx,
 static const char *status_indent (struct status *ctx, int n)
 {
     static char buf[1024];
-    if (!optparse_hasopt (ctx->opt, "pretty") || n == 0)
+    if (optparse_hasopt (ctx->opt, "no-pretty") || n == 0)
         return "";
     snprintf (buf, sizeof (buf), "%*s%s%s%s", n - 1, "",
               vt100_mode_line,
@@ -202,7 +203,7 @@ static const char *status_getname (struct status *ctx, int rank)
 static const char *status_rpctime (struct status *ctx)
 {
     static char buf[64];
-    if (!optparse_hasopt (ctx->opt, "times"))
+    if (ctx->verbose < 2)
         return "";
     snprintf (buf, sizeof (buf), " (%.3f ms)", monotime_since (ctx->start));
     return buf;
@@ -244,7 +245,7 @@ static json_t *topo_lookup (struct status *ctx,
     flux_future_t *f;
     json_t *topo;
 
-    if (!optparse_hasopt (ctx->opt, "ghost"))
+    if (optparse_hasopt (ctx->opt, "no-ghost"))
         return NULL;
     if (!(f = flux_rpc_pack (ctx->h,
                              "overlay.topology",
@@ -414,22 +415,6 @@ static bool show_top (struct status *ctx,
     return false;
 }
 
-/* map fun - only follow degraded/partial, only print lost/offline (leaves).
- */
-static bool show_badleaves (struct status *ctx,
-                            struct status_node *node,
-                            bool parent,
-                            int level)
-{
-    if (level == 0 && streq (node->status, "full"))
-        status_print_noname (ctx, node, parent, level);
-    else if (streq (node->status, "lost") || streq (node->status, "offline"))
-        status_print (ctx, node, parent, level);
-    if (streq (node->status, "full"))
-        return false;
-    return true;
-}
-
 /* map fun - only follow degraded/partial, but print all non-full nodes.
  */
 static bool show_badtrees (struct status *ctx,
@@ -437,12 +422,12 @@ static bool show_badtrees (struct status *ctx,
                            bool parent,
                            int level)
 {
+    if (streq (node->status, "full"))
+        return false;
     if (parent
         || streq (node->status, "lost")
         || streq (node->status, "offline"))
         status_print (ctx, node, parent, level);
-    if (streq (node->status, "full"))
-        return false;
     return true;
 }
 
@@ -486,11 +471,9 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
     if (!validate_wait (ctx.wait))
         log_msg_exit ("invalid --wait state");
 
-    if (ctx.verbose <= 0)
+    if (optparse_hasopt (p, "summary"))
         fun = show_top;
-    else if (ctx.verbose == 1)
-        fun = show_badleaves;
-    else if (ctx.verbose == 2)
+    else if (optparse_hasopt (p, "down"))
         fun = show_badtrees;
     else
         fun = show_all;

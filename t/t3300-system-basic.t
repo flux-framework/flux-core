@@ -33,7 +33,7 @@ test_expect_success HAVE_JQ 'broker overlay shows 2 connected children' '
 '
 
 test_expect_success 'overlay status is full' '
-	test "$(flux overlay status)" = "full"
+	test "$(flux overlay status --summary)" = "full"
 '
 
 test_expect_success 'kill broker rank=2 with SIGTERM like systemd stop' '
@@ -54,7 +54,7 @@ test_expect_success HAVE_JQ 'broker overlay shows 1 connected child' '
 '
 
 test_expect_success 'wait for overlay status to be partial' '
-	flux overlay status --wait partial --timeout 10s
+	run_timeout 10 flux overlay status --summary --wait partial
 '
 
 test_expect_success 'run broker rank=2' '
@@ -62,7 +62,7 @@ test_expect_success 'run broker rank=2' '
 '
 
 test_expect_success 'wait for overlay status to be full' '
-	flux overlay status --wait full --timeout 10s
+	run_timeout 10 flux overlay status --summary --wait full
 '
 
 test_expect_success 'flux exec over all ranks works' '
@@ -80,7 +80,7 @@ test_expect_success 'ping to rank 2 fails' '
 '
 
 test_expect_success 'wait for overlay status to be degraded' '
-	flux overlay status --wait degraded --timeout 10s
+	run_timeout 10 flux overlay status --summary --wait degraded
 '
 
 test_expect_success 'run broker rank=2' '
@@ -88,7 +88,7 @@ test_expect_success 'run broker rank=2' '
 '
 
 test_expect_success 'wait for subtree to be full' '
-	flux overlay status --wait full --timeout 10s
+	run_timeout 10 flux overlay status --summary --wait full
 '
 
 test_expect_success 'run broker rank=2 again fails' '
