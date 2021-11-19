@@ -1101,12 +1101,50 @@ static int configure_implementations (flux_t *h, int argc, char **argv)
     return 0;
 }
 
+static int remove_running_ns (struct job_exec_ctx *ctx)
+{
+    struct jobinfo *job = zhashx_first (ctx->jobs);
+    flux_future_t *fall = NULL;
+    flux_future_t *f = NULL;
+    int rv = -1;
+
+    while (job) {
+        if (job->running) {
+            if (!fall) {
+                if (!(fall = flux_future_wait_all_create ()))
+                    goto cleanup;
+                flux_future_set_flux (fall, ctx->h);
+            }
+            if (!(f = flux_kvs_namespace_remove (ctx->h, job->ns)))
+                goto cleanup;
+            if (flux_future_push (fall, job->ns, f) < 0)
+                goto cleanup;
+            f = NULL;
+        }
+        job = zhashx_next (ctx->jobs);
+    }
+
+    if (fall) {
+        if (flux_future_wait_for (fall, -1.) < 0)
+            goto cleanup;
+    }
+
+    rv = 0;
+cleanup:
+    flux_future_destroy (f);
+    flux_future_destroy (fall);
+    return rv;
+}
+
 static int unload_implementations (struct job_exec_ctx *ctx)
 {
     struct exec_implementation *impl;
     int i = 0;
-    if (ctx && ctx->jobs)
+    if (ctx && ctx->jobs) {
         checkpoint_running (ctx->h, ctx->jobs);
+        if (remove_running_ns (ctx) < 0)
+            flux_log_error (ctx->h, "failed to remove guest namespaces");
+    }
     while ((impl = implementations[i]) && impl->name) {
         if (impl->unload)
              (*impl->unload) ();
