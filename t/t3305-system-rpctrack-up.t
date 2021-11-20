@@ -93,11 +93,12 @@ test_expect_success NO_CHAIN_LINT 'background RPC fails' '
 '
 
 test_expect_success 'report health status' '
-	flux overlay status -vvv --pretty --ghost --color
+	flux overlay status
 '
 test_expect_success 'health status for rank 6 is lost' '
-	echo "6: lost" >status.exp &&
-	flux overlay status -v >status.out &&
+	echo "6 fake6: lost" >status.exp &&
+	flux overlay status --down --no-color --no-pretty \
+		| grep fake6 >status.out &&
 	test_cmp status.exp status.out
 '
 
