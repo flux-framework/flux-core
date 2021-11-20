@@ -85,7 +85,8 @@ fluxcmd_PROGRAMS = \
 	flux-job \
 	flux-queue \
 	flux-exec \
-	flux-R
+	flux-R \
+	flux-top
 
 flux_start_LDADD = \
 	$(fluxcmd_ldadd) \
@@ -122,6 +123,21 @@ flux_keygen_CPPFLAGS = \
 flux_keygen_LDADD = \
 	$(fluxcmd_ldadd) \
 	$(ZMQ_LIBS)
+
+flux_top_SOURCES = \
+	top/top.c \
+	top/top.h \
+	top/keys.c \
+	top/joblist_pane.c \
+	top/summary_pane.c \
+	top/ucache.c
+flux_top_CPPFLAGS = \
+	$(AM_CPPFLAGS) \
+	$(CURSES_CFLAGS)
+flux_top_LDADD = \
+	$(fluxcmd_ldadd) \
+	$(CURSES_LIBS)
+
 #
 # Automatically build list of flux(1) builtins from
 #  builtin/*.c:
