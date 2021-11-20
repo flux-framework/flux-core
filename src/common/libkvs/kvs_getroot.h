@@ -21,7 +21,7 @@ flux_future_t *flux_kvs_getroot (flux_t *h, const char *ns, int flags);
 /* Decode KVS root hash response.
  *
  * treeobj - get the hash as an RFC 11 "dirref" object.
- * blobref - get the raw hash as a n RFC 10 "blobref".
+ * blobref - get the raw hash as an RFC 10 "blobref".
  * sequence - get the commit sequence number
  * owner - get the userid of the namespace owner
  */

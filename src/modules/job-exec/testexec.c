@@ -32,6 +32,9 @@
  *                             event a testexec job. If job has unlimited
  *                             duration, then also wait for finish RPC or
  *                             job exception for job finish event.
+ *   "reattach_finish":i    - if reattached, assume job has finished
+ *                             and no longer has remaining time to run.
+ *                             Useful for testing job reattach.
  * }
  *
  */
@@ -40,8 +43,12 @@
 # include "config.h"
 #endif
 
+#include <time.h>
+#include <sys/time.h>
+
 #include "src/common/libutil/fsd.h"
 #include "src/common/libjob/job_hash.h"
+#include "src/common/libeventlog/eventlog.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "job-exec.h"
 
@@ -55,6 +62,7 @@ struct testexec_ctx {
 struct testconf {
     bool                  enabled;          /* test execution enabled       */
     int                   override;         /* wait for RPC for start event */
+    int                   reattach_finish;  /* if reattached, just finish job */
     double                run_duration;     /* duration of fake job in sec  */
     int                   wait_status;      /* reported status for "finish" */
     const char *          mock_exception;   /* fake excetion at this site   */
@@ -108,6 +116,7 @@ static int init_testconf (flux_t *h, struct testconf *conf, json_t *jobspec)
     /* get/set defaults */
     conf->run_duration = jobspec_duration (h, jobspec);
     conf->override = 0;
+    conf->reattach_finish = 0;
     conf->wait_status = 0;
     conf->mock_exception = NULL;
     conf->enabled = false;
@@ -119,9 +128,10 @@ static int init_testconf (flux_t *h, struct testconf *conf, json_t *jobspec)
         return 0;
     conf->enabled = true;
     if (json_unpack_ex (test, &err, 0,
-                        "{s?s s?i s?i s?s}",
+                        "{s?s s?i s?i s?i s?s}",
                         "run_duration", &trun,
                         "override", &conf->override,
+                        "reattach_finish", &conf->reattach_finish,
                         "wait_status", &conf->wait_status,
                         "mock_exception", &conf->mock_exception) < 0) {
         flux_log (h, LOG_ERR, "init_testconf: %s", err.text);
@@ -160,10 +170,9 @@ static void timer_cb (flux_reactor_t *r,
  *   is sent when the timer fires (simulating the exit of the final
  *   job shell.)
  */
-static int start_timer (flux_t *h, struct testexec *te)
+static int start_timer (flux_t *h, struct testexec *te, double t)
 {
     flux_reactor_t *r = flux_get_reactor (h);
-    double t = te->conf.run_duration;
 
     /*  For now, if a job duration wasn't found, complete job almost
      *   immediately.
@@ -171,7 +180,6 @@ static int start_timer (flux_t *h, struct testexec *te)
     if (t < 0.)
         t = 1.e-5;
     if (t >= 0.) {
-        char timebuf[256];
         if (t > 0.) {
             te->timer = flux_timer_watcher_create (r, t, 0., timer_cb, te);
             if (!te->timer) {
@@ -179,10 +187,11 @@ static int start_timer (flux_t *h, struct testexec *te)
                 return -1;
             }
             flux_watcher_start (te->timer);
-            snprintf (timebuf, sizeof (timebuf), "%.6fs", t);
-        } else
-            strncpy (timebuf, "inf", sizeof (timebuf));
-        jobinfo_started (te->job, "{ s:s }", "timer", timebuf);
+        }
+        if (te->job->reattach)
+            jobinfo_reattached (te->job);
+        else
+            jobinfo_started (te->job);
     }
     else
         return -1;
@@ -219,17 +228,104 @@ static int testexec_init (struct jobinfo *job)
     return 1;
 }
 
+static int testexec_reattach_starttime (struct jobinfo *job,
+                                        const char *eventlog,
+                                        time_t *startp)
+{
+    json_t *o = NULL;
+    size_t index;
+    json_t *value;
+    int rv = -1;
+
+    if (!(o = eventlog_decode (eventlog))) {
+        jobinfo_fatal_error (job, errno, "eventlog_decode");
+        goto cleanup;
+    }
+
+    json_array_foreach (o, index, value) {
+        double timestamp;
+        const char *name;
+
+        if (eventlog_entry_parse (value, &timestamp, &name, NULL) < 0) {
+            jobinfo_fatal_error (job, errno, "eventlog_entry_parse");
+            goto cleanup;
+        }
+        if (!strcmp (name, "start")) {
+            (*startp) = (time_t)timestamp;
+            break;
+        }
+    }
+
+    rv = 0;
+cleanup:
+    json_decref (o);
+    return rv;
+}
+
+static int testexec_reattach (struct testexec *te)
+{
+    const char *value;
+    flux_future_t *f = NULL;
+    time_t start = 0;
+    struct timespec now;
+    time_t runtimeleft = -1;
+    int rv = -1;
+    char ekey[256];
+
+    if (flux_job_kvs_key (ekey, sizeof (ekey), te->job->id, "eventlog") < 0) {
+        jobinfo_fatal_error (te->job, errno, "flux_job_kvs_key");
+        goto cleanup;
+    }
+    if (!(f = flux_kvs_lookup (te->job->h,
+                               NULL,
+                               0,
+                               ekey))) {
+        jobinfo_fatal_error (te->job, errno, "flux_kvs_lookup");
+        goto cleanup;
+    }
+    if (flux_kvs_lookup_get (f, &value) < 0) {
+        jobinfo_fatal_error (te->job, errno, "flux_kvs_lookup_get starttimes");
+        goto cleanup;
+    }
+    if (testexec_reattach_starttime (te->job, value, &start) < 0)
+        goto cleanup;
+    if (!te->conf.reattach_finish) {
+        /* just use seconds, we approximate runtime left */
+        clock_gettime (CLOCK_REALTIME, &now);
+        if ((now.tv_sec - start) <= te->conf.run_duration)
+            runtimeleft = (start + te->conf.run_duration) - now.tv_sec;
+    }
+    if (start_timer (te->job->h,
+                     te,
+                     runtimeleft) < 0) {
+        jobinfo_fatal_error (te->job, errno, "unable to restart timer");
+        goto cleanup;
+    }
+    rv = 0;
+cleanup:
+    flux_future_destroy (f);
+    return rv;
+}
+
 static int testexec_start (struct jobinfo *job)
 {
     struct testexec *te = job->data;
 
-    if (!te->conf.override && start_timer (job->h, te) < 0) {
-        jobinfo_fatal_error (job, errno, "unable to start test exec timer");
-        return -1;
+    if (job->reattach) {
+        if (testexec_reattach (te) < 0)
+            return -1;
     }
-    if (testconf_mock_exception (&te->conf, "run")) {
-        jobinfo_fatal_error (job, 0, "mock run exception generated");
-        return -1;
+    else {
+        if (!te->conf.override && start_timer (job->h,
+                                               te,
+                                               te->conf.run_duration) < 0) {
+            jobinfo_fatal_error (job, errno, "unable to start test exec timer");
+            return -1;
+        }
+        if (testconf_mock_exception (&te->conf, "run")) {
+            jobinfo_fatal_error (job, 0, "mock run exception generated");
+            return -1;
+        }
     }
     return 0;
 }
@@ -297,7 +393,7 @@ static void testexec_request_cb (flux_t *h,
             errno = EINVAL;
             goto error;
         }
-        if (start_timer (h, te) < 0)
+        if (start_timer (h, te, te->conf.run_duration) < 0)
             goto error;
     }
     else if (strcmp (event, "finish") == 0) {

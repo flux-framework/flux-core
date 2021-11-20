@@ -61,6 +61,7 @@ struct jobinfo {
     flux_t *              h;
     flux_jobid_t          id;
     char                  ns [64];   /* namespace string */
+    char                * rootref;   /* ns rootref if restart */
     const flux_msg_t *    req;       /* initial request */
     uint32_t              userid;    /* requesting userid */
     int                   flags;     /* job flags */
@@ -77,6 +78,7 @@ struct jobinfo {
     uint8_t               running:1;     /* all shells are running */
     uint8_t               finalizing:1;  /* in process of cleanup */
 
+    int                   reattach;      /* job-manager reattach attempt */
     int                   wait_status;
 
     struct eventlogger *  ev;           /* event batcher */
@@ -102,8 +104,11 @@ int jobinfo_emit_event_pack_nowait (struct jobinfo *job,
                                      const char *name,
                                      const char *fmt, ...);
 
-/* Emit  start event with optional note in jansson pack format */
-void jobinfo_started (struct jobinfo *job, const char *fmt, ...);
+/* Emit  start event */
+void jobinfo_started (struct jobinfo *job);
+
+/* Emit  reattached event */
+void jobinfo_reattached (struct jobinfo *job);
 
 /* Notify job-exec that ranks in idset `ranks` have completed
  *  with the given wait status

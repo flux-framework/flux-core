@@ -111,7 +111,7 @@ static const char *job_get_cwd (struct jobinfo *job)
 static void start_cb (struct bulk_exec *exec, void *arg)
 {
     struct jobinfo *job = arg;
-    jobinfo_started (job, NULL);
+    jobinfo_started (job);
     /*  This is going to be really slow. However, it should at least
      *   work for now. We wait for all imp's to start, then send input
      */

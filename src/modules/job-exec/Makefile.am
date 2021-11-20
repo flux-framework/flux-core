@@ -27,6 +27,8 @@ libbulk_exec_la_SOURCES = \
 job_exec_la_SOURCES = \
 	job-exec.h \
 	job-exec.c \
+	checkpoint.h \
+	checkpoint.c \
 	rset.c \
 	rset.h \
 	testexec.c \

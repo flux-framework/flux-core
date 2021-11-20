@@ -26,7 +26,7 @@
  *
  * JOB INIT:
  *
- * On reciept of a start request, the exec service enters initialization
+ * On receipt of a start request, the exec service enters initialization
  * phase of the job, where the jobspec and R are fetched from the KVS,
  * and the guest namespace is created and linked from the primary
  * namespace. A guest.exec.eventlog is created with an initial "init"
@@ -99,6 +99,7 @@
 #include "src/common/libutil/errno_safe.h"
 
 #include "job-exec.h"
+#include "checkpoint.h"
 
 static double kill_timeout=5.0;
 
@@ -138,6 +139,7 @@ void jobinfo_decref (struct jobinfo *job)
         free (job->J);
         resource_set_destroy (job->R);
         json_decref (job->jobspec);
+        free (job->rootref);
         free (job);
         errno = saved_errno;
     }
@@ -290,7 +292,7 @@ static int jobinfo_send_release (struct jobinfo *job,
 }
 
 static int jobinfo_respond (flux_t *h, struct jobinfo *job,
-                            const char *event, int status)
+                            const char *event)
 {
     return flux_respond_pack (h, job->req, "{s:I s:s s:{}}",
                                            "id", job->id,
@@ -319,16 +321,23 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
     }
 }
 
-void jobinfo_started (struct jobinfo *job, const char *fmt, ...)
+void jobinfo_started (struct jobinfo *job)
 {
     flux_t *h = job->ctx->h;
     if (h && job->req) {
-        va_list ap;
-        va_start (ap, fmt);
         job->running = 1;
-        va_end (ap);
-        if (jobinfo_respond (h, job, "start", 0) < 0)
+        if (jobinfo_respond (h, job, "start") < 0)
             flux_log_error (h, "jobinfo_started: flux_respond");
+    }
+}
+
+void jobinfo_reattached (struct jobinfo *job)
+{
+    flux_t *h = job->ctx->h;
+    if (h && job->req) {
+        job->running = 1;
+        if (jobinfo_respond (h, job, "reattached") < 0)
+            flux_log_error (h, "jobinfo_reattach: flux_respond");
     }
 }
 
@@ -594,7 +603,10 @@ error_release:
 
 static int jobinfo_start_execution (struct jobinfo *job)
 {
-    jobinfo_emit_event_pack_nowait (job, "starting", NULL);
+    if (job->reattach)
+        jobinfo_emit_event_pack_nowait (job, "re-starting", NULL);
+    else
+        jobinfo_emit_event_pack_nowait (job, "starting", NULL);
     /* Set started flag before calling 'start' method because we want to
      *  be sure to clean up properly if an exception occurs
      */
@@ -731,6 +743,7 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
     }
     job->has_namespace = 1;
 
+
     /*  If an exception was received during startup, no need to continue
      *   with startup
      */
@@ -808,7 +821,9 @@ static void namespace_link (flux_future_t *fprev, void *arg)
         goto error;
     }
     flux_future_set_flux (cf, h);
-    if (!(f = jobinfo_emit_event_pack (job, "init", NULL))
+    if (!(f = jobinfo_emit_event_pack (job,
+                                       job->reattach ? "reattach" : "init",
+                                       NULL))
         || flux_future_push (cf, "emit event", f) < 0)
         goto error;
 
@@ -832,9 +847,65 @@ static flux_future_t *ns_create_and_link (flux_t *h,
     flux_future_t *f = NULL;
     flux_future_t *f2 = NULL;
 
-    if (!(f = flux_kvs_namespace_create (h, job->ns, job->userid, flags))
-        || !(f2 = flux_future_and_then (f, namespace_link, job))) {
+    if (job->reattach && job->rootref)
+        f = flux_kvs_namespace_create_with (h,
+                                            job->ns,
+                                            job->rootref,
+                                            job->userid,
+                                            flags);
+    else
+        f = flux_kvs_namespace_create (h, job->ns, job->userid, flags);
+
+    if (!f || !(f2 = flux_future_and_then (f, namespace_link, job))) {
         flux_log_error (h, "namespace_move: flux_future_and_then");
+        flux_future_destroy (f);
+        return NULL;
+    }
+    return f2;
+}
+
+static void get_rootref_cb (flux_future_t *fprev, void *arg)
+{
+    int saved_errno;
+    flux_t *h = flux_future_get_flux (fprev);
+    struct jobinfo *job = arg;
+    flux_future_t *f = NULL;
+
+    if (!(job->rootref = checkpoint_find_rootref (fprev,
+                                                  job->id,
+                                                  job->userid)))
+        flux_log (job->h,
+                  LOG_DEBUG,
+                  "checkpoint rootref not found: %ju",
+                  (uintmax_t)job->id);
+
+    /* if rootref not found, still create namespace */
+    if (!(f = ns_create_and_link (h, job, 0)))
+        goto error;
+
+    flux_future_continue (fprev, f);
+    flux_future_destroy (fprev);
+    return;
+error:
+    saved_errno = errno;
+    flux_future_destroy (f);
+    flux_future_continue_error (fprev, saved_errno, NULL);
+    flux_future_destroy (fprev);
+}
+
+static flux_future_t *ns_get_rootref (flux_t *h,
+                                      struct jobinfo *job,
+                                      int flags)
+{
+    flux_future_t *f = NULL;
+    flux_future_t *f2 = NULL;
+
+    if (!(f = checkpoint_get_rootrefs (h))) {
+        flux_log_error (h, "ns_get_rootref: checkpoint_get_rootrefs");
+        return NULL;
+    }
+    if (!f || !(f2 = flux_future_and_then (f, get_rootref_cb, job))) {
+        flux_log_error (h, "ns_get_rootref: flux_future_and_then");
         flux_future_destroy (f);
         return NULL;
     }
@@ -858,8 +929,12 @@ static flux_future_t *jobinfo_start_init (struct jobinfo *job)
         || flux_future_push (f, "J", f_kvs) < 0)) {
         goto err;
     }
-    if (!(f_kvs = ns_create_and_link (h, job, 0))
-        || flux_future_push (f, "ns", f_kvs))
+    if (job->reattach)
+        f_kvs = ns_get_rootref (h, job, 0);
+    else
+        f_kvs = ns_create_and_link (h, job, 0);
+
+    if (flux_future_push (f, "ns", f_kvs) < 0)
         goto err;
 
     return f;
@@ -916,10 +991,11 @@ static int job_start (struct job_exec_ctx *ctx, const flux_msg_t *msg)
 
     job->ctx = ctx;
 
-    if (flux_request_unpack (job->req, NULL, "{s:I s:i s:O}",
+    if (flux_request_unpack (job->req, NULL, "{s:I s:i s:O s:b}",
                                              "id", &job->id,
                                              "userid", &job->userid,
-                                             "jobspec", &job->jobspec) < 0) {
+                                             "jobspec", &job->jobspec,
+                                             "reattach", &job->reattach) < 0) {
         flux_log_error (ctx->h, "start: flux_request_unpack");
         jobinfo_decref (job);
         return -1;
@@ -1103,10 +1179,50 @@ static int configure_implementations (flux_t *h, int argc, char **argv)
     return 0;
 }
 
-static int unload_implementations (void)
+static int remove_running_ns (struct job_exec_ctx *ctx)
+{
+    struct jobinfo *job = zhashx_first (ctx->jobs);
+    flux_future_t *fall = NULL;
+    flux_future_t *f = NULL;
+    int rv = -1;
+
+    while (job) {
+        if (job->running) {
+            if (!fall) {
+                if (!(fall = flux_future_wait_all_create ()))
+                    goto cleanup;
+                flux_future_set_flux (fall, ctx->h);
+            }
+            if (!(f = flux_kvs_namespace_remove (ctx->h, job->ns)))
+                goto cleanup;
+            if (flux_future_push (fall, job->ns, f) < 0)
+                goto cleanup;
+            f = NULL;
+        }
+        job = zhashx_next (ctx->jobs);
+    }
+
+    if (fall) {
+        if (flux_future_wait_for (fall, -1.) < 0)
+            goto cleanup;
+    }
+
+    rv = 0;
+cleanup:
+    flux_future_destroy (f);
+    flux_future_destroy (fall);
+    return rv;
+}
+
+static int unload_implementations (struct job_exec_ctx *ctx)
 {
     struct exec_implementation *impl;
     int i = 0;
+    if (ctx && ctx->jobs) {
+        checkpoint_running (ctx->h, ctx->jobs);
+        if (remove_running_ns (ctx) < 0)
+            flux_log_error (ctx->h, "failed to remove guest namespaces");
+    }
     while ((impl = implementations[i]) && impl->name) {
         if (impl->unload)
              (*impl->unload) ();
@@ -1146,7 +1262,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     rc = flux_reactor_run (flux_get_reactor (h), 0);
 out:
-    unload_implementations ();
+    unload_implementations (ctx);
 
     saved_errno = errno;
     if (flux_event_unsubscribe (h, "job-exception") < 0)
