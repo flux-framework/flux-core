@@ -67,6 +67,7 @@ class Flux(Wrapper):
                 raise EnvironmentError(err.errno, "Unable to connect to Flux")
 
         self.aux_txn = None
+        self._active_watchers = set()
 
     @classmethod
     def reactor_running(cls):
@@ -222,6 +223,15 @@ class Flux(Wrapper):
         :raises TypeError: if the topic is not a str, bytes, or unicode
         """
         return self.flux_event_subscribe(encode_topic(topic))
+
+    def add_watcher(self, watcher):
+        """Add a reference to a watcher so it avoids garbage collection"""
+        self._active_watchers.add(watcher)
+        return watcher
+
+    def del_watcher(self, watcher):
+        """Remove ref to ``watcher`` so it is eligible for garbage collection"""
+        self._active_watchers.discard(watcher)
 
     def msg_watcher_create(
         self,

@@ -12,6 +12,7 @@
 
 import unittest
 import os
+import gc
 import signal
 import flux
 from subflux import rerun_under_flux
@@ -121,10 +122,11 @@ class TestSignal(unittest.TestCase):
         sigw.destroy()
 
     def test_signal_watcher(self):
-        cb_called = [False]
+        cb_called = False
 
         def cb(handle, watcher, signum, args):
-            cb_called[0] = True
+            nonlocal cb_called
+            cb_called = True
             handle.reactor_stop()
 
         def raise_signal(handle, wathcer, revents, args):
@@ -141,7 +143,7 @@ class TestSignal(unittest.TestCase):
             to2.start()
             rc = self.f.reactor_run()
             self.assertTrue(rc >= 0, msg="reactor exit")
-            self.assertTrue(cb_called[0], "Signal Watcher Called")
+            self.assertTrue(cb_called, "Signal Watcher Called")
 
     def test_signal_watcher_exception(self):
         def signal_cb(handle, watcher, signum, args):
@@ -204,6 +206,36 @@ class TestFdWatcher(unittest.TestCase):
                 writer.flush()
                 rc = self.f.reactor_run()
                 self.assertTrue(rc < 0)
+
+
+class TestIssue3973(unittest.TestCase):
+    @classmethod
+    def setUpClass(self):
+        self.f = flux.Flux()
+
+    def test_watcher_gc(self):
+        cb_called = 0
+
+        def cb(handle, watcher, revents, _args):
+            nonlocal cb_called
+            cb_called = cb_called + 1
+            if cb_called == 1:
+                gc.collect()
+            elif cb_called == 5:
+                handle.reactor_stop()
+
+        def cb_abort(handle, watcher, revents, _args):
+            raise RuntimeError("cb_abort should not be called")
+
+        #  Create a watcher with no local reference
+        self.f.timer_watcher_create(0.0, cb, repeat=0.05).start()
+
+        #  Timeout/abort after 5s
+        tw = self.f.timer_watcher_create(5.0, cb_abort).start()
+        self.f.reactor_run()
+
+        #  callback should have been called 5 times, not less
+        self.assertTrue(cb_called == 5)
 
 
 if __name__ == "__main__":

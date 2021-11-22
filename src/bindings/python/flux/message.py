@@ -143,7 +143,6 @@ class MessageWatcher(Watcher):
         match_tag=flux.constants.FLUX_MATCHTAG_NONE,
         args=None,
     ):
-        self.flux_handle = flux_handle
         self.callback = callback
         self.args = args
         self.wargs = ffi.new_handle(self)
@@ -162,12 +161,13 @@ class MessageWatcher(Watcher):
             {"typemask": type_mask, "matchtag": match_tag, "topic_glob": c_topic_glob},
         )
         super(MessageWatcher, self).__init__(
+            flux_handle,
             raw.flux_msg_handler_create(
-                self.flux_handle.handle,
+                flux_handle.handle,
                 match[0],
                 lib.message_handler_wrapper,
                 self.wargs,
-            )
+            ),
         )
 
     def start(self):

@@ -19,7 +19,9 @@ __all__ = ["TimerWatcher", "FDWatcher", "SignalWatcher"]
 class Watcher(object):
     __metaclass__ = abc.ABCMeta
 
-    def __init__(self, handle=None):
+    def __init__(self, flux_handle, handle=None):
+        self.flux_handle = flux_handle
+        self.flux_handle.add_watcher(self)
         self.handle = handle
 
     def __enter__(self):
@@ -33,8 +35,7 @@ class Watcher(object):
         return False
 
     def __del__(self):
-        if self.handle is not None:
-            self.destroy()
+        self.destroy()
 
     def start(self):
         raw.flux_watcher_start(self.handle)
@@ -45,6 +46,14 @@ class Watcher(object):
         return self
 
     def destroy(self):
+        #  Remove this watcher from its owning Flux handle
+        #  if the handle is still around. A try/except block
+        #  used here in case the Watcher got an exception
+        #  before __init__ (e.g. in subclass __init__)
+        try:
+            self.flux_handle.del_watcher(self)
+        except AttributeError:
+            pass
         if self.handle is not None:
             raw.flux_watcher_destroy(self.handle)
             self.handle = None
@@ -64,7 +73,6 @@ def timeout_handler_wrapper(unused1, unused2, revents, opaque_handle):
 
 class TimerWatcher(Watcher):
     def __init__(self, flux_handle, after, callback, repeat=0, args=None):
-        self.flux_handle = flux_handle
         self.after = after
         self.repeat = repeat
         self.callback = callback
@@ -72,13 +80,14 @@ class TimerWatcher(Watcher):
         self.handle = None
         self.wargs = ffi.new_handle(self)
         super(TimerWatcher, self).__init__(
+            flux_handle,
             raw.flux_timer_watcher_create(
                 raw.flux_get_reactor(flux_handle),
                 float(after),
                 float(repeat),
                 lib.timeout_handler_wrapper,
                 self.wargs,
-            )
+            ),
         )
 
 
@@ -97,7 +106,6 @@ def fd_handler_wrapper(unused1, unused2, revents, opaque_handle):
 
 class FDWatcher(Watcher):
     def __init__(self, flux_handle, fd_int, events, callback, args=None):
-        self.flux_handle = flux_handle
         self.fd_int = fd_int
         self.events = events
         self.callback = callback
@@ -105,13 +113,14 @@ class FDWatcher(Watcher):
         self.handle = None
         self.wargs = ffi.new_handle(self)
         super(FDWatcher, self).__init__(
+            flux_handle,
             raw.flux_fd_watcher_create(
                 raw.flux_get_reactor(flux_handle),
                 self.fd_int,
                 self.events,
                 lib.fd_handler_wrapper,
                 self.wargs,
-            )
+            ),
         )
 
 
@@ -129,19 +138,19 @@ def signal_handler_wrapper(_unused1, _unused2, _unused3, opaque_handle):
 
 class SignalWatcher(Watcher):
     def __init__(self, flux_handle, signal_int, callback, args=None):
-        self.flux_handle = flux_handle
         self.signal_int = signal_int
         self.callback = callback
         self.args = args
         self.handle = None
         self.wargs = ffi.new_handle(self)
         super(SignalWatcher, self).__init__(
+            flux_handle,
             raw.flux_signal_watcher_create(
                 raw.flux_get_reactor(flux_handle),
                 self.signal_int,
                 lib.signal_handler_wrapper,
                 self.wargs,
-            )
+            ),
         )
         # N.B.: check for error only after SignalWatcher object fully
         #  initialized to avoid 'no attribute self.handle' in __del__
