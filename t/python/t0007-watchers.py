@@ -121,10 +121,11 @@ class TestSignal(unittest.TestCase):
         sigw.destroy()
 
     def test_signal_watcher(self):
-        cb_called = [False]
+        cb_called = False
 
         def cb(handle, watcher, signum, args):
-            cb_called[0] = True
+            nonlocal cb_called
+            cb_called = True
             handle.reactor_stop()
 
         def raise_signal(handle, wathcer, revents, args):
@@ -141,7 +142,7 @@ class TestSignal(unittest.TestCase):
             to2.start()
             rc = self.f.reactor_run()
             self.assertTrue(rc >= 0, msg="reactor exit")
-            self.assertTrue(cb_called[0], "Signal Watcher Called")
+            self.assertTrue(cb_called, "Signal Watcher Called")
 
     def test_signal_watcher_exception(self):
         def signal_cb(handle, watcher, signum, args):
