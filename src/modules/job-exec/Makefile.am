@@ -30,6 +30,8 @@ job_exec_la_SOURCES = \
 	job-exec.c \
 	checkpoint.h \
 	checkpoint.c \
+	exec_config.h \
+	exec_config.c \
 	rset.c \
 	rset.h \
 	testexec.c \

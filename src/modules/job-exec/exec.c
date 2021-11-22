@@ -33,13 +33,11 @@
 #include <unistd.h>
 
 #include "job-exec.h"
+#include "exec_config.h"
 #include "bulk-exec.h"
 #include "rset.h"
 
 extern char **environ;
-static const char *default_cwd = "/tmp";
-static const char *default_job_shell = NULL;
-static const char *flux_imp_path = NULL;
 
 struct exec_ctx {
     const char * mock_exception;   /* fake exception */
@@ -72,40 +70,6 @@ static const char * exec_mock_exception (struct bulk_exec *exec)
     if (!ctx || !ctx->mock_exception)
         return "none";
     return ctx->mock_exception;
-}
-
-static const char *jobspec_get_job_shell (json_t *jobspec)
-{
-    const char *path = NULL;
-    (void) json_unpack (jobspec, "{s:{s:{s:{s:s}}}}",
-                                 "attributes", "system", "exec",
-                                 "job_shell", &path);
-    return path;
-}
-
-static const char *job_shell_path (struct jobinfo *job)
-{
-    const char *path = jobspec_get_job_shell (job->jobspec);
-    return path ? path : default_job_shell;
-}
-
-static const char *jobspec_get_cwd (json_t *jobspec)
-{
-    const char *cwd = NULL;
-    (void) json_unpack (jobspec, "{s:{s:{s:s}}}",
-                                 "attributes", "system",
-                                 "cwd", &cwd);
-    return cwd;
-}
-
-static const char *job_get_cwd (struct jobinfo *job)
-{
-    const char *cwd;
-    if (job->multiuser)
-        cwd = "/";
-    else if (!(cwd = jobspec_get_cwd (job->jobspec)))
-        cwd = default_cwd;
-    return (cwd);
 }
 
 static void start_cb (struct bulk_exec *exec, void *arg)
@@ -300,7 +264,7 @@ static int exec_init (struct jobinfo *job)
     struct bulk_exec *exec = NULL;
     const struct idset *ranks = NULL;
 
-    if (job->multiuser && !flux_imp_path) {
+    if (job->multiuser && !config_get_imp_path ()) {
         flux_log (job->h,
                   LOG_ERR,
                   "unable run multiuser job with no IMP configured!");
@@ -333,18 +297,18 @@ static int exec_init (struct jobinfo *job)
         goto err;
     }
     if (job->multiuser) {
-        if (flux_cmd_argv_append (cmd, flux_imp_path) < 0
+        if (flux_cmd_argv_append (cmd, config_get_imp_path ()) < 0
             || flux_cmd_argv_append (cmd, "exec") < 0) {
             flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
             goto err;
         }
     }
-    if (flux_cmd_argv_append (cmd, job_shell_path (job)) < 0
+    if (flux_cmd_argv_append (cmd, config_get_job_shell (job)) < 0
         || flux_cmd_argv_appendf (cmd, "%ju", (uintmax_t) job->id) < 0) {
         flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
         goto err;
     }
-    if (flux_cmd_setcwd (cmd, job_get_cwd (job)) < 0) {
+    if (flux_cmd_setcwd (cmd, config_get_cwd (job)) < 0) {
         flux_log_error (job->h, "exec_init: flux_cmd_setcwd");
         goto err;
     }
@@ -431,7 +395,7 @@ static int exec_kill (struct jobinfo *job, int signum)
     flux_future_t *f;
 
     if (job->multiuser)
-        f = bulk_exec_imp_kill (exec, flux_imp_path, signum);
+        f = bulk_exec_imp_kill (exec, config_get_imp_path (), signum);
     else
         f = bulk_exec_kill (exec, signum);
     if (!f) {
@@ -467,54 +431,9 @@ static void exec_exit (struct jobinfo *job)
     job->data = NULL;
 }
 
-/*  Configure the exec module.
- *  Read the default job shell path from config. Allow override on cmdline
- */
 static int exec_config (flux_t *h, int argc, char **argv)
 {
-    flux_error_t err;
-
-    /*  Set default job shell path from builtin configuration,
-     *   allow override via configuration, then cmdline.
-     */
-    default_job_shell = flux_conf_builtin_get ("shell_path", FLUX_CONF_AUTO);
-
-
-    /*  Check configuration for exec.job-shell */
-    if (flux_conf_unpack (flux_get_conf (h),
-                          &err,
-                          "{s?:{s?s}}",
-                          "exec",
-                            "job-shell", &default_job_shell) < 0) {
-        flux_log (h, LOG_ERR,
-                  "error reading config value exec.job-shell: %s",
-                  err.text);
-        return -1;
-    }
-
-    /*  Check configuration for exec.imp */
-    if (flux_conf_unpack (flux_get_conf (h),
-                          &err,
-                          "{s?:{s?s}}",
-                          "exec",
-                            "imp", &flux_imp_path) < 0) {
-        flux_log (h, LOG_ERR,
-                  "error reading config value exec.imp: %s",
-                  err.text);
-        return -1;
-    }
-
-    /* Finally, override values on cmdline */
-    for (int i = 0; i < argc; i++) {
-        if (strncmp (argv[i], "job-shell=", 10) == 0)
-            default_job_shell = argv[i]+10;
-        else if (strncmp (argv[i], "imp=", 4) == 0)
-            flux_imp_path = argv[i]+4;
-    }
-    flux_log (h, LOG_DEBUG, "using default shell path %s", default_job_shell);
-    if (flux_imp_path)
-        flux_log (h, LOG_DEBUG, "using imp path %s", flux_imp_path);
-    return 0;
+    return config_init (h, argc, argv);
 }
 
 struct exec_implementation bulkexec = {
