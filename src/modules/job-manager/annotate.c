@@ -107,7 +107,7 @@ int update_annotation_recursive (struct job *job, json_t *orig, json_t *new)
     return 0;
 }
 
-int annotations_update (flux_t *h, struct job *job, json_t *annotations)
+int annotations_update (struct job *job, json_t *annotations)
 {
     if (!json_is_object (annotations)) {
         errno = EINVAL;
@@ -144,7 +144,7 @@ int annotations_update_and_publish (struct job_manager *ctx,
     int rc = -1;
     json_t *tmp = NULL;
 
-    if (annotations_update (ctx->h, job, annotations) < 0)
+    if (annotations_update (job, annotations) < 0)
         return -1;
     if (job->annotations) {
         /* deep copy necessary for journal history, as
