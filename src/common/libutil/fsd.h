@@ -23,6 +23,10 @@ int fsd_parse_duration (const char *s, double *dp);
  */
 int fsd_format_duration (char *buf, size_t len, double duration);
 
+/*  Same as above, but precision may be specified.
+ */
+int fsd_format_duration_ex (char *buf, size_t len, double duration, int prec);
+
 #endif /* !_UTIL_FSD_H */
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

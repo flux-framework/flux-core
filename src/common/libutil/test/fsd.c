@@ -125,6 +125,10 @@ int main(int argc, char** argv)
         "fsd_format_duration (86400.) works");
     is (buf, "1.2d", "returns expected string = %s", buf);
 
+    ok (fsd_format_duration_ex (buf, sizeof (buf), 62.0, 1),
+        "fsd_format_duration_ex (62., 1) works");
+    is (buf, "1m", "returns expected string = %s", buf);
+
     done_testing();
 }
 

@@ -87,20 +87,30 @@ int fsd_parse_duration (const char *s, double *dp)
     return 0;
 }
 
-int fsd_format_duration (char *buf, size_t len, double duration)
+int fsd_format_duration_ex (char *buf,
+                            size_t len,
+                            double duration,
+                            int precision)
 {
     if (buf == NULL || len <= 0 || is_invalid_duration(duration)) {
         errno = EINVAL;
         return -1;
     }
     if (duration < 60.)
-        return snprintf (buf, len, "%gs", duration);
+        return snprintf (buf, len, "%.*gs", precision, duration);
     else if (duration < 60. * 60.)
-        return snprintf (buf, len, "%gm", duration / 60.);
+        return snprintf (buf, len, "%.*gm", precision, duration / 60.);
     else if (duration < 60. * 60. * 24.)
-        return snprintf (buf, len, "%gh", duration / (60. * 60.));
-    else
-        return snprintf (buf, len, "%gd", duration / (60. * 60. * 24.));
+        return snprintf (buf, len, "%.*gh", precision, duration / (60. * 60.));
+    else {
+        return snprintf (buf, len, "%.*gd", precision,
+                         duration / (60. * 60. * 24.));
+    }
+}
+
+int fsd_format_duration (char *buf, size_t len, double duration)
+{
+    return fsd_format_duration_ex (buf, len, duration, 6);
 }
 
 /*
