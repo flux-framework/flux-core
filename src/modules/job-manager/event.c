@@ -50,6 +50,7 @@
 #include "journal.h"
 #include "wait.h"
 #include "prioritize.h"
+#include "annotate.h"
 #include "jobtap-internal.h"
 
 #include "event.h"
@@ -524,6 +525,10 @@ static int event_handle_perilog (struct job *job,
     return 0;
 }
 
+static int event_handle_memo (struct job *job, json_t *o)
+{
+    return annotations_update (job, "user", o);
+}
 
 /*  Return a callback topic string for the current job state
  *
@@ -584,6 +589,10 @@ int event_job_update (struct job *job, json_t *event)
     }
     else if (!strcmp (name, "set-flags")) {
         if (event_handle_set_flags (job, context) < 0)
+            goto error;
+    }
+    else if (!strcmp (name, "memo")) {
+        if (event_handle_memo (job, context) < 0)
             goto error;
     }
     else if (!strcmp (name, "depend")) {
