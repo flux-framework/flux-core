@@ -18,6 +18,18 @@
  */
 int jpath_set (json_t *o, const char *path, json_t *val);
 
+/* Like japth_set(), but if 'o' is NULL create an empty object
+ * and add 'path'. Also doesn't take a reference on 'val'.
+ * Returns result or NULL on failure.
+ */
+json_t * jpath_set_new (json_t *o, const char *path, json_t *val);
+
+/* Update 'path' in object 'o' with 'val', taking a reference on 'val'.
+ * As a special case, a 'path' of '.' updates 'o' with 'val'.
+ * Return 0 on success, -1 on failure with errno set.
+ */
+int jpath_update (json_t *o, const char *path, json_t *val);
+
 /* Delete 'path' from object 'o'.
  * Return 0 on success, -1 on failure with errno set.
  */
@@ -27,6 +39,10 @@ int jpath_del (json_t *o, const char *path);
  * Return value on success, NULL on failure with errno set.
  */
 json_t *jpath_get (json_t *o, const char *path);
+
+/* Delete all values set to JSON null recursively in 'o'.
+ */
+int jpath_clear_null (json_t *o);
 
 #endif /* !_UTIL_JPATH_H */
 
