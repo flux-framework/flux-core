@@ -218,7 +218,7 @@ static void action_quorum (struct state_machine *s)
                              0,
                              "{s:s}",
                              "name", "broker.online"))
-        || flux_future_then (f, -1, action_quorum_continuation, s)) {
+        || flux_future_then (f, -1, action_quorum_continuation, s) < 0) {
         flux_future_destroy (f);
         state_machine_post (s, "quorum-fail");
         return;
