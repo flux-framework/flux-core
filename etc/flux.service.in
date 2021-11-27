@@ -15,7 +15,8 @@ ExecStart=@X_BINDIR@/flux broker \
   -Slog-stderr-mode=local \
   -Scontent.backing-path=@X_LOCALSTATEDIR@/lib/flux/content.sqlite \
   -Sbroker.rc2_none \
-  -Sbroker.quorum=0
+  -Sbroker.quorum=0 \
+  -Sbroker.quorum-timeout=none
 ExecReload=@X_BINDIR@/flux config reload
 Restart=on-success
 RestartSec=5s
