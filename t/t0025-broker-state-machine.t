@@ -208,4 +208,33 @@ test_expect_success 'all expected events and state transitions occurred' '
 	grep "rc3-fail: finalize->exit"			states_rc3.log
 '
 
+test_expect_success 'broker.quorum-timeout=none is accepted' '
+	flux start ${ARGS} -o,-Sbroker.quorum-timeout=none /bin/true
+'
+
+test_expect_success 'broker.quorum-timeout=3h is accepted' '
+	flux start ${ARGS} -o,-Sbroker.quorum-timeout=3h /bin/true
+'
+test_expect_success 'broker.quorum-timeout=x fails' '
+	test_must_fail flux start ${ARGS} -o,-Sbroker.quorum-timeout=x /bin/true
+'
+test_expect_success 'create rc1 that sleeps for 2s on rank != 0' '
+	cat <<-EOT >rc1_sleep &&
+	#!/bin/bash
+	rank=\$(flux getattr rank)
+	test \$rank -eq 0 || sleep 2
+	EOT
+	chmod +x rc1_sleep
+'
+test_expect_success 'broker.quorum-timeout works' '
+	flux start -s2 ${ARGS} \
+		-o,-Slog-filename=timeout.log \
+		-o,-Sbroker.rc1_path="$(pwd)/rc1_sleep" \
+		-o,-Sbroker.quorum-timeout=1s /bin/true
+'
+test_expect_success 'logs contain quorum delayed/reached messages' '
+	grep "quorum delayed" timeout.log &&
+	grep "quorum reached" timeout.log
+'
+
 test_done
