@@ -1173,6 +1173,9 @@ static int job_update_eventlog_seq (struct job_state_ctx *jsctx,
                                     struct job *job,
                                     int latest_eventlog_seq)
 {
+    /* Ignore sequence < 0 */
+    if (latest_eventlog_seq < 0)
+        return 0;
     if (latest_eventlog_seq <= job->eventlog_seq) {
         flux_log (jsctx->h, LOG_INFO,
                   "%s: job %ju duplicate event (last = %d, latest = %d)",
@@ -1209,57 +1212,23 @@ static int job_transition_state (struct job_state_ctx *jsctx,
     return 0;
 }
 
-#define lookup_job(jsctx,id) _lookup_job(jsctx,id,__FUNCTION__)
-static struct job *_lookup_job (struct job_state_ctx *jsctx,
-                                flux_jobid_t id,
-                                const char *prefix)
-{
-    struct job *job;
-    if (!(job = zhashx_lookup (jsctx->index, &id))) {
-        flux_log_error (jsctx->h, "%s: job %ju not in hash",
-                        prefix, (uintmax_t)id);
-        return NULL;
-    }
-    return job;
-}
-
 static int journal_advance_job (struct job_state_ctx *jsctx,
-                                flux_jobid_t id,
+                                struct job *job,
                                 flux_job_state_t newstate,
-                                int eventlog_seq,
                                 double timestamp)
 {
-    struct job *job;
-
-    /* job not found is not-fatal, do not return error */
-    if (!(job = lookup_job (jsctx, id)))
-        return 0;
-
-    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
-        return 0;
-
     return job_transition_state (jsctx, job, newstate, timestamp, 0, 0);
 }
 
 static int journal_revert_job (struct job_state_ctx *jsctx,
-                               flux_jobid_t id,
-                               int eventlog_seq,
+                               struct job *job,
                                double timestamp)
 {
-    struct job *job;
-
-    /* job not found is not-fatal, do not return error */
-    if (!(job = lookup_job (jsctx, id)))
-        return 0;
-
     /* The flux-restart event is currently only posted to jobs in
      * SCHED state since that is the only state transition defined
      * for the event in RFC21.  In the future, other transitions
      * may be defined.
      */
-    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
-        return 0;
-
     return job_transition_state (jsctx,
                                  job,
                                  FLUX_JOB_STATE_PRIORITY,
@@ -1294,14 +1263,13 @@ static int submit_context_parse (flux_t *h,
 }
 
 static int journal_submit_event (struct job_state_ctx *jsctx,
+                                 struct job *job,
                                  flux_jobid_t id,
                                  int eventlog_seq,
                                  double timestamp,
                                  json_t *context)
 {
-    struct job *job;
-
-    if (!(job = zhashx_lookup (jsctx->index, &id))) {
+    if (!job) {
         if (!(job = job_create (jsctx->ctx, id))){
             flux_log_error (jsctx->h, "%s: job_create", __FUNCTION__);
             return -1;
@@ -1318,10 +1286,9 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
             errno = ENOMEM;
             return -1;
         }
+        if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
+            return 0;
     }
-
-    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
-        return 0;
 
     if (submit_context_parse (jsctx->h, job, context) < 0)
         return -1;
@@ -1351,22 +1318,11 @@ static int priority_context_parse (flux_t *h,
 }
 
 static int journal_priority_event (struct job_state_ctx *jsctx,
-                                   flux_jobid_t id,
-                                   int eventlog_seq,
+                                   struct job *job,
                                    double timestamp,
                                    json_t *context)
 {
-    struct job *job;
-    int64_t orig_priority;
-
-    /* job not found is not-fatal, do not return error */
-    if (!(job = lookup_job (jsctx, id)))
-        return 0;
-
-    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
-        return 0;
-
-    orig_priority = job->priority;
+    int64_t orig_priority = job->priority;
 
     if (priority_context_parse (jsctx->h, job, context) < 0)
         return -1;
@@ -1410,20 +1366,10 @@ static int finish_context_parse (flux_t *h,
 }
 
 static int journal_finish_event (struct job_state_ctx *jsctx,
-                                 flux_jobid_t id,
-                                 int eventlog_seq,
+                                 struct job *job,
                                  double timestamp,
                                  json_t *context)
 {
-    struct job *job;
-
-    /* job not found is not-fatal, do not return error */
-    if (!(job = lookup_job (jsctx, id)))
-        return 0;
-
-    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
-        return 0;
-
     if (finish_context_parse (jsctx->h, job, context) < 0)
         return -1;
 
@@ -1456,22 +1402,10 @@ static int urgency_context_parse (flux_t *h,
 }
 
 static int journal_urgency_event (struct job_state_ctx *jsctx,
-                                  flux_jobid_t id,
-                                  int eventlog_seq,
+                                  struct job *job,
                                   json_t *context)
 {
-    struct job *job;
-
-    /* job not found is not-fatal, do not return error */
-    if (!(job = lookup_job (jsctx, id)))
-        return 0;
-
-    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
-        return 0;
-
-    if (urgency_context_parse (jsctx->h, job, context) < 0)
-        return -1;
-    return 0;
+    return urgency_context_parse (jsctx->h, job, context);
 }
 
 static int exception_context_parse (flux_t *h,
@@ -1574,20 +1508,11 @@ static int dependency_context_parse (flux_t *h,
 }
 
 static int journal_exception_event (struct job_state_ctx *jsctx,
-                                    flux_jobid_t id,
-                                    int eventlog_seq,
+                                    struct job *job,
                                     double timestamp,
                                     json_t *context)
 {
-    struct job *job;
     int severity;
-
-    /* job not found is not-fatal, do not return error */
-    if (!(job = lookup_job (jsctx, id)))
-        return 0;
-
-    if (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
-        return 0;
 
     if (exception_context_parse (jsctx->h, job, context, &severity) < 0)
         return -1;
@@ -1604,25 +1529,19 @@ static int journal_exception_event (struct job_state_ctx *jsctx,
 }
 
 static int journal_annotations_event (struct job_state_ctx *jsctx,
-                                      flux_jobid_t id,
+                                      struct job *job,
                                       json_t *context)
 {
-    struct job *job;
     json_t *annotations = NULL;
 
     if (!context
         || json_unpack (context, "{ s:o }", "annotations", &annotations) < 0) {
         flux_log (jsctx->h, LOG_ERR,
                   "%s: annotations event context invalid: %ju",
-                  __FUNCTION__, (uintmax_t)id);
+                  __FUNCTION__, (uintmax_t)job->id);
         errno = EPROTO;
         return -1;
     }
-
-    /* job not found is not-fatal, do not return error */
-    if (!(job = lookup_job (jsctx, id)))
-        return 0;
-
     json_decref (job->annotations);
     if (json_is_null (annotations))
         job->annotations = NULL;
@@ -1633,16 +1552,10 @@ static int journal_annotations_event (struct job_state_ctx *jsctx,
 }
 
 static int journal_dependency_event (struct job_state_ctx *jsctx,
-                                     flux_jobid_t id,
+                                     struct job *job,
                                      const char *cmd,
                                      json_t *context)
 {
-    struct job *job;
-
-    /* job not found is not-fatal, do not return error */
-    if (!(job = lookup_job (jsctx, id)))
-        return 0;
-
     return dependency_context_parse (jsctx->h, job, cmd, context);
 }
 
@@ -1653,6 +1566,7 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
     json_t *entry;
     double timestamp;
     const char *name;
+    struct job *job;
     json_t *context = NULL;
 
     if (json_unpack (event, "{s:I s:i s:o}",
@@ -1666,8 +1580,31 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
         return -1;
     }
 
+    /*
+     *  Lookup job. If eventlog sequence number is not greater than current,
+     *   then return (this event has already been processed, presumably via
+     *   restart from KVS).
+     */
+    if ((job = zhashx_lookup (jsctx->index, &id))
+         && job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
+            return 0;
+
+    /*  Job not found is non-fatal, do not return an error.
+     *  No need to proceed unless this is the first event (submit),
+     *   but log an error since this is an unexpected condition.
+     */
+    if (!job && strcmp (name, "submit") != 0) {
+        flux_log (jsctx->h,
+                  LOG_ERR,
+                  "event %s: job %ju not in hash",
+                  name,
+                  (uintmax_t) id);
+        return 0;
+    }
+
     if (!strcmp (name, "submit")) {
         if (journal_submit_event (jsctx,
+                                  job,
                                   id,
                                   eventlog_seq,
                                   timestamp,
@@ -1676,16 +1613,14 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
     }
     else if (!strcmp (name, "depend")) {
         if (journal_advance_job (jsctx,
-                                 id,
+                                 job,
                                  FLUX_JOB_STATE_PRIORITY,
-                                 eventlog_seq,
                                  timestamp) < 0)
             return -1;
     }
     else if (!strcmp (name, "priority")) {
         if (journal_priority_event (jsctx,
-                                    id,
-                                    eventlog_seq,
+                                    job,
                                     timestamp,
                                     context) < 0)
             return -1;
@@ -1694,49 +1629,46 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
         /* alloc event contains annotations, but we only update
          * annotations via "annotations" events */
         if (journal_advance_job (jsctx,
-                                 id,
+                                 job,
                                  FLUX_JOB_STATE_RUN,
-                                 eventlog_seq,
                                  timestamp) < 0)
             return -1;
     }
     else if (!strcmp (name, "finish")) {
         if (journal_finish_event (jsctx,
-                                  id,
-                                  eventlog_seq,
+                                  job,
                                   timestamp,
                                   context) < 0)
             return -1;
     }
     else if (!strcmp (name, "clean")) {
         if (journal_advance_job (jsctx,
-                                 id,
+                                 job,
                                  FLUX_JOB_STATE_INACTIVE,
-                                 eventlog_seq,
                                  timestamp) < 0)
             return -1;
     }
     else if (!strcmp (name, "urgency")) {
         if (journal_urgency_event (jsctx,
-                                   id,
-                                   eventlog_seq,
+                                   job,
                                    context) < 0)
             return -1;
     }
     else if (!strcmp (name, "exception")) {
         if (journal_exception_event (jsctx,
-                                     id,
-                                     eventlog_seq,
+                                     job,
                                      timestamp,
                                      context) < 0)
             return -1;
     }
     else if (!strcmp (name, "annotations")) {
-        if (journal_annotations_event (jsctx, id, context) < 0)
+        if (journal_annotations_event (jsctx,
+                                       job,
+                                       context) < 0)
             return -1;
     }
     else if (!strncmp (name, "dependency-", 11)) {
-        if (journal_dependency_event (jsctx, id, name+11, context) < 0)
+        if (journal_dependency_event (jsctx, job, name+11, context) < 0)
             return -1;
     }
     else if (!strcmp (name, "flux-restart")) {
@@ -1747,16 +1679,11 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
          * and in case dependency removed in the future.
          */
         if (journal_revert_job (jsctx,
-                                id,
-                                eventlog_seq,
+                                job,
                                 timestamp) < 0)
             return -1;
     }
     else {
-        struct job *job;
-        /* job not found is not-fatal, do not return error */
-        if (!(job = lookup_job (jsctx, id)))
-            return 0;
         (void) job_update_eventlog_seq (jsctx, job, eventlog_seq);
     }
 
