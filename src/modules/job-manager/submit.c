@@ -144,7 +144,7 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
     rv = event_job_post_entry (ctx->event,
                                job,
                                "submit",
-                               EVENT_NO_COMMIT,
+                               EVENT_NO_COMMIT | EVENT_FORCE_SEQUENCE,
                                entry);
     json_decref (entry);
     return rv;

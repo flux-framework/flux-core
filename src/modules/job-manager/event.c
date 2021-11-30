@@ -758,7 +758,18 @@ int event_job_post_entry (struct event *event,
 {
     int rc;
     flux_job_state_t old_state = job->state;
-    int eventlog_seq = (flags & EVENT_JOURNAL_ONLY) ? -1 : job->eventlog_seq;
+    int eventlog_seq = job->eventlog_seq;
+
+    /*  Journal event sequence should match actual sequence of events
+     *   in the job eventlog, so set eventlog_seq to -1 with
+     *   EVENT_NO_COMMIT and do not advance job->eventlog_seq.
+     *
+     *  Howveer, if EVENT_FORCE_SEQUENCE flag is supplied, then we
+     *   do set and advance an actual sequence number (the event may
+     *   already be in the eventlog such as the "submit" event)
+     */
+    if ((flags & EVENT_NO_COMMIT) && !(flags & EVENT_FORCE_SEQUENCE))
+        eventlog_seq = -1;
 
     /* call before eventlog_seq increment below */
     if (journal_process_event (event->ctx->journal,
@@ -767,11 +778,13 @@ int event_job_post_entry (struct event *event,
                                name,
                                entry) < 0)
         return -1;
-    if ((flags & EVENT_JOURNAL_ONLY))
-        return 0;
     if (event_job_update (job, entry) < 0) // modifies job->state
         return -1;
-    job->eventlog_seq++;
+    /*
+     *  Only advance eventlog_seq if one was set for this job
+     */
+    if (eventlog_seq != -1)
+        job->eventlog_seq++;
     if (event_job_cache (event, job, name) < 0)
         return -1;
     if (!(flags & EVENT_NO_COMMIT)

@@ -157,7 +157,7 @@ int annotations_update_and_publish (struct job_manager *ctx,
     if (event_job_post_pack (ctx->event,
                              job,
                              "annotations",
-                             EVENT_JOURNAL_ONLY,
+                             EVENT_NO_COMMIT,
                              "{s:O?}",
                              "annotations", tmp) < 0)
         goto error;
