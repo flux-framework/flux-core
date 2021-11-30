@@ -18,13 +18,13 @@
 
 void annotations_clear (struct job *job, bool *cleared);
 void annotations_sched_clear (struct job *job, bool *cleared);
-int annotations_update (struct job *job, json_t *annotations);
+int annotations_update (struct job *job, const char *path, json_t *annotations);
 
 struct annotate *annotate_ctx_create (struct job_manager *ctx);
 void annotate_ctx_destroy (struct annotate *annotate);
 
 /* exposed for unit testing only */
-int update_annotation_recursive (struct job *job, json_t *orig, json_t *new);
+int update_annotation_recursive (json_t *orig, const char *path, json_t *new);
 
 int annotations_update_and_publish (struct job_manager *ctx,
                                     struct job *job,

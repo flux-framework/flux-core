@@ -991,7 +991,7 @@ int jobtap_call (struct jobtap *jobtap,
          */
         int rc;
         if (strcmp (topic, "job.new") == 0)
-            rc = annotations_update (job, note);
+            rc = annotations_update (job, ".", note);
         else
             rc = annotations_update_and_publish (jobtap->ctx, job, note);
         if (rc < 0)

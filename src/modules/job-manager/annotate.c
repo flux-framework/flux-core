@@ -28,6 +28,7 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/jpath.h"
 
 #include "job.h"
 #include "event.h"
@@ -62,52 +63,15 @@ void annotations_sched_clear (struct job *job, bool *cleared)
     }
 }
 
-/* we want to delete items set to 'null', so this is not the same
- * as json_object_update_recursive() in jansson 2.13.1
- */
-int update_annotation_recursive (struct job *job, json_t *orig, json_t *new)
+int update_annotation_recursive (json_t *orig, const char *path, json_t *new)
 {
-    const char *key;
-    json_t *value;
-
-    assert (job && orig && new);
-
-    json_object_foreach (new, key, value) {
-        if (!json_is_null (value)) {
-            json_t *orig_value = json_object_get (orig, key);
-
-            if (json_is_object (value)) {
-                if (!json_is_object (orig_value)) {
-                    json_t *o = json_object ();
-                    if (!o || json_object_set_new (orig, key, o) < 0) {
-                        errno = ENOMEM;
-                        json_decref (o);
-                        return -1;
-                    }
-                    orig_value = o;
-                }
-                if (update_annotation_recursive (job, orig_value, value) < 0)
-                    return -1;
-                /* if object is now empty, remove it */
-                if (!json_object_size (orig_value))
-                    (void)json_object_del (orig, key);
-            }
-            else {
-                if (json_object_set (orig, key, value) < 0) {
-                    errno = ENOMEM;
-                    return -1;
-                }
-            }
-        }
-        else
-            /* not an error if key doesn't exist in orig */
-            (void)json_object_del (orig, key);
-    }
-
+    if (jpath_update (orig, path, new) < 0
+        || jpath_clear_null (orig) < 0)
+        return -1;
     return 0;
 }
 
-int annotations_update (struct job *job, json_t *annotations)
+int annotations_update (struct job *job, const char *path, json_t *annotations)
 {
     if (!json_is_object (annotations)) {
         errno = EINVAL;
@@ -120,20 +84,17 @@ int annotations_update (struct job *job, json_t *annotations)
                 return -1;
             }
         }
-        if (job->annotations) {
-            if (update_annotation_recursive (job,
-                                             job->annotations,
-                                             annotations) < 0)
-                return -1;
-            /* Special case: if user cleared all entries, assume we no
-             * longer need annotations object.  If cleared, caller
-             * will handle advertisement of the clear.
-             */
-            if (!json_object_size (job->annotations))
-                annotations_clear (job, NULL);
-        }
+        if (update_annotation_recursive (job->annotations,
+                                         path,
+                                         annotations) < 0)
+            return -1;
+        /* Special case: if user cleared all entries, assume we no
+         * longer need annotations object.  If cleared, caller
+         * will handle advertisement of the clear.
+         */
+        if (!json_object_size (job->annotations))
+            annotations_clear (job, NULL);
     }
-
     return 0;
 }
 
@@ -144,7 +105,7 @@ int annotations_update_and_publish (struct job_manager *ctx,
     int rc = -1;
     json_t *tmp = NULL;
 
-    if (annotations_update (job, annotations) < 0)
+    if (annotations_update (job, ".", annotations) < 0)
         return -1;
     if (job->annotations) {
         /* deep copy necessary for journal history, as
