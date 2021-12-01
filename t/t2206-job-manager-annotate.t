@@ -35,42 +35,6 @@ test_expect_success HAVE_JQ 'job-manager: no annotations in job-list (SSSSS)' '
         jlist_check_no_annotations $(cat job5.id)
 '
 
-test_expect_success HAVE_JQ 'job-manager: user annotate invalid id' '
-        test_must_fail flux job annotate 123456789 mykey foo
-'
-
-test_expect_success HAVE_JQ 'job-manager: user annotate job id 1' '
-        flux job annotate $(cat job1.id) mykey foo
-'
-
-test_expect_success HAVE_JQ 'job-manager: user annotate job id 2' '
-        flux job annotate $(cat job2.id) mykey bar
-'
-
-test_expect_success HAVE_JQ 'job-manager: user annotate job id 3' '
-        flux job annotate $(cat job3.id) mykey "{\"baz\": 42}"
-'
-
-test_expect_success HAVE_JQ 'job-manager: user annotate job id 4' '
-        echo -n doh | flux job annotate $(cat job4.id) mykey -
-'
-
-test_expect_success HAVE_JQ 'job-manager: user annotations in jobs (SSSSS)' '
-        jmgr_check_annotation $(cat job1.id) "user.mykey" "\"foo\"" &&
-        jmgr_check_annotation $(cat job2.id) "user.mykey" "\"bar\"" &&
-        jmgr_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
-        jmgr_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
-        jmgr_check_no_annotations $(cat job5.id)
-'
-
-test_expect_success HAVE_JQ 'job-manager: user annotations in job-list (SSSSS)' '
-        jlist_check_annotation $(cat job1.id) "user.mykey" "\"foo\"" &&
-        jlist_check_annotation $(cat job2.id) "user.mykey" "\"bar\"" &&
-        jlist_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
-        jlist_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
-        jlist_check_no_annotations $(cat job5.id)
-'
-
 # --setbit 0x2 enables creation of reason_pending field
 # flux queue stop/start to ensure no raciness with setting up debug bits
 test_expect_success 'job-manager: load sched-simple (1 rank, 2 cores/rank)' '
@@ -89,14 +53,10 @@ test_expect_success HAVE_JQ 'job-manager: job state RRSSS' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate jobs (RRSSS)' '
-        jmgr_check_annotation $(cat job1.id) "user.mykey" "\"foo\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
-        jmgr_check_annotation $(cat job2.id) "user.mykey" "\"bar\"" &&
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jmgr_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
         jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
-        jmgr_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.jobs_ahead" "1" &&
         jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
@@ -104,14 +64,10 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs (RRSSS)' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-list (RRSSS)' '
-        jlist_check_annotation $(cat job1.id) "user.mykey" "\"foo\"" &&
         jlist_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
-        jlist_check_annotation $(cat job2.id) "user.mykey" "\"bar\"" &&
         jlist_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jlist_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
         jlist_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jlist_check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
-        jlist_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
         jlist_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jlist_check_annotation $(cat job4.id) "sched.jobs_ahead" "1" &&
         jlist_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
@@ -119,37 +75,21 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-list (RRSSS)' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate jobs in flux-jobs (RRSSS)' '
-        fjobs_check_annotation $(cat job1.id) "annotations.user.mykey" "foo" &&
         fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "rank0/core0" &&
-        fjobs_check_annotation $(cat job2.id) "annotations.user.mykey" "bar" &&
         fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "rank0/core1" &&
-        fjobs_check_annotation $(cat job3.id) "annotations.user.mykey.baz" "42" &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.jobs_ahead" "0" &&
-        fjobs_check_annotation $(cat job4.id) "annotations.user.mykey" "doh" &&
         fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job4.id) "annotations.sched.jobs_ahead" "1" &&
         fjobs_check_annotation $(cat job5.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job5.id) "annotations.sched.jobs_ahead" "2"
 '
 
-test_expect_success HAVE_JQ 'job-manager: user annotate job id 1 again' '
-        flux job annotate $(cat job1.id) mykey bozo
-'
-
-test_expect_success HAVE_JQ 'job-manager: user clear annotatation job id 2' '
-        flux job annotate $(cat job2.id) mykey null
-'
-
 test_expect_success HAVE_JQ 'job-manager: annotate jobs (RRSSS)' '
-        jmgr_check_annotation $(cat job1.id) "user.mykey" "\"bozo\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
-        test_must_fail jmgr_check_annotation_exists $(cat job2.id) "user.mykey" &&
         jmgr_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jmgr_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
         jmgr_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
-        jmgr_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.jobs_ahead" "1" &&
         jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
@@ -157,14 +97,10 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs (RRSSS)' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-list (RRSSS)' '
-        jlist_check_annotation $(cat job1.id) "user.mykey" "\"bozo\"" &&
         jlist_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
-        test_must_fail jlist_check_annotation_exists $(cat job2.id) "user.mykey" &&
         jlist_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jlist_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
         jlist_check_annotation $(cat job3.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jlist_check_annotation $(cat job3.id) "sched.jobs_ahead" "0" &&
-        jlist_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
         jlist_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jlist_check_annotation $(cat job4.id) "sched.jobs_ahead" "1" &&
         jlist_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
@@ -172,14 +108,10 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-list (RRSSS)' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate jobs in flux-jobs (RRSSS)' '
-        fjobs_check_annotation $(cat job1.id) "annotations.user.mykey" "bozo" &&
         fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "rank0/core0" &&
-        test_must_fail fjobs_check_annotation_exists $(cat job2.id) "annotations.user.mykey" &&
         fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "rank0/core1" &&
-        fjobs_check_annotation $(cat job3.id) "annotations.user.mykey.baz" "42" &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.jobs_ahead" "0" &&
-        fjobs_check_annotation $(cat job4.id) "annotations.user.mykey" "doh" &&
         fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job4.id) "annotations.sched.jobs_ahead" "1" &&
         fjobs_check_annotation $(cat job5.id) "annotations.sched.reason_pending" "insufficient resources" &&
@@ -199,14 +131,11 @@ test_expect_success HAVE_JQ 'job-manager: job state RIRSS' '
 '
 
 test_expect_success HAVE_JQ 'job-manager: annotate jobs (RIRSS)' '
-        jmgr_check_annotation $(cat job1.id) "user.mykey" "\"bozo\"" &&
         jmgr_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
         jmgr_check_no_annotations $(cat job2.id) &&
-        jmgr_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
         jmgr_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
         test_must_fail jmgr_check_annotation_exists $(cat job3.id) "sched.reason_pending" &&
         test_must_fail jmgr_check_annotation_exists $(cat job3.id) "sched.jobs_ahead" &&
-        jmgr_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jmgr_check_annotation $(cat job4.id) "sched.jobs_ahead" "0" &&
         jmgr_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
@@ -216,15 +145,11 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs (RIRSS)' '
 # compared to above, note that job id #2 retains annotations, it is
 # cached in job-list
 test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-list (RIRSS)' '
-        jlist_check_annotation $(cat job1.id) "user.mykey" "\"bozo\"" &&
         jlist_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
-        test_must_fail jlist_check_annotation_exists $(cat job2.id) "user.mykey" &&
         jlist_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jlist_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
         jlist_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
         test_must_fail jlist_check_annotation_exists $(cat job3.id) "sched.reason_pending" &&
         test_must_fail jlist_check_annotation_exists $(cat job3.id) "sched.jobs_ahead" &&
-        jlist_check_annotation $(cat job4.id) "user.mykey" "\"doh\"" &&
         jlist_check_annotation $(cat job4.id) "sched.reason_pending" "\"insufficient resources\"" &&
         jlist_check_annotation $(cat job4.id) "sched.jobs_ahead" "0" &&
         jlist_check_annotation $(cat job5.id) "sched.reason_pending" "\"insufficient resources\"" &&
@@ -234,15 +159,11 @@ test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-list (RIRSS)' '
 # compared to above, note that job id #2 retains annotations, it is
 # cached in job-list
 test_expect_success HAVE_JQ 'job-manager: annotate jobs in flux-jobs (RIRSS)' '
-        fjobs_check_annotation $(cat job1.id) "annotations.user.mykey" "bozo" &&
         fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "rank0/core0" &&
-        test_must_fail fjobs_check_annotation_exists $(cat job2.id) "annotations.user.mykey" &&
         fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "rank0/core1" &&
-        fjobs_check_annotation $(cat job3.id) "annotations.user.mykey.baz" "42" &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.resource_summary" "rank0/core1" &&
         test_must_fail fjobs_check_annotation_exists $(cat job3.id) "annotations.sched.reason_pending" &&
         test_must_fail fjobs_check_annotation_exists $(cat job3.id) "annotations.sched.jobs_ahead" &&
-        fjobs_check_annotation $(cat job4.id) "annotations.user.mykey" "doh" &&
         fjobs_check_annotation $(cat job4.id) "annotations.sched.reason_pending" "insufficient resources" &&
         fjobs_check_annotation $(cat job4.id) "annotations.sched.jobs_ahead" "0" &&
         fjobs_check_annotation $(cat job5.id) "annotations.sched.reason_pending" "insufficient resources" &&
@@ -274,24 +195,17 @@ test_expect_success HAVE_JQ 'job-manager: no annotations (IIIII)' '
 
 # compared to above, note that job ids that ran retain annotations
 test_expect_success HAVE_JQ 'job-manager: annotation jobs in job-list (IIIII)' '
-        jlist_check_annotation $(cat job1.id) "user.mykey" "\"bozo\"" &&
         jlist_check_annotation $(cat job1.id) "sched.resource_summary" "\"rank0/core0\"" &&
-        test_must_fail jlist_check_annotation_exists $(cat job2.id) "user.mykey" &&
         jlist_check_annotation $(cat job2.id) "sched.resource_summary" "\"rank0/core1\"" &&
-        jlist_check_annotation $(cat job3.id) "user.mykey.baz" "42" &&
         jlist_check_annotation $(cat job3.id) "sched.resource_summary" "\"rank0/core1\"" &&
         jlist_check_no_annotations $(cat job4.id) &&
         jlist_check_no_annotations $(cat job5.id)
 '
 
 # compared to above, note that job ids that ran retain annotations
-# note that user annotation on job4 is removed, as job was canceled
 test_expect_success HAVE_JQ 'job-manager: annotate jobs in job-list (IIIII)' '
-        fjobs_check_annotation $(cat job1.id) "annotations.user.mykey" "bozo" &&
         fjobs_check_annotation $(cat job1.id) "annotations.sched.resource_summary" "rank0/core0" &&
-        test_must_fail fjobs_check_annotation_exists $(cat job2.id) "annotations.user.mykey" &&
         fjobs_check_annotation $(cat job2.id) "annotations.sched.resource_summary" "rank0/core1" &&
-        fjobs_check_annotation $(cat job3.id) "annotations.user.mykey.baz" "42" &&
         fjobs_check_annotation $(cat job3.id) "annotations.sched.resource_summary" "rank0/core1" &&
         fjobs_check_no_annotations $(cat job4.id) &&
         fjobs_check_no_annotations $(cat job5.id)
