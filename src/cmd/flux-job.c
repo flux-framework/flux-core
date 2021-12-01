@@ -36,6 +36,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/jpath.h"
 #include "src/common/libjob/job.h"
 #include "src/common/libutil/read_all.h"
 #include "src/common/libutil/monotime.h"
@@ -90,6 +91,7 @@ int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_wait (optparse_t *p, int argc, char **argv);
 int cmd_annotate (optparse_t *p, int argc, char **argv);
+int cmd_memo (optparse_t *p, int argc, char **argv);
 
 int stdin_flags;
 
@@ -325,6 +327,13 @@ static struct optparse_option wait_opts[] =  {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option memo_opts[] = {
+    { .name = "volatile", .has_arg = 0,
+      .usage = "Memo will not appear in eventlog (will be lost on restart)",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_subcommand subcommands[] = {
     { "list",
       "[OPTIONS]",
@@ -473,6 +482,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_annotate,
       0,
       NULL,
+    },
+    { "memo",
+      "[--volatile] id key=value [key=value, ...]",
+      "Post an RFC 21 memo to a job",
+      cmd_memo,
+      0,
+      memo_opts,
     },
     OPTPARSE_SUBCMD_END
 };
@@ -3022,6 +3038,77 @@ int cmd_annotate (optparse_t *p, int argc, char **argv)
     free (valbuf);
     return (0);
 }
+
+int cmd_memo (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h;
+    flux_jobid_t id;
+    json_t *memo = NULL;
+    flux_future_t *f;
+    int i;
+
+    if ((argc - optindex) < 2) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    id = parse_jobid (argv[optindex]);
+
+    /*  Build memo object from multiple values */
+    for (i = optindex + 1; i < argc; i++) {
+        void *valbuf = NULL;
+        char *key;
+        char *value;
+        json_t *val;
+
+        if (!(key = strdup (argv[i])))
+            log_msg_exit ("memo: out of memory duplicating key");
+        value = strchr (key, '=');
+        if (!value)
+            log_msg_exit ("memo: no value for key=%s", key);
+        *value++ = '\0';
+
+        if (!strcmp (value, "-")) {
+            ssize_t size;
+            if ((size = read_all (STDIN_FILENO, &valbuf)) < 0)
+                log_err_exit ("read_all");
+            value = valbuf;
+        }
+
+        /* if value is not legal json, assume string */
+        if (!(val = json_loads (value, JSON_DECODE_ANY, NULL))) {
+            if (!(val = json_string (value)))
+                log_msg_exit ("json_string");
+        }
+
+        if (!(memo = jpath_set_new (memo, key, val)))
+            log_err_exit ("failed to set %s=%s in memo object\n", key, value);
+
+        free (valbuf);
+        free (key);
+    }
+
+    if (!(f = flux_rpc_pack (h,
+                             "job-manager.memo",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:I s:b s:o}",
+                             "id", id,
+                             "volatile", optparse_hasopt (p, "volatile"),
+                             "memo", memo)))
+       log_err_exit ("flux_rpc_pack");
+
+    if (flux_rpc_get (f, NULL) < 0)
+       log_msg_exit ("memo: %s", future_strerror (f, errno));
+
+    flux_future_destroy (f);
+    flux_close (h);
+    return (0);
+}
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
