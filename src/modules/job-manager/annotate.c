@@ -167,6 +167,54 @@ error:
     json_decref (tmp);
 }
 
+void annotate_memo_request (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
+{
+    struct job_manager *ctx = arg;
+    struct flux_msg_cred cred;
+    flux_jobid_t id;
+    json_t *memo = NULL;
+    struct job *job;
+    const char *errstr = NULL;
+    int no_commit = 0;
+    json_t *tmp = NULL;
+
+    if (flux_request_unpack (msg, NULL, "{s:I s?b s:o}",
+                                        "id", &id,
+                                        "volatile", &no_commit,
+                                        "memo", &memo) < 0
+        || flux_msg_get_cred (msg, &cred) < 0)
+        goto error;
+    if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
+        errstr = "unknown job id";
+        errno = ENOENT;
+        goto error;
+    }
+    if (flux_msg_cred_authorize (cred, job->userid) < 0) {
+        errstr = "guests can only add a memo to their own jobs";
+        goto error;
+    }
+    if (event_job_post_pack (ctx->event,
+                             job,
+                             "memo",
+                             no_commit ? EVENT_NO_COMMIT : 0,
+                             "O",
+                             memo) < 0) {
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
+    json_decref (tmp);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    json_decref (tmp);
+}
+
+
 void annotate_ctx_destroy (struct annotate *annotate)
 {
     if (annotate) {
@@ -182,6 +230,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "job-manager.annotate",
         annotate_handle_request,
+        FLUX_ROLE_USER
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.memo",
+        annotate_memo_request,
         FLUX_ROLE_USER
     },
     FLUX_MSGHANDLER_TABLE_END,
