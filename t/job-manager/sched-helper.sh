@@ -75,6 +75,22 @@ jmgr_check_annotation() {
         return 1
 }
 
+# verify if job contains specific memo key & value through job manager
+#  (currently memo is a user annotation)
+#
+# function will loop for up to 5 seconds in case annotation update
+# arrives slowly
+#
+# arg1 - jobid
+# arg2 - key in memo
+# arg3 - value of key
+#
+# callers should set HAVE_JQ requirement
+jmgr_check_memo() {
+	jmgr_check_annotation $1 "user.$2" $3
+	return $?
+}
+
 # verify if job contains specific annotation key through job manager
 #
 # arg1 - jobid
@@ -85,6 +101,12 @@ jmgr_check_annotation_exists() {
         local id=$(flux job id $1)
         local key=$2
         ${JMGR_JOB_LIST} | grep ${id} | jq .annotations | jq -e ."${key}" > /dev/null
+}
+
+#  like jmgr_check_annotation_exists() but for job memo
+#
+jmgr_check_memo_exists() {
+	jmgr_check_annotation_exists $1 "user.$2"
 }
 
 # verify that job contains no annotations through job manager
@@ -129,6 +151,11 @@ jlist_check_annotation() {
                 sleep 0.5
         done
         return 1
+}
+
+jlist_check_memo() {
+	jlist_check_annotation $1 "user.$2" $3
+	return $?
 }
 
 # verify that job contains no annotations via job-list
