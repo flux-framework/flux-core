@@ -1,3 +1,45 @@
+flux-core version 0.32.0 - 2021-12-05
+-------------------------------------
+
+This release adds early groundwork for recovering running jobs across a
+Flux restart.  It also includes improved log messages based on user feedback
+about Flux failures on real workflow runs, a first draft of a new `flux top`
+tool, and a critical fix for system deployments of Flux (#3958).
+
+### Fixes
+
+ * python: fix reference counting for Python Message objects (#3983)
+ * python: avoid early garbage collection of Watcher objects (#3975)
+ * libflux: improve safety against refcounting bugs in message functions (#3985)
+ * shell: reject PMI clients that request v2 (#3953)
+ * resource: don't abort if topo-reduce is received more than once (#3958)
+
+### New Features
+
+ * systemd: start flux systemd user service (#3872)
+ * broker: record child instance URIs as job memo (#3986)
+ * Support job memo events (#3984)
+ * job-exec: checkpoint/restore KVS namespaces of running jobs (#3947)
+ * set hostlist broker attribute when boostrapped by PMI (#3966)
+ * add `flux_get_hostbyrank()` and improve broker attribute caching (#3971)
+ * broker: log slow nodes during startup (#3980)
+ * add flux-top command (#3979)
+
+### Cleanup
+
+ * flux-overlay: improve default status output, rework options (#3974)
+ * job-exec: improve job exception message/logging on broker disconnect (#3962)
+ * drop flux-jobspec command (#3951)
+ * improve flux-mini bulksubmit --dry-run output with --cc (#3956)
+ * README: update LLNL-CODE (#3954)
+ * broker/overlay: misc cleanup (#3948)
+ * bring README.md up to date (#3990)
+ * docker: fix and update ci dockerfiles (#3991)
+
+### Test
+
+ * testsuite: sanitize environment, fix hang in t2607-job-shell-input.t (#3968)
+
 flux-core version 0.31.0 - 2021-11-05
 -------------------------------------
 
