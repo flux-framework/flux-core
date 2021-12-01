@@ -21,6 +21,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/fluid.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/jpath.h"
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libjob/job_hash.h"
 #include "src/common/librlist/rlist.h"
@@ -69,6 +70,9 @@ static int dependency_context_parse (flux_t *h,
                                      struct job *job,
                                      const char *cmd,
                                      json_t *context);
+static int memo_update (flux_t *h,
+                        struct job *job,
+                        json_t *context);
 
 static void process_next_state (struct list_ctx *ctx, struct job *job);
 
@@ -1000,6 +1004,10 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
             if (dependency_context_parse (ctx->h, job, name+11, context) < 0)
                 goto error;
         }
+        else if (!strcmp (name, "memo")) {
+            if (context && memo_update (ctx->h, job, context) < 0)
+                goto error;
+        }
     }
 
     if (job->state == FLUX_JOB_STATE_NEW) {
@@ -1507,6 +1515,29 @@ static int dependency_context_parse (flux_t *h,
     return rc;
 }
 
+static int memo_update (flux_t *h,
+                        struct job *job,
+                        json_t *o)
+{
+    if (!o) {
+        flux_log (h, LOG_ERR, "%ju: invalid memo context", (uintmax_t) job->id);
+        errno = EPROTO;
+        return -1;
+    }
+    if (!job->annotations && !(job->annotations = json_object ())) {
+        errno = ENOMEM;
+        return -1;
+    }
+    if (jpath_update (job->annotations, "user", o) < 0
+        || jpath_clear_null (job->annotations) < 0)
+        return -1;
+    if (json_object_size (job->annotations) == 0) {
+        json_decref (job->annotations);
+        job->annotations = NULL;
+    }
+    return 0;
+}
+
 static int journal_exception_event (struct job_state_ctx *jsctx,
                                     struct job *job,
                                     double timestamp,
@@ -1665,6 +1696,10 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
         if (journal_annotations_event (jsctx,
                                        job,
                                        context) < 0)
+            return -1;
+    }
+    else if (!strcmp (name, "memo")) {
+        if (memo_update (jsctx->h, job, context) < 0)
             return -1;
     }
     else if (!strncmp (name, "dependency-", 11)) {
