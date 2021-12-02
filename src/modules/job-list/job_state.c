@@ -1615,9 +1615,15 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
      *  Lookup job. If eventlog sequence number is not greater than current,
      *   then return (this event has already been processed, presumably via
      *   restart from KVS).
+     *
+     *  FIXME: We need to override the sequence check for "memo" events
+     *   specifically since annotations events may overwrite them on
+     *   job-list module reload. This can be removed when memos are
+     *   separated from scheduler annotations.
      */
     if ((job = zhashx_lookup (jsctx->index, &id))
-         && job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1)
+         && (job_update_eventlog_seq (jsctx, job, eventlog_seq) == 1
+             && strcmp (name, "memo") != 0))
             return 0;
 
     /*  Job not found is non-fatal, do not return an error.
