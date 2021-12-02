@@ -1443,15 +1443,20 @@ void flux_match_free (struct flux_match m)
     ERRNO_SAFE_WRAP (free, (char *)m.topic_glob);
 }
 
-int flux_match_asprintf (struct flux_match *m, const char *topic_glob_fmt, ...)
+int flux_match_asprintf (struct flux_match *m, const char *fmt, ...)
 {
-    va_list args;
-    va_start (args, topic_glob_fmt);
+    va_list ap;
     char *topic = NULL;
-    int res = vasprintf (&topic, topic_glob_fmt, args);
-    va_end (args);
+    int res;
+
+    va_start (ap, fmt);
+    res = vasprintf (&topic, fmt, ap);
+    va_end (ap);
+    if (res < 0)
+        return -1;
+
     m->topic_glob = topic;
-    return res;
+    return 0;
 }
 
 bool flux_msg_route_match_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
