@@ -446,7 +446,7 @@ int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid)
         errno = EINVAL;
         return -1;
     }
-    (*userid) = msg->userid;
+    *userid = msg->userid;
     return 0;
 }
 
@@ -466,7 +466,7 @@ int flux_msg_get_rolemask (const flux_msg_t *msg, uint32_t *rolemask)
         errno = EINVAL;
         return -1;
     }
-    (*rolemask) = msg->rolemask;
+    *rolemask = msg->rolemask;
     return 0;
 }
 
@@ -603,7 +603,7 @@ int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
         errno = EPROTO;
         return -1;
     }
-    (*seq) = msg->sequence;
+    *seq = msg->sequence;
     return 0;
 }
 
@@ -633,7 +633,7 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
         errno = EPROTO;
         return -1;
     }
-    (*t) = msg->matchtag;
+    *t = msg->matchtag;
     return 0;
 }
 
@@ -661,7 +661,7 @@ int flux_msg_get_status (const flux_msg_t *msg, int *s)
         errno = EPROTO;
         return -1;
     }
-    (*s) = msg->status;
+    *s = msg->status;
     return 0;
 }
 
