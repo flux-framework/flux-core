@@ -92,6 +92,8 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_get_type (NULL, &type) < 0 && errno == EINVAL,
         "flux_msg_get_type fails with EINVAL on msg = NULL");
+    lives_ok ({flux_msg_get_type (msg, NULL);},
+        "flux_msg_get_type doesn't segfault with NULL type arg");
 
     errno = 0;
     ok (flux_msg_set_private (NULL) < 0 && errno == EINVAL,

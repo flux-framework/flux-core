@@ -342,7 +342,8 @@ int flux_msg_get_type (const flux_msg_t *msg, int *type)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    (*type) = msg->type;
+    if (type)
+        *type = msg->type;
     return 0;
 }
 
