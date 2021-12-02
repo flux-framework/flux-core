@@ -17,14 +17,6 @@ test_expect_success "flux can run flux instance as a job" '
 	echo 1 >size.exp &&
 	test_cmp size.exp size.out
 '
-
-test_expect_success "flux subinstance leaves local_uri, remote_uri in KVS" '
-	id=$(flux mini submit flux start /bin/true) &&
-	flux job wait-event $id finish &&
-	flux job info $id guest.flux.local_uri &&
-	flux job info $id guest.flux.remote_uri
-'
-
 test_expect_success "flux --parent works in subinstance" '
 	id=$(flux mini submit \
 		flux start ${ARGS} flux --parent kvs put test=ok) &&
