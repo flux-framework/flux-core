@@ -533,11 +533,11 @@ error:
     return -1;
 }
 
-int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeidp)
+int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!nodeidp) {
+    if (!nodeid) {
         errno = EINVAL;
         return -1;
     }
@@ -545,11 +545,11 @@ int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeidp)
         errno = EPROTO;
         return -1;
     }
-    *nodeidp = msg->nodeid;
+    *nodeid = msg->nodeid;
     return 0;
 }
 
-int flux_msg_set_errnum (flux_msg_t *msg, int e)
+int flux_msg_set_errnum (flux_msg_t *msg, int errnum)
 {
     if (msg_validate (msg) < 0)
         return -1;
@@ -558,15 +558,15 @@ int flux_msg_set_errnum (flux_msg_t *msg, int e)
         errno = EINVAL;
         return -1;
     }
-    msg->errnum = e;
+    msg->errnum = errnum;
     return 0;
 }
 
-int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
+int flux_msg_get_errnum (const flux_msg_t *msg, int *errnum)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!e) {
+    if (!errnum) {
         errno = EINVAL;
         return -1;
     }
@@ -575,7 +575,7 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
         errno = EPROTO;
         return -1;
     }
-    *e = msg->errnum;
+    *errnum = msg->errnum;
     return 0;
 }
 
@@ -607,7 +607,7 @@ int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
     return 0;
 }
 
-int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t t)
+int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t matchtag)
 {
     if (msg_validate (msg) < 0)
         return -1;
@@ -616,15 +616,15 @@ int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t t)
         errno = EINVAL;
         return -1;
     }
-    msg->matchtag = t;
+    msg->matchtag = matchtag;
     return 0;
 }
 
-int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
+int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *matchtag)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!t) {
+    if (!matchtag) {
         errno = EINVAL;
         return -1;
     }
@@ -633,11 +633,11 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
         errno = EPROTO;
         return -1;
     }
-    *t = msg->matchtag;
+    *matchtag = msg->matchtag;
     return 0;
 }
 
-int flux_msg_set_status (flux_msg_t *msg, int s)
+int flux_msg_set_status (flux_msg_t *msg, int status)
 {
     if (msg_validate (msg) < 0)
         return -1;
@@ -645,15 +645,15 @@ int flux_msg_set_status (flux_msg_t *msg, int s)
         errno = EINVAL;
         return -1;
     }
-    msg->status = s;
+    msg->status = status;
     return 0;
 }
 
-int flux_msg_get_status (const flux_msg_t *msg, int *s)
+int flux_msg_get_status (const flux_msg_t *msg, int *status)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!s) {
+    if (!status) {
         errno = EINVAL;
         return -1;
     }
@@ -661,7 +661,7 @@ int flux_msg_get_status (const flux_msg_t *msg, int *s)
         errno = EPROTO;
         return -1;
     }
-    *s = msg->status;
+    *status = msg->status;
     return 0;
 }
 
