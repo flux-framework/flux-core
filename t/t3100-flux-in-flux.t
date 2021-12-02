@@ -17,6 +17,16 @@ test_expect_success "flux can run flux instance as a job" '
 	echo 1 >size.exp &&
 	test_cmp size.exp size.out
 '
+
+test_expect_success 'flux subinstance sets uri job memo' '
+	jobid=$(flux mini batch -n1 --wrap sleep 300) &&
+	flux job wait-event -t 60 ${jobid} memo &&
+	flux jobs -no {user.uri} ${jobid} > uri.memo &&
+	grep ^ssh:// uri.memo &&
+	flux job cancel $jobid &&
+	flux job wait-event $jobid clean
+'
+
 test_expect_success "flux --parent works in subinstance" '
 	id=$(flux mini submit \
 		flux start ${ARGS} flux --parent kvs put test=ok) &&
