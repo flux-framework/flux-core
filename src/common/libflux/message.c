@@ -370,11 +370,8 @@ int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *flags)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!flags) {
-        errno = EINVAL;
-        return -1;
-    }
-    *flags = msg->flags;
+    if (flags)
+        *flags = msg->flags;
     return 0;
 }
 
@@ -442,11 +439,8 @@ int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!userid) {
-        errno = EINVAL;
-        return -1;
-    }
-    *userid = msg->userid;
+    if (userid)
+        *userid = msg->userid;
     return 0;
 }
 
@@ -462,11 +456,8 @@ int flux_msg_get_rolemask (const flux_msg_t *msg, uint32_t *rolemask)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!rolemask) {
-        errno = EINVAL;
-        return -1;
-    }
-    *rolemask = msg->rolemask;
+    if (rolemask)
+        *rolemask = msg->rolemask;
     return 0;
 }
 
@@ -537,15 +528,12 @@ int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!nodeid) {
-        errno = EINVAL;
-        return -1;
-    }
     if (msg->type != FLUX_MSGTYPE_REQUEST) {
         errno = EPROTO;
         return -1;
     }
-    *nodeid = msg->nodeid;
+    if (nodeid)
+        *nodeid = msg->nodeid;
     return 0;
 }
 
@@ -566,16 +554,13 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *errnum)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!errnum) {
-        errno = EINVAL;
-        return -1;
-    }
     if (msg->type != FLUX_MSGTYPE_RESPONSE
         && msg->type != FLUX_MSGTYPE_KEEPALIVE) {
         errno = EPROTO;
         return -1;
     }
-    *errnum = msg->errnum;
+    if (errnum)
+        *errnum = msg->errnum;
     return 0;
 }
 
@@ -595,15 +580,12 @@ int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!seq) {
-        errno = EINVAL;
-        return -1;
-    }
     if (msg->type != FLUX_MSGTYPE_EVENT) {
         errno = EPROTO;
         return -1;
     }
-    *seq = msg->sequence;
+    if (seq)
+        *seq = msg->sequence;
     return 0;
 }
 
@@ -624,16 +606,13 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *matchtag)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!matchtag) {
-        errno = EINVAL;
-        return -1;
-    }
     if (msg->type != FLUX_MSGTYPE_REQUEST
         && msg->type != FLUX_MSGTYPE_RESPONSE) {
         errno = EPROTO;
         return -1;
     }
-    *matchtag = msg->matchtag;
+    if (matchtag)
+        *matchtag = msg->matchtag;
     return 0;
 }
 
@@ -653,15 +632,12 @@ int flux_msg_get_status (const flux_msg_t *msg, int *status)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!status) {
-        errno = EINVAL;
-        return -1;
-    }
     if (msg->type != FLUX_MSGTYPE_KEEPALIVE) {
         errno = EPROTO;
         return -1;
     }
-    *status = msg->status;
+    if (status)
+        *status = msg->status;
     return 0;
 }
 
@@ -994,10 +970,6 @@ int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, int *size)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (!buf && !size) {
-        errno = EINVAL;
-        return -1;
-    }
     if (!(msg->flags & FLUX_MSGFLAG_PAYLOAD)) {
         errno = EPROTO;
         return -1;
@@ -1028,28 +1000,24 @@ int flux_msg_set_string (flux_msg_t *msg, const char *s)
 int flux_msg_get_string (const flux_msg_t *msg, const char **s)
 {
     const char *buf;
+    const char *result;
     int size;
-    int rc = -1;
 
     if (msg_validate (msg) < 0)
         return -1;
-    if (!s) {
-        errno = EINVAL;
-        return -1;
-    }
     if (flux_msg_get_payload (msg, (const void **)&buf, &size) < 0) {
         errno = 0;
-        *s = NULL;
+        result = NULL;
     } else {
         if (!buf || size == 0 || buf[size - 1] != '\0') {
             errno = EPROTO;
-            goto done;
+            return -1;
         }
-        *s = buf;
+        result = buf;
     }
-    rc = 0;
-done:
-    return rc;
+    if (s)
+        *s = result;
+    return 0;
 }
 
 /* N.B. const attribute of msg argument is defeated internally to

@@ -127,9 +127,8 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_get_payload (NULL, NULL, NULL) < 0 && errno == EINVAL,
         "flux_msg_get_payload msg=NULL fails with EINVAL");
-    errno = 0;
-    ok (flux_msg_get_payload (msg, NULL, NULL) < 0 && errno == EINVAL,
-       "flux_msg_get_payload fails with EINVAL on in-and-out params = NULL");
+    lives_ok ({flux_msg_get_payload (msg, NULL, NULL);},
+       "flux_msg_get_payload does not segfault on in-and-out params = NULL");
     errno = 0;
     ok (flux_msg_get_payload (msg, &payload, &payload_size) < 0
         && errno == EPROTO,
@@ -140,9 +139,8 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_get_flags (NULL, &flags) < 0 && errno == EINVAL,
         "flux_msg_get_flags msg=NULL fails with EINVAL");
-    errno = 0;
-    ok (flux_msg_get_flags (msg, NULL) < 0 && errno == EINVAL,
-        "flux_msg_get_flags flags=NULL fails with EINVAL");
+    lives_ok ({flux_msg_get_flags (msg, NULL);},
+        "flux_msg_get_flags flags=NULL does not segfault");
     errno = 0;
     ok (flux_msg_set_flags (NULL, 0) < 0 && errno == EINVAL,
         "flux_msg_set_flags msg=NULL fails with EINVAL");
@@ -180,18 +178,16 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_get_userid (NULL, &cred.userid) < 0 && errno == EINVAL,
         "flux_msg_get_userid msg=NULL fails with EINVAL");
-    errno = 0;
-    ok (flux_msg_get_userid (msg, NULL) < 0 && errno == EINVAL,
-        "flux_msg_get_userid userid=NULL fails with EINVAL");
+    lives_ok ({flux_msg_get_userid (msg, NULL);},
+        "flux_msg_get_userid userid=NULL does not segfault");
     errno = 0;
     ok (flux_msg_set_userid (NULL, cred.userid) < 0 && errno == EINVAL,
         "flux_msg_set_userid msg=NULL fails with EINVAL");
     errno = 0;
     ok (flux_msg_get_rolemask (NULL, &cred.rolemask) < 0 && errno == EINVAL,
         "flux_msg_get_rolemask msg=NULL fails with EINVAL");
-    errno = 0;
-    ok (flux_msg_get_rolemask (msg, NULL) < 0 && errno == EINVAL,
-        "flux_msg_get_rolemask rolemask=NULL fails with EINVAL");
+    lives_ok ({flux_msg_get_rolemask (msg, NULL);},
+        "flux_msg_get_rolemask rolemask=NULL does not segfault");
     errno = 0;
     ok (flux_msg_set_rolemask (NULL, cred.rolemask) < 0 && errno == EINVAL,
         "flux_msg_set_rolemask msg=NULL fails with EINVAL");
@@ -215,9 +211,8 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_get_errnum (NULL, &errnum) < 0 && errno == EINVAL,
         "flux_msg_get_errnum fails with EINVAL on msg = NULL");
-    errno = 0;
-    ok (flux_msg_get_errnum (msg, NULL) < 0 && errno == EINVAL,
-        "flux_msg_get_errnum fails with EINVAL on in-and-out param = NULL");
+    lives_ok ({flux_msg_get_errnum (msg, NULL);},
+        "flux_msg_get_errnum errnum = NULL does not segfault");
     errno = 0;
     ok (flux_msg_get_errnum (req, &errnum) < 0 && errno == EPROTO,
         "flux_msg_get_errnum fails with EPROTO on msg != response type");
@@ -227,9 +222,8 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_get_seq (NULL, &seq) < 0 && errno == EINVAL,
         "flux_msg_get_seq fails with EINVAL on msg = NULL");
-    errno = 0;
-    ok (flux_msg_get_seq (msg, NULL) < 0 && errno == EINVAL,
-        "flux_msg_get_seq fails with EINVAL on in-and-out param = NULL");
+    lives_ok ({flux_msg_get_seq (msg, NULL);},
+        "flux_msg_get_seq seq = NULL does not segfault");
     errno = 0;
     ok (flux_msg_get_seq (req, &seq) < 0 && errno == EPROTO,
         "flux_msg_get_seq fails with EPROTO on msg != event type");
@@ -239,9 +233,8 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_get_status (NULL, &status) < 0 && errno == EINVAL,
         "flux_msg_get_status fails with EINVAL on msg = NULL");
-    errno = 0;
-    ok (flux_msg_get_status (msg, NULL) < 0 && errno == EINVAL,
-        "flux_msg_get_status fails with EINVAL on in-and-out param = NULL");
+    lives_ok ({flux_msg_get_status (msg, NULL);},
+        "flux_msg_get_status status = NULL does not segfault");
     errno = 0;
     ok (flux_msg_get_status (req, &status) < 0 && errno == EPROTO,
         "flux_msg_get_status fails with EPROTO on msg != keepalive type");
@@ -251,9 +244,8 @@ void check_cornercase (void)
     errno = 0;
     ok (flux_msg_get_matchtag (NULL, &tag) < 0 && errno == EINVAL,
         "flux_msg_get_matchtag fails with EINVAL on msg = NULL");
-    errno = 0;
-    ok (flux_msg_get_matchtag (msg, NULL) < 0 && errno == EINVAL,
-        "flux_msg_get_matchtag fails with EINVAL on in-and-out param = NULL");
+    lives_ok ({flux_msg_get_matchtag (msg, NULL);},
+        "flux_msg_get_matchtag matchtag = NULL does not segfault");
     errno = 0;
     ok (flux_msg_get_matchtag (evt, &tag) < 0 && errno == EPROTO,
         "flux_msg_get_matchtag fails with EPROTO on msg != req/rsp type");
