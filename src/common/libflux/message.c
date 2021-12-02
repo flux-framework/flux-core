@@ -350,29 +350,31 @@ int flux_msg_get_type (const flux_msg_t *msg, int *type)
     return 0;
 }
 
-int flux_msg_set_flags (flux_msg_t *msg, uint8_t fl)
+int flux_msg_set_flags (flux_msg_t *msg, uint8_t flags)
 {
     const uint8_t valid_flags = FLUX_MSGFLAG_TOPIC | FLUX_MSGFLAG_PAYLOAD
                               | FLUX_MSGFLAG_ROUTE | FLUX_MSGFLAG_UPSTREAM
                               | FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING
                               | FLUX_MSGFLAG_NORESPONSE;
 
-    if (!msg || fl & ~valid_flags || ((fl & FLUX_MSGFLAG_STREAMING)
-                                   && (fl & FLUX_MSGFLAG_NORESPONSE)) != 0) {
+    if (!msg
+        || (flags & ~valid_flags)
+        || ((flags & FLUX_MSGFLAG_STREAMING)
+            && (flags & FLUX_MSGFLAG_NORESPONSE))) {
         errno = EINVAL;
         return -1;
     }
-    msg->flags = fl;
+    msg->flags = flags;
     return 0;
 }
 
-int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *fl)
+int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *flags)
 {
-    if (!msg || !fl) {
+    if (!msg || !flags) {
         errno = EINVAL;
         return -1;
     }
-    (*fl) = msg->flags;
+    *flags = msg->flags;
     return 0;
 }
 
