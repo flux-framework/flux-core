@@ -43,6 +43,12 @@ void badargs (void)
     errno = 0;
     ok (jpath_set (NULL, "foo", json_null ()) < 0 && errno == EINVAL,
         "jpath_set o=NULL fails with EINVAL");
+    errno = 0;
+    ok (jpath_update (NULL, "foo", json_null ()) < 0 && errno == EINVAL,
+        "jpath_update o=NULL fails with EINVAL");
+    errno = 0;
+    ok (jpath_clear_null (NULL) < 0 && errno == EINVAL,
+        "jpath_clear_null o=NULL fails with EINVAL");
 
     errno = 0;
     ok (jpath_get (o, NULL) == NULL && errno == EINVAL,
@@ -53,6 +59,9 @@ void badargs (void)
     errno = 0;
     ok (jpath_set (o, NULL, json_null ()) < 0 && errno == EINVAL,
         "jpath_set path=NULL fails with EINVAL");
+    errno = 0;
+    ok (jpath_set_new (NULL, NULL, json_null ()) == NULL && errno == EINVAL,
+        "jpath_set_new path=NULL fails with EINVAL");
 
     errno = 0;
     ok (jpath_set (o, "foo", NULL) < 0 && errno == EINVAL,
@@ -64,7 +73,7 @@ void badargs (void)
 void basic (void)
 {
     json_t *o;
-    json_t *val[3];
+    json_t *val[4];
     json_t *tmp;
     int i;
 
@@ -72,7 +81,8 @@ void basic (void)
     val[0] = json_object ();
     val[1] = json_real (3.14);
     val[2] = json_string ("foo");
-    if (!o || !val[0] || !val[1] || !val[2])
+    val[3] = json_pack ("{s:{s:s}}", "c", "f", "bar");
+    if (!o || !val[0] || !val[1] || !val[2] || !val[3])
         BAIL_OUT ("error creating test objects");
 
     ok (jpath_set (o, "a.c.d", val[0]) == 0,
@@ -81,6 +91,10 @@ void basic (void)
         "jpath_set a.c.e=3.14 works");
     ok (jpath_set (o, "a.b", val[2]) == 0,
         "jpath_set a.b=\"foo\" works");
+    ok (jpath_update (o, "a", val[3]) == 0,
+        "jpath_set set a=object works");
+
+    diag_json (o);
 
     tmp = jpath_get (o, "a.c.d");
     ok (tmp
@@ -98,6 +112,12 @@ void basic (void)
         && json_is_string (tmp)
         && !strcmp (json_string_value (tmp), "foo"),
         "jpath_get a.b returned expected value");
+
+    tmp = jpath_get (o, "a.c.f");
+    ok (tmp
+        && json_is_string (tmp)
+        && !strcmp (json_string_value (tmp), "bar"),
+        "jpath_get a.c.f returned expected value");
 
     diag_json (o);
 
@@ -123,6 +143,57 @@ void basic (void)
 
     for (i = 0; i < sizeof (val)/sizeof (val[0]); i++)
         json_decref (val[i]);
+    json_decref (o);
+}
+
+void null (void)
+{
+    json_t *o;
+    json_t *val = json_pack ("{s:{s:{s:i}} s:{s:n s:n s:s}}",
+                             "user",
+                               "mykey",
+                                 "baz", 42,
+                             "sched",
+                               "reason_pending",
+                               "jobs_ahead",
+                               "resource_summary", "rank0/core0");
+
+    if (!(o = json_object ()) || !val)
+        BAIL_OUT ("error setting up test objects failed");
+
+    ok (jpath_update (o, ".", val) == 0,
+        "jpath_update with null works");
+
+    diag_json (o);
+
+    ok (jpath_clear_null (o) == 0,
+        "jpath_clear_null works");
+
+    diag_json (o);
+
+    errno = 0;
+    ok (jpath_get (o, "sched.jobs_ahead") == NULL && errno == ENOENT,
+        "null sched.jobs_ahead is eliminated after jpath_clear_null()");
+    errno = 0;
+    ok (jpath_get (o, "sched.reason_pending") == NULL && errno == ENOENT,
+        "null sched.reason_pending is eliminated after jpath_clear_null()");
+
+    json_decref (o);
+    json_decref (val);
+}
+
+void update_new (void)
+{
+    json_t *o = NULL;
+    json_t *val = json_string ("bar");
+
+    if (!val)
+        BAIL_OUT ("error setting up test object");
+
+    o = jpath_set_new (o, "a.b.c", val);
+    ok (o != NULL,
+        "json_update_new (NULL, ...) creates new object");
+    diag_json (o);
     json_decref (o);
 }
 
@@ -174,6 +245,8 @@ int main (int argc, char *argv[])
 
     badargs ();
     basic ();
+    null ();
+    update_new ();
     edge ();
 
     done_testing ();

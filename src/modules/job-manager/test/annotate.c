@@ -20,7 +20,6 @@
 
 void basic (void)
 {
-    struct job j = {0};
     json_t *orig;
     json_t *new;
     json_t *cmp;
@@ -32,7 +31,7 @@ void basic (void)
     if (!orig || !new || !cmp)
         BAIL_OUT ("json_object() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive does nothing on empty dictionary");
 
@@ -44,7 +43,7 @@ void basic (void)
     if (!new || !cmp)
         BAIL_OUT ("json_object() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive does nothing removing non-existant key");
 
@@ -56,7 +55,7 @@ void basic (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive updates orig appropriately");
 
@@ -68,7 +67,7 @@ void basic (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive overwrites existing key");
 
@@ -80,7 +79,7 @@ void basic (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive removes value on json null setting");
 
@@ -91,7 +90,6 @@ void basic (void)
 
 void recursive (void)
 {
-    struct job j = {0};
     json_t *orig;
     json_t *new;
     json_t *cmp;
@@ -103,7 +101,7 @@ void recursive (void)
     if (!orig || !new || !cmp)
         BAIL_OUT ("json_object/pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive recursively does nothing on "
         "empty dictionary");
@@ -116,7 +114,7 @@ void recursive (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive sets dictionary");
 
@@ -128,7 +126,7 @@ void recursive (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive recursively does nothing "
         "removing non-existant key");
@@ -141,7 +139,7 @@ void recursive (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive recursively updates orig appropriately");
 
@@ -153,7 +151,7 @@ void recursive (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive recursively overwrites existing key");
 
@@ -165,7 +163,7 @@ void recursive (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive recursively removes value "
         "on json null setting");
@@ -178,7 +176,7 @@ void recursive (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive recursively removes empty "
         "sub-dictionaries");
@@ -190,7 +188,6 @@ void recursive (void)
 
 void overwrite (void)
 {
-    struct job j = {0};
     json_t *orig;
     json_t *new;
     json_t *cmp;
@@ -202,7 +199,7 @@ void overwrite (void)
     if (!orig || !new || !cmp)
         BAIL_OUT ("json_object/pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive sets dictionary");
 
@@ -214,7 +211,7 @@ void overwrite (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive overwrites object with non-object");
 
@@ -226,7 +223,7 @@ void overwrite (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive overwrites non-object with object");
 
@@ -238,7 +235,7 @@ void overwrite (void)
     if (!new || !cmp)
         BAIL_OUT ("json_pack() failed");
 
-    rc = update_annotation_recursive (&j, orig, new);
+    rc = update_annotation_recursive (orig, ".", new);
     ok (!rc && json_equal (orig, cmp) > 0,
         "update_annotation_recursive removes whole dict on json null setting");
 

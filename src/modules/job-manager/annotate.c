@@ -28,6 +28,7 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/jpath.h"
 
 #include "job.h"
 #include "event.h"
@@ -62,52 +63,15 @@ void annotations_sched_clear (struct job *job, bool *cleared)
     }
 }
 
-/* we want to delete items set to 'null', so this is not the same
- * as json_object_update_recursive() in jansson 2.13.1
- */
-int update_annotation_recursive (struct job *job, json_t *orig, json_t *new)
+int update_annotation_recursive (json_t *orig, const char *path, json_t *new)
 {
-    const char *key;
-    json_t *value;
-
-    assert (job && orig && new);
-
-    json_object_foreach (new, key, value) {
-        if (!json_is_null (value)) {
-            json_t *orig_value = json_object_get (orig, key);
-
-            if (json_is_object (value)) {
-                if (!json_is_object (orig_value)) {
-                    json_t *o = json_object ();
-                    if (!o || json_object_set_new (orig, key, o) < 0) {
-                        errno = ENOMEM;
-                        json_decref (o);
-                        return -1;
-                    }
-                    orig_value = o;
-                }
-                if (update_annotation_recursive (job, orig_value, value) < 0)
-                    return -1;
-                /* if object is now empty, remove it */
-                if (!json_object_size (orig_value))
-                    (void)json_object_del (orig, key);
-            }
-            else {
-                if (json_object_set (orig, key, value) < 0) {
-                    errno = ENOMEM;
-                    return -1;
-                }
-            }
-        }
-        else
-            /* not an error if key doesn't exist in orig */
-            (void)json_object_del (orig, key);
-    }
-
+    if (jpath_update (orig, path, new) < 0
+        || jpath_clear_null (orig) < 0)
+        return -1;
     return 0;
 }
 
-int annotations_update (flux_t *h, struct job *job, json_t *annotations)
+int annotations_update (struct job *job, const char *path, json_t *annotations)
 {
     if (!json_is_object (annotations)) {
         errno = EINVAL;
@@ -120,20 +84,17 @@ int annotations_update (flux_t *h, struct job *job, json_t *annotations)
                 return -1;
             }
         }
-        if (job->annotations) {
-            if (update_annotation_recursive (job,
-                                             job->annotations,
-                                             annotations) < 0)
-                return -1;
-            /* Special case: if user cleared all entries, assume we no
-             * longer need annotations object.  If cleared, caller
-             * will handle advertisement of the clear.
-             */
-            if (!json_object_size (job->annotations))
-                annotations_clear (job, NULL);
-        }
+        if (update_annotation_recursive (job->annotations,
+                                         path,
+                                         annotations) < 0)
+            return -1;
+        /* Special case: if user cleared all entries, assume we no
+         * longer need annotations object.  If cleared, caller
+         * will handle advertisement of the clear.
+         */
+        if (!json_object_size (job->annotations))
+            annotations_clear (job, NULL);
     }
-
     return 0;
 }
 
@@ -144,7 +105,7 @@ int annotations_update_and_publish (struct job_manager *ctx,
     int rc = -1;
     json_t *tmp = NULL;
 
-    if (annotations_update (ctx->h, job, annotations) < 0)
+    if (annotations_update (job, ".", annotations) < 0)
         return -1;
     if (job->annotations) {
         /* deep copy necessary for journal history, as
@@ -157,7 +118,7 @@ int annotations_update_and_publish (struct job_manager *ctx,
     if (event_job_post_pack (ctx->event,
                              job,
                              "annotations",
-                             EVENT_JOURNAL_ONLY,
+                             EVENT_NO_COMMIT,
                              "{s:O?}",
                              "annotations", tmp) < 0)
         goto error;
@@ -167,7 +128,7 @@ error:
     return rc;
 }
 
-void annotate_handle_request (flux_t *h,
+void annotate_memo_request (flux_t *h,
                               flux_msg_handler_t *mh,
                               const flux_msg_t *msg,
                               void *arg)
@@ -175,14 +136,16 @@ void annotate_handle_request (flux_t *h,
     struct job_manager *ctx = arg;
     struct flux_msg_cred cred;
     flux_jobid_t id;
-    json_t *annotations = NULL;
+    json_t *memo = NULL;
     struct job *job;
     const char *errstr = NULL;
+    int no_commit = 0;
     json_t *tmp = NULL;
 
-    if (flux_request_unpack (msg, NULL, "{s:I s:o}",
+    if (flux_request_unpack (msg, NULL, "{s:I s?b s:o}",
                                         "id", &id,
-                                        "annotations", &annotations) < 0
+                                        "volatile", &no_commit,
+                                        "memo", &memo) < 0
         || flux_msg_get_cred (msg, &cred) < 0)
         goto error;
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
@@ -191,11 +154,17 @@ void annotate_handle_request (flux_t *h,
         goto error;
     }
     if (flux_msg_cred_authorize (cred, job->userid) < 0) {
-        errstr = "guests can only annotate their own jobs";
+        errstr = "guests can only add a memo to their own jobs";
         goto error;
     }
-    if (annotations_update_and_publish (ctx, job, annotations) < 0)
+    if (event_job_post_pack (ctx->event,
+                             job,
+                             "memo",
+                             no_commit ? EVENT_NO_COMMIT : 0,
+                             "O",
+                             memo) < 0) {
         goto error;
+    }
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     json_decref (tmp);
@@ -205,6 +174,7 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     json_decref (tmp);
 }
+
 
 void annotate_ctx_destroy (struct annotate *annotate)
 {
@@ -219,8 +189,8 @@ void annotate_ctx_destroy (struct annotate *annotate)
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
-        "job-manager.annotate",
-        annotate_handle_request,
+        "job-manager.memo",
+        annotate_memo_request,
         FLUX_ROLE_USER
     },
     FLUX_MSGHANDLER_TABLE_END,

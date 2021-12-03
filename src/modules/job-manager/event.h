@@ -19,8 +19,20 @@
 #include "job-manager.h"
 
 enum job_manager_event_flags {
-    EVENT_JOURNAL_ONLY = 1,
-    EVENT_NO_COMMIT =    2,  // Do not commit event to eventlog
+
+    /*  EVENT_NO_COMMIT events are the same as any other event, except
+     *   that the event is not posted to the job eventlog in the KVS.
+     *   The event is not given a global sequence number, since this would
+     *   cause the events to be numbered incorrectly when replayed from
+     *   the eventlog in the KVS.
+     */
+    EVENT_NO_COMMIT = 1,
+
+    /*  With EVENT_NO_COMMIT, force the event to get a journal sequence
+     *   numnber. This is useful for events that may already be in the
+     *   job eventlog, such as the "submit" event.
+     */
+    EVENT_FORCE_SEQUENCE = 2,
 };
 
 /* Take any action for 'job' currently needed based on its internal state.

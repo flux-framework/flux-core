@@ -707,17 +707,6 @@ test_expect_success 'flux-jobs annotation "sched" short hands work' '
 	test_cmp sched_long_hand.out sched_short_hand.out
 '
 
-test_expect_success 'flux-jobs annotation "user" short hands work' '
-	for id in $(state_ids sched); do
-		flux job annotate $id foo 42
-	done &&
-	fmt="{annotations.user},{annotations.user.foo}" &&
-	flux jobs -no "${fmt}" > user_long_hand.out &&
-	fmt="{user},{user.foo}" &&
-	flux jobs -no "${fmt}" > user_short_hand.out &&
-	test_cmp user_long_hand.out user_short_hand.out
-'
-
 test_expect_success 'flux-jobs emits empty string on invalid annotations fields' '
 	fmt="{annotations.foo},{annotations.foo:h}" &&
 	fmt="${fmt},{annotations.sched.bar},{annotations.sched.bar:h}" &&
@@ -728,6 +717,17 @@ test_expect_success 'flux-jobs emits empty string on invalid annotations fields'
 		echo ",-,,-,,-" >> invalid-annotations.exp
 	done &&
 	test_cmp invalid-annotations.out invalid-annotations.exp
+'
+
+test_expect_success 'flux-jobs "user" short hands work for job memo' '
+       for id in $(state_ids sched); do
+               flux job memo $id foo=42
+       done &&
+       fmt="{annotations.user},{annotations.user.foo}" &&
+       flux jobs -no "${fmt}" > user_long_hand.out &&
+       fmt="{user},{user.foo}" &&
+       flux jobs -no "${fmt}" > user_short_hand.out &&
+       test_cmp user_long_hand.out user_short_hand.out
 '
 
 test_expect_success 'flux-jobs emits empty string for special case t_estimate' '

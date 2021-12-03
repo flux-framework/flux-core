@@ -70,7 +70,7 @@ static void requeue_pending (struct alloc *alloc, struct job *job)
     annotations_sched_clear (job, &cleared);
     if (cleared) {
         if (event_job_post_pack (ctx->event, job, "annotations",
-                                 EVENT_JOURNAL_ONLY,
+                                 EVENT_NO_COMMIT,
                                  "{s:n}", "annotations") < 0)
             flux_log_error (ctx->h,
                             "%s: event_job_post_pack",
@@ -224,8 +224,6 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     switch (type) {
     case FLUX_SCHED_ALLOC_SUCCESS:
-        alloc->alloc_pending_count--;
-        job->alloc_pending = 0;
         if (alloc->alloc_limit) {
             if (zlistx_delete (alloc->pending_jobs, job->handle) < 0)
                 flux_log (ctx->h, LOG_ERR, "failed to dequeue pending job");
@@ -241,6 +239,11 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         }
         if (annotations_update_and_publish (ctx, job, annotations) < 0)
             flux_log_error (h, "annotations_update: id=%ju", (uintmax_t)id);
+
+        /*  Only modify job state after annotation event is published
+         */
+        alloc->alloc_pending_count--;
+        job->alloc_pending = 0;
         if (job->annotations) {
             if (event_job_post_pack (ctx->event, job, "alloc", 0,
                                      "{ s:O }",
@@ -271,7 +274,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         annotations_clear (job, &cleared);
         if (cleared) {
             if (event_job_post_pack (ctx->event, job, "annotations",
-                                     EVENT_JOURNAL_ONLY,
+                                     EVENT_NO_COMMIT,
                                      "{s:n}", "annotations") < 0)
                 flux_log_error (ctx->h,
                                 "%s: event_job_post_pack: id=%ju",
@@ -300,7 +303,7 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
         job->alloc_pending = 0;
         if (cleared) {
             if (event_job_post_pack (ctx->event, job, "annotations",
-                                     EVENT_JOURNAL_ONLY,
+                                     EVENT_NO_COMMIT,
                                      "{s:n}", "annotations") < 0)
                 flux_log_error (ctx->h,
                                 "%s: event_job_post_pack: id=%ju",

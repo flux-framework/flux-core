@@ -50,6 +50,7 @@
 #include "journal.h"
 #include "wait.h"
 #include "prioritize.h"
+#include "annotate.h"
 #include "jobtap-internal.h"
 
 #include "event.h"
@@ -524,6 +525,10 @@ static int event_handle_perilog (struct job *job,
     return 0;
 }
 
+static int event_handle_memo (struct job *job, json_t *o)
+{
+    return annotations_update (job, "user", o);
+}
 
 /*  Return a callback topic string for the current job state
  *
@@ -584,6 +589,10 @@ int event_job_update (struct job *job, json_t *event)
     }
     else if (!strcmp (name, "set-flags")) {
         if (event_handle_set_flags (job, context) < 0)
+            goto error;
+    }
+    else if (!strcmp (name, "memo")) {
+        if (event_handle_memo (job, context) < 0)
             goto error;
     }
     else if (!strcmp (name, "depend")) {
@@ -758,7 +767,18 @@ int event_job_post_entry (struct event *event,
 {
     int rc;
     flux_job_state_t old_state = job->state;
-    int eventlog_seq = (flags & EVENT_JOURNAL_ONLY) ? -1 : job->eventlog_seq;
+    int eventlog_seq = job->eventlog_seq;
+
+    /*  Journal event sequence should match actual sequence of events
+     *   in the job eventlog, so set eventlog_seq to -1 with
+     *   EVENT_NO_COMMIT and do not advance job->eventlog_seq.
+     *
+     *  Howveer, if EVENT_FORCE_SEQUENCE flag is supplied, then we
+     *   do set and advance an actual sequence number (the event may
+     *   already be in the eventlog such as the "submit" event)
+     */
+    if ((flags & EVENT_NO_COMMIT) && !(flags & EVENT_FORCE_SEQUENCE))
+        eventlog_seq = -1;
 
     /* call before eventlog_seq increment below */
     if (journal_process_event (event->ctx->journal,
@@ -767,11 +787,13 @@ int event_job_post_entry (struct event *event,
                                name,
                                entry) < 0)
         return -1;
-    if ((flags & EVENT_JOURNAL_ONLY))
-        return 0;
     if (event_job_update (job, entry) < 0) // modifies job->state
         return -1;
-    job->eventlog_seq++;
+    /*
+     *  Only advance eventlog_seq if one was set for this job
+     */
+    if (eventlog_seq != -1)
+        job->eventlog_seq++;
     if (event_job_cache (event, job, name) < 0)
         return -1;
     if (!(flags & EVENT_NO_COMMIT)
