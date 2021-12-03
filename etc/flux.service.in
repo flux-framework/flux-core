@@ -5,7 +5,10 @@ Wants=munge.service
 [Service]
 TimeoutStopSec=90
 KillMode=mixed
-ExecStart=@X_BINDIR@/flux broker \
+ExecStart=/bin/bash -c '\
+  XDG_RUNTIME_DIR=/run/user/$UID \
+  DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$UID/bus \
+  @X_BINDIR@/flux broker \
   --config-path=@X_SYSCONFDIR@/flux/system/conf.d \
   -Scron.directory=@X_SYSCONFDIR@/flux/system/cron.d \
   -Stbon.fanout=256 \
@@ -17,6 +20,7 @@ ExecStart=@X_BINDIR@/flux broker \
   -Sbroker.rc2_none \
   -Sbroker.quorum=0 \
   -Sbroker.quorum-timeout=none
+'
 ExecReload=@X_BINDIR@/flux config reload
 Restart=on-success
 RestartSec=5s
@@ -28,6 +32,8 @@ PermissionsStartOnly=true
 ExecStartPre=-/bin/mkdir -p @X_LOCALSTATEDIR@/lib/flux
 ExecStartPre=/bin/chown flux:flux @X_LOCALSTATEDIR@/lib/flux
 ExecStartPre=/bin/chmod 0700 @X_LOCALSTATEDIR@/lib/flux
+ExecStartPre=bash -c 'systemctl start user@$(id -u flux).service'
+
 #
 # Delegate cgroup control to user flux, so that systemd doesn't reset
 #  cgroups for flux initiated processes, and to allow (some) cgroup
