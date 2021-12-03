@@ -33,7 +33,6 @@ class Message(WrapperPimpl):
             self,
             type_id=flux.constants.FLUX_MSGTYPE_REQUEST,
             handle=None,
-            destruct=False,
         ):
             super(Message.InnerWrapper, self).__init__(
                 ffi,
@@ -41,25 +40,23 @@ class Message(WrapperPimpl):
                 handle=handle,
                 match=ffi.typeof(lib.flux_msg_create).result,
                 prefixes=["flux_msg_", "FLUX_MSG"],
-                destructor=raw.flux_msg_destroy if destruct else None,
+                destructor=raw.flux_msg_destroy,
             )
-            self.destruct = destruct
             if handle is None:
                 self.handle = raw.flux_msg_create(type_id)
+            else:
+                #  Always take a reference on externally supplied flux_msg_t
+                #   so that it can't be destroyed while the Python
+                #   Message object is still active.
+                raw.flux_msg_incref(self.handle)
 
         def __del__(self):
-            if (
-                (not self.external or self.destruct)
-                and self.handle is not None
-                and self.handle != ffi.NULL
-            ):
-                raw.flux_msg_destroy(self.handle)
+            if self.handle is not None and self.handle != ffi.NULL:
+                raw.flux_msg_decref(self.handle)
 
-    def __init__(
-        self, type_id=flux.constants.FLUX_MSGTYPE_REQUEST, handle=None, destruct=False
-    ):
+    def __init__(self, type_id=flux.constants.FLUX_MSGTYPE_REQUEST, handle=None):
         super(Message, self).__init__()
-        self.pimpl = self.InnerWrapper(type_id, handle, destruct)
+        self.pimpl = self.InnerWrapper(type_id, handle)
 
     @classmethod
     def from_event_encode(cls, topic, payload=None):
@@ -124,7 +121,7 @@ def message_handler_wrapper(unused1, unused2, msg_handle, opaque_handle):
         watcher.callback(
             watcher.flux_handle,
             watcher,
-            Message(handle=msg_handle, destruct=False),
+            Message(handle=msg_handle),
             watcher.args,
         )
     # pylint: disable=broad-except
