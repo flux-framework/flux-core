@@ -19,7 +19,7 @@
 
 static const double job_activity_rate_limit = 2;
 
-void fatal (int errnum, const char *fmt, ...)
+__attribute__ ((noreturn)) void fatal (int errnum, const char *fmt, ...)
 {
     va_list ap;
     char buf[128];
