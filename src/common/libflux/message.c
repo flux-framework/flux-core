@@ -47,6 +47,15 @@
 #include "message_route.h"
 #include "message_proto.h"
 
+static int msg_validate (const flux_msg_t *msg)
+{
+    if (!msg || msg->refcount <= 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
 static void msg_setup_type (flux_msg_t *msg)
 {
     switch (msg->type) {
@@ -96,9 +105,10 @@ flux_msg_t *flux_msg_create (int type)
 
 void flux_msg_destroy (flux_msg_t *msg)
 {
-    if (msg && --msg->refcount == 0) {
+    if (msg && msg->refcount > 0 && --msg->refcount == 0) {
         int saved_errno = errno;
-        flux_msg_route_clear (msg);
+        if ((msg->flags & FLUX_MSGFLAG_ROUTE))
+            msg_route_clear (msg);
         free (msg->topic);
         free (msg->payload);
         json_decref (msg->json);
@@ -124,10 +134,8 @@ const flux_msg_t *flux_msg_incref (const flux_msg_t *const_msg)
 {
     flux_msg_t *msg = (flux_msg_t *)const_msg;
 
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return NULL;
-    }
     msg->refcount++;
     return msg;
 }
@@ -140,19 +148,15 @@ int flux_msg_aux_set (const flux_msg_t *const_msg, const char *name,
                       void *aux, flux_free_f destroy)
 {
     flux_msg_t *msg = (flux_msg_t *)const_msg;
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     return aux_set (&msg->aux, name, aux, destroy);
 }
 
 void *flux_msg_aux_get (const flux_msg_t *msg, const char *name)
 {
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return NULL;
-    }
     return aux_get (msg->aux, name);
 }
 
@@ -169,10 +173,8 @@ ssize_t flux_msg_encode_size (const flux_msg_t *msg)
 {
     ssize_t size = 0;
 
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
 
     encode_count (&size, PROTO_SIZE);
     if (msg->flags & FLUX_MSGFLAG_PAYLOAD)
@@ -223,10 +225,8 @@ int flux_msg_encode (const flux_msg_t *msg, void *buf, size_t size)
     ssize_t total = 0;
     ssize_t n;
 
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     /* msg never completed initial setup */
     if (msg->type == FLUX_MSGTYPE_ANY) {
         errno = EPROTO;
@@ -324,10 +324,8 @@ error:
 
 int flux_msg_set_type (flux_msg_t *msg, int type)
 {
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (type != FLUX_MSGTYPE_REQUEST
         && type != FLUX_MSGTYPE_RESPONSE
         && type != FLUX_MSGTYPE_EVENT
@@ -342,46 +340,45 @@ int flux_msg_set_type (flux_msg_t *msg, int type)
 
 int flux_msg_get_type (const flux_msg_t *msg, int *type)
 {
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
-    (*type) = msg->type;
+    if (type)
+        *type = msg->type;
     return 0;
 }
 
-int flux_msg_set_flags (flux_msg_t *msg, uint8_t fl)
+int flux_msg_set_flags (flux_msg_t *msg, uint8_t flags)
 {
     const uint8_t valid_flags = FLUX_MSGFLAG_TOPIC | FLUX_MSGFLAG_PAYLOAD
                               | FLUX_MSGFLAG_ROUTE | FLUX_MSGFLAG_UPSTREAM
                               | FLUX_MSGFLAG_PRIVATE | FLUX_MSGFLAG_STREAMING
                               | FLUX_MSGFLAG_NORESPONSE;
 
-    if (!msg || fl & ~valid_flags || ((fl & FLUX_MSGFLAG_STREAMING)
-                                   && (fl & FLUX_MSGFLAG_NORESPONSE)) != 0) {
+    if (msg_validate (msg) < 0)
+        return -1;
+    if ((flags & ~valid_flags)
+        || ((flags & FLUX_MSGFLAG_STREAMING)
+            && (flags & FLUX_MSGFLAG_NORESPONSE))) {
         errno = EINVAL;
         return -1;
     }
-    msg->flags = fl;
+    msg->flags = flags;
     return 0;
 }
 
-int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *fl)
+int flux_msg_get_flags (const flux_msg_t *msg, uint8_t *flags)
 {
-    if (!msg || !fl) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
-    (*fl) = msg->flags;
+    if (flags)
+        *flags = msg->flags;
     return 0;
 }
 
 int flux_msg_set_private (flux_msg_t *msg)
 {
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (flux_msg_set_flags (msg, msg->flags | FLUX_MSGFLAG_PRIVATE) < 0)
         return -1;
     return 0;
@@ -389,7 +386,7 @@ int flux_msg_set_private (flux_msg_t *msg)
 
 bool flux_msg_is_private (const flux_msg_t *msg)
 {
-    if (!msg)
+    if (msg_validate (msg) < 0)
         return true;
     return (msg->flags & FLUX_MSGFLAG_PRIVATE) ? true : false;
 }
@@ -397,10 +394,8 @@ bool flux_msg_is_private (const flux_msg_t *msg)
 int flux_msg_set_streaming (flux_msg_t *msg)
 {
     uint8_t flags;
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     flags = msg->flags & ~FLUX_MSGFLAG_NORESPONSE;
     if (flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_STREAMING) < 0)
         return -1;
@@ -409,7 +404,7 @@ int flux_msg_set_streaming (flux_msg_t *msg)
 
 bool flux_msg_is_streaming (const flux_msg_t *msg)
 {
-    if (!msg)
+    if (msg_validate (msg) < 0)
         return true;
     return (msg->flags & FLUX_MSGFLAG_STREAMING) ? true : false;
 }
@@ -417,10 +412,8 @@ bool flux_msg_is_streaming (const flux_msg_t *msg)
 int flux_msg_set_noresponse (flux_msg_t *msg)
 {
     uint8_t flags = 0;
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     flags = msg->flags & ~FLUX_MSGFLAG_STREAMING;
     if (flux_msg_set_flags (msg, flags | FLUX_MSGFLAG_NORESPONSE) < 0)
         return -1;
@@ -429,54 +422,50 @@ int flux_msg_set_noresponse (flux_msg_t *msg)
 
 bool flux_msg_is_noresponse (const flux_msg_t *msg)
 {
-    if (!msg)
+    if (msg_validate (msg) < 0)
         return true;
     return (msg->flags & FLUX_MSGFLAG_NORESPONSE) ? true : false;
 }
 
 int flux_msg_set_userid (flux_msg_t *msg, uint32_t userid)
 {
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     msg->userid = userid;
     return 0;
 }
 
 int flux_msg_get_userid (const flux_msg_t *msg, uint32_t *userid)
 {
-    if (!msg || !userid) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
-    (*userid) = msg->userid;
+    if (userid)
+        *userid = msg->userid;
     return 0;
 }
 
 int flux_msg_set_rolemask (flux_msg_t *msg, uint32_t rolemask)
 {
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     msg->rolemask = rolemask;
     return 0;
 }
 
 int flux_msg_get_rolemask (const flux_msg_t *msg, uint32_t *rolemask)
 {
-    if (!msg || !rolemask) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
-    (*rolemask) = msg->rolemask;
+    if (rolemask)
+        *rolemask = msg->rolemask;
     return 0;
 }
 
 int flux_msg_get_cred (const flux_msg_t *msg, struct flux_msg_cred *cred)
 {
-    if (!msg || !cred) {
+    if (msg_validate (msg) < 0)
+        return -1;
+    if (!cred) {
         errno = EINVAL;
         return -1;
     }
@@ -489,10 +478,8 @@ int flux_msg_get_cred (const flux_msg_t *msg, struct flux_msg_cred *cred)
 
 int flux_msg_set_cred (flux_msg_t *msg, struct flux_msg_cred cred)
 {
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (flux_msg_set_rolemask (msg, cred.rolemask) < 0)
         return -1;
     if (flux_msg_set_userid (msg, cred.userid) < 0)
@@ -524,8 +511,8 @@ int flux_msg_authorize (const flux_msg_t *msg, uint32_t userid)
 
 int flux_msg_set_nodeid (flux_msg_t *msg, uint32_t nodeid)
 {
-    if (!msg)
-        goto error;
+    if (msg_validate (msg) < 0)
+        return -1;
     if (nodeid == FLUX_NODEID_UPSTREAM) /* should have been resolved earlier */
         goto error;
     if (msg->type != FLUX_MSGTYPE_REQUEST)
@@ -537,50 +524,51 @@ error:
     return -1;
 }
 
-int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeidp)
+int flux_msg_get_nodeid (const flux_msg_t *msg, uint32_t *nodeid)
 {
-    if (!msg || !nodeidp) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (msg->type != FLUX_MSGTYPE_REQUEST) {
         errno = EPROTO;
         return -1;
     }
-    *nodeidp = msg->nodeid;
+    if (nodeid)
+        *nodeid = msg->nodeid;
     return 0;
 }
 
-int flux_msg_set_errnum (flux_msg_t *msg, int e)
+int flux_msg_set_errnum (flux_msg_t *msg, int errnum)
 {
-    if (!msg
-        || (msg->type != FLUX_MSGTYPE_RESPONSE
-            && msg->type != FLUX_MSGTYPE_KEEPALIVE)) {
+    if (msg_validate (msg) < 0)
+        return -1;
+    if (msg->type != FLUX_MSGTYPE_RESPONSE
+        && msg->type != FLUX_MSGTYPE_KEEPALIVE) {
         errno = EINVAL;
         return -1;
     }
-    msg->errnum = e;
+    msg->errnum = errnum;
     return 0;
 }
 
-int flux_msg_get_errnum (const flux_msg_t *msg, int *e)
+int flux_msg_get_errnum (const flux_msg_t *msg, int *errnum)
 {
-    if (!msg || !e) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (msg->type != FLUX_MSGTYPE_RESPONSE
         && msg->type != FLUX_MSGTYPE_KEEPALIVE) {
         errno = EPROTO;
         return -1;
     }
-    *e = msg->errnum;
+    if (errnum)
+        *errnum = msg->errnum;
     return 0;
 }
 
 int flux_msg_set_seq (flux_msg_t *msg, uint32_t seq)
 {
-    if (!msg || msg->type != FLUX_MSGTYPE_EVENT) {
+    if (msg_validate (msg) < 0)
+        return -1;
+    if (msg->type != FLUX_MSGTYPE_EVENT) {
         errno = EINVAL;
         return -1;
     }
@@ -590,66 +578,66 @@ int flux_msg_set_seq (flux_msg_t *msg, uint32_t seq)
 
 int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq)
 {
-    if (!msg || !seq) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (msg->type != FLUX_MSGTYPE_EVENT) {
         errno = EPROTO;
         return -1;
     }
-    (*seq) = msg->sequence;
+    if (seq)
+        *seq = msg->sequence;
     return 0;
 }
 
-int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t t)
+int flux_msg_set_matchtag (flux_msg_t *msg, uint32_t matchtag)
 {
-    if (!msg
-        || (msg->type != FLUX_MSGTYPE_REQUEST
-            && msg->type != FLUX_MSGTYPE_RESPONSE)) {
+    if (msg_validate (msg) < 0)
+        return -1;
+    if (msg->type != FLUX_MSGTYPE_REQUEST
+        && msg->type != FLUX_MSGTYPE_RESPONSE) {
         errno = EINVAL;
         return -1;
     }
-    msg->matchtag = t;
+    msg->matchtag = matchtag;
     return 0;
 }
 
-int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *t)
+int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *matchtag)
 {
-    if (!msg || !t) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (msg->type != FLUX_MSGTYPE_REQUEST
         && msg->type != FLUX_MSGTYPE_RESPONSE) {
         errno = EPROTO;
         return -1;
     }
-    (*t) = msg->matchtag;
+    if (matchtag)
+        *matchtag = msg->matchtag;
     return 0;
 }
 
-int flux_msg_set_status (flux_msg_t *msg, int s)
+int flux_msg_set_status (flux_msg_t *msg, int status)
 {
-    if (!msg || msg->type != FLUX_MSGTYPE_KEEPALIVE) {
+    if (msg_validate (msg) < 0)
+        return -1;
+    if (msg->type != FLUX_MSGTYPE_KEEPALIVE) {
         errno = EINVAL;
         return -1;
     }
-    msg->status = s;
+    msg->status = status;
     return 0;
 }
 
-int flux_msg_get_status (const flux_msg_t *msg, int *s)
+int flux_msg_get_status (const flux_msg_t *msg, int *status)
 {
-    if (!msg || !s) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (msg->type != FLUX_MSGTYPE_KEEPALIVE) {
         errno = EPROTO;
         return -1;
     }
-    (*s) = msg->status;
+    if (status)
+        *status = msg->status;
     return 0;
 }
 
@@ -712,14 +700,14 @@ bool flux_msg_cmp (const flux_msg_t *msg, struct flux_match match)
 
 void flux_msg_route_enable (flux_msg_t *msg)
 {
-    if (!msg || (msg->flags & FLUX_MSGFLAG_ROUTE))
+    if (msg_validate (msg) < 0 || (msg->flags & FLUX_MSGFLAG_ROUTE))
         return;
     (void) flux_msg_set_flags (msg, msg->flags | FLUX_MSGFLAG_ROUTE);
 }
 
 void flux_msg_route_disable (flux_msg_t *msg)
 {
-    if (!msg || (!(msg->flags & FLUX_MSGFLAG_ROUTE)))
+    if (msg_validate (msg) < 0 || (!(msg->flags & FLUX_MSGFLAG_ROUTE)))
         return;
     flux_msg_route_clear (msg);
     (void) flux_msg_set_flags (msg, msg->flags & ~(uint8_t)FLUX_MSGFLAG_ROUTE);
@@ -727,14 +715,16 @@ void flux_msg_route_disable (flux_msg_t *msg)
 
 void flux_msg_route_clear (flux_msg_t *msg)
 {
-    if (!msg || (!(msg->flags & FLUX_MSGFLAG_ROUTE)))
+    if (msg_validate (msg) < 0 || (!(msg->flags & FLUX_MSGFLAG_ROUTE)))
         return;
     msg_route_clear (msg);
 }
 
 int flux_msg_route_push (flux_msg_t *msg, const char *id)
 {
-    if (!msg || !id) {
+    if (msg_validate (msg) < 0)
+        return -1;
+    if (!id) {
         errno = EINVAL;
         return -1;
     }
@@ -747,10 +737,8 @@ int flux_msg_route_push (flux_msg_t *msg, const char *id)
 
 int flux_msg_route_delete_last (flux_msg_t *msg)
 {
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
         errno = EPROTO;
         return -1;
@@ -763,7 +751,7 @@ const char *flux_msg_route_last (const flux_msg_t *msg)
 {
     struct route_id *r;
 
-    if (!msg || !(msg->flags & FLUX_MSGFLAG_ROUTE))
+    if (msg_validate (msg) < 0 || !(msg->flags & FLUX_MSGFLAG_ROUTE))
         return NULL;
     if ((r = list_top (&msg->routes, struct route_id, route_id_node)))
         return r->id;
@@ -775,7 +763,7 @@ const char *flux_msg_route_first (const flux_msg_t *msg)
 {
     struct route_id *r;
 
-    if (!msg || !(msg->flags & FLUX_MSGFLAG_ROUTE))
+    if (msg_validate (msg) < 0 || !(msg->flags & FLUX_MSGFLAG_ROUTE))
         return NULL;
     if ((r = list_tail (&msg->routes, struct route_id, route_id_node)))
         return r->id;
@@ -784,10 +772,8 @@ const char *flux_msg_route_first (const flux_msg_t *msg)
 
 int flux_msg_route_count (const flux_msg_t *msg)
 {
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
         errno = EPROTO;
         return -1;
@@ -818,10 +804,8 @@ char *flux_msg_route_string (const flux_msg_t *msg)
     int hops, len;
     char *buf, *cp;
 
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return NULL;
-    }
     if (!(msg->flags & FLUX_MSGFLAG_ROUTE)) {
         errno = EPROTO;
         return NULL;
@@ -855,10 +839,8 @@ int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
 {
     uint8_t flags = 0;
 
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     json_decref (msg->json);            /* invalidate cached json object */
     msg->json = NULL;
     flags = msg->flags;
@@ -909,7 +891,7 @@ int flux_msg_set_payload (flux_msg_t *msg, const void *buf, int size)
 
 static inline void msg_lasterr_reset (flux_msg_t *msg)
 {
-    if (msg) {
+    if (msg_validate (msg) == 0) {
         free (msg->lasterr);
         msg->lasterr = NULL;
     }
@@ -939,7 +921,9 @@ int flux_msg_vpack (flux_msg_t *msg, const char *fmt, va_list ap)
 
     msg_lasterr_reset (msg);
 
-    if (!msg || !fmt || *fmt == '\0')
+    if (msg_validate (msg) < 0)
+        return -1;
+    if (!fmt || *fmt == '\0')
         goto error_inval;
 
     if (!(json = json_vpack_ex (&err, 0, fmt, ap))) {
@@ -984,10 +968,8 @@ int flux_msg_pack (flux_msg_t *msg, const char *fmt, ...)
 
 int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, int *size)
 {
-    if (!msg || (!buf && !size)) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (!(msg->flags & FLUX_MSGFLAG_PAYLOAD)) {
         errno = EPROTO;
         return -1;
@@ -1001,7 +983,7 @@ int flux_msg_get_payload (const flux_msg_t *msg, const void **buf, int *size)
 
 bool flux_msg_has_payload (const flux_msg_t *msg)
 {
-    if (!msg)
+    if (msg_validate (msg) < 0)
         return false;
     return ((msg->flags & FLUX_MSGFLAG_PAYLOAD));
 }
@@ -1018,26 +1000,24 @@ int flux_msg_set_string (flux_msg_t *msg, const char *s)
 int flux_msg_get_string (const flux_msg_t *msg, const char **s)
 {
     const char *buf;
+    const char *result;
     int size;
-    int rc = -1;
 
-    if (!s) {
-        errno = EINVAL;
-        goto done;
-    }
+    if (msg_validate (msg) < 0)
+        return -1;
     if (flux_msg_get_payload (msg, (const void **)&buf, &size) < 0) {
         errno = 0;
-        *s = NULL;
+        result = NULL;
     } else {
         if (!buf || size == 0 || buf[size - 1] != '\0') {
             errno = EPROTO;
-            goto done;
+            return -1;
         }
-        *s = buf;
+        result = buf;
     }
-    rc = 0;
-done:
-    return rc;
+    if (s)
+        *s = result;
+    return 0;
 }
 
 /* N.B. const attribute of msg argument is defeated internally to
@@ -1052,7 +1032,9 @@ int flux_msg_vunpack (const flux_msg_t *cmsg, const char *fmt, va_list ap)
 
     msg_lasterr_reset (msg);
 
-    if (!msg || !fmt || *fmt == '\0') {
+    if (msg_validate (msg) < 0)
+        return -1;
+    if (!fmt || *fmt == '\0') {
         errno = EINVAL;
         return -1;
     }
@@ -1100,6 +1082,8 @@ const char *flux_msg_last_error (const flux_msg_t *msg)
 {
     if (!msg)
         return "msg object is NULL";
+    if (msg->refcount <= 0)
+        return "msg object is unreferenced";
     if (msg->lasterr == NULL)
         return "";
     return msg->lasterr;
@@ -1109,10 +1093,8 @@ int flux_msg_set_topic (flux_msg_t *msg, const char *topic)
 {
     uint8_t flags = 0;
 
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     flags = msg->flags;
     if ((flags & FLUX_MSGFLAG_TOPIC) && topic) {        /* case 1: repl topic */
         free (msg->topic);
@@ -1136,7 +1118,9 @@ int flux_msg_set_topic (flux_msg_t *msg, const char *topic)
 
 int flux_msg_get_topic (const flux_msg_t *msg, const char **topic)
 {
-    if (!msg || !topic) {
+    if (msg_validate (msg) < 0)
+        return -1;
+    if (!topic) {
         errno = EINVAL;
         return -1;
     }
@@ -1152,10 +1136,8 @@ flux_msg_t *flux_msg_copy (const flux_msg_t *msg, bool payload)
 {
     flux_msg_t *cpy = NULL;
 
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return NULL;
-    }
 
     if (!(cpy = flux_msg_create (FLUX_MSGTYPE_ANY)))
         return NULL;
@@ -1322,6 +1304,10 @@ void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)
         fprintf (f, "NULL");
         return;
     }
+    if (msg->refcount <= 0) {
+        fprintf (f, "unref");
+        return;
+    }
     prefix = type2prefix (msg->type);
     /* Timestamp
      */
@@ -1416,10 +1402,8 @@ void flux_msg_fprint (FILE *f, const flux_msg_t *msg)
 int flux_msg_frames (const flux_msg_t *msg)
 {
     int n = 1; /* 1 for proto frame */
-    if (!msg) {
-        errno = EINVAL;
+    if (msg_validate (msg) < 0)
         return -1;
-    }
     if (msg->flags & FLUX_MSGFLAG_PAYLOAD)
         n++;
     if (msg->flags & FLUX_MSGFLAG_TOPIC)
@@ -1443,15 +1427,20 @@ void flux_match_free (struct flux_match m)
     ERRNO_SAFE_WRAP (free, (char *)m.topic_glob);
 }
 
-int flux_match_asprintf (struct flux_match *m, const char *topic_glob_fmt, ...)
+int flux_match_asprintf (struct flux_match *m, const char *fmt, ...)
 {
-    va_list args;
-    va_start (args, topic_glob_fmt);
+    va_list ap;
     char *topic = NULL;
-    int res = vasprintf (&topic, topic_glob_fmt, args);
-    va_end (args);
+    int res;
+
+    va_start (ap, fmt);
+    res = vasprintf (&topic, fmt, ap);
+    va_end (ap);
+    if (res < 0)
+        return -1;
+
     m->topic_glob = topic;
-    return res;
+    return 0;
 }
 
 bool flux_msg_route_match_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
