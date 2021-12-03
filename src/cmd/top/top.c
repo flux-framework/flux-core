@@ -19,7 +19,7 @@
 
 static const double job_activity_rate_limit = 2;
 
-void fatal (int errnum, const char *fmt, ...)
+__attribute__ ((noreturn)) void fatal (int errnum, const char *fmt, ...)
 {
     va_list ap;
     char buf[128];
@@ -100,26 +100,40 @@ void refresh_cb (flux_reactor_t *r,
     doupdate ();
 }
 
-static int job_get_state (flux_t *h, flux_jobid_t id, int *statep)
+static char * job_get_uri (flux_t *h, flux_jobid_t id)
 {
     flux_future_t *f;
+    const char *uri = NULL;
+    char *cpy;
     int state;
 
     if (!(f = flux_rpc_pack (h,
                              "job-list.list-id",
                              0,
                              0,
-                             "{s:I s:[s]}",
+                             "{s:I s:[ss]}",
                              "id", id,
                              "attrs",
-                               "state"))
-        || flux_rpc_get_unpack (f, "{s:{s:i}}", "job", "state", &state) < 0) {
-        flux_future_destroy (f);
-        return -1;
+                               "state", "annotations"))
+        || flux_rpc_get_unpack (f,
+                                "{s:{s:i s?{s?{s?s}}}}",
+                                "job",
+                                  "state", &state,
+                                  "annotations",
+                                    "user",
+                                      "uri", &uri) < 0) {
+        if (errno == ENOENT)
+            fatal (0, "unknown jobid");
+        fatal (0, "failed to list jobid");
     }
+
+    if (!(state & FLUX_JOB_STATE_RUNNING))
+        fatal (0, "job is not running");
+    if (uri == NULL)
+        fatal (0, "error reading job remote-uri - not a Flux instance?");
+    cpy = strdup (uri);
     flux_future_destroy (f);
-    *statep = state;
-    return 0;
+    return cpy;
 }
 
 /* Get handle to Flux instance to be monitored.
@@ -130,34 +144,18 @@ static flux_t *open_flux_instance (flux_jobid_t id)
 {
     flux_t *h;
     flux_future_t *f = NULL;
-    const char *uri_key = "guest.flux.remote_uri";
-    const char *uri;
     flux_t *job_h = NULL;
-    int state;
+    char *uri;
 
     if (!(h = flux_open (NULL, 0)))
         fatal (errno, "error connecting to Flux");
     if (id == FLUX_JOBID_ANY)
         return h;
-    if (job_get_state (h, id, &state) < 0)
-        fatal (0, "unknown jobid");
-    if (!(state & FLUX_JOB_STATE_RUNNING))
-        fatal (0, "job is not running");
-    if (!(f = flux_rpc_pack (h,
-                             "job-info.lookup",
-                             0,
-                             0,
-                             "{s:I s:[s] s:i}",
-                             "id", id,
-                             "keys", uri_key,
-                             "flags", 0))
-        || flux_rpc_get_unpack (f, "{s:s}", uri_key, &uri) < 0) {
-        if (errno == ENOENT)
-            fatal (0, "error reading job remote-uri - not a Flux instance?");
-        fatal (errno, "error reading job remote-uri");
-    }
+    if (!(uri = job_get_uri (h, id)))
+        fatal (0, "out of memory getting uri");
     if (!(job_h = flux_open (uri, 0)))
         fatal (errno, "error connecting to job");
+    free (uri);
     flux_future_destroy (f);
     flux_close (h);
     return job_h;
