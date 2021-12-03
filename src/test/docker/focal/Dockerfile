@@ -79,6 +79,7 @@ RUN apt-get update \
         libczmq-dev \
         libjansson-dev \
         libmunge-dev \
+        libncurses-dev \
         liblua5.2-dev \
         lua-posix-dev \
         liblz4-dev \

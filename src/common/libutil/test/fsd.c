@@ -69,7 +69,7 @@ int main(int argc, char** argv)
     ok (fsd_parse_duration ("0.5m", &d) == 0,
         "fsd_parse_duration (0.5m) returns success");
     ok (d == 30., "got d == %g", d);
-    
+
     ok (fsd_parse_duration ("0.5h", &d) == 0,
         "fsd_parse_duration (0.5h) returns success");
     ok (d == .5 * 60. * 60., "got d == %g", d);
@@ -92,7 +92,7 @@ int main(int argc, char** argv)
 
     ok (fsd_format_duration (NULL, 1024, 1000.) < 0 && errno == EINVAL,
         "fsd_format_duration with buf == NULL returns EINVAL");
-    
+
     ok (fsd_format_duration (buf, sizeof (buf), .001),
         "fsd_format_duration (.001) works");
     is (buf, "0.001s", "returns expected string = %s", buf);
@@ -124,6 +124,10 @@ int main(int argc, char** argv)
     ok (fsd_format_duration (buf, sizeof (buf), 103680.0),
         "fsd_format_duration (86400.) works");
     is (buf, "1.2d", "returns expected string = %s", buf);
+
+    ok (fsd_format_duration_ex (buf, sizeof (buf), 62.0, 1),
+        "fsd_format_duration_ex (62., 1) works");
+    is (buf, "1m", "returns expected string = %s", buf);
 
     done_testing();
 }

@@ -54,9 +54,9 @@ RUN case $BASE_IMAGE in \
 #  existing packages)
 #
 RUN case $BASE_IMAGE in \
-     bionic*) ;; \
-     focal*) ;; \
-     centos*|fedora*) ;; \
+     bionic*) apt update && apt install libncursesw5-dev ;; \
+     focal*) apt update && apt install libncurses-dev ;; \
+     centos*|fedora*) yum -y install ncurses-devel ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 

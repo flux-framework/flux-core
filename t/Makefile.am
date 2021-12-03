@@ -172,6 +172,7 @@ TESTSCRIPTS = \
 	t2702-mini-alloc.t \
 	t2703-mini-bulksubmit.t \
 	t2800-jobs-cmd.t \
+	t2801-top-cmd.t \
 	t2900-job-timelimits.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \

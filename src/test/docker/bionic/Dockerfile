@@ -77,6 +77,7 @@ RUN apt-get update \
         libczmq-dev \
         libjansson-dev \
         libmunge-dev \
+        libncursesw5-dev \
         liblua5.2-dev \
         liblz4-dev \
         libsqlite3-dev \

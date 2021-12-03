@@ -51,6 +51,7 @@ RUN yum -y update \
 	czmq-devel \
 	jansson-devel \
 	munge-devel \
+	ncurses-devel \
 	lz4-devel \
 	sqlite-devel \
 	libuuid-devel \

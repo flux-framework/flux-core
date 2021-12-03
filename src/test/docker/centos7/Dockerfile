@@ -24,6 +24,7 @@ RUN yum -y update \
       make \
       munge \
       munge-devel \
+      ncurses-devel \
       coreutils \
       ccache \
       cppcheck \
