@@ -113,8 +113,7 @@ the session exits.
 
 ##### SLURM session
 
-To start a Flux instance (size = 64) on a cluster using SLURM,
-first ensure that MUNGE is set up on your cluster, then:
+To start a Flux instance (size = 64) on a cluster using SLURM:
 ```
 srun --pty --mpi=none -N64 src/cmd/flux start
 ```
