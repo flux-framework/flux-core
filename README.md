@@ -164,24 +164,17 @@ which can also be accessed using `./flux help <sub-command>`.
 
 #### A note about PMI
 
-When flux is launched, it requires PMI-1 in order to bootstrap.
-It can use PMI-1 in one of two ways, by inheriting a file descriptor
-via the `PMI_FD` environment variable, or by dlopening a PMI library.
-The library name is `libpmi.so`, unless overridden by the `PMI_LIBRARY`
-environment variable.  If a PMI library is not found, flux falls back
-to "singleton" operation, where each broker is an independent flux instance.
-The PMI bootstrap may be traced by setting the `FLUX_PMI_DEBUG` environment
-variable.
+During launch, Flux brokers use a PMI server provided by the launcher
+to exchange network endpoints and other information.  Flux also _provides_
+a PMI server embedded in the Flux job shell to support launching parallel
+applications such as MPI or subordinate Flux instances.  In both cases,
+the PMI version 1 wire protocol is Flux's preferred PMI interface, but
+other options are available.
 
-When flux launches flux or an MPI job, it provides PMI-1 to bootstrap the
-MPI's runtime.  It offers a PMI server and sets the `PMI_FD` environment
-variable to point to an open file descriptor connected to it.  It also offers
-a `libpmi.so` library that can be dlopened.
-
-If your system process manager uses PMIx, the `libpmi.so` compatibility library
-provided by the PMIx project should be sufficient to bootstrap flux.
-If your version of PMIx was not built with the compatibility libraries
-installed, you may build libpmix as a separate package to get them installed.
+See the [Flux FAQ](https://flux-framework.readthedocs.io/en/latest/faqs.html)
+for more information on debugging and configuring Flux to interoperate with
+foreign launchers and different MPI versions.  Open a flux-core issue if
+you encounter a situation that is not covered in the FAQ.
 
 #### Release
 
