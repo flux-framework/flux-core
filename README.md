@@ -133,27 +133,30 @@ $ flux help
 Usage: flux [OPTIONS] COMMAND ARGS
   -h, --help             Display this message.
   -v, --verbose          Be verbose about environment and command search
+  -V, --version          Display command and component versions
+  -p, --parent           Set environment of parent instead of current instance
 
 Common commands from flux-core:
    broker             Invoke Flux message broker daemon
    content            Access instance content storage
    cron               Schedule tasks on timers and events
    dmesg              manipulate broker log ring buffer
-   env                Print or run inside a Flux environment
+   env                Print the flux environment or execute a command inside it
    event              Send and receive Flux events
    exec               Execute processes across flux ranks
    get,set,lsattr     Access, modify, and list broker attributes
    hwloc              Control/query resource-hwloc service
+   jobs               list jobs submitted to Flux
    keygen             generate keys for Flux security
    kvs                Flux key-value store utility
    logger             create a Flux log entry
+   mini               Minimal Job Submission Tool
+   job                Job Housekeeping Tool
    module             manage Flux extension modules
    ping               measure round-trip latency to Flux services
    proxy              Create proxy environment for Flux instance
-   ps                 List subprocesses managed by brokers
    start              bootstrap a local Flux instance
-   submit             submit job requests to a scheduler
-   user               Flux user database client
+   version            Display flux version information
 ```
 
 Most of these have UNIX manual pages as `flux-<sub-command>(1)`,
