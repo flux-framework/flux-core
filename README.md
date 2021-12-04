@@ -54,16 +54,14 @@ hwloc-devel       | libhwloc-dev      | >= v1.11.1        |
 sqlite-devel      | libsqlite3-dev    | >= 3.0.0          |
 lua               | lua5.1            | >= 5.1, < 5.5     |
 lua-devel         | liblua5.1-dev     | >= 5.1, < 5.5     |
-lua-posix         | lua-posix         |                   | *1*
+lua-posix         | lua-posix         |                   |
 python36-devel    | python3-dev       | >= 3.6            |
 python36-cffi     | python3-cffi      | >= 1.1            |
 python36-yaml     | python3-yaml      | >= 3.10.0         |
 python36-jsonschema | python3-jsonschema | >= 2.3.0       |
-phthon3-sphinx    | python3-sphinx    |                   | *2*
+phthon3-sphinx    | python3-sphinx    |                   | *1*
 
-*Note 1 - Due to a long standing [packaging bug](https://bugs.launchpad.net/ubuntu/+source/lua-posix/+bug/1752082) in lua-posix-33.4.0-2 on Ubuntu bionic, you may wish to install lua-posix via luarocks on that distro.
-
-*Note 2 - only needed if optional man pages are to be created.
+*Note 1 - only needed if optional man pages are to be created.
 
 The following optional dependencies enable additional testing:
 
