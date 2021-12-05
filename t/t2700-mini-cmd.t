@@ -98,23 +98,23 @@ test_expect_success 'flux mini run -vvv produces exec events on stderr' '
 '
 test_expect_success HAVE_JQ 'flux mini submit --time-limit=5d works' '
 	flux mini submit --dry-run --time-limit=5d hostname >t5d.out &&
-	test $(jq ".attributes.system.duration" t5d.out) = "432000"
+	jq -r ".attributes.system.duration == 432000"
 '
 test_expect_success HAVE_JQ 'flux mini submit --time-limit=4h works' '
 	flux mini submit --dry-run --time-limit=4h hostname >t4h.out &&
-	test $(jq ".attributes.system.duration" t4h.out) = "14400"
+	jq -r ".attributes.system.duration == 14400"
 '
 test_expect_success HAVE_JQ 'flux mini submit --time-limit=1m works' '
 	flux mini submit --dry-run --time-limit=5m hostname >t5m.out &&
-	test $(jq ".attributes.system.duration" t5m.out) = "300"
+	jq -r ".attributes.system.duration == 300"
 '
 test_expect_success HAVE_JQ 'flux mini submit -t5s works' '
 	flux mini submit --dry-run -t5s hostname >t5s.out &&
-	test $(jq ".attributes.system.duration" t5s.out) = "5"
+	jq -r ".attributes.system.duration == 300"
 '
 test_expect_success HAVE_JQ 'flux mini submit -t5 works' '
 	flux mini submit --dry-run -t5 hostname >t5.out &&
-	test $(jq ".attributes.system.duration" t5.out) = "5"
+	jq -r ".attributes.system.duration == 300"
 '
 test_expect_success 'flux mini submit --time-limit=00:30 fails' '
 	test_must_fail flux mini submit --time-limit=00:30 hostname 2>st.err &&
