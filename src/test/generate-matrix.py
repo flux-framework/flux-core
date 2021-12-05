@@ -203,7 +203,7 @@ matrix.add_build(
 
 # Centos8
 matrix.add_build(
-    name="centos8 - py3.7",
+    name="centos8",
     image="centos8",
     env=dict(PYTHON_VERSION="3.6", LDFLAGS="-Wl,-z,relro  -Wl,-z,now"),
     docker_tag=True,
