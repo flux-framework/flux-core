@@ -58,7 +58,7 @@ lua-posix         | lua-posix         |                   |
 python36-devel    | python3-dev       | >= 3.6            |
 python36-cffi     | python3-cffi      | >= 1.1            |
 python36-yaml     | python3-yaml      | >= 3.10.0         |
-python36-jsonschema | python3-jsonschema | >= 2.3.0       |
+python36-jsonschema | python3-jsonschema | >= 2.3.0, < 4.0 |
 phthon3-sphinx    | python3-sphinx    |                   | *1*
 
 *Note 1 - only needed if optional man pages are to be created.
