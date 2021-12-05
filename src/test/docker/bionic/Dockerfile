@@ -54,16 +54,18 @@ RUN apt-get update \
 # mapped into the container and contains the same libraries
 RUN apt-get update \
  && apt-get -qq install -y --no-install-recommends \
+	libffi-dev \
         python3-dev \
         python3.7-dev \
         python3.8-dev \
         python3-pip \
         python3-setuptools \
         python3-wheel \
- && rm -rf /var/lib/apt/lists/* \
- && for PY in python3.6 python3.7 python3.8 ; do \
+ && rm -rf /var/lib/apt/lists/*
+
+RUN for PY in python3.6 python3.7 python3.8 ; do \
         sudo $PY -m pip install --upgrade --ignore-installed \
-            coverage cffi six pyyaml jsonschema \
+            coverage cffi six pyyaml "jsonschema>=2.6,<4.0" \
             sphinx sphinx-rtd-theme sphinxcontrib-spelling; \
     done ; \
     apt-get -qq purge -y python3-pip \

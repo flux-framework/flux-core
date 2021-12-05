@@ -48,13 +48,27 @@ pushed to DockerHub at `fluxrm/testenv:bionic` and
 script still runs against the new `testenv` images, e.g.:
 
 ```
-$ for i in bionic focal centos7 centos8 fedora33 fedora34; do
+$ for i in focal centos7 centos8 fedora33 fedora34; do
     make clean &&
     docker build --no-cache -t fluxrm/testenv:$i src/test/docker/$i &&
     src/test/docker/docker-run-checks.sh -j 4 --image=$i &&
     docker push fluxrm/testenv:$i
   done
 ```
+
+#### Bionic multiarch images
+
+Building the bionic images for linux/amd64 and linux/386 requires the
+Docker buildx extensions, see
+
+ https://www.docker.com/blog/multi-arch-build-and-images-the-simple-way/
+
+and run
+```
+$  docker buildx build --push --platform=linux/386,linux/amd64 --tag fluxrm/testenv:bionic src/test/docker/bionic
+```
+
+to build and push images to docker hub.
 
 #### Local Testing
 
