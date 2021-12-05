@@ -54,16 +54,14 @@ hwloc-devel       | libhwloc-dev      | >= v1.11.1        |
 sqlite-devel      | libsqlite3-dev    | >= 3.0.0          |
 lua               | lua5.1            | >= 5.1, < 5.5     |
 lua-devel         | liblua5.1-dev     | >= 5.1, < 5.5     |
-lua-posix         | lua-posix         |                   | *1*
+lua-posix         | lua-posix         |                   |
 python36-devel    | python3-dev       | >= 3.6            |
 python36-cffi     | python3-cffi      | >= 1.1            |
 python36-yaml     | python3-yaml      | >= 3.10.0         |
 python36-jsonschema | python3-jsonschema | >= 2.3.0       |
-phthon3-sphinx    | python3-sphinx    |                   | *2*
+phthon3-sphinx    | python3-sphinx    |                   | *1*
 
-*Note 1 - Due to a long standing [packaging bug](https://bugs.launchpad.net/ubuntu/+source/lua-posix/+bug/1752082) in lua-posix-33.4.0-2 on Ubuntu bionic, you may wish to install lua-posix via luarocks on that distro.
-
-*Note 2 - only needed if optional man pages are to be created.
+*Note 1 - only needed if optional man pages are to be created.
 
 The following optional dependencies enable additional testing:
 
@@ -115,8 +113,7 @@ the session exits.
 
 ##### SLURM session
 
-To start a Flux instance (size = 64) on a cluster using SLURM,
-first ensure that MUNGE is set up on your cluster, then:
+To start a Flux instance (size = 64) on a cluster using SLURM:
 ```
 srun --pty --mpi=none -N64 src/cmd/flux start
 ```
@@ -136,27 +133,30 @@ $ flux help
 Usage: flux [OPTIONS] COMMAND ARGS
   -h, --help             Display this message.
   -v, --verbose          Be verbose about environment and command search
+  -V, --version          Display command and component versions
+  -p, --parent           Set environment of parent instead of current instance
 
 Common commands from flux-core:
    broker             Invoke Flux message broker daemon
    content            Access instance content storage
    cron               Schedule tasks on timers and events
    dmesg              manipulate broker log ring buffer
-   env                Print or run inside a Flux environment
+   env                Print the flux environment or execute a command inside it
    event              Send and receive Flux events
    exec               Execute processes across flux ranks
    get,set,lsattr     Access, modify, and list broker attributes
    hwloc              Control/query resource-hwloc service
+   jobs               list jobs submitted to Flux
    keygen             generate keys for Flux security
    kvs                Flux key-value store utility
    logger             create a Flux log entry
+   mini               Minimal Job Submission Tool
+   job                Job Housekeeping Tool
    module             manage Flux extension modules
    ping               measure round-trip latency to Flux services
    proxy              Create proxy environment for Flux instance
-   ps                 List subprocesses managed by brokers
    start              bootstrap a local Flux instance
-   submit             submit job requests to a scheduler
-   user               Flux user database client
+   version            Display flux version information
 ```
 
 Most of these have UNIX manual pages as `flux-<sub-command>(1)`,
@@ -164,24 +164,17 @@ which can also be accessed using `./flux help <sub-command>`.
 
 #### A note about PMI
 
-When flux is launched, it requires PMI-1 in order to bootstrap.
-It can use PMI-1 in one of two ways, by inheriting a file descriptor
-via the `PMI_FD` environment variable, or by dlopening a PMI library.
-The library name is `libpmi.so`, unless overridden by the `PMI_LIBRARY`
-environment variable.  If a PMI library is not found, flux falls back
-to "singleton" operation, where each broker is an independent flux instance.
-The PMI bootstrap may be traced by setting the `FLUX_PMI_DEBUG` environment
-variable.
+During launch, Flux brokers use a PMI server provided by the launcher
+to exchange network endpoints and other information.  Flux also _provides_
+a PMI server embedded in the Flux job shell to support launching parallel
+applications such as MPI or subordinate Flux instances.  In both cases,
+the PMI version 1 wire protocol is Flux's preferred PMI interface, but
+other options are available.
 
-When flux launches flux or an MPI job, it provides PMI-1 to bootstrap the
-MPI's runtime.  It offers a PMI server and sets the `PMI_FD` environment
-variable to point to an open file descriptor connected to it.  It also offers
-a `libpmi.so` library that can be dlopened.
-
-If your system process manager uses PMIx, the `libpmi.so` compatibility library
-provided by the PMIx project should be sufficient to bootstrap flux.
-If your version of PMIx was not built with the compatibility libraries
-installed, you may build libpmix as a separate package to get them installed.
+See the [Flux FAQ](https://flux-framework.readthedocs.io/en/latest/faqs.html)
+for more information on debugging and configuring Flux to interoperate with
+foreign launchers and different MPI versions.  Open a flux-core issue if
+you encounter a situation that is not covered in the FAQ.
 
 #### Release
 
