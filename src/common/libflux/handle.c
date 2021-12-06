@@ -386,8 +386,6 @@ void flux_handle_destroy (flux_t *h)
                 dlclose (h->dso);
 #endif
             flux_msglist_destroy (h->queue);
-            if (h->pollfd >= 0)
-                (void)close (h->pollfd);
         }
         free (h);
         errno = saved_errno;
