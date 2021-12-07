@@ -289,9 +289,8 @@ int main (int argc, char *argv[])
     }
 
     /* Arrange for the publisher to route event messages.
-     * handle_event - local subscribers (ctx.h)
      */
-    if (!(ctx.publisher = publisher_create (ctx.h,
+    if (!(ctx.publisher = publisher_create (&ctx,
                                             (publisher_send_f)handle_event,
                                             &ctx))) {
         log_err ("error setting up event publishing service");
@@ -1388,7 +1387,7 @@ static struct internal_service services[] = {
     { "content",            NULL },
     { "attr",               NULL },
     { "heaptrace",          NULL },
-    { "event",              "[0]" },
+    { "event",              NULL },
     { "service",            NULL },
     { "overlay",            NULL },
     { "config",             NULL },

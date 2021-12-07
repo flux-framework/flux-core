@@ -23,7 +23,7 @@
 
 
 struct publisher {
-    flux_t *h;
+    struct broker *ctx;
     flux_msg_handler_t **handlers;
     int seq;
     zlist_t *senders;
@@ -84,7 +84,7 @@ error:
 static void send_event (struct publisher *pub, const flux_msg_t *msg)
 {
     if (pub->send (pub->arg, msg) < 0)
-        flux_log_error (pub->h, "error publishing event message");
+        flux_log_error (pub->ctx->h, "error publishing event message");
 }
 
 void pub_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -96,12 +96,18 @@ void pub_cb (flux_t *h, flux_msg_handler_t *mh,
     int flags;
     struct flux_msg_cred cred;
     flux_msg_t *event = NULL;
+    const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:s s:i s?:s}",
                                         "topic", &topic,
                                         "flags", &flags,
                                         "payload", &payload) < 0)
         goto error;
+    if (pub->ctx->rank > 0) {
+        errno = EPROTO;
+        errmsg = "this service is only available on rank 0";
+        goto error;
+    }
     if ((flags & ~(FLUX_MSGFLAG_PRIVATE)) != 0) {
         errno = EPROTO;
         goto error;
@@ -118,7 +124,7 @@ void pub_cb (flux_t *h, flux_msg_handler_t *mh,
 error_restore_seq:
     pub->seq--;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     flux_msg_destroy (event);
 }
@@ -156,16 +162,18 @@ void publisher_destroy (struct publisher *pub)
     }
 }
 
-struct publisher *publisher_create (flux_t *h, publisher_send_f cb, void *arg)
+struct publisher *publisher_create (struct broker *ctx,
+                                    publisher_send_f cb,
+                                    void *arg)
 {
     struct publisher *pub;
 
     if (!(pub = calloc (1, sizeof (*pub))))
         return NULL;
-    pub->h = h;
+    pub->ctx = ctx;
     pub->send = cb;
     pub->arg = arg;
-    if (flux_msg_handler_addvec (h, htab, pub, &pub->handlers) < 0) {
+    if (flux_msg_handler_addvec (ctx->h, htab, pub, &pub->handlers) < 0) {
         publisher_destroy (pub);
         return NULL;
     }
