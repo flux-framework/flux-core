@@ -31,6 +31,9 @@ the value of $FLUX_URI is used, if set.
 FLUX_O_TRACE
    Dumps message trace to stderr.
 
+FLUX_O_CLONE
+   Used internally by ``flux_clone()`` (see below).
+
 FLUX_O_MATCHDEBUG
    Prints diagnostic to stderr when matchtags are leaked, for example when
    a streaming RPC is destroyed without receiving a error response as
