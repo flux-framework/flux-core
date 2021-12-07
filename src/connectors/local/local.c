@@ -96,46 +96,6 @@ static flux_msg_t *op_recv (void *impl, int flags)
     return usock_client_recv (ctx->uclient, flags);
 }
 
-static int op_event_subscribe (void *impl, const char *topic)
-{
-    struct local_connector *ctx = impl;
-    flux_future_t *f;
-
-    if (!(f = flux_rpc_pack (ctx->h,
-                             "event.subscribe",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:s}",
-                             "topic", topic)))
-        return -1;
-    if (flux_future_get (f, NULL) < 0) {
-        flux_future_destroy (f);
-        return -1;
-    }
-    flux_future_destroy (f);
-    return 0;
-}
-
-static int op_event_unsubscribe (void *impl, const char *topic)
-{
-    struct local_connector *ctx = impl;
-    flux_future_t *f;
-
-    if (!(f = flux_rpc_pack (ctx->h,
-                             "event.unsubscribe",
-                             FLUX_NODEID_ANY,
-                             0,
-                             "{s:s}",
-                             "topic", topic)))
-        return -1;
-    if (flux_future_get (f, NULL) < 0) {
-        flux_future_destroy (f);
-        return -1;
-    }
-    flux_future_destroy (f);
-    return 0;
-}
-
 static int op_setopt (void *impl, const char *option,
                       const void *val, size_t size)
 {
@@ -262,8 +222,6 @@ static const struct flux_handle_ops handle_ops = {
     .pollevents = op_pollevents,
     .send = op_send,
     .recv = op_recv,
-    .event_subscribe = op_event_subscribe,
-    .event_unsubscribe = op_event_unsubscribe,
     .setopt = op_setopt,
     .getopt = op_getopt,
     .impl_destroy = op_fini,

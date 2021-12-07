@@ -102,43 +102,6 @@ done:
     return msg;
 }
 
-static int op_event_subscribe (void *impl, const char *topic)
-{
-    shmem_ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
-    flux_future_t *f;
-    int rc = -1;
-
-    if (!(f = flux_rpc_pack (ctx->h, "event.subscribe", FLUX_NODEID_ANY, 0,
-                             "{ s:s }", "topic", topic)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int op_event_unsubscribe (void *impl, const char *topic)
-{
-    shmem_ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
-    flux_future_t *f = NULL;
-    int rc = -1;
-
-    if (!(f = flux_rpc_pack (ctx->h, "event.unsubscribe", FLUX_NODEID_ANY, 0,
-                             "{ s:s }", "topic", topic)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
-
 static void op_fini (void *impl)
 {
     shmem_ctx_t *ctx = impl;
@@ -224,8 +187,6 @@ static const struct flux_handle_ops handle_ops = {
     .recv = op_recv,
     .getopt = NULL,
     .setopt = NULL,
-    .event_subscribe = op_event_subscribe,
-    .event_unsubscribe = op_event_unsubscribe,
     .impl_destroy = op_fini,
 };
 

@@ -357,13 +357,6 @@ int main (int argc, char *argv[])
         goto cleanup;
     }
 
-    /* Create content cache.
-     */
-    if (!(ctx.cache = content_cache_create (ctx.h, ctx.attrs))) {
-        log_err ("content_cache_create");
-        goto cleanup;
-    }
-
     if (ctx.verbose) {
         const char *parent = overlay_get_parent_uri (ctx.overlay);
         const char *child = overlay_get_bind_uri (ctx.overlay);
@@ -428,6 +421,18 @@ int main (int argc, char *argv[])
         log_err ("broker_add_services");
         goto cleanup;
     }
+    /* These two broker-resident services call flux_sync_create(), thus
+     * require event.subscribe to have a handler before running.
+     */
+    if (overlay_keepalive_start (ctx.overlay) < 0) {
+        log_err ("error initializing overlay keepalives");
+        goto cleanup;
+    }
+    if (!(ctx.cache = content_cache_create (ctx.h, ctx.attrs))) {
+        log_err ("error initializing content cache");
+        goto cleanup;
+    }
+
 
     /* Initialize module infrastructure.
      */
@@ -1788,41 +1793,8 @@ done:
     return rc;
 }
 
-static int broker_subscribe (void *impl, const char *topic)
-{
-    broker_ctx_t *ctx = impl;
-    char *cpy = NULL;
-
-    if (!(cpy = strdup (topic)))
-        goto nomem;
-    if (zlist_append (ctx->subscriptions, cpy) < 0)
-        goto nomem;
-    zlist_freefn (ctx->subscriptions, cpy, free, true);
-    return 0;
-nomem:
-    free (cpy);
-    errno = ENOMEM;
-    return -1;
-}
-
-static int broker_unsubscribe (void *impl, const char *topic)
-{
-    broker_ctx_t *ctx = impl;
-    char *s = zlist_first (ctx->subscriptions);
-    while (s) {
-        if (!strcmp (s, topic)) {
-            zlist_remove (ctx->subscriptions, s);
-            break;
-        }
-        s = zlist_next (ctx->subscriptions);
-    }
-    return 0;
-}
-
 static const struct flux_handle_ops broker_handle_ops = {
     .send = broker_send,
-    .event_subscribe = broker_subscribe,
-    .event_unsubscribe = broker_unsubscribe,
 };
 
 

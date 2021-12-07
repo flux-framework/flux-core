@@ -266,7 +266,7 @@ int main (int argc, char *argv[])
     diag ("starting test server");
     test_server_environment_init ("test_router");
 
-    if (!(h = test_server_create (0, server_cb, NULL)))
+    if (!(h = test_server_create (FLUX_O_TEST_NOSUB, server_cb, NULL)))
         BAIL_OUT ("test_server_create failed");
 
     test_basic (h);

@@ -285,8 +285,6 @@ static const struct flux_handle_ops handle_ops = {
     .recv = test_connector_recv,
     .getopt = NULL,
     .setopt = NULL,
-    .event_subscribe = NULL,
-    .event_unsubscribe = NULL,
     .impl_destroy = test_connector_fini,
 };
 
@@ -464,8 +462,6 @@ static const struct flux_handle_ops loopback_ops = {
     .recv = loopback_connector_recv,
     .getopt = loopback_connector_getopt,
     .setopt = loopback_connector_setopt,
-    .event_subscribe = NULL,
-    .event_unsubscribe = NULL,
     .impl_destroy = loopback_connector_fini,
 };
 

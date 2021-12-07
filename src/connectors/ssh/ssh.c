@@ -66,40 +66,6 @@ static flux_msg_t *op_recv (void *impl, int flags)
     return usock_client_recv (ctx->uclient, flags);
 }
 
-static int op_event_subscribe (void *impl, const char *topic)
-{
-    struct ssh_connector *ctx = impl;
-    flux_future_t *f;
-    int rc = 0;
-
-    if (!(f = flux_rpc_pack (ctx->h, "event.subscribe", FLUX_NODEID_ANY, 0,
-                             "{ s:s }", "topic", topic)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
-static int op_event_unsubscribe (void *impl, const char *topic)
-{
-    struct ssh_connector *ctx = impl;
-    flux_future_t *f;
-    int rc = 0;
-
-    if (!(f = flux_rpc_pack (ctx->h, "event.subscribe", FLUX_NODEID_ANY, 0,
-                             "{ s:s }", "topic", topic)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_future_destroy (f);
-    return rc;
-}
-
 static void op_fini (void *impl)
 {
     struct ssh_connector *ctx = impl;
@@ -314,8 +280,6 @@ static const struct flux_handle_ops handle_ops = {
     .pollevents = op_pollevents,
     .send = op_send,
     .recv = op_recv,
-    .event_subscribe = op_event_subscribe,
-    .event_unsubscribe = op_event_unsubscribe,
     .impl_destroy = op_fini,
 };
 
