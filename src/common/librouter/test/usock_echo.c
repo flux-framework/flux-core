@@ -300,7 +300,7 @@ int main (int argc, char *argv[])
     diag ("starting test server");
     test_server_environment_init ("usock_server");
 
-    if (!(h = test_server_create (server_cb, NULL)))
+    if (!(h = test_server_create (0, server_cb, NULL)))
         BAIL_OUT ("test_server_create failed");
 
     test_early_disconnect (h);

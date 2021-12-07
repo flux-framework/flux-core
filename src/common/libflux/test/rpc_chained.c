@@ -348,7 +348,7 @@ int main (int argc, char *argv[])
 
     test_server_environment_init ("rpc-chained-test");
 
-    h = test_server_create (test_server, NULL);
+    h = test_server_create (0, test_server, NULL);
     ok (h != NULL,
         "created test server thread");
     if (!h)
