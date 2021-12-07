@@ -42,6 +42,11 @@ FLUX_O_MATCHDEBUG
 FLUX_O_NONBLOCK
    The ``flux_send()`` and ``flux_recv()`` functions should never block.
 
+FLUX_O_TEST_NOSUB
+   Make ``flux_event_subscribe()` and ``flux_event_unsubscribe()`` no-ops.
+   This may be useful in specialized situations with the ``loop://`` connector,
+   where no message handler is available to service subscription RPCs.
+
 ``flux_clone()`` creates another reference to a ``flux_t`` handle that is
 identical to the original in all respects except that it does not inherit
 a copy of the original handle's "aux" hash, or its reactor and message
