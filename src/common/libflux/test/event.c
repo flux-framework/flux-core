@@ -15,7 +15,7 @@
 #include "event.h"
 #include "src/common/libtap/tap.h"
 
-int main (int argc, char *argv[])
+void test_codec (void)
 {
     flux_msg_t *msg;
     const char *topic, *s;
@@ -25,8 +25,6 @@ int main (int argc, char *argv[])
     const void *d;
     int l;
     int i;
-
-    plan (NO_PLAN);
 
     /* no topic is an error */
     errno = 0;
@@ -96,6 +94,13 @@ int main (int argc, char *argv[])
     ok (flux_event_decode_raw (msg, NULL, &d, NULL) < 0 && errno == EINVAL,
         "flux_event_decode_raw len=NULL fails with EINVAL");
     flux_msg_destroy (msg);
+}
+
+int main (int argc, char *argv[])
+{
+    plan (NO_PLAN);
+
+    test_codec ();
 
     done_testing();
     return (0);
