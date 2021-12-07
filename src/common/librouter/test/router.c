@@ -228,7 +228,7 @@ void test_basic (flux_t *h)
                                          "{\"service\":\"testfu\"}")))
         BAIL_OUT ("flux_request_encode failed");
     router_entry_recv (entry, request); // router receives message from abcd
-    diag ("basic: sent local.sub request");
+    diag ("basic: sent service.add request");
     flux_msg_destroy (request);
     ok (flux_reactor_run (r, 0) >= 0, "basic: reactor processed one message");
 
