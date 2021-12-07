@@ -19,6 +19,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libccan/ccan/base64/base64.h"
 
+#include "module.h"
 #include "publisher.h"
 
 
@@ -149,8 +150,60 @@ error_restore_seq:
     return -1;
 }
 
+static void subscribe_cb (flux_t *h, flux_msg_handler_t *mh,
+                          const flux_msg_t *msg, void *arg)
+{
+    struct publisher *pub = arg;
+    const char *uuid;
+    const char *topic;
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
+        goto error;
+    if (!(uuid = flux_msg_route_first (msg))) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (module_subscribe (pub->ctx->modhash, uuid, topic) < 0)
+        goto error;
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to subscribe request");
+    return;
+error:
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to subscribe request");
+}
+
+static void unsubscribe_cb (flux_t *h, flux_msg_handler_t *mh,
+                            const flux_msg_t *msg, void *arg)
+{
+    struct publisher *pub = arg;
+    const char *uuid;
+    const char *topic;
+
+    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
+        goto error;
+    if (!(uuid = flux_msg_route_first (msg))) {
+        errno = EPROTO;
+        goto error;
+    }
+    if (module_unsubscribe (pub->ctx->modhash, uuid, topic) < 0)
+        goto error;
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to unsubscribe request");
+    return;
+error:
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to unsubscribe request");
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "event.publish",  publish_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "event.subscribe",  subscribe_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "event.unsubscribe",  unsubscribe_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

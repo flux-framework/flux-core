@@ -1168,60 +1168,6 @@ static void broker_disconnect_cb (flux_t *h, flux_msg_handler_t *mh,
     /* no response */
 }
 
-static void broker_sub_cb (flux_t *h, flux_msg_handler_t *mh,
-                        const flux_msg_t *msg, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    const char *uuid;
-    const char *topic;
-
-    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
-        goto error;
-    if (!(uuid = flux_msg_route_first (msg))) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (!uuid) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (module_subscribe (ctx->modhash, uuid, topic) < 0)
-        goto error;
-    if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
-static void broker_unsub_cb (flux_t *h, flux_msg_handler_t *mh,
-                          const flux_msg_t *msg, void *arg)
-{
-    broker_ctx_t *ctx = arg;
-    const char *uuid;
-    const char *topic;
-
-    if (flux_request_unpack (msg, NULL, "{ s:s }", "topic", &topic) < 0)
-        goto error;
-    if (!(uuid = flux_msg_route_first (msg))) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (!uuid) {
-        errno = EPROTO;
-        goto error;
-    }
-    if (module_unsubscribe (ctx->modhash, uuid, topic) < 0)
-        goto error;
-    if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-}
-
 static int route_to_handle (const flux_msg_t *msg, void *arg)
 {
     broker_ctx_t *ctx = arg;
@@ -1347,18 +1293,6 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "broker.disconnect",
         broker_disconnect_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "event.subscribe",
-        broker_sub_cb,
-        0
-    },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "event.unsubscribe",
-        broker_unsub_cb,
         0
     },
     {
