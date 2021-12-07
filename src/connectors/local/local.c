@@ -102,7 +102,7 @@ static int op_event_subscribe (void *impl, const char *topic)
     flux_future_t *f;
 
     if (!(f = flux_rpc_pack (ctx->h,
-                             "local.sub",
+                             "event.subscribe",
                              FLUX_NODEID_ANY,
                              0,
                              "{s:s}",
@@ -122,7 +122,7 @@ static int op_event_unsubscribe (void *impl, const char *topic)
     flux_future_t *f;
 
     if (!(f = flux_rpc_pack (ctx->h,
-                             "local.unsub",
+                             "event.unsubscribe",
                              FLUX_NODEID_ANY,
                              0,
                              "{s:s}",

@@ -92,7 +92,7 @@ static void router_entry_respond_byuuid (const flux_msg_t *msg,
         router_entry_respond (entry, msg, errnum);
 }
 
-/* Handle internal local.sub request.
+/* Handle internal local subscribe request.
  */
 static void local_sub_request (struct router_entry *entry, flux_msg_t *msg)
 {
@@ -108,7 +108,7 @@ error:
     router_entry_respond (entry, msg, errno);
 }
 
-/* Handle internal local.unsub request.
+/* Handle internal local unsubscribe request.
  */
 static void local_unsub_request (struct router_entry *entry, flux_msg_t *msg)
 {
@@ -172,11 +172,11 @@ void router_entry_recv (struct router_entry *entry, flux_msg_t *msg)
         return;
     switch (type) {
         case FLUX_MSGTYPE_REQUEST:
-            if (!strcmp (topic, "local.sub")) {
+            if (!strcmp (topic, "event.subscribe")) {
                 local_sub_request (entry, msg);
                 break;
             }
-            if (!strcmp (topic, "local.unsub")) {
+            if (!strcmp (topic, "event.unsubscribe")) {
                 local_unsub_request (entry, msg);
                 break;
             }
