@@ -19,7 +19,7 @@ ExecStart=/bin/bash -c '\
   -Scontent.backing-path=@X_LOCALSTATEDIR@/lib/flux/content.sqlite \
   -Sbroker.rc2_none \
   -Sbroker.quorum=0 \
-  -Sbroker.quorum-timeout=none
+  -Sbroker.quorum-timeout=none \
 '
 ExecReload=@X_BINDIR@/flux config reload
 Restart=on-success
