@@ -109,7 +109,7 @@ static int op_event_subscribe (void *impl, const char *topic)
     flux_future_t *f;
     int rc = -1;
 
-    if (!(f = flux_rpc_pack (ctx->h, "broker.sub", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (ctx->h, "event.subscribe", FLUX_NODEID_ANY, 0,
                              "{ s:s }", "topic", topic)))
         goto done;
     if (flux_future_get (f, NULL) < 0)
@@ -127,7 +127,7 @@ static int op_event_unsubscribe (void *impl, const char *topic)
     flux_future_t *f = NULL;
     int rc = -1;
 
-    if (!(f = flux_rpc_pack (ctx->h, "broker.unsub", FLUX_NODEID_ANY, 0,
+    if (!(f = flux_rpc_pack (ctx->h, "event.unsubscribe", FLUX_NODEID_ANY, 0,
                              "{ s:s }", "topic", topic)))
         goto done;
     if (flux_future_get (f, NULL) < 0)

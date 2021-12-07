@@ -1351,13 +1351,13 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "broker.sub",
+        "event.subscribe",
         broker_sub_cb,
         0
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "broker.unsub",
+        "event.unsubscribe",
         broker_unsub_cb,
         0
     },
