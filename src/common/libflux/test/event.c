@@ -11,9 +11,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include "message.h"
-#include "event.h"
+#include <flux/core.h>
 #include "src/common/libtap/tap.h"
+#include "src/common/libtestutil/util.h"
 
 void test_codec (void)
 {
@@ -96,11 +96,209 @@ void test_codec (void)
     flux_msg_destroy (msg);
 }
 
+void test_subscribe_badparams (void)
+{
+    flux_t *h;
+
+    if (!(h = loopback_create (0)))
+        BAIL_OUT ("loopback_create failed");
+
+    errno = 0;
+    ok (flux_event_subscribe_ex (NULL, "foo", 0) == NULL && errno == EINVAL,
+        "flux_event_subscribe_ex h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_event_subscribe_ex (h, NULL, 0) == NULL && errno == EINVAL,
+        "flux_event_subscribe_ex topic=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_event_subscribe_ex (h, "foo", -1) == NULL && errno == EINVAL,
+        "flux_event_subscribe_ex flags=-1 fails with EINVAL");
+
+    errno = 0;
+    ok (flux_event_unsubscribe_ex (NULL, "foo", 0) == NULL && errno == EINVAL,
+        "flux_event_unsubscribe_ex h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_event_unsubscribe_ex (h, NULL, 0) == NULL && errno == EINVAL,
+        "flux_event_unsubscribe_ex topic=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_event_unsubscribe_ex (h, "foo", -1) == NULL && errno == EINVAL,
+        "flux_event_unsubscribe_ex flags=-1 fails with EINVAL");
+
+    errno = 0;
+    ok (flux_event_subscribe (NULL, "foo") < 0 && errno == EINVAL,
+        "flux_event_subscribe h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_event_subscribe (h, NULL) < 0 && errno == EINVAL,
+        "flux_event_subscribe topic=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_event_unsubscribe (NULL, "foo") < 0 && errno == EINVAL,
+        "flux_event_unsubscribe h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_event_unsubscribe (h, NULL) < 0 && errno == EINVAL,
+        "flux_event_unsubscribe topic=NULL fails with EINVAL");
+
+    flux_close (h);
+}
+
+bool fake_failure;
+
+void subscribe_cb (flux_t *h, flux_msg_handler_t *mh,
+                   const flux_msg_t *msg, void *arg)
+{
+    const char *topic = NULL;
+
+    if (flux_request_unpack (msg, NULL, "{s:s}", "topic", &topic) < 0)
+        goto error;
+    diag ("subscribe %s", topic);
+    if (fake_failure) {
+        errno = EIO;
+        fake_failure = false;
+        goto error;
+    }
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond (h, msg, NULL) < 0)
+        diag ("error responding to subscribe request");
+    return;
+error:
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond_error (h, msg, errno, NULL) < 0)
+        diag ("error responding to subscribe request: %s", strerror (errno));
+}
+
+void unsubscribe_cb (flux_t *h, flux_msg_handler_t *mh,
+                     const flux_msg_t *msg, void *arg)
+{
+    const char *topic = NULL;
+
+    if (flux_request_unpack (msg, NULL, "{s:s}", "topic", &topic) < 0)
+        goto error;
+    diag ("unsubscribe %s", topic);
+    if (fake_failure) {
+        errno = EIO;
+        fake_failure = false;
+        goto error;
+    }
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond (h, msg, NULL) < 0)
+        diag ("error responding to unsubscribe request");
+    return;
+error:
+    if (!flux_msg_is_noresponse (msg)
+        && flux_respond_error (h, msg, errno, NULL) < 0)
+        diag ("error responding to unsubscribe request: %s", strerror (errno));
+}
+
+const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,   "event.subscribe",    subscribe_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,   "event.unsubscribe",  unsubscribe_cb, 0 },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
+int test_server (flux_t *h, void *arg)
+{
+    flux_msg_handler_t **handlers = NULL;
+    int rc = -1;
+
+    if (flux_msg_handler_addvec (h, htab, NULL, &handlers) < 0) {
+        diag ("flux_msg_handler_addvec failed");
+        return -1;
+    }
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        diag ("flux_reactor_run failed");
+        goto done;
+    }
+    rc = 0;
+done:
+    flux_msg_handler_delvec (handlers);
+    return rc;
+}
+
+void test_subscribe_rpc (void)
+{
+    flux_t *h;
+    flux_future_t *f;
+
+    if (!(h = test_server_create (0, test_server, NULL)))
+        BAIL_OUT ("test_server_create: %s", strerror (errno));
+
+    ok (flux_event_subscribe (h, "fubar") == 0,
+        "flux_event_subscribe topic=FUBAR works");
+
+    ok (flux_event_unsubscribe (h, "fubar") == 0,
+        "flux_event_unsubscribe topic=FUBAR works");
+
+    fake_failure = true;
+    errno = 0;
+    ok (flux_event_subscribe (h, "fubar") < 0 && errno == EIO,
+        "flux_event_subscribe failure works");
+
+    fake_failure = true;
+    errno = 0;
+    ok (flux_event_unsubscribe (h, "fubar") < 0 && errno == EIO,
+        "flux_event_unsubscribe failure works");
+
+    f = flux_event_subscribe_ex (h, "fubar", FLUX_RPC_NORESPONSE);
+    ok (f != NULL,
+        "flux_event_subscribe_ex flags=FLUX_RPC_NORESPONSE works");
+    flux_future_destroy (f);
+
+    f = flux_event_unsubscribe_ex (h, "fubar", FLUX_RPC_NORESPONSE);
+    ok (f != NULL,
+        "flux_event_unsubscribe_ex flags=FLUX_RPC_NORESPONSE works");
+    flux_future_destroy (f);
+
+    f = flux_event_subscribe_ex (h, "fubar", 0);
+    ok (f && flux_future_get (f, NULL) == 0,
+        "flux_event_subscribe_ex works");
+    flux_future_destroy (f);
+
+    f = flux_event_unsubscribe_ex (h, "fubar", 0);
+    ok (f && flux_future_get (f, NULL) == 0,
+        "flux_event_unsubscribe_ex works");
+    flux_future_destroy (f);
+
+    fake_failure = true;
+    errno = 0;
+    f = flux_event_subscribe_ex (h, "fubar", 0);
+    ok (f && flux_future_get (f, NULL) < 0 && errno == EIO,
+        "flux_event_subscribe_ex failure works");
+    flux_future_destroy (f);
+
+    fake_failure = true;
+    errno = 0;
+    f = flux_event_unsubscribe_ex (h, "fubar", 0);
+    ok (f && flux_future_get (f, NULL) < 0 && errno == EIO,
+        "flux_event_unsubscribe_ex failure works");
+    flux_future_destroy (f);
+
+    if (test_server_stop (h) < 0)
+        BAIL_OUT ("error stopping test server: %s", strerror (errno));
+    flux_close (h);
+}
+
+void test_subscribe_nosub (void)
+{
+    flux_t *h;
+
+    if (!(h = loopback_create (FLUX_O_TEST_NOSUB)))
+        BAIL_OUT ("loopback_create failed");
+
+    ok (flux_event_subscribe (h, "foo") == 0,
+        "flux_event_subscribe succeeds in loopback with TEST_NOSUB flag");
+    ok (flux_event_unsubscribe (h, "foo") == 0,
+        "flux_event_unsubscribe succeeds in loopback with TEST_NOSUB flag");
+
+    flux_close (h);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
 
     test_codec ();
+    test_subscribe_badparams ();
+    test_subscribe_rpc ();
+    test_subscribe_nosub ();
 
     done_testing();
     return (0);
