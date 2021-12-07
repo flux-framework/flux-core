@@ -87,8 +87,10 @@ static void send_event (struct publisher *pub, const flux_msg_t *msg)
         flux_log_error (pub->ctx->h, "error publishing event message");
 }
 
-void pub_cb (flux_t *h, flux_msg_handler_t *mh,
-             const flux_msg_t *msg, void *arg)
+static void publish_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
 {
     struct publisher *pub = arg;
     const char *topic;
@@ -148,7 +150,7 @@ error_restore_seq:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "event.pub",  pub_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "event.publish",  publish_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

@@ -211,7 +211,7 @@ static flux_future_t *wrap_event_rpc (flux_t *h,
             errno = EPROTO;
             return NULL;
         }
-        if (!(f = flux_rpc_pack (h, "event.pub", 0, 0,
+        if (!(f = flux_rpc_pack (h, "event.publish", 0, 0,
                                  "{s:s s:i s:s}", "topic", topic,
                                                   "flags", flags,
                                                   "payload", dst))) {
@@ -223,7 +223,7 @@ static flux_future_t *wrap_event_rpc (flux_t *h,
         free (dst);
     }
     else {
-        if (!(f = flux_rpc_pack (h, "event.pub", 0, 0,
+        if (!(f = flux_rpc_pack (h, "event.publish", 0, 0,
                                     "{s:s s:i}", "topic", topic,
                                                  "flags", flags))) {
             return NULL;
