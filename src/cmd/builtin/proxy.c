@@ -29,6 +29,7 @@
 #include <inttypes.h>
 
 #include "src/common/libutil/cleanup.h"
+#include "src/common/libutil/uri.h"
 #include "src/common/librouter/usock.h"
 #include "src/common/librouter/router.h"
 
@@ -256,7 +257,8 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     const char *tmpdir = getenv ("TMPDIR");
     char workpath[PATH_MAX + 1];
     char sockpath[PATH_MAX + 1];
-    const char *uri;
+    const char *target;
+    char *uri;
     int optindex;
     flux_reactor_t *r;
 
@@ -265,11 +267,15 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     optindex = optparse_option_index (p);
     if (optindex == ac)
         optparse_fatal_usage (p, 1, "URI argument is required\n");
-    uri = av[optindex++];
+
+    target = av[optindex++];
+    if (!(uri = uri_resolve (target)))
+        log_msg_exit ("Unable to resolve %s to a URI", target);
 
     memset (&ctx, 0, sizeof (ctx));
     if (!(ctx.h = flux_open (uri, 0)))
         log_err_exit ("%s", uri);
+    free (uri);
     flux_log_set_appname (ctx.h, "proxy");
     ctx.proxy_user = getuid ();
     if (!(r = flux_reactor_create (SIGCHLD)))
@@ -338,7 +344,7 @@ int subcommand_proxy_register (optparse_t *p)
     optparse_err_t e;
 
     e = optparse_reg_subcommand (p, "proxy", cmd_proxy,
-        "[OPTIONS] URI [COMMAND...]",
+        "[OPTIONS] JOBID|URI [COMMAND...]",
         "Route messages to/from Flux instance",
         0,
         proxy_opts);
