@@ -194,12 +194,6 @@ void client_invalid (void)
         "usock_client_connect path=(longstr) fails with EINVAL");
 
     errno = 0;
-    retry.max_retry = -1;
-    ok (usock_client_connect ("foo", retry) < 0 && errno == EINVAL,
-        "usock_client_connect max_retry=-1 fails with EINVAL");
-    retry.max_retry = 0;
-
-    errno = 0;
     retry.min_delay = -1;
     ok (usock_client_connect ("foo", retry) < 0 && errno == EINVAL,
         "usock_client_connect min_delay=-1 fails with EINVAL");

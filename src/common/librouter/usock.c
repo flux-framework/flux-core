@@ -680,8 +680,10 @@ int usock_client_connect (const char *sockpath,
     useconds_t delay_usec = retry.min_delay * 1E6; // sec -> usec
     int retries = 0;
 
-    if (!sockpath || strlen (sockpath) == 0 || retry.max_retry < 0
-                  || retry.min_delay < 0 || retry.max_delay < 0) {
+    if (!sockpath
+        || strlen (sockpath) == 0
+        || retry.min_delay < 0
+        || retry.max_delay < 0) {
         errno = EINVAL;
         return -1;
     }
@@ -698,7 +700,7 @@ int usock_client_connect (const char *sockpath,
         return -1;
     }
     while (connect (fd, (struct sockaddr *)&addr, sizeof (addr)) < 0) {
-        if (retries++ == retry.max_retry)
+        if (retry.max_retry >= 0 && retries++ == retry.max_retry)
             goto error;
         usleep (delay_usec);
         delay_usec *= 2;

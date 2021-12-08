@@ -30,6 +30,11 @@ struct usock_retry_params {
     .min_delay = 0.016, \
     .max_delay = 2, \
 }
+#define USOCK_RETRY_FOREVER (struct usock_retry_params){ \
+    .max_retry = -1, \
+    .min_delay = 0.016, \
+    .max_delay = 2, \
+}
 #define USOCK_RETRY_NONE (struct usock_retry_params){ \
     .max_retry = 0, \
     .min_delay = 0, \
