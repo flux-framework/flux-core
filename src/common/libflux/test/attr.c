@@ -179,7 +179,7 @@ int main (int argc, char *argv[])
 
     test_server_environment_init ("attr-test");
 
-    if (!(h = test_server_create (test_server, NULL)))
+    if (!(h = test_server_create (0, test_server, NULL)))
         BAIL_OUT ("test_server_create failed");
 
     /* get ENOENT */

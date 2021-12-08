@@ -22,6 +22,17 @@ enum event_flags {
     FLUX_EVENT_PRIVATE = 1,
 };
 
+/* Event subscribe/unsubscribe.
+ */
+int flux_event_subscribe (flux_t *h, const char *topic);
+int flux_event_unsubscribe (flux_t *h, const char *topic);
+flux_future_t *flux_event_subscribe_ex (flux_t *h,
+                                        const char *topic,
+                                        int flags);
+flux_future_t *flux_event_unsubscribe_ex (flux_t *h,
+                                          const char *topic,
+                                          int flags);
+
 /* Decode an event message with optional string payload.
  * If topic is non-NULL, assign the event topic string.
  * If s is non-NULL, assign string payload or set to NULL if none

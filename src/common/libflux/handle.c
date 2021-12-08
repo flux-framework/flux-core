@@ -386,8 +386,6 @@ void flux_handle_destroy (flux_t *h)
                 dlclose (h->dso);
 #endif
             flux_msglist_destroy (h->queue);
-            if (h->pollfd >= 0)
-                (void)close (h->pollfd);
         }
         free (h);
         errno = saved_errno;
@@ -737,32 +735,6 @@ int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
         rc = flux_msglist_push (h->queue, msg);
     if (rc < 0)
         goto fatal;
-    return 0;
-fatal:
-    FLUX_FATAL (h);
-    return -1;
-}
-
-int flux_event_subscribe (flux_t *h, const char *topic)
-{
-    h = lookup_clone_ancestor (h);
-    if (h->ops->event_subscribe) {
-        if (h->ops->event_subscribe (h->impl, topic) < 0)
-            goto fatal;
-    }
-    return 0;
-fatal:
-    FLUX_FATAL (h);
-    return -1;
-}
-
-int flux_event_unsubscribe (flux_t *h, const char *topic)
-{
-    h = lookup_clone_ancestor (h);
-    if (h->ops->event_unsubscribe) {
-        if (h->ops->event_unsubscribe (h->impl, topic) < 0)
-            goto fatal;
-    }
     return 0;
 fatal:
     FLUX_FATAL (h);

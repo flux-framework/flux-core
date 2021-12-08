@@ -662,6 +662,16 @@ static void sync_cb (flux_future_t *f, void *arg)
     flux_future_reset (f);
 }
 
+int overlay_keepalive_start (struct overlay *ov)
+{
+    if (!ov->f_sync) {
+        if (!(ov->f_sync = flux_sync_create (ov->h, sync_min))
+            || flux_future_then (ov->f_sync, sync_max, sync_cb, ov) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 const char *overlay_get_bind_uri (struct overlay *ov)
 {
     return ov->bind_uri;
@@ -1771,9 +1781,6 @@ struct overlay *overlay_create (flux_t *h,
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
-        goto error;
-    if (!(ov->f_sync = flux_sync_create (h, sync_min))
-        || flux_future_then (ov->f_sync, sync_max, sync_cb, ov) < 0)
         goto error;
     if (!(ov->cert = zcert_new ()))
         goto nomem;

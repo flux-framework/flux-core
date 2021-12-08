@@ -166,7 +166,7 @@ out:
 
 static void test_basic_protocol (void)
 {
-    flux_t *h = test_server_create (pty_server, NULL);
+    flux_t *h = test_server_create (0, pty_server, NULL);
     flux_future_t *f = NULL;
     flux_future_t *f_attach = NULL;
 
@@ -385,7 +385,7 @@ static void pty_exit_cb (struct flux_pty_client *c, void *arg)
 
 static void test_client()
 {
-    flux_t *h = test_server_create (pty_server, NULL);
+    flux_t *h = test_server_create (0, pty_server, NULL);
     flux_future_t *f = NULL;
     int rc;
     int flags = FLUX_PTY_CLIENT_ATTACH_SYNC

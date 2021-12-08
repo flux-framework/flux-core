@@ -31,9 +31,6 @@ struct flux_handle_ops {
     int         (*send)(void *impl, const flux_msg_t *msg, int flags);
     flux_msg_t* (*recv)(void *impl, int flags);
 
-    int         (*event_subscribe)(void *impl, const char *topic);
-    int         (*event_unsubscribe)(void *impl, const char *topic);
-
     void        (*impl_destroy)(void *impl);
 };
 

@@ -40,10 +40,11 @@ typedef void (*flux_fatal_f)(const char *msg, void *arg);
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
  */
 enum {
-    FLUX_O_TRACE = 1,   /* send message trace to stderr */
-    FLUX_O_CLONE = 2,   /* handle was created with flux_clone() */
-    FLUX_O_NONBLOCK = 4,/* handle should not block on send/recv */
-    FLUX_O_MATCHDEBUG = 8,/* enable matchtag debugging */
+    FLUX_O_TRACE = 1,       /* send message trace to stderr */
+    FLUX_O_CLONE = 2,       /* handle was created with flux_clone() */
+    FLUX_O_NONBLOCK = 4,    /* handle should not block on send/recv */
+    FLUX_O_MATCHDEBUG = 8,  /* enable matchtag debugging */
+    FLUX_O_TEST_NOSUB = 16, /* for testing: make (un)subscribe a no-op */
 };
 
 /* Flags for flux_requeue().
@@ -173,11 +174,6 @@ int flux_pollevents (flux_t *h);
  * Returns fd on sucess, -1 on failure with errno set.
  */
 int flux_pollfd (flux_t *h);
-
-/* Event subscribe/unsubscribe.
- */
-int flux_event_subscribe (flux_t *h, const char *topic);
-int flux_event_unsubscribe (flux_t *h, const char *topic);
 
 /* Get/clear handle message counters.
  */

@@ -22,6 +22,68 @@
 #include "rpc.h"
 #include "message.h"
 
+flux_future_t *flux_event_subscribe_ex (flux_t *h,
+                                        const char *topic,
+                                        int flags)
+{
+    if (!topic) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return flux_rpc_pack (h,
+                          "event.subscribe",
+                          FLUX_NODEID_ANY,
+                          flags,
+                          "{s:s}",
+                          "topic", topic);
+}
+
+int flux_event_subscribe (flux_t *h, const char *topic)
+{
+    flux_future_t *f;
+
+    if (h && (flux_flags_get (h) & FLUX_O_TEST_NOSUB))
+        return 0;
+    if (!(f = flux_event_subscribe_ex (h, topic, 0))
+        || flux_future_get (f, NULL) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
+flux_future_t *flux_event_unsubscribe_ex (flux_t *h,
+                                          const char *topic,
+                                          int flags)
+{
+    if (!topic) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return flux_rpc_pack (h,
+                          "event.unsubscribe",
+                          FLUX_NODEID_ANY,
+                          flags,
+                          "{s:s}",
+                          "topic", topic);
+}
+
+int flux_event_unsubscribe (flux_t *h, const char *topic)
+{
+    flux_future_t *f;
+
+    if (h && (flux_flags_get (h) & FLUX_O_TEST_NOSUB))
+        return 0;
+    if (!(f = flux_event_unsubscribe_ex (h, topic, 0))
+        || flux_future_get (f, NULL) < 0) {
+        flux_future_destroy (f);
+        return -1;
+    }
+    flux_future_destroy (f);
+    return 0;
+}
+
 static int event_decode (const flux_msg_t *msg, const char **topic)
 {
     int type;
@@ -211,7 +273,7 @@ static flux_future_t *wrap_event_rpc (flux_t *h,
             errno = EPROTO;
             return NULL;
         }
-        if (!(f = flux_rpc_pack (h, "event.pub", FLUX_NODEID_ANY, 0,
+        if (!(f = flux_rpc_pack (h, "event.publish", 0, 0,
                                  "{s:s s:i s:s}", "topic", topic,
                                                   "flags", flags,
                                                   "payload", dst))) {
@@ -223,7 +285,7 @@ static flux_future_t *wrap_event_rpc (flux_t *h,
         free (dst);
     }
     else {
-        if (!(f = flux_rpc_pack (h, "event.pub", FLUX_NODEID_ANY, 0,
+        if (!(f = flux_rpc_pack (h, "event.publish", 0, 0,
                                     "{s:s s:i}", "topic", topic,
                                                  "flags", flags))) {
             return NULL;

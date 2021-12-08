@@ -226,7 +226,7 @@ int main (int argc, char *argv[])
     diag ("starting test server");
     test_server_environment_init ("usock_server");
 
-    if (!(h = test_server_create (server_cb, &tp)))
+    if (!(h = test_server_create (0, server_cb, &tp)))
         BAIL_OUT ("test_server_create failed");
 
     test_send_and_exit (h, 1);

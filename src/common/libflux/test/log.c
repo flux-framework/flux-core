@@ -25,7 +25,7 @@ int main (int argc, char *argv[])
 
     test_server_environment_init ("log-test");
 
-    if (!(h = test_server_create (NULL, NULL)))
+    if (!(h = test_server_create (0, NULL, NULL)))
         BAIL_OUT ("could not create test server");
     if (flux_attr_set_cacheonly (h, "rank", "0") < 0)
         BAIL_OUT ("flux_attr_set_cacheonly failed");

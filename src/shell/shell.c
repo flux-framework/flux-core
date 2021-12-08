@@ -222,7 +222,11 @@ static void shell_parse_cmdline (flux_shell_t *shell, int argc, char *argv[])
 
 static void shell_connect_flux (flux_shell_t *shell)
 {
-    if (!(shell->h = flux_open (shell->standalone ? "loop://" : NULL, 0)))
+    if (shell->standalone)
+        shell->h = flux_open ("loop://", FLUX_O_TEST_NOSUB);
+    else
+        shell->h = flux_open (NULL, 0);
+    if (!shell->h)
         shell_die_errno (1, "flux_open");
 
     /*  Set reactor for flux handle to our custom created reactor.

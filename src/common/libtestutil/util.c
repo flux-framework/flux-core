@@ -122,11 +122,10 @@ static void test_server_destroy (struct test_server *a)
     }
 }
 
-flux_t *test_server_create (test_server_f cb, void *arg)
+flux_t *test_server_create (int cflags, test_server_f cb, void *arg)
 {
     int e;
     struct test_server *a;
-    int cflags = 0; // client connector flags
     int sflags = 0; // server connector flags
 
     if (!(a = calloc (1, sizeof (*a))))
@@ -286,8 +285,6 @@ static const struct flux_handle_ops handle_ops = {
     .recv = test_connector_recv,
     .getopt = NULL,
     .setopt = NULL,
-    .event_subscribe = NULL,
-    .event_unsubscribe = NULL,
     .impl_destroy = test_connector_fini,
 };
 
@@ -465,8 +462,6 @@ static const struct flux_handle_ops loopback_ops = {
     .recv = loopback_connector_recv,
     .getopt = loopback_connector_getopt,
     .setopt = loopback_connector_setopt,
-    .event_subscribe = NULL,
-    .event_unsubscribe = NULL,
     .impl_destroy = loopback_connector_fini,
 };
 

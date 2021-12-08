@@ -31,7 +31,11 @@ static void sync_destroy (struct flux_sync *sync)
 {
     if (sync) {
         int saved_errno = errno;
-        (void)flux_event_unsubscribe (sync->h, "heartbeat.pulse");
+        flux_future_t *f;
+        f = flux_event_unsubscribe_ex (sync->h,
+                                       "heartbeat.pulse",
+                                       FLUX_RPC_NORESPONSE);
+        flux_future_destroy (f);
         free (sync);
         errno = saved_errno;
     }
@@ -40,13 +44,17 @@ static void sync_destroy (struct flux_sync *sync)
 static struct flux_sync *sync_create (flux_t *h, double minimum)
 {
     struct flux_sync *sync;
+    flux_future_t *f;
 
     if (!(sync = calloc (1, sizeof (*sync))))
         return NULL;
     sync->h = h;
     sync->minimum = minimum;
-    if (flux_event_subscribe (h, "heartbeat.pulse") < 0)
+    if (!(f = flux_event_subscribe_ex (sync->h,
+                                       "heartbeat.pulse",
+                                       FLUX_RPC_NORESPONSE)))
         goto error;
+    flux_future_destroy (f);
     return sync;
 error:
     sync_destroy (sync);

@@ -90,7 +90,7 @@ static void test_kill_server_empty (void)
 {
     int rc;
     flux_future_t *f = NULL;
-    flux_t *h = test_server_create (terminus_server, NULL);
+    flux_t *h = test_server_create (0, terminus_server, NULL);
 
     /* kill-server
      */
@@ -121,7 +121,7 @@ static void test_protocol (void)
     int rc;
     json_t *o = NULL;
     flux_future_t *f = NULL;
-    flux_t *h = test_server_create (terminus_server, NULL);
+    flux_t *h = test_server_create (0, terminus_server, NULL);
 
     const char *service = NULL;
     const char *name = NULL;

@@ -135,7 +135,7 @@ int basic_recv (const flux_msg_t *msg, void *arg)
 
     switch (type) {
         case FLUX_MSGTYPE_RESPONSE:
-            like (topic, "local.sub|local.unsub|service.add|service.remove|rtest.hello",
+            like (topic, "event.subscribe|event.unsubscribe|service.add|service.remove|rtest.hello",
                   "router-entry: response is %s", topic);
             break;
         case FLUX_MSGTYPE_EVENT:
@@ -192,11 +192,11 @@ void test_basic (flux_t *h)
      * - basic_recv() is called in the context of router_entry_recv()
      *   in this case so don't start the reactor.
      */
-    if (!(request = flux_request_encode ("local.sub",
+    if (!(request = flux_request_encode ("event.subscribe",
                                          "{\"topic\":\"rtest\"}")))
         BAIL_OUT ("flux_request_encode failed");
     router_entry_recv (entry, request); // router recives message from abcd
-    diag ("basic: sent local.sub request");
+    diag ("basic: sent event.subscribe request");
     flux_msg_destroy (request);
 
     /* Send an rtest.pub request from client.
@@ -212,11 +212,11 @@ void test_basic (flux_t *h)
 
     /* Now unsubscribe to rtest events.
      */
-    if (!(request = flux_request_encode ("local.unsub",
+    if (!(request = flux_request_encode ("event.unsubscribe",
                                          "{\"topic\":\"rtest\"}")))
         BAIL_OUT ("flux_request_encode failed");
     router_entry_recv (entry, request); // router recives message from abcd
-    diag ("basic: sent local.unsub request");
+    diag ("basic: sent event.unsubscribe request");
     flux_msg_destroy (request);
 
     /* Register testfu service.
@@ -228,7 +228,7 @@ void test_basic (flux_t *h)
                                          "{\"service\":\"testfu\"}")))
         BAIL_OUT ("flux_request_encode failed");
     router_entry_recv (entry, request); // router receives message from abcd
-    diag ("basic: sent local.sub request");
+    diag ("basic: sent service.add request");
     flux_msg_destroy (request);
     ok (flux_reactor_run (r, 0) >= 0, "basic: reactor processed one message");
 
@@ -266,7 +266,7 @@ int main (int argc, char *argv[])
     diag ("starting test server");
     test_server_environment_init ("test_router");
 
-    if (!(h = test_server_create (server_cb, NULL)))
+    if (!(h = test_server_create (FLUX_O_TEST_NOSUB, server_cb, NULL)))
         BAIL_OUT ("test_server_create failed");
 
     test_basic (h);

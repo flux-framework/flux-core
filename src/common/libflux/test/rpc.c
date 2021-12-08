@@ -917,14 +917,14 @@ void test_fake_server (void)
 {
     flux_t *h;
 
-    ok ((h = test_server_create (fake_server, NULL)) != NULL,
+    ok ((h = test_server_create (0, fake_server, NULL)) != NULL,
         "test_server_create (recv loop)");
     ok (test_server_stop (h) == 0,
         "test_server_stop worked");
     flux_close (h);
     diag ("completed test with server recv loop");
 
-    ok ((h = test_server_create (fake_server_reactor, NULL)) != NULL,
+    ok ((h = test_server_create (0, fake_server_reactor, NULL)) != NULL,
         "test_server_create (reactor)");
     ok ((test_server_stop (h)) == 0,
         "test_server_stop worked");
@@ -965,7 +965,7 @@ int main (int argc, char *argv[])
 
     test_fake_server ();
 
-    h = test_server_create (test_server, NULL);
+    h = test_server_create (0, test_server, NULL);
     ok (h != NULL,
         "created test server thread");
     if (!h)
