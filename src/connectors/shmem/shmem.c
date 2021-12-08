@@ -19,7 +19,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <assert.h>
 #include <errno.h>
 #include <czmq.h>
 #include <argz.h>
@@ -30,9 +29,7 @@
 
 #include "src/common/libzmqutil/msg_zsock.h"
 
-#define MODHANDLE_MAGIC    0xfeefbe02
 typedef struct {
-    int magic;
     zsock_t *sock;
     char *uuid;
     flux_t *h;
@@ -45,7 +42,6 @@ static const struct flux_handle_ops handle_ops;
 static int op_pollevents (void *impl)
 {
     shmem_ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
     uint32_t e;
     int revents = 0;
 
@@ -63,7 +59,6 @@ static int op_pollevents (void *impl)
 static int op_pollfd (void *impl)
 {
     shmem_ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
 
     return zsock_fd (ctx->sock);
 }
@@ -71,7 +66,6 @@ static int op_pollfd (void *impl)
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     shmem_ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
 
     return zmqutil_msg_send (ctx->sock, msg);
 }
@@ -79,7 +73,6 @@ static int op_send (void *impl, const flux_msg_t *msg, int flags)
 static flux_msg_t *op_recv (void *impl, int flags)
 {
     shmem_ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
     zmq_pollitem_t zp = {
         .events = ZMQ_POLLIN,
         .socket = zsock_resolve (ctx->sock),
@@ -104,10 +97,8 @@ done:
 static void op_fini (void *impl)
 {
     shmem_ctx_t *ctx = impl;
-    assert (ctx->magic == MODHANDLE_MAGIC);
     zsock_destroy (&ctx->sock);
     free (ctx->argz);
-    ctx->magic = ~MODHANDLE_MAGIC;
     free (ctx);
 }
 
@@ -135,7 +126,6 @@ flux_t *connector_init (const char *path, int flags)
         errno = ENOMEM;
         goto error;
     }
-    ctx->magic = MODHANDLE_MAGIC;
     if ((e = argz_create_sep (path, '&', &ctx->argz, &ctx->argz_len)) != 0) {
         errno = e;
         goto error;

@@ -13,15 +13,12 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <assert.h>
 #include <unistd.h>
 #include <sys/poll.h>
 
 #include <flux/core.h>
 
-#define CTX_MAGIC   0xf434aaa0
 typedef struct {
-    int magic;
     flux_t *h;
 
     struct flux_msg_cred cred;
@@ -59,7 +56,6 @@ static int op_pollfd (void *impl)
 static int op_send (void *impl, const flux_msg_t *msg, int flags)
 {
     loop_ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
     flux_msg_t *cpy = NULL;
     struct flux_msg_cred cred;
     int rc = -1;
@@ -85,7 +81,6 @@ done:
 static flux_msg_t *op_recv (void *impl, int flags)
 {
     loop_ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
     flux_msg_t *msg = (flux_msg_t *)flux_msglist_pop (c->queue);
     if (!msg)
         errno = EWOULDBLOCK;
@@ -95,10 +90,8 @@ static flux_msg_t *op_recv (void *impl, int flags)
 static void op_fini (void *impl)
 {
     loop_ctx_t *c = impl;
-    assert (c->magic == CTX_MAGIC);
 
     flux_msglist_destroy (c->queue);
-    c->magic = ~CTX_MAGIC;
     free (c);
 }
 
@@ -110,7 +103,6 @@ flux_t *connector_init (const char *path, int flags)
         goto error;
     }
     memset (c, 0, sizeof (*c));
-    c->magic = CTX_MAGIC;
     if (!(c->queue = flux_msglist_create ()))
         goto error;
     if (!(c->h = flux_handle_create (c, &handle_ops, flags)))
