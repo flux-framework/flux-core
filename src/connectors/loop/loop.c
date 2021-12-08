@@ -14,13 +14,10 @@
 #include "config.h"
 #endif
 #include <assert.h>
-#include <errno.h>
 #include <unistd.h>
 #include <sys/poll.h>
 
 #include <flux/core.h>
-
-#include "src/common/libutil/log.h"
 
 #define CTX_MAGIC   0xf434aaa0
 typedef struct {
