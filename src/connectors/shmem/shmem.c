@@ -29,7 +29,6 @@
 #include <flux/core.h>
 
 #include "src/common/libzmqutil/msg_zsock.h"
-#include "src/common/libutil/log.h"
 
 #define MODHANDLE_MAGIC    0xfeefbe02
 typedef struct {
