@@ -95,20 +95,6 @@ flux_future_t *shell_svc_vpack (struct shell_svc *svc,
     return flux_rpc_vpack (svc->shell->h, topic, rank, flags, fmt, ap);
 }
 
-flux_future_t *shell_svc_pack (struct shell_svc *svc,
-                               const char *method,
-                               int shell_rank,
-                               int flags,
-                               const char *fmt, ...)
-{
-    flux_future_t *f;
-    va_list ap;
-    va_start (ap, fmt);
-    f = shell_svc_vpack (svc, method, shell_rank, flags, fmt, ap);
-    va_end (ap);
-    return f;
-}
-
 int shell_svc_allowed (struct shell_svc *svc, const flux_msg_t *msg)
 {
     uint32_t rolemask;

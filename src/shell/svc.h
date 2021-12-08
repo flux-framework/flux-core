@@ -26,15 +26,6 @@ struct shell_svc *shell_svc_create (flux_shell_t *shell);
 
 /* Send an RPC to a shell 'method' by shell rank.
  */
-flux_future_t *shell_svc_pack (struct shell_svc *svc,
-                               const char *method,
-                               int shell_rank,
-                               int flags,
-                               const char *fmt, ...);
-
-
-/* Same as above, but called with a va_list instead of varargs
- */
 flux_future_t *shell_svc_vpack (struct shell_svc *svc,
                                 const char *method,
                                 int shell_rank,
