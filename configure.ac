@@ -521,6 +521,7 @@ AC_CONFIG_FILES( \
   src/shell/Makefile \
   src/connectors/Makefile \
   src/connectors/local/Makefile \
+  src/connectors/rlocal/Makefile \
   src/connectors/shmem/Makefile \
   src/connectors/loop/Makefile \
   src/connectors/ssh/Makefile \

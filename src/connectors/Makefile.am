@@ -1,1 +1,1 @@
-SUBDIRS = local shmem loop ssh
+SUBDIRS = local rlocal shmem loop ssh
