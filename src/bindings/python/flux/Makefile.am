@@ -9,6 +9,7 @@ nobase_fluxpy_PYTHON = \
 	future.py \
 	memoized_property.py \
 	debugged.py \
+	importer.py \
 	core/__init__.py \
 	core/watchers.py \
 	core/inner.py \
