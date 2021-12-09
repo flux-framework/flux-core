@@ -43,6 +43,7 @@ nobase_fluxpy_PYTHON = \
 	uri/uri.py \
 	uri/__init__.py \
 	uri/resolvers/jobid.py \
+	uri/resolvers/pid.py \
 	utils/parsedatetime/__init__.py \
 	utils/parsedatetime/parsedatetime.py \
 	utils/parsedatetime/warns.py \
