@@ -33,7 +33,8 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-version.1 \
 	man1/flux-jobs.1 \
 	man1/flux-shell.1 \
-	man1/flux-jobtap.1
+	man1/flux-jobtap.1 \
+	man1/flux-uri.1
 
 # These files are generated as clones of a primary page.
 # Sphinx handles this automatically if declared in the conf.py

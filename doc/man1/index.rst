@@ -26,5 +26,6 @@ man1
    flux-proxy
    flux-start
    flux-shell
+   flux-uri
    flux-version
    flux
