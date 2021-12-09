@@ -40,6 +40,8 @@ nobase_fluxpy_PYTHON = \
 	hostlist.py \
 	idset.py \
 	progress.py \
+	uri/uri.py \
+	uri/__init__.py \
 	utils/parsedatetime/__init__.py \
 	utils/parsedatetime/parsedatetime.py \
 	utils/parsedatetime/warns.py \
