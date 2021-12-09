@@ -145,6 +145,7 @@ checks_group "Executing tests under system instance container" \
     -e TEST_CHECK_PREREQS \
     -e FLUX_TEST_TIMEOUT \
     -e FLUX_TEST_SIZE_MAX \
+    -e FLUX_ENABLE_SYSTEM_TESTS=t \
     -e PYTHON_VERSION \
     -e PRELOAD \
     -e POISON \
