@@ -59,10 +59,6 @@ test_expect_success 'flux-proxy cannot shadow a broker service (EEXIST)' "
 	  $RPC service.add 17 <service4.add.in
 "
 
-test_expect_success 'flux-proxy fails with unknown URI scheme (ENOENT)' '
-	test_must_fail flux proxy badscheme:// 2>badscheme.err &&
-	grep "No such file or directory" badscheme.err
-'
 test_expect_success 'flux-proxy fails with unknown URI path (ENOENT)' '
 	test_must_fail flux proxy local:///noexist  2>badpath.err &&
 	grep "No such file or directory" badpath.err
