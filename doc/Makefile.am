@@ -321,6 +321,7 @@ stderr_devnull_0 = >/dev/null 2>&1
 
 $(MAN_FILES): conf.py $(RST_FILES)
 	$(sphinx_man) \
+	PYTHONPATH=$(PYTHONPATH):$(abs_srcdir) \
 	SPHINX_BUILDDIR=$(abs_builddir) $(PYTHON) \
 		-m sphinx $(sphinx_verbose_flags) -b man $(srcdir) ./man \
 		$(STDERR_DEVNULL)
@@ -333,12 +334,14 @@ $(MAN_FILES): conf.py $(RST_FILES)
 .PHONY: html
 html: conf.py $(RST_FILES)
 	$(sphinx_html) \
+	PYTHONPATH=$(PYTHONPATH):$(abs_srcdir) \
 	SPHINX_BUILDDIR=$(abs_builddir) $(PYTHON) \
 		-m sphinx $(sphinx_verbose_flags) -b html $(srcdir) ./html \
 		$(STDERR_DEVNULL)
 
 EXTRA_DIST = \
 	conf.py \
+	domainrefs.py \
 	index.rst \
 	$(RST_FILES) \
 	man1/NODESET.rst \

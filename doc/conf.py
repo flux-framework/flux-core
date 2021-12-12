@@ -46,8 +46,28 @@ source_suffix = '.rst'
 
 extensions = [
     'sphinx.ext.intersphinx',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'domainrefs'
 ]
+
+domainrefs = {
+    'man1': {
+        'text': "%s(1)",
+        'url': "../man1/%s.html"
+    },
+    'man3': {
+        'text': "%s(3)",
+        'url': "../man3/%s.html"
+    },
+    'man5': {
+        'text': "%s(5)",
+        'url': "../man5/%s.html"
+    },
+    'man7': {
+        'text': "%s(7)",
+        'url': "../man7/%s.html"
+    }
+}
 
 # Disable "smartquotes" to avoid things such as turning long-options
 #  "--" into en-dash in html output, which won't make much sense for
