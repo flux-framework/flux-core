@@ -163,10 +163,12 @@ jobs:
       run: src/test/checks-annotate.sh
 
     - name: coverage report
-      if: success() && matrix.coverage
+      if: success() && matrix.coverage && matrix.image == 'bionic'
       env:
         DOCKER_REPO:
       uses: codecov/codecov-action@v1
+      with:
+        flags: ci-basic
 
     - name: docker deploy
       if: success() && matrix.docker_tag
