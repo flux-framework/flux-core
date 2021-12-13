@@ -59,6 +59,18 @@ test_expect_success 'flux-proxy cannot shadow a broker service (EEXIST)' "
 	  $RPC service.add 17 <service4.add.in
 "
 
+test_expect_success 'flux-proxy calls out to flux-uri for unknown URI scheme' '
+	result=$(flux proxy pid:$$ flux getattr local-uri) &&
+	test_debug "echo proxy getattr local-uri = $result" &&
+	test "$result" = "$FLUX_URI"
+'
+
+test_expect_success 'flux-proxy fails if flux-uri fails' '
+	test_must_fail flux proxy bloop:1234 2>baduri.err &&
+	test_debug "cat baduri.err" &&
+	grep "Unable to resolve bloop:1234 to a URI" baduri.err
+'
+
 test_expect_success 'flux-proxy fails with unknown URI path (ENOENT)' '
 	test_must_fail flux proxy local:///noexist  2>badpath.err &&
 	grep "No such file or directory" badpath.err
@@ -89,6 +101,16 @@ test_expect_success 'flux-proxy --force works with version mismatch' '
 '
 test_expect_success 'restore real broker version' '
 	flux setattr version $(cat realversion)
+'
+
+test_expect_success 'flux-proxy works with jobid argument' '
+	id=$(flux mini submit -n1 flux start flux mini run sleep 30) &&
+	flux job wait-event -t 10 $id memo &&
+	uri=$(flux proxy $id?local flux getattr parent-uri) &&
+	test_debug "echo flux proxy $id flux getattr parent-uri = $uri" &&
+	test "$uri" = "$FLUX_URI" &&
+	flux job cancel $id &&
+	flux job wait-event -vt 10 $id clean
 '
 
 test_done
