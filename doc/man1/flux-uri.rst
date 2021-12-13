@@ -11,7 +11,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-Connections to Flux are established via a Uniform Resource Indicator
+Connections to Flux are established via a Uniform Resource Identifier
 (URI) which is passed to the :man3:`flux_open` API call. These *native*
 URIs indicate the "connector" which will be used to establish the
 connection, and are typically either *local*, with a  ``local`` URI
