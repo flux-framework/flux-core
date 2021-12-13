@@ -46,8 +46,28 @@ source_suffix = '.rst'
 
 extensions = [
     'sphinx.ext.intersphinx',
-    'sphinx.ext.napoleon'
+    'sphinx.ext.napoleon',
+    'domainrefs'
 ]
+
+domainrefs = {
+    'man1': {
+        'text': "%s(1)",
+        'url': "../man1/%s.html"
+    },
+    'man3': {
+        'text': "%s(3)",
+        'url': "../man3/%s.html"
+    },
+    'man5': {
+        'text': "%s(5)",
+        'url': "../man5/%s.html"
+    },
+    'man7': {
+        'text': "%s(7)",
+        'url': "../man7/%s.html"
+    }
+}
 
 # Disable "smartquotes" to avoid things such as turning long-options
 #  "--" into en-dash in html output, which won't make much sense for
@@ -127,6 +147,7 @@ man_pages = [
     ('man1/flux-hwloc', 'flux-hwloc', 'Control/query resource-hwloc service', [author], 1),
     ('man1/flux-jobs', 'flux-jobs', 'list jobs submitted to Flux', [author], 1),
     ('man1/flux-jobtap', 'flux-jobtap', 'List, remove, and load job-manager plugins', [author], 1),
+    ('man1/flux-uri', 'flux-uri', 'resolve Flux URIs', [author], 1),
     ('man1/flux-keygen', 'flux-keygen', 'generate keys for Flux security', [author], 1),
     ('man1/flux-kvs', 'flux-kvs', 'Flux key-value store utility', [author], 1),
     ('man1/flux-logger', 'flux-logger', 'create a Flux log entry', [author], 1),

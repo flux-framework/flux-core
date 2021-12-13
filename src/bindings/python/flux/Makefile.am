@@ -9,6 +9,7 @@ nobase_fluxpy_PYTHON = \
 	future.py \
 	memoized_property.py \
 	debugged.py \
+	importer.py \
 	core/__init__.py \
 	core/watchers.py \
 	core/inner.py \
@@ -39,6 +40,11 @@ nobase_fluxpy_PYTHON = \
 	hostlist.py \
 	idset.py \
 	progress.py \
+	uri/uri.py \
+	uri/__init__.py \
+	uri/resolvers/jobid.py \
+	uri/resolvers/pid.py \
+	uri/resolvers/slurm.py \
 	utils/parsedatetime/__init__.py \
 	utils/parsedatetime/parsedatetime.py \
 	utils/parsedatetime/warns.py \

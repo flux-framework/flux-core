@@ -174,6 +174,7 @@ TESTSCRIPTS = \
 	t2703-mini-bulksubmit.t \
 	t2800-jobs-cmd.t \
 	t2801-top-cmd.t \
+	t2802-uri-cmd.t \
 	t2900-job-timelimits.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
@@ -212,6 +213,7 @@ TESTSCRIPTS = \
 	python/t0022-resource-set.py \
 	python/t0023-executor.py \
 	python/t0024-util.py \
+	python/t0025-uri.py \
 	python/t1000-service-add-remove.py
 
 if HAVE_FLUX_SECURITY
