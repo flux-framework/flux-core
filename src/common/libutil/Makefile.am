@@ -88,7 +88,9 @@ libutil_la_SOURCES = \
 	digest.c \
 	digest.h \
 	jpath.c \
-	jpath.h
+	jpath.h \
+	uri.c \
+	uri.h
 
 EXTRA_DIST = veb_mach.c
 

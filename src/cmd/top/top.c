@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <locale.h>
 
+#include "src/common/libutil/uri.h"
 #include "top.h"
 
 static const double job_activity_rate_limit = 2;
@@ -100,65 +101,23 @@ void refresh_cb (flux_reactor_t *r,
     doupdate ();
 }
 
-static char * job_get_uri (flux_t *h, flux_jobid_t id)
-{
-    flux_future_t *f;
-    const char *uri = NULL;
-    char *cpy;
-    int state;
-
-    if (!(f = flux_rpc_pack (h,
-                             "job-list.list-id",
-                             0,
-                             0,
-                             "{s:I s:[ss]}",
-                             "id", id,
-                             "attrs",
-                               "state", "annotations"))
-        || flux_rpc_get_unpack (f,
-                                "{s:{s:i s?{s?{s?s}}}}",
-                                "job",
-                                  "state", &state,
-                                  "annotations",
-                                    "user",
-                                      "uri", &uri) < 0) {
-        if (errno == ENOENT)
-            fatal (0, "unknown jobid");
-        fatal (0, "failed to list jobid");
-    }
-
-    if (!(state & FLUX_JOB_STATE_RUNNING))
-        fatal (0, "job is not running");
-    if (uri == NULL)
-        fatal (0, "error reading job remote-uri - not a Flux instance?");
-    cpy = strdup (uri);
-    flux_future_destroy (f);
-    return cpy;
-}
-
 /* Get handle to Flux instance to be monitored.
  * If id = FLUX_JOBID_ANY, merely call flux_open().
  * Otherwise, fetch remote-uri from job and open that.
  */
-static flux_t *open_flux_instance (flux_jobid_t id)
+static flux_t *open_flux_instance (const char *target)
 {
     flux_t *h;
     flux_future_t *f = NULL;
-    flux_t *job_h = NULL;
-    char *uri;
+    char *uri = NULL;
 
-    if (!(h = flux_open (NULL, 0)))
+    if (target && !(uri = uri_resolve (target)))
+        fatal (0, "failed to resolve target %s to a Flux URI", target);
+    if (!(h = flux_open (uri, 0)))
         fatal (errno, "error connecting to Flux");
-    if (id == FLUX_JOBID_ANY)
-        return h;
-    if (!(uri = job_get_uri (h, id)))
-        fatal (0, "out of memory getting uri");
-    if (!(job_h = flux_open (uri, 0)))
-        fatal (errno, "error connecting to job");
     free (uri);
     flux_future_destroy (f);
-    flux_close (h);
-    return job_h;
+    return h;
 }
 
 /* Initialize 'stdscr' and register colors.
@@ -194,13 +153,14 @@ static struct optparse_option cmdopts[] = {
     OPTPARSE_TABLE_END,
 };
 
-static const char *usage_msg = "[OPTIONS] [JOBID]";
+static const char *usage_msg = "[OPTIONS] [TARGET]";
 
 int main (int argc, char *argv[])
 {
     int optindex;
     struct top top;
     int reactor_flags = 0;
+    const char *target = NULL;
 
     memset (&top, 0, sizeof (top));
     top.id = FLUX_JOBID_ANY;
@@ -216,16 +176,13 @@ int main (int argc, char *argv[])
 
     if ((optindex = optparse_parse_args (top.opts, argc, argv)) < 0)
         exit (1);
-    if (optindex < argc) {
-        const char *s = argv[optindex++];
-        if (flux_job_id_parse (s, &top.id) < 0)
-            fatal (errno, "failed to parse JOBID argument");
-    }
+    if (optindex < argc)
+        target = argv[optindex++];
     if (optindex != argc) {
         optparse_print_usage (top.opts);
         exit (1);
     }
-    top.h = open_flux_instance (top.id);
+    top.h = open_flux_instance (target);
     flux_fatal_set (top.h, flux_fatal, &top);
     if (!(top.refresh = flux_prepare_watcher_create (flux_get_reactor (top.h),
                                                      refresh_cb,

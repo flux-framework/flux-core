@@ -12,7 +12,7 @@ testssh="${SHARNESS_TEST_SRCDIR}/scripts/tssh"
 
 test_expect_success 'flux-top -h prints custom usage' '
 	flux top -h 2>usage &&
-	grep "Usage:.*JOBID" usage
+	grep "Usage:.*TARGET" usage
 '
 test_expect_success 'flux-top fails on unknown option' '
 	test_must_fail flux top --notopt 2>notopt.err &&
@@ -22,20 +22,22 @@ test_expect_success 'flux-top fails if FLUX_URI is set wrong' '
 	(FLUX_URI=noturi test_must_fail flux top) 2>baduri.err &&
 	grep "connecting to Flux" baduri.err
 '
-test_expect_success 'flux-top fails if job argument is not a job ID' '
-	test_must_fail flux top notjob 2>badjobid.err &&
-	grep "failed to parse JOBID" badjobid.err
+test_expect_success 'flux-top fails if job argument is not a valid URI' '
+	test_must_fail flux top baduri 2>baduri.err &&
+	test_debug "cat baduri.err" &&
+	grep "failed to resolve" baduri.err
 '
 test_expect_success 'flux-top fails if job argument is unknown' '
 	test_must_fail flux top 12345 2>unkjobid.err &&
-	grep "unknown job" unkjobid.err
+	grep "jobid 12345 not found" unkjobid.err
 '
 test_expect_success 'run a test job to completion' '
-	flux mini submit --wait -n1 /bin/true >jobid
+	flux mini submit --wait -n1 flux start /bin/true >jobid
 '
 test_expect_success 'flux-top fails if job is not running' '
-	test_must_fail flux top $(cat jobid) 2>notrun.err &&
-	grep "job is not running" notrun.err
+	test_must_fail flux top $(cat jobid)?local 2>notrun.err &&
+	test_debug "cat notrun.err" &&
+	grep "jobid $(cat jobid) is not running" notrun.err
 '
 test_expect_success 'flux-top fails if stdin is not a tty' '
 	test_must_fail flux top --test-exit </dev/null 2>notty.err &&
@@ -67,7 +69,8 @@ test_expect_success 'flux-top JOBID fails when JOBID is not a flux instance' '
 	FLUX_SSH=$testssh test_must_fail \
 		$runpty --format=asciicast -o notflux.log \
 		flux top --test-exit $(cat jobid3) &&
-	grep "not a Flux instance" notflux.log
+	test_debug "cat notflux.log" &&
+	grep "URI not found" notflux.log
 '
 test_expect_success NO_CHAIN_LINT 'flux-top quits on q keypress' '
 	$runpty --quit-char=q --format=asciicast -o keys.log flux top &

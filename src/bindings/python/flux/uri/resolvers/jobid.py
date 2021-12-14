@@ -40,11 +40,12 @@ class URIResolver(URIResolverPlugin):
 
         #  Fetch the jobinfo object for this job
         try:
-            uri = (
-                job_list_id(flux_handle, jobid, attrs=["annotations"])
-                .get_jobinfo()
-                .user.uri
-            )
+            job = job_list_id(
+                flux_handle, jobid, attrs=["state", "annotations"]
+            ).get_jobinfo()
+            if job.state != "RUN":
+                raise ValueError(f"jobid {arg} is not running")
+            uri = job.user.uri
         except FileNotFoundError as exc:
             raise ValueError(f"jobid {arg} not found") from exc
 
