@@ -232,11 +232,10 @@ RESOURCES
 
 Github: http://github.com/flux-framework
 
+`RFC 6: Flux Remote Procedure Call Protocol <https://github.com/flux-framework/rfc/blob/master/spec_6.rst>`__
+
 
 SEE ALSO
 ========
 
 :man3:`flux_future_get`, :man3:`flux_respond`
-
-`RFC 6: Flux
-Remote Procedure Call Protocol <https://github.com/flux-framework/rfc/blob/master/spec_6.rst>`__

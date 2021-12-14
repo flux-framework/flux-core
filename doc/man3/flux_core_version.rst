@@ -80,8 +80,4 @@ RESOURCES
 
 Github: http://github.com/flux-framework
 
-
-SEE ALSO
-========
-
 semver.org[Semantic Versioning 2.0.0]

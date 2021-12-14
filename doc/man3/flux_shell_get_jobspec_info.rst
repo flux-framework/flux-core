@@ -68,13 +68,9 @@ EINVAL
    ``shell_rank`` is less than -1.
 
 
-SEE ALSO
-========
-
-For an overview of the Jansson API, see https://jansson.readthedocs.io/en/2.10/apiref.html.
-
-
 RESOURCES
 =========
 
 Github: http://github.com/flux-framework
+
+For an overview of the Jansson API, see https://jansson.readthedocs.io/en/2.10/apiref.html

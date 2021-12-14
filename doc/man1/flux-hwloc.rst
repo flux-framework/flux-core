@@ -86,8 +86,10 @@ RESOURCES
 
 Github: http://github.com/flux-framework
 
+hwloc: https://www.open-mpi.org/projects/hwloc/
+
 
 SEE ALSO
 ========
 
-lstopo(1), hwloc: https://www.open-mpi.org/projects/hwloc/
+lstopo(1)

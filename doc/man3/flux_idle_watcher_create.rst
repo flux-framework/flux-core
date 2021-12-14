@@ -77,10 +77,10 @@ RESOURCES
 
 Github: http://github.com/flux-framework
 
+`libev home page <http://software.schmorp.de/pkg/libev.html>`__
+
 
 SEE ALSO
 ========
 
 :man3:`flux_watcher_start`, :man3:`flux_reactor_run`
-
-`libev home page <http://software.schmorp.de/pkg/libev.html>`__

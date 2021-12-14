@@ -67,9 +67,10 @@ RESOURCES
 
 Github: http://github.com/flux-framework
 
+`RFC 3: Flux Message Protocol <https://github.com/flux-framework/rfc/blob/master/spec_3.rst>`__
+
 
 SEE ALSO
 ========
 
 :man1:`flux-getattr`, :man7:`flux-broker-attributes`,
-`RFC 3: Flux Message Protocol <https://github.com/flux-framework/rfc/blob/master/spec_3.rst>`__

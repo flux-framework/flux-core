@@ -35,10 +35,6 @@ RESOURCES
 
 Github: http://github.com/flux-framework
 
-
-SEE ALSO
-========
-
 ZAP: http://rfc.zeromq.org/spec:27
 
 CurveZMQ: http://curvezmq.org/page:read-the-docs

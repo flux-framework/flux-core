@@ -141,10 +141,10 @@ RESOURCES
 
 Github: http://github.com/flux-framework
 
+`RFC 11: Key Value Store Tree Object Format v1 <https://github.com/flux-framework/rfc/blob/master/spec_11.rst>`__
+
 
 SEE ALSO
 ========
 
 :man3:`flux_kvs_commit`
-
-`RFC 11: Key Value Store Tree Object Format v1 <https://github.com/flux-framework/rfc/blob/master/spec_11.rst>`__

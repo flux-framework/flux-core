@@ -125,10 +125,10 @@ RESOURCES
 
 Github: http://github.com/flux-framework
 
+`RFC 10: Content Storage Service <https://github.com/flux-framework/rfc/blob/master/spec_10.rst>`__
+
 
 SEE ALSO
 ========
 
 :man3:`flux_rpc`, :man3:`flux_future_get`
-
-`RFC 10: Content Storage Service <https://github.com/flux-framework/rfc/blob/master/spec_10.rst>`__

@@ -126,9 +126,10 @@ RESOURCES
 
 Github: http://github.com/flux-framework
 
+`RFC 5424 The Syslog Protocol <https://tools.ietf.org/html/rfc5424>`__
+
 
 SEE ALSO
 ========
 
 :man1:`flux-dmesg`, :man1:`flux-logger`,
-`RFC 5424 The Syslog Protocol <https://tools.ietf.org/html/rfc5424>`__

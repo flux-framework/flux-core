@@ -148,10 +148,10 @@ RESOURCES
 
 Github: http://github.com/flux-framework
 
+`RFC 22: Idset String Representation <https://github.com/flux-framework/rfc/blob/master/spec_22.rst>`__
+
 
 SEE ALSO
 ========
 
 :man3:`idset_encode`, :man3:`idset_add`
-
-`RFC 22: Idset String Representation <https://github.com/flux-framework/rfc/blob/master/spec_22.rst>`__

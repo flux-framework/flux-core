@@ -187,10 +187,6 @@ RESOURCES
 
 Github: http://github.com/flux-framework
 
-
-SEE ALSO
-========
-
 http://pod.tst.eu/http://cvs.schmorp.de/libev/ev.pod
 
 http://api.zeromq.org/4-0:zmq-getsockopt
