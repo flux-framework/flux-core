@@ -78,6 +78,6 @@ These functions cannot fail.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 semver.org[Semantic Versioning 2.0.0]

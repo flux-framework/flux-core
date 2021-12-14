@@ -85,4 +85,4 @@ Connect to a Flux instance started in Slurm job 1234
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org

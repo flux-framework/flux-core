@@ -22,4 +22,4 @@ command is run as it would be by the env(1) utility.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org

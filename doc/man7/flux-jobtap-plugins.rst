@@ -365,7 +365,7 @@ runtime with the ``flux-jobtap(1)`` command
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO

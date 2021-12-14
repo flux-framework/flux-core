@@ -36,7 +36,7 @@ flux-lsattr(1) lists attribute names, optionally with their values.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO

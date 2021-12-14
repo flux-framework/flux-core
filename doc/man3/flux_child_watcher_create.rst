@@ -73,7 +73,7 @@ EINVAL
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 `libev home page <http://software.schmorp.de/pkg/libev.html>`__
 

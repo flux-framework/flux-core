@@ -133,7 +133,7 @@ ETIMEDOUT
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 C++ std::future: `<http://en.cppreference.com/w/cpp/thread/future>`_
 

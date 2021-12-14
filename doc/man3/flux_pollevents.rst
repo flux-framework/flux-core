@@ -185,7 +185,7 @@ handle events pending.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 http://pod.tst.eu/http://cvs.schmorp.de/libev/ev.pod
 

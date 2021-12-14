@@ -93,5 +93,5 @@ type (positional argument) and accepts the following options:
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 

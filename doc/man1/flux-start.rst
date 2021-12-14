@@ -126,7 +126,7 @@ shell as the initial program:
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO

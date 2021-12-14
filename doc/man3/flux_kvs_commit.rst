@@ -129,7 +129,7 @@ EOVERFLOW
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO

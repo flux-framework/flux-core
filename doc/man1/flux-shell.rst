@@ -460,7 +460,7 @@ generated if they are accessed from any other context.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO

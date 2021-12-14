@@ -33,7 +33,7 @@ public keys are exchanged with PMI.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 ZAP: http://rfc.zeromq.org/spec:27
 

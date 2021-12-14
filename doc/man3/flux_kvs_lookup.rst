@@ -237,7 +237,7 @@ EPERM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 `RFC 11: Key Value Store Tree Object Format v1 <https://github.com/flux-framework/rfc/blob/master/spec_11.rst>`__
 

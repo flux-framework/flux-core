@@ -124,7 +124,7 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 `RFC 5424 The Syslog Protocol <https://tools.ietf.org/html/rfc5424>`__
 

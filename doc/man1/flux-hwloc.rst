@@ -84,7 +84,7 @@ may be piped to other hwloc(7) commands such as ``lstopo(1)`` or
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 hwloc: https://www.open-mpi.org/projects/hwloc/
 

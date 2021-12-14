@@ -68,7 +68,7 @@ Set up a continuation callback for each heartbeat that arrives at least
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO

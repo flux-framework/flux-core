@@ -257,7 +257,7 @@ for *flux cron sync* for more information.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
