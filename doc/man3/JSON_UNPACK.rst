@@ -13,6 +13,10 @@ the corresponding argument or arguments.
    internally, so it exists as long as there are still references to the
    corresponding JSON string.
 
+**s%** (string)['const char \*', 'size_t']
+   Convert a JSON string to a pointer to a null terminated UTF-8
+   string and its length.
+
 **n** (null)
    Expect a JSON null value. Nothing is extracted.
 
@@ -65,6 +69,6 @@ the corresponding argument or arguments.
 
 Whitespace, **:** (colon) and **,** (comma) are ignored.
 
-These descriptions came from the Jansson 2.6 manual.
+These descriptions came from the Jansson 2.10 manual.
 
-See also: `Jansson API: Parsing and Validating Values <http://jansson.readthedocs.io/en/2.6/apiref.html#parsing-and-validating-values>`__
+See also: `Jansson API: Parsing and Validating Values <http://jansson.readthedocs.io/en/2.10/apiref.html#parsing-and-validating-values>`__
