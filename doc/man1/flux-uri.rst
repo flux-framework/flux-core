@@ -79,7 +79,8 @@ jobid:ID[/ID...]
    ``scheme:`` is provided in *TARGET* passed to ``flux uri``, so the
    ``jobid:`` prefix is optional. A hierarchy of Flux jobids is supported,
    so ``f1234/f3456`` will resolve the URI for job ``f3456`` running in
-   job ``f1234`` in the current instance.
+   job ``f1234`` in the current instance. This scheme will raise an error
+   if the target job is not running.
 
 pid:PID
   This scheme attempts to read the ``FLUX_URI`` value from the process id
