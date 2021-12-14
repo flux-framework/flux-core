@@ -80,4 +80,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_respond(3), flux_rpc(3)
+:man3:`flux_respond`, :man3:`flux_rpc`

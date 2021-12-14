@@ -48,4 +48,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux-dmesg(1), flux_log(3), syslog(3)
+:man1:`flux-dmesg`, :man3:`flux_log`, syslog(3)

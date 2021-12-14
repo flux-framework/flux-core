@@ -92,4 +92,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_open(3), flux_send(3), flux_requeue(3), flux_msg_cmp(3)
+:man3:`flux_open`, :man3:`flux_send`, :man3:`flux_requeue`, :man3:`flux_msg_cmp`

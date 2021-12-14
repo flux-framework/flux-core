@@ -74,4 +74,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_future_then(3), flux_future_get(3), flux_future_reset(3)
+:man3:`flux_future_then`, :man3:`flux_future_get`, :man3:`flux_future_reset`

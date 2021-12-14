@@ -371,5 +371,5 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux-jobtap(1)
+:man1:`flux-jobtap`
 

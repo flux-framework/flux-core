@@ -119,4 +119,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_event_subscribe(3)
+:man3:`flux_event_subscribe`

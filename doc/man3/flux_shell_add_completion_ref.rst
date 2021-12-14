@@ -60,4 +60,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_reactor_stop(3)
+:man3:`flux_reactor_stop`

@@ -96,4 +96,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_aux_get(3), flux_aux_set(3)
+:man3:`flux_aux_get`, :man3:`flux_aux_set`

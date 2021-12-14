@@ -130,5 +130,5 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux-dmesg(1), flux-logger(1),
+:man1:`flux-dmesg`, :man1:`flux-logger`,
 `RFC 5424 The Syslog Protocol <https://tools.ietf.org/html/rfc5424>`__

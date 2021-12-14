@@ -263,4 +263,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux-exec(1), flux-dmesg(1)
+:man1:`flux-exec`, :man1:`flux-dmesg`

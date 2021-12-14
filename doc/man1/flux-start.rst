@@ -132,4 +132,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux-broker(1)
+:man1:`flux-broker`

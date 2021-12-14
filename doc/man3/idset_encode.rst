@@ -106,6 +106,6 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-idset_create(3)
+:man3:`idset_create`
 
 `RFC 22: Idset String Representation <https://github.com/flux-framework/rfc/blob/master/spec_22.rst>`__

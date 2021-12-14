@@ -160,4 +160,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_log(3)
+:man3:`flux_log`

@@ -108,4 +108,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux-jobtap-plugins(7)
+:man7:`flux-jobtap-plugins`

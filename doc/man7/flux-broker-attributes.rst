@@ -199,4 +199,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux-getattr(1), flux_attr_get(3)
+:man1:`flux-getattr`, :man3:`flux_attr_get`

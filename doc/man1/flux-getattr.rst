@@ -42,4 +42,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_attr_get(3), flux-broker-attributes(7)
+:man3:`flux_attr_get`, :man7:`flux-broker-attributes`

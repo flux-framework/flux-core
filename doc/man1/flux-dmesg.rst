@@ -51,4 +51,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux-setattr(1), flux-broker-attributes(7)
+:man1:`flux-setattr`, :man7:`flux-broker-attributes`

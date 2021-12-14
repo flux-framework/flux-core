@@ -45,6 +45,6 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_reactor_create (3)
+:man3:`flux_reactor_create`
 
 `libev home page <http://software.schmorp.de/pkg/libev.html>`__

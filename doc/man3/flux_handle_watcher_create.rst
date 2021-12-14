@@ -84,4 +84,5 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_watcher_start(3), flux_reactor_run(3), flux_recv(3), flux_send(3).
+:man3:`flux_watcher_start`, :man3:`flux_reactor_run`,
+:man3:`flux_recv`, :man3:`flux_send`

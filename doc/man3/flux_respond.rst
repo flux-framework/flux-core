@@ -102,7 +102,7 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_rpc(3), flux_rpc_raw(3)
+:man3:`flux_rpc`, :man3:`flux_rpc_raw`
 
 `RFC 6: Flux
 Remote Procedure Call Protocol <https://github.com/flux-framework/rfc/blob/master/spec_6.rst>`__

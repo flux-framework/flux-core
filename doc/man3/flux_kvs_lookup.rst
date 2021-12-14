@@ -243,6 +243,6 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_rpc(3), flux_future_then(3)
+:man3:`flux_rpc`, :man3:`flux_future_then`
 
 `RFC 11: Key Value Store Tree Object Format v1 <https://github.com/flux-framework/rfc/blob/master/spec_11.rst>`__

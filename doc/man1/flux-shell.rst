@@ -465,4 +465,5 @@ Github: http://github.com/flux-framework
 
 SEE ALSO
 ========
-flux-mini(1)
+
+:man1:`flux-mini`

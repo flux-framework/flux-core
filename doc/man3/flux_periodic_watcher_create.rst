@@ -85,6 +85,6 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_watcher_start(3), flux_reactor_run(3), flux_timer_watcher_create(3)
+:man3:`flux_watcher_start`, :man3:`flux_reactor_run`, :man3:`flux_timer_watcher_create`
 
 `libev home page <http://software.schmorp.de/pkg/libev.html>`__

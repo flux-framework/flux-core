@@ -80,4 +80,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_request_encode(3), flux_rpc(3)
+:man3:`flux_request_encode`, :man3:`flux_rpc`

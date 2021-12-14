@@ -51,4 +51,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_open(3)
+:man3:`flux_open`

@@ -129,6 +129,6 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_rpc(3), flux_future_get(3)
+:man3:`flux_rpc`, :man3:`flux_future_get`
 
 `RFC 10: Content Storage Service <https://github.com/flux-framework/rfc/blob/master/spec_10.rst>`__

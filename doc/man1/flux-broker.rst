@@ -57,4 +57,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux-broker-attributes(7)
+:man7:`flux-broker-attributes`

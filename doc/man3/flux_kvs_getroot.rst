@@ -110,4 +110,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_kvs_lookup (3), flux_future_get (3), flux_content_load (3).
+:man3:`flux_kvs_lookup`, :man3:`flux_future_get`, :man3:`flux_content_load`

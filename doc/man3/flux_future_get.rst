@@ -145,4 +145,4 @@ Python3 concurrent.futures: https://docs.python.org/3/library/concurrent.futures
 SEE ALSO
 ========
 
-flux_future_create (3)
+:man3:`flux_future_create`
