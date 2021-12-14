@@ -135,4 +135,4 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-`RFC 10: Content Storage Service <https://github.com/flux-framework/rfc/blob/master/spec_10.rst>`__
+RFC 10: Content Storage Service: https://github.com/flux-framework/rfc/blob/master/spec_10.rst

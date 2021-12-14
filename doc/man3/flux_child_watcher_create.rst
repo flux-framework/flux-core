@@ -75,7 +75,7 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-`libev home page <http://software.schmorp.de/pkg/libev.html>`__
+libev: http://software.schmorp.de/pkg/libev.html
 
 
 SEE ALSO

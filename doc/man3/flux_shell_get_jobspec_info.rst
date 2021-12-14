@@ -73,4 +73,4 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-For an overview of the Jansson API, see https://jansson.readthedocs.io/en/2.10/apiref.html
+Jansson: https://jansson.readthedocs.io/en/2.10/apiref.html

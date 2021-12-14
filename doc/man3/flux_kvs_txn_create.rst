@@ -141,7 +141,7 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-`RFC 11: Key Value Store Tree Object Format v1 <https://github.com/flux-framework/rfc/blob/master/spec_11.rst>`__
+RFC 11: Key Value Store Tree Object Format v1: https://github.com/flux-framework/rfc/blob/master/spec_11.rst
 
 
 SEE ALSO

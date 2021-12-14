@@ -135,7 +135,7 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-C++ std::future: `<http://en.cppreference.com/w/cpp/thread/future>`_
+C++ std::future: http://en.cppreference.com/w/cpp/thread/future
 
 Java ``util.concurrent.Future``: https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/Future.html
 

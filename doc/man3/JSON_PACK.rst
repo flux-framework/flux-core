@@ -77,4 +77,4 @@ Whitespace, **:** (colon) and **,** (comma) are ignored.
 
 These descriptions came from the Jansson 2.10 manual.
 
-See also: Jansson API: Building Values <http://jansson.readthedocs.io/en/2.10/apiref.html#building-values>`__
+See also: Jansson API: Building Values: http://jansson.readthedocs.io/en/2.10/apiref.html#building-values

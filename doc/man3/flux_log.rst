@@ -126,7 +126,7 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-`RFC 5424 The Syslog Protocol <https://tools.ietf.org/html/rfc5424>`__
+RFC 5424 The Syslog Protocol: https://tools.ietf.org/html/rfc5424
 
 
 SEE ALSO

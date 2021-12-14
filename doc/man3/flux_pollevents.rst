@@ -187,8 +187,9 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-http://pod.tst.eu/http://cvs.schmorp.de/libev/ev.pod
+libev API: http://pod.tst.eu/http://cvs.schmorp.de/libev/ev.pod
 
-http://api.zeromq.org/4-0:zmq-getsockopt
+zmq_getsockopt(3): http://api.zeromq.org/4-0:zmq-getsockopt
 
+Embedding ZeroMQ in the libev event looop:
 http://funcptr.net/2013/04/20/embedding-zeromq-in-the-libev-event-loop

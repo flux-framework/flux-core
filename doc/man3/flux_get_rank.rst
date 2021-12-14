@@ -50,4 +50,4 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-`RFC 3: Flux Message Protocol <https://github.com/flux-framework/rfc/blob/master/spec_3.rst>`__
+RFC 3: Flux Message Protocol: https://github.com/flux-framework/rfc/blob/master/spec_3.rst
