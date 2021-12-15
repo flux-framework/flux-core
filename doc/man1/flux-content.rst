@@ -94,7 +94,7 @@ not eligible for purge.
 CACHE ACCOUNTING
 ================
 
-Some accounting info for the local cache can be viewed with flux-getattr(1):
+Some accounting info for the local cache can be viewed with :man1:`flux-getattr`:
 
 **content.acct-entries**
    The total number of cache entries.

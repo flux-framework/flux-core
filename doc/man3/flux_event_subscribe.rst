@@ -22,7 +22,7 @@ one or more words separated by periods, interpreted as a hierarchical
 name space.
 
 ``flux_event_subscribe()`` requests that event messages matching *topic*
-be delivered via ``flux_recv(3)``. A match consists of a string comparison
+be delivered via :man3:`flux_recv`. A match consists of a string comparison
 of the event topic and the subscription topic, up to the length of the
 subscription topic. Thus "foo." matches events with topics "foo.bar"
 and "foo.baz", and "" matches all events. This matching algorithm
@@ -37,7 +37,7 @@ will not result in multiple deliveries of a given message. Each
 duplicate subscription requires a separate unsubscribe.
 
 It is not necessary to remove subscriptions with ``flux_event_unsubscribe()``
-prior to calling ``flux_close(3)``.
+prior to calling :man3:`flux_close`.
 
 
 RETURN VALUE

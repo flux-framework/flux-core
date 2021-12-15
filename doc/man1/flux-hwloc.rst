@@ -17,7 +17,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-The **flux-hwloc** utility queries hwloc(7) topology information for
+The **flux-hwloc** utility queries :linux:man7:`hwloc` topology information for
 an instance by gathering XML from the core resource module.
 
 COMMANDS
@@ -53,8 +53,8 @@ EXAMPLES
 ========
 
 When using HWLOC < 2.0 only, the output of ``flux hwloc topology``
-may be piped to other hwloc(7) commands such as ``lstopo(1)`` or
-``hwloc-info(1)``, e.g.
+may be piped to other :linux:man7:`hwloc` commands such as
+:linux:man1:`lstopo` or :linux:man1:`hwloc-info`, e.g.
 
 ::
 

@@ -67,7 +67,7 @@ The Flux Key Value Store is a general purpose distributed storage
 service used by Flux services.
 
 ``flux_kvs_txn_create()`` creates a KVS transaction object that may be
-passed to ``flux_kvs_commit(3)`` or ``flux_kvs_fence(3)``. The transaction
+passed to :man3:`flux_kvs_commit` or :man3:`flux_kvs_fence`. The transaction
 consists of a list of operations that are applied to the KVS together,
 in order. The entire transaction either succeeds or fails. After commit
 or fence, the object must be destroyed with ``flux_kvs_txn_destroy()``.

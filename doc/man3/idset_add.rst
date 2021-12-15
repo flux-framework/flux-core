@@ -54,7 +54,7 @@ cc [flags] files -lflux-idset [libraries]
 DESCRIPTION
 ===========
 
-Refer to ``idset_create(3)`` for a general description of idsets.
+Refer to :man3:`idset_create` for a general description of idsets.
 
 ``idset_union()`` creates a new idset that is the union of *a* and *b*.
 

@@ -32,7 +32,7 @@ DESCRIPTION
 to look up the directory entry of *srckey*. Upon receipt of the response,
 it then sends another request to commit a duplicate at *dstkey*.
 *commit_flags* are passed through to the commit operation.
-See the FLAGS section of flux_kvs_commit(3).
+See the FLAGS section of :man3:`flux_kvs_commit`.
 
 The net effect is that all content below *srckey* is copied to *dstkey*.
 Due to the hash tree organization of the KVS name space, only the
@@ -45,7 +45,7 @@ the commit within ``flux_kvs_copy()``, and to the commit which performs
 the unlink.
 
 ``flux_kvs_copy()`` and ``flux_kvs_move()`` are capable of working across
-namespaces. See ``flux_kvs_commit(3)`` for info on how to select a
+namespaces. See :man3:`flux_kvs_commit` for info on how to select a
 namespace other than the default.
 
 

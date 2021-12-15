@@ -37,7 +37,7 @@ OPTIONS
    Display command environment, and the path search for *CMD*.
 
 **-V, --version**
-   Convenience option to run flux-version(1).
+   Convenience option to run :man1:`flux-version`.
 
 
 SUB-COMMAND ENVIRONMENT

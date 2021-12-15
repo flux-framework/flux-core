@@ -64,7 +64,7 @@ retrieve the stored blob. The blobref string is valid until
 ``flux_future_destroy()`` is called.
 
 These functions may be used asynchronously.
-See ``flux_future_then(3)`` for details.
+See :man3:`flux_future_then` for details.
 
 
 FLAGS
@@ -109,7 +109,7 @@ EPROTO
 
 EFBIG
    A blob larger than the configured maximum blob size
-   could not be stored. See flux-broker-attributes(7).
+   could not be stored. See :man7:`flux-broker-attributes`.
 
 ENOSYS
    The CONTENT_FLAG_CACHE_BYPASS flag was set in a request, but no

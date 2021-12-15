@@ -35,9 +35,9 @@ enable_ipv6
    interface that only supports IPv4.
 
 curve_cert
-   (optional) Path to a CURVE certificate generated with flux-keygen(1).
-   The certificate should be identical on all broker ranks.
-   It is required for instance sizes > 1.
+   (optional) Path to a CURVE certificate generated with
+   :man1:`flux-keygen`.  The certificate should be identical on all
+   broker ranks.  It is required for instance sizes > 1.
 
 default_port
    (optional) The value is an integer port number that is substituted

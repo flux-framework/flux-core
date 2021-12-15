@@ -34,7 +34,7 @@ passed along when registering the handler.
 Multiple plugins may be loaded in the job-manager simultaneously. In this
 case, all matching handlers are called in all loaded plugins in the order
 in which they were loaded. For more information about loading plugins
-see the :ref:`configuration` section below or the ``flux-jobtap(1)``
+see the :ref:`configuration` section below or the :man1:`flux-jobtap`
 manpage.
 
 JOBTAP PLUGIN NAMES
@@ -47,11 +47,11 @@ such that all dynamically loaded plugins have names such as
 ``plugin-name.so``.
 
 Builtin plugins, on the other hand, are named with a leading ``.``,
-and are hidden in ``flux jobtap list``, do not match the glob(7)
-``*`` or "all" keyword, etc. (similar to hidden filesystem files).
-To list builtin plugins, use the ``-a, --all`` option to
-``flux jobtap list``, and to remove them use the name explicitly or
-include the leading ``.`` in any pattern.
+and are hidden in ``flux jobtap list``, do not match the
+:linux:man7:`glob` ``*`` or "all" keyword, etc. (similar to hidden
+filesystem files).  To list builtin plugins, use the ``-a, --all``
+option to ``flux jobtap list``, and to remove them use the name
+explicitly or include the leading ``.`` in any pattern.
 
 A plugin may optionally assign a name with ``flux_plugin_set_name(3)``,
 however this name is not displayed in ``flux jobtap list`` or used in
@@ -140,7 +140,7 @@ job.dependency.*
   with a corresponding call to ``flux_jobtap_dependency_remove(3)``. See
   ``job.state.depend`` below for more information about dependencies.
   If there is an error in the dependency specification, the job may be
-  rejected with ``flux_jobtap_reject_job(3)`` and a negative return code 
+  rejected with :man3:`flux_jobtap_reject_job` and a negative return code 
   from the callback.
 
 job.new
@@ -338,10 +338,10 @@ conf
   With load only, pass an optional configuration table to the loaded plugin.
 
 remove
-  Remove all plugins matching the value. The value may be a glob(7). If
-  ``remove`` appears with ``load``, plugin removal is always handled first.
-  The special value ``all`` is a synonym for ``*``, but will not error when
-  no plugins match.
+  Remove all plugins matching the value. The value may be a
+  :linux:man7:`glob`. If ``remove`` appears with ``load``, plugin
+  removal is always handled first.  The special value ``all`` is a
+  synonym for ``*``, but will not error when no plugins match.
 
 For example
 
@@ -359,7 +359,7 @@ For example
     ]
 
 The list of loaded jobtap plugins may also be queried and controlled at
-runtime with the ``flux-jobtap(1)`` command
+runtime with the :man1:`flux-jobtap` command
 
 
 RESOURCES

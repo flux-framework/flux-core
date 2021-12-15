@@ -66,8 +66,8 @@ the future will trigger recovery of lost events, so these confirmations
 do indicate that Flux's best effort at event propagation is under way.
 
 If this level of confirmation is not required, one may encode
-an event message directly using ``flux_event_encode(3)`` and related
-functions and send it directly with ``flux_send(3)``.
+an event message directly using :man3:`flux_event_encode` and related
+functions and send it directly with :man3:`flux_send`.
 
 
 FLAGS

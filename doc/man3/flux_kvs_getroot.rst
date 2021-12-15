@@ -48,10 +48,10 @@ for the response. *flags* is currently unused and should be set to 0.
 Upon future fulfillment, these functions can decode the result:
 
 ``flux_kvs_getroot_get_treeobj()`` obtains the root hash in the form
-of an RFC 11 *dirref* treeobj, suitable to be passed to ``flux_kvs_lookupat(3)``.
+of an RFC 11 *dirref* treeobj, suitable to be passed to :man3:`flux_kvs_lookupat`.
 
 ``flux_kvs_getroot_get_blobref()`` obtains the RFC 10 blobref, suitable to
-be passed to ``flux_content_load(3)``.
+be passed to :man3:`flux_content_load`.
 
 ``flux_kvs_getroot_get_sequence()`` retrieves the monotonic sequence number
 for the root.

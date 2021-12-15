@@ -116,7 +116,7 @@ lookup.
 requested with FLUX_KVS_WATCH or a waiting lookup response with
 FLUX_KVS_WAITCREATE. See FLAGS below for additional information.
 
-These functions may be used asynchronously. See ``flux_future_then(3)`` for
+These functions may be used asynchronously. See :man3:`flux_future_then` for
 details.
 
 

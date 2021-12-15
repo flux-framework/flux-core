@@ -18,7 +18,7 @@ DESCRIPTION
 
 ``flux_msg_encode()`` converts *msg* to a serialized representation,
 allocated internally and assigned to *buf*, number of bytes to *size*.
-The caller must release *buf* with free(3).
+The caller must release *buf* with :linux:man3:`free`.
 
 ``flux_msg_decode()`` performs the inverse, creating *msg* from *buf* and *size*.
 The caller must destroy *msg* with flux_msg_destroy().

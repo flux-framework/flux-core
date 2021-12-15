@@ -206,9 +206,9 @@ with the job.
 **--env-remove=PATTERN**
    Remove all environment variables matching *PATTERN* from the current
    generated environment. If *PATTERN* starts with a ``/`` character,
-   then it is considered a regex(7), otherwise *PATTERN* is treated
-   as a shell glob(7). This option is equivalent to ``--env=-PATTERN``
-   and may be used multiple times.
+   then it is considered a :linux:man7:`regex`, otherwise *PATTERN* is
+   treated as a shell :linux:man7:`glob`. This option is equivalent to
+   ``--env=-PATTERN`` and may be used multiple times.
 
 **--env-file=FILE**
    Read a set of environment *RULES* from a *FILE*. This option is
@@ -223,8 +223,9 @@ rules are
 
  * If a rule begins with ``-``, then the rest of the rule is a pattern
    which removes matching environment variables. If the pattern starts
-   with ``/``, it is a regex(7), optionally ending with ``/``, otherwise
-   the pattern is considered a shell glob(7) expression.
+   with ``/``, it is a :linux:man7:`regex`, optionally ending with
+   ``/``, otherwise the pattern is considered a shell
+   :linux:man7:`glob` expression.
 
    Examples:
       ``-*`` or ``-/.*/`` filter all environment variables creating an

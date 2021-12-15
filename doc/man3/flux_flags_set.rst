@@ -27,7 +27,7 @@ handle flags will be a logical and of the old flags and the inverse of the new.
 ``flux_flags_get()`` can be used to retrieve the current open flags from
 handle *h*.
 
-The valid flags are described in ``flux_open(3)``.
+The valid flags are described in :man3:`flux_open`.
 
 
 RETURN VALUE

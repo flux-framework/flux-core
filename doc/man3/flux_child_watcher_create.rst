@@ -44,7 +44,7 @@ The callback *revents* argument should be ignored.
 The process id that had a transition may be obtained by calling
 ``flux_child_watcher_get_rpid()``.
 
-The status value returned by waitpid(2) may be obtained by calling
+The status value returned by :linux:man2:`waitpid` may be obtained by calling
 ``flux_child_watcher_get_rstatus()``.
 
 Only a Flux reactor created with the FLUX_REACTOR_SIGCHLD flag can

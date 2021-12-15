@@ -71,9 +71,9 @@ A lower-level variant of ``flux_rpc()``, ``flux_rpc_message()`` accepts a
 pre-created request message, assigning *nodeid* and matchtag according
 to *flags*.
 
-``flux_future_then(3)`` may be used to register a reactor callback
+:man3:`flux_future_then` may be used to register a reactor callback
 (continuation) to be called once the response has been received.
-``flux_future_wait_for(3)`` may be used to block until the
+:man3:`flux_future_wait_for` may be used to block until the
 response has been received. Both accept an optional timeout.
 
 ``flux_rpc_get()``, ``flux_rpc_get_unpack()``, and ``flux_rpc_get_raw()``
@@ -132,7 +132,7 @@ RESPONSE OPTIONS
 ================
 
 The response message is stored in the future when the future is fulfilled.
-At that time it is decoded with ``flux_response_decode(3)``. If it cannot
+At that time it is decoded with :man3:`flux_response_decode`. If it cannot
 be decoded, or if the service returned an error, the future is fulfilled
 with an error. Otherwise it is fulfilled with the response message.
 If there was an error, ``flux_future_get()`` or the ``flux_rpc_get()`` variants
@@ -165,7 +165,7 @@ is received, its matchtag is only returned to the pool when an unclaimed
 
 It is essential that services which return multiple responses verify that
 requests were made with the FLUX_RPC_STREAMING flag and return an immediate
-EPROTO error if they were not. See flux_respond(3).
+EPROTO error if they were not. See :man3:`flux_respond`.
 
 
 CANCELLATION

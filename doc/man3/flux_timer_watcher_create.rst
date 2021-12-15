@@ -43,7 +43,7 @@ will automatically be stopped when *after* seconds have elapsed.
 
 Note that *after* is internally referenced to reactor time, which is
 only updated when the reactor is run/created, and therefore
-can be out of date. Use ``flux_reactor_now_update(3)`` to manually
+can be out of date. Use :man3:`flux_reactor_now_update` to manually
 update reactor time before creating timer watchers in such cases.
 Refer to "The special problem of time updates" in the libev manual
 for more information.

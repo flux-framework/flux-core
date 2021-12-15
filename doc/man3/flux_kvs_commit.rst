@@ -42,8 +42,8 @@ DESCRIPTION
 
 ``flux_kvs_commit()`` sends a request via handle *h* to the KVS service
 to commit a transaction *txn*. *txn* is created with
-``flux_kvs_txn_create(3)`` and after commit completion, is destroyed
-with ``flux_kvs_txn_destroy()``. A ``flux_future_t`` object is returned,
+:man3:`flux_kvs_txn_create` and after commit completion, is destroyed
+with :man3:`flux_kvs_txn_destroy`. A ``flux_future_t`` object is returned,
 which acts as handle for synchronization and container for the
 response. The *txn* will operate in the namespace specified by *ns*.
 If *ns* is NULL, ``flux_kvs_commit()`` will operate on the default
@@ -58,12 +58,12 @@ service for the named operation, the transactions are combined and committed
 together as one transaction. *name* must be unique across the Flux session
 and should not be reused, even after the fence is complete.
 
-``flux_future_then(3)`` may be used to register a reactor callback
+:man3:`flux_future_then` may be used to register a reactor callback
 (continuation) to be called once the response to the commit/fence
-request has been received. ``flux_future_wait_for(3)`` may be used to
+request has been received. :man3:`flux_future_wait_for` may be used to
 block until the response has been received. Both accept an optional timeout.
 
-``flux_future_get()``, ``flux_kvs_commit_get_treeobj()``, or
+:man3:`flux_future_get`, ``flux_kvs_commit_get_treeobj()``, or
 ``flux_kvs_commit_get_sequence()`` can decode the response. A return of
 0 indicates success and the entire transaction was committed. A
 return of -1 indicates failure, none of the transaction was committed.
