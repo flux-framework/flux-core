@@ -151,4 +151,4 @@ Flux: http://flux-framework.org
 SEE ALSO
 ========
 
-syslog(3)
+:linux:man3:`syslog`

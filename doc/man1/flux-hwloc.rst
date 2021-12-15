@@ -92,4 +92,4 @@ hwloc: https://www.open-mpi.org/projects/hwloc/
 SEE ALSO
 ========
 
-lstopo(1)
+:linux:man1:`lstopo`

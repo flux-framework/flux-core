@@ -48,4 +48,4 @@ Flux: http://flux-framework.org
 SEE ALSO
 ========
 
-:man1:`flux-dmesg`, :man3:`flux_log`, syslog(3)
+:man1:`flux-dmesg`, :man3:`flux_log`, :linux:man3:`syslog`
