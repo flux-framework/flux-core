@@ -19,23 +19,24 @@ test_expect_success 'flux-top fails on unknown option' '
 	grep "unrecognized option" notopt.err
 '
 test_expect_success 'flux-top fails if FLUX_URI is set wrong' '
-	(FLUX_URI=noturi test_must_fail flux top) 2>baduri.err &&
+	(FLUX_URI=noturi test_must_fail $runpty -n --stderr=baduri.err flux top) &&
 	grep "connecting to Flux" baduri.err
 '
 test_expect_success 'flux-top fails if job argument is not a valid URI' '
-	test_must_fail flux top baduri 2>baduri.err &&
+	test_must_fail $runpty -n --stderr=baduri.err flux top baduri &&
 	test_debug "cat baduri.err" &&
 	grep "failed to resolve" baduri.err
 '
 test_expect_success 'flux-top fails if job argument is unknown' '
-	test_must_fail flux top 12345 2>unkjobid.err &&
+	test_must_fail $runpty -n --stderr=unkjobid.err flux top 12345 &&
 	grep "jobid 12345 not found" unkjobid.err
 '
 test_expect_success 'run a test job to completion' '
 	flux mini submit --wait -n1 flux start /bin/true >jobid
 '
 test_expect_success 'flux-top fails if job is not running' '
-	test_must_fail flux top $(cat jobid)?local 2>notrun.err &&
+	test_must_fail \
+		$runpty -n --stderr=notrun.err flux top $(cat jobid) &&
 	test_debug "cat notrun.err" &&
 	grep "jobid $(cat jobid) is not running" notrun.err
 '
