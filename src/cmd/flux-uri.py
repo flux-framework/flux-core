@@ -8,6 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ##############################################################
 
+import os
 import sys
 import logging
 import argparse
@@ -44,6 +45,7 @@ def main():
         "--local",
         action="store_true",
         help="convert a remote URI to local",
+        default=os.environ.get("FLUX_URI_RESOLVE_LOCAL"),
     )
     parser.add_argument(
         "uri",
