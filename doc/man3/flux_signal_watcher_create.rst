@@ -63,6 +63,6 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_watcher_start(3), flux_reactor_start(3)
+flux_watcher_start(3), flux_reactor_run(3)
 
 `libev home page <http://software.schmorp.de/pkg/libev.html>`__

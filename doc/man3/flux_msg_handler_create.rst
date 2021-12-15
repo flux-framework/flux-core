@@ -119,4 +119,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_get_reactor(3), flux_reactor_start(3), flux_msg_cmp(3)
+flux_get_reactor(3), flux_reactor_run(3), flux_msg_cmp(3)

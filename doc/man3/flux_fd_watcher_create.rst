@@ -84,4 +84,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_watcher_start(3), flux_reactor_start(3).
+flux_watcher_start(3), flux_reactor_run(3).
