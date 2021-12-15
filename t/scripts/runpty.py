@@ -119,6 +119,7 @@ def parse_args():
     parser.add_argument(
         "-o", "--output", help="set output file. Default=stdout", default="-"
     )
+    parser.add_argument("--stderr", help="redirect stderr of process")
     parser.add_argument(
         "-f",
         "--format",
@@ -213,6 +214,10 @@ def main():
         """
         In child
         """
+        if args.stderr:
+            sys.stderr = open(args.stderr, "w")
+            os.dup2(sys.stderr.fileno(), 2)
+
         setwinsize(pty.STDIN_FILENO, height, width)
         os.execvp(args.COMMAND, [args.COMMAND, *args.ARGS])
     else:
