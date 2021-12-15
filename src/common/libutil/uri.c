@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -28,6 +29,14 @@ static void nullify_newline (char *str)
     }
 }
 
+static char *uri_to_local (struct yuarel *yuri)
+{
+    char *uri = NULL;
+    if (asprintf (&uri, "local:///%s", yuri->path) < 0)
+        return NULL;
+    return uri;
+}
+
 char *uri_resolve (const char *uri)
 {
     struct popen2_child *child = NULL;
@@ -41,8 +50,12 @@ char *uri_resolve (const char *uri)
     if (yuarel_parse (&yuri, cpy) == 0 && yuri.scheme) {
         if (strcmp (yuri.scheme, "ssh") == 0
             || strcmp (yuri.scheme, "local") == 0) {
+            if (getenv ("FLUX_URI_RESOLVE_LOCAL"))
+                result = uri_to_local (&yuri);
+            else
+                result = strdup (uri);
             free (cpy);
-            return strdup (uri);
+            return result;
         }
     }
     free (cpy);
