@@ -35,7 +35,6 @@ struct top {
     flux_watcher_t *jobtimer;
     bool jobtimer_running;
     flux_msg_handler_t **handlers;
-    optparse_t *opts;
 };
 
 struct dimension {
@@ -44,6 +43,10 @@ struct dimension {
     int x_length;
     int y_length;
 };
+
+struct top *top_create (const char *uri);
+void top_destroy (struct top *top);
+int top_run (struct top *top, int reactor_flags);
 
 struct summary_pane *summary_pane_create (struct top *top);
 void summary_pane_destroy (struct summary_pane *sum);
