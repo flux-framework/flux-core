@@ -135,7 +135,8 @@ static void initialize_curses (void)
     start_color ();
     init_pair (TOP_COLOR_YELLOW, COLOR_YELLOW, -1);
     init_pair (TOP_COLOR_RED, COLOR_RED, -1);
-
+    init_pair (TOP_COLOR_BLUE, COLOR_BLUE, -1);
+    init_pair (TOP_COLOR_BLUE_HIGHLIGHT, COLOR_BLACK, COLOR_BLUE);
     clear ();
     refresh ();
 }

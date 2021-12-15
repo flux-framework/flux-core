@@ -21,6 +21,8 @@ int mvwprintw(WINDOW *win, int y, int x, const char *fmt, ...)
 enum {
     TOP_COLOR_YELLOW = 1,
     TOP_COLOR_RED = 2,
+    TOP_COLOR_BLUE = 3,
+    TOP_COLOR_BLUE_HIGHLIGHT = 4,
 };
 
 struct top {
@@ -60,6 +62,8 @@ void joblist_pane_destroy (struct joblist_pane *sum);
 void joblist_pane_draw (struct joblist_pane *sum);
 void joblist_pane_refresh (struct joblist_pane *sum);
 void joblist_pane_query (struct joblist_pane *sum);
+void joblist_pane_set_current (struct joblist_pane *joblist, bool next);
+void joblist_pane_enter (struct joblist_pane *joblist);
 
 struct keys *keys_create (struct top *top);
 void keys_destroy (struct keys *keys);

@@ -59,6 +59,8 @@ struct summary_pane {
     struct resource_count gpu;
     flux_watcher_t *heartblink;
     bool heart_visible;
+    flux_jobid_t current;
+    json_t *jobs;
 };
 
 static void draw_timeleft (struct summary_pane *sum)
