@@ -52,7 +52,7 @@ levels, which are, in order of decreasing importance:
    debug-level message
 
 When *h* is specified, log messages are are added to the broker's
-circular buffer which can be accessed with flux-dmesg(3). From there,
+circular buffer which can be accessed with flux-dmesg(1). From there,
 a message's disposition is up to the broker's log configuration.
 
 ``flux_log_set_procid()`` may be used to override the default procid,
