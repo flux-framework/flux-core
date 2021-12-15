@@ -66,7 +66,23 @@ domainrefs = {
     'man7': {
         'text': "%s(7)",
         'url': "../man7/%s.html"
-    }
+    },
+    'linux:man1': {
+        'text': '%s(1)',
+        'url': 'http://man7.org/linux/man-pages/man1/%s.1.html',
+    },
+    'linux:man2': {
+        'text': '%s(2)',
+        'url': 'http://man7.org/linux/man-pages/man2/%s.2.html',
+    },
+    'linux:man3': {
+        'text': '%s(3)',
+        'url': 'http://man7.org/linux/man-pages/man3/%s.3.html',
+    },
+    'linux:man7': {
+        'text': '%s(7)',
+        'url': 'http://man7.org/linux/man-pages/man7/%s.7.html',
+    },
 }
 
 # Disable "smartquotes" to avoid things such as turning long-options
