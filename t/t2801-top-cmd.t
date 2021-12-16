@@ -10,6 +10,8 @@ runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py"
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
 testssh="${SHARNESS_TEST_SRCDIR}/scripts/tssh"
 
+export FLUX_URI_RESOLVE_LOCAL=t
+
 test_expect_success 'flux-top -h prints custom usage' '
 	flux top -h 2>usage &&
 	grep "Usage:.*TARGET" usage
