@@ -349,7 +349,8 @@ EXTRA_DIST = \
 	$(RST_FILES) \
 	man1/NODESET.rst \
 	man3/JSON_PACK.rst \
-	man3/JSON_UNPACK.rst
+	man3/JSON_UNPACK.rst \
+	man7/flux-undocumented.rst
 
 CLEANFILES = \
 	$(MAN_FILES)
