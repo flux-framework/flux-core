@@ -296,12 +296,19 @@ static void pty_client_resize (struct flux_pty_client *c)
         llog_error (c, "flux_future_then: %s", flux_strerror (errno));
 }
 
-static void pty_die (struct flux_pty_client *c, const char *message)
+static void pty_die (struct flux_pty_client *c, int code, const char *message)
 {
+    flux_pty_client_stop (c);
     if (c->attached && (c->flags & FLUX_PTY_CLIENT_NOTIFY_ON_DETACH)) {
         printf ("\033[999H[detached: %s]\033[K\n\r", message);
         fflush (stdout);
     }
+    /*  Only overwrite c->wait_status for code > 0. O/w, we collect the
+     *   actual task exit status
+     */
+    if (code)
+        c->wait_status = code << 8;
+    c->exit_message = strdup (message);
     notify_exit (c);
 }
 
@@ -325,11 +332,14 @@ static void pty_server_cb (flux_future_t *f, void *arg)
     const char *type;
     if (flux_rpc_get_unpack (f, "{s:s}", "type", &type) < 0) {
         const char *message = c->exit_message;
+        int code = 1;
         if (errno == ENOSYS)
             message = "No such session";
         else if (errno != ENODATA)
             message = future_strerror (f, errno);
-        pty_die (c, message);
+        else
+            code = 0;
+        pty_die (c, code, message);
         flux_future_destroy (f);
         return;
     }
@@ -343,7 +353,7 @@ static void pty_server_cb (flux_future_t *f, void *arg)
         pty_client_exit (c, f);
     else {
         llog_error (c, "unknown server response type=%s", type);
-        pty_die (c, "Protocol error");
+        pty_die (c, 1, "Protocol error");
         flux_future_destroy (f);
     }
     flux_future_reset (f);
@@ -366,8 +376,13 @@ static void data_write_cb (flux_future_t *f, void *arg)
 {
     if (flux_future_get (f, NULL) < 0) {
         struct flux_pty_client *c = flux_future_aux_get (f, "pty_client");
-        if (c)
-            llog_error (c, "data_write: %s", future_strerror (f, errno));
+        if (c) {
+            flux_pty_client_detach (c);
+            if (errno == ENOSYS)
+                pty_die (c, 1, "remote pty disappeared");
+            else
+                pty_die (c, 1, "error writing to remote pty");
+        }
     }
     flux_future_destroy (f);
 }
