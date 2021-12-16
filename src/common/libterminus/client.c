@@ -50,6 +50,7 @@ struct flux_pty_client {
 
     flux_watcher_t *fdw;  /* fd watcher for STDIN */
     flux_watcher_t *sw;   /* signal watcher       */
+    flux_watcher_t *kaw;  /* keepalive timer      */
 
     struct termios term;
 
@@ -69,6 +70,7 @@ void flux_pty_client_destroy (struct flux_pty_client *c)
         int saved_errno = errno;
         flux_watcher_destroy (c->fdw);
         flux_watcher_destroy (c->sw);
+        flux_watcher_destroy (c->kaw);
         zlist_destroy (&c->exit_waiters);
         free (c->exit_message);
         free (c->service);
@@ -179,6 +181,7 @@ static void flux_pty_client_stop (struct flux_pty_client *c)
 {
     flux_watcher_stop (c->fdw);
     flux_watcher_stop (c->sw);
+    flux_watcher_stop (c->kaw);
 }
 
 static int flux_pty_client_set_server (struct flux_pty_client *c,
@@ -242,6 +245,7 @@ static void pty_client_attached (struct flux_pty_client *c)
         printf ("[attached]\r\n");
     }
     flux_watcher_start (c->fdw);
+    flux_watcher_start (c->kaw);
     if (!(c->flags & FLUX_PTY_CLIENT_STDIN_PIPE))
         flux_watcher_start (c->sw);
     c->attached = true;
@@ -391,7 +395,7 @@ flux_future_t *flux_pty_client_write (struct flux_pty_client *c,
                                       const void *buf,
                                       ssize_t len)
 {
-    if (!c || !buf || len <= 0) {
+    if (!c || !buf || len < 0) {
         errno = EINVAL;
         return NULL;
     }
@@ -447,6 +451,26 @@ static void sigwinch_cb (flux_reactor_t *r,
     pty_client_resize ((struct flux_pty_client *)arg);
 }
 
+static void keepalive_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
+{
+    struct flux_pty_client *c = arg;
+    flux_future_t *f;
+    char *buf = "";
+
+    if (!(f = flux_pty_client_write (c, buf, 0))) {
+        llog_error (c, "flux_pty_client_write: %s", strerror (errno));
+        return;
+    }
+    (void) flux_future_aux_set (f, "pty_client", c, NULL);
+    if (flux_future_then (f, -1., data_write_cb, c) < 0) {
+        llog_error (c, "flux_future_then: %s", strerror (errno));
+        flux_future_destroy (f);
+    }
+}
+
 int flux_pty_client_attach (struct flux_pty_client *c,
                             flux_t *h,
                             int rank,
@@ -487,7 +511,11 @@ int flux_pty_client_attach (struct flux_pty_client *c,
                                         SIGWINCH,
                                         sigwinch_cb,
                                         c);
-    if (!c->fdw || !c->sw)
+    c->kaw = flux_timer_watcher_create (flux_get_reactor (h),
+                                        1., 1.,
+                                        keepalive_cb,
+                                        c);
+    if (!c->fdw || !c->sw || !c->kaw)
         return -1;
 
     mode = c->flags & FLUX_PTY_CLIENT_STDIN_PIPE ? "wo" : "rw";
