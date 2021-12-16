@@ -128,7 +128,11 @@ static flux_t *open_flux_instance (const char *target)
  */
 static void initialize_curses (void)
 {
+    char *cap;
     initscr ();
+    if (!(cap = tigetstr ("cup")) || cap == (char *) -1)
+        fatal (0, "terminal does not support required capabilities");
+
     curs_set (0); // make cursor disappear
 
     use_default_colors ();
