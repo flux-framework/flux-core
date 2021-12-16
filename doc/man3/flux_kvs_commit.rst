@@ -135,4 +135,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_future_get(3), flux_kvs_txn_create(3), flux_kvs_set_namespace(3)
+flux_future_get(3), flux_kvs_txn_create(3)

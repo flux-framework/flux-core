@@ -243,6 +243,6 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux_rpc(3), flux_future_then(3), flux_kvs_set_namespace(3)
+flux_rpc(3), flux_future_then(3)
 
 `RFC 11: Key Value Store Tree Object Format v1 <https://github.com/flux-framework/rfc/blob/master/spec_11.rst>`__
