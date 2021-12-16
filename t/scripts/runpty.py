@@ -143,6 +143,12 @@ def parse_args():
         default=ws_default,
     )
     parser.add_argument(
+        "--term",
+        metavar="TERMINAL",
+        help=f"set value of TERM variable for client (default xterm)",
+        default="xterm",
+    )
+    parser.add_argument(
         "-c",
         "--quit-char",
         metavar="C",
@@ -237,6 +243,7 @@ def main():
             sys.stderr = open(args.stderr, "w")
             os.dup2(sys.stderr.fileno(), 2)
 
+        os.environ["TERM"] = args.term
         setwinsize(pty.STDIN_FILENO, height, width)
         os.execvp(args.COMMAND, [args.COMMAND, *args.ARGS])
     else:
