@@ -14,6 +14,7 @@ import struct
 import time
 import json
 import argparse
+import asyncio
 
 from flux import util
 from signal import signal, SIGUSR1, SIGWINCH, SIGTERM, SIGINT
@@ -119,6 +120,14 @@ def parse_args():
     parser.add_argument(
         "-o", "--output", help="set output file. Default=stdout", default="-"
     )
+    parser.add_argument(
+        "-n", "--no-output", help="redirect output to /dev/null", action="store_true"
+    )
+    parser.add_argument(
+        "-i",
+        "--input",
+        help="set an input file in asciicast format",
+    )
     parser.add_argument("--stderr", help="redirect stderr of process")
     parser.add_argument(
         "-f",
@@ -163,6 +172,8 @@ class TTYBuffer:
         try:
             data = os.read(self.fd, self.bufsize)
             self.data += data
+        except (BlockingIOError, InterruptedError):
+            pass
         except OSError as e:
             self.eof = True
 
@@ -197,7 +208,15 @@ log = logging.getLogger("runpty")
 @util.CLIMain(log)
 def main():
 
+    # Avoid asyncio DEBUG log messages (why is this on by default??)
+    logging.getLogger("asyncio").setLevel(logging.WARNING)
+
     args = parse_args()
+    if args.no_output and args.output != "-":
+        log.error("Do not specify --no-output and --output")
+        sys.exit(1)
+    if args.no_output:
+        args.output = "/dev/null"
 
     try:
         formatter = formats[args.format]
@@ -224,6 +243,7 @@ def main():
         """
         In parent, open log file and read output from child
         """
+        os.set_blocking(fd, False)
 
         signal(SIGWINCH, lambda sig, _: os.kill(pid, sig))
         signal(SIGTERM, lambda sig, _: os.kill(pid, sig))
@@ -232,13 +252,32 @@ def main():
 
         ofile = formatter(args.output, width=width, height=height)
         buf = TTYBuffer(fd, linebuffer=args.line_buffer)
-        while True:
+
+        loop = asyncio.get_event_loop()
+
+        if args.input:
+
+            def write_tty(s):
+                os.write(fd, s.encode("utf-8"))
+
+            with open(args.input, "r") as infile:
+                infile.readline()
+                for line in infile:
+                    (timestamp, event_type, data) = json.loads(line)
+                    if event_type == "i":
+                        loop.call_later(float(timestamp), write_tty, data)
+
+        def read_tty():
             buf.read()
             buf.send_data(ofile.write_entry)
             if buf.eof:
-                (pid, status) = os.waitpid(pid, 0)
-                log.info("child exited with status %s", hex(status))
-                sys.exit(status_to_exitcode(status))
+                loop.stop()
+
+        loop.add_reader(fd, read_tty)
+        loop.run_forever()
+
+        (pid, status) = os.waitpid(pid, 0)
+        sys.exit(status_to_exitcode(status))
 
 
 if __name__ == "__main__":
