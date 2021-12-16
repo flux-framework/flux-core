@@ -57,7 +57,7 @@ test_expect_success 'submit batch script and wait for it to start' '
 	cat >batch.sh <<-EOT &&
 	#!/bin/sh
 	touch job2-has-started
-	sleep inf
+	flux mini run sleep inf
 	EOT
 	chmod +x batch.sh &&
 	flux mini batch -t30m -n1 batch.sh >jobid2 &&
@@ -85,6 +85,22 @@ test_expect_success NO_CHAIN_LINT 'flux-top quits on q keypress' '
 	sleep 1 &&
 	kill -USR1 $pid &&
 	wait $pid
+'
+test_expect_success NO_CHAIN_LINT 'flux-top can call itself recursively' '
+	flux jobs &&
+	flux proxy $(cat jobid2) flux jobs -c1 -no {id} >expected.id &&
+	cat <<-EOF >recurse.in &&
+	{ "version": 2 }
+	[0.5, "i", "j"]
+	[0.55, "i", "j"]
+	[0.60, "i", "j"]
+	[0.65, "i", "k"]
+	[0.70, "i", "\n"]
+	[1.00, "i", "q"]
+	[1.10, "i", "q"]
+	EOF
+	$runpty -o recurse.log --input=recurse.in flux top &&
+	grep -q $(echo $(cat expected.id) | sed "s/ƒ//") recurse.log
 '
 
 test_done
