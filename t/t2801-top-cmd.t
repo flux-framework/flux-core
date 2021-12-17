@@ -46,6 +46,10 @@ test_expect_success 'flux-top fails if stdin is not a tty' '
 	test_must_fail flux top --test-exit </dev/null 2>notty.err &&
 	grep "stdin is not a terminal" notty.err
 '
+test_expect_success 'flux-top fails if TERM is not supported' '
+	test_must_fail $runpty --term=dumb --stderr=dumb.err flux top &&
+	grep "terminal does not support required capabilities" dumb.err
+'
 test_expect_success 'flux-top --test-exit works with a pty' '
 	$runpty flux top --test-exit >/dev/null
 '
