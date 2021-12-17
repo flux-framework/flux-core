@@ -71,5 +71,5 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-flux-lsattr(1), flux-getattr(1), flux-setattr(1), flux-broker-attributes(7),
+flux-getattr(1), flux-broker-attributes(7),
 `RFC 3: CMB1 - Flux Comms Message Broker Protocol <https://github.com/flux-framework/rfc/blob/master/spec_3.rst>`__
