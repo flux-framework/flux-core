@@ -107,11 +107,10 @@ def fetch_jobs_flux(args, fields):
     if args.color == "always" or args.color == "auto":
         attrs.update(fields2attrs["result"])
 
-    if args.a:
-        args.user = str(os.getuid())
     if args.A:
         args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
-    if args.a or args.A:
+
+    if args.a:
         args.filter = "pending,running,inactive"
 
     jobs_rpc = JobList(
@@ -184,9 +183,7 @@ def parse_args():
         prog="flux-jobs", formatter_class=flux.util.help_formatter()
     )
     # -a equivalent to -s "pending,running,inactive" and -u set to userid
-    parser.add_argument(
-        "-a", action=FilterTrueAction, help="List all jobs for current user"
-    )
+    parser.add_argument("-a", action=FilterTrueAction, help="List jobs in all states")
     # -A equivalent to -s "pending,running,inactive" and -u set to "all"
     parser.add_argument(
         "-A", action=FilterTrueAction, help="List all jobs for all users"
