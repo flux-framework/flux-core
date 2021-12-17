@@ -50,6 +50,7 @@ struct flux_pty_client {
 
     flux_watcher_t *fdw;  /* fd watcher for STDIN */
     flux_watcher_t *sw;   /* signal watcher       */
+    flux_watcher_t *kaw;  /* keepalive timer      */
 
     struct termios term;
 
@@ -69,6 +70,7 @@ void flux_pty_client_destroy (struct flux_pty_client *c)
         int saved_errno = errno;
         flux_watcher_destroy (c->fdw);
         flux_watcher_destroy (c->sw);
+        flux_watcher_destroy (c->kaw);
         zlist_destroy (&c->exit_waiters);
         free (c->exit_message);
         free (c->service);
@@ -179,6 +181,7 @@ static void flux_pty_client_stop (struct flux_pty_client *c)
 {
     flux_watcher_stop (c->fdw);
     flux_watcher_stop (c->sw);
+    flux_watcher_stop (c->kaw);
 }
 
 static int flux_pty_client_set_server (struct flux_pty_client *c,
@@ -242,6 +245,7 @@ static void pty_client_attached (struct flux_pty_client *c)
         printf ("[attached]\r\n");
     }
     flux_watcher_start (c->fdw);
+    flux_watcher_start (c->kaw);
     if (!(c->flags & FLUX_PTY_CLIENT_STDIN_PIPE))
         flux_watcher_start (c->sw);
     c->attached = true;
@@ -296,12 +300,19 @@ static void pty_client_resize (struct flux_pty_client *c)
         llog_error (c, "flux_future_then: %s", flux_strerror (errno));
 }
 
-static void pty_die (struct flux_pty_client *c, const char *message)
+static void pty_die (struct flux_pty_client *c, int code, const char *message)
 {
+    flux_pty_client_stop (c);
     if (c->attached && (c->flags & FLUX_PTY_CLIENT_NOTIFY_ON_DETACH)) {
         printf ("\033[999H[detached: %s]\033[K\n\r", message);
         fflush (stdout);
     }
+    /*  Only overwrite c->wait_status for code > 0. O/w, we collect the
+     *   actual task exit status
+     */
+    if (code)
+        c->wait_status = code << 8;
+    c->exit_message = strdup (message);
     notify_exit (c);
 }
 
@@ -325,11 +336,14 @@ static void pty_server_cb (flux_future_t *f, void *arg)
     const char *type;
     if (flux_rpc_get_unpack (f, "{s:s}", "type", &type) < 0) {
         const char *message = c->exit_message;
+        int code = 1;
         if (errno == ENOSYS)
             message = "No such session";
         else if (errno != ENODATA)
             message = future_strerror (f, errno);
-        pty_die (c, message);
+        else
+            code = 0;
+        pty_die (c, code, message);
         flux_future_destroy (f);
         return;
     }
@@ -343,7 +357,7 @@ static void pty_server_cb (flux_future_t *f, void *arg)
         pty_client_exit (c, f);
     else {
         llog_error (c, "unknown server response type=%s", type);
-        pty_die (c, "Protocol error");
+        pty_die (c, 1, "Protocol error");
         flux_future_destroy (f);
     }
     flux_future_reset (f);
@@ -366,8 +380,13 @@ static void data_write_cb (flux_future_t *f, void *arg)
 {
     if (flux_future_get (f, NULL) < 0) {
         struct flux_pty_client *c = flux_future_aux_get (f, "pty_client");
-        if (c)
-            llog_error (c, "data_write: %s", future_strerror (f, errno));
+        if (c) {
+            flux_pty_client_detach (c);
+            if (errno == ENOSYS)
+                pty_die (c, 1, "remote pty disappeared");
+            else
+                pty_die (c, 1, "error writing to remote pty");
+        }
     }
     flux_future_destroy (f);
 }
@@ -376,7 +395,7 @@ flux_future_t *flux_pty_client_write (struct flux_pty_client *c,
                                       const void *buf,
                                       ssize_t len)
 {
-    if (!c || !buf || len <= 0) {
+    if (!c || !buf || len < 0) {
         errno = EINVAL;
         return NULL;
     }
@@ -432,6 +451,26 @@ static void sigwinch_cb (flux_reactor_t *r,
     pty_client_resize ((struct flux_pty_client *)arg);
 }
 
+static void keepalive_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
+{
+    struct flux_pty_client *c = arg;
+    flux_future_t *f;
+    char *buf = "";
+
+    if (!(f = flux_pty_client_write (c, buf, 0))) {
+        llog_error (c, "flux_pty_client_write: %s", strerror (errno));
+        return;
+    }
+    (void) flux_future_aux_set (f, "pty_client", c, NULL);
+    if (flux_future_then (f, -1., data_write_cb, c) < 0) {
+        llog_error (c, "flux_future_then: %s", strerror (errno));
+        flux_future_destroy (f);
+    }
+}
+
 int flux_pty_client_attach (struct flux_pty_client *c,
                             flux_t *h,
                             int rank,
@@ -472,7 +511,11 @@ int flux_pty_client_attach (struct flux_pty_client *c,
                                         SIGWINCH,
                                         sigwinch_cb,
                                         c);
-    if (!c->fdw || !c->sw)
+    c->kaw = flux_timer_watcher_create (flux_get_reactor (h),
+                                        1., 1.,
+                                        keepalive_cb,
+                                        c);
+    if (!c->fdw || !c->sw || !c->kaw)
         return -1;
 
     mode = c->flags & FLUX_PTY_CLIENT_STDIN_PIPE ? "wo" : "rw";

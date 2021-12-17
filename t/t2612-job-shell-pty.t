@@ -76,12 +76,32 @@ test_expect_success NO_CHAIN_LINT 'pty: interactive job with pty' '
 	chmod +x stty-test.sh &&
 	for i in `seq 0 10`; do
 	    id=$(flux mini submit -n1 -o pty ./stty-test.sh)
-	    $runpty -w 80x25 -o log.interactive.$i \
-	        flux job attach --show-exec ${id} &
+	    { $runpty -w 80x25 -o log.interactive.$i \
+	        flux job attach --show-exec ${id} & } &&
 	    pid=$! &&
 	    $waitfile -t 20 -vp "shell.start" log.interactive.$i &&
 	    flux kvs put -N $(flux job namespace ${id}) test-ready=${i} &&
 	    $waitfile -t 20 -vp "25 80" log.interactive.$i
 	done
+'
+
+test_expect_success 'pty: client is detached from terminated job' '
+	cat <<-EOF >die-test.sh &&
+	#!/bin/sh
+	# Do not continue until test is ready:
+	flux kvs get --waitcreate --count=1 --label test-ready
+	# Kill shell so that services immediately go away
+	kill -9 \$PPID
+	sleep 10
+	EOF
+	chmod +x die-test.sh &&
+	jobid=$(flux mini submit -n2 -o pty -o exit-timeout=1 ./die-test.sh) &&
+	{ $runpty -w 80x25 -o log.killed \
+		flux job attach --show-exec ${jobid} & } &&
+	pid=$! &&
+	$waitfile -t 20 -vp "shell.start" log.killed &&
+	flux kvs put -N job-$(flux job id ${jobid}) test-ready=1 &&
+	$waitfile -t 20 -vp "pty disappeared" log.killed &&
+	test_must_fail wait $pid
 '
 test_done
