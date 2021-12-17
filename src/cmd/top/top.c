@@ -170,15 +170,49 @@ void top_destroy (struct top *top)
         summary_pane_destroy (top->summary_pane);
         keys_destroy (top->keys);
         flux_close (top->h);
+        free (top->title);
         free (top);
     }
 }
 
-struct top *top_create (const char *uri)
+static flux_jobid_t get_jobid (flux_t *h)
+{
+    const char *s;
+    flux_jobid_t jobid;
+
+    if (!(s = flux_attr_get (h, "jobid")))
+        return FLUX_JOBID_ANY;
+    if (flux_job_id_parse (s, &jobid) < 0)
+        fatal (errno, "error parsing value of jobid attribute: %s", s);
+    return jobid;
+}
+
+static char * build_title (struct top *top, const char *title)
+{
+    if (!title) {
+        char jobid [24];
+        title = "";
+        if (top->id != FLUX_JOBID_ANY) {
+            if (flux_job_id_encode (top->id,
+                                    "f58",
+                                    jobid,
+                                    sizeof (jobid)) < 0)
+                fatal (errno, "failed to build jobid");
+            title = jobid;
+        }
+    }
+    return strdup (title);
+}
+
+struct top *top_create (const char *uri, const char *title)
 {
     struct top *top = calloc (1, sizeof (*top));
 
     if (!top || !(top->h = open_flux_instance (uri)))
+        goto fail;
+
+    top->id = get_jobid (top->h);
+    if (!(top->title = build_title (top, title)))
         goto fail;
 
     flux_fatal_set (top->h, flux_fatal, &top);
@@ -247,7 +281,7 @@ int main (int argc, char *argv[])
         fatal (0, "stdin is not a terminal");
     initialize_curses ();
 
-    if (!(top = top_create (target)))
+    if (!(top = top_create (target, NULL)))
         fatal (errno, "failed to initialize top");
     if (optparse_hasopt (opts, "test-exit"))
         reactor_flags |= FLUX_REACTOR_ONCE;

@@ -23,7 +23,7 @@
 
 static const struct dimension win_dim = { 0, 0, 80, 5 };
 static const struct dimension level_dim = { 0, 0, 2, 1 };
-static const struct dimension jobid_dim = { 36, 0, 16, 1 };
+static const struct dimension title_dim = { 6, 0, 73, 1 };
 static const struct dimension timeleft_dim = { 70, 0, 10, 1 };
 static const struct dimension resource_dim = { 4, 1, 36, 3 };
 static const struct dimension heart_dim = { 77, 3, 1, 1 };
@@ -51,7 +51,6 @@ struct summary_pane {
     struct top *top;
     WINDOW *win;
     unsigned long instance_level;
-    flux_jobid_t jobid;
     double expiration;
     struct stats stats;
     struct resource_count node;
@@ -97,15 +96,26 @@ static void draw_level (struct summary_pane *sum)
     wattroff (sum->win, COLOR_PAIR (TOP_COLOR_YELLOW));
 }
 
-static void draw_jobid (struct summary_pane *sum)
+static void draw_title (struct summary_pane *sum)
 {
-    if (sum->jobid != FLUX_JOBID_ANY) {
-        char buf[jobid_dim.x_length + 1];
-        flux_job_id_encode (sum->jobid, "f58", buf, sizeof (buf));
-        wattron (sum->win, A_BOLD);
-        mvwprintw (sum->win, jobid_dim.y_begin, jobid_dim.x_begin, "%s", buf);
-        wattroff (sum->win, A_BOLD);
+    int len = strlen (sum->top->title);
+    int begin = title_dim.x_begin + (title_dim.x_length - len)/2;
+    int start = 0;
+    char *dots = "";
+
+    if (len > title_dim.x_length) {
+        dots = "…";
+        begin = title_dim.x_begin;
+        start = (len - title_dim.x_length) + strlen (dots) - 1;
     }
+    wattron (sum->win, COLOR_PAIR(TOP_COLOR_BLUE) | A_BOLD);
+    mvwprintw (sum->win,
+               title_dim.y_begin,
+                begin,
+               "%s%s",
+                dots,
+                sum->top->title + start);
+    wattroff (sum->win, COLOR_PAIR(TOP_COLOR_BLUE) | A_BOLD);
 }
 
 static void draw_stats (struct summary_pane *sum)
@@ -239,18 +249,6 @@ static int get_instance_level (flux_t *h)
     return level;
 }
 
-static flux_jobid_t get_jobid (flux_t *h)
-{
-    const char *s;
-    flux_jobid_t jobid;
-
-    if (!(s = flux_attr_get (h, "jobid")))
-        return FLUX_JOBID_ANY;
-    if (flux_job_id_parse (s, &jobid) < 0)
-        fatal (errno, "error parsing value of jobid attribute: %s", s);
-    return jobid;
-}
-
 static int resource_count (json_t *o,
                            const char *name,
                            int *nnodes,
@@ -358,7 +356,7 @@ void summary_pane_draw (struct summary_pane *sum)
 {
     werase (sum->win);
     draw_level (sum);
-    draw_jobid (sum);
+    draw_title (sum);
     draw_timeleft (sum);
     draw_resource (sum);
     draw_stats (sum);
@@ -392,7 +390,6 @@ struct summary_pane *summary_pane_create (struct top *top)
 
     sum->expiration = get_expiration (top->h);
     sum->instance_level = get_instance_level (top->h);
-    sum->jobid = get_jobid (top->h);
 
     summary_pane_query (sum);
     summary_pane_draw (sum);

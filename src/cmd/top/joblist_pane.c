@@ -153,23 +153,35 @@ static void joblist_continuation (flux_future_t *f, void *arg)
 void joblist_pane_enter (struct joblist_pane *joblist)
 {
     struct top *top;
+    flux_jobid_t id;
     char *uri = NULL;
+    char title [1024];
+    char jobid [24];
+
     json_t *job = get_current_job (joblist);
     if (!job)
         return;
     if (json_unpack (job,
-                     "{s:{s:{s:s}}}",
+                     "{s:I s:{s:{s:s}}}",
+                     "id", &id,
                      "annotations",
                        "user",
                          "uri", &uri) < 0)
         return;
     if (uri == NULL)
         return;
+    if (flux_job_id_encode (id, "f58", jobid, sizeof (jobid)) < 0
+        || snprintf (title,
+                     sizeof(title),
+                     "%s/%s",
+                     joblist->top->title,
+                     jobid) > sizeof (title))
+        fatal (errno, "failed to build job title for job");
 
     /*  Lazily attempt to run top on jobid, but for now simply return to the
      *   original top window on failure.
      */
-    if ((top = top_create (uri)))
+    if ((top = top_create (uri, title)))
         top_run (top, 0);
     top_destroy (top);
     return;

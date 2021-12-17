@@ -27,6 +27,7 @@ enum {
 
 struct top {
     flux_t *h;
+    char *title;
     flux_jobid_t id;
     uint32_t userid;
     uint32_t size;
@@ -46,7 +47,7 @@ struct dimension {
     int y_length;
 };
 
-struct top *top_create (const char *uri);
+struct top *top_create (const char *uri, const char *prefix);
 void top_destroy (struct top *top);
 int top_run (struct top *top, int reactor_flags);
 
