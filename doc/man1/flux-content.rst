@@ -139,4 +139,4 @@ Github: http://github.com/flux-framework
 SEE ALSO
 ========
 
-`RFC 10: Content Store <https://github.com/flux-framework/rfc/blob/master/spec_10.rst>`__
+`RFC 10: Content Storage Service <https://github.com/flux-framework/rfc/blob/master/spec_10.rst>`__

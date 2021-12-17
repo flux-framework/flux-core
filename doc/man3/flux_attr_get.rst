@@ -72,4 +72,4 @@ SEE ALSO
 ========
 
 flux-getattr(1), flux-broker-attributes(7),
-`RFC 3: CMB1 - Flux Comms Message Broker Protocol <https://github.com/flux-framework/rfc/blob/master/spec_3.rst>`__
+`RFC 3: Flux Message Protocol <https://github.com/flux-framework/rfc/blob/master/spec_3.rst>`__
