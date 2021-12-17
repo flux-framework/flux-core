@@ -200,6 +200,14 @@ int main (int argc, char *argv[])
         "flux_matchtag_alloc works");
     flux_matchtag_free (h, matchtag);
 
+    /* reconnect */
+    errno = 0;
+    ok (flux_reconnect (NULL) < 0 && errno == EINVAL,
+        "flux_reconnect h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_reconnect (h) < 0 && errno == ENOSYS,
+        "flux_reconnect with null reconnect method fails with ENOSYS");
+
     flux_close (h);
     done_testing();
     return (0);

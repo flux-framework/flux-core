@@ -30,6 +30,7 @@ struct flux_handle_ops {
     int         (*pollevents)(void *impl);
     int         (*send)(void *impl, const flux_msg_t *msg, int flags);
     flux_msg_t* (*recv)(void *impl, int flags);
+    int         (*reconnect)(void *impl);
 
     void        (*impl_destroy)(void *impl);
 };

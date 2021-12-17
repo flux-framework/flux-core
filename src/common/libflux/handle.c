@@ -354,6 +354,42 @@ flux_t *flux_clone (flux_t *orig)
     return h;
 }
 
+/* Call connector's reconnect method, if available.
+ */
+int flux_reconnect (flux_t *h)
+{
+    if (!h) {
+        errno = EINVAL;
+        return -1;
+    }
+    h = lookup_clone_ancestor (h);
+    if (!h->ops->reconnect) {
+        errno = ENOSYS;
+        return -1;
+    }
+    /* Assume that ops->pollfd() returns -1 if it is not connected.
+     * If connected, remove the soon to be disconnected fd from h->pollfd.
+     */
+    if (h->ops->pollfd) {
+        int fd = h->ops->pollfd (h->impl);
+        if (fd >= 0)
+            (void)epoll_ctl (h->pollfd, EPOLL_CTL_DEL, fd, NULL);
+    }
+    if (h->ops->reconnect (h->impl) < 0)
+        return -1;
+    /* Reconnect was successful, add new ops->pollfd() to h->pollfd.
+     */
+    if (h->ops->pollfd) {
+        struct epoll_event ev = {
+            .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
+        };
+        if ((ev.data.fd = h->ops->pollfd (h->impl)) < 0
+            || epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 static void report_leaked_matchtags (struct tagpool *tp)
 {
     uint32_t count = tagpool_getattr (tp, TAGPOOL_ATTR_SIZE) -

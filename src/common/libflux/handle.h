@@ -88,6 +88,10 @@ void flux_decref(flux_t *h);
  */
 flux_t *flux_clone (flux_t *orig);
 
+/* Drop connection to broker and re-establish, if suported by connector.
+ */
+int flux_reconnect (flux_t *h);
+
 /* Get/set handle options.  Options are interpreted by connectors.
  * Returns 0 on success, or -1 on failure with errno set (e.g. EINVAL).
  */
