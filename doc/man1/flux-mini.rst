@@ -52,8 +52,7 @@ By default, a new shell is spawned as the initial program of the instance,
 but this may be overridden by supplying COMMAND on the command line.
 
 The intent is for the "mini" commands to remain simple with stable interfaces
-over time, making them suitable for use in scripts. For advanced usage,
-see flux-run(1) and flux-submit(1).
+over time, making them suitable for use in scripts.
 
 The available OPTIONS are detailed below.
 

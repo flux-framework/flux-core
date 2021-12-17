@@ -83,12 +83,12 @@ tbon.parent-endpoint
    based overlay network. This attribute will not be set on rank zero.
 
 local-uri
-   The Flux URI that should be passed to flux_open(1) to establish
+   The Flux URI that should be passed to flux_open(3) to establish
    a connection to the local broker rank. By default, local-uri is
    created as "local://<broker.rank>/local".
 
 parent-uri
-   The Flux URI that should be passed to flux_open(1) to establish
+   The Flux URI that should be passed to flux_open(3) to establish
    a connection to the enclosing instance.
 
 

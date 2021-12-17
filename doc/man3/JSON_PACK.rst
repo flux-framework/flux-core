@@ -10,6 +10,9 @@ the corresponding argument or arguments.
 **s** (string)['const char \*']
    Convert a null terminated UTF-8 string to a JSON string.
 
+**s?** (string)['const char \*']
+   Like **s**, but if the argument is NULL, outputs a JSON null value.
+
 **s#** (string)['const char \*', 'int']
    Convert a UTF-8 buffer of a given length to a JSON string.
 
@@ -55,6 +58,10 @@ the corresponding argument or arguments.
    is useful if you pack into an array or object and want to keep the reference
    for the JSON value consumed by **O** to yourself.
 
+**o?**, **O?** (any value)['json_t \*']
+   Like **o** and **O**, respectively, but if the argument is NULL,
+   output a JSON null value.
+
 **[fmt]** (array)
    Build an array with contents from the inner format string. **fmt** may
    contain objects and arrays, i.e. recursive value building is supported.
@@ -68,6 +75,6 @@ the corresponding argument or arguments.
 
 Whitespace, **:** (colon) and **,** (comma) are ignored.
 
-These descriptions came from the Jansson 2.6 manual.
+These descriptions came from the Jansson 2.10 manual.
 
-See also: `Jansson API: Building Values <http://jansson.readthedocs.io/en/2.6/apiref.html#building-values>`__
+See also: Jansson API: Building Values <http://jansson.readthedocs.io/en/2.10/apiref.html#building-values>`__

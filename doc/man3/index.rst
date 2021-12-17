@@ -48,6 +48,7 @@ man3
    flux_response_decode
    flux_rpc
    flux_send
+   flux_service_register
    flux_shell_add_completion_ref
    flux_shell_add_event_context
    flux_shell_add_event_handler

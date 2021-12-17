@@ -92,7 +92,7 @@ EINVAL
 SEE ALSO
 ========
 
-For an overview of the Jansson API, see https://jansson.readthedocs.io/en/2.8/apiref.html.
+For an overview of the Jansson API, see https://jansson.readthedocs.io/en/2.10/apiref.html.
 
 
 RESOURCES
