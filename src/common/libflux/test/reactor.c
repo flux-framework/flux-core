@@ -1350,6 +1350,17 @@ static void reactor_destroy_early (void)
     flux_watcher_destroy (w);
 }
 
+static void test_reactor_flags (flux_reactor_t *r)
+{
+    errno = 0;
+    ok (flux_reactor_run (r, 0xffff) < 0 && errno == EINVAL,
+        "flux_reactor_run flags=0xffff fails with EINVAL");
+
+    errno = 0;
+    ok (flux_reactor_create (0xffff) == NULL && errno == EINVAL,
+        "flux_reactor_create flags=0xffff fails with EINVAL");
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *reactor;
@@ -1375,6 +1386,7 @@ int main (int argc, char *argv[])
     test_child (reactor);
     test_stat (reactor);
     test_active_ref (reactor);
+    test_reactor_flags (reactor);
 
     flux_reactor_destroy (reactor);
 

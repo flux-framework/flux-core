@@ -31,6 +31,15 @@
 
 #include "reactor_private.h"
 
+static int valid_flags (int flags, int valid)
+{
+    if ((flags & ~valid)) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
 static void reactor_usecount_decr (flux_reactor_t *r)
 {
     if (r && --r->usecount == 0) {
@@ -58,8 +67,11 @@ void flux_reactor_destroy (flux_reactor_t *r)
 
 flux_reactor_t *flux_reactor_create (int flags)
 {
-    flux_reactor_t *r = calloc (1, sizeof (*r));
-    if (!r)
+    flux_reactor_t *r;
+
+    if (valid_flags (flags, FLUX_REACTOR_SIGCHLD) < 0)
+        return NULL;
+    if (!(r = calloc (1, sizeof (*r))))
         return NULL;
     if ((flags & FLUX_REACTOR_SIGCHLD))
         r->loop = ev_default_loop (EVFLAG_SIGNALFD);
@@ -105,6 +117,9 @@ int flux_reactor_run (flux_reactor_t *r, int flags)
 {
     int ev_flags = 0;
     int count;
+
+    if (valid_flags (flags, FLUX_REACTOR_NOWAIT | FLUX_REACTOR_ONCE) < 0)
+        return -1;
     if (flags & FLUX_REACTOR_NOWAIT)
         ev_flags |= EVRUN_NOWAIT;
     if (flags & FLUX_REACTOR_ONCE)
