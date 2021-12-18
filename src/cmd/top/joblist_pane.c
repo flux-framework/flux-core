@@ -142,8 +142,12 @@ static void joblist_continuation (flux_future_t *f, void *arg)
     struct joblist_pane *joblist = arg;
     json_t *jobs;
 
-    if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
-        fatal (errno, "error decoding job-list.list RPC response");
+    if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0) {
+        if (errno != ENOSYS)
+            fatal (errno, "error decoding job-list.list RPC response");
+        flux_future_destroy (f);
+        return;
+    }
     json_decref (joblist->jobs);
     joblist->jobs = json_incref (jobs);
     joblist_pane_draw (joblist);

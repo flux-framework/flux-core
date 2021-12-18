@@ -278,8 +278,12 @@ static void resource_continuation (flux_future_t *f, void *arg)
     struct summary_pane *sum = arg;
     json_t *o;
 
-    if (flux_rpc_get_unpack (f, "o", &o) < 0)
-        fatal (errno, "sched.resource-status RPC failed");
+    if (flux_rpc_get_unpack (f, "o", &o) < 0) {
+        if (errno != ENOSYS) /* Instance may not be up yet */
+            fatal (errno, "sched.resource-status RPC failed");
+        flux_future_destroy (f);
+        return;
+    }
     if (resource_count (o,
                         "all",
                         &sum->node.total,
@@ -313,8 +317,10 @@ static void stats_continuation (flux_future_t *f, void *arg)
                                "run", &sum->stats.run,
                                "cleanup", &sum->stats.cleanup,
                                "inactive", &sum->stats.inactive,
-                               "total", &sum->stats.total))
-        fatal (errno, "error decoding job-list.job-stats RPC response");
+                               "total", &sum->stats.total)) {
+        if (errno != ENOSYS)
+            fatal (errno, "error decoding job-list.job-stats RPC response");
+    }
     flux_future_destroy (f);
     draw_stats (sum);
 }
