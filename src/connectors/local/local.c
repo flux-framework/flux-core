@@ -11,20 +11,9 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <assert.h>
-#include <errno.h>
-#include <stdbool.h>
-#include <sys/types.h>
-#include <sys/param.h>
-#include <sys/un.h>
-#include <sys/socket.h>
-#include <signal.h>
-#include <poll.h>
 #include <unistd.h>
 #include <flux/core.h>
 
-#include "src/common/libutil/log.h"
-#include "src/common/libutil/errno_safe.h"
 #include "src/common/librouter/usock.h"
 
 struct local_connector {
@@ -157,7 +146,7 @@ static void op_fini (void *impl)
         int saved_errno = errno;
         usock_client_destroy (ctx->uclient);
         if (ctx->fd >= 0)
-            ERRNO_SAFE_WRAP (close, ctx->fd);
+            close (ctx->fd);
         free (ctx);
         errno = saved_errno;
     }
