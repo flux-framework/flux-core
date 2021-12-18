@@ -20,7 +20,7 @@
 
 #include "top.h"
 
-static const struct dimension win_dim = { 0, 5, 80, 60 };
+static const struct dimension win_dim = { 0, 6, 80, 60 };
 
 struct joblist_pane {
     struct top *top;

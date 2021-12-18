@@ -21,13 +21,14 @@
 
 #include "top.h"
 
-static const struct dimension win_dim = { 0, 0, 80, 5 };
+static const struct dimension win_dim = { 0, 0, 80, 6 };
 static const struct dimension level_dim = { 0, 0, 2, 1 };
 static const struct dimension title_dim = { 6, 0, 73, 1 };
 static const struct dimension timeleft_dim = { 70, 0, 10, 1 };
 static const struct dimension resource_dim = { 4, 1, 36, 3 };
 static const struct dimension heart_dim = { 77, 3, 1, 1 };
 static const struct dimension stats_dim = { 60, 1, 15, 3 };
+static const struct dimension info_dim = { 1, 5, 78, 1 };
 
 static const double heartblink_duration = 0.5;
 
@@ -50,7 +51,9 @@ struct stats {
 struct summary_pane {
     struct top *top;
     WINDOW *win;
-    unsigned long instance_level;
+    int instance_level;
+    int instance_size;
+    const char *instance_version;
     double expiration;
     struct stats stats;
     struct resource_count node;
@@ -80,19 +83,10 @@ static void draw_timeleft (struct summary_pane *sum)
                timeleft > 0 ? "⌚" : "∞");
 }
 
-static void draw_level (struct summary_pane *sum)
+static void draw_f (struct summary_pane *sum)
 {
-    const char *sup[] = { "", "²", "³", "⁴", "⁵", "⁶", "⁷", "⁸", "⁹", "⁺" };
-    int size = sizeof (sup) / sizeof (sup[0]);
-    unsigned long level = sum->instance_level;
-
     wattron (sum->win, COLOR_PAIR (TOP_COLOR_YELLOW));
-    mvwprintw (sum->win,
-               level_dim.y_begin,
-               level_dim.x_begin,
-               "%s%s",
-               "ƒ",
-               sup[level < size ? level : size - 1]);
+    mvwprintw (sum->win, level_dim.y_begin, level_dim.x_begin, "ƒ");
     wattroff (sum->win, COLOR_PAIR (TOP_COLOR_YELLOW));
 }
 
@@ -213,6 +207,29 @@ static void draw_heartbeat (struct summary_pane *sum)
                sum->heart_visible ? "♡" : " ");
 }
 
+static void draw_info (struct summary_pane *sum)
+{
+    wattron (sum->win, A_DIM);
+    mvwprintw (sum->win,
+               info_dim.y_begin,
+               info_dim.x_begin,
+               "size: %d",
+               sum->instance_size);
+    if (sum->instance_level)
+        mvwprintw (sum->win,
+                   info_dim.y_begin,
+                   info_dim.x_begin + 10,
+                   "depth: %d",
+                   sum->instance_level);
+    mvwprintw (sum->win,
+               info_dim.y_begin,
+               info_dim.x_begin +
+                   info_dim.x_length - strlen (sum->instance_version),
+               "%s",
+               sum->instance_version);
+    wattroff (sum->win, A_DIM);
+}
+
 /* Fetch expiration time (abs time relative to UNIX epoch) from resource.R.
  * If unavailable (e.g. we are a guest in the system instance), return 0.
  */
@@ -235,19 +252,20 @@ done:
     return val;
 }
 
-static int get_instance_level (flux_t *h)
+static int get_instance_attr_int (flux_t *h, const char *attr)
 {
     const char *s;
     unsigned long level;
 
-    if (!(s = flux_attr_get (h, "instance-level")))
-        fatal (errno, "error fetching instance-level broker attribute");
+    if (!(s = flux_attr_get (h, attr)))
+        fatal (errno, "error fetching %s broker attribute", attr);
     errno = 0;
     level = strtoul (s, NULL, 10);
     if (errno != 0)
-        fatal (errno, "error parsing instance level");
+        fatal (errno, "error parsing %s", attr);
     return level;
 }
+
 
 static int resource_count (json_t *o,
                            const char *name,
@@ -361,11 +379,12 @@ void summary_pane_query (struct summary_pane *sum)
 void summary_pane_draw (struct summary_pane *sum)
 {
     werase (sum->win);
-    draw_level (sum);
+    draw_f (sum);
     draw_title (sum);
     draw_timeleft (sum);
     draw_resource (sum);
     draw_stats (sum);
+    draw_info (sum);
     draw_heartbeat (sum);
 }
 
@@ -395,7 +414,9 @@ struct summary_pane *summary_pane_create (struct top *top)
     sum->top = top;
 
     sum->expiration = get_expiration (top->h);
-    sum->instance_level = get_instance_level (top->h);
+    sum->instance_level = get_instance_attr_int (top->h, "instance-level");
+    sum->instance_size = get_instance_attr_int (top->h, "size");
+    sum->instance_version = flux_attr_get (top->h, "version");
 
     summary_pane_query (sum);
     summary_pane_draw (sum);
