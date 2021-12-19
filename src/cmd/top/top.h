@@ -29,7 +29,6 @@ struct top {
     flux_t *h;
     char *title;
     flux_jobid_t id;
-    uint32_t userid;
     uint32_t size;
     struct summary_pane *summary_pane;
     struct joblist_pane *joblist_pane;
