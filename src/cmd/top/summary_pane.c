@@ -46,6 +46,9 @@ struct stats {
     int run;
     int cleanup;
     int inactive;
+    int failed;
+    int canceled;
+    int timeout;
     int total;
 };
 
@@ -55,6 +58,8 @@ struct summary_pane {
     int instance_level;
     int instance_size;
     double starttime;
+    uid_t owner;
+    bool show_details;
     const char *instance_version;
     double expiration;
     struct stats stats;
@@ -130,12 +135,48 @@ static void draw_stats (struct summary_pane *sum)
                "%*d running",
                stats_dim.x_length - 10,
                sum->stats.run + sum->stats.cleanup);
-    mvwprintw (sum->win,
-               stats_dim.y_begin + 2,
-               stats_dim.x_begin,
-               "%*d inactive",
-               stats_dim.x_length - 10,
-               sum->stats.inactive);
+
+    if (sum->show_details) {
+        int failed = sum->stats.failed +
+                     sum->stats.canceled +
+                     sum->stats.timeout;
+        int complete = sum->stats.inactive - failed;
+
+        if (complete)
+            wattron (sum->win, COLOR_PAIR(TOP_COLOR_GREEN) | A_BOLD);
+        mvwprintw (sum->win,
+                   stats_dim.y_begin + 2,
+                   stats_dim.x_begin - 18,
+                   "%6d",
+                   complete);
+        if (complete)
+            wattroff (sum->win, COLOR_PAIR(TOP_COLOR_GREEN) | A_BOLD);
+        mvwprintw (sum->win,
+                   stats_dim.y_begin + 2,
+                   stats_dim.x_begin - 12,
+                   " complete, ");
+        if (failed)
+            wattron (sum->win, COLOR_PAIR(TOP_COLOR_RED) | A_BOLD);
+        mvwprintw (sum->win,
+                   stats_dim.y_begin + 2,
+                   stats_dim.x_begin - 1,
+                   "%6d",
+                   failed);
+        if (failed)
+            wattroff (sum->win, COLOR_PAIR(TOP_COLOR_RED) | A_BOLD);
+        mvwprintw (sum->win,
+                   stats_dim.y_begin + 2,
+                   stats_dim.x_begin + 5,
+                   " failed");
+    }
+    else {
+        mvwprintw (sum->win,
+                   stats_dim.y_begin + 2,
+                   stats_dim.x_begin,
+                   "%*d inactive",
+                   stats_dim.x_length - 10,
+                   sum->stats.inactive);
+    }
 }
 
 /* Create a little graph like this that fits in bufsz:
@@ -345,7 +386,10 @@ static void stats_continuation (flux_future_t *f, void *arg)
     struct summary_pane *sum = arg;
 
     if (flux_rpc_get_unpack (f,
-                             "{s:{s:i s:i s:i s:i s:i s:i s:i}}",
+                             "{s:i s:i s:i s:{s:i s:i s:i s:i s:i s:i s:i}}",
+                             "failed", &sum->stats.failed,
+                             "canceled", &sum->stats.canceled,
+                             "timeout", &sum->stats.timeout,
                              "job_states",
                                "depend", &sum->stats.depend,
                                "priority", &sum->stats.priority,
@@ -415,6 +459,12 @@ void summary_pane_query (struct summary_pane *sum)
     }
 }
 
+void summary_pane_toggle_details (struct summary_pane *sum)
+{
+    sum->show_details = !sum->show_details;
+    summary_pane_draw (sum);
+}
+
 void summary_pane_draw (struct summary_pane *sum)
 {
     werase (sum->win);
@@ -458,6 +508,10 @@ struct summary_pane *summary_pane_create (struct top *top)
     sum->instance_version = flux_attr_get (top->h, "version");
     if (flux_get_instance_starttime (top->h, &sum->starttime) < 0)
         sum->starttime = flux_reactor_now (flux_get_reactor (top->h));
+
+    sum->owner = get_instance_attr_int (top->h, "security.owner");
+    if (sum->owner == getuid ())
+        sum->show_details = true;
 
     summary_pane_query (sum);
     summary_pane_draw (sum);

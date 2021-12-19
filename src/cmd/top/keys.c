@@ -46,6 +46,9 @@ static void keys_cb (flux_reactor_t *r,
         case KEY_ENTER:
             joblist_pane_enter (keys->top->joblist_pane);
             break;
+        case 'd':
+            summary_pane_toggle_details (keys->top->summary_pane);
+            break;
         case '':
             clear ();
             summary_pane_draw (keys->top->summary_pane);
