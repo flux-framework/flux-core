@@ -38,7 +38,7 @@ char *uri_resolve (const char *uri)
     char *cpy = strdup (uri);
     if (!cpy)
         return NULL;
-    if (yuarel_parse (&yuri, cpy) == 0) {
+    if (yuarel_parse (&yuri, cpy) == 0 && yuri.scheme) {
         if (strcmp (yuri.scheme, "ssh") == 0
             || strcmp (yuri.scheme, "local") == 0) {
             free (cpy);
