@@ -104,7 +104,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
                          "annotations",
                            "user",
                              "uri", &uri) < 0)
-            fatal (errno, "error decoding a job record from job-list RPC");
+            fatal (0, "error decoding a job record from job-list RPC");
         if (flux_job_id_encode (id, "f58", idstr, sizeof (idstr)) < 0)
             fatal (errno, "error encoding jobid as F58");
         if (fsd_format_duration_ex (run, sizeof (run), now - t_run, 2) < 0)
