@@ -313,9 +313,10 @@ static void check_rpc_targetted_policy (flux_t *h)
     flux_msg_handler_destroy (mh);
 }
 
-static void fatal_err (const char *message, void *arg)
+static int comms_err (flux_t *h, void *arg)
 {
-    BAIL_OUT ("fatal error: %s", message);
+    BAIL_OUT ("fatal comms error: %s", strerror (errno));
+    return -1;
 }
 
 int main (int argc, char *argv[])
@@ -326,7 +327,7 @@ int main (int argc, char *argv[])
 
     if (!(h = loopback_create (0)))
         BAIL_OUT ("cannot continue without loopback handle");
-    flux_fatal_set (h, fatal_err, NULL);
+    flux_comms_error_set (h, comms_err, NULL);
 
     check_rpc_oneway (h);
     check_rpc_oneway_faked (h);

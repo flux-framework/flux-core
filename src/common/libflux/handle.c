@@ -73,9 +73,8 @@ struct flux_handle_struct {
 
     struct tagpool  *tagpool;
     flux_msgcounters_t msgcounters;
-    flux_fatal_f    fatal;
-    void            *fatal_arg;
-    bool            fatality;
+    flux_comms_error_f comms_error_cb;
+    void            *comms_error_arg;
     bool            destroy_in_progress;
 #if HAVE_CALIPER
     struct profiling_context prof;
@@ -457,31 +456,21 @@ int flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy)
     return aux_set (&h->aux, name, aux, destroy);
 }
 
-void flux_fatal_set (flux_t *h, flux_fatal_f fun, void *arg)
+void flux_comms_error_set (flux_t *h, flux_comms_error_f fun, void *arg)
 {
     h = lookup_clone_ancestor (h);
-    h->fatal = fun;
-    h->fatal_arg = arg;
-    h->fatality = false;
+    h->comms_error_cb = fun;
+    h->comms_error_arg = arg;
 }
 
-void flux_fatal_error (flux_t *h, const char *fun, const char *msg)
+static int comms_error (flux_t *h, int errnum)
 {
     h = lookup_clone_ancestor (h);
-    if (!h->fatality) {
-        h->fatality = true;
-        if (h->fatal) {
-            char buf[256];
-            snprintf (buf, sizeof (buf), "%s: %s", fun, msg);
-            h->fatal (buf, h->fatal_arg);
-        }
+    if (h->comms_error_cb) {
+        errno = errnum;
+        return h->comms_error_cb (h, h->comms_error_arg);
     }
-}
-
-bool flux_fatality (flux_t *h)
-{
-    h = lookup_clone_ancestor (h);
-    return h->fatality;
+    return -1;
 }
 
 void flux_get_msgcounters (flux_t *h, flux_msgcounters_t *mcs)
@@ -593,21 +582,21 @@ int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
     h = lookup_clone_ancestor (h);
     if (!h->ops->send || h->destroy_in_progress) {
         errno = ENOSYS;
-        goto fatal;
+        return -1;
     }
     flags |= h->flags;
     update_tx_stats (h, msg);
     if ((flags & FLUX_O_TRACE))
         handle_trace (h, msg);
-    if (h->ops->send (h->impl, msg, flags) < 0)
-        goto fatal;
+    while (h->ops->send (h->impl, msg, flags) < 0) {
+        if (comms_error (h, errno) < 0)
+            return -1;
+        /* retry if comms_error() returns success */
+    }
 #if HAVE_CALIPER
     profiling_msg_snapshot(h, msg, flags, "send");
 #endif
     return 0;
-fatal:
-    FLUX_FATAL (h);
-    return -1;
 }
 
 static int defer_enqueue (zlist_t **l, flux_msg_t *msg)
@@ -635,23 +624,32 @@ static int defer_requeue (zlist_t **l, flux_t *h)
 
 static void defer_destroy (zlist_t **l)
 {
-    flux_msg_t *msg;
     if (*l) {
+        flux_msg_t *msg;
+        int saved_errno = errno;;
         while ((msg = zlist_pop (*l)))
             flux_msg_destroy (msg);
         zlist_destroy (l);
+        errno = saved_errno;
     }
 }
 
 static flux_msg_t *flux_recv_any (flux_t *h, int flags)
 {
-    flux_msg_t *msg = NULL;
+    flux_msg_t *msg;
+
     if (flux_msglist_count (h->queue) > 0)
-        msg = (flux_msg_t *)flux_msglist_pop (h->queue);
-    else if (h->ops->recv)
-        msg = h->ops->recv (h->impl, flags);
-    else
+        return (flux_msg_t *)flux_msglist_pop (h->queue);
+    if (!h->ops->recv) {
         errno = ENOSYS;
+        return NULL;
+    }
+    while (!(msg = h->ops->recv (h->impl, flags))) {
+        if (errno == EAGAIN
+            || errno == EWOULDBLOCK
+            || comms_error (h, errno) < 0)
+            return NULL;
+    }
     return msg;
 }
 
@@ -665,22 +663,21 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     h = lookup_clone_ancestor (h);
     zlist_t *l = NULL;
     flux_msg_t *msg = NULL;
-    int saved_errno;
 
     flags |= h->flags;
     do {
         if (!(msg = flux_recv_any (h, flags))) {
             if (errno != EAGAIN && errno != EWOULDBLOCK)
-                goto fatal;
+                goto error;
             if (defer_requeue (&l, h) < 0)
-                goto fatal;
+                goto error;
             defer_destroy (&l);
             errno = EWOULDBLOCK;
             return NULL;
         }
         if (!flux_msg_cmp (msg, match)) {
             if (defer_enqueue (&l, msg) < 0)
-                goto fatal;
+                goto error;
             msg = NULL;
         }
     } while (!msg);
@@ -688,7 +685,7 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     if ((flags & FLUX_O_TRACE))
         handle_trace (h, msg);
     if (defer_requeue (&l, h) < 0)
-        goto fatal;
+        goto error;
     defer_destroy (&l);
 #if HAVE_CALIPER
     cali_begin_int (h->prof.msg_match_type, match.typemask);
@@ -707,13 +704,9 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     cali_end (h->prof.msg_match_glob);
 #endif
     return msg;
-fatal:
-    saved_errno = errno;
-    FLUX_FATAL (h);
-    if (msg)
-        flux_msg_destroy (msg);
+error:
+    flux_msg_destroy (msg);
     defer_destroy (&l);
-    errno = saved_errno;
     return NULL;
 }
 
@@ -727,18 +720,13 @@ int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
 
     if (flags != FLUX_RQ_TAIL && flags != FLUX_RQ_HEAD) {
         errno = EINVAL;
-        goto fatal;
+        return -1;
     }
     if (flags == FLUX_RQ_TAIL)
         rc = flux_msglist_append (h->queue, msg);
     else
         rc = flux_msglist_push (h->queue, msg);
-    if (rc < 0)
-        goto fatal;
-    return 0;
-fatal:
-    FLUX_FATAL (h);
-    return -1;
+    return rc;
 }
 
 int flux_pollfd (flux_t *h)
@@ -749,29 +737,28 @@ int flux_pollfd (flux_t *h)
             .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
         };
         if ((h->pollfd = epoll_create1 (EPOLL_CLOEXEC)) < 0)
-            goto fatal;
+            goto error;
         /* add queue pollfd */
         ev.data.fd = flux_msglist_pollfd (h->queue);
         if (ev.data.fd < 0)
-            goto fatal;
+            goto error;
         if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
-            goto fatal;
+            goto error;
         /* add connector pollfd (if defined) */
         if (h->ops->pollfd) {
             ev.data.fd = h->ops->pollfd (h->impl);
             if (ev.data.fd < 0)
-                goto fatal;
+                goto error;
             if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
-                goto fatal;
+                goto error;
         }
     }
     return h->pollfd;
-fatal:
+error:
     if (h->pollfd >= 0) {
         (void)close (h->pollfd);
         h->pollfd = -1;
     }
-    FLUX_FATAL (h);
     return -1;
 }
 
@@ -788,11 +775,15 @@ int flux_pollevents (flux_t *h)
     /* get connector events (if applicable) */
     if (h->ops->pollevents) {
         if ((events = h->ops->pollevents (h->impl)) < 0)
-            goto fatal;
+            return -1;
+        if ((events & FLUX_POLLERR)) {
+            if (comms_error (h, ECONNRESET) == 0)
+                events &= ~FLUX_POLLERR;
+        }
     }
     /* get queue events */
     if ((e = flux_msglist_pollevents (h->queue)) < 0)
-        goto fatal;
+        return -1;
     if ((e & POLLIN))
         events |= FLUX_POLLIN;
     if ((e & POLLOUT))
@@ -800,9 +791,6 @@ int flux_pollevents (flux_t *h)
     if ((e & POLLERR))
         events |= FLUX_POLLERR;
     return events;
-fatal:
-    FLUX_FATAL (h);
-    return -1;
 }
 
 /*

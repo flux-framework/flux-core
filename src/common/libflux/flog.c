@@ -176,7 +176,6 @@ int flux_vlog (flux_t *h, int level, const char *fmt, va_list ap)
     return 0;
 fatal:
     free (xtra);
-    FLUX_FATAL (h);
     return -1;
 }
 

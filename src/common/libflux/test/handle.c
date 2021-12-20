@@ -36,17 +36,10 @@ static void aux_free (void *arg)
     aux_destroyed = true;
 }
 
-/* First time this is called, don't BAIL_OUT, just set fatal_tested so
- * we can verify that flux_fatal_set() sets the hook.
- * After that, abort the test if the handle suffers a fatality.
- */
-static bool fatal_tested = false;
-static void fatal_err (const char *message, void *arg)
+static int comms_err (flux_t *h, void *arg)
 {
-    if (fatal_tested)
-        BAIL_OUT ("fatal error: %s", message);
-    else
-        fatal_tested = true;
+    BAIL_OUT ("fatal comms error: %s", strerror (errno));
+    return -1;
 }
 
 void test_handle_invalid_args (void)
@@ -74,12 +67,7 @@ int main (int argc, char *argv[])
 
     test_handle_invalid_args ();
 
-    /* Test flux_fatal_set, flux_fatal_err
-     */
-    flux_fatal_set (h, fatal_err, NULL);
-    flux_fatal_error (h, __FUNCTION__, "Foo");
-    ok (fatal_tested == true,
-        "flux_fatal function is called on fatal error");
+    flux_comms_error_set (h, comms_err, NULL);
 
     /* Test flux_opt_set, flux_opt_get.
      */

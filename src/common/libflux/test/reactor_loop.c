@@ -134,9 +134,10 @@ static void leak_msg_handler (void)
     flux_close (h);
 }
 
-static void fatal_err (const char *message, void *arg)
+static int comms_err (flux_t *h, void *arg)
 {
-    BAIL_OUT ("fatal error: %s", message);
+    BAIL_OUT ("fatal comms error: %s", strerror (errno));
+    return -1;
 }
 
 int main (int argc, char *argv[])
@@ -148,7 +149,7 @@ int main (int argc, char *argv[])
 
     if (!(h = loopback_create (0)))
         BAIL_OUT ("can't continue without loop handle");
-    flux_fatal_set (h, fatal_err, NULL);
+    flux_comms_error_set (h, comms_err, NULL);
     ok ((reactor = flux_get_reactor (h)) != NULL,
         "obtained reactor");
     if (!reactor)

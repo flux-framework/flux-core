@@ -950,9 +950,10 @@ static void test_rpc_get_nodeid (flux_t *h)
     flux_future_destroy (f);
 }
 
-static void fatal_err (const char *message, void *arg)
+static int comms_err (flux_t *h, void *arg)
 {
-    BAIL_OUT ("fatal error: %s", message);
+    BAIL_OUT ("fatal coms error: %s", strerror (errno));
+    return -1;
 }
 
 int main (int argc, char *argv[])
@@ -970,7 +971,7 @@ int main (int argc, char *argv[])
         "created test server thread");
     if (!h)
         BAIL_OUT ("can't continue without test server");
-    flux_fatal_set (h, fatal_err, NULL);
+    flux_comms_error_set (h, comms_err, NULL);
     flux_flags_set (h, FLUX_O_MATCHDEBUG);
 
     test_corner_case (h);
