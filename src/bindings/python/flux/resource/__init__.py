@@ -10,3 +10,4 @@
 
 from flux.resource.Rlist import Rlist
 from flux.resource.ResourceSet import ResourceSet
+from flux.resource.list import resource_list, SchedResourceList
