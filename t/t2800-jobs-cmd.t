@@ -159,7 +159,7 @@ test_expect_success 'flux-jobs -a and -A works' '
 	nall=$(state_count all) &&
 	count=`flux jobs --suppress-header -a | wc -l` &&
 	test $count -eq $nall &&
-	count=`flux jobs --suppress-header -a | wc -l` &&
+	count=`flux jobs --suppress-header -a -A | wc -l` &&
 	test $count -eq $nall
 '
 

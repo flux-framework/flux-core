@@ -24,12 +24,11 @@ OPTIONS
 =======
 
 **-a**
-   List all jobs of the current user, including inactive jobs.
-   Equivalent to specifying *--filter=pending,running,inactive*.
+   List jobs in all states, including inactive jobs.
+   This is shorthand for *--filter=pending,running,inactive*.
 
 **-A**
-   List all jobs from all users, including inactive jobs. Equivalent to
-   specifying *--filter=pending,running,inactive --user=all*.
+   List jobs of all users. This is shorthand for *--user=all*.
 
 **-n, --suppress-header**
    For default output, do not output column headers.
