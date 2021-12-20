@@ -372,7 +372,7 @@ static void push_parent_environment (optparse_t *p, struct environment *env)
         return;
 
     environment_set (env, "FLUX_URI", uri, 0);
-    
+
     /*  Before closing current instance handle, set FLUX_KVS_NAMESPACE
      *   if parent-kvs-namespace attr is set.
      */
