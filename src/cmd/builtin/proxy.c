@@ -289,6 +289,56 @@ static void proxy_command_destroy_usock_and_router (struct proxy_command *ctx)
     ctx->router = NULL;
 }
 
+/* Attempt to reconnect to broker.  If successful, wait for for broker to
+ * reach RUN state to avoid "Upstream broker is offline" errors when connecting
+ * early in the broker's startup.  Returns 0 on success, -1 on failure.
+ * On failure, it is safe to call this function again to retry.  This function
+ * calls exit(1) on errors that are unexpected in the reconnect context.
+ *
+ * Notes
+ * - error callback is protected against reentry
+ * - send/recv within the callback can fail as though no callback is registered
+ * - state-machine.wait RPC fails if broker is shutting down, otherwise blocks
+ * - it is safe to call flux_reconnect(3) if already connected
+ * - router_renew() re-establishes client event subs and service regs
+ */
+static int try_reconnect (flux_t *h, struct router *router)
+{
+    flux_future_t *f;
+    int rc = -1;
+
+    if (flux_reconnect (h) < 0) {
+        if (errno == ENOSYS)
+            log_msg_exit ("reconnect not implemented by connector");
+        return -1;
+    }
+    if (!(f = flux_rpc (h, "state-machine.wait", NULL, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get (f, NULL) < 0) {
+        log_msg ("state-machine.wait: %s", future_strerror (f, errno));
+        goto done;
+    }
+    if (router_renew (router) < 0) {
+        log_err ("failed to restore subscriptions/service registrations");
+        goto done;
+    }
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    return rc;
+}
+
+static int comms_error (flux_t *h, void *arg)
+{
+    struct proxy_command *ctx = arg;
+
+    log_msg ("broker: %s", strerror (errno));
+    log_msg ("reconnecting");
+    while (try_reconnect (h, ctx->router) < 0)
+        sleep (2);
+    log_msg ("reconnected");
+    return 0;
+}
+
 static int cmd_proxy (optparse_t *p, int ac, char *av[])
 {
     int n;
@@ -300,6 +350,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     char *uri;
     int optindex;
     flux_reactor_t *r;
+    int flags = 0;
 
     log_init ("flux-proxy");
 
@@ -311,8 +362,10 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     if (!(uri = uri_resolve (target)))
         log_msg_exit ("Unable to resolve %s to a URI", target);
 
-    memset (&ctx, 0, sizeof (ctx));
-    if (!(ctx.h = flux_open (uri, 0)))
+    if (optparse_hasopt (p, "reconnect"))
+        flags |= FLUX_O_RPCTRACK;
+
+    if (!(ctx.h = flux_open (uri, flags)))
         log_err_exit ("%s", uri);
     free (uri);
     flux_log_set_appname (ctx.h, "proxy");
@@ -321,6 +374,11 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         log_err_exit ("flux_reactor_create");
     if (flux_set_reactor (ctx.h, r) < 0)
         log_err_exit ("flux_set_reactor");
+
+    /* Register handler for loss of broker connection if --reconnect
+     */
+    if (optparse_hasopt (p, "reconnect"))
+        flux_comms_error_set (ctx.h, comms_error, &ctx);
 
     /* Check proxy version vs broker version
      */
@@ -393,6 +451,8 @@ static struct optparse_option proxy_opts[] = {
     { .name = "nohup",  .key = 'n',  .has_arg = 0,
       .usage = "Do not send SIGHUP to child processes when connection"
                " to Flux is lost", },
+    { .name = "reconnect",  .has_arg = 0,
+      .usage = "If broker connection is lost, try to reconnect", },
     OPTPARSE_TABLE_END,
 };
 
