@@ -73,7 +73,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_requeue.3 \
 	man3/flux_aux_set.3 \
 	man3/flux_flags_set.3 \
-	man3/flux_fatal_set.3 \
+	man3/flux_comms_error_set.3 \
 	man3/flux_event_subscribe.3 \
 	man3/flux_event_publish.3 \
 	man3/flux_pollevents.3 \
@@ -150,8 +150,6 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_aux_get.3 \
 	man3/flux_flags_unset.3 \
 	man3/flux_flags_get.3 \
-	man3/flux_fatal_error.3 \
-	man3/FLUX_FATAL.3 \
 	man3/flux_event_unsubscribe.3 \
 	man3/flux_event_publish_pack.3 \
 	man3/flux_event_publish_raw.3 \
