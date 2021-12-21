@@ -27,8 +27,8 @@ of the owner to destroy it after the handle is destroyed.
 handle *h*. A flux_reactor_t object may be obtained from another handle,
 for example when events from multiple handles are to be managed using
 a common flux_reactor_t, or one may be created directly with
-``flux_reactor_create(3)``. ``flux_set_reactor()`` should be called
-immediately after ``flux_open(3)`` to avoid conflict with other API calls
+:man3:`flux_reactor_create`. ``flux_set_reactor()`` should be called
+immediately after :man3:`flux_open` to avoid conflict with other API calls
 which may internally call ``flux_get_reactor()``.
 
 
@@ -55,10 +55,10 @@ EEXIST
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_reactor_create(3), flux_reactor_destroy(3)
+:man3:`flux_future_create`, :man3:`flux_reactor_destroy`

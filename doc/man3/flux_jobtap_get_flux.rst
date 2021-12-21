@@ -102,10 +102,10 @@ The remaining functions return 0 on success, -1 on failure.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux-jobtap-plugins(7)
+:man7:`flux-jobtap-plugins`

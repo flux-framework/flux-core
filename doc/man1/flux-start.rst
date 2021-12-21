@@ -14,7 +14,7 @@ DESCRIPTION
 ===========
 
 flux-start(1) launches a new Flux instance. By default, flux-start
-execs a single flux-broker(1) directly, which will attempt to use
+execs a single :man1:`flux-broker` directly, which will attempt to use
 PMI to fetch job information and bootstrap a flux instance.
 
 If a size is specified via *--test-size*, an instance of that size is to be
@@ -126,10 +126,10 @@ shell as the initial program:
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux-broker(1)
+:man1:`flux-broker`

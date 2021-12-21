@@ -15,7 +15,7 @@ DESCRIPTION
 ===========
 
 flux-module(1) manages dynamically loadable Flux modules.
-It can load/remove/list modules for the flux-broker(1), and for other
+It can load/remove/list modules for the :man1:`flux-broker`, and for other
 Flux services that support dynamic module extensions.
 
 
@@ -46,7 +46,7 @@ COMMANDS
    not loaded during removal unless the ``-f, --force`` option is specified.
 
 **list** [*service*]
-   List modules loaded by *service*, or by flux-broker(1) if *service* is unspecified.
+   List modules loaded by *service*, or by :man1:`flux-broker` if *service* is unspecified.
 
 **stats** [*OPTIONS*] [*name*]
    Request statistics from module *name*. A JSON object containing a set of
@@ -74,7 +74,7 @@ STATS OPTIONS
 
 **-R, --rusage**
    Return a JSON object representing an *rusage* structure
-   returned by getrusage(2).
+   returned by :linux:man2:`getrusage`.
 
 **-c, --clear**
    Send a request message to clear statistics in the target module.
@@ -121,7 +121,7 @@ SHA1 hash) module loaded by a service.
    the module .so file.
 
 **Idle**
-   Idle times are defined for flux-broker(1) modules as the number of
+   Idle times are defined for :man1:`flux-broker` modules as the number of
    seconds since the module last sent a request or response message.
    The idle time may be defined differently for other services, or have no
    meaning.
@@ -136,7 +136,7 @@ All Flux modules define the following global symbols:
    A null-terminated string defining the module name.
    Module names are words delimited by periods, with the service that
    will load the module indicated by the words that prefix the final one.
-   If there is no prefix, the module is loaded by flux-broker(1).
+   If there is no prefix, the module is loaded by :man1:`flux-broker`.
 
 **int mod_main (void \*context, int argc, char \**argv);**
    An entry function.
@@ -145,10 +145,10 @@ All Flux modules define the following global symbols:
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-syslog(3)
+:linux:man3:`syslog`

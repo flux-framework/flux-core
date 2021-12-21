@@ -25,4 +25,4 @@ of the currently linked libflux-security is included.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org

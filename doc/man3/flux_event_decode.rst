@@ -113,10 +113,10 @@ EPROTO
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_event_subscribe(3)
+:man3:`flux_event_subscribe`

@@ -33,11 +33,7 @@ public keys are exchanged with PMI.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
-
-
-SEE ALSO
-========
+Flux: http://flux-framework.org
 
 ZAP: http://rfc.zeromq.org/spec:27
 
@@ -45,6 +41,4 @@ CurveZMQ: http://curvezmq.org/page:read-the-docs
 
 ZMTP/3.0: http://rfc.zeromq.org/spec:23
 
-Using ZeroMQ Security:
-http://hintjens.com/blog:48 and
-http://hintjens.com/blog:49
+Using ZeroMQ Security: http://hintjens.com/blog:48, http://hintjens.com/blog:49

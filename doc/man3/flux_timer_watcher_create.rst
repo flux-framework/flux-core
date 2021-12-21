@@ -43,7 +43,7 @@ will automatically be stopped when *after* seconds have elapsed.
 
 Note that *after* is internally referenced to reactor time, which is
 only updated when the reactor is run/created, and therefore
-can be out of date. Use ``flux_reactor_now_update(3)`` to manually
+can be out of date. Use :man3:`flux_reactor_now_update` to manually
 update reactor time before creating timer watchers in such cases.
 Refer to "The special problem of time updates" in the libev manual
 for more information.
@@ -75,12 +75,12 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
+
+libev: http://software.schmorp.de/pkg/libev.html
 
 
 SEE ALSO
 ========
 
-flux_watcher_start(3), flux_reactor_run(3), flux_reactor_now(3)
-
-`libev home page <http://software.schmorp.de/pkg/libev.html>`__
+:man3:`flux_watcher_start`, :man3:`flux_reactor_run`, :man3:`flux_reactor_now`

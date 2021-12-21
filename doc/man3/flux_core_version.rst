@@ -45,7 +45,7 @@ FLUX_CORE_VERSION_HEX
 
 FLUX_CORE_VERSION_STRING
    (string) the three versions above separated by periods, with optional
-   ``git-describe(1)`` suffix preceded by a hyphen, if the version is a
+   :linux:man1:`git-describe` suffix preceded by a hyphen, if the version is a
    development snapshot.
 
 Note that major version zero (0.y.z) is for initial development.
@@ -78,10 +78,6 @@ These functions cannot fail.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
-
-SEE ALSO
-========
-
-semver.org[Semantic Versioning 2.0.0]
+Semantic Versioning 2.0.0: http://semver.org

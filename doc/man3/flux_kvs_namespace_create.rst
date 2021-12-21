@@ -87,10 +87,10 @@ ENOTSUP
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_kvs_lookup(3), flux_kvs_commit(3)
+:man3:`flux_kvs_lookup`, :man3:`flux_kvs_commit`

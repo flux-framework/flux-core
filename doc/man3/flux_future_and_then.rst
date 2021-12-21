@@ -33,12 +33,12 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-See ``flux_future_get(3)`` for general functions that operate on futures,
-and ``flux_future_create(3)`` for a description of the ``flux_future_t``
+See :man3:`flux_future_get` for general functions that operate on futures,
+and :man3:`flux_future_create` for a description of the ``flux_future_t``
 base type. This page covers functions for the sequential composition of
 futures, i.e. chains of dependent futures.
 
-``flux_future_and_then(3)`` is similar to ``flux_future_then(3)``, but
+``flux_future_and_then(3)`` is similar to :man3:`flux_future_then`, but
 returns a future that may later be "continued" from the continuation
 callback ``cb``. The provided continuation callback ``cb`` is only
 executed when the future argument ``f`` is fulfilled successfully. On
@@ -129,10 +129,10 @@ ENOENT
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_future_get(3), flux_future_create(3)
+:man3:`flux_future_get`, :man3:`flux_future_create`

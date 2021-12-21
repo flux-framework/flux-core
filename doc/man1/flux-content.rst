@@ -94,7 +94,7 @@ not eligible for purge.
 CACHE ACCOUNTING
 ================
 
-Some accounting info for the local cache can be viewed with flux-getattr(1):
+Some accounting info for the local cache can be viewed with :man1:`flux-getattr`:
 
 **content.acct-entries**
    The total number of cache entries.
@@ -133,10 +133,6 @@ traveling further up the tree.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
-
-SEE ALSO
-========
-
-`RFC 10: Content Store <https://github.com/flux-framework/rfc/blob/master/spec_10.rst>`__
+RFC 10: Content Storage Service: https://github.com/flux-framework/rfc/blob/master/spec_10.rst

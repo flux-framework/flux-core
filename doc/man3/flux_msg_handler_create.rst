@@ -42,7 +42,7 @@ DESCRIPTION
 ===========
 
 ``flux_msg_handler_create()`` registers *callback* to be invoked when
-a message meeting *match* criteria, as described in ``flux_msg_cmp(3)``,
+a message meeting *match* criteria, as described in :man3:`flux_msg_cmp`,
 is received on Flux broker handle *h*.
 
 The message handler must be started with ``flux_msg_handler_start()`` in
@@ -51,7 +51,7 @@ the message handler to stop receiving messages. Starting and stopping
 are idempotent operations.
 
 The handle *h* is monitored for FLUX_POLLIN events on the flux_reactor_t
-associated with the handle as described in ``flux_set_reactor(3)``.
+associated with the handle as described in :man3:`flux_set_reactor`.
 This internal "handle watcher" is started when the first message handler
 is started, and stopped when the last message handler is stopped.
 
@@ -85,7 +85,7 @@ CAVEATS
 =======
 
 Although it is possible to register a message handler in a given `flux_t`
-handle for any topic string, ``flux-broker(1)`` does not automatically route
+handle for any topic string, :man1:`flux-broker` does not automatically route
 matching requests or events to the handle.
 
 Requests are only routed if the handle has registered a matching service
@@ -93,7 +93,7 @@ with ``flux_service_register(3)``, or for broker modules only, the service
 matches the module name.
 
 Events are only routed if the topic matches a subscription registered
-with ``flux_event_subscribe(3)``.
+with :man3:`flux_event_subscribe`.
 
 
 RETURN VALUE
@@ -113,10 +113,10 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_get_reactor(3), flux_reactor_run(3), flux_msg_cmp(3)
+:man3:`flux_get_reactor`, :man3:`flux_reactor_run`, :man3:`flux_msg_cmp`

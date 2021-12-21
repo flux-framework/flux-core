@@ -45,10 +45,10 @@ EINVAL
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-``flux_msg_handler_create(3)``
+:man3:`flux_msg_handler_create`

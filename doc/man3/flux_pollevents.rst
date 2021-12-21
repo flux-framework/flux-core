@@ -64,12 +64,13 @@ to integrate flux handles into the Flux reactor, which is based on libev.
 Refer to the libev documentation for background on how libev works.
 
 There are a total of four different types of libev watcher in the
-composite watcher. libev "prepare" and "check" callbacks are executed just
-before and just after libev blocks internally in the poll(2) system call.
-Here they are used to test ``flux_pollevents()``, make user callbacks,
-and enable/disable no-op "io" and "idle" watchers. The io watcher
-watches for EV_READ on ``flux_pollfd()`` file descriptor. The idle watcher,
-if enabled, is always ready and thus causes the event loop to spin.
+composite watcher. libev "prepare" and "check" callbacks are executed
+just before and just after libev blocks internally in the
+:linux:man2:`poll` system call.  Here they are used to test
+``flux_pollevents()``, make user callbacks, and enable/disable no-op
+"io" and "idle" watchers. The io watcher watches for EV_READ on
+``flux_pollfd()`` file descriptor. The idle watcher, if enabled, is
+always ready and thus causes the event loop to spin.
 
 When ``flux_pollevents()`` has poll flags asserted, the idle watcher is enabled.
 When ``flux_pollevents()`` has no poll flags asserted, the idle watcher is
@@ -185,14 +186,11 @@ handle events pending.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
+libev API: http://pod.tst.eu/http://cvs.schmorp.de/libev/ev.pod
 
-SEE ALSO
-========
+zmq_getsockopt(3): http://api.zeromq.org/4-0:zmq-getsockopt
 
-http://pod.tst.eu/http://cvs.schmorp.de/libev/ev.pod
-
-http://api.zeromq.org/4-0:zmq-getsockopt
-
+Embedding ZeroMQ in the libev event looop:
 http://funcptr.net/2013/04/20/embedding-zeromq-in-the-libev-event-loop

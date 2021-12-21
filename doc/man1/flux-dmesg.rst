@@ -45,10 +45,10 @@ To dump the ring buffer on all ranks
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux-setattr(1), flux-broker-attributes(7)
+:man1:`flux-setattr`, :man7:`flux-broker-attributes`

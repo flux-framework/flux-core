@@ -75,12 +75,12 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
+
+libev: http://software.schmorp.de/pkg/libev.html
 
 
 SEE ALSO
 ========
 
-flux_watcher_start(3), flux_reactor_run(3)
-
-`libev home page <http://software.schmorp.de/pkg/libev.html>`__
+:man3:`flux_watcher_start`, :man3:`flux_reactor_run`

@@ -67,7 +67,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-See ``flux_future_get(3)`` for general functions that operate on futures.
+See :man3:`flux_future_get` for general functions that operate on futures.
 This page covers functions primarily used when building classes that
 return futures.
 
@@ -246,10 +246,10 @@ EEXIST
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_future_get(3), flux_clone(3)
+:man3:`flux_future_get`, :man3:`flux_clone`

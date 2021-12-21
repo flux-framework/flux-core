@@ -37,7 +37,7 @@ FLUX_MATCH_ANY
 FLUX_MATCH_EVENT
    Match any event message.
 
-For additional details on how to use *match*, see flux_msg_cmp(3).
+For additional details on how to use *match*, see :man3:`flux_msg_cmp`.
 
 *flags* is the logical "or" of zero or more of the following flags:
 
@@ -86,10 +86,10 @@ as they arrive.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_open(3), flux_send(3), flux_requeue(3), flux_msg_cmp(3)
+:man3:`flux_open`, :man3:`flux_send`, :man3:`flux_requeue`, :man3:`flux_msg_cmp`

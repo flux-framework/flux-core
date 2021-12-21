@@ -46,10 +46,10 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_open(3), flux_recv(3), flux_send(3)
+:man3:`flux_open`, :man3:`flux_recv`, :man3:`flux_send`

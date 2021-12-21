@@ -24,7 +24,7 @@ DESCRIPTION
 are sent to the Flux message broker on *h* for handling if it is
 specified. If *h* is NULL, the log message is output to stderr.
 
-The *level* parameter should be set to one of the syslog(3) severity
+The *level* parameter should be set to one of the :linux:man3:`syslog` severity
 levels, which are, in order of decreasing importance:
 
 *LOG_EMERG*
@@ -52,7 +52,7 @@ levels, which are, in order of decreasing importance:
    debug-level message
 
 When *h* is specified, log messages are are added to the broker's
-circular buffer which can be accessed with flux-dmesg(1). From there,
+circular buffer which can be accessed with :man1:`flux-dmesg`. From there,
 a message's disposition is up to the broker's log configuration.
 
 ``flux_log_set_procid()`` may be used to override the default procid,
@@ -124,11 +124,12 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
+
+RFC 5424 The Syslog Protocol: https://tools.ietf.org/html/rfc5424
 
 
 SEE ALSO
 ========
 
-flux-dmesg(1), flux-logger(1),
-`RFC 5424 The Syslog Protocol <https://tools.ietf.org/html/rfc5424>`__
+:man1:`flux-dmesg`, :man1:`flux-logger`,

@@ -54,7 +54,7 @@ cc [flags] files -lflux-idset [libraries]
 DESCRIPTION
 ===========
 
-Refer to ``idset_create(3)`` for a general description of idsets.
+Refer to :man3:`idset_create` for a general description of idsets.
 
 ``idset_union()`` creates a new idset that is the union of *a* and *b*.
 
@@ -101,12 +101,12 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
+
+RFC 22: Idset String Representation: https://github.com/flux-framework/rfc/blob/master/spec_22.rst
 
 
 SEE ALSO
 ========
 
-idset_create(3), idset_encode(3)
-
-`RFC 22: Idset String Representation <https://github.com/flux-framework/rfc/blob/master/spec_22.rst>`__
+:man3:`idset_create`, :man3:`idset_encode`

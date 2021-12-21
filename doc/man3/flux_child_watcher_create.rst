@@ -44,7 +44,7 @@ The callback *revents* argument should be ignored.
 The process id that had a transition may be obtained by calling
 ``flux_child_watcher_get_rpid()``.
 
-The status value returned by waitpid(2) may be obtained by calling
+The status value returned by :linux:man2:`waitpid` may be obtained by calling
 ``flux_child_watcher_get_rstatus()``.
 
 Only a Flux reactor created with the FLUX_REACTOR_SIGCHLD flag can
@@ -73,12 +73,12 @@ EINVAL
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
+
+libev: http://software.schmorp.de/pkg/libev.html
 
 
 SEE ALSO
 ========
 
-flux_watcher_start(3), flux_reactor_run(3)
-
-`libev home page <http://software.schmorp.de/pkg/libev.html>`__
+:man3:`flux_watcher_start`, :man3:`flux_reactor_run`

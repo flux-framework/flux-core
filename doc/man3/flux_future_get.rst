@@ -58,7 +58,7 @@ implementation of any particular one.
 Generally other Flux classes return futures, and may provide class-specific
 access function for results. The functions described in this page can be
 used to access, synchronize, and destroy futures returned from any such class.
-Authors of classes that return futures are referred to ``flux_future_create(3)``.
+Authors of classes that return futures are referred to :man3:`flux_future_create`.
 
 
 DESCRIPTION
@@ -133,9 +133,9 @@ ETIMEDOUT
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
-C++ std::future: `<http://en.cppreference.com/w/cpp/thread/future>`_
+C++ std::future: http://en.cppreference.com/w/cpp/thread/future
 
 Java ``util.concurrent.Future``: https://docs.oracle.com/javase/7/docs/api/java/util/concurrent/Future.html
 
@@ -145,4 +145,4 @@ Python3 concurrent.futures: https://docs.python.org/3/library/concurrent.futures
 SEE ALSO
 ========
 
-flux_future_create (3)
+:man3:`flux_future_create`

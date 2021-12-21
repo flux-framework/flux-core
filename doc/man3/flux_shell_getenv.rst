@@ -42,7 +42,7 @@ DESCRIPTION
 ``flux_shell_get_environ()`` returns 0 on success with ``*json_str`` set
 to an allocated JSON string, or -1 on failure with ``errno`` set.
 ``flux_shell_setenvf()`` sets an environment variable in the global job
-environment using ``printf(3)`` style format arguments.
+environment using :linux:man3:`printf` style format arguments.
 ``flux_shell_unsetenv()`` unsets the specified environment variable in the global job environment.
 
 
@@ -69,4 +69,4 @@ EEXIST
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org

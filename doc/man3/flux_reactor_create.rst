@@ -34,15 +34,15 @@ There is currently only one possible flag for reactor creation:
 
 FLUX_REACTOR_SIGCHLD
    The reactor will internally register a SIGCHLD handler and be capable
-   of handling flux child watchers (see flux_child_watcher_create(3)).
+   of handling flux child watchers (see :man3:`flux_child_watcher_create`).
 
 For each event source and type that is to be monitored, a flux_watcher_t
 object is created using a type-specific create function, and started
-with flux_watcher_start(3).
+with :man3:`flux_watcher_start`.
 
 For each event source and type that is to be monitored, a flux_watcher_t
 object is created and associated with a specific reactor using a type-specific
-create function, and started with flux_watcher_start(3). To receive events,
+create function, and started with :man3:`flux_watcher_start`. To receive events,
 control must be transferred to the reactor event loop by calling
 ``flux_reactor_run()``.
 
@@ -71,7 +71,7 @@ is met:
 If ``flux_reactor_stop_error()`` is called, this will cause
 ``flux_reactor_run()`` to return -1 indicating that an error has occurred.
 The caller should ensure that a valid error code has been assigned to
-errno(3) before calling this function.
+:linux:man3:`errno` before calling this function.
 
 ``flux_reactor_destroy()`` releases an internal reference taken at
 ``flux_reactor_create()`` time. Freeing of the underlying resources will
@@ -109,13 +109,13 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
+
+libev: http://software.schmorp.de/pkg/libev.html
 
 
 SEE ALSO
 ========
 
-flux_fd_watcher_create(3), flux_handle_watcher_create(3),
-flux_timer_watcher_create(3), flux_watcher_start(3)
-
-`libev home page <http://software.schmorp.de/pkg/libev.html>`__
+:man3:`flux_fd_watcher_create`, :man3:`flux_handle_watcher_create`,
+:man3:`flux_timer_watcher_create`, :man3:`flux_watcher_start`

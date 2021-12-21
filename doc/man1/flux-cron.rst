@@ -19,7 +19,7 @@ triggers such as a time interval or Flux events. The service is
 implemented as a Flux extension module which, when loaded, manages
 a set of cron entries and uses the built-in *broker.exec* service to run
 a command associated with the entry each time the defined trigger is
-reached. As with *flux-exec(1)*, these tasks run as direct children
+reached. As with :man1:`flux-exec`, these tasks run as direct children
 of the flux-broker and run outside of the control of any loaded
 job scheduling service.
 
@@ -233,7 +233,7 @@ scheduler control, described in more detail in the *flux-exec(1)* man
 page.
 
 Standard output and error from tasks executed by the cron service are
-logged and may be viewed with *flux-dmesg(1)*. If a cron task exits
+logged and may be viewed with :man1:`flux-dmesg`. If a cron task exits
 with non-zero status, or fails to launch under the *broker.exec* service,
 a message is logged and the failure is added to the failure stats.
 On task failure, the cron job is stopped if *stop-on-failure* is set, and
@@ -257,10 +257,10 @@ for *flux cron sync* for more information.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux-exec(1), flux-dmesg(1)
+:man1:`flux-exec`, :man1:`flux-dmesg`

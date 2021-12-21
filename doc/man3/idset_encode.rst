@@ -32,7 +32,7 @@ cc [flags] files -lflux-idset [libraries]
 DESCRIPTION
 ===========
 
-Refer to ``idset_create(3)`` for a general description of idsets.
+Refer to :man3:`idset_create` for a general description of idsets.
 
 ``idset_encode()`` creates a string from *idset*. The string contains
 a comma-separated list of ids, potentially modified by *flags*
@@ -81,7 +81,7 @@ RETURN VALUE
 ============
 
 ``idset_decode()`` and ``idset_ndecode()`` return idset on success which must
-be freed with ``idset_destroy(3)``. On error, NULL is returned with errno set.
+be freed with :man3:`idset_destroy`. On error, NULL is returned with errno set.
 
 ``idset_encode()`` returns a string on success which must be freed
 with ``free()``. On error, NULL is returned with errno set.
@@ -100,12 +100,12 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
+
+RFC 22: Idset String Representation: https://github.com/flux-framework/rfc/blob/master/spec_22.rst
 
 
 SEE ALSO
 ========
 
-idset_create(3)
-
-`RFC 22: Idset String Representation <https://github.com/flux-framework/rfc/blob/master/spec_22.rst>`__
+:man3:`idset_create`

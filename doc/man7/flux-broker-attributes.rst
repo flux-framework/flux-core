@@ -8,7 +8,8 @@ DESCRIPTION
 
 Flux broker attributes are parameters that affect how different
 broker systems behave. Attributes can be listed and manipulated
-with flux-getattr(1), flux-setattr(1), and flux-lsattr(1).
+with :man1:`flux-getattr`, :man1:`flux-setattr`, and
+:man1:`flux-lsattr`.
 
 The broker currently exports the following attributes:
 
@@ -27,10 +28,11 @@ rundir
    content.backing-path are located (see below).  By default, each broker
    rank creates a unique rundir in $TMPDIR and removes it on exit.  If
    rundir is set on the command line, beware exceeding the UNIX domain socket
-   path limit described in unix(7), as low as 92 bytes on some systems.
-   If rundir is set to a pre-existing directory, the directory is not removed
-   on exit;  if the broker has to create the directory, it is removed.
-   In most cases this attribute should not be set by users.
+   path limit described in :linux:man7:`unix`, as low as 92 bytes on
+   some systems.  If rundir is set to a pre-existing directory, the
+   directory is not removed on exit; if the broker has to create the
+   directory, it is removed.  In most cases this attribute should not
+   be set by users.
 
 content.backing-path
    The path to the content backing store file(s). If this is set on the
@@ -83,13 +85,13 @@ tbon.parent-endpoint
    based overlay network. This attribute will not be set on rank zero.
 
 local-uri
-   The Flux URI that should be passed to flux_open(3) to establish
-   a connection to the local broker rank. By default, local-uri is
-   created as "local://<broker.rank>/local".
+   The Flux URI that should be passed to :man3:`flux_open` to
+   establish a connection to the local broker rank. By default,
+   local-uri is created as "local://<broker.rank>/local".
 
 parent-uri
-   The Flux URI that should be passed to flux_open(3) to establish
-   a connection to the enclosing instance.
+   The Flux URI that should be passed to :man3:`flux_open` to
+   establish a connection to the enclosing instance.
 
 
 LOGGING ATTRIBUTES
@@ -105,12 +107,13 @@ log-count
    The number of log entries ever stored in the ring buffer.
 
 log-forward-level
-   Log entries at syslog(3) level at or below this value are forwarded
-   to rank zero for permanent capture.
+   Log entries at :linux:man3:`syslog` level at or below this value
+   are forwarded to rank zero for permanent capture.
 
 log-critical-level
-   Log entries at syslog(3) level at or below this value are copied
-   to stderr on the logging rank, for capture by the enclosing instance.
+   Log entries at :linux:man3:`syslog` level at or below this value
+   are copied to stderr on the logging rank, for capture by the
+   enclosing instance.
 
 log-filename
    (rank zero only) If set, session log entries, as filtered by log-forward-level,
@@ -123,12 +126,12 @@ log-stderr-mode
    logs to stderr, subject to the constraints of log-stderr-level.
 
 log-stderr-level
-   Log entries at syslog(3) level at or below this value to stderr,
-   subject to log-stderr-mode.
+   Log entries at :linux:man3:`syslog` level at or below this value to
+   stderr, subject to log-stderr-mode.
 
 log-level
-   Log entries at syslog(3) level at or below this value are stored
-   in the ring buffer.
+   Log entries at :linux:man3:`syslog` level at or below this value
+   are stored in the ring buffer.
 
 
 CONTENT ATTRIBUTES
@@ -193,10 +196,10 @@ hello.hwm
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux-getattr(1), flux_attr_get(3)
+:man1:`flux-getattr`, :man3:`flux_attr_get`

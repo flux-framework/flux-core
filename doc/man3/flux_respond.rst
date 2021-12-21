@@ -96,15 +96,14 @@ EPROTO
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
+
+RFC 6: Flux Remote Procedure Call Protocol: https://github.com/flux-framework/rfc/blob/master/spec_6.rst
+
+RFC 3: Flux Message Protocol: https://github.com/flux-framework/rfc/blob/master/spec_3.rst
 
 
 SEE ALSO
 ========
 
-flux_rpc(3), flux_rpc_raw(3)
-
-`RFC 6: Flux
-Remote Procedure Call Protocol <https://github.com/flux-framework/rfc/blob/master/spec_6.rst>`__
-
-`RFC 3: CMB1 - Flux Comms Message Broker Protocol <https://github.com/flux-framework/rfc/blob/master/spec_3.rst>`__
+:man3:`flux_rpc`, :man3:`flux_rpc_raw`

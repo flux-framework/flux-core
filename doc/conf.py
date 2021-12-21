@@ -22,6 +22,7 @@
 #
 import os
 import sys
+import docutils.nodes
 
 # -- Project information -----------------------------------------------------
 
@@ -51,22 +52,22 @@ extensions = [
 ]
 
 domainrefs = {
-    'man1': {
-        'text': "%s(1)",
-        'url': "../man1/%s.html"
+    'linux:man1': {
+        'text': '%s(1)',
+        'url': 'http://man7.org/linux/man-pages/man1/%s.1.html',
     },
-    'man3': {
-        'text': "%s(3)",
-        'url': "../man3/%s.html"
+    'linux:man2': {
+        'text': '%s(2)',
+        'url': 'http://man7.org/linux/man-pages/man2/%s.2.html',
     },
-    'man5': {
-        'text': "%s(5)",
-        'url': "../man5/%s.html"
+    'linux:man3': {
+        'text': '%s(3)',
+        'url': 'http://man7.org/linux/man-pages/man3/%s.3.html',
     },
-    'man7': {
-        'text': "%s(7)",
-        'url': "../man7/%s.html"
-    }
+    'linux:man7': {
+        'text': '%s(7)',
+        'url': 'http://man7.org/linux/man-pages/man7/%s.7.html',
+    },
 }
 
 # Disable "smartquotes" to avoid things such as turning long-options
@@ -101,9 +102,30 @@ def run_apidoc(_):
     exclusions = [os.path.join(py_bindings_dir, 'setup.py'),]
     main(['-e', '-f', '-M', '-o', output_path, py_bindings_dir] + exclusions)
 
+def man_role(name, rawtext, text, lineno, inliner, options={}, content=[]):
+    section = int(name[-1])
+    page = None
+    for man in man_pages:
+        if man[1] == text and man[4] == section:
+            page = man[0]
+            break
+    if page == None:
+        page = "man7/flux-undocumented"
+        section = 7
+
+    node = docutils.nodes.reference(
+        rawsource=rawtext,
+        text=f"{text}({section})",
+        refuri=f"../{page}.html",
+        **options,
+    )
+    return [node], []
+
 # launch setup
 def setup(app):
     app.connect('builder-inited', run_apidoc)
+    for section in [ 1, 3, 5, 7 ]:
+        app.add_role(f"man{section}", man_role)
 
 # ReadTheDocs runs sphinx without first building Flux, so the cffi modules in
 # `_flux` will not exist, causing import errors.  Mock the imports to prevent

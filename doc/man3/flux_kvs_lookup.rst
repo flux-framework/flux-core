@@ -116,7 +116,7 @@ lookup.
 requested with FLUX_KVS_WATCH or a waiting lookup response with
 FLUX_KVS_WAITCREATE. See FLAGS below for additional information.
 
-These functions may be used asynchronously. See ``flux_future_then(3)`` for
+These functions may be used asynchronously. See :man3:`flux_future_then` for
 details.
 
 
@@ -237,12 +237,12 @@ EPERM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
+
+RFC 11: Key Value Store Tree Object Format v1: https://github.com/flux-framework/rfc/blob/master/spec_11.rst
 
 
 SEE ALSO
 ========
 
-flux_rpc(3), flux_future_then(3)
-
-`RFC 11: Key Value Store Tree Object Format v1 <https://github.com/flux-framework/rfc/blob/master/spec_11.rst>`__
+:man3:`flux_rpc`, :man3:`flux_future_then`

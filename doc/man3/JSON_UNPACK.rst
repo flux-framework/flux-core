@@ -71,4 +71,4 @@ Whitespace, **:** (colon) and **,** (comma) are ignored.
 
 These descriptions came from the Jansson 2.10 manual.
 
-See also: `Jansson API: Parsing and Validating Values <http://jansson.readthedocs.io/en/2.10/apiref.html#parsing-and-validating-values>`__
+See also: Jansson API: Parsing and Validating Values: http://jansson.readthedocs.io/en/2.10/apiref.html#parsing-and-validating-values

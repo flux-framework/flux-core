@@ -91,7 +91,7 @@ execution of the job:
  * create all local tasks. For each task, the following procedure is used
 
    - call ``task.init`` plugin callback
-   - launch task, call ``task.exec`` plugin callback just before ``execve(2)``
+   - launch task, call ``task.exec`` plugin callback just before :linux:man2:`execve`
    - call ``task.fork`` plugin callback
 
  * once all tasks have started, call ``shell.start`` plugin callback
@@ -124,7 +124,7 @@ which calls to ``flux_plugin_add_handler(3)`` should be used to register
 functions which will be invoked at defined points during shell execution.
 These callbacks are defined by "topic strings" to which plugins can
 "subscribe" by calling ``flux_plugin_add_handler(3)`` and/or
-``flux_plugin_register(3)`` with topic ``glob(7)`` strings.
+``flux_plugin_register(3)`` with topic :linux:man7:`glob` strings.
 
 .. note::
    ``flux_plugin_init(3)`` is not called for builtin shell plugins. If
@@ -153,7 +153,7 @@ By default, flux-shell supports the following plugin callback topics:
 
 **task.exec**
   Called for each task after the task has been forked just before
-  ``execve(2)`` is called. This callback is made from within the
+  :linux:man2:`execve` is called. This callback is made from within the
   task process.
 
 **task.fork**
@@ -337,7 +337,7 @@ supported. Job shell specific functions and tables are described below:
   Return the job environment (not the job shell environment). This is
   the environment which will be inherited by the job tasks. If called
   with no arguments, then the entire environment is copied to a table
-  and returned. Otherwise, acts as ``flux_shell_getenv(3)`` and returns
+  and returned. Otherwise, acts as :man3:`flux_shell_getenv` and returns
   the value for the environment variable name, or ``nil`` if not set.
 
 **shell.setenv(var, val, [overwrite])**
@@ -364,7 +364,7 @@ supported. Job shell specific functions and tables are described below:
 
 **shell.info**
   Returns a Lua table of shell information obtained via
-  ``flux_shell_get_info(3)``. This table includes
+  :man3:`flux_shell_get_info`. This table includes
 
   **jobid**
     The current jobid.
@@ -392,7 +392,7 @@ supported. Job shell specific functions and tables are described below:
 
 **shell.get_rankinfo(shell_rank)**
   Query rank-specific shell info as in the function call
-  ``flux_shell_get_rank_info(3)``.  If ``shell_rank`` is not provided
+  :man3:`flux_shell_get_rank_info`.  If ``shell_rank`` is not provided
   then the current rank is used.  Returns a table of rank-specific
   information including:
 
@@ -418,7 +418,7 @@ generated if they are accessed from any other context.
 
 **task.info**
   Returns a Lua table of task specific information for the "current"
-  task (see ``flux_shell_task_get_info(3)``). Included members of
+  task (see :man3:`flux_shell_task_get_info`). Included members of
   the ``task.info`` table include:
 
   **localid**
@@ -430,8 +430,8 @@ generated if they are accessed from any other context.
   **pid**
     The process id of the current task (if task has been started)
   **wait_status**
-    (Only in ``task.exit``) The status returned by ``waitpid(2)`` for
-    this task.
+    (Only in ``task.exit``) The status returned by
+    :linux:man2:`waitpid` for this task.
   **exitcode**
     (Only in ``task.exit``) The exit code if ``WIFEXTED()`` is true.
   **signaled**
@@ -460,9 +460,10 @@ generated if they are accessed from any other context.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
-flux-mini(1)
+
+:man1:`flux-mini`

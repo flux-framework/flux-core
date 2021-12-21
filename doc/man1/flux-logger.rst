@@ -16,7 +16,7 @@ DESCRIPTION
 flux-logger(1) appends Flux log entries to the local Flux
 broker's circular buffer.
 
-Log entries are associated with a syslog(3) style severity.
+Log entries are associated with a :linux:man3:`syslog` style severity.
 Valid severity names are *emerg*, *alert*, *crit*, *err*,
 *warning*, *notice*, *info*, *debug*.
 
@@ -42,10 +42,10 @@ OPTIONS
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux-dmesg(1), flux_log(3), syslog(3)
+:man1:`flux-dmesg`, :man3:`flux_log`, :linux:man3:`syslog`

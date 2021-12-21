@@ -43,8 +43,8 @@ The last entry in the array is set to NULL.
 returned from ``flux_msg_handler_addvec()``.
 
 These functions are convenience functions which call
-``flux_msg_handler_create(3)``, ``flux_msg_handler_start(3)``; and
-``flux_msg_handler_stop(3)``, ``flux_msg_handler_destroy(3)`` on each element
+:man3:`flux_msg_handler_create`, :man3:`flux_msg_handler_start`; and
+:man3:`flux_msg_handler_stop`, :man3:`flux_msg_handler_destroy` on each element
 of the array, respectively.
 
 If ``flux_msg_handler_addvec()`` encounters an error creating a message
@@ -69,10 +69,10 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_msg_handler_create(3)
+:man3:`flux_msg_handler_create`

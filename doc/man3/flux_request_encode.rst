@@ -53,10 +53,10 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_response_decode(3), flux_rpc(3)
+:man3:`flux_response_decode`, :man3:`flux_rpc`

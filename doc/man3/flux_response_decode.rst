@@ -74,10 +74,10 @@ ENOENT
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_request_encode(3), flux_rpc(3)
+:man3:`flux_request_encode`, :man3:`flux_rpc`

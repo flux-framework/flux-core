@@ -54,7 +54,8 @@ OPTIONS
 
 **--stats**
    Output a summary of global job statistics before the header.
-   May be useful in conjunction with utilities like ``watch(1)``, e.g.::
+   May be useful in conjunction with utilities like
+   :linux:man1:`watch`, e.g.::
 
       $ watch -n 2 flux jobs --stats -f running -c 25
 
@@ -216,7 +217,7 @@ The field names that can be specified are:
    True of False if job completed successfully, empty string otherwise
 
 **waitstatus**
-   The raw status of the job as returned by ``waitpid(2)`` if the job
+   The raw status of the job as returned by :linux:man2:`waitpid` if the job
    exited, otherwise an empty string. Note: *waitstatus* is the maximum
    wait status returned by all job shells in a job, which may not necessarily
    indicate the highest *task* wait status. (The job shell exits with the
@@ -332,4 +333,4 @@ user can learn why a job failed.
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org

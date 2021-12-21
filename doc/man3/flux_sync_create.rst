@@ -68,10 +68,10 @@ Set up a continuation callback for each heartbeat that arrives at least
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_future_then(3), flux_future_get(3), flux_future_reset(3)
+:man3:`flux_future_then`, :man3:`flux_future_get`, :man3:`flux_future_reset`

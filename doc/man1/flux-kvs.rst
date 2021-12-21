@@ -96,11 +96,11 @@ COMMANDS
 **ls** [-N ns] [-R] [-d] [-F] [-w COLS] [-1] [*key* ...]
    Display directory referred to by *key*, or "." (root) if unspecified.
    Specify an alternate namespace to display via *-N*. Remaining options are
-   roughly equivalent to a subset of ls(1) options. *-R* lists directory
-   recursively. *-d* displays directory not its contents. *-F*
-   classifies files with one character suffix (. is directory, @ is
-   symlink). *-w COLS* sets the terminal width in characters. *-1*
-   causes output to be displayed in one column.
+   roughly equivalent to a subset of :linux:man1:`ls` options. *-R*
+   lists directory recursively. *-d* displays directory not its
+   contents. *-F* classifies files with one character suffix (. is
+   directory, @ is symlink). *-w COLS* sets the terminal width in
+   characters. *-1* causes output to be displayed in one column.
 
 **dir** [-N ns] [-R] [-d] [-w COLS] [-a treeobj] [*key*]
    Display all keys and their values under the directory *key*. Specify
@@ -213,4 +213,4 @@ COMMANDS
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org

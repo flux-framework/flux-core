@@ -37,7 +37,7 @@ DESCRIPTION
 ``flux_stat_watcher_create()`` creates a reactor watcher that
 monitors for changes in the status of the file system object
 represented by *path*. If the file system object exists,
-inotify(2) is used, if available; otherwise the reactor polls
+:linux:man2:`inotify` is used, if available; otherwise the reactor polls
 the file every *interval* seconds. A value of zero selects a
 conservative default (currently five seconds).
 
@@ -69,12 +69,13 @@ ENOMEM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
+
+libev: http://software.schmorp.de/pkg/libev.html
 
 
 SEE ALSO
 ========
 
-flux_watcher_start(3), flux_reactor_run(3), stat(2)
-
-`libev home page <http://software.schmorp.de/pkg/libev.html>`__
+:man3:`flux_watcher_start`, :man3:`flux_reactor_run`,
+:linux:man2:`stat`

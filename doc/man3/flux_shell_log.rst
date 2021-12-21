@@ -154,10 +154,10 @@ EINVAL
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
 
 
 SEE ALSO
 ========
 
-flux_log(3)
+:man3:`flux_log`

@@ -65,11 +65,12 @@ EPERM
 RESOURCES
 =========
 
-Github: http://github.com/flux-framework
+Flux: http://flux-framework.org
+
+RFC 3: Flux Message Protocol: https://github.com/flux-framework/rfc/blob/master/spec_3.rst
 
 
 SEE ALSO
 ========
 
-flux-lsattr(1), flux-getattr(1), flux-setattr(1), flux-broker-attributes(7),
-`RFC 3: CMB1 - Flux Comms Message Broker Protocol <https://github.com/flux-framework/rfc/blob/master/spec_3.rst>`__
+:man1:`flux-getattr`, :man7:`flux-broker-attributes`,
