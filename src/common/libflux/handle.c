@@ -624,10 +624,10 @@ static void update_rx_stats (flux_t *h, const flux_msg_t *msg)
         errno = 0;
 }
 
-static void handle_trace (flux_t *h, const flux_msg_t *msg)
+static double handle_trace_timestamp (flux_t *h)
 {
-    const char *auxkey = "flux::trace_start";
     struct timespec *ts;
+    const char *auxkey = "flux::trace_start";
 
     if (!(ts = flux_aux_get (h, auxkey))) {
         if ((ts = calloc (1, sizeof (*ts)))) {
@@ -638,7 +638,14 @@ static void handle_trace (flux_t *h, const flux_msg_t *msg)
             }
         }
     }
-    flux_msg_fprint_ts (stderr, msg, ts ? monotime_since (*ts)/1000 : -1);
+    return ts ? monotime_since (*ts)/1000 : -1;
+}
+
+static void handle_trace_message (flux_t *h, const flux_msg_t *msg)
+{
+    if ((h->flags & FLUX_O_TRACE)) {
+        flux_msg_fprint_ts (stderr, msg, handle_trace_timestamp (h));
+    }
 }
 
 int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
@@ -650,8 +657,7 @@ int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
     }
     flags |= h->flags;
     update_tx_stats (h, msg);
-    if ((flags & FLUX_O_TRACE))
-        handle_trace (h, msg);
+    handle_trace_message (h, msg);
     while (h->ops->send (h->impl, msg, flags) < 0) {
         if (comms_error (h, errno) < 0)
             return -1;
@@ -747,8 +753,7 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
         }
     } while (!msg);
     update_rx_stats (h, msg);
-    if ((flags & FLUX_O_TRACE))
-        handle_trace (h, msg);
+    handle_trace_message (h, msg);
     if (defer_requeue (&l, h) < 0)
         goto error;
     defer_destroy (&l);
