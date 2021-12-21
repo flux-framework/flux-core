@@ -25,6 +25,7 @@
 #include <sys/syscall.h>
 #endif
 
+#include "src/common/librouter/rpc_track.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"
@@ -79,6 +80,7 @@ struct flux_handle_struct {
 #if HAVE_CALIPER
     struct profiling_context prof;
 #endif
+    struct rpc_track *tracker;
 };
 
 static flux_t *lookup_clone_ancestor (flux_t *h)
@@ -332,6 +334,13 @@ flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int f
     tagpool_set_grow_cb (h->tagpool, tagpool_grow_notify, h);
     if (!(h->queue = flux_msglist_create ()))
         goto error;
+    if ((flags & FLUX_O_RPCTRACK)) {
+        /* N.B. rpc_track functions are safe to call with tracker == NULL,
+         * so skipping creation here disables tracking without further ado.
+         */
+        if (!(h->tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG)))
+            goto error;
+    }
     h->pollfd = -1;
     return h;
 error:
@@ -352,6 +361,23 @@ flux_t *flux_clone (flux_t *orig)
     h->usecount = 1;
     h->flags = orig->flags | FLUX_O_CLONE;
     return h;
+}
+
+static void fail_tracked_request (const flux_msg_t *msg, void *arg)
+{
+    flux_t *h = arg;
+    flux_msg_t *rep;
+    const char *topic = "NULL";
+    struct flux_msg_cred lies = { .userid = 0, .rolemask = FLUX_ROLE_OWNER };
+
+    flux_msg_get_topic (msg, &topic);
+    if (!(rep = flux_response_derive (msg, ECONNRESET))
+        || flux_msg_set_string (rep, "RPC aborted due to broker reconnect") < 0
+        || flux_msg_set_cred (rep, lies) < 0
+        || flux_requeue (h, rep, FLUX_RQ_TAIL) < 0) {
+        /* log something? */
+    }
+    flux_msg_destroy (rep);
 }
 
 /* Call connector's reconnect method, if available.
@@ -387,6 +413,7 @@ int flux_reconnect (flux_t *h)
             || epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
             return -1;
     }
+    rpc_track_purge (h->tracker, fail_tracked_request, h);
     return 0;
 }
 
@@ -406,6 +433,7 @@ void flux_handle_destroy (flux_t *h)
         if (h->destroy_in_progress)
             return;
         h->destroy_in_progress = true;
+        rpc_track_destroy (h->tracker);
         aux_destroy (&h->aux);
         if ((h->flags & FLUX_O_CLONE)) {
             flux_handle_destroy (h->parent); // decr usecount
@@ -632,6 +660,7 @@ int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
 #if HAVE_CALIPER
     profiling_msg_snapshot(h, msg, flags, "send");
 #endif
+    rpc_track_update (h->tracker, msg);
     return 0;
 }
 
@@ -739,6 +768,7 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     cali_end (h->prof.msg_match_tag);
     cali_end (h->prof.msg_match_glob);
 #endif
+    rpc_track_update (h->tracker, msg);
     return msg;
 error:
     flux_msg_destroy (msg);

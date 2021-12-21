@@ -45,6 +45,7 @@ enum {
     FLUX_O_NONBLOCK = 4,    /* handle should not block on send/recv */
     FLUX_O_MATCHDEBUG = 8,  /* enable matchtag debugging */
     FLUX_O_TEST_NOSUB = 16, /* for testing: make (un)subscribe a no-op */
+    FLUX_O_RPCTRACK = 32,   /* track RPCs for recovery after reconnect */
 };
 
 /* Flags for flux_requeue().
