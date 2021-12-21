@@ -21,12 +21,14 @@ int mvwprintw(WINDOW *win, int y, int x, const char *fmt, ...)
 enum {
     TOP_COLOR_YELLOW = 1,
     TOP_COLOR_RED = 2,
+    TOP_COLOR_BLUE = 3,
+    TOP_COLOR_BLUE_HIGHLIGHT = 4,
 };
 
 struct top {
     flux_t *h;
+    char *title;
     flux_jobid_t id;
-    uint32_t userid;
     uint32_t size;
     struct summary_pane *summary_pane;
     struct joblist_pane *joblist_pane;
@@ -35,7 +37,6 @@ struct top {
     flux_watcher_t *jobtimer;
     bool jobtimer_running;
     flux_msg_handler_t **handlers;
-    optparse_t *opts;
 };
 
 struct dimension {
@@ -44,6 +45,10 @@ struct dimension {
     int x_length;
     int y_length;
 };
+
+struct top *top_create (const char *uri, const char *prefix);
+void top_destroy (struct top *top);
+int top_run (struct top *top, int reactor_flags);
 
 struct summary_pane *summary_pane_create (struct top *top);
 void summary_pane_destroy (struct summary_pane *sum);
@@ -57,6 +62,8 @@ void joblist_pane_destroy (struct joblist_pane *sum);
 void joblist_pane_draw (struct joblist_pane *sum);
 void joblist_pane_refresh (struct joblist_pane *sum);
 void joblist_pane_query (struct joblist_pane *sum);
+void joblist_pane_set_current (struct joblist_pane *joblist, bool next);
+void joblist_pane_enter (struct joblist_pane *joblist);
 
 struct keys *keys_create (struct top *top);
 void keys_destroy (struct keys *keys);

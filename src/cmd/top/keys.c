@@ -30,9 +30,21 @@ static void keys_cb (flux_reactor_t *r,
     struct keys *keys = arg;
     int c;
 
-    switch ((c = getch ())) {
+    switch ((c = getch())) {
         case 'q':
             flux_reactor_stop (r);
+            break;
+        case 'j':
+        case KEY_DOWN:
+            joblist_pane_set_current (keys->top->joblist_pane, true);
+            break;
+        case 'k':
+        case KEY_UP:
+            joblist_pane_set_current (keys->top->joblist_pane, false);
+            break;
+        case '\n':
+        case KEY_ENTER:
+            joblist_pane_enter (keys->top->joblist_pane);
             break;
         case '':
             clear ();
