@@ -83,6 +83,9 @@ struct flux_handle_struct {
     struct rpc_track *tracker;
 };
 
+static void handle_trace (flux_t *h, const char *fmt, ...)
+    __attribute__ ((format (printf, 2, 3)));
+
 static flux_t *lookup_clone_ancestor (flux_t *h)
 {
     while ((h->flags & FLUX_O_CLONE))
@@ -375,8 +378,13 @@ static void fail_tracked_request (const flux_msg_t *msg, void *arg)
         || flux_msg_set_string (rep, "RPC aborted due to broker reconnect") < 0
         || flux_msg_set_cred (rep, lies) < 0
         || flux_requeue (h, rep, FLUX_RQ_TAIL) < 0) {
-        /* log something? */
+        handle_trace (h,
+                      "error responding to tracked rpc topic=%s: %s",
+                      topic,
+                      strerror (errno));
     }
+    else
+        handle_trace (h, "responded to tracked rpc topic=%s", topic);
     flux_msg_destroy (rep);
 }
 
@@ -401,8 +409,11 @@ int flux_reconnect (flux_t *h)
         if (fd >= 0)
             (void)epoll_ctl (h->pollfd, EPOLL_CTL_DEL, fd, NULL);
     }
-    if (h->ops->reconnect (h->impl) < 0)
+    handle_trace (h, "trying to reconnect");
+    if (h->ops->reconnect (h->impl) < 0) {
+        handle_trace (h, "reconnect failed");
         return -1;
+    }
     /* Reconnect was successful, add new ops->pollfd() to h->pollfd.
      */
     if (h->ops->pollfd) {
@@ -413,6 +424,7 @@ int flux_reconnect (flux_t *h)
             || epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
             return -1;
     }
+    handle_trace (h, "reconnected");
     rpc_track_purge (h->tracker, fail_tracked_request, h);
     return 0;
 }
@@ -645,6 +657,27 @@ static void handle_trace_message (flux_t *h, const flux_msg_t *msg)
 {
     if ((h->flags & FLUX_O_TRACE)) {
         flux_msg_fprint_ts (stderr, msg, handle_trace_timestamp (h));
+    }
+}
+
+static void handle_trace (flux_t *h, const char *fmt, ...)
+{
+    if ((h->flags & FLUX_O_TRACE)) {
+        va_list ap;
+        char buf[256];
+        int saved_errno = errno;
+        double timestamp = handle_trace_timestamp (h);
+
+        va_start (ap, fmt);
+        vsnprintf (buf, sizeof (buf), fmt, ap);
+        va_end (ap);
+
+        fprintf (stderr, "--------------------------------------\n");
+        if (timestamp >= 0.)
+            fprintf (stderr, "c %.5f\n", timestamp);
+        fprintf (stderr, "c %s\n", buf);
+
+        errno = saved_errno;
     }
 }
 
