@@ -194,6 +194,7 @@ TESTSCRIPTS = \
 	t3306-system-routercrash.t \
 	t3307-system-leafcrash.t \
 	t3308-system-torpid.t \
+	t3309-system-reconnect.t \
 	t4000-issues-test-driver.t \
 	lua/t0001-send-recv.t \
 	lua/t0002-rpc.t \
