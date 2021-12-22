@@ -45,6 +45,7 @@ clean-local:
 #   in TESTS so that `make check` runs them first, hopefully resulting
 #   in a reduced makespan overall.
 LONGTESTSCRIPTS = \
+	t9000-system.t \
 	t5000-valgrind.t \
 	t3100-flux-in-flux.t \
 	t3200-instance-restart.t \
@@ -252,6 +253,7 @@ EXTRA_DIST= \
 
 dist_check_SCRIPTS = \
 	$(TESTSCRIPTS) \
+	system/0001-basic.t \
 	issues/t0441-kvs-put-get.sh \
 	issues/t0505-msg-handler-reg.lua \
 	issues/t0821-kvs-segfault.sh \

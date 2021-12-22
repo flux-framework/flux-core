@@ -13,6 +13,7 @@ import re
 import socket
 import subprocess
 import os
+import sys
 
 parser = argparse.ArgumentParser()
 parser.add_argument(
@@ -48,27 +49,32 @@ if not args.no_set_host:
     os.environ["FLUX_FRIPP_STATSD"] = f"127.0.0.1:{s.getsockname()[1]}"
 
 f = subprocess.Popen(args.cmd, env=dict(os.environ))
-f.wait()
+returncode = f.wait()
+print(f"{args.cmd[0]} returncode = {returncode}", file=sys.stderr)
 
 p = []
 
 if args.search_for is not None:
     while True:
-        m = s.recvfrom(1024)[0]
-        if args.search_for in m.decode("utf-8"):
+        m = s.recvfrom(1024)[0].decode("utf-8")
+        print(f"checking for {args.search_for} in {m}", file=sys.stderr)
+        if args.search_for in m:
             p.append(m)
             break
 
 else:
     for i in range(args.wait_for):
-        p.append(s.recvfrom(1024)[0])
+        p.append(s.recvfrom(1024)[0].decode("utf-8"))
 
-    if len(p) < args.wait_for:
-        s.close()
-        exit(-1)
+print(p)
+
+if len(p) < args.wait_for:
+    print(f"Error: Got less than {args.wait_for} packets", file=sys.stderr)
+    s.close()
+    exit(-1)
 
 if args.validate:
-    metrics = str.splitlines("".join([_.decode("utf-8") for _ in p]))
+    metrics = str.splitlines("".join(p))
     ex = re.compile("^\w+:[\+\-]*\d+\|ms|[gC]$")
 
     for m in metrics:
@@ -76,5 +82,4 @@ if args.validate:
             s.close()
             exit(-1)
 
-print(p)
 s.close()

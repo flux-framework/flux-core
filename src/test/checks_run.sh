@@ -121,7 +121,8 @@ if test "$COVERAGE" = "t"; then
 	ENABLE_USER_SITE=1 \
 	COVERAGE_PROCESS_START=$(pwd)/coverage.rc \
 	${MAKE} -j $JOBS check-code-coverage && \
-	lcov -l flux*-coverage.info && \
+	(lcov -l flux*-coverage.info || :) && \
+	rm -f coverage.xml && \
 	coverage combine .coverage* && \
 	coverage html && coverage xml &&
 	chmod 444 coverage.xml &&
@@ -176,7 +177,7 @@ sudo /sbin/runuser -u munge /usr/sbin/munged
 
 checks_group_end # Setup
 
-checks_group "autogen.sh" ./autogen.sh
+checks_group "autogen.sh" ./autogen.sh || checks_die "autogen failed"
 
 WORKDIR=$(pwd)
 if test -n "$BUILD_DIR" ; then
@@ -185,7 +186,7 @@ if test -n "$BUILD_DIR" ; then
 fi
 
 checks_group "configure ${ARGS}"  ${WORKDIR}/configure ${ARGS} \
-	|| (printf "::error::configure failed\n"; cat config.log; exit 1)
+	|| checks_die "configure failed" cat config.log
 checks_group "make clean..." make clean
 
 if test "$POISON" = "t" -a "$PROJECT" = "flux-core"; then
@@ -195,7 +196,7 @@ fi
 
 if test "$DISTCHECK" != "t"; then
   checks_group "${MAKECMDS}" "${MAKECMDS}" \
-	|| (printf "::error::${MAKECMDS} failed\n"; exit 1)
+	|| checks_die "${MAKECMDS} failed"
 fi
 checks_group "${CHECKCMDS}" "${CHECKCMDS}"
 RC=$?

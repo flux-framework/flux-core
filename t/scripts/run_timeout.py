@@ -71,6 +71,7 @@ def do_timeout():
         r = p.wait(timeout=args.timeout)
     except s.TimeoutExpired:
         # send signal to timeout process
+        print(f"{args.cmd} timed out after {args.timeout}s", file=sys.stderr)
         p.send_signal(args.signal)
         if args.kill_after > 0:
             try:

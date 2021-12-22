@@ -69,6 +69,7 @@ RUN yum -y update \
 	aspell \
 	aspell-en \
 	glibc-langpack-en \
+	hwloc \
  && yum clean all
 
 #  Set default /usr/bin/python to python3
@@ -95,6 +96,12 @@ RUN mkdir mvapich2 \
  && make install \
  && cd .. \
  && rm -rf mvapich2
+
+# Install lcov
+RUN rpm --nodeps -i http://downloads.sourceforge.net/ltp/lcov-1.14-1.noarch.rpm
+
+# Install Python 3 coverage
+RUN pip3 install coverage
 
 ENV LANG=C.UTF-8
 RUN printf "LANG=C.UTF-8" > /etc/locale.conf

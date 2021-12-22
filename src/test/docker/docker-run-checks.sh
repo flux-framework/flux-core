@@ -25,7 +25,7 @@ declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
 
 #
-declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,inception,platform:,workdir:"
+declare -r long_opts="help,quiet,interactive,image:,flux-security-version:,jobs:,no-cache,no-home,distcheck,tag:,build-directory:,install-only,no-poison,recheck,unit-test-only,inception,platform:,workdir:,system"
 declare -r short_opts="hqIdi:S:j:t:D:Prup:"
 declare -r usage="
 Usage: $prog [OPTIONS] -- [CONFIGURE_ARGS...]\n\
@@ -40,6 +40,7 @@ Options:\n\
      --no-home                 Skip mounting the host home directory\n\
      --install-only            Skip make check, only make install\n\
      --inception               Run tests as flux jobs\n\
+     --system                  Run under system instance\n\
  -q, --quiet                   Add --quiet to docker-build\n\
  -t, --tag=TAG                 If checks succeed, tag image as NAME\n\
  -i, --image=NAME              Use base docker image NAME (default=$IMAGE)\n\
@@ -87,6 +88,7 @@ while true; do
       --no-home)                   MOUNT_HOME_ARGS="";         shift   ;;
       --install-only)              INSTALL_ONLY=t;             shift   ;;
       --inception)                 INCEPTION=t;                shift   ;;
+      --system)                    SYSTEM=t;                   shift   ;;
       -P|--no-poison)              POISON=0;                   shift   ;;
       -t|--tag)                    TAG="$2";                   shift 2 ;;
       --)                          shift; break;                       ;;
@@ -107,12 +109,24 @@ fi
 # distcheck incompatible with some configure args
 if test "$DISTCHECK" = "t"; then
     test "$RECHECK" = "t" && die "--recheck not allowed with --distcheck"
+    test "$SYSTEM" = "t" && die "--system not allowed with --distcheck"
     for arg in "$@"; do
         case $arg in
           --sysconfdir=*|systemdsystemunitdir=*)
             die "distcheck incompatible with configure arg $arg"
         esac
     done
+fi
+
+if test "$SYSTEM" = "t"; then
+    if test "$IMAGE" != "centos8"; then
+        echo >&2 "Setting image to centos8 for system checks build"
+    fi
+    IMAGE=centos8
+    TAG="checks-builder:centos8"
+    INSTALL_ONLY=t
+    NO_CACHE="--no-cache"
+    POISON=0
 fi
 
 CONFIGURE_ARGS="$@"
@@ -158,6 +172,7 @@ export DISTCHECK
 export RECHECK
 export UNIT_TEST_ONLY
 export BUILD_DIR
+export COVERAGE
 export chain_lint
 
 if [[ "$INSTALL_ONLY" == "t" ]]; then
@@ -173,8 +188,10 @@ if [[ "$INSTALL_ONLY" == "t" ]]; then
                 --with-flux-security \
                 --enable-caliper &&
                make clean &&
-               make -j${JOBS}" \
-    || (docker rm tmp.$$; die "docker run of 'make install' failed")
+               make -j${JOBS}"
+    RC=$?
+    docker rm tmp.$$
+    test $RC -ne 0 &&  die "docker run of 'make install' failed"
 else
     docker run --rm \
         --workdir=$WORKDIR \
@@ -244,4 +261,12 @@ if test -n "$TAG"; then
 	|| die "docker commit failed"
     docker rm tmp.$$
     echo "Tagged image $TAG"
+fi
+
+if test -n "$SYSTEM"; then
+    ${TOP}/src/test/docker/docker-run-systest.sh \
+	--image=${TAG} \
+        --jobs=${JOBS} \
+        -- src/test/checks_run.sh ${CONFIGURE_ARGS} \
+    || die "docker-run-systest.sh failed"
 fi

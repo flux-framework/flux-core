@@ -108,7 +108,7 @@ jobs:
       DOCKER_USERNAME: travisflux
       DOCKER_PASSWORD: ${{ secrets.DOCKER_HUB_TRAVISFLUX_TOKEN }}
       GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-    timeout-minutes: 40
+    timeout-minutes: 60
     strategy:
       matrix: ${{fromJson(needs.generate-matrix.outputs.matrix)}}
       fail-fast: false
@@ -163,10 +163,12 @@ jobs:
       run: src/test/checks-annotate.sh
 
     - name: coverage report
-      if: success() && matrix.coverage
+      if: success() && matrix.coverage && matrix.image == 'bionic'
       env:
         DOCKER_REPO:
       uses: codecov/codecov-action@v1
+      with:
+        flags: ci-basic
 
     - name: docker deploy
       if: success() && matrix.docker_tag

@@ -33,3 +33,16 @@ checks_group() {
     checks_group_end
     return $rc
 }
+
+#
+#  Usage: checks_die MESSAGE COMMANDS...
+#
+checks_die() {
+    local MSG="$1"
+    shift 1
+    printf "::error::$MSG\n"
+    if $# -gt 0; then
+        eval "$@"
+    fi
+    exit 1
+}

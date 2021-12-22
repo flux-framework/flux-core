@@ -78,7 +78,7 @@ local function reladate (t)
         return fmt ("a minute ago")
     end
     if (diff < 90) then
-        return fmt ("%d minutes ago", diff)
+        return fmt ("%d minutes ago", math.floor (diff + 0.5))
     end
 
     -- Convert to hours:
@@ -96,10 +96,10 @@ local function reladate (t)
     -- weeks for past 10 weeks or so, reduce precision in output:
     local d = math.floor (diff)
     if (d < 70) then
-        return fmt ("%d weeks ago", (d + 3) / 7)
+        return fmt ("%d weeks ago", math.floor ((d + 3) / 7))
     end
     if (d < 365) then
-        return fmt ("%d months ago", (d + 15) / 30)
+        return fmt ("%d months ago", math.floor ((d + 15) / 30))
     end
 
     return fmt ("%.1f years ago", diff / 365)
