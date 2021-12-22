@@ -8,6 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
+import os
 import platform
 import re
 from abc import ABC, abstractmethod
@@ -59,6 +60,8 @@ class JobURI(URI):
       local: If a remote URI, convert to a local URI. Otherwise return the URI.
     """
 
+    force_local = os.environ.get("FLUX_URI_RESOLVE_LOCAL", False)
+
     def __init__(self, uri):
         super().__init__(uri)
         if self.scheme == "":
@@ -96,6 +99,8 @@ class JobURI(URI):
         return self.local_uri
 
     def __str__(self):
+        if self.force_local:
+            return self.local
         return self.uri
 
 
