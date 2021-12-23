@@ -63,6 +63,8 @@ struct state_machine {
     struct quorum quorum;
 
     int child_count;
+
+    struct flux_msglist *wait_requests;
 };
 
 typedef void (*action_f)(struct state_machine *s);
@@ -92,6 +94,9 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg);
 static void monitor_update (flux_t *h,
                             struct flux_msglist *requests,
                             broker_state_t state);
+static void wait_update (flux_t *h,
+                         struct flux_msglist *requests,
+                         broker_state_t state);
 static void join_check_parent (struct state_machine *s);
 static void quorum_check_parent (struct state_machine *s);
 static void run_check_parent (struct state_machine *s);
@@ -387,6 +392,7 @@ static void process_event (struct state_machine *s, const char *event)
         s->state = next_state;
         state_action (s, s->state);
         monitor_update (s->ctx->h, s->monitor.requests, s->state);
+        wait_update (s->ctx->h, s->wait_requests, s->state);
     }
     else {
         flux_log (s->ctx->h,
@@ -676,6 +682,68 @@ static void broker_online_cb (flux_future_t *f, void *arg)
     }
 }
 
+static bool wait_respond (flux_t *h,
+                          const flux_msg_t *msg,
+                          broker_state_t state)
+{
+    int rc;
+
+    if (state < STATE_RUN)
+        return false;
+    if (state == STATE_RUN)
+        rc = flux_respond (h, msg, NULL);
+    else {
+        rc = flux_respond_error (h,
+                                 msg,
+                                 ENOENT,
+                                 "broker has surpassed RUN state");
+    }
+    if (rc < 0)
+        flux_log_error (h, "error responding to state-machine.wait request");
+    return true;
+}
+
+static void wait_update (flux_t *h,
+                         struct flux_msglist *requests,
+                         broker_state_t state)
+{
+    const flux_msg_t *msg;
+
+    msg = flux_msglist_first (requests);
+    while (msg) {
+        if (wait_respond (h, msg, state))
+            flux_msglist_delete (requests);
+        msg = flux_msglist_next (requests);
+    }
+}
+
+/* This request is answered once the local broker enters RUN state.
+ * An error response is generated if the local broker enters a state
+ * that cannot lead to the run state, e.g. CLEANUP, SHUTDOWN, FINALIZE, EXIT.
+ * This is handy when a running broker client tries to reconnect after a broker
+ * restart.  If it tries to send requests too early, it may receive "Upstream
+ * broker is offline" errors.  This request is specifically excluded from that
+ * error path.
+ */
+static void wait_cb (flux_t *h,
+                     flux_msg_handler_t *mh,
+                     const flux_msg_t *msg,
+                     void *arg)
+{
+    struct state_machine *s = arg;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (!wait_respond (h, msg, s->state)) {
+        if (flux_msglist_append (s->wait_requests, msg) < 0)
+            goto error;
+    }
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to state-machine.wait request");
+}
+
 static void monitor_update (flux_t *h,
                             struct flux_msglist *requests,
                             broker_state_t state)
@@ -812,16 +880,15 @@ static void disconnect_cb (flux_t *h,
                            void *arg)
 {
     struct state_machine *s = arg;
-    int count;
 
-    if ((count = flux_msglist_disconnect (s->monitor.requests, msg)) < 0)
+    if (flux_msglist_disconnect (s->monitor.requests, msg) < 0
+        || flux_msglist_disconnect (s->wait_requests, msg) < 0)
         flux_log_error (h, "error handling state-machine.disconnect");
-    if (count > 0)
-        flux_log (h, LOG_DEBUG, "state-machine: goodbye to %d clients", count);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "state-machine.monitor", monitor_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "state-machine.wait", wait_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST,  "state-machine.disconnect", disconnect_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -835,6 +902,7 @@ void state_machine_destroy (struct state_machine *s)
         flux_watcher_destroy (s->check);
         flux_watcher_destroy (s->idle);
         flux_msg_handler_delvec (s->handlers);
+        flux_msglist_destroy (s->wait_requests);
         flux_future_destroy (s->monitor.f);
         flux_msglist_destroy (s->monitor.requests);
         idset_destroy (s->quorum.want);
@@ -860,6 +928,8 @@ struct state_machine *state_machine_create (struct broker *ctx)
         goto nomem;
     zlist_autofree (s->events);
     if (flux_msg_handler_addvec (ctx->h, htab, s, &s->handlers) < 0)
+        goto error;
+    if (!(s->wait_requests = flux_msglist_create ()))
         goto error;
     s->prep = flux_prepare_watcher_create (r, prep_cb, s);
     s->check = flux_check_watcher_create (r, check_cb, s);
