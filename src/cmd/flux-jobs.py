@@ -109,6 +109,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
 
     if args.color == "always" or args.color == "auto":
         attrs.update(fields2attrs["result"])
+        attrs.update(fields2attrs["annotations"])
     if args.recursive:
         attrs.update(fields2attrs["annotations"])
         attrs.update(fields2attrs["status"])
@@ -291,6 +292,9 @@ def color_setup(args, job):
                 sys.stdout.write("\033[37m")
             elif job.result == "TIMEOUT":
                 sys.stdout.write("\033[01;31m")
+            return True
+        if job.uri:
+            sys.stdout.write("\033[01;34m")
             return True
     return False
 
