@@ -76,6 +76,7 @@ struct flux_handle_struct {
     flux_msgcounters_t msgcounters;
     flux_comms_error_f comms_error_cb;
     void            *comms_error_arg;
+    bool            comms_error_in_progress;
     bool            destroy_in_progress;
 #if HAVE_CALIPER
     struct profiling_context prof;
@@ -541,12 +542,16 @@ void flux_comms_error_set (flux_t *h, flux_comms_error_f fun, void *arg)
 
 static int comms_error (flux_t *h, int errnum)
 {
+    int rc = -1;
+
     h = lookup_clone_ancestor (h);
-    if (h->comms_error_cb) {
+    if (h->comms_error_cb && !h->comms_error_in_progress) {
+        h->comms_error_in_progress = true;
         errno = errnum;
-        return h->comms_error_cb (h, h->comms_error_arg);
+        rc = h->comms_error_cb (h, h->comms_error_arg);
+        h->comms_error_in_progress = false;
     }
-    return -1;
+    return rc;
 }
 
 void flux_get_msgcounters (flux_t *h, flux_msgcounters_t *mcs)
