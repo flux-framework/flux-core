@@ -89,6 +89,8 @@ def fetch_jobs_flux(args, fields):
         # Special cases, pointers to sub-dicts in annotations
         "sched": ("annotations",),
         "user": ("annotations",),
+        "uri": ("annotations",),
+        "uri.local": ("annotations",),
     }
 
     attrs = set()
