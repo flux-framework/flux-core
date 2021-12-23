@@ -335,6 +335,43 @@ error:
     return NULL;
 }
 
+static int renew_service_registration (struct servhash *sh,
+                                       struct servhash_entry *entry)
+{
+    flux_future_t *f;
+    flux_msg_t *cpy;
+    int rc = -1;
+
+    if (!(cpy = request_copy_clear_routes (entry->add_request)))
+        return -1;
+    if (!(f = flux_rpc_message (sh->h, cpy, FLUX_NODEID_ANY, 0)))
+        goto done;
+    if (flux_future_get (f, NULL) < 0)
+        goto done;
+    rc = 0;
+done:
+    flux_future_destroy (f);
+    flux_msg_destroy (cpy);
+    return rc;
+}
+
+int servhash_renew (struct servhash *sh)
+{
+    struct servhash_entry *entry;
+
+    if (sh) {
+        entry = zhashx_first (sh->services);
+        while (entry) {
+            if (entry->live && !entry->f_remove) {
+                if (renew_service_registration (sh, entry) < 0)
+                    return -1;
+            }
+            entry = zhashx_next (sh->services);
+        }
+    }
+    return 0;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

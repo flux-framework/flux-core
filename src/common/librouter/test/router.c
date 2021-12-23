@@ -257,6 +257,12 @@ void test_basic (flux_t *h)
     router_destroy (rtr);
 }
 
+void test_error (flux_t *h)
+{
+    ok (router_renew (NULL) == 0,
+        "router_renew rtr=NULL works as no-op");
+}
+
 int main (int argc, char *argv[])
 {
     flux_t *h;
@@ -270,6 +276,7 @@ int main (int argc, char *argv[])
         BAIL_OUT ("test_server_create failed");
 
     test_basic (h);
+    test_error (h);
 
     diag ("stopping test server");
     if (test_server_stop (h) < 0)

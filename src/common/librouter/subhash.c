@@ -188,6 +188,20 @@ void subhash_set_unsubscribe (struct subhash *sh, subscribe_f cb, void *arg)
     }
 }
 
+int subhash_renew (struct subhash *sh)
+{
+    struct subhash_entry *entry;
+
+    if (sh) {
+        entry = zhashx_first (sh->subs);
+        while (entry) {
+            if (sh->sub (entry->topic, sh->sub_arg) < 0)
+                return -1;
+            entry = zhashx_next (sh->subs);
+        }
+    }
+    return 0;
+}
 
 void subhash_destroy (struct subhash *sh)
 {

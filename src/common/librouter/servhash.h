@@ -44,6 +44,8 @@ int servhash_match (struct servhash *sh,
 
 void servhash_disconnect (struct servhash *sh, const char *uuid);
 
+int servhash_renew (struct servhash *sh);
+
 #endif /* !_ROUTER_SERVHASH_H */
 
 /*

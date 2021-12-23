@@ -180,6 +180,7 @@ void test_basic (flux_t *h)
     flux_msg_t *req2;
     flux_reactor_t *r;
     const char *uuid;
+    flux_future_t *f;
 
     if (!(add = flux_request_encode ("service.add", NULL))
             || flux_msg_pack (add, "{s:s}", "service", "fubar") < 0)
@@ -213,6 +214,23 @@ void test_basic (flux_t *h)
         && errno == EEXIST,
         "servhash_add for same service failed with EEXIST");
 
+    /* servhash_renew makes a synchronous RPC internally for any existing
+     * services.  The service thread should respond with EEXIST.
+     */
+    errno = 0;
+    ok (servhash_renew (sh) < 0 && errno == EEXIST,
+        "servhash_renew fails with EEXIST");
+
+    /* remove the service with a direct rpc, then call servhash_renew()
+     * to restore it.
+     */
+    if (!(f = flux_rpc_message (h, remove, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get (f, NULL) < 0)
+        BAIL_OUT ("error removing fubar with direct RPC");
+    flux_future_destroy (f);
+    ok (servhash_renew (sh) == 0,
+        "servhash_renew works");
+
     /* match some messages */
     uuid = NULL;
     ok (servhash_match (sh, req, &uuid) == 0,
@@ -231,6 +249,10 @@ void test_basic (flux_t *h)
         "flux_reactor_run processed a response");
     ok (last_errnum == 0,
         "remove request was successful");
+
+    /* renew with no valid services is a no-op */
+    ok (servhash_renew (sh) == 0,
+        "servhash_renew works with empty servhash");
 
     flux_msg_destroy (add);
     flux_msg_destroy (remove);

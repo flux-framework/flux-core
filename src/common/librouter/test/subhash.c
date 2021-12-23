@@ -103,13 +103,19 @@ void test_callbacks (void)
     sub_count = 0;
     unsub_count = 0;
 
-    /* subhash destroy unsubscribes to remaining topics */
+    /* Subscribe to two topics.
+     */
     ok (subhash_subscribe (sub, "bar") == 0,
         "subhash_subscribe bar");
     ok (subhash_subscribe (sub, "baz") == 0,
         "subhash_subscribe baz");
     ok (sub_count == 2,
         "sub callback called twice");
+
+    ok (subhash_renew (sub) == 0,
+        "subhash_renew works");
+    ok (sub_count == 4,
+        "sub callback called twice more");
 
     subhash_destroy (sub);
 
@@ -178,6 +184,9 @@ void test_errors (void)
         "subhash_topic_match sub=NULL returns false");
     ok (subhash_topic_match (sub, NULL) == false,
         "subhash_topic_match topic=NULL returns false");
+
+    ok (subhash_renew (NULL) == 0,
+        "subhash_renew sub=NULL succeeds as a no-op");
 
     lives_ok ({ subhash_destroy (NULL);},
         "subhash_destroy sub=NULL doesn't crash");
