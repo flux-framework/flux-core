@@ -191,7 +191,7 @@ class JobInfo:
             raise AttributeError
         try:
             return getattr(self, "_{0}".format(attr))
-        except KeyError:
+        except (KeyError, AttributeError):
             raise AttributeError("invalid JobInfo attribute '{}'".format(attr))
 
     def get_runtime(self):
