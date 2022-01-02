@@ -59,6 +59,29 @@ class ExceptionInfo:
         self.note = note
 
 
+class EmptyObject:
+    """Convenience "empty" object for use with string.format
+
+    This class can be used in place of a real class but returns
+    appropriate empty or unset value for various conversions, or
+    for string.format() calls.
+    """
+
+    def __getattr__(self, attr):
+        return EmptyObject()
+
+    def __repr__(self):
+        return ""
+
+    def __str__(self):
+        return ""
+
+    def __format__(self, spec):
+        # Strip trailing specifier (e.g. d, f)
+        spec = spec.rstrip("bcdoxXeEfFgGn%")
+        return "".__format__(spec)
+
+
 # AnnotationsInfo is a wrapper for a namedtuple.  We need this
 # object so that we can we detect when an attribute is missing and
 # ultimately return an empty string (e.g. when an attribute does not
@@ -86,9 +109,10 @@ class AnnotationsInfo:
         try:
             return object.__getattribute__(self.atuple, attr)
         except AttributeError:
-            # We return an empty AnnotationsInfo so that we can recursively
+            # We return an empty object so that we can recursively
             # handle errors.  e.g. annotations.user.illegal.illegal.illegal
-            return AnnotationsInfo({})
+            return EmptyObject()
+
 
 
 class InfoList(list):
