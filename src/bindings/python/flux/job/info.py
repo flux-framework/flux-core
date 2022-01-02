@@ -419,6 +419,19 @@ class JobInfoFormat(flux.util.OutputFormat):
                         value = ""
                     else:
                         raise
+            elif conv == "P":
+                #  Convert a floating point to percentage
+                try:
+                    value = value * 100
+                    if value < 100:
+                        value = f"{value:.2g}%"
+                    else:
+                        value = f"{value:3.0f}%"
+                except (TypeError, ValueError):
+                    if orig_value == "":
+                        value = ""
+                    else:
+                        raise
             else:
                 value = super().convert_field(value, conv)
             return value
