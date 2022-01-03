@@ -19,6 +19,7 @@ from collections import namedtuple
 import flux.constants
 from flux.memoized_property import memoized_property
 from flux.job.JobID import JobID
+from flux.uri import JobURI
 from flux.core.inner import raw
 
 
@@ -186,6 +187,12 @@ class JobInfo:
         if tleft < 0.0:
             return 0.0
         return tleft
+
+    @memoized_property
+    def uri(self):
+        if str(self.user.uri):
+            return JobURI(self.user.uri)
+        return None
 
     @property
     def t_remaining(self):
@@ -395,6 +402,8 @@ class JobInfoFormat(flux.util.OutputFormat):
         "sched.reason_pending": "REASON",
         "sched.resource_summary": "RESOURCES",
         "user": "USER",
+        "uri": "URI",
+        "uri.local": "URI",
     }
 
     def __init__(self, fmt):

@@ -42,8 +42,9 @@ def fetch_jobs_stdin():
     return jobs
 
 
-def fetch_jobs_flux(args, fields):
-    flux_handle = flux.Flux()
+def fetch_jobs_flux(args, fields, flux_handle=None):
+    if not flux_handle:
+        flux_handle = flux.Flux()
 
     # Note there is no attr for "id", its always returned
     fields2attrs = {
@@ -89,6 +90,8 @@ def fetch_jobs_flux(args, fields):
         # Special cases, pointers to sub-dicts in annotations
         "sched": ("annotations",),
         "user": ("annotations",),
+        "uri": ("annotations",),
+        "uri.local": ("annotations",),
     }
 
     attrs = set()
@@ -106,6 +109,10 @@ def fetch_jobs_flux(args, fields):
 
     if args.color == "always" or args.color == "auto":
         attrs.update(fields2attrs["result"])
+        attrs.update(fields2attrs["annotations"])
+    if args.recursive:
+        attrs.update(fields2attrs["annotations"])
+        attrs.update(fields2attrs["status"])
 
     if args.A:
         args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
@@ -238,6 +245,20 @@ def parse_args():
         help="Colorize output; WHEN can be 'never', 'always', or 'auto' (default)",
     )
     parser.add_argument(
+        "-R",
+        "--recursive",
+        action="store_true",
+        help="List jobs recursively",
+    )
+    parser.add_argument(
+        "-L",
+        "--level",
+        type=int,
+        metavar="N",
+        default=9999,
+        help="With --recursive, only descend N levels",
+    )
+    parser.add_argument(
         "--stats", action="store_true", help="Print job statistics before header"
     )
     parser.add_argument(
@@ -272,12 +293,55 @@ def color_setup(args, job):
             elif job.result == "TIMEOUT":
                 sys.stdout.write("\033[01;31m")
             return True
+        if job.uri:
+            sys.stdout.write("\033[01;34m")
+            return True
     return False
 
 
 def color_reset(color_set):
     if color_set:
         sys.stdout.write("\033[0;0m")
+
+
+def print_jobs(jobs, args, formatter, path="", level=0):
+    children = []
+
+    for job in jobs:
+        color_set = color_setup(args, job)
+        print(formatter.format(job))
+        color_reset(color_set)
+        if args.recursive and job.uri and job.status_abbrev == "R":
+            children.append(job)
+
+    if not args.recursive or args.level == level:
+        return
+
+    #  Reset args.jobids since it won't apply recursively:
+    args.jobids = None
+    if path:
+        path = f"{path}/"
+
+    for job in children:
+        try:
+            #  Don't generate an error if we fail to connect to this
+            #   job. This could be because job services aren't up yet,
+            #   (OSError with errno ENOSYS) or this user is not the owner
+            #   of the job. Either way, simply skip descending into the job
+            #
+            handle = flux.Flux(str(job.uri))
+            jobs = fetch_jobs_flux(args, formatter.fields, flux_handle=handle)
+        except (OSError, FileNotFoundError):
+            continue
+        thispath = f"{path}{job.id.f58}"
+        print(f"\n{thispath}:")
+        if args.stats:
+            stats = JobStats(handle).update_sync()
+            print(
+                f"{stats.running} running, {stats.successful} completed, "
+                f"{stats.failed} failed, {stats.pending} pending"
+            )
+        print_jobs(jobs, args, formatter, path=thispath, level=level + 1)
 
 
 @flux.util.CLIMain(LOGGER)
@@ -287,7 +351,7 @@ def main():
 
     args = parse_args()
 
-    if args.jobids and args.filtered:
+    if args.jobids and args.filtered and not args.recursive:
         LOGGER.warning("Filtering options ignored with jobid list")
 
     if args.format:
@@ -317,10 +381,7 @@ def main():
     if not args.suppress_header:
         print(formatter.header())
 
-    for job in jobs:
-        color_set = color_setup(args, job)
-        print(formatter.format(job))
-        color_reset(color_set)
+    print_jobs(jobs, args, formatter)
 
 
 if __name__ == "__main__":

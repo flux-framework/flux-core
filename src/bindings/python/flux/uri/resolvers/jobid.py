@@ -10,6 +10,7 @@
 
 from pathlib import PurePath
 
+import os
 import flux
 from flux.job import JobID, job_list_id
 from flux.uri import URIResolverPlugin, URIResolverURI, JobURI
@@ -66,6 +67,6 @@ class URIResolver(URIResolverPlugin):
 
     def resolve(self, uri):
         force_local = False
-        if "local" in uri.query_dict:
+        if "local" in uri.query_dict or "FLUX_URI_RESOLVE_LOCAL" in os.environ:
             force_local = True
         return self._do_resolve(uri, flux.Flux(), force_local=force_local)

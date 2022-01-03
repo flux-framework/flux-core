@@ -71,6 +71,19 @@ OPTIONS
 
    All other options are ignored when ``--stats-only`` is used. 
 
+**-R, --recursive**
+   List jobs recursively. Each child job which is also an instance of
+   Flux is prefixed by its jobid "path" followed by the list of jobs,
+   recursively up to any defined ``-L, --level``. If the ``--stats``
+   option is used, then each child instance in the hierararchy is listed
+   with its stats.
+
+**-L, --level**\ *=N*
+   With ``-R, --recursive``, stop recursive job listing at level **N**.
+   Levels are counted starting at 0, so ``flux jobs -R --level=0`` is
+   equivalent to ``flux jobs`` without ``-R``, and ``--level=1`` would
+   limit recursive job listing to child jobs of the current instance.
+
 
 JOB STATUS
 ==========
