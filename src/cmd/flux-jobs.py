@@ -14,6 +14,7 @@ import logging
 import argparse
 import fileinput
 import json
+import concurrent.futures
 
 import flux.constants
 import flux.util
@@ -94,6 +95,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
         "uri.local": ("annotations",),
     }
 
+    get_instance_info = False
     attrs = set()
     for field in fields:
         # Special case for annotations, can be arbitrary field names determined
@@ -104,6 +106,10 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
             or field.startswith("user.")
         ):
             attrs.update(fields2attrs["annotations"])
+        elif field.startswith("instance."):
+            get_instance_info = True
+            attrs.update(fields2attrs["annotations"])
+            attrs.update(fields2attrs["status"])
         else:
             attrs.update(fields2attrs[field])
 
@@ -130,6 +136,12 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
     )
 
     jobs = jobs_rpc.jobs()
+
+    if get_instance_info:
+        with concurrent.futures.ThreadPoolExecutor() as executor:
+            concurrent.futures.wait(
+                [executor.submit(job.get_instance_info) for job in jobs]
+            )
 
     #  Print all errors accumulated in JobList RPC:
     try:
