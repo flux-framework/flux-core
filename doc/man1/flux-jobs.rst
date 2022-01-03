@@ -294,6 +294,34 @@ The field names that can be specified are:
    short hand for *annotations.user*
 
 
+Field names which are specific to jobs which are also instances of Flux
+include:
+
+**instance.stats**
+   a short string describing current job statistics for the instance of
+   the form ``PD:{pending} R:{running} CD:{successful} F:{failed}``
+
+**instance.stats.total**
+   total number of jobs in any state in the instance.
+
+**instance.utilization**
+   number of cores currently allocated divided by the total number of cores.
+   Can be formatted as a percentage with ``!P``, e.g.
+   ``{instance.utilization!P:>4}``.
+
+**instance.gpu_utilization**
+   same as ``instance.utilization`` but for gpu resources
+
+**instance.progress**
+   number of inactive jobs divided by the total number of jobs.
+   Can be formatted as a percentage with ``{instance.progress!P:>4}``
+
+**instance.resources.<state>.{ncores,ngpus}**
+   number of cores, gpus in state ``state``, where ``state`` can be
+   ``all``, ``up``, ``down``, ``allocated``, or ``free``, e.g.
+   ``{instance.resources.all.ncores}``
+
+
 EXAMPLES
 ========
 
