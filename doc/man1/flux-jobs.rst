@@ -91,6 +91,14 @@ OPTIONS
    equivalent to ``flux jobs`` without ``-R``, and ``--level=1`` would
    limit recursive job listing to child jobs of the current instance.
 
+**--threads**\ *=N*
+   When ``flux jobs`` recursively queries job lists (with ``--recursive``)
+   or fetches info for jobs that are also instances (see
+   ``instance.*`` fields), a pool of threads is used to parallelize
+   the required RPCs. Normally, the default number of ThreadPoolExecutor
+   threads is used, but by using the ``--threads``, a specific number
+   of threads can be chosen.
+
 
 JOB STATUS
 ==========
