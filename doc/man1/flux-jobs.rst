@@ -78,6 +78,13 @@ OPTIONS
    option is used, then each child instance in the hierararchy is listed
    with its stats.
 
+**--recurse-all**
+   By default, jobs not owned by the user running ``flux jobs`` are
+   skipped with ``-R, --recursive``, because normally Flux instances
+   only permit the instance owner to connect. This option forces the
+   command to attempt to recurse into the jobs of other users.  Implies
+   ``--recursive``.
+
 **-L, --level**\ *=N*
    With ``-R, --recursive``, stop recursive job listing at level **N**.
    Levels are counted starting at 0, so ``flux jobs -R --level=0`` is
