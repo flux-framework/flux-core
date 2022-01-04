@@ -332,6 +332,25 @@ def is_user_instance(job, args):
     )
 
 
+def get_jobs_recursive(job, args, fields):
+    jobs = []
+    stats = None
+    try:
+        #  Don't generate an error if we fail to connect to this
+        #   job. This could be because job services aren't up yet,
+        #   (OSError with errno ENOSYS) or this user is not the owner
+        #   of the job. Either way, simply skip descending into the job
+        #
+        handle = flux.Flux(str(job.uri))
+        jobs = fetch_jobs_flux(args, fields, flux_handle=handle)
+        stats = None
+        if args.stats:
+            stats = JobStats(handle).update_sync()
+    except (OSError, FileNotFoundError):
+        pass
+    return (job, jobs, stats)
+
+
 def print_jobs(jobs, args, formatter, path="", level=0):
     children = []
 
@@ -347,24 +366,22 @@ def print_jobs(jobs, args, formatter, path="", level=0):
 
     #  Reset args.jobids since it won't apply recursively:
     args.jobids = None
+
+    futures = []
+    with concurrent.futures.ThreadPoolExecutor() as executor:
+        for job in children:
+            futures.append(
+                executor.submit(get_jobs_recursive, job, args, formatter.fields)
+            )
+
     if path:
         path = f"{path}/"
 
-    for job in children:
-        try:
-            #  Don't generate an error if we fail to connect to this
-            #   job. This could be because job services aren't up yet,
-            #   (OSError with errno ENOSYS) or this user is not the owner
-            #   of the job. Either way, simply skip descending into the job
-            #
-            handle = flux.Flux(str(job.uri))
-            jobs = fetch_jobs_flux(args, formatter.fields, flux_handle=handle)
-        except (OSError, FileNotFoundError):
-            continue
+    for future in futures:
+        (job, jobs, stats) = future.result()
         thispath = f"{path}{job.id.f58}"
         print(f"\n{thispath}:")
-        if args.stats:
-            stats = JobStats(handle).update_sync()
+        if stats:
             print(
                 f"{stats.running} running, {stats.successful} completed, "
                 f"{stats.failed} failed, {stats.pending} pending"
