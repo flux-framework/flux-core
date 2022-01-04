@@ -5,10 +5,27 @@ test_description='Test flux jobs command with --recursive'
 . $(dirname $0)/sharness.sh
 
 test_under_flux 2 job
+flux version | grep -q libflux-security && test_set_prereq FLUX_SECURITY
 
+export FLUX_PYCLI_LOGLEVEL=10
 export FLUX_URI_RESOLVE_LOCAL=t
 runpty="${SHARNESS_TEST_SRCDIR}/scripts/runpty.py --line-buffer -f asciicast"
 waitfile="${SHARNESS_TEST_SRCDIR}/scripts/waitfile.lua"
+sign_as=${SHARNESS_TEST_SRCDIR}/scripts/sign-as.py
+
+submit_fake_user_instance()
+{
+	FAKE_USERID=42
+	test_debug "echo running flux mini run $@ as userid $FAKE_USERID"
+	flux mini run --dry-run \
+		--setattr=system.exec.test.run_duration=1d hostname | \
+		flux python $sign_as $FAKE_USERID \
+		>job.signed &&
+	FLUX_HANDLE_USERID=$FAKE_USERID \
+		flux job submit --flags=signed job.signed >altid &&
+	flux job memo $(cat altid) uri=local:///dev/null
+}
+
 
 #  Start a child instance that immediately exits, so that we can test
 #   that `flux jobs -R` doesn't error on child instances that are no
@@ -28,6 +45,9 @@ test_expect_success 'start a recursive job' '
 			 flux queue idle") &&
 	flux job wait-event $id clean
 '
+test_expect_success FLUX_SECURITY 'submit fake instance job as another user' '
+	submit_fake_user_instance
+'
 blue_line_count() {
         grep -c -o "\\u001b\[01\;34m" $1 || true
 }
@@ -42,6 +62,11 @@ test_expect_success 'wait for hierarchy to be ready' '
 '
 test_expect_success 'flux jobs --recursive works' '
 	flux jobs --recursive > recursive.out &&
+	test_debug "cat recursive.out" &&
+	test $(grep -c : recursive.out) -eq 3
+'
+test_expect_success 'flux jobs --recursive avoids other user jobs by default' '
+	flux jobs -A --recursive > recursive.out &&
 	test_debug "cat recursive.out" &&
 	test $(grep -c : recursive.out) -eq 3
 '
@@ -62,7 +87,15 @@ test_expect_success 'flux jobs --recursive --level  works' '
 '
 test_expect_success 'flux jobs --recursive JOBID works' '
 	flux jobs --recursive $rid > recursive-jobid.out &&
-	test_debug "cat recursive.out" &&
+	test_debug "cat recursive-jobid.out" &&
 	test $(grep -c : recursive-jobid.out) -eq 3
+'
+test_expect_success 'flux jobs --recurse-all tries to recurse other user jobs' '
+	flux jobs -A --recurse-all > recurse-all.out &&
+	test_debug "cat recurse-all.out"  &&
+	grep $(cat altid): recurse-all.out
+'
+test_expect_success 'cancel alternate user job' '
+	flux job cancel $(cat altid)
 '
 test_done
