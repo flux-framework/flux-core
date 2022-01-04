@@ -1,6 +1,3 @@
-.. flux-help-command: content
-.. flux-help-description: Access instance content storage
-
 ===============
 flux-content(1)
 ===============
