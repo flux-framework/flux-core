@@ -72,10 +72,6 @@ setenv FLUX_CONNECTOR_PATH
       [getenv FLUX_CONNECTOR_PATH_PREPEND]:install-path:\
         [getenv FLUX_CONNECTOR_PATH]
 
-setenv FLUX_SEC_DIRECTORY
-   Set directory for Flux CURVE keys. This is not a search path.
-   If unset, flux(1) sets it to $HOME/flux.
-
 setenv LUA_PATH
    Set Lua module search path:
 

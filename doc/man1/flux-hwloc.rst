@@ -1,6 +1,3 @@
-.. flux-help-command: hwloc
-.. flux-help-description: Control/query resource-hwloc service
-
 =============
 flux-hwloc(1)
 =============

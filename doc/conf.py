@@ -170,6 +170,7 @@ man_pages = [
     ('man1/flux-jobs', 'flux-jobs', 'list jobs submitted to Flux', [author], 1),
     ('man1/flux-jobtap', 'flux-jobtap', 'List, remove, and load job-manager plugins', [author], 1),
     ('man1/flux-uri', 'flux-uri', 'resolve Flux URIs', [author], 1),
+    ('man1/flux-resource', 'flux-resource', 'list/manipulate Flux resource status', [author], 1),
     ('man1/flux-keygen', 'flux-keygen', 'generate keys for Flux security', [author], 1),
     ('man1/flux-kvs', 'flux-kvs', 'Flux key-value store utility', [author], 1),
     ('man1/flux-logger', 'flux-logger', 'create a Flux log entry', [author], 1),

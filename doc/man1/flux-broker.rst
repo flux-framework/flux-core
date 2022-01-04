@@ -1,5 +1,3 @@
-.. flux-help-description: Invoke Flux message broker daemon
-
 ==============
 flux-broker(1)
 ==============

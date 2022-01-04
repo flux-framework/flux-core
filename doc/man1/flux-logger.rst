@@ -1,5 +1,3 @@
-.. flux-help-include: true
-
 ==============
 flux-logger(1)
 ==============
