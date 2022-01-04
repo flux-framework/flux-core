@@ -139,7 +139,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
     jobs = jobs_rpc.jobs()
 
     if get_instance_info:
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor(args.threads) as executor:
             concurrent.futures.wait(
                 [executor.submit(job.get_instance_info) for job in jobs]
             )
@@ -278,6 +278,12 @@ def parse_args():
         + "not just jobs of current user",
     )
     parser.add_argument(
+        "--threads",
+        type=int,
+        metavar="N",
+        help="Set max number of worker threads",
+    )
+    parser.add_argument(
         "--stats", action="store_true", help="Print job statistics before header"
     )
     parser.add_argument(
@@ -368,7 +374,7 @@ def print_jobs(jobs, args, formatter, path="", level=0):
     args.jobids = None
 
     futures = []
-    with concurrent.futures.ThreadPoolExecutor() as executor:
+    with concurrent.futures.ThreadPoolExecutor(args.threads) as executor:
         for job in children:
             futures.append(
                 executor.submit(get_jobs_recursive, job, args, formatter.fields)
