@@ -119,6 +119,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
     if args.recursive:
         attrs.update(fields2attrs["annotations"])
         attrs.update(fields2attrs["status"])
+        attrs.update(fields2attrs["userid"])
 
     if args.A:
         args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
@@ -271,6 +272,12 @@ def parse_args():
         help="With --recursive, only descend N levels",
     )
     parser.add_argument(
+        "--recurse-all",
+        action="store_true",
+        help="With --recursive, attempt to recurse all jobs, "
+        + "not just jobs of current user",
+    )
+    parser.add_argument(
         "--stats", action="store_true", help="Print job statistics before header"
     )
     parser.add_argument(
@@ -316,6 +323,15 @@ def color_reset(color_set):
         sys.stdout.write("\033[0;0m")
 
 
+def is_user_instance(job, args):
+    """Return True if this job should be target of recursive job list"""
+    return (
+        job.uri
+        and job.status_abbrev == "R"
+        and (args.recurse_all or job.userid == os.getuid())
+    )
+
+
 def print_jobs(jobs, args, formatter, path="", level=0):
     children = []
 
@@ -323,7 +339,7 @@ def print_jobs(jobs, args, formatter, path="", level=0):
         color_set = color_setup(args, job)
         print(formatter.format(job))
         color_reset(color_set)
-        if args.recursive and job.uri and job.status_abbrev == "R":
+        if args.recursive and is_user_instance(job, args):
             children.append(job)
 
     if not args.recursive or args.level == level:
@@ -365,6 +381,9 @@ def main():
 
     if args.jobids and args.filtered and not args.recursive:
         LOGGER.warning("Filtering options ignored with jobid list")
+
+    if args.recurse_all:
+        args.recursive = True
 
     if args.format:
         fmt = args.format
