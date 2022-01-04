@@ -19,8 +19,10 @@ import argparse
 import traceback
 import signal
 import threading
+import shutil
 from datetime import datetime, timedelta
 from string import Formatter
+from collections import namedtuple
 
 from flux.core.inner import ffi, raw
 from flux.utils.parsedatetime import Calendar
@@ -380,3 +382,213 @@ class OutputFormat:
             typestr = type(obj)
             raise KeyError(f"Invalid format field {exc} for {typestr}")
         return retval
+
+
+class Tree:
+    """Very simple pstree-like display for the console
+
+    Args:
+        label: Label for this node
+        prefix: Text which comes before connector and label
+        combine_children: combine like children as they are added
+    """
+
+    Connectors = namedtuple("Connectors", ["PIPE", "TEE", "ELBOW", "BLANK"])
+
+    connector_styles = {
+        "ascii": Connectors("|   ", "|-- ", "`-- ", "    "),
+        "box": Connectors("│   ", "├── ", "└── ", "    "),
+        "compact": Connectors("│ ", "├─", "└─", "  "),
+    }
+
+    def __init__(self, label, prefix="", combine_children=False):
+
+        self.label = label
+        self.prefix = prefix
+        if self.prefix:
+            self.prefix += " "
+
+        #  dictionary of prefix/label for duplicate child tracking:
+        self.duplicates = {}
+        self.duplicate_count = 1
+
+        self.children = []
+
+        #  True if attempt to combine duplicate children should be
+        #   made as they are added to the tree with self.append()
+        #   and self.append_tree():
+        self.combine_children = combine_children
+
+    def append(self, label, prefix=""):
+        """Append a new child, possibly combining duplicates
+
+        Args:
+            label: Label for this node
+            prefix: Optional prefix to display before tree part
+
+        Returns:
+            A new or existing Tree object (if duplicate)
+
+        """
+        if not self.combine_children:
+            return self.add(label, prefix, combine_children=False)
+
+        #  Create a key and check for existing duplicate children.
+        #  If found, simply increment the count of the existing node,
+        #  O/w, add a new child and new duplicate label
+        #
+        clabel = f"{prefix}{label}"
+        if clabel in self.duplicates:
+            self.duplicates[clabel].increment()
+        else:
+            tree = self.add(label, prefix, combine_children=True)
+            self.duplicates[clabel] = tree
+        return self.duplicates[clabel]
+
+    def append_tree(self, tree):
+        """Add a child Tree, combining duplicates
+
+        Args:
+            tree: the Tree object to append
+
+        Returns:
+            A new or existing Tree object (if duplicate)
+        """
+        if not self.combine_children or tree.children:
+            self.children.append(tree)
+            return tree
+        clabel = f"{tree.prefix}{tree.label}"
+        if clabel in self.duplicates:
+            self.duplicates[clabel].increment()
+        else:
+            self.children.append(tree)
+            self.duplicates[clabel] = tree
+        return self.duplicates[clabel]
+
+    def add(self, label, prefix="", combine_children=False):
+        """Add a child by prefix and label, does not combine duplicates
+
+        Args:
+            label: Label for this node
+            prefix: Optional prefix to display before tree part
+            combine_children: True if like children should be combined
+
+        Returns:
+            Tree: the new child Tree object
+        """
+        tree = Tree(label, prefix=prefix, combine_children=combine_children)
+        self.children.append(tree)
+        return tree
+
+    def increment(self):
+        self.duplicate_count = self.duplicate_count + 1
+
+    def _render(
+        self,
+        pstack=None,
+        connector="",
+        style="box",
+        max_level=None,
+        truncate=None,
+    ):
+
+        #  `pstack` is a stack of prefix characters used during
+        #   recursive walk of the Tree. This stack maintains the
+        #   extra prefix characters required before printing the
+        #   current tree connector and node label.
+        #
+        #  Note: the connector at the top of the stack is always
+        #   the connector required for the _next_ level down in the
+        #   tree. This is because we know what the prefix connector
+        #   should be at this level, not at the subsequent level.
+        #
+        if pstack is None:
+            pstack = []
+
+        if max_level is not None and len(pstack) > max_level:
+            return
+
+        if self.duplicate_count > 1:
+            label = f"{self.duplicate_count}*[{self.label}]"
+        else:
+            label = self.label
+
+        #  As noted above, we need to prefix this node with all characters
+        #   in `pstack` _except_ the character at the top of the stack,
+        #    which applies to the next level down.
+        #
+        prefix = "".join(pstack[:-1])
+
+        #  Generate the current line, truncating at 'truncate'
+        #   characters if necessary
+        #
+        result = f"{self.prefix}{prefix}{connector}{label}"
+        if truncate and len(result) > truncate:
+            result = result[: truncate - 1] + "+"
+
+        print(result)
+
+        cstyle = self.connector_styles[style]
+
+        for child in self.children:
+            if child == self.children[-1]:
+                #  If this is the last child, then push a BLANK prefix for
+                #   two levels down and an ELBLOW to connect this child
+                #   to its parent.
+                #
+                pstack.append(cstyle.BLANK)
+                connector = cstyle.ELBOW
+            else:
+                #  Otherwise, push a PIPE prefix for two levels down
+                #   and a TEE to connect this child to its parent.
+                #
+                pstack.append(cstyle.PIPE)
+                connector = cstyle.TEE
+
+            #  Finally, render this child and its children:
+            #
+            # pylint: disable=protected-access
+            child._render(
+                pstack,
+                connector=connector,
+                style=style,
+                max_level=max_level,
+                truncate=truncate,
+            )
+            pstack.pop()
+
+    def render(
+        self,
+        style="box",
+        level=None,
+        skip_root=False,
+        truncate=True,
+    ):
+        """Render a Tree to the console
+
+        Args:
+            style (str): style of connectors, "ascii" for ascii or "box" for
+                         unicode box drawing characters (default="box")
+            level (int): stop traversing at tree depth of ``level``.
+            skip_root(bool): Do not include root of tree in rendered output
+            truncate(bool): Chop long lines at current terminal width
+                            (or 132 columns if COLUMNS variable not set
+                            and current terminal width cannot be determined)
+        """
+        limit = None
+        if truncate:
+            limit = shutil.get_terminal_size((132, 25)).columns
+
+        if skip_root:
+            for child in self.children:
+                child.render(
+                    style=style,
+                    level=level,
+                    truncate=truncate,
+                )
+            return
+        self._render(
+            style=style,
+            max_level=level,
+            truncate=limit,
+        )
