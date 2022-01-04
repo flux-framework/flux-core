@@ -31,7 +31,7 @@ test_expect_success 'flux-uri passes through ssh and local URIs unchanged' '
 	test "$result" = "$local_uri" &&
 	result=$(flux uri --remote $local_uri) &&
 	test_debug "echo flux uri --remote $local_uri returns $result" &&
-	test "$result" = "ssh://$(hostname -s)/tmp/flux-xyzzy/local-0"
+	test "$result" = "ssh://$(hostname)/tmp/flux-xyzzy/local-0"
 '
 test_expect_success 'flux-uri pid resolver works' '
 	test "$(flux uri pid:$$)" =  "$FLUX_URI"
