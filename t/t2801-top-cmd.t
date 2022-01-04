@@ -87,6 +87,7 @@ test_expect_success NO_CHAIN_LINT 'flux-top quits on q keypress' '
 	wait $pid
 '
 test_expect_success NO_CHAIN_LINT 'flux-top can call itself recursively' '
+	SHELL=/bin/sh &&
 	flux jobs &&
 	flux proxy $(cat jobid2) flux jobs -c1 -no {id} >expected.id &&
 	cat <<-EOF >recurse.in &&
