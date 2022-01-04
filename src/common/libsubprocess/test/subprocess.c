@@ -2599,6 +2599,51 @@ void test_post_fork_hook (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 }
 
+void destroy_in_completion_cb (flux_subprocess_t *p)
+{
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_EXITED,
+        "subprocess state == EXITED in completion handler");
+    ok (flux_subprocess_status (p) != -1,
+        "subprocess status is valid");
+    ok (flux_subprocess_exit_code (p) == 0,
+        "subprocess exit code is 0");
+    completion_cb_count++;
+    flux_subprocess_destroy (p);
+}
+
+void test_destroy_in_completion (flux_reactor_t *r)
+{
+    char *av[] = { "/bin/true", NULL };
+    flux_cmd_t *cmd, *cmd2;
+    flux_reactor_t *r2;
+    flux_subprocess_t *p = NULL;
+
+    ok ((cmd = flux_cmd_create (1, av, NULL)) != NULL, "flux_cmd_create");
+
+    flux_subprocess_ops_t ops = {
+        .on_completion = destroy_in_completion_cb
+    };
+    completion_cb_count = 0;
+    p = flux_local_exec (r, 0, cmd, &ops, NULL);
+    ok (p != NULL, "flux_local_exec");
+
+    ok (flux_subprocess_state (p) == FLUX_SUBPROCESS_RUNNING,
+        "subprocess state == RUNNING after flux_local_exec");
+    ok ((flux_subprocess_pid (p) > (pid_t) 0),
+        "flux_local_exec() started pid %ld", (pid_t) flux_subprocess_pid (p));
+    ok ((cmd2 = flux_subprocess_get_cmd (p)) != NULL,
+        "flux_subprocess_get_cmd success");
+    ok ((r2 = flux_subprocess_get_reactor (p)) != NULL,
+        "flux_subprocess_get_reactor success");
+    ok (r == r2,
+        "flux_subprocess_get_reactor returns correct reactor");
+
+    int rc = flux_reactor_run (r, 0);
+    ok (rc == 0, "flux_reactor_run returned zero status");
+    ok (completion_cb_count == 1, "completion callback called 1 time");
+    flux_cmd_destroy (cmd);
+}
+
 int main (int argc, char *argv[])
 {
     flux_reactor_t *r;
@@ -2704,6 +2749,8 @@ int main (int argc, char *argv[])
     test_pre_exec_hook (r);
     diag ("post_fork_hook");
     test_post_fork_hook (r);
+    diag ("test_destroy_in_completion");
+    test_destroy_in_completion (r);
 
     end_fdcount = fdcount ();
 
