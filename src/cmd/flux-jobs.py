@@ -119,6 +119,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
     if args.recursive:
         attrs.update(fields2attrs["annotations"])
         attrs.update(fields2attrs["status"])
+        attrs.update(fields2attrs["userid"])
 
     if args.A:
         args.user = str(flux.constants.FLUX_USERID_UNKNOWN)
@@ -138,7 +139,7 @@ def fetch_jobs_flux(args, fields, flux_handle=None):
     jobs = jobs_rpc.jobs()
 
     if get_instance_info:
-        with concurrent.futures.ThreadPoolExecutor() as executor:
+        with concurrent.futures.ThreadPoolExecutor(args.threads) as executor:
             concurrent.futures.wait(
                 [executor.submit(job.get_instance_info) for job in jobs]
             )
@@ -271,6 +272,18 @@ def parse_args():
         help="With --recursive, only descend N levels",
     )
     parser.add_argument(
+        "--recurse-all",
+        action="store_true",
+        help="With --recursive, attempt to recurse all jobs, "
+        + "not just jobs of current user",
+    )
+    parser.add_argument(
+        "--threads",
+        type=int,
+        metavar="N",
+        help="Set max number of worker threads",
+    )
+    parser.add_argument(
         "--stats", action="store_true", help="Print job statistics before header"
     )
     parser.add_argument(
@@ -316,6 +329,34 @@ def color_reset(color_set):
         sys.stdout.write("\033[0;0m")
 
 
+def is_user_instance(job, args):
+    """Return True if this job should be target of recursive job list"""
+    return (
+        job.uri
+        and job.status_abbrev == "R"
+        and (args.recurse_all or job.userid == os.getuid())
+    )
+
+
+def get_jobs_recursive(job, args, fields):
+    jobs = []
+    stats = None
+    try:
+        #  Don't generate an error if we fail to connect to this
+        #   job. This could be because job services aren't up yet,
+        #   (OSError with errno ENOSYS) or this user is not the owner
+        #   of the job. Either way, simply skip descending into the job
+        #
+        handle = flux.Flux(str(job.uri))
+        jobs = fetch_jobs_flux(args, fields, flux_handle=handle)
+        stats = None
+        if args.stats:
+            stats = JobStats(handle).update_sync()
+    except (OSError, FileNotFoundError):
+        pass
+    return (job, jobs, stats)
+
+
 def print_jobs(jobs, args, formatter, path="", level=0):
     children = []
 
@@ -323,7 +364,7 @@ def print_jobs(jobs, args, formatter, path="", level=0):
         color_set = color_setup(args, job)
         print(formatter.format(job))
         color_reset(color_set)
-        if args.recursive and job.uri and job.status_abbrev == "R":
+        if args.recursive and is_user_instance(job, args):
             children.append(job)
 
     if not args.recursive or args.level == level:
@@ -331,24 +372,22 @@ def print_jobs(jobs, args, formatter, path="", level=0):
 
     #  Reset args.jobids since it won't apply recursively:
     args.jobids = None
+
+    futures = []
+    with concurrent.futures.ThreadPoolExecutor(args.threads) as executor:
+        for job in children:
+            futures.append(
+                executor.submit(get_jobs_recursive, job, args, formatter.fields)
+            )
+
     if path:
         path = f"{path}/"
 
-    for job in children:
-        try:
-            #  Don't generate an error if we fail to connect to this
-            #   job. This could be because job services aren't up yet,
-            #   (OSError with errno ENOSYS) or this user is not the owner
-            #   of the job. Either way, simply skip descending into the job
-            #
-            handle = flux.Flux(str(job.uri))
-            jobs = fetch_jobs_flux(args, formatter.fields, flux_handle=handle)
-        except (OSError, FileNotFoundError):
-            continue
+    for future in futures:
+        (job, jobs, stats) = future.result()
         thispath = f"{path}{job.id.f58}"
         print(f"\n{thispath}:")
-        if args.stats:
-            stats = JobStats(handle).update_sync()
+        if stats:
             print(
                 f"{stats.running} running, {stats.successful} completed, "
                 f"{stats.failed} failed, {stats.pending} pending"
@@ -365,6 +404,9 @@ def main():
 
     if args.jobids and args.filtered and not args.recursive:
         LOGGER.warning("Filtering options ignored with jobid list")
+
+    if args.recurse_all:
+        args.recursive = True
 
     if args.format:
         fmt = args.format
