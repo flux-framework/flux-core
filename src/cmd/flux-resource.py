@@ -18,9 +18,8 @@ from datetime import datetime
 import flux
 from flux.idset import IDset
 from flux.hostlist import Hostlist
-from flux.resource import ResourceSet
+from flux.resource import ResourceSet, resource_list, SchedResourceList
 from flux.rpc import RPC
-from flux.memoized_property import memoized_property
 
 
 def reload(args):
@@ -290,51 +289,6 @@ def status(args):
         print(formatter.format(line))
 
 
-class SchedResourceList:
-    """
-    Encapsulate response from sched.resource-status query.
-    The response will contain 3 Rv1 resource sets:
-        "all"       - all resources known to scheduler
-        "down"      - resources currently unavailable (drained or down)
-        "allocated" - resources currently allocated to jobs
-
-    From these sets, the "up" and "free" resource sets are
-    computed on-demand.
-
-    """
-
-    def __init__(self, resp):
-        for state in ["all", "down", "allocated"]:
-            rset = ResourceSet(resp.get(state))
-            rset.state = state
-            setattr(self, f"_{state}", rset)
-
-    def __getattr__(self, attr):
-        if attr.startswith("_"):
-            raise AttributeError
-        try:
-            return getattr(self, f"_{attr}")
-        except KeyError:
-            raise AttributeError(f"Invalid SchedResourceList attr {attr}")
-
-    #  Make class subscriptable, e.g. resources[state]
-    def __getitem__(self, item):
-        return getattr(self, item)
-
-    @memoized_property
-    # pylint: disable=invalid-name
-    def up(self):
-        res = self.all - self.down
-        res.state = "up"
-        return res
-
-    @memoized_property
-    def free(self):
-        res = self.up - self.allocated
-        res.state = "free"
-        return res
-
-
 def list_handler(args):
     valid_states = ["up", "down", "allocated", "free", "all"]
     headings = {
@@ -363,10 +317,9 @@ def list_handler(args):
     formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
 
     if args.from_stdin:
-        resp = json.load(sys.stdin)
+        resources = SchedResourceList(json.load(sys.stdin))
     else:
-        resp = RPC(flux.Flux(), "sched.resource-status").get()
-    resources = SchedResourceList(resp)
+        resources = resource_list(flux.Flux()).get()
 
     if not args.no_header:
         print(formatter.header())

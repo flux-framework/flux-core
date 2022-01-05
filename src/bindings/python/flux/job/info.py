@@ -19,6 +19,8 @@ from collections import namedtuple
 import flux.constants
 from flux.memoized_property import memoized_property
 from flux.job.JobID import JobID
+from flux.job.stats import JobStats
+from flux.resource import SchedResourceList
 from flux.uri import JobURI
 from flux.core.inner import raw
 
@@ -59,6 +61,29 @@ class ExceptionInfo:
         self.note = note
 
 
+class EmptyObject:
+    """Convenience "empty" object for use with string.format
+
+    This class can be used in place of a real class but returns
+    appropriate empty or unset value for various conversions, or
+    for string.format() calls.
+    """
+
+    def __getattr__(self, attr):
+        return EmptyObject()
+
+    def __repr__(self):
+        return ""
+
+    def __str__(self):
+        return ""
+
+    def __format__(self, spec):
+        # Strip trailing specifier (e.g. d, f)
+        spec = spec.rstrip("bcdoxXeEfFgGn%")
+        return "".__format__(spec)
+
+
 # AnnotationsInfo is a wrapper for a namedtuple.  We need this
 # object so that we can we detect when an attribute is missing and
 # ultimately return an empty string (e.g. when an attribute does not
@@ -86,9 +111,70 @@ class AnnotationsInfo:
         try:
             return object.__getattribute__(self.atuple, attr)
         except AttributeError:
-            # We return an empty AnnotationsInfo so that we can recursively
+            # We return an empty object so that we can recursively
             # handle errors.  e.g. annotations.user.illegal.illegal.illegal
-            return AnnotationsInfo({})
+            return EmptyObject()
+
+
+class StatsInfo(JobStats):
+    """Extend JobStats with default __repr__"""
+
+    def __init__(self, handle=None):
+        super().__init__(handle)
+
+    def __repr__(self):
+        return (
+            f"PD:{self.pending} R:{self.running} "
+            f"CD:{self.successful} F:{self.failed}"
+        )
+
+    def __format__(self, fmt):
+        return str(self).__format__(fmt)
+
+
+class InstanceInfo:
+    def __init__(self, uri=None):
+        self.initialized = False
+        try:
+            if not uri:
+                raise ValueError
+            handle = flux.Flux(str(uri))
+            future = handle.rpc("sched.resource-status")
+            self.stats = StatsInfo(handle).update_sync()
+            self.resources = SchedResourceList(future.get())
+            self.initialized = True
+            return
+        except (ValueError, OSError, FileNotFoundError):
+            self.stats = EmptyObject()
+            self.resources = EmptyObject()
+
+    @memoized_property
+    def utilization(self):
+        if self.initialized and self.resources.all.ncores:
+            res = self.resources
+            return res.allocated.ncores / res.all.ncores
+        return ""
+
+    @memoized_property
+    def gpu_utilization(self):
+        if self.initialized and self.resources.all.ngpus > 0:
+            res = self.resources
+            return res.allocated.ngpus / res.all.ngpus
+        return ""
+
+    @memoized_property
+    def progress(self):
+        if self.initialized:
+            stats = self.stats
+            if stats.total == 0:
+                return ""
+            return stats.inactive / stats.total
+        return ""
+
+    def __getattr__(self, attr):
+        if not self.initialized:
+            return ""
+        return self.__getattribute__(attr)
 
 
 class InfoList(list):
@@ -167,8 +253,15 @@ class JobInfo:
             raise AttributeError
         try:
             return getattr(self, "_{0}".format(attr))
-        except KeyError:
+        except (KeyError, AttributeError):
             raise AttributeError("invalid JobInfo attribute '{}'".format(attr))
+
+    def get_instance_info(self):
+        if self.uri and self.state_single == "R":  # pylint: disable=W0143
+            setattr(self, "_instance", InstanceInfo(self.uri))
+        else:
+            setattr(self, "_instance", InstanceInfo())
+        return self
 
     def get_runtime(self):
         if self.t_cleanup > 0 and self.t_run > 0:
@@ -326,6 +419,19 @@ class JobInfoFormat(flux.util.OutputFormat):
                         value = ""
                     else:
                         raise
+            elif conv == "P":
+                #  Convert a floating point to percentage
+                try:
+                    value = value * 100
+                    if value < 100:
+                        value = f"{value:.2g}%"
+                    else:
+                        value = f"{value:3.0f}%"
+                except (TypeError, ValueError):
+                    if orig_value == "":
+                        value = ""
+                    else:
+                        raise
             else:
                 value = super().convert_field(value, conv)
             return value
@@ -404,6 +510,25 @@ class JobInfoFormat(flux.util.OutputFormat):
         "user": "USER",
         "uri": "URI",
         "uri.local": "URI",
+        "instance.stats.total": "NJOBS",
+        "instance.utilization": "CPU%",
+        "instance.gpu_utilization": "GPU%",
+        "instance.progress": "PROG",
+        "instance.resources.all.ncores": "CORES",
+        "instance.resources.all.ngpus": "GPUS",
+        "instance.resources.all.nnodes": "NODES",
+        "instance.resources.up.ncores": "UP",
+        "instance.resources.up.ngpus": "UP",
+        "instance.resources.up.nnodes": "UP",
+        "instance.resources.down.ncores": "DOWN",
+        "instance.resources.down.ngpus": "DOWN",
+        "instance.resources.down.nnodes": "DOWN",
+        "instance.resources.allocated.ncores": "USED",
+        "instance.resources.allocated.ngpus": "USED",
+        "instance.resources.allocated.nnodes": "USED",
+        "instance.resources.free.ncores": "FREE",
+        "instance.resources.free.ngpus": "FREE",
+        "instance.resources.free.nnodes": "FREE",
     }
 
     def __init__(self, fmt):
@@ -426,6 +551,12 @@ class JobInfoFormat(flux.util.OutputFormat):
                     self.headings[field] = field_heading
                 elif field.startswith("sched.") or field.startswith("user."):
                     field_heading = field.upper()
+                    self.headings[field] = field_heading
+                elif field.startswith("instance."):
+                    field_heading = field[9:].upper()
+                    #  Shorten RESOURCES. headings
+                    if field_heading.startswith("RESOURCES."):
+                        field_heading = field_heading[10:]
                     self.headings[field] = field_heading
         super().__init__(self.headings, fmt, prepend="0.")
 

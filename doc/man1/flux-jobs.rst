@@ -141,10 +141,14 @@ the following conversion flags are supported by *flux-jobs*:
    convert a duration in floating point seconds to Flux Standard Duration (FSD).
    string.  Defaults to empty string if duration field does not exist.
 
-
 **!H**
    convert a duration to hours:minutes:seconds form (e.g. *{runtime!H}*).
    Defaults to empty string if duration field does not exist.
+
+**!P**
+   convert a floating point number into a percentage fitting in 4 characters
+   including the "%" character. E.g. 0.5 becomes "50%" 0.015 becomes 1.5%,
+   etc.
 
 Annotations can be retrieved via the *annotations* field name.
 Specific keys and sub-object keys can be retrieved separated by a
@@ -288,6 +292,34 @@ The field names that can be specified are:
 
 **user**
    short hand for *annotations.user*
+
+
+Field names which are specific to jobs which are also instances of Flux
+include:
+
+**instance.stats**
+   a short string describing current job statistics for the instance of
+   the form ``PD:{pending} R:{running} CD:{successful} F:{failed}``
+
+**instance.stats.total**
+   total number of jobs in any state in the instance.
+
+**instance.utilization**
+   number of cores currently allocated divided by the total number of cores.
+   Can be formatted as a percentage with ``!P``, e.g.
+   ``{instance.utilization!P:>4}``.
+
+**instance.gpu_utilization**
+   same as ``instance.utilization`` but for gpu resources
+
+**instance.progress**
+   number of inactive jobs divided by the total number of jobs.
+   Can be formatted as a percentage with ``{instance.progress!P:>4}``
+
+**instance.resources.<state>.{ncores,ngpus}**
+   number of cores, gpus in state ``state``, where ``state`` can be
+   ``all``, ``up``, ``down``, ``allocated``, or ``free``, e.g.
+   ``{instance.resources.all.ncores}``
 
 
 EXAMPLES
