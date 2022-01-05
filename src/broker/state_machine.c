@@ -280,7 +280,7 @@ static void action_quorum (struct state_machine *s)
     }
     if (s->ctx->rank > 0)
         quorum_check_parent (s);
-    else {
+    else if (s->quorum.timeout > 0.) {
         flux_timer_watcher_reset (s->quorum.timer, s->quorum.timeout, 0.);
         flux_watcher_start (s->quorum.timer);
     }
