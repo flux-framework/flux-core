@@ -15,6 +15,7 @@
 #include <flux/core.h>
 
 #include "src/common/libccan/ccan/str/str.h"
+#include "src/common/libccan/ccan/ptrint/ptrint.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libhostlist/hostlist.h"
@@ -27,9 +28,6 @@ static const char *ansi_red = "\033[31m";
 static const char *ansi_yellow = "\033[33m";
 //static const char *ansi_green = "\033[32m";
 static const char *ansi_dark_gray = "\033[90m";
-
-static const char *vt100_mode_line = "\033(0";
-static const char *vt100_mode_normal = "\033(B";
 
 static struct optparse_option status_opts[] = {
     { .name = "rank", .key = 'r', .has_arg = 1, .arginfo = "NODEID",
@@ -81,6 +79,15 @@ struct status {
     optparse_t *opt;
     struct timespec start;
     const char *wait;
+    zlistx_t *stack;
+};
+
+enum connector {
+    PIPE = 1,
+    TEE = 2,
+    ELBOW = 3,
+    BLANK = 4,
+    NIL = 5,
 };
 
 struct status_node {
@@ -88,6 +95,7 @@ struct status_node {
     const char *status;
     double duration;
     bool ghost;
+    enum connector connector;
 };
 
 static json_t *overlay_topology;
@@ -97,6 +105,19 @@ typedef bool (*map_f)(struct status *ctx,
                       struct status_node *node,
                       bool parent,
                       int level);
+
+static int status_prefix_push (struct status *ctx, enum connector c)
+{
+    if (zlistx_add_end (ctx->stack, int2ptr (c)) == NULL)
+        return -1;
+    return 0;
+}
+
+static void status_prefix_pop (struct status *ctx)
+{
+    if (zlistx_last (ctx->stack))
+        zlistx_detach_cur (ctx->stack);
+}
 
 static json_t *get_topology (flux_t *h)
 {
@@ -170,15 +191,47 @@ static const char *status_colorize (struct status *ctx,
     return status;
 }
 
+static const char *connector_string (enum connector c)
+{
+    switch (c) {
+        case PIPE:
+            return "│  ";
+        case TEE:
+            return "├─ ";
+        case ELBOW:
+            return "└─ ";
+        case BLANK:
+            return "   ";
+        case NIL:
+            return "";
+    }
+    return "";
+}
+
 static const char *status_indent (struct status *ctx, int n)
 {
+    void *val;
     static char buf[1024];
+    int nleft = sizeof (buf) - 1;
+    size_t size = zlistx_size (ctx->stack);
+    int i;
+
     if (optparse_hasopt (ctx->opt, "no-pretty") || n == 0)
         return "";
-    snprintf (buf, sizeof (buf), "%*s%s%s%s", n - 1, "",
-              vt100_mode_line,
-              "m", // '|_'
-              vt100_mode_normal);
+
+    buf[0] = '\0';
+    i = 0;
+    val = zlistx_first (ctx->stack);
+    while (val) {
+        /*  Only print up to the penultimate connector on the stack.
+         *  The final connector is for the next level down.
+         */
+        if (i++ == size - 1)
+            break;
+        (void) strncat (buf, connector_string (ptr2int (val)), nleft);
+        nleft -= 4;
+        val = zlistx_next (ctx->stack);
+    }
     return buf;
 }
 
@@ -214,8 +267,12 @@ static void status_print (struct status *ctx,
                           bool parent,
                           int level)
 {
-    printf ("%s%s: %s%s%s\n",
+    enum connector connector = optparse_hasopt (ctx->opt, "no-pretty") ?
+                               0 :
+                               node->connector;
+    printf ("%s%s%s: %s%s%s\n",
             status_indent (ctx, level),
+            connector_string (connector),
             status_getname (ctx, node->rank),
             status_colorize (ctx, node->status, node->ghost),
             status_duration (ctx, node->duration),
@@ -227,8 +284,9 @@ static void status_print_noname (struct status *ctx,
                                  bool parent,
                                  int level)
 {
-    printf ("%s%s%s%s\n",
+    printf ("%s%s%s%s%s\n",
             status_indent (ctx, level),
+            connector_string (node->connector),
             status_colorize (ctx, node->status, node->ghost),
             status_duration (ctx, node->duration),
             parent ? status_rpctime (ctx) : "");
@@ -274,24 +332,42 @@ static void status_ghostwalk (struct status *ctx,
                               json_t *topo,
                               int level,
                               const char *status,
+                              enum connector connector,
                               map_f fun)
 {
     json_t *children;
     size_t index;
+    size_t total;
     json_t *entry;
     struct status_node node = {
         .status = status,
         .duration = -1., // invalid - don't print
         .ghost = true,
+        .connector = connector,
     };
 
     if (json_unpack (topo, "{s:o}", "children", &children) < 0)
         return;
+    total = json_array_size (children);
     json_array_foreach (children, index, entry) {
         if (json_unpack (entry, "{s:i}", "rank", &node.rank) < 0)
             return;
+        if (index == total - 1) {
+            status_prefix_push (ctx, BLANK);
+            node.connector = ELBOW;
+        }
+        else {
+            status_prefix_push (ctx, PIPE);
+            node.connector = TEE;
+        }
         if (fun (ctx, &node, false, level + 1))
-            status_ghostwalk (ctx, entry, level + 1, status, fun);
+            status_ghostwalk (ctx,
+                              entry,
+                              level + 1,
+                              status,
+                              node.connector,
+                              fun);
+        status_prefix_pop (ctx);
     }
 }
 
@@ -341,9 +417,10 @@ static flux_future_t *health_rpc (struct status *ctx,
 static int status_healthwalk (struct status *ctx,
                               int rank,
                               int level,
+                              enum connector connector,
                               map_f fun)
 {
-    struct status_node node = { .ghost = false };
+    struct status_node node = { .ghost = false, .connector = connector };
     flux_future_t *f;
     json_t *children;
     int rc = 0;
@@ -365,8 +442,9 @@ static int status_healthwalk (struct status *ctx,
          */
         if (level == 0)
             log_msg_exit ("%s", future_strerror (f, errno));
-        printf ("%s%s: %s%s\n",
+        printf ("%s%s%s: %s%s\n",
                 status_indent (ctx, level),
+                connector_string (connector),
                 status_getname (ctx, rank),
                 future_strerror (f, errno),
                 status_rpctime (ctx));
@@ -376,10 +454,12 @@ static int status_healthwalk (struct status *ctx,
     if (fun (ctx, &node, true, level)) {
         if (children) {
             size_t index;
+            size_t total;
             json_t *entry;
             struct status_node child = { .ghost = false };
             json_t *topo;
 
+            total = json_array_size (children);
             json_array_foreach (children, index, entry) {
                 if (json_unpack (entry,
                                  "{s:i s:s s:f}",
@@ -387,15 +467,29 @@ static int status_healthwalk (struct status *ctx,
                                  "status", &child.status,
                                  "duration", &child.duration) < 0)
                     log_msg_exit ("error parsing child array entry");
+                if (index == total - 1) {
+                    status_prefix_push (ctx, BLANK);
+                    connector = child.connector = ELBOW;
+                }
+                else {
+                    status_prefix_push (ctx, PIPE);
+                    connector = child.connector = TEE;
+                }
                 if (fun (ctx, &child, false, level + 1)) {
                     if (streq (child.status, "offline")
                         || streq (child.status, "lost")
                         || status_healthwalk (ctx, child.rank,
-                                              level + 1, fun) < 0) {
+                                              level + 1, connector, fun) < 0) {
                         topo = topo_lookup (ctx, node.rank, child.rank);
-                        status_ghostwalk (ctx, topo, level + 1, child.status, fun);
+                        status_ghostwalk (ctx,
+                                          topo,
+                                          level + 1,
+                                          child.status,
+                                          connector,
+                                          fun);
                     }
                 }
+                status_prefix_pop (ctx);
             }
         }
     }
@@ -470,6 +564,8 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
     ctx.wait = optparse_get_str (p, "wait", NULL);
     if (!validate_wait (ctx.wait))
         log_msg_exit ("invalid --wait state");
+    if (!(ctx.stack = zlistx_new ()))
+        log_msg_exit ("failed to create status zlistx");
 
     if (optparse_hasopt (p, "summary"))
         fun = show_top;
@@ -478,8 +574,9 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
     else
         fun = show_all;
 
-    status_healthwalk (&ctx, rank, 0, fun);
+    status_healthwalk (&ctx, rank, 0, NIL, fun);
 
+    zlistx_destroy (&ctx.stack);
     return 0;
 }
 
