@@ -141,10 +141,14 @@ the following conversion flags are supported by *flux-jobs*:
    convert a duration in floating point seconds to Flux Standard Duration (FSD).
    string.  Defaults to empty string if duration field does not exist.
 
-
 **!H**
    convert a duration to hours:minutes:seconds form (e.g. *{runtime!H}*).
    Defaults to empty string if duration field does not exist.
+
+**!P**
+   convert a floating point number into a percentage fitting in 4 characters
+   including the "%" character. E.g. 0.5 becomes "50%" 0.015 becomes 1.5%,
+   etc.
 
 Annotations can be retrieved via the *annotations* field name.
 Specific keys and sub-object keys can be retrieved separated by a
