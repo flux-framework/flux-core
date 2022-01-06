@@ -39,6 +39,9 @@ RUN id $USER \
 # Add flux user and group
 #
 RUN useradd --user-group --system -d /home/flux -m flux
+RUN touch /home/flux/.bashrc
+RUN echo export XDG_RUNTIME_DIR=/run/user/$(id -u flux) >> /home/flux/.bashrc
+RUN echo export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u flux)/bus >> /home/flux/.bashrc
 
 #
 #  Add users besides fluxuser for mult-user testing
