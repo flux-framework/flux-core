@@ -31,7 +31,7 @@ RUN (cd /lib/systemd/system/sysinit.target.wants/; \
 RUN id $USER \
  || ( groupadd -g $UID $USER \
    && useradd -g $USER -u $UID -d /home/$USER -m $USER \
-   && printf "$USER ALL= NOPASSWD: ALL\\n" >> /etc/sudoers \
+   && printf "$USER ALL=(root,flux) NOPASSWD: ALL\\n" >> /etc/sudoers \
    && usermod -G wheel $USER \
  )
 
