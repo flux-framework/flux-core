@@ -32,7 +32,7 @@ test_expect_success 'start a set of Flux instances' '
 	$waitfile -t 60 ready
 '
 test_expect_success 'flux-jobs can get instance info' "
-	flux jobs -ao '{id.f58:>12} {instance.stats:^25} {instance.utilization!P:>4} {instance.gpu_utilization!P:>4}' > jobs.out &&
+	flux jobs -ao '{id.f58:>12} {instance.stats:^25} {instance.utilization!P:>5} {instance.gpu_utilization!P:>5}' > jobs.out &&
 	test_debug 'cat jobs.out'
 "
 test_expect_success 'flux-jobs -o {instance.stats} worked' '
@@ -55,7 +55,7 @@ test_expect_success 'flux-jobs instance fields empty for completed job' '
 '
 test_expect_success 'flux-jobs instance headers work' '
 	cat >headers.expected <<-EOF &&
-	       JOBID           STATS           CPU% GPU%
+	       JOBID           STATS           CORE%  GPU%
 	EOF
 	head -n1 jobs.out >headers &&
 	test_cmp headers.expected headers

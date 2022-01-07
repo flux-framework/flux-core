@@ -161,9 +161,9 @@ the following conversion flags are supported by *flux-jobs*:
    Defaults to empty string if duration field does not exist.
 
 **!P**
-   convert a floating point number into a percentage fitting in 4 characters
+   convert a floating point number into a percentage fitting in 5 characters
    including the "%" character. E.g. 0.5 becomes "50%" 0.015 becomes 1.5%,
-   etc.
+   and 0.0005 becomes 0.05% etc.
 
 Annotations can be retrieved via the *annotations* field name.
 Specific keys and sub-object keys can be retrieved separated by a
