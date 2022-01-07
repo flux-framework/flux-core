@@ -394,3 +394,8 @@ RESOURCES
 =========
 
 Flux: http://flux-framework.org
+
+SEE ALSO
+========
+
+:man1:`flux-pstree`
