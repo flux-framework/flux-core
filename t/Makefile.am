@@ -178,6 +178,7 @@ TESTSCRIPTS = \
 	t2800-jobs-instance-info.t \
 	t2801-top-cmd.t \
 	t2802-uri-cmd.t \
+	t2803-flux-pstree.t \
 	t2900-job-timelimits.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
