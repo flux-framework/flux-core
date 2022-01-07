@@ -31,7 +31,7 @@ RUN (cd /lib/systemd/system/sysinit.target.wants/; \
 RUN id $USER \
  || ( groupadd -g $UID $USER \
    && useradd -g $USER -u $UID -d /home/$USER -m $USER \
-   && printf "$USER ALL= NOPASSWD: ALL\\n" >> /etc/sudoers \
+   && printf "$USER ALL=(root,flux) NOPASSWD: ALL\\n" >> /etc/sudoers \
    && usermod -G wheel $USER \
  )
 
@@ -39,6 +39,9 @@ RUN id $USER \
 # Add flux user and group
 #
 RUN useradd --user-group --system -d /home/flux -m flux
+RUN touch /home/flux/.bashrc
+RUN echo export XDG_RUNTIME_DIR=/run/user/$(id -u flux) >> /home/flux/.bashrc
+RUN echo export DBUS_SESSION_BUS_ADDRESS=unix:path=/run/user/$(id -u flux)/bus >> /home/flux/.bashrc
 
 #
 #  Add users besides fluxuser for mult-user testing
