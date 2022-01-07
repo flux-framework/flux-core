@@ -90,12 +90,13 @@ test_expect_success 'flux jobs --recursive JOBID works' '
 	test_debug "cat recursive-jobid.out" &&
 	test $(grep -c : recursive-jobid.out) -eq 3
 '
-test_expect_success 'flux jobs --recurse-all tries to recurse other user jobs' '
+test_expect_success FLUX_SECURITY \
+	'flux jobs --recurse-all tries to recurse other user jobs' '
 	flux jobs -A --recurse-all > recurse-all.out &&
 	test_debug "cat recurse-all.out"  &&
 	grep $(cat altid): recurse-all.out
 '
-test_expect_success 'cancel alternate user job' '
+test_expect_success FLUX_SECURITY 'cancel alternate user job' '
 	flux job cancel $(cat altid)
 '
 test_done
