@@ -24,6 +24,7 @@ man1
    flux-module
    flux-ping
    flux-proxy
+   flux-pstree
    flux-resource
    flux-start
    flux-shell
