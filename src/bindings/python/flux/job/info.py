@@ -423,10 +423,10 @@ class JobInfoFormat(flux.util.OutputFormat):
                 #  Convert a floating point to percentage
                 try:
                     value = value * 100
-                    if value < 100:
-                        value = f"{value:.2g}%"
+                    if 0 < value < 1:
+                        value = f"{value:.2f}%"
                     else:
-                        value = f"{value:3.0f}%"
+                        value = f"{value:.3g}%"
                 except (TypeError, ValueError):
                     if orig_value == "":
                         value = ""
@@ -511,7 +511,7 @@ class JobInfoFormat(flux.util.OutputFormat):
         "uri": "URI",
         "uri.local": "URI",
         "instance.stats.total": "NJOBS",
-        "instance.utilization": "CPU%",
+        "instance.utilization": "CORE%",
         "instance.gpu_utilization": "GPU%",
         "instance.progress": "PROG",
         "instance.resources.all.ncores": "CORES",
