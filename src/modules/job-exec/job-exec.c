@@ -321,26 +321,6 @@ static void jobinfo_complete (struct jobinfo *job, const struct idset *ranks)
     }
 }
 
-void jobinfo_started (struct jobinfo *job)
-{
-    flux_t *h = job->ctx->h;
-    if (h && job->req) {
-        job->running = 1;
-        if (jobinfo_respond (h, job, "start") < 0)
-            flux_log_error (h, "jobinfo_started: flux_respond");
-    }
-}
-
-void jobinfo_reattached (struct jobinfo *job)
-{
-    flux_t *h = job->ctx->h;
-    if (h && job->req) {
-        job->running = 1;
-        if (jobinfo_respond (h, job, "reattached") < 0)
-            flux_log_error (h, "jobinfo_reattach: flux_respond");
-    }
-}
-
 static void kill_timer_cb (flux_reactor_t *r, flux_watcher_t *w,
                            int revents, void *arg)
 {
@@ -363,6 +343,106 @@ static void jobinfo_killtimer_start (struct jobinfo *job, double after)
                                                      kill_timer_cb,
                                                      job);
         flux_watcher_start (job->kill_timer);
+    }
+}
+
+static void timelimit_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
+{
+    struct jobinfo *job = arg;
+
+    /*  Timelimit reached. Generate "timeout" exception and send SIGALRM.
+     *  Wait for a gracetime then forcibly terminate job.
+     */
+    if (jobid_exception (job->h, job->id, job->req, "timeout", 0, 0,
+                         "resource allocation expired") < 0)
+        flux_log_error (job->h,
+                        "failed to generate timeout exception for %ju",
+                        job->id);
+    (*job->impl->kill) (job, SIGALRM);
+    flux_watcher_stop (w);
+    job->exception_in_progress = 1;
+    jobinfo_killtimer_start (job, job->kill_timeout);
+}
+
+static int jobinfo_set_expiration (struct jobinfo *job)
+{
+    flux_watcher_t *w = NULL;
+    double now;
+    double expiration = resource_set_expiration (job->R);
+    double starttime = resource_set_starttime (job->R);
+    double offset;
+
+    if (expiration < 0.) {
+        jobinfo_fatal_error (job,
+                             EINVAL,
+                             "Invalid resource set expiration %.2f",
+                             expiration);
+        return -1;
+    }
+
+    /* Timelimit disabled if expiration is set to 0.
+     */
+    if (expiration == 0.)
+        return 0;
+
+    /* N.B. Use of flux_reactor_time(3) here instead of flux_reactor_now(3)
+     *  is purposeful, Since this is used to find the time the job has
+     *  remaining, we should be as accurate as possible.
+     */
+    now = flux_reactor_time ();
+
+    /* Adjust expiration time based on delay between when scheduler
+     *  created R and when we received this job. O/w jobs may be
+     *  terminated due to timeouts prematurely when the system
+     *  is very busy, which can cause long delays between alloc and
+     *  start events.
+     */
+    if (starttime > 0.)
+        expiration += now - starttime;
+
+    offset = expiration - now;
+    if (offset <= 0.) {
+        jobinfo_fatal_error (job, 0, "job started after expiration");
+        return -1;
+    }
+    if (!(w = flux_timer_watcher_create (flux_get_reactor(job->h),
+                                         offset,
+                                         0.,
+                                         timelimit_cb,
+                                         job))) {
+        jobinfo_fatal_error (job, errno, "unable to start expiration timer");
+        return -1;
+    }
+    flux_watcher_start (w);
+    job->expiration_timer = w;
+    return 0;
+}
+
+
+void jobinfo_started (struct jobinfo *job)
+{
+    flux_t *h = job->ctx->h;
+    if (h && job->req) {
+        if (jobinfo_set_expiration (job) < 0)
+            flux_log_error (h,
+                            "failed to set expiration for %ju",
+                            (uintmax_t) job->id);
+        job->running = 1;
+        if (jobinfo_respond (h, job, "start") < 0)
+            flux_log_error (h, "jobinfo_started: flux_respond");
+    }
+}
+
+void jobinfo_reattached (struct jobinfo *job)
+{
+    flux_t *h = job->ctx->h;
+    if (h && job->req) {
+        job->running = 1;
+        if (jobinfo_respond (h, job, "reattached") < 0)
+            flux_log_error (h, "jobinfo_reattach: flux_respond");
     }
 }
 
@@ -666,68 +746,6 @@ static int jobinfo_load_implementation (struct jobinfo *job)
     return -1;
 }
 
-static void timelimit_cb (flux_reactor_t *r,
-                          flux_watcher_t *w,
-                          int revents,
-                          void *arg)
-{
-    struct jobinfo *job = arg;
-
-    /*  Timelimit reached. Generate "timeout" exception and send SIGALRM.
-     *  Wait for a gracetime then forcibly terminate job.
-     */
-    if (jobid_exception (job->h, job->id, job->req, "timeout", 0, 0,
-                         "resource allocation expired") < 0)
-        flux_log_error (job->h,
-                        "failed to generate timeout exception for %ju",
-                        job->id);
-    (*job->impl->kill) (job, SIGALRM);
-    flux_watcher_stop (w);
-    job->exception_in_progress = 1;
-    jobinfo_killtimer_start (job, job->kill_timeout);
-}
-
-static int jobinfo_set_expiration (struct jobinfo *job)
-{
-    flux_watcher_t *w = NULL;
-    double expiration = resource_set_expiration (job->R);
-    double offset;
-
-    if (expiration < 0.) {
-        jobinfo_fatal_error (job,
-                             EINVAL,
-                             "Invalid resource set expiration %.2f",
-                             expiration);
-        return -1;
-    }
-
-    /* Timelimit disabled if expiration is set to 0.
-     */
-    if (expiration == 0.)
-        return 0;
-
-    /* N.B. Use of flux_reactor_time(3) here instead of flux_reactor_now(3)
-     *  is purposeful, Since this is used to find the time the job has
-     *  remaining, we should be as accurate as possible.
-     */
-    offset = expiration - flux_reactor_time ();
-    if (offset <= 0.) {
-        jobinfo_fatal_error (job, 0, "job started after expiration");
-        return -1;
-    }
-    if (!(w = flux_timer_watcher_create (flux_get_reactor(job->h),
-                                         offset,
-                                         0.,
-                                         timelimit_cb,
-                                         job))) {
-        jobinfo_fatal_error (job, errno, "unable to start expiration timer");
-        return -1;
-    }
-    flux_watcher_start (w);
-    job->expiration_timer = w;
-    return 0;
-}
-
 /*  Completion for jobinfo_initialize(), finish init of jobinfo using
  *   data fetched from KVS
  */
@@ -757,8 +775,6 @@ static void jobinfo_start_continue (flux_future_t *f, void *arg)
         jobinfo_fatal_error (job, errno, "reading R: %s", error.text);
         goto done;
     }
-    if (jobinfo_set_expiration (job) < 0)
-        goto done;
     if (job->multiuser) {
         const char *J = jobinfo_kvs_lookup_get (f, "J");
         if (!J || !(job->J = strdup (J))) {
