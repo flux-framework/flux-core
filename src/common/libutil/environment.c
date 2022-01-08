@@ -146,8 +146,24 @@ static void environment_push_inner (struct environment *e,
     if (split) {
         char *split_value = NULL;
         size_t split_value_len = 0;
+        char *entry = NULL;
+
         argz_create_sep (value, item->sep, &split_value, &split_value_len);
-        char *entry = 0;
+        if (before && argz_count (split_value, split_value_len) > 1) {
+            /*  If inserting a split list "before", we need to reverse
+             *   the list, o/w the split list is pushed in the wrong
+             *   order (last element ends up as the first element)
+             */
+            char *rev = NULL;
+            size_t rev_len = 0;
+            while ((entry = argz_next (split_value, split_value_len, entry)))
+                argz_insert (&rev, &rev_len, rev, entry);
+            free (split_value);
+            split_value = rev;
+            split_value_len = rev_len;
+        }
+
+        entry = NULL;
         while((entry = argz_next (split_value, split_value_len, entry))) {
             char *found;
             if ((!strlen(entry)))
