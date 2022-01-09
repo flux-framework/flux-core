@@ -1,3 +1,55 @@
+flux-core version 0.33.0 - 2022-01-08
+-------------------------------------
+
+This release includes several improvements in the recursive tooling
+in Flux to enhance the user experience when dealing with nested jobs.
+
+Highlights include:
+
+ * Improved interface for job URI discovery allows `flux proxy` and
+   `flux top` to target jobids directly.
+ * Addition of a `-R, --recursive` option to `flux jobs`
+ * Support in `flux top` for selecting and recursing into sub-instances
+ * A new  `flux pstree` command for displaying job hierarchies in a tree
+
+### Fixes
+
+ * systemd: fix typo in flux.service unit file (#3996)
+ * libflux: check reactor flags (#4014)
+ * fix uninterruptible hang when attached to terminated jobs with -o pty
+   (#4010)
+ * cmd/flux-jobs: re-work -A option and clarify -a option (#4012)
+ * broker: avoid inappropriate quorum.timeout (#4027)
+ * add workaround for invalid job timeouts when system is busy (#4037)
+
+### New Features
+
+ * add FluxURIResolver Python class and flux-uri command for job URI
+   discovery (#3999)
+ * cmd: support high-level URIs and JOBID arguments in flux-top and
+   flux-proxy (#4004, #4015)
+ * flux-top: allow top to recursively call itself (#4011)
+ * flux-jobs: add --recursive option (#4019, #4024)
+ * flux-jobs: support instance-specific fields in output (#4022)
+ * add flux-pstree command (#4026)
+
+### Cleanup
+
+ * doc: add flux-resource(1),  clean up help output (#4021)
+ * doc: audit / cleanup SEE ALSO and RESOURCES, add cross references (#4007)
+ * doc: misc updates and fixes (#4009)
+ * connector cleanup (#4013)
+ * connectors: avoid embedded synchronous RPC for subscribe/unsubscribe
+   (#3997)
+
+### Test
+
+ * testsuite: minor testsuite fixes (#4023)
+ * ci: add ability to run tests under system instance (#3844)
+ * fluxorama: allow user to sudo to flux user, add common systemd environment
+   vars to flux user's bashrc (#4031)
+
+
 flux-core version 0.32.0 - 2021-12-05
 -------------------------------------
 
