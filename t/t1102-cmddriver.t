@@ -106,6 +106,12 @@ test_expect_success 'FLUX_*_PREPEND environment variables work' '
 	FLUX_PYTHONPATH_PREPEND=/foo \
 	  flux /usr/bin/printenv | grep "PYTHONPATH=/foo")
 '
+test_expect_success 'environment variables are prepended in correct order' '
+	( FLUX_EXEC_PATH_PREPEND=/foo:/bar \
+	  flux /usr/bin/printenv FLUX_EXEC_PATH > prepend.out ) &&
+	test_debug "cat prepend.out" &&
+	grep "^/foo:/bar:" prepend.out
+'
 test_expect_success 'flux-env output can be passed to eval' '
     (eval $(flux env))
 '
