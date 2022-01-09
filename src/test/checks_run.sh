@@ -191,7 +191,7 @@ checks_group "make clean..." make clean
 
 if test "$POISON" = "t" -a "$PROJECT" = "flux-core"; then
   checks_group "Installing poison libflux and commands..." \
-    bash src/test/docker/poison-libflux.sh /tmp/poison-cmds
+    sudo bash src/test/docker/poison-libflux.sh /tmp/poison-cmds
   export FLUX_EXEC_PATH=/tmp/poison-cmds
 fi
 
