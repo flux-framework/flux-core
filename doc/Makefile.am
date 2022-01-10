@@ -369,7 +369,8 @@ AM_CFLAGS = \
 	$(CODE_COVERAGE_CFLAGS)
 
 AM_LDFLAGS = \
-	$(CODE_COVERAGE_LIBS)
+	$(CODE_COVERAGE_LIBS) \
+	-no-install
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
