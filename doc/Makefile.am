@@ -378,8 +378,8 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux
 
 LDADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(LIBPTHREAD)
 
 check_PROGRAMS = \

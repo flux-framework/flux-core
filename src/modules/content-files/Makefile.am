@@ -26,8 +26,8 @@ content_files_la_LIBADD = \
 TESTS = test_filedb.t
 
 test_ldadd = \
-	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(LIBPTHREAD)
 
