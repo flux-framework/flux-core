@@ -9,7 +9,7 @@
 ###############################################################
 
 import json
-from collections import Mapping
+from collections.abc import Mapping
 
 from flux.idset import IDset
 from flux.resource import Rlist

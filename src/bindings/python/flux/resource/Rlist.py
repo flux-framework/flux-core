@@ -10,7 +10,7 @@
 
 import json
 import socket
-from collections import Mapping
+from collections.abc import Mapping
 
 from _flux._rlist import ffi, lib
 from flux.wrapper import Wrapper, WrapperPimpl
