@@ -1724,10 +1724,6 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
                                 timestamp) < 0)
             return -1;
     }
-    else {
-        (void) job_update_eventlog_seq (jsctx, job, eventlog_seq);
-    }
-
     return 0;
 }
 
