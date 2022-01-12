@@ -522,10 +522,9 @@ void test_destroy (int size, struct context *ctx[])
 void monitor_diag_cb (struct overlay *ov, void *arg)
 {
     struct context *ctx = arg;
-    diag ("%s: children=%d parent_success=%s parent_error=%s",
+    diag ("%s: children=%d parent_error=%s",
           ctx->name,
           overlay_get_child_peer_count (ov),
-          overlay_parent_success (ov) ? "true" : "false",
           overlay_parent_error (ov) ? "true" : "false");
 }
 
@@ -568,8 +567,8 @@ void check_monitor (flux_t *h)
         "%s: reactor ran until child connected", ctx[0]->name);
     ok (overlay_get_child_peer_count (ctx[0]->ov) == 2,
         "%s: overlay_get_child_peer_count returns 2", ctx[0]->name);
-    ok (overlay_parent_success (ctx[2]->ov) == true,
-        "%s: overlay_parent_connected returns true", ctx[2]->name);
+    ok (overlay_parent_error (ctx[2]->ov) == false,
+        "%s: overlay_parent_error returns false", ctx[2]->name);
 
     /* rank 3 will try to connect with simulated wrong flux-core version
      * Disable rank 0 stopping the reactor and enable rank 3 to do it.
@@ -584,7 +583,7 @@ void check_monitor (flux_t *h)
     ok (overlay_get_child_peer_count (ctx[0]->ov) == 2,
         "%s: overlay_get_child_peer_count is still 2", ctx[0]->name);
     ok (overlay_parent_error (ctx[3]->ov) == true,
-        "%s: overlay_parent_connected returns true", ctx[3]->name);
+        "%s: overlay_parent_error returns true", ctx[3]->name);
     overlay_set_monitor_cb (ctx[3]->ov, monitor_diag_cb, ctx[3]);
 
     /* rank 4 will have its rank altered to '42' for overlay.hello
@@ -599,7 +598,7 @@ void check_monitor (flux_t *h)
     ok (overlay_get_child_peer_count (ctx[0]->ov) == 2,
         "%s: overlay_get_child_peer_count is still 2", ctx[0]->name);
     ok (overlay_parent_error (ctx[4]->ov) == true,
-        "%s: overlay_parent_connected returns true", ctx[4]->name);
+        "%s: overlay_parent_error returns true", ctx[4]->name);
 
     test_destroy (size, ctx);
 }

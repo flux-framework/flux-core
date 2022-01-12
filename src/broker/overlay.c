@@ -329,12 +329,6 @@ bool overlay_parent_error (struct overlay *ov)
             || ov->parent.offline);
 }
 
-bool overlay_parent_success (struct overlay *ov)
-{
-    return (ov->parent.hello_responded
-            && !ov->parent.hello_error);
-}
-
 void overlay_set_version (struct overlay *ov, int version)
 {
     ov->version = version;

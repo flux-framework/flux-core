@@ -88,7 +88,6 @@ const char *overlay_get_bind_uri (struct overlay *ov);
 const char *overlay_get_parent_uri (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
 bool overlay_parent_error (struct overlay *ov);
-bool overlay_parent_success (struct overlay *ov);
 void overlay_set_version (struct overlay *ov, int version); // test only
 const char *overlay_get_uuid (struct overlay *ov);
 bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid);
@@ -108,7 +107,7 @@ int overlay_connect (struct overlay *ov);
 
 /* 'cb' is called each time the number of connected TBON peers changes,
  * or when a TBON parent error occurs.  Use overlay_get_child_peer_count(),
- * overlay_parent_error(), or overlay_parent_connected() from the callback.
+ * overlay_parent_error() from the callback.
  */
 void overlay_set_monitor_cb (struct overlay *ov,
                              overlay_monitor_f cb,
