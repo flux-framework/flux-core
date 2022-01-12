@@ -353,9 +353,11 @@ void overlay_log_torpid_children (struct overlay *ov)
     double now = flux_reactor_now (ov->reactor);
     char fsd[64];
     double torpid;
+    bool child_torpid_prev;
 
     if (torpid_max > 0) {
         foreach_overlay_child (ov, child) {
+            child_torpid_prev = child->torpid;
             if (subtree_is_online (child->status) && child->lastseen > 0) {
                 torpid = now - child->lastseen;
 
@@ -382,6 +384,8 @@ void overlay_log_torpid_children (struct overlay *ov)
                     }
                 }
             }
+            if (child_torpid_prev != child->torpid)
+                overlay_monitor_notify (ov, child->rank);
         }
     }
 }
