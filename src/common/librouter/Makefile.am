@@ -70,8 +70,8 @@ test_ldadd = \
         $(top_builddir)/src/common/librouter/librouter.la \
         $(top_builddir)/src/common/libtestutil/libtestutil.la \
         $(top_builddir)/src/common/libzmqutil/libzmqutil.la \
-        $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
+        $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libtap/libtap.la \
         $(ZMQ_LIBS)
 

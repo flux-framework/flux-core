@@ -11,7 +11,7 @@ fi
 #  Do not run system tests by default unless FLUX_ENABLE_SYSTEM_TESTS
 #   is set in environment (e.g. by CI), or the test run run with -d, --debug
 #
-if test -z "$FLUX_ENABLE_SYSTEM_TESTS" && test "$debug" = ""; then
+if test -z "$FLUX_ENABLE_SYSTEM_TESTS"; then
 	skip_all='skipping system tests since FLUX_ENABLE_SYSTEM_TESTS not set'
 	test_done
 fi

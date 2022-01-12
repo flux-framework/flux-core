@@ -413,11 +413,14 @@ dist_check_DATA = \
 	valgrind/valgrind.supp
 
 test_ldadd = \
-	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(LIBPTHREAD)
+
+test_ldflags = \
+	-no-install
 
 test_cppflags = \
 	-I$(top_srcdir)/src/common/libtap \
@@ -426,134 +429,167 @@ test_cppflags = \
 shmem_backtoback_t_SOURCES = shmem/backtoback.c
 shmem_backtoback_t_CPPFLAGS = $(test_cppflags)
 shmem_backtoback_t_LDADD = $(test_ldadd)
+shmem_backtoback_t_LDFLAGS = $(test_ldflags)
 
 loop_logstderr_SOURCES = loop/logstderr.c
 loop_logstderr_CPPFLAGS = $(test_cppflags)
 loop_logstderr_LDADD = $(test_ldadd)
+loop_logstderr_LDFLAGS = $(test_ldflags)
 
 loop_issue2337_SOURCES = loop/issue2337.c
 loop_issue2337_CPPFLAGS = $(test_cppflags)
 loop_issue2337_LDADD = $(test_ldadd)
+loop_issue2337_LDFLAGS = $(test_ldflags)
 
 loop_issue2711_SOURCES = loop/issue2711.c
 loop_issue2711_CPPFLAGS = $(test_cppflags)
 loop_issue2711_LDADD = $(test_ldadd)
+loop_issue2711_LDFLAGS = $(test_ldflags)
 
 mpi_hello_SOURCES = mpi/hello.c
 mpi_hello_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
 mpi_hello_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+mpi_hello_LDFLAGS = $(test_ldflags)
 
 mpi_abort_SOURCES = mpi/abort.c
 mpi_abort_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
 mpi_abort_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+mpi_abort_LDFLAGS = $(test_ldflags)
 
 mpi_version_SOURCES = mpi/version.c
 mpi_version_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
 mpi_version_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+mpi_version_LDFLAGS = $(test_ldflags)
 
 mpi_mpich_basic_adapt_SOURCES = mpi/mpich_basic/adapt.c mpi/mpich_basic/GetOpt.c mpi/mpich_basic/GetOpt.h
 mpi_mpich_basic_adapt_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
-mpi_mpich_basic_adapt_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+mpi_mpich_basic_adapt_LDADD = $(test_ldadd)
+mpi_mpich_basic_adapt_LDFLAGS = $(MPI_CLDFLAGS) $(test_ldflags)
 
 mpi_mpich_basic_netpipe_SOURCES = mpi/mpich_basic/netmpi.c mpi/mpich_basic/GetOpt.c mpi/mpich_basic/GetOpt.h
 mpi_mpich_basic_netpipe_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
-mpi_mpich_basic_netpipe_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+mpi_mpich_basic_netpipe_LDADD = $(test_ldadd)
+mpi_mpich_basic_netpipe_LDFLAGS = $(MPI_CLDFLAGS) $(test_ldflags)
 
 mpi_mpich_basic_patterns_SOURCES = mpi/mpich_basic/patterns.c
 mpi_mpich_basic_patterns_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
-mpi_mpich_basic_patterns_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+mpi_mpich_basic_patterns_LDADD = $(test_ldadd)
+mpi_mpich_basic_patterns_LDFLAGS = $(MPI_CLDFLAGS) $(test_ldflags)
 
 mpi_mpich_basic_srtest_SOURCES = mpi/mpich_basic/srtest.c
 mpi_mpich_basic_srtest_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
-mpi_mpich_basic_srtest_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+mpi_mpich_basic_srtest_LDADD = $(test_ldadd)
+mpi_mpich_basic_srtest_LDFLAGS = $(MPI_CLDFLAGS) $(test_ldflags)
 
 mpi_mpich_basic_self_SOURCES = mpi/mpich_basic/self.c
 mpi_mpich_basic_self_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
 mpi_mpich_basic_self_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+mpi_mpich_basic_self_LDFLAGS = $(MPI_CLDFLAGS) $(test_ldflags)
 
 mpi_mpich_basic_sendrecv_SOURCES = mpi/mpich_basic/sendrecv.c
 mpi_mpich_basic_sendrecv_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
 mpi_mpich_basic_sendrecv_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+mpi_mpich_basic_sendrecv_LDFLAGS = $(MPI_CLDFLAGS) $(test_ldflags)
 
 mpi_mpich_basic_simple_SOURCES = mpi/mpich_basic/simple.c
 mpi_mpich_basic_simple_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
 mpi_mpich_basic_simple_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
+mpi_mpich_basic_simple_LDFLAGS = $(MPI_CLDFLAGS) $(test_ldflags)
 
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)
 kvs_torture_LDADD = $(test_ldadd)
+kvs_torture_LDFLAGS = $(test_ldflags)
 
 kvs_dtree_SOURCES = kvs/dtree.c
 kvs_dtree_CPPFLAGS = $(test_cppflags)
 kvs_dtree_LDADD = $(test_ldadd)
+kvs_dtree_LDFLAGS = $(test_ldflags)
 
 kvs_blobref_SOURCES = kvs/blobref.c
 kvs_blobref_CPPFLAGS = $(test_cppflags)
 kvs_blobref_LDADD = $(test_ldadd)
+kvs_blobref_LDFLAGS = $(test_ldflags)
 
 kvs_commit_SOURCES = kvs/commit.c
 kvs_commit_CPPFLAGS = $(test_cppflags)
 kvs_commit_LDADD = $(test_ldadd)
+kvs_commit_LDFLAGS = $(test_ldflags)
 
 kvs_fence_api_SOURCES = kvs/fence_api.c
 kvs_fence_api_CPPFLAGS = $(test_cppflags)
 kvs_fence_api_LDADD = $(test_ldadd)
+kvs_fence_api_LDFLAGS = $(test_ldflags)
 
 kvs_transactionmerge_SOURCES = kvs/transactionmerge.c
 kvs_transactionmerge_CPPFLAGS = $(test_cppflags)
 kvs_transactionmerge_LDADD = $(test_ldadd)
+kvs_transactionmerge_LDFLAGS = $(test_ldflags)
 
 kvs_fence_namespace_remove_SOURCES = kvs/fence_namespace_remove.c
 kvs_fence_namespace_remove_CPPFLAGS = $(test_cppflags)
 kvs_fence_namespace_remove_LDADD = $(test_ldadd)
+kvs_fence_namespace_remove_LDFLAGS = $(test_ldflags)
 
 kvs_fence_invalid_SOURCES = kvs/fence_invalid.c
 kvs_fence_invalid_CPPFLAGS = $(test_cppflags)
 kvs_fence_invalid_LDADD = $(test_ldadd)
+kvs_fence_invalid_LDFLAGS = $(test_ldflags)
 
 kvs_lookup_invalid_SOURCES = kvs/lookup_invalid.c
 kvs_lookup_invalid_CPPFLAGS = $(test_cppflags)
 kvs_lookup_invalid_LDADD = $(test_ldadd)
+kvs_lookup_invalid_LDFLAGS = $(test_ldflags)
 
 kvs_commit_order_SOURCES = kvs/commit_order.c
 kvs_commit_order_CPPFLAGS = $(test_cppflags)
 kvs_commit_order_LDADD = $(test_ldadd)
+kvs_commit_order_LDFLAGS = $(test_ldflags)
 
 kvs_watch_disconnect_SOURCES = kvs/watch_disconnect.c
 kvs_watch_disconnect_CPPFLAGS = $(test_cppflags)
 kvs_watch_disconnect_LDADD = $(test_ldadd)
+kvs_watch_disconnect_LDFLAGS = $(test_ldflags)
 
 kvs_issue1760_SOURCES = kvs/issue1760.c
 kvs_issue1760_CPPFLAGS = $(test_cppflags)
 kvs_issue1760_LDADD = $(test_ldadd)
+kvs_issue1760_LDFLAGS = $(test_ldflags)
 
 kvs_issue1876_SOURCES = kvs/issue1876.c
 kvs_issue1876_CPPFLAGS = $(test_cppflags)
 kvs_issue1876_LDADD = $(test_ldadd)
+kvs_issue1876_LDFLAGS = $(test_ldflags)
 
 kvs_waitcreate_cancel_SOURCES = kvs/waitcreate_cancel.c
 kvs_waitcreate_cancel_CPPFLAGS = $(test_cppflags)
 kvs_waitcreate_cancel_LDADD = $(test_ldadd)
+kvs_waitcreate_cancel_LDFLAGS = $(test_ldflags)
 
 kvs_setrootevents_SOURCES = kvs/setrootevents.c
 kvs_setrootevents_CPPFLAGS = $(test_cppflags)
 kvs_setrootevents_LDADD = $(test_ldadd)
+kvs_setrootevents_LDFLAGS = $(test_ldflags)
 
 kvs_checkpoint_SOURCES = kvs/checkpoint.c
 kvs_checkpoint_CPPFLAGS = $(test_cppflags)
 kvs_checkpoint_LDADD = $(test_ldadd)
+kvs_checkpoint_LDFLAGS = $(test_ldflags)
 
 request_treq_SOURCES = request/treq.c
 request_treq_CPPFLAGS = $(test_cppflags)
 request_treq_LDADD = $(test_ldadd)
+request_treq_LDFLAGS = $(test_ldflags)
 
 request_rpc_SOURCES = request/rpc.c
 request_rpc_CPPFLAGS = $(test_cppflags)
 request_rpc_LDADD = $(test_ldadd)
+request_rpc_LDFLAGS = $(test_ldflags)
 
 request_rpc_stream_SOURCES = request/rpc_stream.c
 request_rpc_stream_CPPFLAGS = $(test_cppflags)
 request_rpc_stream_LDADD = $(test_ldadd)
+request_rpc_stream_LDFLAGS = $(test_ldflags)
 
 module_parent_la_SOURCES = module/parent.c
 module_parent_la_CPPFLAGS = $(test_cppflags)
@@ -573,6 +609,7 @@ module_running_la_LIBADD = $(test_ldadd)
 barrier_tbarrier_SOURCES = barrier/tbarrier.c
 barrier_tbarrier_CPPFLAGS = $(test_cppflags)
 barrier_tbarrier_LDADD = $(test_ldadd)
+barrier_tbarrier_LDFLAGS = $(test_ldflags)
 
 request_req_la_SOURCES = request/req.c
 request_req_la_CPPFLAGS = $(test_cppflags)
@@ -583,16 +620,19 @@ shell_rcalc_SOURCES = shell/rcalc.c
 shell_rcalc_CPPFLAGS = $(test_cppflags)
 shell_rcalc_LDADD = $(top_builddir)/src/shell/libshell.la \
 	$(test_ldadd)
+shell_rcalc_LDFLAGS = $(test_ldflags)
 
 shell_lptest_SOURCES = shell/lptest.c
 shell_lptest_CPPFLAGS = $(test_cppflags)
 shell_lptest_LDADD = $(test_ldadd)
+shell_lptest_LDFLAGS = $(test_ldflags)
 
 shell_mpir_SOURCES = shell/mpir.c
 shell_mpir_CPPFLAGS = $(test_cppflags)
 shell_mpir_LDADD = \
 	$(top_builddir)/src/shell/libmpir.la \
 	$(test_ldadd)
+shell_mpir_LDFLAGS = $(test_ldflags)
 
 debug_stall_SOURCES = debug/stall.c
 debug_stall_CPPFLAGS = $(test_cppflags)
@@ -600,22 +640,27 @@ debug_stall_CPPFLAGS = $(test_cppflags)
 reactor_reactorcat_SOURCES = reactor/reactorcat.c
 reactor_reactorcat_CPPFLAGS = $(test_cppflags)
 reactor_reactorcat_LDADD = $(test_ldadd)
+reactor_reactorcat_LDFLAGS = $(test_ldflags)
 
 rexec_rexec_SOURCES = rexec/rexec.c
 rexec_rexec_CPPFLAGS = $(test_cppflags)
 rexec_rexec_LDADD = $(test_ldadd)
+rexec_rexec_LDFLAGS = $(test_ldflags)
 
 rexec_rexec_ps_SOURCES = rexec/rexec_ps.c
 rexec_rexec_ps_CPPFLAGS = $(test_cppflags)
 rexec_rexec_ps_LDADD = $(test_ldadd)
+rexec_rexec_ps_LDFLAGS = $(test_ldflags)
 
 rexec_rexec_count_stdout_SOURCES = rexec/rexec_count_stdout.c
 rexec_rexec_count_stdout_CPPFLAGS = $(test_cppflags)
 rexec_rexec_count_stdout_LDADD = $(test_ldadd)
+rexec_rexec_count_stdout_LDFLAGS = $(test_ldflags)
 
 rexec_rexec_getline_SOURCES = rexec/rexec_getline.c
 rexec_rexec_getline_CPPFLAGS = $(test_cppflags)
 rexec_rexec_getline_LDADD = $(test_ldadd)
+rexec_rexec_getline_LDFLAGS = $(test_ldflags)
 
 ingest_job_manager_dummy_la_SOURCES = ingest/job-manager-dummy.c
 ingest_job_manager_dummy_la_CPPFLAGS = $(test_cppflags)
@@ -625,18 +670,22 @@ ingest_job_manager_dummy_la_LIBADD = $(test_ldadd)
 ingest_submitbench_SOURCES = ingest/submitbench.c
 ingest_submitbench_CPPFLAGS = $(test_cppflags)
 ingest_submitbench_LDADD = $(test_ldadd)
+ingest_submitbench_LDFLAGS = $(test_ldflags)
 
 job_manager_list_jobs_SOURCES = job-manager/list-jobs.c
 job_manager_list_jobs_CPPFLAGS = $(test_cppflags)
 job_manager_list_jobs_LDADD = $(test_ldadd)
+job_manager_list_jobs_LDFLAGS = $(test_ldflags)
 
 job_manager_print_constants_SOURCES = job-manager/print-constants.c
 job_manager_print_constants_CPPFLAGS = $(test_cppflags)
 job_manager_print_constants_LDADD = $(test_ldadd)
+job_manager_print_constants_LDFLAGS = $(test_ldflags)
 
 job_manager_events_journal_stream_SOURCES = job-manager/events_journal_stream.c
 job_manager_events_journal_stream_CPPFLAGS = $(test_cppflags)
 job_manager_events_journal_stream_LDADD = $(test_ldadd)
+job_manager_events_journal_stream_LDFLAGS = $(test_ldflags)
 
 disconnect_watcher_la_SOURCES = disconnect/watcher.c
 disconnect_watcher_la_CPPFLAGS = $(test_cppflags)
@@ -648,6 +697,7 @@ sched_simple_jj_reader_CPPFLAGS = $(test_cppflags)
 sched_simple_jj_reader_LDADD = \
 	$(top_builddir)/src/modules/sched-simple/libjj.la \
 	$(test_ldadd)
+sched_simple_jj_reader_LDFLAGS = $(test_ldflags)
 
 shell_plugins_dummy_la_SOURCES = shell/plugins/dummy.c
 shell_plugins_dummy_la_CPPFLAGS = $(test_cppflags)
@@ -819,19 +869,23 @@ hwloc_hwloc_convert_SOURCES = hwloc/hwloc-convert.c
 hwloc_hwloc_convert_CPPFLAGS = $(HWLOC_CFLAGS) $(test_cppflags)
 hwloc_hwloc_convert_LDADD = $(HWLOC_LIBS) \
 	$(test_ldadd)
+hwloc_hwloc_convert_LDFLAGS = $(test_ldadd)
 
 hwloc_hwloc_version_SOURCES = hwloc/hwloc-version.c
 hwloc_hwloc_version_CPPFLAGS = $(HWLOC_CFLAGS) $(test_cppflags)
 hwloc_hwloc_version_LDADD = $(HWLOC_LIBS) \
 	$(test_ldadd)
+hwloc_hwloc_version_LDFLAGS = $(test_ldadd)
 
 util_jobspec1_validate_SOURCES = util/jobspec1-validate.c
 util_jobspec1_validate_CPPFLAGS = $(test_cppflags)
 util_jobspec1_validate_LDADD = $(test_ldadd)
+util_jobspec1_validate_LDFLAGS = $(test_ldflags)
 
 util_handle_SOURCES = util/handle.c
 util_handle_CPPFLAGS = $(test_cppflags)
 util_handle_LDADD = $(test_ldadd)
+util_handle_LDFLAGS = $(test_ldflags)
 
 stats_stats_basic_la_SOURCES = stats/stats-basic.c
 stats_stats_basic_la_CPPFLAGS = $(test_cppflags)

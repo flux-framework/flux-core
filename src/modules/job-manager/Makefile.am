@@ -123,8 +123,8 @@ test_ldadd = \
 	libjob-manager.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
-	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(LIBPTHREAD) $(JANSSON_LIBS)
 
 test_cppflags = \

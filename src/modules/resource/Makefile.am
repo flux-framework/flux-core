@@ -46,8 +46,8 @@ TESTS = test_rutil.t
 
 test_ldadd = \
         $(top_builddir)/src/common/librlist/librlist.la \
-        $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libflux-core.la \
+        $(top_builddir)/src/common/libflux-internal.la \
         $(top_builddir)/src/common/libtap/libtap.la \
 	$(HWLOC_LIBS) \
 	$(JANSSON_LIBS) \

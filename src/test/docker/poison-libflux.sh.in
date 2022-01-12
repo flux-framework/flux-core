@@ -2,10 +2,14 @@
 #
 #  Build a "poison" libflux-core.so to install in system path.
 #
+#  Also put some poison commands in a fake FLUX_EXEC_PATH given on
+#   commandline.
+#
 #  This will hopefully ensure no flux-core internal tests try to
 #   load the system libflux-core.so
 #
 
+CMDDIR=${1:-/tmp/poison-cmds}
 WORKDIR=$(mktemp -d)
 printf " Changing working directory to $WORKDIR\n"
 cd $WORKDIR || exit 1
@@ -85,5 +89,19 @@ for lib in core idset optparse schedutil hostlist; do
     ln -sf ${LIBDIR}/libflux-${lib}.so ${LIBDIR}/libflux-${lib}.so.${suffix}
     ln -sf ${LIBDIR}/libflux-${lib}.so ${LIBDIR}/libflux-${lib}.so.${major}
 
+done
+
+printf " Installing poison flux commands...\n"
+mkdir -p -m 0755 $CMDDIR
+for cmd in \
+	terminus ping keygen logger event module kvs start job queue exec \
+	cron mini jobs reosurce admin jobtap job-validator \
+	job-exec-override perilog-run uri pstree; do
+	cat <<-EOF >${CMDDIR}/flux-${cmd}
+	#!/bin/sh
+	printf "Error: running poison command $0\n"
+	exit 1
+	EOF
+	chmod +x ${CMDDIR}/flux-${cmd}
 done
 

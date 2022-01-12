@@ -39,6 +39,13 @@ if test -n "$FLUX_TEST_INSTALLED_PATH"; then
 else # normal case, use ${top_builddir}/src/cmd/flux
     PATH=$FLUX_BUILD_DIR/src/cmd:$PATH
     fluxbin=$FLUX_BUILD_DIR/src/cmd/flux
+
+    #  Ensure that the built libflux-*.so are found before any system
+    #   installed versions. This is necessary because sometimes libtool
+    #   will use -rpath /usr/lib64 even for uninstalled test programs
+    #   (e.g. compiled MPI test programs like t/mpi/version)
+    #
+    export LD_LIBRARY_PATH="${FLUX_BUILD_DIR}/src/common/.libs:$LD_LIBRARY_PATH"
 fi
 export PATH
 

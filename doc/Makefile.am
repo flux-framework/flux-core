@@ -369,7 +369,8 @@ AM_CFLAGS = \
 	$(CODE_COVERAGE_CFLAGS)
 
 AM_LDFLAGS = \
-	$(CODE_COVERAGE_LIBS)
+	$(CODE_COVERAGE_LIBS) \
+	-no-install
 
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
@@ -377,8 +378,8 @@ AM_CPPFLAGS = \
 	-I$(top_builddir)/src/common/libflux
 
 LDADD = \
-	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
+	$(top_builddir)/src/common/libflux-internal.la \
 	$(LIBPTHREAD)
 
 check_PROGRAMS = \
