@@ -1478,6 +1478,20 @@ static void disconnect_cb (flux_t *h,
         flux_log (h, LOG_DEBUG, "overlay: goodbye to %d health clients", count);
 }
 
+const char *overlay_get_subtree_status (struct overlay *ov, int rank)
+{
+    const char *result = "unknown";
+
+    if (rank == ov->rank)
+        result = subtree_status_str (ov->status);
+    else {
+        struct child *child;
+        if ((child = child_lookup_byrank (ov, rank)))
+            result = subtree_status_str (child->status);
+    }
+    return result;
+}
+
 /* Recursive function to build subtree topology object.
  * Right now the tree is regular.  In the future support the configuration
  * of irregular tree topologies.

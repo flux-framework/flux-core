@@ -105,6 +105,11 @@ void overlay_set_ipv6 (struct overlay *ov, int enable);
  */
 json_t *overlay_get_subtree_topo (struct overlay *ov, int rank);
 
+/* Fetch status for TBON subtree rooted at 'rank'.  If 'rank' is not this
+ * broker's rank or one of its direct descendants, "unknown" is returned.
+ */
+const char *overlay_get_subtree_status (struct overlay *ov, int rank);
+
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they
  * try to connect.
