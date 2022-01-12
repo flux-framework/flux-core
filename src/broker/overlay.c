@@ -114,6 +114,11 @@ static const double sync_max = 5.0;
 static const double idle_min = 5.0;
 static const double idle_max = 30.0;
 
+struct overlay_monitor {
+    overlay_monitor_f cb;
+    void *arg;
+};
+
 struct overlay {
     zcert_t *cert;
     struct zmqutil_zap *zap;
@@ -144,11 +149,7 @@ struct overlay {
     struct timespec status_timestamp;
     struct zmqutil_monitor *bind_monitor;
 
-    overlay_monitor_f child_monitor_cb;
-    void *child_monitor_arg;
-
-    overlay_loss_f loss_cb;
-    void *loss_arg;
+    zlist_t *monitor_callbacks;
 
     overlay_recv_f recv_cb;
     void *recv_arg;
@@ -228,10 +229,15 @@ static void subtree_status_update (struct overlay *ov)
     }
 }
 
-static void overlay_monitor_notify (struct overlay *ov)
+static void overlay_monitor_notify (struct overlay *ov, uint32_t rank)
 {
-    if (ov->child_monitor_cb)
-        ov->child_monitor_cb (ov, ov->child_monitor_arg);
+    struct overlay_monitor *mon;
+
+    mon = zlist_first (ov->monitor_callbacks);
+    while (mon) {
+        mon->cb (ov, rank, mon->arg);
+        mon = zlist_next (ov->monitor_callbacks);
+    }
 }
 
 static int child_count (uint32_t rank, uint32_t size, int k)
@@ -240,25 +246,6 @@ static int child_count (uint32_t rank, uint32_t size, int k)
     for (count = 0; kary_childof (k, size, rank, count) != KARY_NONE; count++)
         ;
     return count;
-}
-
-static void overlay_loss_notify (struct overlay *ov,
-                                 struct child *child,
-                                 int status)
-{
-    if (ov->loss_cb) {
-        json_t *topo;
-        if (!(topo = overlay_get_subtree_topo (ov, child->rank))) {
-            flux_log_error (ov->h, "overlay_loss_notify failed");
-            return;
-        }
-        ov->loss_cb (ov,
-                     child->rank,
-                     subtree_status_str (status),
-                     topo,
-                     ov->loss_arg);
-        json_decref (topo);
-    }
 }
 
 int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank)
@@ -710,7 +697,6 @@ static void overlay_child_status_update (struct overlay *ov,
             && !subtree_is_online (status)) {
             zhashx_delete (ov->child_hash, child->uuid);
             rpc_track_purge (child->tracker, fail_child_rpcs, ov);
-            overlay_loss_notify (ov, child, status);
         }
         else if (!subtree_is_online (child->status)
             && subtree_is_online (status)) {
@@ -721,7 +707,7 @@ static void overlay_child_status_update (struct overlay *ov,
         monotime (&child->status_timestamp);
 
         subtree_status_update (ov);
-        overlay_monitor_notify (ov);
+        overlay_monitor_notify (ov, child->rank);
         overlay_health_respond_all (ov);
     }
 }
@@ -973,7 +959,7 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
                 (void)zsock_disconnect (ov->parent.zsock, "%s", ov->parent.uri);
                 ov->parent.offline = true;
                 rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
-                overlay_monitor_notify (ov);
+                overlay_monitor_notify (ov, FLUX_NODEID_ANY);
             }
             else
                 logdrop (ov, OVERLAY_UPSTREAM, msg, "unknown keepalive type");
@@ -1123,13 +1109,13 @@ static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
     snprintf (ov->parent.uuid, sizeof (ov->parent.uuid), "%s", uuid);
     ov->parent.hello_responded = true;
     ov->parent.hello_error = false;
-    overlay_monitor_notify (ov);
+    overlay_monitor_notify (ov, FLUX_NODEID_ANY);
     return;
 error:
     log_msg ("overlay.hello: %s", errstr ? errstr : flux_strerror (errno));
     ov->parent.hello_responded = true;
     ov->parent.hello_error = true;
-    overlay_monitor_notify (ov);
+    overlay_monitor_notify (ov, FLUX_NODEID_ANY);
 }
 
 /* Send overlay.hello message to TBON parent.
@@ -1342,20 +1328,22 @@ int overlay_register_attrs (struct overlay *overlay)
     return 0;
 }
 
-void overlay_set_monitor_cb (struct overlay *ov,
-                             overlay_monitor_f cb,
-                             void *arg)
+int overlay_set_monitor_cb (struct overlay *ov,
+                            overlay_monitor_f cb,
+                            void *arg)
 {
-    ov->child_monitor_cb = cb;
-    ov->child_monitor_arg = arg;
-}
+    struct overlay_monitor *mon;
 
-void overlay_set_loss_cb (struct overlay *ov,
-                          overlay_loss_f cb,
-                          void *arg)
-{
-    ov->loss_cb = cb;
-    ov->loss_arg = arg;
+    if (!(mon = calloc (1, sizeof (*mon))))
+        return -1;
+    mon->cb = cb;
+    mon->arg = arg;
+    if (zlist_append (ov->monitor_callbacks, mon) < 0) {
+        free (mon);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
 }
 
 static int child_rpc_track_count (struct overlay *ov)
@@ -1711,6 +1699,13 @@ void overlay_destroy (struct overlay *ov)
             free (ov->children);
         }
         rpc_track_destroy (ov->parent.tracker);
+        if (ov->monitor_callbacks) {
+            struct montior *mon;
+
+            while ((mon = zlist_pop (ov->monitor_callbacks)))
+                free (mon);
+            zlist_destroy (&ov->monitor_callbacks);
+        }
         free (ov);
         errno = saved_errno;
     }
@@ -1770,6 +1765,8 @@ struct overlay *overlay_create (flux_t *h,
     ov->version = FLUX_CORE_VERSION_HEX;
     uuid_generate (uuid);
     uuid_unparse (uuid, ov->uuid);
+    if (!(ov->monitor_callbacks = zlist_new ()))
+        goto nomem;
     if (overlay_configure_attr_int (ov->attrs,
                                     "tbon.fanout",
                                     DEFAULT_FANOUT,

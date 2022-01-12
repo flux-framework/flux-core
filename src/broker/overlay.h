@@ -24,14 +24,9 @@ typedef enum {
 
 struct overlay;
 
-typedef void (*overlay_monitor_f)(struct overlay *ov, void *arg);
+typedef void (*overlay_monitor_f)(struct overlay *ov, uint32_t rank, void *arg);
 typedef void (*overlay_recv_f)(const flux_msg_t *msg,
                                overlay_where_t from,
-                               void *arg);
-typedef void (*overlay_loss_f)(struct overlay *ov,
-                               uint32_t rank,
-                               const char *status,
-                               json_t *topo,
                                void *arg);
 
 /* Create overlay network, registering 'cb' to be called with each
@@ -121,17 +116,18 @@ int overlay_bind (struct overlay *ov, const char *uri);
  */
 int overlay_connect (struct overlay *ov);
 
-/* 'cb' is called each time the number of connected TBON peers changes,
- * or when a TBON parent error occurs.  Use overlay_get_child_peer_count(),
- * overlay_parent_error() from the callback.
+/* Arrange for 'cb' to be called if:
+ * - error on TBON parent (rank = FLUX_NODEID_ANY)
+ * - a subtree rooted at rank (child) has changed status
+ * The following accessors may be useful in the callback:
+ * - overlay_parent_error() - test whether TBON parent connection has failed
+ * - overlay_get_child_peer_count() - number of online children
+ * - overlay_get_subtree_status (rank) - subtree status of child
+ * - overlay_get_subtree_topo (rank) - topology of subtree rooted at child
  */
-void overlay_set_monitor_cb (struct overlay *ov,
-                             overlay_monitor_f cb,
-                             void *arg);
-
-void overlay_set_loss_cb (struct overlay *ov,
-                          overlay_loss_f cb,
-                          void *arg);
+int overlay_set_monitor_cb (struct overlay *ov,
+                            overlay_monitor_f cb,
+                            void *arg);
 
 /* Register overlay-related broker attributes.
  */

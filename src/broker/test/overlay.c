@@ -519,20 +519,28 @@ void test_destroy (int size, struct context *ctx[])
         ctx_destroy (ctx[rank]);
 }
 
-void monitor_diag_cb (struct overlay *ov, void *arg)
+void monitor_diag_cb (struct overlay *ov, uint32_t rank, void *arg)
 {
     struct context *ctx = arg;
-    diag ("%s: children=%d parent_error=%s",
+    diag ("%s: rank=%d status=%s children=%d parent_error=%s",
           ctx->name,
+          (int)rank,
+          overlay_get_subtree_status (ov, rank),
           overlay_get_child_peer_count (ov),
           overlay_parent_error (ov) ? "true" : "false");
 }
 
-void monitor_cb (struct overlay *ov, void *arg)
+void monitor_cb (struct overlay *ov, uint32_t rank, void *arg)
 {
     struct context *ctx = arg;
-    monitor_diag_cb (ov, arg);
-    flux_reactor_stop (flux_get_reactor (ctx->h));
+    const char *status = overlay_get_subtree_status (ov, rank);
+    monitor_diag_cb (ov, rank, arg);
+    if (overlay_parent_error (ov)
+        || !strcmp (status, "full")
+        || !strcmp (status, "partial")
+        || !strcmp (status, "lost")
+        || !strcmp (status, "offline"))
+        flux_reactor_stop (flux_get_reactor (ctx->h));
 }
 
 
@@ -542,7 +550,11 @@ void check_monitor (flux_t *h)
     const char *name = "mon";
     struct context *ctx[size];
 
+    diag ("check_monitor BEGIN");
+
     test_create (h, name, size, ctx);
+
+    diag ("check_monitor test_create returned");
 
     /* If anything changes on rank 0, stop the reactor
      */

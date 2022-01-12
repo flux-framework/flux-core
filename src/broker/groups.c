@@ -645,19 +645,24 @@ static int add_subtree_ids (struct idset *ids, json_t *topology)
     return 0;
 }
 
-/* Process overlay loss callback for 'rank'.  This means that rank has
- * crashed or been shutdown, and we must automatically generate LEAVEs
- * for 'rank' and members of its TBON subtree.
+/* Detect when a TBON child has been lost (crashed) or goes offline (shutdown).
+ * We must automatically generate LEAVEs for 'rank' and members of its TBON
+ * subtree.
  */
-static void overlay_loss_cb (struct overlay *ov,
-                             uint32_t rank,
-                             const char *status,
-                             json_t *topology,
-                             void *arg)
+static void overlay_monitor_cb (struct overlay *ov, uint32_t rank, void *arg)
 {
     struct groups *g = arg;
-    struct idset *ids;
+    const char *status = overlay_get_subtree_status (ov, rank);
+    json_t *topology;
+    struct idset *ids = NULL;
     struct group *group;
+
+    if (strcmp (status, "lost") != 0
+        && strcmp (status, "offline") != 0)
+        return;
+
+    if (!(topology = overlay_get_subtree_topo (ov, rank)))
+        flux_log_error (g->ctx->h, "groups: error fetching subtree");
 
     batch_flush (g); // handle any JOINs before loss
 
@@ -695,6 +700,7 @@ static void overlay_loss_cb (struct overlay *ov,
     }
 done:
     idset_destroy (ids);
+    json_decref (topology);
     return;
 }
 
@@ -748,7 +754,7 @@ struct groups *groups_create (struct broker *ctx)
                                                       batch_timeout_cb,
                                                       g)))
         goto error;
-    overlay_set_loss_cb (ctx->overlay, overlay_loss_cb, g);
+    overlay_set_monitor_cb (ctx->overlay, overlay_monitor_cb, g);
     return g;
 error:
     groups_destroy (g);
