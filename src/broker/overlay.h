@@ -105,6 +105,11 @@ json_t *overlay_get_subtree_topo (struct overlay *ov, int rank);
  */
 const char *overlay_get_subtree_status (struct overlay *ov, int rank);
 
+/* A TBON child is "torpid" if no messages (including regular keepalives)
+ * have been received from it for a while.
+ */
+bool overlay_peer_is_torpid (struct overlay *ov, uint32_t rank);
+
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they
  * try to connect.

@@ -85,7 +85,7 @@ struct child {
     char uuid[UUID_STR_LEN];
     enum subtree_status status;
     struct timespec status_timestamp;
-    bool idle;
+    bool torpid;
     struct rpc_track *tracker;
 };
 
@@ -105,14 +105,14 @@ struct parent {
 };
 
 /* Wake up periodically (between 'sync_min' and 'sync_max' seconds) and:
- * 1) send keepalive to parent if nothing was sent in 'idle_min' seconds
- * 2) find children that have not been heard from in 'idle_max' seconds
+ * 1) send keepalive to parent if nothing was sent in 'torpid_min' seconds
+ * 2) find children that have not been heard from in 'torpid_max' seconds
  */
 static const double sync_min = 1.0;
 static const double sync_max = 5.0;
 
-static const double idle_min = 5.0;
-static const double idle_max = 30.0;
+static const double torpid_min = 5.0;
+static const double torpid_max = 30.0;
 
 struct overlay_monitor {
     overlay_monitor_f cb;
@@ -166,6 +166,7 @@ static int overlay_keepalive_parent (struct overlay *ov,
                                      enum keepalive_type ktype,
                                      int arg);
 static void overlay_health_respond_all (struct overlay *ov);
+static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank);
 
 /* Convenience iterator for ov->children
  */
@@ -337,38 +338,47 @@ void overlay_set_ipv6 (struct overlay *ov, int enable)
     ov->enable_ipv6 = enable;
 }
 
-void overlay_log_idle_children (struct overlay *ov)
+bool overlay_peer_is_torpid (struct overlay *ov, uint32_t rank)
+{
+    struct child *child;
+
+    if (!(child = child_lookup_byrank (ov, rank)))
+        return false;
+    return child->torpid;
+}
+
+void overlay_log_torpid_children (struct overlay *ov)
 {
     struct child *child;
     double now = flux_reactor_now (ov->reactor);
     char fsd[64];
-    double idle;
+    double torpid;
 
-    if (idle_max > 0) {
+    if (torpid_max > 0) {
         foreach_overlay_child (ov, child) {
             if (subtree_is_online (child->status) && child->lastseen > 0) {
-                idle = now - child->lastseen;
+                torpid = now - child->lastseen;
 
-                if (idle >= idle_max) {
-                    (void)fsd_format_duration (fsd, sizeof (fsd), idle);
-                    if (!child->idle) {
+                if (torpid >= torpid_max) {
+                    (void)fsd_format_duration (fsd, sizeof (fsd), torpid);
+                    if (!child->torpid) {
                         flux_log (ov->h,
                                   LOG_ERR,
                         "broker on %s (rank %lu) has been unresponsive for %s",
                                   flux_get_hostbyrank (ov->h, child->rank),
                                   (unsigned long)child->rank,
                                   fsd);
-                        child->idle = true;
+                        child->torpid = true;
                     }
                 }
                 else {
-                    if (child->idle) {
+                    if (child->torpid) {
                         flux_log (ov->h,
                                   LOG_ERR,
                                   "broker on %s (rank %lu) is responsive now",
                                   flux_get_hostbyrank (ov->h, child->rank),
                                   (unsigned long)child->rank);
-                        child->idle = false;
+                        child->torpid = false;
                     }
                 }
             }
@@ -635,9 +645,9 @@ static void sync_cb (flux_future_t *f, void *arg)
     struct overlay *ov = arg;
     double now = flux_reactor_now (ov->reactor);
 
-    if (now - ov->parent.lastsent > idle_min)
+    if (now - ov->parent.lastsent > torpid_min)
         overlay_keepalive_parent (ov, KEEPALIVE_HEARTBEAT, 0);
-    overlay_log_idle_children (ov);
+    overlay_log_torpid_children (ov);
 
     flux_future_reset (f);
 }
