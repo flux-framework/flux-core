@@ -165,7 +165,6 @@ static int overlay_keepalive_parent (struct overlay *ov,
                                      enum keepalive_type ktype,
                                      int arg);
 static void overlay_health_respond_all (struct overlay *ov);
-static json_t *get_subtree_topo (struct overlay *ov, int rank);
 
 /* Convenience iterator for ov->children
  */
@@ -249,7 +248,7 @@ static void overlay_loss_notify (struct overlay *ov,
 {
     if (ov->loss_cb) {
         json_t *topo;
-        if (!(topo = get_subtree_topo (ov, child->rank))) {
+        if (!(topo = overlay_get_subtree_topo (ov, child->rank))) {
             flux_log_error (ov->h, "overlay_loss_notify failed");
             return;
         }
@@ -1483,7 +1482,7 @@ static void disconnect_cb (flux_t *h,
  * Right now the tree is regular.  In the future support the configuration
  * of irregular tree topologies.
  */
-static json_t *get_subtree_topo (struct overlay *ov, int rank)
+json_t *overlay_get_subtree_topo (struct overlay *ov, int rank)
 {
     json_t *o;
     json_t *children;
@@ -1497,7 +1496,7 @@ static json_t *get_subtree_topo (struct overlay *ov, int rank)
         r = kary_childof (ov->fanout, ov->size, rank, i);
         if (r == KARY_NONE)
             break;
-        if (!(child = get_subtree_topo (ov, r)))
+        if (!(child = overlay_get_subtree_topo (ov, r)))
             goto error;
         if (json_array_append_new (children, child) < 0) {
             json_decref (child);
@@ -1538,7 +1537,7 @@ static void overlay_topology_cb (flux_t *h,
         errno = ENOENT;
         goto error;
     }
-    if (!(topo = get_subtree_topo (ov, rank)))
+    if (!(topo = overlay_get_subtree_topo (ov, rank)))
         goto error;
     if (flux_respond_pack (h, msg, "O", topo) < 0)
         flux_log_error (h, "error responding to overlay.topology");

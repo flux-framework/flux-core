@@ -31,7 +31,7 @@ typedef void (*overlay_recv_f)(const flux_msg_t *msg,
 typedef void (*overlay_loss_f)(struct overlay *ov,
                                uint32_t rank,
                                const char *status,
-                               json_t *topology,
+                               json_t *topo,
                                void *arg);
 
 /* Create overlay network, registering 'cb' to be called with each
@@ -93,6 +93,17 @@ const char *overlay_get_uuid (struct overlay *ov);
 bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid);
 bool overlay_uuid_is_child (struct overlay *ov, const char *uuid);
 void overlay_set_ipv6 (struct overlay *ov, int enable);
+
+/* Fetch TBON subtree topo at 'rank'.  The returned topology object has the
+ * following recursive structure, where "children" is an array of topology
+ * objects:
+ *
+ * {"rank":i, "size":i, "children":o}
+ *
+ * If rank has no children, the "children" array will be present but empty.
+ * Caller must release returned object with json_decref().
+ */
+json_t *overlay_get_subtree_topo (struct overlay *ov, int rank);
 
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they
