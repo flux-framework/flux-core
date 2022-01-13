@@ -45,6 +45,12 @@ test_expect_success 'flux-uri pid resolver works with ?remote' '
 test_expect_success 'flux-uri pid resolver works on flux-broker' '
 	test "$(flux uri pid:$(flux getattr broker.pid))" =  "$FLUX_URI"
 '
+test_expect_success 'flux-uri pid resolver works on flux-broker with fallback' '
+	(
+	  export FLUX_FORCE_BROKER_CHILD_FALLBACK=t &&
+	  test "$(flux uri pid:$(flux getattr broker.pid))" =  "$FLUX_URI"
+	)
+'
 test_expect_success 'flux-uri pid resolver fails for nonexistent pid' '
 	test_expect_code 1 flux uri pid:123456
 '
