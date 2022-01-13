@@ -380,4 +380,8 @@ for var in $(env | grep ^SLURM); do unset ${var%%=*}; done
 unset FLUX_SHELL_RC_PATH
 unset FLUX_RC_EXTRA
 
+# Individual tests that need to force local URI resolution should set
+#  this specifically. In general it breaks other URI tests:
+unset FLUX_URI_RESOLVE_LOCAL
+
 # vi: ts=4 sw=4 expandtab
