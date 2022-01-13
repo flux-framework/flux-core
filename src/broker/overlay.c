@@ -111,8 +111,8 @@ struct parent {
 static const double sync_min = 1.0;
 static const double sync_max = 5.0;
 
-static const double torpid_min = 5.0;
-static const double torpid_max = 30.0;
+static const double default_torpid_min = 5.0;
+static const double default_torpid_max = 30.0;
 
 struct overlay_monitor {
     overlay_monitor_f cb;
@@ -136,6 +136,8 @@ struct overlay {
     char uuid[UUID_STR_LEN];
     int version;
     int zmqdebug;
+    double torpid_min;
+    double torpid_max;
 
     struct parent parent;
 
@@ -355,13 +357,13 @@ void overlay_log_torpid_children (struct overlay *ov)
     double torpid;
     bool child_torpid_prev;
 
-    if (torpid_max > 0) {
+    if (ov->torpid_max > 0) {
         foreach_overlay_child (ov, child) {
             child_torpid_prev = child->torpid;
             if (subtree_is_online (child->status) && child->lastseen > 0) {
                 torpid = now - child->lastseen;
 
-                if (torpid >= torpid_max) {
+                if (torpid >= ov->torpid_max) {
                     (void)fsd_format_duration (fsd, sizeof (fsd), torpid);
                     if (!child->torpid) {
                         flux_log (ov->h,
@@ -649,7 +651,7 @@ static void sync_cb (flux_future_t *f, void *arg)
     struct overlay *ov = arg;
     double now = flux_reactor_now (ov->reactor);
 
-    if (now - ov->parent.lastsent > torpid_min)
+    if (now - ov->parent.lastsent > ov->torpid_min)
         overlay_keepalive_parent (ov, KEEPALIVE_HEARTBEAT, 0);
     overlay_log_torpid_children (ov);
 
@@ -1679,6 +1681,68 @@ static int overlay_configure_attr_int (attr_t *attrs,
     return 0;
 }
 
+static int set_torpid (const char *name, const char *val, void *arg)
+{
+    struct overlay *ov = arg;
+    double d;
+
+    if (fsd_parse_duration (val, &d) < 0)
+        return -1;
+    if (!strcmp (name, "tbon.torpid_max"))
+        ov->torpid_max = d;
+    else if (!strcmp (name, "tbon.torpid_min")) {
+        if (d == 0)
+            goto error;
+        ov->torpid_min = d;
+    }
+    else
+        goto error;
+    return 0;
+error:
+    errno = EINVAL;
+    return -1;
+}
+
+static int get_torpid (const char *name, const char **val, void *arg)
+{
+    struct overlay *ov = arg;
+    static char buf[64];
+    double d;
+
+    if (!strcmp (name, "tbon.torpid_max"))
+        d = ov->torpid_max;
+    else if (!strcmp (name, "tbon.torpid_min"))
+        d = ov->torpid_min;
+    else
+        goto error;
+    if (fsd_format_duration (buf, sizeof (buf), d) < 0)
+        return -1;
+    *val = buf;
+    return 0;
+error:
+    errno = EINVAL;
+    return -1;
+}
+
+static int overlay_configure_torpid (struct overlay *ov)
+{
+    if (attr_add_active (ov->attrs,
+                         "tbon.torpid_max",
+                         0,
+                         get_torpid,
+                         set_torpid,
+                         ov) < 0)
+        return -1;
+    if (attr_add_active (ov->attrs,
+                         "tbon.torpid_min",
+                         0,
+                         get_torpid,
+                         set_torpid,
+                         ov) < 0)
+        return -1;
+    return 0;
+}
+
 void overlay_destroy (struct overlay *ov)
 {
     if (ov) {
@@ -1777,6 +1841,8 @@ struct overlay *overlay_create (flux_t *h,
     ov->recv_cb = cb;
     ov->recv_arg = arg;
     ov->version = FLUX_CORE_VERSION_HEX;
+    ov->torpid_min = default_torpid_min;
+    ov->torpid_max = default_torpid_max;
     uuid_generate (uuid);
     uuid_unparse (uuid, ov->uuid);
     if (!(ov->monitor_callbacks = zlist_new ()))
@@ -1797,6 +1863,8 @@ struct overlay *overlay_create (flux_t *h,
                                     &ov->zmqdebug) < 0)
         goto error;
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
+        goto error;
+    if (overlay_configure_torpid (ov) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;
