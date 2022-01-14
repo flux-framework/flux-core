@@ -83,6 +83,16 @@ static const char *env_blocklist[] = {
     "PMIX_SERVER_URI2",
     "PMIX_SERVER_URI",
 #endif
+    /* Cray shasta plugin for slurm/flux sets these variables.
+     * If set in flux's environment, don't leak through to applications
+     * launched by flux or incorrect job info could be conveyed.
+     */
+    "PALS_APID",
+    "PALS_RANKID",
+    "PALS_NODEID",
+    "PALS_SPOOL_DIR",
+    "PALS_APINFO",
+    "PMI_CONTROL_PORT",
     NULL,
 };
 
