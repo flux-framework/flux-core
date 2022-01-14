@@ -349,45 +349,58 @@ bool overlay_peer_is_torpid (struct overlay *ov, uint32_t rank)
     return child->torpid;
 }
 
-void overlay_log_torpid_children (struct overlay *ov)
+static void log_torpid_child (flux_t *h,
+                               uint32_t rank,
+                               bool torpid,
+                               double duration)
+{
+    if (torpid) {
+        char fsd[64] = "unknown duration";
+        (void)fsd_format_duration (fsd, sizeof (fsd), duration);
+        flux_log (h,
+                  LOG_ERR,
+                  "broker on %s (rank %lu) has been unresponsive for %s",
+                  flux_get_hostbyrank (h, rank),
+                  (unsigned long)rank,
+                  fsd);
+    }
+    else {
+        flux_log (h,
+                  LOG_ERR,
+                  "broker on %s (rank %lu) is responsive now",
+                  flux_get_hostbyrank (h, rank),
+                  (unsigned long)rank);
+    }
+}
+
+/* Find children that have not been heard from in a while.
+ * If torpid_max is set to zero it means torpid node flagging is disabled.
+ * This value may be set on the fly during runtime, so ensure that any
+ * torpid nodes are immediately transitioned to non-torpid if that occurs.
+ */
+static void update_torpid_children (struct overlay *ov)
 {
     struct child *child;
     double now = flux_reactor_now (ov->reactor);
-    char fsd[64];
-    double torpid;
-    bool child_torpid_prev;
 
-    if (ov->torpid_max > 0) {
-        foreach_overlay_child (ov, child) {
-            child_torpid_prev = child->torpid;
-            if (subtree_is_online (child->status) && child->lastseen > 0) {
-                torpid = now - child->lastseen;
+    foreach_overlay_child (ov, child) {
+        if (subtree_is_online (child->status) && child->lastseen > 0) {
+            double duration = now - child->lastseen;
 
-                if (torpid >= ov->torpid_max) {
-                    (void)fsd_format_duration (fsd, sizeof (fsd), torpid);
-                    if (!child->torpid) {
-                        flux_log (ov->h,
-                                  LOG_ERR,
-                        "broker on %s (rank %lu) has been unresponsive for %s",
-                                  flux_get_hostbyrank (ov->h, child->rank),
-                                  (unsigned long)child->rank,
-                                  fsd);
-                        child->torpid = true;
-                    }
-                }
-                else {
-                    if (child->torpid) {
-                        flux_log (ov->h,
-                                  LOG_ERR,
-                                  "broker on %s (rank %lu) is responsive now",
-                                  flux_get_hostbyrank (ov->h, child->rank),
-                                  (unsigned long)child->rank);
-                        child->torpid = false;
-                    }
+            if (duration >= ov->torpid_max && ov->torpid_max > 0) {
+                if (!child->torpid) {
+                    log_torpid_child (ov->h, child->rank, true, duration);
+                    child->torpid = true;
+                    overlay_monitor_notify (ov, child->rank);
                 }
             }
-            if (child_torpid_prev != child->torpid)
-                overlay_monitor_notify (ov, child->rank);
+            else { // duration < torpid_max OR torpid_max == 0
+                if (child->torpid) {
+                    log_torpid_child (ov->h, child->rank, false, 0.);
+                    child->torpid = false;
+                    overlay_monitor_notify (ov, child->rank);
+                }
+            }
         }
     }
 }
@@ -653,7 +666,7 @@ static void sync_cb (flux_future_t *f, void *arg)
 
     if (now - ov->parent.lastsent > ov->torpid_min)
         overlay_keepalive_parent (ov, KEEPALIVE_HEARTBEAT, 0);
-    overlay_log_torpid_children (ov);
+    update_torpid_children (ov);
 
     flux_future_reset (f);
 }
