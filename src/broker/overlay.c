@@ -1739,6 +1739,46 @@ error:
 
 static int overlay_configure_torpid (struct overlay *ov)
 {
+    const flux_conf_t *cf;
+
+    /* Start with compiled in defaults.
+     */
+    ov->torpid_min = default_torpid_min;
+    ov->torpid_max = default_torpid_max;
+
+    /* Override with config file settings, if any.
+     */
+    if ((cf = flux_get_conf (ov->h))) {
+        flux_conf_error_t error;
+        const char *min_fsd = NULL;
+        const char *max_fsd = NULL;
+
+        if (flux_conf_unpack (flux_get_conf (ov->h),
+                              &error,
+                              "{s?{s?s s?s}}",
+                              "tbon",
+                                "torpid_min", &min_fsd,
+                                "torpid_max", &max_fsd) < 0) {
+            log_msg ("Config file error [tbon]: %s", error.errbuf);
+            return -1;
+        }
+        if (min_fsd) {
+            if (fsd_parse_duration (min_fsd, &ov->torpid_min) < 0
+                || ov->torpid_min == 0) {
+                log_msg ("Config file error parsing tbon.torpid_min value");
+                return -1;
+            }
+        }
+        if (max_fsd) {
+            if (fsd_parse_duration (max_fsd, &ov->torpid_max) < 0) {
+                log_msg ("Config file error parsing tbon.torpid_max value");
+                return -1;
+            }
+        }
+    }
+
+    /* Override with broker attribute (command line/runtime) settings, if any.
+     */
     if (attr_add_active (ov->attrs,
                          "tbon.torpid_max",
                          0,
@@ -1854,8 +1894,6 @@ struct overlay *overlay_create (flux_t *h,
     ov->recv_cb = cb;
     ov->recv_arg = arg;
     ov->version = FLUX_CORE_VERSION_HEX;
-    ov->torpid_min = default_torpid_min;
-    ov->torpid_max = default_torpid_max;
     uuid_generate (uuid);
     uuid_unparse (uuid, ov->uuid);
     if (!(ov->monitor_callbacks = zlist_new ()))
