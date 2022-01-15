@@ -63,8 +63,8 @@ tbon.maxlevel
    The maximum level number in the tree based overlay network.
    Maxlevel is 0 for a size=1 instance.
 
-tbon.endpoint
-   The endpoint for the tree based overlay network to communicate over.
+tbon.parent-endpoint
+   The ZeroMQ endpoint of this broker's TBON parent.
 
 tbon.zmqdebug
    If set to an non-zero integer value, 0MQ socket event logging is enabled,
@@ -92,10 +92,6 @@ tbon.torpid_max
 
 SOCKET ATTRIBUTES
 =================
-
-tbon.parent-endpoint
-   The URI of the ZeroMQ endpoint this rank is connected to in the tree
-   based overlay network. This attribute will not be set on rank zero.
 
 local-uri
    The Flux URI that should be passed to :man3:`flux_open` to
