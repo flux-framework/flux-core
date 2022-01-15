@@ -190,22 +190,6 @@ content.purge-target-size
    size of the cache stays at or below this value.
 
 
-WIREUP ATTRIBUTES
-=================
-
-hello.timeout
-   The reduction timeout (in seconds) for the broker wireup protocol.
-   Before the timeout, a topology-based high water mark is applied
-   at each node of the tree based overlay network. After the timeout,
-   new wireup information is forwarded upstream without delay.
-   Set to 0 to disable the timeout.
-
-hello.hwm
-   The reduction high water mark for the broker wireup protocol,
-   normally calculated based on the topology.
-   Set to 0 to disable the high water mark.
-
-
 RESOURCES
 =========
 
