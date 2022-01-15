@@ -76,6 +76,19 @@ tbon.prefertcp
    with PMI, tcp:// endpoints will be used instead of ipc://, even if all
    brokers are on a single node.
 
+tbon.torpid_min
+   The amount of time (in RFC 23 Flux Standard Duration format) that a broker
+   will allow the connection to its TBON parent to remain idle before sending a
+   keepalive message.  This value may be adjusted on a live system.
+
+tbon.torpid_max
+   The amount of time (in RFC 23 Flux Standard Duration format) that a broker
+   will wait for an idle TBON child connection to send messages before
+   declaring it torpid (unresponsive).  A value of 0 disables torpid node
+   checking.  Torpid nodes are automatically drained and require manual
+   undraining with :man1:`flux-resource`.  This value may be adjusted on a
+   live system.
+
 
 SOCKET ATTRIBUTES
 =================
@@ -197,6 +210,8 @@ RESOURCES
 =========
 
 Flux: http://flux-framework.org
+
+RFC 23: Flux Standard Duration: https://github.com/flux-framework/rfc/blob/master/spec_23.rst
 
 
 SEE ALSO
