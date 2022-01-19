@@ -767,7 +767,9 @@ static flux_future_t *monitor_parent (flux_t *h, void *arg)
 
 /* This callback is called when the overlay connection state has changed.
  */
-static void overlay_monitor_cb (struct overlay *overlay, void *arg)
+static void overlay_monitor_cb (struct overlay *overlay,
+                                uint32_t rank,
+                                void *arg)
 {
     struct state_machine *s = arg;
 

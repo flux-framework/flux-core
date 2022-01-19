@@ -85,7 +85,7 @@ struct child {
     char uuid[UUID_STR_LEN];
     enum subtree_status status;
     struct timespec status_timestamp;
-    bool idle;
+    bool torpid;
     struct rpc_track *tracker;
 };
 
@@ -105,14 +105,19 @@ struct parent {
 };
 
 /* Wake up periodically (between 'sync_min' and 'sync_max' seconds) and:
- * 1) send keepalive to parent if nothing was sent in 'idle_min' seconds
- * 2) find children that have not been heard from in 'idle_max' seconds
+ * 1) send keepalive to parent if nothing was sent in 'torpid_min' seconds
+ * 2) find children that have not been heard from in 'torpid_max' seconds
  */
 static const double sync_min = 1.0;
 static const double sync_max = 5.0;
 
-static const double idle_min = 5.0;
-static const double idle_max = 30.0;
+static const double default_torpid_min = 5.0;
+static const double default_torpid_max = 30.0;
+
+struct overlay_monitor {
+    overlay_monitor_f cb;
+    void *arg;
+};
 
 struct overlay {
     zcert_t *cert;
@@ -131,6 +136,8 @@ struct overlay {
     char uuid[UUID_STR_LEN];
     int version;
     int zmqdebug;
+    double torpid_min;
+    double torpid_max;
 
     struct parent parent;
 
@@ -144,11 +151,7 @@ struct overlay {
     struct timespec status_timestamp;
     struct zmqutil_monitor *bind_monitor;
 
-    overlay_monitor_f child_monitor_cb;
-    void *child_monitor_arg;
-
-    overlay_loss_f loss_cb;
-    void *loss_arg;
+    zlist_t *monitor_callbacks;
 
     overlay_recv_f recv_cb;
     void *recv_arg;
@@ -165,7 +168,7 @@ static int overlay_keepalive_parent (struct overlay *ov,
                                      enum keepalive_type ktype,
                                      int arg);
 static void overlay_health_respond_all (struct overlay *ov);
-static json_t *get_subtree_topo (struct overlay *ov, int rank);
+static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank);
 
 /* Convenience iterator for ov->children
  */
@@ -229,10 +232,15 @@ static void subtree_status_update (struct overlay *ov)
     }
 }
 
-static void overlay_monitor_notify (struct overlay *ov)
+static void overlay_monitor_notify (struct overlay *ov, uint32_t rank)
 {
-    if (ov->child_monitor_cb)
-        ov->child_monitor_cb (ov, ov->child_monitor_arg);
+    struct overlay_monitor *mon;
+
+    mon = zlist_first (ov->monitor_callbacks);
+    while (mon) {
+        mon->cb (ov, rank, mon->arg);
+        mon = zlist_next (ov->monitor_callbacks);
+    }
 }
 
 static int child_count (uint32_t rank, uint32_t size, int k)
@@ -241,25 +249,6 @@ static int child_count (uint32_t rank, uint32_t size, int k)
     for (count = 0; kary_childof (k, size, rank, count) != KARY_NONE; count++)
         ;
     return count;
-}
-
-static void overlay_loss_notify (struct overlay *ov,
-                                 struct child *child,
-                                 int status)
-{
-    if (ov->loss_cb) {
-        json_t *topo;
-        if (!(topo = get_subtree_topo (ov, child->rank))) {
-            flux_log_error (ov->h, "overlay_loss_notify failed");
-            return;
-        }
-        ov->loss_cb (ov,
-                     child->rank,
-                     subtree_status_str (status),
-                     topo,
-                     ov->loss_arg);
-        json_decref (topo);
-    }
 }
 
 int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank)
@@ -329,12 +318,6 @@ bool overlay_parent_error (struct overlay *ov)
             || ov->parent.offline);
 }
 
-bool overlay_parent_success (struct overlay *ov)
-{
-    return (ov->parent.hello_responded
-            && !ov->parent.hello_error);
-}
-
 void overlay_set_version (struct overlay *ov, int version)
 {
     ov->version = version;
@@ -357,39 +340,65 @@ void overlay_set_ipv6 (struct overlay *ov, int enable)
     ov->enable_ipv6 = enable;
 }
 
-void overlay_log_idle_children (struct overlay *ov)
+bool overlay_peer_is_torpid (struct overlay *ov, uint32_t rank)
+{
+    struct child *child;
+
+    if (!(child = child_lookup_byrank (ov, rank)))
+        return false;
+    return child->torpid;
+}
+
+static void log_torpid_child (flux_t *h,
+                               uint32_t rank,
+                               bool torpid,
+                               double duration)
+{
+    if (torpid) {
+        char fsd[64] = "unknown duration";
+        (void)fsd_format_duration (fsd, sizeof (fsd), duration);
+        flux_log (h,
+                  LOG_ERR,
+                  "broker on %s (rank %lu) has been unresponsive for %s",
+                  flux_get_hostbyrank (h, rank),
+                  (unsigned long)rank,
+                  fsd);
+    }
+    else {
+        flux_log (h,
+                  LOG_ERR,
+                  "broker on %s (rank %lu) is responsive now",
+                  flux_get_hostbyrank (h, rank),
+                  (unsigned long)rank);
+    }
+}
+
+/* Find children that have not been heard from in a while.
+ * If torpid_max is set to zero it means torpid node flagging is disabled.
+ * This value may be set on the fly during runtime, so ensure that any
+ * torpid nodes are immediately transitioned to non-torpid if that occurs.
+ */
+static void update_torpid_children (struct overlay *ov)
 {
     struct child *child;
     double now = flux_reactor_now (ov->reactor);
-    char fsd[64];
-    double idle;
 
-    if (idle_max > 0) {
-        foreach_overlay_child (ov, child) {
-            if (subtree_is_online (child->status) && child->lastseen > 0) {
-                idle = now - child->lastseen;
+    foreach_overlay_child (ov, child) {
+        if (subtree_is_online (child->status) && child->lastseen > 0) {
+            double duration = now - child->lastseen;
 
-                if (idle >= idle_max) {
-                    (void)fsd_format_duration (fsd, sizeof (fsd), idle);
-                    if (!child->idle) {
-                        flux_log (ov->h,
-                                  LOG_ERR,
-                        "broker on %s (rank %lu) has been unresponsive for %s",
-                                  flux_get_hostbyrank (ov->h, child->rank),
-                                  (unsigned long)child->rank,
-                                  fsd);
-                        child->idle = true;
-                    }
+            if (duration >= ov->torpid_max && ov->torpid_max > 0) {
+                if (!child->torpid) {
+                    log_torpid_child (ov->h, child->rank, true, duration);
+                    child->torpid = true;
+                    overlay_monitor_notify (ov, child->rank);
                 }
-                else {
-                    if (child->idle) {
-                        flux_log (ov->h,
-                                  LOG_ERR,
-                                  "broker on %s (rank %lu) is responsive now",
-                                  flux_get_hostbyrank (ov->h, child->rank),
-                                  (unsigned long)child->rank);
-                        child->idle = false;
-                    }
+            }
+            else { // duration < torpid_max OR torpid_max == 0
+                if (child->torpid) {
+                    log_torpid_child (ov->h, child->rank, false, 0.);
+                    child->torpid = false;
+                    overlay_monitor_notify (ov, child->rank);
                 }
             }
         }
@@ -655,9 +664,9 @@ static void sync_cb (flux_future_t *f, void *arg)
     struct overlay *ov = arg;
     double now = flux_reactor_now (ov->reactor);
 
-    if (now - ov->parent.lastsent > idle_min)
+    if (now - ov->parent.lastsent > ov->torpid_min)
         overlay_keepalive_parent (ov, KEEPALIVE_HEARTBEAT, 0);
-    overlay_log_idle_children (ov);
+    update_torpid_children (ov);
 
     flux_future_reset (f);
 }
@@ -717,7 +726,6 @@ static void overlay_child_status_update (struct overlay *ov,
             && !subtree_is_online (status)) {
             zhashx_delete (ov->child_hash, child->uuid);
             rpc_track_purge (child->tracker, fail_child_rpcs, ov);
-            overlay_loss_notify (ov, child, status);
         }
         else if (!subtree_is_online (child->status)
             && subtree_is_online (status)) {
@@ -728,7 +736,7 @@ static void overlay_child_status_update (struct overlay *ov,
         monotime (&child->status_timestamp);
 
         subtree_status_update (ov);
-        overlay_monitor_notify (ov);
+        overlay_monitor_notify (ov, child->rank);
         overlay_health_respond_all (ov);
     }
 }
@@ -980,7 +988,7 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
                 (void)zsock_disconnect (ov->parent.zsock, "%s", ov->parent.uri);
                 ov->parent.offline = true;
                 rpc_track_purge (ov->parent.tracker, fail_parent_rpc, ov);
-                overlay_monitor_notify (ov);
+                overlay_monitor_notify (ov, FLUX_NODEID_ANY);
             }
             else
                 logdrop (ov, OVERLAY_UPSTREAM, msg, "unknown keepalive type");
@@ -1130,13 +1138,13 @@ static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg)
     snprintf (ov->parent.uuid, sizeof (ov->parent.uuid), "%s", uuid);
     ov->parent.hello_responded = true;
     ov->parent.hello_error = false;
-    overlay_monitor_notify (ov);
+    overlay_monitor_notify (ov, FLUX_NODEID_ANY);
     return;
 error:
     log_msg ("overlay.hello: %s", errstr ? errstr : flux_strerror (errno));
     ov->parent.hello_responded = true;
     ov->parent.hello_error = true;
-    overlay_monitor_notify (ov);
+    overlay_monitor_notify (ov, FLUX_NODEID_ANY);
 }
 
 /* Send overlay.hello message to TBON parent.
@@ -1349,20 +1357,22 @@ int overlay_register_attrs (struct overlay *overlay)
     return 0;
 }
 
-void overlay_set_monitor_cb (struct overlay *ov,
-                             overlay_monitor_f cb,
-                             void *arg)
+int overlay_set_monitor_cb (struct overlay *ov,
+                            overlay_monitor_f cb,
+                            void *arg)
 {
-    ov->child_monitor_cb = cb;
-    ov->child_monitor_arg = arg;
-}
+    struct overlay_monitor *mon;
 
-void overlay_set_loss_cb (struct overlay *ov,
-                          overlay_loss_f cb,
-                          void *arg)
-{
-    ov->loss_cb = cb;
-    ov->loss_arg = arg;
+    if (!(mon = calloc (1, sizeof (*mon))))
+        return -1;
+    mon->cb = cb;
+    mon->arg = arg;
+    if (zlist_append (ov->monitor_callbacks, mon) < 0) {
+        free (mon);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
 }
 
 static int child_rpc_track_count (struct overlay *ov)
@@ -1485,11 +1495,25 @@ static void disconnect_cb (flux_t *h,
         flux_log (h, LOG_DEBUG, "overlay: goodbye to %d health clients", count);
 }
 
+const char *overlay_get_subtree_status (struct overlay *ov, int rank)
+{
+    const char *result = "unknown";
+
+    if (rank == ov->rank)
+        result = subtree_status_str (ov->status);
+    else {
+        struct child *child;
+        if ((child = child_lookup_byrank (ov, rank)))
+            result = subtree_status_str (child->status);
+    }
+    return result;
+}
+
 /* Recursive function to build subtree topology object.
  * Right now the tree is regular.  In the future support the configuration
  * of irregular tree topologies.
  */
-static json_t *get_subtree_topo (struct overlay *ov, int rank)
+json_t *overlay_get_subtree_topo (struct overlay *ov, int rank)
 {
     json_t *o;
     json_t *children;
@@ -1503,7 +1527,7 @@ static json_t *get_subtree_topo (struct overlay *ov, int rank)
         r = kary_childof (ov->fanout, ov->size, rank, i);
         if (r == KARY_NONE)
             break;
-        if (!(child = get_subtree_topo (ov, r)))
+        if (!(child = overlay_get_subtree_topo (ov, r)))
             goto error;
         if (json_array_append_new (children, child) < 0) {
             json_decref (child);
@@ -1544,7 +1568,7 @@ static void overlay_topology_cb (flux_t *h,
         errno = ENOENT;
         goto error;
     }
-    if (!(topo = get_subtree_topo (ov, rank)))
+    if (!(topo = overlay_get_subtree_topo (ov, rank)))
         goto error;
     if (flux_respond_pack (h, msg, "O", topo) < 0)
         flux_log_error (h, "error responding to overlay.topology");
@@ -1670,6 +1694,108 @@ static int overlay_configure_attr_int (attr_t *attrs,
     return 0;
 }
 
+static int set_torpid (const char *name, const char *val, void *arg)
+{
+    struct overlay *ov = arg;
+    double d;
+
+    if (fsd_parse_duration (val, &d) < 0)
+        return -1;
+    if (!strcmp (name, "tbon.torpid_max"))
+        ov->torpid_max = d;
+    else if (!strcmp (name, "tbon.torpid_min")) {
+        if (d == 0)
+            goto error;
+        ov->torpid_min = d;
+    }
+    else
+        goto error;
+    return 0;
+error:
+    errno = EINVAL;
+    return -1;
+}
+
+static int get_torpid (const char *name, const char **val, void *arg)
+{
+    struct overlay *ov = arg;
+    static char buf[64];
+    double d;
+
+    if (!strcmp (name, "tbon.torpid_max"))
+        d = ov->torpid_max;
+    else if (!strcmp (name, "tbon.torpid_min"))
+        d = ov->torpid_min;
+    else
+        goto error;
+    if (fsd_format_duration (buf, sizeof (buf), d) < 0)
+        return -1;
+    *val = buf;
+    return 0;
+error:
+    errno = EINVAL;
+    return -1;
+}
+
+static int overlay_configure_torpid (struct overlay *ov)
+{
+    const flux_conf_t *cf;
+
+    /* Start with compiled in defaults.
+     */
+    ov->torpid_min = default_torpid_min;
+    ov->torpid_max = default_torpid_max;
+
+    /* Override with config file settings, if any.
+     */
+    if ((cf = flux_get_conf (ov->h))) {
+        flux_conf_error_t error;
+        const char *min_fsd = NULL;
+        const char *max_fsd = NULL;
+
+        if (flux_conf_unpack (flux_get_conf (ov->h),
+                              &error,
+                              "{s?{s?s s?s}}",
+                              "tbon",
+                                "torpid_min", &min_fsd,
+                                "torpid_max", &max_fsd) < 0) {
+            log_msg ("Config file error [tbon]: %s", error.errbuf);
+            return -1;
+        }
+        if (min_fsd) {
+            if (fsd_parse_duration (min_fsd, &ov->torpid_min) < 0
+                || ov->torpid_min == 0) {
+                log_msg ("Config file error parsing tbon.torpid_min value");
+                return -1;
+            }
+        }
+        if (max_fsd) {
+            if (fsd_parse_duration (max_fsd, &ov->torpid_max) < 0) {
+                log_msg ("Config file error parsing tbon.torpid_max value");
+                return -1;
+            }
+        }
+    }
+
+    /* Override with broker attribute (command line/runtime) settings, if any.
+     */
+    if (attr_add_active (ov->attrs,
+                         "tbon.torpid_max",
+                         0,
+                         get_torpid,
+                         set_torpid,
+                         ov) < 0)
+        return -1;
+    if (attr_add_active (ov->attrs,
+                         "tbon.torpid_min",
+                         0,
+                         get_torpid,
+                         set_torpid,
+                         ov) < 0)
+        return -1;
+    return 0;
+}
+
 void overlay_destroy (struct overlay *ov)
 {
     if (ov) {
@@ -1704,6 +1830,13 @@ void overlay_destroy (struct overlay *ov)
             free (ov->children);
         }
         rpc_track_destroy (ov->parent.tracker);
+        if (ov->monitor_callbacks) {
+            struct montior *mon;
+
+            while ((mon = zlist_pop (ov->monitor_callbacks)))
+                free (mon);
+            zlist_destroy (&ov->monitor_callbacks);
+        }
         free (ov);
         errno = saved_errno;
     }
@@ -1763,6 +1896,8 @@ struct overlay *overlay_create (flux_t *h,
     ov->version = FLUX_CORE_VERSION_HEX;
     uuid_generate (uuid);
     uuid_unparse (uuid, ov->uuid);
+    if (!(ov->monitor_callbacks = zlist_new ()))
+        goto nomem;
     if (overlay_configure_attr_int (ov->attrs,
                                     "tbon.fanout",
                                     DEFAULT_FANOUT,
@@ -1779,6 +1914,8 @@ struct overlay *overlay_create (flux_t *h,
                                     &ov->zmqdebug) < 0)
         goto error;
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
+        goto error;
+    if (overlay_configure_torpid (ov) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;

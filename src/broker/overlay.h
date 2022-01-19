@@ -24,14 +24,9 @@ typedef enum {
 
 struct overlay;
 
-typedef void (*overlay_monitor_f)(struct overlay *ov, void *arg);
+typedef void (*overlay_monitor_f)(struct overlay *ov, uint32_t rank, void *arg);
 typedef void (*overlay_recv_f)(const flux_msg_t *msg,
                                overlay_where_t from,
-                               void *arg);
-typedef void (*overlay_loss_f)(struct overlay *ov,
-                               uint32_t rank,
-                               const char *status,
-                               json_t *topology,
                                void *arg);
 
 /* Create overlay network, registering 'cb' to be called with each
@@ -88,12 +83,32 @@ const char *overlay_get_bind_uri (struct overlay *ov);
 const char *overlay_get_parent_uri (struct overlay *ov);
 int overlay_set_parent_uri (struct overlay *ov, const char *uri);
 bool overlay_parent_error (struct overlay *ov);
-bool overlay_parent_success (struct overlay *ov);
 void overlay_set_version (struct overlay *ov, int version); // test only
 const char *overlay_get_uuid (struct overlay *ov);
 bool overlay_uuid_is_parent (struct overlay *ov, const char *uuid);
 bool overlay_uuid_is_child (struct overlay *ov, const char *uuid);
 void overlay_set_ipv6 (struct overlay *ov, int enable);
+
+/* Fetch TBON subtree topo at 'rank'.  The returned topology object has the
+ * following recursive structure, where "children" is an array of topology
+ * objects:
+ *
+ * {"rank":i, "size":i, "children":o}
+ *
+ * If rank has no children, the "children" array will be present but empty.
+ * Caller must release returned object with json_decref().
+ */
+json_t *overlay_get_subtree_topo (struct overlay *ov, int rank);
+
+/* Fetch status for TBON subtree rooted at 'rank'.  If 'rank' is not this
+ * broker's rank or one of its direct descendants, "unknown" is returned.
+ */
+const char *overlay_get_subtree_status (struct overlay *ov, int rank);
+
+/* A TBON child is "torpid" if no messages (including regular keepalives)
+ * have been received from it for a while.
+ */
+bool overlay_peer_is_torpid (struct overlay *ov, uint32_t rank);
 
 /* Broker should call overlay_bind() if there are children.  This may happen
  * before any peers are authorized as long as they are authorized before they
@@ -106,17 +121,18 @@ int overlay_bind (struct overlay *ov, const char *uri);
  */
 int overlay_connect (struct overlay *ov);
 
-/* 'cb' is called each time the number of connected TBON peers changes,
- * or when a TBON parent error occurs.  Use overlay_get_child_peer_count(),
- * overlay_parent_error(), or overlay_parent_connected() from the callback.
+/* Arrange for 'cb' to be called if:
+ * - error on TBON parent (rank = FLUX_NODEID_ANY)
+ * - a subtree rooted at rank (child) has changed status
+ * The following accessors may be useful in the callback:
+ * - overlay_parent_error() - test whether TBON parent connection has failed
+ * - overlay_get_child_peer_count() - number of online children
+ * - overlay_get_subtree_status (rank) - subtree status of child
+ * - overlay_get_subtree_topo (rank) - topology of subtree rooted at child
  */
-void overlay_set_monitor_cb (struct overlay *ov,
-                             overlay_monitor_f cb,
-                             void *arg);
-
-void overlay_set_loss_cb (struct overlay *ov,
-                          overlay_loss_f cb,
-                          void *arg);
+int overlay_set_monitor_cb (struct overlay *ov,
+                            overlay_monitor_f cb,
+                            void *arg);
 
 /* Register overlay-related broker attributes.
  */

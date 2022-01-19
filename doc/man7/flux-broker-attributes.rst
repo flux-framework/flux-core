@@ -63,8 +63,8 @@ tbon.maxlevel
    The maximum level number in the tree based overlay network.
    Maxlevel is 0 for a size=1 instance.
 
-tbon.endpoint
-   The endpoint for the tree based overlay network to communicate over.
+tbon.parent-endpoint
+   The ZeroMQ endpoint of this broker's TBON parent.
 
 tbon.zmqdebug
    If set to an non-zero integer value, 0MQ socket event logging is enabled,
@@ -76,13 +76,22 @@ tbon.prefertcp
    with PMI, tcp:// endpoints will be used instead of ipc://, even if all
    brokers are on a single node.
 
+tbon.torpid_min
+   The amount of time (in RFC 23 Flux Standard Duration format) that a broker
+   will allow the connection to its TBON parent to remain idle before sending a
+   keepalive message.  This value may be adjusted on a live system.
+
+tbon.torpid_max
+   The amount of time (in RFC 23 Flux Standard Duration format) that a broker
+   will wait for an idle TBON child connection to send messages before
+   declaring it torpid (unresponsive).  A value of 0 disables torpid node
+   checking.  Torpid nodes are automatically drained and require manual
+   undraining with :man1:`flux-resource`.  This value may be adjusted on a
+   live system.
+
 
 SOCKET ATTRIBUTES
 =================
-
-tbon.parent-endpoint
-   The URI of the ZeroMQ endpoint this rank is connected to in the tree
-   based overlay network. This attribute will not be set on rank zero.
 
 local-uri
    The Flux URI that should be passed to :man3:`flux_open` to
@@ -177,26 +186,12 @@ content.purge-target-size
    size of the cache stays at or below this value.
 
 
-WIREUP ATTRIBUTES
-=================
-
-hello.timeout
-   The reduction timeout (in seconds) for the broker wireup protocol.
-   Before the timeout, a topology-based high water mark is applied
-   at each node of the tree based overlay network. After the timeout,
-   new wireup information is forwarded upstream without delay.
-   Set to 0 to disable the timeout.
-
-hello.hwm
-   The reduction high water mark for the broker wireup protocol,
-   normally calculated based on the topology.
-   Set to 0 to disable the high water mark.
-
-
 RESOURCES
 =========
 
 Flux: http://flux-framework.org
+
+RFC 23: Flux Standard Duration: https://github.com/flux-framework/rfc/blob/master/spec_23.rst
 
 
 SEE ALSO

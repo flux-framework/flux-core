@@ -65,6 +65,7 @@ struct groups {
     uint32_t rank;
     struct idset *self;
     bool verbose;
+    struct idset *torpid; // current list of torpid peers at this broker rank
 };
 
 static void get_respond_all (struct groups *g, struct group *group);
@@ -645,25 +646,48 @@ static int add_subtree_ids (struct idset *ids, json_t *topology)
     return 0;
 }
 
-/* Process overlay loss callback for 'rank'.  This means that rank has
- * crashed or been shutdown, and we must automatically generate LEAVEs
- * for 'rank' and members of its TBON subtree.
+/* Generate JOIN/LEAVE for 'rank' in 'broker.torpid' group if rank becomes
+ * torpid/non-torpid.  N.B. For now, just operate on the single rank, not
+ * its entire subtree.  Although it would be straightforward to add the subtree
+ * to the group when the root becomes torpid, removing the whole subtree when
+ * responsiveness returns is less clear, since only a broker's immediate
+ * parent really knows how responsive it is.
  */
-static void overlay_loss_cb (struct overlay *ov,
-                             uint32_t rank,
-                             const char *status,
-                             json_t *topology,
-                             void *arg)
+static void torpid_update (struct groups *g,
+                           uint32_t rank,
+                           struct idset *subtree_ids,
+                           bool torpid)
 {
-    struct groups *g = arg;
     struct idset *ids;
-    struct group *group;
+    bool set_flag;
+    json_t *update = NULL;
 
-    batch_flush (g); // handle any JOINs before loss
+    if (torpid && !idset_test (g->torpid, rank))
+        set_flag = true;
+    else if (!torpid && idset_test (g->torpid, rank))
+        set_flag = false;
+    else
+        return; // nothing to do
 
     if (!(ids = idset_create (0, IDSET_FLAG_AUTOGROW))
-        || add_subtree_ids (ids, topology) < 0)
-        goto done;
+        || idset_set (ids, rank) < 0
+        || !(update = update_encode (ids, set_flag))
+        || batch_append (g, "broker.torpid", update) < 0
+        || (set_flag ? idset_set (g->torpid, rank)
+                     : idset_clear (g->torpid, rank)) < 0) {
+        flux_log_error (g->ctx->h, "error updating broker.torpid");
+    }
+    idset_destroy (ids);
+    json_decref (update);
+}
+
+static void auto_leave (struct groups *g,
+                        const char *status,
+                        uint32_t rank,
+                        struct idset *ids)
+{
+    struct group *group;
+
     group = zhashx_first (g->groups);
     while (group) {
         struct idset *x;
@@ -693,8 +717,42 @@ static void overlay_loss_cb (struct overlay *ov,
         idset_destroy (x);
         group = zhashx_next (g->groups);
     }
+}
+
+static void overlay_monitor_cb (struct overlay *ov, uint32_t rank, void *arg)
+{
+    struct groups *g = arg;
+    const char *status = overlay_get_subtree_status (ov, rank);
+    json_t *topology;
+    struct idset *ids = NULL;
+
+    batch_flush (g); // handle any pending ops first
+
+    /* Prepare a list of ranks that are members of subtree rooted at rank.
+     */
+    if (!(topology = overlay_get_subtree_topo (ov, rank))
+        || !(ids = idset_create (0, IDSET_FLAG_AUTOGROW))
+        || add_subtree_ids (ids, topology) < 0)
+        goto done;
+
+    /* Generate LEAVEs for any groups 'rank' (and subtree) may be a member
+     * of if transitioning to lost (crashed) or offline (shutdown).
+     */
+    if (!strcmp (status, "lost") || !strcmp (status, "offline")) {
+        auto_leave (g, status, rank, ids);
+    }
+    /* Update broker.torpid if torpidity has changed while subtree is in
+     * one of the "online" states.
+     */
+    else if (!strcmp (status, "full")
+        || !strcmp (status, "partial")
+        || !strcmp (status, "degraded")) {
+        torpid_update (g, rank, ids, overlay_peer_is_torpid (ov, rank));
+    }
+
 done:
     idset_destroy (ids);
+    json_decref (topology);
     return;
 }
 
@@ -714,6 +772,7 @@ void groups_destroy (struct groups *g)
         zhashx_destroy (&g->groups);
         json_decref (g->batch);
         idset_destroy (g->self);
+        idset_destroy (g->torpid);
         flux_msg_handler_delvec (g->handlers);
         flux_watcher_destroy (g->batch_timer);
         free (g);
@@ -735,7 +794,8 @@ struct groups *groups_create (struct broker *ctx)
         goto error;
     }
     if (!(g->self = idset_create (0, IDSET_FLAG_AUTOGROW))
-        || idset_set (g->self, g->ctx->rank) < 0)
+        || idset_set (g->self, g->ctx->rank) < 0
+        || !(g->torpid = idset_create (0, IDSET_FLAG_AUTOGROW)))
         goto error;
     zhashx_set_destructor (g->groups, group_destructor);
     zhashx_set_key_duplicator (g->groups, NULL);
@@ -748,7 +808,7 @@ struct groups *groups_create (struct broker *ctx)
                                                       batch_timeout_cb,
                                                       g)))
         goto error;
-    overlay_set_loss_cb (ctx->overlay, overlay_loss_cb, g);
+    overlay_set_monitor_cb (ctx->overlay, overlay_monitor_cb, g);
     return g;
 error:
     groups_destroy (g);
