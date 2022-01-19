@@ -8,3 +8,4 @@ man5
    flux-config
    flux-config-access
    flux-config-bootstrap
+   flux-config-tbon

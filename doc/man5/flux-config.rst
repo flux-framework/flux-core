@@ -74,4 +74,5 @@ TOML: Tom's Obvious Minimal Language: https://toml.io/en/
 SEE ALSO
 ========
 
-:man1:`flux-broker`, :man5:`flux-config-access`, :man5:`flux-config-bootstrap`
+:man1:`flux-broker`, :man5:`flux-config-access`, :man5:`flux-config-bootstrap`,
+:man5:`flux-config-tbon`
