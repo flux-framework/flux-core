@@ -46,9 +46,9 @@ def unblock_signals():
     signal.pthread_sigmask(signal.SIG_UNBLOCK, {signal.SIGTERM, signal.SIGINT})
 
 
-def process_create(cmd):
+def process_create(cmd, stderr=None):
     # pylint: disable=subprocess-popen-preexec-fn
-    return subprocess.Popen(cmd, preexec_fn=unblock_signals)
+    return subprocess.Popen(cmd, preexec_fn=unblock_signals, stderr=stderr)
 
 
 def run_per_rank(name, jobid, args):
@@ -68,6 +68,7 @@ def run_per_rank(name, jobid, args):
     fail_ids = IDset()
 
     handle = flux.Flux()
+    hostlist = flux.hostlist.Hostlist(handle.attr_get("hostlist"))
 
     ranks = fetch_job_ranks(handle, jobid)
     if ranks is None:
@@ -80,17 +81,20 @@ def run_per_rank(name, jobid, args):
 
     for rank in ranks:
         cmd = ["flux", "exec", "-qn", f"-r{rank}"] + per_rank_cmd
-        processes[rank] = process_create(cmd)
+        processes[rank] = process_create(cmd, stderr=subprocess.PIPE)
 
     for rank in ranks:
         rc = processes[rank].wait()
+        for line in processes[rank].stderr:
+            errline = line.decode("utf-8").rstrip()
+            LOGGER.error("%s (rank %d): %s", hostlist[rank], rank, errline)
         if rc != 0:
             fail_ids.set(rank)
             if rc > returncode:
                 returncode = rc
 
     if len(fail_ids) > 0:
-        LOGGER.info("%s: %s failed %s, draining", jobid, fail_ids, name)
+        LOGGER.error("%s: rank %s failed %s, draining", jobid, fail_ids, name)
         drain(handle, fail_ids, f"{name} failed for jobid {jobid}")
 
     if args.verbose:
