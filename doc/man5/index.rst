@@ -6,4 +6,5 @@ man5
    :maxdepth: 1
 
    flux-config
+   flux-config-access
    flux-config-bootstrap
