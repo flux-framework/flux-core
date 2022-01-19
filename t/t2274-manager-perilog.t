@@ -86,6 +86,25 @@ test_expect_success 'perilog: failed ranks are drained with --exec-per-rank' '
 	test "$(drained_ranks)" = "1" &&
 	undrain_all
 '
+test_expect_success 'perilog: failed ranks generate useful error messages' '
+	cat <<-EOF >fail-err.sh &&
+	#!/bin/sh
+	if test \$(flux getattr rank) -eq \$1; then
+		echo failing on \$1 >&2
+		exit 1
+	fi
+	EOF
+	chmod +x fail-err.sh &&
+	(export FLUX_JOB_ID=${jobid}  &&
+	 test_expect_code 1 flux perilog-run prolog -ve./fail-err.sh,1 \
+	 >fail-err.out 2>&1
+	) &&
+	test_debug "cat fail-err.out" &&
+	test "$(drained_ranks)" = "1" &&
+	grep "$(hostname) (rank 1): failing on 1" fail-err.out &&
+	undrain_all
+
+'
 test_expect_success 'perilog: load perilog.so plugin' '
 	flux jobtap load perilog.so
 '
