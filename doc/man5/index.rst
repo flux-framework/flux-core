@@ -9,3 +9,4 @@ man5
    flux-config-access
    flux-config-bootstrap
    flux-config-tbon
+   flux-config-exec
