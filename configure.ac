@@ -270,6 +270,11 @@ AM_COND_IF([WITH_PYTHON], [
                              [sphinx=true],
                              [sphinx=false; AC_MSG_WARN([could not find sphinx to generate docs, version 1.6.7+ required])]
                              )
+              AM_CHECK_PYMOD(docutils,
+                             [StrictVersion(docutils.__version__) >= StrictVersion ('0.11.0')],
+                             [docutils=true],
+                             [docutils=false; AC_MSG_WARN([could not find docutils to generate docs, version 0.11.0+ required])]
+                             )
   ])
 ])
 
@@ -279,7 +284,10 @@ AM_COND_IF([WITH_PYTHON], [
 AS_IF([test "x$enable_docs" = "xyes" -a "x$sphinx" = "xfalse"],[
   AC_MSG_ERROR([--enable-docs used but no document generator found!])
 ])
-AM_CONDITIONAL([ENABLE_DOCS], [test "x$sphinx" = "xtrue"])
+AS_IF([test "x$enable_docs" = "xyes" -a "x$docutils" = "xfalse"],[
+  AC_MSG_ERROR([--enable-docs used but docutils not found!])
+])
+AM_CONDITIONAL([ENABLE_DOCS], [test "x$sphinx" = "xtrue" -a "x$docutils" = "xtrue"])
 AC_CHECK_PROG(ASPELL,[aspell],[aspell])
 
 
@@ -568,6 +576,8 @@ AC_OUTPUT
 AS_IF([test "x$enable_docs" != "xno"], [
   if test "x$sphinx" = "xfalse"; then
     AC_MSG_WARN([Python Sphinx not found. Manual pages will not be generated.])
+  elif test "x$docutils" = "xfalse"; then
+    AC_MSG_WARN([Python Docutils not found. Manual pages will not be generated.])
   fi
 ])
 
