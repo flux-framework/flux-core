@@ -282,6 +282,7 @@ MAN3_FILES_SECONDARY = \
 MAN5_FILES = $(MAN5_FILES_PRIMARY)
 
 MAN5_FILES_PRIMARY = \
+	man5/flux-config.5 \
 	man5/flux-config-bootstrap.5
 
 MAN7_FILES = $(MAN7_FILES_PRIMARY)
