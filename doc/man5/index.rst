@@ -10,3 +10,4 @@ man5
    flux-config-bootstrap
    flux-config-tbon
    flux-config-exec
+   flux-config-resource
