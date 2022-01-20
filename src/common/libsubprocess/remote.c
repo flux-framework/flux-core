@@ -597,8 +597,12 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
     }
 
     if (!(c = zhash_lookup (p->channels, stream))) {
-        flux_log_error (p->h, "invalid channel received: rank = %d, pid = %d, stream = %s",
-                 rank, pid, stream);
+        flux_log_error (p->h,
+                        "invalid channel received: "
+                        "rank = %d, pid = %d, stream = %s",
+                        rank,
+                        pid,
+                        stream);
         errno = EPROTO;
         goto cleanup;
     }
@@ -614,8 +618,13 @@ static int remote_output (flux_subprocess_t *p, flux_future_t *f,
         /* add list of msgs if there is overflow? */
 
         if (tmp != len) {
-            flux_log_error (p->h, "channel buffer error: rank = %d pid = %d, stream = %s, len = %d",
-                            rank, pid, stream, len);
+            flux_log_error (p->h,
+                            "channel buffer error: "
+                            "rank = %d pid = %d, stream = %s, len = %d",
+                            rank,
+                            pid,
+                            stream,
+                            len);
             errno = EOVERFLOW;
             goto cleanup;
         }
