@@ -250,19 +250,15 @@ static void remote_in_check_cb (flux_reactor_t *r,
     flux_watcher_stop (c->in_idle_w);
 
     if (flux_buffer_bytes (c->write_buffer) > 0) {
-        if (remote_write (c) < 0) {
-            flux_log_error (c->p->h, "remote_write");
+        if (remote_write (c) < 0)
             goto error;
-        }
     }
 
     if (!flux_buffer_bytes (c->write_buffer)
         && c->closed
         && !c->write_eof_sent) {
-        if (remote_close (c) < 0) {
-            flux_log_error (c->p->h, "remote_close");
+        if (remote_close (c) < 0)
             goto error;
-        }
         c->write_eof_sent = true;
     }
 
