@@ -11,3 +11,4 @@ man5
    flux-config-tbon
    flux-config-exec
    flux-config-resource
+   flux-config-archive
