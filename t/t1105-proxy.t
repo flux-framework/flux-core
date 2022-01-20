@@ -13,6 +13,7 @@ export TEST_FLUX=${FLUX_BUILD_DIR}/src/cmd/flux
 export TEST_TMPDIR=${TMPDIR:-/tmp}
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 EVENT_TRACE="$SHARNESS_TEST_SRCDIR/scripts/event-trace.lua"
+RUNPTY="$SHARNESS_TEST_SRCDIR/scripts/runpty.py"
 
 test_expect_success 'flux-proxy creates new socket' '
 	PROXY_URI=$(flux proxy $TEST_URI printenv FLUX_URI) &&
@@ -116,6 +117,18 @@ test_expect_success 'flux-proxy works with /jobid argument' '
 	test "$uri" = "$FLUX_URI" &&
 	flux job cancel $id &&
 	flux job wait-event -vt 10 $id clean
+'
+test_expect_success NO_CHAIN_LINT 'flux-proxy attempts to restore terminal on error' '
+	cat <<-EOF >test.sh &&
+	#!/bin/bash
+	flux --parent job cancel \$(flux getattr jobid)
+	while true; do sleep 0.1; done
+	EOF
+	chmod +x test.sh
+	id=$(flux mini batch -n1 --wrap flux mini run sleep 600) &&
+	flux job wait-event -vt 60 $id memo &&
+	$RUNPTY -o pty.out -f asciicast flux proxy ${id}?local $(pwd)/test.sh &&
+	grep "\[\?25h" pty.out
 '
 
 test_done
