@@ -698,6 +698,8 @@ static void remote_exec_cb (flux_future_t *f, void *arg)
     return;
 
 error:
+    process_new_state (p, FLUX_SUBPROCESS_FAILED,
+                       p->rank, -1, errno, 0);
     if (p->state == FLUX_SUBPROCESS_RUNNING) {
         flux_future_t *fkill;
         if (!(fkill = remote_kill (p, SIGKILL)))
@@ -708,8 +710,6 @@ error:
         else
             flux_future_destroy (fkill);
     }
-    process_new_state (p, FLUX_SUBPROCESS_FAILED,
-                       p->rank, -1, errno, 0);
     flux_future_destroy (f);
     p->f = NULL;
 }
