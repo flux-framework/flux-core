@@ -27,6 +27,7 @@
 #include <argz.h>
 #include <glob.h>
 #include <inttypes.h>
+#include <termios.h>
 
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/uri.h"
@@ -44,6 +45,36 @@ struct proxy_command {
 };
 
 static const char *route_auxkey = "flux::route";
+
+static struct termios orig_term;
+static bool term_needs_restore = false;
+
+static void save_terminal_state (void)
+{
+    if (isatty (STDIN_FILENO)) {
+        tcgetattr (STDIN_FILENO, &orig_term);
+        term_needs_restore = true;
+    }
+}
+
+static void restore_terminal_state (void)
+{
+    if (term_needs_restore) {
+        /*
+         *  Ignore SIGTTOU so we can write to controlling terminal
+         *   as background process
+         */
+        signal (SIGTTOU, SIG_IGN);
+        tcsetattr (STDIN_FILENO, TCSADRAIN, &orig_term);
+        /* https://en.wikipedia.org/wiki/ANSI_escape_code
+         * Best effort: attempt to ensure cursor is visible:
+         */
+        printf ("\033[?25h\r\n");
+        fflush (stdout);
+        term_needs_restore = false;
+    }
+}
+
 
 static void completion_cb (flux_subprocess_t *p)
 {
@@ -318,7 +349,9 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
     /* Start reactor
      */
+    save_terminal_state ();
     if (flux_reactor_run (r, 0) < 0) {
+        restore_terminal_state ();
         log_err ("flux_reactor_run");
         goto done;
     }
