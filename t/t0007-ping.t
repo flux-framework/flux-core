@@ -132,4 +132,9 @@ test_expect_success 'ping with "upstream" works (format 3)' '
         grep -q -E "time=[0-9]+\.[0-9]+ ms" stdout
 '
 
+test_expect_success 'ping help output works' '
+        flux ping --help 2> help.err &&
+        grep "Usage: flux-ping \[OPTIONS\] TARGET" help.err
+'
+
 test_done

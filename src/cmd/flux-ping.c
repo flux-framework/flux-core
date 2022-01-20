@@ -262,6 +262,7 @@ void parse_service (const char *s, uint32_t *nodeid, char **topic)
 int main (int argc, char *argv[])
 {
     int pad_bytes;
+    char *cmdusage = "[OPTIONS] TARGET";
     flux_watcher_t *tw = NULL;
     optparse_t *opts;
     struct ping_ctx ctx;
@@ -272,6 +273,8 @@ int main (int argc, char *argv[])
     log_init ("flux-ping");
 
     opts = optparse_create ("flux-ping");
+    if (optparse_set (opts, OPTPARSE_USAGE, cmdusage) != OPTPARSE_SUCCESS)
+        log_msg_exit ("optparse_set (USAGE)");
     if (optparse_add_option_table (opts, cmdopts) != OPTPARSE_SUCCESS)
         log_msg_exit ("optparse_add_option_table");
     if ((optindex = optparse_parse_args (opts, argc, argv)) < 0)
