@@ -288,7 +288,9 @@ MAN5_FILES_PRIMARY = \
 	man5/flux-config-tbon.5 \
 	man5/flux-config-exec.5 \
 	man5/flux-config-resource.5 \
-	man5/flux-config-archive.5
+	man5/flux-config-archive.5 \
+	man5/flux-config-job-manager.5
+
 
 MAN7_FILES = $(MAN7_FILES_PRIMARY)
 

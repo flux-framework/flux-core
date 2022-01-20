@@ -12,3 +12,4 @@ man5
    flux-config-exec
    flux-config-resource
    flux-config-archive
+   flux-config-job-manager
