@@ -165,7 +165,7 @@ static int channel_local_setup (flux_subprocess_t *p,
     int buffer_size;
 
     if (!(c = channel_create (p, output_f, name, channel_flags))) {
-        flux_log_error (p->h, "calloc");
+        flux_log_error (p->h, "channel_create");
         goto error;
     }
 
