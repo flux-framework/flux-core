@@ -354,6 +354,7 @@ html: conf.py $(RST_FILES)
 
 EXTRA_DIST = \
 	conf.py \
+	manpages.py \
 	domainrefs.py \
 	index.rst \
 	$(RST_FILES) \

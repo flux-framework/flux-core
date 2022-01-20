@@ -11,7 +11,7 @@ dist_fluxrc1_SCRIPTS = \
 
 fluxhelpdir = $(datadir)/flux/help.d
 fluxhelp_DATA = flux/help.d/core.json
-flux/help.d/core.json: $(top_srcdir)/doc/conf.py
+flux/help.d/core.json: $(top_srcdir)/doc/manpages.py
 	$(AM_V_GEN)umask 077 && $(MKDIR_P) flux/help.d && \
 	$(PYTHON) $(srcdir)/gen-cmdhelp.py $< > $@
 
