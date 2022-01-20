@@ -122,13 +122,27 @@ test_expect_success NO_CHAIN_LINT 'flux-proxy attempts to restore terminal on er
 	cat <<-EOF >test.sh &&
 	#!/bin/bash
 	flux --parent job cancel \$(flux getattr jobid)
+	while flux getattr jobid; do sleep 0.1; done
+	EOF
+	chmod +x test.sh
+	id=$(flux mini batch -n1 --wrap flux mini run sleep 600) &&
+	flux job wait-event -vt 60 $id memo &&
+	$RUNPTY -o pty.out -f asciicast \
+		flux proxy --nohup ${id}?local $(pwd)/test.sh &&
+	grep "\[\?25h" pty.out
+'
+test_expect_success NO_CHAIN_LINT 'flux-proxy sends SIGHUP to children without --nohup' '
+	cat <<-EOF >test.sh &&
+	#!/bin/bash
+	flux --parent job cancel \$(flux getattr jobid)
 	while true; do sleep 0.1; done
 	EOF
 	chmod +x test.sh
 	id=$(flux mini batch -n1 --wrap flux mini run sleep 600) &&
 	flux job wait-event -vt 60 $id memo &&
-	$RUNPTY -o pty.out -f asciicast flux proxy ${id}?local $(pwd)/test.sh &&
-	grep "\[\?25h" pty.out
+	test_expect_code 129 $RUNPTY -o pty.out -f asciicast \
+		flux proxy ${id}?local $(pwd)/test.sh &&
+	grep "\[\?25h" pty.out &&
+	grep "SIGHUP" pty.out
 '
-
 test_done
