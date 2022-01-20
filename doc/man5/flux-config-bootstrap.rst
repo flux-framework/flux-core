@@ -6,28 +6,21 @@ flux-config-bootstrap(5)
 DESCRIPTION
 ===========
 
-The broker discovers the size of the Flux instance, the broker's rank,
-and overlay network wireup information either dynamically using a PMI
-service, such as when being launched by Flux or another resource manager,
-or statically using the ``bootstrap`` section of the Flux configuration,
-such as when being launched by systemd.
+The system instance requires that the overlay network configuration be
+statically configured.  The ``bootstrap`` TOML table defines these details
+for a given cluster.
 
-The default bootstrap mode is PMI. To select config file bootstrap,
-specify the config directory with the ``--config-path=PATH`` broker command
-line option or set ``FLUX_CONF_DIR`` in the broker's environment. Ensure that
-this directory contains a file that defines the ``bootstrap`` section.
+WARNING:  Although ``flux config reload`` works on a live system, these
+settings do not take effect until the next broker restart.  As such, they
+must only be changed in conjunction with a full system instance restart in
+order to avoid brokers becoming de-synchronized if they are independently
+restarted before the next instance restart.
 
-
-CONFIG FILES
-============
-
-Flux uses the TOML configuration file format. The ``bootstrap`` section is
-a TOML table containing the following keys. Each node in a cluster is
-expected to bootstrap from an identical config file.
+The ``bootstrap`` table contains the following keys:
 
 
-KEYWORDS
-========
+KEYS
+====
 
 enable_ipv6
    (optional) Boolean value for enabling IPv6.  By default only IPv4 is
@@ -89,12 +82,14 @@ EXAMPLE
    default_connect = "tcp://e%h:%p"
 
    hosts = [
-       {
-           host="fluke0",
+       {   # Management requires non-default config
+           host="test0",
            bind="tcp://en4:9001",
-           connect="tcp://fluke-mgmt:9001"
+           connect="tcp://test-mgmt:9001"
        },
-       { host = "fluke[1-1023]" },
+       {   # Other nodes use defaults
+           host = "test[1-1023]"
+       },
    ]
 
 
@@ -107,4 +102,4 @@ Flux: http://flux-framework.org
 SEE ALSO
 ========
 
-:man1:`flux-getattr`, :man3:`flux_attr_get`
+:man5:`flux-config`
