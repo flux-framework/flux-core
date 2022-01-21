@@ -43,7 +43,8 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-RFC 23: Flux Standard Duration: https://github.com/flux-framework/rfc/blob/master/spec_23.rst
+RFC 23: Flux Standard Duration: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_23.html
+
 
 SEE ALSO
 ========

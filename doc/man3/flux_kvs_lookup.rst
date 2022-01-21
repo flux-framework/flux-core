@@ -239,10 +239,5 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-RFC 11: Key Value Store Tree Object Format v1: https://github.com/flux-framework/rfc/blob/master/spec_11.rst
+RFC 11: Key Value Store Tree Object Format v1: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_11.html
 
-
-SEE ALSO
-========
-
-:man3:`flux_rpc`, :man3:`flux_future_then`

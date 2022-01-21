@@ -41,7 +41,7 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-RFC 15: Flux Security: https://github.com/flux-framework/rfc/blob/master/spec_15.rs
+RFC 15: Flux Security: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_15.html
 
 
 SEE ALSO

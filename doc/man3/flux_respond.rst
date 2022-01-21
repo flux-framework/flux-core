@@ -98,9 +98,9 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-RFC 6: Flux Remote Procedure Call Protocol: https://github.com/flux-framework/rfc/blob/master/spec_6.rst
+RFC 6: Flux Remote Procedure Call Protocol: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_6.html
 
-RFC 3: Flux Message Protocol: https://github.com/flux-framework/rfc/blob/master/spec_3.rst
+RFC 3: Flux Message Protocol: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_3.html
 
 
 SEE ALSO
