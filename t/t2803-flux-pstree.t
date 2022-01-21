@@ -108,6 +108,12 @@ test_expect_success 'flux-pstree JOBID works' '
 	EOF
 	test_cmp ${name}.expected ${name}.output
 '
+test_expect_success 'flux-pstree errors on illegal JOBID' '
+	name="jobidillegal" &&
+	test_must_fail flux pstree IllegalID 2> ${name}.output &&
+	test_debug "cat ${name}.output" &&
+	grep "invalid JobID value" ${name}.output
+'
 test_expect_success 'flux-pstree works when run inside child job' '
 	name="proxy" &&
 	flux proxy $rid flux pstree > ${name}.output &&

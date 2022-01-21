@@ -305,6 +305,11 @@ test_expect_success 'flux-jobs error on bad IDs' '
 	test $count -eq 3
 '
 
+test_expect_success 'flux-jobs errors with illegal IDs' '
+	test_must_fail flux jobs --suppress-header IllegalID 2> illegal_ids.err &&
+	grep "invalid JobID value" illegal_ids.err
+'
+
 test_expect_success 'flux-jobs good and bad IDs works' '
 	ids=$(state_ids sched) &&
 	flux jobs --suppress-header ${ids} 0 1 2 > ids.out 2> ids.err &&
