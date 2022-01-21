@@ -42,7 +42,7 @@ content.backing-path
    If it doesn't exist, it is created.
 
 hostlist
-   An RFC29 hostlist in broker rank order.
+   An RFC 29 hostlist in broker rank order.
 
 
 TOPOLOGY ATTRIBUTES
@@ -191,7 +191,9 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-RFC 23: Flux Standard Duration: https://github.com/flux-framework/rfc/blob/master/spec_23.rst
+RFC 23: Flux Standard Duration: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_23.html
+
+RFC 29: Hostlist Format: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_29.html
 
 
 SEE ALSO

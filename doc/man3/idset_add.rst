@@ -103,7 +103,7 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-RFC 22: Idset String Representation: https://github.com/flux-framework/rfc/blob/master/spec_22.rst
+RFC 22: Idset String Representation: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_22.html
 
 
 SEE ALSO

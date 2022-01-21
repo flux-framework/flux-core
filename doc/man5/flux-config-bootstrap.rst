@@ -66,7 +66,7 @@ COMPACT HOSTS
 
 Since it would be tedious to repeat host entries for every compute
 node in a large cluster, the ``hosts`` array may be abbreviated using
-RFC29 hostlists.  For example, the list of hosts foo0, foo1, foo2,
+RFC 29 hostlists.  For example, the list of hosts foo0, foo1, foo2,
 foo3, foo18, foo4, foo20 can be represented as "foo[0-3,18,4,20]".
 
 
@@ -97,6 +97,8 @@ RESOURCES
 =========
 
 Flux: http://flux-framework.org
+
+RFC 29: Hostlist Format: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_29.html
 
 
 SEE ALSO

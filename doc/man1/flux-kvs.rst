@@ -90,7 +90,7 @@ COMMANDS
    from being merged with with other contemporaneous commits. *-A*
    appends the value to a key instead of overwriting the value. Append
    is incompatible with the -j option. After a successful put, *-O* or
-   *-s* can be specified to output the RFC11 treeobj or root sequence
+   *-s* can be specified to output the RFC 11 treeobj or root sequence
    number of the root containing the put(s).
 
 **ls** [-N ns] [-R] [-d] [-F] [-w COLS] [-1] [*key* ...]
@@ -118,7 +118,7 @@ COMMANDS
    namespace to commit to via *-N*. If *key* represents a directory,
    specify *-R* to remove all keys underneath it. If *-f* is specified,
    ignore nonexistent files. After a successful unlink, *-O* or *-s* can
-   be specified to output the RFC11 treeobj or root sequence number of
+   be specified to output the RFC 11 treeobj or root sequence number of
    the root containing the unlink(s).
 
 **link** [-N ns] [-T ns] [-O|-s] *target* *linkname*
@@ -127,7 +127,7 @@ COMMANDS
    it is overwritten. Specify an alternate namespace to commit linkname
    to via *-N*. Specify the target's namespace via *-T*. After a
    successfully created link, *-O* or *-s* can be specified to output the
-   RFC11 treeobj or root sequence number of the root containing the link.
+   RFC 11 treeobj or root sequence number of the root containing the link.
 
 **readlink** [-N ns] [-a treeobj] [ -o \| -k ] *key* [*key* ...]
    Retrieve the key a link refers to rather than its value, as would be
@@ -142,7 +142,7 @@ COMMANDS
    Create an empty directory and commit the change. If *key* exists,
    it is overwritten. Specify an alternate namespace to commit to via
    *-N*. After a successful mkdir, *-O* or *-s* can be specified to
-   output the RFC11 treeobj or root sequence number of the root
+   output the RFC 11 treeobj or root sequence number of the root
    containing the new directory.
 
 **copy** [-S src-ns] [-D dst-ns] *source* *destination*
@@ -214,3 +214,5 @@ RESOURCES
 =========
 
 Flux: http://flux-framework.org
+
+RFC 11: Key Value Store Tree Object Format v1: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_11.html

@@ -133,6 +133,6 @@ RESOURCES
 
 Flux: http://flux-framework.org
 
-RFC 20: Resource Set Specification Version 1: https://github.com/flux-framework/rfc/blob/master/spec_22.rst
+RFC 20: Resource Set Specification Version 1: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_20.html
 
-RFC 27: Flux Resource Allocation Protocol Version 1: https://github.com/flux-framework/rfc/blob/master/spec_27.rst
+RFC 27: Flux Resource Allocation Protocol Version 1: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_27.html
