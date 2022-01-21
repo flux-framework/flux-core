@@ -299,7 +299,7 @@ test_expect_success 'flux jobs can take specific IDs in any form' '
 	test_cmp ids.specific.expected ids.specific.out
 '
 
-test_expect_success 'flux-jobs error on bad IDs' '
+test_expect_success 'flux-jobs error on unknown IDs' '
 	flux jobs --suppress-header 0 1 2 2> ids.err &&
 	count=`grep -i unknown ids.err | wc -l` &&
 	test $count -eq 3
