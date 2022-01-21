@@ -352,6 +352,8 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
     flux_reactor_t *r;
     int flags = 0;
 
+    memset (&ctx, 0, sizeof (ctx));
+
     log_init ("flux-proxy");
 
     optindex = optparse_option_index (p);
