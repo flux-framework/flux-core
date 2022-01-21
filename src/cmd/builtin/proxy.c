@@ -27,6 +27,7 @@
 #include <argz.h>
 #include <glob.h>
 #include <inttypes.h>
+#include <termios.h>
 
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/uri.h"
@@ -44,6 +45,36 @@ struct proxy_command {
 };
 
 static const char *route_auxkey = "flux::route";
+
+static struct termios orig_term;
+static bool term_needs_restore = false;
+
+static void save_terminal_state (void)
+{
+    if (isatty (STDIN_FILENO)) {
+        tcgetattr (STDIN_FILENO, &orig_term);
+        term_needs_restore = true;
+    }
+}
+
+static void restore_terminal_state (void)
+{
+    if (term_needs_restore) {
+        /*
+         *  Ignore SIGTTOU so we can write to controlling terminal
+         *   as background process
+         */
+        signal (SIGTTOU, SIG_IGN);
+        tcsetattr (STDIN_FILENO, TCSADRAIN, &orig_term);
+        /* https://en.wikipedia.org/wiki/ANSI_escape_code
+         * Best effort: attempt to ensure cursor is visible:
+         */
+        printf ("\033[?25h\r\n");
+        fflush (stdout);
+        term_needs_restore = false;
+    }
+}
+
 
 static void completion_cb (flux_subprocess_t *p)
 {
@@ -250,6 +281,14 @@ static void version_check (flux_t *h, bool force)
     }
 }
 
+static void proxy_command_destroy_usock_and_router (struct proxy_command *ctx)
+{
+    usock_server_destroy (ctx->server); // destroy before router
+    ctx->server = NULL;
+    router_destroy (ctx->router);
+    ctx->router = NULL;
+}
+
 static int cmd_proxy (optparse_t *p, int ac, char *av[])
 {
     int n;
@@ -318,13 +357,28 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
 
     /* Start reactor
      */
+    save_terminal_state ();
     if (flux_reactor_run (r, 0) < 0) {
-        log_err ("flux_reactor_run");
+        if (errno == ECONNRESET)
+            log_msg ("Lost connection to Flux");
+        else
+            log_err ("flux_reactor_run");
+        if (!optparse_hasopt (p, "nohup")) {
+            log_msg ("Sending SIGHUP to child processes");
+            flux_future_destroy (flux_subprocess_kill (ctx.p, SIGHUP));
+            flux_future_destroy (flux_subprocess_kill (ctx.p, SIGCONT));
+        }
+        proxy_command_destroy_usock_and_router (&ctx);
+
+        /*
+         * Wait for child to normally terminate
+         */
+        flux_reactor_run (r, 0);
+        restore_terminal_state ();
         goto done;
     }
 done:
-    usock_server_destroy (ctx.server); // destroy before router
-    router_destroy (ctx.router);
+    proxy_command_destroy_usock_and_router (&ctx);
 
     if (ctx.exit_code)
         exit (ctx.exit_code);
@@ -336,6 +390,9 @@ done:
 static struct optparse_option proxy_opts[] = {
     { .name = "force",  .key = 'f',  .has_arg = 0,
       .usage = "Skip version check when connecting to Flux broker", },
+    { .name = "nohup",  .key = 'n',  .has_arg = 0,
+      .usage = "Do not send SIGHUP to child processes when connection"
+               " to Flux is lost", },
     OPTPARSE_TABLE_END,
 };
 
