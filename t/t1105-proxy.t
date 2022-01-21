@@ -132,6 +132,7 @@ test_expect_success NO_CHAIN_LINT 'flux-proxy attempts to restore terminal on er
 	grep "\[\?25h" pty.out
 '
 test_expect_success NO_CHAIN_LINT 'flux-proxy sends SIGHUP to children without --nohup' '
+	SHELL=/bin/sh &&
 	cat <<-EOF >test.sh &&
 	#!/bin/bash
 	flux --parent job cancel \$(flux getattr jobid)
