@@ -408,8 +408,13 @@ static int write_subprocess (flux_subprocess_server_t *s, flux_subprocess_t *p,
     /* add list of msgs if there is overflow? */
 
     if (tmp != len) {
-        flux_log_error (s->h, "channel buffer error: rank = %d pid = %d, stream = %s, len = %d",
-                        s->rank, flux_subprocess_pid (p), stream, len);
+        flux_log_error (s->h,
+                        "channel buffer error: "
+                        "rank = %d pid = %d, stream = %s, len = %d",
+                        s->rank,
+                        flux_subprocess_pid (p),
+                        stream,
+                        len);
         errno = EOVERFLOW;
         return -1;
     }

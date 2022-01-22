@@ -165,12 +165,12 @@ static int channel_local_setup (flux_subprocess_t *p,
     int buffer_size;
 
     if (!(c = channel_create (p, output_f, name, channel_flags))) {
-        flux_log_error (p->h, "calloc");
+        flux_log (p->h, LOG_DEBUG, "channel_create");
         goto error;
     }
 
     if (socketpair (PF_LOCAL, SOCK_STREAM, 0, fds) < 0) {
-        flux_log_error (p->h, "socketpair");
+        flux_log (p->h, LOG_DEBUG, "socketpair");
         goto error;
     }
 
@@ -184,12 +184,12 @@ static int channel_local_setup (flux_subprocess_t *p,
     fds[1] = -1;
 
     if ((fd_flags = fd_set_nonblocking (c->parent_fd)) < 0) {
-        flux_log_error (p->h, "fd_set_nonblocking");
+        flux_log (p->h, LOG_DEBUG, "fd_set_nonblocking");
         goto error;
     }
 
     if ((buffer_size = cmd_option_bufsize (p, name)) < 0) {
-        flux_log_error (p->h, "cmd_option_bufsize");
+        flux_log (p->h, LOG_DEBUG, "cmd_option_bufsize");
         goto error;
     }
 
@@ -201,7 +201,7 @@ static int channel_local_setup (flux_subprocess_t *p,
                                                               0,
                                                               c);
         if (!c->buffer_write_w) {
-            flux_log_error (p->h, "flux_buffer_write_watcher_create");
+            flux_log (p->h, LOG_DEBUG, "flux_buffer_write_watcher_create");
             goto error;
         }
     }
@@ -210,7 +210,7 @@ static int channel_local_setup (flux_subprocess_t *p,
         int wflag;
 
         if ((wflag = cmd_option_line_buffer (p, name)) < 0) {
-            flux_log_error (p->h, "cmd_option_line_buffer");
+            flux_log (p->h, LOG_DEBUG, "cmd_option_line_buffer");
             goto error;
         }
 
@@ -224,7 +224,7 @@ static int channel_local_setup (flux_subprocess_t *p,
                                                             wflag,
                                                             c);
         if (!c->buffer_read_w) {
-            flux_log_error (p->h, "flux_buffer_read_watcher_create");
+            flux_log (p->h, LOG_DEBUG, "flux_buffer_read_watcher_create");
             goto error;
         }
 
@@ -233,7 +233,7 @@ static int channel_local_setup (flux_subprocess_t *p,
 
     if (channel_flags & CHANNEL_FD) {
         if (asprintf (&e, "%s", name) < 0) {
-            flux_log_error (p->h, "asprintf");
+            flux_log (p->h, LOG_DEBUG, "asprintf");
             goto error;
         }
 
@@ -244,17 +244,17 @@ static int channel_local_setup (flux_subprocess_t *p,
                               e,
                               "%d",
                               c->child_fd) < 0) {
-            flux_log_error (p->h, "flux_cmd_setenvf");
+            flux_log (p->h, LOG_DEBUG, "flux_cmd_setenvf");
             goto error;
         }
     }
 
     if (zhash_insert (p->channels, name, c) < 0) {
-        flux_log_error (p->h, "zhash_insert");
+        flux_log (p->h, LOG_DEBUG, "zhash_insert");
         goto error;
     }
     if (!zhash_freefn (p->channels, name, channel_destroy)) {
-        flux_log_error (p->h, "zhash_freefn");
+        flux_log (p->h, LOG_DEBUG, "zhash_freefn");
         goto error;
     }
 
@@ -322,7 +322,7 @@ static int local_setup_channels (flux_subprocess_t *p)
     int len;
 
     if (!(channels = flux_cmd_channel_list (p->cmd))) {
-        flux_log_error (p->h, "flux_cmd_channel_list");
+        flux_log (p->h, LOG_DEBUG, "flux_cmd_channel_list");
         return -1;
     }
 
@@ -409,7 +409,7 @@ static void closefd_child (void *arg, int fd)
  *   signal to proceed. This is done by writing 1 byte to child side of
  *   socketpair, and waiting for parent to write one byte back.
  *
- * Call fprintf instead of flux_log_error(), errors in child should
+ * Call fprintf instead of flux_log(), errors in child should
  *  go to parent error streams.
  */
 static int local_child_ready (flux_subprocess_t *p)
@@ -433,7 +433,7 @@ static int local_child_ready (flux_subprocess_t *p)
 static void local_child_report_exec_failed_errno (flux_subprocess_t *p, int e)
 {
     int fd = p->sync_fds[1];
-    /* Call fprintf instead of flux_log_error(), errors in child
+    /* Call fprintf instead of flux_log(), errors in child
      * should go to parent error streams. */
     if (write (fd, &e, sizeof (e)) != sizeof (e))
         fprintf (stderr, "local_child_report_exec_failed_errno: %s\n",
@@ -453,7 +453,7 @@ static int local_child (flux_subprocess_t *p)
     /* Throughout this function use _exit() instead of exit(), to
      * avoid calling any atexit() routines of parent.
      *
-     * Call fprintf instead of flux_log_error(), errors in child
+     * Call fprintf instead of flux_log(), errors in child
      * should go to parent error streams.
      */
 
@@ -553,7 +553,7 @@ static int subprocess_parent_wait_on_child (flux_subprocess_t *p)
     char c;
 
     if (read (p->sync_fds[0], &c, sizeof (c)) != 1) {
-        flux_log_error (p->h, "subprocess_parent_wait_on_child: read");
+        flux_log (p->h, LOG_DEBUG, "subprocess_parent_wait_on_child: read");
         return -1;
     }
     return 0;
@@ -609,7 +609,7 @@ static int local_fork (flux_subprocess_t *p)
                                                   true,
                                                   child_watch_cb,
                                                   p))) {
-        flux_log_error (p->h, "flux_child_watcher_create");
+        flux_log (p->h, LOG_DEBUG, "flux_child_watcher_create");
         return -1;
     }
 
