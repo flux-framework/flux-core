@@ -55,7 +55,10 @@ class JobID(int):
         if isinstance(value, int):
             jobid = value
         else:
-            jobid = id_parse(value)
+            try:
+                jobid = id_parse(value)
+            except OSError:
+                raise ValueError(f"{value} is not a valid Flux jobid")
         self = super(cls, cls).__new__(cls, jobid)
         self.orig_str = str(value)
         return self

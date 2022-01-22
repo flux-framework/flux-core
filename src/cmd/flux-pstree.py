@@ -164,13 +164,21 @@ def load_tree(
     #
     attrs = flux.job.list.VALID_ATTRS
     try:
-        jobs = (
-            JobList(flux.Flux(uri), ids=jobids, filters=filters, attrs=attrs)
-            .fetch_jobs()
-            .get_jobs()
-        )
+        jobs_rpc = JobList(
+            flux.Flux(uri), ids=jobids, filters=filters, attrs=attrs
+        ).fetch_jobs()
+        jobs = jobs_rpc.get_jobs()
     except (OSError, FileNotFoundError):
         return tree
+
+    #  Print all errors accumulated in JobList RPC:
+    #  fetch_jobs() may not set errors list, must check first
+    if hasattr(jobs_rpc, "errors"):
+        try:
+            for err in jobs_rpc.errors:
+                print(err, file=sys.stderr)
+        except EnvironmentError:
+            pass
 
     #  Since the executor cannot be used recursively, start one per
     #   loop iteration. This is very wasteful but greatly speeds up
