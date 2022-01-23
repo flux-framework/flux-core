@@ -87,6 +87,16 @@ struct flux_handle_struct {
 static void handle_trace (flux_t *h, const char *fmt, ...)
     __attribute__ ((format (printf, 2, 3)));
 
+
+static int validate_flags (int flags, int allowed)
+{
+    if ((flags & allowed) != flags) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
+
 static flux_t *lookup_clone_ancestor (flux_t *h)
 {
     while ((h->flags & FLUX_O_CLONE))
@@ -261,6 +271,15 @@ flux_t *flux_open (const char *uri, int flags)
     connector_init_f *connector_init = NULL;
     const char *s;
     flux_t *h = NULL;
+    const int valid_flags = FLUX_O_TRACE
+                          | FLUX_O_CLONE
+                          | FLUX_O_NONBLOCK
+                          | FLUX_O_MATCHDEBUG
+                          | FLUX_O_TEST_NOSUB
+                          | FLUX_O_RPCTRACK;
+
+    if (validate_flags (flags, valid_flags) < 0)
+        return NULL;
 
     /* Try to get URI from (in descending precedence):
      *   argument > environment > builtin
@@ -482,7 +501,13 @@ void flux_decref (flux_t *h)
 
 void flux_flags_set (flux_t *h, int flags)
 {
-    h->flags |= flags;
+    /* N.B. FLUX_O_RPCTRACK not permitted here, only in flux_open() */
+    const int valid_flags = FLUX_O_TRACE
+                          | FLUX_O_CLONE
+                          | FLUX_O_NONBLOCK
+                          | FLUX_O_MATCHDEBUG
+                          | FLUX_O_TEST_NOSUB;
+    h->flags |= (flags & valid_flags);
 }
 
 void flux_flags_unset (flux_t *h, int flags)
@@ -688,6 +713,10 @@ static void handle_trace (flux_t *h, const char *fmt, ...)
 
 int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
 {
+    if (!h || !msg || validate_flags (flags, FLUX_O_NONBLOCK) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
     h = lookup_clone_ancestor (h);
     if (!h->ops->send || h->destroy_in_progress) {
         errno = ENOSYS;
@@ -769,6 +798,10 @@ static flux_msg_t *flux_recv_any (flux_t *h, int flags)
  */
 flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
 {
+    if (!h || validate_flags (flags, FLUX_O_NONBLOCK) < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
     h = lookup_clone_ancestor (h);
     zlist_t *l = NULL;
     flux_msg_t *msg = NULL;

@@ -18,16 +18,8 @@
 #include "src/common/libtap/tap.h"
 #include "src/common/libtestutil/util.h"
 
-/* Fake handle flags for testing flux_flags_get/set/unset
- */
-enum {
-    FAKE_FLAG1 = 0x10000000,
-    FAKE_FLAG2 = 0x20000000,
-    FAKE_FLAG3 = 0x30000000,
-};
-
 /* Destructor for malloc'ed string.
- * Set flag so we no this was called when aux was destroyed.
+ * Set flag so we know this was called when aux was destroyed.
  */
 static bool aux_destroyed = false;
 static void aux_free (void *arg)
@@ -42,14 +34,39 @@ static int comms_err (flux_t *h, void *arg)
     return -1;
 }
 
-void test_handle_invalid_args (void)
+void test_handle_invalid_args (flux_t *h)
 {
+    flux_msg_t *msg;
+
     errno = 0;
     ok (flux_aux_set (NULL, "foo", "bar", NULL) < 0 && errno == EINVAL,
         "flux_aux_set h=NULL fails with EINVAL");
     errno = 0;
     ok (flux_aux_get (NULL, "foo") == NULL && errno == EINVAL,
         "flux_aux_get h=NULL fails with EINVAL");
+
+    errno = 0;
+    ok (flux_open (NULL, 0x100000) == NULL && errno == EINVAL,
+        "flux_open flags=BOGUS fails with EINVAL");
+
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_EVENT)))
+        BAIL_OUT ("failed to create message");
+    errno = 0;
+    ok (flux_send (NULL, msg, 0) < 0 && errno == EINVAL,
+       "flux_send h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_send (h, NULL, 0) < 0 && errno == EINVAL,
+       "flux_send msg=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_send (h, msg, 0x100000) < 0 && errno == EINVAL,
+       "flux_send flags=BOGUS fails with EINVAL");
+    errno = 0;
+    ok (flux_recv (NULL, FLUX_MATCH_ANY, 0) == NULL && errno == EINVAL,
+       "flux_recv h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_recv (h, FLUX_MATCH_ANY, 0x1000000) == NULL && errno == EINVAL,
+       "flux_recv flags=BOGUS fails with EINVAL");
+    flux_msg_destroy (msg);
 }
 
 int main (int argc, char *argv[])
@@ -65,7 +82,7 @@ int main (int argc, char *argv[])
     if (!(h = loopback_create (0)))
         BAIL_OUT ("can't continue without loopback handle");
 
-    test_handle_invalid_args ();
+    test_handle_invalid_args (h);
 
     flux_comms_error_set (h, comms_err, NULL);
 
@@ -98,24 +115,27 @@ int main (int argc, char *argv[])
      */
     ok (flux_flags_get (h) == 0,
         "flux_flags_get returns flags handle was opened with");
-    flux_flags_set (h, (FAKE_FLAG1 | FAKE_FLAG2));
-    ok (flux_flags_get (h) == (FAKE_FLAG1 | FAKE_FLAG2),
+    flux_flags_set (h, (FLUX_O_TRACE | FLUX_O_MATCHDEBUG));
+    ok (flux_flags_get (h) == (FLUX_O_TRACE | FLUX_O_MATCHDEBUG),
         "flux_flags_set sets specified flags");
-    flux_flags_unset (h, FAKE_FLAG1);
-    ok (flux_flags_get (h) == FAKE_FLAG2,
+    flux_flags_unset (h, FLUX_O_MATCHDEBUG);
+    ok (flux_flags_get (h) == FLUX_O_TRACE,
         "flux_flags_unset clears specified flag without clearing others");
-    flux_flags_set (h, FAKE_FLAG1);
-    ok (flux_flags_get (h) == (FAKE_FLAG1 | FAKE_FLAG2),
+    flux_flags_set (h, FLUX_O_MATCHDEBUG);
+    ok (flux_flags_get (h) == (FLUX_O_TRACE | FLUX_O_MATCHDEBUG),
         "flux_flags_set sets specified flag without clearing others");
     flux_flags_set (h, 0);
-    ok (flux_flags_get (h) == (FAKE_FLAG1 | FAKE_FLAG2),
+    ok (flux_flags_get (h) == (FLUX_O_TRACE | FLUX_O_MATCHDEBUG),
         "flux_flags_set (0) has no effect");
     flux_flags_unset (h, 0);
-    ok (flux_flags_get (h) == (FAKE_FLAG1 | FAKE_FLAG2),
+    ok (flux_flags_get (h) == (FLUX_O_TRACE | FLUX_O_MATCHDEBUG),
         "flux_flags_unset (0) has no effect");
     flux_flags_unset (h, ~0);
     ok (flux_flags_get (h) == 0,
         "flux_flags_unset (~0) clears all flags");
+    flux_flags_set (h, FLUX_O_RPCTRACK);
+    ok (flux_flags_get (h) == 0,
+    "flux_flags_set flags=FLUX_O_RPCTRACK has no effect");
 
     /* Test flux_send, flux_recv, flux_requeue
      * Check flux_pollevents along the way.
