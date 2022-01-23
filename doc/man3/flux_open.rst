@@ -16,6 +16,8 @@ SYNOPSIS
 
    flux_t *flux_clone (flux_t *h);
 
+   int flux_reconnect (flux_t *h);
+
 
 DESCRIPTION
 ===========
@@ -49,6 +51,24 @@ FLUX_O_TEST_NOSUB
    This may be useful in specialized situations with the ``loop://`` connector,
    where no message handler is available to service subscription RPCs.
 
+FLUX_O_RPCTRACK
+   Track pending RPCs so that they can receive automatic ECONNRESET failure
+   responses if the broker connection is re-established with
+   ``flux_reconnect()``.  Tracking incurs a small overhead.  This flag can
+   only be specified with ``flux_open()``, not :man3:`flux_flags_set`.
+
+``flux_reconnect()`` may be called from a communications error callback
+registered with :man3:`flux_comms_error_set`.  The current connection is
+closed and a new one is established with a new UUID.  Since responses addressed
+to the old UUID will not be routed to the new connection, RPCs that are pending
+before ``flux_reconnect()`` remain pending indefinitely without FLUX_O_RPCTRACK.
+After a successful reconnect, the following additional steps may be needed
+before a client can continue normal operation:
+
+- Wait until the broker has entered RUN state by making an RPC to ``state_machine.wait``
+- Restore service registrations.
+- Restore event subscriptions.
+
 ``flux_clone()`` creates another reference to a ``flux_t`` handle that is
 identical to the original in all respects except that it does not inherit
 a copy of the original handle's "aux" hash, or its reactor and message
@@ -71,7 +91,7 @@ ERRORS
 ======
 
 EINVAL
-   *uri* was NULL and $FLUX_URI was not set, or other arguments were invalid.
+   One or more arguments was invalid.
 
 ENOMEM
    Out of memory.
@@ -95,4 +115,4 @@ Flux: http://flux-framework.org
 SEE ALSO
 ========
 
-:man1:`flux-uri`
+:man1:`flux-uri`, :man3:`flux_comms_error_set`
