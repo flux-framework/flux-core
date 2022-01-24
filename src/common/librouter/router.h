@@ -36,6 +36,12 @@ struct router_entry *router_entry_add (struct router *rtr,
                                        void *arg);
 void router_entry_delete (struct router_entry *entry);
 
+/* Notify router that connection was lost to broker and restored
+ * so it can re-establish event subscriptions and service registrations.
+ * It does this synchronously.
+ */
+int router_renew (struct router *rtr);
+
 /* Create/destroy router.  'h' is the "upstream broker connection.
  */
 struct router *router_create (flux_t *h);

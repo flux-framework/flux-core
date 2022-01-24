@@ -25,6 +25,7 @@
 #include <sys/syscall.h>
 #endif
 
+#include "src/common/librouter/rpc_track.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"
@@ -73,14 +74,28 @@ struct flux_handle_struct {
 
     struct tagpool  *tagpool;
     flux_msgcounters_t msgcounters;
-    flux_fatal_f    fatal;
-    void            *fatal_arg;
-    bool            fatality;
+    flux_comms_error_f comms_error_cb;
+    void            *comms_error_arg;
+    bool            comms_error_in_progress;
     bool            destroy_in_progress;
 #if HAVE_CALIPER
     struct profiling_context prof;
 #endif
+    struct rpc_track *tracker;
 };
+
+static void handle_trace (flux_t *h, const char *fmt, ...)
+    __attribute__ ((format (printf, 2, 3)));
+
+
+static int validate_flags (int flags, int allowed)
+{
+    if ((flags & allowed) != flags) {
+        errno = EINVAL;
+        return -1;
+    }
+    return 0;
+}
 
 static flux_t *lookup_clone_ancestor (flux_t *h)
 {
@@ -256,6 +271,15 @@ flux_t *flux_open (const char *uri, int flags)
     connector_init_f *connector_init = NULL;
     const char *s;
     flux_t *h = NULL;
+    const int valid_flags = FLUX_O_TRACE
+                          | FLUX_O_CLONE
+                          | FLUX_O_NONBLOCK
+                          | FLUX_O_MATCHDEBUG
+                          | FLUX_O_TEST_NOSUB
+                          | FLUX_O_RPCTRACK;
+
+    if (validate_flags (flags, valid_flags) < 0)
+        return NULL;
 
     /* Try to get URI from (in descending precedence):
      *   argument > environment > builtin
@@ -333,6 +357,13 @@ flux_t *flux_handle_create (void *impl, const struct flux_handle_ops *ops, int f
     tagpool_set_grow_cb (h->tagpool, tagpool_grow_notify, h);
     if (!(h->queue = flux_msglist_create ()))
         goto error;
+    if ((flags & FLUX_O_RPCTRACK)) {
+        /* N.B. rpc_track functions are safe to call with tracker == NULL,
+         * so skipping creation here disables tracking without further ado.
+         */
+        if (!(h->tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG)))
+            goto error;
+    }
     h->pollfd = -1;
     return h;
 error:
@@ -355,6 +386,69 @@ flux_t *flux_clone (flux_t *orig)
     return h;
 }
 
+static void fail_tracked_request (const flux_msg_t *msg, void *arg)
+{
+    flux_t *h = arg;
+    flux_msg_t *rep;
+    const char *topic = "NULL";
+    struct flux_msg_cred lies = { .userid = 0, .rolemask = FLUX_ROLE_OWNER };
+
+    flux_msg_get_topic (msg, &topic);
+    if (!(rep = flux_response_derive (msg, ECONNRESET))
+        || flux_msg_set_string (rep, "RPC aborted due to broker reconnect") < 0
+        || flux_msg_set_cred (rep, lies) < 0
+        || flux_requeue (h, rep, FLUX_RQ_TAIL) < 0) {
+        handle_trace (h,
+                      "error responding to tracked rpc topic=%s: %s",
+                      topic,
+                      strerror (errno));
+    }
+    else
+        handle_trace (h, "responded to tracked rpc topic=%s", topic);
+    flux_msg_destroy (rep);
+}
+
+/* Call connector's reconnect method, if available.
+ */
+int flux_reconnect (flux_t *h)
+{
+    if (!h) {
+        errno = EINVAL;
+        return -1;
+    }
+    h = lookup_clone_ancestor (h);
+    if (!h->ops->reconnect) {
+        errno = ENOSYS;
+        return -1;
+    }
+    /* Assume that ops->pollfd() returns -1 if it is not connected.
+     * If connected, remove the soon to be disconnected fd from h->pollfd.
+     */
+    if (h->ops->pollfd) {
+        int fd = h->ops->pollfd (h->impl);
+        if (fd >= 0)
+            (void)epoll_ctl (h->pollfd, EPOLL_CTL_DEL, fd, NULL);
+    }
+    handle_trace (h, "trying to reconnect");
+    if (h->ops->reconnect (h->impl) < 0) {
+        handle_trace (h, "reconnect failed");
+        return -1;
+    }
+    /* Reconnect was successful, add new ops->pollfd() to h->pollfd.
+     */
+    if (h->ops->pollfd) {
+        struct epoll_event ev = {
+            .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
+        };
+        if ((ev.data.fd = h->ops->pollfd (h->impl)) < 0
+            || epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
+            return -1;
+    }
+    handle_trace (h, "reconnected");
+    rpc_track_purge (h->tracker, fail_tracked_request, h);
+    return 0;
+}
+
 static void report_leaked_matchtags (struct tagpool *tp)
 {
     uint32_t count = tagpool_getattr (tp, TAGPOOL_ATTR_SIZE) -
@@ -371,6 +465,7 @@ void flux_handle_destroy (flux_t *h)
         if (h->destroy_in_progress)
             return;
         h->destroy_in_progress = true;
+        rpc_track_destroy (h->tracker);
         aux_destroy (&h->aux);
         if ((h->flags & FLUX_O_CLONE)) {
             flux_handle_destroy (h->parent); // decr usecount
@@ -406,7 +501,13 @@ void flux_decref (flux_t *h)
 
 void flux_flags_set (flux_t *h, int flags)
 {
-    h->flags |= flags;
+    /* N.B. FLUX_O_RPCTRACK not permitted here, only in flux_open() */
+    const int valid_flags = FLUX_O_TRACE
+                          | FLUX_O_CLONE
+                          | FLUX_O_NONBLOCK
+                          | FLUX_O_MATCHDEBUG
+                          | FLUX_O_TEST_NOSUB;
+    h->flags |= (flags & valid_flags);
 }
 
 void flux_flags_unset (flux_t *h, int flags)
@@ -457,31 +558,25 @@ int flux_aux_set (flux_t *h, const char *name, void *aux, flux_free_f destroy)
     return aux_set (&h->aux, name, aux, destroy);
 }
 
-void flux_fatal_set (flux_t *h, flux_fatal_f fun, void *arg)
+void flux_comms_error_set (flux_t *h, flux_comms_error_f fun, void *arg)
 {
     h = lookup_clone_ancestor (h);
-    h->fatal = fun;
-    h->fatal_arg = arg;
-    h->fatality = false;
+    h->comms_error_cb = fun;
+    h->comms_error_arg = arg;
 }
 
-void flux_fatal_error (flux_t *h, const char *fun, const char *msg)
+static int comms_error (flux_t *h, int errnum)
 {
+    int rc = -1;
+
     h = lookup_clone_ancestor (h);
-    if (!h->fatality) {
-        h->fatality = true;
-        if (h->fatal) {
-            char buf[256];
-            snprintf (buf, sizeof (buf), "%s: %s", fun, msg);
-            h->fatal (buf, h->fatal_arg);
-        }
+    if (h->comms_error_cb && !h->comms_error_in_progress) {
+        h->comms_error_in_progress = true;
+        errno = errnum;
+        rc = h->comms_error_cb (h, h->comms_error_arg);
+        h->comms_error_in_progress = false;
     }
-}
-
-bool flux_fatality (flux_t *h)
-{
-    h = lookup_clone_ancestor (h);
-    return h->fatality;
+    return rc;
 }
 
 void flux_get_msgcounters (flux_t *h, flux_msgcounters_t *mcs)
@@ -571,10 +666,10 @@ static void update_rx_stats (flux_t *h, const flux_msg_t *msg)
         errno = 0;
 }
 
-static void handle_trace (flux_t *h, const flux_msg_t *msg)
+static double handle_trace_timestamp (flux_t *h)
 {
-    const char *auxkey = "flux::trace_start";
     struct timespec *ts;
+    const char *auxkey = "flux::trace_start";
 
     if (!(ts = flux_aux_get (h, auxkey))) {
         if ((ts = calloc (1, sizeof (*ts)))) {
@@ -585,29 +680,61 @@ static void handle_trace (flux_t *h, const flux_msg_t *msg)
             }
         }
     }
-    flux_msg_fprint_ts (stderr, msg, ts ? monotime_since (*ts)/1000 : -1);
+    return ts ? monotime_since (*ts)/1000 : -1;
+}
+
+static void handle_trace_message (flux_t *h, const flux_msg_t *msg)
+{
+    if ((h->flags & FLUX_O_TRACE)) {
+        flux_msg_fprint_ts (stderr, msg, handle_trace_timestamp (h));
+    }
+}
+
+static void handle_trace (flux_t *h, const char *fmt, ...)
+{
+    if ((h->flags & FLUX_O_TRACE)) {
+        va_list ap;
+        char buf[256];
+        int saved_errno = errno;
+        double timestamp = handle_trace_timestamp (h);
+
+        va_start (ap, fmt);
+        vsnprintf (buf, sizeof (buf), fmt, ap);
+        va_end (ap);
+
+        fprintf (stderr, "--------------------------------------\n");
+        if (timestamp >= 0.)
+            fprintf (stderr, "c %.5f\n", timestamp);
+        fprintf (stderr, "c %s\n", buf);
+
+        errno = saved_errno;
+    }
 }
 
 int flux_send (flux_t *h, const flux_msg_t *msg, int flags)
 {
+    if (!h || !msg || validate_flags (flags, FLUX_O_NONBLOCK) < 0) {
+        errno = EINVAL;
+        return -1;
+    }
     h = lookup_clone_ancestor (h);
     if (!h->ops->send || h->destroy_in_progress) {
         errno = ENOSYS;
-        goto fatal;
+        return -1;
     }
     flags |= h->flags;
     update_tx_stats (h, msg);
-    if ((flags & FLUX_O_TRACE))
-        handle_trace (h, msg);
-    if (h->ops->send (h->impl, msg, flags) < 0)
-        goto fatal;
+    handle_trace_message (h, msg);
+    while (h->ops->send (h->impl, msg, flags) < 0) {
+        if (comms_error (h, errno) < 0)
+            return -1;
+        /* retry if comms_error() returns success */
+    }
 #if HAVE_CALIPER
     profiling_msg_snapshot(h, msg, flags, "send");
 #endif
+    rpc_track_update (h->tracker, msg);
     return 0;
-fatal:
-    FLUX_FATAL (h);
-    return -1;
 }
 
 static int defer_enqueue (zlist_t **l, flux_msg_t *msg)
@@ -635,23 +762,32 @@ static int defer_requeue (zlist_t **l, flux_t *h)
 
 static void defer_destroy (zlist_t **l)
 {
-    flux_msg_t *msg;
     if (*l) {
+        flux_msg_t *msg;
+        int saved_errno = errno;;
         while ((msg = zlist_pop (*l)))
             flux_msg_destroy (msg);
         zlist_destroy (l);
+        errno = saved_errno;
     }
 }
 
 static flux_msg_t *flux_recv_any (flux_t *h, int flags)
 {
-    flux_msg_t *msg = NULL;
+    flux_msg_t *msg;
+
     if (flux_msglist_count (h->queue) > 0)
-        msg = (flux_msg_t *)flux_msglist_pop (h->queue);
-    else if (h->ops->recv)
-        msg = h->ops->recv (h->impl, flags);
-    else
+        return (flux_msg_t *)flux_msglist_pop (h->queue);
+    if (!h->ops->recv) {
         errno = ENOSYS;
+        return NULL;
+    }
+    while (!(msg = h->ops->recv (h->impl, flags))) {
+        if (errno == EAGAIN
+            || errno == EWOULDBLOCK
+            || comms_error (h, errno) < 0)
+            return NULL;
+    }
     return msg;
 }
 
@@ -662,33 +798,35 @@ static flux_msg_t *flux_recv_any (flux_t *h, int flags)
  */
 flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
 {
+    if (!h || validate_flags (flags, FLUX_O_NONBLOCK) < 0) {
+        errno = EINVAL;
+        return NULL;
+    }
     h = lookup_clone_ancestor (h);
     zlist_t *l = NULL;
     flux_msg_t *msg = NULL;
-    int saved_errno;
 
     flags |= h->flags;
     do {
         if (!(msg = flux_recv_any (h, flags))) {
             if (errno != EAGAIN && errno != EWOULDBLOCK)
-                goto fatal;
+                goto error;
             if (defer_requeue (&l, h) < 0)
-                goto fatal;
+                goto error;
             defer_destroy (&l);
             errno = EWOULDBLOCK;
             return NULL;
         }
         if (!flux_msg_cmp (msg, match)) {
             if (defer_enqueue (&l, msg) < 0)
-                goto fatal;
+                goto error;
             msg = NULL;
         }
     } while (!msg);
     update_rx_stats (h, msg);
-    if ((flags & FLUX_O_TRACE))
-        handle_trace (h, msg);
+    handle_trace_message (h, msg);
     if (defer_requeue (&l, h) < 0)
-        goto fatal;
+        goto error;
     defer_destroy (&l);
 #if HAVE_CALIPER
     cali_begin_int (h->prof.msg_match_type, match.typemask);
@@ -706,14 +844,11 @@ flux_msg_t *flux_recv (flux_t *h, struct flux_match match, int flags)
     cali_end (h->prof.msg_match_tag);
     cali_end (h->prof.msg_match_glob);
 #endif
+    rpc_track_update (h->tracker, msg);
     return msg;
-fatal:
-    saved_errno = errno;
-    FLUX_FATAL (h);
-    if (msg)
-        flux_msg_destroy (msg);
+error:
+    flux_msg_destroy (msg);
     defer_destroy (&l);
-    errno = saved_errno;
     return NULL;
 }
 
@@ -727,18 +862,13 @@ int flux_requeue (flux_t *h, const flux_msg_t *msg, int flags)
 
     if (flags != FLUX_RQ_TAIL && flags != FLUX_RQ_HEAD) {
         errno = EINVAL;
-        goto fatal;
+        return -1;
     }
     if (flags == FLUX_RQ_TAIL)
         rc = flux_msglist_append (h->queue, msg);
     else
         rc = flux_msglist_push (h->queue, msg);
-    if (rc < 0)
-        goto fatal;
-    return 0;
-fatal:
-    FLUX_FATAL (h);
-    return -1;
+    return rc;
 }
 
 int flux_pollfd (flux_t *h)
@@ -749,29 +879,28 @@ int flux_pollfd (flux_t *h)
             .events = EPOLLET | EPOLLIN | EPOLLOUT | EPOLLERR | EPOLLHUP,
         };
         if ((h->pollfd = epoll_create1 (EPOLL_CLOEXEC)) < 0)
-            goto fatal;
+            goto error;
         /* add queue pollfd */
         ev.data.fd = flux_msglist_pollfd (h->queue);
         if (ev.data.fd < 0)
-            goto fatal;
+            goto error;
         if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
-            goto fatal;
+            goto error;
         /* add connector pollfd (if defined) */
         if (h->ops->pollfd) {
             ev.data.fd = h->ops->pollfd (h->impl);
             if (ev.data.fd < 0)
-                goto fatal;
+                goto error;
             if (epoll_ctl (h->pollfd, EPOLL_CTL_ADD, ev.data.fd, &ev) < 0)
-                goto fatal;
+                goto error;
         }
     }
     return h->pollfd;
-fatal:
+error:
     if (h->pollfd >= 0) {
         (void)close (h->pollfd);
         h->pollfd = -1;
     }
-    FLUX_FATAL (h);
     return -1;
 }
 
@@ -788,11 +917,15 @@ int flux_pollevents (flux_t *h)
     /* get connector events (if applicable) */
     if (h->ops->pollevents) {
         if ((events = h->ops->pollevents (h->impl)) < 0)
-            goto fatal;
+            return -1;
+        if ((events & FLUX_POLLERR)) {
+            if (comms_error (h, ECONNRESET) == 0)
+                events &= ~FLUX_POLLERR;
+        }
     }
     /* get queue events */
     if ((e = flux_msglist_pollevents (h->queue)) < 0)
-        goto fatal;
+        return -1;
     if ((e & POLLIN))
         events |= FLUX_POLLIN;
     if ((e & POLLOUT))
@@ -800,9 +933,6 @@ int flux_pollevents (flux_t *h)
     if ((e & POLLERR))
         events |= FLUX_POLLERR;
     return events;
-fatal:
-    FLUX_FATAL (h);
-    return -1;
 }
 
 /*

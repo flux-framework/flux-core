@@ -42,11 +42,10 @@ __attribute__ ((noreturn)) void fatal (int errnum, const char *fmt, ...)
  * errors propagate to higher level functions (like RPCs), so it
  * is an opportunity to consolidate error handling for that case.
  * N.B. ssh:// connections do not always propagate fatal errors as expected.
- * N.B. the msg argument would appear to be mostly useless for our purposes.
  */
-static void flux_fatal (const char *msg, void *arg)
+static int comms_error (flux_t *h, void *arg)
 {
-    fatal (0, "lost connection to Flux");
+    fatal (0, "lost connection to Flux: %s", strerror (errno));
 }
 
 static void heartbeat_cb (flux_t *h,
@@ -215,7 +214,7 @@ struct top *top_create (const char *uri, const char *title)
     if (!(top->title = build_title (top, title)))
         goto fail;
 
-    flux_fatal_set (top->h, flux_fatal, &top);
+    flux_comms_error_set (top->h, comms_error, &top);
     top->refresh = flux_prepare_watcher_create (flux_get_reactor (top->h),
                                                 refresh_cb,
                                                 top);

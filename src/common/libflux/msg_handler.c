@@ -533,10 +533,8 @@ static void handle_cb (flux_reactor_t *r,
     }
     rc = 0;
 done:
-    if (rc < 0) {
+    if (rc < 0)
         flux_reactor_stop_error (r);
-        FLUX_FATAL (d->h);
-    }
     flux_msg_destroy (msg);
 }
 

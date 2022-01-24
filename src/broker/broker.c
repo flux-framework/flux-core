@@ -1477,6 +1477,21 @@ void disconnect_send_cb (const flux_msg_t *msg, void *arg)
     broker_request_sendmsg (ctx, msg);
 }
 
+/* If a message from a connector-routed client is not matched by this function,
+ * then it will fail with EAGAIN if the broker is in a pre-INIT state.
+ */
+static bool allow_early_request (const flux_msg_t *msg)
+{
+    const struct flux_match match[] = {
+        // state-machine.wait may be needed early by flux_reconnect(3) users
+        { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "state-machine.wait" },
+    };
+    for (int i = 0; i < sizeof (match) / sizeof (match[0]); i++)
+        if (flux_msg_cmp (msg, match[i]))
+            return true;
+    return false;
+}
+
 /* Handle messages on the service socket of a module.
  */
 static void module_cb (module_t *p, void *arg)
@@ -1512,7 +1527,7 @@ static void module_cb (module_t *p, void *arg)
              * Possible scenario for this message: user submitting a job on
              * a login node before cluster reboot is complete.
              */
-            else if (count > 1 && !ctx->online) {
+            else if (count > 1 && !ctx->online && !allow_early_request (msg)) {
                 const char *errmsg = "Upstream Flux broker is offline."
                                      " Try again later.";
 

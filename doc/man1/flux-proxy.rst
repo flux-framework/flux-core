@@ -55,6 +55,14 @@ OPTIONS
    exit before terminating to avoid having the child process reparented
    and possibly lose its controlling tty.
 
+**--reconnect**
+   If broker communication fails, drop the current connection and try to
+   reconnect every 2 seconds until the connection succeeds.  Any event
+   subscriptions and service registrations that were made on behalf of
+   clients are re-established, and in-flight RPCs receive an ECONNRESET
+   error responses.
+
+
 EXAMPLES
 ========
 

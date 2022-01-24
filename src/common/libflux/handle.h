@@ -35,7 +35,7 @@ typedef struct {
     int keepalive_rx;
 } flux_msgcounters_t;
 
-typedef void (*flux_fatal_f)(const char *msg, void *arg);
+typedef int (*flux_comms_error_f)(flux_t *h, void *arg);
 
 /* Flags for handle creation and flux_flags_set()/flux_flags_unset.
  */
@@ -45,6 +45,7 @@ enum {
     FLUX_O_NONBLOCK = 4,    /* handle should not block on send/recv */
     FLUX_O_MATCHDEBUG = 8,  /* enable matchtag debugging */
     FLUX_O_TEST_NOSUB = 16, /* for testing: make (un)subscribe a no-op */
+    FLUX_O_RPCTRACK = 32,   /* track RPCs for recovery after reconnect */
 };
 
 /* Flags for flux_requeue().
@@ -88,29 +89,20 @@ void flux_decref(flux_t *h);
  */
 flux_t *flux_clone (flux_t *orig);
 
+/* Drop connection to broker and re-establish, if suported by connector.
+ */
+int flux_reconnect (flux_t *h);
+
 /* Get/set handle options.  Options are interpreted by connectors.
  * Returns 0 on success, or -1 on failure with errno set (e.g. EINVAL).
  */
 int flux_opt_set (flux_t *h, const char *option, const void *val, size_t len);
 int flux_opt_get (flux_t *h, const char *option, void *val, size_t len);
 
-/* Register a handler for fatal handle errors.
- * A fatal error is ENOMEM or a handle send/recv error after which
- * it is inadvisable to continue using the handle.
+/* Register a callback to flux_send() / flux_recv() errors.
+ * The callback return value becomes the send/receive function return value.
  */
-void flux_fatal_set (flux_t *h, flux_fatal_f fun, void *arg);
-
-/* Set the fatality bit and call the user's fatal error handler, if any.
- * The fatal error handler will only be called once.
- */
-void flux_fatal_error (flux_t *h, const char *fun, const char *msg);
-#define FLUX_FATAL(h) do { \
-    flux_fatal_error((h),__FUNCTION__,(strerror (errno))); \
-} while (0)
-
-/* Return true if the handle 'h' has encountered a fatal error.
- */
-bool flux_fatality (flux_t *h);
+void flux_comms_error_set (flux_t *h, flux_comms_error_f fun, void *arg);
 
 /* A mechanism is provide for users to attach auxiliary state to the flux_t
  * handle by name.  The destructor, if non-NULL, will be called

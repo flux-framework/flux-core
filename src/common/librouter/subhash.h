@@ -25,7 +25,7 @@ bool subhash_topic_match (struct subhash *sh, const char *topic);
 int subhash_subscribe (struct subhash *sh, const char *topic);
 int subhash_unsubscribe (struct subhash *sh, const char *topic);
 
-
+int subhash_renew (struct subhash *sh);
 
 #endif /* !_ROUTER_SUBHASH_H */
 

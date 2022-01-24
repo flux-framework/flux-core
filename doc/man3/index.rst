@@ -13,7 +13,7 @@ man3
    flux_event_decode
    flux_event_publish
    flux_event_subscribe
-   flux_fatal_set
+   flux_comms_error_set
    flux_fd_watcher_create
    flux_flags_set
    flux_future_and_then

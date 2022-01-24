@@ -52,9 +52,10 @@ int test_server (flux_t *h, void *arg)
     return 0;
 }
 
-void fatal_err (const char *message, void *arg)
+int comms_err (flux_t *h, void *arg)
 {
-    BAIL_OUT ("fatal error: %s", message);
+    BAIL_OUT ("fatal comms error: %s", strerror (errno));
+    return -1;
 }
 
 flux_future_t *incr (flux_t *h, int n)
@@ -353,7 +354,7 @@ int main (int argc, char *argv[])
         "created test server thread");
     if (!h)
         BAIL_OUT ("can't continue without test server");
-    flux_fatal_set (h, fatal_err, NULL);
+    flux_comms_error_set (h, comms_err, NULL);
 
     test_sanity_now (h);
     test_sanity_then (h);

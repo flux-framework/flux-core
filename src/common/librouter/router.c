@@ -481,6 +481,17 @@ void router_mute (struct router *rtr)
         rtr->mute = true;
 }
 
+int router_renew (struct router *rtr)
+{
+    if (rtr) {
+        if (subhash_renew (rtr->subscriptions) < 0)
+            return -1;
+        if (servhash_renew (rtr->services) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
