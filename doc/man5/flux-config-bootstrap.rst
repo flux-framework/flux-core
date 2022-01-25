@@ -30,7 +30,9 @@ enable_ipv6
 curve_cert
    (optional) Path to a CURVE certificate generated with
    :man1:`flux-keygen`.  The certificate should be identical on all
-   broker ranks.  It is required for instance sizes > 1.
+   broker ranks.  It is required for instance sizes > 1.  The file should
+   be owned by the instance owner (e.g. `flux` user) and only readable by
+   that user.
 
 default_port
    (optional) The value is an integer port number that is substituted
