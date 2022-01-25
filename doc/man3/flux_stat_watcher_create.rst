@@ -37,7 +37,7 @@ DESCRIPTION
 ``flux_stat_watcher_create()`` creates a reactor watcher that
 monitors for changes in the status of the file system object
 represented by *path*. If the file system object exists,
-:linux:man2:`inotify` is used, if available; otherwise the reactor polls
+:linux:man7:`inotify` is used, if available; otherwise the reactor polls
 the file every *interval* seconds. A value of zero selects a
 conservative default (currently five seconds).
 
