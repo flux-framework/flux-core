@@ -1,3 +1,48 @@
+flux-core version 0.34.0 - 2022-02-28
+-------------------------------------
+
+This release features the automatic draining of "torpid" (unresponsive)
+nodes, to prevent new work from being scheduled on them until the instance
+owner investigates and runs `flux resource undrain`.
+
+### Fixes
+
+ * libsubprocess: fix excess logging and logging corner cases (#4060)
+ * doc: fix cross-references (#4063)
+ * flux-proxy: improve experience when proxied Flux instance terminates
+   (#4058)
+ * flux-perilog-run: improve usefulness of logging when prolog/epilog fails
+   (#4054)
+ * Fix issues found on Cray Shasta (perlmutter) (#4050)
+ * env: fix prepend of colon-separated paths in reverse order (#4045)
+ * python: fix ImportError for collections.abc.Mapping (#4042)
+ * job-list: fix "duplicate event" errors (#4043)
+ * systemd: set linger on flux user (#4035)
+
+### New Features
+
+ * shell: enhance pty support (#4075)
+ * add broker.starttime; add uptime to flux-top, flux-pstree (#4076)
+ * libflux: add `flux_reconnect()`, revamp flux fatal error callback (#4016)
+ * doc: add/improve man pages for config files (#4057, #4069)
+ * resource: drain torpid nodes (#4052)
+
+### Cleanup
+
+ * broker/content: misc cleanup (#4074)
+ * improve error message from flux-proxy and flux-jobs for invalid and
+   unknown jobids (#4062)
+ * cmd/flux-ping: make help output clearer (#4061)
+ * configure: Add python docutils check, do not require doc utils to build
+   flux help (#4056)
+
+### Test
+
+ * testsuite: fix non-bourne shell test failure (#4064)
+ * sharness: unset `FLUX_CONF_DIR` for all tests (#4059)
+ * ci: fix use of poison-libflux.sh and add poison `flux-*` commands (#4046)
+
+
 flux-core version 0.33.0 - 2022-01-08
 -------------------------------------
 
