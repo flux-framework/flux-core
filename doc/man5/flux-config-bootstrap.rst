@@ -63,6 +63,35 @@ hosts
    substitutions work here as well.
 
 
+ZEROMQ ENDPOINTS
+================
+
+In this context, ZeroMQ endpoint URIs normally use the :linux:man7:`zmq_tcp`
+transport, consisting of the transport name ``tcp://`` followed by an address.
+
+Bind addresses specify interface followed by a colon and the TCP port.
+The interface may be one of:
+
+- the wild-card ``*`` meaning all available interfaces
+
+- the primary IP address assigned to the interface (numeric only)
+
+- the interface name
+
+The port should be an explicit numerical port number.
+
+Connect addresses specify a peer address followed by a colon and the TCP port.
+The peer address may be one of:
+
+- the DNS name of the peer
+
+- the IP address of the peer in its numeric representation
+
+When specifying the ``bind`` and ``connect`` URIs for a hosts entry, ensure
+that another host can use the ``connect`` URI to reach the Flux service bound
+to the ``bind`` address on the host.
+
+
 COMPACT HOSTS
 =============
 
