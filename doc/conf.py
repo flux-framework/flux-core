@@ -54,19 +54,19 @@ extensions = [
 domainrefs = {
     'linux:man1': {
         'text': '%s(1)',
-        'url': 'http://man7.org/linux/man-pages/man1/%s.1.html',
+        'url': 'https://linux.die.net/man/1/%s',
     },
     'linux:man2': {
         'text': '%s(2)',
-        'url': 'http://man7.org/linux/man-pages/man2/%s.2.html',
+        'url': 'https://linux.die.net/man/2/%s',
     },
     'linux:man3': {
         'text': '%s(3)',
-        'url': 'http://man7.org/linux/man-pages/man3/%s.3.html',
+        'url': 'https://linux.die.net/man/3/%s',
     },
     'linux:man7': {
         'text': '%s(7)',
-        'url': 'http://man7.org/linux/man-pages/man7/%s.7.html',
+        'url': 'https://linux.die.net/man/7/%s',
     },
 }
 
