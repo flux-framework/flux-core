@@ -75,9 +75,40 @@ foo3, foo18, foo4, foo20 can be represented as "foo[0-3,18,4,20]".
 EXAMPLE
 =======
 
+The following example is a simple, two node cluster with a fully specified
+``hosts`` array.
+
 ::
 
    [bootstrap]
+
+   curve_cert = "/etc/flux/system/curve.cert"
+
+   hosts = [
+       {
+           host="foo",
+           bind="tcp://eth0:9001",
+           connect="tcp://10.0.1.1:9001"
+       },
+       {
+           host = "bar"
+       },
+   ]
+
+
+Host ``foo`` is assigned rank 0, and binds to the interface ``eth0`` port 9001.
+
+Host ``bar`` is assigned rank 1, and connects to ``10.0.1.1`` port 9001.
+
+The following example is a 1024 node cluster that relies on default settings
+and compact hosts.  We assume a ``tbon.fanout`` of 2 (see
+:man7:`flux-broker-attributes`).
+
+::
+
+   [bootstrap]
+
+   curve_cert = "/etc/flux/system/curve.cert"
 
    default_port = 8050
    default_bind = "tcp://en0:%p"
@@ -93,6 +124,18 @@ EXAMPLE
            host = "test[1-1023]"
        },
    ]
+
+
+Host ``test0`` is assigned rank 0, and binds to interface ``en4`` port 9001.
+
+Host ``test1`` is assigned rank 1, binds to interface ``en0`` port 8050,
+and connects to ``test-mgmt`` port 9001.
+
+Host ``test2`` is assigned rank 2, binds to interface ``en0`` port 8050,
+and connects to ``test-mgmt`` port 9001.
+
+Host ``test3`` is assigned rank 3, binds to interface ``en0`` port 8050,
+and connects to ``etest1`` port 8050, and so on.
 
 
 RESOURCES
