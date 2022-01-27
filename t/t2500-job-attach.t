@@ -121,8 +121,8 @@ test_expect_success HAVE_JQ 'attach: -v option displays file and line info in lo
 	grep "$file:$line: $message" verbose.output
 '
 
-test_expect_success 'attach: cannot attach to pty when --read-only specified' '
-	jobid=$(flux mini submit -o pty bash) &&
+test_expect_success 'attach: cannot attach to interactive pty when --read-only specified' '
+	jobid=$(flux mini submit -o pty.interactive bash) &&
 	test_must_fail flux job attach --read-only $jobid &&
 	flux job cancel $jobid
 '
