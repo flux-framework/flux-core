@@ -24,9 +24,13 @@ typedef void (*pty_log_f) (void *arg,
                            const char *fmt,
                            va_list args);
 
+
 struct flux_pty;
 struct flux_pty_client;
 
+typedef void (*pty_monitor_f) (struct flux_pty *pty,
+                               void *data,
+                               int len);
 
 /* server:
  */
@@ -50,6 +54,11 @@ int  flux_pty_kill (struct flux_pty *pty, int sig);
 void flux_pty_set_log (struct flux_pty *pty,
                        pty_log_f log,
                        void *log_data);
+
+/*  Set a callback to receive data events locally.
+ *  (Usefully if we want to locally monitor the pty for logging, etc.)
+ */
+void flux_pty_monitor (struct flux_pty *pty, pty_monitor_f fn);
 
 int flux_pty_leader_fd (struct flux_pty *pty);
 
@@ -150,6 +159,13 @@ int flux_pty_client_notify_exit (struct flux_pty_client *c,
 int flux_pty_client_exit_status (struct flux_pty_client *c, int *statusp);
 
 void flux_pty_client_restore_terminal (void);
+
+int flux_pty_aux_set (struct flux_pty *pty,
+                      const char *key,
+                      void *val,
+                      flux_free_f destroy);
+
+void * flux_pty_aux_get (struct flux_pty *pty, const char *name);
 
 #endif /* !FLUX_PTY_H */
 
