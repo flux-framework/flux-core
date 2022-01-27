@@ -56,9 +56,9 @@ struct cache_entry {
     void *data;
     int len;
     char *blobref;
-    uint8_t valid:1;                /* entry contains valid data */
-    uint8_t dirty:1;                /* entry needs to be stored upstream */
-                                    /*   or to backing store (rank 0) */
+    uint8_t valid:1;                // entry contains valid data
+    uint8_t dirty:1;                // entry needs to be stored upstream
+                                    //   or to backing store (rank 0)
     uint8_t load_pending:1;
     uint8_t store_pending:1;
     struct msgstack *load_requests;
@@ -75,13 +75,13 @@ struct content_cache {
     flux_future_t *f_sync;
     uint32_t rank;
     zhashx_t *entries;
-    uint8_t backing:1;              /* 'content.backing' service available */
+    uint8_t backing:1;              // 'content.backing' service available
     char *backing_name;
     const char *hash_name;
     struct msgstack *flush_requests;
 
-    struct list_head lru;           /* LRU is for valid, clean entries only */
-    struct list_head flush;         /* dirties queued due to batch limit */
+    struct list_head lru;           // LRU is for valid, clean entries only
+    struct list_head flush;         // dirties queued due to batch limit
 
     uint32_t blob_size_limit;
     uint32_t flush_batch_limit;
@@ -90,9 +90,9 @@ struct content_cache {
     uint32_t purge_target_size;
     uint32_t purge_old_entry;
 
-    uint32_t acct_size;             /* total size of all cache entries */
-    uint32_t acct_valid;            /* count of valid cache entries */
-    uint32_t acct_dirty;            /* count of dirty cache entries */
+    uint32_t acct_size;             // total size of all cache entries
+    uint32_t acct_valid;            // count of valid cache entries
+    uint32_t acct_dirty;            // count of dirty cache entries
 };
 
 static void flush_respond (struct content_cache *cache);
@@ -170,11 +170,9 @@ static void cache_entry_destroy (struct cache_entry *e)
 {
     if (e) {
         int saved_errno = errno;
-        assert (e->load_requests == 0);
-        assert (e->store_requests == 0);
+        assert (e->load_requests == NULL);
+        assert (e->store_requests == NULL);
         free (e->data);
-        msgstack_destroy (&e->load_requests);
-        msgstack_destroy (&e->store_requests);
         free (e);
         errno = saved_errno;
     }
