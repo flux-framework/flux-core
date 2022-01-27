@@ -34,15 +34,15 @@ terminus_jobid() {
         -s $(shell_service $jobid).terminus "$@"
 }
 
-test_expect_success HAVE_JQ 'pty: submit a job with pty' '
-	id=$(flux mini submit --flags waitable -o pty bash) &&
+test_expect_success HAVE_JQ 'pty: submit a job with an interactive pty' '
+	id=$(flux mini submit --flags waitable -o pty.interactive bash) &&
 	terminus_jobid $id list &&
 	flux job cancel ${id} &&
 	test_must_fail flux job wait $id
 '
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'pty: run job with pty' '
 	printf "PS1=XXX:\n" >ps1.rc
-	id=$(flux mini submit -o pty bash --rcfile ps1.rc | flux job id)
+	id=$(flux mini submit -o pty.interactive bash --rcfile ps1.rc | flux job id)
 	$runpty -o log.job-pty flux job attach ${id} &
 	pid=$! &&
 	terminus_jobid ${id} list &&
@@ -75,7 +75,7 @@ test_expect_success NO_CHAIN_LINT 'pty: interactive job with pty' '
 	EOF
 	chmod +x stty-test.sh &&
 	for i in `seq 0 10`; do
-	    id=$(flux mini submit -n1 -o pty ./stty-test.sh)
+	    id=$(flux mini submit -n1 -o pty.interactive ./stty-test.sh)
 	    { $runpty -w 80x25 -o log.interactive.$i \
 	        flux job attach --show-exec ${id} & } &&
 	    pid=$! &&
@@ -95,7 +95,8 @@ test_expect_success 'pty: client is detached from terminated job' '
 	sleep 10
 	EOF
 	chmod +x die-test.sh &&
-	jobid=$(flux mini submit -n2 -o pty -o exit-timeout=1 ./die-test.sh) &&
+	jobid=$(flux mini submit -n2 -o pty.interactive -o pty.ranks=0 \
+	        -o exit-timeout=1 ./die-test.sh) &&
 	{ $runpty -w 80x25 -o log.killed \
 		flux job attach --show-exec ${jobid} & } &&
 	pid=$! &&
