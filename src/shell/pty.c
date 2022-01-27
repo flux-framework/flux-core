@@ -19,12 +19,15 @@
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <termios.h>
+#include <jansson.h>
 
 #include <flux/core.h>
 #include <flux/shell.h>
+#include <flux/idset.h>
 
 #include "src/common/libterminus/pty.h"
 #include "src/common/libterminus/terminus.h"
+#include "src/common/libccan/ccan/ptrint/ptrint.h"
 #include "builtins.h"
 #include "log.h"
 
@@ -62,6 +65,171 @@ shell_terminus_server_start (flux_shell_t *shell, const char *shell_service)
     return t;
 }
 
+static void pty_monitor (struct flux_pty *pty, void *data, int len)
+{
+    flux_plugin_arg_t *args;
+    int rank;
+
+    /* Don't bother sending 0 length output */
+    if (len == 0)
+        return;
+
+    rank = ptr2int (flux_pty_aux_get (pty, "rank"));
+    if (!(args = flux_plugin_arg_create ())
+        || flux_plugin_arg_pack (args, FLUX_PLUGIN_ARG_IN,
+                                 "{s:s s:i s:s#}",
+                                 "stream", "stdout",
+                                 "rank", rank,
+                                 "data", data, len) < 0) {
+        shell_log_errno ("monitor: packing %d bytes of shell.output: %s",
+                         len,
+                         flux_plugin_arg_strerror (args));
+        return;
+    }
+    flux_shell_plugstack_call (flux_pty_aux_get (pty, "shell"),
+                               "shell.output", args);
+    flux_plugin_arg_destroy (args);
+}
+
+/*  Return an idset of ids that intersect the local taskids on shell rank
+ *   given the idset encoded in `ids` ("all" will intersect with all ids).
+ */
+static struct idset *shell_taskids_intersect (flux_shell_t *shell,
+                                              int rank,
+                                              const char *ids)
+{
+    const char *taskids;
+    struct idset *localids;
+    struct idset *idset;
+    struct idset *result = NULL;
+
+    if (flux_shell_rank_info_unpack (shell,
+                                     rank,
+                                     "{s:s}",
+                                     "taskids", &taskids) < 0)
+        return NULL;
+    if (!(localids = idset_decode (taskids)))
+        return NULL;
+    if (strcmp (ids, "all") == 0)
+        return localids;
+    if (!(idset = idset_decode (ids)))
+        goto out;
+    result = idset_intersect (localids, idset);
+out:
+    idset_destroy (localids);
+    idset_destroy (idset);
+    return result;
+}
+
+
+/*  Parse any shell 'pty' option.
+ *
+ *  The shell pty option has the form:
+ *
+ *  {
+ *     rasks:s or i   # rank or rank on which to open a pty
+ *     capture:i      # if nonzero, capture pty output to the same
+ *                    #  destination as task output
+ *     interactive:i  # if nonzero, note pty endpoint in shell.init
+ *                    #  for interactive attach from client
+ *  }
+ *
+ *  The default if none of the above are set is pty.ranks = "all".
+ *  If pty.interactive is nonzero, the default is pty.ranks = "0".
+ *
+ *  Return 0 if the option was not present,
+ *         1 if the option was present and parsed without error,
+ *    and -1 if the option was present and had a parse error.
+ */
+static int pty_getopt (flux_shell_t *shell,
+                       int shell_rank,
+                       struct idset **targets,
+                       int *capture,
+                       int *interactive)
+{
+    char *s;
+    const char *ranks;
+    char rbuf [21];
+    json_t *o;
+
+    /*  Only create a session for rank 0 if the pty option was specified
+     */
+    if (flux_shell_getopt (shell, "pty", &s) != 1)
+        return 0;
+
+    /*  Default: pty on all ranks with "non-interactive" attach
+     *   and pty output is copied to stdout location.
+     */
+    ranks = "all";
+    *interactive = 0;
+    *capture = -1;
+
+    if (!(o = json_loads (s, JSON_DECODE_ANY, NULL))) {
+        shell_log_error ("Unable to parse pty shell option: %s", s);
+        return -1;
+    }
+    if (json_is_object (o)) {
+        json_error_t error;
+        json_t *ranks_obj = NULL;
+
+        if (json_unpack_ex (o,
+                            &error,
+                            JSON_STRICT,
+                            "{s?:o s?i s?i}",
+                            "ranks", &ranks_obj,
+                            "capture", capture,
+                            "interactive", interactive) < 0) {
+            shell_die (1, "invalid shell pty option: %s", error.text);
+            return -1;
+        }
+
+        if (*interactive) {
+            /*  If pty.interactive is set and pty.ranks is not, then
+             *   default pty.ranks to "0"
+             */
+            if (ranks_obj == NULL)
+                ranks = "0";
+
+            /*  If pty.interactive is set and capture was not set
+             *   then disable capture.
+             */
+            if (*capture == -1)
+                *capture = 0;
+        }
+
+        /*  Allow ranks to be encoded as a string (for RFC 22 IDSet)
+         *   or as an integer for a single rank (e.g. 0).
+         */
+        if (json_is_string (ranks_obj))
+            ranks = json_string_value (ranks_obj);
+        else if (json_is_integer (ranks_obj)) {
+            /*  32bit unsigned guaranteed to fit in 21 bytes */
+            sprintf (rbuf, "%u", (uint32_t) json_integer_value (ranks_obj));
+            ranks = rbuf;
+        }
+
+        /*  Default for capture if not set is 1/true
+         */
+        if (*capture == -1)
+            *capture = 1;
+    }
+    if (!(*targets = shell_taskids_intersect (shell, shell_rank, ranks))) {
+        shell_log_error ("pty: shell_taskids_intersect");
+        return -1;
+    }
+
+    /*  If interactive, then always ensure rank 0 is in the set of targets
+     *  (interactive attach to non-rank 0 task is not yet supported)
+     */
+    if (*interactive
+        && shell_rank == 0
+        && !idset_test (*targets, 0)) {
+        shell_warn ("pty: adding pty to rank 0 for interactive support");
+        idset_set (*targets, 0);
+    }
+    return 1;
+}
+
 static int pty_init (flux_plugin_t *p,
                      const char *topic,
                      flux_plugin_arg_t *args,
@@ -70,8 +238,12 @@ static int pty_init (flux_plugin_t *p,
     const char *shell_service;
     int shell_rank = -1;
     flux_shell_t *shell;
-    struct flux_pty *pty;
     struct flux_terminus_server *t;
+    int interactive = 0;
+    struct idset *targets;
+    int rank;
+    int capture;
+    int rc;
 
     if (!(shell = flux_plugin_get_shell (p)))
         return shell_log_errno ("flux_plugin_get_shell");
@@ -85,36 +257,76 @@ static int pty_init (flux_plugin_t *p,
     if (!(t = shell_terminus_server_start (shell, shell_service)))
         return -1;
 
-    /*  Only create a session for rank 0 if the pty option was specified
-     */
-    if (flux_shell_getopt (shell, "pty", NULL) != 1)
-        return 0;
+    if ((rc = pty_getopt (shell,
+                          shell_rank,
+                          &targets,
+                          &capture,
+                          &interactive)) != 1)
+        return rc;
 
-    /* On rank 0, open a pty for task 0 only. It is important that the
-     *   pty service be started before the shell.init event, since a client
-     *   may attempt to attach to the pty immediately after this event.
+    /*  Create a pty session for each local target
      */
-    if (shell_rank == 0) {
-        pty = flux_terminus_server_session_open (t, 0, "task0");
-        if (!pty)
+    rank = idset_first (targets);
+    while (rank != IDSET_INVALID_ID) {
+        struct flux_pty *pty;
+        char name [26];
+        char key [35];
+
+        /*  task<int> guaranteed to fit in 25 characters */
+        sprintf (name, "task%d", rank);
+        /*  builtin::pty.<int> guaranteed to fit in 34 characters */
+        sprintf (key, "builtin::pty.%d", rank);
+
+        /*  Open a new terminal session for this rank
+         */
+        if (!(pty = flux_terminus_server_session_open (t, rank, name)))
             return shell_log_errno ("terminus_session_open");
 
-        if (flux_shell_aux_set (shell, "builtin::pty.0", pty, NULL) < 0)
+        if (flux_shell_aux_set (shell, key, pty, NULL) < 0)
             goto error;
 
-        if (flux_shell_add_event_context (shell,
-                                          "shell.init",
-                                          0,
-                                          "{s:s}",
-                                          "pty", "terminus.0") < 0) {
-            shell_log_errno ("flux_shell_service_register");
-            goto error;
+        /*  For an interactive pty, add the endpoint in the shell.init
+         *   event context. This lets `flux job attach` or other entities
+         *   know that the pty is ready for attach, and also lets them
+         *   key off the presence of this value to know that an interactive
+         *   pty was requested.
+         */
+        if (interactive && rank == 0) {
+            if (flux_shell_add_event_context (shell,
+                                              "shell.init",
+                                              0,
+                                              "{s:s}",
+                                              "pty", "terminus.0") < 0) {
+                shell_log_errno ("flux_shell_service_register");
+                goto error;
+            }
         }
+        if (capture) {
+            /*  If non-interactive, monitor this pty and redirect data to
+             *   the same place as stdout
+             */
+            if (flux_pty_aux_set (pty, "shell", shell, NULL) < 0
+                || flux_pty_aux_set (pty, "rank", int2ptr (rank), NULL) < 0) {
+                shell_log_errno ("flux_pty_aux_set");
+                goto error;
+            }
+            flux_pty_monitor (pty, pty_monitor);
+        }
+        rank = idset_next (targets, rank);
     }
+    idset_destroy (targets);
     return 0;
 error:
+    idset_destroy (targets);
     flux_terminus_server_destroy (t);
     return -1;
+}
+
+static struct flux_pty *pty_lookup (flux_shell_t *shell, int rank)
+{
+    char key [35];
+    sprintf (key, "builtin::pty.%d", rank);
+    return flux_shell_aux_get (shell, key);
 }
 
 static int pty_task_exec (flux_plugin_t *p,
@@ -124,6 +336,7 @@ static int pty_task_exec (flux_plugin_t *p,
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
     flux_shell_task_t *task;
+    struct flux_pty *pty;
     int rank;
 
     if (!shell)
@@ -136,10 +349,7 @@ static int pty_task_exec (flux_plugin_t *p,
         || flux_shell_task_info_unpack (task, "{s:i}", "rank", &rank) < 0)
         return shell_log_errno ("unable to get task rank");
 
-    /*  pty on rank 0 only for now */
-    if (rank == 0) {
-        struct flux_pty *pty = flux_shell_aux_get (shell, "builtin::pty.0");
-
+    if ((pty = pty_lookup (shell, rank))) {
         /*  Redirect stdio to 'pty'
          */
         if (pty && flux_pty_attach (pty) < 0)
@@ -160,6 +370,7 @@ static int pty_task_exit (flux_plugin_t *p,
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
     flux_shell_task_t *task;
+    struct flux_pty *pty;
     int rank;
 
     if (!shell)
@@ -172,18 +383,14 @@ static int pty_task_exit (flux_plugin_t *p,
         || flux_shell_task_info_unpack (task, "{s:i}", "rank", &rank) < 0)
         return shell_log_errno ("unable to get task rank");
 
-    /*  pty is present only on rank 0 only for now */
-    if (rank == 0) {
+    if ((pty = pty_lookup (shell, rank))) {
         struct flux_terminus_server *t = NULL;
-        struct flux_pty *pty;
         int status = flux_subprocess_status (flux_shell_task_subprocess (task));
 
-        if (!(t = flux_shell_aux_get (shell, "builtin::terminus"))
-            || !(pty = flux_shell_aux_get (shell, "builtin::pty.0")))
+        if (!(t = flux_shell_aux_get (shell, "builtin::terminus")))
             return shell_log_errno ("failed to get terminus and pty objects");
 
-        if (t && pty
-            && flux_terminus_server_session_close (t, pty, status) < 0)
+        if (flux_terminus_server_session_close (t, pty, status) < 0)
             shell_die_errno (1, "pty attach failed");
     }
     return (0);
