@@ -44,6 +44,9 @@ content.backing-path
 hostlist
    An RFC 29 hostlist in broker rank order.
 
+broker.starttime
+   Timestamp of broker startup from :man3:`flux_reactor_now`.
+
 
 TOPOLOGY ATTRIBUTES
 ===================
