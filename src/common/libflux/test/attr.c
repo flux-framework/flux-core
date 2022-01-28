@@ -52,11 +52,6 @@ static bool lookup_hardwired (const char *key, const char **val, int *flags)
     return false;
 }
 
-/* Two hardwired value:
- *   cow=moo (flags = 1)
- *   chicken=cluck (flags = 1)
- * all other values come from the hash and are returned with (flags = 0)
- */
 static volatile int get_count = 0;
 void get_cb (flux_t *h, flux_msg_handler_t *mh,
              const flux_msg_t *msg, void *arg)
