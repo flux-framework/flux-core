@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <jansson.h>
+#include <math.h>
 
 #include "src/common/libutil/fsd.h"
 #include "src/common/librlist/rlist.h"
@@ -164,14 +165,14 @@ static void draw_bargraph (WINDOW *win, int y, int x, int x_length,
                suffix);
     /* Graph used */
     wattron (win, COLOR_PAIR (TOP_COLOR_YELLOW));
-    for (int i = 0; i < ((double)res.used / res.total) * slots; i++)
+    for (int i = 0; i < ceil (((double)res.used / res.total) * slots); i++)
         mvwaddch (win, y, x + strlen (prefix) + i, '|');
     wattroff (win, COLOR_PAIR (TOP_COLOR_YELLOW));
 
     /* Graph down */
     wattron (win, COLOR_PAIR (TOP_COLOR_RED));
     for (int i = slots - 1;
-         i >= slots - ((double)res.down / res.total) * slots; i--) {
+         i >= slots - ceil (((double)res.down / res.total) * slots); i--) {
         mvwaddch (win, y, x + strlen (prefix) + i, '|');
     }
     wattroff (win, COLOR_PAIR (TOP_COLOR_RED));
