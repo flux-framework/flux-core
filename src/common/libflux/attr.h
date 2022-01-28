@@ -66,6 +66,13 @@ int flux_get_size (flux_t *h, uint32_t *size);
  */
 const char *flux_get_hostbyrank (flux_t *h, uint32_t rank);
 
+/* Look up the broker.starttime attribute on rank 0.
+ * The instance uptime is flux_reactor_now() - starttime.
+ * N.B. if the instance has been restarted, this value is the most
+ * recent restart time.
+ */
+int flux_get_instance_starttime (flux_t *h, double *starttime);
+
 #ifdef __cplusplus
 }
 #endif

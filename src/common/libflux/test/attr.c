@@ -33,6 +33,7 @@ static struct entry hardwired[] = {
     { .key = "fox",     .val = "-",     .flags = 1  },
     { .key = "bear",    .val = "roar",  .flags = 1  },
     { .key = "hostlist", .val = "foo[0-2]", .flags = 1 },
+    { .key = "broker.starttime", .val = "3.14", .flags = 1 },
     { .key = NULL,      .val = NULL,    .flags = 1  },
 };
 
@@ -303,6 +304,14 @@ int main (int argc, char *argv[])
     ok ((value = flux_get_hostbyrank (h, 3)) != NULL
         && !strcmp (value, "(null)"),
         "flux_get_hostbyrank 3 returns (null)");
+
+    /* test flux_get_instance_starttime */
+    double d;
+    ok (flux_get_instance_starttime (h, &d) == 0 && d == 3.14,
+        "flux_get_instance_starttime works");
+    errno = 0;
+    ok (flux_get_instance_starttime (NULL, &d) < 0 && errno == EINVAL,
+        "flux_get_instance_starttime h=NULL fails with EINVAL");
 
     test_server_stop (h);
     flux_close (h);
