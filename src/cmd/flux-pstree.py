@@ -426,6 +426,10 @@ def get_root_jobinfo():
             nodelist=nodelist,
             annotations={"user": {"uri": uri}},
         )
+        try:
+            info["t_run"] = float(handle.attr_get("broker.starttime"))
+        except OSError:
+            pass
 
     #  If 'ranks' idset came from parent, it could be confusing,
     #   rewrite ranks to be relative to current instance, i.e.

@@ -212,6 +212,30 @@ error:
     return "(null)";
 }
 
+int flux_get_instance_starttime (flux_t *h, double *starttimep)
+{
+    flux_future_t *f;
+    const char *attr = "broker.starttime";
+    const char *s;
+    double starttime;
+
+    if (!(f = flux_rpc_pack (h, "attr.get", 0, 0, "{s:s}", "name", attr)))
+        return -1;
+    if (flux_rpc_get_unpack (f, "{s:s}", "value", &s) < 0)
+        goto error;
+    errno = 0;
+    starttime = strtod (s, NULL);
+    if (errno != 0)
+        goto error;
+    flux_future_destroy (f);
+    if (starttimep)
+        *starttimep = starttime;
+    return 0;
+error:
+    flux_future_destroy (f);
+    return -1;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */

@@ -26,6 +26,8 @@ struct broker {
 
     bool online;
 
+    double starttime;
+
     struct broker_attr *attrs;
     struct flux_msg_cred cred;  /* instance owner */
 

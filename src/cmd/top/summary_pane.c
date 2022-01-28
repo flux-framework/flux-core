@@ -15,6 +15,7 @@
 #include <unistd.h>
 #include <time.h>
 #include <jansson.h>
+#include <math.h>
 
 #include "src/common/libutil/fsd.h"
 #include "src/common/librlist/rlist.h"
@@ -53,6 +54,7 @@ struct summary_pane {
     WINDOW *win;
     int instance_level;
     int instance_size;
+    double starttime;
     const char *instance_version;
     double expiration;
     struct stats stats;
@@ -163,14 +165,14 @@ static void draw_bargraph (WINDOW *win, int y, int x, int x_length,
                suffix);
     /* Graph used */
     wattron (win, COLOR_PAIR (TOP_COLOR_YELLOW));
-    for (int i = 0; i < ((double)res.used / res.total) * slots; i++)
+    for (int i = 0; i < ceil (((double)res.used / res.total) * slots); i++)
         mvwaddch (win, y, x + strlen (prefix) + i, '|');
     wattroff (win, COLOR_PAIR (TOP_COLOR_YELLOW));
 
     /* Graph down */
     wattron (win, COLOR_PAIR (TOP_COLOR_RED));
     for (int i = slots - 1;
-         i >= slots - ((double)res.down / res.total) * slots; i--) {
+         i >= slots - ceil (((double)res.down / res.total) * slots); i--) {
         mvwaddch (win, y, x + strlen (prefix) + i, '|');
     }
     wattroff (win, COLOR_PAIR (TOP_COLOR_RED));
@@ -209,6 +211,11 @@ static void draw_heartbeat (struct summary_pane *sum)
 
 static void draw_info (struct summary_pane *sum)
 {
+    double now = flux_reactor_now (flux_get_reactor (sum->top->h));
+    char fsd[32] = "";
+
+    (void)fsd_format_duration_ex (fsd, sizeof (fsd), now - sum->starttime, 2);
+
     wattron (sum->win, A_DIM);
     mvwprintw (sum->win,
                info_dim.y_begin,
@@ -221,6 +228,11 @@ static void draw_info (struct summary_pane *sum)
                    info_dim.x_begin + 10,
                    "depth: %d",
                    sum->instance_level);
+    mvwprintw (sum->win,
+               info_dim.y_begin,
+               info_dim.x_begin + 30,
+               "uptime: %s",
+               fsd);
     mvwprintw (sum->win,
                info_dim.y_begin,
                info_dim.x_begin +
@@ -417,6 +429,8 @@ struct summary_pane *summary_pane_create (struct top *top)
     sum->instance_level = get_instance_attr_int (top->h, "instance-level");
     sum->instance_size = get_instance_attr_int (top->h, "size");
     sum->instance_version = flux_attr_get (top->h, "version");
+    if (flux_get_instance_starttime (top->h, &sum->starttime) < 0)
+        sum->starttime = flux_reactor_now (flux_get_reactor (top->h));
 
     summary_pane_query (sum);
     summary_pane_draw (sum);
