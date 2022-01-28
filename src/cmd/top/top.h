@@ -19,10 +19,10 @@ int mvwprintw(WINDOW *win, int y, int x, const char *fmt, ...)
     __attribute__ ((format (printf, 4, 5)));
 
 enum {
-    TOP_COLOR_YELLOW = 1,
-    TOP_COLOR_RED = 2,
-    TOP_COLOR_BLUE = 3,
-    TOP_COLOR_BLUE_HIGHLIGHT = 4,
+    TOP_COLOR_YELLOW = 1, // origin of 1 since 0 is an invalid color pair index
+    TOP_COLOR_RED,
+    TOP_COLOR_BLUE,
+    TOP_COLOR_BLUE_HIGHLIGHT,
 };
 
 struct top {
