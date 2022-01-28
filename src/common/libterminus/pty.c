@@ -350,7 +350,7 @@ int flux_pty_attach (struct flux_pty *pty)
     return 0;
 }
 
-static void pty_client_send_data (struct flux_pty *pty, void *data, int len)
+void pty_client_send_data (struct flux_pty *pty, void *data, int len)
 {
     struct pty_client *c = zlist_first (pty->clients);
 

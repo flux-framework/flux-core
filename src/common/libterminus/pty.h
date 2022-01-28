@@ -167,6 +167,10 @@ int flux_pty_aux_set (struct flux_pty *pty,
 
 void * flux_pty_aux_get (struct flux_pty *pty, const char *name);
 
+/*  Function exported for testing only
+ */
+void pty_client_send_data (struct flux_pty *pty, void *data, int len);
+
 #endif /* !FLUX_PTY_H */
 
 /*
