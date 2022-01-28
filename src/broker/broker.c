@@ -38,7 +38,6 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/kary.h"
-#include "src/common/libutil/monotime.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libutil/fsd.h"
@@ -98,6 +97,8 @@ static int create_runat_phases (broker_ctx_t *ctx);
 static int handle_event (broker_ctx_t *ctx, const flux_msg_t *msg);
 
 static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred);
+
+static void init_attrs_starttime (attr_t *attrs, double starttime);
 
 static int init_local_uri_attr (struct overlay *ov, attr_t *attrs);
 
@@ -193,8 +194,6 @@ int main (int argc, char *argv[])
     struct sigaction old_sigact_term;
     flux_msg_handler_t **handlers = NULL;
     const flux_conf_t *conf;
-    double boot_elapsed_sec;
-    struct timespec boot_start_time;
 
     memset (&ctx, 0, sizeof (ctx));
     log_init (argv[0]);
@@ -300,11 +299,17 @@ int main (int argc, char *argv[])
     if (create_rundir (ctx.attrs) < 0)
         goto cleanup;
 
+    /* Record the broker start time.  This time will also be used to
+     * capture how long network bootstrap takes.
+     */
+    flux_reactor_now_update (ctx.reactor);
+    ctx.starttime = flux_reactor_now (ctx.reactor);
+    init_attrs_starttime (ctx.attrs, ctx.starttime);
+
     /* Execute broker network bootstrap.
      * Default method is pmi.
      * If [bootstrap] is defined in configuration, use static configuration.
      */
-    monotime (&boot_start_time);
     if (flux_conf_unpack (conf, NULL, "{s:{}}", "bootstrap") == 0) {
         if (boot_config (ctx.h, ctx.overlay, ctx.attrs) < 0) {
             log_msg ("bootstrap failed");
@@ -317,7 +322,6 @@ int main (int argc, char *argv[])
             goto cleanup;
         }
     }
-    boot_elapsed_sec = monotime_since (boot_start_time) / 1000;
 
     ctx.rank = overlay_get_rank (ctx.overlay);
     ctx.size = overlay_get_size (ctx.overlay);
@@ -331,10 +335,11 @@ int main (int argc, char *argv[])
     }
 
     if (ctx.verbose) {
+        flux_reactor_now_update (ctx.reactor);
         log_msg ("boot: rank=%d size=%d time %.3fs",
                   ctx.rank,
                   ctx.size,
-                  boot_elapsed_sec);
+                  flux_reactor_now (ctx.reactor) - ctx.starttime);
     }
 
     // Setup profiling
@@ -590,6 +595,15 @@ static void init_attrs_shell_paths (attr_t *attrs)
                   flux_conf_builtin_get ("shell_initrc", FLUX_CONF_AUTO),
                   0) < 0)
         log_err_exit ("attr_add conf.shell_initrc");
+}
+
+static void init_attrs_starttime (attr_t *attrs, double starttime)
+{
+    char buf[32];
+
+    snprintf (buf, sizeof (buf), "%.2f", starttime);
+    if (attr_add (attrs, "broker.starttime", buf, FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        log_err_exit ("error setting broker.starttime attribute");
 }
 
 static void init_attrs (attr_t *attrs, pid_t pid, struct flux_msg_cred *cred)
