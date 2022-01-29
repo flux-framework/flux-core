@@ -215,7 +215,34 @@ see the documentation for the specific plugin in question. The following
 options are supported by the builtin plugins of ``flux-shell``:
 
 **pty**
-  Allocate a pty for the first task rank.
+  Allocate a pty to all task ranks for non-interactive use. Output
+  from all ranks will be captured to the same location as ``stdout``.
+  This is the same as setting **pty.ranks=all** and **pty.capture**.
+  (see below).
+
+**pty.ranks**\ =\ *OPT*
+  Set the task ranks for which to allocate a pty. *OPT* may be either
+  an RFC 22 IDset of target ranks, an integer rank, or the string "all"
+  to indicate all ranks.
+
+**pty.capture**
+  Enable capture of pty output to the same location as stdout. This is
+  the default unless **pty.interactive** is set.
+
+**pty.interactive**
+  Enable a a pty on rank 0 that is set up for interactive attach by
+  a front-end program (i.e. ``flux job attach``). With no other **pty**
+  options, only rank 0 will be assigned a pty and output will not
+  be captured. These defaults can be changed by setting other
+  **pty** options after **pty.interactive**, e.g.
+
+  .. code-block:: console
+
+    $  flux mini run -o pty.interactive -o pty.capture ...
+
+  would allocate an interactive pty on rank 0 and also capture the
+  pty session to the KVS (so it can be displayed after the job exits
+  with ``flux job attach``).
 
 **cpu-affinity**\ =\ *OPT*
   Adjust the operation of the builtin shell ``affinity`` plugin.

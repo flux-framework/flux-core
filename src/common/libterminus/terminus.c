@@ -870,7 +870,7 @@ flux_terminus_server_create (flux_t *h, const char *service)
     if (strlen (service) > sizeof (ts->service) - 1)
         goto err;
     strcpy (ts->service, service);
-    
+
     if (start_msghandlers (ts, handler_tab) < 0)
         goto err;
 

@@ -34,15 +34,15 @@ terminus_jobid() {
         -s $(shell_service $jobid).terminus "$@"
 }
 
-test_expect_success HAVE_JQ 'pty: submit a job with pty' '
-	id=$(flux mini submit --flags waitable -o pty bash) &&
+test_expect_success HAVE_JQ 'pty: submit a job with an interactive pty' '
+	id=$(flux mini submit --flags waitable -o pty.interactive bash) &&
 	terminus_jobid $id list &&
 	flux job cancel ${id} &&
 	test_must_fail flux job wait $id
 '
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'pty: run job with pty' '
 	printf "PS1=XXX:\n" >ps1.rc
-	id=$(flux mini submit -o pty bash --rcfile ps1.rc | flux job id)
+	id=$(flux mini submit -o pty.interactive bash --rcfile ps1.rc | flux job id)
 	$runpty -o log.job-pty flux job attach ${id} &
 	pid=$! &&
 	terminus_jobid ${id} list &&
@@ -75,7 +75,7 @@ test_expect_success NO_CHAIN_LINT 'pty: interactive job with pty' '
 	EOF
 	chmod +x stty-test.sh &&
 	for i in `seq 0 10`; do
-	    id=$(flux mini submit -n1 -o pty ./stty-test.sh)
+	    id=$(flux mini submit -n1 -o pty.interactive ./stty-test.sh)
 	    { $runpty -w 80x25 -o log.interactive.$i \
 	        flux job attach --show-exec ${id} & } &&
 	    pid=$! &&
@@ -95,7 +95,8 @@ test_expect_success 'pty: client is detached from terminated job' '
 	sleep 10
 	EOF
 	chmod +x die-test.sh &&
-	jobid=$(flux mini submit -n2 -o pty -o exit-timeout=1 ./die-test.sh) &&
+	jobid=$(flux mini submit -n2 -o pty.interactive -o pty.ranks=0 \
+	        -o exit-timeout=1 ./die-test.sh) &&
 	{ $runpty -w 80x25 -o log.killed \
 		flux job attach --show-exec ${jobid} & } &&
 	pid=$! &&
@@ -103,5 +104,41 @@ test_expect_success 'pty: client is detached from terminated job' '
 	flux kvs put -N job-$(flux job id ${jobid}) test-ready=1 &&
 	$waitfile -t 20 -vp "pty disappeared" log.killed &&
 	test_must_fail wait $pid
+'
+test_expect_success 'pty: pty for all tasks, output captured' '
+	flux mini run -n2 --label-io -o pty tty > ptys.out &&
+	grep 0: ptys.out &&
+	grep 1: ptys.out &&
+	test_must_fail grep "not a tty" ptys.out
+'
+test_expect_success 'pty: ptys only on select ranks' '
+	test_expect_code 1 \
+		flux mini run -n2 --label-io -o pty.ranks=1 tty > ptys1.out &&
+	grep "0: not a tty" ptys1.out &&
+	test_must_fail grep "1: not a tty" ptys1.out
+'
+test_expect_success 'pty: pty.ranks can take an idset' '
+	flux mini run -n2 --label-io -o pty.ranks=0,1 tty > ptyss.out &&
+	grep 0: ptyss.out &&
+	grep 1: ptyss.out &&
+	test_must_fail grep "not a tty" ptyss.out
+'
+test_expect_success HAVE_JQ 'pty: pty.interactive forces a pty on rank 0' '
+	id=$(flux mini submit --flags waitable \
+		-o pty.interactive -o pty.ranks=1 \
+		-n2 \
+		bash) &&
+	terminus_jobid $id list &&
+	flux job cancel ${id} &&
+	flux job eventlog -p guest.output ${id} | grep "adding pty to rank 0" &&
+	test_must_fail flux job wait $id
+'
+test_expect_success 'pty: -o pty.interactive and -o pty.capture can be used together' '
+	id=$(flux mini submit -o pty.interactive -o pty.capture tty) &&
+	flux job attach $id >ptyim.out 2>&1 &&
+	flux job attach $id
+'
+test_expect_success 'pty: unsupported -o pty.<opt> generates exception' '
+	test_must_fail flux mini run -o pty.foo hostname
 '
 test_done

@@ -89,6 +89,14 @@ static void test_invalid_args ()
     ok (flux_pty_client_exit_status (c, NULL) < 0 && errno == EINVAL,
         "flux_pty_client_get_exit_status returns EINVAL on NULL statusp");
 
+    lives_ok ({flux_pty_monitor (NULL, NULL);},
+             "flux_pty_monitor can safely be called with NULL");
+
+    ok (flux_pty_aux_set (NULL, NULL, NULL, NULL) < 0 && errno == EINVAL,
+        "flux_pty_aux_set (NULL) fails");
+    ok (flux_pty_aux_get (NULL, NULL) == NULL && errno == EINVAL,
+        "flux_pty_aux_get (NULL, NULL) fails");
+
     flux_pty_close (pty, 0);
     flux_pty_client_destroy (c);
 }
@@ -428,6 +436,41 @@ static void test_client()
     flux_close (h);
 }
 
+static void monitor_cb (struct flux_pty *pty, void *data, int len)
+{
+    int *totalp = flux_pty_aux_get (pty, "total");
+    *totalp += len;
+    diag ("monitor_cb got %ld bytes", len);
+}
+
+void test_monitor ()
+{
+    int total = 0;
+    flux_t *h = loopback_create (0);
+    struct flux_pty *pty = flux_pty_open ();
+
+    if (!h || !pty)
+        BAIL_OUT ("Unable to create test handle and pty");
+
+    ok (flux_pty_set_flux (pty, h) == 0,
+        "flux_pty_set_flux");
+
+    ok (flux_pty_aux_set (pty, "total", &total, NULL) == 0,
+        "flux_pty_aux_set");
+
+    diag ("starting pty monitor");
+    flux_pty_monitor (pty, monitor_cb);
+
+    pty_client_send_data (pty, "hello", 6);
+    pty_client_send_data (pty, "world", 6);
+
+    ok (total == 12,
+        "monitor received 12 bytes");
+
+    flux_pty_close (pty, 0);
+    flux_close (h);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -437,7 +480,7 @@ int main (int argc, char *argv[])
     test_empty_server ();
     test_basic_protocol ();
     test_client ();
-
+    test_monitor ();
     done_testing ();
     return 0;
 }

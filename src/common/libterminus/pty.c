@@ -55,6 +55,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/aux.h"
 
 #include "src/common/libutil/llog.h"
 
@@ -82,6 +83,9 @@ struct flux_pty {
     int exit_status;
 
     zlist_t *clients;
+
+    pty_monitor_f monitor;
+    struct aux_item *aux;
 };
 
 static void pty_client_destroy (struct pty_client *c)
@@ -283,6 +287,19 @@ void flux_pty_set_log (struct flux_pty *pty,
     }
 }
 
+void flux_pty_monitor (struct flux_pty *pty, pty_monitor_f fn)
+{
+    if (!pty)
+        return;
+
+    pty->monitor = fn;
+    /*  If a monitor function is provided, and there are currently no
+     *   other clients, ensure the pty fd_watcher is started.
+     */
+    if (fn != NULL && zlist_size (pty->clients) == 0)
+        flux_watcher_start (pty->fdw);
+}
+
 int flux_pty_leader_fd (struct flux_pty *pty)
 {
     if (!pty) {
@@ -333,9 +350,12 @@ int flux_pty_attach (struct flux_pty *pty)
     return 0;
 }
 
-static void pty_client_send_data (struct flux_pty *pty, void *data, int len)
+void pty_client_send_data (struct flux_pty *pty, void *data, int len)
 {
     struct pty_client *c = zlist_first (pty->clients);
+
+    if (pty->monitor)
+        (*pty->monitor) (pty, data, len);
 
     while (c) {
         if (c->read_enabled) {
@@ -595,6 +615,28 @@ int flux_pty_set_flux (struct flux_pty *pty, flux_t *h)
     fd_set_nonblocking (pty->leader);
 
     return 0;
+}
+
+int flux_pty_aux_set (struct flux_pty *pty,
+                      const char *key,
+                      void *val,
+                      flux_free_f destroy)
+{
+    if (!pty) {
+        errno = EINVAL;
+        return -1;
+    }
+    return aux_set (&pty->aux, key, val, destroy);
+}
+
+void * flux_pty_aux_get (struct flux_pty *pty, const char *name)
+{
+    if (!pty) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return aux_get (pty->aux, name);
+
 }
 
 

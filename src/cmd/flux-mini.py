@@ -1503,7 +1503,7 @@ class AllocCmd(MiniCmd):
             broker_opts=list_split(args.broker_opts),
         )
         if sys.stdin.isatty():
-            jobspec.setattr_shell_option("pty", True)
+            jobspec.setattr_shell_option("pty.interactive", 1)
         return jobspec
 
     def main(self, args):
