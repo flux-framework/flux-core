@@ -837,10 +837,16 @@ class SubmitBulkCmd(SubmitBaseCmd):
                 else:
                     getattr(args, stream).write(data)
 
-    def exec_watch_cb(self, future, args, jobid, label=""):
+    def exec_watch_cb(self, future, watch_future, args, jobinfo, label=""):
         """Handle events in the guest.exec.eventlog"""
+        jobid = jobinfo["id"]
         event = future.get_event()
-        if event and event.name == "shell.init":
+        if event is None:
+            return
+        if args.verbose > 2:
+            ts = event.timestamp - self.t0
+            print(f"{jobid}: {ts:.3f}s exec.{event.name}", file=sys.stderr)
+        if args.watch and event and event.name == "shell.init":
             #  Once the shell.init event is posted, then it is safe to
             #   begin watching the output eventlog:
             #
@@ -848,8 +854,16 @@ class SubmitBulkCmd(SubmitBaseCmd):
                 self.flux_handle, jobid, eventlog="guest.output"
             ).then(self.output_watch_cb, args, jobid, label)
 
-            #  Events from this eventlog are no longer needed
-            future.cancel()
+            if not args.wait or not args.wait.startswith("exec."):
+                #  Events from this eventlog are no longer needed
+                future.cancel()
+        if args.wait and args.wait == f"exec.{event.name}":
+            # Done with this job: update progress bar if necessary
+            #  and cancel this and the main eventlog futures:
+            #
+            self.progress_update(jobinfo, event=None)
+            future.cancel(stop=True)
+            watch_future.cancel(stop=True)
 
     @staticmethod
     def status_to_exitcode(status):
@@ -903,13 +917,14 @@ class SubmitBulkCmd(SubmitBaseCmd):
             )
         elif event.name == "alloc":
             jobinfo["state"] = "running"
-        elif event.name == "start" and args.watch:
+        elif event.name == "start" and (args.watch or args.wait.startswith("exec.")):
             #
-            #  Watch the exec eventlog if the --watch option was provided:
+            #  Watch the exec eventlog if the --watch option was provided
+            #   or args.wait starts with 'exec.'
             #
             job.event_watch_async(
                 self.flux_handle, jobid, eventlog="guest.exec.eventlog"
-            ).then(self.exec_watch_cb, args, jobid, label)
+            ).then(self.exec_watch_cb, future, args, jobinfo, label)
         elif event.name == "finish":
             #
             #  Collect exit status and adust self.exitcode if necesary:
