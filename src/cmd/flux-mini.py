@@ -845,7 +845,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
             return
         if args.verbose > 2:
             ts = event.timestamp - self.t0
-            print(f"{jobid}: {ts:.3f}s exec.{event.name}", file=sys.stderr)
+            print(f"{jobid}: {ts:.3f}s exec.{event.name}", file=args.stderr)
         if args.watch and event and event.name == "shell.init":
             #  Once the shell.init event is posted, then it is safe to
             #   begin watching the output eventlog:
@@ -887,7 +887,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
             self.t0 = event.timestamp
         if args.verbose > 2:
             ts = event.timestamp - self.t0
-            print(f"{jobid}: {ts:.3f}s {event.name}", file=sys.stderr)
+            print(f"{jobid}: {ts:.3f}s {event.name}", file=args.stderr)
 
         if args.wait and args.wait == event.name:
             # Done with this job: update progress bar if necessary
