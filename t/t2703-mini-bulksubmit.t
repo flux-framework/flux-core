@@ -123,6 +123,16 @@ test_expect_success 'flux-mini bulksubmit --wait returns highest exit code' '
 	test_expect_code 143 \
 	    flux mini bulksubmit --wait sh -c "kill -{} \$\$" ::: 0 0 15
 '
+test_expect_success 'flux-mini bulksubmit --wait-event works' '
+	flux mini bulksubmit -vvv \
+		--wait-event={} \
+		--log-stderr=wait.{}.out \
+		true ::: start exec.shell.init &&
+	test_debug "cat wait.start.out" &&
+	test_debug "cat wait.exec.shell.init.out" &&
+	tail -n1 wait.start.out | grep start &&
+	tail -n1 wait.exec.shell.init.out | grep shell.init
+'
 test_expect_success 'flux-mini bulksubmit replacement format strings work' '
 	echo /a/b/c/d.txt /a/b/c/d c.txt | \
 	    flux mini bulksubmit --sep=None --dry-run \
