@@ -7,7 +7,7 @@ PROJECT=flux-core
 WORKDIR=/usr/src
 MOUNT_HOME_ARGS="--volume=$HOME:/home/$USER -e HOME"
 JOBS=2
-IMAGE="fluxrm/flux-core:centos8"
+IMAGE="fluxrm/flux-core:el8"
 
 declare -r prog=${0##*/}
 die() { echo -e "$prog: $@"; exit 1; }
@@ -65,10 +65,10 @@ which docker >/dev/null \
 . ${TOP}/src/test/checks-lib.sh
 
 if test "$REBUILD_BASE_IMAGE" = "t"; then
-    checks_group "Rebuilding fluxrm/flux-core:centos8 from source" \
+    checks_group "Rebuilding fluxrm/flux-core:el8 from source" \
       $TOP/src/test/docker/docker-run-checks.sh \
         -j $JOBS \
-        -i centos8 \
+        -i el8 \
         -t $IMAGE \
         --install-only
 fi

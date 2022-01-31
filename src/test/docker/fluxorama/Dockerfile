@@ -1,4 +1,4 @@
-ARG IMAGE=fluxrm/flux-core:centos8
+ARG IMAGE=fluxrm/flux-core:el8
 FROM $IMAGE AS systest
 
 # Default container user.

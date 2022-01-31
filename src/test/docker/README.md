@@ -14,9 +14,9 @@ or a tagged version of flux-core.
 #### fluxrm/testenv Docker images
 
 The Dockerfiles `bionic/Dockerfile`, `focal/Dockerfile`,
-`centos7/Dockerfile`, and `centos8/Dockerfile` describe the images built
+`el7/Dockerfile`, and `el8/Dockerfile` describe the images built
 under the `fluxrm/testenv:bionic`, `fluxrm/testenv:focal`,
-`fluxrm/testenv:centos7`, and `fluxrm/testenv:centos8` respectively, and
+`fluxrm/testenv:el7`, and `fluxrm/testenv:el8` respectively, and
 include the base dependencies required to build flux-core. These images
 are updated manually by flux-core maintainers, but the Dockerfiles should
 be kept up to date for a single point of management.
@@ -36,19 +36,19 @@ Docker images.
 #### Adding a new dependency
 
 When constructing a PR that adds new dependency, the dependency should
-be added (for both CentOS and Ubuntu) in `checks/Dockerfile`. This will
+be added (for both rh/el and Ubuntu) in `checks/Dockerfile`. This will
 result in a temporary docker image being created during testing of the
 PR with the dependency installed.
 
 Later, a flux-core maintainer can move the dependency into the `testenv`
-Docker images `bionic/Dockerfile` and `centos7/Dockerfile`.
+Docker images `bionic/Dockerfile` and `el7/Dockerfile`.
 These docker images should then be built by hand and manually
 pushed to DockerHub at `fluxrm/testenv:bionic` and
-`fluxrm/testenv:centos7`. Be sure to test that the `docker-run-test.sh`
+`fluxrm/testenv:el7`. Be sure to test that the `docker-run-test.sh`
 script still runs against the new `testenv` images, e.g.:
 
 ```
-$ for i in focal centos7 centos8 fedora33 fedora34; do
+$ for i in focal el7 el8 fedora33 fedora34; do
     make clean &&
     docker build --no-cache -t fluxrm/testenv:$i src/test/docker/$i &&
     src/test/docker/docker-run-checks.sh -j 4 --image=$i &&
@@ -73,7 +73,7 @@ to build and push images to docker hub.
 #### Local Testing
 
 Developers can test the docker images themselves. If new dependencies are needed,
-they can update the `$image` Dockerfiles manually (where `$image` is one of bionic, centos7, centos8, or focal).
+they can update the `$image` Dockerfiles manually (where `$image` is one of bionic, el7, el8, or focal).
 To create a local Docker image, run the command:
 
 ```

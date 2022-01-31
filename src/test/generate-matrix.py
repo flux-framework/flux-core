@@ -194,25 +194,25 @@ matrix.add_build(
     docker_tag=True,
 )
 
-# Centos7
+# RHEL7 clone
 matrix.add_build(
-    name="centos7",
-    image="centos7",
+    name="el7",
+    image="el7",
     docker_tag=True,
 )
 
-# Centos8
+# RHEL8 clone
 matrix.add_build(
-    name="centos8",
-    image="centos8",
+    name="el8",
+    image="el8",
     env=dict(PYTHON_VERSION="3.6", LDFLAGS="-Wl,-z,relro  -Wl,-z,now"),
     docker_tag=True,
 )
 
-# Centos8, system, coverage
+# RHEL8 clone, system, coverage
 matrix.add_build(
-    name="centos8 - system,coverage",
-    image="centos8",
+    name="el8 - system,coverage",
+    image="el8",
     coverage=True,
     jobs=2,
     command_args="--system",
