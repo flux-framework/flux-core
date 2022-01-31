@@ -27,8 +27,8 @@ if echo "$DOCKER_TAG" | grep -q "bionic"; then
     docker tag "$DOCKER_TAG" ${t} && docker push ${t}
 fi
 
-#  If this is the centos8 build, then build fluxorama image
-if echo "$DOCKER_TAG" | grep -q "centos8"; then
+#  If this is the el8 build, then build fluxorama image
+if echo "$DOCKER_TAG" | grep -q "el8"; then
     FLUXORAMA="fluxrm/fluxorama"
     docker build -t ${FLUXORAMA} src/test/docker/fluxorama
     docker push ${FLUXORAMA}

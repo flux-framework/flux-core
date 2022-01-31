@@ -119,11 +119,11 @@ if test "$DISTCHECK" = "t"; then
 fi
 
 if test "$SYSTEM" = "t"; then
-    if test "$IMAGE" != "centos8"; then
-        echo >&2 "Setting image to centos8 for system checks build"
+    if test "$IMAGE" != "el8"; then
+        echo >&2 "Setting image to el8 for system checks build"
     fi
-    IMAGE=centos8
-    TAG="checks-builder:centos8"
+    IMAGE=el8
+    TAG="checks-builder:el8"
     INSTALL_ONLY=t
     NO_CACHE="--no-cache"
     POISON=0

@@ -43,20 +43,20 @@ RUN set -x && groupadd fluxuser \
 RUN case $BASE_IMAGE in \
      bionic*) adduser $USER sudo && adduser fluxuser sudo ;; \
      focal*)  adduser $USER sudo && adduser fluxuser sudo ;; \
-     centos*|fedora*) usermod -G wheel $USER && usermod -G wheel fluxuser ;; \
+     el*|fedora*) usermod -G wheel $USER && usermod -G wheel fluxuser ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
 # Install extra dependencies if necessary here.
 #
 # Do not forget to run `apt update` on Ubuntu/bionic.
-# Do NOT run `yum upgrade` on CentOS (this will unnecessarily upgrade
+# Do NOT run `yum upgrade` on RPM systems (this will unnecessarily upgrade
 #  existing packages)
 #
 RUN case $BASE_IMAGE in \
      bionic*) ;; \
      focal*) ;; \
-     centos*|fedora*) ;; \
+     el*|fedora*) ;; \
      *) (>&2 echo "Unknown BASE_IMAGE") ;; \
     esac
 
