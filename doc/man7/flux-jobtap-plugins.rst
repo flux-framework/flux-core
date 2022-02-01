@@ -314,7 +314,7 @@ or ``job.event.finish`` callbacks.
 
 If ``flux_jobtap_prolog_start()``, ``flux_jobtap_prolog_finish()``,
 ``flux_jobtap_epilog_start()`` or ``flux_jobtap_epilog_finish()`` are
-called for a job in an invaid state, these function will return -1 with
+called for a job in an invalid state, these function will return -1 with
 ``errno`` set to ``EINVAL``.
 
 Multiple prolog or epilog actions can be active at the same time.

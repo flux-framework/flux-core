@@ -8,7 +8,7 @@ DESCRIPTION
 Flux normally operates without configuration files.  If configuration is
 needed, the :man1:`flux-broker` **--config-path=DIR** option may be used
 to instruct Flux to parse all files matching the glob **DIR/*.toml**.
-Alteratively, the FLUX_CONF_DIR environment variable may be set the config
+Alternatively, the FLUX_CONF_DIR environment variable may be set the config
 directory path.  If both are set, the command line argument takes precedence.
 The option value must be a directory, not a file.
 

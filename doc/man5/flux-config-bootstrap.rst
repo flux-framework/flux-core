@@ -13,7 +13,7 @@ for a given cluster.
 WARNING:  Although ``flux config reload`` works on a live system, these
 settings do not take effect until the next broker restart.  As such, they
 must only be changed in conjunction with a full system instance restart in
-order to avoid brokers becoming de-synchronized if they are independently
+order to avoid brokers becoming desynchronized if they are independently
 restarted before the next instance restart.
 
 The ``bootstrap`` table contains the following keys:
