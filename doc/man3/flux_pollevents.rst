@@ -192,5 +192,5 @@ libev API: http://pod.tst.eu/http://cvs.schmorp.de/libev/ev.pod
 
 zmq_getsockopt(3): http://api.zeromq.org/4-0:zmq-getsockopt
 
-Embedding ZeroMQ in the libev event looop:
+Embedding ZeroMQ in the libev event loop:
 http://funcptr.net/2013/04/20/embedding-zeromq-in-the-libev-event-loop

@@ -72,7 +72,7 @@ COMMANDS
 
 **reload** [-x] [-f] PATH
    Reload the resource inventory from a file in RFC 20 format, or if the
-   *-x,--xml* option, a directory of hlwoc ``<rank>.xml`` files.  If
+   *-x,--xml* option, a directory of hwloc ``<rank>.xml`` files.  If
    *-f,--force*, resources may contain invalid ranks.  This command is
    primarily used in test.
 

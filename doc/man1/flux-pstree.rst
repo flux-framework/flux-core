@@ -46,7 +46,7 @@ job information before the tree display with the ``-x, --extended``,
     ƒ2MYrwzf user1     R      1      1   4.736s     └── sleep
 
 Several detail formats are available via the ``-d, --details=NAME``
-option, including progree, resources, and stats. For example, the
+option, including progress, resources, and stats. For example, the
 ``progress`` display attempts to show the overall progress and
 utilization of all Flux instances in a hierarchy by displaying the
 total number of jobs in that instance (``NJOBS``), the "progress"
@@ -76,7 +76,7 @@ option.
 By default, the enclosing Flux instance, or root of the tree, is included
 in output, unless extended details are displayed as when any of the
 ``-x, --extended``, ``-d, --details=NAME`` or ``--detail-format=FORMAT``
-options are used, or if one or more jobids are directly targetted with
+options are used, or if one or more jobids are directly targeted with
 a ``JOBID`` argument. This behavior can be changed via the
 ``--skip-root=[yes|no]`` option.
 
@@ -136,15 +136,15 @@ OPTIONS
    ``{id.f58}``.
 
 **--skip-root**\ *=yes|no*
-   Excplicitly skip (yes)  or force (no) display of the enclosing instance,
+   Explicitly skip (yes)  or force (no) display of the enclosing instance,
    or root of the tree, in output.
 
 **-C, --compact**
-   Use compact tree connectors. Usefully for deep hieararchies.
+   Use compact tree connectors. Usefully for deep hierarchies.
 
 **--ascii**
    Use ascii tree connectors.
-   
+
 
 EXAMPLES
 ========

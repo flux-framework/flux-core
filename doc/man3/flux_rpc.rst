@@ -195,7 +195,7 @@ RPC request, or ``FLUX_MATCHTAG_NONE`` if no matchtag was allocated (e.g. no
 response is expected), or the future argument does not correspond to an RPC.
 
 ``flux_rpc_get_nodeid()`` returns the original ``nodeid`` target of the
-``flux_rpc()`` request, including if the RPC was targetted to
+``flux_rpc()`` request, including if the RPC was targeted to
 ``FLUX_NODEID_ANY`` or ``FLUX_NODEID_UPSTREAM``.
 
 ERRORS

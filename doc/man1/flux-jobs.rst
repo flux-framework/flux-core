@@ -69,13 +69,13 @@ OPTIONS
 
        $ while flux jobs --stats-only; do sleep 2; done
 
-   All other options are ignored when ``--stats-only`` is used. 
+   All other options are ignored when ``--stats-only`` is used.
 
 **-R, --recursive**
    List jobs recursively. Each child job which is also an instance of
    Flux is prefixed by its jobid "path" followed by the list of jobs,
    recursively up to any defined ``-L, --level``. If the ``--stats``
-   option is used, then each child instance in the hierararchy is listed
+   option is used, then each child instance in the hierarchy is listed
    with its stats.
 
 **--recurse-all**

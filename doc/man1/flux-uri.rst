@@ -63,7 +63,7 @@ OPTIONS
    Return the *remote* (``ssh://``)  equivalent of the resolved URI.
 
 **--local**
-   Return the *local* (``local://``) equivalent of the resulved URI.
+   Return the *local* (``local://``) equivalent of the resolved URI.
    Warning: the resulting URI may be invalid for the current system
    if the network host specified by an ``ssh`` URI is not the current
    host.
