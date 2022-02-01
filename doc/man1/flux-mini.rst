@@ -405,6 +405,13 @@ OTHER OPTIONS
 
 **--wait**
    *(submit,bulksubmit)* Wait on completion of all jobs before exiting.
+   This is equivalent to ``--wait-event=clean``.
+
+**--wait-event=NAME**
+   *(submit,bulksubmit)* Wait until all jobs have received event ``NAME``
+   before exiting. E.g. to submit a job and block until the job begins
+   running, use ``--wait-event=start``. If ``NAME`` begins with ``exec.``,
+   then wait for an event in the exec eventlog, e.g. ``exec.shell.init``.
 
 **--watch**
    *(submit,bulksubmit)* Display output from all jobs. Implies ``--wait``.

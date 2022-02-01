@@ -31,7 +31,8 @@ def continuation_callback(c_future, opaque_handle):
     try:
         py_future: "Future" = ffi.from_handle(opaque_handle)
         assert c_future == py_future.pimpl.handle
-        py_future.then_cb(py_future, *py_future.then_args, **py_future.then_kwargs)
+        if not py_future.stopped:
+            py_future.then_cb(py_future, *py_future.then_args, **py_future.then_kwargs)
     # pylint: disable=broad-except
     except Exception as exc:
         #
@@ -95,6 +96,13 @@ class Future(WrapperPimpl):
         self.then_args = []
         self.then_kwargs = {}
         self.cb_handle = None
+        self.stopped = False
+
+    def stop(self):
+        """Stop a future from calling the user callback.
+        Useful for streaming futures given lack of destroy.
+        """
+        self.stopped = True
 
     def error_string(self):
         try:

@@ -303,6 +303,28 @@ class TestJob(unittest.TestCase):
         job.cancel(self.fh, jobid)
         job.wait(self.fh, jobid)
 
+    def test_20_005_1_job_event_watch_with_cancel_stop_true(self):
+        jobid = job.submit(
+            self.fh, JobspecV1.from_command(["sleep", "3"]), waitable=True
+        )
+        self.assertTrue(jobid > 0)
+        events = []
+        future = job.event_watch_async(self.fh, jobid)
+
+        def cb(future, events):
+            event = future.get_event()
+            if event.name == "start":
+                future.cancel(stop=True)
+            events.append(event.name)
+
+        future.then(cb, events)
+        rc = self.fh.reactor_run()
+
+        # Last event should be "start"
+        self.assertEqual(events[-1], "start")
+        job.cancel(self.fh, jobid)
+        job.wait(self.fh, jobid)
+
     def test_20_006_job_event_wait(self):
         jobid = job.submit(self.fh, JobspecV1.from_command(["sleep", "0"]))
         self.assertTrue(jobid > 0)

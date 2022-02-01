@@ -91,7 +91,7 @@ logging-modules=logging
 bad-functions=map,filter,apply,input,file
 
 # Good variable names which should always be accepted, separated by a comma
-good-names=i,j,k,x,y,z,ex,io,rc,Run,_
+good-names=i,j,k,x,y,z,ex,io,rc,Run,_,ts,t0
 
 # Bad variable names which should always be refused, separated by a comma
 bad-names=foo,bar,baz,toto,tutu,tata
