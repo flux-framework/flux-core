@@ -107,7 +107,7 @@ static void evlog_error (struct eventlogger *ev,
         fprintf (stderr, "evlog_error: failed to unpack message\n");
         return;
     }
-    fprintf (stderr, "flux-shell: evlog failure: %s: msg=%s\n",
+    fprintf (stderr, "evlog: %s: msg=%s\n",
                      strerror (errnum), msg);
 }
 
