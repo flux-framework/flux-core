@@ -206,7 +206,8 @@ static int log_eventlog_start (flux_plugin_t *p,
                                    evlog) < 0)
         goto err;
 
-    flux_shell_log_setlevel (FLUX_SHELL_ERROR, "stderr");
+    /*  Disable stderr logging */
+    flux_shell_log_setlevel (FLUX_SHELL_QUIET, "stderr");
     return 0;
 err:
     evlog_destroy (evlog);
