@@ -79,6 +79,9 @@ static int log_eventlog (flux_plugin_t *p,
 
 static void evlog_destroy (struct evlog *evlog)
 {
+    /*  Redirect future logging to stderr */
+    flux_shell_log_setlevel (evlog->level, "stderr");
+
     eventlogger_flush (evlog->ev);
     eventlogger_destroy (evlog->ev);
     free (evlog);
