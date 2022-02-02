@@ -79,6 +79,7 @@ static int log_eventlog (flux_plugin_t *p,
 
 static void evlog_destroy (struct evlog *evlog)
 {
+    eventlogger_flush (evlog->ev);
     eventlogger_destroy (evlog->ev);
     free (evlog);
 }
