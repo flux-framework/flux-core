@@ -93,6 +93,9 @@ int flux_plugin_init (flux_plugin_t *p)
 
     ok (flux_plugin_add_handler (p, "*", check_shell_log, NULL) == 0,
         "flux_plugin_add_handler works");
+
+    ok (flux_shell_log_setlevel (-2, NULL) < 0 && errno == EINVAL,
+        "flux_shell_log_setlevel with invalid level fails");
     return 0;
 }
 
