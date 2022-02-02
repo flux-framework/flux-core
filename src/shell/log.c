@@ -337,7 +337,7 @@ out:
 
 int flux_shell_log_setlevel (int level, const char *dest)
 {
-    if (level < FLUX_SHELL_FATAL || level > FLUX_SHELL_TRACE) {
+    if (level < FLUX_SHELL_QUIET || level > FLUX_SHELL_TRACE) {
         errno = EINVAL;
         return -1;
     }

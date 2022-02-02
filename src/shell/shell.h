@@ -289,6 +289,7 @@ int flux_shell_task_channel_subscribe (flux_shell_task_t *task,
  *  in the context of shell logging.
  */
 enum {
+    FLUX_SHELL_QUIET  = -1,
     FLUX_SHELL_FATAL  = 0,  /* LOG_EMERG   */
     /* Level 1 Reserved */  /* LOG_ALERT   */
     /* Level 2 Reserved */  /* LOG_CRIT    */
@@ -387,6 +388,8 @@ void flux_shell_raise (const char *type, int severity, const char *fmt, ...);
  *   If dest == NULL then set the internal log dispatch level --
  *   (i.e. no messages above severity level will be logged to any
  *    log destination)
+ *
+ *  If 'level' is FLUX_SHELL_QUIET, then logging to 'dest' is disabled.
  */
 int flux_shell_log_setlevel (int level, const char *dest);
 
