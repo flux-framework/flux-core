@@ -133,6 +133,14 @@ test_expect_success 'drain/undrain works on rank > 0' '
 	flux exec -r 1 flux resource drain 0 whee drained again
 '
 
+test_expect_success 'drain with no arguments works on rank > 0' '
+	flux exec -r 1 flux resource drain
+'
+
+test_expect_success 'drain with no arguments works for guest' '
+	FLUX_HANDLE_ROLEMASK=0x2 flux resource drain
+'
+
 drain_onrank() {
 	local op=$1
 	local nodeid=$2
@@ -141,14 +149,13 @@ drain_onrank() {
 }
 
 test_expect_success 'resource.drain RPC fails on rank > 0' '
-       test_must_fail drain_onrank drain 1 0 2>drain1.err &&
-       grep -i "unknown service method" drain1.err
+	test_must_fail drain_onrank drain 1 0 2>drain1.err &&
+	grep -i "unknown service method" drain1.err
 '
 
 test_expect_success 'resource.undrain RPC fails on rank > 0' '
-       test_must_fail drain_onrank undrain 1 0 2>undrain1.err &&
-       grep -i "unknown service method" undrain1.err
+	test_must_fail drain_onrank undrain 1 0 2>undrain1.err &&
+	grep -i "unknown service method" undrain1.err
 '
-
 
 test_done
