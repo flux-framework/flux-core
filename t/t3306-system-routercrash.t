@@ -106,7 +106,7 @@ test_expect_success 'resource status shows 0 offline nodes' '
 '
 
 test_expect_success 'wait for rank 0 to report subtree status of full' '
-	run_timeout 10 flux overlay status --wait full
+	run_timeout 10 flux overlay status --timeout=0 --wait full
 '
 
 test_expect_success 'ping broker 2 via broker 0' '

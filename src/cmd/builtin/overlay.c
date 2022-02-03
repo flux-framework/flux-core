@@ -23,6 +23,8 @@
 
 #include "builtin.h"
 
+static double default_timeout = 0.5;
+
 static const char *ansi_default = "\033[39m";
 static const char *ansi_red = "\033[31m";
 static const char *ansi_yellow = "\033[33m";
@@ -39,7 +41,7 @@ static struct optparse_option status_opts[] = {
                " 2=show round-trip RPC times."
     },
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "FSD",
-      .usage = "Set RPC timeout (default none)",
+      .usage = "Set RPC timeout, 0=disable (default 0.5s)",
     },
     { .name = "summary", .has_arg = 0,
       .usage = "Show only the root subtree status."
@@ -559,7 +561,9 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
 
     ctx.h = builtin_get_flux_handle (p);
     ctx.verbose = optparse_get_int (p, "verbose", 0);
-    ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
+    ctx.timeout = optparse_get_duration (p, "timeout", default_timeout);
+    if (ctx.timeout == 0)
+        ctx.timeout = -1.0; // disabled
     ctx.opt = p;
     ctx.wait = optparse_get_str (p, "wait", NULL);
     if (!validate_wait (ctx.wait))
@@ -580,35 +584,51 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
     return 0;
 }
 
-static int subcmd_gethostbyrank (optparse_t *p, int ac, char *av[])
+static int subcmd_lookup (optparse_t *p, int ac, char *av[])
 {
     int optindex = optparse_option_index (p);
     flux_t *h = builtin_get_flux_handle (p);
     struct hostlist *hostmap = get_hostmap (h);
     struct hostlist *hosts;
     struct idset *ranks;
-    unsigned int rank;
     char *s;
 
     if (optindex != ac - 1)
-        log_msg_exit ("IDSET is required");
-    if (!(ranks = idset_decode (av[optindex++])))
-        log_err_exit ("IDSET could not be decoded");
-
-    if (!(hosts = hostlist_create ()))
-        log_err_exit ("failed to create hostlist");
-
-    rank = idset_first (ranks);
-    while (rank != IDSET_INVALID_ID) {
-        const char *host;
-        if (!(host = hostlist_nth (hostmap, rank)))
-            log_msg_exit ("rank %u is not found in host map", rank);
-        if (hostlist_append (hosts, host) < 0)
-            log_err_exit ("error appending to hostlist");
-        rank = idset_next (ranks, rank);
+        log_msg_exit ("single TARGET argument is required");
+    if ((ranks = idset_decode (av[optindex]))) {
+        unsigned int rank;
+        if (!(hosts = hostlist_create ()))
+            log_err_exit ("failed to create hostlist");
+        rank = idset_first (ranks);
+        while (rank != IDSET_INVALID_ID) {
+            const char *host;
+            if (!(host = hostlist_nth (hostmap, rank)))
+                log_msg_exit ("rank %u is not found in host map", rank);
+            if (hostlist_append (hosts, host) < 0)
+                log_err_exit ("error appending to hostlist");
+            rank = idset_next (ranks, rank);
+        }
+        if (!(s = hostlist_encode (hosts)))
+            log_err_exit ("error encoding hostlist");
     }
-    if (!(s = hostlist_encode (hosts)))
-        log_err_exit ("error encoding hostlist");
+    else if ((hosts = hostlist_decode (av[optindex]))) {
+        const char *host;
+        int rank = 0;
+        if (!(ranks = idset_create (0, IDSET_FLAG_AUTOGROW)))
+            log_err_exit ("failed to create idset");
+        host = hostlist_first (hosts);
+        while (host) {
+            if ((rank = hostlist_find (hostmap, host)) < 0)
+                log_msg_exit ("host %s is not found in host map", host);
+            if (idset_set (ranks, rank) < 0)
+                log_err_exit ("error adding rank %d to idset", (int)rank);
+            host = hostlist_next (hosts);
+        }
+        if (!(s = idset_encode (ranks, IDSET_FLAG_RANGE)))
+            log_err_exit ("error encoding idset");
+    }
+    else
+        log_msg_exit ("TARGET must be a valid idset or hostlist");
 
     printf ("%s\n", s);
 
@@ -693,14 +713,26 @@ static int subcmd_disconnect (optparse_t *p, int ac, char *av[])
     int parent = optparse_get_int (p, "parent", -1);
     int rank;
     flux_future_t *f;
+    char *endptr;
 
     if (optindex != ac - 1)
-        log_msg_exit ("RANK is required");
-    rank = strtoul (av[optindex++], NULL, 10);
+        log_msg_exit ("TARGET is required");
+    errno = 0;
+    rank = strtol (av[optindex], &endptr, 10);
+    if (errno != 0 || *endptr != '\0' || rank < 0) {
+        struct hostlist *hostmap = get_hostmap (h);
+        if ((rank = hostlist_find (hostmap, av[optindex])) < 0)
+            log_msg_exit ("TARGET must be a valid rank or hostname");
+    }
+
     if (parent == -1)
         parent = lookup_parentof (h, rank); // might return -1 (unlikely)
 
-    log_msg ("asking rank %d to disconnect child rank %d", parent, rank);
+    log_msg ("asking %s (rank %d) to disconnect child %s (rank %d)",
+             flux_get_hostbyrank (h, parent),
+             parent,
+             flux_get_hostbyrank (h, rank),
+             rank);
 
     if (!(f = flux_rpc_pack (h,
                              "overlay.disconnect-subtree",
@@ -737,10 +769,10 @@ static struct optparse_subcommand overlay_subcmds[] = {
       0,
       status_opts,
     },
-    { "gethostbyrank",
-      "[OPTIONS] IDSET",
-      "lookup hostname(s) for rank(s), if available",
-      subcmd_gethostbyrank,
+    { "lookup",
+      "[OPTIONS] TARGET",
+      "translate rank idset to hostlist or the reverse",
+      subcmd_lookup,
       0,
       NULL,
     },
@@ -752,8 +784,8 @@ static struct optparse_subcommand overlay_subcmds[] = {
       NULL,
     },
     { "disconnect",
-      "[OPTIONS] RANK",
-      "disconnect a subtree rooted at RANK",
+      "[OPTIONS] TARGET",
+      "disconnect a subtree rooted at TARGET (hostname or rank)",
       subcmd_disconnect,
       0,
       disconnect_opts,
