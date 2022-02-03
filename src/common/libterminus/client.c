@@ -303,10 +303,6 @@ static void pty_client_resize (struct flux_pty_client *c)
 static void pty_die (struct flux_pty_client *c, int code, const char *message)
 {
     flux_pty_client_stop (c);
-    if (c->attached && (c->flags & FLUX_PTY_CLIENT_NOTIFY_ON_DETACH)) {
-        printf ("\033[999H[detached: %s]\033[K\n\r", message);
-        fflush (stdout);
-    }
     /*  Only overwrite c->wait_status for code > 0. O/w, we collect the
      *   actual task exit status
      */
@@ -315,6 +311,11 @@ static void pty_die (struct flux_pty_client *c, int code, const char *message)
     if (message) {
         free (c->exit_message);
         c->exit_message = strdup (message);
+    }
+    if (c->attached && (c->flags & FLUX_PTY_CLIENT_NOTIFY_ON_DETACH)) {
+        printf ("\033[999H[detached: %s]\033[K\n\r",
+                c->exit_message ? c->exit_message : "unknown reason");
+        fflush (stdout);
     }
     notify_exit (c);
 }
