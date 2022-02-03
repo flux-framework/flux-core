@@ -20,14 +20,14 @@ startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 # can be made to block indefinitely by requesting a state not expected
 # to be entered.
 test_expect_success NO_CHAIN_LINT 'start background RPC to rank 2' '
-	flux overlay status --wait=lost --rank=2 2>health.err &
+	flux overlay status --timeout=0 --wait=lost --rank=2 2>health.err &
 	echo $! >health.pid
 '
 
 # This ensures the blocking check was received on rank 2 so that
 # we don't shut down rank 2 broker before zeromq has routes the request.
 test_expect_success 'ensure background request was received on rank 2' '
-	flux overlay status --rank=2
+	flux overlay status --timeout=0 --rank=2
 '
 
 test_expect_success NO_CHAIN_LINT 'broker 1 tracked child rpc count is nonzero' '
@@ -49,7 +49,8 @@ test_expect_success NO_CHAIN_LINT 'background RPC fails with EHOSTUNREACH (track
 '
 
 test_expect_success 'new RPC to rank 2 fails with EHOSTUNREACH' '
-	test_expect_code 1 flux overlay status --rank=2 2>health2.err &&
+	test_expect_code 1 flux overlay status \
+		--timeout=0 --rank=2 2>health2.err &&
 	grep "No route to host" health2.err
 '
 
@@ -60,12 +61,12 @@ test_expect_success 'broker 1 tracked child rpc count is zero' '
 '
 
 test_expect_success NO_CHAIN_LINT 'start background RPC to rank 1' '
-	flux overlay status --wait=lost --rank=1 2>health3.err &
+	flux overlay status --timeout=0 --wait=lost --rank=1 2>health3.err &
 	echo $! >health3.pid
 '
 
 test_expect_success 'ensure background request was received on rank 1' '
-	flux overlay status --rank=1
+	flux overlay status --timeout=0 --rank=1
 '
 
 test_expect_success NO_CHAIN_LINT 'broker 0 tracked child rpc count is nonzero' '
@@ -96,7 +97,8 @@ test_expect_success NO_CHAIN_LINT 'background RPC fails with EHOSTUNREACH (track
 '
 
 test_expect_success 'new RPC to rank 1 fails with EHOSTUNREACH' '
-	test_expect_code 1 flux overlay status --rank=1 2>health4.err &&
+	test_expect_code 1 flux overlay status \
+		--timeout=0 --rank=1 2>health4.err &&
 	grep "No route to host" health4.err
 '
 

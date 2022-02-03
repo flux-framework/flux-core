@@ -24,7 +24,7 @@ test_expect_success 'tell brokers to log to stderr' '
 
 # Degraded at parent means child was lost
 test_expect_success NO_CHAIN_LINT 'start overlay status wait in the background' '
-	flux overlay status --wait degraded &
+	flux overlay status --timeout=0 --wait degraded &
 	echo $! >subtree.pid
 '
 
@@ -42,7 +42,7 @@ test_expect_success NO_CHAIN_LINT 'ensure child was lost' '
 '
 
 test_expect_success 'and child returned to service' '
-	flux overlay status --wait full
+	flux overlay status --timeout=0 --wait full
 '
 
 # Side effect: let rc1 on rank 1 finish loading resource module

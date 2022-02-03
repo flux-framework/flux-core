@@ -31,7 +31,7 @@ test_expect_success HAVE_JQ 'startctl shows rank 1 pids as -1' '
 '
 
 test_expect_success 'overlay status is partial' '
-        test "$(flux overlay status --summary)" = "partial"
+        test "$(flux overlay status --timeout=0 --summary)" = "partial"
 '
 
 test_expect_success 'resource list shows one down nodes' '

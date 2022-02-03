@@ -54,7 +54,7 @@ test_expect_success 'overlay.topology RPC with bad rank fails' '
 '
 
 test_expect_success 'flux overlay status fails on bad rank' '
-	test_must_fail flux overlay status --summary --rank 99
+	test_must_fail flux overlay status --timeout=0 --summary --rank 99
 '
 
 test_expect_success 'flux overlay fails on bad subcommand' '
@@ -62,7 +62,7 @@ test_expect_success 'flux overlay fails on bad subcommand' '
 '
 
 test_expect_success 'overlay status is full' '
-	test "$(flux overlay status --summary)" = "full"
+	test "$(flux overlay status --timeout=0 --summary)" = "full"
 '
 
 test_expect_success 'wait timeout of zero is not an immediate timeout' '
@@ -74,7 +74,8 @@ test_expect_success 'stop broker 3 with children 7,8' '
 '
 
 test_expect_success 'wait for rank 0 overlay status to be partial' '
-	run_timeout 10 flux overlay status --rank 0 --summary --wait=partial
+	run_timeout 10 flux overlay status \
+		--timeout=0 --rank 0 --summary --wait=partial
 '
 
 # Just because rank 0 is partial doesn't mean rank 3 is offline yet
@@ -85,36 +86,37 @@ test_expect_success HAVE_JQ 'wait for rank 1 to lose connection with rank 3' '
 '
 
 test_expect_success 'flux overlay status -vv works' '
-	flux overlay status -vv
+	flux overlay status --timeout=0 -vv
 '
 
 test_expect_success 'flux overlay status shows rank 3 offline' '
 	echo "3 fake3: offline" >health.exp &&
-	flux overlay status --no-pretty --no-color | grep fake3 >health.out &&
+	flux overlay status --timeout=0 --no-pretty --no-color \
+		| grep fake3 >health.out &&
 	test_cmp health.exp health.out
 '
 
 test_expect_success 'flux overlay status --summary' '
-	flux overlay status --summary
+	flux overlay status --timeout=0 --summary
 '
 
 test_expect_success 'flux overlay status --down' '
-	flux overlay status --down
+	flux overlay status --timeout=0 --down
 '
 
 test_expect_success 'flux overlay status -vv' '
-	flux overlay status -vv
+	flux overlay status --timeout=0 -vv
 '
 
 test_expect_success 'flux overlay status: 0,1:partial, 3:offline' '
-	flux overlay status --no-color --no-pretty  >health2.out &&
+	flux overlay status --timeout=0 --no-color --no-pretty  >health2.out &&
 	grep "0 fake0: partial" health2.out &&
 	grep "1 fake1: partial" health2.out &&
 	grep "3 fake3: offline" health2.out
 '
 
 test_expect_success 'flux overlay status: 0-1:partial, 3,7-8:offline' '
-	flux overlay status --no-color --no-pretty >health3.out &&
+	flux overlay status --timeout=0 --no-color --no-pretty >health3.out &&
 	grep "0 fake0: partial" health3.out &&
 	grep "1 fake1: partial" health3.out &&
 	grep "3 fake3: offline" health3.out &&
@@ -123,7 +125,7 @@ test_expect_success 'flux overlay status: 0-1:partial, 3,7-8:offline' '
 '
 
 test_expect_success 'flux overlay status: 0,1:partial, 3,7-8:offline, rest:full' '
-	flux overlay status --no-color --no-pretty >health4.out &&
+	flux overlay status --timeout=0 --no-color --no-pretty >health4.out &&
 	grep "0 fake0: partial" health4.out &&
 	grep "1 fake1: partial" health4.out &&
 	grep "3 fake3: offline" health4.out &&
@@ -152,11 +154,11 @@ test_expect_success 'ping to rank 14 fails with EHOSTUNREACH' '
 '
 
 test_expect_success 'wait for rank 0 subtree to be degraded' '
-	run_timeout 10 flux overlay status --summary --wait=degraded
+	run_timeout 10 flux overlay status --timeout=0 --summary --wait=degraded
 '
 
 test_expect_success 'wait for unknown status fails' '
-	test_must_fail flux overlay status --wait=foo
+	test_must_fail flux overlay status --timeout=0 --wait=foo
 '
 
 test_expect_success 'wait timeout works' '
@@ -164,10 +166,10 @@ test_expect_success 'wait timeout works' '
 '
 
 test_expect_success 'flux overlay status -vv' '
-	flux overlay status -vv
+	flux overlay status --timeout=0 -vv
 '
 test_expect_success 'flux overlay status -v' '
-	flux overlay status -v
+	flux overlay status --timeout=0 -v
 '
 
 test_expect_success 'flux overlay gethostbyrank with no rank fails' '
