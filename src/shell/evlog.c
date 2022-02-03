@@ -79,6 +79,10 @@ static int log_eventlog (flux_plugin_t *p,
 
 static void evlog_destroy (struct evlog *evlog)
 {
+    /*  Redirect future logging to stderr */
+    flux_shell_log_setlevel (evlog->level, "stderr");
+
+    eventlogger_flush (evlog->ev);
     eventlogger_destroy (evlog->ev);
     free (evlog);
 }
@@ -107,7 +111,7 @@ static void evlog_error (struct eventlogger *ev,
         fprintf (stderr, "evlog_error: failed to unpack message\n");
         return;
     }
-    fprintf (stderr, "flux-shell: evlog failure: %s: msg=%s\n",
+    fprintf (stderr, "evlog: %s: msg=%s\n",
                      strerror (errnum), msg);
 }
 
@@ -206,7 +210,8 @@ static int log_eventlog_start (flux_plugin_t *p,
                                    evlog) < 0)
         goto err;
 
-    flux_shell_log_setlevel (FLUX_SHELL_ERROR, "stderr");
+    /*  Disable stderr logging */
+    flux_shell_log_setlevel (FLUX_SHELL_QUIET, "stderr");
     return 0;
 err:
     evlog_destroy (evlog);

@@ -131,6 +131,14 @@ be logged to any log destination). Macros include:
    #define shell_set_quiet(n) \
    flux_shell_log_setlevel(FLUX_SHELL_NOTICE-n, NULL)
 
+As a special case, if ``level`` is set to ``FLUX_SHELL_QUIET``, then
+logging will be completely disabled to ``dest``. For example, to disable
+logging to ``stderr``, use:
+
+::
+
+   flux_shell_log_setlevel (FLUX_SHELL_QUIET, "stderr");
+
 
 RETURN VALUE
 ============
