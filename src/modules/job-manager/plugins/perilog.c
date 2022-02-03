@@ -107,6 +107,15 @@ static void perilog_proc_destructor (void **item)
 {
     if (item) {
         struct perilog_proc *proc = *item;
+        /*  Delete this perilog_proc entry from job hash first,
+         *  since job-exception handler detects if a perilog is currently
+         *  executing by checking for the perilog_proc aux_item:
+         */
+        flux_jobtap_job_aux_set (proc->p,
+                                 proc->id,
+                                 "perilog_proc",
+                                 NULL,
+                                 NULL);
         perilog_proc_destroy (proc);
         *item = NULL;
     }
