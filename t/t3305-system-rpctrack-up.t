@@ -48,7 +48,7 @@ test_expect_success 'flux overlay parentof relects k=2 topology' '
 	test $(flux overlay parentof 14) -eq 6
 '
 
-test_expect_success 'flux overlay disconnect fails with missing rank' '
+test_expect_success 'flux overlay disconnect fails with missing target' '
 	test_must_fail flux overlay disconnect
 '
 
@@ -69,8 +69,8 @@ test_expect_success 'ensure background request was received on rank 0' '
         (FLUX_URI=$(cat uri13) flux overlay status --timeout=0)
 '
 
-test_expect_success 'disconnect rank 6' '
-	flux overlay disconnect 6
+test_expect_success 'disconnect host fake6 (rank 6)' '
+	flux overlay disconnect fake6
 '
 test_expect_success 'rank 6 exited with rc=1' '
 	test_expect_code 1 $startctl wait 6

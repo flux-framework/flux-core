@@ -713,14 +713,26 @@ static int subcmd_disconnect (optparse_t *p, int ac, char *av[])
     int parent = optparse_get_int (p, "parent", -1);
     int rank;
     flux_future_t *f;
+    char *endptr;
 
     if (optindex != ac - 1)
-        log_msg_exit ("RANK is required");
-    rank = strtoul (av[optindex++], NULL, 10);
+        log_msg_exit ("TARGET is required");
+    errno = 0;
+    rank = strtol (av[optindex], &endptr, 10);
+    if (errno != 0 || *endptr != '\0' || rank < 0) {
+        struct hostlist *hostmap = get_hostmap (h);
+        if ((rank = hostlist_find (hostmap, av[optindex])) < 0)
+            log_msg_exit ("TARGET must be a valid rank or hostname");
+    }
+
     if (parent == -1)
         parent = lookup_parentof (h, rank); // might return -1 (unlikely)
 
-    log_msg ("asking rank %d to disconnect child rank %d", parent, rank);
+    log_msg ("asking %s (rank %d) to disconnect child %s (rank %d)",
+             flux_get_hostbyrank (h, parent),
+             parent,
+             flux_get_hostbyrank (h, rank),
+             rank);
 
     if (!(f = flux_rpc_pack (h,
                              "overlay.disconnect-subtree",
@@ -772,8 +784,8 @@ static struct optparse_subcommand overlay_subcmds[] = {
       NULL,
     },
     { "disconnect",
-      "[OPTIONS] RANK",
-      "disconnect a subtree rooted at RANK",
+      "[OPTIONS] TARGET",
+      "disconnect a subtree rooted at TARGET (hostname or rank)",
       subcmd_disconnect,
       0,
       disconnect_opts,

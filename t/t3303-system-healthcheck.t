@@ -214,4 +214,19 @@ test_expect_success 'flux overlay lookup fails on unknown host target' '
 	test_must_fail flux overlay lookup foo
 '
 
+test_expect_success 'flux overlay disconnect fails on unknown rank target' '
+	test_must_fail flux overlay disconnect 42 2>discon.err &&
+	grep "is not a valid rank in this instance" discon.err
+'
+
+test_expect_success 'flux overlay disconnect interprets rank w/ extra as host' '
+	test_must_fail flux overlay disconnect 42xxx 2>disconn2.err &&
+	grep "TARGET must be a valid rank or hostname" disconn2.err
+'
+
+test_expect_success 'flux overlay disconnect fails on bad input' '
+	test_must_fail flux overlay disconnect "fake2[" 2>disconn3.err &&
+	grep "TARGET must be a valid rank or hostname" disconn3.err
+'
+
 test_done
