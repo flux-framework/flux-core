@@ -172,28 +172,46 @@ test_expect_success 'flux overlay status -v' '
 	flux overlay status --timeout=0 -v
 '
 
-test_expect_success 'flux overlay gethostbyrank with no rank fails' '
-	test_must_fail flux overlay gethostbyrank
+test_expect_success 'flux overlay lookup with no target fails' '
+	test_must_fail flux overlay lookup
 '
 
-test_expect_success 'flux overlay gethostbyrank 0 works' '
+test_expect_success 'flux overlay lookup 0 works' '
 	echo fake0 >host.0.exp &&
-	flux overlay gethostbyrank 0 >host.0.out &&
+	flux overlay lookup 0 >host.0.out &&
 	test_cmp host.0.exp host.0.out
 '
 
-test_expect_success 'flux overlay gethostbyrank 0-14 works' '
+test_expect_success 'flux overlay lookup 0-14 works' '
 	echo "fake[0-14]" >host.0-14.exp &&
-	flux overlay gethostbyrank 0-14 >host.0-14.out &&
+	flux overlay lookup 0-14 >host.0-14.out &&
 	test_cmp host.0-14.exp host.0-14.out
 '
 
-test_expect_success 'flux overlay gethostbyrank fails on invalid idset' '
-	test_must_fail flux overlay gethostbyrank -- -1
+test_expect_success 'flux overlay lookup fails on invalid idset target' '
+	test_must_fail flux overlay lookup -- -1
 '
 
-test_expect_success 'flux overlay gethostbyrank fails on out of range rank' '
-	test_must_fail flux overlay gethostbyrank 100
+test_expect_success 'flux overlay lookup fails on too big rank target' '
+	test_must_fail flux overlay lookup 100
+'
+
+test_expect_success 'flux overlay lookup works on single host target' '
+	echo 2 >idset.2.exp &&
+	flux overlay lookup fake2 >idset.2.out &&
+	test_cmp idset.2.exp idset.2.out
+'
+test_expect_success 'flux overlay lookup works on multi-host target' '
+	echo "2-3" >idset.23.exp &&
+	flux overlay lookup "fake[2-3]" >idset.23.out &&
+	test_cmp idset.23.exp idset.23.out
+'
+
+test_expect_success 'flux overlay lookup fails on invalid hostlist target' '
+	test_must_fail flux overlay lookup "fake2["
+'
+test_expect_success 'flux overlay lookup fails on unknown host target' '
+	test_must_fail flux overlay lookup foo
 '
 
 test_done
