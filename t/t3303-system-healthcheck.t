@@ -65,6 +65,10 @@ test_expect_success 'overlay status is full' '
 	test "$(flux overlay status --summary)" = "full"
 '
 
+test_expect_success 'wait timeout of zero is not an immediate timeout' '
+	flux overlay status --wait=full --summary --timeout=0
+'
+
 test_expect_success 'stop broker 3 with children 7,8' '
 	$startctl kill 3 15
 '

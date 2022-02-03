@@ -23,6 +23,8 @@
 
 #include "builtin.h"
 
+static double default_timeout = 0.5;
+
 static const char *ansi_default = "\033[39m";
 static const char *ansi_red = "\033[31m";
 static const char *ansi_yellow = "\033[33m";
@@ -39,7 +41,7 @@ static struct optparse_option status_opts[] = {
                " 2=show round-trip RPC times."
     },
     { .name = "timeout", .key = 't', .has_arg = 1, .arginfo = "FSD",
-      .usage = "Set RPC timeout (default none)",
+      .usage = "Set RPC timeout, 0=disable (default 0.5s)",
     },
     { .name = "summary", .has_arg = 0,
       .usage = "Show only the root subtree status."
@@ -559,7 +561,9 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
 
     ctx.h = builtin_get_flux_handle (p);
     ctx.verbose = optparse_get_int (p, "verbose", 0);
-    ctx.timeout = optparse_get_duration (p, "timeout", -1.0);
+    ctx.timeout = optparse_get_duration (p, "timeout", default_timeout);
+    if (ctx.timeout == 0)
+        ctx.timeout = -1.0; // disabled
     ctx.opt = p;
     ctx.wait = optparse_get_str (p, "wait", NULL);
     if (!validate_wait (ctx.wait))
