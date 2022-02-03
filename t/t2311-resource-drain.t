@@ -137,6 +137,10 @@ test_expect_success 'drain with no arguments works on rank > 0' '
 	flux exec -r 1 flux resource drain
 '
 
+test_expect_success 'drain with no arguments works for guest' '
+	FLUX_HANDLE_ROLEMASK=0x2 flux resource drain
+'
+
 drain_onrank() {
 	local op=$1
 	local nodeid=$2

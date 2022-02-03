@@ -58,13 +58,12 @@ COMMANDS
    *-o,--format=FORMAT*, customizes output formatting (see below).
    *-s,--states=STATE,...* limits output to specified resource states, where
    valid states are "online", "offline", "avail", "exclude", "drain", and "all".
-   This command is restricted to the Flux instance owner.
 
 **drain** [targets] [reason ...]
    If specified without arguments, list drained nodes.  The *targets* argument
    is an IDSET or HOSTLIST specifying nodes to drain.  Any remaining arguments
    are assumed to be a reason to be recorded with the drain event.  This
-   command is restricted to the Flux instance owner.
+   command, when run with arguments, is restricted to the Flux instance owner.
 
 **undrain** targets
    The *targets* argument is an IDSET or HOSTLIST specifying nodes to undrain.
