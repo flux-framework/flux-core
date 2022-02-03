@@ -141,14 +141,13 @@ drain_onrank() {
 }
 
 test_expect_success 'resource.drain RPC fails on rank > 0' '
-       test_must_fail drain_onrank drain 1 0 2>drain1.err &&
-       grep -i "unknown service method" drain1.err
+	test_must_fail drain_onrank drain 1 0 2>drain1.err &&
+	grep -i "unknown service method" drain1.err
 '
 
 test_expect_success 'resource.undrain RPC fails on rank > 0' '
-       test_must_fail drain_onrank undrain 1 0 2>undrain1.err &&
-       grep -i "unknown service method" undrain1.err
+	test_must_fail drain_onrank undrain 1 0 2>undrain1.err &&
+	grep -i "unknown service method" undrain1.err
 '
-
 
 test_done
