@@ -230,6 +230,7 @@ void flux_pty_close (struct flux_pty *pty, int status)
         if (pty->leader >= 0)
             close (pty->leader);
         free (pty->follower);
+        aux_destroy (&pty->aux);
         free (pty);
     }
 }
