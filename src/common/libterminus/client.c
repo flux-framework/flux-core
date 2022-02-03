@@ -312,7 +312,10 @@ static void pty_die (struct flux_pty_client *c, int code, const char *message)
      */
     if (code)
         c->wait_status = code << 8;
-    c->exit_message = strdup (message);
+    if (message) {
+        free (c->exit_message);
+        c->exit_message = strdup (message);
+    }
     notify_exit (c);
 }
 
@@ -326,6 +329,7 @@ static void pty_client_exit (struct flux_pty_client *c, flux_future_t *f)
         llog_error (c, "rpc unpack: %s", future_strerror (f, errno));
         message="unknown reason";
     }
+    free (c->exit_message);
     c->exit_message = strdup (message);
     flux_pty_client_stop (c);
 }
@@ -335,7 +339,7 @@ static void pty_server_cb (flux_future_t *f, void *arg)
     struct flux_pty_client *c = arg;
     const char *type;
     if (flux_rpc_get_unpack (f, "{s:s}", "type", &type) < 0) {
-        const char *message = c->exit_message;
+        const char *message = NULL;
         int code = 1;
         if (errno == ENOSYS)
             message = "No such session";
