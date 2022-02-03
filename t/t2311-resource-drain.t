@@ -133,6 +133,10 @@ test_expect_success 'drain/undrain works on rank > 0' '
 	flux exec -r 1 flux resource drain 0 whee drained again
 '
 
+test_expect_success 'drain with no arguments works on rank > 0' '
+	flux exec -r 1 flux resource drain
+'
+
 drain_onrank() {
 	local op=$1
 	local nodeid=$2

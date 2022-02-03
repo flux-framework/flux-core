@@ -98,7 +98,7 @@ def drain_list():
         "reason": "REASON",
         "nodelist": "NODELIST",
     }
-    resp = RPC(flux.Flux(), "resource.status").get()
+    resp = RPC(flux.Flux(), "resource.status", nodeid=0).get()
     rset = ResourceSet(resp["R"])
     nodelist = rset.nodelist
 
