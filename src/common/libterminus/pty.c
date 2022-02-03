@@ -57,6 +57,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/aux.h"
 
+#define LLOG_SUBSYSTEM "pty"
 #include "src/common/libutil/llog.h"
 
 #include "pty.h"

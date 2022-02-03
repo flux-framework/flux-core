@@ -56,8 +56,11 @@
 
 #include <flux/idset.h>
 
-#include "src/common/libczmqcontainers/czmq_containers.h"
+#define LLOG_SUBSYSTEM "pty"
+
 #include "src/common/libutil/llog.h"
+
+#include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libterminus/pty.h"
 
 #include "terminus.h"
