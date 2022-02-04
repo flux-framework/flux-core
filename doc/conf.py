@@ -68,6 +68,10 @@ domainrefs = {
         'text': '%s(7)',
         'url': 'https://linux.die.net/man/7/%s',
     },
+    'linux:man8': {
+        'text': '%s(8)',
+        'url': 'https://linux.die.net/man/8/%s',
+    },
 }
 
 # Disable "smartquotes" to avoid things such as turning long-options
