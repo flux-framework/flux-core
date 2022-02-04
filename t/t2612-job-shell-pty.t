@@ -38,6 +38,7 @@ test_expect_success HAVE_JQ 'pty: submit a job with an interactive pty' '
 	id=$(flux mini submit --flags waitable -o pty.interactive bash) &&
 	terminus_jobid $id list &&
 	flux job cancel ${id} &&
+	$runpty flux job attach ${id} && # pty waiting for first client attach
 	test_must_fail flux job wait $id
 '
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'pty: run job with pty' '
@@ -130,6 +131,7 @@ test_expect_success HAVE_JQ 'pty: pty.interactive forces a pty on rank 0' '
 		bash) &&
 	terminus_jobid $id list &&
 	flux job cancel ${id} &&
+	flux job attach ${id} &&
 	flux job eventlog -p guest.output ${id} | grep "adding pty to rank 0" &&
 	test_must_fail flux job wait $id
 '
