@@ -57,6 +57,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/aux.h"
 
+#define LLOG_SUBSYSTEM "pty"
 #include "src/common/libutil/llog.h"
 
 #include "pty.h"
@@ -229,6 +230,7 @@ void flux_pty_close (struct flux_pty *pty, int status)
         if (pty->leader >= 0)
             close (pty->leader);
         free (pty->follower);
+        aux_destroy (&pty->aux);
         free (pty);
     }
 }
