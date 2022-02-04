@@ -32,8 +32,8 @@ static void test_invalid_args ()
 
     lives_ok ({flux_pty_set_log (NULL, NULL, NULL);},
               "flux_pty_set_log does nothing with NULL args");
-    lives_ok ({flux_pty_close (NULL, 0);},
-              "flux_pty_close does nothing with NULL arg");
+    lives_ok ({flux_pty_destroy (NULL);},
+              "flux_pty_destroy does nothing with NULL arg");
 
     ok (flux_pty_kill (NULL, SIGINT) < 0 && errno == EINVAL,
         "flux_pty_kill() with NULL pty returns EINVAL");
@@ -97,7 +97,7 @@ static void test_invalid_args ()
     ok (flux_pty_aux_get (NULL, NULL) == NULL && errno == EINVAL,
         "flux_pty_aux_get (NULL, NULL) fails");
 
-    flux_pty_close (pty, 0);
+    flux_pty_destroy (pty);
     flux_pty_client_destroy (c);
 }
 
@@ -111,7 +111,7 @@ static void test_empty_server ()
         "pty leader fd is valid");
     ok (flux_pty_client_count (pty) == 0,
         "pty client count is 0 for newly created pty server");
-    flux_pty_close (pty, 0);
+    flux_pty_destroy (pty);
 }
 
 static void tap_logger (void *arg,
@@ -168,7 +168,7 @@ static int pty_server (flux_t *h, void *arg)
     diag ("pty server exiting");
 out:
     flux_msg_handler_destroy (mh);
-    flux_pty_close (pty, 0);
+    flux_pty_destroy (pty);
     return rc;
 }
 
@@ -467,7 +467,7 @@ void test_monitor ()
     ok (total == 12,
         "monitor received 12 bytes");
 
-    flux_pty_close (pty, 0);
+    flux_pty_destroy (pty);
     flux_close (h);
 }
 

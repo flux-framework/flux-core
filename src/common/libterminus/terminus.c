@@ -69,6 +69,7 @@ extern char **environ;
 
 struct terminus_session {
     struct flux_terminus_server *server;
+    int refcount;
 
     char *name;
     char topic[128];
@@ -109,6 +110,30 @@ struct flux_terminus_server {
     zlist_t *empty_waiters;
 };
 
+static void terminus_session_incref (struct terminus_session *s)
+{
+    if (s)
+        s->refcount++;
+}
+
+static void terminus_session_decref (struct terminus_session *s)
+{
+    if (s && --s->refcount == 0) {
+        if (s->id >= 0)
+            idset_clear (s->server->idset, s->id);
+        flux_pty_destroy (s->pty);
+        flux_msg_handler_destroy (s->mh);
+        free (s->name);
+        flux_subprocess_destroy (s->p);
+        free (s);
+    }
+}
+
+static void terminus_session_destroy (struct terminus_session *s)
+{
+    terminus_session_decref (s);
+}
+
 static void notify_empty_waiters (struct flux_terminus_server *ts)
 {
     struct empty_waiter *w;
@@ -128,22 +153,13 @@ static void server_remove_session (struct flux_terminus_server *ts,
     }
 }
 
-
-static void try_session_close (struct terminus_session *s)
-{
-    if (!s->wait_on_attach) {
-        flux_pty_close (s->pty, flux_subprocess_status (s->p));
-        s->pty = NULL;
-        server_remove_session (s->server, s);
-    }
-}
-
 static void session_msg_handler (flux_t *h,
                                  flux_msg_handler_t *mh,
                                  const flux_msg_t *msg,
                                  void *arg)
 {
     struct terminus_session *s = arg;
+    terminus_session_incref (s);
     if (flux_pty_sendmsg (s->pty, msg) < 0)
         llog_error (s->server, "flux_pty_sendmsg: %s", strerror (errno));
 
@@ -152,8 +168,7 @@ static void session_msg_handler (flux_t *h,
      */
     if (s->wait_on_attach && flux_pty_client_count (s->pty) > 0)
         s->wait_on_attach = false;
-    if (s->exited)
-        try_session_close (s);
+    terminus_session_decref (s);
 }
 
 static int terminus_msg_handler_start (struct terminus_session *s)
@@ -171,21 +186,10 @@ static int terminus_msg_handler_start (struct terminus_session *s)
     return 0;
 }
 
-
-static void terminus_session_destroy (struct terminus_session *s)
+static void session_complete (struct flux_pty *pty)
 {
-    if (s) {
-        if (s->id >= 0)
-            idset_clear (s->server->idset, s->id);
-        /* Should already be closed when process exits, but
-         *  we try again anyway to avoid leaks
-         */
-        flux_pty_close (s->pty, 0);
-        flux_msg_handler_destroy (s->mh);
-        free (s->name);
-        flux_subprocess_destroy (s->p);
-        free (s);
-    }
+    struct terminus_session *s = flux_pty_aux_get (pty, "terminus_session");
+    server_remove_session (s->server, s);
 }
 
 static struct terminus_session *
@@ -198,6 +202,7 @@ terminus_session_create (struct flux_terminus_server *ts,
     if (!s)
         return NULL;
 
+    s->refcount = 1;
     s->id = id;
     s->server = ts;
     s->wait_on_attach = wait;
@@ -206,7 +211,13 @@ terminus_session_create (struct flux_terminus_server *ts,
         goto error;
     if (!(s->pty = flux_pty_open ()))
         goto error;
-    flux_pty_set_flux (s->pty, ts->h);
+    if (flux_pty_set_flux (s->pty, ts->h) < 0
+        || flux_pty_aux_set (s->pty, "terminus_session", s, NULL) < 0)
+        goto error;
+    flux_pty_wait_on_close (s->pty);
+    flux_pty_set_complete_cb (s->pty, session_complete);
+    if (s->wait_on_attach)
+        flux_pty_wait_for_client (s->pty);
     if (ts->llog)
         flux_pty_set_log (s->pty, ts->llog, ts->llog_data);
     if (snprintf (s->topic,
@@ -257,7 +268,7 @@ static int terminus_session_kill (struct terminus_session *s, int signum)
      *  Close the pty now to avoid a hang.
      */
     if (s->exited) {
-        try_session_close (s);
+        server_remove_session (s->server, s);
         return 0;
     }
     /*  First kill processes using pty, then signal process group,
@@ -266,6 +277,7 @@ static int terminus_session_kill (struct terminus_session *s, int signum)
     if (flux_pty_kill (s->pty, signum) < 0
         || kill (-flux_subprocess_pid (s->p), signum) < 0)
         return -1;
+
     return 0;
 }
 
@@ -301,10 +313,9 @@ int flux_terminus_server_session_close (struct flux_terminus_server *ts,
             break;
         s = zlist_next (ts->sessions);
     }
-    if (s)  {
-        flux_pty_close (s->pty, status);
-        s->pty = NULL;
-        server_remove_session (ts, s);
+    if (s) {
+        s->exited = true;
+        flux_pty_exited (s->pty, status);
         return 0;
     }
     errno = ENOENT;
@@ -319,7 +330,7 @@ static void terminus_session_exit (flux_subprocess_t *p)
                 (long) flux_subprocess_pid (p),
                 flux_subprocess_status (p));
     s->exited = true;
-    try_session_close (s);
+    flux_pty_exited (s->pty, flux_subprocess_status (p));
 }
 
 static int terminus_session_start (struct terminus_session *s,
