@@ -22,7 +22,7 @@ ExecStart=/bin/bash -c '\
   -Sbroker.quorum-timeout=none \
 '
 ExecReload=@X_BINDIR@/flux config reload
-Restart=on-success
+Restart=always
 RestartSec=5s
 User=flux
 Group=flux
