@@ -212,6 +212,21 @@ error:
     return "(null)";
 }
 
+int flux_get_rankbyhost (flux_t *h, const char *host)
+{
+    struct attr_cache *c;
+
+    if (!(c = get_attr_cache (h)))
+        return -1;
+    if (!c->hostlist) {
+        const char *val;
+        if (!(val = flux_attr_get (h, "hostlist"))
+            || !(c->hostlist = hostlist_decode (val)))
+            return -1;
+    }
+    return hostlist_find (c->hostlist, host);
+}
+
 int flux_get_instance_starttime (flux_t *h, double *starttimep)
 {
     flux_future_t *f;

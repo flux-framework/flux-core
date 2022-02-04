@@ -300,6 +300,19 @@ int main (int argc, char *argv[])
         && !strcmp (value, "(null)"),
         "flux_get_hostbyrank 3 returns (null)");
 
+    /* test flux_get_rankbyhost () */
+    errno = 0;
+    ok (flux_get_rankbyhost (NULL, "foo2") < 0 && errno == EINVAL,
+        "flux_get_rankbyhost h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_get_rankbyhost (h, NULL) < 0 && errno == EINVAL,
+        "flux_get_rankbyhost host=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_get_rankbyhost (h, "foo3") < 0 && errno == ENOENT,
+        "flux_get_rankbyhost host=foo3 fails with ENOENT");
+    ok (flux_get_rankbyhost (h, "foo2") == 2,
+        "flux_get_rankbyhost host=foo2 returns 2");
+
     /* test flux_get_instance_starttime */
     double d;
     ok (flux_get_instance_starttime (h, &d) == 0 && d == 3.14,

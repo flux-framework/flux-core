@@ -66,6 +66,12 @@ int flux_get_size (flux_t *h, uint32_t *size);
  */
 const char *flux_get_hostbyrank (flux_t *h, uint32_t rank);
 
+/* Find the lowest numbered broker rank running on 'host', by consulting
+ * the "hostlist" attribute.
+ * Returns rank on success, -1 on failure with errno set.
+ */
+int flux_get_rankbyhost (flux_t *h, const char *host);
+
 /* Look up the broker.starttime attribute on rank 0.
  * The instance uptime is flux_reactor_now() - starttime.
  * N.B. if the instance has been restarted, this value is the most
