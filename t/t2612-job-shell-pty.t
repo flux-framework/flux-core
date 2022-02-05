@@ -35,10 +35,10 @@ terminus_jobid() {
 }
 
 test_expect_success HAVE_JQ 'pty: submit a job with an interactive pty' '
-	id=$(flux mini submit --flags waitable -o pty.interactive bash) &&
+	id=$(flux mini submit --flags waitable -o pty.interactive tty) &&
 	terminus_jobid $id list &&
-	flux job cancel ${id} &&
-	test_must_fail flux job wait $id
+	$runpty flux job attach ${id} &&
+	flux job wait $id
 '
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'pty: run job with pty' '
 	printf "PS1=XXX:\n" >ps1.rc
@@ -55,34 +55,9 @@ test_expect_success HAVE_JQ,NO_CHAIN_LINT 'pty: run job with pty' '
 '
 # Interactively attach to pty many times to ensure no hangs, etc.
 #
-# Ensure `flux job attach` has a chance to attach to pty before `stty size`
-#  is executed by blocking and waiting for `test-ready` key to appear in
-#  the job's kvs namespace.
-#
-# Test driver waits for "shell.start" event to be output by `flux-job attach`
-#  which guarantees we're attached to pty, since this is done synchronously
-#  in flux-job attach after the `shell.init` event.
-#
-# Finally, put the test-ready key into kvs, unblocking the test job so
-#  it can proceed to print result.
-#
 test_expect_success NO_CHAIN_LINT 'pty: interactive job with pty' '
-	cat <<-EOF >stty-test.sh &&
-	#!/bin/sh
-	# Do not continue until test is ready:
-	flux kvs get --waitcreate --count=1 --label test-ready
-	stty size
-	EOF
-	chmod +x stty-test.sh &&
-	for i in `seq 0 10`; do
-	    id=$(flux mini submit -n1 -o pty.interactive ./stty-test.sh)
-	    { $runpty -w 80x25 -o log.interactive.$i \
-	        flux job attach --show-exec ${id} & } &&
-	    pid=$! &&
-	    $waitfile -t 20 -vp "shell.start" log.interactive.$i &&
-	    flux kvs put -N $(flux job namespace ${id}) test-ready=${i} &&
-	    $waitfile -t 20 -vp "25 80" log.interactive.$i
-	done
+	flux mini submit --cc=1-10 -n1 -o pty.interactive stty size >jobids &&
+	for id in $(cat jobids); do $runpty flux job attach $id; done
 '
 
 test_expect_success 'pty: client is detached from terminated job' '
@@ -124,19 +99,18 @@ test_expect_success 'pty: pty.ranks can take an idset' '
 	test_must_fail grep "not a tty" ptyss.out
 '
 test_expect_success HAVE_JQ 'pty: pty.interactive forces a pty on rank 0' '
-	id=$(flux mini submit --flags waitable \
+	id=$(flux mini submit \
 		-o pty.interactive -o pty.ranks=1 \
 		-n2 \
-		bash) &&
+		tty) &&
 	terminus_jobid $id list &&
-	flux job cancel ${id} &&
-	flux job eventlog -p guest.output ${id} | grep "adding pty to rank 0" &&
-	test_must_fail flux job wait $id
+	$runpty flux job attach ${id} &&
+	flux job eventlog -p guest.output ${id} | grep "adding pty to rank 0"
 '
 test_expect_success 'pty: -o pty.interactive and -o pty.capture can be used together' '
 	id=$(flux mini submit -o pty.interactive -o pty.capture tty) &&
-	flux job attach $id >ptyim.out 2>&1 &&
-	flux job attach $id
+	$runpty flux job attach $id >ptyim.out 2>&1 &&
+	$runpty flux job attach $id
 '
 test_expect_success 'pty: unsupported -o pty.<opt> generates exception' '
 	test_must_fail flux mini run -o pty.foo hostname

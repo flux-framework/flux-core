@@ -80,12 +80,15 @@ struct flux_pty {
     char *follower;
     flux_watcher_t *fdw;
 
-    int flags;
-    int exit_status;
+    bool wait_for_client;
+    bool wait_on_close;
+    bool exited;
+    int status;
 
     zlist_t *clients;
 
     pty_monitor_f monitor;
+    pty_complete_f complete;
     struct aux_item *aux;
 };
 
@@ -162,11 +165,11 @@ static int pty_client_send_exit (struct flux_pty *pty,
     return flux_respond_error (pty->h, c->req, ENODATA, NULL);
 }
 
-static int pty_clients_notify_exit (struct flux_pty *pty, int status)
+static int pty_clients_notify_exit (struct flux_pty *pty)
 {
     struct pty_client *c = zlist_first (pty->clients);
     while (c) {
-        if (pty_client_send_exit (pty, c, "session exiting", status) < 0)
+        if (pty_client_send_exit (pty, c, "session exiting", pty->status) < 0)
             llog_error (pty, "send_exit: %s", flux_strerror (errno));
         c = zlist_next (pty->clients);
     }
@@ -200,6 +203,11 @@ int flux_pty_kill (struct flux_pty *pty, int sig)
         errno = EINVAL;
         return -1;
     }
+    /*  Disable wait-on-client if being killed (except for terminal resize) */
+    if (sig != SIGWINCH) {
+        pty->wait_for_client = false;
+        pty->wait_on_close = false;
+    }
     if (ioctl (pty->leader, TIOCSIG, sig) >= 0)
         return 0;
     llog_debug (pty, "ioctl (TIOCSIG): %s", strerror (errno));
@@ -220,11 +228,11 @@ static void pty_clients_destroy (struct flux_pty *pty)
     }
 }
 
-void flux_pty_close (struct flux_pty *pty, int status)
+void flux_pty_destroy (struct flux_pty *pty)
 {
     if (pty) {
         flux_watcher_destroy (pty->fdw);
-        pty_clients_notify_exit (pty, status);
+        pty_clients_notify_exit (pty);
         pty_clients_destroy (pty);
         zlist_destroy (&pty->clients);
         if (pty->leader >= 0)
@@ -232,6 +240,25 @@ void flux_pty_close (struct flux_pty *pty, int status)
         free (pty->follower);
         aux_destroy (&pty->aux);
         free (pty);
+    }
+}
+
+static void check_pty_complete (struct flux_pty *pty)
+{
+    llog_debug (pty, "wait_for_client=%d wait_on_close=%d exited=%d",
+                pty->wait_for_client, pty->wait_on_close, pty->exited);
+    if (!pty->wait_for_client
+        && !pty->wait_on_close
+        && pty->exited)
+        (*pty->complete) (pty);
+}
+
+void flux_pty_exited (struct flux_pty *pty, int status)
+{
+    if (pty) {
+        pty->status = status;
+        pty->exited = true;
+        check_pty_complete (pty);
     }
 }
 
@@ -251,6 +278,18 @@ int flux_pty_client_count (struct flux_pty *pty)
         return zlist_size (pty->clients);
     }
     return 0;
+}
+
+void flux_pty_wait_for_client (struct flux_pty *pty)
+{
+    if (pty)
+        pty->wait_for_client = true;
+}
+
+void flux_pty_wait_on_close (struct flux_pty *pty)
+{
+    if (pty)
+        pty->wait_on_close = true;
 }
 
 struct flux_pty * flux_pty_open ()
@@ -273,9 +312,11 @@ struct flux_pty * flux_pty_open ()
     if (ioctl (pty->leader, TIOCSWINSZ, &ws) < 0)
         goto err;
 
+    pty->complete = flux_pty_destroy;
+
     return pty;
 err:
-    flux_pty_close (pty, 1);
+    flux_pty_destroy (pty);
     return NULL;
 }
 
@@ -298,8 +339,17 @@ void flux_pty_monitor (struct flux_pty *pty, pty_monitor_f fn)
     /*  If a monitor function is provided, and there are currently no
      *   other clients, ensure the pty fd_watcher is started.
      */
-    if (fn != NULL && zlist_size (pty->clients) == 0)
+    if (fn != NULL
+        && !pty->wait_for_client
+        && zlist_size (pty->clients) == 0) {
         flux_watcher_start (pty->fdw);
+    }
+}
+
+void flux_pty_set_complete_cb (struct flux_pty *pty, pty_complete_f fn)
+{
+    if (pty)
+        pty->complete = fn;
 }
 
 int flux_pty_leader_fd (struct flux_pty *pty)
@@ -391,10 +441,14 @@ static void pty_read (flux_reactor_t *r,
             return;
         /*
          *  pty: EIO indicates pty follower has closed.
-         *   Stop the fd watcher and continue.
+         *   stop the fd watcher, disable wait_on_close and
+         *   check to see if the pty has met all conditions
+         *   for completion:
          */
         if (errno == EIO) {
             flux_watcher_stop (pty->fdw);
+            pty->wait_on_close = false;
+            check_pty_complete (pty);
             return;
         }
         llog_error (pty, "read: %s", strerror (errno));
@@ -481,8 +535,11 @@ static int pty_attach (struct flux_pty *pty, const flux_msg_t *msg)
         goto err;
 
     /*  Only start watching tty fd when first client attaches */
-    if (zlist_size (pty->clients) == 0)
+    if (zlist_size (pty->clients) == 0 && c->read_enabled) {
         flux_watcher_start (pty->fdw);
+        /* Done waiting for first client */
+        pty->wait_for_client = false;
+    }
     if (zlist_append (pty->clients, c) < 0) {
         errno = ENOMEM;
         goto err;
@@ -552,6 +609,7 @@ int flux_pty_sendmsg (struct flux_pty *pty, const flux_msg_t *msg)
         /* pty_attach() starts a streaming response. Skip singleton
          * response below
          */
+        check_pty_complete (pty);
         return 0;
     }
 

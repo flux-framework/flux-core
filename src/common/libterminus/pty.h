@@ -32,18 +32,41 @@ typedef void (*pty_monitor_f) (struct flux_pty *pty,
                                void *data,
                                int len);
 
+typedef void (*pty_complete_f) (struct flux_pty *pty);
+
 /* server:
  */
+
 
 /*  Open a new server-side pty handle.
  */
 struct flux_pty *flux_pty_open (void);
 
-/*  Close pty server - `status` may be set to the wait status of a
- *   terminating child process of the pty. This status will be forwarded
- *   to any currently connected clients.
+void flux_pty_destroy (struct flux_pty *pty);
+
+/*
+ * Notify pty that associated process has exited.
+ *
+ * This may trigger the exit callback immediately, unless data
+ *  is still being read from the pty, or the pty is waiting
+ *  for the first client to attach.
  */
-void flux_pty_close (struct flux_pty *pty, int status);
+void flux_pty_exited (struct flux_pty *pty, int status);
+
+/* Set wait-for-client flag on 'pty'. This disables read from the pty
+ *  fd until the first client attaches so that no data is lost. Use
+ *  of flux_pty_monitor() does not count as a client in this case, which
+ *  allows a pty to be monitored, while still waiting for the first
+ *  real client to attach.
+ */
+void flux_pty_wait_for_client (struct flux_pty *pty);
+
+/* Set wait-on-close flag on 'pty'. This ensures the pty does not
+ *  "complete" until all data has been read from the pty.
+ *  (only should be set if a process is attached to the pty with
+ *   flux_pty_attach())
+ */
+void flux_pty_wait_on_close (struct flux_pty *pty);
 
 /*  Send signal `sig` to the foreground process group of `pty`.
  */
@@ -56,9 +79,15 @@ void flux_pty_set_log (struct flux_pty *pty,
                        void *log_data);
 
 /*  Set a callback to receive data events locally.
- *  (Usefully if we want to locally monitor the pty for logging, etc.)
+ *  (Useful if we want to locally monitor the pty for logging, etc.)
  */
 void flux_pty_monitor (struct flux_pty *pty, pty_monitor_f fn);
+
+/*  Set a callback which is triggered when a pty has exited,
+ *   has read all data from the pty, and is not waiting for any
+ *   client to attach. The default handler calls flux_pty_destroy ().
+ */
+void flux_pty_set_complete_cb (struct flux_pty *pty, pty_complete_f fn);
 
 int flux_pty_leader_fd (struct flux_pty *pty);
 

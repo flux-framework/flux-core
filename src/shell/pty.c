@@ -230,6 +230,14 @@ static int pty_getopt (flux_shell_t *shell,
     return 1;
 }
 
+static void server_empty (struct flux_terminus_server *ts, void *arg)
+{
+    flux_shell_t *shell = arg;
+    if (flux_shell_remove_completion_ref (shell, "terminus.server") < 0)
+        shell_log_errno ("failed to remove completion ref for terminus.server");
+}
+
+
 static int pty_init (flux_plugin_t *p,
                      const char *topic,
                      flux_plugin_arg_t *args,
@@ -254,8 +262,12 @@ static int pty_init (flux_plugin_t *p,
                                 "service", &shell_service) < 0)
         return shell_log_errno ("flux_shell_info_unpack: service");
 
-    if (!(t = shell_terminus_server_start (shell, shell_service)))
+    /*  Start terminus server for all shells
+     */
+    if (!(t = shell_terminus_server_start (shell, shell_service))) {
+        shell_log_errno ("pty_init: error setting up terminal server");
         return -1;
+    }
 
     if ((rc = pty_getopt (shell,
                           shell_rank,
@@ -263,6 +275,24 @@ static int pty_init (flux_plugin_t *p,
                           &capture,
                           &interactive)) != 1)
         return rc;
+
+    if (idset_count (targets) > 0) {
+        /*
+         *   If there is at least one pty active on this shell rank,
+         *    ensure shell doesn't exit until the terminus server is complete,
+         *    even if all tasks have exited. This is required to support
+         *    an interactive attach from a pty client, which may come after
+         *    the task has exited.
+         */
+        if (flux_shell_add_completion_ref (shell, "terminus.server") < 0
+            || flux_terminus_server_notify_empty (t,
+                                                  server_empty,
+                                                  shell) < 0) {
+            shell_log_errno ("failed to enable pty server notification");
+            return -1;
+        }
+    }
+
 
     /*  Create a pty session for each local target
      */
@@ -285,6 +315,11 @@ static int pty_init (flux_plugin_t *p,
         if (flux_shell_aux_set (shell, key, pty, NULL) < 0)
             goto error;
 
+        /*  Always wait for the pty to be "closed" so that we ensure
+         *   all data is read before the pty exits
+         */
+        flux_pty_wait_on_close (pty);
+
         /*  For an interactive pty, add the endpoint in the shell.init
          *   event context. This lets `flux job attach` or other entities
          *   know that the pty is ready for attach, and also lets them
@@ -300,11 +335,20 @@ static int pty_init (flux_plugin_t *p,
                 shell_log_errno ("flux_shell_service_register");
                 goto error;
             }
-        }
-        if (capture) {
-            /*  If non-interactive, monitor this pty and redirect data to
-             *   the same place as stdout
+            /*  Ensure that rank 0 pty waits for client to attach
+             *   in pty.interactive mode, even if pty.capture is also
+             *   specified.
              */
+            flux_pty_wait_for_client (pty);
+        }
+
+        /*  Enable capture of pty output to stdout if capture flag is set.
+         *
+         *  Always enable capture on nonzero ranks though, otherwise
+         *   reading from the pty will never be started since nonozero
+         *   ranks do not support interactive attach.
+         */
+        if (capture || rank != 0) {
             if (flux_pty_aux_set (pty, "shell", shell, NULL) < 0
                 || flux_pty_aux_set (pty, "rank", int2ptr (rank), NULL) < 0) {
                 shell_log_errno ("flux_pty_aux_set");
@@ -390,6 +434,7 @@ static int pty_task_exit (flux_plugin_t *p,
         if (!(t = flux_shell_aux_get (shell, "builtin::terminus")))
             return shell_log_errno ("failed to get terminus and pty objects");
 
+        shell_debug ("close pty session rank=%d status=%d", rank, status);
         if (flux_terminus_server_session_close (t, pty, status) < 0)
             shell_die_errno (1, "pty attach failed");
     }
