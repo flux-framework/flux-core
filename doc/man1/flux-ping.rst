@@ -22,13 +22,13 @@ give insight into how various addresses are routed.
 
 *target* may be the name of a Flux service, e.g. "kvs".
 flux-ping(1) will send a request to "kvs.ping". As a shorthand,
-*target* can include a rank prefix delimited by an exclamation point.
+*target* can include a rank or host prefix delimited by an exclamation point.
 "flux ping 4!kvs" is equivalent to "flux ping --rank 4 kvs" (see --rank
 option below). Don't forget to quote the exclamation point if it is
 interpreted by your shell.
 
-As a shorthand, *target* may also simply be a rank by itself
-indicating that the broker on that rank or ranks, rather than a Flux
+As a shorthand, *target* may also simply be a rank or host by itself
+indicating that the broker on that rank/host, rather than a Flux
 service, is to be pinged. "flux ping 1" is equivalent to
 "flux ping --rank 1 broker".
 
