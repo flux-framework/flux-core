@@ -214,48 +214,56 @@ void timer_cb (flux_reactor_t *r, flux_watcher_t *w, int revents, void *arg)
     }
 }
 
-int parse_nodeid (const char *s, uint32_t *np)
+int parse_nodeid (struct ping_ctx *ctx, const char *input, uint32_t *nodeid)
 {
-    uint32_t n;
+    int rank;
     char *endptr;
 
+    if (!strcmp (input, "any")) {
+        *nodeid = FLUX_NODEID_ANY;
+        return 0;
+    }
+    if (!strcmp (input, "upstream")) {
+        *nodeid = FLUX_NODEID_UPSTREAM;
+        return 0;
+    }
+    if ((rank = flux_get_rankbyhost (ctx->h, input)) >= 0) {
+        *nodeid = rank;
+        return 0;
+    }
     errno = 0;
-    n = strtoul (s, &endptr, 10);
-    if (errno != 0 || *endptr != '\0')
-        return -1;
-    *np = n;
-    return 0;
+    rank = strtol (input, &endptr, 10);
+    if (errno == 0 && *endptr == '\0' && rank >= 0) {
+        *nodeid = rank;
+        return 0;
+    }
+    return -1;
 }
 
-/* Parse 's' to obtain the ping topic string and (optionally) nodeid.
- * If nodeid is non-NULL, then try to parse a nodeid from 's'
- * looking for nodeid!service expressions (including nodeid=any and upstream),
- * or just a number in which case the service is assumed to be "broker".
- */
-void parse_service (const char *s, uint32_t *nodeid, char **topic)
+void parse_target (struct ping_ctx *ctx, const char *target)
 {
+    char *cpy;
+    char *service;
 
-    char *cpy = NULL;
-    char *service = NULL;
+    if (!(cpy = strdup (target)))
+        log_err_exit ("out of memory");
 
-    if (nodeid) {
-        if (!(cpy = strdup (s)))
-            log_err_exit ("strdup");
-        if ((service = strchr (cpy, '!')))
-            *service++ = '\0';
-        else
-            service = "broker";
-        if (!strcmp (cpy, "any"))
-            *nodeid = FLUX_NODEID_ANY;
-        else if (!strcmp (cpy, "upstream"))
-            *nodeid = FLUX_NODEID_UPSTREAM;
-        else if (parse_nodeid (cpy, nodeid) < 0) {
-            *nodeid = FLUX_NODEID_ANY; // back where we started
-            service = NULL;
-        }
+    /* TARGET specifies nodeid!service */
+    if ((service = strchr (cpy, '!'))) {
+        *service++ = '\0';
+        if (parse_nodeid (ctx, cpy, &ctx->nodeid) < 0)
+            log_msg_exit ("invalid nodeid/host: '%s'", cpy);
     }
-    if (asprintf (topic, "%s.ping", service ? service : s) < 0)
-        log_err_exit ("asprintf");
+    /* TARGET only specifies service, assume nodeid is ANY */
+    else if (parse_nodeid (ctx, cpy, &ctx->nodeid) < 0) {
+        service = cpy;
+        ctx->nodeid = FLUX_NODEID_ANY;
+    }
+    /* TARGET only specifies nodeid, assume service is "broker" */
+    else
+        service = "broker";
+    if (asprintf (&ctx->topic, "%s.ping", service) < 0)
+        log_err_exit ("out of memory");
     free (cpy);
 }
 
@@ -267,6 +275,7 @@ int main (int argc, char *argv[])
     optparse_t *opts;
     struct ping_ctx ctx;
     int optindex;
+    char *target;
 
     memset (&ctx, 0, sizeof (ctx));
 
@@ -279,6 +288,12 @@ int main (int argc, char *argv[])
         log_msg_exit ("optparse_add_option_table");
     if ((optindex = optparse_parse_args (opts, argc, argv)) < 0)
         exit (1);
+    if (optindex != argc - 1) {
+        optparse_print_usage (opts);
+        exit (1);
+    }
+    if (!(target = strdup (argv[optindex])))
+        log_msg_exit ("out of memory");
 
     pad_bytes = optparse_get_int (opts, "pad", 0);
     if (pad_bytes < 0)
@@ -289,17 +304,13 @@ int main (int argc, char *argv[])
         const char *s = optparse_get_str (opts, "rank", NULL);
         if (!s)
             log_msg_exit ("error parsing --rank option");
-        if (!strcmp (s, "any"))
-            ctx.nodeid = FLUX_NODEID_ANY;
-        else if (!strcmp (s, "upstream"))
-            ctx.nodeid = FLUX_NODEID_UPSTREAM;
-        else {
-            char *endptr;
-            errno = 0;
-            ctx.nodeid = strtoul (s, &endptr, 10);
-            if (errno != 0 || *endptr != '\0')
-                log_msg_exit ("error parsing --rank option");
-        }
+        if (strchr (target, '!'))
+            log_msg_exit ("--rank and TARGET both try to specify a nodeid");
+        char *new_target;
+        if (asprintf (&new_target, "%s!%s", s, target) < 0)
+            log_msg_exit ("out of memory");
+        free (target);
+        target = new_target;
     }
 
     ctx.interval = optparse_get_duration (opts, "interval", 1.0);
@@ -316,25 +327,20 @@ int main (int argc, char *argv[])
     if (ctx.batch && ctx.count == 0)
         log_msg_exit ("--batch should only be used with --count");
 
-    if (optindex != argc - 1) {
-        optparse_print_usage (opts);
-        exit (1);
-    }
-    parse_service (argv[optindex++],
-                   optparse_hasopt (opts, "rank") ? NULL : &ctx.nodeid,
-                   &ctx.topic);
-
     /* Create null terminated pad string for reuse in each message.
      * By default it's the empty string.
      */
     ctx.pad = xzmalloc (pad_bytes + 1);
     memset (ctx.pad, 'p', pad_bytes);
 
-
     if (!(ctx.h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
     if (!(ctx.reactor = flux_get_reactor (ctx.h)))
         log_err_exit ("flux_get_reactor");
+
+    /* Set ctx.nodeid and ctx.topic from TARGET argument
+     */
+    parse_target (&ctx, target);
 
     /* In batch mode, requests are sent before reactor is started
      * to process responses.  o/w requests are set in a timer watcher.
@@ -361,6 +367,7 @@ int main (int argc, char *argv[])
     free (ctx.topic);
     free (ctx.pad);
 
+    free (target);
     flux_close (ctx.h);
     optparse_destroy (opts);
     log_fini ();

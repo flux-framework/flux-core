@@ -137,4 +137,14 @@ test_expect_success 'ping help output works' '
         grep "Usage: flux-ping \[OPTIONS\] TARGET" help.err
 '
 
+test_expect_success 'ping works with hostname' '
+        flux ping --count=1 $(hostname -s)
+'
+test_expect_success 'ping works with hostname!service' '
+        flux ping --count=1 "$(hostname -s)!broker"
+'
+test_expect_success 'ping fails with unknown hostname' '
+        test_must_fail flux ping --count=1 "notmyhost!broker"
+'
+
 test_done
