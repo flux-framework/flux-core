@@ -18,7 +18,10 @@ from _flux._core import ffi, lib
 
 
 class SubmitFuture(Future):
+    """Future subclass representing job IDs."""
+
     def get_id(self):
+        """Return the job ID represented by this future."""
         return submit_get_id(self)
 
 
@@ -59,7 +62,7 @@ def submit_async(
         instance owner.
     :type novalidate: bool
     :returns: a Flux Future object for obtaining the assigned jobid
-    :rtype: Future
+    :rtype: SubmitFuture
     """
     jobspec = _convert_jobspec_arg_to_string(jobspec)
     flags = 0

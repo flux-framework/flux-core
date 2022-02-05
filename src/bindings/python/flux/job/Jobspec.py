@@ -160,12 +160,14 @@ class Jobspec(object):
 
     @classmethod
     def from_yaml_stream(cls, yaml_stream):
+        """Create a jobspec from a YAML file-like object."""
         jobspec = yaml.safe_load(yaml_stream)
         _validate_keys(cls.top_level_keys, jobspec.keys())
         return cls(**jobspec)
 
     @classmethod
     def from_yaml_file(cls, filename):
+        """Create a jobspec from a path to a YAML file."""
         with open(filename, "rb") as infile:
             return cls.from_yaml_stream(infile)
 
@@ -299,6 +301,16 @@ class Jobspec(object):
 
     @property
     def duration(self):
+        """Job's time limit.
+
+        The duration may be:
+
+        * an int or float in seconds
+        * a string in Flux Standard Duration (see RFC 23)
+        * a python ``datetime.timedelta``
+
+        A duration of zero is interpreted as "not set".
+        """
         try:
             return self.jobspec["attributes"]["system"]["duration"]
         except KeyError:
@@ -306,13 +318,7 @@ class Jobspec(object):
 
     @duration.setter
     def duration(self, duration):
-        """
-        Assign a time limit to the job.  The duration may be:
-        - an int or float in seconds
-        - a string in Flux Standard Duration
-        - a python datetime.timedelta
-        A duration of zero is interpreted as "not set".
-        """
+        """Assign a time limit to the job."""
         if isinstance(duration, str):
             time = parse_fsd(duration)
         elif isinstance(duration, datetime.timedelta):
@@ -330,7 +336,7 @@ class Jobspec(object):
     @property
     def cwd(self):
         """
-        Get working directory of job.
+        Working directory of job.
         """
         try:
             return self.jobspec["attributes"]["system"]["cwd"]
@@ -353,7 +359,7 @@ class Jobspec(object):
     @property
     def environment(self):
         """
-        Get (entire) environment of job.
+        Environment of job. Defaults to ``None``.
         """
         try:
             return self.jobspec["attributes"]["system"]["environment"]
@@ -374,6 +380,7 @@ class Jobspec(object):
 
     @property
     def stdin(self):
+        """Path to use for stdin."""
         return self._get_io_path("input", "stdin")
 
     @stdin.setter
@@ -383,6 +390,7 @@ class Jobspec(object):
 
     @property
     def stdout(self):
+        """Path to use for stdout."""
         return self._get_io_path("output", "stdout")
 
     @stdout.setter
@@ -392,6 +400,7 @@ class Jobspec(object):
 
     @property
     def stderr(self):
+        """Path to use for stderr."""
         return self._get_io_path("output", "stderr")
 
     @stderr.setter
@@ -447,18 +456,22 @@ class Jobspec(object):
 
     @property
     def resources(self):
+        """Jobspec resources section"""
         return self.jobspec.get("resources", None)
 
     @property
     def tasks(self):
+        """Jobspec tasks section"""
         return self.jobspec.get("tasks", None)
 
     @property
     def attributes(self):
+        """Jobspec attributes section"""
         return self.jobspec.get("attributes", None)
 
     @property
     def version(self):
+        """Jobspec version section"""
         return self.jobspec.get("version", None)
 
     def __iter__(self):

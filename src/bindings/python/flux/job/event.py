@@ -217,9 +217,9 @@ def event_wait(flux_handle, jobid, name, eventlog="eventlog", raiseJobException=
     :param eventlog: eventlog path in job kvs directory (default: eventlog)
     :param raiseJobException: if True, watch for job exception events and
       raise a JobException if one is seen before event 'name' (default=True)
-    :returns: an EventLogEntry object, or raises OSError if eventlog
+    :returns: an EventLogEvent object, or raises OSError if eventlog
      ended before matching event was found
-    :rtype: EventLogEntry
+    :rtype: EventLogEvent
     """
     for event in event_watch(flux_handle, jobid, eventlog):
         if event.name == name:

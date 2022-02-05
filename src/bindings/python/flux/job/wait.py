@@ -20,6 +20,15 @@ from _flux._core import ffi, lib
 
 class JobWaitFuture(Future):
     def get_status(self):
+        """Return the result of a job wait request.
+
+        This method blocks until the response is received,
+        then decodes the result to obtain the job status.
+
+        :returns: job status, a tuple of: Job ID (int), success (bool),
+            and an error (string) if success=False
+        :rtype: JobWaitResult
+        """
         return wait_get_status(self)
 
 
@@ -36,7 +45,7 @@ def wait_async(flux_handle, jobid=lib.FLUX_JOBID_ANY):
     :type flux_handle: Flux
     :param jobid: the job ID to wait for (default is any waitable job)
     :returns: a Flux Future object for obtaining the job result
-    :rtype: Future
+    :rtype: JobWaitFuture
     """
     future_handle = RAW.wait(flux_handle, jobid)
     return JobWaitFuture(future_handle)
@@ -57,7 +66,7 @@ def wait_get_status(future):
     :type future: Future
     :returns: job status, a tuple of: Job ID (int), success (bool),
         and an error (string) if success=False
-    :rtype: tuple
+    :rtype: JobWaitResult
     """
     if future is None or future == ffi.NULL:
         raise EnvironmentError(errno.EINVAL, "future must not be None/NULL")
@@ -83,7 +92,7 @@ def wait(flux_handle, jobid=lib.FLUX_JOBID_ANY):
     :param jobid: the job ID to wait for (default is any waitable job)
     :returns: job status, a tuple of: Job ID (int), success (bool),
         and an error (string) if success=False
-    :rtype: tuple
+    :rtype: JobWaitResult
     """
     future = wait_async(flux_handle, jobid)
     return future.get_status()
@@ -147,7 +156,7 @@ def result_async(flux_handle, jobid, flags=0):
         jobid (:obj:`flux.job.JobID`): the jobid for which to fetch result
 
     Returns:
-        :obj:`JobResultFuture`: A Future fulfilled with the job result.
+        JobResultFuture: A Future fulfilled with the job result.
     """
     future = RAW.result(flux_handle, flux.job.JobID(jobid), flags)
     return JobResultFuture(future)
@@ -181,7 +190,7 @@ def result(flux_handle, jobid, flags=0):
         jobid (:obj:`flux.job.JobID`): the jobid for which to fetch result
 
     Returns:
-        :obj:`JobInfo`: A limited JobInfo object which can be used to fetch
+        JobInfo: A limited JobInfo object which can be used to fetch
         the final job result, returncode, etc.
     """
     future = result_async(flux_handle, flux.job.JobID(jobid), flags)
