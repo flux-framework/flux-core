@@ -1,4 +1,40 @@
-flux-core version 0.34.0 - 2022-02-28
+flux-core version 0.35.0 - 2022-02-05
+-------------------------------------
+
+This release fixes a broker crash when a job receives an exception after
+running a job prolog. Users of the prolog/epilog feature should update
+to this version as soon as possible.
+
+In addition, TCP keepalive support was added for detection of powered off
+compute nodes.  For configuration info, see the Flux Admin Guide:
+
+https://flux-framework.readthedocs.io/en/latest/adminguide.html
+
+
+### Fixes
+
+ * flux-ping: support hostnames in TARGET #4105
+ * Fix broker segfault when an exception is raised on a job after prolog (#4096)
+ * flux-overlay: improve timeouts, hostname handling (#4095)
+ * flux resource: allow limited guest access (#4094)
+ * shell: fix duplicate logging after evlog plugin is initialized (#4085)
+ * shell: do not allow instance owner to use guest shell services (#4101)
+ * shell: fix race in attach to interactive job pty (#4102)
+ * libterminus: fix leak in pty client code (#4098)
+
+### New Features
+
+ * broker: use TCP keepalives (#4099)
+ * systemd: set restart=always (#4100)
+ * flux-mini: add --wait-event option to submit/bulksubmit (#4078)
+
+### Testsuite
+
+ * testsuite: fix spellcheck (#4082)
+ * ci: rename centos images to el, and use rockylinux for el8 image (#4080)
+
+
+flux-core version 0.34.0 - 2022-01-28
 -------------------------------------
 
 This release features the automatic draining of "torpid" (unresponsive)
