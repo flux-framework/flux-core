@@ -92,6 +92,30 @@ tbon.torpid_max
    undraining with :man1:`flux-resource`.  This value may be adjusted on a
    live system.
 
+tbon.keepalive_enable
+   An integer value to disable (0) or enable (1) TCP keepalives on TBON
+   child connections.  TCP keepalives are required to detect abruptly turned
+   off peers that are unable to shutdown their TCP connection.  Default 1
+   or as configured in :man5:`flux-config-tbon`.
+
+tbon.keepalive_count
+   The integer number of TCP keepalive packets to send to an idle downstream
+   peer with no response before disconnecting it.  Set to -1 to use the
+   system value from :linux:man8:`sysctl` ``net.ipv4.tcp_keepalive_probes``.
+   Default -1 or as configured in :man5:`flux-config-tbon`.
+
+tbon.keepalive_idle
+   The integer number of seconds to wait for an idle downstream peer to send
+   messages before beginning to send keepalive packets.  Set to -1 to use the
+   system value from :linux:man8:`sysctl` ``net.ipv4.tcp_keepalive_time``.
+   Default -1 or as configured in :man5:`flux-config-tbon`.
+
+tbon.keepalive_interval
+   The integer number of seconds to wait between sending keepalive packets.
+   Set to -1 to use the system value from :linux:man8:`sysctl`
+   ``net.ipv4.tcp_keepalive_intvl``.  Default -1 or as configured in
+   :man5:`flux-config-tbon`.
+
 
 SOCKET ATTRIBUTES
 =================
