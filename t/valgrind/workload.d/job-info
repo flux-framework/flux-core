@@ -8,4 +8,3 @@ id=$(flux mini submit -n 1 /bin/true)
 flux job attach ${id}
 
 flux job info ${id} eventlog jobspec R >/dev/null
-flux job list -A

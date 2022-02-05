@@ -1,0 +1,11 @@
+#!/bin/bash -e
+
+set -x
+
+# Test job list
+
+# launch a few jobs just to ensure there are jobs to list
+flux mini submit -n 1 /bin/true
+flux mini submit -n 1 /bin/false
+
+flux job list -A
