@@ -104,13 +104,13 @@ test_expect_success HAVE_JQ 'pty: pty.interactive forces a pty on rank 0' '
 		-n2 \
 		tty) &&
 	terminus_jobid $id list &&
-	flux job attach ${id} &&
+	$runpty flux job attach ${id} &&
 	flux job eventlog -p guest.output ${id} | grep "adding pty to rank 0"
 '
 test_expect_success 'pty: -o pty.interactive and -o pty.capture can be used together' '
 	id=$(flux mini submit -o pty.interactive -o pty.capture tty) &&
-	flux job attach $id >ptyim.out 2>&1 &&
-	flux job attach $id
+	$runpty flux job attach $id >ptyim.out 2>&1 &&
+	$runpty flux job attach $id
 '
 test_expect_success 'pty: unsupported -o pty.<opt> generates exception' '
 	test_must_fail flux mini run -o pty.foo hostname
