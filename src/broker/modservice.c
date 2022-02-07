@@ -151,22 +151,15 @@ error:
 }
 
 /* Reactor loop is about to block.
+ * Notify broker that module is running, then disable the prepare watcher.
  */
 static void prepare_cb (flux_reactor_t *r, flux_watcher_t *w,
                         int revents, void *arg)
 {
     modservice_ctx_t *ctx = arg;
 
-    /*  Notify broker that this module has finished initialization
-     */
-    flux_msg_t *msg = flux_keepalive_encode (0, FLUX_MODSTATE_RUNNING);
-    if (!msg || flux_send (ctx->h, msg, 0) < 0)
-        flux_log_error (ctx->h, "error sending keepalive");
-    flux_msg_destroy (msg);
-
-    /*  Then, disable te prepare watcher. We no longer send keepalive
-     *   messages on every entry/exit of the reactor.
-     */
+    if (flux_module_set_running (ctx->h) < 0)
+        flux_log_error (ctx->h, "error setting module status to running");
     flux_watcher_destroy (ctx->w_prepare);
     ctx->w_prepare = NULL;
 }

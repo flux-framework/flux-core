@@ -1153,6 +1153,59 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+/* This is a message handler for status messages from modules, not to be
+ * confused with module_status_cb().
+ */
+static void broker_module_status_cb (flux_t *h,
+                                     flux_msg_handler_t *mh,
+                                     const flux_msg_t *msg,
+                                     void *arg)
+{
+    broker_ctx_t *ctx = arg;
+    int status;
+    int errnum = 0;
+    const char *sender;
+    module_t *p;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:i s?i}",
+                             "status", &status,
+                             "errnum", &errnum) < 0
+        || !(sender = flux_msg_route_first (msg))
+        || !(p = module_lookup (ctx->modhash, sender))) {
+        const char *errmsg = "error decoding/finding broker.module-status";
+        if (flux_msg_is_noresponse (msg))
+            flux_log_error (h, "%s", errmsg);
+        else if (flux_respond_error (h, msg, errno, errmsg) < 0)
+            flux_log_error (h, "error responding to broker.module-status");
+        return;
+    }
+    switch (status) {
+        case FLUX_MODSTATE_FINALIZING:
+            module_mute (p);
+            break;
+        case FLUX_MODSTATE_EXITED:
+            module_set_errnum (p, errnum);
+            break;
+        default:
+            break;
+    }
+    /* Send a response if required.
+     * Hint: module waits for response in FINALIZING state.
+     */
+    if (!flux_msg_is_noresponse (msg)) {
+        if (flux_respond (h, msg, NULL) < 0) {
+            flux_log_error (h,
+                            "%s: error responding to broker.module-status",
+                            module_get_name (p));
+        }
+    }
+    /* N.B. this will cause module_status_cb() to be called.
+     */
+    module_set_status (p, status);
+}
+
 #if CODE_COVERAGE_ENABLED
 void __gcov_flush (void);
 #endif
@@ -1300,6 +1353,12 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "broker.lsmod",
         broker_lsmod_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "broker.module-status",
+        broker_module_status_cb,
         0
     },
     {
@@ -1513,7 +1572,6 @@ static void module_cb (module_t *p, void *arg)
     broker_ctx_t *ctx = arg;
     flux_msg_t *msg = module_recvmsg (p);
     int type;
-    int ka_errnum, ka_status;
     int count;
 
     if (!msg)
@@ -1557,27 +1615,6 @@ static void module_cb (module_t *p, void *arg)
                                 __FUNCTION__, module_get_name (p),
                                 flux_msg_typestr (type));
             }
-            break;
-        case FLUX_MSGTYPE_KEEPALIVE:
-            if (flux_keepalive_decode (msg, &ka_errnum, &ka_status) < 0) {
-                flux_log_error (ctx->h, "%s: flux_keepalive_decode",
-                                module_get_name (p));
-                break;
-            }
-            if (ka_status == FLUX_MODSTATE_FINALIZING) {
-                /* Module is finalizing and doesn't want any more messages.
-                 * mute the module and respond with the same keepalive
-                 * message for synchronization (module waits to proceed)
-                 */
-                module_mute (p);
-                if (module_sendmsg (p, msg) < 0)
-                    flux_log_error (ctx->h,
-                                    "%s: reply to finalizing: module_sendmsg",
-                                    module_get_name (p));
-            }
-            if (ka_status == FLUX_MODSTATE_EXITED)
-                module_set_errnum (p, ka_errnum);
-            module_set_status (p, ka_status);
             break;
         default:
             flux_log (ctx->h, LOG_ERR, "%s(%s): unexpected %s",

@@ -14,6 +14,14 @@ invalid_rank() {
 	echo $((${SIZE} + 1))
 }
 
+module_status_bad_proto() {
+	flux python -c "import flux; print(flux.Flux().rpc(\"broker.module-status\").get())"
+}
+
+module_status () {
+	flux python -c "import flux; print(flux.Flux().rpc(\"broker.module-status\",{\"status\":0}).get())"
+}
+
 test_expect_success 'module: load test module' '
 	flux module load \
 		${FLUX_BUILD_DIR}/t/module/.libs/parent.so
@@ -276,6 +284,14 @@ test_expect_success 'flux_module_set_running - signal module to enter reactor' '
 '
 test_expect_success 'flux_module_set_running - remove test module' '
 	flux module remove running
+'
+test_expect_success 'broker.module-status rejects malformed request' '
+	test_must_fail module_status_bad_proto 2>proto.err &&
+	grep "error decoding/finding broker.module-status" proto.err
+'
+test_expect_success 'broker.module-status rejects request from unknown sender' '
+	test_must_fail module_status 2>sender.err &&
+	grep "error decoding/finding broker.module-status" sender.err
 '
 
 test_done
