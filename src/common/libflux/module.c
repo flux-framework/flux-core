@@ -121,21 +121,17 @@ bool flux_module_debug_test (flux_t *h, int flag, bool clear)
 
 int flux_module_set_running (flux_t *h)
 {
-    flux_msg_t *msg;
-    int rc = -1;
+    flux_future_t *f;
 
-    if (!h) {
-        errno = EINVAL;
+    if (!(f = flux_rpc_pack (h,
+                             "broker.module-status",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_NORESPONSE,
+                             "{s:i}",
+                             "status", FLUX_MODSTATE_RUNNING)))
         return -1;
-    }
-    if (!(msg = flux_keepalive_encode (0, FLUX_MODSTATE_RUNNING)))
-        return -1;
-    if (flux_send (h, msg, 0) < 0)
-        goto done;
-    rc = 0;
-done:
-    flux_msg_decref (msg);
-    return rc;
+    flux_future_destroy (f);
+    return 0;
 }
 
 /*

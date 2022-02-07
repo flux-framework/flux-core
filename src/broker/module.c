@@ -100,34 +100,21 @@ static int setup_module_profiling (module_t *p)
  */
 static int module_finalizing (module_t *p)
 {
-    int rc = -1;
-    flux_msg_t *msg = NULL;
-    struct flux_match match = {
-        .typemask = FLUX_MSGTYPE_KEEPALIVE
-    };
-    /* Notify the broker we're finalizing, which will disable new
-     *  messages
-     */
-    if (!(msg = flux_keepalive_encode (0, FLUX_MODSTATE_FINALIZING))) {
-        flux_log_error (p->h, "module_finalizing: flux_keepalive_encode");
+    flux_future_t *f;
+
+    if (!(f = flux_rpc_pack (p->h,
+                             "broker.module-status",
+                             FLUX_NODEID_ANY,
+                             0,
+                             "{s:i}",
+                             "status", FLUX_MODSTATE_FINALIZING))
+        || flux_rpc_get (f, NULL)) {
+        flux_log_error (p->h, "broker.module-status FINALIZING error");
+        flux_future_destroy (f);
         return -1;
     }
-    if (flux_send (p->h, msg, 0) < 0) {
-        flux_log_error (p->h, "module_finalizing: flux_send");
-        goto done;
-    }
-    flux_msg_destroy (msg);
-
-    /* Synchronize with the broker using a blocking recv for keepalive
-     *  message. This should be the only time the broker sends a keepalive
-     *  to a module.
-     */
-    if (!(msg = flux_recv (p->h, match, 0)))
-        flux_log_error (p->h, "module_finalizing: flux_recv");
-    rc = 0;
-done:
-    flux_msg_destroy (msg);
-    return rc;
+    flux_future_destroy (f);
+    return 0;
 }
 
 static void *module_thread (void *arg)
@@ -141,6 +128,7 @@ static void *module_thread (void *arg)
     int mod_main_errno = 0;
     flux_msg_t *msg;
     flux_conf_t *conf;
+    flux_future_t *f;
 
     setup_module_profiling (p);
 
@@ -218,13 +206,17 @@ static void *module_thread (void *arg)
             flux_log_error (p->h, "responding to post-shutdown %s", topic);
         flux_msg_destroy (msg);
     }
-    if (!(msg = flux_keepalive_encode (mod_main_errno, FLUX_MODSTATE_EXITED))) {
-        flux_log_error (p->h, "flux_keepalive_encode");
+    if (!(f = flux_rpc_pack (p->h,
+                             "broker.module-status",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_NORESPONSE,
+                             "{s:i s:i}",
+                             "status", FLUX_MODSTATE_EXITED,
+                             "errnum", mod_main_errno))) {
+        flux_log_error (p->h, "broker.module-status EXITED error");
         goto done;
     }
-    if (flux_send (p->h, msg, 0) < 0)
-        flux_log_error (p->h, "flux_send");
-    flux_msg_destroy (msg);
+    flux_future_destroy (f);
 done:
     free (uri);
     free (av);
@@ -296,18 +288,22 @@ int module_sendmsg (module_t *p, const flux_msg_t *msg)
 {
     flux_msg_t *cpy = NULL;
     int type;
+    const char *topic;
     int rc = -1;
 
     if (!msg)
         return 0;
-    if (flux_msg_get_type (msg, &type) < 0)
-        goto done;
-    if (p->muted && type != FLUX_MSGTYPE_KEEPALIVE) {
-        /* Muted modules only accept keepalive messages */
-        const char *topic;
-        (void) flux_msg_get_topic (msg, &topic);
-        errno = ENOSYS;
-        goto done;
+    if (flux_msg_get_type (msg, &type) < 0
+        || flux_msg_get_topic (msg, &topic) < 0)
+        return -1;
+    /* Muted modules only accept response to broker.module-status
+     */
+    if (p->muted) {
+        if (type != FLUX_MSGTYPE_RESPONSE
+            || strcmp (topic, "broker.module-status") != 0) {
+            errno = ENOSYS;
+            return -1;
+        }
     }
     switch (type) {
         case FLUX_MSGTYPE_REQUEST: { /* simulate DEALER socket */
@@ -743,7 +739,13 @@ nomem:
 
 module_t *module_lookup (modhash_t *mh, const char *uuid)
 {
-    return zhash_lookup (mh->zh_byuuid, uuid);
+    module_t *m;
+
+    if (!(m = zhash_lookup (mh->zh_byuuid, uuid))) {
+        errno = ENOENT;
+        return NULL;
+    }
+    return m;
 }
 
 module_t *module_lookup_byname (modhash_t *mh, const char *name)
