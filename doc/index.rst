@@ -28,8 +28,9 @@ flux-core Python Bindings
 =========================
 
 .. toctree::
+   :maxdepth: 3
 
-   python/modules
+   python/index
 
 Indices and tables
 ==================
