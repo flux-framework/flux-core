@@ -307,12 +307,10 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
     char rankstr[16];
     double timestamp;
 
-    if (rank >= drain->ctx->size) {
+    if (rank >= drain->ctx->size || !reason) {
         errno = EINVAL;
         return -1;
     }
-    if (!reason)
-        reason = "unknown";
     if (get_timestamp_now (&timestamp) < 0)
         return -1;
     if (update_draininfo_rank (drain, rank, true, timestamp, reason) < 0)
