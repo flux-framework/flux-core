@@ -88,8 +88,8 @@ static void stats_get_cb (flux_t *h, flux_msg_handler_t *mh,
                            "#response (rx)", mcs.response_rx,
                            "#event (tx)", mcs.event_tx,
                            "#event (rx)", mcs.event_rx,
-                           "#keepalive (tx)", mcs.keepalive_tx,
-                           "#keepalive (rx)", mcs.keepalive_rx) < 0)
+                           "#control (tx)", mcs.control_tx,
+                           "#control (rx)", mcs.control_rx) < 0)
       FLUX_LOG_ERROR (h);
 }
 

@@ -67,7 +67,7 @@ fluxcoreinclude_HEADERS = \
 	message.h \
 	msglist.h \
 	request.h \
-	keepalive.h \
+	control.h \
 	response.h \
 	rpc.h \
 	panic.h \
@@ -118,7 +118,7 @@ libflux_la_SOURCES = \
 	ev_buffer_read.c \
 	ev_buffer_write.h \
 	ev_buffer_write.c \
-	keepalive.c \
+	control.c \
 	content.c \
 	future.c \
 	composite_future.c \

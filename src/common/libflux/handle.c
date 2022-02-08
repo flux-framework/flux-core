@@ -181,7 +181,7 @@ static void profiling_msg_snapshot (flux_t *h,
     }
 
     const char *msg_topic;
-    if (type != FLUX_MSGTYPE_KEEPALIVE)
+    if (type != FLUX_MSGTYPE_CONTROL)
         flux_msg_get_topic (msg, &msg_topic);
     else
         msg_topic = "NONE";
@@ -636,8 +636,8 @@ static void update_tx_stats (flux_t *h, const flux_msg_t *msg)
             case FLUX_MSGTYPE_EVENT:
                 h->msgcounters.event_tx++;
                 break;
-            case FLUX_MSGTYPE_KEEPALIVE:
-                h->msgcounters.keepalive_tx++;
+            case FLUX_MSGTYPE_CONTROL:
+                h->msgcounters.control_tx++;
                 break;
         }
     } else
@@ -658,8 +658,8 @@ static void update_rx_stats (flux_t *h, const flux_msg_t *msg)
             case FLUX_MSGTYPE_EVENT:
                 h->msgcounters.event_rx++;
                 break;
-        case FLUX_MSGTYPE_KEEPALIVE:
-            h->msgcounters.keepalive_rx++;
+        case FLUX_MSGTYPE_CONTROL:
+            h->msgcounters.control_rx++;
             break;
         }
     } else

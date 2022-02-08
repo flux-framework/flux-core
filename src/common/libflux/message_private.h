@@ -40,12 +40,13 @@ struct flux_msg {
     union {
         uint32_t nodeid;  // request
         uint32_t sequence; // event
-        uint32_t errnum; // response, keepalive
+        uint32_t errnum; // response
+        uint32_t control_type; // control
         uint32_t aux1; // common accessor
     };
     union {
         uint32_t matchtag; // request, response
-        uint32_t status; // keepalive
+        uint32_t control_status; // control
         uint32_t aux2; // common accessor
     };
 

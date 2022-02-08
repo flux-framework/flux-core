@@ -195,8 +195,8 @@ test_expect_success 'flux module stats gets comms statistics' '
 	grep -q "#response (rx)" comms.stats &&
 	grep -q "#event (tx)" comms.stats &&
 	grep -q "#event (rx)" comms.stats &&
-	grep -q "#keepalive (tx)" comms.stats &&
-	grep -q "#keepalive (rx)" comms.stats
+	grep -q "#control (tx)" comms.stats &&
+	grep -q "#control (rx)" comms.stats
 '
 
 test_expect_success 'flux module stats --parse "#event (tx)" counts events' '

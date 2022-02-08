@@ -43,16 +43,15 @@
 
 #define DEFAULT_FANOUT 2
 
-/* Overlay keepalives set PROTO aux1 to the keepalive type.
- * The meaning of PROTO aux2 depends on the type.
+/* Overlay control messages
  */
-enum keepalive_type {
-    KEEPALIVE_HEARTBEAT = 0, // child sends when connection is idle
-    KEEPALIVE_STATUS = 1,    // child tells parent of subtree status change
-    KEEPALIVE_DISCONNECT = 2,// parent tells child to immediately disconnect
+enum control_type {
+    CONTROL_HEARTBEAT = 0, // child sends when connection is idle
+    CONTROL_STATUS = 1,    // child tells parent of subtree status change
+    CONTROL_DISCONNECT = 2,// parent tells child to immediately disconnect
 };
 
-/* Numerical values for "subtree health" so we can send them in keepalive
+/* Numerical values for "subtree health" so we can send them in control
  * messages.  Textual values below will be used for communication with front
  * end diagnostic tool.
  */
@@ -99,13 +98,13 @@ struct parent {
     char uuid[UUID_STR_LEN];
     bool hello_error;
     bool hello_responded;
-    bool offline;           // set upon receipt of KEEPALIVE_DISCONNECT
+    bool offline;           // set upon receipt of CONTROL_DISCONNECT
     struct rpc_track *tracker;
     struct zmqutil_monitor *monitor;
 };
 
 /* Wake up periodically (between 'sync_min' and 'sync_max' seconds) and:
- * 1) send keepalive to parent if nothing was sent in 'torpid_min' seconds
+ * 1) send control to parent if nothing was sent in 'torpid_min' seconds
  * 2) find children that have not been heard from in 'torpid_max' seconds
  */
 static const double sync_min = 1.0;
@@ -179,9 +178,9 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg);
 static int overlay_sendmsg_parent (struct overlay *ov, const flux_msg_t *msg);
 static void hello_response_handler (struct overlay *ov, const flux_msg_t *msg);
 static void hello_request_handler (struct overlay *ov, const flux_msg_t *msg);
-static int overlay_keepalive_parent (struct overlay *ov,
-                                     enum keepalive_type ktype,
-                                     int arg);
+static int overlay_control_parent (struct overlay *ov,
+                                   enum control_type type,
+                                   int status);
 static void overlay_health_respond_all (struct overlay *ov);
 static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank);
 
@@ -214,7 +213,7 @@ static bool subtree_is_online (enum subtree_status status)
 /* Call this function after a child->status changes.
  * It calculates a new subtree status based on the state of children,
  * then if the status has changed, the parent is informed with a
- * keepalive message and any waiting health requests are processed.
+ * control message and any waiting health requests are processed.
  */
 static void subtree_status_update (struct overlay *ov)
 {
@@ -242,7 +241,7 @@ static void subtree_status_update (struct overlay *ov)
     if (ov->status != status) {
         ov->status = status;
         monotime (&ov->status_timestamp);
-        overlay_keepalive_parent (ov, KEEPALIVE_STATUS, ov->status);
+        overlay_control_parent (ov, CONTROL_STATUS, ov->status);
         overlay_health_respond_all (ov);
     }
 }
@@ -519,14 +518,14 @@ done:
     return rc;
 }
 
-static int overlay_keepalive_parent (struct overlay *ov,
-                                     enum keepalive_type ktype,
-                                     int arg)
+static int overlay_control_parent (struct overlay *ov,
+                                   enum control_type type,
+                                   int status)
 {
     flux_msg_t *msg = NULL;
 
     if (ov->parent.zsock) {
-        if (!(msg = flux_keepalive_encode (ktype, arg)))
+        if (!(msg = flux_control_encode (type, status)))
             return -1;
         flux_msg_route_enable (msg);
         if (overlay_sendmsg_parent (ov, msg) < 0)
@@ -539,14 +538,14 @@ error:
     return -1;
 }
 
-static int overlay_keepalive_child (struct overlay *ov,
-                                    const char *uuid,
-                                    enum keepalive_type ktype,
-                                    int arg)
+static int overlay_control_child (struct overlay *ov,
+                                  const char *uuid,
+                                  enum control_type type,
+                                  int status)
 {
     flux_msg_t *msg;
 
-    if (!(msg = flux_keepalive_encode (ktype, arg)))
+    if (!(msg = flux_control_encode (type, status)))
         return -1;
     flux_msg_route_enable (msg);
     if (flux_msg_route_push (msg, uuid) < 0)
@@ -680,13 +679,13 @@ static void sync_cb (flux_future_t *f, void *arg)
     double now = flux_reactor_now (ov->reactor);
 
     if (now - ov->parent.lastsent > ov->torpid_min)
-        overlay_keepalive_parent (ov, KEEPALIVE_HEARTBEAT, 0);
+        overlay_control_parent (ov, CONTROL_HEARTBEAT, 0);
     update_torpid_children (ov);
 
     flux_future_reset (f);
 }
 
-int overlay_keepalive_start (struct overlay *ov)
+int overlay_control_start (struct overlay *ov)
 {
     if (!ov->f_sync) {
         if (!(ov->f_sync = flux_sync_create (ov->h, sync_min))
@@ -874,7 +873,7 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
         /* If child is not online but we know this uuid, message is from a
          * child that transitioned to offline/lost.  Don't log the drop if
          * LOST, since message was probably sent before child received
-         * KEEPALIVE_DISCONNECT and that is not interesting.
+         * CONTROL_DISCONNECT and that is not interesting.
          */
         if ((child = child_lookup (ov, uuid))) {
             if (child->status != SUBTREE_STATUS_LOST) {
@@ -896,13 +895,13 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
          * This likely means that *this broker* restarted without getting a
          * message through to the child, and the child still thinks it is
          * communicating with the same broker (since 0MQ hides reconnects).
-         * Send KEEPALIVE_DISCONNECT to force subtree panic.
+         * Send CONTROL_DISCONNECT to force subtree panic.
          */
         else {
             logdrop (ov, OVERLAY_DOWNSTREAM, msg,
                      "didn't say hello, sending disconnect");
-            if (overlay_keepalive_child (ov, uuid, KEEPALIVE_DISCONNECT, 0) < 0)
-                flux_log_error (ov->h, "failed to send KEEPALIVE_DISCONNECT");
+            if (overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0) < 0)
+                flux_log_error (ov->h, "failed to send CONTROL_DISCONNECT");
         }
         goto done;
     }
@@ -910,10 +909,10 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
 
     child->lastseen = flux_reactor_now (ov->reactor);
     switch (type) {
-        case FLUX_MSGTYPE_KEEPALIVE: {
-            int ktype, status;
-            if (flux_keepalive_decode (msg, &ktype, &status) == 0
-                && ktype == KEEPALIVE_STATUS)
+        case FLUX_MSGTYPE_CONTROL: {
+            int type, status;
+            if (flux_control_decode (msg, &type, &status) == 0
+                && type == CONTROL_STATUS)
                 overlay_child_status_update (ov, child, status);
             goto done;
         }
@@ -990,12 +989,12 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
              */
             flux_msg_route_disable (msg);
             break;
-        case FLUX_MSGTYPE_KEEPALIVE: {
-            int ktype, reason;
-            if (flux_keepalive_decode (msg, &ktype, &reason) < 0) {
-                logdrop (ov, OVERLAY_UPSTREAM, msg, "malformed keepalive");
+        case FLUX_MSGTYPE_CONTROL: {
+            int type, reason;
+            if (flux_control_decode (msg, &type, &reason) < 0) {
+                logdrop (ov, OVERLAY_UPSTREAM, msg, "malformed control");
             }
-            else if (ktype == KEEPALIVE_DISCONNECT) {
+            else if (type == CONTROL_DISCONNECT) {
                 flux_log (ov->h, LOG_CRIT,
                           "%s (rank %lu) sent disconnect control message",
                           flux_get_hostbyrank (ov->h, ov->parent.rank),
@@ -1006,7 +1005,7 @@ static void parent_cb (flux_reactor_t *r, flux_watcher_t *w,
                 overlay_monitor_notify (ov, FLUX_NODEID_ANY);
             }
             else
-                logdrop (ov, OVERLAY_UPSTREAM, msg, "unknown keepalive type");
+                logdrop (ov, OVERLAY_UPSTREAM, msg, "unknown control type");
             goto done;
         }
         default:
@@ -1629,10 +1628,10 @@ static void overlay_disconnect_subtree_cb (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (overlay_keepalive_child (ov,
-                                 child->uuid,
-                                 KEEPALIVE_DISCONNECT, 0) < 0) {
-        errstr = "failed to send KEEPALIVE_DISCONNECT message";
+    if (overlay_control_child (ov,
+                               child->uuid,
+                               CONTROL_DISCONNECT, 0) < 0) {
+        errstr = "failed to send CONTROL_DISCONNECT message";
         goto error;
     }
     overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
@@ -1912,7 +1911,7 @@ void overlay_destroy (struct overlay *ov)
         flux_future_destroy (ov->f_sync);
         flux_msg_handler_delvec (ov->handlers);
         ov->status = SUBTREE_STATUS_OFFLINE;
-        overlay_keepalive_parent (ov, KEEPALIVE_STATUS, ov->status);
+        overlay_control_parent (ov, CONTROL_STATUS, ov->status);
 
         zsock_destroy (&ov->parent.zsock);
         free (ov->parent.uri);

@@ -38,11 +38,11 @@ struct overlay *overlay_create (flux_t *h,
                                 void *arg);
 void overlay_destroy (struct overlay *ov);
 
-/* Start sending keepalive messages to parent and monitoring peers.
+/* Start sending control messages to parent and monitoring peers.
  * This registers a sync callback, and will fail if event.subscribe
  * doesn't have a handler yet.
  */
-int overlay_keepalive_start (struct overlay *ov);
+int overlay_control_start (struct overlay *ov);
 
 /* Set the overlay network size and rank of this broker.
  */
@@ -105,7 +105,7 @@ json_t *overlay_get_subtree_topo (struct overlay *ov, int rank);
  */
 const char *overlay_get_subtree_status (struct overlay *ov, int rank);
 
-/* A TBON child is "torpid" if no messages (including regular keepalives)
+/* A TBON child is "torpid" if no messages (including regular control messages)
  * have been received from it for a while.
  */
 bool overlay_peer_is_torpid (struct overlay *ov, uint32_t rank);

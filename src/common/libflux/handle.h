@@ -31,8 +31,8 @@ typedef struct {
     int response_rx;
     int event_tx;
     int event_rx;
-    int keepalive_tx;
-    int keepalive_rx;
+    int control_tx;
+    int control_rx;
 } flux_msgcounters_t;
 
 typedef int (*flux_comms_error_f)(flux_t *h, void *arg);

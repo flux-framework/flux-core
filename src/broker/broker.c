@@ -429,8 +429,8 @@ int main (int argc, char *argv[])
     /* These two broker-resident services call flux_sync_create(), thus
      * require event.subscribe to have a handler before running.
      */
-    if (overlay_keepalive_start (ctx.overlay) < 0) {
-        log_err ("error initializing overlay keepalives");
+    if (overlay_control_start (ctx.overlay) < 0) {
+        log_err ("error initializing overlay control messages");
         goto cleanup;
     }
     if (!(ctx.cache = content_cache_create (ctx.h, ctx.attrs))) {
