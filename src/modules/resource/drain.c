@@ -297,7 +297,7 @@ static void drain_cb (flux_t *h,
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to undrain request");
+        flux_log_error (h, "error responding to drain request");
     free (idstr);
     idset_destroy (idset);
 }
