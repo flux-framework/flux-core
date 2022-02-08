@@ -255,6 +255,7 @@ static void drain_cb (flux_t *h,
                       const flux_msg_t *msg,
                       void *arg)
 {
+    int rc;
     struct drain *drain = arg;
     const char *s;
     const char *reason = NULL;
@@ -282,15 +283,26 @@ static void drain_cb (flux_t *h,
         goto error;
     if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE)))
         goto error;
-    if (reslog_post_pack (drain->ctx->reslog,
-                          msg,
-                          timestamp,
-                          "drain",
-                          "{s:s s:s}",
-                          "idset",
-                          idstr,
-                          "reason",
-                          reason ? reason : "unknown") < 0)
+
+    /*  If draining with no reason, do not encode 'reason' in the
+     *   eventlog so that it can be replayed as reason=NULL.
+     */
+    if (reason)
+        rc = reslog_post_pack (drain->ctx->reslog,
+                               msg,
+                               timestamp,
+                               "drain",
+                               "{s:s s:s}",
+                               "idset", idstr,
+                               "reason", reason);
+    else
+        rc = reslog_post_pack (drain->ctx->reslog,
+                               msg,
+                               timestamp,
+                               "drain",
+                               "{s:s}",
+                               "idset", idstr);
+    if (rc < 0)
         goto error;
     free (idstr);
     idset_destroy (idset);
