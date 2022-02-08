@@ -82,7 +82,8 @@ tbon.prefertcp
 tbon.torpid_min
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
    will allow the connection to its TBON parent to remain idle before sending a
-   keepalive message.  This value may be adjusted on a live system.
+   control message to indicate create activity.  This value may be adjusted
+   on a live system.
 
 tbon.torpid_max
    The amount of time (in RFC 23 Flux Standard Duration format) that a broker
