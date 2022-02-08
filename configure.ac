@@ -336,6 +336,17 @@ AX_LUA_LIBS
 # N.B oldest in CI are bionic=libzmq-4.2.5, centos7=zeromq-4.1.4
 PKG_CHECK_MODULES([ZMQ], [libczmq >= 3.0.0 libzmq >= 4.0.4])
 X_AC_JANSSON
+PKG_CHECK_MODULES([LIBSYSTEMD], [libsystemd >= 0.23],
+                                [have_libsystemd=yes], [have_libsystemd=no])
+AC_CHECK_HEADER([systemd/sd-bus.h], [have_sd_bus_h=yes], [have_sd_bus_h=no])
+AM_CONDITIONAL([HAVE_LIBSYSTEMD],
+        [test "$have_libsystemd" = yes -a "$have_sd_bus_h" = yes])
+if test "$have_libsystemd" = yes -a "$have_sd_bus_h" = yes; then
+    AC_DEFINE([HAVE_LIBSYSTEMD], [1], [Define if you have libsystemd])
+    AC_CHECK_LIB(systemd, sd_bus_set_method_call_timeout,
+                 AC_DEFINE([HAVE_SD_BUS_SET_METHOD_CALL_TIMEOUT], [1],
+                           [Define if you have sd_bus_set_method_call_timeout]))
+fi
 PKG_CHECK_MODULES([HWLOC], [hwloc >= 1.11.1], [], [])
 PKG_CHECK_MODULES([LZ4], [liblz4], [], [])
 PKG_CHECK_MODULES([SQLITE], [sqlite3], [], [])
@@ -504,6 +515,7 @@ AC_CONFIG_FILES( \
   src/common/libcontent/Makefile \
   src/common/libjob/Makefile \
   src/common/libsubprocess/Makefile \
+  src/common/libsdprocess/Makefile \
   src/common/liboptparse/Makefile \
   src/common/libidset/Makefile \
   src/common/libtomlc99/Makefile \

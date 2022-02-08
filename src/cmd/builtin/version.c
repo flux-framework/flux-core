@@ -64,6 +64,9 @@ static int cmd_version (optparse_t *p, int ac, char *av[])
 #if HAVE_CALIPER
     printf ("+caliper");
 #endif
+#if HAVE_LIBSYSTEMD
+    printf ("+systemd");
+#endif
 #if HAVE_LIBPMIX
     printf ("+pmix-bootstrap==%ld.%ld.%ld",
             PMIX_VERSION_MAJOR,
