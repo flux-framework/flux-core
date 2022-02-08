@@ -34,7 +34,7 @@ test_expect_success 'restart instance, job completed (long run)' '
 	test_must_fail grep $(cat id1.out) jobs_long2.out
 '
 
-# reattach_finish will indicate to testexcec that the job finished
+# reattach_finish will indicate to testexec that the job finished
 # right after reattach, emulating a job that finished before the
 # instance restarted
 test_expect_success 'run a testexec job in persistent instance (exit run)' '
