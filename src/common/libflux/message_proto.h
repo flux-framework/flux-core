@@ -28,14 +28,14 @@
  * request - nodeid
  * response - errnum
  * event - sequence
- * keepalive - errnum
+ * control - type
  *
  * aux2
  *
  * request - matchtag
  * response - matchtag
  * event - not used
- * keepalive - status
+ * control - status
  */
 #define PROTO_IND_USERID    0
 #define PROTO_IND_ROLEMASK  1

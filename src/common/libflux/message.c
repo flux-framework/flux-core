@@ -71,9 +71,9 @@ static void msg_setup_type (flux_msg_t *msg)
             msg->sequence = 0;
             msg->aux2 = 0;
             break;
-        case FLUX_MSGTYPE_KEEPALIVE:
-            msg->errnum = 0;
-            msg->status = 0;
+        case FLUX_MSGTYPE_CONTROL:
+            msg->control_type = 0;
+            msg->control_status = 0;
             break;
     }
 }
@@ -85,7 +85,7 @@ flux_msg_t *flux_msg_create (int type)
     if (type != FLUX_MSGTYPE_REQUEST
         && type != FLUX_MSGTYPE_RESPONSE
         && type != FLUX_MSGTYPE_EVENT
-        && type != FLUX_MSGTYPE_KEEPALIVE
+        && type != FLUX_MSGTYPE_CONTROL
         && type != FLUX_MSGTYPE_ANY) {
         errno = EINVAL;
         return NULL;
@@ -329,7 +329,7 @@ int flux_msg_set_type (flux_msg_t *msg, int type)
     if (type != FLUX_MSGTYPE_REQUEST
         && type != FLUX_MSGTYPE_RESPONSE
         && type != FLUX_MSGTYPE_EVENT
-        && type != FLUX_MSGTYPE_KEEPALIVE) {
+        && type != FLUX_MSGTYPE_CONTROL) {
         errno = EINVAL;
         return -1;
     }
@@ -541,8 +541,7 @@ int flux_msg_set_errnum (flux_msg_t *msg, int errnum)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->type != FLUX_MSGTYPE_RESPONSE
-        && msg->type != FLUX_MSGTYPE_KEEPALIVE) {
+    if (msg->type != FLUX_MSGTYPE_RESPONSE) {
         errno = EINVAL;
         return -1;
     }
@@ -554,8 +553,7 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *errnum)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->type != FLUX_MSGTYPE_RESPONSE
-        && msg->type != FLUX_MSGTYPE_KEEPALIVE) {
+    if (msg->type != FLUX_MSGTYPE_RESPONSE) {
         errno = EPROTO;
         return -1;
     }
@@ -616,28 +614,31 @@ int flux_msg_get_matchtag (const flux_msg_t *msg, uint32_t *matchtag)
     return 0;
 }
 
-int flux_msg_set_status (flux_msg_t *msg, int status)
+int flux_msg_set_control (flux_msg_t *msg, int type, int status)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->type != FLUX_MSGTYPE_KEEPALIVE) {
+    if (msg->type != FLUX_MSGTYPE_CONTROL) {
         errno = EINVAL;
         return -1;
     }
-    msg->status = status;
+    msg->control_type = type;
+    msg->control_status = status;
     return 0;
 }
 
-int flux_msg_get_status (const flux_msg_t *msg, int *status)
+int flux_msg_get_control (const flux_msg_t *msg, int *type, int *status)
 {
     if (msg_validate (msg) < 0)
         return -1;
-    if (msg->type != FLUX_MSGTYPE_KEEPALIVE) {
+    if (msg->type != FLUX_MSGTYPE_CONTROL) {
         errno = EPROTO;
         return -1;
     }
+    if (type)
+        *type = msg->control_type;
     if (status)
-        *status = msg->status;
+        *status = msg->control_status;
     return 0;
 }
 
@@ -1188,7 +1189,7 @@ static struct typemap typemap[] = {
     { "request", ">", FLUX_MSGTYPE_REQUEST },
     { "response", "<", FLUX_MSGTYPE_RESPONSE},
     { "event", "e", FLUX_MSGTYPE_EVENT},
-    { "keepalive", "k", FLUX_MSGTYPE_KEEPALIVE},
+    { "control", "c", FLUX_MSGTYPE_CONTROL},
 };
 static const int typemap_len = sizeof (typemap) / sizeof (typemap[0]);
 
@@ -1313,7 +1314,7 @@ void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)
      */
     if (timestamp >= 0.)
         fprintf (f, "%s %.5f\n", prefix, timestamp);
-    /* Topic (keepalive has none)
+    /* Topic (control has none)
      */
     if (msg->topic)
         fprintf (f, "%s %s\n", prefix, msg->topic);
@@ -1340,10 +1341,10 @@ void flux_msg_fprint_ts (FILE *f, const flux_msg_t *msg, double timestamp)
             fprintf (f, "sequence=%u\n",
                      msg->sequence);
             break;
-        case FLUX_MSGTYPE_KEEPALIVE:
-            fprintf (f, "errnum=%u status=%u\n",
-                     msg->errnum,
-                     msg->status);
+        case FLUX_MSGTYPE_CONTROL:
+            fprintf (f, "type=%u status=%u\n",
+                     msg->control_type,
+                     msg->control_status);
             break;
         default:
             fprintf (f, "aux1=0x%X aux2=0x%X\n",

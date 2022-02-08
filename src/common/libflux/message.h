@@ -28,7 +28,7 @@ enum {
     FLUX_MSGTYPE_REQUEST    = 0x01,
     FLUX_MSGTYPE_RESPONSE   = 0x02,
     FLUX_MSGTYPE_EVENT      = 0x04,
-    FLUX_MSGTYPE_KEEPALIVE  = 0x08,
+    FLUX_MSGTYPE_CONTROL    = 0x08,
     FLUX_MSGTYPE_ANY        = 0x0f,
     FLUX_MSGTYPE_MASK       = 0x0f,
 };
@@ -254,7 +254,7 @@ int flux_msg_cred_authorize (struct flux_msg_cred cred, uint32_t userid);
  */
 int flux_msg_authorize (const flux_msg_t *msg, uint32_t userid);
 
-/* Get/set errnum (response/keepalive only)
+/* Get/set errnum (response only)
  */
 int flux_msg_set_errnum (flux_msg_t *msg, int errnum);
 int flux_msg_get_errnum (const flux_msg_t *msg, int *errnum);
@@ -264,10 +264,10 @@ int flux_msg_get_errnum (const flux_msg_t *msg, int *errnum);
 int flux_msg_set_seq (flux_msg_t *msg, uint32_t seq);
 int flux_msg_get_seq (const flux_msg_t *msg, uint32_t *seq);
 
-/* Get/set status (keepalive only)
+/* Get/set type, status (control only)
  */
-int flux_msg_set_status (flux_msg_t *msg, int status);
-int flux_msg_get_status (const flux_msg_t *msg, int *status);
+int flux_msg_set_control (flux_msg_t *msg, int type, int status);
+int flux_msg_get_control (const flux_msg_t *msg, int *type, int *status);
 
 /* Get/set/compare match tag (request/response only)
  */

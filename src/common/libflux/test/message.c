@@ -228,16 +228,16 @@ void check_cornercase (void)
     ok (flux_msg_get_seq (req, &seq) < 0 && errno == EPROTO,
         "flux_msg_get_seq fails with EPROTO on msg != event type");
     errno = 0;
-    ok (flux_msg_set_status (NULL, 0) < 0 && errno == EINVAL,
+    ok (flux_msg_set_control (NULL, 0, 0) < 0 && errno == EINVAL,
         "flux_msg_set_status fails with EINVAL on msg = NULL");
     errno = 0;
-    ok (flux_msg_get_status (NULL, &status) < 0 && errno == EINVAL,
+    ok (flux_msg_get_control (NULL, &type, &status) < 0 && errno == EINVAL,
         "flux_msg_get_status fails with EINVAL on msg = NULL");
-    lives_ok ({flux_msg_get_status (msg, NULL);},
+    lives_ok ({flux_msg_get_control (msg, &type, NULL);},
         "flux_msg_get_status status = NULL does not segfault");
     errno = 0;
-    ok (flux_msg_get_status (req, &status) < 0 && errno == EPROTO,
-        "flux_msg_get_status fails with EPROTO on msg != keepalive type");
+    ok (flux_msg_get_control (req, &type, &status) < 0 && errno == EPROTO,
+        "flux_msg_get_status fails with EPROTO on msg != control type");
     errno = 0;
     ok (flux_msg_set_matchtag (NULL, 42) < 0 && errno == EINVAL,
         "flux_msg_set_matchtag fails with EINVAL on msg = NULL");
@@ -978,13 +978,13 @@ void check_copy (void)
     const void *cpybuf;
     const char *s;
 
-    ok ((msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)) != NULL,
-        "created no-payload keepalive");
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_CONTROL)) != NULL,
+        "created no-payload control");
     ok ((cpy = flux_msg_copy (msg, true)) != NULL,
         "flux_msg_copy works");
     flux_msg_destroy (msg);
     type = -1;
-    ok (flux_msg_get_type (cpy, &type) == 0 && type == FLUX_MSGTYPE_KEEPALIVE
+    ok (flux_msg_get_type (cpy, &type) == 0&& type == FLUX_MSGTYPE_CONTROL
              && !flux_msg_has_payload (cpy)
              && flux_msg_route_count (cpy) < 0
              && flux_msg_get_topic (cpy, &topic) < 0,
@@ -1051,10 +1051,10 @@ void check_print (void)
     if (!f)
         BAIL_OUT ("cannot open /dev/null for writing");
 
-    ok ((msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)) != NULL,
+    ok ((msg = flux_msg_create (FLUX_MSGTYPE_CONTROL)) != NULL,
         "created test message");
     lives_ok ({flux_msg_fprint_ts (f, msg, 0.);},
-        "flux_msg_fprint_ts doesn't segfault on keepalive");
+        "flux_msg_fprint_ts doesn't segfault on control");
     flux_msg_destroy (msg);
 
     ok ((msg = flux_msg_create (FLUX_MSGTYPE_EVENT)) != NULL,
@@ -1202,13 +1202,13 @@ void check_refcount (void)
     const flux_msg_t *p;
     int type;
 
-    if (!(msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)))
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_CONTROL)))
         BAIL_OUT ("failed to create test message");
     p = flux_msg_incref (msg);
     ok (p == msg,
         "flux_msg_incref returns pointer to original");
     flux_msg_destroy (msg);
-    ok (flux_msg_get_type (p, &type) == 0 && type == FLUX_MSGTYPE_KEEPALIVE,
+    ok (flux_msg_get_type (p, &type) == 0 && type == FLUX_MSGTYPE_CONTROL,
         "reference remains valid after destroy");
     flux_msg_decref (p);
 }

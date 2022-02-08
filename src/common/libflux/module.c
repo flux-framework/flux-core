@@ -19,7 +19,6 @@
 
 #include "module.h"
 #include "message.h"
-#include "keepalive.h"
 #include "rpc.h"
 
 #include "src/common/libutil/log.h"

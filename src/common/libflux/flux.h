@@ -20,7 +20,7 @@
 #include "msglist.h"
 #include "request.h"
 #include "response.h"
-#include "keepalive.h"
+#include "control.h"
 #include "rpc.h"
 #include "panic.h"
 #include "event.h"

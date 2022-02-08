@@ -53,7 +53,7 @@ int iovec_to_msg (flux_msg_t *msg,
     if (msg->type != FLUX_MSGTYPE_REQUEST
         && msg->type != FLUX_MSGTYPE_RESPONSE
         && msg->type != FLUX_MSGTYPE_EVENT
-        && msg->type != FLUX_MSGTYPE_KEEPALIVE) {
+        && msg->type != FLUX_MSGTYPE_CONTROL) {
         errno = EPROTO;
         return -1;
     }

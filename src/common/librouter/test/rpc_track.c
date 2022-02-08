@@ -248,11 +248,11 @@ void test_badarg (void)
         "rpc_track_update msg=event is a no-op");
     flux_msg_decref (msg);
 
-    if (!(msg = flux_keepalive_encode (42, 43)))
+    if (!(msg = flux_control_encode (42, 43)))
         BAIL_OUT ("could not create test message");
     rpc_track_update (rt, NULL);
     ok (rpc_track_count (rt) == 0,
-        "rpc_track_update msg=keepalive is a no-op");
+        "rpc_track_update msg=control is a no-op");
     flux_msg_decref (msg);
 
     if (!(msg = flux_request_encode ("foo", NULL)))

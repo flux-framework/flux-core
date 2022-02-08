@@ -90,7 +90,7 @@ static void diag_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_msg_get_type (msg, &msgtype) < 0)
         goto badmsg;
-    if (msgtype != FLUX_MSGTYPE_KEEPALIVE) {
+    if (msgtype != FLUX_MSGTYPE_CONTROL) {
         if (flux_msg_get_topic (msg, &topic) < 0)
             goto badmsg;
     }

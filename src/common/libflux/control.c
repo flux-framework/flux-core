@@ -13,17 +13,15 @@
 #endif
 #include <flux/core.h>
 
-#include "keepalive.h"
+#include "control.h"
 
-flux_msg_t *flux_keepalive_encode (int errnum, int status)
+flux_msg_t *flux_control_encode (int type, int status)
 {
     flux_msg_t *msg;
 
-    if (!(msg = flux_msg_create (FLUX_MSGTYPE_KEEPALIVE)))
+    if (!(msg = flux_msg_create (FLUX_MSGTYPE_CONTROL)))
         goto error;
-    if (flux_msg_set_errnum (msg, errnum) < 0)
-        goto error;
-    if (flux_msg_set_status (msg, status) < 0)
+    if (flux_msg_set_control (msg, type, status) < 0)
         goto error;
     return msg;
 error:
@@ -31,22 +29,17 @@ error:
     return NULL;
 }
 
-int flux_keepalive_decode (const flux_msg_t *msg, int *ep, int *sp)
+int flux_control_decode (const flux_msg_t *msg, int *typep, int *statusp)
 {
-    int rc = -1;
-    int errnum, status;
+    int type, status;
 
-    if (flux_msg_get_errnum (msg, &errnum) < 0)
-        goto done;
-    if (flux_msg_get_status (msg, &status) < 0)
-        goto done;
-    if (ep)
-        *ep = errnum;
-    if (sp)
-        *sp = status;
-    rc = 0;
-done:
-    return rc;
+    if (flux_msg_get_control (msg, &type, &status) < 0)
+        return -1;
+    if (typep)
+        *typep = type;
+    if (statusp)
+        *statusp = status;
+    return 0;
 }
 
 /*
