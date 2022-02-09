@@ -219,6 +219,7 @@ static struct sdexec *sdexec_create (flux_t *h,
     }
 
     if (flux_cmd_argv_append (se->cmd, job_shell) < 0
+        || flux_cmd_argv_append (se->cmd, "--reconnect") < 0
         || flux_cmd_argv_appendf (se->cmd, "%ju", (uintmax_t) job->id) < 0) {
         flux_log_error (job->h, "flux_cmd_argv_append");
         goto cleanup;
