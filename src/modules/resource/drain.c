@@ -483,9 +483,10 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
             else if (!strcmp (name, "drain")) {
                 int overwrite = 1;
                 if (json_unpack (context,
-                                 "{s:s s?s}",
+                                 "{s:s s?s s?i}",
                                  "idset", &s,
-                                 "reason", &reason) < 0) {
+                                 "reason", &reason,
+                                 "overwrite", &overwrite) < 0) {
                     errno = EPROTO;
                     return -1;
                 }
