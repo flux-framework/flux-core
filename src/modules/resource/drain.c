@@ -431,7 +431,7 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
     }
     if (get_timestamp_now (&timestamp) < 0)
         return -1;
-    if (update_draininfo_rank (drain, rank, true, timestamp, reason, 1) < 0)
+    if (update_draininfo_rank (drain, rank, true, timestamp, reason, 0) < 0)
         return -1;
     snprintf (rankstr, sizeof (rankstr), "%ju", (uintmax_t)rank);
     if (reslog_post_pack (drain->ctx->reslog,
