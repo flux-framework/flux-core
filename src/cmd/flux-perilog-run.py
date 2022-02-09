@@ -36,7 +36,7 @@ def drain(handle, ids, reason):
 
     handle.rpc(
         "resource.drain",
-        {"targets": str(ids), "reason": reason},
+        {"targets": str(ids), "reason": reason, "mode": "update"},
         nodeid=0,
     )
 
