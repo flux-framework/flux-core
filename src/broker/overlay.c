@@ -113,17 +113,6 @@ static const double sync_max = 5.0;
 static const double default_torpid_min = 5.0;
 static const double default_torpid_max = 30.0;
 
-/* TCP keepalives for child connections.
- * These are distinct from the application level keepalives described above
- * and are needed to detect nodes that are turned off before they can send FIN.
- * The values of -1 below mean "use OS default" and are 0MQ-specific.
- * The OS defaults can be tuned with sysctl.
- */
-static int default_keepalive_enable = 1;    // 0=disable, 1=enable
-static int default_keepalive_count = -1;
-static int default_keepalive_idle = -1;
-static int default_keepalive_interval = -1;
-
 struct overlay_monitor {
     overlay_monitor_f cb;
     void *arg;
@@ -148,10 +137,6 @@ struct overlay {
     int zmqdebug;
     double torpid_min;
     double torpid_max;
-    int keepalive_enable;
-    int keepalive_count;
-    int keepalive_idle;
-    int keepalive_interval;
 
     struct parent parent;
 
@@ -1301,11 +1286,6 @@ int overlay_bind (struct overlay *ov, const char *uri)
     zsock_set_router_mandatory (ov->bind_zsock, 1);
     zsock_set_ipv6 (ov->bind_zsock, ov->enable_ipv6);
 
-    zsock_set_tcp_keepalive (ov->bind_zsock, ov->keepalive_enable);
-    zsock_set_tcp_keepalive_idle (ov->bind_zsock, ov->keepalive_idle);
-    zsock_set_tcp_keepalive_intvl (ov->bind_zsock, ov->keepalive_interval);
-    zsock_set_tcp_keepalive_cnt (ov->bind_zsock, ov->keepalive_count);
-
     zsock_set_zap_domain (ov->bind_zsock, FLUX_ZAP_DOMAIN);
     zcert_apply (ov->cert, ov->bind_zsock);
     zsock_set_curve_server (ov->bind_zsock, 1);
@@ -1818,86 +1798,6 @@ static int overlay_configure_torpid (struct overlay *ov)
     return 0;
 }
 
-static int check_keepalive_values (struct overlay *ov, const char *msg)
-{
-    if (ov->keepalive_enable != 0 && ov->keepalive_enable != 1) {
-        log_msg ("%s: %s must be 0 or 1", msg, "tbon.keepalive_enable");
-        return -1;
-    }
-    if (ov->keepalive_count != -1 && !(ov->keepalive_count > 0)) {
-        log_msg ("%s: %s must be -1 or >0", msg, "tbon.keepalive_count");
-        return -1;
-    }
-    if (ov->keepalive_idle != -1 && !(ov->keepalive_idle > 0)) {
-        log_msg ("%s: %s must be -1 or >0", msg, "tbon.keepalive_idle");
-        return -1;
-    }
-    if (ov->keepalive_interval != -1 && !(ov->keepalive_interval > 0)) {
-        log_msg ("%s: %s must be -1 or >0", msg, "tbon.keepalive_interval");
-        return -1;
-    }
-    return 0;
-}
-
-static int overlay_configure_keepalive (struct overlay *ov)
-{
-    const flux_conf_t *cf;
-
-    /* Start with compiled in defaults.
-     */
-    ov->keepalive_enable = default_keepalive_enable;
-    ov->keepalive_count = default_keepalive_count;
-    ov->keepalive_idle = default_keepalive_idle;
-    ov->keepalive_interval = default_keepalive_interval;
-
-    /* Override with config file settings, if any.
-     */
-    if ((cf = flux_get_conf (ov->h))) {
-        flux_conf_error_t error;
-
-        if (flux_conf_unpack (flux_get_conf (ov->h),
-                              &error,
-                              "{s?{s?i s?i s?i s?i}}",
-                              "tbon",
-                                "keepalive_enable", &ov->keepalive_enable,
-                                "keepalive_count", &ov->keepalive_count,
-                                "keepalive_idle", &ov->keepalive_idle,
-                                "keepalive_interval",
-                                    &ov->keepalive_interval) < 0) {
-            log_msg ("Config file error [tbon]: %s", error.errbuf);
-            return -1;
-        }
-        if (check_keepalive_values (ov, "Config file error") < 0)
-            return -1;
-    }
-
-    /* Override with broker attribute (command line only) settings, if any.
-     */
-    if (overlay_configure_attr_int (ov->attrs,
-                                    "tbon.keepalive_enable",
-                                    ov->keepalive_enable,
-                                    &ov->keepalive_enable) < 0)
-        return -1;
-    if (overlay_configure_attr_int (ov->attrs,
-                                    "tbon.keepalive_count",
-                                    ov->keepalive_count,
-                                    &ov->keepalive_count) < 0)
-        return -1;
-    if (overlay_configure_attr_int (ov->attrs,
-                                    "tbon.keepalive_idle",
-                                    ov->keepalive_idle,
-                                    &ov->keepalive_idle) < 0)
-        return -1;
-    if (overlay_configure_attr_int (ov->attrs,
-                                    "tbon.keepalive_interval",
-                                    ov->keepalive_interval,
-                                    &ov->keepalive_interval) < 0)
-        return -1;
-    if (check_keepalive_values (ov, "broker attribute error") < 0)
-        return -1;
-    return 0;
-}
-
 void overlay_destroy (struct overlay *ov)
 {
     if (ov) {
@@ -2018,8 +1918,6 @@ struct overlay *overlay_create (flux_t *h,
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
         goto error;
     if (overlay_configure_torpid (ov) < 0)
-        goto error;
-    if (overlay_configure_keepalive (ov) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;
