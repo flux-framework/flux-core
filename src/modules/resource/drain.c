@@ -15,7 +15,12 @@
  *
  * Handle RPCs from front-end commands.
  * - if a node in undrain target is not drained, request fails
- * - if a node in drain target is already drained, request succeeds
+ * - if a node in drain target is already drained, request status depends
+ *   on setting of optional 'mode' member:
+ *    - If mode is not set, request fails
+ *    - If mode=overwrite, request succeeds and reason is updated
+ *    - If mode=update, request succeeds and reason is updated only for
+ *      those target that are not drained or do not have reason set.
  *
  * Post events for each drain/undrain action.  Drain state is sticky
  * across module reload / instance restart.  The state is reacquired
@@ -118,6 +123,57 @@ static int update_draininfo_idset (struct drain *drain,
     }
     return 0;
 }
+
+/*  Check if all targets in idset are either not drained, or do
+ *   not have a reason currently set. If one or more ranks do
+ *   not meet this criteria then the function returns -1 and
+ *   calls out the ranks in the returned errstr.
+ */
+static int check_draininfo_idset (struct drain *drain,
+                                  struct idset *idset,
+                                  char *errstr,
+                                  size_t errlen)
+{
+    int rc = 0;
+    unsigned int rank;
+    struct idset *errids = idset_create (0, IDSET_FLAG_AUTOGROW);
+
+    if (!errids)
+        return -1;
+
+    errstr[0] = '\0';
+
+    rank = idset_first (idset);
+    while (rank != IDSET_INVALID_ID) {
+        if (drain->info[rank].drained && drain->info[rank].reason) {
+            rc = -1;
+            if (idset_set (errids, rank) < 0)
+                flux_log_error (drain->ctx->h,
+                                "check_draininfo_idset: idset_set(%d)",
+                                rank);
+        }
+        rank = idset_next (idset, rank);
+    }
+    if (rc < 0) {
+        char *s;
+        int n = idset_count (errids);
+
+        if (!(s = idset_encode (errids, IDSET_FLAG_RANGE)))
+            flux_log_error (drain->ctx->h,
+                            "check_draininfo_idset: idset_encode");
+
+        snprintf (errstr,
+                  errlen,
+                  "rank%s %s already drained",
+                  n > 1 ? "s" : "",
+                  s ? s : "(unknown)");
+        free (s);
+        errno = EEXIST;
+    }
+    idset_destroy (errids);
+    return rc;
+}
+
 
 static bool is_drained (struct drain *drain, unsigned int rank)
 {
@@ -275,21 +331,22 @@ static void drain_cb (flux_t *h,
     int rc;
     struct drain *drain = arg;
     const char *s;
+    const char *mode = NULL;
     const char *reason = NULL;
     struct idset *idset = NULL;
     const char *errstr = NULL;
     char *idstr = NULL;
     char errbuf[256];
     double timestamp;
-    int overwrite = 1;
+    int overwrite = 0;
+    int update_only = 0;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s?:s}",
-                             "targets",
-                             &s,
-                             "reason",
-                             &reason) < 0)
+                             "{s:s s?:s s?:s}",
+                             "targets", &s,
+                             "reason", &reason,
+                             "mode", &mode) < 0)
         goto error;
     if (!(idset = drain_idset_decode (drain, s, errbuf, sizeof (errbuf)))) {
         errstr = errbuf;
@@ -297,6 +354,28 @@ static void drain_cb (flux_t *h,
     }
     if (get_timestamp_now (&timestamp) < 0)
         goto error;
+
+    if (mode) {
+        errstr = "Invalid mode specified";
+        if (strcmp (mode, "update") == 0)
+            update_only = 1;
+        else if (strcmp (mode, "overwrite") == 0)
+            overwrite = 1;
+        else {
+            errno = EINVAL;
+            goto error;
+        }
+    }
+
+    /*  If neither overwrite or update_only are set, then return error unless
+     *   none of the target ranks are already drained.
+     */
+    if (!overwrite &&
+        !update_only &&
+        check_draininfo_idset (drain, idset, errbuf, sizeof (errbuf)) < 0) {
+        errstr = errbuf;
+        goto error;
+    }
     if (update_draininfo_idset (drain,
                                 idset,
                                 true,
@@ -315,16 +394,18 @@ static void drain_cb (flux_t *h,
                                msg,
                                timestamp,
                                "drain",
-                               "{s:s s:s}",
+                               "{s:s s:s s:i}",
                                "idset", idstr,
-                               "reason", reason);
+                               "reason", reason,
+                               "overwrite", overwrite);
     else
         rc = reslog_post_pack (drain->ctx->reslog,
                                msg,
                                timestamp,
                                "drain",
-                               "{s:s}",
-                               "idset", idstr);
+                               "{s:s s:i}",
+                               "idset", idstr,
+                               "overwrite", overwrite);
     if (rc < 0)
         goto error;
     free (idstr);
