@@ -205,4 +205,4 @@ RFC 29: Hostlist Format: https://flux-framework.readthedocs.io/projects/flux-rfc
 SEE ALSO
 ========
 
-:man1:`flux-getattr`, :man3:`flux_attr_get`
+:man1:`flux-broker`, :man1:`flux-getattr`, :man3:`flux_attr_get`
