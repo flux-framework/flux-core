@@ -123,8 +123,7 @@ SOCKET ATTRIBUTES
 
 local-uri
    The Flux URI that should be passed to :man3:`flux_open` to
-   establish a connection to the local broker rank. By default,
-   local-uri is created as "local://<broker.rank>/local".
+   establish a connection to the local broker rank.
 
 parent-uri
    The Flux URI that should be passed to :man3:`flux_open` to
