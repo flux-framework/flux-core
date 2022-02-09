@@ -137,6 +137,7 @@ struct overlay {
     int zmqdebug;
     double torpid_min;
     double torpid_max;
+    double tcp_user_timeout;
 
     struct parent parent;
 
@@ -1285,7 +1286,10 @@ int overlay_bind (struct overlay *ov, const char *uri)
     zsock_set_linger (ov->bind_zsock, 5);
     zsock_set_router_mandatory (ov->bind_zsock, 1);
     zsock_set_ipv6 (ov->bind_zsock, ov->enable_ipv6);
-
+#ifdef ZMQ_TCP_MAXRT
+    if (ov->tcp_user_timeout > 0)
+        zsock_set_tcp_maxrt (ov->bind_zsock, ov->tcp_user_timeout * 1000);
+#endif
     zsock_set_zap_domain (ov->bind_zsock, FLUX_ZAP_DOMAIN);
     zcert_apply (ov->cert, ov->bind_zsock);
     zsock_set_curve_server (ov->bind_zsock, 1);
@@ -1798,6 +1802,60 @@ static int overlay_configure_torpid (struct overlay *ov)
     return 0;
 }
 
+static int overlay_configure_tcp_user_timeout (struct overlay *ov)
+{
+    const flux_conf_t *cf;
+    const char *fsd = NULL;
+
+    if ((cf = flux_get_conf (ov->h))) {
+        flux_conf_error_t error;
+
+        if (flux_conf_unpack (cf,
+                              &error,
+                              "{s?{s?s}}",
+                              "tbon",
+                                "tcp_user_timeout", &fsd) < 0) {
+            log_msg ("Config file error [tbon]: %s", error.errbuf);
+            return -1;
+        }
+        if (fsd) {
+            if (fsd_parse_duration (fsd, &ov->tcp_user_timeout) < 0
+                || ov->tcp_user_timeout <= 0) {
+                log_msg ("Config file error parsing tbon.tcp_user_timeout");
+                return -1;
+            }
+        }
+    }
+
+    /* Override with broker attribute (command line only) settings, if any.
+     */
+    if (attr_get (ov->attrs, "tbon.tcp_user_timeout", &fsd, NULL) == 0) {
+        if (fsd_parse_duration (fsd, &ov->tcp_user_timeout) < 0
+            || ov->tcp_user_timeout < 0) {
+            log_msg ("Error parsing tbon.tcp_user_timeout attribute");
+            return -1;
+        }
+        if (attr_delete (ov->attrs, "tbon.tcp_user_timeout", true) < 0)
+            return -1;
+    }
+#ifdef ZMQ_TCP_MAXRT
+    char buf[64];
+    if (fsd_format_duration (buf, sizeof (buf), ov->tcp_user_timeout) < 0)
+        return -1;
+    if (attr_add (ov->attrs,
+                  "tbon.tcp_user_timeout",
+                  buf,
+                  FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+#else
+    if (ov->tcp_user_timeout != 0) {
+        log_msg ("tbon.tcp_user_timeout unsupported by this zeromq version");
+        return -1;
+    }
+#endif
+    return 0;
+}
+
 void overlay_destroy (struct overlay *ov)
 {
     if (ov) {
@@ -1918,6 +1976,8 @@ struct overlay *overlay_create (flux_t *h,
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
         goto error;
     if (overlay_configure_torpid (ov) < 0)
+        goto error;
+    if (overlay_configure_tcp_user_timeout (ov) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;

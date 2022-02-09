@@ -5,8 +5,16 @@ test_description='Test config file overlay bootstrap'
 
 . `dirname $0`/sharness.sh
 
+
 # Avoid loading unnecessary modules in back to back broker tests
 ARGS="-Sbroker.rc1_path= -Sbroker.rc3_path="
+
+# This option is compiled out of flux if zeromq is too old
+if flux broker ${ARGS} flux getattr tbon.tcp_user_timeout >/dev/null 2>&1; then
+	test_set_prereq MAXRT
+else
+	test_set_prereq NOMAXRT
+fi
 
 #
 # check config file parsing
@@ -212,4 +220,70 @@ test_expect_success '[bootstrap] curve_cert file must be mode o-r' '
 	test_must_fail flux broker ${ARGS} -c conf14 /bin/true
 '
 
+#
+# [tbon] test
+#
+
+test_expect_success MAXRT 'tbon.tcp_user_timeout is zero by default' '
+	cat <<-EOT >maxrt.exp &&
+	0s
+	EOT
+	flux broker ${ARGS} \
+		flux getattr tbon.tcp_user_timeout >maxrt.out &&
+	test_cmp maxrt.exp maxrt.out
+'
+test_expect_success MAXRT 'tbon.tcp_user_timeout can be configured' '
+	mkdir conf15 &&
+	cat <<-EOT2 >maxrt2.exp &&
+	30s
+	EOT2
+	cat <<-EOT >conf15/tbon.toml &&
+	[tbon]
+	tcp_user_timeout = "30s"
+	EOT
+	flux broker ${ARGS} -c conf15 flux getattr tbon.tcp_user_timeout \
+		>maxrt2.out &&
+	test_cmp maxrt2.exp maxrt2.out
+'
+test_expect_success MAXRT 'tbon.tcp_user_timeout command line overrides config' '
+	cat <<-EOT >maxrt3.exp &&
+	1h
+	EOT
+	flux broker ${ARGS} -c conf15 \
+		-Stbon.tcp_user_timeout=1h \
+		flux getattr tbon.tcp_user_timeout >maxrt3.out &&
+	test_cmp maxrt3.exp maxrt3.out
+'
+test_expect_success MAXRT 'tbon.tcp_user_timeout with bad FSD on command line fails' '
+	test_must_fail flux broker ${ARGS} \
+		-Stbon.tcp_user_timeout=zzz \
+		/bin/true 2>badattr.err &&
+	grep "Error parsing" badattr.err
+'
+test_expect_success MAXRT 'tbon.tcp_user_timeout with bad FSD configured fails' '
+	mkdir conf16 &&
+	cat <<-EOT >conf16/tbon.toml &&
+	[tbon]
+	tcp_user_timeout = 42
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf16 \
+		/bin/true 2>badconf.err &&
+	grep "Config file error" badconf.err
+'
+test_expect_success NOMAXRT 'tbon.tcp_user_timeout config cannot be set with old zeromq' '
+	mkdir conf17 &&
+	cat <<-EOT >conf17/tbon.toml &&
+	[tbon]
+	tcp_user_timeout = "30s"
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf17 \
+		/bin/true 2>noconf.err &&
+	grep "unsupported by this zeromq version" noconf.err
+'
+test_expect_success NOMAXRT 'tbon.tcp_user_timeout attr cannot be set with old zeromq' '
+	test_must_fail flux broker ${ARGS} \
+		-Stbon.tcp_user_timeout=30s \
+		/bin/true 2>noattr.err &&
+	grep "unsupported by this zeromq version" noattr.err
+'
 test_done
