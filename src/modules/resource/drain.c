@@ -69,7 +69,8 @@ static int update_draininfo_rank (struct drain *drain,
                                   unsigned int rank,
                                   bool drained,
                                   double timestamp,
-                                  const char *reason)
+                                  const char *reason,
+                                  int overwrite)
 {
     char *cpy = NULL;
 
@@ -77,8 +78,17 @@ static int update_draininfo_rank (struct drain *drain,
         errno = EINVAL;
         return -1;
     }
+    /*  Skip rank if it is already drained with an existing reason
+     *   and the overwrite flag is not set.
+     */
+    if (!overwrite
+        && drain->info[rank].drained
+        && drain->info[rank].reason)
+        return 0;
+
     if (reason && !(cpy = strdup (reason)))
         return -1;
+
     free (drain->info[rank].reason);
     drain->info[rank].reason = cpy;
     drain->info[rank].drained = drained;
@@ -90,13 +100,19 @@ static int update_draininfo_idset (struct drain *drain,
                                    struct idset *idset,
                                    bool drained,
                                    double timestamp,
-                                   const char *reason)
+                                   const char *reason,
+                                   int overwrite)
 {
     unsigned int rank;
 
     rank = idset_first (idset);
     while (rank != IDSET_INVALID_ID) {
-        if (update_draininfo_rank (drain, rank, drained, timestamp, reason) < 0)
+        if (update_draininfo_rank (drain,
+                                   rank,
+                                   drained,
+                                   timestamp,
+                                   reason,
+                                   overwrite) < 0)
             return -1;
         rank = idset_next (idset, rank);
     }
@@ -145,7 +161,8 @@ static void broker_torpid_cb (flux_future_t *f, void *arg)
                                        ids,
                                        true,
                                        timestamp,
-                                       reason) < 0) {
+                                       reason,
+                                       0) < 0) {
             flux_log_error (h, "error draining torpid nodes");
             goto done;
         }
@@ -264,6 +281,7 @@ static void drain_cb (flux_t *h,
     char *idstr = NULL;
     char errbuf[256];
     double timestamp;
+    int overwrite = 1;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -279,7 +297,12 @@ static void drain_cb (flux_t *h,
     }
     if (get_timestamp_now (&timestamp) < 0)
         goto error;
-    if (update_draininfo_idset (drain, idset, true, timestamp, reason) < 0)
+    if (update_draininfo_idset (drain,
+                                idset,
+                                true,
+                                timestamp,
+                                reason,
+                                overwrite) < 0)
         goto error;
     if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE)))
         goto error;
@@ -325,7 +348,7 @@ int drain_rank (struct drain *drain, uint32_t rank, const char *reason)
     }
     if (get_timestamp_now (&timestamp) < 0)
         return -1;
-    if (update_draininfo_rank (drain, rank, true, timestamp, reason) < 0)
+    if (update_draininfo_rank (drain, rank, true, timestamp, reason, 1) < 0)
         return -1;
     snprintf (rankstr, sizeof (rankstr), "%ju", (uintmax_t)rank);
     if (reslog_post_pack (drain->ctx->reslog,
@@ -379,7 +402,7 @@ static void undrain_cb (flux_t *h,
         }
         id = idset_next (idset, id);
     }
-    if (update_draininfo_idset (drain, idset, false, 0., NULL) < 0)
+    if (update_draininfo_idset (drain, idset, false, 0., NULL, 1) < 0)
         goto error;
     if (!(idstr = idset_encode (idset, IDSET_FLAG_RANGE)))
         goto error;
@@ -458,6 +481,7 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                     return -1;
             }
             else if (!strcmp (name, "drain")) {
+                int overwrite = 1;
                 if (json_unpack (context,
                                  "{s:s s?s}",
                                  "idset", &s,
@@ -471,7 +495,8 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                                             idset,
                                             true,
                                             timestamp,
-                                            reason) < 0) {
+                                            reason,
+                                            overwrite) < 0) {
                     idset_destroy (idset);
                     return -1;
                 }
@@ -488,7 +513,8 @@ static int replay_eventlog (struct drain *drain, const json_t *eventlog)
                                             idset,
                                             false,
                                             timestamp,
-                                            NULL) < 0) {
+                                            NULL,
+                                            1) < 0) {
                     idset_destroy (idset);
                     return -1;
                 }
