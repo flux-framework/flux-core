@@ -56,8 +56,12 @@ static struct optparse_option shell_opts[] =  {
       .usage = "Run local program without Flux instance", },
     { .name = "initrc", .has_arg = 1, .arginfo = "FILE",
       .usage = "Load shell initrc from FILE instead of the system default" },
+    { .name = "reconnect", .has_arg = 0,
+      .usage = "Attempt to reconnect if broker connection is lost" },
     OPTPARSE_TABLE_END
 };
+
+static void shell_events_subscribe (flux_shell_t *shell);
 
 /* Parse optarg as a jobid rank and assign to 'jobid'.
  * Return 0 on success or -1 on failure (log error).
@@ -221,14 +225,63 @@ static void shell_parse_cmdline (flux_shell_t *shell, int argc, char *argv[])
     shell->p = p;
 }
 
+static int try_reconnect (flux_t *h)
+{
+    int rc = -1;
+    flux_future_t *f;
+
+    if (flux_reconnect (h) < 0) {
+        if (errno == ENOSYS)
+            shell_die (1, "reconnect not implemented by connector");
+        return -1;
+    }
+
+    /*  Wait for broker to enter RUN state.
+     *
+     *  RPC may fail if broker is still shutting down. In that case, return
+     *   error so that we reconnect again and retry.
+     */
+    if (!(f = flux_rpc (h, "state-machine.wait", NULL, FLUX_NODEID_ANY, 0)))
+        shell_die (1, "could not send state-machine.wait RPC");
+    rc = flux_rpc_get (f, NULL);
+
+    flux_future_destroy (f);
+    return rc;
+}
+
+static int reconnect (flux_t *h, void *arg)
+{
+    flux_future_t *f;
+    flux_shell_t *shell = arg;
+
+    shell_log_errno ("broker");
+    while (try_reconnect (h) < 0)
+        sleep (2);
+
+    shell_events_subscribe (shell);
+
+    if (!(f = flux_service_register (h, shell_svc_name (shell->svc))))
+        shell_die (1, "could not re-register shell service name");
+    if (flux_rpc_get (f, NULL) < 0)
+        shell_die (1, "flux_service_register: %s", future_strerror (f, errno));
+    flux_future_destroy (f);
+    shell_log ("broker: reconnected");
+    return 0;
+}
+
 static void shell_connect_flux (flux_shell_t *shell)
 {
+    int flags = optparse_hasopt (shell->p, "reconnect") ? FLUX_O_RPCTRACK : 0;
+
     if (shell->standalone)
         shell->h = flux_open ("loop://", FLUX_O_TEST_NOSUB);
     else
-        shell->h = flux_open (NULL, 0);
+        shell->h = flux_open (NULL, flags);
     if (!shell->h)
         shell_die_errno (1, "flux_open");
+
+    if (optparse_hasopt (shell->p, "reconnect"))
+        flux_comms_error_set (shell->h, reconnect, shell);
 
     /*  Set reactor for flux handle to our custom created reactor.
      */
