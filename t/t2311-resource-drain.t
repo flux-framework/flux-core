@@ -20,6 +20,10 @@ has_resource_event () {
 	flux kvs eventlog get resource.eventlog | awk '{ print $2 }' | grep $1
 }
 
+drain_timestamp () {
+	flux resource drain | tail -n 1 | awk '{ print $1 }'
+}
+
 test_expect_success 'wait for monitor to declare all ranks are up' '
 	waitdown 0
 '
@@ -27,6 +31,10 @@ test_expect_success 'wait for monitor to declare all ranks are up' '
 test_expect_success 'drain works with no reason' '
 	flux resource drain 1 &&
 	test $(flux resource list -n -s down -o {nnodes}) -eq 1
+'
+
+test_expect_success 'save original drain timestamp' '
+	drain_timestamp > rank1.timestamp
 '
 
 test_expect_success 'resource.eventlog has one drain event' '
@@ -42,6 +50,43 @@ test_expect_success 'reason can be added after node is drained' '
 
 test_expect_success 'resource.eventlog has two drain events' '
 	test $(has_resource_event drain | wc -l) -eq 2
+'
+
+test_expect_success 'reason cannot be updated when already set' '
+	test_expect_code 1 flux resource drain 1 test_reason_fail &&
+	flux resource drain | test_must_fail grep test_reason_fail &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq 1 &&
+	test $(flux resource status -s drain -no {nnodes}) -eq 1
+'
+
+test_expect_success 'drain detects subset of already drained targets' '
+	test_expect_code 1 flux resource drain 0-1 >drain-0-1.out 2>&1 &&
+	test_debug "cat drain-0-1.out" &&
+	grep "rank 1 already drained" drain-0-1.out &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq 1 &&
+	test $(flux resource status -s drain -no {nnodes}) -eq 1
+'
+
+test_expect_success 'drain reason can be updated with --force' '
+	flux resource drain --force 1 test_reason_updated &&
+	flux resource drain | grep test_reason_updated
+'
+
+test_expect_success 'original drain timestamp is preserved' '
+	test $(drain_timestamp) = $(cat rank1.timestamp)
+'
+
+test_expect_success 'drain update mode does not change already drained rank' '
+	flux resource drain --update 1 test_reason_notouch &&
+	flux resource drain | test_must_fail grep test_reason_notouch
+'
+
+test_expect_success 'drain update mode works with idset' '
+	flux resource drain --update 0-1 test_reason_update &&
+	flux resource status -s drain -no {reason} | grep test_reason_update &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq 2 &&
+	test $(flux resource status -s drain -no {nnodes}) -eq 2 &&
+	flux resource undrain 0
 '
 
 test_expect_success 'drain works with idset' '
@@ -71,8 +116,8 @@ test_expect_success 'undrain remaining nodes' '
 	test $(flux resource list -n -s down -o {nnodes}) -eq 0
 '
 
-test_expect_success 'resource.eventlog has two undrain events' '
-	test $(has_resource_event undrain | wc -l) -eq 2
+test_expect_success 'resource.eventlog has three undrain events' '
+	test $(has_resource_event undrain | wc -l) -eq 3
 '
 
 test_expect_success 'reload resource module to simulate instance restart' '
