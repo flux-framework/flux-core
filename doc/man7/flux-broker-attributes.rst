@@ -173,29 +173,12 @@ log-level
 CONTENT ATTRIBUTES
 ==================
 
-content.acct-dirty
-   The number of dirty cache entries on this rank.
-
-content.acct-entries
-   The total number of cache entries on this rank.
-
-content.acct-size
-   The estimated total size in bytes consumed by cache entries on
-   this rank, excluding overhead.
-
-content.acct-valid
-   The number of valid cache entries on this rank.
-
 content.backing-module
    The selected backing store module, if any. This attribute is only
    set on rank 0 where the content backing store is active.
 
 content.blob-size-limit
    The maximum size of a blob, the basic unit of content storage.
-
-content.flush-batch-count
-   The current number of outstanding store requests, either to the
-   backing store (rank 0) or upstream (rank > 0).
 
 content.flush-batch-limit
    The maximum number of outstanding store requests that will be
