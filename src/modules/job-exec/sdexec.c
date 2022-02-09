@@ -364,7 +364,10 @@ static void state_cb (sdprocess_t *sdp, sdprocess_state_t state, void *arg)
         jobinfo_started (se->job);
 
     if (state == SDPROCESS_ACTIVE) {
-        if (se->job->multiuser) {
+        /*  Don't try to write J to stdin_fd of -1
+         *  This probably indicates we've reattached to this job
+         */
+        if (se->job->multiuser && se->stdin_fds[0] >= 0) {
             char *input = NULL;
             json_t *o = json_pack ("{s:s}", "J", se->job->J);
             if (!o || !(input = json_dumps (o, JSON_COMPACT))) {
