@@ -42,11 +42,15 @@ def drain(args):
     if args.targets is None:
         drain_list()
         return
-
+    payload = {
+        "targets": args.targets,
+    }
+    if args.reason:
+        payload["reason"] = " ".join(args.reason)
     RPC(
         flux.Flux(),
         "resource.drain",
-        {"targets": args.targets, "reason": " ".join(args.reason)},
+        payload,
         nodeid=0,
     ).get()
 
