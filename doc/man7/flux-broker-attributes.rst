@@ -283,8 +283,11 @@ RESOURCES
 Flux: http://flux-framework.org
 
 RFC 13: Simple Process Manager Interface v1: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_13.html
+
 RFC 22: Idset String Representation: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_22.html
+
 RFC 23: Flux Standard Duration: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_23.html
+
 RFC 29: Hostlist Format: https://flux-framework.readthedocs.io/projects/flux-rfc/en/latest/spec_29.html
 
 
