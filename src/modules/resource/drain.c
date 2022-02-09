@@ -96,8 +96,10 @@ static int update_draininfo_rank (struct drain *drain,
 
     free (drain->info[rank].reason);
     drain->info[rank].reason = cpy;
-    drain->info[rank].drained = drained;
-    drain->info[rank].timestamp = timestamp;
+    if (drain->info[rank].drained != drained) {
+        drain->info[rank].drained = drained;
+        drain->info[rank].timestamp = timestamp;
+    }
     return 0;
 }
 
