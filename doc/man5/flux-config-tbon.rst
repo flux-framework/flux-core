@@ -64,8 +64,8 @@ EXAMPLE
 ::
 
    [tbon]
-   torpid_min = 10s
-   torpid_max = 1m
+   torpid_min = "10s"
+   torpid_max = "1m"
 
    keepalive_count = 12
    keepalive_interval = 10
