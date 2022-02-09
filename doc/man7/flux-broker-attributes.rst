@@ -6,16 +6,16 @@ flux-broker-attributes(7)
 DESCRIPTION
 ===========
 
-Flux broker attributes are parameters that affect how different
-broker systems behave. Attributes can be listed and manipulated
-with :man1:`flux-getattr`, :man1:`flux-setattr`, and
-:man1:`flux-lsattr`.
+Flux broker attributes are broker parameters with a scope of a single broker
+rank, that may be set on the :man1:`flux-broker` command line using
+`--setattr=NAME=VALUE`, or manipulated on a running system with
+:man1:`flux-getattr`, :man1:`flux-setattr`, and :man1:`flux-lsattr`.
 
 The broker currently exports the following attributes:
 
 
-SESSION ATTRIBUTES
-==================
+GENERAL
+=======
 
 rank
    The rank of the local broker.
@@ -34,12 +34,13 @@ rundir
    directory, it is removed.  In most cases this attribute should not
    be set by users.
 
-content.backing-path
-   The path to the content backing store file(s). If this is set on the
-   broker command line, the backing store uses this path instead of
-   a temporary one, and content is preserved on instance exit.
-   If file exists, its content is imported into the instance.
-   If it doesn't exist, it is created.
+local-uri
+   The Flux URI that should be passed to :man3:`flux_open` to
+   establish a connection to the local broker rank.
+
+parent-uri
+   The Flux URI that should be passed to :man3:`flux_open` to
+   establish a connection to the enclosing instance.
 
 hostlist
    An RFC 29 hostlist in broker rank order.
@@ -48,8 +49,8 @@ broker.starttime
    Timestamp of broker startup from :man3:`flux_reactor_now`.
 
 
-TOPOLOGY ATTRIBUTES
-===================
+TREE BASED OVERLAY NETWORK
+==========================
 
 tbon.fanout
    Branching factor of the tree based overlay network.
@@ -118,20 +119,8 @@ tbon.keepalive_interval
    :man5:`flux-config-tbon`.
 
 
-SOCKET ATTRIBUTES
-=================
-
-local-uri
-   The Flux URI that should be passed to :man3:`flux_open` to
-   establish a connection to the local broker rank.
-
-parent-uri
-   The Flux URI that should be passed to :man3:`flux_open` to
-   establish a connection to the enclosing instance.
-
-
-LOGGING ATTRIBUTES
-==================
+LOGGING
+=======
 
 log-ring-used
    The number of log entries currently stored in the ring buffer.
@@ -170,12 +159,19 @@ log-level
    are stored in the ring buffer.
 
 
-CONTENT ATTRIBUTES
-==================
+CONTENT
+=======
 
 content.backing-module
    The selected backing store module, if any. This attribute is only
    set on rank 0 where the content backing store is active.
+
+content.backing-path
+   The path to the content backing store file(s). If this is set on the
+   broker command line, the backing store uses this path instead of
+   a temporary one, and content is preserved on instance exit.
+   If file exists, its content is imported into the instance.
+   If it doesn't exist, it is created.
 
 content.blob-size-limit
    The maximum size of a blob, the basic unit of content storage.
