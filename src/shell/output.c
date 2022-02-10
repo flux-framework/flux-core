@@ -455,6 +455,23 @@ static int shell_output_file (struct shell_output *out)
     return 0;
 }
 
+static void shell_output_eof (struct shell_output *out,
+                              flux_msg_handler_t *mh)
+{
+    if (--out->eof_pending == 0) {
+        flux_msg_handler_stop (mh);
+        if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
+            shell_log_errno ("flux_shell_remove_completion_ref");
+
+        /* no more output is coming, flush the last batch of output */
+        if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS
+            || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
+            if (eventlogger_flush (out->ev) < 0)
+                shell_log_errno ("eventlogger_flush");
+        }
+    }
+}
+
 static int shell_output_write_leader (struct shell_output *out,
                                       const char *type,
                                       json_t *o,
@@ -494,20 +511,8 @@ static int shell_output_write_leader (struct shell_output *out,
         shell_log_error ("json_array_clear failed");
         goto error;
     }
-    if (eof) {
-        if (--out->eof_pending == 0) {
-            flux_msg_handler_stop (mh);
-            if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
-                shell_log_errno ("flux_shell_remove_completion_ref");
-            /* no more output is coming, flush the last batch of
-             * output */
-            if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS
-                 || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
-                if (eventlogger_flush (out->ev) < 0)
-                    shell_log_errno ("eventlogger_flush");
-            }
-        }
-    }
+    if (eof)
+        shell_output_eof (out, mh);
     return 0;
 error:
     return -1;
