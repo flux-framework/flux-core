@@ -412,15 +412,17 @@ static int shell_output_file (struct shell_output *out)
 }
 
 static int shell_output_write_leader (struct shell_output *out,
+                                      const char *type,
                                       json_t *o,
                                       flux_msg_handler_t *mh) // may be NULL
 {
     bool eof = false;
     json_t *entry;
 
-    if (iodecode (o, NULL, NULL, NULL, NULL, &eof) < 0)
+    if (strcmp (type, "data") == 0
+        && iodecode (o, NULL, NULL, NULL, NULL, &eof) < 0)
         goto error;
-    if (!(entry = eventlog_entry_pack (0., "data", "O", o))) // increfs 'o'
+    if (!(entry = eventlog_entry_pack (0., type, "O", o))) // increfs 'o'
         goto error;
     if (json_array_append_new (out->output, entry) < 0) {
         json_decref (entry);
@@ -477,10 +479,15 @@ static void shell_output_write_cb (flux_t *h,
 {
     struct shell_output *out = arg;
     json_t *o;
+    const char *type;
 
-    if (flux_request_unpack (msg, NULL, "o", &o) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:o}",
+                             "name", &type,
+                             "context", &o) < 0)
         goto error;
-    if (shell_output_write_leader (out, o, mh) < 0)
+    if (shell_output_write_leader (out, type, o, mh) < 0)
         goto error;
     if (flux_respond (out->shell->h, msg, NULL) < 0)
         shell_log_errno ("flux_respond");
@@ -503,29 +510,24 @@ static void shell_output_write_completion (flux_future_t *f, void *arg)
         shell_output_control (out, false);
 }
 
-static int shell_output_write (struct shell_output *out,
-                               int rank,
-                               const char *stream,
-                               const char *data,
-                               int len,
-                               bool eof)
+static int shell_output_write_type (struct shell_output *out,
+                                    char *type,
+                                    json_t *context)
 {
     flux_future_t *f = NULL;
-    json_t *o = NULL;
-    char rankstr[64];
-
-    snprintf (rankstr, sizeof (rankstr), "%d", rank);
-    if (!(o = ioencode (stream, rankstr, data, len, eof))) {
-        shell_log_errno ("ioencode");
-        return -1;
-    }
 
     if (out->shell->info->shell_rank == 0) {
-        if (shell_output_write_leader (out, o, NULL) < 0)
+        if (shell_output_write_leader (out, type, context, NULL) < 0)
             shell_log_errno ("shell_output_write_leader");
     }
     else {
-        if (!(f = flux_shell_rpc_pack (out->shell, "write", 0, 0, "O", o)))
+        if (!(f = flux_shell_rpc_pack (out->shell,
+                                       "write",
+                                        0,
+                                        0,
+                                        "{s:s s:O}",
+                                        "name", type,
+                                        "context", context)))
             goto error;
         if (flux_future_then (f, -1, shell_output_write_completion, out) < 0)
             goto error;
@@ -534,14 +536,33 @@ static int shell_output_write (struct shell_output *out,
         if (zlist_size (out->pending_writes) >= shell_output_hwm)
             shell_output_control (out, true);
     }
-    json_decref (o);
-
     return 0;
-
 error:
     flux_future_destroy (f);
-    json_decref (o);
     return -1;
+}
+
+static int shell_output_write (struct shell_output *out,
+                               int rank,
+                               const char *stream,
+                               const char *data,
+                               int len,
+                               bool eof)
+{
+    int rc;
+    json_t *o = NULL;
+    char rankstr[13];
+
+    /* integer %d guaranteed to fit in 13 bytes
+     */
+    (void) snprintf (rankstr, sizeof (rankstr), "%d", rank);
+    if (!(o = ioencode (stream, rankstr, data, len, eof))) {
+        shell_log_errno ("ioencode");
+        return -1;
+    }
+    rc = shell_output_write_type (out, "data", o);
+    json_decref (o);
+    return rc;
 }
 
 static int shell_output_handler (flux_plugin_t *p,
