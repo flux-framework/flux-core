@@ -345,6 +345,50 @@ static int shell_output_write_fd (int fd, const void *buf, size_t len)
     return n;
 }
 
+static int shell_output_label (struct shell_output_type_file *ofp,
+                               const char *rank)
+{
+    if (shell_output_write_fd (ofp->fdp->fd,  rank, strlen (rank)) < 0
+        || shell_output_write_fd (ofp->fdp->fd, ": ", 2) < 0)
+        return -1;
+    return 0;
+}
+
+static int shell_output_data (struct shell_output *out, json_t *context)
+{
+    struct shell_output_type_file *ofp;
+    int output_type;
+    const char *stream = NULL;
+    const char *rank = NULL;
+    char *data = NULL;
+    int len = 0;
+    int rc = -1;
+
+    if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
+        shell_log_errno ("iodecode");
+        return -1;
+    }
+    if (!strcmp (stream, "stdout")) {
+        output_type = out->stdout_type;
+        ofp = &out->stdout_file;
+    }
+    else {
+        output_type = out->stderr_type;
+        ofp = &out->stderr_file;
+    }
+    if ((output_type == FLUX_OUTPUT_TYPE_FILE) && len > 0) {
+        if (ofp->label
+            && shell_output_label (ofp, rank) < 0)
+            goto out;
+        if (shell_output_write_fd (ofp->fdp->fd, data, len) < 0)
+            goto out;
+    }
+    rc = 0;
+out:
+    free (data);
+    return rc;
+}
+
 static int shell_output_file (struct shell_output *out)
 {
     json_t *entry;
@@ -358,42 +402,12 @@ static int shell_output_file (struct shell_output *out)
             return -1;
         }
         if (!strcmp (name, "data")) {
-            struct shell_output_type_file *ofp;
-            int output_type;
-            const char *stream = NULL;
-            const char *rank = NULL;
-            char *data = NULL;
-            int len = 0;
-            if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
-                shell_log_errno ("iodecode");
+            if (shell_output_data (out, context) < 0) {
+                shell_log_errno ("shell_output_data");
                 return -1;
             }
-            if (!strcmp (stream, "stdout")) {
-                output_type = out->stdout_type;
-                ofp = &out->stdout_file;
-            }
-            else {
-                output_type = out->stderr_type;
-                ofp = &out->stderr_file;
-            }
-            if ((output_type == FLUX_OUTPUT_TYPE_FILE) && len > 0) {
-                if (ofp->label) {
-                    char *buf = NULL;
-                    int buflen;
-                    if ((buflen = asprintf (&buf, "%s: ", rank)) < 0)
-                        return -1;
-                    if (shell_output_write_fd (ofp->fdp->fd, buf, buflen) < 0) {
-                        free (buf);
-                        return -1;
-                    }
-                    free (buf);
-                }
-                if (shell_output_write_fd (ofp->fdp->fd, data, len) < 0)
-                    return -1;
-            }
-            free (data);
         }
-    }
+   }
     return 0;
 }
 
