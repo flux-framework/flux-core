@@ -70,11 +70,10 @@ static int drain_self (struct topo *topo, const char *reason)
                                  "resource.drain",
                                  0,
                                  0,
-                                 "{s:s s:s}",
-                                 "targets",
-                                 rankstr,
-                                 "reason",
-                                 reason)))
+                                 "{s:s s:s s:s}",
+                                 "targets", rankstr,
+                                 "reason", reason,
+                                 "mode", "update")))
             return -1;
         if (flux_rpc_get (f, NULL) < 0) {
             flux_future_destroy (f);

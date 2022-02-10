@@ -42,11 +42,22 @@ def drain(args):
     if args.targets is None:
         drain_list()
         return
-
+    payload = {
+        "targets": args.targets,
+    }
+    if args.update and args.force:
+        LOGGER.error("Only one of --force and --update may be specified")
+        sys.exit(1)
+    if args.update:
+        payload["mode"] = "update"
+    elif args.force:
+        payload["mode"] = "overwrite"
+    if args.reason:
+        payload["reason"] = " ".join(args.reason)
     RPC(
         flux.Flux(),
         "resource.drain",
-        {"targets": args.targets, "reason": " ".join(args.reason)},
+        payload,
         nodeid=0,
     ).get()
 
@@ -340,6 +351,19 @@ def main():
 
     drain_parser = subparsers.add_parser(
         "drain", formatter_class=flux.util.help_formatter()
+    )
+    drain_parser.add_argument(
+        "-f",
+        "--force",
+        action="store_true",
+        help="Force overwrite of existing drain reason",
+    )
+    drain_parser.add_argument(
+        "-u",
+        "--update",
+        action="store_true",
+        help="Update only. Do not return an error if one or more targets "
+        + "are already drained. Do not overwrite any existing drain reason.",
     )
     drain_parser.add_argument(
         "targets", nargs="?", help="List of targets to drain (IDSET or HOSTLIST)"

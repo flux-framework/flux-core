@@ -59,11 +59,20 @@ COMMANDS
    *-s,--states=STATE,...* limits output to specified resource states, where
    valid states are "online", "offline", "avail", "exclude", "drain", and "all".
 
-**drain** [targets] [reason ...]
+**drain** [-f] [-u] [targets] [reason ...]
    If specified without arguments, list drained nodes.  The *targets* argument
    is an IDSET or HOSTLIST specifying nodes to drain.  Any remaining arguments
-   are assumed to be a reason to be recorded with the drain event.  This
-   command, when run with arguments, is restricted to the Flux instance owner.
+   are assumed to be a reason to be recorded with the drain event.
+
+   By default, **flux resource drain** will fail if any of the *targets*
+   are already drained. To change this behavior, use either of the
+   *-f, --force* or *-u, --update* options. With *--force*, the *reason* for
+   all existing drained targets is overwritten, while with *--update*,
+   only those ranks that are not already drained or do not have a *reason* set
+   have their *reason* updated.
+
+   This command, when run with arguments, is restricted to the Flux instance
+   owner.
 
 **undrain** targets
    The *targets* argument is an IDSET or HOSTLIST specifying nodes to undrain.
