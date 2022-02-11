@@ -173,29 +173,15 @@ tbon.torpid_max [Updates: C, R]
    checking.  Torpid nodes are automatically drained and require manual
    undraining with :man1:`flux-resource`.  Default: ``30s``.
 
-tbon.keepalive_enable
-   An integer value to disable (0) or enable (1) TCP keepalives on TBON
-   child connections.  TCP keepalives are required to detect abruptly turned
-   off peers that are unable to shutdown their TCP connection.  Default 1
-   or as configured in :man5:`flux-config-tbon`.
-
-tbon.keepalive_count
-   The integer number of TCP keepalive packets to send to an idle downstream
-   peer with no response before disconnecting it.  Set to -1 to use the
-   system value from :linux:man8:`sysctl` ``net.ipv4.tcp_keepalive_probes``.
-   Default -1 or as configured in :man5:`flux-config-tbon`.
-
-tbon.keepalive_idle
-   The integer number of seconds to wait for an idle downstream peer to send
-   messages before beginning to send keepalive packets.  Set to -1 to use the
-   system value from :linux:man8:`sysctl` ``net.ipv4.tcp_keepalive_time``.
-   Default -1 or as configured in :man5:`flux-config-tbon`.
-
-tbon.keepalive_interval
-   The integer number of seconds to wait between sending keepalive packets.
-   Set to -1 to use the system value from :linux:man8:`sysctl`
-   ``net.ipv4.tcp_keepalive_intvl``.  Default -1 or as configured in
-   :man5:`flux-config-tbon`.
+tbon.tcp_user_timeout
+   The amount of time (in RFC 23 Flux Standard Duration format) that a broker
+   waits for a TBON child connection to acknowledge transmitted TCP data
+   before forcibly closing the connection.  A value of 0 means use the system
+   default.  This value affects how Flux responds to an abruptly turned off
+   node, which could take up to 20m if this value is not set.  This attribute
+   may not be changed during runtime.  The broker attribute overrides
+   the :man5:`flux-config-tbon` ``tcp_user_timeout`` value, if configured.
+   See also: :linux:man7:`tcp`, TCP_USER_TIMEOUT socket option.
 
 
 LOGGING
