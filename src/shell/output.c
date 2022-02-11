@@ -184,7 +184,7 @@ static int shell_output_redirect_stream (struct shell_output *out,
                                          const char *stream,
                                          const char *path)
 {
-    struct idset *idset;
+    struct idset *idset = NULL;
     json_t *entry = NULL;
     char *entrystr = NULL;
     int saved_errno, rc = -1;
@@ -236,6 +236,7 @@ error:
     json_decref (entry);
     free (entrystr);
     free (rankptr);
+    idset_destroy (idset);
     errno = saved_errno;
     return rc;
 }
