@@ -930,7 +930,7 @@ void test_assign_hosts ()
             "reassign hosts to %s worked", hosts);
 
         free (hosts);
-        
+
         hostlist_destroy (hl);
         rlist_destroy (rl);
         free (R);
@@ -958,7 +958,7 @@ void test_rerank ()
         "rlist_rerank with too many hosts returns EOVERFLOW");
     ok (rlist_rerank (rl, "foo[1-16]") < 0 && errno == ENOENT,
         "rlist_rerank with invalid host returns ENOENT");
-    
+
     if (!(hl = rlist_nodelist (rl)) || !(s = hostlist_encode (hl)))
         BAIL_OUT ("rlist_nodelist/hostlist_encode failed!");
     is (s, "foo[0-15]",
