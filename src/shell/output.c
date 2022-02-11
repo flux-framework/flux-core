@@ -84,7 +84,6 @@ struct shell_output {
     struct eventlogger *ev;
     double batch_timeout;
     int refcount;
-    int eof_pending;
     zlist_t *pending_writes;
     json_t *output;
     bool stopped;
@@ -455,10 +454,10 @@ static int shell_output_file (struct shell_output *out)
     return 0;
 }
 
-static void shell_output_eof (struct shell_output *out,
-                              flux_msg_handler_t *mh)
+static void shell_output_decref (struct shell_output *out,
+                                 flux_msg_handler_t *mh)
 {
-    if (--out->eof_pending == 0) {
+    if (--out->refcount == 0) {
         flux_msg_handler_stop (mh);
         if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
             shell_log_errno ("flux_shell_remove_completion_ref");
@@ -477,12 +476,12 @@ static int shell_output_write_leader (struct shell_output *out,
                                       json_t *o,
                                       flux_msg_handler_t *mh) // may be NULL
 {
-    bool eof = false;
     json_t *entry;
 
-    if (strcmp (type, "data") == 0
-        && iodecode (o, NULL, NULL, NULL, NULL, &eof) < 0)
-        goto error;
+    if (strcmp (type, "eof") == 0) {
+        shell_output_decref (out, mh);
+        return 0;
+    }
     if (!(entry = eventlog_entry_pack (0., type, "O", o))) // increfs 'o'
         goto error;
     if (json_array_append_new (out->output, entry) < 0) {
@@ -511,8 +510,6 @@ static int shell_output_write_leader (struct shell_output *out,
         shell_log_error ("json_array_clear failed");
         goto error;
     }
-    if (eof)
-        shell_output_eof (out, mh);
     return 0;
 error:
     return -1;
@@ -646,6 +643,22 @@ void shell_output_destroy (struct shell_output *out)
 {
     if (out) {
         int saved_errno = errno;
+        flux_future_t *f = NULL;
+
+        if (out->shell->info->shell_rank != 0) {
+            /* Nonzero shell rank: send EOF to leader shell to notify
+             *  that no more messages will be sent to shell.write
+             */
+            if (!(f = flux_shell_rpc_pack (out->shell,
+                                           "write",
+                                            0,
+                                            0,
+                                            "{s:s s:{}}",
+                                            "name", "eof", "context")))
+                shell_log_errno ("shell.write: eof");
+            flux_future_destroy (f);
+        }
+
         if (out->pending_writes) {
             flux_future_t *f;
 
@@ -1116,12 +1129,18 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
                                              shell_output_write_cb,
                                              out) < 0)
                 goto error;
-            if (output_type_requires_service (out->stdout_type))
-                out->eof_pending += shell->info->total_ntasks;
-            if (output_type_requires_service (out->stderr_type))
-                out->eof_pending += shell->info->total_ntasks;
-            if (flux_shell_add_completion_ref (shell, "output.write") < 0)
-                goto error;
+
+            /*  The shell.output.write service needs to wait for all
+             *   *remote* shells before output destination can be closed.
+             *   Therefore, set a reference counter for size - 1, and
+             *   if the refcount is > 0 then add a completion reference
+             *   so that the shell won't leave the reactor until the
+             *   all remote shells have sent an "eof" sentinel.
+             */
+            if ((out->refcount = shell->info->shell_size - 1) > 0) {
+                if (flux_shell_add_completion_ref (shell, "output.write") < 0)
+                    goto error;
+            }
             if (!(out->output = json_array ())) {
                 errno = ENOMEM;
                 goto error;
