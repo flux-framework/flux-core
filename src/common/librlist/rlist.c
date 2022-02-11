@@ -330,34 +330,60 @@ struct rnode * rlist_find_host (const struct rlist *rl, const char *host)
     return NULL;
 }
 
-static int rlist_rerank_hostlist (struct rlist *rl, struct hostlist *hl)
+static int rlist_rerank_hostlist (struct rlist *rl,
+                                  struct hostlist *hl,
+                                  rlist_error_t *errp)
 {
     uint32_t rank = 0;
     const char *host = hostlist_first (hl);
     while (host) {
         struct rnode *n = rlist_find_host (rl, host);
-        if (!n)
+        if (!n) {
+            if (errp) {
+                int saved_errno = errno;
+                snprintf (errp->text, sizeof (errp->text),
+                          "Host %s not found in resources",
+                          host);
+                errno = saved_errno;
+            }
             return -1;
+        }
         n->rank = rank++;
         host = hostlist_next (hl);
     }
     return 0;
 }
 
-int rlist_rerank (struct rlist *rl, const char *hosts)
+int rlist_rerank (struct rlist *rl, const char *hosts, rlist_error_t *errp)
 {
     int rc = -1;
     struct hostlist *hl = NULL;
     struct hostlist *orig = NULL;
 
-    if (!(hl = hostlist_decode (hosts)))
+    if (!(hl = hostlist_decode (hosts))) {
+        int saved_errno = errno;
+        if (errp)
+            snprintf (errp->text, sizeof (errp->text),
+                      "hostlist_decode: %s: %s", hosts, strerror (errno));
+        errno = saved_errno;
         return -1;
+    }
 
     if (hostlist_count (hl) > rlist_nnodes (rl)) {
+        if (errp)
+            snprintf (errp->text, sizeof (errp->text),
+                      "Number of hosts (%d) is greater than node count (%zu)",
+                      hostlist_count (hl),
+                      rlist_nnodes (rl));
         errno = EOVERFLOW;
         goto done;
     }
     else if (hostlist_count (hl) < rlist_nnodes (rl)) {
+        if (errp)
+            snprintf (errp->text, sizeof (errp->text),
+                      "Number of hosts (%d) is less than node count (%zu)",
+                      hostlist_count (hl),
+                      rlist_nnodes (rl));
         errno = ENOSPC;
         goto done;
     }
@@ -370,9 +396,9 @@ int rlist_rerank (struct rlist *rl, const char *hosts)
     /* Perform re-ranking based on hostlist hl. On failure, undo
      *  by reranking with original hostlist.
      */
-    if ((rc = rlist_rerank_hostlist (rl, hl)) < 0) {
+    if ((rc = rlist_rerank_hostlist (rl, hl, errp)) < 0) {
         int saved_errno = errno;
-        (void) rlist_rerank_hostlist (rl, orig);
+        (void) rlist_rerank_hostlist (rl, orig, NULL);
         errno = saved_errno;
     }
 done:

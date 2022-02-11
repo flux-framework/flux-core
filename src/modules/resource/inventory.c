@@ -345,6 +345,7 @@ static int convert_R_conf (flux_t *h, json_t *conf_R, json_t **Rp)
 {
     json_error_t e;
     struct rlist *rl;
+    rlist_error_t err;
     json_t *R;
     const char *hosts;
 
@@ -353,10 +354,11 @@ static int convert_R_conf (flux_t *h, json_t *conf_R, json_t **Rp)
         errno = EINVAL;
         return -1;
     }
+    err.text[0] = '\0';
     if (conf_has_bootstrap (h)) {
         if (!(hosts = flux_attr_get (h, "hostlist"))
-            || rlist_rerank (rl, hosts) < 0) { // sets errno
-            flux_log (h, LOG_ERR, "error reranking R");
+            || rlist_rerank (rl, hosts, &err) < 0) { // sets errno
+            flux_log (h, LOG_ERR, "error reranking R: %s", err.text);
             goto error;
         }
     }
