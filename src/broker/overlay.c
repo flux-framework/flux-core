@@ -1276,7 +1276,7 @@ int overlay_bind (struct overlay *ov, const char *uri)
     /* The socket monitor is only used for logging.
      * Setup may fail if libzmq is too old.
      */
-    if (attr_get (ov->attrs, "tbon.zmqdebug", NULL, NULL) == 0) {
+    if (ov->zmqdebug) {
         ov->bind_monitor = zmqutil_monitor_create (ov->bind_zsock,
                                                    ov->reactor,
                                                    bind_monitor_cb,
