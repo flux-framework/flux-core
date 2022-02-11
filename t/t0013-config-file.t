@@ -286,4 +286,33 @@ test_expect_success NOMAXRT 'tbon.tcp_user_timeout attr cannot be set with old z
 		/bin/true 2>noattr.err &&
 	grep "unsupported by this zeromq version" noattr.err
 '
+
+test_expect_success 'tbon.zmqdebug is zero by default' '
+	cat <<-EOT >zmqdebug.exp &&
+	0
+	EOT
+	flux broker ${ARGS} \
+		flux getattr tbon.zmqdebug >zmqdebug.out &&
+	test_cmp zmqdebug.exp zmqdebug.out
+'
+test_expect_success 'tbon.zmqdebug can be configured' '
+	mkdir conf18 &&
+	cat <<-EOT2 >zmqdebug2.exp &&
+	1
+	EOT2
+	cat <<-EOT >conf18/tbon.toml &&
+	[tbon]
+	zmqdebug = 1
+	EOT
+	flux broker ${ARGS} -c conf18 flux getattr tbon.zmqdebug \
+		>zmqdebug2.out &&
+	test_cmp zmqdebug2.exp zmqdebug2.out
+'
+test_expect_success MAXRT 'tbon.zmqdebug with bad value on command line fails' '
+	test_must_fail flux broker ${ARGS} \
+		-Stbon.zmqdebug=zzz \
+		/bin/true 2>zbadattr.err &&
+	grep "value must be an integer" zbadattr.err
+'
+
 test_done
