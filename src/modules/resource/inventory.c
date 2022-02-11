@@ -354,11 +354,22 @@ static int convert_R_conf (flux_t *h, json_t *conf_R, json_t **Rp)
         errno = EINVAL;
         return -1;
     }
-    err.text[0] = '\0';
     if (conf_has_bootstrap (h)) {
-        if (!(hosts = flux_attr_get (h, "hostlist"))
-            || rlist_rerank (rl, hosts, &err) < 0) { // sets errno
+        if (!(hosts = flux_attr_get (h, "hostlist"))) {
+            flux_log_error (h, "Unable to get hostlist attribute");
+            goto error;
+        }
+        err.text[0] = '\0';
+        if (rlist_rerank (rl, hosts, &err) < 0) {
             flux_log (h, LOG_ERR, "error reranking R: %s", err.text);
+            /*
+             *  rlist_rerank() repurposes errno like EOVERFLOW and ENOSPC,
+             *   but this may cause confusion when logging an error
+             *   return from this function. Since the specific error has
+             *   already been printed, reset errno to EINVAL so that
+             *   the calling function simply prints "Invalid argument".
+             */
+            errno = EINVAL;
             goto error;
         }
     }
