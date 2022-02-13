@@ -1276,7 +1276,7 @@ int overlay_bind (struct overlay *ov, const char *uri)
     /* The socket monitor is only used for logging.
      * Setup may fail if libzmq is too old.
      */
-    if (attr_get (ov->attrs, "tbon.zmqdebug", NULL, NULL) == 0) {
+    if (ov->zmqdebug) {
         ov->bind_monitor = zmqutil_monitor_create (ov->bind_zsock,
                                                    ov->reactor,
                                                    bind_monitor_cb,
@@ -1856,6 +1856,31 @@ static int overlay_configure_tcp_user_timeout (struct overlay *ov)
     return 0;
 }
 
+static int overlay_configure_zmqdebug (struct overlay *ov)
+{
+    const flux_conf_t *cf;
+
+    ov->zmqdebug = 0;
+    if ((cf = flux_get_conf (ov->h))) {
+        flux_conf_error_t error;
+
+        if (flux_conf_unpack (cf,
+                              &error,
+                              "{s?{s?i}}",
+                              "tbon",
+                                "zmqdebug", &ov->zmqdebug) < 0) {
+            log_msg ("Config file error [tbon]: %s", error.errbuf);
+            return -1;
+        }
+    }
+    if (overlay_configure_attr_int (ov->attrs,
+                                    "tbon.zmqdebug",
+                                    ov->zmqdebug,
+                                    &ov->zmqdebug) < 0)
+        return -1;
+    return 0;
+}
+
 void overlay_destroy (struct overlay *ov)
 {
     if (ov) {
@@ -1968,16 +1993,13 @@ struct overlay *overlay_create (flux_t *h,
         errno = EINVAL;
         goto error;
     }
-    if (overlay_configure_attr_int (ov->attrs,
-                                    "tbon.zmqdebug",
-                                    0,
-                                    &ov->zmqdebug) < 0)
-        goto error;
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
         goto error;
     if (overlay_configure_torpid (ov) < 0)
         goto error;
     if (overlay_configure_tcp_user_timeout (ov) < 0)
+        goto error;
+    if (overlay_configure_zmqdebug (ov) < 0)
         goto error;
     if (flux_msg_handler_addvec (h, htab, ov, &ov->handlers) < 0)
         goto error;

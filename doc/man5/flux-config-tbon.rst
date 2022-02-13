@@ -40,6 +40,11 @@ tcp_user_timeout
    broker attribute.  See also: :linux:man7:`tcp`, TCP_USER_TIMEOUT socket
    option.
 
+zmqdebug
+   (optional) Integer value indicating whether ZeroMQ socket debug logging
+   should be enabled: 0=disabled, 1=enabled.  Default: ``0``.  This configured
+   value may be overridden by setting the ``tbon.zmqdebug`` broker attribute.
+
 
 EXAMPLE
 =======
