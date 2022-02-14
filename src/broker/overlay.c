@@ -857,17 +857,19 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
     }
     if (!(child = child_lookup_online (ov, uuid))) {
         /* If child is not online but we know this uuid, message is from a
-         * child that transitioned to offline/lost.  Don't log the drop if
-         * LOST, since message was probably sent before child received
-         * CONTROL_DISCONNECT and that is not interesting.
+         * child that has already transitioned to offline/lost:
+         * - message sent while control DISCONNECT is in flight
+         * - network partition disconnected child; now it's back
+         * Send a disconnect control message, which is required in the second
+         * case, and won't hurt in the first.
          */
         if ((child = child_lookup (ov, uuid))) {
-            if (child->status != SUBTREE_STATUS_LOST) {
-                logdrop (ov, OVERLAY_DOWNSTREAM, msg,
-                         "message from %s rank %lu",
-                         subtree_status_str (child->status),
-                         (unsigned long)child->rank);
-            }
+            logdrop (ov, OVERLAY_DOWNSTREAM, msg,
+                     "message from %s child %s (rank %lu)",
+                     subtree_status_str (child->status),
+                     flux_get_hostbyrank (ov->h, child->rank),
+                     (unsigned long)child->rank);
+            (void)overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0);
         }
         /* Hello new peer!
          * hello_request_handler() completes the handshake.
@@ -884,8 +886,7 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
          * Send CONTROL_DISCONNECT to force subtree panic.
          */
         else {
-            logdrop (ov, OVERLAY_DOWNSTREAM, msg,
-                     "didn't say hello, sending disconnect");
+            logdrop (ov, OVERLAY_DOWNSTREAM, msg, "unknown uuid");
             if (overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0) < 0)
                 flux_log_error (ov->h, "failed to send CONTROL_DISCONNECT");
         }
