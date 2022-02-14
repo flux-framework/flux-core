@@ -326,4 +326,12 @@ test_expect_success NO_CHAIN_LINT 'job-shell: job attach waits if no kvs output 
         flux job cancel $id &&
         ! wait $pid
 '
+test_expect_success 'job-shell: shell errors are captured in output file' '
+	test_expect_code 127 flux mini run --output=test.out nosuchcommand &&
+	grep "nosuchcommand: No such file or directory" test.out
+'
+test_expect_success 'job-shell: shell errors are captured in error file' '
+	test_expect_code 127  flux mini run --error=test.err nosuchcommand &&
+	grep "nosuchcommand: No such file or directory" test.err
+'
 test_done

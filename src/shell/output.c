@@ -84,7 +84,6 @@ struct shell_output {
     struct eventlogger *ev;
     double batch_timeout;
     int refcount;
-    int eof_pending;
     zlist_t *pending_writes;
     json_t *output;
     bool stopped;
@@ -185,7 +184,7 @@ static int shell_output_redirect_stream (struct shell_output *out,
                                          const char *stream,
                                          const char *path)
 {
-    struct idset *idset;
+    struct idset *idset = NULL;
     json_t *entry = NULL;
     char *entrystr = NULL;
     int saved_errno, rc = -1;
@@ -237,6 +236,7 @@ error:
     json_decref (entry);
     free (entrystr);
     free (rankptr);
+    idset_destroy (idset);
     errno = saved_errno;
     return rc;
 }
@@ -345,6 +345,92 @@ static int shell_output_write_fd (int fd, const void *buf, size_t len)
     return n;
 }
 
+static int shell_output_label (struct shell_output_type_file *ofp,
+                               const char *rank)
+{
+    if (shell_output_write_fd (ofp->fdp->fd,  rank, strlen (rank)) < 0
+        || shell_output_write_fd (ofp->fdp->fd, ": ", 2) < 0)
+        return -1;
+    return 0;
+}
+
+static int shell_output_data (struct shell_output *out, json_t *context)
+{
+    struct shell_output_type_file *ofp;
+    int output_type;
+    const char *stream = NULL;
+    const char *rank = NULL;
+    char *data = NULL;
+    int len = 0;
+    int rc = -1;
+
+    if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
+        shell_log_errno ("iodecode");
+        return -1;
+    }
+    if (!strcmp (stream, "stdout")) {
+        output_type = out->stdout_type;
+        ofp = &out->stdout_file;
+    }
+    else {
+        output_type = out->stderr_type;
+        ofp = &out->stderr_file;
+    }
+    if ((output_type == FLUX_OUTPUT_TYPE_FILE) && len > 0) {
+        if (ofp->label
+            && shell_output_label (ofp, rank) < 0)
+            goto out;
+        if (shell_output_write_fd (ofp->fdp->fd, data, len) < 0)
+            goto out;
+    }
+    rc = 0;
+out:
+    free (data);
+    return rc;
+}
+
+/*  Level prefix strings. Nominally, output log event 'level' integers
+ *   are Internet RFC 5424 severity levels. In the context of flux-shell,
+ *   the first 3 levels are equivalently "fatal" errors.
+ */
+static const char *levelstr[] = {
+    "FATAL", "FATAL", "FATAL", "ERROR", " WARN", NULL, "DEBUG", "TRACE"
+};
+
+static void shell_output_log (struct shell_output *out, json_t *context)
+{
+    const char *msg = NULL;
+    const char *file = NULL;
+    const char *component = NULL;
+    int rank = -1;
+    int line = -1;
+    int level = -1;
+    int fd = out->stderr_file.fdp->fd;
+    json_error_t error;
+
+    if (json_unpack_ex (context, &error, 0,
+                     "{ s?i s:i s:s s?:s s?:s s?:i }",
+                     "rank", &rank,
+                     "level", &level,
+                     "message", &msg,
+                     "component", &component,
+                     "file", &file,
+                     "line", &line) < 0) {
+        /*  Ignore log messages that cannot be unpacked so we don't
+         *   log an error while logging.
+         */
+        return;
+    }
+    dprintf (fd, "flux-shell");
+    if (rank >= 0)
+        dprintf (fd, "[%d]", rank);
+    if (level >= 0 && level <= FLUX_SHELL_TRACE)
+        dprintf (fd, ": %s", levelstr [level]);
+    if (component)
+        dprintf (fd, ": %s", component);
+    dprintf (fd, ": %s\n", msg);
+}
+
 static int shell_output_file (struct shell_output *out)
 {
     json_t *entry;
@@ -358,55 +444,46 @@ static int shell_output_file (struct shell_output *out)
             return -1;
         }
         if (!strcmp (name, "data")) {
-            struct shell_output_type_file *ofp;
-            int output_type;
-            const char *stream = NULL;
-            const char *rank = NULL;
-            char *data = NULL;
-            int len = 0;
-            if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0) {
-                shell_log_errno ("iodecode");
+            if (shell_output_data (out, context) < 0) {
+                shell_log_errno ("shell_output_data");
                 return -1;
             }
-            if (!strcmp (stream, "stdout")) {
-                output_type = out->stdout_type;
-                ofp = &out->stdout_file;
-            }
-            else {
-                output_type = out->stderr_type;
-                ofp = &out->stderr_file;
-            }
-            if ((output_type == FLUX_OUTPUT_TYPE_FILE) && len > 0) {
-                if (ofp->label) {
-                    char *buf = NULL;
-                    int buflen;
-                    if ((buflen = asprintf (&buf, "%s: ", rank)) < 0)
-                        return -1;
-                    if (shell_output_write_fd (ofp->fdp->fd, buf, buflen) < 0) {
-                        free (buf);
-                        return -1;
-                    }
-                    free (buf);
-                }
-                if (shell_output_write_fd (ofp->fdp->fd, data, len) < 0)
-                    return -1;
-            }
-            free (data);
         }
-    }
+        else if (!strcmp (name, "log"))
+            shell_output_log (out, context);
+   }
     return 0;
 }
 
+static void shell_output_decref (struct shell_output *out,
+                                 flux_msg_handler_t *mh)
+{
+    if (--out->refcount == 0) {
+        flux_msg_handler_stop (mh);
+        if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
+            shell_log_errno ("flux_shell_remove_completion_ref");
+
+        /* no more output is coming, flush the last batch of output */
+        if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS
+            || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
+            if (eventlogger_flush (out->ev) < 0)
+                shell_log_errno ("eventlogger_flush");
+        }
+    }
+}
+
 static int shell_output_write_leader (struct shell_output *out,
+                                      const char *type,
                                       json_t *o,
                                       flux_msg_handler_t *mh) // may be NULL
 {
-    bool eof = false;
     json_t *entry;
 
-    if (iodecode (o, NULL, NULL, NULL, NULL, &eof) < 0)
-        goto error;
-    if (!(entry = eventlog_entry_pack (0., "data", "O", o))) // increfs 'o'
+    if (strcmp (type, "eof") == 0) {
+        shell_output_decref (out, mh);
+        return 0;
+    }
+    if (!(entry = eventlog_entry_pack (0., type, "O", o))) // increfs 'o'
         goto error;
     if (json_array_append_new (out->output, entry) < 0) {
         json_decref (entry);
@@ -434,20 +511,6 @@ static int shell_output_write_leader (struct shell_output *out,
         shell_log_error ("json_array_clear failed");
         goto error;
     }
-    if (eof) {
-        if (--out->eof_pending == 0) {
-            flux_msg_handler_stop (mh);
-            if (flux_shell_remove_completion_ref (out->shell, "output.write") < 0)
-                shell_log_errno ("flux_shell_remove_completion_ref");
-            /* no more output is coming, flush the last batch of
-             * output */
-            if ((out->stdout_type == FLUX_OUTPUT_TYPE_KVS
-                 || (out->stderr_type == FLUX_OUTPUT_TYPE_KVS))) {
-                if (eventlogger_flush (out->ev) < 0)
-                    shell_log_errno ("eventlogger_flush");
-            }
-        }
-    }
     return 0;
 error:
     return -1;
@@ -463,10 +526,15 @@ static void shell_output_write_cb (flux_t *h,
 {
     struct shell_output *out = arg;
     json_t *o;
+    const char *type;
 
-    if (flux_request_unpack (msg, NULL, "o", &o) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:s s:o}",
+                             "name", &type,
+                             "context", &o) < 0)
         goto error;
-    if (shell_output_write_leader (out, o, mh) < 0)
+    if (shell_output_write_leader (out, type, o, mh) < 0)
         goto error;
     if (flux_respond (out->shell->h, msg, NULL) < 0)
         shell_log_errno ("flux_respond");
@@ -489,29 +557,24 @@ static void shell_output_write_completion (flux_future_t *f, void *arg)
         shell_output_control (out, false);
 }
 
-static int shell_output_write (struct shell_output *out,
-                               int rank,
-                               const char *stream,
-                               const char *data,
-                               int len,
-                               bool eof)
+static int shell_output_write_type (struct shell_output *out,
+                                    char *type,
+                                    json_t *context)
 {
     flux_future_t *f = NULL;
-    json_t *o = NULL;
-    char rankstr[64];
-
-    snprintf (rankstr, sizeof (rankstr), "%d", rank);
-    if (!(o = ioencode (stream, rankstr, data, len, eof))) {
-        shell_log_errno ("ioencode");
-        return -1;
-    }
 
     if (out->shell->info->shell_rank == 0) {
-        if (shell_output_write_leader (out, o, NULL) < 0)
+        if (shell_output_write_leader (out, type, context, NULL) < 0)
             shell_log_errno ("shell_output_write_leader");
     }
     else {
-        if (!(f = flux_shell_rpc_pack (out->shell, "write", 0, 0, "O", o)))
+        if (!(f = flux_shell_rpc_pack (out->shell,
+                                       "write",
+                                        0,
+                                        0,
+                                        "{s:s s:O}",
+                                        "name", type,
+                                        "context", context)))
             goto error;
         if (flux_future_then (f, -1, shell_output_write_completion, out) < 0)
             goto error;
@@ -520,14 +583,33 @@ static int shell_output_write (struct shell_output *out,
         if (zlist_size (out->pending_writes) >= shell_output_hwm)
             shell_output_control (out, true);
     }
-    json_decref (o);
-
     return 0;
-
 error:
     flux_future_destroy (f);
-    json_decref (o);
     return -1;
+}
+
+static int shell_output_write (struct shell_output *out,
+                               int rank,
+                               const char *stream,
+                               const char *data,
+                               int len,
+                               bool eof)
+{
+    int rc;
+    json_t *o = NULL;
+    char rankstr[13];
+
+    /* integer %d guaranteed to fit in 13 bytes
+     */
+    (void) snprintf (rankstr, sizeof (rankstr), "%d", rank);
+    if (!(o = ioencode (stream, rankstr, data, len, eof))) {
+        shell_log_errno ("ioencode");
+        return -1;
+    }
+    rc = shell_output_write_type (out, "data", o);
+    json_decref (o);
+    return rc;
 }
 
 static int shell_output_handler (flux_plugin_t *p,
@@ -562,6 +644,22 @@ void shell_output_destroy (struct shell_output *out)
 {
     if (out) {
         int saved_errno = errno;
+        flux_future_t *f = NULL;
+
+        if (out->shell->info->shell_rank != 0) {
+            /* Nonzero shell rank: send EOF to leader shell to notify
+             *  that no more messages will be sent to shell.write
+             */
+            if (!(f = flux_shell_rpc_pack (out->shell,
+                                           "write",
+                                            0,
+                                            0,
+                                            "{s:s s:{}}",
+                                            "name", "eof", "context")))
+                shell_log_errno ("shell.write: eof");
+            flux_future_destroy (f);
+        }
+
         if (out->pending_writes) {
             flux_future_t *f;
 
@@ -977,6 +1075,28 @@ static int output_eventlogger_start (struct shell_output *out)
     return 0;
 }
 
+static int log_output (flux_plugin_t *p,
+                       const char *topic,
+                       flux_plugin_arg_t *args,
+                       void *data)
+{
+    struct shell_output *out = data;
+    int rc = 0;
+    int level = -1;
+    json_t *context = NULL;
+
+    if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
+                                "{s:i}", "level", &level) < 0)
+        return -1;
+    if (level > FLUX_SHELL_NOTICE + out->shell->verbose)
+        return 0;
+    if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN, "o", &context) < 0
+        || shell_output_write_type (out, "log", context) < 0) {
+        rc = -1;
+    }
+    return rc;
+}
+
 struct shell_output *shell_output_create (flux_shell_t *shell)
 {
     struct shell_output *out;
@@ -1010,12 +1130,18 @@ struct shell_output *shell_output_create (flux_shell_t *shell)
                                              shell_output_write_cb,
                                              out) < 0)
                 goto error;
-            if (output_type_requires_service (out->stdout_type))
-                out->eof_pending += shell->info->total_ntasks;
-            if (output_type_requires_service (out->stderr_type))
-                out->eof_pending += shell->info->total_ntasks;
-            if (flux_shell_add_completion_ref (shell, "output.write") < 0)
-                goto error;
+
+            /*  The shell.output.write service needs to wait for all
+             *   *remote* shells before output destination can be closed.
+             *   Therefore, set a reference counter for size - 1, and
+             *   if the refcount is > 0 then add a completion reference
+             *   so that the shell won't leave the reactor until the
+             *   all remote shells have sent an "eof" sentinel.
+             */
+            if ((out->refcount = shell->info->shell_size - 1) > 0) {
+                if (flux_shell_add_completion_ref (shell, "output.write") < 0)
+                    goto error;
+            }
             if (!(out->output = json_array ())) {
                 errno = ENOMEM;
                 goto error;
@@ -1177,6 +1303,17 @@ static int shell_output_init (flux_plugin_t *p,
         shell_output_destroy (out);
         return -1;
     }
+
+    /*  If stderr is redirected to file, be sure to also copy log messages
+     *   there as soon as file is opened
+     */
+    if (out->stderr_type == FLUX_OUTPUT_TYPE_FILE) {
+        shell_debug ("redirecting log messages to job output file");
+        if (flux_plugin_add_handler (p, "shell.log", log_output, out) < 0)
+            return shell_log_errno ("failed to add shell.log handler");
+        flux_shell_log_setlevel (FLUX_SHELL_QUIET, "eventlog");
+    }
+
     return 0;
 }
 
