@@ -865,8 +865,9 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
          */
         if ((child = child_lookup (ov, uuid))) {
             logdrop (ov, OVERLAY_DOWNSTREAM, msg,
-                     "message from %s rank %lu",
+                     "message from %s child %s (rank %lu)",
                      subtree_status_str (child->status),
+                     flux_get_hostbyrank (ov->h, child->rank),
                      (unsigned long)child->rank);
             (void)overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0);
         }
