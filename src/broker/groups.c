@@ -221,9 +221,9 @@ static void batch_apply (struct groups *g)
             char *s = idset_encode (group->members, IDSET_FLAG_RANGE);
             flux_log (g->ctx->h,
                       LOG_DEBUG,
-                      "groups: set %s %s",
+                      "groups: %s=%s",
                       name,
-                      s ? s : "NULL");
+                      s && strlen (s) > 0 ? s : "");
             free (s);
         }
         get_respond_all (g, group);
