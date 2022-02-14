@@ -672,10 +672,12 @@ static void broker_online_cb (flux_future_t *f, void *arg)
         idset_destroy (s->quorum.have);
         s->quorum.have = ids;
         if (is_subset_of (s->quorum.want, s->quorum.have)) {
-            state_machine_post (s, "quorum-full");
-            if (s->quorum.warned) {
-                flux_log (s->ctx->h, LOG_ERR, "quorum reached");
-                s->quorum.warned = false;
+            if (s->state != STATE_RUN) {
+                state_machine_post (s, "quorum-full");
+                if (s->quorum.warned) {
+                    flux_log (s->ctx->h, LOG_ERR, "quorum reached");
+                    s->quorum.warned = false;
+                }
             }
         }
         flux_future_reset (f);
