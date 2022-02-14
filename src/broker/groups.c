@@ -702,17 +702,6 @@ static void auto_leave (struct groups *g,
                         group->name);
             }
             json_decref (update);
-            if (g->verbose) {
-                char *s = idset_encode (x, IDSET_FLAG_RANGE);
-                flux_log (g->ctx->h,
-                          LOG_DEBUG,
-                          "groups: subtree loss rank=%d (%s) LEAVE %s %s",
-                          (int)rank,
-                          status,
-                          group->name,
-                          s ? s : "NULL");
-                free (s);
-            }
         }
         idset_destroy (x);
         group = zhashx_next (g->groups);
