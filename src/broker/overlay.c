@@ -886,8 +886,7 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
          * Send CONTROL_DISCONNECT to force subtree panic.
          */
         else {
-            logdrop (ov, OVERLAY_DOWNSTREAM, msg,
-                     "didn't say hello, sending disconnect");
+            logdrop (ov, OVERLAY_DOWNSTREAM, msg, "unknown uuid");
             if (overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0) < 0)
                 flux_log_error (ov->h, "failed to send CONTROL_DISCONNECT");
         }
