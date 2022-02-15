@@ -26,7 +26,7 @@ from urllib.parse import urlparse, parse_qs
 
 import flux
 from flux import job
-from flux.job import JobspecV1, JobID
+from flux.job import JobspecV1
 from flux import util
 from flux import debugged
 from flux.idset import IDset
@@ -675,7 +675,7 @@ class MiniCmd:
         )
 
     def submit(self, args, jobspec=None):
-        return JobID(self.submit_async(args, jobspec).get_id())
+        return self.submit_async(args, jobspec).get_id()
 
     def get_parser(self):
         return self.parser
@@ -938,7 +938,7 @@ class SubmitBulkCmd(SubmitBaseCmd):
 
     def submit_cb(self, future, args, label=""):
         try:
-            jobid = JobID(future.get_id())
+            jobid = future.get_id()
             if not args.quiet:
                 print(jobid, file=args.stdout)
         except OSError as exc:
