@@ -12,6 +12,7 @@ import errno
 from flux import constants
 from flux.util import check_future_error
 from flux.future import Future
+from flux.job import JobID
 from flux.job.Jobspec import _convert_jobspec_arg_to_string
 from flux.job._wrapper import _RAW as RAW
 from _flux._core import ffi, lib
@@ -89,14 +90,14 @@ def submit_get_id(future):
     :param future: a Flux future object returned by job.submit_async()
     :type future: Future
     :returns: job ID
-    :rtype: int
+    :rtype: JobID
     """
     if future is None or future == ffi.NULL:
         raise EnvironmentError(errno.EINVAL, "future must not be None/NULL")
     future.wait_for()  # ensure the future is fulfilled
     jobid = ffi.new("flux_jobid_t[1]")
     RAW.submit_get_id(future, jobid)
-    return int(jobid[0])
+    return JobID(jobid[0])
 
 
 def submit(
