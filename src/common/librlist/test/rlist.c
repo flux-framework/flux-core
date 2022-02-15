@@ -930,7 +930,7 @@ void test_assign_hosts ()
             "reassign hosts to %s worked", hosts);
 
         free (hosts);
-        
+
         hostlist_destroy (hl);
         rlist_destroy (rl);
         free (R);
@@ -946,19 +946,30 @@ void test_rerank ()
     struct hostlist *hl = NULL;
     char *s = NULL;
     struct rlist *rl = NULL;
+    rlist_error_t err;
     char *R = R_create ("0-15", "0-3", NULL, "foo[0-15]");
     if (!R)
         BAIL_OUT ("R_create failed");
     if (!(rl = rlist_from_R (R)))
         BAIL_OUT ("rlist_from_R failed");
 
-    ok (rlist_rerank (rl, "foo[1-15]") < 0 && errno == ENOSPC,
+    ok (rlist_rerank (rl, "foo[1-15]", &err) < 0 && errno == ENOSPC,
         "rlist_rerank with too few hosts returns ENOSPC");
-    ok (rlist_rerank (rl, "foo[0-16]") < 0 && errno == EOVERFLOW,
+    is (err.text, "Number of hosts (15) is less than node count (16)",
+        "rlist_rerank error message is expected");
+    ok (rlist_rerank (rl, "foo[0-16]", &err) < 0 && errno == EOVERFLOW,
         "rlist_rerank with too many hosts returns EOVERFLOW");
-    ok (rlist_rerank (rl, "foo[1-16]") < 0 && errno == ENOENT,
+    is (err.text, "Number of hosts (17) is greater than node count (16)",
+        "rlist_rerank error message is expected");
+    ok (rlist_rerank (rl, "foo[1-16]", &err) < 0 && errno == ENOENT,
         "rlist_rerank with invalid host returns ENOENT");
-    
+    is (err.text, "Host foo16 not found in resources",
+        "rlist_rerank error message is expected");
+    ok (rlist_rerank (rl, "foo[0-", &err) < 0 && errno == EINVAL,
+        "rlist_rerank fails with invalid hostlist");
+    is (err.text, "hostlist_decode: foo[0-: Invalid argument",
+        "rlist_rerank error message is expected");
+
     if (!(hl = rlist_nodelist (rl)) || !(s = hostlist_encode (hl)))
         BAIL_OUT ("rlist_nodelist/hostlist_encode failed!");
     is (s, "foo[0-15]",
@@ -967,7 +978,7 @@ void test_rerank ()
     hostlist_destroy (hl);
 
     /* Swap rank 0 to rank 15 */
-    ok (rlist_rerank (rl, "foo[1-15,0]") == 0,
+    ok (rlist_rerank (rl, "foo[1-15,0]", NULL) == 0,
         "rlist_rerank works");
 
     if (!(hl = rlist_nodelist (rl)) || !(s = hostlist_encode (hl)))

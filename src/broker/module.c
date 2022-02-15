@@ -184,7 +184,7 @@ static void *module_thread (void *arg)
         mod_main_errno = errno;
         if (mod_main_errno == 0)
             mod_main_errno = ECONNRESET;
-        flux_log (p->h, LOG_CRIT, "fatal error: %s", strerror (errno));
+        flux_log (p->h, LOG_CRIT, "module exiting abnormally");
     }
 
     /* Before processing unhandled requests, ensure that this module

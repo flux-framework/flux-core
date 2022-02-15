@@ -562,7 +562,7 @@ int cmd_rerank (optparse_t *p, int argc, char **argv)
         log_err_exit ("Failed to transform R objects on stdin");
     if (argc != 2)
         log_err_exit ("Must provide a hostlist for re-ranking");
-    if (rlist_rerank (rl, argv[1]) < 0) {
+    if (rlist_rerank (rl, argv[1], NULL) < 0) {
         if (errno == ENOENT)
             log_msg_exit ("failed to find one or more provided hosts in R");
         else if (errno == EOVERFLOW)

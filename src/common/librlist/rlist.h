@@ -90,7 +90,7 @@ int rlist_assign_hosts (struct rlist *rl, const char *hosts);
  *   ENOENT:    a hostname in 'hosts' was not found in 'rl'
  *   ENOMEM:    out of memory
  */
-int rlist_rerank (struct rlist *rl, const char *hosts);
+int rlist_rerank (struct rlist *rl, const char *hosts, rlist_error_t *error);
 
 /*  Destroy an rlist object */
 void rlist_destroy (struct rlist *rl);
