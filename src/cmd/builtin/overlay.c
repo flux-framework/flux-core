@@ -425,6 +425,7 @@ static int status_healthwalk (struct status *ctx,
     struct status_node node = { .ghost = false, .connector = connector };
     flux_future_t *f;
     json_t *children;
+    const char *errstr;
     int rc = 0;
 
     monotime (&ctx->start);
@@ -436,6 +437,7 @@ static int status_healthwalk (struct status *ctx,
                                 "status", &node.status,
                                 "duration", &node.duration,
                                 "children", &children) < 0) {
+        errstr = future_strerror (f, errno);
         /* RPC failed.
          * An error at level 0 should be fatal, e.g. unknown wait argument,
          * bad rank, timeout.  An error at level > 0 should return -1 so
@@ -443,12 +445,12 @@ static int status_healthwalk (struct status *ctx,
          * and sibling subtrees can be probed.
          */
         if (level == 0)
-            log_msg_exit ("%s", future_strerror (f, errno));
+            log_msg_exit ("%s", errstr);
         printf ("%s%s%s: %s%s\n",
                 status_indent (ctx, level),
                 connector_string (connector),
                 status_getname (ctx, rank),
-                future_strerror (f, errno),
+                errstr,
                 status_rpctime (ctx));
         rc = -1;
         goto done;
