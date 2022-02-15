@@ -229,4 +229,17 @@ test_expect_success 'flux overlay disconnect fails on bad input' '
 	grep "TARGET must be a valid rank or hostname" disconn3.err
 '
 
+test_expect_success 'stop broker 12' '
+	$startctl kill 12 19
+'
+
+test_expect_success 'flux overlay status prints connection timed out on 12' '
+	flux overlay status --no-pretty --no-color >status.out &&
+	grep "fake12: Connection timed out" status.out
+'
+
+test_expect_success 'continue broker 12' '
+	$startctl kill 12 18
+'
+
 test_done
