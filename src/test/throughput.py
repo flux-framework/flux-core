@@ -16,7 +16,7 @@ import json
 
 import flux
 from flux import job
-from flux.job import JobspecV1, JobID
+from flux.job import JobspecV1
 from flux.progress import Bottombar
 
 
@@ -155,7 +155,7 @@ class BulkRun:
     def submit_cb(self, future, args):
         # pylint: disable=broad-except
         try:
-            self.handle_submit(args, JobID(future.get_id()))
+            self.handle_submit(args, future.get_id())
         except Exception as exc:
             print(f"Submission failed: {exc}", file=sys.stderr)
 
