@@ -64,6 +64,7 @@ test_cppflags = \
 check_PROGRAMS = \
 	$(TESTS) \
 	test_pmi_info \
+	test_pmi2_info \
 	test_kvstest
 
 TEST_EXTENSIONS = .t
@@ -103,6 +104,10 @@ test_clique_t_LDADD = $(test_ldadd)
 test_pmi_info_SOURCES = test/pmi_info.c
 test_pmi_info_CPPFLAGS = $(test_cppflags)
 test_pmi_info_LDADD = $(test_ldadd)
+
+test_pmi2_info_SOURCES = test/pmi2_info.c
+test_pmi2_info_CPPFLAGS = $(test_cppflags)
+test_pmi2_info_LDADD = $(test_ldadd)
 
 test_kvstest_SOURCES = test/kvstest.c
 test_kvstest_CPPFLAGS = $(test_cppflags)
