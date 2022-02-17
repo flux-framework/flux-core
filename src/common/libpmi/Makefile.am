@@ -65,7 +65,8 @@ check_PROGRAMS = \
 	$(TESTS) \
 	test_pmi_info \
 	test_pmi2_info \
-	test_kvstest
+	test_kvstest \
+	test_kvstest2
 
 TEST_EXTENSIONS = .t
 T_LOG_DRIVER = env AM_TAP_AWK='$(AWK)' $(SHELL) \
@@ -112,6 +113,10 @@ test_pmi2_info_LDADD = $(test_ldadd)
 test_kvstest_SOURCES = test/kvstest.c
 test_kvstest_CPPFLAGS = $(test_cppflags)
 test_kvstest_LDADD = $(test_ldadd)
+
+test_kvstest2_SOURCES = test/kvstest2.c
+test_kvstest2_CPPFLAGS = $(test_cppflags)
+test_kvstest2_LDADD = $(test_ldadd)
 
 EXTRA_DIST = \
     ltrace.conf
