@@ -361,11 +361,24 @@ int pmi_simple_client_abort (struct pmi_simple_client *pmi,
                              const char *msg)
 {
     int result = PMI_FAIL;
+    char *cpy = NULL;
 
     if (!pmi || !pmi->initialized)
         return PMI_ERR_INIT;
     if (exit_code < 0)
         return PMI_ERR_INVALID_ARG;
+    /* If message includes embedded \n's that would interfere with
+     * the wire protocol, replace them with spaces.
+     */
+    if (strchr (msg, '\n')) {
+        if (!(cpy = strdup (msg)))
+            return PMI_ERR_NOMEM;
+        for (char *cp = cpy; *cp != '\0'; cp++) {
+            if (*cp == '\n')
+                *cp = ' ';
+        }
+        msg = cpy;
+    }
     if (dprintf (pmi->fd,
                  "cmd=abort exitcode=%d%s%s\n",
                  exit_code,
@@ -375,6 +388,7 @@ int pmi_simple_client_abort (struct pmi_simple_client *pmi,
     exit (exit_code);
     /* NOTREACHED */
 done:
+    free (cpy);
     return result;
 }
 
