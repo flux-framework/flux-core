@@ -206,8 +206,8 @@ int main (int argc, char *argv[])
         "PMI2_KVS_Fence works");
 
     result = PMI2_KVS_Get (NULL, 0, "foo", val, sizeof (val), &vallen);
-    ok (result == PMI2_ERR_INVALID_ARG,
-        "PMI2_KVS_Get jobid=NULL fails with PMI2_ERR_INVALID_ARG");
+    ok (result == PMI2_SUCCESS,
+        "PMI2_KVS_Get jobid=NULL works");
 
     result = PMI2_KVS_Get (jobid, 0, "foo", val, sizeof (val), &vallen);
     ok (result == PMI2_SUCCESS

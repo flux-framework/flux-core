@@ -229,6 +229,11 @@ int PMI2_KVS_Get (const char *jobid,
 {
     int result;
 
+    if (!jobid) {
+        result = get_cached_kvsname (pmi_global_ctx, &jobid);
+        if (result != PMI2_SUCCESS)
+            return result;
+    }
     result = pmi_simple_client_kvs_get (pmi_global_ctx,
                                         jobid,
                                         key,
