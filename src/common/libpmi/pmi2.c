@@ -42,6 +42,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <errno.h>
@@ -248,10 +249,43 @@ int PMI2_Info_GetSize (int *size)
     return PMI2_FAIL;
 }
 
+/* Cray MPI: look up a node-scope key stored with PMI2_Info_PutNodeAttr().
+ * If waitfor is nonzero, try once per second until the key is available.
+ */
 int PMI2_Info_GetNodeAttr (const char name[],
                            char value[], int valuelen, int *found, int waitfor)
 {
-    return PMI2_FAIL;
+    const char *kvsname;
+    int result;
+    int tries = 0;
+    char local_name[PMI2_MAX_KEYLEN + 8];
+
+    if (!name || !value)
+        return PMI2_ERR_INVALID_ARG;
+    result = get_cached_kvsname (pmi_global_ctx, &kvsname);
+    if (result != PMI2_SUCCESS)
+        return result;
+    if (snprintf (local_name,
+                  sizeof (local_name),
+                  "local::%s", name) >= sizeof (local_name))
+        return PMI2_ERR_INVALID_KEY_LENGTH;
+    do {
+        if (tries++ > 0)
+            sleep (1);
+        result = pmi_simple_client_kvs_get (pmi_global_ctx,
+                                            kvsname,
+                                            local_name,
+                                            value,
+                                            valuelen);
+        if (result != PMI2_ERR_INVALID_KEY && result != PMI2_SUCCESS)
+            return result;
+        tries++;
+    } while (result == PMI2_ERR_INVALID_KEY && waitfor != 0);
+    if (found) {
+        *found = (result == PMI2_SUCCESS) ? 1 : 0;
+        return PMI2_SUCCESS;
+    }
+    return result;
 }
 
 int PMI2_Info_GetNodeAttrIntArray (const char name[], int array[],
@@ -260,9 +294,31 @@ int PMI2_Info_GetNodeAttrIntArray (const char name[], int array[],
     return PMI2_FAIL;
 }
 
+/* Cray MPI: prefix node local keys with local:: to tell the flux PMI plugin
+ * not to exchange them.  They are immediately available for kvs_get by procs
+ * on the same shell.
+ */
 int PMI2_Info_PutNodeAttr (const char name[], const char value[])
 {
-    return PMI2_FAIL;
+    const char *kvsname;
+    int result;
+    char local_name[PMI2_MAX_KEYLEN + 8];
+
+    if (!name || !value)
+        return PMI2_ERR_INVALID_ARG;
+    result = get_cached_kvsname (pmi_global_ctx, &kvsname);
+    if (result != PMI2_SUCCESS)
+        return result;
+
+    if (snprintf (local_name,
+                  sizeof (local_name),
+                  "local::%s", name) >= sizeof (local_name))
+        return PMI2_ERR_INVALID_KEY_LENGTH;
+
+    return pmi_simple_client_kvs_put (pmi_global_ctx,
+                                      kvsname,
+                                      local_name,
+                                      value);
 }
 
 /* MPICH: only fetches PMI_process_mapping and universeSize
