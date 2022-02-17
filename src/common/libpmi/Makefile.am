@@ -48,12 +48,10 @@ TESTS = test_keyval.t \
 
 test_ldadd = \
 	$(top_builddir)/src/common/libflux/libflux.la \
-	$(top_builddir)/src/common/libzmqutil/libzmqutil.la \
 	$(top_builddir)/src/common/libpmi/libpmi_client.la \
 	$(top_builddir)/src/common/libpmi/libpmi_server.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libtap/libtap.la \
-	$(ZMQ_LIBS) \
 	$(JANSSON_LIBS) \
 	$(LIBPTHREAD) \
 	$(LIBRT) \
