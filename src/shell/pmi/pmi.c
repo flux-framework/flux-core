@@ -203,6 +203,10 @@ static int native_kvs_put (void *arg,
 {
     struct shell_pmi *pmi = arg;
 
+    /* Hack to support "node scope" for partial PMI2 impl needed for Cray.
+     */
+    if (strncmp (key, "local::", 7) == 0)
+        return put_dict (pmi->locals, key, val);
     return put_dict (pmi->pending, key, val);
 }
 
@@ -314,6 +318,10 @@ static int exchange_kvs_put (void *arg,
 {
     struct shell_pmi *pmi = arg;
 
+    /* Hack to support "node scope" for partial PMI2 impl needed for Cray.
+     */
+    if (strncmp (key, "local::", 7) == 0)
+        return put_dict (pmi->locals, key, val);
     return put_dict (pmi->pending, key, val);
 }
 
