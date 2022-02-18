@@ -2709,7 +2709,7 @@ static void process_args (struct kvs_ctx *ctx, int ac, char **av)
 
 static int checkpoint_get_version0 (const char *value, char *buf, size_t len)
 {
-    /* if value is a blobref, its verison 0 checkpoint */
+    /* if value is a blobref, its version 0 checkpoint */
     if (blobref_validate (value) == 0) {
         if (strlen (value) >= len)
             return -1;
