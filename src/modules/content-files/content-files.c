@@ -167,7 +167,7 @@ void checkpoint_get_cb (flux_t *h,
                            msg,
                            "{s:s}",
                            "value",
-                           size > 0 ? data : "", 0) < 0)
+                           size > 0 ? data : "") < 0)
         flux_log_error (h, "error responding to kvs-checkpoint.get request");
     free (data);
     return;

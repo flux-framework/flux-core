@@ -342,7 +342,7 @@ void checkpoint_get_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg
                            msg,
                            "{s:s}",
                            "value",
-                           size > 0 ? dup : "", 0) < 0) {
+                           size > 0 ? dup : "") < 0) {
         errno = EIO;
         flux_log_error (h, "error responding to kvs-checkpoint.get request (pack)");
     }
