@@ -263,6 +263,7 @@ int PMI2_Info_GetNodeAttr (const char name[],
     const char *kvsname;
     int result;
     int tries = 0;
+    const int max_tries = 30;
     char local_name[PMI2_MAX_KEYLEN + 8];
 
     if (!name || !value)
@@ -285,7 +286,9 @@ int PMI2_Info_GetNodeAttr (const char name[],
         if (result != PMI2_ERR_INVALID_KEY && result != PMI2_SUCCESS)
             return result;
         tries++;
-    } while (result == PMI2_ERR_INVALID_KEY && waitfor != 0);
+    } while (result == PMI2_ERR_INVALID_KEY
+        && waitfor != 0
+        && tries < max_tries);
     if (found) {
         *found = (result == PMI2_SUCCESS) ? 1 : 0;
         return PMI2_SUCCESS;
