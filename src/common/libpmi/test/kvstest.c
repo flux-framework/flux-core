@@ -23,11 +23,10 @@
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
 
-#define OPTIONS "nN:l:"
+#define OPTIONS "nN:"
 static const struct option longopts[] = {
     {"n-squared",    no_argument,        0, 'n'},
     {"key-count",    required_argument,  0, 'N'},
-    {"library",      required_argument,  0, 'l'},
     {0, 0, 0, 0},
 };
 
@@ -40,7 +39,6 @@ int main(int argc, char *argv[])
     bool nsquared = false;
     int ch;
     int i, j, keycount = 1;
-    char *library = NULL;
 
     while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
         switch (ch) {
@@ -50,19 +48,12 @@ int main(int argc, char *argv[])
             case 'N':   /* --key-count N */
                 keycount = strtoul (optarg, NULL, 10);
                 break;
-            case 'l':   /* --library */
-                library = optarg;
-                break;
         }
     }
 
     /* Initial handshake with PMI obtains
      *    rank, size, and some string max lengths
      */
-    if (library) {
-        unsetenv ("PMI_FD");
-        setenv ("PMI_LIBRARY", library, 1);
-    }
     e = PMI_Init (&spawned);
     if (e != PMI_SUCCESS)
         log_msg_exit ("PMI_Init: %s", pmi_strerror (e));
