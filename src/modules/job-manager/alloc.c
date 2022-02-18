@@ -708,6 +708,7 @@ static void alloc_admin_cb (flux_t *h,
 {
     struct job_manager *ctx = arg;
     struct alloc *alloc = ctx->alloc;
+    const char *errmsg = NULL;
     int query_only;
     int enable;
     const char *reason = NULL;
@@ -723,6 +724,10 @@ static void alloc_admin_cb (flux_t *h,
                              &reason) < 0)
         goto error;
     if (!query_only) {
+        if (flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0) {
+            errmsg = "Request requires owner credentals";
+            goto error;
+        }
         if (!enable) {
             char *cpy = NULL;
             if (reason && strlen (reason) > 0 && !(cpy = strdup (reason)))
@@ -763,7 +768,7 @@ static void alloc_admin_cb (flux_t *h,
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
@@ -814,7 +819,7 @@ static const struct flux_msg_handler_spec htab[] = {
     {   FLUX_MSGTYPE_REQUEST,
         "job-manager.alloc-admin",
         alloc_admin_cb,
-        0
+        FLUX_ROLE_USER,
     },
     {   FLUX_MSGTYPE_RESPONSE,
         "sched.alloc",

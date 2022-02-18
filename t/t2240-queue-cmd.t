@@ -253,6 +253,10 @@ runas_guest() {
         FLUX_HANDLE_USERID=$userid FLUX_HANDLE_ROLEMASK=0x2 "$@"
 }
 
+test_expect_success 'flux-queue: status allowed for guest' '
+	runas_guest flux queue status
+'
+
 test_expect_success 'flux-queue: stop denied for guest' '
 	test_must_fail runas_guest flux queue stop 2>guest_stop.err &&
 	cat <<-EOT >guest_alloc.exp &&
