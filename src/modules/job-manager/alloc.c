@@ -801,11 +801,31 @@ void alloc_ctx_destroy (struct alloc *alloc)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  "job-manager.sched-hello", hello_cb, 0},
-    { FLUX_MSGTYPE_REQUEST,  "job-manager.sched-ready", ready_cb, 0},
-    { FLUX_MSGTYPE_REQUEST,  "job-manager.alloc-admin", alloc_admin_cb, 0},
-    { FLUX_MSGTYPE_RESPONSE, "sched.alloc", alloc_response_cb, 0},
-    { FLUX_MSGTYPE_RESPONSE, "sched.free", free_response_cb, 0},
+    {   FLUX_MSGTYPE_REQUEST,
+        "job-manager.sched-hello",
+        hello_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "job-manager.sched-ready",
+        ready_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "job-manager.alloc-admin",
+        alloc_admin_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_RESPONSE,
+        "sched.alloc",
+        alloc_response_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_RESPONSE,
+        "sched.free",
+        free_response_cb,
+        0
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

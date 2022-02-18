@@ -339,8 +339,17 @@ void submit_ctx_destroy (struct submit *submit)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job-manager.submit", submit_cb, 0},
-    { FLUX_MSGTYPE_REQUEST, "job-manager.submit-admin", submit_admin_cb, 0},
+    {   FLUX_MSGTYPE_REQUEST,
+        "job-manager.submit",
+        submit_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.submit-admin",
+        submit_admin_cb,
+        0
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
