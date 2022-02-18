@@ -16,6 +16,7 @@
 #include <sqlite3.h>
 #include <lz4.h>
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/log.h"
@@ -337,6 +338,10 @@ void checkpoint_get_cb (flux_t *h,
 {
     struct content_sqlite *ctx = arg;
     const char *key;
+    char *s;
+    json_t *o = NULL;
+    const char *errstr = NULL;
+    json_error_t error;
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
         goto error;
@@ -353,18 +358,38 @@ void checkpoint_get_cb (flux_t *h,
         errno = ENOENT;
         goto error;
     }
+    s = (char *)sqlite3_column_text (ctx->checkpt_get_stmt, 0);
+    if (!(o = json_loads (s, 0, &error))) {
+        if (blobref_validate (s) < 0) {
+            errstr = error.text;
+            errno = EINVAL;
+            goto error;
+        }
+        /* assume "version 0" if value is a bare blobref and return it
+         * in a json envelope */
+        if (!(o = json_pack ("{s:i s:s s:f}",
+                             "version", 0,
+                             "rootref", s,
+                             "timestamp", 0.))) {
+            errstr = "failed to encode blobref in json envelope";
+            errno = EINVAL;
+            goto error;
+        }
+    }
     if (flux_respond_pack (h,
                            msg,
-                           "{s:s}",
+                           "{s:O}",
                            "value",
-                           sqlite3_column_text (ctx->checkpt_get_stmt, 0)) < 0)
+                           o) < 0)
         flux_log_error (h, "flux_respond_pack");
     (void )sqlite3_reset (ctx->checkpt_get_stmt);
+    json_decref (o);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "flux_respond_error");
     (void )sqlite3_reset (ctx->checkpt_get_stmt);
+    json_decref (o);
 }
 
 void checkpoint_put_cb (flux_t *h,
@@ -374,16 +399,23 @@ void checkpoint_put_cb (flux_t *h,
 {
     struct content_sqlite *ctx = arg;
     const char *key;
-    const char *value;
+    json_t *o;
+    char *value = NULL;
+    const char *errstr = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:s}",
+                             "{s:s s:o}",
                              "key",
                              &key,
                              "value",
-                             &value) < 0)
+                             &o) < 0)
         goto error;
+    if (!(value = json_dumps (o, JSON_COMPACT))) {
+        errstr = "failed to encode checkpoint value";
+        errno = EINVAL;
+        goto error;
+    }
     if (sqlite3_bind_text (ctx->checkpt_put_stmt,
                            1,
                            (char *)key,
@@ -395,7 +427,7 @@ void checkpoint_put_cb (flux_t *h,
     }
     if (sqlite3_bind_text (ctx->checkpt_put_stmt,
                            2,
-                           (char *)value,
+                           value,
                            strlen (value),
                            SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "checkpt_put: binding value");
@@ -411,11 +443,13 @@ void checkpoint_put_cb (flux_t *h,
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "flux_respond");
     (void )sqlite3_reset (ctx->checkpt_put_stmt);
+    free (value);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "flux_respond_error");
     (void )sqlite3_reset (ctx->checkpt_put_stmt);
+    free (value);
 }
 
 static void content_sqlite_closedb (struct content_sqlite *ctx)

@@ -52,6 +52,7 @@
 #include "config.h"
 #endif
 #include <flux/core.h>
+#include <jansson.h>
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/log.h"
@@ -157,24 +158,34 @@ void checkpoint_get_cb (flux_t *h,
     const char *key;
     void *data = NULL;
     size_t size;
+    json_t *o = NULL;
     const char *errstr = NULL;
+    json_error_t error;
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
         goto error;
     if (filedb_get (ctx->dbpath, key, &data, &size, &errstr) < 0)
         goto error;
+    /* recovery from version 0 checkpoint blobref not supported */
+    if (!(o = json_loadb (data, size, 0, &error))) {
+        errstr = error.text;
+        errno = EINVAL;
+        goto error;
+    }
     if (flux_respond_pack (h,
                            msg,
-                           "{s:s}",
+                           "{s:O}",
                            "value",
-                           size > 0 ? data : "") < 0)
+                           o) < 0)
         flux_log_error (h, "error responding to kvs-checkpoint.get request");
     free (data);
+    json_decref (o);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to kvs-checkpoint.get request");
     free (data);
+    json_decref (o);
 }
 
 /* Handle a kvs-checkpoint.put request from the rank 0 kvs module.
@@ -187,25 +198,33 @@ void checkpoint_put_cb (flux_t *h,
 {
     struct content_files *ctx = arg;
     const char *key;
-    const char *value;
+    json_t *o;
+    char *value = NULL;
     const char *errstr = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:s}",
+                             "{s:s s:o}",
                              "key",
                              &key,
                              "value",
-                             &value) < 0)
+                             &o) < 0)
         goto error;
+    if (!(value = json_dumps (o, JSON_COMPACT))) {
+        errstr = "failed to encode checkpoint value";
+        errno = EINVAL;
+        goto error;
+    }
     if (filedb_put (ctx->dbpath, key, value, strlen (value), &errstr) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to kvs-checkpoint.put request");
+    free (value);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to kvs-checkpoint.put request");
+    free (value);
 }
 
 /* Destroy module context.

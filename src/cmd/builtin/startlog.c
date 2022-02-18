@@ -46,26 +46,38 @@ static void content_flush (flux_t *h)
 static void kvs_checkpoint_put (flux_t *h, const char *treeobj)
 {
     json_t *o;
+    json_t *value;
     const char *rootref;
     flux_future_t *f;
+    double timestamp;
 
     if (!(o = treeobj_decode (treeobj))
         || !(rootref = treeobj_get_blobref (o, 0)))
         log_err_exit ("Error decoding treeobj from eventlog commit");
+
+    timestamp = flux_reactor_now (flux_get_reactor (h));
+
+    if (!(value = json_pack ("{s:i s:s s:f}",
+                             "version", 1,
+                             "rootref", rootref,
+                             "timestamp", timestamp)))
+        log_msg_exit ("Error encoding checkpoint object");
+
     if (!(f = flux_rpc_pack (h,
                              "kvs-checkpoint.put",
                              0,
                              0,
-                             "{s:s s:s}",
+                             "{s:s s:O}",
                              "key",
                              "kvs-primary",
                              "value",
-                             rootref))
+                             value))
         || flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("Error writing kvs checkpoint: %s",
                       future_strerror (f, errno));
     flux_future_destroy (f);
     json_decref (o);
+    json_decref (value);
 }
 
 static void post_startlog_event (flux_t *h,

@@ -326,8 +326,9 @@ void checkpoint_get_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg
     struct content_s3 *ctx = arg;
     const char *key;
     void *data = NULL;
-    char *dup = NULL;
     size_t size;
+    json_t *o = NULL;
+    json_error_t error;
 
     if (flux_request_unpack (msg, NULL, "{s:s}", "key", &key) < 0)
         goto error;
@@ -335,26 +336,30 @@ void checkpoint_get_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg
     if (s3_get (ctx->cfg, key, &data, &size, &errstr) < 0)
         goto error;
 
-    if (!(dup = strndup (data, size)))
+    if (!(o = json_loadb (data, size, 0, &error))) {
+        /* recovery from version 0 checkpoint blobref not supported */
+        errstr = error.text;
+        errno = EINVAL;
         goto error;
+    }
 
     if (flux_respond_pack (h,
                            msg,
-                           "{s:s}",
+                           "{s:O}",
                            "value",
-                           size > 0 ? dup : "") < 0) {
+                           o) < 0) {
         errno = EIO;
         flux_log_error (h, "error responding to kvs-checkpoint.get request (pack)");
     }
     free (data);
-    free (dup);
+    json_decref (o);
     return;
 
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to kvs-checkpoint.get request");
     free (data);
-    free (dup);
+    json_decref (o);
 }
 
 /* Handle a kvs-checkpoint.put request from the rank 0 kvs module.
@@ -364,26 +369,34 @@ void checkpoint_put_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg
 {
     struct content_s3 *ctx = arg;
     const char *key;
-    const char *value;
+    json_t *o;
+    char *value = NULL;
     const char *errstr = NULL;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:s s:s}",
+                             "{s:s s:o}",
                              "key",
                              &key,
                              "value",
-                             &value) < 0)
+                             &o) < 0)
         goto error;
+    if (!(value = json_dumps (o, JSON_COMPACT))) {
+        errstr = "failed to encode checkpoint value";
+        errno = EINVAL;
+        goto error;
+    }
     if (s3_put (ctx->cfg, key, value, strlen (value), &errstr) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to kvs-checkpoint.put request (pack)");
+    free (value);
     return;
 
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
         flux_log_error (h, "error responding to kvs-checkpoint.put request");
+    free (value);
 }
 
 /* Table of message handler callbacks registered below.

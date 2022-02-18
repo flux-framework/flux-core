@@ -2707,62 +2707,18 @@ static void process_args (struct kvs_ctx *ctx, int ac, char **av)
     }
 }
 
-static int checkpoint_get_version0 (const char *value, char *buf, size_t len)
-{
-    /* if value is a blobref, its version 0 checkpoint */
-    if (blobref_validate (value) == 0) {
-        if (strlen (value) >= len)
-            return -1;
-        strcpy (buf, value);
-        return 0;
-    }
-    return -1;
-}
-
-static int checkpoint_get_version1 (const char *value,
-                                    char *buf, size_t len,
-                                    double *timestamp)
-{
-    const char *rootref = NULL;
-    json_t *o = NULL;
-    int version;
-    int rv = -1;
-
-    if (!(o = json_loads (value, 0, NULL)))
-        goto error;
-
-    if (json_unpack (o, "{s:i}", "version", &version) < 0)
-        goto error;
-    /* only can handle version 1 right now */
-    if (version == 1) {
-        if (json_unpack (o, "{s:s s:f}",
-                         "rootref", &rootref,
-                         "timestamp", timestamp) < 0)
-            goto error;
-        if (strlen (rootref) >= len)
-            goto error;
-        strcpy (buf, rootref);
-    }
-    else
-        goto error;
-
-    rv = 0;
-error:
-    json_decref (o);
-    return rv;
-}
-
-/* Synchronously get string value by key from checkpoint service.
- * Copy value to buf with '\0' termination.
+/* Synchronously get checkpoint data by key from checkpoint service.
+ * Copy rootref buf with '\0' termination.
  * Return 0 on success, -1 on failure,
  */
 static int checkpoint_get (flux_t *h, const char *key, char *buf, size_t len)
 {
     flux_future_t *f = NULL;
-    const char *value = NULL;
-    double timestamp = 0.;
+    json_t *o;
     char datestr[128];
-    int rv = -1;
+    int version;
+    const char *rootref = NULL;
+    double timestamp = 0.;
 
     if (!(f = flux_rpc_pack (h,
                              "kvs-checkpoint.get",
@@ -2772,14 +2728,28 @@ static int checkpoint_get (flux_t *h, const char *key, char *buf, size_t len)
                              "key",
                              key)))
         return -1;
-    if (flux_rpc_get_unpack (f, "{s:s}", "value", &value) < 0)
+    if (flux_rpc_get_unpack (f, "{s:o}", "value", &o) < 0)
         goto error;
 
-    if (checkpoint_get_version1 (value, buf, len, &timestamp) < 0
-        && checkpoint_get_version0 (value, buf, len) < 0) {
-        errno = EINVAL;
-        goto error;
+    if (json_unpack (o, "{s:i}", "version", &version) < 0)
+        goto error_einval;
+
+    if (version == 0) {
+        if (json_unpack (o, "{s:s}", "rootref", &rootref) < 0)
+            goto error_einval;
     }
+    else if (version == 1) {
+        if (json_unpack (o, "{s:s s:f}",
+                         "rootref", &rootref,
+                         "timestamp", &timestamp) < 0)
+            goto error_einval;
+    }
+    else
+        goto error_einval;
+
+    if (strlen (rootref) >= len)
+        goto error_einval;
+    strcpy (buf, rootref);
 
     if (timestamp > 0.) {
         time_t sec = timestamp;
@@ -2792,10 +2762,14 @@ static int checkpoint_get (flux_t *h, const char *key, char *buf, size_t len)
 
     flux_log (h, LOG_INFO,
               "restored kvs-primary from checkpoint on %s", datestr);
-    rv = 0;
+    flux_future_destroy (f);
+    return 0;
+
+error_einval:
+    errno = EINVAL;
 error:
     flux_future_destroy (f);
-    return rv;
+    return -1;
 }
 
 /* Synchronously store key-value pair to checkpoint service.
@@ -2806,7 +2780,6 @@ static int checkpoint_put (flux_t *h, const char *key, const char *rootref)
     flux_future_t *f = NULL;
     double timestamp;
     json_t *o = NULL;
-    char *value = NULL;
     int save_errno, rv = -1;
 
     timestamp = flux_reactor_now (flux_get_reactor (h));
@@ -2823,20 +2796,16 @@ static int checkpoint_put (flux_t *h, const char *key, const char *rootref)
         errno = ENOMEM;
         goto error;
     }
-    if (!(value = json_dumps (o, JSON_COMPACT))) {
-        errno = ENOMEM;
-        goto error;
-    }
 
     if (!(f = flux_rpc_pack (h,
                              "kvs-checkpoint.put",
                              0,
                              0,
-                             "{s:s s:s}",
+                             "{s:s s:O}",
                              "key",
                              key,
                              "value",
-                             value)))
+                             o)))
         goto error;
     if (flux_rpc_get (f, NULL) < 0)
         goto error;
@@ -2845,7 +2814,6 @@ error:
     save_errno = errno;
     flux_future_destroy (f);
     json_decref (o);
-    free (value);
     errno = save_errno;
     return rv;
 }
