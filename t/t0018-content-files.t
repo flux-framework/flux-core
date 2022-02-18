@@ -144,8 +144,8 @@ test_expect_success LONGTEST 'reload/verify various size large blobs' '
 '
 
 test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returns same value' '
-        kvs_checkpoint_get foo | jq -r .value >value2.out &&
-        test_cmp value2.exp value2.out
+        kvs_checkpoint_get foo | jq -r .value >value3.out &&
+        test_cmp value2.exp value3.out
 '
 
 test_expect_success 'load with invalid blobref fails' '
