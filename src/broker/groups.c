@@ -746,11 +746,31 @@ done:
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  "groups.update", update_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "groups.join", join_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "groups.leave", leave_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "groups.get", get_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "groups.disconnect", disconnect_cb, 0 },
+    {   FLUX_MSGTYPE_REQUEST,
+        "groups.update",
+        update_request_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "groups.join",
+        join_request_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "groups.leave",
+        leave_request_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "groups.get",
+        get_request_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "groups.disconnect",
+        disconnect_cb,
+        0
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
