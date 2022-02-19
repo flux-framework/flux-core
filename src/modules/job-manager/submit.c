@@ -287,6 +287,7 @@ static void submit_admin_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager *ctx = arg;
     const char *error_prefix = "job submission is disabled: ";
+    const char *errmsg = NULL;
     int enable;
     int query_only;
     const char *reason;
@@ -302,6 +303,10 @@ static void submit_admin_cb (flux_t *h, flux_msg_handler_t *mh,
                              &reason) < 0)
         goto error;
     if (!query_only) {
+        if (flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0) {
+            errmsg = "Request requires owner credentals";
+            goto error;
+        }
         if (!enable) {
             char *errmsg;
             if (asprintf (&errmsg, "%s%s", error_prefix, reason) < 0)
@@ -323,7 +328,7 @@ static void submit_admin_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
@@ -339,8 +344,17 @@ void submit_ctx_destroy (struct submit *submit)
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST, "job-manager.submit", submit_cb, 0},
-    { FLUX_MSGTYPE_REQUEST, "job-manager.submit-admin", submit_admin_cb, 0},
+    {   FLUX_MSGTYPE_REQUEST,
+        "job-manager.submit",
+        submit_cb,
+        0
+    },
+    {
+        FLUX_MSGTYPE_REQUEST,
+        "job-manager.submit-admin",
+        submit_admin_cb,
+        FLUX_ROLE_USER,
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

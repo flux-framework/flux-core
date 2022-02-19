@@ -28,6 +28,7 @@ man1
    flux-resource
    flux-start
    flux-shell
+   flux-uptime
    flux-uri
    flux-version
    flux

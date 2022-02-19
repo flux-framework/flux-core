@@ -31,6 +31,7 @@ man_pages = [
     ('man1/flux-jobs', 'flux-jobs', 'list jobs submitted to Flux', [author], 1),
     ('man1/flux-pstree', 'flux-pstree', 'display job hierarchies', [author], 1),
     ('man1/flux-jobtap', 'flux-jobtap', 'List, remove, and load job-manager plugins', [author], 1),
+    ('man1/flux-uptime', 'flux-uptime', 'Tell how long Flux has been up and running', [author], 1),
     ('man1/flux-uri', 'flux-uri', 'resolve Flux URIs', [author], 1),
     ('man1/flux-resource', 'flux-resource', 'list/manipulate Flux resource status', [author], 1),
     ('man1/flux-keygen', 'flux-keygen', 'generate keys for Flux security', [author], 1),
