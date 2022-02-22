@@ -55,7 +55,8 @@ flux_SOURCES = \
 	builtin/overlay.c \
 	builtin/relay.c \
 	builtin/python.c \
-	builtin/uptime.c
+	builtin/uptime.c \
+	builtin/startlog.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
 
