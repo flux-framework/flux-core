@@ -384,10 +384,6 @@ void checkpoint_put_cb (flux_t *h,
                              "value",
                              &value) < 0)
         goto error;
-    if (strlen (key) == 0) {
-        errno = EINVAL;
-        goto error;
-    }
     if (sqlite3_bind_text (ctx->checkpt_put_stmt,
                            1,
                            (char *)key,
