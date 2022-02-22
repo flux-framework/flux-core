@@ -337,7 +337,6 @@ check_PROGRAMS = \
 	kvs/issue1876 \
 	kvs/waitcreate_cancel \
 	kvs/setrootevents \
-	kvs/checkpoint \
 	request/treq \
 	request/rpc \
 	request/rpc_stream \
@@ -584,11 +583,6 @@ kvs_setrootevents_SOURCES = kvs/setrootevents.c
 kvs_setrootevents_CPPFLAGS = $(test_cppflags)
 kvs_setrootevents_LDADD = $(test_ldadd)
 kvs_setrootevents_LDFLAGS = $(test_ldflags)
-
-kvs_checkpoint_SOURCES = kvs/checkpoint.c
-kvs_checkpoint_CPPFLAGS = $(test_cppflags)
-kvs_checkpoint_LDADD = $(test_ldadd)
-kvs_checkpoint_LDFLAGS = $(test_ldflags)
 
 request_treq_SOURCES = request/treq.c
 request_treq_CPPFLAGS = $(test_cppflags)
