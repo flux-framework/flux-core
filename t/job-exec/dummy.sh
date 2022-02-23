@@ -76,7 +76,7 @@ get_job_shell_rank() {
         if [[ $r == $BROKER_RANK ]]; then
             JOB_SHELL_RANK=$r
             return 0
-	fi
+        fi
         ((i++))
     done
     die "My rank: $BROKER_RANK, not found in ranklist!"
@@ -104,11 +104,22 @@ get_traps() {
     fi
 }
 
+barrier() {
+    if [[ ${NNODES} -gt 1 && -n ${FLUX_EXEC_PROTOCOL_FD} ]]; then
+        echo enter >&${FLUX_EXEC_PROTOCOL_FD}
+        read -u ${FLUX_EXEC_PROTOCOL_FD} line
+        if [[ ${line##*=} -ne 0 ]]; then
+            exit ${line##*=}
+        fi
+    fi
+}
+
 #
 #  Gather remaining job information:
 #
 get_job_shell_rank
 get_nnodes
+barrier
 get_duration
 get_command
 get_traps
