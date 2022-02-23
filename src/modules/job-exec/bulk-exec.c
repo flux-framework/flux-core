@@ -375,6 +375,7 @@ struct bulk_exec * bulk_exec_create (struct bulk_exec_ops *ops, void *arg)
     flux_subprocess_ops_t sp_ops = {
         .on_completion =   exec_complete_cb,
         .on_state_change = exec_state_cb,
+        .on_channel_out =  exec_output_cb,
         .on_stdout =       exec_output_cb,
         .on_stderr =       exec_output_cb,
     };
