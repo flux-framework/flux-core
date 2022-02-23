@@ -41,37 +41,34 @@ static const char *default_cwd = "/tmp";
 static const char *default_job_shell = NULL;
 static const char *flux_imp_path = NULL;
 
-/* Configuration for "bulk" execution implementation. Used only for testing
- *  for now.
- */
-struct exec_conf {
-    const char *        mock_exception;   /* fake exception */
+struct exec_ctx {
+    const char * mock_exception;   /* fake exception */
 };
 
-static void exec_conf_destroy (struct exec_conf *tc)
+static void exec_ctx_destroy (struct exec_ctx *tc)
 {
     free (tc);
 }
 
-static struct exec_conf *exec_conf_create (json_t *jobspec)
+static struct exec_ctx *exec_ctx_create (json_t *jobspec)
 {
-    struct exec_conf *conf = calloc (1, sizeof (*conf));
-    if (conf == NULL)
+    struct exec_ctx *ctx = calloc (1, sizeof (*ctx));
+    if (ctx == NULL)
         return NULL;
     (void) json_unpack (jobspec, "{s:{s:{s:{s:{s:s}}}}}",
                                  "attributes", "system", "exec",
                                      "bulkexec",
                                          "mock_exception",
-                                         &conf->mock_exception);
-    return conf;
+                                         &ctx->mock_exception);
+    return ctx;
 }
 
 static const char * exec_mock_exception (struct bulk_exec *exec)
 {
-    struct exec_conf *conf = bulk_exec_aux_get (exec, "conf");
-    if (!conf || !conf->mock_exception)
+    struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
+    if (!ctx || !ctx->mock_exception)
         return "none";
-    return conf->mock_exception;
+    return ctx->mock_exception;
 }
 
 static const char *jobspec_get_job_shell (json_t *jobspec)
@@ -205,7 +202,7 @@ static struct bulk_exec_ops exec_ops = {
 static int exec_init (struct jobinfo *job)
 {
     flux_cmd_t *cmd = NULL;
-    struct exec_conf *conf = NULL;
+    struct exec_ctx *ctx = NULL;
     struct bulk_exec *exec = NULL;
     const struct idset *ranks = NULL;
 
@@ -224,12 +221,12 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: bulk_exec_create");
         goto err;
     }
-    if (!(conf = exec_conf_create (job->jobspec))) {
-        flux_log_error (job->h, "exec_init: exec_conf_create");
+    if (!(ctx = exec_ctx_create (job->jobspec))) {
+        flux_log_error (job->h, "exec_init: exec_ctx_create");
         goto err;
     }
-    if (bulk_exec_aux_set (exec, "conf", conf,
-                          (flux_free_f) exec_conf_destroy) < 0) {
+    if (bulk_exec_aux_set (exec, "ctx", ctx,
+                          (flux_free_f) exec_ctx_destroy) < 0) {
         flux_log_error (job->h, "exec_init: bulk_exec_aux_set");
         goto err;
     }
