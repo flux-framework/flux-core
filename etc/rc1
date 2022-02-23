@@ -32,6 +32,11 @@ modload all job-info
 modload 0 job-list
 modload 0 job-archive
 
+if test $RANK -eq 0 && ! flux startlog --check --quiet; then
+    flux queue stop
+    flux queue disable "Flux is in safe mode due to an incomplete shutdown."
+fi
+
 modload all job-ingest
 modload 0 job-exec
 modload 0 heartbeat
