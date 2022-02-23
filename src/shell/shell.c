@@ -30,6 +30,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/fdutils.h"
 
 #include "internal.h"
 #include "builtins.h"
@@ -878,11 +879,38 @@ static const char *shell_conf_get (const char *name)
     return flux_conf_builtin_get (name, FLUX_CONF_AUTO);
 }
 
+static int get_protocol_fd (int *pfd)
+{
+    const char *s;
+
+    if ((s = getenv ("FLUX_EXEC_PROTOCOL_FD"))) {
+        char *endptr;
+        int fd;
+
+        errno = 0;
+        fd = strtol (s, &endptr, 10);
+        if (errno != 0 || *endptr != '\0') {
+            errno = EINVAL;
+            return -1;
+        }
+        if (fd_set_cloexec (fd) < 0)
+            return -1;
+        *pfd = fd;
+        return 0;
+    }
+    *pfd = -1;
+    return 0;
+}
+
 static void shell_initialize (flux_shell_t *shell)
 {
     const char *pluginpath = shell_conf_get ("shell_pluginpath");
 
     memset (shell, 0, sizeof (struct flux_shell));
+
+    if (get_protocol_fd (&shell->protocol_fd) < 0)
+        shell_die_errno (1, "Failed to parse FLUX_EXEC_PROTOCOL_FD");
+
     if (!(shell->completion_refs = zhashx_new ()))
         shell_die_errno (1, "zhashx_new");
     zhashx_set_destructor (shell->completion_refs, item_free);
@@ -1060,6 +1088,16 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
 
     if (shell->standalone || shell->info->shell_size == 1)
         return 0; // NO-OP
+
+    if (shell->protocol_fd != -1) {
+        char buf [64];
+        dprintf (shell->protocol_fd, "enter\n");
+        if (read (shell->protocol_fd, buf, 7) < 0
+            || strcmp (buf, "exit=1\n") == 0)
+            exit (1);
+        return 0;
+    }
+
     id = shell->info->jobid;
     if (snprintf (fqname,
                   sizeof (fqname),
@@ -1076,6 +1114,7 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
      */
     if (!(h = flux_clone (shell->h)))
         shell_die_errno (1, "flux_handle_clone");
+
 
     if (!(f = flux_barrier (h, fqname, shell->info->shell_size))) {
         shell_log_errno ("flux_barrier");
