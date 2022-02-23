@@ -6,7 +6,7 @@ test_description='Test instance restart and still running jobs with testexec'
 test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 . `dirname $0`/sharness.sh
 
-export FLUX_INSTANCE_RESTART=t
+export FLUX_DISABLE_JOB_CLEANUP=t
 
 test_expect_success 'run a testexec job in persistent instance (long run)' '
 	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
