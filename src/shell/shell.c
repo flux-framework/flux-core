@@ -1090,10 +1090,21 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
         return 0; // NO-OP
 
     if (shell->protocol_fd != -1) {
-        char buf [64];
-        dprintf (shell->protocol_fd, "enter\n");
-        if (read (shell->protocol_fd, buf, 7) < 0
-            || strcmp (buf, "exit=1\n") == 0)
+        char buf [8];
+        if (dprintf (shell->protocol_fd, "enter\n") != 6)
+            shell_die_errno (1, "shell_barrier: dprintf");
+
+        /*  Note: The only expected values currently are "exit=0\n"
+         *   for success and "exit=1\n" for failure. Therefore, if
+         *   read(2) fails, or we don't receive exactly "exit=0\n",
+         *   then this barrier has failed. We exit immediately since
+         *   the reason for the failed barrier has likely been logged
+         *   elsewhere.
+         */
+        memset (buf, 0, sizeof (buf));
+        if (read (shell->protocol_fd, buf, 7) < 0)
+            shell_die_errno (1, "shell_barrier: read");
+        if (strcmp (buf, "exit=0\n") != 0)
             exit (1);
         return 0;
     }
