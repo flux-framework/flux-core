@@ -18,6 +18,7 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-logger.1 \
 	man1/flux-ping.1 \
 	man1/flux-start.1 \
+	man1/flux-startlog.1 \
 	man1/flux-module.1 \
 	man1/flux-exec.1 \
 	man1/flux-env.1 \

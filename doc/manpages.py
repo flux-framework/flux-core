@@ -43,6 +43,7 @@ man_pages = [
     ('man1/flux-ping', 'flux-ping', 'measure round-trip latency to Flux services', [author], 1),
     ('man1/flux-proxy', 'flux-proxy', 'create proxy environment for Flux instance', [author], 1),
     ('man1/flux-start', 'flux-start', 'bootstrap a local Flux instance', [author], 1),
+    ('man1/flux-startlog', 'flux-startlog', 'Show Flux instance start and stop times', [author], 1),
     ('man1/flux-version', 'flux-version', 'Display flux version information', [author], 1),
     ('man1/flux', 'flux', 'the Flux resource management framework', [author], 1),
     ('man1/flux-shell', 'flux-shell', 'the Flux job shell', [author], 1),
