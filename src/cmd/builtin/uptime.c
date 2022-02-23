@@ -219,8 +219,7 @@ static void append_count_if (char *buf,
         int n = strlen (buf);
         snprintf (buf + n,
                   len - n,
-                  "%s%d %s",
-                  n > 0 ? ",  " : "",
+                  ",  %d %s",
                   count,
                   name);
     }
