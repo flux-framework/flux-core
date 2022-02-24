@@ -72,6 +72,23 @@ const char *flux_get_hostbyrank (flux_t *h, uint32_t rank);
  */
 int flux_get_rankbyhost (flux_t *h, const char *host);
 
+/* Return a list/set of hosts/ranks in Hostlist/Idset form given 'targets'
+ * in Idset/Hostlist form. Caller must free returned value.
+ *
+ * Returns NULL on failure with error message in errp->text (if errp != NULL).
+ *
+ * NOTES:
+ *  - The source of the mapping is the rank-ordered broker 'hostlist' attribute.
+ *  - An Idset (RFC 22) is a set (unordered, no duplicates)
+ *  - A Hostlist (RFC 29) is a list (ordered, may be duplicates)
+ *  - If there are multiple ranks per host, this function can only map
+ *    hostnames to the first rank found on the host.
+ *
+ */
+char *flux_hostmap_lookup (flux_t *h,
+                           const char *targets,
+                           flux_error_t *errp);
+
 /* Look up the broker.starttime attribute on rank 0.
  * The instance uptime is flux_reactor_now() - starttime.
  * N.B. if the instance has been restarted, this value is the most
