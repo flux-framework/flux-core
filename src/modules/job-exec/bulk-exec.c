@@ -542,9 +542,9 @@ static void imp_kill_output (struct bulk_exec *kill,
 {
     int rank = flux_subprocess_rank (p);
     flux_log (kill->h, LOG_INFO,
-              "rank%d: flux-imp kill: %s: %s",
+              "%s (rank %d): imp kill: %s",
+              flux_get_hostbyrank (kill->h, rank),
               rank,
-              stream,
               data);
 }
 
@@ -561,9 +561,11 @@ static void imp_kill_error (struct bulk_exec *kill,
                             flux_subprocess_t *p,
                             void *arg)
 {
+    int rank = flux_subprocess_rank (p);
     flux_log_error (kill->h,
-                    "imp kill: rank=%d: failed",
-                    flux_subprocess_rank (p));
+                    "imp kill on %s (rank %d) failed",
+                    flux_get_hostbyrank (kill->h, rank),
+                    rank);
 }
 
 
