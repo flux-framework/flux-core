@@ -590,54 +590,18 @@ static int subcmd_lookup (optparse_t *p, int ac, char *av[])
 {
     int optindex = optparse_option_index (p);
     flux_t *h = builtin_get_flux_handle (p);
-    struct hostlist *hostmap = get_hostmap (h);
-    struct hostlist *hosts;
-    struct idset *ranks;
+    flux_error_t error;
     char *s;
 
     if (optindex != ac - 1)
         log_msg_exit ("single TARGET argument is required");
-    if ((ranks = idset_decode (av[optindex]))) {
-        unsigned int rank;
-        if (!(hosts = hostlist_create ()))
-            log_err_exit ("failed to create hostlist");
-        rank = idset_first (ranks);
-        while (rank != IDSET_INVALID_ID) {
-            const char *host;
-            if (!(host = hostlist_nth (hostmap, rank)))
-                log_msg_exit ("rank %u is not found in host map", rank);
-            if (hostlist_append (hosts, host) < 0)
-                log_err_exit ("error appending to hostlist");
-            rank = idset_next (ranks, rank);
-        }
-        if (!(s = hostlist_encode (hosts)))
-            log_err_exit ("error encoding hostlist");
-    }
-    else if ((hosts = hostlist_decode (av[optindex]))) {
-        const char *host;
-        int rank = 0;
-        if (!(ranks = idset_create (0, IDSET_FLAG_AUTOGROW)))
-            log_err_exit ("failed to create idset");
-        host = hostlist_first (hosts);
-        while (host) {
-            if ((rank = hostlist_find (hostmap, host)) < 0)
-                log_msg_exit ("host %s is not found in host map", host);
-            if (idset_set (ranks, rank) < 0)
-                log_err_exit ("error adding rank %d to idset", (int)rank);
-            host = hostlist_next (hosts);
-        }
-        if (!(s = idset_encode (ranks, IDSET_FLAG_RANGE)))
-            log_err_exit ("error encoding idset");
-    }
-    else
-        log_msg_exit ("TARGET must be a valid idset or hostlist");
+
+    if (!(s = flux_hostmap_lookup (h, av[optindex], &error)))
+        log_msg_exit ("%s", error.text);
 
     printf ("%s\n", s);
 
     free (s);
-    hostlist_destroy (hosts);
-    idset_destroy (ranks);
-
     return 0;
 }
 
