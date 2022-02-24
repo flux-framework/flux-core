@@ -1025,67 +1025,8 @@ int flux_shell_add_event_context (flux_shell_t *shell,
     return rc;
 }
 
-static void eventlog_cb (flux_future_t *f, void *arg)
-{
-    json_t *o = NULL;
-    json_t *context = NULL;
-    const char *name;
-    const char *entry;
-
-    if (flux_job_event_watch_get (f, &entry) < 0) {
-        if (errno == ENODATA)
-            return;
-        shell_log_errno ("flux_job_event_watch_get");
-        return;
-    }
-    if (!(o = eventlog_entry_decode (entry))) {
-        shell_log_errno ("eventlog_entry_decode: %s", entry);
-        return;
-    }
-    if (eventlog_entry_parse (o, NULL, &name, &context) < 0) {
-        shell_log_errno ("eventlog_entry_parse: %s", entry);
-        return;
-    }
-    if (strcmp (name, "exception") == 0) {
-        const char *type;
-        int severity;
-        const char *note = NULL;
-        if (json_unpack (context, "{s:s s:i s?s}",
-                         "type", &type,
-                         "severity", &severity,
-                         "note", &note) < 0) {
-            shell_log_errno ("exception event unpack");
-            return;
-        }
-        shell_log_set_exception_logged ();
-        shell_die (1, "job.exception during init barrier, aborting");
-    }
-    json_decref (o);
-    flux_future_reset (f);
-}
-
-static void barrier_cb (flux_future_t *f, void *arg)
-{
-    flux_reactor_t *r = flux_future_get_reactor (f);
-    if (flux_future_get (f, NULL) < 0) {
-        shell_log_errno ("flux_future_get: shell_barrier");
-        flux_reactor_stop_error (r);
-    }
-    else {
-        shell_trace ("shell barrier complete");
-        flux_reactor_stop (r);
-    }
-}
-
 static int shell_barrier (flux_shell_t *shell, const char *name)
 {
-    flux_future_t *log_f = NULL;
-    flux_future_t *f = NULL;
-    flux_t *h = NULL;
-    flux_jobid_t id;
-    char fqname[128];
-    int rc = -1;
-
     if (shell->standalone || shell->info->shell_size == 1)
         return 0; // NO-OP
 
@@ -1109,52 +1050,7 @@ static int shell_barrier (flux_shell_t *shell, const char *name)
         return 0;
     }
 
-    id = shell->info->jobid;
-    if (snprintf (fqname,
-                  sizeof (fqname),
-                  "shell-%ju-%s",
-                  (uintmax_t) id,
-                   name) >= sizeof (fqname)) {
-        errno = EINVAL;
-        return -1;
-    }
-    /*  Clone shell flux handle so that only barrier and eventlog watch
-     *   messages are dispatched in the temporary reactor call here.
-     *   This allows messages from other shell services to be requeued
-     *   for the real reactor in main().
-     */
-    if (!(h = flux_clone (shell->h)))
-        shell_die_errno (1, "flux_handle_clone");
-
-
-    if (!(f = flux_barrier (h, fqname, shell->info->shell_size))) {
-        shell_log_errno ("flux_barrier");
-        goto out;
-    }
-    if (!(log_f = flux_job_event_watch (h, id, "eventlog", 0))) {
-        shell_log_errno ("flux_job_event_watch");
-        goto out;
-    }
-    if (flux_future_then (log_f, -1., eventlog_cb, NULL) < 0
-        ||  flux_future_then (f, -1., barrier_cb, NULL) < 0) {
-        shell_log_errno ("flux_future_then");
-        goto out;
-    }
-    if (flux_future_then (f, -1., barrier_cb, shell) < 0) {
-        shell_log_errno ("flux_future_then");
-        goto out;
-    }
-    if (flux_reactor_run (flux_get_reactor (h), 0) >= 0)
-        rc = 0;
-    shell_trace ("exited barrier with rc = %d", rc);
-out:
-    flux_job_event_watch_cancel (log_f);
-    flux_future_destroy (log_f);
-    flux_future_destroy (f);
-
-    /*  Close the cloned handle */
-    flux_close (h);
-    return rc;
+    return -1;
 }
 
 static int load_initrc (flux_shell_t *shell, const char *default_rcfile)
