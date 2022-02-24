@@ -602,3 +602,5 @@ multi
 sysctl
 pluginpath
 uptime
+startlog
+timestamps

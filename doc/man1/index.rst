@@ -27,6 +27,7 @@ man1
    flux-pstree
    flux-resource
    flux-start
+   flux-startlog
    flux-shell
    flux-uptime
    flux-uri

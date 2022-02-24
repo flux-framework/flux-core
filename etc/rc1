@@ -21,12 +21,21 @@ modload 0 ${content_backing}
 modload all kvs
 modload all kvs-watch
 
+if test $RANK -eq 0; then
+    flux startlog --post-start-event
+fi
+
 modload all resource
 modload 0 cron sync=heartbeat.pulse
 modload 0 job-manager
 modload all job-info
 modload 0 job-list
 modload 0 job-archive
+
+if test $RANK -eq 0 && ! flux startlog --check --quiet; then
+    flux queue stop
+    flux queue disable "Flux is in safe mode due to an incomplete shutdown."
+fi
 
 modload all job-ingest
 modload 0 job-exec
@@ -54,9 +63,10 @@ if test $RANK -eq 0 -a "${FLUX_SCHED_MODULE}" != "none" \
     flux module load ${FLUX_SCHED_MODULE:-sched-simple}
 fi
 
-test $RANK -ne 0 -o "${FLUX_INSTANCE_RESTART}" = "t" \
-     || flux admin cleanup-push <<-EOT
+if test $RANK -eq 0 -a -z "${FLUX_DISABLE_JOB_CLEANUP}"; then
+	flux admin cleanup-push <<-EOT
 	flux queue stop --quiet
 	flux job cancelall --user=all --quiet -f --states RUN
 	flux queue idle --quiet
-EOT
+	EOT
+fi

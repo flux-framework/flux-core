@@ -35,6 +35,10 @@ modrm all job-ingest
 modrm 0 cron
 modrm all barrier
 
+if test $RANK -eq 0; then
+    flux startlog --post-finish-event
+fi
+
 modrm all kvs-watch
 modrm all kvs
 

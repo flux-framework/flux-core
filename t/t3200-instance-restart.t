@@ -44,6 +44,31 @@ test_expect_success 'job IDs were issued in ascending order' '
 	test $(cat id2.out | flux job id) -lt $(cat id3.out | flux job id)
 '
 
+test_expect_success 'restart instance and capture startlog' '
+	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
+	           flux startlog >startlog.out
+'
+test_expect_success 'startlog shows 5 run periods' '
+	test $(wc -l <startlog.out) -eq 5
+'
+test_expect_success 'most recent period is still running' '
+	tail -1 startlog.out | grep running
+'
+
+test_expect_success 'doctor startlog to look like a crash' '
+	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
+		-o,-Sbroker.rc1_path=$SHARNESS_TEST_SRCDIR/rc/rc1-kvs \
+		-o,-Sbroker.rc3_path=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs \
+		flux startlog --post-start-event
+'
+test_expect_success 'check queue status' '
+	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
+		flux queue status >queue_status.out 2>&1
+'
+test_expect_success 'safe mode is entered' '
+	grep "Flux is in safe mode" queue_status.out
+'
+
 test_expect_success 'run a job in persistent instance (content-files)' '
 	flux start \
 	    -o,-Scontent.backing-module=content-files \
