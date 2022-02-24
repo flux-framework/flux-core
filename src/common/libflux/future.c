@@ -480,8 +480,14 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
             flux_dispatch_requeue (f->now->h);
         f->now->running = false;
     }
-    if (!future_is_ready (f))
+    if (!future_is_ready (f)) {
+        /* Typically this error should be "impossible", but can occur
+         * if the future does not get initialized properly to use the
+         * now reactor.
+         */
+        errno = EINVAL;
         return -1;
+    }
     return 0;
 }
 

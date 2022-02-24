@@ -122,6 +122,11 @@ void test_simple (void)
     ok (!flux_future_is_ready (f),
         "flux_future_is_ready returns false");
     errno = 0;
+    ok (flux_future_wait_for (f, -1.0) < 0 && errno == EINVAL,
+        "flux_future_wait_for fails with EINVAL with timeout < 0");
+    ok (!flux_future_is_ready (f),
+        "flux_future_is_ready returns false");
+    errno = 0;
     const void *result = NULL;
     result_destroy_called = 0;
     result_destroy_arg = NULL;
