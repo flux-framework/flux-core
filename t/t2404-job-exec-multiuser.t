@@ -12,6 +12,8 @@ if ! test_have_prereq FLUX_SECURITY; then
 fi
 
 IMP=${SHARNESS_TEST_SRCDIR}/job-exec/imp.sh
+IMP_FAIL=${SHARNESS_TEST_SRCDIR}/job-exec/imp-fail.sh
+
 #  Configure dummy IMP
 if ! test -d conf.d; then
 	mkdir conf.d
@@ -79,4 +81,26 @@ test_expect_success HAVE_JQ,NO_ASAN 'job-exec: kill multiuser job uses the IMP' 
 	test_expect_code 143 run_timeout 30 flux job status -v ${id} &&
 	flux dmesg | grep "test-imp: Kill .*signal 15"
 '
+
+#  Configure failing IMP
+test_expect_success 'job-exec: reconfig with failing dummy IMP' '
+	cat <<-EOF >conf.d/exec.toml
+	[exec]
+	imp = "${IMP_FAIL}"
+	EOF
+'
+
+test_expect_success 'job-exec: reconfig and reload module' '
+	flux config reload &&
+	flux module reload -f job-exec
+'
+test_expect_success 'job-exec: IMP failure on one rank terminates job' '
+	FAKE_USERID=42 &&
+	id=$(FLUX_HANDLE_USERID=${FAKE_USERID} \
+		flux job submit --flags=signed sleep-job.signed) &&
+	flux job wait-event -vt 20 ${id}  clean &&
+	test_must_fail_or_be_terminated flux job attach -vEX ${id}
+'
+
+
 test_done
