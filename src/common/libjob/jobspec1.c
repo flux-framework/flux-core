@@ -18,6 +18,7 @@
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "jobspec1.h"
 #include "jobspec1_private.h"
@@ -143,17 +144,6 @@ int flux_jobspec1_attr_pack (flux_jobspec1_t *jobspec,
     }
     json_decref (val);
     return 0;
-}
-
-static void __attribute__ ((format (printf, 2, 3)))
-errprintf (flux_jobspec1_error_t *error, const char *fmt, ...)
-{
-    va_list ap;
-    if (error) {
-        va_start (ap, fmt);
-        vsnprintf (error->text, sizeof (error->text), fmt, ap);
-        va_end (ap);
-    }
 }
 
 static int tasks_check (json_t *tasks, flux_jobspec1_error_t *error)

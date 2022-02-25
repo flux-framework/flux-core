@@ -11,11 +11,10 @@
 #ifndef _FLUX_CORE_JOBSPEC1_H
 #define _FLUX_CORE_JOBSPEC1_H
 
-typedef struct flux_jobspec1 flux_jobspec1_t;
+#include <flux/core.h>
 
-typedef struct {
-    char text[160];
-} flux_jobspec1_error_t;
+typedef struct flux_jobspec1 flux_jobspec1_t;
+typedef flux_error_t flux_jobspec1_error_t;
 
 /* Remove the value in the jobspec's attributes section at the given path,
  * where "." is treated as a path separator.
