@@ -90,7 +90,9 @@ libutil_la_SOURCES = \
 	jpath.c \
 	jpath.h \
 	uri.c \
-	uri.h
+	uri.h \
+	errprintf.c \
+	errprintf.h
 
 EXTRA_DIST = veb_mach.c
 
@@ -118,7 +120,8 @@ TESTS = test_sha1.t \
 	test_fdwalk.t \
 	test_grudgeset.t \
 	test_digest.t \
-	test_jpath.t
+	test_jpath.t \
+	test_errprintf.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -245,3 +248,7 @@ test_digest_t_LDADD = $(test_ldadd)
 test_jpath_t_SOURCES = test/jpath.c
 test_jpath_t_CPPFLAGS = $(test_cppflags)
 test_jpath_t_LDADD = $(test_ldadd)
+
+test_errprintf_t_SOURCES = test/errprintf.c
+test_errprintf_t_CPPFLAGS = $(test_cppflags)
+test_errprintf_t_LDADD = $(test_ldadd)
