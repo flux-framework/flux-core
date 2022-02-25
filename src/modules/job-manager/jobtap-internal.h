@@ -11,12 +11,10 @@
 #ifndef _FLUX_JOB_MANAGER_JOBTAP_H
 #define _FLUX_JOB_MANAGER_JOBTAP_H
 
+#include "src/common/libflux/types.h" /* flux_error_t */
+
 #include "job.h"
 #include "job-manager.h"
-
-typedef struct jobtap_error {
-    char text [128];
-} jobtap_error_t;
 
 struct jobtap * jobtap_create (struct job_manager *ctx);
 
@@ -68,7 +66,7 @@ int jobtap_check_dependencies (struct jobtap *jobtap,
 flux_plugin_t * jobtap_load (struct jobtap *jobtap,
                              const char *path,
                              json_t *conf,
-                             jobtap_error_t *errp);
+                             flux_error_t *errp);
 
 /*  Job manager RPC handler for loading new jobtap plugins.
  */

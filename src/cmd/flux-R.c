@@ -658,7 +658,7 @@ int cmd_decode (optparse_t *p, int argc, char **argv)
 int cmd_verify (optparse_t *p, int argc, char **argv)
 {
     int rc;
-    rlist_error_t error;
+    flux_error_t error;
     struct rlist *expected;
     struct rlist *rl;
     zlistx_t *l = rlist_loadf (stdin);

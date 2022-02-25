@@ -776,7 +776,7 @@ void test_hwloc (const char *xml)
 
 void test_xml ()
 {
-    rlist_error_t error;
+    flux_error_t error;
     struct rlist *rl1 = NULL;
     struct rlist *rl2 = NULL;
     char *s1 = NULL;

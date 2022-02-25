@@ -17,6 +17,13 @@ extern "C" {
 
 typedef void (*flux_free_f)(void *arg);
 
+/*  Generic container for holding textual errors from selected libflux
+ *   functions:
+ */
+typedef struct {
+    char text[160];
+} flux_error_t;
+
 #ifdef __cplusplus
 }
 #endif

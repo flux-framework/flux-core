@@ -946,7 +946,7 @@ void test_rerank ()
     struct hostlist *hl = NULL;
     char *s = NULL;
     struct rlist *rl = NULL;
-    rlist_error_t err;
+    flux_error_t err;
     char *R = R_create ("0-15", "0-3", NULL, "foo[0-15]");
     if (!R)
         BAIL_OUT ("R_create failed");
@@ -1401,7 +1401,7 @@ void test_verify ()
 
     while (t && t->ranksa) {
         int rc;
-        rlist_error_t error;
+        flux_error_t error;
         struct rlist *rla = NULL;
         struct rlist *rlb = NULL;
         char *a;
@@ -1512,7 +1512,7 @@ static struct hosts_to_ranks_test hosts_to_ranks_tests[] = {
 
 void test_hosts_to_ranks (void)
 {
-    rlist_error_t err;
+    flux_error_t err;
     struct hosts_to_ranks_test *t = hosts_to_ranks_tests;
 
     ok (rlist_hosts_to_ranks (NULL, NULL, &err) == NULL,
