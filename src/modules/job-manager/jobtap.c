@@ -28,6 +28,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "annotate.h"
 #include "prioritize.h"
@@ -87,26 +88,6 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
                                     int index,
                                     json_t *entry,
                                     char **errp);
-
-
-static int errprintf (jobtap_error_t *errp, const char *fmt, ...)
-{
-    va_list ap;
-    int n;
-    int saved_errno = errno;
-
-    if (!errp)
-        return -1;
-
-    va_start (ap, fmt);
-    n = vsnprintf (errp->text, sizeof (errp->text), fmt, ap);
-    va_end (ap);
-    if (n > sizeof (errp->text))
-        errp->text[sizeof (errp->text) - 2] = '+';
-
-    errno = saved_errno;
-    return -1;
-}
 
 static struct dependency * dependency_create (bool add,
                                               const char *description)
@@ -268,7 +249,7 @@ static int current_job_pop (struct jobtap *jobtap)
 static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
                                            const char *path,
                                            json_t *conf,
-                                           jobtap_error_t *errp)
+                                           flux_error_t *errp)
 {
     struct job_manager *ctx = jobtap->ctx;
     flux_plugin_t *p = NULL;
@@ -342,7 +323,7 @@ static bool isa_glob (const char *s)
 
 static int jobtap_remove (struct jobtap *jobtap,
                           const char *arg,
-                          jobtap_error_t *errp)
+                          flux_error_t *errp)
 {
     int count = 0;
     bool isglob = isa_glob (arg);
@@ -370,10 +351,10 @@ static int jobtap_remove (struct jobtap *jobtap,
 static int jobtap_conf_entry (struct jobtap *jobtap,
                               int index,
                               json_t *entry,
-                              jobtap_error_t *errp)
+                              flux_error_t *errp)
 {
     json_error_t json_err;
-    jobtap_error_t jobtap_err;
+    flux_error_t jobtap_err;
     const char *load = NULL;
     const char *remove = NULL;
     json_t *conf = NULL;
@@ -410,7 +391,7 @@ static int jobtap_conf_entry (struct jobtap *jobtap,
 
 static int jobtap_parse_config (struct jobtap *jobtap,
                                 const flux_conf_t *conf,
-                                jobtap_error_t *errp)
+                                flux_error_t *errp)
 {
     json_t *plugins = NULL;
     flux_conf_error_t error;
@@ -478,7 +459,7 @@ static int load_builtins (struct jobtap *jobtap)
 struct jobtap *jobtap_create (struct job_manager *ctx)
 {
     const char *path;
-    jobtap_error_t error;
+    flux_error_t error;
     struct jobtap *jobtap = calloc (1, sizeof (*jobtap));
     if (!jobtap)
         return NULL;
@@ -1108,7 +1089,7 @@ static int plugin_set_name (flux_plugin_t *p,
 static int plugin_try_load (struct jobtap *jobtap,
                             flux_plugin_t *p,
                             const char *fullpath,
-                            jobtap_error_t *errp)
+                            flux_error_t *errp)
 {
     char *name = NULL;
 
@@ -1138,7 +1119,7 @@ static int plugin_try_load (struct jobtap *jobtap,
 int jobtap_plugin_load_first (struct jobtap *jobtap,
                               flux_plugin_t *p,
                               const char *path,
-                              jobtap_error_t *errp)
+                              flux_error_t *errp)
 {
     bool found = false;
     zlistx_t *l;
@@ -1174,7 +1155,7 @@ int jobtap_plugin_load_first (struct jobtap *jobtap,
 flux_plugin_t * jobtap_load (struct jobtap *jobtap,
                              const char *path,
                              json_t *conf,
-                             jobtap_error_t *errp)
+                             flux_error_t *errp)
 {
     flux_plugin_t *p = NULL;
     char *conf_str = NULL;
@@ -1234,7 +1215,7 @@ static int jobtap_handle_remove_req (struct job_manager *ctx,
                                      const flux_msg_t *msg,
                                      const char *arg)
 {
-    jobtap_error_t error;
+    flux_error_t error;
     if (jobtap_remove (ctx->jobtap, arg, &error) < 0) {
         if (flux_respond_error (ctx->h,
                                 msg,
@@ -1252,7 +1233,7 @@ static int jobtap_handle_load_req (struct job_manager *ctx,
                                    const char *path,
                                    json_t *conf)
 {
-    jobtap_error_t error;
+    flux_error_t error;
     flux_plugin_t *p = NULL;
 
     if (!(p = jobtap_load_plugin (ctx->jobtap, path, conf, &error))) {
