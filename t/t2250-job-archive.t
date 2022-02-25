@@ -16,6 +16,9 @@ fj_wait_event() {
   flux job wait-event --timeout=20 "$@"
 }
 
+# wait for job to be in specific state in job-list module
+# arg1 - jobid
+# arg2 - job state
 wait_jobid_state() {
         local jobid=$(flux job id $1)
         local state=$2
@@ -33,6 +36,9 @@ wait_jobid_state() {
         return 0
 }
 
+# wait for job to be stored in job archive
+# arg1 - jobid
+# arg2 - database path
 wait_db() {
         local jobid=$(flux job id $1)
         local dbpath=$2
@@ -51,6 +57,8 @@ wait_db() {
         return 0
 }
 
+# count number of entries in database
+# arg1 - database path
 db_count_entries() {
         local dbpath=$1
         query="select id from jobs;"
@@ -58,6 +66,9 @@ db_count_entries() {
         echo $count
 }
 
+# verify entries stored into job archive
+# arg1 - jobid
+# arg2 - database path
 db_check_entries() {
         local id=$(flux job id $1)
         local dbpath=$2
@@ -79,6 +90,9 @@ db_check_entries() {
         return 1
 }
 
+# get job values from database
+# arg1 - jobid
+# arg2 - database path
 get_db_values() {
         local id=$(flux job id $1)
         local dbpath=$2
@@ -95,6 +109,9 @@ get_db_values() {
         R=`grep "R = " query.out | awk '{print \$3}'`
 }
 
+# check database values (job ran)
+# arg1 - jobid
+# arg2 - database path
 db_check_values_run() {
         local id=$(flux job id $1)
         local dbpath=$2
@@ -114,6 +131,9 @@ db_check_values_run() {
         return 0
 }
 
+# check database values (job did not run)
+# arg1 - jobid
+# arg2 - database path
 db_check_values_no_run() {
         local id=$(flux job id $1)
         local dbpath=$2
