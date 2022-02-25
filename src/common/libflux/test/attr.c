@@ -313,6 +313,44 @@ int main (int argc, char *argv[])
     ok (flux_get_rankbyhost (h, "foo2") == 2,
         "flux_get_rankbyhost host=foo2 returns 2");
 
+    /* test flux_hostmap_lookup () */
+    flux_error_t error;
+    errno = 0;
+    ok (flux_hostmap_lookup (NULL, "foo", NULL) == NULL && errno == EINVAL,
+        "flux_hostmap_lookup h=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_hostmap_lookup (h, NULL, &error) == NULL && errno == EINVAL,
+        "flux_hostmap_lookup targets=NULL fails with EINVAL");
+    errno = 0;
+    ok (flux_hostmap_lookup (h, "foo3", &error) == NULL && errno == ENOENT,
+        "flux_hostmap_lookup targets=foo3 fails with ENOENT");
+    is (error.text, "host foo3 not found in host map",
+        "error.text is as expected");
+
+    ok (flux_hostmap_lookup (h, "3", &error) == NULL && errno == ENOENT,
+        "flux_hostmap_lookup targets=3 fails with ENOENT");
+    is (error.text, "rank 3 is not in host map",
+        "error.text is as expected");
+
+    ok (flux_hostmap_lookup (h, "foo[", &error) == NULL && errno == EINVAL,
+        "flux_hostmap_lookup targets=foo[ fails with EINVAL");
+    is (error.text, "target must be a valid idset or hostlist",
+        "error.text is as expected");
+
+    char *s = flux_hostmap_lookup (h, "foo2", &error);
+    ok (s != NULL,
+        "flux_hostmap_lookup targets=foo2 returns %s", s);
+    is (s, "2",
+        "value is expected");
+    free (s);
+
+    s = flux_hostmap_lookup (h, "1-2", &error);
+    ok (s != NULL,
+        "flux_hostmap_lookup targets=1-2 returns %s", s);
+    is (s, "foo[1-2]",
+        "value is expected");
+    free (s);
+
     /* test flux_get_instance_starttime */
     double d;
     ok (flux_get_instance_starttime (h, &d) == 0 && d == 3.14,
