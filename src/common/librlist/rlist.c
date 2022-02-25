@@ -22,6 +22,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "rnode.h"
 #include "rlist.h"
@@ -332,20 +333,14 @@ struct rnode * rlist_find_host (const struct rlist *rl, const char *host)
 
 static int rlist_rerank_hostlist (struct rlist *rl,
                                   struct hostlist *hl,
-                                  rlist_error_t *errp)
+                                  flux_error_t *errp)
 {
     uint32_t rank = 0;
     const char *host = hostlist_first (hl);
     while (host) {
         struct rnode *n = rlist_find_host (rl, host);
         if (!n) {
-            if (errp) {
-                int saved_errno = errno;
-                snprintf (errp->text, sizeof (errp->text),
-                          "Host %s not found in resources",
-                          host);
-                errno = saved_errno;
-            }
+            errprintf (errp, "Host %s not found in resources", host);
             return -1;
         }
         n->rank = rank++;
@@ -354,33 +349,27 @@ static int rlist_rerank_hostlist (struct rlist *rl,
     return 0;
 }
 
-int rlist_rerank (struct rlist *rl, const char *hosts, rlist_error_t *errp)
+int rlist_rerank (struct rlist *rl, const char *hosts, flux_error_t *errp)
 {
     int rc = -1;
     struct hostlist *hl = NULL;
     struct hostlist *orig = NULL;
 
     if (!(hl = hostlist_decode (hosts))) {
-        int saved_errno = errno;
-        if (errp)
-            snprintf (errp->text, sizeof (errp->text),
-                      "hostlist_decode: %s: %s", hosts, strerror (errno));
-        errno = saved_errno;
+        errprintf (errp, "hostlist_decode: %s: %s", hosts, strerror (errno));
         return -1;
     }
 
     if (hostlist_count (hl) > rlist_nnodes (rl)) {
-        if (errp)
-            snprintf (errp->text, sizeof (errp->text),
-                      "Number of hosts (%d) is greater than node count (%zu)",
-                      hostlist_count (hl),
-                      rlist_nnodes (rl));
+        errprintf (errp,
+                   "Number of hosts (%d) is greater than node count (%zu)",
+                   hostlist_count (hl),
+                   rlist_nnodes (rl));
         errno = EOVERFLOW;
         goto done;
     }
     else if (hostlist_count (hl) < rlist_nnodes (rl)) {
-        if (errp)
-            snprintf (errp->text, sizeof (errp->text),
+            errprintf (errp,
                       "Number of hosts (%d) is less than node count (%zu)",
                       hostlist_count (hl),
                       rlist_nnodes (rl));
@@ -634,7 +623,7 @@ static char * rnode_child_dumps (struct rnode *rnode)
 }
 
 
-int rlist_verify (rlist_error_t *errp,
+int rlist_verify (flux_error_t *errp,
                   const struct rlist *expected,
                   const struct rlist *rl)
 {
@@ -646,9 +635,7 @@ int rlist_verify (rlist_error_t *errp,
     int rc = -1;
 
     if (!(errors = errlist_create ())) {
-        if (errp)
-            snprintf (errp->text, sizeof (errp->text),
-                      "Internal error: Out of memory");
+        errprintf (errp, "Internal error: Out of memory");
         errno = ENOMEM;
         goto done;
     }
@@ -1207,21 +1194,9 @@ static int rlist_idset_set_by_host (const struct rlist *rl,
     return count;
 }
 
-static void errsprintf (rlist_error_t *errp, const char *fmt, ...)
-{
-    va_list ap;
-    if (errp) {
-        int saved_errno = errno;
-        va_start (ap, fmt);
-        (void) vsnprintf (errp->text, sizeof (errp->text), fmt, ap);
-        va_end (ap);
-        errno = saved_errno;
-    }
-}
-
 struct idset *rlist_hosts_to_ranks (const struct rlist *rl,
                                     const char *hosts,
-                                    rlist_error_t *errp)
+                                    flux_error_t *errp)
 {
     const char *host;
     struct idset *ids = NULL;
@@ -1232,33 +1207,33 @@ struct idset *rlist_hosts_to_ranks (const struct rlist *rl,
         memset (errp->text, 0, sizeof (errp->text));
 
     if (rl == NULL || hosts == NULL) {
-        errsprintf (errp, "An expected argument was NULL");
+        errprintf (errp, "An expected argument was NULL");
         errno = EINVAL;
         return NULL;
     }
     if (!(hl = hostlist_decode (hosts))) {
-        errsprintf (errp, "Hostlist cannot be decoded");
+        errprintf (errp, "Hostlist cannot be decoded");
         goto fail;
     }
     if (!(ids = idset_create (0, IDSET_FLAG_AUTOGROW))) {
-        errsprintf (errp, "idset_create: %s", strerror (errno));
+        errprintf (errp, "idset_create: %s", strerror (errno));
         goto fail;
     }
     if (!(missing = hostlist_create ())) {
-        errsprintf (errp, "hostlist_create: %s", strerror (errno));
+        errprintf (errp, "hostlist_create: %s", strerror (errno));
         goto fail;
     }
     host = hostlist_first (hl);
     while (host) {
         int count = rlist_idset_set_by_host (rl, ids, host);
         if (count < 0) {
-            errsprintf (errp,
+            errprintf (errp,
                         "error adding host %s to idset: %s",
                         host,
                         strerror (errno));
             goto fail;
         } else if (!count && hostlist_append (missing, host) < 0) {
-            errsprintf (errp,
+            errprintf (errp,
                         "failed to append missing host '%s'",
                         host);
             goto fail;
@@ -1267,7 +1242,7 @@ struct idset *rlist_hosts_to_ranks (const struct rlist *rl,
     }
     if (hostlist_count (missing)) {
         char *s = hostlist_encode (missing);
-        errsprintf (errp, "invalid hosts: %s", s ? s : "");
+        errprintf (errp, "invalid hosts: %s", s ? s : "");
         free (s);
         goto fail;
     }

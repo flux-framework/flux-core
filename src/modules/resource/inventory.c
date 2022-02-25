@@ -310,7 +310,7 @@ struct idset *inventory_targets_to_ranks (struct inventory *inv,
     if (!(ids = idset_decode (targets))) {
         /*  Not a valid idset, maybe an RFC29 Hostlist
          */
-        rlist_error_t err;
+        flux_error_t err;
         struct rlist *rl = rlist_from_json (inv->R, NULL);
         ids = rlist_hosts_to_ranks (rl, targets, &err);
         rlist_destroy (rl);
@@ -345,7 +345,7 @@ static int convert_R_conf (flux_t *h, json_t *conf_R, json_t **Rp)
 {
     json_error_t e;
     struct rlist *rl;
-    rlist_error_t err;
+    flux_error_t err;
     json_t *R;
     const char *hosts;
 

@@ -20,10 +20,7 @@
 #include <flux/hostlist.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
-
-typedef struct {
-    char text[128];
-} rlist_error_t;
+#include "src/common/libflux/types.h" /* flux_error_t */
 
 /* A list of resource nodes */
 struct rlist {
@@ -90,7 +87,7 @@ int rlist_assign_hosts (struct rlist *rl, const char *hosts);
  *   ENOENT:    a hostname in 'hosts' was not found in 'rl'
  *   ENOMEM:    out of memory
  */
-int rlist_rerank (struct rlist *rl, const char *hosts, rlist_error_t *error);
+int rlist_rerank (struct rlist *rl, const char *hosts, flux_error_t *error);
 
 /*  Destroy an rlist object */
 void rlist_destroy (struct rlist *rl);
@@ -157,7 +154,7 @@ struct idset * rlist_ranks (const struct rlist *rl);
  */
 struct idset * rlist_hosts_to_ranks (const struct rlist *rl,
                                      const char *hosts,
-                                     rlist_error_t *err);
+                                     flux_error_t *err);
 
 /*
  *  Serialize a resource list into v1 "R" format. This encodes only the
@@ -202,7 +199,7 @@ struct rlist *rlist_from_hwloc (int my_rank, const char *xml);
  *
  *    1: resources in 'actual' exceed those in 'expected'.
  */
-int rlist_verify (rlist_error_t *error,
+int rlist_verify (flux_error_t *error,
                   const struct rlist *expected,
                   const struct rlist *actual);
 

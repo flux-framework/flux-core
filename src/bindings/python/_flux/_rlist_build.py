@@ -14,6 +14,7 @@ ffi.set_source(
     """
 #include <jansson.h>
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libflux/types.h"
 #include "src/common/librlist/rlist.h"
 
 
@@ -30,6 +31,7 @@ typedef struct _zhashx_t zhashx_t;
 typedef int... json_type;
 typedef struct json_t json_t;
 typedef struct json_error_t json_error_t;
+
 
 void free (void *);
 

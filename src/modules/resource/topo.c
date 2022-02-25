@@ -88,7 +88,7 @@ static int topo_verify (struct topo *topo, json_t *R, bool nodrain)
 {
     json_error_t e;
     struct rlist *rl;
-    rlist_error_t error;
+    flux_error_t error;
     int rc;
 
     if (!(rl = rlist_from_json (R, &e))) {
