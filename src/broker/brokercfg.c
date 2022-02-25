@@ -213,8 +213,32 @@ error:
         flux_log_error (h, "reload: flux_respond_error");
 }
 
+static void get_cb (flux_t *h,
+                    flux_msg_handler_t *mh,
+                    const flux_msg_t *msg,
+                    void *arg)
+{
+    const char *errmsg = NULL;
+    flux_conf_error_t error;
+    json_t *o;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (flux_conf_unpack (flux_get_conf (h), &error, "o", &o) < 0) {
+        errmsg = error.errbuf;
+        goto error;
+    }
+    if (flux_respond_pack (h, msg, "O", o) < 0)
+        flux_log_error (h, "error responding to config.get request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to config.get request");
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "config.reload", reload_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "config.get", get_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
