@@ -8,6 +8,10 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
+#if HAVE_CONFIG_H
+#include "config.h"
+#endif
+
 #include "builtin.h"
 
 static int internal_config_reload (optparse_t *p, int ac, char *av[])
