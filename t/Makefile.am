@@ -182,6 +182,7 @@ TESTSCRIPTS = \
 	t2803-flux-pstree.t \
 	t2804-uptime-cmd.t \
 	t2805-startlog-cmd.t \
+	t2806-config-cmd.t \
 	t2900-job-timelimits.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \

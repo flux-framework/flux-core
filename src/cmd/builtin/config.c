@@ -140,7 +140,7 @@ static int config_get (optparse_t *p, int ac, char *av[])
                       future_strerror (f, errno));
     typestr = optparse_get_str (p, "type", "any");
     if (parse_json_type (typestr, &type, &fsd_subtype) < 0)
-        log_msg_exit ("Unknown type");
+        log_msg_exit ("Unknown type: %s", typestr);
 
     print_config_item (o,
                        path,
