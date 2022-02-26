@@ -14,7 +14,7 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-The ``flux-uptime`` displays the following information about the
+The ``flux-uptime`` command displays the following information about the
 current Flux instance, on one or two lines:
 
 - The current wall clock time.
