@@ -6,6 +6,7 @@ man1
    :maxdepth: 1
 
    flux-broker
+   flux-config
    flux-content
    flux-cron
    flux-dmesg
