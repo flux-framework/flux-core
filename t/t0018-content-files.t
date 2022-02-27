@@ -156,6 +156,26 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo still returns rootref baz' '
         test_cmp rootref3.exp rootref3.out
 '
 
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref with longer rootref' '
+        kvs_checkpoint_put foo abcdefghijklmnopqrstuvwxyz
+'
+
+test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned rootref with longer rootref' '
+        echo abcdefghijklmnopqrstuvwxyz >rootref3.exp &&
+        kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref3.out &&
+        test_cmp rootref3.exp rootref3.out
+'
+
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref to shorter rootref' '
+        kvs_checkpoint_put foo foobar
+'
+
+test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned rootref with shorter rootref' '
+        echo foobar >rootref4.exp &&
+        kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref4.out &&
+        test_cmp rootref4.exp rootref4.out
+'
+
 test_expect_success 'load with invalid blobref fails' '
 	test_must_fail backing_load notblobref 2>notblobref.err &&
 	grep "invalid blobref" notblobref.err

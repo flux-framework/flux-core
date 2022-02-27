@@ -87,7 +87,7 @@ int filedb_put (const char *dbpath,
             *errstr = "key name too long for internal buffer";
         return -1;
     }
-    if ((fd = open (path, O_WRONLY | O_CREAT, 0666)) < 0)
+    if ((fd = open (path, O_WRONLY | O_CREAT | O_TRUNC, 0666)) < 0)
         return -1;
     if (write_all (fd, data, size) < 0) {
         ERRNO_SAFE_WRAP (close, fd);
