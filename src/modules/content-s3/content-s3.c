@@ -175,7 +175,7 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
         errno = EINVAL;
         goto error;
     }
-    
+
     if (!(cfg->hostname = hostport (yuri.host, yuri.port))) {
         snprintf(errbuff, eb_size, "failed to form hostname");
         errno = ENOMEM;
