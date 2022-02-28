@@ -315,4 +315,29 @@ test_expect_success 'job-shell: restore rundir writability' '
 	chmod 700 $(flux getattr rundir)
 '
 
+test_expect_success 'job-shell: fails if FLUX_EXEC_PROTOCOL_FD not set' '
+	cat <<-EOF >shell.sh &&
+	#!/bin/sh
+	unset FLUX_EXEC_PROTOCOL_FD
+	exec ${FLUX_BUILD_DIR}/src/shell/flux-shell "\$@"
+	EOF
+	chmod +x shell.sh &&
+	test_must_fail flux mini run \
+		--setattr=system.exec.job_shell=$(pwd)/shell.sh \
+		-n2 -N2 hostname 2>protocol_fd_missing.err &&
+	grep FLUX_EXEC_PROTOCOL_FD protocol_fd_missing.err
+'
+
+test_expect_success 'job-shell: fails if FLUX_EXEC_PROTOCOL_FD incorrect' '
+	cat <<-EOF >shell2.sh &&
+	#!/bin/sh
+	FLUX_EXEC_PROTOCOL_FD=foo
+	exec ${FLUX_BUILD_DIR}/src/shell/flux-shell "\$@"
+	EOF
+	chmod +x shell2.sh &&
+	test_must_fail flux mini run \
+		--setattr=system.exec.job_shell=$(pwd)/shell2.sh \
+		-n2 -N2 hostname 2>protocol_fd_invalid.err &&
+	grep FLUX_EXEC_PROTOCOL_FD protocol_fd_invalid.err
+'
 test_done
