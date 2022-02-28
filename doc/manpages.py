@@ -18,6 +18,7 @@ author = 'This page is maintained by the Flux community.'
 # - Manual section
 man_pages = [
     ('man1/flux-broker', 'flux-broker', 'Flux message broker daemon', [author], 1),
+    ('man1/flux-config', 'flux-config', 'Manage/query Flux configuration', [author], 1),
     ('man1/flux-content', 'flux-content', 'access content service', [author], 1),
     ('man1/flux-cron', 'flux-cron', 'Cron-like utility for Flux', [author], 1),
     ('man1/flux-dmesg', 'flux-dmesg', 'access broker ring buffer', [author], 1),

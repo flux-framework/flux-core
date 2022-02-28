@@ -604,3 +604,8 @@ pluginpath
 uptime
 startlog
 timestamps
+runstatedir
+libexecdir
+bindir
+cmdhelp
+MANPATH
