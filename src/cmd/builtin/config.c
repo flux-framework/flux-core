@@ -153,6 +153,24 @@ static int config_get (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
+static int builtin_get (optparse_t *p, int ac, char *av[])
+{
+    int optindex = optparse_option_index (p);
+    const char *name;
+    const char *value;
+
+    if (optindex != ac - 1) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    name = av[optindex];
+    value = flux_conf_builtin_get (name, FLUX_CONF_AUTO);
+    if (!value)
+        log_msg_exit ("%s is invalid", name);
+    printf ("%s\n", value);
+    return (0);
+}
+
 static int internal_config_reload (optparse_t *p, int ac, char *av[])
 {
     flux_t *h;
@@ -211,6 +229,13 @@ static struct optparse_subcommand config_subcmds[] = {
       config_get,
       0,
       get_opts,
+    },
+    { "builtin",
+      "NAME",
+      "Print compiled-in Flux configuration values",
+      builtin_get,
+      0,
+      NULL,
     },
     OPTPARSE_SUBCMD_END
 };
