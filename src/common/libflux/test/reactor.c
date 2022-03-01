@@ -1336,6 +1336,45 @@ static void test_active_ref (flux_reactor_t *r)
     flux_watcher_destroy (w);
 }
 
+static void is_active_cb (flux_reactor_t *r,
+                          flux_watcher_t *w,
+                          int revents,
+                          void *arg)
+{
+    /* do nothing */
+}
+
+static void test_is_active (flux_reactor_t *r)
+{
+    flux_watcher_t *w;
+    bool ret;
+
+    ret = flux_watcher_is_active (NULL);
+    ok (ret == false,
+        "flux_watcher_is_active returns false in invalid input");
+
+    if (!(w = flux_idle_watcher_create (r, is_active_cb, NULL)))
+        BAIL_OUT ("flux_idle_watcher_create failed");
+
+    ret = flux_watcher_is_active (w);
+    ok (ret == false,
+        "flux_watcher_is_active returns false on just created watcher");
+
+    flux_watcher_start (w);
+
+    ret = flux_watcher_is_active (w);
+    ok (ret == true,
+        "flux_watcher_is_active returns true on started watcher");
+
+    flux_watcher_stop (w);
+
+    ret = flux_watcher_is_active (w);
+    ok (ret == false,
+        "flux_watcher_is_active returns false on just stopped watcher");
+
+    flux_watcher_destroy (w);
+}
+
 static void reactor_destroy_early (void)
 {
     flux_reactor_t *r;
@@ -1387,6 +1426,7 @@ int main (int argc, char *argv[])
     test_stat (reactor);
     test_active_ref (reactor);
     test_reactor_flags (reactor);
+    test_is_active (reactor);
 
     flux_reactor_destroy (reactor);
 

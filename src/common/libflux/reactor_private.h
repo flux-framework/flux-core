@@ -30,6 +30,7 @@ struct flux_watcher {
     void *arg;
     struct flux_watcher_ops *ops;
     void *data;
+    bool is_active;
 };
 
 static inline int events_to_libev (int events)

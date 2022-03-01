@@ -206,17 +206,28 @@ struct flux_watcher_ops * flux_watcher_get_ops (flux_watcher_t *w)
 void flux_watcher_start (flux_watcher_t *w)
 {
     if (w) {
-        if (w->ops->start)
+        if (w->ops->start) {
             w->ops->start (w);
+            w->is_active = true;
+        }
     }
 }
 
 void flux_watcher_stop (flux_watcher_t *w)
 {
     if (w) {
-        if (w->ops->stop)
+        if (w->ops->stop) {
             w->ops->stop (w);
+            w->is_active = false;
+        }
     }
+}
+
+bool flux_watcher_is_active (flux_watcher_t *w)
+{
+    if (w)
+        return w->is_active;
+    return false;
 }
 
 void flux_watcher_destroy (flux_watcher_t *w)
