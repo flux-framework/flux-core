@@ -727,10 +727,10 @@ static void wait_update (flux_t *h,
  * broker is offline" errors.  This request is specifically excluded from that
  * error path.
  */
-static void wait_cb (flux_t *h,
-                     flux_msg_handler_t *mh,
-                     const flux_msg_t *msg,
-                     void *arg)
+static void state_machine_wait_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     struct state_machine *s = arg;
 
@@ -771,10 +771,10 @@ static void monitor_update (flux_t *h,
     }
 }
 
-static void monitor_cb (flux_t *h,
-                        flux_msg_handler_t *mh,
-                        const flux_msg_t *msg,
-                        void *arg)
+static void state_machine_monitor_cb (flux_t *h,
+                                      flux_msg_handler_t *mh,
+                                      const flux_msg_t *msg,
+                                      void *arg)
 {
     struct state_machine *s = arg;
 
@@ -873,6 +873,31 @@ static void overlay_monitor_cb (struct overlay *overlay,
     }
 }
 
+static void state_machine_get_cb (flux_t *h,
+                                  flux_msg_handler_t *mh,
+                                  const flux_msg_t *msg,
+                                  void *arg)
+{
+    struct state_machine *s = arg;
+    double duration = monotime_since (s->t_start) * 1E-3;
+
+    if (flux_request_decode (msg, NULL, NULL) < 0)
+        goto error;
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:s s:f}",
+                           "state", statestr (s->state),
+                           "duration", duration) < 0)
+        flux_log_error (h,
+                        "error responding to state-machine.get request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0) {
+        flux_log_error (h,
+                        "error responding to state-machine.get request");
+    }
+}
+
 /* If a disconnect is received for streaming monitor request,
  * drop the request.
  */
@@ -889,9 +914,26 @@ static void disconnect_cb (flux_t *h,
 }
 
 static const struct flux_msg_handler_spec htab[] = {
-    { FLUX_MSGTYPE_REQUEST,  "state-machine.monitor", monitor_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST,  "state-machine.wait", wait_cb, FLUX_ROLE_USER },
-    { FLUX_MSGTYPE_REQUEST,  "state-machine.disconnect", disconnect_cb, 0 },
+    {    FLUX_MSGTYPE_REQUEST,
+        "state-machine.monitor",
+        state_machine_monitor_cb,
+        0
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "state-machine.wait",
+        state_machine_wait_cb,
+        FLUX_ROLE_USER
+    },
+    {   FLUX_MSGTYPE_REQUEST,
+        "state-machine.disconnect",
+        disconnect_cb,
+        0
+    },
+    {    FLUX_MSGTYPE_REQUEST,
+        "state-machine.get",
+        state_machine_get_cb,
+        FLUX_ROLE_USER,
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

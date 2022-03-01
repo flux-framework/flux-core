@@ -34,4 +34,11 @@ test_expect_success 'flux mini run on rank 2 fails with offline error' '
 	grep "broker is offline" online.err
 '
 
+test_expect_success 'flux uptime on rank 2 reports join state' '
+	bash -c \
+		"FLUX_URI=$(echo $FLUX_URI | sed s/local-0/local-2/) \
+			flux uptime" >uptime.out &&
+	grep join uptime.out
+'
+
 test_done
