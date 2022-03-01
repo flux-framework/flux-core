@@ -727,10 +727,10 @@ static void wait_update (flux_t *h,
  * broker is offline" errors.  This request is specifically excluded from that
  * error path.
  */
-static void wait_cb (flux_t *h,
-                     flux_msg_handler_t *mh,
-                     const flux_msg_t *msg,
-                     void *arg)
+static void state_machine_wait_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     struct state_machine *s = arg;
 
@@ -771,10 +771,10 @@ static void monitor_update (flux_t *h,
     }
 }
 
-static void monitor_cb (flux_t *h,
-                        flux_msg_handler_t *mh,
-                        const flux_msg_t *msg,
-                        void *arg)
+static void state_machine_monitor_cb (flux_t *h,
+                                      flux_msg_handler_t *mh,
+                                      const flux_msg_t *msg,
+                                      void *arg)
 {
     struct state_machine *s = arg;
 
@@ -891,12 +891,12 @@ static void disconnect_cb (flux_t *h,
 static const struct flux_msg_handler_spec htab[] = {
     {    FLUX_MSGTYPE_REQUEST,
         "state-machine.monitor",
-        monitor_cb,
+        state_machine_monitor_cb,
         0
     },
     {   FLUX_MSGTYPE_REQUEST,
         "state-machine.wait",
-        wait_cb,
+        state_machine_wait_cb,
         FLUX_ROLE_USER
     },
     {   FLUX_MSGTYPE_REQUEST,
