@@ -19,9 +19,11 @@ current Flux instance, on one or two lines:
 
 - The current wall clock time.
 
+- The broker state.  See BROKER STATES.
+
 - The elapsed time the Flux instance has been running, in RFC 23 Flux Standard
-  Duration format.  This is derived from the ``broker.starttime`` attribute
-  on the rank 0 broker.
+  Duration format.  If the local broker is not in **run** state, the elapsed
+  time in the current state is reported instead.
 
 - The Flux instance owner.  On a system instance, this is probably the
   ``flux`` user.
@@ -42,6 +44,36 @@ current Flux instance, on one or two lines:
 - A notice if job submission is disabled.
 
 - A notice if scheduling is disabled.
+
+
+BROKER STATES
+=============
+
+join
+   The local broker is trying to connect to its overlay network parent,
+   or is waiting for the parent to complete initialization and reach
+   **quorum** state.
+
+init
+   The local broker is waiting for the ``rc1`` script to complete locally.
+
+quorum
+   All brokers are waiting for a configured set of brokers to reach **quorum**
+   state.  The default quorum set is all brokers.  A Flux system instance
+   typically defines the quorum set to only the rank 0 broker.
+
+run
+   Flux is fully up and running.
+
+cleanup
+   Cleanup scripts are executing.  This state appears on the rank 0 broker only.
+
+shutdown
+   The local broker is waiting for its overlay network children to finalize
+   and disconnect.
+
+finalize
+   The local broker is waiting for the ``rc3`` script to complete locally.
 
 
 RESOURCES
