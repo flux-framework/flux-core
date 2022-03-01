@@ -310,6 +310,7 @@ dist_check_SCRIPTS = \
 	job-attach/outputsleep.sh \
 	job-exec/dummy.sh \
 	job-exec/imp.sh \
+	job-exec/imp-fail.sh \
 	job-list/list-id.py \
 	job-list/list-rpc.py \
 	job-list/jobspec-permissive.jsonschema \

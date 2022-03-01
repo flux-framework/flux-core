@@ -30,6 +30,7 @@
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/fdutils.h"
 
 #include "internal.h"
 #include "builtins.h"
@@ -878,11 +879,38 @@ static const char *shell_conf_get (const char *name)
     return flux_conf_builtin_get (name, FLUX_CONF_AUTO);
 }
 
+static int get_protocol_fd (int *pfd)
+{
+    const char *s;
+
+    if ((s = getenv ("FLUX_EXEC_PROTOCOL_FD"))) {
+        char *endptr;
+        int fd;
+
+        errno = 0;
+        fd = strtol (s, &endptr, 10);
+        if (errno != 0 || *endptr != '\0') {
+            errno = EINVAL;
+            return -1;
+        }
+        if (fd_set_cloexec (fd) < 0)
+            return -1;
+        *pfd = fd;
+        return 0;
+    }
+    *pfd = -1;
+    return 0;
+}
+
 static void shell_initialize (flux_shell_t *shell)
 {
     const char *pluginpath = shell_conf_get ("shell_pluginpath");
 
     memset (shell, 0, sizeof (struct flux_shell));
+
+    if (get_protocol_fd (&shell->protocol_fd) < 0)
+        shell_die_errno (1, "Failed to parse FLUX_EXEC_PROTOCOL_FD");
+
     if (!(shell->completion_refs = zhashx_new ()))
         shell_die_errno (1, "zhashx_new");
     zhashx_set_destructor (shell->completion_refs, item_free);
@@ -997,114 +1025,32 @@ int flux_shell_add_event_context (flux_shell_t *shell,
     return rc;
 }
 
-static void eventlog_cb (flux_future_t *f, void *arg)
-{
-    json_t *o = NULL;
-    json_t *context = NULL;
-    const char *name;
-    const char *entry;
-
-    if (flux_job_event_watch_get (f, &entry) < 0) {
-        if (errno == ENODATA)
-            return;
-        shell_log_errno ("flux_job_event_watch_get");
-        return;
-    }
-    if (!(o = eventlog_entry_decode (entry))) {
-        shell_log_errno ("eventlog_entry_decode: %s", entry);
-        return;
-    }
-    if (eventlog_entry_parse (o, NULL, &name, &context) < 0) {
-        shell_log_errno ("eventlog_entry_parse: %s", entry);
-        return;
-    }
-    if (strcmp (name, "exception") == 0) {
-        const char *type;
-        int severity;
-        const char *note = NULL;
-        if (json_unpack (context, "{s:s s:i s?s}",
-                         "type", &type,
-                         "severity", &severity,
-                         "note", &note) < 0) {
-            shell_log_errno ("exception event unpack");
-            return;
-        }
-        shell_log_set_exception_logged ();
-        shell_die (1, "job.exception during init barrier, aborting");
-    }
-    json_decref (o);
-    flux_future_reset (f);
-}
-
-static void barrier_cb (flux_future_t *f, void *arg)
-{
-    flux_reactor_t *r = flux_future_get_reactor (f);
-    if (flux_future_get (f, NULL) < 0) {
-        shell_log_errno ("flux_future_get: shell_barrier");
-        flux_reactor_stop_error (r);
-    }
-    else {
-        shell_trace ("shell barrier complete");
-        flux_reactor_stop (r);
-    }
-}
-
 static int shell_barrier (flux_shell_t *shell, const char *name)
 {
-    flux_future_t *log_f = NULL;
-    flux_future_t *f = NULL;
-    flux_t *h = NULL;
-    flux_jobid_t id;
-    char fqname[128];
-    int rc = -1;
+    char buf [8];
 
     if (shell->standalone || shell->info->shell_size == 1)
         return 0; // NO-OP
-    id = shell->info->jobid;
-    if (snprintf (fqname,
-                  sizeof (fqname),
-                  "shell-%ju-%s",
-                  (uintmax_t) id,
-                   name) >= sizeof (fqname)) {
-        errno = EINVAL;
-        return -1;
-    }
-    /*  Clone shell flux handle so that only barrier and eventlog watch
-     *   messages are dispatched in the temporary reactor call here.
-     *   This allows messages from other shell services to be requeued
-     *   for the real reactor in main().
+
+    if (shell->protocol_fd < 0)
+        shell_die (1, "required FLUX_EXEC_PROTOCOL_FD not set");
+
+    if (dprintf (shell->protocol_fd, "enter\n") != 6)
+        shell_die_errno (1, "shell_barrier: dprintf");
+
+    /*  Note: The only expected values currently are "exit=0\n"
+     *   for success and "exit=1\n" for failure. Therefore, if
+     *   read(2) fails, or we don't receive exactly "exit=0\n",
+     *   then this barrier has failed. We exit immediately since
+     *   the reason for the failed barrier has likely been logged
+     *   elsewhere.
      */
-    if (!(h = flux_clone (shell->h)))
-        shell_die_errno (1, "flux_handle_clone");
-
-    if (!(f = flux_barrier (h, fqname, shell->info->shell_size))) {
-        shell_log_errno ("flux_barrier");
-        goto out;
-    }
-    if (!(log_f = flux_job_event_watch (h, id, "eventlog", 0))) {
-        shell_log_errno ("flux_job_event_watch");
-        goto out;
-    }
-    if (flux_future_then (log_f, -1., eventlog_cb, NULL) < 0
-        ||  flux_future_then (f, -1., barrier_cb, NULL) < 0) {
-        shell_log_errno ("flux_future_then");
-        goto out;
-    }
-    if (flux_future_then (f, -1., barrier_cb, shell) < 0) {
-        shell_log_errno ("flux_future_then");
-        goto out;
-    }
-    if (flux_reactor_run (flux_get_reactor (h), 0) >= 0)
-        rc = 0;
-    shell_trace ("exited barrier with rc = %d", rc);
-out:
-    flux_job_event_watch_cancel (log_f);
-    flux_future_destroy (log_f);
-    flux_future_destroy (f);
-
-    /*  Close the cloned handle */
-    flux_close (h);
-    return rc;
+    memset (buf, 0, sizeof (buf));
+    if (read (shell->protocol_fd, buf, 7) < 0)
+        shell_die_errno (1, "shell_barrier: read");
+    if (strcmp (buf, "exit=0\n") != 0)
+        exit (1);
+    return 0;
 }
 
 static int load_initrc (flux_shell_t *shell, const char *default_rcfile)

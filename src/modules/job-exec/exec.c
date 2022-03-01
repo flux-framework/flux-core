@@ -41,37 +41,36 @@ static const char *default_cwd = "/tmp";
 static const char *default_job_shell = NULL;
 static const char *flux_imp_path = NULL;
 
-/* Configuration for "bulk" execution implementation. Used only for testing
- *  for now.
- */
-struct exec_conf {
-    const char *        mock_exception;   /* fake exception */
+struct exec_ctx {
+    const char * mock_exception;   /* fake exception */
+    int barrier_enter_count;
+    int barrier_completion_count;
 };
 
-static void exec_conf_destroy (struct exec_conf *tc)
+static void exec_ctx_destroy (struct exec_ctx *tc)
 {
     free (tc);
 }
 
-static struct exec_conf *exec_conf_create (json_t *jobspec)
+static struct exec_ctx *exec_ctx_create (json_t *jobspec)
 {
-    struct exec_conf *conf = calloc (1, sizeof (*conf));
-    if (conf == NULL)
+    struct exec_ctx *ctx = calloc (1, sizeof (*ctx));
+    if (ctx == NULL)
         return NULL;
     (void) json_unpack (jobspec, "{s:{s:{s:{s:{s:s}}}}}",
                                  "attributes", "system", "exec",
                                      "bulkexec",
                                          "mock_exception",
-                                         &conf->mock_exception);
-    return conf;
+                                         &ctx->mock_exception);
+    return ctx;
 }
 
 static const char * exec_mock_exception (struct bulk_exec *exec)
 {
-    struct exec_conf *conf = bulk_exec_aux_get (exec, "conf");
-    if (!conf || !conf->mock_exception)
+    struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
+    if (!ctx || !ctx->mock_exception)
         return "none";
-    return conf->mock_exception;
+    return ctx->mock_exception;
 }
 
 static const char *jobspec_get_job_shell (json_t *jobspec)
@@ -143,6 +142,23 @@ static void complete_cb (struct bulk_exec *exec, void *arg)
                             bulk_exec_rc (exec));
 }
 
+static int exec_barrier_enter (struct bulk_exec *exec)
+{
+    struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
+    if (!ctx)
+        return -1;
+    if (++ctx->barrier_enter_count == bulk_exec_total (exec)) {
+        if (bulk_exec_write (exec,
+                             "FLUX_EXEC_PROTOCOL_FD",
+                             "exit=0\n",
+                             7) < 0)
+            return -1;
+        ctx->barrier_enter_count = 0;
+        ctx->barrier_completion_count++;
+    }
+    return 0;
+}
+
 static void output_cb (struct bulk_exec *exec, flux_subprocess_t *p,
                        const char *stream,
                        const char *data,
@@ -151,6 +167,16 @@ static void output_cb (struct bulk_exec *exec, flux_subprocess_t *p,
 {
     struct jobinfo *job = arg;
     const char *cmd = flux_cmd_arg (flux_subprocess_get_cmd (p), 0);
+
+    if (strcmp (stream, "FLUX_EXEC_PROTOCOL_FD") == 0) {
+        if (strcmp (data, "enter\n") == 0
+            && exec_barrier_enter (exec) < 0) {
+            jobinfo_fatal_error (job,
+                                 errno,
+                                 "Failed to handle barrier");
+        }
+        return;
+    }
     jobinfo_log_output (job,
                         flux_subprocess_rank (p),
                         basename (cmd),
@@ -194,9 +220,42 @@ static void error_cb (struct bulk_exec *exec, flux_subprocess_t *p, void *arg)
                              rank);
 }
 
+
+static void exit_cb (struct bulk_exec *exec,
+                     void *arg,
+                     const struct idset *ranks)
+{
+    struct jobinfo *job = arg;
+    struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
+
+    if (bulk_exec_total (exec) > 1
+        && ctx->barrier_completion_count == 0) {
+        char *ids = idset_encode (ranks, IDSET_FLAG_RANGE);
+        char *hosts = flux_hostmap_lookup (job->h, ids, NULL);
+        jobinfo_fatal_error (job, 0,
+                             "%s (rank%s %s) terminated before first barrier",
+                              hosts ? hosts : "(unknown)",
+                              idset_count (ranks) ? "s" : "",
+                              ids ? ids : "(unknown)");
+        free (ids);
+        free (hosts);
+
+        /*  Terminate barrier with failed exit status.
+         *  This will allow any shells that do get to the barrier to exit
+         *   immediately, instead of waiting to be killed by exec system.
+         */
+        if (bulk_exec_write (exec,
+                             "FLUX_EXEC_PROTOCOL_FD",
+                             "exit=1\n",
+                             7) < 0)
+            flux_log_error (job->h,
+                            "Failed to write failed barrier exit status");
+    }
+}
+
 static struct bulk_exec_ops exec_ops = {
     .on_start =     start_cb,
-    .on_exit =      NULL,
+    .on_exit =      exit_cb,
     .on_complete =  complete_cb,
     .on_output =    output_cb,
     .on_error =     error_cb
@@ -205,7 +264,7 @@ static struct bulk_exec_ops exec_ops = {
 static int exec_init (struct jobinfo *job)
 {
     flux_cmd_t *cmd = NULL;
-    struct exec_conf *conf = NULL;
+    struct exec_ctx *ctx = NULL;
     struct bulk_exec *exec = NULL;
     const struct idset *ranks = NULL;
 
@@ -224,12 +283,12 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: bulk_exec_create");
         goto err;
     }
-    if (!(conf = exec_conf_create (job->jobspec))) {
-        flux_log_error (job->h, "exec_init: exec_conf_create");
+    if (!(ctx = exec_ctx_create (job->jobspec))) {
+        flux_log_error (job->h, "exec_init: exec_ctx_create");
         goto err;
     }
-    if (bulk_exec_aux_set (exec, "conf", conf,
-                          (flux_free_f) exec_conf_destroy) < 0) {
+    if (bulk_exec_aux_set (exec, "ctx", ctx,
+                          (flux_free_f) exec_ctx_destroy) < 0) {
         flux_log_error (job->h, "exec_init: bulk_exec_aux_set");
         goto err;
     }
@@ -256,6 +315,19 @@ static int exec_init (struct jobinfo *job)
     if (flux_cmd_setcwd (cmd, job_get_cwd (job)) < 0) {
         flux_log_error (job->h, "exec_init: flux_cmd_setcwd");
         goto err;
+    }
+
+    /*  If more than one shell is involved in this job, set up a channel
+     *   for exec system based barrier:
+     */
+    if (idset_count (ranks) > 1) {
+        if (flux_cmd_add_channel (cmd, "FLUX_EXEC_PROTOCOL_FD") < 0
+            || flux_cmd_setopt (cmd,
+                                "FLUX_EXEC_PROTOCOL_FD_LINE_BUFFER",
+                                "true") < 0) {
+            flux_log_error (job->h, "exec_init: flux_cmd_add_channel");
+            goto err;
+        }
     }
     if (bulk_exec_push_cmd (exec, ranks, cmd, 0) < 0) {
         flux_log_error (job->h, "exec_init: bulk_exec_push_cmd");

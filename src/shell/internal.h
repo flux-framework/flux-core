@@ -24,6 +24,7 @@
 struct flux_shell {
     flux_jobid_t jobid;
     int broker_rank;
+    int protocol_fd;
 
     optparse_t *p;
     flux_t *h;
