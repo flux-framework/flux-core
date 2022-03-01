@@ -1558,6 +1558,9 @@ static bool allow_early_request (const flux_msg_t *msg)
     const struct flux_match match[] = {
         // state-machine.wait may be needed early by flux_reconnect(3) users
         { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "state-machine.wait" },
+        // let state-machine.get and attr.get work for flux-uptime(1)
+        { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "state-machine.get" },
+        { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "attr.get" },
     };
     for (int i = 0; i < sizeof (match) / sizeof (match[0]); i++)
         if (flux_msg_cmp (msg, match[i]))
