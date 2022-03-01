@@ -229,20 +229,42 @@ static void append_count_if (char *buf,
  */
 static void default_summary (flux_t *h)
 {
-    double t_start = attr_get_starttime (h);
     double t_now = flux_reactor_now (flux_get_reactor (h));
     int userid = attr_get_int (h, "security.owner");
     int size = attr_get_int (h, "size");
     int level = attr_get_int (h, "instance-level");
-    int drained = resource_status_drained (h);
-    int online = groups_get_count (h, "broker.online");
-    int offline = size - online;
+    int drained = 0;
+    int offline = 0;
+    bool submit_is_disabled = false;
+    bool sched_is_disabled = false;
+    flux_future_t *f;
+    const char *broker_state;
+    double duration;
     char fsd[32];
     char now[32];
     char owner[32];
     char extra[512] = "";
 
-    if (fsd_format_duration_ex (fsd, sizeof (fsd), t_now - t_start, 2) < 0)
+    /* Fetch the broker state.
+     * If it is "run", proceed to fetch info from high level services and
+     * the rank 0 broker and set duration to the instance runtime.
+     * Otherwise, an abbreviated set of info will be displayed and let the
+     * duration reflect the local broker's time in the current state.
+     */
+    if (!(f = flux_rpc (h, "state-machine.get", NULL, FLUX_NODEID_ANY, 0))
+        || flux_rpc_get_unpack (f,
+                                "{s:s s:f}",
+                                "state", &broker_state,
+                                "duration", &duration) < 0)
+        log_err_exit ("Error fetching broker state");
+    if (!strcmp (broker_state, "run")) {
+        duration = t_now - attr_get_starttime (h);
+        drained = resource_status_drained (h);
+        offline = size - groups_get_count (h, "broker.online");
+        submit_is_disabled = submit_disabled (h);
+        sched_is_disabled = sched_disabled (h);
+    }
+    if (fsd_format_duration_ex (fsd, sizeof (fsd), duration, 2) < 0)
         log_err_exit ("Error formatting uptime duration");
     if (format_time (now, sizeof (now), t_now) < 0)
         log_msg_exit ("Error formatting current time");
@@ -250,8 +272,9 @@ static void default_summary (flux_t *h)
         log_msg_exit ("Error formatting instance owner");
     append_count_if (extra, sizeof (extra), "drained", drained, drained > 0);
     append_count_if (extra, sizeof (extra), "offline", offline, offline > 0);
-    printf (" %s up %s,  owner %s,  depth %d,  size %d%s\n",
+    printf (" %s %s %s,  owner %s,  depth %d,  size %d%s\n",
             now,
+            broker_state,
             fsd,
             owner,
             level,
@@ -261,16 +284,12 @@ static void default_summary (flux_t *h)
     /* optional 2nd line for submit/sched disabled
      */
     extra[0] = '\0';
-    append_if (extra,
-               sizeof (extra),
-               "submit disabled",
-               submit_disabled (h));
-    append_if (extra,
-               sizeof (extra),
-               "scheduler disabled",
-               sched_disabled (h));
+    append_if (extra, sizeof (extra), "submit disabled", submit_is_disabled);
+    append_if (extra, sizeof (extra), "scheduler disabled", sched_is_disabled);
     if (strlen (extra) > 0)
         printf ("  %s\n", extra);
+
+    flux_future_destroy (f);
 }
 
 static int cmd_uptime (optparse_t *p, int ac, char *av[])
