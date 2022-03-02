@@ -17,6 +17,8 @@ libkvs_la_SOURCES = \
 	kvs.c \
 	kvs_lookup.c \
 	kvs_getroot.c \
+	kvs_checkpoint.c \
+	kvs_checkpoint.h \
 	kvs_dir.c \
 	kvs_dir_private.h \
 	kvs_commit.c \
@@ -47,6 +49,7 @@ TESTS = \
 	test_kvs_commit.t \
 	test_kvs_getroot.t \
 	test_treeobj.t \
+	test_kvs_checkpoint.t \
 	test_kvs_copy.t \
 	test_kvs_util.t
 
@@ -103,6 +106,10 @@ test_kvs_getroot_t_LDADD = $(test_ldadd)
 test_treeobj_t_SOURCES = test/treeobj.c
 test_treeobj_t_CPPFLAGS = $(test_cppflags)
 test_treeobj_t_LDADD = $(test_ldadd)
+
+test_kvs_checkpoint_t_SOURCES = test/kvs_checkpoint.c
+test_kvs_checkpoint_t_CPPFLAGS = $(test_cppflags)
+test_kvs_checkpoint_t_LDADD = $(test_ldadd)
 
 test_kvs_copy_t_SOURCES = test/kvs_copy.c
 test_kvs_copy_t_CPPFLAGS = $(test_cppflags)

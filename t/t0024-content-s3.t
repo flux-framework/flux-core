@@ -63,9 +63,10 @@ recheck_cache_blob() {
 	flux content load $(cat blobref.$1) >blob.$1.cachecheck &&
 	test_cmp blob.$1 blob.$1.cachecheck
 }
-# Usage: kvs_checkpoint_put key value
+# Usage: kvs_checkpoint_put key rootref
 kvs_checkpoint_put() {
-        jq -j -c -n  "{key:\"$1\",value:\"$2\"}" | $RPC kvs-checkpoint.put
+        o="{key:\"$1\",value:{version:1,rootref:\"$2\",timestamp:2.2}}"
+        jq -j -c -n  ${o} | $RPC kvs-checkpoint.put
 }
 # Usage: kvs_checkpoint_get key >value
 kvs_checkpoint_get() {
@@ -118,24 +119,31 @@ test_expect_success LONGTEST 'store/load/verify various size large blobs' '
 	test $err -eq 0
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put foo=bar' '
-        kvs_checkpoint_put foo bar
+
+test_expect_success HAVE_JQ 'kvs-checkpoint.put foo w/ rootref bar' '
+	kvs_checkpoint_put foo bar
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned bar' '
-        echo bar >value.exp &&
-        kvs_checkpoint_get foo | jq -r .value >value.out &&
-        test_cmp value.exp value.out
+test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned rootref bar' '
+        echo bar >rootref.exp &&
+        kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref.out &&
+        test_cmp rootref.exp rootref.out
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo=baz' '
+# use grep instead of compare, incase of floating point rounding
+test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned correct timestamp' '
+        kvs_checkpoint_get foo | jq -r .value | jq -r .timestamp >timestamp.out &&
+        grep 2.2 timestamp.out
+'
+
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref to baz' '
         kvs_checkpoint_put foo baz
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned baz' '
-        echo baz >value2.exp &&
-        kvs_checkpoint_get foo | jq -r .value >value2.out &&
-        test_cmp value2.exp value2.out
+test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned rootref baz' '
+        echo baz >rootref2.exp &&
+        kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref2.out &&
+        test_cmp rootref2.exp rootref2.out
 '
 
 test_expect_success 'reload content-s3 module' '
@@ -158,9 +166,10 @@ test_expect_success LONGTEST 'reload/verify various size large blobs' '
 	test $err -eq 0
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returns same value' '
-        kvs_checkpoint_get foo | jq -r .value >value2.out &&
-        test_cmp value2.exp value2.out
+test_expect_success HAVE_JQ 'kvs-checkpoint.get foo still returns rootref baz' '
+        echo baz >rootref3.exp &&
+        kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref3.out &&
+        test_cmp rootref3.exp rootref3.out
 '
 
 test_expect_success 'config: reload config does not take effect immediately' '
@@ -250,6 +259,54 @@ test_expect_success LONGTEST 'reload/verify various size large blobs through cac
 
 test_expect_success 'remove content-s3 module' '
 	flux module remove content-s3
+'
+
+##
+# Tests of kvs checkpointing
+##
+
+test_expect_success 'generate rc1/rc3 for content-s3 backing' '
+	cat >rc1-content-s3 <<EOF &&
+#!/bin/bash -e
+flux module load content-s3
+flux module load kvs
+EOF
+	cat >rc3-content-s3 <<EOF &&
+#!/bin/bash -e
+flux module remove kvs
+flux module remove content-s3
+EOF
+        chmod +x rc1-content-s3 &&
+        chmod +x rc3-content-s3
+'
+
+test_expect_success 'run instance with content.backing-path set (s3)' '
+	flux start -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-s3 \
+                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-s3 \
+	           flux kvs put testkey=43
+'
+
+test_expect_success 're-run instance with content.backing-path set (s3)' '
+	flux start -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-s3 \
+                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-s3 \
+	           flux kvs get testkey >gets3.out
+'
+
+test_expect_success 'content from previous instance survived (s3)' '
+	echo 43 >gets3.exp &&
+	test_cmp gets3.exp gets3.out
+'
+
+test_expect_success 're-run instance, verify checkpoint date saved (s3)' '
+	flux start -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-s3 \
+                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-s3 \
+	           flux dmesg >dmesgs3.out
+'
+
+# just check for todays date, not time for obvious reasons
+test_expect_success 'verify date in flux logs (s3)' '
+	today=`date --iso-8601` &&
+	grep checkpoint dmesgs3.out | grep ${today}
 '
 
 test_done

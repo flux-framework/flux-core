@@ -119,30 +119,37 @@ test_expect_success 'fill the cache with more data for later purging' '
 '
 
 kvs_checkpoint_put() {
-	jq -j -c -n  "{key:\"$1\",value:\"$2\"}" | $RPC kvs-checkpoint.put
+	o="{key:\"$1\",value:{version:1,rootref:\"$2\",timestamp:2.2}}"
+	jq -j -c -n  ${o} | $RPC kvs-checkpoint.put
 }
 kvs_checkpoint_get() {
 	jq -j -c -n  "{key:\"$1\"}" | $RPC kvs-checkpoint.get
 }
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put foo=bar' '
+test_expect_success HAVE_JQ 'kvs-checkpoint.put foo w/ rootref bar' '
 	kvs_checkpoint_put foo bar
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned bar' '
-	echo bar >value.exp &&
-	kvs_checkpoint_get foo | jq -r .value >value.out &&
-	test_cmp value.exp value.out
+test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned rootref bar' '
+	echo bar >rootref.exp &&
+	kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref.out &&
+	test_cmp rootref.exp rootref.out
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo=baz' '
+# use grep instead of compare, incase of floating point rounding
+test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned correct timestamp' '
+        kvs_checkpoint_get foo | jq -r .value | jq -r .timestamp >timestamp.out &&
+        grep 2.2 timestamp.out
+'
+
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref to baz' '
 	kvs_checkpoint_put foo baz
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned baz' '
-	echo baz >value2.exp &&
-	kvs_checkpoint_get foo | jq -r .value >value2.out &&
-	test_cmp value2.exp value2.out
+test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned rootref baz' '
+	echo baz >rootref2.exp &&
+	kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref2.out &&
+	test_cmp rootref2.exp rootref2.out
 '
 
 test_expect_success 'flush + reload content-sqlite module on rank 0' '
@@ -150,10 +157,10 @@ test_expect_success 'flush + reload content-sqlite module on rank 0' '
 	flux module reload content-sqlite
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.get foo still returns baz' '
-	echo baz >value3.exp &&
-	kvs_checkpoint_get foo | jq -r .value >value3.out &&
-	test_cmp value3.exp value3.out
+test_expect_success HAVE_JQ 'kvs-checkpoint.get foo still returns rootref baz' '
+	echo baz >rootref3.exp &&
+	kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref3.out &&
+	test_cmp rootref3.exp rootref3.out
 '
 
 test_expect_success HAVE_JQ 'kvs-checkpoint.get noexist fails with No such...' '

@@ -18,6 +18,7 @@
 
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libkvs/treeobj.h"
+#include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libutil/fsd.h"
 
 #include "builtin.h"
@@ -52,15 +53,8 @@ static void kvs_checkpoint_put (flux_t *h, const char *treeobj)
     if (!(o = treeobj_decode (treeobj))
         || !(rootref = treeobj_get_blobref (o, 0)))
         log_err_exit ("Error decoding treeobj from eventlog commit");
-    if (!(f = flux_rpc_pack (h,
-                             "kvs-checkpoint.put",
-                             0,
-                             0,
-                             "{s:s s:s}",
-                             "key",
-                             "kvs-primary",
-                             "value",
-                             rootref))
+
+    if (!(f = kvs_checkpoint_commit (h, "kvs-primary", rootref))
         || flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("Error writing kvs checkpoint: %s",
                       future_strerror (f, errno));

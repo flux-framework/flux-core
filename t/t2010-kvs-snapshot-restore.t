@@ -9,38 +9,13 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 
 test_under_flux 1
 
-CHECKPOINT=${FLUX_BUILD_DIR}/t/kvs/checkpoint
 CHANGECHECKPOINT=${FLUX_SOURCE_DIR}/t/kvs/change-checkpoint.py
 
-test_expect_success 'store kvs-checkpoint key-val pairs' '
-	$CHECKPOINT put foo bar &&
-	$CHECKPOINT put foo2 42 &&
-	$CHECKPOINT put foo3 "x x x"
-'
+#
+# test content-sqlite backing
+#
 
-test_expect_success 'verify kvs-checkpoint key-val pairs' '
-	test "$($CHECKPOINT get foo)" = "bar" &&
-	test "$($CHECKPOINT get foo2)" = "42" &&
-	test "$($CHECKPOINT get foo3)" = "x x x"
-'
-
-test_expect_success 'get unknown kvs-checkpoint key fails' '
-	test_must_fail $CHECKPOINT get noexist
-'
-
-test_expect_success 'put existing kvs-checkpoint key is allowed' '
-	$CHECKPOINT put foo zzz
-'
-
-test_expect_success 'kvs-checkpoint value was updated' '
-	test $($CHECKPOINT get foo) = "zzz"
-'
-
-test_expect_success 'empty kvs-checkpoint key is not allowed' '
-	test_must_fail $CHECKPOINT put "" xyz
-'
-
-test_expect_success 'run instance with content.backing-path set' '
+test_expect_success 'run instance with content.backing-path set (sqlite)' '
 	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
 	           flux kvs put testkey=42
 '
@@ -50,44 +25,100 @@ test_expect_success 'content.sqlite file exists after instance exited' '
 	echo Size in bytes: $(stat --format "%s" content.sqlite)
 '
 
-test_expect_success 're-run instance with content.backing-path set' '
+test_expect_success 're-run instance with content.backing-path set (sqlite)' '
 	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
-	           flux kvs get testkey >get.out
+	           flux kvs get testkey >getsqlite.out
 '
 
-test_expect_success 'content from previous instance survived' '
-	echo 42 >get.exp &&
-	test_cmp get.exp get.out
+test_expect_success 'content from previous instance survived (sqlite)' '
+	echo 42 >getsqlite.exp &&
+	test_cmp getsqlite.exp getsqlite.out
 '
 
-test_expect_success 're-run instance, verify checkpoint date saved' '
+test_expect_success 're-run instance, verify checkpoint date saved (sqlite)' '
 	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
-	           flux dmesg >dmesg1.out
+	           flux dmesg >dmesgsqlite1.out
 '
 
 # just check for todays date, not time for obvious reasons
-test_expect_success 'verify date in flux logs' '
+test_expect_success 'verify date in flux logs (sqlite)' '
 	today=`date --iso-8601` &&
-	grep checkpoint dmesg1.out | grep ${today}
+	grep checkpoint dmesgsqlite1.out | grep ${today}
 '
 
-test_expect_success 're-run instance, get rootref' '
+test_expect_success 're-run instance, get rootref (sqlite)' '
 	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
-	           flux kvs getroot -b > getroot.out
+	           flux kvs getroot -b > getrootsqlite.out
 '
 
-test_expect_success 'write rootref to checkpoint path, emulating original checkpoint' '
-        rootref=$(cat getroot.out) &&
+test_expect_success 'write rootref to checkpoint path, emulating original checkpoint (sqlite)' '
+        rootref=$(cat getrootsqlite.out) &&
         ${CHANGECHECKPOINT} $(pwd)/content.sqlite "kvs-primary" ${rootref}
 '
 
-test_expect_success 're-run instance, verify checkpoint correctly loaded' '
+test_expect_success 're-run instance, verify checkpoint correctly loaded (sqlite)' '
 	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
-	           flux dmesg >dmesg2.out
+	           flux dmesg >dmesgsqlite2.out
 '
 
-test_expect_success 'verify checkpoint loaded with no date' '
-	grep checkpoint dmesg2.out | grep "N\/A"
+test_expect_success 'verify checkpoint loaded with no date (sqlite)' '
+	grep checkpoint dmesgsqlite2.out | grep "N\/A"
+'
+
+#
+# test content-files backing
+#
+
+test_expect_success 'generate rc1/rc3 for content-files backing' '
+	cat >rc1-content-files <<EOF &&
+#!/bin/bash -e
+flux module load content-files
+flux module load kvs
+EOF
+	cat >rc3-content-files <<EOF &&
+#!/bin/bash -e
+flux module remove kvs
+flux module remove content-files
+EOF
+        chmod +x rc1-content-files &&
+        chmod +x rc3-content-files
+'
+
+test_expect_success 'run instance with content.backing-path set (files)' '
+	flux start -o,--setattr=content.backing-path=$(pwd)/content.files \
+                   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+	           flux kvs put testkey=43
+'
+
+test_expect_success 'content.files dir and kvs-primary exist after instance exit' '
+	test -d content.files &&
+	test -e content.files/kvs-primary
+'
+
+test_expect_success 're-run instance with content.backing-path set (files)' '
+	flux start -o,--setattr=content.backing-path=$(pwd)/content.files \
+                   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+	           flux kvs get testkey >getfiles.out
+'
+
+test_expect_success 'content from previous instance survived (files)' '
+	echo 43 >getfiles.exp &&
+	test_cmp getfiles.exp getfiles.out
+'
+
+test_expect_success 're-run instance, verify checkpoint date saved (files)' '
+	flux start -o,--setattr=content.backing-path=$(pwd)/content.files \
+                   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+	           flux dmesg >dmesgfiles.out
+'
+
+# just check for todays date, not time for obvious reasons
+test_expect_success 'verify date in flux logs (files)' '
+	today=`date --iso-8601` &&
+	grep checkpoint dmesgfiles.out | grep ${today}
 '
 
 test_done
