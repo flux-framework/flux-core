@@ -6,6 +6,6 @@
 #
 echo "Running libtoolize --automake --copy ... "
 libtoolize --automake --copy || exit
-echo "Running autoreconf --verbose --install"
-autoreconf --verbose --install || exit
+echo "Running autoreconf --force --verbose --install"
+autoreconf --force --verbose --install || exit
 echo "Now run ./configure."
