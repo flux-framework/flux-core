@@ -173,17 +173,33 @@ test_expect_success 'rexec kill with already pending signal gets error' '
 	grep "rexec: flux_subprocess_kill: Invalid argument" KK.out
 '
 
+wait_rexec_process_count () {
+	expected=$1
+	i=0
+	${FLUX_BUILD_DIR}/t/rexec/rexec_ps -r 1 > output &&
+	count=`cat output | wc -l` &&
+	while [ "${count}" != "${expected}" ] && [ $i -lt 30 ]
+	do
+	    sleep 1
+	    ${FLUX_BUILD_DIR}/t/rexec/rexec_ps -r 1 > output &&
+	    count=`cat output | wc -l` &&
+	    i=$((i + 1))
+	done
+	if [ "$i" -eq "30" ]
+	then
+	    return 1
+	fi
+	return 0;
+}
+
 test_expect_success NO_CHAIN_LINT 'rexec ps works' '
 	${FLUX_BUILD_DIR}/t/rexec/rexec -r 1 sleep 100 &
 	pid1=$!
 	${FLUX_BUILD_DIR}/t/rexec/rexec -r 1 sleep 100 &
 	pid2=$!
-	sleep 1 &&
-	${FLUX_BUILD_DIR}/t/rexec/rexec_ps -r 1 > output &&
-	count=`cat output | wc -l` &&
+	wait_rexec_process_count 2 &&
 	kill -TERM $pid1 &&
-	kill -TERM $pid2 &&
-	test "$count" = "2"
+	kill -TERM $pid2
 '
 
 test_expect_success NO_CHAIN_LINT 'disconnect terminates all running processes' '
@@ -191,16 +207,10 @@ test_expect_success NO_CHAIN_LINT 'disconnect terminates all running processes' 
 	pid1=$!
 	${FLUX_BUILD_DIR}/t/rexec/rexec -r 1 sleep 100 &
 	pid2=$!
-	sleep 1 &&
-	${FLUX_BUILD_DIR}/t/rexec/rexec_ps -r 1 > output &&
-	count=`cat output | wc -l` &&
-	test "$count" = "2" &&
-	sleep 1 &&
+	wait_rexec_process_count 2 &&
 	kill -TERM $pid1 &&
 	kill -TERM $pid2 &&
-	${FLUX_BUILD_DIR}/t/rexec/rexec_ps -r 1 > output &&
-	count=`cat output | wc -l` &&
-	test "$count" = "0"
+	wait_rexec_process_count 0
 '
 
 test_expect_success 'rexec line buffering works (default)' '
