@@ -61,7 +61,7 @@ struct job *job_create (void)
     if (!(job = calloc (1, sizeof (*job))))
         return NULL;
     if (!(job->events = bitmap_alloc0 (EVENTS_BITMAP_SIZE))) {
-        free (job);
+        job_decref (job);
         return NULL;
     }
     job->refcount = 1;
