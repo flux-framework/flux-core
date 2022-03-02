@@ -1,3 +1,66 @@
+flux-core version 0.36.0 - 2022-03-01
+-------------------------------------
+
+This release adds support for restarting a Flux system instance in safe
+mode after a failure to shut down properly -- for example in the case of a
+broker crash.  New `flux-startlog(1)` and `flux-uptime(1)` commands are
+also introduced to give a quick review of the start and stop times and
+status of the current Flux instance.
+
+System instance users will want to update their configuration files to
+set `tbon.tcp_user_timeout` and remove `tbon.keepalive_*`, if present.
+For more information, see the Flux Admin Guide:
+
+https://flux-framework.readthedocs.io/en/latest/adminguide.html
+
+### Fixes
+
+ * job-exec: fix job hang after early IMP/shell exit (#4155)
+ * broker: allow `tbon.zmqdebug` to be set in config file and make sure it's
+   really off if set to 0 (#4127)
+ * broker: handle network partition (#4130)
+ * shell: capture job shell error messages in designated output file (#4125)
+ * resource: emit a more specific error when `rlist_rerank()` fails (#4126)
+ * flux-overlay: fix timeout error message (#4131)
+ * README: add libc development packages in requirements (#4133)
+ * libflux/future: set missing errno in `flux_future_wait_for()`  (#4162)
+ * flux-config-archive(5): fix TOML example (#4164)
+ * shell: fix delay in completion of jobs with a single shell rank (#4159)
+
+### New Features
+
+ * flux-uptime: provide useful output for slow/stuck broker state (#4172)
+ * improve KVS checkpoint protocol to allow for future changes (#4149)
+ * add `flux config get` (#4166)
+ * broker: use RPC not control message for broker module sync/status (#4110)
+ * docs: add Python overview documentation (#4104)
+ * Support new libsdprocess to launch processes under systemd (#3864)
+ * rename keepalive messages to control messages (#4112)
+ * resource: enhance resource.drain RPC with "update" and "overwrite" modes
+   (#4121)
+ * broker: replace keepalive tunables with `tcp_user_timeout` (#4118)
+ * kvs: add date to kvs-primary checkpoint (#4136)
+ * libpmi2: implement bits needed for Cray MPI (#4142)
+ * add `flux-uptime` command (#4148)
+ * add `flux-startlog` and enter safe mode after crash (#4153)
+ * libflux: add `flux_hostmap_lookup(3)` (#4157)
+
+### Cleanup
+
+ * drop unused project meta files (#4170)
+ * doc: update flux-broker-attributes(7) (#4119)
+ * python: return `JobID` from flux.job.submit, not `int` (#4134)
+ * consolidate multiple `*_error_t` structures into a common `flux_error_t`
+   (#4165)
+ * drop unused project meta files (#4170)
+
+### Testsuite
+
+ * testsuite: remove unportable cshism (#4115)
+ * codecov: minor improvements for coverage reporting (#4147)
+ * testsuite: add clarification comments (#4167)
+
+
 flux-core version 0.35.0 - 2022-02-05
 -------------------------------------
 
