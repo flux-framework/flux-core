@@ -318,10 +318,8 @@ static void list_id_respond (struct list_ctx *ctx,
     if (!(o = job_to_json (job, isd->attrs, &err)))
         goto error;
 
-    if (flux_respond_pack (ctx->h, isd->msg, "{s:O}", "job", o) < 0) {
+    if (flux_respond_pack (ctx->h, isd->msg, "{s:O}", "job", o) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
 
     json_decref (o);
     return;
@@ -329,7 +327,6 @@ static void list_id_respond (struct list_ctx *ctx,
 error:
     if (flux_respond_error (ctx->h, isd->msg, errno, err.text) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-    json_decref (o);
 }
 
 static void check_waiting_id (struct list_ctx *ctx,
@@ -875,16 +872,8 @@ void job_state_pause_cb (flux_t *h, flux_msg_handler_t *mh,
 
     ctx->jsctx->pause = true;
 
-    if (flux_respond (h, msg, NULL) < 0) {
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-        goto error;
-    }
-
-    return;
-
- error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
 void job_state_unpause_cb (flux_t *h, flux_msg_handler_t *mh,
@@ -901,17 +890,9 @@ void job_state_unpause_cb (flux_t *h, flux_msg_handler_t *mh,
         o = zlistx_next (ctx->jsctx->events_journal_backlog);
     }
 
-    if (flux_respond (h, msg, NULL) < 0) {
+    if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-        goto error;
-    }
 
-    zlistx_purge (ctx->jsctx->events_journal_backlog);
-    return;
-
- error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     zlistx_purge (ctx->jsctx->events_journal_backlog);
 }
 
