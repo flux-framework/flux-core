@@ -1760,6 +1760,32 @@ error:
     return;
 }
 
+static flux_future_t *job_events_journal (struct job_state_ctx *jsctx)
+{
+    flux_future_t *f;
+
+    /* no filters on events-journal, stream all events */
+    if (!(f = flux_rpc_pack (jsctx->h,
+                             "job-manager.events-journal",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_STREAMING,
+                             "{}"))
+        || flux_future_then (f,
+                             -1,
+                             job_events_journal_continuation,
+                             jsctx) < 0) {
+        flux_log (jsctx->h,
+                  LOG_ERR,
+                  "error synchronizing with job manager journal: %s",
+                  future_strerror (f, errno));
+        goto error;
+    }
+    return f;
+error:
+    flux_future_destroy (f);
+    return NULL;
+}
+
 struct job_state_ctx *job_state_create (struct list_ctx *ctx)
 {
     struct job_state_ctx *jsctx = NULL;
@@ -1803,23 +1829,8 @@ struct job_state_ctx *job_state_create (struct list_ctx *ctx)
         goto error;
     zlistx_set_destructor (jsctx->events_journal_backlog, json_decref_wrapper);
 
-    /* no filters on events-journal, stream all events */
-    if (!(jsctx->events = flux_rpc_pack (jsctx->h,
-                                         "job-manager.events-journal",
-                                         FLUX_NODEID_ANY,
-                                         FLUX_RPC_STREAMING,
-                                         "{}"))) {
-        flux_log_error (jsctx->h, "flux_rpc_pack");
+    if (!(jsctx->events = job_events_journal (jsctx)))
         goto error;
-    }
-
-    if (flux_future_then (jsctx->events,
-                          -1,
-                          job_events_journal_continuation,
-                          jsctx) < 0) {
-        flux_log_error (jsctx->h, "flux_future_then");
-        goto error;
-    }
 
     return jsctx;
 
