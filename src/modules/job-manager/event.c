@@ -773,7 +773,7 @@ int event_job_post_entry (struct event *event,
      *   in the job eventlog, so set eventlog_seq to -1 with
      *   EVENT_NO_COMMIT and do not advance job->eventlog_seq.
      *
-     *  Howveer, if EVENT_FORCE_SEQUENCE flag is supplied, then we
+     *  However, if EVENT_FORCE_SEQUENCE flag is supplied, then we
      *   do set and advance an actual sequence number (the event may
      *   already be in the eventlog such as the "submit" event)
      */
