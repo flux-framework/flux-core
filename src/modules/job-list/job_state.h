@@ -51,10 +51,9 @@ struct job_state_ctx {
     /*  Job statistics: */
     struct job_stats stats;
 
-    /* debug/testing - if paused store job events journal on list for
-     * processing later */
+    /* debug/testing - journal responses queued during pause */
     bool pause;
-    zlistx_t *events_journal_backlog;
+    struct flux_msglist *backlog;
 
     /* stream of job events from the job-manager */
     flux_future_t *events;
