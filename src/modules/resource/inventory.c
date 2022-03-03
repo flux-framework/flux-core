@@ -384,6 +384,23 @@ error:
     return -1;
 }
 
+static bool no_duplicates (const char *hosts)
+{
+    struct hostlist *hl = hostlist_decode (hosts);
+    bool result = false;
+
+    if (hl) {
+        int count = hostlist_count (hl);
+        hostlist_uniq (hl);
+        if (hostlist_count (hl) == count)
+            result = true;
+    }
+
+    hostlist_destroy (hl);
+
+    return result;
+}
+
 /* Derive resource object from R, normalizing broker ranks to origin.
  * Return success (0) but leave *Rp alone if conversion cannot be performed,
  * thus *Rp should be set to NULL before calling this function.
@@ -394,7 +411,10 @@ static int convert_R (flux_t *h, const char *job_R, int size, json_t **Rp)
     struct rlist *rl;
     json_t *R;
     struct idset *ranks;
+    const char *hosts;
     int count;
+    int rc = -1;
+    flux_error_t err;
 
     if (!(rl = rlist_from_R (job_R)))
         return -1;
@@ -410,19 +430,36 @@ static int convert_R (flux_t *h, const char *job_R, int size, json_t **Rp)
                   size);
         goto noconvert;
     }
+    /*  If we have an assigned hostlist and there is no more than
+     *   one broker per rank (i.e. no duplicates), then rerank R
+     *   based on the assigned hostlist.
+     */
+    if ((hosts = flux_attr_get (h, "hostlist"))
+        && no_duplicates (hosts)) {
+
+        /*  Allow rlist_rerank() to fail here. This could be due to a fake
+         *   R used in testing, or other conditions where it won't make
+         *   sense to apply the re-ranking anyway. Just issue a warning
+         *   and continue on failure.
+         */
+        err.text[0] = '\0';
+        if (rlist_rerank (rl, hosts, &err) < 0)
+            flux_log (h, LOG_DEBUG,
+                      "Warning: rerank of R failed: %s", err.text);
+    }
+    /*  Also always remap ids to zero origin
+     */
     if (rlist_remap (rl) < 0)
         goto error;
     if (!(R = rlist_to_R (rl)))
         goto error;
     *Rp = R;
 noconvert:
-    idset_destroy (ranks);
-    rlist_destroy (rl);
-    return 0;
+    rc = 0;
 error:
     idset_destroy (ranks);
     rlist_destroy (rl);
-    return -1;
+    return rc;
 }
 
 static int get_from_job_info (struct inventory *inv, const char *key)
