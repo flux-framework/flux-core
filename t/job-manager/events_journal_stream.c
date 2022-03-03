@@ -66,20 +66,36 @@ int main (int argc, char *argv[])
         log_err_exit ("signal");
 
     while (1) {
+        flux_jobid_t id;
         json_t *events;
         size_t index;
-        json_t *value;
-        if (flux_rpc_get_unpack (f, "{s:o}", "events", &events) < 0) {
+        json_t *entry;
+        if (flux_rpc_get_unpack (f,
+                                 "{s:I s:o}",
+                                 "id", &id,
+                                 "events", &events) < 0) {
             if (errno == ENODATA)
                 break;
             log_msg_exit ("job-manager.events-journal: %s",
                           future_strerror (f, errno));
         }
-        json_array_foreach (events, index, value) {
-            char *s = json_dumps (value, 0);
+        json_array_foreach (events, index, entry) {
+            /* For testing, wrap each eventlog entry in an outer object that
+             * includes the jobid.  Not coincidentally, this looks like
+             * the old format for job manager journal entries.
+             */
+            json_t *o;
+            char *s;
+
+            if (!(o = json_pack ("{s:I s:O}",
+                                 "id", id,
+                                 "entry", entry))
+                || !(s = json_dumps (o, 0)))
+                log_msg_exit ("Error creating eventlog envelope");
             printf ("%s\n", s);
             fflush (stdout);
             free (s);
+            json_decref (o);
         }
         flux_future_reset (f);
     }
