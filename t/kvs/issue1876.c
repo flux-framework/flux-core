@@ -28,7 +28,8 @@ int main (int argc, char *argv[])
     for (i = 0; i < 1000; i++) {
         flux_future_t *f;
 
-        log_msg ("loop=%d", i);
+        if (i % 100 == 0)
+            log_msg ("loop=%d", i);
 
         if (!(f = flux_kvs_lookup (h, NULL, FLUX_KVS_WATCH
                                    | FLUX_KVS_WAITCREATE, key)))

@@ -282,6 +282,7 @@ dist_check_SCRIPTS = \
 	issues/t3960-job-exec-ehostunreach.sh \
 	issues/t3906-job-exec-exception.sh \
 	issues/t3982-python-message-ref.py \
+	issues/t4182-resource-rerank.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
