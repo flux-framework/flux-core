@@ -114,3 +114,5 @@ json_t * job_stats_encode (struct job_stats *stats)
                       "canceled", stats->canceled,
                       "timeout", stats->timeout);
 }
+
+// vi: ts=4 sw=4 expandtab

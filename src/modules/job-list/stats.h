@@ -31,3 +31,5 @@ void job_stats_update (struct job_stats *stats,
 json_t * job_stats_encode (struct job_stats *stats);
 
 #endif /* ! _FLUX_JOB_LIST_JOB_STATS_H */
+
+// vi: ts=4 sw=4 expandtab
