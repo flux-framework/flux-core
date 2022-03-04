@@ -69,9 +69,9 @@ void job_stats_update (struct job_stats *stats,
     }
 }
 
-static int json_add_counter (json_t *o,
-                             const char *key,
-                             unsigned int n)
+static int object_set_integer (json_t *o,
+                               const char *key,
+                               unsigned int n)
 {
     json_t *val = json_integer (n);
     if (!val || json_object_set_new (o, key, val) < 0) {
@@ -88,13 +88,13 @@ static json_t *job_states_encode (struct job_stats *stats)
     if (!o)
         return NULL;
     for (int i = 1; i < FLUX_JOB_NR_STATES; i++) {
-        if (json_add_counter (o,
-                              state_index_name (i),
-                              stats->state_count[i]) < 0)
+        if (object_set_integer (o,
+                                state_index_name (i),
+                                stats->state_count[i]) < 0)
             goto error;
         total += stats->state_count[i];
     }
-    if (json_add_counter (o, "total", total) < 0)
+    if (object_set_integer (o, "total", total) < 0)
         goto error;
     return o;
 error:
