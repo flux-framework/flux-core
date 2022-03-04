@@ -1,3 +1,25 @@
+flux-core version 0.37.0 - 2022-03-04
+-------------------------------------
+
+This release disables resource verification of GPUs by default to
+workaround issues with GPU detection with system versions of hwloc.
+
+### Fixes
+
+ * resource: restrict resource verification to cores/hostnames only (#4192)
+ * resource: assign ranks in R based on hostlist attribute (#4188)
+ * add assertions that rank, size, hostlist broker attributes are cacheable
+   (#4187)
+
+### Testsuite
+
+ * testsuite: fix racy tests in t0005-rexec (#4179)
+
+### Cleanup
+
+ * build: ensure autogen.sh updates package version (#4174)
+
+
 flux-core version 0.36.0 - 2022-03-01
 -------------------------------------
 
