@@ -178,6 +178,14 @@ void test_copy ()
         "rnode_count_type (gpu) == 2");
 
     rnode_destroy (b);
+    ok ((b = rnode_copy_cores (n)) != NULL,
+        "copy rnode (cores only)");
+    ok (rnode_count_type (b, "core") == 4,
+        "rnode_count_type (gpu) == 4");
+    ok (rnode_count_type (b, "gpu") == 0,
+        "rnode_count_type (gpu) == 0");
+
+    rnode_destroy (b);
     rnode_destroy (n);
 }
 
