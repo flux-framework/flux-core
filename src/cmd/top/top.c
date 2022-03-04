@@ -57,6 +57,7 @@ static void heartbeat_cb (flux_t *h,
     summary_pane_heartbeat (top->summary_pane);
     summary_pane_draw (top->summary_pane);
     joblist_pane_draw (top->joblist_pane);
+    summary_pane_query (top->summary_pane);
 }
 
 static void jobtimer_cb (flux_reactor_t *r,
@@ -66,7 +67,6 @@ static void jobtimer_cb (flux_reactor_t *r,
 {
     struct top *top = arg;
 
-    summary_pane_query (top->summary_pane);
     joblist_pane_query (top->joblist_pane);
     top->jobtimer_running = false;
 }
