@@ -104,15 +104,21 @@ error:
 
 json_t * job_stats_encode (struct job_stats *stats)
 {
-    json_t *states = job_states_encode (stats);
-    if (states == NULL)
-        return NULL;
+    json_t *o;
+    json_t *states;
 
-    return json_pack ("{ s:o s:i s:i s:i }",
-                      "job_states", states,
-                      "failed", stats->failed,
-                      "canceled", stats->canceled,
-                      "timeout", stats->timeout);
+    if (!(states = job_states_encode (stats))
+        || !(o = json_pack ("{ s:O s:i s:i s:i }",
+                            "job_states", states,
+                            "failed", stats->failed,
+                            "canceled", stats->canceled,
+                            "timeout", stats->timeout))) {
+        json_decref (states);
+        errno = ENOMEM;
+        return NULL;
+    }
+    json_decref (states);
+    return o;
 }
 
 // vi: ts=4 sw=4 expandtab
