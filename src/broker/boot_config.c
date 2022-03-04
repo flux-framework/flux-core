@@ -256,8 +256,19 @@ int boot_config_attr (attr_t *attrs, json_t *hosts)
     char *val;
     int rv = -1;
 
-    if (!hosts || json_array_size (hosts) == 0)
+    if (!hosts || json_array_size (hosts) == 0) {
+        char hostname[MAXHOSTNAMELEN + 1];
+
+        if (gethostname (hostname, sizeof (hostname)) < 0
+            || attr_add (attrs,
+                         "hostlist",
+                         hostname,
+                         FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+            log_err ("failed to set hostlist attribute to localhost");
+            goto error;
+        }
         return 0;
+    }
 
     if (!(hl = hostlist_create ()))
         goto error;

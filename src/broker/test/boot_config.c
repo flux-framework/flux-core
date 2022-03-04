@@ -465,22 +465,24 @@ void test_attr (const char *dir)
     rc = boot_config_attr (attrs, NULL);
     ok (rc == 0,
         "boot_config_attr works NULL hosts");
-    errno = 0;
-    ok (attr_get (attrs, "hostlist", NULL, NULL) < 0
-        && errno == ENOENT,
-        "attr_get cannot find hostlist after NULL hosts");
+    ok (attr_get (attrs, "hostlist", NULL, NULL) == 0,
+        "attr_get finds hostlist after NULL hosts");
+    attr_destroy (attrs);
 
+    attrs = attr_create ();
+    if (!attrs)
+        BAIL_OUT ("attr_create failed");
     hosts = json_array ();
     if (hosts == NULL)
         BAIL_OUT ("cannot continue without empty hosts array");
     rc = boot_config_attr (attrs, hosts);
     ok (rc == 0,
         "boot_config_attr works empty hosts");
-    ok (attr_get (attrs, "hostlist", NULL, NULL) < 0
-        && errno == ENOENT,
-        "attr_get cannot find hostlist after hosts");
+    ok (attr_get (attrs, "hostlist", NULL, NULL) == 0,
+        "attr_get finds hostlist after empty hosts");
     json_decref (hosts);
     hosts = NULL;
+    attr_destroy (attrs);
 
     rc = boot_config_parse (cf, &conf, &hosts);
     ok (rc == 0,
@@ -488,6 +490,9 @@ void test_attr (const char *dir)
     if (hosts == NULL)
         BAIL_OUT ("cannot continue without hosts array");
 
+    attrs = attr_create ();
+    if (!attrs)
+        BAIL_OUT ("attr_create failed");
     rc = boot_config_attr (attrs, hosts);
     ok (rc == 0,
         "boot_config_attr works on input hosts");
