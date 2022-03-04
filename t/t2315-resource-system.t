@@ -101,4 +101,20 @@ test_expect_success 'invalid exclude hosts cause instance failure' '
     grep "nosuchhost: Invalid argument" ${name}/logfile
 '
 
+test_expect_success HAVE_JQ 'gpu resources in configured R are not verified' '
+	name=gpu-noverify &&
+	mkdir $name &&
+	flux R encode -r 0 --local | \
+		jq .execution.R_lite[0].children.gpu=\"42-43\" > ${name}/R &&
+	cat >${name}/resource.toml <<-EOF &&
+	[resource]
+	path = "$(pwd)/${name}/R"
+	EOF
+	flux start -s 1\
+		-o,--config-path=$(pwd)/${name},-Slog-filename=${name}/logfile \
+		flux resource list -s up -no {rlist} > ${name}/rlist &&
+	test_debug "cat ${name}/rlist" &&
+	grep "gpu\[42-43\]" ${name}/rlist
+'
+
 test_done

@@ -211,6 +211,11 @@ struct rlist *rlist_copy_allocated (const struct rlist *orig)
     return rlist_copy_internal (orig, rnode_copy_alloc);
 }
 
+struct rlist *rlist_copy_cores (const struct rlist *orig)
+{
+    return rlist_copy_internal (orig, rnode_copy_cores);
+}
+
 struct rlist *rlist_copy_down (const struct rlist *orig)
 {
     struct rnode *n;
@@ -621,7 +626,6 @@ static char * rnode_child_dumps (struct rnode *rnode)
     }
     return s;
 }
-
 
 int rlist_verify (flux_error_t *errp,
                   const struct rlist *expected,

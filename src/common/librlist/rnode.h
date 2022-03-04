@@ -78,6 +78,9 @@ struct rnode *rnode_copy_avail (const struct rnode *n);
 /*  Copy only allocated resources from rnode 'n' */
 struct rnode *rnode_copy_alloc (const struct rnode *n);
 
+/*  Copy only all cores in rnode 'n' */
+struct rnode *rnode_copy_cores (const struct rnode *n);
+
 int rnode_add (struct rnode *orig, struct rnode *n);
 
 /*  Return an rnode object that is the set difference of 'b' from 'a'.

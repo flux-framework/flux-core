@@ -63,6 +63,8 @@ struct rlist *rlist_copy_allocated (const struct rlist *orig);
 /*  Create a copy of rl including only the ranks in 'ranks' idset */
 struct rlist *rlist_copy_ranks (const struct rlist *rl, struct idset *ranks);
 
+struct rlist *rlist_copy_cores (const struct rlist *rl);
+
 /*  Delete ranks in idset 'ranks' from rlist 'rl'
  */
 int rlist_remove_ranks (struct rlist *rl, struct idset *ranks);

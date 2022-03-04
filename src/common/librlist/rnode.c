@@ -354,6 +354,28 @@ fail:
     return NULL;
 }
 
+struct rnode *rnode_copy_cores (const struct rnode *orig)
+{
+    struct rnode *n = rnode_copy (orig);
+    if (n) {
+        const char *name;
+        zlistx_t *keys = zhashx_keys (n->children);
+        if (!keys)
+            goto error;
+        name = zlistx_first (keys);
+        while (name) {
+            if (strcmp (name, "core") != 0)
+                zhashx_delete (n->children, name);
+            name = zlistx_next (keys);
+        }
+        zlistx_destroy (&keys);
+        return n;
+    }
+error:
+    rnode_destroy (n);
+    return NULL;
+}
+
 struct rnode *rnode_copy_empty (const struct rnode *orig)
 {
     struct rnode *n = rnode_copy (orig);
