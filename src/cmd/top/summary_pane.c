@@ -65,6 +65,8 @@ struct summary_pane {
     bool heart_visible;
     flux_jobid_t current;
     json_t *jobs;
+    flux_future_t *f_stats;
+    flux_future_t *f_resource;
 };
 
 static void draw_timeleft (struct summary_pane *sum)
@@ -311,26 +313,27 @@ static void resource_continuation (flux_future_t *f, void *arg)
     if (flux_rpc_get_unpack (f, "o", &o) < 0) {
         if (errno != ENOSYS) /* Instance may not be up yet */
             fatal (errno, "sched.resource-status RPC failed");
-        flux_future_destroy (f);
-        return;
     }
-    if (resource_count (o,
-                        "all",
-                        &sum->node.total,
-                        &sum->core.total,
-                        &sum->gpu.total) < 0
-        || resource_count (o,
-                           "allocated",
-                           &sum->node.used,
-                           &sum->core.used,
-                           &sum->gpu.used) < 0
-        || resource_count (o,
-                           "down",
-                           &sum->node.down,
-                           &sum->core.down,
-                           &sum->gpu.down) < 0)
-        fatal (0, "error decoding sched.resource-status RPC response");
+    else {
+        if (resource_count (o,
+                            "all",
+                            &sum->node.total,
+                            &sum->core.total,
+                            &sum->gpu.total) < 0
+            || resource_count (o,
+                               "allocated",
+                               &sum->node.used,
+                               &sum->core.used,
+                               &sum->gpu.used) < 0
+            || resource_count (o,
+                               "down",
+                               &sum->node.down,
+                               &sum->core.down,
+                               &sum->gpu.down) < 0)
+            fatal (0, "error decoding sched.resource-status RPC response");
+    }
     flux_future_destroy (f);
+    sum->f_resource = NULL;
     draw_resource (sum);
 }
 
@@ -352,6 +355,7 @@ static void stats_continuation (flux_future_t *f, void *arg)
             fatal (errno, "error decoding job-list.job-stats RPC response");
     }
     flux_future_destroy (f);
+    sum->f_stats = NULL;
     draw_stats (sum);
 }
 
@@ -373,18 +377,38 @@ void summary_pane_heartbeat (struct summary_pane *sum)
     flux_watcher_start (sum->heartblink);
 }
 
+/* Send a query.
+ * If there's already one pending, do nothing.
+ */
 void summary_pane_query (struct summary_pane *sum)
 {
-    flux_future_t *f;
-    flux_future_t *fstats;
-
-    if (!(f = flux_rpc (sum->top->h, "sched.resource-status", NULL, 0, 0))
-        || flux_future_then (f, -1, resource_continuation, sum) < 0) {
-        flux_future_destroy (f);
+    if (!sum->f_resource) {
+        if (!(sum->f_resource = flux_rpc (sum->top->h,
+                                          "sched.resource-status",
+                                          NULL,
+                                          0,
+                                          0))
+            || flux_future_then (sum->f_resource,
+                                 -1,
+                                 resource_continuation,
+                                 sum) < 0) {
+            flux_future_destroy (sum->f_resource);
+            sum->f_resource = NULL;
+        }
     }
-    if (!(fstats = flux_rpc (sum->top->h, "job-list.job-stats", "{}", 0, 0))
-        || flux_future_then (fstats, -1, stats_continuation, sum) < 0) {
-        flux_future_destroy (fstats);
+    if (!sum->f_stats) {
+        if (!(sum->f_stats = flux_rpc (sum->top->h,
+                                       "job-list.job-stats",
+                                       "{}",
+                                       0,
+                                       0))
+            || flux_future_then (sum->f_stats,
+                                 -1,
+                                 stats_continuation,
+                                 sum) < 0) {
+            flux_future_destroy (sum->f_stats);
+            sum->f_stats = NULL;
+        }
     }
 }
 
@@ -442,6 +466,8 @@ void summary_pane_destroy (struct summary_pane *sum)
 {
     if (sum) {
         int saved_errno = errno;
+        flux_future_destroy (sum->f_stats);
+        flux_future_destroy (sum->f_resource);
         flux_watcher_destroy (sum->heartblink);
         delwin (sum->win);
         free (sum);
