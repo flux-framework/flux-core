@@ -21,6 +21,7 @@
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/ipaddr.h"
 #include "src/common/libutil/kary.h"
+#include "src/common/libutil/errno_safe.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libpmi/clique.h"
@@ -153,6 +154,28 @@ overflow:
     return -1;
 }
 
+static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
+{
+    const char *value;
+    char *s;
+    int rc = -1;
+
+    /*  Allow hostlist attribute to be set on command line for testing.
+     *  The value must be re-added if so, so that the IMMUTABLE flag can
+     *   be set so that the attribute is properly cached.
+     */
+    if (attr_get (attrs, "hostlist", &value, NULL) == 0) {
+        s = strdup (value);
+        (void) attr_delete (attrs, "hostlist", true);
+    }
+    else
+        s = hostlist_encode (hl);
+    if (s && attr_add (attrs, "hostlist", s, FLUX_ATTRFLAG_IMMUTABLE) == 0)
+        rc = 0;
+    ERRNO_SAFE_WRAP (free, s);
+    return rc;
+}
+
 int boot_pmi (struct overlay *overlay, attr_t *attrs)
 {
     int fanout = overlay_get_fanout (overlay);
@@ -163,7 +186,6 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     char *bizcard = NULL;
     struct hostlist *hl = NULL;
     json_t *o;
-    char *s;
     struct pmi_handle *pmi;
     struct pmi_params pmi_params;
     int result;
@@ -398,14 +420,10 @@ done:
         log_msg ("broker_pmi_finalize: %s", pmi_strerror (result));
         goto error;
     }
-    if (!(s = hostlist_encode (hl)))
-        goto error;
-    if (attr_add (attrs, "hostlist", s, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+    if (set_hostlist_attr (attrs, hl) < 0) {
         log_err ("failed to set hostlist attribute to PMI-derived value");
-        free (s);
         goto error;
     }
-    free (s);
     free (bizcard);
     broker_pmi_destroy (pmi);
     hostlist_destroy (hl);
