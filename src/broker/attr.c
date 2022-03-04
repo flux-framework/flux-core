@@ -97,7 +97,8 @@ int attr_add (attr_t *attrs, const char *name, const char *val, int flags)
         errno = EEXIST;
         return -1;
     }
-    e = entry_create (name, val, flags);
+    if (!(e = entry_create (name, val, flags)))
+        return -1;
     zhash_update (attrs->hash, name, e);
     zhash_freefn (attrs->hash, name, entry_destroy);
     return 0;
@@ -121,7 +122,8 @@ int attr_add_active (attr_t *attrs, const char *name, int flags,
         if (set (name, e->val, arg) < 0)
             goto done;
     }
-    e = entry_create (name, NULL, flags);
+    if (!(e = entry_create (name, NULL, flags)))
+        goto done;
     e->set = set;
     e->get = get;
     e->arg = arg;
