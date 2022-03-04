@@ -25,8 +25,8 @@ from flux.uri import JobURI
 from flux.core.inner import raw
 
 
-def statetostr(stateid, singlechar=False):
-    return raw.flux_job_statetostr(stateid, singlechar).decode("utf-8")
+def statetostr(stateid, fmt="L"):
+    return raw.flux_job_statetostr(stateid, fmt).decode("utf-8")
 
 
 def resulttostr(resultid, singlechar=False):
@@ -297,7 +297,7 @@ class JobInfo:
 
     @memoized_property
     def state_single(self):
-        return statetostr(self.state_id, True)
+        return statetostr(self.state_id, fmt="S")
 
     @memoized_property
     def result(self):

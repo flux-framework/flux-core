@@ -279,7 +279,7 @@ int event_batch_pub_state (struct event *event, struct job *job,
     }
     if (!(o = json_pack ("[I,s,f]",
                          job->id,
-                         flux_job_statetostr (job->state, false),
+                         flux_job_statetostr (job->state, "L"),
                          timestamp)))
         goto nomem;
     if (json_array_append_new (event->batch->state_trans, o)) {

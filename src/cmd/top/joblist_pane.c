@@ -125,7 +125,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
                    "%13.13s %8.8s %2.2s %6d %6d %7.7s %-*.*s",
                    idstr,
                    username,
-                   flux_job_statetostr (state, true),
+                   flux_job_statetostr (state, "S"),
                    ntasks,
                    nnodes,
                    run,
