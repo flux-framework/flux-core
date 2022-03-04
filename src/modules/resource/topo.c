@@ -87,26 +87,43 @@ static int drain_self (struct topo *topo, const char *reason)
 static int topo_verify (struct topo *topo, json_t *R, bool nodrain)
 {
     json_error_t e;
-    struct rlist *rl;
+    struct rlist *rl = NULL;
+    struct rlist *rl_cores = NULL;
+    struct rlist *r_local_cores = NULL;
     flux_error_t error;
-    int rc;
+    int rc = -1;
 
     if (!(rl = rlist_from_json (R, &e))) {
         flux_log (topo->ctx->h, LOG_ERR, "R: %s", e.text);
         errno = EINVAL;
         return -1;
     }
-    rc = rlist_verify (&error, rl, topo->r_local);
+
+    /*  Only verify cores (and rank hostname) for now.
+     *
+     *  This is to allow GPUs to be configured or set in a job's allocated
+     *  R even when the system installed libhwloc fails to detect GPUs
+     *  due to lack of appropriately configured backend or other reason.
+     *  (See flux-core issue #4181 for more details)
+     */
+    if (!(r_local_cores = rlist_copy_cores (topo->r_local))
+        || !(rl_cores = rlist_copy_cores (rl))) {
+        flux_log_error (topo->ctx->h, "rlist_copy_cores");
+        goto out;
+    }
+    rc = rlist_verify (&error, rl_cores, r_local_cores);
     if (rc < 0 && !nodrain) {
-        if (drain_self (topo, error.text) < 0) {
-            rlist_destroy (rl);
-            return -1;
-        }
+        if (drain_self (topo, error.text) < 0)
+            goto out;
     }
     else if (rc != 0)
         flux_log (topo->ctx->h, LOG_ERR, "verify: %s", error.text);
+    rc = 0;
+out:
+    rlist_destroy (rl_cores);
+    rlist_destroy (r_local_cores);
     rlist_destroy (rl);
-    return 0;
+    return rc;
 }
 
 /* Call this on any rank when there are no more descendants reporting.
