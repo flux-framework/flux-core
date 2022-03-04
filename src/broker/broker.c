@@ -350,12 +350,21 @@ int main (int argc, char *argv[])
      */
     logbuf_initialize (ctx.h, ctx.rank, ctx.attrs);
 
-    /* Allow flux_get_rank() and flux_get_size() to work in the broker.
+    /* Allow flux_get_rank(), flux_get_size(), flux_get_hostybyrank(), etc.
+     * to work in the broker without causing a synchronous RPC to self that
+     * would deadlock.
      */
     if (attr_cache_immutables (ctx.attrs, ctx.h) < 0) {
         log_err ("error priming broker attribute cache");
         goto cleanup;
     }
+    int flags;
+    assert (attr_get (ctx.attrs, "rank", NULL, &flags) == 0
+            && (flags & FLUX_ATTRFLAG_IMMUTABLE));
+    assert (attr_get (ctx.attrs, "size", NULL, &flags) == 0
+            && (flags & FLUX_ATTRFLAG_IMMUTABLE));
+    assert (attr_get (ctx.attrs, "hostlist", NULL, &flags) == 0
+            && (flags & FLUX_ATTRFLAG_IMMUTABLE));
 
     if (!(ctx.groups = groups_create (&ctx))) {
         log_err ("groups_create");
