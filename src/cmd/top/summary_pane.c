@@ -216,7 +216,10 @@ static void draw_info (struct summary_pane *sum)
     double now = flux_reactor_now (flux_get_reactor (sum->top->h));
     char fsd[32] = "";
 
-    (void)fsd_format_duration_ex (fsd, sizeof (fsd), now - sum->starttime, 2);
+    (void)fsd_format_duration_ex (fsd,
+                                  sizeof (fsd),
+                                  fabs (now - sum->starttime),
+                                  2);
 
     wattron (sum->win, A_DIM);
     mvwprintw (sum->win,

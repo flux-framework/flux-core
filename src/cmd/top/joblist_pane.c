@@ -14,6 +14,7 @@
 #include <sys/types.h>
 #include <unistd.h>
 #include <time.h>
+#include <math.h>
 #include <jansson.h>
 
 #include "src/common/libutil/fsd.h"
@@ -82,7 +83,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
     json_array_foreach (joblist->jobs, index, job) {
         char *uri = NULL;
         char idstr[16];
-        char run[16];
+        char run[16] = "";
         flux_jobid_t id;
         int userid;
         const char *username;
@@ -107,8 +108,7 @@ void joblist_pane_draw (struct joblist_pane *joblist)
             fatal (0, "error decoding a job record from job-list RPC");
         if (flux_job_id_encode (id, "f58", idstr, sizeof (idstr)) < 0)
             fatal (errno, "error encoding jobid as F58");
-        if (fsd_format_duration_ex (run, sizeof (run), now - t_run, 2) < 0)
-            fatal (errno, "error formating expiration time as FSD");
+        (void)fsd_format_duration_ex (run, sizeof (run), fabs (now - t_run), 2);
         if (!(username = ucache_lookup (joblist->ucache, userid)))
             fatal (errno, "error looking up userid %d in ucache", (int)userid);
 
