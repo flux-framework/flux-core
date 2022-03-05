@@ -609,3 +609,5 @@ libexecdir
 bindir
 cmdhelp
 MANPATH
+bargraph
+emoji

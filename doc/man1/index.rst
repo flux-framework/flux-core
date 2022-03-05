@@ -30,6 +30,7 @@ man1
    flux-start
    flux-startlog
    flux-shell
+   flux-top
    flux-uptime
    flux-uri
    flux-version
