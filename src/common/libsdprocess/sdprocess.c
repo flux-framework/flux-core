@@ -1145,7 +1145,7 @@ static int check_state (sdprocess_t *sdp)
 
     /* Assumption: All other states "inactive", "activating",
      * "deactivating", "reloaded", we are transitioning to a final
-     * state or "active" (success w/ RemainAfterExit) or
+     * state of "active" (success w/ RemainAfterExit) or
      * "failed" */
     if (!strcmp (active_state, "failed")) {
         if (get_final_properties (sdp) < 0)
