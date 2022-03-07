@@ -1155,10 +1155,6 @@ static int check_state (sdprocess_t *sdp)
         goto done;
     }
     else if (strcmp (active_state, "active")) {
-        sdp_log (sdp->h,
-                 LOG_DEBUG,
-                 "Transitioning on ActiveState=%s",
-                 active_state);
         errno = EAGAIN;
         goto cleanup;
     }
