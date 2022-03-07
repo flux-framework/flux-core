@@ -1318,7 +1318,9 @@ int main (int argc, char *argv[])
             else if (errno == ENOENT)
                 ec = 127;
             shell_die (ec, "task %d: start failed: %s: %s",
-                       i, flux_cmd_arg (task->cmd, 0), strerror (errno));
+                       task->rank,
+                       flux_cmd_arg (task->cmd, 0),
+                       strerror (errno));
         }
 
         if (zlist_append (shell.tasks, task) < 0)
