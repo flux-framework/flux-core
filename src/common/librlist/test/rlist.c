@@ -1549,6 +1549,38 @@ void test_hosts_to_ranks (void)
     }
 }
 
+void test_issue4184 ()
+{
+    char *R;
+    struct rlist *rl = NULL;
+    struct rlist *alloc = NULL;
+
+    if (!(R = R_create_num (4, 4))
+        || !(rl = rlist_from_R (R)))
+        BAIL_OUT ("issue4184: failed to create rlist");
+
+    free (R);
+    if (!(R = R_create_num (4, 4))
+        || !(alloc = rlist_from_R (R)))
+        BAIL_OUT ("issue4184: failed to create alloc rlist");
+
+    ok (rlist_mark_down (rl, "all") == 0,
+        "rlist_mark_down");
+
+    ok (rl->avail == 0,
+        "rlist avail = %d (expected 0)", rl->avail);
+
+    ok (rlist_set_allocated (rl, alloc) == 0,
+        "rlist_set_allocated");
+
+    ok (rl->avail == 0,
+        "rlist avail = %d (expected 0)", rl->avail);
+
+    rlist_destroy (alloc);
+    rlist_destroy (rl);
+    free (R);
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -1573,6 +1605,7 @@ int main (int ac, char *av[])
     test_assign_hosts ();
     test_rerank ();
     test_hosts_to_ranks ();
+    test_issue4184 ();
 
     done_testing ();
 }

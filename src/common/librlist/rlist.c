@@ -1660,7 +1660,8 @@ static int rlist_alloc_rnode (struct rlist *rl, struct rnode *n)
     }
     if (rnode_alloc_idset (rnode, n->cores->avail) < 0)
         return -1;
-    rl->avail -= idset_count (n->cores->avail);
+    if (rnode->up)
+        rl->avail -= idset_count (n->cores->avail);
     return 0;
 }
 
