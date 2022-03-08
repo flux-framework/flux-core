@@ -94,4 +94,12 @@ test_expect_success 'job-exec: exception while starting terminates job' '
 		| flux job submit) &&
 	flux job wait-event -vt 5 $id clean
 '
+test_expect_success 'job-exec: failure after first barrier terminates job' '
+	for id in $(flux mini bulksubmit --env FAIL_MODE={} -N2 -n2 sleep 300 \
+		    ::: before_barrier_entry after_barrier_entry); do
+		echo checking on job $id &&
+		flux job wait-event -vt 600 $id clean &&
+		test_must_fail flux job status -v $id
+	done
+'
 test_done
