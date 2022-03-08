@@ -22,6 +22,16 @@ imp
    the credentials of the guest user that submitted them.  If unset, only
    jobs submitted by the instance owner may be executed.
 
+method
+   (optional) Run job shell under a specific mechanism other than the default
+   forked subprocesses.  Potential configurations:
+
+   systemd
+
+   Run job shells are run under systemd, the job shell may be able to
+   survive an unexpected broker shutdown and be recovered when the
+   broker is restarted.
+
 job-shell
    (optional) Override the compiled-in default job shell path.
 

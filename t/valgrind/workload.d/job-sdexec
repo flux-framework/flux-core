@@ -1,0 +1,36 @@
+#!/bin/bash -e
+
+if ! flux version | grep systemd; then
+    echo "flux not built with systemd"
+    exit 0
+fi
+
+#  Don't run if systemd environment variables not setup
+if test -z "$DBUS_SESSION_BUS_ADDRESS" \
+     -o -z "$XDG_RUNTIME_DIR"; then
+    echo "DBUS_SESSION_BUS_ADDRESS and/or XDG_RUNTIME_DIR not set"
+    exit 0
+fi
+
+uid=`id -u`
+userservice="user@${uid}.service"
+if ! systemctl list-units | grep ${userservice}
+then
+    echo "systemd user service not running"
+    exit 0
+fi
+
+# sdexec cannot work in a multi-broker test environment b/c sdexec
+# cannot execute a process on remote ranks (i.e. rank > 0).
+#
+# to get around this, submit 1 job at a time, effectively ensuring
+# job is always run on rank 0
+
+NJOBS=${NJOBS:-10}
+
+for i in `seq 1 ${NJOBS}`
+do
+    flux mini submit --wait \
+	--setattr=system.exec.sd.test=true \
+	${SHARNESS_TEST_DIRECTORY}/shell/lptest 78 2
+done

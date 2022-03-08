@@ -37,6 +37,10 @@ job_exec_la_SOURCES = \
 	testexec.c \
 	exec.c
 
+if HAVE_LIBSYSTEMD
+job_exec_la_SOURCES += sdexec.c
+endif
+
 job_exec_la_LDFLAGS = \
 	$(fluxmod_ldflags) \
 	-module
@@ -47,6 +51,10 @@ job_exec_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(JANSSON_LIBS) \
 	libbulk-exec.la
+
+if HAVE_LIBSYSTEMD
+job_exec_la_LIBADD += $(top_builddir)/src/common/libsdprocess/libsdprocess.la
+endif
 
 bulk_exec_SOURCES = \
 	test/bulk-exec.c
