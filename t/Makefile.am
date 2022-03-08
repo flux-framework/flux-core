@@ -270,6 +270,8 @@ EXTRA_DIST= \
 dist_check_SCRIPTS = \
 	$(TESTSCRIPTS) \
 	system/0001-basic.t \
+	system/0002-job-exec-sdexec-basic.t \
+	system/0003-instance-restart.t \
 	issues/t0441-kvs-put-get.sh \
 	issues/t0505-msg-handler-reg.lua \
 	issues/t0821-kvs-segfault.sh \
