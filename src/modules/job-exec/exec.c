@@ -45,6 +45,7 @@ struct exec_ctx {
     const char * mock_exception;   /* fake exception */
     int barrier_enter_count;
     int barrier_completion_count;
+    int exit_count;
 };
 
 static void exec_ctx_destroy (struct exec_ctx *tc)
@@ -156,6 +157,19 @@ static int exec_barrier_enter (struct bulk_exec *exec)
         ctx->barrier_enter_count = 0;
         ctx->barrier_completion_count++;
     }
+    else if (ctx->barrier_enter_count == 1 && ctx->exit_count > 0) {
+        /*
+         *  Terminate barrier with error immediately when a barrier is
+         *   started after one or more shells have already exited. The
+         *   case where a shell exits while a barrier is already in progress
+         *   is handled in exit_cb().
+         */
+        if (bulk_exec_write (exec,
+                             "FLUX_EXEC_PROTOCOL_FD",
+                             "exit=1\n",
+                             7) < 0)
+            return -1;
+    }
     return 0;
 }
 
@@ -228,8 +242,20 @@ static void exit_cb (struct bulk_exec *exec,
     struct jobinfo *job = arg;
     struct exec_ctx *ctx = bulk_exec_aux_get (exec, "ctx");
 
-    if (bulk_exec_total (exec) > 1
-        && ctx->barrier_completion_count == 0) {
+    /*  Nothing to do here if the job consists of only one shell.
+     *  (or, if we fail to to get ctx object (highly unlikely))
+     */
+    if (bulk_exec_total (exec) == 1
+        || !(ctx = bulk_exec_aux_get (exec, "ctx")))
+        return;
+
+    ctx->exit_count++;
+
+    /*  Check if a shell is exiting before the first barrier, in which
+     *   case we raise a job exception because the shell or IMP may not
+     *   have had a chance to do so.
+     */
+    if (ctx->barrier_completion_count == 0) {
         char *ids = idset_encode (ranks, IDSET_FLAG_RANGE);
         char *hosts = flux_hostmap_lookup (job->h, ids, NULL);
         jobinfo_fatal_error (job, 0,
@@ -239,17 +265,23 @@ static void exit_cb (struct bulk_exec *exec,
                               ids ? ids : "(unknown)");
         free (ids);
         free (hosts);
+    }
 
-        /*  Terminate barrier with failed exit status.
-         *  This will allow any shells that do get to the barrier to exit
-         *   immediately, instead of waiting to be killed by exec system.
-         */
+    /*  If a shell exited before the first barrier or there is a
+     *   barrier in progress (enter_count > 0), then terminate the
+     *   current/next barrier immediately with error. This will allow
+     *   shells currently waiting or entering the barrier in the future
+     *   to exit immediately, rather than being killed by exec system.
+     */
+    if (ctx->barrier_completion_count == 0
+        || ctx->barrier_enter_count > 0) {
         if (bulk_exec_write (exec,
                              "FLUX_EXEC_PROTOCOL_FD",
                              "exit=1\n",
                              7) < 0)
-            flux_log_error (job->h,
-                            "Failed to write failed barrier exit status");
+            jobinfo_fatal_error (job, 0,
+                                 "failed to terminate barrier: %s",
+                                 strerror (errno));
     }
 }
 

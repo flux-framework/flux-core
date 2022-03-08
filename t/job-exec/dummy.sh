@@ -74,7 +74,7 @@ get_job_shell_rank() {
     get_ranklist
     for r in "${RANKLIST[@]}"; do
         if [[ $r == $BROKER_RANK ]]; then
-            JOB_SHELL_RANK=$r
+            JOB_SHELL_RANK=$i
             return 0
         fi
         ((i++))
@@ -104,6 +104,43 @@ get_traps() {
     fi
 }
 
+test_mock_failure() {
+    FAIL_MODE=$(json_get "$JOBSPEC" '.attributes.system.environment.FAIL_MODE')
+    case "$FAIL_MODE" in
+        before_barrier_entry)
+            #
+            #  Attempt to exit early from shell rank 1 *before* rank 0
+            #   enters the shell barrier. This is best effort since there
+            #   is not a good way to ensure a separate shell process has
+            #   reached the barrier.
+            #
+            echo "Got FAIL_MODE=$FAIL_MODE"
+            if test $JOB_SHELL_RANK -eq 0; then
+                sleep 1
+            elif test $JOB_SHELL_RANK -eq 1; then
+                echo >&2 "before_barrier: exiting early on job shell rank 1"
+                exit 1
+            fi
+            ;;
+        after_barrier_entry)
+            #
+            #  Similer to above, but try to ensure that rank 0 shell has
+            #   entered the barrier before rank 1 unexpectedly exits.
+            #   See caveats about best effort above.
+            #
+            echo "after_barrier_entry: rank=$JOB_SHELL_RANK"
+            if test $JOB_SHELL_RANK -eq 1; then
+                echo "after_barrier: exiting early on job shell rank 1"
+                sleep 1
+                echo "exiting"
+                exit 1
+            fi
+            ;;
+        *)
+            ;;
+    esac
+}
+
 barrier() {
     if [[ ${NNODES} -gt 1 && -n ${FLUX_EXEC_PROTOCOL_FD} ]]; then
         echo enter >&${FLUX_EXEC_PROTOCOL_FD}
@@ -124,8 +161,13 @@ get_duration
 get_command
 get_traps
 
+test_mock_failure
+barrier
+
 #
 #  Run specified COMMAND:
 #
 echo Running  "${COMMAND[@]}"
 eval "${COMMAND[@]}"
+
+# vi: ts=4 sw=4 expandtab
