@@ -74,7 +74,7 @@ get_job_shell_rank() {
     get_ranklist
     for r in "${RANKLIST[@]}"; do
         if [[ $r == $BROKER_RANK ]]; then
-            JOB_SHELL_RANK=$r
+            JOB_SHELL_RANK=$i
             return 0
         fi
         ((i++))
