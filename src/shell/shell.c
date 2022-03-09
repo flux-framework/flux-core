@@ -908,6 +908,9 @@ static void shell_initialize (flux_shell_t *shell)
 
     memset (shell, 0, sizeof (struct flux_shell));
 
+    if (gethostname (shell->hostname, sizeof (shell->hostname)) < 0)
+        shell_die_errno (1, "gethostname");
+
     if (get_protocol_fd (&shell->protocol_fd) < 0)
         shell_die_errno (1, "Failed to parse FLUX_EXEC_PROTOCOL_FD");
 
