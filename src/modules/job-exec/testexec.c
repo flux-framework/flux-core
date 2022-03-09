@@ -65,7 +65,7 @@ struct testconf {
     int                   reattach_finish;  /* if reattached, just finish job */
     double                run_duration;     /* duration of fake job in sec  */
     int                   wait_status;      /* reported status for "finish" */
-    const char *          mock_exception;   /* fake excetion at this site   */
+    const char *          mock_exception;   /* fake exception at this site  */
 };
 
 struct testexec {

@@ -454,7 +454,7 @@ int bulk_exec_cancel (struct bulk_exec *exec)
         while (rank != IDSET_INVALID_ID) {
             exec->complete++;
             if (idset_set (exec->exit_batch, rank) < 0)
-                flux_log_error (exec->h, "bulk_exec_cance: idset_set");
+                flux_log_error (exec->h, "bulk_exec_cancel: idset_set");
             rank = idset_next (cmd->ranks, rank);
         }
         cmd = zlist_next (exec->commands);
