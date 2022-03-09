@@ -1114,9 +1114,11 @@ static int shell_init (flux_shell_t *shell)
      */
     if (shell->info->jobspec->cwd) {
         if (chdir (shell->info->jobspec->cwd) < 0) {
-            shell_log_error ("Could not change dir to %s: %s. "
+            shell_log_error ("host %s: Could not change dir to %s: %s. "
                              "Going to /tmp instead",
-                             shell->info->jobspec->cwd, strerror (errno));
+                             shell->hostname,
+                             shell->info->jobspec->cwd,
+                             strerror (errno));
             if (chdir ("/tmp") < 0) {
                 shell_log_errno ("Could not change dir to /tmp");
                 return -1;
@@ -1320,8 +1322,9 @@ int main (int argc, char *argv[])
                 ec = 126;
             else if (errno == ENOENT)
                 ec = 127;
-            shell_die (ec, "task %d: start failed: %s: %s",
+            shell_die (ec, "task %d (host %s): start failed: %s: %s",
                        task->rank,
+                       shell.hostname,
                        flux_cmd_arg (task->cmd, 0),
                        strerror (errno));
         }
