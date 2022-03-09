@@ -59,7 +59,8 @@ flux_SOURCES = \
 	builtin/python.c \
 	builtin/uptime.c \
 	builtin/startlog.c \
-	builtin/dump.c
+	builtin/dump.c \
+	builtin/restore.c
 nodist_flux_SOURCES = \
 	builtin-cmds.c
 
