@@ -53,6 +53,13 @@ test_expect_success 'flux R encode --xml works' '
     test_debug "echo encode XML = $result" &&
     test "$result" = "rank0/core[0-43],gpu[0-3]"
 '
+test_expect_success 'flux R encode --xml works with AMD RSMI gpus' '
+    flux R encode --xml=$SHARNESS_TEST_SRCDIR/hwloc-data/corona/0.xml \
+        > R.corona &&
+    result=$(flux R decode --short < R.corona) &&
+    test_debug "echo encode XML = $result" &&
+    test "$result" = "rank0/core[0-47],gpu[0-7]"
+'
 test_expect_success 'flux R decode --include works' '
     result=$(flux R encode -r 0-1023 | flux R decode --include 5-7 --short) &&
     test_debug "echo $result" &&

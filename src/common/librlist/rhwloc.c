@@ -153,6 +153,17 @@ out:
     return result;
 }
 
+/*  Return true if the hwloc "backend" type string matches a GPU
+ *   which should be indexed as a compute GPU.
+ */
+static bool backend_is_coproc (const char *s)
+{
+    /* Only count cudaX, openclX, and rmsiX devices for now */
+    return (strcmp (s, "CUDA") == 0
+            || strcmp (s, "OpenCL") == 0
+            || strcmp (s, "RSMI") == 0);
+}
+
 char * rhwloc_gpu_idset_string (hwloc_topology_t topo)
 {
     int index;
@@ -169,9 +180,8 @@ char * rhwloc_gpu_idset_string (hwloc_topology_t topo)
      */
     index = 0;
     while ((obj = hwloc_get_next_osdev (topo, obj))) {
-        /* Only count cudaX and openclX devices for now */
         const char *s = hwloc_obj_get_info_by_name (obj, "Backend");
-        if (s && ((strcmp (s, "CUDA") == 0) || (strcmp (s, "OpenCL") == 0)))
+        if (s && backend_is_coproc (s))
             idset_set (ids, index++);
     }
     if (idset_count (ids) > 0)
