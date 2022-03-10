@@ -177,11 +177,11 @@ class TestIDsetMethods(unittest.TestCase):
         with self.assertRaises(ValueError):
             ids.subtract("foo")
         with self.assertRaises(TypeError):
-            ids.subtract(42)
+            ids.subtract(42.0)
         with self.assertRaises(ValueError):
             ids.add("foo")
         with self.assertRaises(TypeError):
-            ids.add(42)
+            ids.add(42.0)
 
     def test_intersect(self):
         tests = [
