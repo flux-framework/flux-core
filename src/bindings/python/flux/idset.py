@@ -122,7 +122,34 @@ class IDset(WrapperPimpl):
             self.clear(i)
 
     def __eq__(self, idset):
+        """Test if two idsets are equal"""
         return self.equal(idset)
+
+    def __add__(self, arg):
+        """Returns the union of an idset and argument"""
+        return self.union(arg)
+
+    def __sub__(self, arg):
+        """Returns the difference of an idset and argument"""
+        return self.difference(arg)
+
+    def __and__(self, arg):
+        """Returns the set intersection of an idset and argument"""
+        return self.intersect(arg)
+
+    def __or__(self, arg):
+        """Returns the union of an idset and argument"""
+        return self.union(arg)
+
+    def __iadd__(self, arg):
+        """Adds the provided argument to an idset in-place"""
+        self.add(arg)
+        return self
+
+    def __isub__(self, arg):
+        """Subtracts the provided argument to an idset in-place"""
+        self.subtract(arg)
+        return self
 
     def equal(self, idset):
         if not isinstance(idset, IDset):
