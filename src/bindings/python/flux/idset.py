@@ -79,6 +79,8 @@ class IDset(WrapperPimpl):
             arg = str(arg)
         elif isinstance(arg, collections.Iterable) and not isinstance(arg, str):
             arg = ",".join(str(i) for i in sorted(arg))
+        elif isinstance(arg, int):
+            arg = str(arg)
 
         self.default_flags = flags
         try:
