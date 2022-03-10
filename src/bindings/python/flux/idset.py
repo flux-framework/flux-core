@@ -270,6 +270,19 @@ class IDset(WrapperPimpl):
             result = IDset(handle=result.pimpl.intersect(idset))
         return result
 
+    def difference(self, *args):
+        """Return the set difference of the target IDset and all args
+
+        All args will be converted to IDsets if possible, i.e. any IDset,
+        valid idset string, or iterable composted of integers will work.
+        """
+        result = self.copy()
+        for idset in args:
+            if not isinstance(idset, IDset):
+                idset = IDset(idset)
+            result = IDset(handle=result.pimpl.difference(idset))
+        return result
+
 
 def decode(string):
     """Decode an idset string and return IDset object"""
