@@ -166,14 +166,35 @@ class TestIDsetMethods(unittest.TestCase):
 
     def test_add_subtract(self):
         ids = idset.decode("0-9")
+        ids2 = ids.copy()
+
         self.assertEqual(str(ids.add("10-11")), "0-11")
         self.assertEqual(str(ids.add([20, 21])), "0-11,20-21")
         self.assertEqual(str(ids.add(idset.decode(""))), "0-11,20-21")
+
+        ids2 += "10-11"
+        self.assertEqual(str(ids2), "0-11")
+        ids2 += [20, 21]
+        self.assertEqual(str(ids2), "0-11,20-21")
+        ids2 += idset.decode("")
+        self.assertEqual(str(ids2), "0-11,20-21")
 
         self.assertEqual(str(ids.subtract([])), "0-11,20-21")
         self.assertEqual(str(ids.subtract("11-20")), "0-10,21")
         self.assertEqual(str(ids.subtract(idset.decode("0-10"))), "21")
         self.assertEqual(str(ids.subtract([21])), "")
+
+        ids2 -= ""
+        self.assertEqual(str(ids2), "0-11,20-21")
+        ids2 -= idset.IDset()
+        self.assertEqual(str(ids2), "0-11,20-21")
+        ids2 -= "11-20"
+        self.assertEqual(str(ids2), "0-10,21")
+        ids2 -= idset.decode("0-10")
+        self.assertEqual(str(ids2), "21")
+        ids2 -= 21
+        self.assertEqual(str(ids2), "")
+
         with self.assertRaises(ValueError):
             ids.subtract("foo")
         with self.assertRaises(TypeError):
@@ -199,6 +220,12 @@ class TestIDsetMethods(unittest.TestCase):
             result = ids.intersect(*map(idset.decode, test["args"]))
             self.assertEqual(str(result), test["result"])
 
+            # and finally with & operator
+            result = ids.copy()
+            for arg in test["args"]:
+                result = result & arg
+            self.assertEqual(str(result), test["result"])
+
     def test_union(self):
         tests = [
             {"idset": "0-10", "args": ["5-15", "0-3"], "result": "0-15"},
@@ -207,6 +234,16 @@ class TestIDsetMethods(unittest.TestCase):
         for test in tests:
             ids = idset.decode(test["idset"])
             result = ids.union(*test["args"])
+            self.assertEqual(str(result), test["result"])
+
+            result = ids.copy()
+            for arg in test["args"]:
+                result = result + arg
+            self.assertEqual(str(result), test["result"])
+
+            result = ids.copy()
+            for arg in test["args"]:
+                result = result | arg
             self.assertEqual(str(result), test["result"])
 
     def test_difference(self):
@@ -220,6 +257,11 @@ class TestIDsetMethods(unittest.TestCase):
         for test in tests:
             ids = idset.decode(test["idset"])
             result = ids.difference(*test["args"])
+            self.assertEqual(str(result), test["result"])
+
+            result = ids.copy()
+            for arg in test["args"]:
+                result = result - arg
             self.assertEqual(str(result), test["result"])
 
 
