@@ -16,6 +16,16 @@ import flux.idset as idset
 
 
 class TestIDsetMethods(unittest.TestCase):
+    def test_constructor(self):
+        self.assertEqual(str(idset.IDset()), "")
+        self.assertEqual(str(idset.IDset(idset.IDset())), "")
+        self.assertEqual(str(idset.IDset(0)), "0")
+        self.assertEqual(str(idset.IDset(42)), "42")
+        self.assertEqual(str(idset.IDset([42])), "42")
+        self.assertEqual(str(idset.IDset("40,41,42")), "40-42")
+        self.assertEqual(str(idset.IDset([40, 41, 42])), "40-42")
+        self.assertEqual(str(idset.IDset([42, 41, 40])), "40-42")
+
     def test_str(self):
         tests = [
             {"input": "", "flags": None, "output": ""},
