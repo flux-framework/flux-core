@@ -209,6 +209,19 @@ class TestIDsetMethods(unittest.TestCase):
             result = ids.union(*test["args"])
             self.assertEqual(str(result), test["result"])
 
+    def test_difference(self):
+        tests = [
+            {"idset": "0-10", "args": ["0-3"], "result": "4-10"},
+            {"idset": "0-10", "args": ["0-10"], "result": ""},
+            {"idset": "0-10", "args": ["5-7", "1-3"], "result": "0,4,8-10"},
+            {"idset": "0-1", "args": ["0-10"], "result": ""},
+            {"idset": "0-1024", "args": ["500-600"], "result": "0-499,601-1024"},
+        ]
+        for test in tests:
+            ids = idset.decode(test["idset"])
+            result = ids.difference(*test["args"])
+            self.assertEqual(str(result), test["result"])
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())
