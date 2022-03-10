@@ -26,7 +26,7 @@ void errors (void)
     const char *rootref;
 
     errno = 0;
-    ok (kvs_checkpoint_commit (NULL, NULL, NULL) == NULL
+    ok (kvs_checkpoint_commit (NULL, NULL, NULL, 0) == NULL
         && errno == EINVAL,
         "kvs_checkpoint_commit fails on bad input");
 

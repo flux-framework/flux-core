@@ -15,7 +15,8 @@
 
 flux_future_t *kvs_checkpoint_commit (flux_t *h,
                                       const char *key,
-                                      const char *rootref);
+                                      const char *rootref,
+                                      double timestamp);
 
 flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key);
 

@@ -22,17 +22,17 @@
 
 flux_future_t *kvs_checkpoint_commit (flux_t *h,
                                       const char *key,
-                                      const char *rootref)
+                                      const char *rootref,
+                                      double timestamp)
 {
     flux_future_t *f = NULL;
-    double timestamp;
 
     if (!h || !key || !rootref) {
         errno = EINVAL;
         return NULL;
     }
-
-    timestamp = flux_reactor_now (flux_get_reactor (h));
+    if (timestamp == 0)
+        timestamp = flux_reactor_now (flux_get_reactor (h));
 
     if (!(f = flux_rpc_pack (h,
                              "kvs-checkpoint.put",

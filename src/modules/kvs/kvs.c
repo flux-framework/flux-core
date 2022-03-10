@@ -2754,7 +2754,7 @@ static int checkpoint_put (flux_t *h, const char *key, const char *rootref)
     flux_future_t *f = NULL;
     int rv = -1;
 
-    if (!(f = kvs_checkpoint_commit (h, "kvs-primary", rootref))
+    if (!(f = kvs_checkpoint_commit (h, "kvs-primary", rootref, 0))
         || flux_rpc_get (f, NULL) < 0)
         goto error;
     rv = 0;
