@@ -71,12 +71,22 @@ class IDset(WrapperPimpl):
 
     def __init__(self, arg="", flags=IDSET_FLAG_RANGE, handle=None):
         super().__init__()
-        if isinstance(arg, collections.Iterable) and not isinstance(arg, str):
-            self.pimpl = self.InnerWrapper()
-            self.add(arg)
-        else:
-            self.pimpl = self.InnerWrapper(arg=arg, handle=handle)
+        if isinstance(arg, IDset):
+            #  Encode incoming IDset to string to generate a copy.
+            #  Note: Trying to use handle=arg.copy() here failed for some
+            #   reason and conversion to string just works, though it is
+            #   slightly less efficient.
+            arg = str(arg)
+        elif isinstance(arg, collections.Iterable) and not isinstance(arg, str):
+            arg = ",".join(str(i) for i in sorted(arg))
+
         self.default_flags = flags
+        try:
+            self.pimpl = self.InnerWrapper(arg=arg, handle=handle)
+        except (TypeError, AttributeError):
+            raise TypeError(
+                "IDset() expected an idset string or iterable, got " + type(arg)
+            )
 
     def __str__(self):
         return self.encode()
@@ -216,35 +226,22 @@ class IDset(WrapperPimpl):
         """Return the greatest id set in an IDset"""
         return self.pimpl.last()
 
-    @staticmethod
-    def arg_to_set(arg, method):
-        if isinstance(arg, str):
-            try:
-                arg = IDset(arg)
-            except:
-                raise ValueError(f"IDset.{method}(): string isn't a valid idset")
-        elif not isinstance(arg, collections.Iterable):
-            typestr = type(arg)
-            method = f"IDset.{method}()"
-            raise TypeError(
-                f"{method}: expected an idset string or iterable, got {typestr}"
-            )
-        return set(arg)
-
     def add(self, arg):
         """Add all ids or values in arg to IDset
         :param: arg: IDset, string, or iterable of integers to add
         """
-        for i in self.arg_to_set(arg, "add"):
-            self.set(i)
+        if not isinstance(arg, IDset):
+            arg = IDset(arg)
+        self.pimpl.add(arg)
         return self
 
     def subtract(self, arg):
         """subtract all ids or values in arg from IDset
         :param: arg: IDset, string, or iterable of integers to subtract
         """
-        for i in self.arg_to_set(arg, "subtract"):
-            self.clear(i)
+        if not isinstance(arg, IDset):
+            arg = IDset(arg)
+        self.pimpl.subtract(arg)
         return self
 
     def union(self, *args):
@@ -253,12 +250,12 @@ class IDset(WrapperPimpl):
         All args will be converted to IDsets if possible, i.e. any IDset,
         valid idset string, or iterable composed of integers will work.
         """
-        result = set(self)
+        result = self.copy()
         for idset in args:
             if not isinstance(idset, IDset):
                 idset = IDset(idset)
-            result = result | set(idset)
-        return IDset(result)
+            result = IDset(handle=result.pimpl.union(idset))
+        return result
 
     def intersect(self, *args):
         """Return the set intersection of the target IDset and all args
@@ -266,12 +263,12 @@ class IDset(WrapperPimpl):
         All args will be converted to IDsets if possible, i.e. any IDset,
         valid idset string, or iterable composed of integers will work.
         """
-        result = set(self)
+        result = self.copy()
         for idset in args:
             if not isinstance(idset, IDset):
                 idset = IDset(idset)
-            result = result & set(idset)
-        return IDset(result)
+            result = IDset(handle=result.pimpl.intersect(idset))
+        return result
 
 
 def decode(string):
