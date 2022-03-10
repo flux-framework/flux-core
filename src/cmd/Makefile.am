@@ -14,7 +14,8 @@ AM_CPPFLAGS = \
 	$(FLUX_SECURITY_CFLAGS) \
 	$(HWLOC_CFLAGS) \
 	$(PMIX_CFLAGS) \
-	$(JANSSON_CFLAGS)
+	$(JANSSON_CFLAGS) \
+	$(LIBARCHIVE_CFLAGS)
 
 fluxcmd_ldadd = \
 	$(top_builddir)/src/common/libkvs/libkvs.la \
@@ -25,7 +26,8 @@ fluxcmd_ldadd = \
 	$(FLUX_SECURITY_LIBS) \
 	$(LIBPTHREAD) \
 	$(HWLOC_LIBS) \
-	$(JANSSON_LIBS)
+	$(JANSSON_LIBS) \
+	$(LIBARCHIVE_LIBS)
 
 LDADD = $(fluxcmd_ldadd)
 
