@@ -28,6 +28,7 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
+#include "src/common/libutil/timestamp.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libkvs/kvs_txn_private.h"
@@ -2716,7 +2717,8 @@ static int checkpoint_get (flux_t *h, const char *key, char *buf, size_t len)
 {
     flux_future_t *f = NULL;
     const char *rootref;
-    char datestr[128] = {0};
+    double timestamp = 0;
+    char datestr[128] = "N/A";
     int rv = -1;
 
     if (!(f = kvs_checkpoint_lookup (h, "kvs-primary")))
@@ -2731,10 +2733,9 @@ static int checkpoint_get (flux_t *h, const char *key, char *buf, size_t len)
     }
     strcpy (buf, rootref);
 
-    if (kvs_checkpoint_lookup_get_formatted_timestamp (f,
-                                                       datestr,
-                                                       sizeof (datestr)) < 0)
-        goto error;
+    (void)kvs_checkpoint_lookup_get_timestamp (f, &timestamp);
+    if (timestamp > 0)
+        timestamp_tostr (timestamp, datestr, sizeof (datestr));
 
     flux_log (h, LOG_INFO,
               "restored kvs-primary from checkpoint on %s", datestr);

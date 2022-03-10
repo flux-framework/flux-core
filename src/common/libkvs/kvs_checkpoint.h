@@ -21,10 +21,9 @@ flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key);
 
 int kvs_checkpoint_lookup_get_rootref (flux_future_t *f, const char **rootref);
 
-/* returns "N/A" if not available */
-int kvs_checkpoint_lookup_get_formatted_timestamp (flux_future_t *f,
-                                                   char *buf,
-                                                   size_t len);
+/* sets timestamp to 0 if unavailable
+ */
+int kvs_checkpoint_lookup_get_timestamp (flux_future_t *f, double *timestamp);
 
 #endif /* !_KVS_CHECKPOINT_H */
 

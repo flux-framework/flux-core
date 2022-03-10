@@ -91,45 +91,25 @@ int kvs_checkpoint_lookup_get_rootref (flux_future_t *f, const char **rootref)
     return 0;
 }
 
-/* returns "N/A" if not available */
-int kvs_checkpoint_lookup_get_formatted_timestamp (flux_future_t *f,
-                                                   char *buf,
-                                                   size_t len)
+int kvs_checkpoint_lookup_get_timestamp (flux_future_t *f, double *timestamp)
 {
     int version;
-    double timestamp = 0.;
+    double ts = 0.;
 
-    if (!f || !buf) {
+    if (!f || !timestamp) {
         errno = EINVAL;
         return -1;
     }
-
     if (flux_rpc_get_unpack (f, "{s:{s:i s?f}}",
                                 "value",
                                 "version", &version,
-                                "timestamp", &timestamp) < 0)
+                                "timestamp", &ts) < 0)
         return -1;
-
     if (version != 0 && version != 1) {
         errno = EINVAL;
         return -1;
     }
-
-    if (version == 1) {
-        time_t sec = timestamp;
-        struct tm tm;
-        gmtime_r (&sec, &tm);
-        if (strftime (buf, len, "%FT%T", &tm) == 0) {
-            errno = EINVAL;
-            return -1;
-        }
-    }
-    else { /* version == 0 */
-        if (snprintf (buf, len, "N/A") >= len) {
-            errno = EINVAL;
-            return -1;
-        }
-    }
+    *timestamp = ts;
     return 0;
 }
 
