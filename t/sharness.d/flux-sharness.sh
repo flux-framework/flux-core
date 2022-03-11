@@ -204,6 +204,9 @@ test_under_flux() {
         flags="${flags} --debug"
         export FLUX_PYCLI_LOGLEVEL=10
     fi
+    if test -n "$root"; then
+        flags="${flags} --root=$root"
+    fi
     if test "$chain_lint" = "t"; then
         flags="${flags} --chain-lint"
     fi
