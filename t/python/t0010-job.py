@@ -511,7 +511,10 @@ class TestJob(unittest.TestCase):
         if y.exception.occurred:
             self.assertEqual(x.exception.type, y.exception.type)
             self.assertEqual(x.exception.severity, y.exception.severity)
-            self.assertEqual(x.exception.note, y.exception.note)
+            if y.exception.note:
+                self.assertRegexpMatches(x.exception.note, y.exception.note)
+            else:
+                self.assertEqual(x.exception.note, y.exception.note)
 
     def test_32_job_result(self):
         result = {}
@@ -589,7 +592,7 @@ class TestJob(unittest.TestCase):
                     "waitstatus": 32512,
                     "exception_occurred": True,
                     "exception_type": "exec",
-                    "exception_note": "task 0: start failed: nosuchprog: "
+                    "exception_note": "task 0.*: start failed: nosuchprog: "
                     "No such file or directory",
                     "exception_severity": 0,
                 }

@@ -134,16 +134,16 @@ done
 
 test_expect_success 'flux-shell: missing command logs fatal error' '
 	test_expect_code 127 flux mini run nosuchcommand 2>missing.err &&
-	grep "flux-shell\[0\]: FATAL: task 0: start failed" missing.err &&
-	grep "job.exception type=exec severity=0 task 0: start failed" missing.err &&
+	grep "flux-shell\[0\]: FATAL: task 0.*: start failed" missing.err &&
+	grep "job.exception type=exec severity=0 task 0.*: start failed" missing.err &&
         grep "No such file or directory" missing.err
 '
 
 test_expect_success 'flux-shell: illegal command logs fatal error' '
 	mkdir adirectory &&
 	test_expect_code 126 flux mini run ./adirectory 2>illegal.err &&
-	grep "flux-shell\[0\]: FATAL: task 0: start failed" illegal.err &&
-	grep "job.exception type=exec severity=0 task 0: start failed" illegal.err &&
+	grep "flux-shell\[0\]: FATAL: task 0.*: start failed" illegal.err &&
+	grep "job.exception type=exec severity=0 task 0.*: start failed" illegal.err &&
 	grep "Permission denied" illegal.err
 '
 
