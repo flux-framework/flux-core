@@ -16,6 +16,16 @@ import flux.idset as idset
 
 
 class TestIDsetMethods(unittest.TestCase):
+    def test_constructor(self):
+        self.assertEqual(str(idset.IDset()), "")
+        self.assertEqual(str(idset.IDset(idset.IDset())), "")
+        self.assertEqual(str(idset.IDset(0)), "0")
+        self.assertEqual(str(idset.IDset(42)), "42")
+        self.assertEqual(str(idset.IDset([42])), "42")
+        self.assertEqual(str(idset.IDset("40,41,42")), "40-42")
+        self.assertEqual(str(idset.IDset([40, 41, 42])), "40-42")
+        self.assertEqual(str(idset.IDset([42, 41, 40])), "40-42")
+
     def test_str(self):
         tests = [
             {"input": "", "flags": None, "output": ""},
@@ -166,22 +176,43 @@ class TestIDsetMethods(unittest.TestCase):
 
     def test_add_subtract(self):
         ids = idset.decode("0-9")
+        ids2 = ids.copy()
+
         self.assertEqual(str(ids.add("10-11")), "0-11")
         self.assertEqual(str(ids.add([20, 21])), "0-11,20-21")
         self.assertEqual(str(ids.add(idset.decode(""))), "0-11,20-21")
+
+        ids2 += "10-11"
+        self.assertEqual(str(ids2), "0-11")
+        ids2 += [20, 21]
+        self.assertEqual(str(ids2), "0-11,20-21")
+        ids2 += idset.decode("")
+        self.assertEqual(str(ids2), "0-11,20-21")
 
         self.assertEqual(str(ids.subtract([])), "0-11,20-21")
         self.assertEqual(str(ids.subtract("11-20")), "0-10,21")
         self.assertEqual(str(ids.subtract(idset.decode("0-10"))), "21")
         self.assertEqual(str(ids.subtract([21])), "")
+
+        ids2 -= ""
+        self.assertEqual(str(ids2), "0-11,20-21")
+        ids2 -= idset.IDset()
+        self.assertEqual(str(ids2), "0-11,20-21")
+        ids2 -= "11-20"
+        self.assertEqual(str(ids2), "0-10,21")
+        ids2 -= idset.decode("0-10")
+        self.assertEqual(str(ids2), "21")
+        ids2 -= 21
+        self.assertEqual(str(ids2), "")
+
         with self.assertRaises(ValueError):
             ids.subtract("foo")
         with self.assertRaises(TypeError):
-            ids.subtract(42)
+            ids.subtract(42.0)
         with self.assertRaises(ValueError):
             ids.add("foo")
         with self.assertRaises(TypeError):
-            ids.add(42)
+            ids.add(42.0)
 
     def test_intersect(self):
         tests = [
@@ -199,6 +230,12 @@ class TestIDsetMethods(unittest.TestCase):
             result = ids.intersect(*map(idset.decode, test["args"]))
             self.assertEqual(str(result), test["result"])
 
+            # and finally with & operator
+            result = ids.copy()
+            for arg in test["args"]:
+                result = result & arg
+            self.assertEqual(str(result), test["result"])
+
     def test_union(self):
         tests = [
             {"idset": "0-10", "args": ["5-15", "0-3"], "result": "0-15"},
@@ -207,6 +244,34 @@ class TestIDsetMethods(unittest.TestCase):
         for test in tests:
             ids = idset.decode(test["idset"])
             result = ids.union(*test["args"])
+            self.assertEqual(str(result), test["result"])
+
+            result = ids.copy()
+            for arg in test["args"]:
+                result = result + arg
+            self.assertEqual(str(result), test["result"])
+
+            result = ids.copy()
+            for arg in test["args"]:
+                result = result | arg
+            self.assertEqual(str(result), test["result"])
+
+    def test_difference(self):
+        tests = [
+            {"idset": "0-10", "args": ["0-3"], "result": "4-10"},
+            {"idset": "0-10", "args": ["0-10"], "result": ""},
+            {"idset": "0-10", "args": ["5-7", "1-3"], "result": "0,4,8-10"},
+            {"idset": "0-1", "args": ["0-10"], "result": ""},
+            {"idset": "0-1024", "args": ["500-600"], "result": "0-499,601-1024"},
+        ]
+        for test in tests:
+            ids = idset.decode(test["idset"])
+            result = ids.difference(*test["args"])
+            self.assertEqual(str(result), test["result"])
+
+            result = ids.copy()
+            for arg in test["args"]:
+                result = result - arg
             self.assertEqual(str(result), test["result"])
 
 
