@@ -1056,6 +1056,7 @@ static int broker_handle_signals (broker_ctx_t *ctx)
 {
     int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE,
                       SIGALRM };
+    int blocked[] = { SIGPIPE };
     flux_watcher_t *w;
 
     for (i = 0; i < sizeof (sigs) / sizeof (sigs[0]); i++) {
@@ -1071,6 +1072,10 @@ static int broker_handle_signals (broker_ctx_t *ctx)
         zlist_freefn (ctx->sigwatchers, w, broker_destroy_sigwatcher, false);
         flux_watcher_start (w);
     }
+
+    /*  Block the list of signals in the blocked array */
+    for (i = 0; i < sizeof (blocked) / sizeof (blocked[0]); i++)
+        signal(blocked[i], SIG_IGN);
     return 0;
 }
 
