@@ -616,6 +616,7 @@ cpio
 gzip
 libarchive
 OUTFILE
+INFILE
 POSIX
 ustar
 xz

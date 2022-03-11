@@ -36,6 +36,7 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-version.1 \
 	man1/flux-jobs.1 \
 	man1/flux-pstree.1 \
+	man1/flux-restore.1 \
 	man1/flux-shell.1 \
 	man1/flux-top.1 \
 	man1/flux-jobtap.1 \

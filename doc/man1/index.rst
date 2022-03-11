@@ -28,6 +28,7 @@ man1
    flux-proxy
    flux-pstree
    flux-resource
+   flux-restore
    flux-start
    flux-startlog
    flux-shell
