@@ -22,6 +22,7 @@ man_pages = [
     ('man1/flux-content', 'flux-content', 'access content service', [author], 1),
     ('man1/flux-cron', 'flux-cron', 'Cron-like utility for Flux', [author], 1),
     ('man1/flux-dmesg', 'flux-dmesg', 'access broker ring buffer', [author], 1),
+    ('man1/flux-dump', 'flux-dump', 'Dump kvs to portable archive format', [author], 1),
     ('man1/flux-env', 'flux-env', 'Print the flux environment or execute a command inside it', [author], 1),
     ('man1/flux-event', 'flux-event', 'Send and receive Flux events', [author], 1),
     ('man1/flux-exec', 'flux-exec', 'Execute processes across flux ranks', [author], 1),

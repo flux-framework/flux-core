@@ -10,6 +10,7 @@ man1
    flux-content
    flux-cron
    flux-dmesg
+   flux-dump
    flux-env
    flux-event
    flux-exec
