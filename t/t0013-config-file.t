@@ -122,12 +122,14 @@ test_expect_success 'create initial program for testing' '
 '
 
 test_expect_success 'start size=2 instance with ipc://' '
+	BINDDIR=$(mktemp -d) &&
+	test_when_finished "rm -rf $BINDIR" &&
 	mkdir conf8 &&
 	cat <<-EOT >conf8/bootstrap.toml &&
 	[bootstrap]
 	curve_cert = "testcert"
 	hosts = [
-	    { host="fake0", bind="ipc:///tmp/test-ipc2-0", connect="ipc:///tmp/test-ipc2-0" },
+	    { host="fake0", bind="ipc://${BINDDIR}/test-ipc2-0", connect="ipc://${BINDDIR}/test-ipc2-0" },
 	    { host="fake1" }
 	]
 	EOT
@@ -142,14 +144,21 @@ test_expect_success 'start size=2 instance with ipc://' '
 	test_cmp ipc.exp ipc.out
 '
 
+getport() {
+	flux python -c \
+	'from socket import socket; s=socket(); s.bind(("", 0)); print(s.getsockname()[1])'
+}
+
 test_expect_success 'start size=4 instance with tcp://' '
+	PORT1=$(getport) &&
+	PORT2=$(getport) &&
 	mkdir conf9 &&
 	cat <<-EOT >conf9/bootstrap.toml &&
 	[bootstrap]
 	curve_cert = "testcert"
 	hosts = [
-	    { host="fake0", bind="tcp://127.0.0.1:5080", connect="tcp://127.0.0.1:5080" },
-	    { host="fake1", bind="tcp://127.0.0.1:5081", connect="tcp://127.0.0.1:5081" },
+	    { host="fake0", bind="tcp://127.0.0.1:$PORT1", connect="tcp://127.0.0.1:$PORT1" },
+	    { host="fake1", bind="tcp://127.0.0.1:$PORT2", connect="tcp://127.0.0.1:$PORT2" },
 	    { host="fake[2-3]" }
 	]
 	EOT
