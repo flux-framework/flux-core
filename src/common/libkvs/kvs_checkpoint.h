@@ -13,6 +13,8 @@
 
 #include <flux/core.h>
 
+#define KVS_DEFAULT_CHECKPOINT "kvs-primary"
+
 flux_future_t *kvs_checkpoint_commit (flux_t *h,
                                       const char *key,
                                       const char *rootref,

@@ -27,10 +27,12 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
 {
     flux_future_t *f = NULL;
 
-    if (!h || !key || !rootref) {
+    if (!h || !rootref) {
         errno = EINVAL;
         return NULL;
     }
+    if (!key)
+        key = KVS_DEFAULT_CHECKPOINT;
     if (timestamp == 0)
         timestamp = flux_reactor_now (flux_get_reactor (h));
 
@@ -52,10 +54,12 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
 
 flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key)
 {
-    if (!h || !key) {
+    if (!h) {
         errno = EINVAL;
         return NULL;
     }
+    if (!key)
+        key = KVS_DEFAULT_CHECKPOINT;
 
     return flux_rpc_pack (h,
                           "kvs-checkpoint.get",
