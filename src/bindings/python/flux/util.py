@@ -88,9 +88,11 @@ def encode_payload(payload):
     if payload is None or payload == ffi.NULL:
         payload = ffi.NULL
     elif isinstance(payload, str):
-        payload = payload.encode("UTF-8")
+        payload = payload.encode("UTF-8", errors="surrogateescape")
     elif not isinstance(payload, bytes):
-        payload = json.dumps(payload, ensure_ascii=False).encode("UTF-8")
+        payload = json.dumps(payload, ensure_ascii=False).encode(
+            "UTF-8", errors="surrogateescape"
+        )
     return payload
 
 
