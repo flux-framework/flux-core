@@ -13,6 +13,7 @@
 import os
 import sys
 import subprocess
+import argparse
 
 script_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -26,6 +27,17 @@ builddir = os.path.abspath(
 flux_exe = os.path.join(builddir, "src", "cmd", "flux")
 
 sys.path.append(script_dir + "/tap")
+
+
+#  Ignore -v, --verbose and --root options so that python test scripts
+#   can absorb the same options as sharness tests. Later, something could
+#   be done with these options, but for now they are dropped silently.
+parser = argparse.ArgumentParser()
+parser.add_argument("--debug", "-d", action="store_true")
+parser.add_argument("--root", metavar="PATH", type=str)
+args, remainder = parser.parse_known_args()
+
+sys.argv[1:] = remainder
 
 
 def is_exe(fpath):
