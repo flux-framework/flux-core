@@ -296,6 +296,7 @@ dist_check_SCRIPTS = \
 	scripts/runpty.py \
 	scripts/dmesg-grep.py \
 	scripts/stats-listen.py \
+	scripts/sqlite-query.py \
 	valgrind/valgrind-workload.sh \
 	valgrind/workload.d/job \
 	kvs/kvs-helper.sh \
@@ -316,8 +317,7 @@ dist_check_SCRIPTS = \
 	job-list/list-id.py \
 	job-list/list-rpc.py \
 	job-list/jobspec-permissive.jsonschema \
-	ingest/bad-validate.py \
-	job-archive/query.py
+	ingest/bad-validate.py
 
 check_PROGRAMS = \
 	shmem/backtoback.t \

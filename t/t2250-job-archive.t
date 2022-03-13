@@ -10,7 +10,7 @@ test_under_flux 4 job
 ARCHIVEDIR=`pwd`
 ARCHIVEDB="${ARCHIVEDIR}/jobarchive.db"
 
-QUERYCMD="flux python ${FLUX_SOURCE_DIR}/t/job-archive/query.py"
+QUERYCMD="flux python ${FLUX_SOURCE_DIR}/t/scripts/sqlite-query.py"
 
 fj_wait_event() {
   flux job wait-event --timeout=20 "$@"
