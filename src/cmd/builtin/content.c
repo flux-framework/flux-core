@@ -17,6 +17,7 @@
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/read_all.h"
+#include "src/common/libcontent/content.h"
 
 static int internal_content_load (optparse_t *p, int ac, char *av[])
 {
@@ -38,10 +39,10 @@ static int internal_content_load (optparse_t *p, int ac, char *av[])
         log_err_exit ("flux_open");
     if (optparse_hasopt (p, "bypass-cache"))
         flags |= CONTENT_FLAG_CACHE_BYPASS;
-    if (!(f = flux_content_load (h, ref, flags)))
-        log_err_exit ("flux_content_load");
-    if (flux_content_load_get (f, (const void **)&data, &size) < 0)
-        log_err_exit ("flux_content_load_get");
+    if (!(f = content_load (h, ref, flags)))
+        log_err_exit ("content_load");
+    if (content_load_get (f, (const void **)&data, &size) < 0)
+        log_err_exit ("content_load_get");
     if (write_all (STDOUT_FILENO, data, size) < 0)
         log_err_exit ("write");
     flux_future_destroy (f);
@@ -68,10 +69,10 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
         log_err_exit ("flux_open");
     if ((size = read_all (STDIN_FILENO, (void **)&data)) < 0)
         log_err_exit ("read");
-    if (!(f = flux_content_store (h, data, size, flags)))
-        log_err_exit ("flux_content_store");
-    if (flux_content_store_get (f, &blobref) < 0)
-        log_err_exit ("flux_content_store_get");
+    if (!(f = content_store (h, data, size, flags)))
+        log_err_exit ("content_store");
+    if (content_store_get (f, &blobref) < 0)
+        log_err_exit ("content_store_get");
     printf ("%s\n", blobref);
     flux_future_destroy (f);
     flux_close (h);
@@ -127,7 +128,7 @@ static void store_completion (flux_future_t *f, void *arg)
     flux_t *h = arg;
     const char *blobref;
 
-    if (flux_content_store_get (f, &blobref) < 0)
+    if (content_store_get (f, &blobref) < 0)
         log_err_exit ("store");
     printf ("%s\n", blobref);
     flux_future_destroy (f);
@@ -161,8 +162,8 @@ static int internal_content_spam (optparse_t *p, int ac, char *av[])
     while (i < count || spam_cur_inflight > 0) {
         while (i < count && spam_cur_inflight < spam_max_inflight) {
             snprintf (data, size, "spam-o-matic pid=%d seq=%d", getpid(), i);
-            if (!(f = flux_content_store (h, data, size, 0)))
-                log_err_exit ("flux_content_store(%d)", i);
+            if (!(f = content_store (h, data, size, 0)))
+                log_err_exit ("content_store(%d)", i);
             if (flux_future_then (f, -1., store_completion, h) < 0)
                 log_err_exit ("flux_future_then(%d)", i);
             spam_cur_inflight++;

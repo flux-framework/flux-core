@@ -8,7 +8,6 @@ man3
    flux_attr_get
    flux_aux_set
    flux_child_watcher_create
-   flux_content_load
    flux_core_version
    flux_event_decode
    flux_event_publish

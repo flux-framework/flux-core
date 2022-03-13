@@ -52,6 +52,7 @@ libflux_internal_la_LIBADD = \
 	$(builddir)/librouter/librouter.la \
 	$(builddir)/libhostlist/libhostlist.la \
 	$(builddir)/libczmqcontainers/libczmqcontainers.la \
+	$(builddir)/libcontent/libcontent.la \
 	$(JANSSON_LIBS) \
 	$(LIBUUID_LIBS) \
 	$(LIBPTHREAD) \

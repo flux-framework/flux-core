@@ -107,7 +107,6 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_event_decode.3 \
 	man3/flux_response_decode.3 \
 	man3/flux_request_encode.3 \
-	man3/flux_content_load.3 \
 	man3/flux_log.3 \
 	man3/flux_future_get.3 \
 	man3/flux_future_create.3 \
@@ -203,9 +202,6 @@ MAN3_FILES_SECONDARY = \
 	man3/flux_response_decode_raw.3 \
 	man3/flux_response_decode_error.3 \
 	man3/flux_request_encode_raw.3 \
-	man3/flux_content_load_get.3 \
-	man3/flux_content_store.3 \
-	man3/flux_content_store_get.3 \
 	man3/flux_vlog.3 \
 	man3/flux_log_set_appname.3 \
 	man3/flux_log_set_procid.3 \

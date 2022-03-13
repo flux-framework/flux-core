@@ -33,6 +33,7 @@
 #include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libkvs/kvs_txn_private.h"
 #include "src/common/libkvs/kvs_util_private.h"
+#include "src/common/libcontent/content.h"
 
 #include "waitqueue.h"
 #include "cache.h"
@@ -463,8 +464,8 @@ static void content_load_completion (flux_future_t *f, void *arg)
         goto done;
     }
 
-    if (flux_content_load_get (f, &data, &size) < 0) {
-        flux_log_error (ctx->h, "%s: flux_content_load_get", __FUNCTION__);
+    if (content_load_get (f, &data, &size) < 0) {
+        flux_log_error (ctx->h, "%s: content_load_get", __FUNCTION__);
         content_load_cache_entry_error (ctx, entry, errno, blobref);
         goto done;
     }
@@ -491,8 +492,8 @@ static int content_load_request_send (struct kvs_ctx *ctx, const char *ref)
     char *refcpy;
     int saved_errno;
 
-    if (!(f = flux_content_load (ctx->h, ref, 0))) {
-        flux_log_error (ctx->h, "%s: flux_content_load", __FUNCTION__);
+    if (!(f = content_load (ctx->h, ref, 0))) {
+        flux_log_error (ctx->h, "%s: content_load", __FUNCTION__);
         goto error;
     }
     if (!(refcpy = strdup (ref)))
@@ -592,8 +593,8 @@ static void content_store_completion (flux_future_t *f, void *arg)
     cache_blobref = flux_future_aux_get (f, "cache_blobref");
     assert (cache_blobref);
 
-    if (flux_content_store_get (f, &blobref) < 0) {
-        flux_log_error (ctx->h, "%s: flux_content_store_get", __FUNCTION__);
+    if (content_store_get (f, &blobref) < 0) {
+        flux_log_error (ctx->h, "%s: content_store_get", __FUNCTION__);
         goto error;
     }
 
@@ -679,7 +680,7 @@ static int content_store_request_send (struct kvs_ctx *ctx, const char *blobref,
     flux_future_t *f;
     int saved_errno, rc = -1;
 
-    if (!(f = flux_content_store (ctx->h, data, len, 0)))
+    if (!(f = content_store (ctx->h, data, len, 0)))
         goto error;
     if (flux_future_aux_set (f, "cache_blobref", (void *)blobref, NULL) < 0) {
         saved_errno = errno;
@@ -2803,9 +2804,9 @@ static int store_initial_rootdir (struct kvs_ctx *ctx, char *ref, int ref_len)
             flux_log_error (ctx->h, "%s: cache_entry_set_raw", __FUNCTION__);
             goto error_uncache;
         }
-        if (!(f = flux_content_store (ctx->h, data, len, 0))
-                || flux_content_store_get (f, &newref) < 0) {
-            flux_log_error (ctx->h, "%s: flux_content_store", __FUNCTION__);
+        if (!(f = content_store (ctx->h, data, len, 0))
+                || content_store_get (f, &newref) < 0) {
+            flux_log_error (ctx->h, "%s: content_store", __FUNCTION__);
             goto error_uncache;
         }
         /* Sanity check that content cache is using the same hash alg as KVS.

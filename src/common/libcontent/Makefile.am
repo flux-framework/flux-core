@@ -13,5 +13,7 @@ AM_CPPFLAGS = \
 noinst_LTLIBRARIES = libcontent.la
 
 libcontent_la_SOURCES = \
-        content-util.h \
-        content-util.c
+	content-util.h \
+	content-util.c \
+	content.h \
+	content.c
