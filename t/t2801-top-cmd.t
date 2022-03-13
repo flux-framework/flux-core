@@ -57,7 +57,7 @@ test_expect_success 'submit batch script and wait for it to start' '
 	cat >batch.sh <<-EOT &&
 	#!/bin/sh
 	touch job2-has-started
-	flux mini run sleep inf
+	flux mini run sleep 300
 	EOT
 	chmod +x batch.sh &&
 	flux mini batch -t30m -n1 batch.sh >jobid2 &&
@@ -69,7 +69,7 @@ test_expect_success 'flux-top JOBID works' '
 '
 test_expect_success 'submit non-batch job and wait for it to start' '
 	flux mini submit -n1 \
-		bash -c "touch job3-has-started && sleep inf" >jobid3 &&
+		bash -c "touch job3-has-started && sleep 300" >jobid3 &&
 	$waitfile job3-has-started
 '
 test_expect_success 'flux-top JOBID fails when JOBID is not a flux instance' '

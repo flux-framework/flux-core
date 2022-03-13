@@ -24,7 +24,7 @@ test_expect_success 'start a set of Flux instances' '
 	id=$(flux mini submit flux start /bin/true) &&
 	id2=$(flux mini submit -n2 -c1 flux start \
 		"flux mini run /bin/false ; \
-		 flux mini submit --cc=1-4 sleep inf && \
+		 flux mini submit --cc=1-4 sleep 300 && \
 		 touch ready && \
 		 flux queue idle") &&
 	flux mini submit sleep 600 &&

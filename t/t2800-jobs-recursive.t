@@ -40,7 +40,7 @@ test_expect_success 'start a recursive job' '
 	rid=$(flux mini submit -n2 \
 		flux start \
 		flux mini submit --wait --cc=1-2 flux start \
-			"flux mini submit sleep inf && \
+			"flux mini submit sleep 300 && \
 			 touch ready.\$FLUX_JOB_CC && \
 			 flux queue idle") &&
 	flux job wait-event $id clean
