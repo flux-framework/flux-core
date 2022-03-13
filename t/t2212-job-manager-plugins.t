@@ -81,7 +81,7 @@ test_expect_success 'job-manager: bad plugins config is detected' '
 	remove = "notfound.so"
 	EOF
 	test_must_fail \
-	    flux mini bulksubmit -n1 --progress --watch --log=badconf.{}.log \
+	    flux mini bulksubmit -n1 --watch --log=badconf.{}.log \
 	        flux start -o,-c$(pwd)/badconf/{} ::: a b c &&
 	test_debug "echo a:; cat badconf.a.log" &&
 	grep "config must be an array" badconf.a.log &&
