@@ -28,7 +28,11 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     try:
-        dburi = "file:" + args.dbpath[0] + "?mode=ro"
+        #  Required in non-utf-8 locale if dbpath contains multibyte
+        #   characters. Prevents Python from whining about surrogates
+        #   not allowed. Really there must be a better way, but this works:
+        dbpath = args.dbpath[0].encode("utf-8", errors="surrogateescape").decode()
+        dburi = "file:" + dbpath + "?mode=ro"
         con = sqlite3.connect(dburi, uri=True)
     except sqlite3.Error as e:
         print(e)

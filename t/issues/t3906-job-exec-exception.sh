@@ -8,7 +8,7 @@
 #
 export startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 SHELL=/bin/sh flux start -s 4 -o,-Stbon.fanout=4 --test-exit-mode=leader '\
-   id=$(flux mini submit -n4 -N4 sleep inf) \
+   id=$(flux mini submit -n4 -N4 sleep 300) \
 && flux job wait-event $id start \
 && $startctl kill 3 9 \
 && flux job wait-event $id exception >t3906.output 2>&1'

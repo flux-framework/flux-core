@@ -15,13 +15,13 @@ BAD_VALIDATOR=${SHARNESS_TEST_SRCDIR}/ingest/bad-validate.py
 
 test_valid ()
 {
-	flux mini bulksubmit --quiet --wait --watch --progress \
+	flux mini bulksubmit --quiet --wait --watch \
 		sh -c "cat {} | $Y2J | $SUBMITBENCH --urgency=0 -" ::: $*
 }
 
 test_invalid ()
 {
-	flux mini bulksubmit --quiet --wait --watch --progress \
+	flux mini bulksubmit --quiet --wait --watch \
 		sh -c "cat {} | $Y2J | $SUBMITBENCH --urgency=0 -" ::: $*
 	test $? -ne 0
 }

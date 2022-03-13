@@ -204,9 +204,6 @@ test_under_flux() {
         flags="${flags} --debug"
         export FLUX_PYCLI_LOGLEVEL=10
     fi
-    if test -n "$root"; then
-        flags="${flags} --root=$root"
-    fi
     if test "$chain_lint" = "t"; then
         flags="${flags} --chain-lint"
     fi
@@ -229,6 +226,7 @@ test_under_flux() {
         # Place the re-executed test script trash within the first invocation's
         # trash to preserve config files for broker restart in test
         flags="${flags} --root=$SHARNESS_TRASH_DIRECTORY"
+        unset root
     elif test "$personality" != "full"; then
         RC1_PATH=$FLUX_SOURCE_DIR/t/rc/rc1-$personality
         RC3_PATH=$FLUX_SOURCE_DIR/t/rc/rc3-$personality
@@ -237,6 +235,10 @@ test_under_flux() {
     else
         unset RC1_PATH
         unset RC3_PATH
+    fi
+
+    if test -n "$root"; then
+        flags="${flags} --root=$root"
     fi
 
     if test -n "$FLUX_TEST_VALGRIND" ; then
@@ -383,6 +385,7 @@ for var in $(env | grep ^SLURM); do unset ${var%%=*}; done
 unset FLUX_SHELL_RC_PATH
 unset FLUX_RC_EXTRA
 unset FLUX_CONF_DIR
+unset FLUX_JOB_CC
 
 # Individual tests that need to force local URI resolution should set
 #  this specifically. In general it breaks other URI tests:

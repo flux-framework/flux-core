@@ -66,6 +66,7 @@ run_sub_test_lib_test () {
 		cat >>".$name.t" &&
 		chmod +x ".$name.t" &&
 		export SHARNESS_TEST_SRCDIR &&
+		if $roof; then opt="$opt --root=$root"; fi
 		$prefix ./".$name.t" $opt --chain-lint >out 2>err
 	)
 }

@@ -46,12 +46,6 @@ fluxTest.__index = fluxTest
 local getopt = require 'flux.alt_getopt'.get_opts
 local posix = require 'flux.posix'
 
---  Options:
-local cmdline_opts = {
-    help =     { char = 'h' },
-    verbose =  { char = 'v' }
-}
-
 ---
 --  Append path p to PATH environment variable:
 --
@@ -80,6 +74,10 @@ function fluxTest:start_session (t)
     end
 
     table.insert (cmd, self.arg0)
+
+    if (self.opts.r) then
+        table.insert(cmd, "--root="..self.opts.r)
+    end
 
     -- Set FLUXOMETER_LUA_PATH to ensure we load the same fluxometer.conf
     --  after `flux start ...`
@@ -117,6 +115,13 @@ function fluxTest.init (...)
     test.arg0 = debug.getinfo (2).source:sub (2)
     test.prog = test.arg0:match ("/*([^/]+)%.t")
 
+    -- Support the same common arguments as sharness:
+    test.opts, optind = getopt (arg, "dvr:",
+                                 { debug = 'd',
+                                   verbose = 'v',
+                                   root = 'r'
+                                 })
+
     local cwd, err = posix.getcwd ()
     if not cwd then error (err) end
     test.src_dir = cwd
@@ -140,9 +145,12 @@ function fluxTest.init (...)
     end
 
     test.trash_dir = "trash-directory.lua-"..test.prog
+    if test.opts.r then
+        test.trash_dir = test.opts.r .. "/" .. test.trash_dir
+    end
     if test.flux_active then
         os.execute ("rm -rf "..test.trash_dir)
-        posix.mkdir (test.trash_dir)
+        os.execute ("mkdir -p "..test.trash_dir)
         posix.chdir (test.trash_dir)
         cleanup (function ()
                      posix.chdir (test.src_dir)

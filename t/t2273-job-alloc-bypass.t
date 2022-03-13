@@ -24,7 +24,7 @@ submit_as_alternate_user()
 test_expect_success 'alloc-bypass: start a job using all resources' '
 	SLEEPID=$(flux mini submit \
 	            -n $(flux resource list -s up -no {ncores}) \
-	            sleep inf)
+	            sleep 300)
 '
 test_expect_success 'alloc-bypass: load alloc-bypass plugin' '
 	flux jobtap load alloc-bypass.so
