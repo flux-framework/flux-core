@@ -20,6 +20,7 @@ from flux.idset import IDset
 from flux.hostlist import Hostlist
 from flux.resource import ResourceSet, resource_list, SchedResourceList
 from flux.rpc import RPC
+from flux.future import WaitAllFuture
 
 
 def reload(args):
@@ -102,30 +103,89 @@ class StatusLine:
         return len(self.hostlist)
 
 
+def split_draining(drain_ranks, allocated_ranks):
+    """
+    Given drain_ranks and allocated_ranks, return "drained" vs "draining"
+    idsets as (IDset, state) tuples in a list of 1 or 2 elements.
+    """
+    draining = drain_ranks.intersect(allocated_ranks)
+    drained = drain_ranks.difference(draining)
+    return [
+        (drain_ranks.copy(), "drain"),
+        (draining, "draining"),
+        (drained, "drained"),
+    ]
+
+
+class ListStatusRPC(WaitAllFuture):
+    """Combination sched.resource-status and resource.status RPC
+
+    Inclusion of sched.resource-status response allows drain/draining
+    differentiation in resource status and drain command outputs.
+    """
+
+    def __init__(self, handle):
+        # Initiate RPCs to both resource.status and sched.resource-status:
+        children = [RPC(handle, "resource.status", nodeid=0), resource_list(handle)]
+        self.rlist = None
+        self.rstatus = None
+        self.allocated_ranks = None
+        super().__init__(children)
+
+    def get_status(self):
+        if not self.rstatus:
+            self.get()
+            self.rstatus = self.children[0].get()
+        return self.rstatus
+
+    def get_allocated_ranks(self):
+        if not self.allocated_ranks:
+            #
+            #  If the scheduler is not loaded, do not propagate an error,
+            #   just return an empty idset for allocated ranks.
+            #
+            try:
+                self.get()
+                self.rlist = self.children[1].get()
+                self.allocated_ranks = self.rlist.allocated.ranks
+            except EnvironmentError:
+                self.allocated_ranks = IDset()
+        return self.allocated_ranks
+
+
 def drain_list():
     headings = {
         "timestamp": "TIMESTAMP",
         "ranks": "RANK",
         "reason": "REASON",
         "nodelist": "NODELIST",
+        "state": "STATE",
     }
-    resp = RPC(flux.Flux(), "resource.status", nodeid=0).get()
+    result = ListStatusRPC(flux.Flux())
+
+    resp = result.get_status()
+    allocated = result.get_allocated_ranks()
+
     rset = ResourceSet(resp["R"])
     nodelist = rset.nodelist
 
     lines = []
-    for ranks, entry in resp["drain"].items():
-        ranks = IDset(ranks)
-        line = StatusLine(
-            "drain",
-            ranks,
-            Hostlist([nodelist[i] for i in ranks]),
-            entry["reason"],
-            entry["timestamp"],
-        )
-        lines.append(line)
+    for drain_ranks, entry in resp["drain"].items():
+        for ranks, state in split_draining(IDset(drain_ranks), allocated):
+            # Do not report empty or "drain" rank sets
+            # Only draining & drained are reported in this view
+            if not ranks or state == "drain":
+                continue
+            line = StatusLine(
+                state,
+                ranks,
+                Hostlist([nodelist[i] for i in ranks]),
+                entry["reason"],
+                entry["timestamp"],
+            )
+            lines.append(line)
 
-    fmt = "{timestamp:<20} {ranks:<8} {reason:<30} {nodelist}"
+    fmt = "{timestamp:<20} {state:<8.8} {ranks:<8.8} {reason:<30} {nodelist}"
     formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
     print(formatter.header())
     for line in lines:
@@ -137,8 +197,9 @@ class ResourceStatus:
 
     # pylint: disable=too-many-instance-attributes
 
-    def __init__(self, rset=None):
+    def __init__(self, rset=None, rlist=None):
         self.rset = ResourceSet(rset)
+        self.rlist = rlist
         self.nodelist = self.rset.nodelist
         self.all = self.rset.ranks
         self.statuslines = []
@@ -186,12 +247,15 @@ class ResourceStatus:
         self._idset_update(state, ranks)
 
     @classmethod
-    def from_status_response(cls, resp, fmt):
+    def from_status_response(cls, resp, fmt, allocated=None):
 
         #  Return empty ResourceStatus object if resp not set:
         #  (mainly used for testing)
         if not resp:
             return cls()
+
+        if allocated is None:
+            allocated = IDset()
 
         if isinstance(resp, str):
             resp = json.loads(resp)
@@ -210,17 +274,20 @@ class ResourceStatus:
         #  "drain" key contains a dict of idsets with timestamp,reason
         #
         drained = 0
-        for ranks, entry in resp["drain"].items():
-            #  Only include reason if it will be displayed in format
-            reason = ""
-            if "reason" in fmt:
-                reason = entry["reason"]
-            rstat.append("drain", IDset(ranks), reason)
-            drained = drained + 1
+        for drain_ranks, entry in resp["drain"].items():
+            for ranks, state in split_draining(IDset(drain_ranks), allocated):
+                #  Only include reason if it will be displayed in format
+                reason = ""
+                if ranks and "reason" in fmt:
+                    reason = entry["reason"]
+
+                rstat.append(state, IDset(ranks), reason)
+                drained = drained + 1
 
         #  If no drained nodes, append an empty StatusLine
         if drained == 0:
-            rstat.append("drain")
+            for state in ["drain", "draining", "drained"]:
+                rstat.append(state)
 
         #  "avail" is computed from above
         rstat.append("avail", rstat.avail)
@@ -255,8 +322,17 @@ def status_get_state_list(args, valid_states, default_states):
 
 
 def status(args):
-    valid_states = ["all", "online", "avail", "offline", "exclude", "drain"]
-    default_states = "avail,offline,exclude,drain"
+    valid_states = [
+        "all",
+        "online",
+        "avail",
+        "offline",
+        "exclude",
+        "drain",
+        "draining",
+        "drained",
+    ]
+    default_states = "avail,offline,exclude,draining,drained"
     headings = {
         "state": "STATUS",
         "nnodes": "NNODES",
@@ -283,10 +359,13 @@ def status(args):
     #  Get payload from stdin or from resource.status RPC:
     if args.from_stdin:
         resp = sys.stdin.read()
+        allocated = IDset()
     else:
-        resp = RPC(flux.Flux(), "resource.status", nodeid=0).get()
+        rpc = ListStatusRPC(flux.Flux())
+        resp = rpc.get_status()
+        allocated = rpc.get_allocated_ranks()
 
-    rstat = ResourceStatus.from_status_response(resp, fmt)
+    rstat = ResourceStatus.from_status_response(resp, fmt, allocated)
 
     formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
     if not args.no_header:

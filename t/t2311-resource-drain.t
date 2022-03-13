@@ -193,4 +193,37 @@ test_expect_success 'resource.undrain RPC fails on rank > 0' '
 	grep -i "unknown service method" undrain1.err
 '
 
+test_expect_success 'drain works on allocated rank' '
+	flux resource undrain $(flux resource status -s drain -no {ranks}) &&
+	id=$(flux mini submit --wait-event=start sleep 300) &&
+	rank=$(flux jobs -no {ranks} $id) &&
+	flux resource drain $rank &&
+	test $(flux resource list -n -s down -o {nnodes}) -eq 1 &&
+	flux resource drain | grep draining &&
+	flux job cancel $id &&
+	flux job wait-event $id clean &&
+	flux resource drain | grep drained
+'
+
+test_expect_success 'flux resource drain differentiates drain/draining' '
+	flux resource undrain $(flux resource status -s drain -no {ranks}) &&
+	id=$(flux mini submit --wait-event=start sleep 300) &&
+	rank=$(flux jobs -no {ranks} $id) &&
+	flux resource drain $(hostname) &&
+	test_debug "flux resource drain" &&
+	test_debug "flux resource status" &&
+	test $(flux resource status -s draining -no {ranks}) = "$rank" &&
+	flux resource drain | grep draining &&
+	flux job cancel $id &&
+	flux job wait-event $id clean &&
+	test $(flux resource status -s drain -no {nnodes}) -eq ${SIZE}
+'
+
+test_expect_success 'flux resource drain works without scheduler loaded' '
+	flux module unload sched-simple &&
+	flux resource drain &&
+	test $(flux resource status -s drain -no {nnodes}) -eq ${SIZE}
+'
+
+
 test_done

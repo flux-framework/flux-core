@@ -67,8 +67,8 @@ test_expect_success 'flux-resource status: -vv displays REASON field' '
 	test_debug "echo verbose:; cat ${name}-vv.out" &&
 	test_must_fail grep REASON ${name}.out &&
 	grep REASON ${name}-vv.out &&
-	test $(grep -c drain ${name}.out) -eq 1 &&
-	test $(grep -c drain ${name}-vv.out) -eq 2
+	test $(grep -c drained  ${name}.out) -eq 1 &&
+	test $(grep -c drained ${name}-vv.out) -eq 2
 '
 
 test_expect_success 'flux-resource status: -o {reason} works w/out -vv' '

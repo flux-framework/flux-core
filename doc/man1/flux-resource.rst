@@ -34,6 +34,9 @@ A few notes on drained nodes:
 - When an instance is restarted, drained nodes remain drained.
 - The scheduler may determine that a job request is *feasible* if the total
   resource set, including drained nodes, would allow it to run.
+- In ``flux resource status`` and ``flux resource drain``, the drain state
+  of a node will be presented as "drained" if the node has no job allocations,
+  and "draining" if there are still jobs running on the node.
 
 Some further background on resource service operation may be found in the
 RESOURCE INVENTORY section below.
@@ -57,7 +60,9 @@ COMMANDS
    increase output verbosity.  *-n,--no-header* suppresses header from output.
    *-o,--format=FORMAT*, customizes output formatting (see below).
    *-s,--states=STATE,...* limits output to specified resource states, where
-   valid states are "online", "offline", "avail", "exclude", "drain", and "all".
+   valid states are "online", "offline", "avail", "exclude", "draining",
+   "drained", and "all". The special "drain" state is also supported, and
+   selects both draining and drained resources.
 
 **drain** [-f] [-u] [targets] [reason ...]
    If specified without arguments, list drained nodes.  The *targets* argument
