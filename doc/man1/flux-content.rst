@@ -37,6 +37,8 @@ This is mainly used in testing. The **flux content dropcache** command
 drops all non-essential entries in the local cache; that is, entries
 which can be removed without data loss.
 
+These operations are only available to the Flux instance owner.
+
 
 OPTIONS
 =======

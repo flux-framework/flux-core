@@ -325,13 +325,21 @@ test_expect_success 'flux content flush not allowed for guest user' '
 	grep -q "Operation not permitted" content.flush.err
 '
 
-test_expect_success 'flux content load/store allowed for guest user' '
-	echo Hello >content.store.value &&
-	FLUX_HANDLE_ROLEMASK=0x2 \
-	    flux content store <content.store.value >content.store.ref &&
-	FLUX_HANDLE_ROLEMASK=0x2 \
-	    flux content load $(cat content.store.ref) >content.load.value &&
-	test_cmp content.store.value content.load.value
+test_expect_success 'store a value with content service' '
+	echo Hello >content.blob &&
+	flux content store <content.blob >content.blobref
+'
+
+test_expect_success 'flux content load not allowed for guest user' '
+	test_must_fail bash -c "FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux content load $(cat content.blobref) 2>content-load.err" &&
+	    grep "not permitted" content-load.err
+'
+
+test_expect_success 'flux content store not allowed for guest user' '
+	test_must_fail bash -c "FLUX_HANDLE_ROLEMASK=0x2 \
+	    flux content store <content.blob 2>content-store.err" &&
+	    grep "not permitted" content-store.err
 '
 
 test_done
