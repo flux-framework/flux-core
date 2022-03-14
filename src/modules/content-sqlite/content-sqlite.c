@@ -13,6 +13,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <unistd.h>
 #include <sqlite3.h>
 #include <lz4.h>
 #include <flux/core.h>
@@ -622,6 +623,12 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
     if (backing_path) {
         if (!(ctx->dbfile = strdup (backing_path)))
             goto error;
+        if (access (ctx->dbfile, F_OK) == 0) {
+            if (access (ctx->dbfile, R_OK | W_OK) < 0) {
+                flux_log_error (h, "ctx->dbfile");
+                goto error;
+            }
+        }
     }
     else {
         const char *rundir = flux_attr_get (h, "rundir");
