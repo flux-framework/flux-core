@@ -88,6 +88,7 @@ RUN apt-get update \
         libmpich-dev \
         libs3-dev \
         libevent-dev \
+        libarchive-dev \
  && rm -rf /var/lib/apt/lists/*
 
 # Testing utils and libs
