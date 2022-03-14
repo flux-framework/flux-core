@@ -120,61 +120,6 @@ static int internal_content_dropcache (optparse_t *p, int ac, char *av[])
     return (0);
 }
 
-static int spam_max_inflight;
-static int spam_cur_inflight;
-
-static void store_completion (flux_future_t *f, void *arg)
-{
-    flux_t *h = arg;
-    const char *blobref;
-
-    if (content_store_get (f, &blobref) < 0)
-        log_err_exit ("store");
-    printf ("%s\n", blobref);
-    flux_future_destroy (f);
-    if (--spam_cur_inflight < spam_max_inflight/2)
-        flux_reactor_stop (flux_get_reactor (h));
-}
-
-static int internal_content_spam (optparse_t *p, int ac, char *av[])
-{
-    int i, count;
-    flux_future_t *f;
-    flux_t *h;
-    char data[256];
-    int size = 256;
-
-    if (ac != 2 && ac != 3) {
-        optparse_print_usage (p);
-        exit (1);
-    }
-    count = strtoul (av[1], NULL, 10);
-    if (ac == 3)
-        spam_max_inflight = strtoul (av[2], NULL, 10);
-    else
-        spam_max_inflight = 1;
-
-    if (!(h = builtin_get_flux_handle (p)))
-        log_err_exit ("flux_open");
-
-    spam_cur_inflight = 0;
-    i = 0;
-    while (i < count || spam_cur_inflight > 0) {
-        while (i < count && spam_cur_inflight < spam_max_inflight) {
-            snprintf (data, size, "spam-o-matic pid=%d seq=%d", getpid(), i);
-            if (!(f = content_store (h, data, size, 0)))
-                log_err_exit ("content_store(%d)", i);
-            if (flux_future_then (f, -1., store_completion, h) < 0)
-                log_err_exit ("flux_future_then(%d)", i);
-            spam_cur_inflight++;
-            i++;
-        }
-        if (flux_reactor_run (flux_get_reactor (h), 0) < 0)
-            log_err ("flux_reactor_run");
-    }
-    return (0);
-}
-
 int cmd_content (optparse_t *p, int ac, char *av[])
 {
     log_init ("flux-content");
@@ -222,13 +167,6 @@ static struct optparse_subcommand content_subcmds[] = {
       NULL,
       "Flush dirty entries from local content cache",
       internal_content_flush,
-      0,
-      NULL,
-    },
-    { "spam",
-      "N [M]",
-      "Store N random entries, keeping M requests in flight (default 1)",
-      internal_content_spam,
       0,
       NULL,
     },

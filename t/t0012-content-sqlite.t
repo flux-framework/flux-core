@@ -11,6 +11,7 @@ echo "# $0: flux session size will be ${SIZE}"
 
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+SPAMUTIL="${FLUX_BUILD_DIR}/t/kvs/content-spam"
 
 HASHFUN=`flux getattr content.hash`
 
@@ -32,7 +33,7 @@ test_expect_success 'verify content.backing-module=content-sqlite' '
 '
 
 test_expect_success 'store 100 blobs on rank 0' '
-	flux content spam 100 100 >/dev/null &&
+	${SPAMUTIL} 100 100 >/dev/null &&
 	TOTAL=`flux module stats --type int --parse count content` &&
 	test $TOTAL -ge 100
 '
@@ -104,7 +105,7 @@ test_expect_success 'load and verify 1m blob on all ranks' '
 
 test_expect_success 'exercise batching of synchronous flush to backing store' '
 	flux setattr content.flush-batch-limit 5 &&
-	flux content spam 200 200 >/dev/null &&
+	${SPAMUTIL} 200 200 >/dev/null &&
 	flux content flush &&
 	NDIRTY=`flux module stats --type int --parse dirty content` &&
 	test ${NDIRTY} -eq 0
@@ -115,7 +116,7 @@ test_expect_success 'drop the cache' '
 '
 
 test_expect_success 'fill the cache with more data for later purging' '
-	flux content spam 10000 200 >/dev/null
+	${SPAMUTIL} 10000 200 >/dev/null
 '
 
 kvs_checkpoint_put() {

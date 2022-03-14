@@ -11,6 +11,7 @@ echo "# $0: flux session size will be ${SIZE}"
 
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
+SPAMUTIL=${FLUX_BUILD_DIR}/t/kvs/content-spam
 
 MAXBLOB=`flux getattr content.blob-size-limit`
 HASHFUN=`flux getattr content.hash`
@@ -173,12 +174,12 @@ test_expect_success 'rank 0 cache is all valid' '
 
 # Write 8192 blobs, allowing 1024 requests to be outstanding
 test_expect_success 'store 8K blobs from rank 0 using async RPC' '
-	flux content spam 8192 1024 >/dev/null
+	${SPAMUTIL} 8192 1024 >/dev/null
 '
 
 # Write 1024 blobs per rank
 test_expect_success 'store 1K blobs from all ranks using async RPC' '
-	flux exec -n flux content spam 1024 256 >/dev/null
+	flux exec -n ${SPAMUTIL} 1024 256 >/dev/null
 '
 
 test_expect_success 'load request with empty payload fails with EPROTO(71)' '

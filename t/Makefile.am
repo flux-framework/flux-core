@@ -325,6 +325,7 @@ check_PROGRAMS = \
 	loop/logstderr \
 	loop/issue2337 \
 	loop/issue2711 \
+	kvs/content-spam \
 	kvs/torture \
 	kvs/dtree \
 	kvs/blobref \
@@ -512,6 +513,11 @@ mpi_mpich_basic_simple_SOURCES = mpi/mpich_basic/simple.c
 mpi_mpich_basic_simple_CPPFLAGS = $(MPI_CFLAGS) $(test_cppflags)
 mpi_mpich_basic_simple_LDADD = $(MPI_CLDFLAGS) $(test_ldadd)
 mpi_mpich_basic_simple_LDFLAGS = $(MPI_CLDFLAGS) $(test_ldflags)
+
+kvs_content_spam_SOURCES = kvs/content-spam.c
+kvs_content_spam_CPPFLAGS = $(test_cppflags)
+kvs_content_spam_LDADD = $(test_ldadd)
+kvs_content_spam_LDFLAGS = $(test_ldflags)
 
 kvs_torture_SOURCES = kvs/torture.c
 kvs_torture_CPPFLAGS = $(test_cppflags)
