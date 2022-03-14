@@ -41,6 +41,7 @@
 extern int priority_default_plugin_init (flux_plugin_t *p);
 extern int after_plugin_init (flux_plugin_t *p);
 extern int begin_time_plugin_init (flux_plugin_t *p);
+extern int validate_duration_plugin_init (flux_plugin_t *p);
 
 struct jobtap_builtin {
     const char *name;
@@ -51,6 +52,7 @@ static struct jobtap_builtin jobtap_builtins [] = {
     { ".priority-default", priority_default_plugin_init },
     { ".dependency-after", after_plugin_init },
     { ".begin-time", &begin_time_plugin_init },
+    { ".validate-duration", &validate_duration_plugin_init },
     { 0 },
 };
 
