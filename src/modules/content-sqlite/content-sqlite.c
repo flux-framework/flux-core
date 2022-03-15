@@ -274,6 +274,10 @@ static int content_sqlite_store (struct content_sqlite *ctx,
         set_errno_from_sqlite_error (ctx);
         goto error;
     }
+    /* N.B. ignore SQLITE_CONSTRAINT errors - it means the insert failed
+     * because it violated the implicit primary key uniqueness constraint.
+     * Blob and blobref are indeed stored and storage is conserved - success!
+     */
     if (sqlite3_step (ctx->store_stmt) != SQLITE_DONE
                     && sqlite3_errcode (ctx->db) != SQLITE_CONSTRAINT) {
         log_sqlite_error (ctx, "store: executing stmt");
