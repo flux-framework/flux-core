@@ -24,6 +24,7 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-env.1 \
 	man1/flux-getattr.1 \
 	man1/flux-dmesg.1 \
+	man1/flux-dump.1 \
 	man1/flux-content.1 \
 	man1/flux-config.1 \
 	man1/flux-hwloc.1 \
@@ -35,6 +36,7 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-version.1 \
 	man1/flux-jobs.1 \
 	man1/flux-pstree.1 \
+	man1/flux-restore.1 \
 	man1/flux-shell.1 \
 	man1/flux-top.1 \
 	man1/flux-jobtap.1 \

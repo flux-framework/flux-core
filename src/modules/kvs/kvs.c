@@ -28,6 +28,7 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
+#include "src/common/libutil/timestamp.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libkvs/kvs_txn_private.h"
@@ -2712,14 +2713,15 @@ static void process_args (struct kvs_ctx *ctx, int ac, char **av)
  * Copy rootref buf with '\0' termination.
  * Return 0 on success, -1 on failure,
  */
-static int checkpoint_get (flux_t *h, const char *key, char *buf, size_t len)
+static int checkpoint_get (flux_t *h, char *buf, size_t len)
 {
     flux_future_t *f = NULL;
     const char *rootref;
-    char datestr[128] = {0};
+    double timestamp = 0;
+    char datestr[128] = "N/A";
     int rv = -1;
 
-    if (!(f = kvs_checkpoint_lookup (h, "kvs-primary")))
+    if (!(f = kvs_checkpoint_lookup (h, NULL)))
         return -1;
 
     if (kvs_checkpoint_lookup_get_rootref (f, &rootref) < 0)
@@ -2731,13 +2733,12 @@ static int checkpoint_get (flux_t *h, const char *key, char *buf, size_t len)
     }
     strcpy (buf, rootref);
 
-    if (kvs_checkpoint_lookup_get_formatted_timestamp (f,
-                                                       datestr,
-                                                       sizeof (datestr)) < 0)
-        goto error;
+    (void)kvs_checkpoint_lookup_get_timestamp (f, &timestamp);
+    if (timestamp > 0)
+        timestamp_tostr (timestamp, datestr, sizeof (datestr));
 
     flux_log (h, LOG_INFO,
-              "restored kvs-primary from checkpoint on %s", datestr);
+              "restored KVS from checkpoint on %s", datestr);
 
     rv = 0;
 error:
@@ -2745,15 +2746,15 @@ error:
     return rv;
 }
 
-/* Synchronously store key-value pair to checkpoint service.
+/* Synchronously store checkpoint to checkpoint service.
  * Returns 0 on success, -1 on failure.
  */
-static int checkpoint_put (flux_t *h, const char *key, const char *rootref)
+static int checkpoint_put (flux_t *h, const char *rootref)
 {
     flux_future_t *f = NULL;
     int rv = -1;
 
-    if (!(f = kvs_checkpoint_commit (h, "kvs-primary", rootref))
+    if (!(f = kvs_checkpoint_commit (h, NULL, rootref, 0))
         || flux_rpc_get (f, NULL) < 0)
         goto error;
     rv = 0;
@@ -2854,7 +2855,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         /* Look for a checkpoint and use it if found.
          * Otherwise start the primary root namespace with an empty directory.
          */
-        if (checkpoint_get (h, "kvs-primary", rootref, sizeof (rootref)) < 0) {
+        if (checkpoint_get (h, rootref, sizeof (rootref)) < 0) {
             if (store_initial_rootdir (ctx, rootref, sizeof (rootref)) < 0) {
                 flux_log_error (h, "storing initial root object");
                 goto done;
@@ -2909,7 +2910,7 @@ int mod_main (flux_t *h, int argc, char **argv)
             flux_log_error (h, "error looking up primary root");
             goto done;
         }
-        if (checkpoint_put (ctx->h, "kvs-primary", root->ref) < 0) {
+        if (checkpoint_put (ctx->h, root->ref) < 0) {
             if (errno != ENOSYS) { // service not loaded is not an error
                 flux_log_error (h, "error saving primary KVS checkpoint");
                 goto done;

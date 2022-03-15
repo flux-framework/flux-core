@@ -54,7 +54,7 @@ static void kvs_checkpoint_put (flux_t *h, const char *treeobj)
         || !(rootref = treeobj_get_blobref (o, 0)))
         log_err_exit ("Error decoding treeobj from eventlog commit");
 
-    if (!(f = kvs_checkpoint_commit (h, "kvs-primary", rootref))
+    if (!(f = kvs_checkpoint_commit (h, NULL, rootref, 0))
         || flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("Error writing kvs checkpoint: %s",
                       future_strerror (f, errno));

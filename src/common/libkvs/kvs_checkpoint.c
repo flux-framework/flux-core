@@ -22,17 +22,19 @@
 
 flux_future_t *kvs_checkpoint_commit (flux_t *h,
                                       const char *key,
-                                      const char *rootref)
+                                      const char *rootref,
+                                      double timestamp)
 {
     flux_future_t *f = NULL;
-    double timestamp;
 
-    if (!h || !key || !rootref) {
+    if (!h || !rootref) {
         errno = EINVAL;
         return NULL;
     }
-
-    timestamp = flux_reactor_now (flux_get_reactor (h));
+    if (!key)
+        key = KVS_DEFAULT_CHECKPOINT;
+    if (timestamp == 0)
+        timestamp = flux_reactor_now (flux_get_reactor (h));
 
     if (!(f = flux_rpc_pack (h,
                              "kvs-checkpoint.put",
@@ -52,10 +54,12 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
 
 flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key)
 {
-    if (!h || !key) {
+    if (!h) {
         errno = EINVAL;
         return NULL;
     }
+    if (!key)
+        key = KVS_DEFAULT_CHECKPOINT;
 
     return flux_rpc_pack (h,
                           "kvs-checkpoint.get",
@@ -91,45 +95,25 @@ int kvs_checkpoint_lookup_get_rootref (flux_future_t *f, const char **rootref)
     return 0;
 }
 
-/* returns "N/A" if not available */
-int kvs_checkpoint_lookup_get_formatted_timestamp (flux_future_t *f,
-                                                   char *buf,
-                                                   size_t len)
+int kvs_checkpoint_lookup_get_timestamp (flux_future_t *f, double *timestamp)
 {
     int version;
-    double timestamp = 0.;
+    double ts = 0.;
 
-    if (!f || !buf) {
+    if (!f || !timestamp) {
         errno = EINVAL;
         return -1;
     }
-
     if (flux_rpc_get_unpack (f, "{s:{s:i s?f}}",
                                 "value",
                                 "version", &version,
-                                "timestamp", &timestamp) < 0)
+                                "timestamp", &ts) < 0)
         return -1;
-
     if (version != 0 && version != 1) {
         errno = EINVAL;
         return -1;
     }
-
-    if (version == 1) {
-        time_t sec = timestamp;
-        struct tm tm;
-        gmtime_r (&sec, &tm);
-        if (strftime (buf, len, "%FT%T", &tm) == 0) {
-            errno = EINVAL;
-            return -1;
-        }
-    }
-    else { /* version == 0 */
-        if (snprintf (buf, len, "N/A") >= len) {
-            errno = EINVAL;
-            return -1;
-        }
-    }
+    *timestamp = ts;
     return 0;
 }
 

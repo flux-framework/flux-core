@@ -611,3 +611,12 @@ cmdhelp
 MANPATH
 bargraph
 emoji
+bzip
+cpio
+gzip
+libarchive
+OUTFILE
+INFILE
+POSIX
+ustar
+xz

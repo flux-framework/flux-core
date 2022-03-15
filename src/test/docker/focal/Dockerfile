@@ -88,6 +88,7 @@ RUN apt-get update \
         libhwloc-dev \
         libopenmpi-dev \
         libs3-dev \
+        libarchive-dev \
  && rm -rf /var/lib/apt/lists/*
 
 # Testing utils and libs

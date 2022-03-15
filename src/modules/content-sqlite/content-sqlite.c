@@ -625,7 +625,7 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
             goto error;
         if (access (ctx->dbfile, F_OK) == 0) {
             if (access (ctx->dbfile, R_OK | W_OK) < 0) {
-                flux_log_error (h, "ctx->dbfile");
+                flux_log_error (h, "%s", ctx->dbfile);
                 goto error;
             }
         }

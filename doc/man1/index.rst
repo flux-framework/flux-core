@@ -10,6 +10,7 @@ man1
    flux-content
    flux-cron
    flux-dmesg
+   flux-dump
    flux-env
    flux-event
    flux-exec
@@ -27,6 +28,7 @@ man1
    flux-proxy
    flux-pstree
    flux-resource
+   flux-restore
    flux-start
    flux-startlog
    flux-shell

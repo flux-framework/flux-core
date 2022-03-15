@@ -24,10 +24,9 @@ void errors (void)
 {
     flux_future_t *f;
     const char *rootref;
-    char buf[128];
 
     errno = 0;
-    ok (kvs_checkpoint_commit (NULL, NULL, NULL) == NULL
+    ok (kvs_checkpoint_commit (NULL, NULL, NULL, 0) == NULL
         && errno == EINVAL,
         "kvs_checkpoint_commit fails on bad input");
 
@@ -42,9 +41,9 @@ void errors (void)
         "kvs_checkpoint_lookup_get_rootref fails on bad input");
 
     errno = 0;
-    ok (kvs_checkpoint_lookup_get_formatted_timestamp (NULL, NULL, 0) < 0
+    ok (kvs_checkpoint_lookup_get_timestamp (NULL, NULL) < 0
         && errno == EINVAL,
-        "kvs_checkpoint_lookup_get_formatted_timestamp fails on bad input");
+        "kvs_checkpoint_lookup_get_timestamp fails on bad input");
 
     if (!(f = flux_future_create (NULL, NULL)))
         BAIL_OUT ("flux_future_create failed");
@@ -55,10 +54,10 @@ void errors (void)
         "kvs_checkpoint_lookup_get_rootref fails on unfulfilled future");
 
     errno = 0;
-    ok (kvs_checkpoint_lookup_get_formatted_timestamp (f, buf, 128) < 0
+    double timestamp;
+    ok (kvs_checkpoint_lookup_get_timestamp (f, &timestamp) < 0
         && errno == EINVAL,
-        "kvs_checkpoint_lookup_get_formatted_timestamp "
-        "fails on unfulfilled future");
+        "kvs_checkpoint_lookup_get_timestamp fails on unfulfilled future");
 
     flux_future_destroy (f);
 }

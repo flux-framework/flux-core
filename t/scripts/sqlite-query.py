@@ -8,7 +8,7 @@
 # SPDX-License-Identifier: LGPL-3.0
 ###############################################################
 
-# Query a job-archive db for testing purposes
+# Query a sqlite db for testing purposes
 
 # Usage: flux python query.py [OPTIONS] dbpath query
 
