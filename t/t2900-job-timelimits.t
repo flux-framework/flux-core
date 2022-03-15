@@ -19,6 +19,28 @@ test_expect_success 'job time limits are enforced' '
 		flux mini run --time-limit=${TIMEOUT} sleep 30 2>limit1.err &&
 	grep "resource allocation expired" limit1.err
 '
+test_expect_success HAVE_JQ 'job timelimits are propagated' '
+	cat <<-EOF >limit.sh &&
+	#!/bin/sh -e
+	round() { printf "%.0f" \$1; }
+
+	expiration=\$(flux kvs get resource.R | jq .execution.expiration)
+	echo "expiration is \$expiration"
+
+	id1=\$(flux mini submit --wait-event=start sleep 300)
+	flux jobs -no "{id.f58} {expiration}"
+	test "\$(flux jobs -no {expiration} \$id1)" = "\$expiration"
+	flux job cancelall -f
+
+	id2=\$(flux mini submit --wait-event=start -t 1m sleep 300)
+	flux jobs -no "{id.f58} {expiration}"
+	exp2=\$(flux jobs -no {expiration} \$id2)
+	test \$(round \${exp2}) -lt \$(round \${expiration})
+        flux job cancelall -f
+	EOF
+	chmod +x limit.sh &&
+	flux mini run --time-limit=10m flux start ./limit.sh
+'
 test_expect_success 'job may exit before time limit' '
         flux mini run --time-limit=5m sleep 0.25
 '
