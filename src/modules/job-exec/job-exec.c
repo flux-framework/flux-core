@@ -746,7 +746,7 @@ static int jobinfo_load_implementation (struct jobinfo *job)
     return -1;
 }
 
-/*  Completion for jobinfo_initialize(), finish init of jobinfo using
+/*  Completion for jobinfo_start_init (), finish init of jobinfo using
  *   data fetched from KVS
  */
 static void jobinfo_start_continue (flux_future_t *f, void *arg)
