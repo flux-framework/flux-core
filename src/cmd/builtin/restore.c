@@ -295,26 +295,6 @@ static json_t *restore_snapshot (struct archive *ar, flux_t *h)
     return rootref;
 }
 
-/* Work around #4222.
- */
-static void store_empty_dir (flux_t *h)
-{
-    json_t *dir;
-    char *s;
-    flux_future_t *f = NULL;
-
-    if (!(dir = treeobj_create_dir ())
-        || !(s = treeobj_encode (dir))
-        || !(f = content_store (h, s, strlen (s), content_flags))
-        || flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("error storing emtpy directory: %s",
-                      future_strerror (f, errno));
-    flux_future_destroy (f);
-    free (s);
-    json_decref (dir);
-    progress (1, 0);
-}
-
 /* Return the number of characters of 'blobref' that a human might want to see.
  */
 static int shortblobref_length (const char *blobref)
@@ -382,7 +362,6 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
         if (kvs_is_running (h))
             log_msg_exit ("please unload kvs module before using --checkpoint");
 
-        store_empty_dir (h);
         dirref = restore_snapshot (ar, h);
         blobref = treeobj_get_blobref (dirref, 0);
         progress_end ();
@@ -409,7 +388,6 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
         flux_kvs_txn_t *txn;
         flux_future_t *f;
 
-        store_empty_dir (h);
         dirref = restore_snapshot (ar, h);
         blobref = treeobj_get_blobref (dirref, 0);
         progress_end ();
