@@ -13,7 +13,11 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <sys/types.h>
+#include <sys/stat.h>
 #include <unistd.h>
+#include <unistd.h>
+#include <sys/statvfs.h>
 #include <sqlite3.h>
 #include <lz4.h>
 #include <flux/core.h>
@@ -22,6 +26,8 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/tstat.h"
+#include "src/common/libutil/monotime.h"
 
 #include "src/common/libcontent/content-util.h"
 
@@ -37,6 +43,7 @@ const char *sql_load = "SELECT object,size FROM objects"
                        "  WHERE hash = ?1 LIMIT 1";
 const char *sql_store = "INSERT INTO objects (hash,size,object) "
                         "  values (?1, ?2, ?3)";
+const char *sql_objects_count = "SELECT count(1) FROM objects";
 
 const char *sql_create_table_checkpt = "CREATE TABLE if not exists checkpt("
                                        "  key TEXT UNIQUE,"
@@ -46,6 +53,11 @@ const char *sql_checkpt_get = "SELECT value FROM checkpt"
                               "  WHERE key = ?1";
 const char *sql_checkpt_put = "REPLACE INTO checkpt (key,value) "
                               "  values (?1, ?2)";
+
+struct content_stats {
+    tstat_t load;
+    tstat_t store;
+};
 
 struct content_sqlite {
     flux_msg_handler_t **handlers;
@@ -59,6 +71,7 @@ struct content_sqlite {
     const char *hashfun;
     size_t lzo_bufsize;
     void *lzo_buf;
+    struct content_stats stats;
 };
 
 static void log_sqlite_error (struct content_sqlite *ctx, const char *fmt, ...)
@@ -284,6 +297,7 @@ static void load_cb (flux_t *h,
     int blobref_size;
     const void *data;
     int size;
+    struct timespec t0;
 
     if (flux_request_decode_raw (msg,
                                  NULL,
@@ -297,8 +311,10 @@ static void load_cb (flux_t *h,
         flux_log_error (h, "load: malformed blobref");
         goto error;
     }
+    monotime (&t0);
     if (content_sqlite_load (ctx, blobref, &data, &size) < 0)
         goto error;
+    tstat_push (&ctx->stats.load, monotime_since (t0));
     if (flux_respond_raw (h, msg, data, size) < 0)
         flux_log_error (h, "load: flux_respond_raw");
     (void )sqlite3_reset (ctx->load_stmt);
@@ -317,13 +333,16 @@ void store_cb (flux_t *h,
     const void *data;
     int size;
     char blobref[BLOBREF_MAX_STRING_SIZE];
+    struct timespec t0;
 
     if (flux_request_decode_raw (msg, NULL, &data, &size) < 0) {
         flux_log_error (h, "store: request decode failed");
         goto error;
     }
+    monotime (&t0);
     if (content_sqlite_store (ctx, data, size, blobref, sizeof (blobref)) < 0)
         goto error;
+    tstat_push (&ctx->stats.store, monotime_since (t0));
     if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
         flux_log_error (h, "store: flux_respond_raw");
     return;
@@ -481,6 +500,102 @@ static void content_sqlite_closedb (struct content_sqlite *ctx)
     }
 }
 
+/* sqlite3_exec() callback from sql_objects_count query.
+ * On success, return 0 and set *arg to the count result.
+ * On error, return -1 which causes sqlite3_exec() to fail with SQLITE_ABORT.
+ */
+static int set_count (void *arg, int ncols, char **cols, char **col_names)
+{
+    int *result = arg;
+    int count = 0;
+    int rc = -1;
+
+    if (ncols == 1) {
+        errno = 0;
+        count = strtoul (cols[0], NULL, 10);
+        if (errno == 0) {
+            *result = count;
+            rc = 0;
+        }
+    }
+    return rc; // returning -1 causes SQLITE_ABORT
+}
+
+static json_t *pack_tstat (tstat_t *ts)
+{
+    json_t *o;
+    if (!(o = json_pack ("{s:i s:f s:f s:f s:f}",
+                         "count", tstat_count (ts),
+                         "min", tstat_min (ts),
+                         "max", tstat_max (ts),
+                         "mean", tstat_mean (ts),
+                          "stddev", tstat_stddev (ts)))) {
+        errno = ENOMEM;
+        return NULL;
+    }
+    return o;
+}
+
+static unsigned long long get_file_size (const char *path)
+{
+    struct stat sb;
+
+    if (stat (path, &sb) < 0)
+        return 0;
+    return sb.st_size;
+}
+
+static unsigned long long get_fs_free (const char *path)
+{
+    struct statvfs sb;
+
+    if (statvfs (path, &sb) < 0)
+        return 0;
+    return sb.f_bsize * sb.f_bavail;
+}
+
+void stats_get_cb (flux_t *h,
+                   flux_msg_handler_t *mh,
+                   const flux_msg_t *msg,
+                   void *arg)
+{
+    struct content_sqlite *ctx = arg;
+    int count;
+    const char *errmsg = NULL;
+    json_t *load_time = NULL;
+    json_t *store_time = NULL;
+
+    if (sqlite3_exec (ctx->db,
+                      sql_objects_count,
+                      set_count,
+                      &count,
+                      NULL) != SQLITE_OK) {
+        errmsg = sqlite3_errmsg (ctx->db);
+        errno = EPERM;
+        goto error;
+    }
+    if (!(load_time = pack_tstat (&ctx->stats.load))
+        || !(store_time = pack_tstat (&ctx->stats.store)))
+        goto error;
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:I s:I s:o s:o}",
+                           "object_count", count,
+                           "dbfile_size", get_file_size (ctx->dbfile),
+                           "dbfile_free", get_fs_free (ctx->dbfile),
+                           "load_time", load_time,
+                           "store_time", store_time) < 0)
+        flux_log_error (h, "error responding to stats.get request");
+    json_decref (load_time);
+    json_decref (store_time);
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errmsg) < 0)
+        flux_log_error (h, "error responding to stats.get request");
+    json_decref (load_time);
+    json_decref (store_time);
+}
+
 /* Open the database file ctx->dbfile and set up the database.
  */
 static int content_sqlite_opendb (struct content_sqlite *ctx)
@@ -586,6 +701,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.get", checkpoint_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.put", checkpoint_put_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-sqlite.stats.get", stats_get_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
