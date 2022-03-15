@@ -65,6 +65,7 @@ RUN apt-get update \
 
 RUN for PY in python3.6 python3.7 python3.8 ; do \
         sudo $PY -m pip install --upgrade --ignore-installed \
+	    "markupsafe==2.0.0" \
             coverage cffi six pyyaml "jsonschema>=2.6,<4.0" \
             sphinx sphinx-rtd-theme sphinxcontrib-spelling; \
     done ; \
