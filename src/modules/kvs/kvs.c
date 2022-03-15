@@ -2766,6 +2766,10 @@ error:
 
 /* Store initial root in local cache, and flush to content cache
  * synchronously.  The corresponding blobref is written into 'ref'.
+ *
+ * N.B. The code for creating a new / empty kvs namespace assumes that
+ * an empty RFC 11 dir object was already created / stored, but
+ * offline garbage collection could remove it.
  */
 static int store_initial_rootdir (struct kvs_ctx *ctx, char *ref, int ref_len)
 {
@@ -2850,18 +2854,22 @@ int mod_main (flux_t *h, int argc, char **argv)
     process_args (ctx, argc, argv);
     if (ctx->rank == 0) {
         struct kvsroot *root;
+        char empty_dir_rootref[BLOBREF_MAX_STRING_SIZE];
         char rootref[BLOBREF_MAX_STRING_SIZE];
         uint32_t owner = getuid ();
+
+        if (store_initial_rootdir (ctx,
+                                   empty_dir_rootref,
+                                   sizeof (empty_dir_rootref)) < 0) {
+            flux_log_error (h, "store_initial_rootdir");
+            goto done;
+        }
 
         /* Look for a checkpoint and use it if found.
          * Otherwise start the primary root namespace with an empty directory.
          */
-        if (checkpoint_get (h, rootref, sizeof (rootref)) < 0) {
-            if (store_initial_rootdir (ctx, rootref, sizeof (rootref)) < 0) {
-                flux_log_error (h, "storing initial root object");
-                goto done;
-            }
-        }
+        if (checkpoint_get (h, rootref, sizeof (rootref)) < 0)
+            memcpy (rootref, empty_dir_rootref, sizeof (empty_dir_rootref));
 
         /* primary namespace must always be there and not marked
          * for removal
