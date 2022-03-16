@@ -59,7 +59,7 @@ included with Flux, see the URI SCHEMES and EXAMPLES sections below.
 OPTIONS
 =======
 
-**-remote**
+**--remote**
    Return the *remote* (``ssh://``)  equivalent of the resolved URI.
 
 **--local**
