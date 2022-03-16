@@ -1,4 +1,4 @@
-.. flux-help-description: Dump kvs to portable archive format
+.. flux-help-description: Write KVS snapshot to portable archive
 
 ============
 flux-dump(1)

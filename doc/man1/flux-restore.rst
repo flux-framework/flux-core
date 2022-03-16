@@ -1,4 +1,4 @@
-.. flux-help-description: Restore kvs from portable archive format
+.. flux-help-description: Read KVS snapshot from portable archive
 
 ===============
 flux-restore(1)
