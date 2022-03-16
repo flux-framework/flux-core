@@ -23,6 +23,7 @@
 #include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/blobref.h"
+#include "src/common/libcontent/content.h"
 
 #include "builtin.h"
 
@@ -133,9 +134,9 @@ static void dump_valref (struct archive *ar,
         log_err_exit ("could not create message list");
     for (int i = 0; i < count; i++) {
         flux_future_t *f;
-        if (!(f = flux_content_load (h,
-                                     treeobj_get_blobref (treeobj, i),
-                                     content_flags))
+        if (!(f = content_load (h,
+                                treeobj_get_blobref (treeobj, i),
+                                content_flags))
             || flux_future_get (f, (const void **)&msg) < 0
             || flux_msg_get_payload (msg, &data, &len) < 0) {
             log_msg_exit ("%s: missing blobref %d: %s",
@@ -259,10 +260,10 @@ static void dump_dirref (struct archive *ar,
 
     if (treeobj_get_count (treeobj) != 1)
         log_msg_exit ("%s: blobref count is not 1", path);
-    if (!(f = flux_content_load (h,
-                                 treeobj_get_blobref (treeobj, 0),
-                                 content_flags))
-        || flux_content_load_get (f, &buf, &buflen) < 0) {
+    if (!(f = content_load (h,
+                            treeobj_get_blobref (treeobj, 0),
+                            content_flags))
+        || content_load_get (f, &buf, &buflen) < 0) {
         log_msg_exit ("%s: missing blobref: %s",
                       path,
                       future_strerror (f, errno));
@@ -318,8 +319,8 @@ static void dump_blobref (struct archive *ar,
     const char *key;
     json_t *entry;
 
-    if (!(f = flux_content_load (h, blobref, content_flags))
-        || flux_content_load_get (f, &buf, &buflen) < 0)
+    if (!(f = content_load (h, blobref, content_flags))
+        || content_load_get (f, &buf, &buflen) < 0)
         log_msg_exit ("cannot load root tree object: %s",
                       future_strerror (f, errno));
     if (!(treeobj = treeobj_decodeb (buf, buflen)))

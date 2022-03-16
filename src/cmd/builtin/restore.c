@@ -24,6 +24,7 @@
 #include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/blobref.h"
+#include "src/common/libcontent/content.h"
 
 #include "builtin.h"
 
@@ -114,8 +115,8 @@ static json_t *restore_dir (flux_t *h, json_t *dir)
 
     if (!(s = treeobj_encode (ndir)))
         log_msg_exit ("out of memory");
-    if (!(f = flux_content_store (h, s, strlen (s), content_flags))
-        || flux_content_store_get (f, &blobref) < 0)
+    if (!(f = content_store (h, s, strlen (s), content_flags))
+        || content_store_get (f, &blobref) < 0)
         log_msg_exit ("error storing dirref blob: %s",
                       future_strerror (f, errno));
     progress (1, 0);
@@ -212,8 +213,8 @@ static void restore_value (flux_t *h,
         flux_future_t *f;
         const char *blobref;
 
-        if (!(f = flux_content_store (h, buf, size, content_flags))
-            || flux_content_store_get (f, &blobref) < 0)
+        if (!(f = content_store (h, buf, size, content_flags))
+            || content_store_get (f, &blobref) < 0)
             log_msg_exit ("error storing blob for %s: %s",
                           path,
                           future_strerror (f, errno));
@@ -304,7 +305,7 @@ static void store_empty_dir (flux_t *h)
 
     if (!(dir = treeobj_create_dir ())
         || !(s = treeobj_encode (dir))
-        || !(f = flux_content_store (h, s, strlen (s), content_flags))
+        || !(f = content_store (h, s, strlen (s), content_flags))
         || flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("error storing emtpy directory: %s",
                       future_strerror (f, errno));

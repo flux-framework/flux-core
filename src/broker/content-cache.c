@@ -23,6 +23,7 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libcontent/content.h"
 
 #include "attr.h"
 #include "content-cache.h"
@@ -344,7 +345,7 @@ static void cache_load_continuation (flux_future_t *f, void *arg)
     int len = 0;
 
     e->load_pending = 0;
-    if (flux_content_load_get (f, &data, &len) < 0) {
+    if (content_load_get (f, &data, &len) < 0) {
         if (errno == ENOSYS && cache->rank == 0)
             errno = ENOENT;
         if (errno != ENOENT)
@@ -376,7 +377,7 @@ static int cache_load (struct content_cache *cache, struct cache_entry *e)
         return 0;
     if (cache->rank == 0)
         flags = CONTENT_FLAG_CACHE_BYPASS;
-    if (!(f = flux_content_load (cache->h, e->blobref, flags))
+    if (!(f = content_load (cache->h, e->blobref, flags))
         || flux_future_aux_set (f, "entry", e, NULL) < 0
         || flux_future_then (f, -1., cache_load_continuation, cache) < 0) {
         flux_log_error (cache->h, "content load");
@@ -473,7 +474,7 @@ static void cache_store_continuation (flux_future_t *f, void *arg)
     e->store_pending = 0;
     assert (cache->flush_batch_count > 0);
     cache->flush_batch_count--;
-    if (flux_content_store_get (f, &blobref) < 0) {
+    if (content_store_get (f, &blobref) < 0) {
         if (cache->rank == 0 && errno == ENOSYS)
             flux_log (cache->h, LOG_DEBUG, "content store: %s",
                       "backing store service unavailable");
@@ -516,7 +517,7 @@ static int cache_store (struct content_cache *cache, struct cache_entry *e)
         }
         flags = CONTENT_FLAG_CACHE_BYPASS;
     }
-    if (!(f = flux_content_store (cache->h, e->data, e->len, flags))
+    if (!(f = content_store (cache->h, e->data, e->len, flags))
         || flux_future_aux_set (f, "entry", e, NULL) < 0
         || flux_future_then (f, -1., cache_store_continuation, cache) < 0) {
         flux_log_error (cache->h, "content store");
@@ -813,13 +814,13 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "content.load",
         content_load_request,
-        FLUX_ROLE_USER
+        0
     },
     {
         FLUX_MSGTYPE_REQUEST,
         "content.store",
         content_store_request,
-        FLUX_ROLE_USER
+        0
     },
     {
         FLUX_MSGTYPE_REQUEST,

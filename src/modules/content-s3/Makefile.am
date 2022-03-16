@@ -19,7 +19,6 @@ content_s3_la_SOURCES = \
 
 content_s3_la_LDFLAGS = $(fluxmod_ldflags) -module
 content_s3_la_LIBADD = \
-		$(top_builddir)/src/common/libcontent/libcontent.la \
 		$(top_builddir)/src/common/libflux-internal.la \
 		$(top_builddir)/src/common/libflux-core.la \
 		$(LIBS3)
