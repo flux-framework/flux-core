@@ -41,7 +41,7 @@ instance with:
    $ flux uri JOBID
 
 Depending on the *TARGET* URI scheme and corresponding plugin, specific
-query arguments int *TARGET* may be supported. However, as a convenience,
+query arguments in *TARGET* may be supported. However, as a convenience,
 all *TARGET* URIs support the special query arguments ``local`` or
 ``remote`` to force the resulting URI into a local (``local://``) or remote
 (``ssh://``) form. For example:
@@ -59,7 +59,7 @@ included with Flux, see the URI SCHEMES and EXAMPLES sections below.
 OPTIONS
 =======
 
-**-remote**
+**--remote**
    Return the *remote* (``ssh://``)  equivalent of the resolved URI.
 
 **--local**
