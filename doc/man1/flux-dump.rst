@@ -14,17 +14,18 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-The ``flux-dump`` command writes a snapshot of the Flux key value store
-to a file in a portable archive format.
+The ``flux-dump`` command writes a KVS snapshot to a portable archive format,
+usually read by :man1:`flux-restore`.
 
-The snapshot is of the primary namespace of the current KVS root by default.
-If *--checkpoint* is specified, the snapshot is of the last KVS checkpoint
+The snapshot source is the primary namespace of the current KVS root by default.
+If *--checkpoint* is specified, the snapshot source is the last KVS checkpoint
 written to the content backing store.
 
-The format of the archive and compression algorithm, if any, is determined
-by the output file name extension.  The supported formats and compression
-algorithms are a capability of :linux:man3:`libarchive`.  Some common
-extensions that are supported by modern versions of that library are:
+The archive is a file path or *-* for standard output.  If standard output,
+the format is POSIX *ustar* with no compression.  Otherwise the format is
+determined by the file extension.  The list of valid extensions depends on the
+version of :linux:man3:`libarchive` used to build Flux, but modern versions
+support:
 
 .tar
    POSIX *ustar* format, compatible with :linux:man1:`tar`.
@@ -46,9 +47,6 @@ extensions that are supported by modern versions of that library are:
 
 .iso
    ISO9660 CD image
-
-The output filename may be *-* to indicate standard output.  In that case,
-uncompressed tar format is used.
 
 
 OPTIONS
