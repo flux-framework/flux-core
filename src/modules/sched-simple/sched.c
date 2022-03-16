@@ -152,13 +152,20 @@ static struct simple_sched * simple_sched_create (void)
     return ss;
 }
 
-static char *Rstring_create (struct rlist *l, double now, double timelimit)
+static char *Rstring_create (struct simple_sched *ss,
+                             struct rlist *l,
+                             double now,
+                             double timelimit)
 {
     char *s = NULL;
     json_t *R = NULL;
     if (timelimit > 0.) {
         l->starttime = now;
         l->expiration = now + timelimit;
+    }
+    else if (ss->rlist->expiration > 0.) {
+        l->starttime = now;
+        l->expiration = ss->rlist->expiration;
     }
     if ((R = rlist_to_R (l))) {
         s = json_dumps (R, JSON_COMPACT);
@@ -187,7 +194,7 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
         alloc = rlist_alloc (ss->rlist, ss->alloc_mode,
                              jj->nnodes, jj->nslots, jj->slot_size);
     }
-    if (!alloc || !(R = Rstring_create (alloc, now, jj->duration))) {
+    if (!alloc || !(R = Rstring_create (ss, alloc, now, jj->duration))) {
         const char *note = "unable to allocate provided jobspec";
         if (alloc != NULL) {
             /*  unlikely: allocation succeeded but Rstring_create failed */
