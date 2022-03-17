@@ -49,9 +49,11 @@ test_expect_success 'construct FLUX_URI for rank 2 (child of 1)' '
 	test $(FLUX_URI=$(cat uri2) flux getattr rank) -eq 2
 '
 
-test_expect_success 'kill -9 broker 1' '
-	$startctl kill 1 9 &&
-	test_expect_code 137 $startctl wait 1
+# Choice of signal 11 (SIGSEGV) is deliberate here.
+# The broker should not trap this siganl - see flux-framework/flux-core#4230.
+test_expect_success 'kill -11 broker 1' '
+	$startctl kill 1 11 &&
+	test_expect_code 139 $startctl wait 1
 '
 
 test_expect_success 'wait broker.online to reach count of one' '

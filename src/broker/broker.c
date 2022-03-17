@@ -217,10 +217,20 @@ int main (int argc, char *argv[])
 
     parse_command_line_arguments (argc, argv, &ctx);
 
-    /* Block all signals, saving old mask and actions for SIGINT, SIGTERM.
+    /* Block all signals but those that we want to generate core dumps.
+     * Save old mask and actions for SIGINT, SIGTERM.
      */
     sigset_t sigmask;
     sigfillset (&sigmask);
+    sigdelset (&sigmask, SIGSEGV);
+    sigdelset (&sigmask, SIGFPE);
+    sigdelset (&sigmask, SIGILL);
+    sigdelset (&sigmask, SIGABRT);
+    sigdelset (&sigmask, SIGFPE);
+    sigdelset (&sigmask, SIGSYS);
+    sigdelset (&sigmask, SIGTRAP);
+    sigdelset (&sigmask, SIGXCPU);
+    sigdelset (&sigmask, SIGXFSZ);
     if (sigprocmask (SIG_SETMASK, &sigmask, &old_sigmask) < 0
         || sigaction (SIGINT, NULL, &old_sigact_int) < 0
         || sigaction (SIGTERM, NULL, &old_sigact_term) < 0)
@@ -1054,8 +1064,7 @@ static void broker_destroy_sigwatcher (void *data)
 
 static int broker_handle_signals (broker_ctx_t *ctx)
 {
-    int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGSEGV, SIGFPE,
-                      SIGALRM };
+    int i, sigs[] = { SIGHUP, SIGINT, SIGQUIT, SIGTERM, SIGALRM };
     int blocked[] = { SIGPIPE };
     flux_watcher_t *w;
 
