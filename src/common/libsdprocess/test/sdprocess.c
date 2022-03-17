@@ -87,7 +87,7 @@ static void test_corner_case (void)
     bool active, exited;
     int ret;
 
-    sdp = sdprocess_exec (NULL, NULL, NULL, NULL, -1, -1, -1);
+    sdp = sdprocess_exec (NULL, NULL, NULL, NULL, NULL, -1, -1, -1);
     ok (sdp == NULL && errno == EINVAL,
         "sdprocess_exec returns EINVAL on invalid input");
 
@@ -156,6 +156,7 @@ static void test_basic (flux_t *h,
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -202,6 +203,7 @@ static void test_unitname (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -234,6 +236,7 @@ static void test_pid (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -283,6 +286,7 @@ static void test_duplicate (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -300,6 +304,7 @@ static void test_duplicate (flux_t *h)
     sdp_dup = sdprocess_exec (h,
                               unitname,
                               cmdv,
+                              NULL,
                               NULL,
                               STDIN_FILENO,
                               STDOUT_FILENO,
@@ -319,6 +324,54 @@ static void test_duplicate (flux_t *h)
     sdprocess_destroy (sdp);
 }
 
+static void test_property_illegal (flux_t *h)
+{
+    char *unitname = get_unitname (NULL);
+    char *cmdv[] = { "/bin/true", NULL };
+    char *properties1[] = { "foobar", NULL };
+    char *properties2[] = { "foobar=1", NULL };
+    char *properties3[] = { "RemainAfterExit=1", NULL };
+    sdprocess_t *sdp = NULL;
+
+    sdp = sdprocess_exec (h,
+                          unitname,
+                          cmdv,
+                          NULL,
+                          properties1,
+                          STDIN_FILENO,
+                          STDOUT_FILENO,
+                          STDERR_FILENO);
+    ok (sdp == NULL
+        && errno == EINVAL,
+        "sdprocess_exec failed with EINVAL on property name without value");
+
+    sdp = sdprocess_exec (h,
+                          unitname,
+                          cmdv,
+                          NULL,
+                          properties2,
+                          STDIN_FILENO,
+                          STDOUT_FILENO,
+                          STDERR_FILENO);
+    ok (sdp == NULL
+        && errno == EINVAL,
+        "sdprocess_exec failed with EINVAL on illegal property name");
+
+    sdp = sdprocess_exec (h,
+                          unitname,
+                          cmdv,
+                          NULL,
+                          properties3,
+                          STDIN_FILENO,
+                          STDOUT_FILENO,
+                          STDERR_FILENO);
+    ok (sdp == NULL
+        && errno == EINVAL,
+        "sdprocess_exec failed with EINVAL on RemainAfterExit");
+
+    free (unitname);
+}
+
 static void test_active (flux_t *h)
 {
     char *unitname = get_unitname (NULL);
@@ -330,6 +383,7 @@ static void test_active (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -369,6 +423,7 @@ static void test_exited (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -405,6 +460,7 @@ static void test_exit_status (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -443,6 +499,7 @@ static void test_wait_status (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -480,6 +537,7 @@ static void test_wait (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -506,6 +564,7 @@ static void test_wait_after_exited (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -551,6 +610,7 @@ static void test_state (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -601,6 +661,7 @@ static void test_state_after_exited (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -642,6 +703,7 @@ static void test_kill (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -688,6 +750,7 @@ static void test_kill_after_exited_success (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -718,6 +781,7 @@ static void test_kill_after_exited_failure (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -751,6 +815,7 @@ static void test_find_unit (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -807,6 +872,7 @@ static void test_find_unit_state (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -860,6 +926,7 @@ static void test_find_unit_after_exited (flux_t *h,
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -917,6 +984,7 @@ static void test_find_unit_after_signaled (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1003,6 +1071,7 @@ static void test_output (flux_t *h,
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           -1,
                           do_stdout ? fds[1] : -1,
                           do_stdout ? -1 : fds[1]);
@@ -1065,6 +1134,7 @@ static void test_stdin (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           stdin_fds[1],
                           stdout_fds[1],
                           -1);
@@ -1125,6 +1195,7 @@ static void test_environment (flux_t *h)
                           unitname,
                           cmdv,
                           env,
+                          NULL,
                           -1,
                           fds[1],
                           -1);
@@ -1166,6 +1237,7 @@ static void test_no_such_command (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1210,6 +1282,7 @@ static void test_list (flux_t *h)
                            unitname1,
                            cmdv,
                            NULL,
+                           NULL,
                            STDIN_FILENO,
                            STDOUT_FILENO,
                            STDERR_FILENO);
@@ -1219,6 +1292,7 @@ static void test_list (flux_t *h)
     sdp2 = sdprocess_exec (h,
                            unitname2,
                            cmdv,
+                           NULL,
                            NULL,
                            STDIN_FILENO,
                            STDOUT_FILENO,
@@ -1293,6 +1367,7 @@ static void test_list_error (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -1338,6 +1413,7 @@ static void test_list_early_exit (flux_t *h)
                            unitname1,
                            cmdv,
                            NULL,
+                           NULL,
                            STDIN_FILENO,
                            STDOUT_FILENO,
                            STDERR_FILENO);
@@ -1347,6 +1423,7 @@ static void test_list_early_exit (flux_t *h)
     sdp2 = sdprocess_exec (h,
                            unitname2,
                            cmdv,
+                           NULL,
                            NULL,
                            STDIN_FILENO,
                            STDOUT_FILENO,
@@ -1389,6 +1466,7 @@ static void test_invalid_permissions_command (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1441,6 +1519,7 @@ static void test_cleanup_success (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -1483,6 +1562,7 @@ static void test_cleanup_failure (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1527,6 +1607,7 @@ static void test_cleanup_before_exited (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -1568,6 +1649,7 @@ static void test_cleanup_success_after_cleanup (flux_t *h)
                           unitname,
                           cmdv,
                           NULL,
+                          NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
                           STDERR_FILENO);
@@ -1605,6 +1687,7 @@ static void test_cleanup_failure_after_cleanup (flux_t *h)
     sdp = sdprocess_exec (h,
                           unitname,
                           cmdv,
+                          NULL,
                           NULL,
                           STDIN_FILENO,
                           STDOUT_FILENO,
@@ -1680,6 +1763,8 @@ int main (int argc, char *argv[])
     test_pid (h);
     diag ("duplicate");
     test_duplicate (h);
+    diag ("property_illegal");
+    test_property_illegal (h);
     diag ("active");
     test_active (h);
     diag ("exited");

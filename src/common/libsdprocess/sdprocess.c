@@ -53,6 +53,7 @@ struct sdprocess {
     char *unitname;
     char **argv;
     char **envv;
+    char **properties;
     int stdin_fd;
     int stdout_fd;
     int stderr_fd;
@@ -229,6 +230,7 @@ static sdprocess_t *sdprocess_create (flux_t *h,
                                       const char *unitname,
                                       char **argv,
                                       char **envv,
+                                      char **properties,
                                       int stdin_fd,
                                       int stdout_fd,
                                       int stderr_fd)
@@ -246,6 +248,10 @@ static sdprocess_t *sdprocess_create (flux_t *h,
     }
     if (envv) {
         if (strv_copy (envv, &sdp->envv) < 0)
+            goto cleanup;
+    }
+    if (properties) {
+        if (strv_copy (properties, &sdp->properties) < 0)
             goto cleanup;
     }
     sdp->h = h;
@@ -269,6 +275,57 @@ static sdprocess_t *sdprocess_create (flux_t *h,
 cleanup:
     sdprocess_destroy (sdp);
     return NULL;
+}
+
+static int transient_service_parse_user_property (sdprocess_t *sdp,
+                                                  sd_bus_message *m,
+                                                  const char *str)
+{
+    char *value;
+    char *property = NULL;
+
+    if (!strchr (str, '=')) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!(property = strdup (str)))
+        return -1;
+
+    if (!(value = strchr (property, '='))) {
+        errno = EINVAL;
+        goto error;
+    }
+    (*value) = '\0';
+    value++;
+
+    /* See comments in transient_service_set_properties(), we do not allow
+     * the user to set RemainAfterExit */
+    if (!strcmp (property, "RemainAfterExit")) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    /* No properties currently supported */
+    errno = EINVAL;
+error:
+    free (property);
+    return -1;
+}
+
+static int transient_service_set_user_properties (sdprocess_t *sdp,
+                                                  sd_bus_message *m)
+{
+    if (sdp->properties) {
+        char **ptr = sdp->properties;
+        while (*ptr) {
+            if (transient_service_parse_user_property (sdp, m, *ptr) < 0)
+                return -1;
+            ptr++;
+        }
+    }
+
+    return 0;
 }
 
 static int transient_service_set_stdio_properties (sdprocess_t *sdp,
@@ -405,8 +462,6 @@ static int transient_service_set_properties (sdprocess_t *sdp,
         return -1;
     }
 
-    /* achu: no property assignments for the time being */
-
     if ((ret = sd_bus_message_append (m, "(sv)", "AddRef", "b", 1)) < 0) {
         set_errno_log (sdp->h, ret, "sd_bus_message_append");
         return -1;
@@ -427,6 +482,11 @@ static int transient_service_set_properties (sdprocess_t *sdp,
         set_errno_log (sdp->h, ret, "sd_bus_message_append");
         return -1;
     }
+
+    /* User properties */
+
+    if (transient_service_set_user_properties (sdp, m) < 0)
+        return -1;
 
     /* Stdio */
 
@@ -512,6 +572,7 @@ sdprocess_t *sdprocess_exec (flux_t *h,
                              const char *unitname,
                              char **argv,
                              char **envv,
+                             char **properties,
                              int stdin_fd,
                              int stdout_fd,
                              int stderr_fd)
@@ -530,6 +591,7 @@ sdprocess_t *sdprocess_exec (flux_t *h,
                                   unitname,
                                   argv,
                                   envv,
+                                  properties,
                                   stdin_fd,
                                   stdout_fd,
                                   stderr_fd)))
@@ -587,6 +649,7 @@ sdprocess_t *sdprocess_find_unit (flux_t *h, const char *unitname)
 
     if (!(sdp = sdprocess_create (h,
                                   unitname,
+                                  NULL,
                                   NULL,
                                   NULL,
                                   -1,
