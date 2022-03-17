@@ -760,6 +760,12 @@ static int overlay_sendmsg_child (struct overlay *ov, const flux_msg_t *msg)
 
         if ((uuid = flux_msg_route_last (msg))
             && (child = child_lookup_online (ov, uuid))) {
+            flux_log (ov->h,
+                      LOG_ERR,
+                      "%s (rank %d) transitioning to LOST due to %s",
+                      flux_get_hostbyrank (ov->h, child->rank),
+                      (int)child->rank,
+                      "EHOSTUNREACH error on send");
             overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
         }
         errno = saved_errno;
@@ -864,11 +870,9 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
          * case, and won't hurt in the first.
          */
         if ((child = child_lookup (ov, uuid))) {
-            logdrop (ov, OVERLAY_DOWNSTREAM, msg,
-                     "message from %s child %s (rank %lu)",
-                     subtree_status_str (child->status),
-                     flux_get_hostbyrank (ov->h, child->rank),
-                     (unsigned long)child->rank);
+            /* Don't log dropped messages as first case above is expected,
+             * it this can be noisey.  See flux-framework/flux-core#4180
+             */
             (void)overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0);
         }
         /* Hello new peer!
@@ -886,7 +890,6 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
          * Send CONTROL_DISCONNECT to force subtree panic.
          */
         else {
-            logdrop (ov, OVERLAY_DOWNSTREAM, msg, "unknown uuid");
             if (overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0) < 0)
                 flux_log_error (ov->h, "failed to send CONTROL_DISCONNECT");
         }
@@ -1619,6 +1622,12 @@ static void overlay_disconnect_subtree_cb (flux_t *h,
         errstr = "failed to send CONTROL_DISCONNECT message";
         goto error;
     }
+    flux_log (ov->h,
+              LOG_ERR,
+              "%s (rank %d) transitioning to LOST due to %s",
+              flux_get_hostbyrank (ov->h, child->rank),
+              (int)child->rank,
+              "administrative action");
     overlay_child_status_update (ov, child, SUBTREE_STATUS_LOST);
     if (flux_respond (h, msg, NULL) < 0)
         flux_log_error (h, "error responding to overlay.disconnect-subtree");
