@@ -870,11 +870,9 @@ static void child_cb (flux_reactor_t *r, flux_watcher_t *w,
          * case, and won't hurt in the first.
          */
         if ((child = child_lookup (ov, uuid))) {
-            logdrop (ov, OVERLAY_DOWNSTREAM, msg,
-                     "message from %s child %s (rank %lu)",
-                     subtree_status_str (child->status),
-                     flux_get_hostbyrank (ov->h, child->rank),
-                     (unsigned long)child->rank);
+            /* Don't log dropped messages as first case above is expected,
+             * it this can be noisey.  See flux-framework/flux-core#4180
+             */
             (void)overlay_control_child (ov, uuid, CONTROL_DISCONNECT, 0);
         }
         /* Hello new peer!
