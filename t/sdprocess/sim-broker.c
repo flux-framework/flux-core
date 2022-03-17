@@ -137,6 +137,7 @@ int cmd_run (optparse_t *p, int argc, char **argv)
                                 unitname,
                                 cmdv,
                                 NULL,
+                                NULL,
                                 -1,
                                 STDOUT_FILENO,
                                 STDERR_FILENO))) {
@@ -257,6 +258,7 @@ int cmd_run_wait_exit (optparse_t *p, int argc, char **argv)
     if (!(sdp = sdprocess_exec (h,
                                 unitname,
                                 cmdv,
+                                NULL,
                                 NULL,
                                 -1,
                                 STDOUT_FILENO,

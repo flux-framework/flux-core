@@ -505,6 +505,7 @@ static int sdexec_launch (struct sdexec *se,
                                     unitname,
                                     cmdv,
                                     envv,
+                                    NULL,
                                     se->stdin_fds[1],
                                     se->stdout_fds[1],
                                     se->stderr_fds[1]))) {
