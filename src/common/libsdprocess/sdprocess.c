@@ -412,6 +412,13 @@ static int transient_service_set_properties (sdprocess_t *sdp,
         return -1;
     }
 
+    /* In sdprocess, we require the systemd unit to exist until the
+     * user cleans it up with sdprocess_systemd_cleanup().  This
+     * ensures consistent behavior in a number of functions.  For
+     * example, a function like sdprocess_wait() can be called
+     * multiple times.  Therefore, we set RemainAfterExit to true
+     * for every process we start.
+     */
     if ((ret = sd_bus_message_append (m,
                                       "(sv)",
                                       "RemainAfterExit",
