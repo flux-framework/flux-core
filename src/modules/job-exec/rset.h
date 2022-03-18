@@ -30,6 +30,8 @@ double resource_set_starttime (struct resource_set *rset);
 
 double resource_set_expiration (struct resource_set *rset);
 
+const json_t *resource_set_R_lite (struct resource_set *r);
+
 #endif /* !HAVE_JOB_EXEC_RSET_H */
 
 

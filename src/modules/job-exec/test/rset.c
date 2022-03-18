@@ -162,6 +162,7 @@ int main (int ac, char *av[])
                 const struct idset *ids = resource_set_ranks (r);
                 double starttime = resource_set_starttime (r);
                 double expiration = resource_set_expiration (r);
+                const json_t *R_lite = resource_set_R_lite (r);
                 if (ids == NULL)
                     fail ("%s: resource_set_ranks() failed", e->descr);
                 else {
@@ -176,6 +177,8 @@ int main (int ac, char *av[])
                 ok (expiration == e->expiration,
                     "%s: expect expiration %.2f (got %.2f)", e->descr,
                     e->expiration, expiration);
+                ok (R_lite != NULL,
+                    "%s: non-NULL R_lite returned", e->descr);
             }
             else {
                 fail ("%s: %d:[%s]",
