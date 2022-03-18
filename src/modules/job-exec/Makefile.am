@@ -10,7 +10,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
 	-I$(top_builddir)/src/common/libccan \
-	$(JANSSON_CFLAGS)
+	$(JANSSON_CFLAGS) \
+	$(HWLOC_CFLAGS)
 
 noinst_LTLIBRARIES = \
 	libjob-exec.la \
