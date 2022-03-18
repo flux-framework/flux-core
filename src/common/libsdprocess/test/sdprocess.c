@@ -17,6 +17,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <time.h>
+#include <sched.h>
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libsdprocess/sdprocess.h"
@@ -1716,6 +1717,183 @@ static void test_cleanup_failure_after_cleanup (flux_t *h)
     sdprocess_destroy (sdp);
 }
 
+static void test_property_CPUAffinity_cpuset (flux_t *h,
+                                              char **properties,
+                                              cpu_set_t *cpuset_expected)
+{
+    char *unitname = get_unitname (NULL);
+    char *cmdv[] = { "/bin/sleep", "60", NULL };
+    sdprocess_t *sdp = NULL;
+    bool active;
+    int pid;
+    int ret;
+    int i;
+    cpu_set_t cpuset;
+
+    sdp = sdprocess_exec (h,
+                          unitname,
+                          cmdv,
+                          NULL,
+                          properties,
+                          STDIN_FILENO,
+                          STDOUT_FILENO,
+                          STDERR_FILENO);
+    ok (sdp != NULL,
+        "sdprocess_exec launched process under systemd");
+
+    active = sdprocess_active (sdp);
+    while (!active) {
+        usleep (100000);
+        active = sdprocess_active (sdp);
+    }
+    ok (active == true,
+        "sdprocess_active success");
+
+    pid = sdprocess_pid (sdp);
+    ok (pid > 0,
+        "sdprocess_pid returned pid of process");
+
+    /* systemd setup of CPU affinity can be racy aginst the following
+     * check.  loop a few times if necessary. */
+
+    ret = sched_getaffinity (pid, sizeof (cpu_set_t), &cpuset);
+    ok (ret == 0,
+        "sched_getaffinity get cpuset of process");
+
+    ret = CPU_EQUAL (&cpuset, cpuset_expected);
+
+    for (i = 0; i < 20 && ret == 0; i++) {
+        usleep (500000);
+
+        ret = sched_getaffinity (pid, sizeof (cpu_set_t), &cpuset);
+        ok (ret == 0,
+            "sched_getaffinity get cpuset of process");
+
+        ret = CPU_EQUAL (&cpuset, cpuset_expected);
+    }
+
+    ok (ret != 0,
+        "CPU Affinity of process set correctly");
+
+    sdprocess_kill_wrap (sdp, SIGKILL);
+
+    ret = sdprocess_wait (sdp);
+    ok (ret == 0,
+        "sdprocess_wait success");
+
+    sdprocess_systemd_cleanup_wrap (sdp);
+
+    free (unitname);
+    sdprocess_destroy (sdp);
+}
+
+static void test_property_CPUAffinity_cpu_count1 (flux_t *h,
+                                                  cpu_set_t *cpuset_avail)
+{
+    char *affinitystr = NULL;
+    char **properties = NULL;
+    cpu_set_t cpuset_expected;
+    int cpuid;
+    int i = 0;
+
+    while (1) {
+        if (CPU_ISSET (i, cpuset_avail) > 0) {
+            cpuid = i;
+            break;
+        }
+        i++;
+    }
+
+    CPU_ZERO (&cpuset_expected);
+    CPU_SET (cpuid, &cpuset_expected);
+
+    if (asprintf (&affinitystr, "CPUAffinity=%d", cpuid) < 0)
+        BAIL_OUT ("asprintf");
+
+    if (!(properties = strv_create (affinitystr, " ")))
+        BAIL_OUT ("strv_create");
+
+    diag ("testing %s", affinitystr);
+    test_property_CPUAffinity_cpuset (h, properties, &cpuset_expected);
+
+    strv_destroy (properties);
+    free (affinitystr);
+}
+
+static void test_property_CPUAffinity_cpu_count2 (flux_t *h,
+                                                  cpu_set_t *cpuset_avail)
+{
+    char *affinitystr = NULL;
+    char **properties = NULL;
+    cpu_set_t cpuset_expected;
+    int cpuid1 = -1;
+    int cpuid2 = -1;
+    int i = 0;
+
+    while (1) {
+        if (CPU_ISSET (i, cpuset_avail) > 0) {
+            if (cpuid1 == -1)
+                cpuid1 = i;
+            else {
+                cpuid2 = i;
+                break;
+            }
+        }
+        i++;
+    }
+
+    CPU_ZERO (&cpuset_expected);
+    CPU_SET (cpuid1, &cpuset_expected);
+    CPU_SET (cpuid2, &cpuset_expected);
+
+    /* Using comma style i.e, 0,1 */
+    if (asprintf (&affinitystr, "CPUAffinity=%d,%d", cpuid1, cpuid2) < 0)
+        BAIL_OUT ("asprintf");
+
+    if (!(properties = strv_create (affinitystr, " ")))
+        BAIL_OUT ("strv_create");
+
+    test_property_CPUAffinity_cpuset (h, properties, &cpuset_expected);
+
+    strv_destroy (properties);
+    free (affinitystr);
+
+    if ((cpuid2 - cpuid1) > 1)
+        return;
+
+    /* Using bracket range style i.e, [0-1] */
+    if (asprintf (&affinitystr, "CPUAffinity=[%d-%d]", cpuid1, cpuid2) < 0)
+        BAIL_OUT ("asprintf");
+
+    if (!(properties = strv_create (affinitystr, " ")))
+        BAIL_OUT ("strv_create");
+
+    test_property_CPUAffinity_cpuset (h, properties, &cpuset_expected);
+
+    strv_destroy (properties);
+    free (affinitystr);
+}
+
+static void test_property_CPUAffinity (flux_t *h)
+{
+    cpu_set_t cpuset_avail;
+    int count;
+    if (sched_getaffinity (0, sizeof (cpu_set_t), &cpuset_avail) < 0)
+        BAIL_OUT ("sched_getaffinity");
+
+    count = CPU_COUNT (&cpuset_avail);
+
+    if (!count)
+        BAIL_OUT ("CPU_COUNT says no cpus available?");
+
+    test_property_CPUAffinity_cpu_count1 (h, &cpuset_avail);
+
+    if (count == 1)
+        return;
+
+    test_property_CPUAffinity_cpu_count2 (h, &cpuset_avail);
+}
+
 int main (int argc, char *argv[])
 {
     flux_t *h = loopback_create (0);
@@ -1827,6 +2005,8 @@ int main (int argc, char *argv[])
     test_cleanup_success_after_cleanup (h);
     diag ("cleanup_failure_after_cleanup");
     test_cleanup_failure_after_cleanup (h);
+    diag ("property_CPUAffinity");
+    test_property_CPUAffinity (h);
 
     flux_close (h);
     done_testing ();
