@@ -162,10 +162,11 @@ static int rlist_add_rnode (struct rlist *rl, struct rnode *n)
     return 0;
 }
 
-typedef struct rnode * (*rnode_copy_f) (const struct rnode *);
+typedef struct rnode * (*rnode_copy_f) (const struct rnode *, void *arg);
 
 static struct rlist *rlist_copy_internal (const struct rlist *orig,
-                                          rnode_copy_f cpfn)
+                                          rnode_copy_f cpfn,
+                                          void *arg)
 {
     struct rnode *n;
     struct rlist *rl = rlist_create ();
@@ -174,7 +175,7 @@ static struct rlist *rlist_copy_internal (const struct rlist *orig,
 
     n = zlistx_first (orig->nodes);
     while (n) {
-        struct rnode *copy = (*cpfn) (n);
+        struct rnode *copy = (*cpfn) (n, arg);
         if (copy && rlist_add_rnode_new (rl, copy) < 0) {
             rnode_destroy (copy);
             goto fail;
@@ -201,19 +202,34 @@ fail:
     return NULL;
 }
 
+static struct rnode *copy_empty (const struct rnode *rnode, void *arg)
+{
+    return rnode_copy_empty (rnode);
+}
+
 struct rlist *rlist_copy_empty (const struct rlist *orig)
 {
-    return rlist_copy_internal (orig, rnode_copy_empty);
+    return rlist_copy_internal (orig, copy_empty, NULL);
+}
+
+static struct rnode *copy_alloc (const struct rnode *rnode, void *arg)
+{
+    return rnode_copy_alloc (rnode);
 }
 
 struct rlist *rlist_copy_allocated (const struct rlist *orig)
 {
-    return rlist_copy_internal (orig, rnode_copy_alloc);
+    return rlist_copy_internal (orig, copy_alloc, NULL);
+}
+
+static struct rnode *copy_cores (const struct rnode *rnode, void *arg)
+{
+    return rnode_copy_cores (rnode);
 }
 
 struct rlist *rlist_copy_cores (const struct rlist *orig)
 {
-    return rlist_copy_internal (orig, rnode_copy_cores);
+    return rlist_copy_internal (orig, copy_cores, NULL);
 }
 
 struct rlist *rlist_copy_down (const struct rlist *orig)
