@@ -136,6 +136,10 @@ double resource_set_expiration (struct resource_set *r)
     return r->expiration;
 }
 
+const json_t *resource_set_R_lite (struct resource_set *r)
+{
+    return r->R_lite;
+}
 
 /* vi: ts=4 sw=4 expandtab
  */
