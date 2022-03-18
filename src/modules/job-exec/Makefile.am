@@ -10,7 +10,8 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir)/src/include \
 	-I$(top_builddir)/src/common/libflux \
 	-I$(top_builddir)/src/common/libccan \
-	$(JANSSON_CFLAGS)
+	$(JANSSON_CFLAGS) \
+	$(HWLOC_CFLAGS)
 
 fluxmod_LTLIBRARIES = \
 	job-exec.la
@@ -50,6 +51,7 @@ job_exec_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(JANSSON_LIBS) \
+	$(HWLOC_LIBS) \
 	libbulk-exec.la
 
 if HAVE_LIBSYSTEMD

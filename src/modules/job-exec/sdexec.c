@@ -23,6 +23,13 @@
  * [exec]
  * method = systemd
  *
+ * Other configuration options available under [exec.systemd]:
+ *
+ * cpu_set_affinity = true
+ *
+ * Based on the cores listed in R, set CPU affinity in the launched
+ * process via the systemd CPUAffinity property.
+ *
  * The following configurations are supported under
  * attributes.system.exec.sd in the jobspec.
  *
@@ -51,6 +58,7 @@
 #include <sys/socket.h>
 #include <unistd.h>
 #include <jansson.h>
+#include <hwloc.h>
 #include <assert.h>
 
 #include "src/common/libsdprocess/sdprocess.h"
@@ -70,6 +78,7 @@ struct sdexec
     flux_t *h;
     struct jobinfo *job;
     flux_cmd_t *cmd;
+    char **properties;
 
     int start_errno;
     int test_exec_fail;
@@ -92,6 +101,18 @@ static int sdexec_config (flux_t *h, int argc, char **argv)
     return config_init (h, argc, argv);
 }
 
+static void strv_destroy (char **strv)
+{
+    if (strv) {
+        char **ptr = strv;
+        while (*ptr) {
+            free (*ptr);
+            ptr++;
+        }
+        free (strv);
+    }
+}
+
 static void sdexec_destroy (void *data)
 {
     struct sdexec *se = data;
@@ -104,6 +125,7 @@ static void sdexec_destroy (void *data)
             sdprocess_destroy (se->sdp);
         }
         flux_cmd_destroy (se->cmd);
+        strv_destroy (se->properties);
         close (se->stdin_fds[0]);
         close (se->stdin_fds[1]);
         close (se->stdout_fds[0]);
@@ -191,6 +213,213 @@ static void set_stdlog (struct sdexec *se,
     }
 }
 
+static int rank_in_idset (const char *idset_str,
+                          uint32_t rank,
+                          bool *in_idset)
+{
+    struct idset *idset = idset_decode (idset_str);
+
+    if (!idset)
+        return -1;
+
+    (*in_idset) = idset_test (idset, rank);
+    idset_destroy (idset);
+    return 0;
+}
+
+static char *hwloc_cpuset_2_systemd_property (hwloc_cpuset_t set)
+{
+    char *str = NULL;
+    size_t str_index = 0;
+    size_t str_len = 0;
+    int i;
+
+    /* N.B. It is assumed hwloc bitmap will always returns id in
+     * increasing numerical order */
+
+    i = hwloc_bitmap_first (set);
+    while (i >= 0) {
+        int len;
+        /* max printed int is 10 chars + comma = 11, we'll realloc if
+         * we're ever below 16 bytes left */
+        if ((str_len - str_index) < 16) {
+            str_len += 256;
+            if (!(str = realloc (str, str_len)))
+                goto error;
+        }
+        len = snprintf (str + str_index,
+                        str_len - str_index,
+                        "%s%d",
+                        str_index ? "," : "CPUAffinity=",
+                        i);
+        assert (len < (str_len - str_index));
+        str_index += len;
+        i = hwloc_bitmap_next (set, i);
+    }
+
+    return str;
+
+error:
+    free (str);
+    return NULL;
+}
+
+static char *CPUAffinity_list (struct jobinfo *job,
+                               const char *cores)
+{
+    hwloc_topology_t topo = NULL;
+    hwloc_cpuset_t coreset = NULL;
+    hwloc_cpuset_t puset = NULL;
+    int depth;
+    int i;
+    char *rv = NULL;
+
+    if (hwloc_topology_init (&topo) < 0
+        || hwloc_topology_load (topo) < 0) {
+        flux_log_error (job->h, "hwloc topology setup");
+        goto error;
+    }
+
+    depth = hwloc_get_type_depth (topo, HWLOC_OBJ_CORE);
+    if (depth == HWLOC_TYPE_DEPTH_UNKNOWN
+        || depth == HWLOC_TYPE_DEPTH_MULTIPLE) {
+        flux_log_error (job->h, "invalid depth returned");
+        goto error;
+    }
+
+    if (!(coreset = hwloc_bitmap_alloc ())
+        || !(puset = hwloc_bitmap_alloc ())) {
+        flux_log_error (job->h, "hwloc_bitmap_alloc");
+        goto error;
+    }
+
+    if (hwloc_bitmap_list_sscanf (coreset, cores) < 0) {
+        flux_log_error (job->h, "hwloc_bitmap_list_sscanf");
+        goto error;
+    }
+
+    /* A core may be hyperthreaded, so we have to figure out all
+     * processor units that need to be "affinitied" */
+
+    i = hwloc_bitmap_first (coreset);
+    while (i >= 0) {
+        hwloc_obj_t core;
+        if (!(core = hwloc_get_obj_by_depth (topo, depth, i))) {
+            flux_log_error (job->h, "hwloc_get_obj_by_depth");
+            goto error;
+        }
+        if (!core->cpuset) {
+            flux_log_error (job->h, "hwloc obj invalid");
+            goto error;
+        }
+        hwloc_bitmap_or (puset, puset, core->cpuset);
+        i = hwloc_bitmap_next (coreset, i);
+    }
+
+    rv = hwloc_cpuset_2_systemd_property (puset);
+error:
+    if (topo)
+        hwloc_topology_destroy (topo);
+    if (coreset)
+        hwloc_bitmap_free (coreset);
+    if (puset)
+        hwloc_bitmap_free (puset);
+    return rv;
+}
+
+static char *sdexec_CPUAffinity (struct jobinfo *job)
+{
+    const json_t *R_lite;
+    json_t *entry;
+    uint32_t myrank;
+    size_t index;
+    const char *cores = NULL;
+
+    if (!(R_lite = resource_set_R_lite (job->R)))
+        return NULL;
+
+    if (flux_get_rank (job->h, &myrank) < 0) {
+        flux_log_error (job->h, "flux_get_rank");
+        return NULL;
+    }
+
+    json_array_foreach (R_lite, index, entry) {
+        const char *ranks;
+        bool in_ranks;
+        if (json_unpack_ex (entry, NULL, 0, "{s:s}", "rank", &ranks) < 0)
+            return NULL;
+        if (rank_in_idset (ranks, myrank, &in_ranks) < 0)
+            return NULL;
+        if (in_ranks) {
+            if (json_unpack_ex (entry,
+                                NULL,
+                                0,
+                                "{s:{s:s}}",
+                                "children",
+                                "core",
+                                &cores) < 0) {
+                flux_log_error (job->h, "cannot get rank cores");
+                return NULL;
+            }
+            break;
+        }
+    }
+    if (!cores) {
+        flux_log (job->h, LOG_ERR, "cores for rank %u not found in R", myrank);
+        return NULL;
+    }
+    return CPUAffinity_list (job, cores);
+}
+
+static int sdexec_setup_properties (struct sdexec *se, struct jobinfo *job)
+{
+    /* currently supported properties
+     * - CPUAffinity
+     */
+    char **properties = NULL;
+    flux_error_t err;
+    int cpu_set_affinity = 0;
+    int properties_len = 0;
+    int index = 0;
+
+    if (flux_conf_unpack (flux_get_conf (se->h),
+                          &err,
+                          "{s?:{s?:{s?b}}}",
+                          "exec", "systemd",
+                            "cpu_set_affinity", &cpu_set_affinity) < 0) {
+        flux_log (se->h, LOG_ERR,
+                  "error reading systemd config: %s",
+                  err.text);
+        return -1;
+    }
+
+    if (cpu_set_affinity)
+        properties_len++;
+
+    if (!properties_len) {
+        se->properties = NULL;
+        return 0;
+    }
+
+    /* +1 for NULL terminator */
+    properties_len++;
+
+    if (!(properties = calloc (properties_len, sizeof (char *))))
+        return -1;
+
+    if (cpu_set_affinity) {
+        if (!(properties[index++] = sdexec_CPUAffinity (job)))
+            goto error;
+    }
+
+    se->properties = properties;
+    return 0;
+
+error:
+    strv_destroy (properties);
+    return -1;
+}
+
 static struct sdexec *sdexec_create (flux_t *h,
                                      struct jobinfo *job,
                                      const char *job_shell)
@@ -255,6 +484,9 @@ static struct sdexec *sdexec_create (flux_t *h,
         flux_log_error (job->h, "flux_cmd_setenvf");
         goto cleanup;
     }
+
+    if (sdexec_setup_properties (se, job) < 0)
+        goto cleanup;
 
     se->stdoutlog = SDEXEC_LOG_EVENTLOG;
     se->stderrlog = SDEXEC_LOG_EVENTLOG;
@@ -506,7 +738,7 @@ static int sdexec_launch (struct sdexec *se,
                                     unitname,
                                     cmdv,
                                     envv,
-                                    NULL,
+                                    se->properties,
                                     se->stdin_fds[1],
                                     se->stdout_fds[1],
                                     se->stderr_fds[1]))) {
