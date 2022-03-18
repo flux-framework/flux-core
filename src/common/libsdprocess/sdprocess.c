@@ -44,6 +44,8 @@
 
 #include <systemd/sd-bus.h>
 
+#include "src/common/libidset/idset.h"
+
 #include "sdprocess.h"
 #include "strv.h"
 
@@ -277,12 +279,98 @@ cleanup:
     return NULL;
 }
 
+static int cpu_idset_to_bitmask (const char *idset_str,
+                                 uint8_t **bitmask,
+                                 size_t *bitmask_len)
+{
+    struct idset *idset = NULL;
+    unsigned int i, high_cpu_id;
+    uint8_t *cpu_bitmask = NULL;
+    size_t cpu_bitmask_len = -1;
+
+    if (!(idset = idset_decode (idset_str)))
+        goto error;
+
+    if ((high_cpu_id = idset_last (idset)) == IDSET_INVALID_ID) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    /* N.B. as of this code's writing, max CONFIG_NR_CPUS in Linux is
+     * 8192 */
+    if (high_cpu_id >= 8192) {
+        errno = EINVAL;
+        goto error;
+    }
+
+    cpu_bitmask_len = (high_cpu_id / 8) + 1;
+    if (!(cpu_bitmask = calloc (1, cpu_bitmask_len)))
+        goto error;
+
+    i = idset_first (idset);
+    while (i != IDSET_INVALID_ID) {
+        cpu_bitmask[i / 8] |= 0x1 << (i % 8);
+        i = idset_next (idset, i);
+    }
+
+    idset_destroy (idset);
+    (*bitmask) = cpu_bitmask;
+    (*bitmask_len) = cpu_bitmask_len;
+    return 0;
+
+error:
+    idset_destroy (idset);
+    free (cpu_bitmask);
+    return -1;
+}
+
+static int set_property_CPUAffinity (sdprocess_t *sdp,
+                                     sd_bus_message *m,
+                                     const char *value)
+{
+    uint8_t *bitmask = NULL;
+    size_t bitmask_len;
+    int ret;
+
+    if (cpu_idset_to_bitmask (value, &bitmask, &bitmask_len) < 0)
+        return -1;
+
+    if ((ret = sd_bus_message_open_container (m, SD_BUS_TYPE_STRUCT, "sv")) < 0)
+        goto error;
+
+    if ((ret = sd_bus_message_append_basic (m,
+                                            SD_BUS_TYPE_STRING,
+                                            "CPUAffinity")) < 0)
+        goto error;
+
+    if ((ret = sd_bus_message_open_container (m, 'v', "ay")) < 0)
+        goto error;
+
+    if ((ret = sd_bus_message_append_array (m, 'y', bitmask, bitmask_len)) < 0)
+        goto error;
+
+    if ((ret = sd_bus_message_close_container (m)) < 0)
+        goto error;
+
+    if ((ret = sd_bus_message_close_container (m)) < 0)
+        goto error;
+
+    free (bitmask);
+    return 0;
+
+error:
+    set_errno_log (sdp->h, ret, "error setting CPUAffinity property");
+    free (bitmask);
+    return -1;
+}
+
 static int transient_service_parse_user_property (sdprocess_t *sdp,
                                                   sd_bus_message *m,
                                                   const char *str)
 {
     char *value;
     char *property = NULL;
+    int rv = -1;
 
     if (!strchr (str, '=')) {
         errno = EINVAL;
@@ -306,11 +394,20 @@ static int transient_service_parse_user_property (sdprocess_t *sdp,
         goto error;
     }
 
-    /* No properties currently supported */
-    errno = EINVAL;
+    /* N.B. for consistency to systemd, properties are case sensitive */
+    if (!strcmp (property, "CPUAffinity")) {
+        if (set_property_CPUAffinity (sdp, m, value) < 0)
+            goto error;
+    }
+    else {
+        errno = EINVAL;
+        goto error;
+    }
+
+    rv = 0;
 error:
     free (property);
-    return -1;
+    return rv;
 }
 
 static int transient_service_set_user_properties (sdprocess_t *sdp,

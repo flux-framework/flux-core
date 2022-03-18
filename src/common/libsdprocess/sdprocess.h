@@ -63,7 +63,7 @@ typedef int (*sdprocess_list_f) (flux_t *h,
  * if unnecessary, set fd to < 0
  *
  * Current properties supported:
- * None
+ * - CPUAffinity=<flux idset> (N.B. input different than systemd)
  *
  * Properties not allowed due to internal use:
  * - RemainAfterExit
