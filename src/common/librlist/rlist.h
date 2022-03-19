@@ -68,6 +68,25 @@ struct rlist *rlist_copy_ranks (const struct rlist *rl, struct idset *ranks);
 
 struct rlist *rlist_copy_cores (const struct rlist *rl);
 
+/*  Create a copy of rl constrained by an RFC 31 constraint object
+ *
+ *  Returns a copy of rl with only those resource nodes that match
+ *   the provided constraint. The result 'struct rlist' may be empty
+ *   if no resources satisfy the constraint.
+ *
+ *  Returns NULL with `errp` set if the constraint object was invalid.
+ *
+ */
+struct rlist *rlist_copy_constraint (const struct rlist *rl,
+                                     json_t *constraint,
+                                     flux_error_t *errp);
+
+/*  Same as above, but takes a JSON string instead of json_t object.
+ */
+struct rlist *rlist_copy_constraint_string (const struct rlist *orig,
+                                            const char *constraint,
+                                            flux_error_t *errp);
+
 /*  Delete ranks in idset 'ranks' from rlist 'rl'
  */
 int rlist_remove_ranks (struct rlist *rl, struct idset *ranks);

@@ -25,6 +25,7 @@
 #include "src/common/libutil/errprintf.h"
 
 #include "rnode.h"
+#include "match.h"
 #include "rlist.h"
 #include "rhwloc.h"
 
@@ -303,6 +304,34 @@ err:
     rlist_destroy (result);
     return NULL;
 }
+
+struct rlist *rlist_copy_constraint (const struct rlist *orig,
+                                     json_t *constraint,
+                                     flux_error_t *errp)
+{
+    if (rnode_match_validate (constraint, errp) < 0)
+        return NULL;
+    return rlist_copy_internal (orig,
+                                (rnode_copy_f) rnode_copy_match,
+                                (void *) constraint);
+}
+
+struct rlist *rlist_copy_constraint_string (const struct rlist *orig,
+                                            const char *constraint,
+                                            flux_error_t *errp)
+{
+    struct rlist *rl;
+    json_error_t error;
+    json_t *o = json_loads (constraint, 0, &error);
+    if (!o) {
+        errprintf (errp, "%s", error.text);
+        return NULL;
+    }
+    rl = rlist_copy_constraint (orig, o, errp);
+    json_decref (o);
+    return rl;
+}
+
 
 int rlist_remove_ranks (struct rlist *rl, struct idset *ranks)
 {
