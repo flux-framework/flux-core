@@ -66,6 +66,33 @@ def _validate_dependency(dep):
         raise TypeError("dependency value must be a string")
 
 
+def _validate_property_query(name):
+    invalid_chars = set("&'\"`|()")
+    if any((x in invalid_chars) for x in name):
+        raise TypeError(f"invalid character in property '{name}'")
+
+
+def _validate_constraint_op(operator, args):
+    if not isinstance(operator, str):
+        raise TypeError(f"constraint operation {operator} is not a string")
+    if not isinstance(args, abc.Sequence):
+        raise TypeError(f"argument to constraint {operator} must be a sequence")
+    if operator in ["and", "or", "not"]:
+        for constraint in args:
+            _validate_constraint(constraint)
+    elif operator in ["properties"]:
+        for name in args:
+            _validate_property_query(name)
+
+
+def _validate_constraint(constraints):
+    """Validate RFC 31 Constraint object"""
+    if not isinstance(constraints, abc.Mapping):
+        raise TypeError("constraints must be a mapping")
+    for operator, arg in constraints.items():
+        _validate_constraint_op(operator, arg)
+
+
 def validate_jobspec(jobspec, require_version=None):
     """
     Validates the jobspec by attempting to construct a Jobspec object.  If no
@@ -277,6 +304,8 @@ class Jobspec(object):
                 raise TypeError("attributes.system.dependencies must be a list")
             for dependency in system["dependencies"]:
                 _validate_dependency(dependency)
+        if "constraints" in system:
+            _validate_constraint(system["constraints"])
 
     @staticmethod
     def _create_resource(res_type, count, with_child=None):
