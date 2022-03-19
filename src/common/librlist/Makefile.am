@@ -41,6 +41,7 @@ test_ldflags = \
 
 TESTS = \
 	test_rnode.t \
+	test_match.t \
 	test_rlist.t \
 	test_rhwloc.t
 
@@ -55,6 +56,16 @@ test_rnode_t_LDADD = \
 	librlist.la \
 	$(test_ldadd)
 test_rnode_t_LDFLAGS = \
+	$(test_ldflags)
+
+test_match_t_SOURCES = \
+	test/match.c
+test_match_t_CPPFLAGS = \
+	$(test_cppflags)
+test_match_t_LDADD = \
+	librlist.la \
+	$(test_ldadd)
+test_match_t_LDFLAGS = \
 	$(test_ldflags)
 
 test_rlist_t_SOURCES = \
