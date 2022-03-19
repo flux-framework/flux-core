@@ -9,6 +9,7 @@ AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
 	-I$(top_srcdir)/src/common/libccan \
+	-I$(top_builddir)/src/common/libflux \
 	$(JANSSON_CFLAGS) \
 	$(HWLOC_CFLAGS)
 
@@ -18,6 +19,8 @@ noinst_LTLIBRARIES = \
 librlist_la_SOURCES = \
 	rnode.h \
 	rnode.c \
+	match.h \
+	match.c \
 	rlist.c \
 	rlist.h \
 	rhwloc.c \
