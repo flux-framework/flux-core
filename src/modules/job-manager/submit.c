@@ -22,7 +22,6 @@
 #include "job.h"
 #include "alloc.h"
 #include "event.h"
-#include "journal.h"
 #include "wait.h"
 #include "jobtap-internal.h"
 
