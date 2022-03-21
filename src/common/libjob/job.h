@@ -107,7 +107,7 @@ const char *flux_job_statetostr (flux_job_state_t state, const char *fmt);
  */
 int flux_job_strtostate (const char *s, flux_job_state_t *state);
 
-const char *flux_job_resulttostr (flux_job_result_t result, bool abbrev);
+const char *flux_job_resulttostr (flux_job_result_t result, const char *fmt);
 
 int flux_job_strtoresult (const char *s, flux_job_result_t *result);
 

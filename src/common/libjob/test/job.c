@@ -294,14 +294,16 @@ struct rr {
     flux_job_result_t result;
     const char *r;
     const char *r_long;
+    const char *r_lower;
+    const char *r_long_lower;
 };
 
 struct rr rrtab[] = {
-    { FLUX_JOB_RESULT_COMPLETED, "CD", "COMPLETED" },
-    { FLUX_JOB_RESULT_FAILED,    "F",  "FAILED" },
-    { FLUX_JOB_RESULT_CANCELED,  "CA", "CANCELED" },
-    { FLUX_JOB_RESULT_TIMEOUT,   "TO", "TIMEOUT" },
-    { -1, NULL, NULL },
+    { FLUX_JOB_RESULT_COMPLETED, "CD", "COMPLETED", "cd", "completed" },
+    { FLUX_JOB_RESULT_FAILED,    "F",  "FAILED", "f", "failed" },
+    { FLUX_JOB_RESULT_CANCELED,  "CA", "CANCELED", "ca", "canceled" },
+    { FLUX_JOB_RESULT_TIMEOUT,   "TO", "TIMEOUT", "to", "timeout" },
+    { -1, NULL, NULL, NULL, NULL },
 };
 
 void check_resultstr(void)
@@ -309,12 +311,18 @@ void check_resultstr(void)
     struct rr *rr;
 
     for (rr = &rrtab[0]; rr->r != NULL; rr++) {
-        const char *r = flux_job_resulttostr (rr->result, true);
-        const char *r_long = flux_job_resulttostr (rr->result, false);
+        const char *r = flux_job_resulttostr (rr->result, "S");
+        const char *r_long = flux_job_resulttostr (rr->result, "L");
+        const char *r_lower = flux_job_resulttostr (rr->result, "s");
+        const char *r_long_lower = flux_job_resulttostr (rr->result, "l");
         ok (r && !strcmp (r, rr->r),
-            "flux_job_resulttostr (%d, true) = %s", rr->result, rr->r);
+            "flux_job_resulttostr (%d, S) = %s", rr->result, rr->r);
         ok (r_long && !strcmp (r_long, rr->r_long),
-            "flux_job_resulttostr (%d, false) = %s", rr->result, rr->r_long);
+            "flux_job_resulttostr (%d, L) = %s", rr->result, rr->r_long);
+        ok (r_lower && !strcmp (r_lower, rr->r_lower),
+            "flux_job_resulttostr (%d, s) = %s", rr->result, rr->r_lower);
+        ok (r_long_lower && !strcmp (r_long_lower, rr->r_long_lower),
+            "flux_job_resulttostr (%d, l) = %s", rr->result, rr->r_long_lower);
     }
     for (rr = &rrtab[0]; rr->r != NULL; rr++) {
         flux_job_result_t result;
@@ -323,10 +331,14 @@ void check_resultstr(void)
         ok (flux_job_strtoresult (rr->r_long, &result) == 0 && result == rr->result,
             "flux_job_strtoresult (%s) = %d", rr->r_long, rr->result);
     }
-    ok (flux_job_resulttostr (0, true) != NULL,
-        "flux_job_resulttostr (0, true) returned non-NULL");
-    ok (flux_job_resulttostr (0, false) != NULL,
-        "flux_job_resulttostr (0, false) returned non-NULL");
+    ok (flux_job_resulttostr (0, "S") != NULL,
+        "flux_job_resulttostr (0, S) returned non-NULL");
+    ok (flux_job_resulttostr (0, "L") != NULL,
+        "flux_job_resulttostr (0, L) returned non-NULL");
+    ok (flux_job_resulttostr (0, "") != NULL,
+        "flux_job_resulttostr (0, <empty string>) returned non-NULL");
+    ok (flux_job_resulttostr (0, NULL) != NULL,
+        "flux_job_resulttostr (0, NULL) returned non-NULL");
 }
 
 void check_kvs_namespace (void)

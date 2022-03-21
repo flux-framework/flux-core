@@ -40,11 +40,14 @@ def strtostate(args):
 
 
 def resulttostr(args):
+    fmt = "L"
+    if args.abbrev:
+        fmt = "S"
     if not args.results:
         args.results = [line.strip() for line in sys.stdin]
 
     for result in args.results:
-        print(raw.flux_job_resulttostr(int(result), args.abbrev).decode("utf-8"))
+        print(raw.flux_job_resulttostr(int(result), fmt).decode("utf-8"))
 
 
 def strtoresult(args):
