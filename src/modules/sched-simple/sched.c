@@ -16,6 +16,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libjob/job.h"
 #include "src/common/librlist/rlist.h"
 #include "libjj.h"
@@ -35,6 +36,7 @@ struct jobreq {
     double t_submit;
     flux_jobid_t id;
     struct jj_counts jj;
+    json_t *constraints;
     int errnum;
 };
 
@@ -59,6 +61,7 @@ static void jobreq_destroy (struct jobreq *job)
 {
     if (job) {
         flux_msg_decref (job->msg);
+        json_decref (job->constraints);
         ERRNO_SAFE_WRAP (free, job);
     }
 }
@@ -114,6 +117,15 @@ jobreq_create (const flux_msg_t *msg)
     job->msg = flux_msg_incref (msg);
     if (libjj_get_counts_json (jobspec, &job->jj) < 0)
         job->errnum = errno;
+    if (json_unpack (jobspec,
+                     "{s?{s?{s?O}}}",
+                     "attributes",
+                     "system",
+                     "constraints", &job->constraints) < 0) {
+        job->errnum = errno;
+        goto err;
+    }
+
     return job;
 err:
     jobreq_destroy (job);
@@ -174,6 +186,41 @@ static char *Rstring_create (struct simple_sched *ss,
     return s;
 }
 
+static struct rlist *sched_alloc (struct simple_sched *ss,
+                                  struct jobreq *job,
+                                  flux_error_t *errp)
+{
+    struct rlist *alloc;
+
+    if (job->constraints) {
+        struct rlist *rl;
+
+        if (!(rl = rlist_copy_constraint (ss->rlist,
+                                          job->constraints,
+                                          errp)))
+            return NULL;
+
+        alloc = rlist_alloc (rl,
+                             ss->alloc_mode,
+                             job->jj.nnodes,
+                             job->jj.nslots,
+                             job->jj.slot_size);
+        rlist_destroy (rl);
+        if (alloc && rlist_set_allocated (ss->rlist, alloc) < 0) {
+            errprintf (errp, "rlist_set_allocated: %s", strerror (errno));
+            rlist_destroy (alloc);
+            alloc = NULL;
+        }
+    }
+    else
+        alloc = rlist_alloc (ss->rlist,
+                             ss->alloc_mode,
+                             job->jj.nnodes,
+                             job->jj.nslots,
+                             job->jj.slot_size);
+    return alloc;
+}
+
 static int try_alloc (flux_t *h, struct simple_sched *ss)
 {
     int rc = -1;
@@ -184,6 +231,7 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     struct jobreq *job = zlistx_first (ss->queue);
     double now = flux_reactor_now (flux_get_reactor (h));
     bool fail_alloc = flux_module_debug_test (h, DEBUG_FAIL_ALLOC, false);
+    flux_error_t error;
 
     if (!job)
         return -1;
@@ -191,8 +239,7 @@ static int try_alloc (flux_t *h, struct simple_sched *ss)
     jj = &job->jj;
     if (!fail_alloc) {
         errno = 0;
-        alloc = rlist_alloc (ss->rlist, ss->alloc_mode,
-                             jj->nnodes, jj->nslots, jj->slot_size);
+        alloc = sched_alloc (ss, job, &error);
     }
     if (!alloc || !(R = Rstring_create (ss, alloc, now, jj->duration))) {
         const char *note = "unable to allocate provided jobspec";
@@ -564,17 +611,45 @@ static void feasibility_cb (flux_t *h,
     struct simple_sched *ss = arg;
     struct jj_counts jj;
     json_t *jobspec;
+    json_t *constraints = NULL;
     struct rlist *alloc = NULL;
     const char *errmsg = NULL;
+    flux_error_t error;
+
+    struct rlist *rl = ss->rlist;
 
     if (flux_request_unpack (msg, NULL, "{s:o}",
                             "jobspec", &jobspec) < 0)
         goto err;
+    if (json_unpack (jobspec,
+                     "{s?{s?{s?o}}}",
+                     "attributes",
+                     "system",
+                     "constraints", &constraints) < 0)
+        goto err;
+    if (constraints) {
+        /*  If the job has constraints, first copy the set of resources
+         *   which match the constraint. rlist_copy_constraint() will
+         *   also validate the constraints object on error.
+         */
+        if (!(rl = rlist_copy_constraint (ss->rlist,
+                                          constraints,
+                                          &error))) {
+            errno = EINVAL;
+            errmsg = error.text;
+            goto err;
+        }
+        if (rlist_count (rl, "core") == 0) {
+            errno = ENOSPC;
+            errmsg = "no resources satisfy provided constraints";
+            goto err;
+        }
+    }
     if (libjj_get_counts_json (jobspec, &jj) < 0) {
         errmsg = jj.error;
         goto err;
     }
-    if (!(alloc = rlist_alloc (ss->rlist,
+    if (!(alloc = rlist_alloc (rl,
                                ss->alloc_mode,
                                jj.nnodes,
                                jj.nslots,
@@ -589,9 +664,11 @@ static void feasibility_cb (flux_t *h,
         }
         /* Fall-through: job is satisfiable */
     }
-    else {
+    else if (rl == ss->rlist) {
+        /*  If we didn't try allocation from a copy, then we have to free
+         *   the test allocation now.
+         */
         int rc = rlist_free (ss->rlist, alloc);
-        rlist_destroy (alloc);
         if (rc < 0) {
             /*  If rlist_free() fails we're in trouble because
              *  ss->rlist will have an invalid allocation. This should
@@ -605,10 +682,16 @@ static void feasibility_cb (flux_t *h,
             goto err;
         }
     }
+    rlist_destroy (alloc);
+    if (rl != ss->rlist)
+        rlist_destroy (rl);
     if (flux_respond_pack (h, msg, "{s:i}", "errnum", 0) < 0)
         flux_log_error (h, "feasibility_cb: flux_respond_pack");
     return;
 err:
+    rlist_destroy (alloc);
+    if (rl != ss->rlist)
+        rlist_destroy (rl);
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "feasibility_cb: flux_respond_error");
 }
