@@ -46,6 +46,26 @@ test_expect_success 'flux R encode --hosts works' '
     hosts=$(flux R encode --hosts=foo[0-1] | flux R decode --nodelist) &&
     test "$hosts" = "foo[0-1]"
 '
+test_expect_success 'flux R encode/decode --property works' '
+    flux R encode --hosts=foo[0-1] --gpus 0 --cores 0-1  \
+        --property xx:0 \
+        --property yy:1 \
+        --property all > properties.json &&
+    test $(flux R decode -c node <properties.json) -eq 2 &&
+    test $(flux R decode -c node --properties all <properties.json) -eq 2 &&
+    test $(flux R decode -c node --properties xx <properties.json) -eq 1 &&
+    test $(flux R decode -c node --properties yy <properties.json) -eq 1 &&
+    test $(flux R decode -c node --properties ^all <properties.json) -eq 0 &&
+    test $(flux R decode -c node --properties all,yy <properties.json) -eq 1 &&
+    test $(flux R decode --nodelist --properties xx <properties.json) = foo0 &&
+    test $(flux R decode --nodelist --properties yy <properties.json) = foo1 &&
+    test $(flux R decode --nodelist --properties ^yy <properties.json) = foo0
+'
+test_expect_success 'flux R encode --property fails with invalid rank' '
+    test_must_fail flux R encode -r 0-3 -p xx:3-5 >property-fail.out 2>&1 &&
+    test_debug "cat property-fail.out" &&
+    grep "ranks 4-5 not found" property-fail.out
+'
 test_expect_success 'flux R encode --xml works' '
     flux R encode --xml=$SHARNESS_TEST_SRCDIR/hwloc-data/sierra2/0.xml \
         > R.sierra2 &&
@@ -140,6 +160,23 @@ test_expect_success 'flux R verify fails with mismatched resources' '
 test_expect_success 'flux R verify reports extra resources' '
     (flux R encode  -r 1 -c 0-3 && flux R encode -r 1 -c 0-7 -g 1) \
         | flux R verify
+'
+test_expect_success 'flux R set-property works' '
+    flux R encode -r 0-1 -c 0-3 -H foo[0-1] | \
+        flux R set-property all | \
+        flux R set-property xx:0 yy:1 > setprop.json &&
+    test $(flux R decode -c node <setprop.json) -eq 2 &&
+    test $(flux R decode -c node --properties all <setprop.json) -eq 2 &&
+    test $(flux R decode -c node --properties xx <setprop.json) -eq 1 &&
+    test $(flux R decode -c node --properties yy <setprop.json) -eq 1 &&
+    test $(flux R decode -c node --properties ^all <setprop.json) -eq 0 &&
+    test $(flux R decode -c node --properties all,yy <setprop.json) -eq 1 &&
+    test $(flux R decode --nodelist --properties xx <setprop.json) = foo0 &&
+    test $(flux R decode --nodelist --properties yy <setprop.json) = foo1 &&
+    test $(flux R decode --nodelist --properties ^yy <setprop.json) = foo0
+'
+test_expect_success 'flux R set-property fails with unknown ranks' '
+    flux R encode -r 0-1 | test_must_fail flux R set-property foo:1-2
 '
 test_expect_success HAVE_JQ 'scheduling opaque key is preserved' '
     flux R encode -r 0-3 -c 0-3 -g 0 -H foo[0-3] \
