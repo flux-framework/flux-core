@@ -60,6 +60,7 @@
 #include "boot_pmi.h"
 #include "publisher.h"
 #include "state_machine.h"
+#include "shutdown.h"
 
 #include "broker.h"
 
@@ -478,6 +479,13 @@ int main (int argc, char *argv[])
     }
     state_machine_post (ctx.state_machine, "start");
 
+    /* Create shutdown mechanism
+     */
+    if (!(ctx.shutdown = shutdown_create (&ctx))) {
+        log_err ("error creating shutdown mechanism");
+        goto cleanup;
+    }
+
     /* Load the local connector module.
      * Other modules will be loaded in rc1 using flux module,
      * which uses the local connector.
@@ -525,6 +533,7 @@ cleanup:
 
     modhash_destroy (ctx.modhash);
     zlist_destroy (&ctx.sigwatchers);
+    shutdown_destroy (ctx.shutdown);
     state_machine_destroy (ctx.state_machine);
     overlay_destroy (ctx.overlay);
     groups_destroy (ctx.groups);
@@ -1465,6 +1474,7 @@ static struct internal_service services[] = {
     { "runat",              NULL },
     { "state-machine",      NULL },
     { "groups",             NULL },
+    { "shutdown",           NULL },
     { NULL, NULL, },
 };
 

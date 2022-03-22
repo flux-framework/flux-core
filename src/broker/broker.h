@@ -46,6 +46,7 @@ struct broker {
 
     struct runat *runat;
     struct state_machine *state_machine;
+    struct shutdown *shutdown;
 
     char *init_shell_cmd;
     size_t init_shell_cmd_len;

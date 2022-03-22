@@ -20,6 +20,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libhostlist/hostlist.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "state_machine.h"
 
@@ -28,6 +29,7 @@
 #include "overlay.h"
 #include "attr.h"
 #include "groups.h"
+#include "shutdown.h"
 
 struct quorum {
     struct idset *want;
@@ -88,7 +90,6 @@ static void action_run (struct state_machine *s);
 static void action_cleanup (struct state_machine *s);
 static void action_shutdown (struct state_machine *s);
 static void action_finalize (struct state_machine *s);
-static void action_goodbye (struct state_machine *s);
 static void action_exit (struct state_machine *s);
 
 static void runat_completion_cb (struct runat *r, const char *name, void *arg);
@@ -111,7 +112,7 @@ static struct state statetab[] = {
     { STATE_CLEANUP,    "cleanup",          action_cleanup },
     { STATE_SHUTDOWN,   "shutdown",         action_shutdown },
     { STATE_FINALIZE,   "finalize",         action_finalize },
-    { STATE_GOODBYE,    "goodbye",          action_goodbye},
+    { STATE_GOODBYE,    "goodbye",          NULL },
     { STATE_EXIT,       "exit",             action_exit },
 };
 
@@ -338,11 +339,6 @@ static void action_shutdown (struct state_machine *s)
         state_machine_post (s, "children-none");
 }
 
-static void action_goodbye (struct state_machine *s)
-{
-    state_machine_post (s, "goodbye");
-}
-
 static void rmmod_continuation (flux_future_t *f, void *arg)
 {
     struct state_machine *s = arg;
@@ -454,6 +450,33 @@ void state_machine_kill (struct state_machine *s, int signum)
     }
 }
 
+int state_machine_shutdown (struct state_machine *s, flux_error_t *error)
+{
+    if (s->state != STATE_RUN) {
+        errprintf (error,
+                   "shutdown cannot be initiated in state %s",
+                   statestr (s->state));
+        errno = EINVAL;
+        return -1;
+    }
+    if (s->ctx->rank != 0) {
+        errprintf (error, "shutdown may only be initiated on rank 0");
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (s->exit_norestart > 0)
+        s->ctx->exit_rc = s->exit_norestart;
+
+    if (runat_is_defined (s->ctx->runat, "rc2")) {
+        if (runat_abort (s->ctx->runat, "rc2") < 0)
+            flux_log_error (s->ctx->h, "runat_abort rc2 (shutdown)");
+    }
+    else
+        state_machine_post (s, "rc2-abort");
+    return 0;
+}
+
 static void runat_completion_cb (struct runat *r, const char *name, void *arg)
 {
     struct state_machine *s = arg;
@@ -475,17 +498,17 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
         state_machine_post (s, rc == 0 ? "rc1-success" : "rc1-fail");
     }
     else if (!strcmp (name, "rc2")) {
-        if (rc != 0)
+        if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "rc2-success" : "rc2-fail");
     }
     else if (!strcmp (name, "cleanup")) {
-        if (rc != 0)
+        if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "cleanup-success" : "cleanup-fail");
     }
     else if (!strcmp (name, "rc3")) {
-        if (rc != 0)
+        if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "rc3-success" : "rc3-fail");
     }
