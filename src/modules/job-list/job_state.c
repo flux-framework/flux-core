@@ -76,7 +76,8 @@ static int memo_update (flux_t *h,
 
 static void process_next_state (struct list_ctx *ctx, struct job *job);
 
-static int journal_process_events (struct job_state_ctx *jsctx, json_t *events);
+static int journal_process_events (struct job_state_ctx *jsctx,
+                                   const flux_msg_t *msg);
 
 /* Compare items for sorting in list, priority first (higher priority
  * before lower priority), job id second N.B. zlistx_comparator_fn signature
@@ -161,14 +162,6 @@ static struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
     }
 
     return job;
-}
-
-static void json_decref_wrapper (void **data)
-{
-    if (data) {
-        json_t **ptr = (json_t **)data;
-        json_decref (*ptr);
-    }
 }
 
 /* zlistx_insert() and zlistx_reorder() take a 'low_value' parameter
@@ -318,10 +311,8 @@ static void list_id_respond (struct list_ctx *ctx,
     if (!(o = job_to_json (job, isd->attrs, &err)))
         goto error;
 
-    if (flux_respond_pack (ctx->h, isd->msg, "{s:O}", "job", o) < 0) {
+    if (flux_respond_pack (ctx->h, isd->msg, "{s:O}", "job", o) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
 
     json_decref (o);
     return;
@@ -329,7 +320,6 @@ static void list_id_respond (struct list_ctx *ctx,
 error:
     if (flux_respond_error (ctx->h, isd->msg, errno, err.text) < 0)
         flux_log_error (ctx->h, "%s: flux_respond_error", __FUNCTION__);
-    json_decref (o);
 }
 
 static void check_waiting_id (struct list_ctx *ctx,
@@ -875,44 +865,32 @@ void job_state_pause_cb (flux_t *h, flux_msg_handler_t *mh,
 
     ctx->jsctx->pause = true;
 
-    if (flux_respond (h, msg, NULL) < 0) {
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-        goto error;
-    }
-
-    return;
-
- error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to pause request");
 }
 
 void job_state_unpause_cb (flux_t *h, flux_msg_handler_t *mh,
                            const flux_msg_t *msg, void *arg)
 {
     struct list_ctx *ctx = arg;
-    json_t *o;
+    const flux_msg_t *resp;
+
+    resp = flux_msglist_first (ctx->jsctx->backlog);
+    while (resp) {
+        if (journal_process_events (ctx->jsctx, resp) < 0)
+            goto error;
+        flux_msglist_delete (ctx->jsctx->backlog);
+        resp = flux_msglist_next (ctx->jsctx->backlog);
+    }
 
     ctx->jsctx->pause = false;
 
-    o = zlistx_first (ctx->jsctx->events_journal_backlog);
-    while (o) {
-        (void)journal_process_events (ctx->jsctx, o);
-        o = zlistx_next (ctx->jsctx->events_journal_backlog);
-    }
-
-    if (flux_respond (h, msg, NULL) < 0) {
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-        goto error;
-    }
-
-    zlistx_purge (ctx->jsctx->events_journal_backlog);
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to unpause request");
     return;
-
- error:
+error:
     if (flux_respond_error (h, msg, errno, NULL) < 0)
-        flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-    zlistx_purge (ctx->jsctx->events_journal_backlog);
+        flux_log_error (h, "error responding to unpause request");
 }
 
 static struct job *eventlog_restart_parse (struct list_ctx *ctx,
@@ -1727,11 +1705,15 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
     return 0;
 }
 
-static int journal_process_events (struct job_state_ctx *jsctx, json_t *events)
+static int journal_process_events (struct job_state_ctx *jsctx,
+                                   const flux_msg_t *msg)
 {
+    json_t *events;
     size_t index;
     json_t *value;
 
+    if (flux_msg_unpack (msg, "{s:o}", "events", &events) < 0)
+        return -1;
     json_array_foreach (events, index, value) {
         if (journal_process_event (jsctx, value) < 0)
             return -1;
@@ -1743,10 +1725,12 @@ static int journal_process_events (struct job_state_ctx *jsctx, json_t *events)
 static void job_events_journal_continuation (flux_future_t *f, void *arg)
 {
     struct job_state_ctx *jsctx = arg;
+    const flux_msg_t *msg;
     json_t *events;
 
-    if (flux_rpc_get_unpack (f, "{s:o}", "events", &events) < 0) {
-        flux_log_error (jsctx->h, "%s: flux_rpc_get_unpack", __FUNCTION__);
+    if (flux_future_get (f, (const void **)&msg) < 0
+        || flux_msg_unpack (msg, "{s:o}", "events", &events) < 0) {
+        flux_log_error (jsctx->h, "error unpacking journal response");
         goto error;
     }
 
@@ -1757,16 +1741,13 @@ static void job_events_journal_continuation (flux_future_t *f, void *arg)
     }
 
     if (jsctx->pause) {
-        json_t *o = json_incref (events);
-        if (!zlistx_add_end (jsctx->events_journal_backlog, o)) {
-            flux_log_error (jsctx->h, "%s: zlistx_add_end", __FUNCTION__);
-            json_decref (o);
-            errno = ENOMEM;
+        if (flux_msglist_append (jsctx->backlog, msg) < 0) {
+            flux_log_error (jsctx->h, "error storing journal backlog");
             goto error;
         }
     }
     else {
-        if (journal_process_events (jsctx, events) < 0)
+        if (journal_process_events (jsctx, msg) < 0)
             goto error;
     }
 
@@ -1777,6 +1758,32 @@ error:
     /* future will be cleaned up in shutdown path */
     flux_reactor_stop_error (flux_get_reactor (jsctx->h));
     return;
+}
+
+static flux_future_t *job_events_journal (struct job_state_ctx *jsctx)
+{
+    flux_future_t *f;
+
+    /* no filters on events-journal, stream all events */
+    if (!(f = flux_rpc_pack (jsctx->h,
+                             "job-manager.events-journal",
+                             FLUX_NODEID_ANY,
+                             FLUX_RPC_STREAMING,
+                             "{}"))
+        || flux_future_then (f,
+                             -1,
+                             job_events_journal_continuation,
+                             jsctx) < 0) {
+        flux_log (jsctx->h,
+                  LOG_ERR,
+                  "error synchronizing with job manager journal: %s",
+                  future_strerror (f, errno));
+        goto error;
+    }
+    return f;
+error:
+    flux_future_destroy (f);
+    return NULL;
 }
 
 struct job_state_ctx *job_state_create (struct list_ctx *ctx)
@@ -1818,27 +1825,11 @@ struct job_state_ctx *job_state_create (struct list_ctx *ctx)
     if (!(jsctx->futures = zlistx_new ()))
         goto error;
 
-    if (!(jsctx->events_journal_backlog = zlistx_new ()))
+    if (!(jsctx->backlog = flux_msglist_create ()))
         goto error;
-    zlistx_set_destructor (jsctx->events_journal_backlog, json_decref_wrapper);
 
-    /* no filters on events-journal, stream all events */
-    if (!(jsctx->events = flux_rpc_pack (jsctx->h,
-                                         "job-manager.events-journal",
-                                         FLUX_NODEID_ANY,
-                                         FLUX_RPC_STREAMING,
-                                         "{}"))) {
-        flux_log_error (jsctx->h, "flux_rpc_pack");
+    if (!(jsctx->events = job_events_journal (jsctx)))
         goto error;
-    }
-
-    if (flux_future_then (jsctx->events,
-                          -1,
-                          job_events_journal_continuation,
-                          jsctx) < 0) {
-        flux_log_error (jsctx->h, "flux_future_then");
-        goto error;
-    }
 
     return jsctx;
 
@@ -1873,7 +1864,7 @@ void job_state_destroy (void *data)
         zlistx_destroy (&jsctx->running);
         zlistx_destroy (&jsctx->pending);
         zhashx_destroy (&jsctx->index);
-        zlistx_destroy (&jsctx->events_journal_backlog);
+        flux_msglist_destroy (jsctx->backlog);
         flux_future_destroy (jsctx->events);
         free (jsctx);
     }

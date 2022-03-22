@@ -69,9 +69,9 @@ void job_stats_update (struct job_stats *stats,
     }
 }
 
-static int json_add_counter (json_t *o,
-                             const char *key,
-                             unsigned int n)
+static int object_set_integer (json_t *o,
+                               const char *key,
+                               unsigned int n)
 {
     json_t *val = json_integer (n);
     if (!val || json_object_set_new (o, key, val) < 0) {
@@ -88,13 +88,13 @@ static json_t *job_states_encode (struct job_stats *stats)
     if (!o)
         return NULL;
     for (int i = 1; i < FLUX_JOB_NR_STATES; i++) {
-        if (json_add_counter (o,
-                              state_index_name (i),
-                              stats->state_count[i]) < 0)
+        if (object_set_integer (o,
+                                state_index_name (i),
+                                stats->state_count[i]) < 0)
             goto error;
         total += stats->state_count[i];
     }
-    if (json_add_counter (o, "total", total) < 0)
+    if (object_set_integer (o, "total", total) < 0)
         goto error;
     return o;
 error:
@@ -104,13 +104,21 @@ error:
 
 json_t * job_stats_encode (struct job_stats *stats)
 {
-    json_t *states = job_states_encode (stats);
-    if (states == NULL)
-        return NULL;
+    json_t *o;
+    json_t *states;
 
-    return json_pack ("{ s:o s:i s:i s:i }",
-                      "job_states", states,
-                      "failed", stats->failed,
-                      "canceled", stats->canceled,
-                      "timeout", stats->timeout);
+    if (!(states = job_states_encode (stats))
+        || !(o = json_pack ("{ s:O s:i s:i s:i }",
+                            "job_states", states,
+                            "failed", stats->failed,
+                            "canceled", stats->canceled,
+                            "timeout", stats->timeout))) {
+        json_decref (states);
+        errno = ENOMEM;
+        return NULL;
+    }
+    json_decref (states);
+    return o;
 }
+
+// vi: ts=4 sw=4 expandtab

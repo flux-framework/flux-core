@@ -162,7 +162,7 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct list_ctx *ctx = arg;
     job_list_error_t err;
-    json_t *jobs = NULL;
+    json_t *jobs;
     json_t *attrs;
     int max_entries;
     uint32_t userid;
@@ -206,10 +206,8 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
                            attrs, userid, states, results)))
         goto error;
 
-    if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0) {
+    if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
 
     json_decref (jobs);
     return;
@@ -217,7 +215,6 @@ void list_cb (flux_t *h, flux_msg_handler_t *mh,
 error:
     if (flux_respond_error (h, msg, errno, err.text) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-    json_decref (jobs);
 }
 
 /* Create a JSON array of 'job' objects.  'since' limits entries
@@ -276,7 +273,7 @@ void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct list_ctx *ctx = arg;
     job_list_error_t err = {{0}};
-    json_t *jobs = NULL;
+    json_t *jobs;
     int max_entries;
     double since;
     json_t *attrs;
@@ -307,10 +304,8 @@ void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
                                     name)))
         goto error;
 
-    if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0) {
+    if (flux_respond_pack (h, msg, "{s:O}", "jobs", jobs) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
 
     json_decref (jobs);
     return;
@@ -318,7 +313,6 @@ void list_inactive_cb (flux_t *h, flux_msg_handler_t *mh,
 error:
     if (flux_respond_error (h, msg, errno, err.text) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-    json_decref (jobs);
 }
 
 int wait_id_valid (struct list_ctx *ctx, struct idsync_data *isd)
@@ -506,7 +500,7 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct list_ctx *ctx = arg;
     job_list_error_t err = {{0}};
-    json_t *job = NULL;
+    json_t *job;
     flux_jobid_t id;
     json_t *attrs;
     bool stall = false;
@@ -532,10 +526,8 @@ void list_id_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (flux_respond_pack (h, msg, "{s:O}", "job", job) < 0) {
+    if (flux_respond_pack (h, msg, "{s:O}", "job", job) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
 
     json_decref (job);
 stall:
@@ -544,7 +536,6 @@ stall:
 error:
     if (flux_respond_error (h, msg, errno, err.text) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
-    json_decref (job);
 }
 
 int list_attrs_append (json_t *a, const char *attr)
@@ -573,7 +564,7 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                             "exception_note", "result", "expiration",
                             "annotations", "waitstatus", "dependencies",
                             NULL };
-    json_t *a = NULL;
+    json_t *a;
     int i;
 
     if (!(a = json_array ())) {
@@ -586,11 +577,10 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
     }
 
-    if (flux_respond_pack (h, msg, "{s:o}", "attrs", a) < 0) {
+    if (flux_respond_pack (h, msg, "{s:O}", "attrs", a) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
-        goto error;
-    }
 
+    json_decref (a);
     return;
 
 error:
