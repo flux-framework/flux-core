@@ -41,8 +41,8 @@ static int state_cb (flux_plugin_t *p,
         return -1;
     }
 
-    flux_stats_gauge_inc (h, flux_job_statetostr (state, false), 1);
-    flux_stats_gauge_inc (h, flux_job_statetostr (prev_state, false), -1);
+    flux_stats_gauge_inc (h, flux_job_statetostr (state, "L"), 1);
+    flux_stats_gauge_inc (h, flux_job_statetostr (prev_state, "L"), -1);
 
     switch (state) {
         case FLUX_JOB_STATE_CLEANUP:

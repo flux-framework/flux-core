@@ -92,11 +92,22 @@ int flux_job_id_parse (const char *s, flux_jobid_t *id);
 int flux_job_id_encode (flux_jobid_t id, const char *type,
                         char *buf, size_t bufsz);
 
-const char *flux_job_statetostr (flux_job_state_t state, bool single_char);
+/* Convert state to string.  'fmt' may be:
+ * "s" - lower case short name
+ * "S" - upper case short name
+ * "l" - lower case long name
+ * "L" - upper case long name
+ * This function always returns a valid string, though it may
+ * be something like "(unknown)".
+ */
+const char *flux_job_statetostr (flux_job_state_t state, const char *fmt);
 
+/* Convert state string in any of the forms produced by flux_job_statetostr()
+ * back to state.  Returns 0 on success, -1 on failure with errno set.
+ */
 int flux_job_strtostate (const char *s, flux_job_state_t *state);
 
-const char *flux_job_resulttostr (flux_job_result_t result, bool abbrev);
+const char *flux_job_resulttostr (flux_job_result_t result, const char *fmt);
 
 int flux_job_strtoresult (const char *s, flux_job_result_t *result);
 

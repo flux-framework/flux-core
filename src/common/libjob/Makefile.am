@@ -32,7 +32,9 @@ libjob_la_SOURCES = \
 	job_hash.c \
 	job_hash.h \
 	jobspec1.c \
-	jobspec1_private.h
+	jobspec1_private.h \
+	strtab.c \
+	strtab.h
 
 TESTS = \
 	test_job.t \

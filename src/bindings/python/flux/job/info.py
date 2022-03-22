@@ -25,24 +25,24 @@ from flux.uri import JobURI
 from flux.core.inner import raw
 
 
-def statetostr(stateid, singlechar=False):
-    return raw.flux_job_statetostr(stateid, singlechar).decode("utf-8")
+def statetostr(stateid, fmt="L"):
+    return raw.flux_job_statetostr(stateid, fmt).decode("utf-8")
 
 
-def resulttostr(resultid, singlechar=False):
+def resulttostr(resultid, fmt="L"):
     # if result not returned, just return empty string back
     if resultid == "":
         return ""
-    return raw.flux_job_resulttostr(resultid, singlechar).decode("utf-8")
+    return raw.flux_job_resulttostr(resultid, fmt).decode("utf-8")
 
 
-def statustostr(stateid, resultid, abbrev=False):
+def statustostr(stateid, resultid, fmt="L"):
     if stateid & flux.constants.FLUX_JOB_STATE_PENDING:
-        statusstr = "PD" if abbrev else "PENDING"
+        statusstr = "PD" if fmt == "S" else "PENDING"
     elif stateid & flux.constants.FLUX_JOB_STATE_RUNNING:
-        statusstr = "R" if abbrev else "RUNNING"
+        statusstr = "R" if fmt == "S" else "RUNNING"
     else:  # flux.constants.FLUX_JOB_STATE_INACTIVE
-        statusstr = resulttostr(resultid, abbrev)
+        statusstr = resulttostr(resultid, fmt)
     return statusstr
 
 
@@ -297,7 +297,7 @@ class JobInfo:
 
     @memoized_property
     def state_single(self):
-        return statetostr(self.state_id, True)
+        return statetostr(self.state_id, fmt="S")
 
     @memoized_property
     def result(self):
@@ -305,7 +305,7 @@ class JobInfo:
 
     @memoized_property
     def result_abbrev(self):
-        return resulttostr(self.result_id, True)
+        return resulttostr(self.result_id, "S")
 
     @memoized_property
     def username(self):
@@ -317,11 +317,11 @@ class JobInfo:
 
     @memoized_property
     def status(self):
-        return statustostr(self.state_id, self.result_id, False)
+        return statustostr(self.state_id, self.result_id)
 
     @memoized_property
     def status_abbrev(self):
-        return statustostr(self.state_id, self.result_id, True)
+        return statustostr(self.state_id, self.result_id, fmt="S")
 
     @memoized_property
     def returncode(self):

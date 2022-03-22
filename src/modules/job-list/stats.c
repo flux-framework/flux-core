@@ -35,17 +35,7 @@ static inline int state_index (flux_job_state_t state)
  */
 static const char *state_index_name (int index)
 {
-    static char name[64];
-    char *p;
-
-    memset (name, 0, sizeof (name));
-    strncpy (name,
-            flux_job_statetostr ((1<<index), false),
-            sizeof (name) - 1);
-
-    for (p = name; *p != '\0'; ++p)
-        *p = tolower(*p);
-    return name;
+    return flux_job_statetostr ((1<<index), "l");
 }
 
 void job_stats_update (struct job_stats *stats,

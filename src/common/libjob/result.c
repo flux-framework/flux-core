@@ -14,43 +14,33 @@
 #include <flux/core.h>
 
 #include "job.h"
+#include "strtab.h"
 
 #include "src/common/libeventlog/eventlog.h"
 
-const char *flux_job_resulttostr (flux_job_result_t result, bool abbrev)
+static struct strtab results[] = {
+    { FLUX_JOB_RESULT_COMPLETED, "COMPLETED", "completed", "CD", "cd" },
+    { FLUX_JOB_RESULT_FAILED,    "FAILED",    "failed",    "F",  "f" },
+    { FLUX_JOB_RESULT_CANCELED,  "CANCELED",  "canceled",  "CA", "ca" },
+    { FLUX_JOB_RESULT_TIMEOUT,   "TIMEOUT",   "timeout",   "TO", "to" },
+};
+static const size_t results_count = sizeof (results) / sizeof (results[0]);
+
+
+const char *flux_job_resulttostr (flux_job_result_t result, const char *fmt)
 {
-    switch (result) {
-        case FLUX_JOB_RESULT_COMPLETED:
-            return abbrev ? "CD" : "COMPLETED";
-        case FLUX_JOB_RESULT_FAILED:
-            return abbrev ? "F" : "FAILED";
-        case FLUX_JOB_RESULT_CANCELED:
-            return abbrev ? "CA" : "CANCELED";
-        case FLUX_JOB_RESULT_TIMEOUT:
-            return abbrev ? "TO" : "TIMEOUT";
-    }
-    return abbrev ? "?" : "(unknown)";
+    return strtab_numtostr (result, fmt, results, results_count);
 }
 
 int flux_job_strtoresult (const char *s, flux_job_result_t *result)
 {
-    if (!s || !result)
-        goto inval;
-    if (!strcasecmp (s, "CD") || !strcasecmp (s, "COMPLETED"))
-        *result = FLUX_JOB_RESULT_COMPLETED;
-    else if (!strcasecmp (s, "F") || !strcasecmp (s, "FAILED"))
-        *result = FLUX_JOB_RESULT_FAILED;
-    else if (!strcasecmp (s, "CA") || !strcasecmp (s, "CANCELED"))
-        *result = FLUX_JOB_RESULT_CANCELED;
-    else if (!strcasecmp (s, "TO") || !strcasecmp (s, "TIMEOUT"))
-        *result = FLUX_JOB_RESULT_TIMEOUT;
-    else
-        goto inval;
+    int num;
 
+    if ((num = strtab_strtonum (s, results, results_count)) < 0)
+        return -1;
+    if (result)
+        *result = num;
     return 0;
-inval:
-    errno = EINVAL;
-    return -1;
 }
 
 static flux_job_result_t job_result_calc (json_t *res)
