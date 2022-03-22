@@ -37,6 +37,8 @@ struct rnode {
 
     /* non-core children */
     zhashx_t *children;
+
+    zhashx_t *properties;
 };
 
 /*  Create a resource node object from an existing idset `set`
@@ -148,5 +150,13 @@ int rnode_hostname_cmp (const struct rnode *a, const struct rnode *b);
 int rnode_remap (struct rnode *n, zhashx_t *noremap);
 
 json_t *rnode_encode (const struct rnode *n, const struct idset *ids);
+
+/*  Set/remove/check for rnode properties
+ */
+int rnode_set_property (struct rnode *n, const char *name);
+
+void rnode_remove_property (struct rnode *n, const char *name);
+
+bool rnode_has_property (struct rnode *n, const char *name);
 
 #endif /* !HAVE_SCHED_RNODE_H */

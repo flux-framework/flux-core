@@ -21,6 +21,7 @@
 #include <flux/idset.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libccan/ccan/ptrint/ptrint.h"
 
 #include "rnode.h"
 
@@ -40,6 +41,7 @@ void rnode_destroy (struct rnode *n)
         int saved_errno = errno;
         free (n->hostname);
         zhashx_destroy (&n->children);
+        zhashx_destroy (&n->properties);
         free (n);
         errno = saved_errno;
     }
@@ -267,6 +269,32 @@ out:
     return n;
 }
 
+int rnode_set_property (struct rnode *n, const char *name)
+{
+    if (!n->properties && !(n->properties = zhashx_new ())) {
+        errno = ENOMEM;
+        return -1;
+    }
+    /*
+     *  zhashx_insert () supposedly returns -1 when 'name' already
+     *   exists in the hash, but setting an existing property is
+     *   not an error. Therefore, ignore this error.
+     */
+    (void) zhashx_insert (n->properties, name, int2ptr (1));
+    return 0;
+}
+
+void rnode_remove_property (struct rnode *n, const char *name)
+{
+    if (n->properties)
+        zhashx_delete (n->properties, name);
+}
+
+bool rnode_has_property (struct rnode *n, const char *name)
+{
+    return (n->properties && zhashx_lookup (n->properties, name));
+}
+
 static int rnode_set_empty (struct rnode *n)
 {
     int count = 0;
@@ -347,6 +375,9 @@ struct rnode *rnode_copy (const struct rnode *orig)
     if (!(n->children = rnode_children_copy (orig)))
         goto fail;
     if (!(n->cores = zhashx_lookup (n->children, "core")))
+        goto fail;
+    if (orig->properties
+        && !(n->properties = zhashx_dup (orig->properties)))
         goto fail;
     return n;
 fail:
