@@ -30,9 +30,9 @@ void strv_destroy (char **strv)
     }
 }
 
-static int strv_len_delim (char *str, char *delim)
+static int strv_len_delim (char *str, char *delim, size_t *lenp)
 {
-    int len = 0;
+    size_t len = 0;
 
     if (str) {
         char *cpy = NULL;
@@ -47,7 +47,8 @@ static int strv_len_delim (char *str, char *delim)
         }
         free (cpy);
     }
-    return len;
+    (*lenp) = len;
+    return 0;
 }
 
 char **strv_create (char *str, char *delim)
@@ -55,7 +56,8 @@ char **strv_create (char *str, char *delim)
     char *cpy = NULL;
     char *itrcpy = NULL;
     char *ptr = NULL;
-    int i, len = 0;
+    size_t len = 0;
+    int i;
     char **strv = NULL;
 
     if (!str || !delim) {
@@ -63,13 +65,13 @@ char **strv_create (char *str, char *delim)
         return NULL;
     }
 
-    if ((len = strv_len_delim (str, delim)) < 0)
+    if (strv_len_delim (str, delim, &len) < 0)
         return NULL;
 
     /* for NULL pointer at end */
     len++;
 
-    if (!(strv = calloc (1, sizeof (char *) * len)))
+    if (!(strv = calloc (len, sizeof (char *))))
         return NULL;
 
     if (!(cpy = itrcpy = strdup (str))) {
