@@ -31,6 +31,9 @@ struct rlist {
     /*  hash of resources to ignore on remap */
     zhashx_t *noremap;
 
+    /*  Hash of property->idset mapping */
+    zhashx_t *properties;
+
     /*  Rv1 optional starttime, expiration:
      */
     double starttime;
@@ -230,5 +233,18 @@ int rlist_set_allocated (struct rlist *rl, struct rlist *alloc);
 /*  Free resource list `to_free` from resource list `rl`
  */
 int rlist_free (struct rlist *rl, struct rlist *to_free);
+
+/*  Assign a single property 'name' to ranks in 'targets'
+ */
+int rlist_add_property (struct rlist *rl,
+                        flux_error_t *errp,
+                        const char *name,
+                        const char *targets);
+
+/*  Assign properties to targets
+ */
+int rlist_assign_properties (struct rlist *rl,
+                             json_t *properties,
+                             flux_error_t *errp);
 
 #endif /* !HAVE_SCHED_RLIST_H */
