@@ -331,12 +331,6 @@ static void action_finalize (struct state_machine *s)
 
 static void action_shutdown (struct state_machine *s)
 {
-    if (s->ctx->rank == 0) {
-        flux_future_t *f;
-        if (!(f = flux_event_publish (s->ctx->h, "shutdown", 0, NULL)))
-            flux_log_error (s->ctx->h, "error publishing shutdown event");
-        flux_future_destroy (f);
-    }
     if (overlay_get_child_peer_count (s->ctx->overlay) == 0)
         state_machine_post (s, "children-none");
 }
