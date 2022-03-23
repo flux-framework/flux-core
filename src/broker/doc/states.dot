@@ -29,7 +29,8 @@ digraph finite_state_machine {
     S -> 3 [ label = "children-complete" ];
     S -> 3 [ label = "children-none" ];
     S -> 3 [ label = "children-timeout" ];
-    3 -> E [ label = "rc3-none" ];
-    3 -> E [ label = "rc3-success" ];
-    3 -> E [ label = "rc3-fail" ];
+    3 -> G [ label = "goodbye" ];
+    G -> E [ label = "rc3-none" ];
+    G -> E [ label = "rc3-success" ];
+    G -> E [ label = "rc3-fail" ];
 }

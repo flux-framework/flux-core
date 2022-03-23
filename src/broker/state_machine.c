@@ -88,6 +88,7 @@ static void action_run (struct state_machine *s);
 static void action_cleanup (struct state_machine *s);
 static void action_shutdown (struct state_machine *s);
 static void action_finalize (struct state_machine *s);
+static void action_goodbye (struct state_machine *s);
 static void action_exit (struct state_machine *s);
 
 static void runat_completion_cb (struct runat *r, const char *name, void *arg);
@@ -110,6 +111,7 @@ static struct state statetab[] = {
     { STATE_CLEANUP,    "cleanup",          action_cleanup },
     { STATE_SHUTDOWN,   "shutdown",         action_shutdown },
     { STATE_FINALIZE,   "finalize",         action_finalize },
+    { STATE_GOODBYE,    "goodbye",          action_goodbye},
     { STATE_EXIT,       "exit",             action_exit },
 };
 
@@ -133,9 +135,10 @@ static struct state_next nexttab[] = {
     { "cleanup-fail",       STATE_CLEANUP,      STATE_SHUTDOWN },
     { "children-complete",  STATE_SHUTDOWN,     STATE_FINALIZE },
     { "children-none",      STATE_SHUTDOWN,     STATE_FINALIZE },
-    { "rc3-success",        STATE_FINALIZE,     STATE_EXIT },
-    { "rc3-none",           STATE_FINALIZE,     STATE_EXIT },
-    { "rc3-fail",           STATE_FINALIZE,     STATE_EXIT },
+    { "rc3-success",        STATE_FINALIZE,     STATE_GOODBYE },
+    { "rc3-none",           STATE_FINALIZE,     STATE_GOODBYE },
+    { "rc3-fail",           STATE_FINALIZE,     STATE_GOODBYE },
+    { "goodbye",            STATE_GOODBYE,      STATE_EXIT },
 };
 
 static const double default_quorum_timeout = 60; // log slow joiners
@@ -335,6 +338,15 @@ static void action_shutdown (struct state_machine *s)
         state_machine_post (s, "children-none");
 }
 
+/* goodbye state is an opportunity for any flux-shutdown clients to
+ * receive the full shutdown message stream and disconnect before the local
+ * connector is unloaded.
+ */
+static void action_goodbye (struct state_machine *s)
+{
+    state_machine_post (s, "goodbye");
+}
+
 static void rmmod_continuation (flux_future_t *f, void *arg)
 {
     struct state_machine *s = arg;
@@ -435,6 +447,7 @@ void state_machine_kill (struct state_machine *s, int signum)
             break;
         case STATE_NONE:
         case STATE_SHUTDOWN:
+        case STATE_GOODBYE:
         case STATE_EXIT:
             flux_log (h,
                       LOG_INFO,
@@ -540,6 +553,7 @@ static void run_check_parent (struct state_machine *s)
                 state_machine_post (s, "shutdown-abort");
                 break;
             case STATE_FINALIZE:
+            case STATE_GOODBYE:
             case STATE_EXIT:
                 state_machine_post (s, "parent-fail");
                 break;
@@ -567,6 +581,7 @@ static void join_check_parent (struct state_machine *s)
             case STATE_CLEANUP:
             case STATE_SHUTDOWN:
             case STATE_FINALIZE:
+            case STATE_GOODBYE:
             case STATE_EXIT:
                 state_machine_post (s, "parent-fail");
                 break;
@@ -594,6 +609,7 @@ static void quorum_check_parent (struct state_machine *s)
             case STATE_CLEANUP:
             case STATE_SHUTDOWN:
             case STATE_FINALIZE:
+            case STATE_GOODBYE:
             case STATE_EXIT:
                 state_machine_post (s, "quorum-fail");
                 break;
@@ -777,7 +793,9 @@ static void monitor_update (flux_t *h,
      * State machine doesn't need to know about parent transition to these
      * states anyway.
      */
-    if (state == STATE_FINALIZE || state == STATE_EXIT)
+    if (state == STATE_FINALIZE
+        || state == STATE_GOODBYE
+        || state == STATE_EXIT)
         return;
     msg = flux_msglist_first (requests);
     while (msg) {
