@@ -131,6 +131,22 @@ emitting the job's I/O to its stdout and stderr.
 **-l, --label-io**
    Add task rank prefixes to each line of output.
 
+CONSTRAINTS
+===========
+
+.. note::
+   Flux supports an advanced constraint specification detailed in RFC 31.
+   However, the interface currently exported via the **flux mini** commands
+   is purposefully limited.
+
+**--requires=LIST**
+   Specify a *LIST* of resource property constraints for this job. *LIST*
+   is a single property or comma-separated list of properties which are
+   required for this job. The ``--requires`` option may be specified
+   multiple times. Currently, all properties are required (logical and).
+   If a property name starts with ``^``, then the job requires that property
+   *not* be present on assigned resources.
+
 DEPENDENCIES
 ============
 
