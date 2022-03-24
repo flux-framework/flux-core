@@ -559,9 +559,13 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
     logbuf_t *logbuf = arg;
     struct logbuf_entry *e;
     int follow;
+    int nobacklog = 0;
 
-    if (flux_request_unpack (msg, NULL, "{ s:b }",
-                             "follow", &follow) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:b s?b}",
+                             "follow", &follow,
+                             "nobacklog", &nobacklog) < 0)
         goto error;
 
     if (!flux_msg_is_streaming (msg)) {
@@ -569,13 +573,15 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    e = zlist_first (logbuf->buf);
-    while (e) {
-        if (flux_respond (h, msg, e->buf) < 0) {
-            log_err ("error responding to log.dmesg request");
-            goto error;
+    if (!nobacklog) {
+        e = zlist_first (logbuf->buf);
+        while (e) {
+            if (flux_respond (h, msg, e->buf) < 0) {
+                log_err ("error responding to log.dmesg request");
+                goto error;
+            }
+            e = zlist_next (logbuf->buf);
         }
-        e = zlist_next (logbuf->buf);
     }
 
     if (follow) {
