@@ -133,8 +133,7 @@ static int cmd_dmesg (optparse_t *p, int ac, char *av[])
     if ((n = optparse_option_index (p)) != ac)
         log_msg_exit ("flux-dmesg accepts no free arguments");
 
-    if (!(h = builtin_get_flux_handle (p)))
-        log_err_exit ("flux_open");
+    h = builtin_get_flux_handle (p);
     if (optparse_hasopt (p, "read-clear") || optparse_hasopt (p, "clear"))
         flags |= DMESG_CLEAR;
     if (optparse_hasopt (p, "clear"))
