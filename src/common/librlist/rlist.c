@@ -1467,15 +1467,14 @@ fail:
     return NULL;
 }
 
-static json_t *rlist_json_nodelist (struct rlist *rl)
+int rlist_json_nodelist (struct rlist *rl, json_t **result)
 {
-    json_t *o = NULL;
     struct hostlist *hl = rlist_nodelist (rl);
     if (!hl)
-        return NULL;
-    o = hostlist_to_nodelist (hl);
+        return 0;
+    *result = hostlist_to_nodelist (hl);
     hostlist_destroy (hl);
-    return o;
+    return 0;
 }
 
 static zhashx_t *rlist_properties (struct rlist *rl)
@@ -1538,21 +1537,23 @@ error:
     return NULL;
 }
 
-static json_t *rlist_json_properties (struct rlist *rl)
+int rlist_json_properties (struct rlist *rl, json_t **result)
 {
     int saved_errno;
+    int rc = -1;
     zhashx_t *properties = NULL;;
     json_t *o = NULL;
-    json_t *result = NULL;
     struct idset *ids;
 
     if (!(properties = rlist_properties (rl)))
-        return NULL;
+        return -1;
 
     /*  Do not bother returning an empty JSON object
      */
-    if (zhashx_size (properties) == 0)
+    if (zhashx_size (properties) == 0) {
+        rc = 0;
         goto out;
+    }
 
     if (!(o = json_object ())) {
         errno = ENOMEM;
@@ -1562,14 +1563,13 @@ static json_t *rlist_json_properties (struct rlist *rl)
     while (ids) {
         const char *name = zhashx_cursor (properties);
         char *s = idset_encode (ids, IDSET_FLAG_RANGE);
-        json_t *val;
-        if (!s || !(val = json_string (s))) {
-            free (s);
-            goto out;
-        }
-        if (json_object_set_new (o, name, val) < 0) {
+        json_t *val = NULL;
+        if (!s
+            || !(val = json_string (s))
+            || json_object_set_new (o, name, val) < 0) {
             free (s);
             json_decref (val);
+            errno = ENOMEM;
             goto out;
         }
         free (s);
@@ -1578,13 +1578,14 @@ static json_t *rlist_json_properties (struct rlist *rl)
     /*  Assign o to result, but incref since we decref in exit path
      */
     json_incref (o);
-    result = o;
+    *result = o;
+    rc = 0;
 out:
     saved_errno = errno;
     zhashx_destroy (&properties);
     json_decref (o);
     errno = saved_errno;
-    return result;
+    return rc;
 }
 
 json_t *rlist_to_R (struct rlist *rl)
@@ -1597,12 +1598,13 @@ json_t *rlist_to_R (struct rlist *rl)
     if (!rl)
         return NULL;
 
-    R_lite = rlist_compressed (rl);
-    nodelist = rlist_json_nodelist (rl);
-    properties = rlist_json_properties (rl);
-
-    if (!R_lite)
+    if (!(R_lite = rlist_compressed (rl)))
         goto fail;
+
+    if (rlist_json_nodelist (rl, &nodelist) < 0
+        || rlist_json_properties (rl, &properties) < 0)
+        goto fail;
+
     if (!(R = json_pack ("{s:i, s:{s:o s:f s:f}}",
                          "version", 1,
                          "execution",
