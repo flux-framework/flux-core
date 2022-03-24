@@ -338,10 +338,6 @@ static void action_shutdown (struct state_machine *s)
         state_machine_post (s, "children-none");
 }
 
-/* goodbye state is an opportunity for any flux-shutdown clients to
- * receive the full shutdown message stream and disconnect before the local
- * connector is unloaded.
- */
 static void action_goodbye (struct state_machine *s)
 {
     state_machine_post (s, "goodbye");
@@ -782,29 +778,47 @@ error:
         flux_log_error (h, "error responding to state-machine.wait request");
 }
 
+static void log_monitor_respond_error (flux_t *h)
+{
+    if (errno != EHOSTUNREACH && errno != ENOSYS)
+        flux_log_error (h, "error responding to state-machine.monitor request");
+}
+
+/* Return true if request should continue to receive updates
+ */
+static bool monitor_update_one (flux_t *h,
+                                const flux_msg_t *msg,
+                                broker_state_t state)
+{
+    broker_state_t final;
+
+    if (flux_msg_unpack (msg, "{s:i}", "final", &final) < 0)
+        final = STATE_EXIT;
+    if (state > final)
+        goto nodata;
+    if (flux_respond_pack (h, msg, "{s:i}", "state", state) < 0)
+        log_monitor_respond_error (h);
+    if (!flux_msg_is_streaming (msg))
+        return false;
+    if (state == final)
+        goto nodata;
+    return true;
+nodata:
+    if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
+        log_monitor_respond_error (h);
+    return false;
+}
+
 static void monitor_update (flux_t *h,
                             struct flux_msglist *requests,
                             broker_state_t state)
 {
     const flux_msg_t *msg;
 
-    /* Skip sending these states to avoid deadlock on disconnecting children
-     * on zeromq-4.1.4 (doesn't seem to be a problem on newer zmq).
-     * State machine doesn't need to know about parent transition to these
-     * states anyway.
-     */
-    if (state == STATE_FINALIZE
-        || state == STATE_GOODBYE
-        || state == STATE_EXIT)
-        return;
     msg = flux_msglist_first (requests);
     while (msg) {
-        if (flux_respond_pack (h, msg, "{s:i}", "state", state) < 0) {
-            if (errno != EHOSTUNREACH && errno != ENOSYS) {
-                flux_log_error (h,
-                        "error responding to state-machine.monitor request");
-            }
-        }
+        if (!monitor_update_one (h, msg, state))
+            flux_msglist_delete (requests);
         msg = flux_msglist_next (requests);
     }
 }
@@ -818,20 +832,14 @@ static void state_machine_monitor_cb (flux_t *h,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (flux_respond_pack (h, msg, "{s:i}", "state", s->state) < 0) {
-        flux_log_error (h,
-                        "error responding to state-machine.monitor request");
-    }
-    if (flux_msg_is_streaming (msg)) {
+    if (monitor_update_one (h, msg, s->state)) {
         if (flux_msglist_append (s->monitor.requests, msg) < 0)
             goto error;
     }
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0) {
-        flux_log_error (h,
-                        "error responding to state-machine.monitor request");
-    }
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        log_monitor_respond_error (h);
 }
 
 static void monitor_continuation (flux_future_t *f, void *arg)
@@ -841,8 +849,10 @@ static void monitor_continuation (flux_future_t *f, void *arg)
     int state;
 
     if (flux_rpc_get_unpack (f, "{s:i}", "state", &state) < 0) {
-        flux_log_error (h, "state-machine.monitor");
-        s->monitor.parent_error = 1;
+        if (errno != ENODATA) {
+            flux_log_error (h, "state-machine.monitor");
+            s->monitor.parent_error = 1;
+        }
         return;
     }
     s->monitor.parent_state = state;
@@ -856,15 +866,22 @@ static void monitor_continuation (flux_future_t *f, void *arg)
         run_check_parent (s);
 }
 
+/* Set up monitoring of parent state up to and including SHUTDOWN state.
+ * Skip monitoring states beyond that to avoid deadlock on disconnecting
+ * children on zeromq-4.1.4 (doesn't seem to be a problem on newer versions).
+ * State machine doesn't need to know about parent transition to these
+ * states anyway.
+ */
 static flux_future_t *monitor_parent (flux_t *h, void *arg)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpc (h,
-                        "state-machine.monitor",
-                        NULL,
-                        FLUX_NODEID_UPSTREAM,
-                        FLUX_RPC_STREAMING)))
+    if (!(f = flux_rpc_pack (h,
+                             "state-machine.monitor",
+                             FLUX_NODEID_UPSTREAM,
+                             FLUX_RPC_STREAMING,
+                             "{s:i}",
+                             "final", STATE_SHUTDOWN)))
         return NULL;
     if (flux_future_then (f, -1, monitor_continuation, arg) < 0) {
         flux_future_destroy (f);
