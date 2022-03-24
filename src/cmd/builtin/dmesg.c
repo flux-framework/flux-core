@@ -23,6 +23,8 @@ static struct optparse_option dmesg_opts[] = {
       .usage = "Clear the ring buffer contents after printing", },
     { .name = "follow",  .key = 'f',  .has_arg = 0,
       .usage = "Track new entries as are logged", },
+    { .name = "new",  .key = 'n',  .has_arg = 0,
+      .usage = "Show only new log messages", },
     OPTPARSE_TABLE_END,
 };
 
@@ -66,8 +68,9 @@ static int cmd_dmesg (optparse_t *p, int ac, char *av[])
                                  "log.dmesg",
                                  FLUX_NODEID_ANY,
                                  FLUX_RPC_STREAMING,
-                                 "{s:b}",
-                                 "follow", optparse_hasopt (p, "follow"))))
+                                 "{s:b s:b}",
+                                 "follow", optparse_hasopt (p, "follow"),
+                                 "nobacklog", optparse_hasopt (p, "new"))))
             log_err_exit ("error sending log.dmesg request");
         while (flux_rpc_get (f, &buf) == 0) {
             dmesg_print (buf, strlen (buf));

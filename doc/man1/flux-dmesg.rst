@@ -31,6 +31,9 @@ OPTIONS
    After printing the contents of the ring buffer, wait for new entries
    and print them as they arrive.
 
+**-n, --new**
+   Follow only new log entries.
+
 
 EXAMPLES
 ========

@@ -60,6 +60,15 @@ test_expect_success NO_CHAIN_LINT 'flux dmesg -f works' '
 	$waitfile -t 20 -p hello_follow dmesg.out &&
 	kill $pid
 '
+test_expect_success NO_CHAIN_LINT 'flux dmesg -f --new works' '
+	flux logger hello_old &&
+	flux dmesg -f --new > dmesg2.out &
+	pid=$! &&
+	for i in $(seq 1 10); do flux logger hello_new; done &&
+	$waitfile -t 20 -p hello_new dmesg2.out &&
+	test_must_fail grep hello_old dmesg2.out &&
+	kill $pid
+'
 test_expect_success 'ring buffer wraps over old entries' '
 	OLD_RINGSIZE=`flux getattr log-ring-size` &&
 	flux setattr log-ring-size 2 &&
