@@ -51,7 +51,7 @@ typedef struct {
     zlist_t *buf;
     int ring_size;
     int seq;
-    zlist_t *followers;
+    struct flux_msglist *followers;
 } logbuf_t;
 
 struct logbuf_entry {
@@ -97,28 +97,6 @@ static void logbuf_trim (logbuf_t *logbuf, int size)
     }
 }
 
-static void flux_msg_decref_wrapper (void *data)
-{
-    const flux_msg_t *msg = data;
-    flux_msg_decref (msg);
-}
-
-
-static int logbuf_follow (logbuf_t *logbuf, const flux_msg_t *msg)
-{
-    if (zlist_append (logbuf->followers,
-                      (flux_msg_t *)flux_msg_incref (msg)) < 0) {
-        flux_msg_decref (msg);
-        errno = ENOMEM;
-        return -1;
-    }
-    zlist_freefn (logbuf->followers,
-                  (flux_msg_t *)msg,
-                  flux_msg_decref_wrapper,
-                  true);
-    return 0;
-}
-
 static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
 {
     struct logbuf_entry *e;
@@ -136,11 +114,11 @@ static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
             errno = ENOMEM;
             return -1;
         }
-        msg = zlist_first (logbuf->followers);
+        msg = flux_msglist_first (logbuf->followers);
         while (msg) {
             if (flux_respond (logbuf->h, msg, e->buf) < 0)
                 log_err ("error responding to log.dmesg request");
-            msg = zlist_next (logbuf->followers);
+            msg = flux_msglist_next (logbuf->followers);
         }
     }
     return 0;
@@ -163,10 +141,8 @@ static logbuf_t *logbuf_create (void)
         errno = ENOMEM;
         goto cleanup;
     }
-    if (!(logbuf->followers = zlist_new ())) {
-        errno = ENOMEM;
+    if (!(logbuf->followers = flux_msglist_create ()))
         goto cleanup;
-    }
     return logbuf;
 cleanup:
     logbuf_destroy (logbuf);
@@ -182,7 +158,7 @@ void logbuf_destroy (logbuf_t *logbuf)
         }
         /* logbuf_destroy() would be called after local connector
          * unloaded, so no need to send ENODATA to followers */
-        zlist_destroy (&logbuf->followers);
+        flux_msglist_destroy (logbuf->followers);
         if (logbuf->f)
             (void)fclose (logbuf->f);
         if (logbuf->filename)
@@ -575,7 +551,7 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (follow) {
-        if (logbuf_follow (logbuf, msg) < 0)
+        if (flux_msglist_append (logbuf->followers, msg) < 0)
             goto error;
     }
     else {
@@ -590,44 +566,14 @@ error:
         log_err ("error responding to log.dmesg request");
 }
 
-static int cmp_sender (const flux_msg_t *msg, const char *uuid)
-{
-    const char *sender;
-
-    if (!(sender = flux_msg_route_first (msg)))
-        return 0;
-    if (!sender || strcmp (sender, uuid) != 0)
-        return 0;
-    return 1;
-}
-
-static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void disconnect_request_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     logbuf_t *logbuf = arg;
-    const char *sender;
-    const flux_msg_t *msgp;
-    zlist_t *tmp = NULL;
 
-    if (!(sender = flux_msg_route_first (msg)))
-        goto done;
-    msgp = zlist_first (logbuf->followers);
-    while (msgp) {
-        if (cmp_sender (msgp, sender)) {
-            if (!tmp && !(tmp = zlist_new ()))
-                goto done;
-            if (zlist_append (tmp, (flux_msg_t *)msgp) < 0)
-                goto done;
-        }
-        msgp = zlist_next (logbuf->followers);
-    }
-    if (tmp) {
-        while ((msgp = zlist_pop (tmp)))
-            zlist_remove (logbuf->followers, (flux_msg_t *)msgp);
-    }
-done:
-    zlist_destroy (&tmp);
-    /* no response */
+    flux_msglist_disconnect (logbuf->followers, msg);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
