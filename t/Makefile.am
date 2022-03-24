@@ -137,6 +137,7 @@ TESTSCRIPTS = \
 	t2273-job-alloc-bypass.t \
 	t2274-manager-perilog.t \
 	t2275-job-duration-validator.t \
+	t2276-job-requires.t \
 	t2280-job-memo.t \
 	t2300-sched-simple.t \
 	t2302-sched-simple-up-down.t \
