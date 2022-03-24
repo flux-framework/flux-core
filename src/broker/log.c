@@ -37,9 +37,7 @@ static const int default_stderr_level = LOG_ERR;
 static const stderr_mode_t default_stderr_mode = MODE_LEADER;
 static const int default_level = LOG_DEBUG;
 
-#define LOGBUF_MAGIC 0xe1e2e3e4
 typedef struct {
-    int magic;
     flux_t *h;
     flux_msg_handler_t **handlers;
     uint32_t rank;
@@ -92,7 +90,6 @@ static struct logbuf_entry *logbuf_entry_create (const char *buf, int len)
 
 static void logbuf_trim (logbuf_t *logbuf, int size)
 {
-    assert (logbuf->magic == LOGBUF_MAGIC);
     struct logbuf_entry *e;
     while (zlist_size (logbuf->buf) > size) {
         e = zlist_pop (logbuf->buf);
@@ -124,7 +121,6 @@ static int logbuf_follow (logbuf_t *logbuf, const flux_msg_t *msg)
 
 static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
 {
-    assert (logbuf->magic == LOGBUF_MAGIC);
     struct logbuf_entry *e;
     const flux_msg_t *msg;
 
@@ -157,7 +153,6 @@ static logbuf_t *logbuf_create (void)
         errno = ENOMEM;
         goto cleanup;
     }
-    logbuf->magic = LOGBUF_MAGIC;
     logbuf->forward_level = default_forward_level;
     logbuf->critical_level = default_critical_level;
     logbuf->stderr_level = default_stderr_level;
@@ -181,7 +176,6 @@ cleanup:
 void logbuf_destroy (logbuf_t *logbuf)
 {
     if (logbuf) {
-        assert (logbuf->magic == LOGBUF_MAGIC);
         if (logbuf->buf) {
             logbuf_trim (logbuf, 0);
             zlist_destroy (&logbuf->buf);
@@ -193,7 +187,6 @@ void logbuf_destroy (logbuf_t *logbuf)
             (void)fclose (logbuf->f);
         if (logbuf->filename)
             free (logbuf->filename);
-        logbuf->magic = ~LOGBUF_MAGIC;
         free (logbuf);
     }
 }
@@ -419,8 +412,6 @@ done:
 
 static int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
 {
-    assert (logbuf->magic == LOGBUF_MAGIC);
-
     flux_future_t *f;
     if (!(f = flux_rpc_raw (logbuf->h, "log.append", buf, len,
                               FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
@@ -459,7 +450,6 @@ static void log_fp (FILE *fp, int flags, const char *buf, int len)
 
 static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
 {
-    assert (logbuf->magic == LOGBUF_MAGIC);
     bool logged_stderr = false;
     int rc = 0;
     uint32_t rank = FLUX_NODEID_ANY;
@@ -619,7 +609,6 @@ static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
     const flux_msg_t *msgp;
     zlist_t *tmp = NULL;
 
-    assert (logbuf->magic == LOGBUF_MAGIC);
     if (!(sender = flux_msg_route_first (msg)))
         goto done;
     msgp = zlist_first (logbuf->followers);
