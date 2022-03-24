@@ -561,11 +561,22 @@ static void disconnect_request_cb (flux_t *h,
     flux_msglist_disconnect (logbuf->followers, msg);
 }
 
+static void cancel_request_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    logbuf_t *logbuf = arg;
+
+    flux_msglist_cancel (h, logbuf->followers, msg);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "log.append",         append_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.clear",          clear_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.dmesg",          dmesg_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.disconnect",     disconnect_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "log.cancel",         cancel_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
