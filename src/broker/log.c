@@ -17,7 +17,6 @@
 #include "config.h"
 #endif
 #include <inttypes.h>
-#include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
@@ -244,54 +243,40 @@ static int logbuf_set_filename (logbuf_t *logbuf, const char *destination)
     return 0;
 }
 
+static const char *int_to_string (int n)
+{
+    static char s[32]; // ample room to avoid overflow
+    (void)snprintf (s, sizeof (s), "%d", n);
+    return s;
+}
+
 static int attr_get_log (const char *name, const char **val, void *arg)
 {
     logbuf_t *logbuf = arg;
-    static char s[32];
-    int n, rc = -1;
 
-    if (!strcmp (name, "log-forward-level")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->forward_level);
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-critical-level")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->critical_level);
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-stderr-level")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->stderr_level);
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-stderr-mode")) {
-        n = snprintf (s, sizeof (s), "%s",
-                      logbuf->stderr_mode == MODE_LEADER ? "leader" : "local");
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-ring-size")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->ring_size);
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-ring-used")) {
-        n = snprintf (s, sizeof (s), "%zd", zlist_size (logbuf->buf));
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-count")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->seq);
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-filename")) {
+    if (!strcmp (name, "log-forward-level"))
+        *val = int_to_string (logbuf->forward_level);
+    else if (!strcmp (name, "log-critical-level"))
+        *val = int_to_string (logbuf->critical_level);
+    else if (!strcmp (name, "log-stderr-level"))
+        *val = int_to_string (logbuf->stderr_level);
+    else if (!strcmp (name, "log-stderr-mode"))
+        *val = logbuf->stderr_mode == MODE_LEADER ? "leader" : "local";
+    else if (!strcmp (name, "log-ring-size"))
+        *val = int_to_string (logbuf->ring_size);
+    else if (!strcmp (name, "log-ring-used"))
+        *val = int_to_string (zlist_size (logbuf->buf));
+    else if (!strcmp (name, "log-count"))
+        *val = int_to_string (logbuf->seq);
+    else if (!strcmp (name, "log-filename"))
         *val = logbuf->filename;
-    } else if (!strcmp (name, "log-level")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->level);
-        assert (n < sizeof (s));
-        *val = s;
-    } else {
+    else if (!strcmp (name, "log-level"))
+        *val = int_to_string (logbuf->level);
+    else {
         errno = ENOENT;
-        goto done;
+        return -1;
     }
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 static int attr_set_log (const char *name, const char *val, void *arg)
