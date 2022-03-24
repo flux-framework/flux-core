@@ -334,7 +334,7 @@ static void call_handler (flux_msg_handler_t *mh, const flux_msg_t *msg)
             && matchtag != FLUX_MATCHTAG_NONE) {
             const char *errmsg;
             if (mh->rolemask == 0 || mh->rolemask == FLUX_ROLE_OWNER)
-                errmsg = "Request requires owner credentals";
+                errmsg = "Request requires owner credentials";
             else
                 errmsg = "Request rejected due to insufficient privilege";
             (void)flux_respond_error (mh->d->h, msg, EPERM, errmsg);

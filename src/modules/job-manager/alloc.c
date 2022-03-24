@@ -725,7 +725,7 @@ static void alloc_admin_cb (flux_t *h,
         goto error;
     if (!query_only) {
         if (flux_msg_authorize (msg, FLUX_USERID_UNKNOWN) < 0) {
-            errmsg = "Request requires owner credentals";
+            errmsg = "Request requires owner credentials";
             goto error;
         }
         if (!enable) {
