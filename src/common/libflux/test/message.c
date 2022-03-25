@@ -395,6 +395,30 @@ void check_routes (void)
         "flux_msg_route_push fails with EPROTO after flux_msg_route_disable()");
 
     flux_msg_destroy (msg);
+
+    msg = flux_msg_create (FLUX_MSGTYPE_REQUEST);
+    flux_msg_t *msg2 = flux_msg_create (FLUX_MSGTYPE_REQUEST);
+    if (!msg || !msg2)
+        BAIL_OUT ("flux_msg_create failed");
+    flux_msg_route_enable (msg);
+    flux_msg_route_enable (msg2);
+    ok (flux_msg_route_match_first (msg, msg2) == true,
+        "flux_msg_route_match_first returns true on messages with no routes");
+    if (flux_msg_route_push (msg, "foobar") < 0)
+        BAIL_OUT ("flux_msg_route_push failed");
+    ok (flux_msg_route_match_first (msg, msg2) == false,
+        "flux_msg_route_match_first returns false on route and no route");
+    if (flux_msg_route_push (msg2, "foobar") < 0)
+        BAIL_OUT ("flux_msg_route_push failed");
+    ok (flux_msg_route_match_first (msg, msg2) == true,
+        "flux_msg_route_match_first returns true if routes match");
+    if (flux_msg_route_push (msg2, "bar") < 0)
+        BAIL_OUT ("flux_msg_route_push failed");
+    ok (flux_msg_route_match_first (msg, msg2) == true,
+        "flux_msg_route_match_first still returns true with more routes pushed");
+
+    flux_msg_destroy (msg);
+    flux_msg_destroy (msg2);
 }
 
 /* flux_msg_get_topic, flux_msg_set_topic on message with and without routes
