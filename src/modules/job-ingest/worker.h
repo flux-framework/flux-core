@@ -25,10 +25,15 @@ bool worker_is_running (struct worker *w);
 
 flux_future_t *worker_kill (struct worker *w, int signo);
 void worker_destroy (struct worker *w);
-struct worker *worker_create (flux_t *h, double inactivity_timeout,
-                              const char *worker_name,
-                              int argc, char **argv);
 
+struct worker *worker_create (flux_t *h,
+                              double inactivity_timeout,
+                              const char *worker_name);
+
+/*  (re)set cmdline for worker `w`. The new command will be used the
+ *   next time the worker starts.
+ */
+int worker_set_cmdline (struct worker *w, int argc, char **argv);
 
 /* Tell worker to stop.
  * Return a count of running processes.

@@ -142,20 +142,15 @@ error:
     return -1;
 }
 
-struct validate *validate_create (flux_t *h,
-                                  const char *validator_plugins,
-                                  const char *validator_args)
+int validate_configure (struct validate *v,
+                        const char *validator_plugins,
+                        const char *validator_args)
 {
-    struct validate *v;
+    int rc = -1;
     int argc;
     char **argv = NULL;
     char *argz = NULL;
     size_t argz_len = 0;
-    int i;
-
-    if (!(v = calloc (1, sizeof (*v))))
-        return NULL;
-    v->h = h;
 
     if (validator_argz_create (&argz,
                                &argz_len,
@@ -165,28 +160,37 @@ struct validate *validate_create (flux_t *h,
 
     argc = argz_count (argz, argz_len);
     if (!(argv = calloc (1, sizeof (char *) * (argc + 1)))) {
-        flux_log_error (h, "failed to create argv");
+        flux_log_error (v->h, "failed to create argv");
         goto error;
     }
     argz_extract (argz, argz_len, argv);
 
-    for (i = 0; i < MAX_WORKER_COUNT; i++) {
-        char name[256];
-        (void) snprintf (name, sizeof (name), "validator[%d]", i);
-        if (!(v->worker[i] = worker_create (h,
-                                            worker_inactivity_timeout,
-                                            name,
-                                            argc, argv)))
+    for (int i = 0; i < MAX_WORKER_COUNT; i++) {
+        if (!v->worker[i]) {
+            char name[256];
+            (void) snprintf (name, sizeof (name), "validator[%d]", i);
+            if (!(v->worker[i] = worker_create (v->h,
+                                                worker_inactivity_timeout,
+                                                name)))
+                goto error;
+        }
+        if (worker_set_cmdline (v->worker[i], argc, argv) < 0)
             goto error;
     }
-    free (argv);
-    free (argz);
-    return v;
+    rc = 0;
 error:
-    free (argv);
-    free (argz);
-    validate_destroy (v);
-    return NULL;
+    ERRNO_SAFE_WRAP (free, argv);
+    ERRNO_SAFE_WRAP (free, argz);
+    return rc;
+}
+
+struct validate *validate_create (flux_t *h)
+{
+    struct validate *v;
+    if (!(v = calloc (1, sizeof (*v))))
+        return NULL;
+    v->h = h;
+    return v;
 }
 
 /* Select worker with least backlog.  If none is running, or the best

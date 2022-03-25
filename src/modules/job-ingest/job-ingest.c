@@ -914,10 +914,12 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
             return -1;
         }
     }
-    if (use_validator &&
-        !(ctx->validate = validate_create (h, plugins, valargs))) {
-        flux_log_error (h, "validate_create");
-        return -1;
+    if (use_validator) {
+        if (!(ctx->validate = validate_create (h))
+            || validate_configure (ctx->validate, plugins, valargs) < 0) {
+            flux_log_error (h, "validate_create");
+            return -1;
+        }
     }
 
 #if HAVE_FLUX_SECURITY
