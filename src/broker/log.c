@@ -17,7 +17,6 @@
 #include "config.h"
 #endif
 #include <inttypes.h>
-#include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
@@ -37,9 +36,7 @@ static const int default_stderr_level = LOG_ERR;
 static const stderr_mode_t default_stderr_mode = MODE_LEADER;
 static const int default_level = LOG_DEBUG;
 
-#define LOGBUF_MAGIC 0xe1e2e3e4
 typedef struct {
-    int magic;
     flux_t *h;
     flux_msg_handler_t **handlers;
     uint32_t rank;
@@ -53,7 +50,7 @@ typedef struct {
     zlist_t *buf;
     int ring_size;
     int seq;
-    zlist_t *followers;
+    struct flux_msglist *followers;
 } logbuf_t;
 
 struct logbuf_entry {
@@ -92,7 +89,6 @@ static struct logbuf_entry *logbuf_entry_create (const char *buf, int len)
 
 static void logbuf_trim (logbuf_t *logbuf, int size)
 {
-    assert (logbuf->magic == LOGBUF_MAGIC);
     struct logbuf_entry *e;
     while (zlist_size (logbuf->buf) > size) {
         e = zlist_pop (logbuf->buf);
@@ -100,31 +96,8 @@ static void logbuf_trim (logbuf_t *logbuf, int size)
     }
 }
 
-static void flux_msg_decref_wrapper (void *data)
-{
-    const flux_msg_t *msg = data;
-    flux_msg_decref (msg);
-}
-
-
-static int logbuf_follow (logbuf_t *logbuf, const flux_msg_t *msg)
-{
-    if (zlist_append (logbuf->followers,
-                      (flux_msg_t *)flux_msg_incref (msg)) < 0) {
-        flux_msg_decref (msg);
-        errno = ENOMEM;
-        return -1;
-    }
-    zlist_freefn (logbuf->followers,
-                  (flux_msg_t *)msg,
-                  flux_msg_decref_wrapper,
-                  true);
-    return 0;
-}
-
 static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
 {
-    assert (logbuf->magic == LOGBUF_MAGIC);
     struct logbuf_entry *e;
     const flux_msg_t *msg;
 
@@ -140,11 +113,11 @@ static int append_new_entry (logbuf_t *logbuf, const char *buf, int len)
             errno = ENOMEM;
             return -1;
         }
-        msg = zlist_first (logbuf->followers);
+        msg = flux_msglist_first (logbuf->followers);
         while (msg) {
             if (flux_respond (logbuf->h, msg, e->buf) < 0)
                 log_err ("error responding to log.dmesg request");
-            msg = zlist_next (logbuf->followers);
+            msg = flux_msglist_next (logbuf->followers);
         }
     }
     return 0;
@@ -157,7 +130,6 @@ static logbuf_t *logbuf_create (void)
         errno = ENOMEM;
         goto cleanup;
     }
-    logbuf->magic = LOGBUF_MAGIC;
     logbuf->forward_level = default_forward_level;
     logbuf->critical_level = default_critical_level;
     logbuf->stderr_level = default_stderr_level;
@@ -168,10 +140,8 @@ static logbuf_t *logbuf_create (void)
         errno = ENOMEM;
         goto cleanup;
     }
-    if (!(logbuf->followers = zlist_new ())) {
-        errno = ENOMEM;
+    if (!(logbuf->followers = flux_msglist_create ()))
         goto cleanup;
-    }
     return logbuf;
 cleanup:
     logbuf_destroy (logbuf);
@@ -181,19 +151,17 @@ cleanup:
 void logbuf_destroy (logbuf_t *logbuf)
 {
     if (logbuf) {
-        assert (logbuf->magic == LOGBUF_MAGIC);
         if (logbuf->buf) {
             logbuf_trim (logbuf, 0);
             zlist_destroy (&logbuf->buf);
         }
         /* logbuf_destroy() would be called after local connector
          * unloaded, so no need to send ENODATA to followers */
-        zlist_destroy (&logbuf->followers);
+        flux_msglist_destroy (logbuf->followers);
         if (logbuf->f)
             (void)fclose (logbuf->f);
         if (logbuf->filename)
             free (logbuf->filename);
-        logbuf->magic = ~LOGBUF_MAGIC;
         free (logbuf);
     }
 }
@@ -275,54 +243,40 @@ static int logbuf_set_filename (logbuf_t *logbuf, const char *destination)
     return 0;
 }
 
+static const char *int_to_string (int n)
+{
+    static char s[32]; // ample room to avoid overflow
+    (void)snprintf (s, sizeof (s), "%d", n);
+    return s;
+}
+
 static int attr_get_log (const char *name, const char **val, void *arg)
 {
     logbuf_t *logbuf = arg;
-    static char s[32];
-    int n, rc = -1;
 
-    if (!strcmp (name, "log-forward-level")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->forward_level);
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-critical-level")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->critical_level);
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-stderr-level")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->stderr_level);
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-stderr-mode")) {
-        n = snprintf (s, sizeof (s), "%s",
-                      logbuf->stderr_mode == MODE_LEADER ? "leader" : "local");
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-ring-size")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->ring_size);
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-ring-used")) {
-        n = snprintf (s, sizeof (s), "%zd", zlist_size (logbuf->buf));
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-count")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->seq);
-        assert (n < sizeof (s));
-        *val = s;
-    } else if (!strcmp (name, "log-filename")) {
+    if (!strcmp (name, "log-forward-level"))
+        *val = int_to_string (logbuf->forward_level);
+    else if (!strcmp (name, "log-critical-level"))
+        *val = int_to_string (logbuf->critical_level);
+    else if (!strcmp (name, "log-stderr-level"))
+        *val = int_to_string (logbuf->stderr_level);
+    else if (!strcmp (name, "log-stderr-mode"))
+        *val = logbuf->stderr_mode == MODE_LEADER ? "leader" : "local";
+    else if (!strcmp (name, "log-ring-size"))
+        *val = int_to_string (logbuf->ring_size);
+    else if (!strcmp (name, "log-ring-used"))
+        *val = int_to_string (zlist_size (logbuf->buf));
+    else if (!strcmp (name, "log-count"))
+        *val = int_to_string (logbuf->seq);
+    else if (!strcmp (name, "log-filename"))
         *val = logbuf->filename;
-    } else if (!strcmp (name, "log-level")) {
-        n = snprintf (s, sizeof (s), "%d", logbuf->level);
-        assert (n < sizeof (s));
-        *val = s;
-    } else {
+    else if (!strcmp (name, "log-level"))
+        *val = int_to_string (logbuf->level);
+    else {
         errno = ENOENT;
-        goto done;
+        return -1;
     }
-    rc = 0;
-done:
-    return rc;
+    return 0;
 }
 
 static int attr_set_log (const char *name, const char *val, void *arg)
@@ -419,8 +373,6 @@ done:
 
 static int logbuf_forward (logbuf_t *logbuf, const char *buf, int len)
 {
-    assert (logbuf->magic == LOGBUF_MAGIC);
-
     flux_future_t *f;
     if (!(f = flux_rpc_raw (logbuf->h, "log.append", buf, len,
                               FLUX_NODEID_UPSTREAM, FLUX_RPC_NORESPONSE)))
@@ -459,7 +411,6 @@ static void log_fp (FILE *fp, int flags, const char *buf, int len)
 
 static int logbuf_append (logbuf_t *logbuf, const char *buf, int len)
 {
-    assert (logbuf->magic == LOGBUF_MAGIC);
     bool logged_stderr = false;
     int rc = 0;
     uint32_t rank = FLUX_NODEID_ANY;
@@ -559,9 +510,13 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
     logbuf_t *logbuf = arg;
     struct logbuf_entry *e;
     int follow;
+    int nobacklog = 0;
 
-    if (flux_request_unpack (msg, NULL, "{ s:b }",
-                             "follow", &follow) < 0)
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:b s?b}",
+                             "follow", &follow,
+                             "nobacklog", &nobacklog) < 0)
         goto error;
 
     if (!flux_msg_is_streaming (msg)) {
@@ -569,17 +524,19 @@ static void dmesg_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    e = zlist_first (logbuf->buf);
-    while (e) {
-        if (flux_respond (h, msg, e->buf) < 0) {
-            log_err ("error responding to log.dmesg request");
-            goto error;
+    if (!nobacklog) {
+        e = zlist_first (logbuf->buf);
+        while (e) {
+            if (flux_respond (h, msg, e->buf) < 0) {
+                log_err ("error responding to log.dmesg request");
+                goto error;
+            }
+            e = zlist_next (logbuf->buf);
         }
-        e = zlist_next (logbuf->buf);
     }
 
     if (follow) {
-        if (logbuf_follow (logbuf, msg) < 0)
+        if (flux_msglist_append (logbuf->followers, msg) < 0)
             goto error;
     }
     else {
@@ -594,45 +551,24 @@ error:
         log_err ("error responding to log.dmesg request");
 }
 
-static int cmp_sender (const flux_msg_t *msg, const char *uuid)
-{
-    const char *sender;
-
-    if (!(sender = flux_msg_route_first (msg)))
-        return 0;
-    if (!sender || strcmp (sender, uuid) != 0)
-        return 0;
-    return 1;
-}
-
-static void disconnect_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                                   const flux_msg_t *msg, void *arg)
+static void disconnect_request_cb (flux_t *h,
+                                   flux_msg_handler_t *mh,
+                                   const flux_msg_t *msg,
+                                   void *arg)
 {
     logbuf_t *logbuf = arg;
-    const char *sender;
-    const flux_msg_t *msgp;
-    zlist_t *tmp = NULL;
 
-    assert (logbuf->magic == LOGBUF_MAGIC);
-    if (!(sender = flux_msg_route_first (msg)))
-        goto done;
-    msgp = zlist_first (logbuf->followers);
-    while (msgp) {
-        if (cmp_sender (msgp, sender)) {
-            if (!tmp && !(tmp = zlist_new ()))
-                goto done;
-            if (zlist_append (tmp, (flux_msg_t *)msgp) < 0)
-                goto done;
-        }
-        msgp = zlist_next (logbuf->followers);
-    }
-    if (tmp) {
-        while ((msgp = zlist_pop (tmp)))
-            zlist_remove (logbuf->followers, (flux_msg_t *)msgp);
-    }
-done:
-    zlist_destroy (&tmp);
-    /* no response */
+    flux_msglist_disconnect (logbuf->followers, msg);
+}
+
+static void cancel_request_cb (flux_t *h,
+                                flux_msg_handler_t *mh,
+                                const flux_msg_t *msg,
+                                void *arg)
+{
+    logbuf_t *logbuf = arg;
+
+    flux_msglist_cancel (h, logbuf->followers, msg);
 }
 
 static const struct flux_msg_handler_spec htab[] = {
@@ -640,6 +576,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "log.clear",          clear_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.dmesg",          dmesg_request_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "log.disconnect",     disconnect_request_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "log.cancel",         cancel_request_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 

@@ -137,7 +137,7 @@ test_expect_success 'flux logger not allowed for non-owner' '
 
 test_expect_success 'flux dmesg not allowed for non-owner' '
 	! FLUX_HANDLE_ROLEMASK=0x2 flux dmesg 2>dmesg.err &&
-	grep -q "Operation not permitted" dmesg.err
+	grep -q "Request requires owner credentials" dmesg.err
 '
 
 # Note these rules:
