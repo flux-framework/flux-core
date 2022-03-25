@@ -106,6 +106,7 @@ TESTSCRIPTS = \
 	t2010-kvs-snapshot-restore.t \
 	t2100-job-ingest.t \
 	t2110-job-ingest-validator.t \
+	t2111-job-ingest-config.t \
 	t2201-job-cmd.t \
 	t2202-job-manager.t \
 	t2203-job-manager-single.t \
