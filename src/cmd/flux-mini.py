@@ -241,6 +241,7 @@ class Xcmd:
         "log": "--log=",
         "log_stderr": "--log-stderr=",
         "dependency": "--dependency=",
+        "requires": "--requires=",
         "wait": "--wait-event=",
     }
 
@@ -468,6 +469,14 @@ class MiniCmd:
             metavar="URI",
         )
         parser.add_argument(
+            "--requires",
+            action="append",
+            help="Set one or more required resource properties for this job. "
+            + "Currently this option supports only a list of property names, "
+            + "optionally prefixed by ^ to indicate negation.",
+            metavar="LIST",
+        )
+        parser.add_argument(
             "--begin-time",
             action=BeginTimeAction,
             metavar="TIME",
@@ -567,6 +576,11 @@ class MiniCmd:
         if args.dependency is not None:
             jobspec.setattr(
                 "system.dependencies", dependency_array_create(args.dependency)
+            )
+        if args.requires is not None:
+            jobspec.setattr(
+                "system.constraints.properties",
+                list_split(args.requires),
             )
         if args.time_limit is not None:
             jobspec.duration = args.time_limit

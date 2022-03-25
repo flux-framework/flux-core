@@ -359,6 +359,13 @@ static int attr_system_check (json_t *o, flux_jobspec1_error_t *error)
                 return -1;
             }
         }
+        else if (!strcmp (key, "constraints")) {
+            if (!(json_is_object (value))) {
+                errprintf (error,
+                         "attributes.system.constraints must be a dictionary");
+                return -1;
+            }
+        }
         else if (!strcmp (key, "dependencies")) {
             size_t index;
             json_t *el;

@@ -127,6 +127,26 @@ class ResourceSet:
     def intersect(self, *args):
         return self._run_op("intersect", *args)
 
+    def copy_constraint(self, constraint):
+        """
+        Return a copy of a ResourceSet containing only those resources that
+        match the RFC 31 constraint object `constraint`
+
+        :param constraint: An RFC 31 constraint object in encoded string
+                           form or as Python mapping. (The mapping will be
+                           converted to a JSON string)
+        """
+        return ResourceSet(self.impl.copy_constraint(constraint))
+
+    def set_property(self, name, ranks=None):
+        """
+        Set property 'name' on optional 'ranks' (all ranks if ranks is None)
+        """
+        if ranks is None:
+            ranks = str(self.ranks)
+        self.impl.set_property(name, ranks)
+        return self
+
     def remove_ranks(self, ranks):
         """
         Remove the rank or ranks specified from the ResourceSet

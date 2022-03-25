@@ -212,6 +212,38 @@ void test_rnode_cmp ()
     rnode_destroy (b);
 }
 
+void test_properties ()
+{
+    struct rnode *a;
+    struct rnode *b;
+
+    if (!(a = rnode_create ("foo", 0, "0-3")))
+        BAIL_OUT ("failed to create rnode object");
+
+    ok (rnode_set_property (a, "blingy") == 0,
+        "rnode_set_property works");
+    ok (rnode_set_property (a, "blingy") == 0,
+        "rnode_set_property again works");
+    ok (rnode_has_property (a, "blingy"),
+        "rnode_has_property works");
+    ok (!rnode_has_property (a, "dull"),
+        "rnode_has_property returns false if property not set");
+    if (!(b = rnode_copy (a)))
+        BAIL_OUT ("failed to copy rnode");
+    ok (b != NULL,
+        "rnode_copy with properties");
+    ok (rnode_has_property (b, "blingy"),
+        "rnode_has_property works on copy");
+    ok (!rnode_has_property (b, "dull"),
+        "rnode_has_property on copy returns false if property not set");
+    rnode_remove_property (a, "blingy");
+    ok (!rnode_has_property (a, "blingy"),
+        "rnode_has_property now returns false");
+
+    rnode_destroy (a);
+    rnode_destroy (b);
+}
+
 int main (int ac, char *av[])
 {
     struct idset *ids = NULL;
@@ -327,6 +359,7 @@ int main (int ac, char *av[])
     test_intersect ();
     test_add_child ();
     test_copy ();
+    test_properties ();
     done_testing ();
 }
 

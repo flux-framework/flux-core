@@ -149,6 +149,57 @@ class TestRSet(unittest.TestCase):
         rset.state = "up"
         self.assertEqual(rset.state, "up")
 
+    def test_properties(self):
+        rset = ResourceSet(self.R_input)
+        self.assertIsInstance(rset, ResourceSet)
+
+        rset.set_property("xx", "0-1")
+        rset.set_property("zz", "2-3")
+        rset.set_property("aa", "1")
+
+        with self.assertRaises(ValueError):
+            rset.set_property("x^y")
+        with self.assertRaises(ValueError):
+            rset.set_property("yy", "0-6")
+        with self.assertRaises(ValueError):
+            rset.set_property("yy", "foo")
+
+        # copy_constraint() with invalid property resturns empty set
+        empty = rset.copy_constraint({"properties": ["foo"]})
+        self.assertIsInstance(empty, ResourceSet)
+        self.assertEqual(str(empty), "")
+
+        xx = rset.copy_constraint({"properties": ["xx"]})
+        self.assertIsInstance(xx, ResourceSet)
+        self.assertEqual(str(xx), "rank[0-1]/core[0-3],gpu0")
+
+        zz = rset.copy_constraint({"properties": ["zz"]})
+        self.assertIsInstance(zz, ResourceSet)
+        self.assertEqual(str(zz), "rank[2-3]/core[0-3],gpu0")
+
+        aa = rset.copy_constraint({"properties": ["aa"]})
+        self.assertIsInstance(aa, ResourceSet)
+        self.assertEqual(str(aa), "rank1/core[0-3],gpu0")
+
+        aa = xx.copy_constraint({"properties": ["aa"]})
+        self.assertIsInstance(aa, ResourceSet)
+        self.assertEqual(str(aa), "rank1/core[0-3],gpu0")
+
+        #  not (xx and aa)
+        notax = rset.copy_constraint({"not": [{"properties": ["aa", "xx"]}]})
+        self.assertIsInstance(notax, ResourceSet)
+        self.assertEqual(str(notax), "rank[0,2-3]/core[0-3],gpu0")
+
+        #  not xx and not aa
+        notax2 = rset.copy_constraint({"properties": ["^aa", "^xx"]})
+        self.assertIsInstance(notax2, ResourceSet)
+        self.assertEqual(str(notax2), "rank[2-3]/core[0-3],gpu0")
+
+        with self.assertRaises(ValueError):
+            rset.copy_constraint({"foo": []})
+        with self.assertRaises(ValueError):
+            rset.copy_constraint({"properties": [42]})
+
 
 if __name__ == "__main__":
     unittest.main(testRunner=TAPTestRunner())

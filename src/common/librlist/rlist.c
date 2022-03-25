@@ -25,6 +25,7 @@
 #include "src/common/libutil/errprintf.h"
 
 #include "rnode.h"
+#include "match.h"
 #include "rlist.h"
 #include "rhwloc.h"
 
@@ -162,10 +163,11 @@ static int rlist_add_rnode (struct rlist *rl, struct rnode *n)
     return 0;
 }
 
-typedef struct rnode * (*rnode_copy_f) (const struct rnode *);
+typedef struct rnode * (*rnode_copy_f) (const struct rnode *, void *arg);
 
 static struct rlist *rlist_copy_internal (const struct rlist *orig,
-                                          rnode_copy_f cpfn)
+                                          rnode_copy_f cpfn,
+                                          void *arg)
 {
     struct rnode *n;
     struct rlist *rl = rlist_create ();
@@ -174,7 +176,7 @@ static struct rlist *rlist_copy_internal (const struct rlist *orig,
 
     n = zlistx_first (orig->nodes);
     while (n) {
-        struct rnode *copy = (*cpfn) (n);
+        struct rnode *copy = (*cpfn) (n, arg);
         if (copy && rlist_add_rnode_new (rl, copy) < 0) {
             rnode_destroy (copy);
             goto fail;
@@ -201,19 +203,34 @@ fail:
     return NULL;
 }
 
+static struct rnode *copy_empty (const struct rnode *rnode, void *arg)
+{
+    return rnode_copy_empty (rnode);
+}
+
 struct rlist *rlist_copy_empty (const struct rlist *orig)
 {
-    return rlist_copy_internal (orig, rnode_copy_empty);
+    return rlist_copy_internal (orig, copy_empty, NULL);
+}
+
+static struct rnode *copy_alloc (const struct rnode *rnode, void *arg)
+{
+    return rnode_copy_alloc (rnode);
 }
 
 struct rlist *rlist_copy_allocated (const struct rlist *orig)
 {
-    return rlist_copy_internal (orig, rnode_copy_alloc);
+    return rlist_copy_internal (orig, copy_alloc, NULL);
+}
+
+static struct rnode *copy_cores (const struct rnode *rnode, void *arg)
+{
+    return rnode_copy_cores (rnode);
 }
 
 struct rlist *rlist_copy_cores (const struct rlist *orig)
 {
-    return rlist_copy_internal (orig, rnode_copy_cores);
+    return rlist_copy_internal (orig, copy_cores, NULL);
 }
 
 struct rlist *rlist_copy_down (const struct rlist *orig)
@@ -287,6 +304,34 @@ err:
     rlist_destroy (result);
     return NULL;
 }
+
+struct rlist *rlist_copy_constraint (const struct rlist *orig,
+                                     json_t *constraint,
+                                     flux_error_t *errp)
+{
+    if (rnode_match_validate (constraint, errp) < 0)
+        return NULL;
+    return rlist_copy_internal (orig,
+                                (rnode_copy_f) rnode_copy_match,
+                                (void *) constraint);
+}
+
+struct rlist *rlist_copy_constraint_string (const struct rlist *orig,
+                                            const char *constraint,
+                                            flux_error_t *errp)
+{
+    struct rlist *rl;
+    json_error_t error;
+    json_t *o = json_loads (constraint, 0, &error);
+    if (!o) {
+        errprintf (errp, "%s", error.text);
+        return NULL;
+    }
+    rl = rlist_copy_constraint (orig, o, errp);
+    json_decref (o);
+    return rl;
+}
+
 
 int rlist_remove_ranks (struct rlist *rl, struct idset *ranks)
 {
@@ -882,6 +927,160 @@ static int rlist_assign_nodelist (struct rlist *rl, json_t *nodelist)
     return rc;
 }
 
+static void property_destructor (void **arg)
+{
+    if (arg) {
+        idset_destroy (*(struct idset **) arg);
+        *arg = NULL;
+    }
+}
+
+static char * property_string_invalid (const char *s)
+{
+    return strpbrk (s, "^&'\"`|()");
+}
+
+int rlist_add_property (struct rlist *rl,
+                        flux_error_t *errp,
+                        const char *name,
+                        const char *targets)
+{
+    unsigned int i;
+    int count;
+    struct rnode *n;
+    struct idset *ids = NULL;
+    struct idset *unknown = NULL;
+    int rc = -1;
+    char *p;
+
+    if ((p = property_string_invalid (name))) {
+        errprintf (errp,
+                   "Invalid character '%c' in property \"%s\"",
+                   *p,
+                   name);
+        errno = EINVAL;
+        goto out;
+    }
+
+    if (!targets || !(ids = idset_decode (targets))) {
+        errprintf (errp,
+                   "Invalid idset string '%s'",
+                   targets ? targets : "(null)");
+        errno = EINVAL;
+        goto out;
+    }
+
+    /*  Check for invalid ranks first, so we can fail early before
+     *   applying any properties.
+     */
+    if (!(unknown = idset_create (0, IDSET_FLAG_AUTOGROW))) {
+        errprintf (errp, "Out of memory");
+        goto out;
+    }
+    i = idset_first (ids);
+    while (i != IDSET_INVALID_ID) {
+        if (!rlist_find_rank (rl, i)
+            && idset_set (unknown, i) < 0) {
+            errprintf (errp, "unknown rank %u", i);
+            errno = ENOENT;
+            goto out;
+        }
+        i = idset_next (ids, i);
+    }
+    if ((count = idset_count (unknown)) > 0) {
+        p = idset_encode (unknown, IDSET_FLAG_RANGE);
+        errprintf (errp,
+                   "%s%s not found in target resource list",
+                   p ? (count == 1 ? "rank " : "ranks ") : "some ranks",
+                   p ? p : "");
+        free (p);
+        errno = ENOENT;
+        goto out;
+    }
+
+    i = idset_first (ids);
+    while (i != IDSET_INVALID_ID) {
+        if ((n = rlist_find_rank (rl, i)))
+            if (rnode_set_property (n, name) < 0) {
+                errprintf (errp,
+                           "Failed to set property %s on rank %u",
+                           name,
+                           i);
+                goto out;
+            }
+        i = idset_next (ids, i);
+    }
+    rc = 0;
+out:
+    idset_destroy (ids);
+    idset_destroy (unknown);
+    return rc;
+}
+
+int rlist_assign_properties (struct rlist *rl,
+                             json_t *properties,
+                             flux_error_t *errp)
+{
+    json_t *val;
+    const char *name;
+    char *p;
+    int rc = -1;
+
+    if (!rl || !properties) {
+        errprintf (errp, "Invalid argument");
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!json_is_object (properties)) {
+        errprintf (errp, "properties must be an object");
+        errno = EINVAL;
+        return -1;
+    }
+
+    /*  First, iterate all property inputs to ensure they are valid.
+     *  This avoids the need to undo any applied properties on failure.
+     */
+    json_object_foreach (properties, name, val) {
+        struct idset *ids;
+        if (!json_is_string (val)) {
+            char *s = json_dumps (val, JSON_COMPACT | JSON_ENCODE_ANY);
+            errprintf (errp, "properties value '%s' not a string", s);
+            free (s);
+            errno = EINVAL;
+            goto error;
+        }
+        if ((p = property_string_invalid (name))) {
+            errprintf (errp,
+                       "invalid character '%c' in property \"%s\"",
+                        *p,
+                        name);
+            errno = EINVAL;
+            goto error;
+        }
+        if (!(ids = idset_decode (json_string_value (val)))) {
+            errprintf (errp,
+                       "invalid idset '%s' specified for property \"%s\"",
+                       json_string_value (val),
+                       name);
+            errno = EINVAL;
+            goto error;
+        }
+        idset_destroy (ids);
+    }
+
+    json_object_foreach (properties, name, val) {
+        /*  Note: validity of json_string_value (val)
+         *   checked above, no need to do it again here.
+         */
+        if (rlist_add_property (rl, errp, name, json_string_value (val)) < 0)
+            goto error;
+    }
+    rc = 0;
+error:
+    return rc;
+}
+
 struct rlist *rlist_from_json (json_t *o, json_error_t *errp)
 {
     int i, version;
@@ -890,16 +1089,19 @@ struct rlist *rlist_from_json (json_t *o, json_error_t *errp)
     json_t *R_lite = NULL;
     json_t *nodelist = NULL;
     json_t *scheduling = NULL;
+    json_t *properties = NULL;
     double starttime = -1.;
     double expiration = -1.;
+    flux_error_t error;
 
     if (json_unpack_ex (o, errp, 0,
-                        "{s:i s?O s:{s:o s?o s?F s?F}}",
+                        "{s:i s?O s:{s:o s?o s?o s?F s?F}}",
                         "version", &version,
                         "scheduling", &scheduling,
                         "execution",
                           "R_lite", &R_lite,
                           "nodelist", &nodelist,
+                          "properties", &properties,
                           "starttime", &starttime,
                           "expiration", &expiration) < 0)
         goto err;
@@ -927,6 +1129,11 @@ struct rlist *rlist_from_json (json_t *o, json_error_t *errp)
     }
     if (nodelist && rlist_assign_nodelist (rl, nodelist) < 0)
         goto err;
+    if (properties && rlist_assign_properties (rl, properties, &error) < 0) {
+        if (errp)
+            snprintf (errp->text, sizeof (errp->text), "%s", error.text);
+        goto err;
+    }
     return (rl);
 err:
     rlist_destroy (rl);
@@ -1260,15 +1467,125 @@ fail:
     return NULL;
 }
 
-static json_t *rlist_json_nodelist (struct rlist *rl)
+int rlist_json_nodelist (struct rlist *rl, json_t **result)
 {
-    json_t *o = NULL;
     struct hostlist *hl = rlist_nodelist (rl);
     if (!hl)
-        return NULL;
-    o = hostlist_to_nodelist (hl);
+        return 0;
+    *result = hostlist_to_nodelist (hl);
     hostlist_destroy (hl);
-    return o;
+    return 0;
+}
+
+static zhashx_t *rlist_properties (struct rlist *rl)
+{
+    int saved_errno;
+    struct rnode *n;
+    zlistx_t *keys = NULL;
+    zhashx_t *properties = zhashx_new ();
+
+    if (!properties) {
+        errno = ENOMEM;
+        return NULL;
+    }
+
+    zhashx_set_destructor (properties, property_destructor);
+
+    n = zlistx_first (rl->nodes);
+    while (n) {
+        if (n->properties) {
+            const char *name;
+            if (!(keys = zhashx_keys (n->properties))) {
+                errno = ENOMEM;
+                goto error;
+            }
+            name = zlistx_first (keys);
+            while (name) {
+                struct idset *ids = zhashx_lookup (properties, name);
+                if (!ids) {
+                    if (!(ids = idset_create (0, IDSET_FLAG_AUTOGROW))) {
+                        errno = ENOMEM;
+                        goto error;
+                    }
+                    /* This zhashx_insert() cannot fail since we are
+                     *  guaranteed that `name` is not set in properties
+                     *  hash. However, check for error return in case
+                     *  zhashx_insert() returns -1 on ENOMEM in the future.
+                     */
+                    if (zhashx_insert (properties, name, ids) < 0) {
+                        idset_destroy (ids);
+                        errno = ENOMEM;
+                        goto error;
+                    }
+                }
+                if (idset_set (ids, n->rank) < 0)
+                    goto error;
+                name = zlistx_next (keys);
+            }
+            zlistx_destroy (&keys);
+            keys = NULL;
+        }
+        n = zlistx_next (rl->nodes);
+    }
+
+    return properties;
+error:
+    saved_errno = errno;
+    zhashx_destroy (&properties);
+    zlistx_destroy (&keys);
+    errno = saved_errno;
+    return NULL;
+}
+
+int rlist_json_properties (struct rlist *rl, json_t **result)
+{
+    int saved_errno;
+    int rc = -1;
+    zhashx_t *properties = NULL;;
+    json_t *o = NULL;
+    struct idset *ids;
+
+    if (!(properties = rlist_properties (rl)))
+        return -1;
+
+    /*  Do not bother returning an empty JSON object
+     */
+    if (zhashx_size (properties) == 0) {
+        rc = 0;
+        goto out;
+    }
+
+    if (!(o = json_object ())) {
+        errno = ENOMEM;
+        goto out;
+    }
+    ids = zhashx_first (properties);
+    while (ids) {
+        const char *name = zhashx_cursor (properties);
+        char *s = idset_encode (ids, IDSET_FLAG_RANGE);
+        json_t *val = NULL;
+        if (!s
+            || !(val = json_string (s))
+            || json_object_set_new (o, name, val) < 0) {
+            free (s);
+            json_decref (val);
+            errno = ENOMEM;
+            goto out;
+        }
+        free (s);
+        ids = zhashx_next (properties);
+    }
+    /*  Assign o to result, but incref since we decref in exit path
+     */
+    json_incref (o);
+    *result = o;
+    rc = 0;
+out:
+    saved_errno = errno;
+    zhashx_destroy (&properties);
+    json_decref (o);
+    errno = saved_errno;
+    return rc;
 }
 
 json_t *rlist_to_R (struct rlist *rl)
@@ -1276,15 +1593,18 @@ json_t *rlist_to_R (struct rlist *rl)
     json_t *R = NULL;
     json_t *R_lite = NULL;
     json_t *nodelist = NULL;
+    json_t *properties = NULL;
 
     if (!rl)
         return NULL;
 
-    R_lite = rlist_compressed (rl);
-    nodelist = rlist_json_nodelist (rl);
-
-    if (!R_lite)
+    if (!(R_lite = rlist_compressed (rl)))
         goto fail;
+
+    if (rlist_json_nodelist (rl, &nodelist) < 0
+        || rlist_json_properties (rl, &properties) < 0)
+        goto fail;
+
     if (!(R = json_pack ("{s:i, s:{s:o s:f s:f}}",
                          "version", 1,
                          "execution",
@@ -1295,6 +1615,10 @@ json_t *rlist_to_R (struct rlist *rl)
     if (nodelist
         && json_object_set_new (json_object_get (R, "execution"),
                                 "nodelist", nodelist) < 0)
+        goto fail;
+    if (properties
+        && json_object_set_new (json_object_get (R, "execution"),
+                                "properties", properties) < 0)
         goto fail;
     if (rl->scheduling
         && json_object_set (R, "scheduling", rl->scheduling) < 0)

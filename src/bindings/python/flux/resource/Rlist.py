@@ -110,3 +110,23 @@ class Rlist(WrapperPimpl):
     def add_child(self, rank, name, ids):
         self.pimpl.rank_add_child(rank, name, ids)
         return self
+
+    def set_property(self, name, ranks):
+        error = ffi.new("flux_error_t *")
+        try:
+            self.pimpl.add_property(error, name, ranks)
+        except OSError as exc:
+            raise ValueError(
+                "set_property: " + ffi.string(error.text).decode("utf-8")
+            ) from exc
+
+    def copy_constraint(self, constraint):
+        error = ffi.new("flux_error_t *")
+        if not isinstance(constraint, str):
+            constraint = json.dumps(constraint)
+        handle = self.pimpl.copy_constraint_string(constraint, error)
+        if not handle:
+            raise ValueError(
+                "copy_constraint: " + ffi.string(error.text).decode("utf-8")
+            )
+        return Rlist(handle=handle)

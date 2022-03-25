@@ -201,7 +201,8 @@ struct rlist_test_entry test_1024n_4c[] = {
 char *R_create (const char *ranklist,
                 const char *corelist,
                 const char *gpus,
-                const char *nodelist)
+                const char *nodelist,
+                const char *properties)
 {
     char *retval;
     json_t *o = NULL;
@@ -234,6 +235,16 @@ char *R_create (const char *ranklist,
                    "version", 1,
                    "execution", "R_lite", R_lite)))
             goto err;
+    }
+    if (properties) {
+        json_error_t error;
+        json_t *execution;
+        json_t *prop = json_loads (properties, JSON_DECODE_ANY, &error);
+        if (!prop)
+            BAIL_OUT ("json_loads ('%s'): %s", properties, error.text);
+        if (!(execution = json_object_get (o, "execution")))
+            goto err;
+        json_object_set_new (execution, "properties", prop);
     }
     retval = json_dumps (o, JSON_COMPACT|JSON_ENCODE_ANY);
     json_decref (o);
@@ -290,7 +301,7 @@ static char *R_create_num (int ranks, int cores)
     if ((snprintf (corelist, sizeof (corelist)-1, "0-%d", cores-1) < 0)
         || (snprintf (ranklist, sizeof (ranklist)-1, "0-%d", ranks -1) < 0))
         return NULL;
-    return R_create (ranklist, corelist, NULL, NULL);
+    return R_create (ranklist, corelist, NULL, NULL, NULL);
 }
 
 void run_test_entries (struct rlist_test_entry tests[], int ranks, int cores)
@@ -677,7 +688,7 @@ static void test_updown ()
 {
     struct rlist *rl = NULL;
     struct rlist *rl2 = NULL;
-    char *R = R_create ("0-3", "0-3", NULL, "host[0-3]");
+    char *R = R_create ("0-3", "0-3", NULL, "host[0-3]", NULL);
     rl = rlist_from_R (R);
     if (rl == NULL)
         BAIL_OUT ("rlist_from_R failed");
@@ -791,8 +802,8 @@ void test_append (void)
         struct hostlist *hl = NULL;
         char *s1;
         char *s2;
-        char *R1 = R_create (t->ranksa, t->coresa, NULL, t->hostsa);
-        char *R2 = R_create (t->ranksb, t->coresb, NULL, t->hostsb);
+        char *R1 = R_create (t->ranksa, t->coresa, NULL, t->hostsa, NULL);
+        char *R2 = R_create (t->ranksb, t->coresb, NULL, t->hostsb, NULL);
 
         if (!R1 || !R2)
             BAIL_OUT ("R_create() failed!");
@@ -870,7 +881,7 @@ void test_remap ()
         char *before;
         char *after;
         struct rlist *rl;
-        char *R = R_create (t->ranks, t->cores, t->gpus, t->hosts);
+        char *R = R_create (t->ranks, t->cores, t->gpus, t->hosts, NULL);
         if (!R)
             BAIL_OUT ("R_create failed");
         if (!(rl = rlist_from_R (R)))
@@ -912,7 +923,7 @@ void test_assign_hosts ()
         char *hosts = NULL;
         struct hostlist *hl;
         struct rlist *rl;
-        char *R = R_create (t->ranks, t->cores, t->gpus, NULL);
+        char *R = R_create (t->ranks, t->cores, t->gpus, NULL, NULL);
         if (!R)
             BAIL_OUT ("R_create failed");
         if (!(rl = rlist_from_R (R)))
@@ -947,7 +958,7 @@ void test_rerank ()
     char *s = NULL;
     struct rlist *rl = NULL;
     flux_error_t err;
-    char *R = R_create ("0-15", "0-3", NULL, "foo[0-15]");
+    char *R = R_create ("0-15", "0-3", NULL, "foo[0-15]", NULL);
     if (!R)
         BAIL_OUT ("R_create failed");
     if (!(rl = rlist_from_R (R)))
@@ -1042,8 +1053,8 @@ void test_diff ()
         char *a;
         char *b;
         char *s;
-        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa);
-        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb);
+        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa, NULL);
+        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb, NULL);
 
         if (!Ra || !Rb)
             BAIL_OUT ("R_create() failed!");
@@ -1111,8 +1122,8 @@ void test_union ()
         char *a;
         char *b;
         char *s;
-        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa);
-        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb);
+        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa, NULL);
+        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb, NULL);
 
         if (!Ra || !Rb)
             BAIL_OUT ("R_create() failed!");
@@ -1175,8 +1186,8 @@ void test_intersect ()
         char *a;
         char *b;
         char *s;
-        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa);
-        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb);
+        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa, NULL);
+        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb, NULL);
 
         if (!Ra || !Rb)
             BAIL_OUT ("R_create() failed!");
@@ -1217,7 +1228,7 @@ void test_copy_ranks ()
     struct rlist *rl;
     struct rlist *result;
     char *s;
-    char *R = R_create ("0-5", "0-3", "0", "foo[0-5]");
+    char *R = R_create ("0-5", "0-3", "0", "foo[0-5]", NULL);
     if (!R)
         BAIL_OUT ("R_create failed");
     if (!(rl = rlist_from_R (R)))
@@ -1273,7 +1284,7 @@ void test_remove_ranks ()
     struct idset *ranks;
     struct rlist *rl;
     char *s;
-    char *R = R_create ("0-5", "0-3", "0", "foo[0-5]");
+    char *R = R_create ("0-5", "0-3", "0", "foo[0-5]", NULL);
     if (!R)
         BAIL_OUT ("R_create failed");
     if (!(rl = rlist_from_R (R)))
@@ -1406,8 +1417,8 @@ void test_verify ()
         struct rlist *rlb = NULL;
         char *a;
         char *b;
-        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa);
-        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb);
+        char *Ra = R_create (t->ranksa, t->coresa, t->gpusa, t->hostsa, NULL);
+        char *Rb = R_create (t->ranksb, t->coresb, t->gpusb, t->hostsb, NULL);
 
         if (!Ra || !Rb)
             BAIL_OUT ("R_create() failed!");
@@ -1441,7 +1452,7 @@ void test_timelimits ()
 {
     struct rlist *rl;
     json_t *o;
-    char *R = R_create ("0-1", "0-3", NULL, "foo[0-1]");
+    char *R = R_create ("0-1", "0-3", NULL, "foo[0-1]", NULL);
 
     if (!R)
         BAIL_OUT ("R_create failed");
@@ -1525,7 +1536,7 @@ void test_hosts_to_ranks (void)
         struct rlist *rl = NULL;
         struct idset *ids = NULL;
 
-        if (!(R = R_create (t->ranks, "0-1", NULL, t->input)))
+        if (!(R = R_create (t->ranks, "0-1", NULL, t->input, NULL)))
             BAIL_OUT ("R_create");
         if (!(rl = rlist_from_R (R)))
             BAIL_OUT ("rlist_from_R");
@@ -1581,6 +1592,189 @@ void test_issue4184 ()
     free (R);
 }
 
+struct property_test {
+    const char *desc;
+    const char *ranks;
+    const char *cores;
+    const char *hosts;
+    const char *properties;
+
+    const char *decode_error;
+
+    const char *constraint;
+
+    const char *result;
+};
+
+struct property_test property_tests[] = {
+    {
+        "invalid properties",
+        "1-10", "0-1", "foo[1-10]",
+        "\"foo\"",
+        "properties must be an object",
+        NULL,
+        NULL,
+    },
+    {
+        "invalid properties",
+        "1-10", "0-1", "foo[1-10]",
+        "{ \"foo\": 1 }",
+        "properties value '1' not a string",
+        NULL,
+        NULL,
+    },
+    {
+        "invalid properties",
+        "1-10", "0-1", "foo[1-10]",
+        "{ \"foo\": \"1-30\" }",
+        "ranks 11-30 not found in target resource list",
+        NULL,
+        NULL,
+    },
+    {
+        "invalid properties",
+        "1-10", "0-1", "foo[1-10]",
+        "{ \"fo^o\": \"1-30\" }",
+        "invalid character '^' in property \"fo^o\"",
+        NULL,
+        NULL,
+    },
+    {
+        "invalid properties",
+        "1-10", "0-1", "foo[1-10]",
+        "{ \"foo\": \"x-y\" }",
+        "invalid idset 'x-y' specified for property \"foo\"",
+        NULL,
+        NULL,
+    },
+    {
+        "constraint: property=na",
+        "1-10", "0-1", "foo[1-10]",
+        "{\"foo\": \"1-3\", \"bar\": \"7\"}",
+        NULL,
+        "{\"properties\": [\"na\"]}",
+        "",
+    },
+    {
+        "constraint: property=foo",
+        "1-10", "0-1", "foo[1-10]",
+        "{\"foo\": \"1-3\", \"bar\": \"7\"}",
+        NULL,
+        "{\"properties\": [\"foo\"]}",
+        "rank[1-3]/core[0-1]",
+    },
+    {
+        "constraint: property=bar",
+        "1-10", "0-1", "foo[1-10]",
+        "{\"foo\": \"1-3\", \"bar\": \"7\"}",
+        NULL,
+        "{\"properties\": [\"bar\"]}",
+        "rank7/core[0-1]",
+    },
+    {
+        "constraint: property=^foo",
+        "1-10", "0-1", "foo[1-10]",
+        "{\"foo\": \"1-3\", \"bar\": \"7\"}",
+        NULL,
+        "{\"properties\": [\"^bar\"]}",
+        "rank[1-6,8-10]/core[0-1]",
+    },
+    {
+        "constraint: by hostname: foo5",
+        "1-10", "0-1", "foo[1-10]",
+        "{\"foo\": \"1-3\", \"bar\": \"7\"}",
+        NULL,
+        "{\"properties\": [\"foo5\"]}",
+        "rank5/core[0-1]",
+    },
+    {
+        "constraint: by hostname: ^foo5",
+        "1-10", "0-1", "foo[1-10]",
+        "{\"foo\": \"1-3\", \"bar\": \"7\"}",
+        NULL,
+        "{\"properties\": [\"^foo5\"]}",
+        "rank[1-4,6-10]/core[0-1]",
+    },
+    { 0 }
+};
+
+/*  Note: this test only does some simple sanity checks.
+ *   More extensive testing will be contained in flux-R driven tests.
+ */
+void test_properties (void)
+{
+    struct rlist *rl;
+    struct rlist *cpy;
+    struct rlist *rlc;
+    char *R;
+    char *s;
+    json_t *Rj;
+    flux_error_t error;
+    json_error_t jerr;
+
+    ok (rlist_assign_properties (NULL, NULL, &error) < 0 && errno == EINVAL,
+        "rlist_assign_properties (NULL, NULL) fails");
+    is (error.text, "Invalid argument",
+        "fails with \"Invalid argument\"");
+
+    struct property_test *t = property_tests;
+    while (t->desc) {
+        if (!(R = R_create (t->ranks,
+                            t->cores,
+                            NULL,
+                            t->hosts,
+                            t->properties)))
+            BAIL_OUT ("%s: R_create failed!", t->desc);
+
+        if (!(Rj = json_loads (R, 0, NULL)))
+            BAIL_OUT ("%s: json_loads (R) failed", t->desc);
+
+        if (!(rl  = rlist_from_json (Rj, &jerr))) {
+            if (t->decode_error) {
+                is (jerr.text, t->decode_error,
+                    "%s: %s",
+                    t->desc,
+                    jerr.text);
+                free (R);
+                json_decref (Rj);
+                ++t;
+                continue;
+            }
+            BAIL_OUT ("%s: rlist_from_R() failed!", t->desc);
+        }
+
+        /*  Return R from rl and ensure it can be decoded again.
+         */
+        free (R);
+        if (!(R = rlist_encode (rl)))
+            BAIL_OUT ("%s: rlist_encode() failed!", t->desc);
+        if (!(cpy = rlist_from_R (R)))
+            BAIL_OUT ("%s: rlist_from_R() after rlist_encode() failed!",
+                      t->desc);
+
+        /*  Use cpy in place of original rlist to ensure that encode/decode
+         *   preserves expected properties.
+         */
+        rlist_destroy (rl);
+        rl = cpy;
+
+        rlc = rlist_copy_constraint_string (rl, t->constraint, &error);
+        ok (rlc != NULL,
+            "rlist_copy_constraint works: %s",
+            rlc ? "ok" : error.text);
+        s = rlist_dumps (rlc);
+        is (s, t->result, "%s: %s", t->desc, s);
+
+        free (R);
+        free (s);
+        json_decref (Rj);
+        rlist_destroy (rl);
+        rlist_destroy (rlc);
+        t++;
+    }
+
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -1606,6 +1800,7 @@ int main (int ac, char *av[])
     test_rerank ();
     test_hosts_to_ranks ();
     test_issue4184 ();
+    test_properties ();
 
     done_testing ();
 }

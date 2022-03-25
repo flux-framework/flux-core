@@ -100,6 +100,7 @@
             "duration": { "type": "number", "minimum": 0 },
             "cwd": { "type": "string" },
             "environment": { "type": "object" },
+            "constraints": { "type": "object" },
             "dependencies": {
               "type": "array",
               "items": {

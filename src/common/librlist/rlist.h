@@ -31,6 +31,9 @@ struct rlist {
     /*  hash of resources to ignore on remap */
     zhashx_t *noremap;
 
+    /*  Hash of property->idset mapping */
+    zhashx_t *properties;
+
     /*  Rv1 optional starttime, expiration:
      */
     double starttime;
@@ -64,6 +67,25 @@ struct rlist *rlist_copy_allocated (const struct rlist *orig);
 struct rlist *rlist_copy_ranks (const struct rlist *rl, struct idset *ranks);
 
 struct rlist *rlist_copy_cores (const struct rlist *rl);
+
+/*  Create a copy of rl constrained by an RFC 31 constraint object
+ *
+ *  Returns a copy of rl with only those resource nodes that match
+ *   the provided constraint. The result 'struct rlist' may be empty
+ *   if no resources satisfy the constraint.
+ *
+ *  Returns NULL with `errp` set if the constraint object was invalid.
+ *
+ */
+struct rlist *rlist_copy_constraint (const struct rlist *rl,
+                                     json_t *constraint,
+                                     flux_error_t *errp);
+
+/*  Same as above, but takes a JSON string instead of json_t object.
+ */
+struct rlist *rlist_copy_constraint_string (const struct rlist *orig,
+                                            const char *constraint,
+                                            flux_error_t *errp);
 
 /*  Delete ranks in idset 'ranks' from rlist 'rl'
  */
@@ -230,5 +252,18 @@ int rlist_set_allocated (struct rlist *rl, struct rlist *alloc);
 /*  Free resource list `to_free` from resource list `rl`
  */
 int rlist_free (struct rlist *rl, struct rlist *to_free);
+
+/*  Assign a single property 'name' to ranks in 'targets'
+ */
+int rlist_add_property (struct rlist *rl,
+                        flux_error_t *errp,
+                        const char *name,
+                        const char *targets);
+
+/*  Assign properties to targets
+ */
+int rlist_assign_properties (struct rlist *rl,
+                             json_t *properties,
+                             flux_error_t *errp);
 
 #endif /* !HAVE_SCHED_RLIST_H */

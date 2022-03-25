@@ -42,6 +42,7 @@ int cmd_remap (optparse_t *p, int argc, char **argv);
 int cmd_rerank (optparse_t *p, int argc, char **argv);
 int cmd_decode (optparse_t *p, int argc, char **argv);
 int cmd_verify (optparse_t *p, int argc, char **argv);
+int cmd_set_property (optparse_t *p, int argc, char **argv);
 
 static struct optparse_option global_opts[] =  {
     OPTPARSE_TABLE_END
@@ -69,6 +70,12 @@ static struct optparse_option encode_opts[] = {
       .usage = "Generate R with nodelist set to HOSTS. By default, duplicate "
                "the local hostname to match the number of ranks given in "
                "--ranks.",
+    },
+    { .name = "property", .key = 'p',
+      .has_arg = 1, .arginfo = "NAME[:RANKS]",
+      .usage = "Assign property NAME to target ranks RANKS. If RANKS is not "
+               "specified then the property applies to all defined ranks. "
+               "This option may be specified multiple times for each property",
     },
     { .name = "local", .key = 'l',
       .has_arg = 0,
@@ -105,6 +112,10 @@ static struct optparse_option verify_opts[] = {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option set_property_opts[] = {
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_option decode_opts[] = {
     { .name = "short", .key = 's',
       .usage = "Print short-form representation of R"
@@ -126,6 +137,10 @@ static struct optparse_option decode_opts[] = {
     { .name = "exclude", .key = 'x',
       .has_arg = 1, .arginfo = "RANKS",
       .usage = "Exclude specified ranks.",
+    },
+    { .name = "properties", .key = 'p',
+      .has_arg = 1, .arginfo = "LIST",
+      .usage = "Filter on properties"
     },
     OPTPARSE_TABLE_END
 };
@@ -195,6 +210,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_verify,
       0,
       verify_opts,
+    },
+    { "set-property",
+      "PROPERTY:RANKS [PROPERTY:RANKS]...",
+      "Set properties on R object on stdin, emitting the result on stdout",
+      cmd_set_property,
+      0,
+      set_property_opts,
     },
     OPTPARSE_SUBCMD_END
 };
@@ -349,6 +371,62 @@ static char *get_xml (optparse_t *p)
     return s;
 }
 
+static char *rlist_ranks_string (struct rlist *rl)
+{
+    char *s = NULL;
+    struct idset *ranks = rlist_ranks (rl);
+    if (ranks)
+        s = idset_encode (ranks, IDSET_FLAG_RANGE);
+    idset_destroy (ranks);
+    return s;
+}
+
+static void set_one_property (json_t *o, char *allranks, const char *s)
+{
+    json_t *val;
+    char *ranks;
+    char *property;
+
+    if (!(property = strdup (s)))
+        log_err_exit ("get_properties: strdup");
+    if ((ranks = strchr (property, ':')))
+        *ranks++ = '\0';
+    else
+        ranks = allranks;
+    if (!(val = json_string (ranks))
+            || json_object_set_new (o, property, val) < 0)
+        log_err_exit ("failed to set property %s=%s", property, ranks);
+
+    free (property);
+}
+
+static void set_properties (optparse_t *p, struct rlist *rl)
+{
+    const char *s;
+    char *allranks;
+    json_t *o;
+    flux_error_t err;
+
+    if (!optparse_hasopt (p, "property"))
+        return;
+
+    if (!(o = json_object ()))
+        log_err_exit ("failed to create properties JSON object");
+
+    if (!(allranks = rlist_ranks_string (rl)))
+        log_err_exit ("failed to get rank idset string");
+
+    optparse_getopt_iterator_reset (p, "property");
+    while ((s = optparse_getopt_next (p, "property")))
+        set_one_property (o, allranks, s);
+
+    if (rlist_assign_properties (rl, o, &err) < 0)
+        log_msg_exit ("failed to assign properties: %s", err.text);
+
+    json_decref (o);
+    free (allranks);
+}
+
 int cmd_encode (optparse_t *p, int argc, char **argv)
 {
     struct hostlist *hl;
@@ -399,6 +477,8 @@ int cmd_encode (optparse_t *p, int argc, char **argv)
         i = idset_next (ranks, i);
         host = hostlist_next (hl);
     }
+
+    set_properties (p, rl);
 
     rlist_puts (rl);
 
@@ -579,6 +659,33 @@ int cmd_rerank (optparse_t *p, int argc, char **argv)
     return 0;
 }
 
+static json_t *property_constraint_create (const char *arg)
+{
+    char *tok;
+    char *p;
+    char *s;
+    char *cpy = strdup (arg);
+    json_t *result = NULL;
+    json_t *o = json_array ();
+
+
+    if (!cpy || !o)
+        goto out;
+
+    s = cpy;
+    while ((tok = strtok_r (s, ",", &p))) {
+        json_t *prop = json_string (tok);
+        if (!prop || json_array_append_new (o, prop) != 0)
+            log_msg_exit ("Failed to append %s to properties array",
+                          tok);
+        s = NULL;
+    }
+    result = json_pack ("{s:o}", "properties", o);
+out:
+    free (cpy);
+    return result;
+}
+
 int cmd_decode (optparse_t *p, int argc, char **argv)
 {
     int lines = 0;
@@ -589,6 +696,17 @@ int cmd_decode (optparse_t *p, int argc, char **argv)
     if (!rl)
         log_msg_exit ("failed to read R on stdin");
 
+    if (optparse_getopt (p, "properties", &arg) > 0) {
+        struct rlist *tmp = rl;
+        flux_error_t error;
+        json_t *constraint = property_constraint_create (arg);
+
+        if (!(rl = rlist_copy_constraint (tmp, constraint, &error)))
+            log_err_exit ("Invalid property constraint: %s", error.text);
+
+        rlist_destroy (tmp);
+        json_decref (constraint);
+    }
     if (optparse_getopt (p, "include", &arg) > 0) {
         struct rlist *tmp;
         struct idset *ranks = idset_decode (arg);
@@ -676,6 +794,37 @@ int cmd_verify (optparse_t *p, int argc, char **argv)
     zlistx_destroy (&l);
     if (rc < 0)
         exit (1);
+    return 0;
+}
+
+int cmd_set_property (optparse_t *p, int argc, char **argv)
+{
+    json_t *o;
+    char *allranks;
+    flux_error_t err;
+
+    struct rlist *rl = rl_transform ("union", stdin, 1, rlist_union);
+    if (!rl)
+        log_msg_exit ("failed to read R on stdin");
+
+    if (!(o = json_object ()))
+        log_err_exit ("failed to create properties JSON object");
+
+    if (!(allranks = rlist_ranks_string (rl)))
+        log_err_exit ("failed to get rank idset string");
+
+    for (int i = 1; i < argc; i++)
+        set_one_property (o, allranks, argv[i]);
+
+    if (rlist_assign_properties (rl, o, &err) < 0)
+        log_msg_exit ("failed to assign properties: %s", err.text);
+
+    rlist_puts (rl);
+
+    json_decref (o);
+    free (allranks);
+    rlist_destroy (rl);
+
     return 0;
 }
 

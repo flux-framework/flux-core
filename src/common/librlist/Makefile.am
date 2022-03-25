@@ -8,6 +8,8 @@ AM_LDFLAGS = \
 AM_CPPFLAGS = \
 	-I$(top_srcdir) \
 	-I$(top_srcdir)/src/include \
+	-I$(top_srcdir)/src/common/libccan \
+	-I$(top_builddir)/src/common/libflux \
 	$(JANSSON_CFLAGS) \
 	$(HWLOC_CFLAGS)
 
@@ -17,6 +19,8 @@ noinst_LTLIBRARIES = \
 librlist_la_SOURCES = \
 	rnode.h \
 	rnode.c \
+	match.h \
+	match.c \
 	rlist.c \
 	rlist.h \
 	rhwloc.c \
@@ -37,6 +41,7 @@ test_ldflags = \
 
 TESTS = \
 	test_rnode.t \
+	test_match.t \
 	test_rlist.t \
 	test_rhwloc.t
 
@@ -51,6 +56,16 @@ test_rnode_t_LDADD = \
 	librlist.la \
 	$(test_ldadd)
 test_rnode_t_LDFLAGS = \
+	$(test_ldflags)
+
+test_match_t_SOURCES = \
+	test/match.c
+test_match_t_CPPFLAGS = \
+	$(test_cppflags)
+test_match_t_LDADD = \
+	librlist.la \
+	$(test_ldadd)
+test_match_t_LDFLAGS = \
 	$(test_ldflags)
 
 test_rlist_t_SOURCES = \
