@@ -33,6 +33,7 @@ nobase_fluxpy_PYTHON = \
 	job/validator/plugins/jobspec.py \
 	job/validator/plugins/schema.py \
 	job/validator/plugins/feasibility.py \
+	job/validator/plugins/require-instance.py \
 	resource/Rlist.py \
 	resource/__init__.py \
 	resource/ResourceSetImplementation.py \
