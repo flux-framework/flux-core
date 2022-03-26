@@ -31,8 +31,8 @@ RuntimeDirectory=flux
 RuntimeDirectoryMode=0755
 PermissionsStartOnly=true
 ExecStartPre=-/bin/mkdir -p @X_LOCALSTATEDIR@/lib/flux
-ExecStartPre=/bin/chown flux:flux @X_LOCALSTATEDIR@/lib/flux
-ExecStartPre=/bin/chmod 0700 @X_LOCALSTATEDIR@/lib/flux
+ExecStartPre=-/bin/chown flux:flux @X_LOCALSTATEDIR@/lib/flux
+ExecStartPre=-/bin/chmod 0700 @X_LOCALSTATEDIR@/lib/flux
 ExecStartPre=/usr/bin/loginctl enable-linger flux
 ExecStartPre=bash -c 'systemctl start user@$(id -u flux).service'
 
