@@ -164,6 +164,7 @@ if [[ -n "$MOUNT_HOME_ARGS" ]]; then
 fi
 echo "mounting $TOP as $WORKDIR"
 
+export PLATFORM
 export PROJECT
 export POISON
 export INCEPTION
@@ -198,6 +199,7 @@ else
         --volume=$TOP:$WORKDIR \
         ${PLATFORM} \
         $MOUNT_HOME_ARGS \
+        -e PLATFORM \
         -e CC \
         -e CXX \
         -e LDFLAGS \
