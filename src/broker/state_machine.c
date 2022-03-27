@@ -396,7 +396,7 @@ static void process_event (struct state_machine *s, const char *event)
     }
     else {
         flux_log (s->ctx->h,
-                  LOG_INFO,
+                  LOG_DEBUG,
                   "%s: ignored in %s",
                   event,
                   statestr (s->state));
