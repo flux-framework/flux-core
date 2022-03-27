@@ -662,7 +662,7 @@ static int ss_resource_update (struct simple_sched *ss, flux_future_t *f)
     }
 
     flux_rpc_get (f, &s);
-    flux_log (ss->h, LOG_INFO, "resource update: %s", s);
+    flux_log (ss->h, LOG_DEBUG, "resource update: %s", s);
 
     /* Update resource states:
      */
