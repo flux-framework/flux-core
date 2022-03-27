@@ -155,6 +155,33 @@ test_expect_success 'all expected events and state transitions occurred' '
 	grep "rc3-none: finalize->exit"			states.log
 '
 
+test_expect_success 'capture state transitions from size=2 instance' '
+	flux start ${ARGS} --test-size=2 -o,-Slog-stderr-level=6 \
+		/bin/true 2>states2.log
+'
+
+test_expect_success 'all expected events and state transitions occurred on rank 0' '
+	grep "\[0\]: start: none->join"				states2.log &&
+	grep "\[0\]: parent-none: join->init"			states2.log &&
+	grep "\[0\]: rc1-none: init->quorum"			states2.log &&
+	grep "\[0\]: quorum-full: quorum->run"			states2.log &&
+	grep "\[0\]: rc2-success: run->cleanup"			states2.log &&
+	grep "\[0\]: cleanup-none: cleanup->shutdown"		states2.log &&
+	grep "\[0\]: children-complete: shutdown->finalize"	states2.log &&
+	grep "\[0\]: rc3-none: finalize->exit"			states2.log
+'
+
+test_expect_success 'all expected events and state transitions occurred on rank 1' '
+	grep "\[1\]: start: none->join"				states2.log &&
+	grep "\[1\]: parent-ready: join->init"			states2.log &&
+	grep "\[1\]: rc1-none: init->quorum"			states2.log &&
+	grep "\[1\]: quorum-full: quorum->run"			states2.log &&
+	grep "\[1\]: shutdown-abort: run->cleanup"		states2.log &&
+	grep "\[1\]: cleanup-none: cleanup->shutdown"		states2.log &&
+	grep "\[1\]: children-none: shutdown->finalize"	        states2.log &&
+	grep "\[1\]: rc3-none: finalize->exit"			states2.log
+'
+
 test_expect_success 'capture state transitions from instance with rc1 failure' '
 	test_must_fail flux start \
 	    -o,-Slog-filename=states_rc1.log \
