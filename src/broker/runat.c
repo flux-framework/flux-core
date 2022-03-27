@@ -101,8 +101,15 @@ static char *get_cmdline (flux_cmd_t *cmd)
     char *buf = NULL;
     size_t len = 0;
     int i;
+    int start = 0;
 
-    for (i = 0; i < flux_cmd_argc (cmd); i++) {
+    /* Drop the "/bin/bash -c" from logging for brevity.
+     */
+    if (flux_cmd_argc (cmd) > 2
+        && !strcmp (flux_cmd_arg (cmd, 0), get_shell ())
+        && !strcmp (flux_cmd_arg (cmd, 1), "-c"))
+        start += 2;
+    for (i = start; i < flux_cmd_argc (cmd); i++) {
         if (argz_add (&buf, &len, flux_cmd_arg (cmd, i)) != 0) {
             free (buf);
             return NULL;
