@@ -1809,18 +1809,19 @@ err:
  *  Works by getting the first N least utilized nodes and spreading
  *  the nslots evenly across the result.
  */
-static struct rlist *rlist_alloc_nnodes (struct rlist *rl, int nnodes,
-                                         int cores_per_slot, int slots)
+static struct rlist *rlist_alloc_nnodes (struct rlist *rl,
+                                         struct rlist_alloc_info *ai)
 {
     struct rlist *result = NULL;
     struct rnode *n = NULL;
     zlistx_t *cl = NULL;
+    int slots = ai->nslots;
 
-    if (rlist_nnodes (rl) < nnodes) {
+    if (rlist_nnodes (rl) < ai->nnodes) {
         errno = ENOSPC;
         return NULL;
     }
-    if (slots < nnodes) {
+    if (ai->nslots < ai->nnodes) {
         errno = EINVAL;
         return NULL;
     }
@@ -1834,7 +1835,7 @@ static struct rlist *rlist_alloc_nnodes (struct rlist *rl, int nnodes,
 
     /* 2. get a list of the first up n nodes
      */
-    if (!(cl = rlist_get_nnodes (rl, nnodes)))
+    if (!(cl = rlist_get_nnodes (rl, ai->nnodes)))
         goto unwind;
 
     /* We will sort candidate list by used cores on each iteration to
@@ -1855,7 +1856,7 @@ static struct rlist *rlist_alloc_nnodes (struct rlist *rl, int nnodes,
          *  least loaded node from the least loaded nodelist, we know
          *  we don't have enough resources to satisfy request.
          */
-        if (rlist_rnode_alloc (rl, n, cores_per_slot, &ids) < 0)
+        if (rlist_rnode_alloc (rl, n, ai->slot_size, &ids) < 0)
             goto unwind;
         rc = rlist_append_cores (result, n->hostname, n->rank, ids);
         idset_destroy (ids);
@@ -1883,12 +1884,13 @@ unwind:
     return NULL;
 }
 
-static struct rlist *rlist_try_alloc (struct rlist *rl, const char *mode,
-                                      int nnodes, int slots, int cores_per_slot)
+static struct rlist *rlist_try_alloc (struct rlist *rl,
+                                      struct rlist_alloc_info *ai)
 {
     struct rlist *result = NULL;
+    const char *mode = ai->mode;
 
-    if (!rl) {
+    if (!rl || !ai) {
         errno = EINVAL;
         return NULL;
     }
@@ -1896,14 +1898,14 @@ static struct rlist *rlist_try_alloc (struct rlist *rl, const char *mode,
     /*  Reset default sort to order nodes by "rank" */
     zlistx_set_comparator (rl->nodes, by_rank);
 
-    if (nnodes > 0)
-        result = rlist_alloc_nnodes (rl, nnodes, cores_per_slot, slots);
+    if (ai->nnodes > 0)
+        result = rlist_alloc_nnodes (rl, ai);
     else if (mode == NULL || strcmp (mode, "worst-fit") == 0)
-        result = rlist_alloc_worst_fit (rl, cores_per_slot, slots);
+        result = rlist_alloc_worst_fit (rl, ai->slot_size, ai->nslots);
     else if (mode && strcmp (mode, "best-fit") == 0)
-        result = rlist_alloc_best_fit (rl, cores_per_slot, slots);
+        result = rlist_alloc_best_fit (rl, ai->slot_size, ai->nslots);
     else if (mode && strcmp (mode, "first-fit") == 0)
-        result = rlist_alloc_first_fit (rl, cores_per_slot, slots);
+        result = rlist_alloc_first_fit (rl, ai->slot_size, ai->nslots);
     else
         errno = EINVAL;
     return result;
@@ -1916,42 +1918,76 @@ static bool rlist_alloc_feasible (const struct rlist *rl, const char *mode,
 {
     bool rc = false;
     struct rlist *result = NULL;
+    struct rlist_alloc_info ai = {
+        .nnodes = nnodes,
+        .slot_size = slotsz,
+        .nslots = slots,
+        .mode = mode,
+    };
+    int saved_errno = errno;
     struct rlist *all = rlist_copy_empty (rl);
-    if (all && (result = rlist_try_alloc (all, mode, nnodes, slots, slotsz)))
+    if (all && (result = rlist_try_alloc (all, &ai)))
         rc = true;
     rlist_destroy (all);
     rlist_destroy (result);
+    errno = saved_errno;
     return rc;
+}
+
+static int alloc_info_check (struct rlist *rl,
+                             struct rlist_alloc_info *ai,
+                             flux_error_t *errp)
+{
+    int slots = ai->nslots;
+    int nnodes = ai->nnodes;
+    int slotsz = ai->slot_size;
+    int total = slots * slotsz;
+
+    if (slots <= 0 || slotsz <= 0 || nnodes < 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (total > rl->total) {
+        errprintf (errp, "unsatisfiable request");
+        errno = EOVERFLOW;
+        return -1;
+    }
+    if (total > rl->avail) {
+        if (!rlist_alloc_feasible (rl,
+                                   ai->mode,
+                                   ai->nnodes,
+                                   ai->nslots,
+                                   ai->slot_size)) {
+            errprintf (errp, "unsatisfiable request");
+            errno = EOVERFLOW;
+        }
+        else
+            errno = ENOSPC;
+        return -1;
+    }
+    return 0;
 }
 
 struct rlist *rlist_alloc (struct rlist *rl, const char *mode,
                           int nnodes, int slots, int slotsz)
 {
-    int total = slots * slotsz;
     struct rlist *result = NULL;
+    struct rlist_alloc_info ai = {
+        .nnodes = nnodes,
+        .nslots = slots,
+        .slot_size = slotsz,
+        .mode = mode
+    };
 
-    if (slots <= 0 || slotsz <= 0 || nnodes < 0) {
-        errno = EINVAL;
+    if (alloc_info_check (rl, &ai, NULL) < 0)
         return NULL;
-    }
-    if (total > rl->total) {
-        errno = EOVERFLOW;
-        return NULL;
-    }
-    if (total > rl->avail) {
-        if (rlist_alloc_feasible (rl, mode, nnodes, slots, slotsz))
-            errno = ENOSPC;
-        else
-            errno = EOVERFLOW;
-        return NULL;
-    }
 
     /*
      *   Try allocation. If it fails with not enough resources (ENOSPC),
      *    then try again on an empty copy of rlist to see the request could
      *    *ever* be satisfied. Adjust errno to EOVERFLOW if not.
      */
-    result = rlist_try_alloc (rl, mode, nnodes, slots, slotsz);
+    result = rlist_try_alloc (rl, &ai);
     if (!result && (errno == ENOSPC)) {
         if (rlist_alloc_feasible (rl, mode, nnodes, slots, slotsz))
             errno = ENOSPC;

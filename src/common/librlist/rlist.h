@@ -43,6 +43,14 @@ struct rlist {
     json_t *scheduling;
 };
 
+struct rlist_alloc_info {
+    int nnodes;
+    int slot_size;
+    int nslots;
+    const char *mode;
+    json_t *constraints;
+};
+
 /*  Create an empty rlist object */
 struct rlist *rlist_create (void);
 
