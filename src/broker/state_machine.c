@@ -62,8 +62,6 @@ struct state_machine {
     struct monitor monitor;
     struct quorum quorum;
 
-    int child_count;
-
     struct flux_msglist *wait_requests;
 };
 
@@ -337,7 +335,7 @@ static void action_shutdown (struct state_machine *s)
             flux_log_error (s->ctx->h, "error publishing shutdown event");
         flux_future_destroy (f);
     }
-    if (s->child_count == 0)
+    if (overlay_get_child_peer_count (s->ctx->overlay) == 0)
         state_machine_post (s, "children-none");
 }
 
@@ -864,8 +862,7 @@ static void overlay_monitor_cb (struct overlay *overlay,
          * node) the exit event is posted immediately in action_shutdown().
          */
         case STATE_SHUTDOWN:
-            s->child_count = overlay_get_child_peer_count (overlay);
-            if (s->child_count == 0)
+            if (overlay_get_child_peer_count (overlay) == 0)
                 state_machine_post (s, "children-complete");
             break;
         default:
@@ -996,7 +993,6 @@ struct state_machine *state_machine_create (struct broker *ctx)
         log_err ("error configuring quorum attributes");
         goto error;
     }
-    s->child_count = overlay_get_child_peer_count (ctx->overlay);
     overlay_set_monitor_cb (ctx->overlay, overlay_monitor_cb, s);
     if (s->ctx->rank == 0) {
         if (!(s->quorum.f = flux_rpc_pack (ctx->h,
