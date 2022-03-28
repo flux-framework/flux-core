@@ -389,12 +389,27 @@ void worker_destroy (struct worker *w)
     }
 }
 
+int worker_set_cmdline (struct worker *w, int argc, char **argv)
+{
+    char path[PATH_MAX + 1];
+
+    flux_cmd_destroy (w->cmd);
+
+    if (!(w->cmd = flux_cmd_create (argc, argv, environ))) {
+        flux_log_error (w->h, "flux_cmd_create");
+        return -1;
+    }
+    if (flux_cmd_setcwd (w->cmd, getcwd (path, sizeof (path))) < 0) {
+        flux_log_error (w->h, "flux_cmd_setcwd");
+        return -1;
+    }
+    return 0;
+}
+
 struct worker *worker_create (flux_t *h, double inactivity_timeout,
-                              const char *name,
-                              int argc, char **argv)
+                              const char *name)
 {
     struct worker *w;
-    char path[PATH_MAX + 1];
     flux_reactor_t *r = flux_get_reactor (h);
 
     if (!(w = calloc (1, sizeof (*w))))
@@ -410,14 +425,6 @@ struct worker *worker_create (flux_t *h, double inactivity_timeout,
         goto error;
     if (!(w->queue = zlist_new ()))
         goto error;
-    if (!(w->cmd = flux_cmd_create (argc, argv, environ))) {
-        flux_log_error (h, "flux_cmd_create");
-        goto error;
-    }
-    if (flux_cmd_setcwd (w->cmd, getcwd (path, sizeof (path))) < 0) {
-        flux_log_error (h, "flux_cmd_setcwd");
-        goto error;
-    }
     return w;
 error:
     worker_destroy (w);

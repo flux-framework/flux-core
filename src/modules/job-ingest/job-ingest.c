@@ -865,10 +865,182 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+static char *json_array_join (json_t *o)
+{
+    int n = 0;
+    size_t index;
+    json_t *value;
+    const char *arg;
+    char *result;
+
+    if (!json_is_array (o)) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    json_array_foreach (o, index, value) {
+        if (!(arg = json_string_value (value))) {
+            errno = EINVAL;
+            return NULL;
+        }
+        n += strlen (arg) + 1;  /* arg + "," */
+    }
+    n += 2; /* ',\0' */
+
+    if (!(result = malloc (n)))
+        return NULL;
+    result[0] = '\0';
+
+     json_array_foreach (o, index, value) {
+        strcat (result, json_string_value (value));
+        strcat (result, ",");
+    }
+    result[n-3] = '\0';
+
+    return result;
+}
+
+/*  Configure job ingest from flux_conf_t and/or  argc, argv.
+ *
+ *  Supported configuration:
+ *
+ *  [ingest]
+ *  batch-count = N
+ *
+ *  [ingest.validator]
+ *  disable = false
+ *  plugins = [ "jobspec" ]
+ *  args = []
+ *
+ */
+static int job_ingest_configure (struct job_ingest_ctx *ctx,
+                                 const flux_conf_t *conf,
+                                 int argc,
+                                 char **argv)
+{
+    flux_conf_error_t error;
+    json_t *plugins = NULL;
+    json_t *args = NULL;
+    char *validator_plugins = NULL;
+    char *validator_args = NULL;
+    int disable_validator = 0;
+    int rc = -1;
+
+    if (flux_conf_unpack (conf,
+                          &error,
+                          "{s?{s?{s?o s?o s?b !} s?i !}}",
+                          "ingest",
+                            "validator",
+                              "args", &args,
+                              "plugins", &plugins,
+                              "disable", &disable_validator,
+                            "batch-count", &ctx->batch_count) < 0) {
+        flux_log (ctx->h, LOG_ERR,
+                  "error reading [ingest] config table: %s",
+                  error.errbuf);
+        goto out;
+    }
+
+    if (plugins && !(validator_plugins = json_array_join (plugins))) {
+        flux_log_error (ctx->h,
+                        "error in [ingest.validator] plugins array");
+        goto out;
+    }
+    if (args && !(validator_args = json_array_join (args))) {
+        flux_log_error (ctx->h,
+                        "error in [ingest.validator] args array");
+        goto out;
+    }
+
+    /*  Process cmdline args */
+    for (int i = 0; i < argc; i++) {
+        if (!strncmp (argv[i], "validator-args=", 15)) {
+            free (validator_args);
+            validator_args = strdup (argv[i] + 15);
+        }
+        else if (!strncmp (argv[i], "validator-plugins=", 18)) {
+            free (validator_plugins);
+            validator_plugins = strdup (argv[i] + 18);
+        }
+        else if (!strncmp (argv[i], "batch-count=", 12)) {
+            char *endptr;
+            ctx->batch_count = strtol (argv[i]+12, &endptr, 0);
+            if (*endptr != '\0' || ctx->batch_count < 0) {
+                flux_log (ctx->h, LOG_ERR, "Invalid batch-count: %s", argv[i]);
+                goto out;
+            }
+        }
+        else if (!strcmp (argv[i], "disable-validator")) {
+            disable_validator = 1;
+        }
+        else {
+            flux_log (ctx->h, LOG_ERR, "invalid option %s", argv[i]);
+            errno = EINVAL;
+            goto out;
+        }
+    }
+    if (disable_validator) {
+        if (ctx->validate)
+            flux_log (ctx->h,
+                      LOG_ERR,
+                      "Unable to disable validator at runtime");
+        else {
+            flux_log (ctx->h,
+                      LOG_DEBUG,
+                      "Disabling job validator");
+            rc = 0;
+        }
+        goto out;
+    }
+    if (!ctx->validate && !(ctx->validate = validate_create (ctx->h))) {
+        flux_log_error (ctx->h, "validate_create");
+        goto out;
+    }
+
+    flux_log (ctx->h,
+              LOG_DEBUG,
+              "configuring with plugins=%s, args=%s",
+              validator_plugins,
+              validator_args);
+
+    if (validate_configure (ctx->validate,
+                            validator_plugins,
+                            validator_args) < 0) {
+        flux_log_error (ctx->h, "validate_configure");
+        goto out;
+    }
+    rc = 0;
+out:
+    free (validator_plugins);
+    free (validator_args);
+    return rc;
+}
+
+static void reload_cb (flux_t *h,
+                       flux_msg_handler_t *mh,
+                       const flux_msg_t *msg,
+                       void *arg)
+{
+    struct job_ingest_ctx *ctx = arg;
+    const flux_conf_t *conf;
+    const char *errstr = "Failed to reconfigure job-ingest";
+    if (flux_conf_reload_decode (msg, &conf) < 0)
+        goto error;
+    if (job_ingest_configure (ctx, conf, 0, NULL) < 0)
+        goto error;
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.getinfo", getinfo_cb, 0},
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.submit", submit_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST,  "job-ingest.shutdown", shutdown_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST,  "job-ingest.config-reload", reload_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -878,47 +1050,11 @@ int job_ingest_ctx_init (struct job_ingest_ctx *ctx,
                          char **argv)
 {
     flux_reactor_t *r = flux_get_reactor (h);
-    const char *usage_message =
-        "Usage: flux module load [OPTIONS] job-ingest"
-        " [validator-plugins=LIST] [validator-args=ARGS]";
-    const char *plugins = NULL;
-    const char *valargs = NULL;
-    bool use_validator = true;
-
     memset (ctx, 0, sizeof (*ctx));
     ctx->h = h;
 
-    /*  Process cmdline args */
-    for (int i = 0; i < argc; i++) {
-        if (!strncmp (argv[i], "validator-args=", 15)) {
-            valargs = argv[i] + 15;
-        }
-        else if (!strncmp (argv[i], "validator-plugins=", 18)) {
-            plugins = argv[i] + 18;
-        }
-        else if (!strncmp (argv[i], "batch-count=", 12)) {
-            char *endptr;
-            ctx->batch_count = strtol (argv[i]+12, &endptr, 0);
-            if (*endptr != '\0' || ctx->batch_count < 0) {
-                flux_log (h, LOG_ERR, "Invalid batch-count: %s", argv[i]);
-                return -1;
-            }
-        }
-        else if (!strcmp (argv[i], "disable-validator")) {
-            use_validator = false;
-        }
-        else {
-            flux_log (h, LOG_ERR, "invalid option %s", argv[i]);
-            flux_log (h, LOG_ERR, "%s", usage_message);
-            errno = EINVAL;
-            return -1;
-        }
-    }
-    if (use_validator &&
-        !(ctx->validate = validate_create (h, plugins, valargs))) {
-        flux_log_error (h, "validate_create");
+    if (job_ingest_configure (ctx, flux_get_conf (h), argc, argv) < 0)
         return -1;
-    }
 
 #if HAVE_FLUX_SECURITY
     if (!(ctx->sec = flux_security_create (0))) {
