@@ -309,8 +309,10 @@ struct rlist *rlist_copy_constraint (const struct rlist *orig,
                                      json_t *constraint,
                                      flux_error_t *errp)
 {
-    if (rnode_match_validate (constraint, errp) < 0)
+    if (rnode_match_validate (constraint, errp) < 0) {
+        errno = EINVAL;
         return NULL;
+    }
     return rlist_copy_internal (orig,
                                 (rnode_copy_f) rnode_copy_match,
                                 (void *) constraint);
