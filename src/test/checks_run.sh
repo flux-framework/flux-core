@@ -26,6 +26,17 @@
 #  CC, CXX, LDFLAGS, CFLAGS, etc.
 #
 
+
+#  Ensure uname -m reports 32bit architecture if platform was specified
+#   as 386:
+#
+case $PLATFORM in *386)
+  unset PLATFORM
+  echo "Rexecuting under linux32 personality"
+  exec setarch i386 $0 "$@"
+  ;;
+esac
+
 # if make is old, and scl is here, and devtoolset is available and not turned
 # on, re-exec ourself with it active to get a newer make
 if make --version | grep 'GNU Make 4' 2>&1 > /dev/null ; then
