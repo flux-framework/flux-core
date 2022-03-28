@@ -190,35 +190,14 @@ static struct rlist *sched_alloc (struct simple_sched *ss,
                                   struct jobreq *job,
                                   flux_error_t *errp)
 {
-    struct rlist *alloc;
-
-    if (job->constraints) {
-        struct rlist *rl;
-
-        if (!(rl = rlist_copy_constraint (ss->rlist,
-                                          job->constraints,
-                                          errp)))
-            return NULL;
-
-        alloc = rlist_alloc (rl,
-                             ss->alloc_mode,
-                             job->jj.nnodes,
-                             job->jj.nslots,
-                             job->jj.slot_size);
-        rlist_destroy (rl);
-        if (alloc && rlist_set_allocated (ss->rlist, alloc) < 0) {
-            errprintf (errp, "rlist_set_allocated: %s", strerror (errno));
-            rlist_destroy (alloc);
-            alloc = NULL;
-        }
-    }
-    else
-        alloc = rlist_alloc (ss->rlist,
-                             ss->alloc_mode,
-                             job->jj.nnodes,
-                             job->jj.nslots,
-                             job->jj.slot_size);
-    return alloc;
+    struct rlist_alloc_info ai = {
+        .mode = ss->alloc_mode,
+        .nnodes = job->jj.nnodes,
+        .nslots = job->jj.nslots,
+        .slot_size = job->jj.slot_size,
+        .constraints = job->constraints
+    };
+    return rlist_alloc_ex (ss->rlist, &ai, errp);
 }
 
 static int try_alloc (flux_t *h, struct simple_sched *ss)
@@ -616,8 +595,6 @@ static void feasibility_cb (flux_t *h,
     const char *errmsg = NULL;
     flux_error_t error;
 
-    struct rlist *rl = ss->rlist;
-
     if (flux_request_unpack (msg, NULL, "{s:o}",
                             "jobspec", &jobspec) < 0)
         goto err;
@@ -627,71 +604,44 @@ static void feasibility_cb (flux_t *h,
                      "system",
                      "constraints", &constraints) < 0)
         goto err;
-    if (constraints) {
-        /*  If the job has constraints, first copy the set of resources
-         *   which match the constraint. rlist_copy_constraint() will
-         *   also validate the constraints object on error.
-         */
-        if (!(rl = rlist_copy_constraint (ss->rlist,
-                                          constraints,
-                                          &error))) {
-            errno = EINVAL;
-            errmsg = error.text;
-            goto err;
-        }
-        if (rlist_count (rl, "core") == 0) {
-            errno = ENOSPC;
-            errmsg = "no resources satisfy provided constraints";
-            goto err;
-        }
-    }
+
     if (libjj_get_counts_json (jobspec, &jj) < 0) {
         errmsg = jj.error;
         goto err;
     }
-    if (!(alloc = rlist_alloc (rl,
-                               ss->alloc_mode,
-                               jj.nnodes,
-                               jj.nslots,
-                               jj.slot_size))) {
-        if (errno == EOVERFLOW) {
-            errmsg = "request is not satisfiable";
+
+    struct rlist_alloc_info ai = {
+        .mode = ss->alloc_mode,
+        .nnodes = jj.nnodes,
+        .nslots = jj.nslots,
+        .slot_size = jj.slot_size,
+        .constraints = constraints
+    };
+    if (!(alloc = rlist_alloc_ex (ss->rlist, &ai, &error))) {
+        if (errno != ENOSPC) {
+            errmsg = error.text;
             goto err;
         }
-        else if (errno != ENOSPC) {
-            errmsg = "cannot allocate this jobspec";
-            goto err;
-        }
-        /* Fall-through: job is satisfiable */
+        /* Fall-through: if ENOSPC then job is satisfiable */
     }
-    else if (rl == ss->rlist) {
-        /*  If we didn't try allocation from a copy, then we have to free
-         *   the test allocation now.
+    if (alloc && rlist_free (ss->rlist, alloc) < 0) {
+        /*  If rlist_free() fails we're in trouble because
+         *  ss->rlist will have an invalid allocation. This should
+         *  be rare if not impossible, so just exit the reactor.
+         *
+         *  The sched module can then be reloaded without loss of jobs.
          */
-        int rc = rlist_free (ss->rlist, alloc);
-        if (rc < 0) {
-            /*  If rlist_free() fails we're in trouble because
-             *  ss->rlist will have an invalid allocation. This should
-             *  be rare if not impossible, so just exit the reactor.
-             *
-             *  The sched module can then be reloaded without loss of jobs.
-             */
-            flux_log_error (h, "feasibility_cb: failed to free fake alloc");
-            flux_reactor_stop_error (flux_get_reactor (h));
-            errmsg = "Internal scheduler error";
-            goto err;
-        }
+        flux_log_error (h, "feasibility_cb: failed to free fake alloc");
+        flux_reactor_stop_error (flux_get_reactor (h));
+        errmsg = "Internal scheduler error";
+        goto err;
     }
     rlist_destroy (alloc);
-    if (rl != ss->rlist)
-        rlist_destroy (rl);
     if (flux_respond_pack (h, msg, "{s:i}", "errnum", 0) < 0)
         flux_log_error (h, "feasibility_cb: flux_respond_pack");
     return;
 err:
     rlist_destroy (alloc);
-    if (rl != ss->rlist)
-        rlist_destroy (rl);
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "feasibility_cb: flux_respond_error");
 }

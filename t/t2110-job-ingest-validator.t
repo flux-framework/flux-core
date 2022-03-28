@@ -128,11 +128,14 @@ test_expect_success 'job-ingest: feasibility check succceeds with ENOSYS' '
 '
 test_expect_success 'job-ingest: infeasible jobs are now rejected' '
 	test_must_fail flux mini submit -g 1 hostname 2>infeasible1.err &&
+	test_debug "cat infeasible1.err" &&
 	grep -i "unsupported resource type" infeasible1.err &&
 	test_must_fail flux mini submit -n 10000 hostname 2>infeasible2.err &&
-	grep "request is not satisfiable" infeasible2.err &&
+	test_debug "cat infeasible2.err" &&
+	grep "unsatisfiable request" infeasible2.err &&
 	test_must_fail flux mini submit -N 12 -n12 hostname 2>infeasible3.err &&
-	grep "request is not satisfiable" infeasible3.err
+	test_debug "cat infeasible3.err" &&
+	grep "unsatisfiable request" infeasible3.err
 '
 test_expect_success 'job-ingest: feasibility validator works with jobs running' '
 	ncores=$(flux resource list -s up -no {ncores}) &&
@@ -142,7 +145,7 @@ test_expect_success 'job-ingest: feasibility validator works with jobs running' 
 	flux queue stop &&
 	flux mini submit -n 2 hostname &&
 	test_must_fail flux mini submit -N 12 -n12 hostname 2>infeasible4.err &&
-	grep "request is not satisfiable" infeasible4.err &&
+	grep "unsatisfiable request" infeasible4.err &&
 	flux job cancel ${jobid} &&
 	flux job wait-event ${jobid} clean
 '
