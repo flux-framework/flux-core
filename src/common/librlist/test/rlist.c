@@ -256,13 +256,28 @@ err:
     return NULL;
 }
 
+static struct rlist * rl_alloc (struct rlist *rl,
+                                const char *mode,
+                                int nnodes,
+                                int nslots,
+                                int slot_size)
+{
+    struct rlist_alloc_info ai = {
+        .mode = mode,
+        .nnodes = nnodes,
+        .nslots = nslots,
+        .slot_size = slot_size
+    };
+    return rlist_alloc_ex (rl, &ai, NULL);
+}
+
 static struct rlist * rlist_testalloc (struct rlist *rl,
                                        struct rlist_test_entry *e)
 {
-    return rlist_alloc (rl, e->mode,
-                        e->alloc.nnodes,
-                        e->alloc.nslots,
-                        e->alloc.slot_size);
+    return rl_alloc (rl, e->mode,
+                     e->alloc.nnodes,
+                     e->alloc.nslots,
+                     e->alloc.slot_size);
 }
 
 static char * rlist_tostring (struct rlist *rl, bool allocated)
@@ -387,7 +402,7 @@ static void test_simple (void)
         "rlist_append_rank_cores 1, 0-3");
     ok (rl->total == 8 && rl->avail == 8,
         "rlist: avail and total == 4");
-    ok ((alloc = rlist_alloc (rl, NULL, 0, 8, 1)) != NULL,
+    ok ((alloc = rl_alloc (rl, NULL, 0, 8, 1)) != NULL,
         "rlist: alloc all cores works");
     ok (alloc->total == 8 && alloc->avail == 8,
         "rlist: alloc: got %d/%d (expected 8/8)",
@@ -486,7 +501,7 @@ static void test_issue2202 (void)
         "issue2202: rlist_dumps works");
     free (result);
 
-    a = rlist_alloc (rl, "best-fit", 1, 1, 1);
+    a = rl_alloc (rl, "best-fit", 1, 1, 1);
     ok (a != NULL,
         "issue2202: rlist_alloc worked");
     if (a) {
@@ -523,7 +538,7 @@ static void test_issue2202 (void)
         "issue2202b: rlist_dumps works");
     free (result);
 
-    a = rlist_alloc (rl, "best-fit", 1, 1, 1);
+    a = rl_alloc (rl, "best-fit", 1, 1, 1);
     ok (a != NULL,
         "issue2202b: rlist_alloc worked");
     if (a) {
@@ -587,7 +602,7 @@ static void test_issue2473 (void)
     free (result);
 
     /* problem: allocated 3 cores on one node */
-    a = rlist_alloc (rl, "worst-fit", 3, 3, 1);
+    a = rl_alloc (rl, "worst-fit", 3, 3, 1);
     ok (a != NULL,
         "issue2473: rlist_alloc nnodes=3 slots=3 slotsz=1 worked");
     if (!a)
@@ -604,7 +619,7 @@ static void test_issue2473 (void)
     rlist_destroy (a);
 
     /* problem: unsatisfiable */
-    a = rlist_alloc (rl, "worst-fit", 3, 8, 1);
+    a = rl_alloc (rl, "worst-fit", 3, 8, 1);
     ok (a != NULL,
         "issue2473: rlist_alloc nnodes=3 slots=8 slotsz=1 worked");
     if (a) {
@@ -618,7 +633,7 @@ static void test_issue2473 (void)
      * - ask for 2 cores spread across 2 nodes
      * - we should get cores on rank[0-1] not rank[1-2]
      */
-    a = rlist_alloc (rl, "worst-fit", 1, 1, 1);
+    a = rl_alloc (rl, "worst-fit", 1, 1, 1);
     ok (a != NULL,
         "issue2473: rlist_alloc nnodes=1 slots=1 slotsz=1 worked");
     if (!a)
@@ -630,7 +645,7 @@ static void test_issue2473 (void)
         "issue2473: one core was allocated from rank0");
     free (result);
 
-    a2 = rlist_alloc (rl, "worst-fit", 2, 2, 1);
+    a2 = rl_alloc (rl, "worst-fit", 2, 2, 1);
     ok (a2 != NULL,
         "issue2473: rlist_alloc nnodes=2 slots=2 slotsz=1 worked");
     result = rlist_dumps (a2);
@@ -709,7 +724,7 @@ static void test_updown ()
     ok (rl->avail == 16,
         "rl avail == 16");
 
-    rl2 = rlist_alloc (rl, NULL, 0, 4, 1);
+    rl2 = rl_alloc (rl, NULL, 0, 4, 1);
     ok (rl2 != NULL,
         "rlist_alloc() works when all nodes up");
 
@@ -732,12 +747,12 @@ static void test_updown ()
     ok (rlist_mark_up (rl, "0-2") == 0,
         "rlist_mark_up all but rank 3 up");
 
-    ok (rlist_alloc (rl, NULL, 4, 4, 1) == NULL && errno == ENOSPC,
+    ok (rl_alloc (rl, NULL, 4, 4, 1) == NULL && errno == ENOSPC,
         "allocation with 4 nodes fails with ENOSPC");
 
     ok (rlist_mark_up (rl, "3") == 0,
         "rlist_mark_up 3");
-    rl2 = rlist_alloc (rl, NULL, 4, 4, 1);
+    rl2 = rl_alloc (rl, NULL, 4, 4, 1);
 
     ok (rl2 != NULL,
         "rlist_alloc() for 4 nodes now succeeds");
