@@ -197,7 +197,7 @@ static struct rlist *sched_alloc (struct simple_sched *ss,
         .slot_size = job->jj.slot_size,
         .constraints = job->constraints
     };
-    return rlist_alloc_ex (ss->rlist, &ai, errp);
+    return rlist_alloc (ss->rlist, &ai, errp);
 }
 
 static int try_alloc (flux_t *h, struct simple_sched *ss)
@@ -617,7 +617,7 @@ static void feasibility_cb (flux_t *h,
         .slot_size = jj.slot_size,
         .constraints = constraints
     };
-    if (!(alloc = rlist_alloc_ex (ss->rlist, &ai, &error))) {
+    if (!(alloc = rlist_alloc (ss->rlist, &ai, &error))) {
         if (errno != ENOSPC) {
             errmsg = error.text;
             goto err;

@@ -268,7 +268,7 @@ static struct rlist * rl_alloc (struct rlist *rl,
         .nslots = nslots,
         .slot_size = slot_size
     };
-    return rlist_alloc_ex (rl, &ai, NULL);
+    return rlist_alloc (rl, &ai, NULL);
 }
 
 static struct rlist * rlist_testalloc (struct rlist *rl,

@@ -2012,9 +2012,9 @@ rlist_alloc_constrained (struct rlist *rl,
     return result;
 }
 
-struct rlist *rlist_alloc_ex (struct rlist *rl,
-                              const struct rlist_alloc_info *ai,
-                              flux_error_t *errp)
+struct rlist *rlist_alloc (struct rlist *rl,
+                           const struct rlist_alloc_info *ai,
+                           flux_error_t *errp)
 {
     struct rlist *result = NULL;
 
@@ -2044,35 +2044,6 @@ struct rlist *rlist_alloc_ex (struct rlist *rl,
     }
 
     return result;
-}
-
-struct rlist *rlist_alloc (struct rlist *rl, const char *mode,
-                          int nnodes, int slots, int slotsz)
-{
-    struct rlist *result = NULL;
-    struct rlist_alloc_info ai = {
-        .nnodes = nnodes,
-        .nslots = slots,
-        .slot_size = slotsz,
-        .mode = mode
-    };
-
-    if (alloc_info_check (rl, &ai, NULL) < 0)
-        return NULL;
-
-    /*
-     *   Try allocation. If it fails with not enough resources (ENOSPC),
-     *    then try again on an empty copy of rlist to see the request could
-     *    *ever* be satisfied. Adjust errno to EOVERFLOW if not.
-     */
-    result = rlist_try_alloc (rl, &ai);
-    if (!result && (errno == ENOSPC)) {
-        if (rlist_alloc_feasible (rl, mode, nnodes, slots, slotsz))
-            errno = ENOSPC;
-        else
-            errno = EOVERFLOW;
-    }
-    return (result);
 }
 
 static int rlist_free_rnode (struct rlist *rl, struct rnode *n)
