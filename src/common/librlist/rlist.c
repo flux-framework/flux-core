@@ -1810,7 +1810,7 @@ err:
  *  the nslots evenly across the result.
  */
 static struct rlist *rlist_alloc_nnodes (struct rlist *rl,
-                                         struct rlist_alloc_info *ai)
+                                         const struct rlist_alloc_info *ai)
 {
     struct rlist *result = NULL;
     struct rnode *n = NULL;
@@ -1885,7 +1885,7 @@ unwind:
 }
 
 static struct rlist *rlist_try_alloc (struct rlist *rl,
-                                      struct rlist_alloc_info *ai)
+                                      const struct rlist_alloc_info *ai)
 {
     struct rlist *result = NULL;
     const char *mode = ai->mode;
@@ -1935,7 +1935,7 @@ static bool rlist_alloc_feasible (const struct rlist *rl, const char *mode,
 }
 
 static int alloc_info_check (struct rlist *rl,
-                             struct rlist_alloc_info *ai,
+                             const struct rlist_alloc_info *ai,
                              flux_error_t *errp)
 {
     int slots = ai->nslots;
@@ -1966,6 +1966,82 @@ static int alloc_info_check (struct rlist *rl,
         return -1;
     }
     return 0;
+}
+
+static struct rlist *
+rlist_alloc_constrained (struct rlist *rl,
+                         const struct rlist_alloc_info *ai,
+                         flux_error_t *errp)
+{
+    struct rlist *result;
+    struct rlist *cpy;
+    int saved_errno;
+
+    if (!(cpy = rlist_copy_constraint (rl, ai->constraints, errp)))
+        return NULL;
+
+    if (rlist_count (cpy, "core") == 0) {
+        errprintf (errp, "no resources satisfy provided constraints");
+        errno = EOVERFLOW;
+    }
+
+    result = rlist_try_alloc (cpy, ai);
+    saved_errno = errno;
+
+    if (!result && errno == ENOSPC) {
+        if (!rlist_alloc_feasible (cpy,
+                                   ai->mode,
+                                   ai->nnodes,
+                                   ai->nslots,
+                                   ai->slot_size)) {
+            saved_errno = EOVERFLOW;
+            errprintf (errp, "unsatisfiable constrained request");
+        }
+    }
+    rlist_destroy (cpy);
+
+    if (result && rlist_set_allocated (rl, result) < 0) {
+        errprintf (errp, "rlist_set_allocated: %s", strerror (errno));
+        rlist_destroy (result);
+        result = NULL;
+    }
+
+    errno = saved_errno;
+    return result;
+}
+
+struct rlist *rlist_alloc_ex (struct rlist *rl,
+                              const struct rlist_alloc_info *ai,
+                              flux_error_t *errp)
+{
+    struct rlist *result = NULL;
+
+    if (!rl || !ai) {
+        errno = EINVAL;
+        return NULL;
+    }
+
+    if (alloc_info_check (rl, ai, errp) < 0)
+        return NULL;
+
+    if (ai->constraints)
+        result = rlist_alloc_constrained (rl, ai, errp);
+    else {
+        result = rlist_try_alloc (rl, ai);
+
+        if (!result && (errno == ENOSPC)) {
+            if (!rlist_alloc_feasible (rl,
+                                       ai->mode,
+                                       ai->nnodes,
+                                       ai->nslots,
+                                       ai->slot_size)) {
+                errprintf (errp, "unsatisfiable request");
+                errno = EOVERFLOW;
+            }
+        }
+    }
+
+    return result;
 }
 
 struct rlist *rlist_alloc (struct rlist *rl, const char *mode,

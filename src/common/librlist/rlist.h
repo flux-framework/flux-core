@@ -252,6 +252,11 @@ int rlist_verify (flux_error_t *error,
 struct rlist * rlist_alloc (struct rlist *rl, const char *mode,
                             int nnodes, int slot_size, int nslots);
 
+/*  As above, but arguments are passed in an rlist_alloc_info object
+ */
+struct rlist * rlist_alloc_ex (struct rlist *rl,
+                               const struct rlist_alloc_info *ai,
+                               flux_error_t *errp);
 
 /*  Mark rlist "alloc" as allocated in rlist "rl".
  */
