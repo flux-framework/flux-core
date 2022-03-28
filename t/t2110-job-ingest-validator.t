@@ -41,7 +41,8 @@ test_expect_success 'flux job-validator --list-plugins works' '
 	flux job-validator --list-plugins >list-plugins.output 2>&1 &&
 	test_debug "cat list-plugins.output" &&
 	grep jobspec list-plugins.output &&
-	grep feasibility list-plugins.output
+	grep feasibility list-plugins.output &&
+	grep require-instance list-plugins.output
 '
 test_expect_success 'flux job-validator --help shows help for selected plugins' '
 	flux job-validator --plugins=jobspec --help >help.jobspec.out 2>&1 &&
@@ -157,5 +158,13 @@ test_expect_success 'job-ingest: validator unexpected exit is handled' '
 		validator-plugins=${BAD_VALIDATOR} &&
 		test_must_fail flux mini submit hostname 2>badvalidator.out &&
 	grep "unexpectedly exited" badvalidator.out
+'
+test_expect_success 'job-ingest: require-instance validator plugin works' '
+	ingest_module reload validator-plugins=require-instance &&
+	flux mini batch -n1 --wrap flux resource list &&
+	flux mini submit -n1 flux start flux resource list &&
+	flux mini submit -n1 flux broker flux resource list &&
+	test_must_fail flux mini submit hostname &&
+	test_must_fail flux mini submit flux getattr rank
 '
 test_done
