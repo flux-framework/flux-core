@@ -1,12 +1,13 @@
 #!/bin/bash
 
 RANK=$(flux getattr rank)
+exit_rc=0
 
 # Usage: modrm {all|<rank>} modname
 modrm() {
     local where=$1; shift
     if test "$where" = "all" || test $where -eq $RANK; then
-        flux module remove -f $*
+        flux module remove -f $* || exit_rc=1
     fi
 }
 
@@ -17,7 +18,7 @@ shopt -s nullglob
 for rcdir in $all_dirs; do
     for rcfile in $rcdir/rc3.d/*; do
         echo running $rcfile
-        $rcfile
+        $rcfile || exit_rc=1
     done
 done
 shopt -u nullglob
@@ -36,13 +37,15 @@ modrm 0 cron
 modrm all barrier
 
 if test $RANK -eq 0; then
-    flux startlog --post-finish-event
+    flux startlog --post-finish-event || exit_rc=1
 fi
 
 modrm all kvs-watch
 modrm all kvs
 
-flux content flush
+flux content flush || exit_rc=1
 
-backingmod=$(flux getattr content.backing-module 2>/dev/null) || true
+backingmod=$(flux getattr content.backing-module 2>/dev/null)
 modrm 0 ${backingmod:-content-sqlite}
+
+exit $exit_rc
