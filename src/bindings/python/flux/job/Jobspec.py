@@ -308,7 +308,7 @@ class Jobspec(object):
             _validate_constraint(system["constraints"])
 
     @staticmethod
-    def _create_resource(res_type, count, with_child=None):
+    def _create_resource(res_type, count, with_child=None, exclusive=False):
         if with_child is not None and not isinstance(with_child, abc.Sequence):
             raise TypeError("child resource must None or a sequence")
         if with_child is not None and isinstance(with_child, str):
@@ -317,6 +317,9 @@ class Jobspec(object):
             raise ValueError("resource count must be > 0")
 
         res = {"type": res_type, "count": count}
+
+        if exclusive:
+            res["exclusive"] = True
 
         if with_child:
             res["with"] = with_child
@@ -639,8 +642,15 @@ class JobspecV1(Jobspec):
             raise ValueError("attributes.system.duration must be a number")
 
     @classmethod
+    # pylint: disable=too-many-branches
     def from_command(
-        cls, command, num_tasks=1, cores_per_task=1, gpus_per_task=None, num_nodes=None
+        cls,
+        command,
+        num_tasks=1,
+        cores_per_task=1,
+        gpus_per_task=None,
+        num_nodes=None,
+        exclusive=False,
     ):
         """
         Factory function that builds the minimum legal v1 jobspec.
@@ -666,6 +676,8 @@ class JobspecV1(Jobspec):
                 raise ValueError("node count must be an integer >= 1 (if set)")
             if num_nodes > num_tasks:
                 raise ValueError("node count must not be greater than task count")
+        elif exclusive:
+            raise ValueError("exclusive can only be set with a node count")
         children = [cls._create_resource("core", cores_per_task)]
         if gpus_per_task not in (None, 0):
             children.append(cls._create_resource("gpu", gpus_per_task))
@@ -677,7 +689,9 @@ class JobspecV1(Jobspec):
             else:
                 task_count_dict = {"per_slot": 1}
             slot = cls._create_slot("task", num_slots, children)
-            resource_section = cls._create_resource("node", num_nodes, [slot])
+            resource_section = cls._create_resource(
+                "node", num_nodes, [slot], exclusive
+            )
         else:
             task_count_dict = {"per_slot": 1}
             slot = cls._create_slot("task", num_tasks, children)
@@ -699,6 +713,7 @@ class JobspecV1(Jobspec):
         gpus_per_slot=None,
         num_nodes=None,
         broker_opts=None,
+        exclusive=False,
     ):
         """Create a Jobspec describing a nested Flux instance controlled by a script.
 
@@ -738,6 +753,7 @@ class JobspecV1(Jobspec):
             cores_per_task=cores_per_slot,
             gpus_per_task=gpus_per_slot,
             num_nodes=num_nodes,
+            exclusive=exclusive,
         )
         jobspec.setattr_shell_option("per-resource.type", "node")
         #  Copy script contents into jobspec
@@ -755,6 +771,7 @@ class JobspecV1(Jobspec):
         gpus_per_slot=None,
         num_nodes=None,
         broker_opts=None,
+        exclusive=False,
     ):
         """Create a Jobspec describing a nested Flux instance controlled by `command`.
 
@@ -783,6 +800,7 @@ class JobspecV1(Jobspec):
             cores_per_task=cores_per_slot,
             gpus_per_task=gpus_per_slot,
             num_nodes=num_nodes,
+            exclusive=exclusive,
         )
         jobspec.setattr_shell_option("per-resource.type", "node")
         return jobspec
