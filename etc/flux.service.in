@@ -16,7 +16,7 @@ ExecStart=/bin/bash -c '\
   -Slocal-uri=local://@X_RUNSTATEDIR@/flux/local \
   -Slog-stderr-level=6 \
   -Slog-stderr-mode=local \
-  -Scontent.backing-path=@X_LOCALSTATEDIR@/lib/flux/content.sqlite \
+  -Scontent.backing-path=${STATE_DIRECTORY:-/var/lib/flux}/content.sqlite \
   -Sbroker.rc2_none \
   -Sbroker.quorum=0 \
   -Sbroker.quorum-timeout=none \
@@ -29,10 +29,9 @@ User=flux
 Group=flux
 RuntimeDirectory=flux
 RuntimeDirectoryMode=0755
+StateDirectory=flux
+StateDirectoryMode=0700
 PermissionsStartOnly=true
-ExecStartPre=-/bin/mkdir -p @X_LOCALSTATEDIR@/lib/flux
-ExecStartPre=/bin/chown flux:flux @X_LOCALSTATEDIR@/lib/flux
-ExecStartPre=/bin/chmod 0700 @X_LOCALSTATEDIR@/lib/flux
 ExecStartPre=/usr/bin/loginctl enable-linger flux
 ExecStartPre=bash -c 'systemctl start user@$(id -u flux).service'
 
