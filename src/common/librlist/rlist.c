@@ -1835,6 +1835,30 @@ static struct rlist *rlist_alloc_nnodes (struct rlist *rl,
     zlistx_set_comparator (rl->nodes, by_used);
     zlistx_sort (rl->nodes);
 
+    if (ai->exclusive) {
+        int nleft = ai->nnodes;
+        struct rnode *cpy;
+        n = zlistx_first (rl->nodes);
+        while (n && nleft) {
+            /*  We can abort after we find the first non-idle node.
+             */
+            if (idset_count (n->cores->avail) < idset_count (n->cores->ids))
+                goto unwind;
+
+            if (!(cpy = rnode_copy (n))
+                || rlist_add_rnode_new (result, cpy) < 0) {
+                rnode_destroy (cpy);
+                goto unwind;
+            }
+            rnode_alloc_idset (n, n->cores->ids);
+            nleft--;
+            n = zlistx_next (rl->nodes);
+        }
+        if (nleft) /* Unable to allocate all nodes exclusively */
+            goto unwind;
+        return result;
+    }
+
     /* 2. get a list of the first up n nodes
      */
     if (!(cl = rlist_get_nnodes (rl, ai->nnodes)))
@@ -1949,6 +1973,11 @@ static int alloc_info_check (struct rlist *rl,
         errno = EINVAL;
         return -1;
     }
+    if (ai->exclusive && ai->nnodes <= 0) {
+        errprintf (errp, "exclusive allocation only supported with nnodes");
+        errno = EINVAL;
+        return -1;
+    }
     if (total > rl->total) {
         errprintf (errp, "unsatisfiable request");
         errno = EOVERFLOW;
@@ -2042,7 +2071,6 @@ struct rlist *rlist_alloc (struct rlist *rl,
             }
         }
     }
-
     return result;
 }
 
