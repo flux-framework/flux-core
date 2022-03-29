@@ -195,6 +195,7 @@ static struct rlist *sched_alloc (struct simple_sched *ss,
         .nnodes = job->jj.nnodes,
         .nslots = job->jj.nslots,
         .slot_size = job->jj.slot_size,
+        .exclusive = job->jj.exclusive,
         .constraints = job->constraints
     };
     return rlist_alloc (ss->rlist, &ai, errp);
