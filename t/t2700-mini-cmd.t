@@ -49,10 +49,6 @@ test_expect_success 'flux mini run --ntasks=1 --nodes=2 fails' '
 		2>run1n2N.err &&
 	grep -i "node count must not be greater than task count" run1n2N.err
 '
-test_expect_success 'flux mini run (default ntasks) --nodes=2 fails' '
-	test_must_fail flux mini run --nodes=2 hostname 2>run2N.err &&
-	grep -i "node count must not be greater than task count" run2N.err
-'
 test_expect_success 'flux mini submit --urgency=6 works' '
 	jobid=$(flux mini submit --urgency=6 hostname) &&
 	flux job eventlog $jobid | grep submit | grep urgency=6
