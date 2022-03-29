@@ -20,11 +20,13 @@ ExecStart=/bin/bash -c '\
   -Sbroker.rc2_none \
   -Sbroker.quorum=0 \
   -Sbroker.quorum-timeout=none \
+  -Sbroker.exit-norestart=42 \
 '
 SyslogIdentifier=flux
 ExecReload=@X_BINDIR@/flux config reload
 Restart=always
 RestartSec=5s
+RestartPreventExitStatus=42
 User=flux
 Group=flux
 RuntimeDirectory=flux
