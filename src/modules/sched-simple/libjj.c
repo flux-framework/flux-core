@@ -26,10 +26,12 @@ static int jj_read_vertex (json_t *o, int level, struct jj_counts *jj)
     const char *type = NULL;
     json_t *with = NULL;
     json_error_t error;
+    int exclusive = 0;
 
-    if (json_unpack_ex (o, &error, 0, "{ s:s s:i s?o }",
+    if (json_unpack_ex (o, &error, 0, "{ s:s s:i s?b s?o }",
                        "type", &type,
                        "count", &count,
+                       "exclusive", &exclusive,
                        "with", &with) < 0) {
         snprintf (jj->error, sizeof (jj->error) - 1,
                   "level %d: %s", level, error.text);
@@ -42,8 +44,11 @@ static int jj_read_vertex (json_t *o, int level, struct jj_counts *jj)
         errno = EINVAL;
         return -1;
     }
-    if (strcmp (type, "node") == 0)
+    if (strcmp (type, "node") == 0) {
         jj->nnodes = count;
+        if (exclusive)
+            jj->exclusive = true;
+    }
     else if (strcmp (type, "slot") == 0)
         jj->nslots = count;
     else if (strcmp (type, "core") == 0)
