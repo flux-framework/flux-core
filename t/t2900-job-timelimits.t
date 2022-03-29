@@ -29,7 +29,8 @@ test_expect_success HAVE_JQ 'job timelimits are propagated' '
 
 	id1=\$(flux mini submit --wait-event=start sleep 300)
 	flux jobs -no "{id.f58} {expiration}"
-	test "\$(flux jobs -no {expiration} \$id1)" = "\$expiration"
+	exp1=\$(flux jobs -no {expiration} \$id1)
+	test "\$(round \$exp1)" = "\$(round \${expiration})"
 	flux job cancelall -f
 
 	id2=\$(flux mini submit --wait-event=start -t 1m sleep 300)
