@@ -63,6 +63,8 @@ struct state_machine {
     struct quorum quorum;
 
     struct flux_msglist *wait_requests;
+
+    int exit_norestart;
 };
 
 typedef void (*action_f)(struct state_machine *s);
@@ -476,6 +478,21 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
         if (rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "rc3-success" : "rc3-fail");
+    }
+}
+
+/* If '-Sbroker.exit-norestart' was set on the command line, set
+ * s->exit_norestart to its value; otherwise leave it set it to 0.
+ */
+static void norestart_configure (struct state_machine *s)
+{
+    const char *val;
+
+    if (attr_get (s->ctx->attrs, "broker.exit-norestart", &val, NULL) == 0) {
+        errno = 0;
+        int rc = strtol (val, NULL, 10);
+        if (errno == 0 && rc >= 1)
+            s->exit_norestart = rc;
     }
 }
 
@@ -993,6 +1010,7 @@ struct state_machine *state_machine_create (struct broker *ctx)
         log_err ("error configuring quorum attributes");
         goto error;
     }
+    norestart_configure (s);
     overlay_set_monitor_cb (ctx->overlay, overlay_monitor_cb, s);
     if (s->ctx->rank == 0) {
         if (!(s->quorum.f = flux_rpc_pack (ctx->h,
