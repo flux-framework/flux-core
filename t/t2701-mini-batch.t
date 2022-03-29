@@ -11,6 +11,9 @@ test_under_flux 4 job
 
 flux setattr log-stderr-level 1
 
+NCORES=$(flux kvs get resource.R | flux R decode --count=core)
+test ${NCORES} -gt 4 && test_set_prereq MULTICORE
+
 test_expect_success 'create generic test batch script' '
 	cat <<-EOF >batch-script.sh
 	#!/bin/sh
@@ -60,18 +63,42 @@ test_expect_success 'flux-mini batch fails for file without she-bang' '
 	EOF
 	test_expect_code 1 flux mini batch -n1 invalid-script.sh
 '
+test_expect_success 'flux-mini batch fails if -N > -n' '
+	test_expect_code 1 flux mini batch -N4 -n1 --wrap hostname
+'
+test_expect_success HAVE_JQ 'flux-mini batch -N2 requests 2 nodes exclusively' '
+	flux mini batch -N2 --wrap --dry-run hostname | \
+		jq -S ".resources[0]" | \
+		jq -e ".type == \"node\" and .exclusive"
+'
+test_expect_success HAVE_JQ 'flux-mini batch --exclusive works' '
+	flux mini batch -N1 -n1 --exclusive --wrap --dry-run hostname | \
+		jq -S ".resources[0]" | \
+		jq -e ".type == \"node\" and .exclusive"
+'
 test_expect_success NO_ASAN 'flux-mini batch: submit a series of jobs' '
 	id1=$(flux mini batch --flags=waitable -n1 batch-script.sh) &&
 	id2=$(flux mini batch --flags=waitable -n4 batch-script.sh) &&
 	id3=$(flux mini batch --flags=waitable -N2 -n4 batch-script.sh) &&
+	flux resource list &&
+	flux jobs &&
+	id4=$(flux mini batch --flags=waitable -N2 -n2 --exclusive batch-script.sh) &&
+	id5=$(flux mini batch --flags=waitable -N2 batch-script.sh) &&
 	run_timeout 60 flux job wait --verbose --all
 '
 test_expect_success NO_ASAN 'flux-mini batch: job results are expected' '
 	test_debug "grep . flux-*.out" &&
 	grep "size=1 nodes=1" flux-${id1}.out &&
 	grep "size=1 nodes=1" flux-${id2}.out &&
-	grep "size=2 nodes=2" flux-${id3}.out
+	grep "size=2 nodes=2" flux-${id3}.out &&
+	grep "size=2 nodes=2" flux-${id4}.out &&
+	grep "size=2 nodes=2" flux-${id5}.out
 '
+test_expect_success MULTICORE 'flux-mini batch: exclusive flag worked' '
+	test $(flux job info ${id4} R | flux R decode --count=core) -gt 2 &&
+	test $(flux job info ${id5} R | flux R decode --count=core) -gt 2
+'
+
 test_expect_success 'flux-mini batch: --output=kvs directs output to kvs' '
 	id=$(flux mini batch -n1 --flags=waitable --output=kvs batch-script.sh) &&
 	run_timeout 60 flux job attach $id > kvs-output.log 2>&1 &&
