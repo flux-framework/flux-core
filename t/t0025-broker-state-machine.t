@@ -183,7 +183,7 @@ test_expect_success 'all expected events and state transitions occurred on rank 
 '
 
 test_expect_success 'capture state transitions from instance with rc1 failure' '
-	test_must_fail flux start \
+	test_expect_code 1 flux start \
 	    -o,-Slog-filename=states_rc1.log \
 	    -o,-Sbroker.rc1_path=/bin/false \
 	    -o,-Sbroker.rc3_path= \
@@ -199,7 +199,7 @@ test_expect_success 'all expected events and state transitions occurred' '
 '
 
 test_expect_success 'capture state transitions from instance with rc2 failure' '
-	test_must_fail flux start \
+	test_expect_code 1 flux start \
 	    -o,-Slog-filename=states_rc2.log \
 	    ${ARGS} \
 	    /bin/false
@@ -217,7 +217,7 @@ test_expect_success 'all expected events and state transitions occurred' '
 '
 
 test_expect_success 'capture state transitions from instance with rc3 failure' '
-	test_must_fail flux start \
+	test_expect_code 1 flux start \
 	    -o,-Slog-filename=states_rc3.log \
 	    -o,-Sbroker.rc1_path= \
 	    -o,-Sbroker.rc3_path=/bin/false \
@@ -233,6 +233,14 @@ test_expect_success 'all expected events and state transitions occurred' '
 	grep "cleanup-none: cleanup->shutdown"		states_rc3.log &&
 	grep "children-none: shutdown->finalize"	states_rc3.log &&
 	grep "rc3-fail: finalize->exit"			states_rc3.log
+'
+
+test_expect_success 'instance rc1 failure exits with norestart code' '
+	test_expect_code 99 flux start \
+	    -o,-Sbroker.exit-norestart=99 \
+	    -o,-Sbroker.rc1_path=/bin/false \
+	    -o,-Sbroker.rc3_path= \
+	    /bin/true
 '
 
 test_expect_success 'broker.quorum-timeout=none is accepted' '

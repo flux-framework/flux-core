@@ -460,8 +460,15 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
         log_err ("runat_get_exit_code %s", name);
 
     if (!strcmp (name, "rc1")) {
-        if (rc != 0)
-            s->ctx->exit_rc = rc;
+        /* If rc1 fails, it most likely will fail again on restart, so if
+         * running under systemd, exit with the broker.exit-norestart value.
+         */
+        if (rc != 0) {
+            if (s->exit_norestart != 0)
+                s->ctx->exit_rc = s->exit_norestart;
+            else
+                s->ctx->exit_rc = rc;
+        }
         state_machine_post (s, rc == 0 ? "rc1-success" : "rc1-fail");
     }
     else if (!strcmp (name, "rc2")) {
