@@ -709,7 +709,6 @@ class SubmitBaseCmd(MiniCmd):
             "-n",
             "--ntasks",
             metavar="N",
-            default="1",
             help="Number of tasks to start",
         )
         self.parser.add_argument(
@@ -741,6 +740,15 @@ class SubmitBaseCmd(MiniCmd):
     def init_jobspec(self, args):
         if not args.command:
             raise ValueError("job command and arguments are missing")
+
+        #  If ntasks not set, then set it to either node count, with
+        #   exclusive flag enabled, or to 1 (the default).
+        if not args.ntasks:
+            if args.nodes:
+                args.ntasks = args.nodes
+                args.exclusive = True
+            else:
+                args.ntasks = 1
 
         #  Ensure integer args are converted to int() here.
         #  This is done because we do not use type=int in argparse in order
@@ -1510,8 +1518,14 @@ class BatchCmd(MiniCmd):
 
     def init_jobspec(self, args):
         # If no script (reading from stdin), then use "flux" as arg[0]
+
+        #  If number of slots not specified, then set it to node count
+        #   if set, otherwise raise an error.
         if not args.nslots:
-            raise ValueError("Number of slots to allocate must be specified")
+            if not args.nodes:
+                raise ValueError("Number of slots to allocate must be specified")
+            args.nslots = args.nodes
+            args.exclusive = True
 
         jobspec = JobspecV1.from_batch_command(
             script=self.read_script(args),
@@ -1556,8 +1570,13 @@ class AllocCmd(MiniCmd):
 
     def init_jobspec(self, args):
 
+        #  If number of slots not specified, then set it to node count
+        #   if set, otherwise raise an error.
         if not args.nslots:
-            raise ValueError("Number of slots to allocate must be specified")
+            if not args.nodes:
+                raise ValueError("Number of slots to allocate must be specified")
+            args.nslots = args.nodes
+            args.exclusive = True
 
         jobspec = JobspecV1.from_nest_command(
             command=args.COMMAND,
