@@ -48,6 +48,7 @@ struct rlist_alloc_info {
     int slot_size;
     int nslots;
     const char *mode;
+    bool exclusive;
     json_t *constraints;
 };
 
