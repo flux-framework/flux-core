@@ -379,10 +379,66 @@ def status(args):
         print(formatter.format(line))
 
 
+def resources_uniq_lines(resources, states, formatter):
+    """
+    Generate a set of resource sets that would produce unique lines given
+    the ResourceSet formatter argument. Include only the provided states
+    """
+    #  uniq_fields are the fields on which to combine like results
+    uniq_fields = ["state", "properties"]
+
+    #
+    #  Create the uniq format by combining all provided uniq fields:
+    #   (but only if > 1 field was provided or "state" is in the list of
+    #   fields. This allows something like
+    #
+    #       flux resource -s all -no {properties}
+    #
+    #   to work as expected)
+    #
+    uniq_fmt = ""
+    if len(formatter.fields) > 1 or "state" in formatter.fields:
+        for field in formatter.fields:
+            if field in uniq_fields:
+                uniq_fmt += "{" + field + "}:"
+
+    fmt = flux.util.OutputFormat(formatter.headings, uniq_fmt, prepend="0.")
+
+    #  Create a mapping of resources sets that generate uniq "lines":
+    lines = {}
+    for state in states:
+        if not resources[state].ranks:
+            #
+            #  If there are no resources in this state, generate an empty
+            #   resource set for output purposes. O/w the output for this
+            #   state would be suppressed.
+            #
+            rset = ResourceSet()
+            rset.state = state
+            key = fmt.format(rset)
+            if key not in lines:
+                lines[key] = rset
+            else:
+                lines[key] = lines[key].union(rset)
+            continue
+
+        for rank in resources[state].ranks:
+            rset = resources[state].copy_ranks(rank)
+            key = fmt.format(rset)
+
+            if key not in lines:
+                lines[key] = rset
+            else:
+                lines[key] = lines[key].union(rset)
+
+    return lines
+
+
 def list_handler(args):
     valid_states = ["up", "down", "allocated", "free", "all"]
     headings = {
         "state": "STATE",
+        "properties": "PROPERTIES",
         "nnodes": "NNODES",
         "ncores": "NCORES",
         "ngpus": "NGPUS",
@@ -397,24 +453,32 @@ def list_handler(args):
             LOGGER.error("Invalid resource state %s specified", state)
             sys.exit(1)
 
-    if args.verbose:
-        fmt = "{state:>10} {nnodes:>6} {ncores:>8} {ngpus:>8} {rlist}"
-    else:
-        fmt = "{state:>10} {nnodes:>6} {ncores:>8} {ngpus:>8} {nodelist}"
-    if args.format:
-        fmt = args.format
-
-    formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
-
     if args.from_stdin:
         resources = SchedResourceList(json.load(sys.stdin))
     else:
         resources = resource_list(flux.Flux()).get()
 
+    fmt = "{state:>10}"
+
+    # Only include properties list if properties exist in set:
+    if resources.all.properties:
+        fmt += " {properties:<10.10}"
+    if args.verbose:
+        fmt += " {nnodes:>6} {ncores:>8} {ngpus:>8} {rlist}"
+    else:
+        fmt += " {nnodes:>6} {ncores:>8} {ngpus:>8} {nodelist}"
+
+    if args.format:
+        fmt = args.format
+
+    formatter = flux.util.OutputFormat(headings, fmt, prepend="0.")
+
+    lines = resources_uniq_lines(resources, states, formatter)
+
     if not args.no_header:
         print(formatter.header())
-    for state in states:
-        print(formatter.format(resources[state]))
+    for _, line in lines.items():
+        print(formatter.format(line))
 
 
 LOGGER = logging.getLogger("flux-resource")
