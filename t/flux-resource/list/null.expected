@@ -1,4 +1,4 @@
-     STATE NNODES   NCORES    NGPUS
-      free      4       16        0
- allocated      0        0        0
-      down      0        0        0
+     STATE PROPERTIES NNODES   NCORES    NGPUS
+      free                 4       16        0
+ allocated                 0        0        0
+      down                 0        0        0
