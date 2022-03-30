@@ -107,7 +107,9 @@ class ResourceSet:
 
     def copy(self):
         """Return a copy of a ResourceSet"""
-        return ResourceSet(self.impl.copy())
+        rset = ResourceSet(self.impl.copy())
+        rset.state = self.state
+        return rset
 
     def _run_op(self, method, *args):
         result = self.copy()
@@ -116,6 +118,7 @@ class ResourceSet:
                 arg = ResourceSet(arg, version=self.version)
             impl = getattr(result.impl, method)(arg.impl)
             result = ResourceSet(impl)
+        result.state = self.state
         return result
 
     def union(self, *args):
