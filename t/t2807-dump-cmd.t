@@ -4,12 +4,12 @@ test_description='Test flux dump/restore'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1 minimal
+test_under_flux 1 minimal -o,-Sstatedir=$(pwd)
 
 QUERYCMD="flux python ${FLUX_SOURCE_DIR}/t/scripts/sqlite-query.py"
 
 countblobs() {
-	$QUERYCMD -t 100 $(flux getattr content.backing-path) \
+	$QUERYCMD -t 100 content.sqlite \
 		"select count(*) from objects;" | sed -e 's/.*= //'
 }
 
@@ -81,7 +81,7 @@ test_expect_success 'count blobs representing those four keys' '
 	test_cmp blobcount.exp blobcount.out
 '
 test_expect_success 'remove backing file and load content-sqlite' '
-	rm -f $(flux getattr content.backing-path) &&
+	rm -f content.sqlite &&
 	flux module load content-sqlite
 '
 test_expect_success 'restore content' '
@@ -183,14 +183,15 @@ test_expect_success 'restore --no-cache with no backing store fails' '
 	test_must_fail flux restore --no-cache --checkpoint foo.tar
 '
 test_expect_success 'run a flux instance, preserving content.sqlite' '
-	flux start -o,-Scontent.backing-path=content.sqlite /bin/true
+	mkdir test &&
+	flux start -o,-Sstatedir=$(pwd)/test /bin/true
 '
 
 reader() {
-	local dbfile=$1
+	local dbdir=$1
         flux start -o,-Sbroker.rc1_path= \
                 -o,-Sbroker.rc3_path=\
-                -o,-Scontent.backing-path=$dbfile \
+                -o,-Sstatedir=$dbdir\
                 bash -c "\
                         flux module load content-sqlite && \
                         flux dump --no-cache -q --checkpoint - &&\
@@ -199,10 +200,10 @@ reader() {
 }
 
 writer() {
-	local dbfile=$1
+	local dbdir=$1
         flux start -o,-Sbroker.rc1_path= \
                 -o,-Sbroker.rc3_path= \
-                -o,-Scontent.backing-path=$dbfile \
+                -o,-Sstatedir=$dbdir \
                 bash -c "\
                         flux module load content-sqlite && \
                         flux restore --checkpoint - && \
@@ -211,12 +212,13 @@ writer() {
 }
 
 test_expect_success 'perform offline garbage collection with dump/restore' '
-	mv content.sqlite content.sqlite.bak &&
-	reader content.sqlite.bak | writer content.sqlite
+	mkdir test_bak &&
+	mv test/content.sqlite test_bak/ &&
+	reader test_bak | writer test
 '
 
 test_expect_success 'restart flux instance and try to run a job' '
-	flux start -o,-Scontent.backing-path=content.sqlite \
+	flux start -o,-Sstatedir=test \
 		flux mini run /bin/true
 '
 

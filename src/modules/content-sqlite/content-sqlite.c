@@ -592,7 +592,7 @@ static const struct flux_msg_handler_spec htab[] = {
 static struct content_sqlite *content_sqlite_create (flux_t *h)
 {
     struct content_sqlite *ctx;
-    const char *backing_path;
+    const char *dbdir;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
@@ -611,36 +611,26 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
         goto error;
     }
 
-    /* If 'content.backing-path' attribute is already set, then:
-     * - value is the sqlite backing file
-     * - if it exists, preserve existing content; else create empty
-     * Otherwise:
-     * - ${rundir}/content.sqlite is the backing file
-     * - ${rundir} is normally recursively cleaned up when the instance exits
-     * - set 'content.backing-path' to this name
+    /* Prefer 'statedir' as the location for content.sqlite file, if set.
+     * Otherwise use 'rundir'.
      */
-    backing_path = flux_attr_get (h, "content.backing-path");
-    if (backing_path) {
-        if (!(ctx->dbfile = strdup (backing_path)))
-            goto error;
-        if (access (ctx->dbfile, F_OK) == 0) {
-            if (access (ctx->dbfile, R_OK | W_OK) < 0) {
-                flux_log_error (h, "%s", ctx->dbfile);
-                goto error;
-            }
-        }
-    }
-    else {
-        const char *rundir = flux_attr_get (h, "rundir");
-        if (!rundir) {
-            flux_log_error (h, "rundir");
+    if (!(dbdir = flux_attr_get (h, "statedir")))
+        dbdir = flux_attr_get (h, "rundir");
+    if (!dbdir)
+        flux_log_error (h, "neither statedir nor rundir are set");
+    if (asprintf (&ctx->dbfile, "%s/content.sqlite", dbdir) < 0)
+        goto error;
+
+    /* If dbfile exists, we are restarting.
+     * If existing dbfile does not have the right permissions, fail early.
+     */
+    if (access (ctx->dbfile, F_OK) == 0) {
+        if (access (ctx->dbfile, R_OK | W_OK) < 0) {
+            flux_log_error (h, "%s", ctx->dbfile);
             goto error;
         }
-        if (asprintf (&ctx->dbfile, "%s/content.sqlite", rundir) < 0)
-            goto error;
-        if (flux_attr_set (h, "content.backing-path", ctx->dbfile) < 0)
-            goto error;
     }
+
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;
     return ctx;
@@ -657,7 +647,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "content_sqlite_create failed");
         return -1;
     }
-    if (content_sqlite_opendb(ctx) < 0)
+    if (content_sqlite_opendb (ctx) < 0)
         goto done;
     if (content_register_backing_store (h, "content-sqlite") < 0)
         goto done;

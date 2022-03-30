@@ -13,10 +13,10 @@ ExecStart=/bin/bash -c '\
   -Scron.directory=@X_SYSCONFDIR@/flux/system/cron.d \
   -Stbon.fanout=256 \
   -Srundir=@X_RUNSTATEDIR@/flux \
+  -Sstatedir=${STATE_DIRECTORY:-/var/lib/flux} \
   -Slocal-uri=local://@X_RUNSTATEDIR@/flux/local \
   -Slog-stderr-level=6 \
   -Slog-stderr-mode=local \
-  -Scontent.backing-path=${STATE_DIRECTORY:-/var/lib/flux}/content.sqlite \
   -Sbroker.rc2_none \
   -Sbroker.quorum=0 \
   -Sbroker.quorum-timeout=none \

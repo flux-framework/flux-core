@@ -201,7 +201,7 @@ test_expect_success 'remove heartbeat module' '
 
 # test for issue #4210
 test_expect_success 'remove read permission from content.sqlite file' '
-	chmod u-w $(flux getattr content.backing-path) &&
+	chmod u-w $(flux getattr rundir)/content.sqlite &&
 	test_must_fail flux module load content-sqlite
 '
 

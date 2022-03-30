@@ -402,19 +402,44 @@ test_expect_success 'broker fails gracefully on unwriteable rundir' '
 		/bin/true 2>privdir.err &&
 	grep "permissions" privdir.err
 '
+# statedir created here is reused in the next several tests
+test_expect_success 'broker statedir is not cleaned up' '
+	mkdir -p statedir &&
+	flux start ${ARGS} -o,-Sstatedir=$(pwd)/statedir /bin/true &&
+	test -d statedir
+'
+test_expect_success 'broker statedir cannot be changed at runtime' '
+	test_must_fail flux start ${ARGS} -o,-Sstatedir=$(pwd)/statedir \
+		flux setattr statedir $(pwd)/statedir 2>rostatedir.err &&
+	grep "Operation not permitted" rostatedir.err
+'
+test_expect_success 'broker statedir cannot be set at runtime' '
+	test_must_fail flux start ${ARGS} \
+		flux setattr statedir $(pwd)/statedir 2>rostatedir2.err &&
+	grep "Operation not permitted" rostatedir2.err
+'
+test_expect_success 'broker fails when statedir does not exist' '
+	rm -rf statedir &&
+	test_must_fail flux start ${ARGS} -o,-Sstatedir=$(pwd)/statedir \
+		/bin/true 2>nostatedir.err &&
+	grep "cannot stat" nostatedir.err
+'
 # Use -eq hack to test that BROKERPID is a number
 test_expect_success 'broker broker.pid attribute is readable' '
 	BROKERPID=`flux start ${ARGS} flux getattr broker.pid` &&
 	test -n "$BROKERPID" &&
 	test "$BROKERPID" -eq "$BROKERPID"
 '
+
 test_expect_success 'local-uri override works' '
-	newsock=local:///tmp/meep &&
+	sockdir=$(mktemp -d) &&
+	newsock=local://$sockdir/meep &&
 	echo $newsock >uri.exp &&
 	flux start ${ARGS} \
 		-o,-Slocal-uri=$newsock \
 		printenv FLUX_URI >uri.out &&
-	test_cmp uri.exp uri.out
+	test_cmp uri.exp uri.out &&
+	rm -rf $sockdir
 '
 test_expect_success 'broker fails gracefully when local-uri is malformed' '
 	test_must_fail flux start ${ARGS} -o,-Slocal-uri=baduri \

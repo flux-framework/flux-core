@@ -91,6 +91,7 @@ static int unload_module_byname (broker_ctx_t *ctx, const char *name,
 static void set_proctitle (uint32_t rank);
 
 static int create_rundir (attr_t *attrs);
+static int check_statedir (attr_t *attrs);
 
 static int create_runat_phases (broker_ctx_t *ctx);
 
@@ -307,6 +308,8 @@ int main (int argc, char *argv[])
     }
 
     if (create_rundir (ctx.attrs) < 0)
+        goto cleanup;
+    if (check_statedir (ctx.attrs) < 0)
         goto cleanup;
 
     /* Record the broker start time.  This time will also be used to
@@ -735,6 +738,11 @@ static int checkdir (const char *name, const char *path)
         log_err ("cannot stat %s %s", name, path);
         return -1;
     }
+    if (sb.st_uid != getuid ()) {
+        errno = EPERM;
+        log_err ("%s %s is not owned by instance owner", name, path);
+        return -1;
+    }
     if (!S_ISDIR (sb.st_mode)) {
         errno = ENOTDIR;
         log_err ("%s %s", name, path);
@@ -748,6 +756,29 @@ static int checkdir (const char *name, const char *path)
     return 0;
 }
 
+/* Validate statedir, if set.
+ * Ensure that the attribute cannot change from this point forward.
+ */
+static int check_statedir (attr_t *attrs)
+{
+    const char *statedir;
+
+    if (attr_get (attrs, "statedir", &statedir, NULL) < 0) {
+        if (attr_add (attrs, "statedir", NULL, FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+            log_err ("error creating statedir broker attribute");
+            return -1;
+        }
+    }
+    else {
+        if (checkdir ("statedir", statedir) < 0)
+            return -1;
+        if (attr_set_flags (attrs, "statedir", FLUX_ATTRFLAG_IMMUTABLE) < 0) {
+            log_err ("error setting statedir broker attribute flags");
+            return -1;
+        }
+    }
+    return 0;
+}
 
 /*  Handle global rundir attribute.
  */
