@@ -1539,13 +1539,18 @@ error:
     return NULL;
 }
 
-int rlist_json_properties (struct rlist *rl, json_t **result)
+static int rlist_json_properties (struct rlist *rl, json_t **result)
 {
     int saved_errno;
     int rc = -1;
     zhashx_t *properties = NULL;;
     json_t *o = NULL;
     struct idset *ids;
+
+    if (!rl || !result) {
+        errno = EINVAL;
+        return -1;
+    }
 
     if (!(properties = rlist_properties (rl)))
         return -1;
