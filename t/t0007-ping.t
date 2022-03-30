@@ -138,10 +138,10 @@ test_expect_success 'ping help output works' '
 '
 
 test_expect_success 'ping works with hostname' '
-        flux ping --count=1 $(hostname -s)
+        flux ping --count=1 $(hostname)
 '
 test_expect_success 'ping works with hostname!service' '
-        flux ping --count=1 "$(hostname -s)!broker"
+        flux ping --count=1 "$(hostname)!broker"
 '
 test_expect_success 'ping fails with unknown hostname' '
         test_must_fail flux ping --count=1 "notmyhost!broker"
