@@ -30,7 +30,7 @@ test_expect_success 'Started instance with content.hash=sha256' '
 test_expect_success 'Started instance with content.hash=sha256,content-files' '
     OUT=$(flux start -o,-Scontent.hash=sha256 \
           -o,-Scontent.backing-module=content-files \
-          -o,-Scontent.backing-path=$(pwd)/content.files \
+          -o,-Sstatedir=$(pwd) \
           flux getattr content.hash) && test "$OUT" = "sha256" &&
     ls -1 content.files | tail -1 | grep sha256
 '

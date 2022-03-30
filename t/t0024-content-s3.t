@@ -280,13 +280,13 @@ EOF
         chmod +x rc3-content-s3
 '
 
-test_expect_success 'run instance with content.backing-path set (s3)' '
+test_expect_success 'run instance with content-s3 module loaded' '
 	flux start -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-s3 \
                    -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-s3 \
 	           flux kvs put testkey=43
 '
 
-test_expect_success 're-run instance with content.backing-path set (s3)' '
+test_expect_success 're-run instance with content-s3 module loaded' '
 	flux start -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-s3 \
                    -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-s3 \
 	           flux kvs get testkey >gets3.out

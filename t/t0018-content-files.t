@@ -8,7 +8,7 @@ if test "$TEST_LONG" = "t"; then
     test_set_prereq LONGTEST
 fi
 
-test_under_flux 1 minimal
+test_under_flux 1 minimal -o,-Sstatedir=$(pwd)
 
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
@@ -76,15 +76,10 @@ test_expect_success 'load content-files module' '
 	flux module load content-files testing
 '
 
-test_expect_success 'content.backing-path attribute is set' '
-	FILEDB=$(flux getattr content.backing-path) &&
-	test -d ${FILEDB}
-'
-
 test_expect_success 'load/store/verify key-values stored directly' '
 	make_blob 140 >rawblob.140 &&
-	$TEST_STORE $FILEDB testkey1 <rawblob.140 &&
-	$TEST_LOAD $FILEDB testkey1 >rawblob.140.out &&
+	$TEST_STORE $(pwd)/content.files testkey1 <rawblob.140 &&
+	$TEST_LOAD $(pwd)/content.files testkey1 >rawblob.140.out &&
 	test_cmp rawblob.140 rawblob.140.out
 '
 

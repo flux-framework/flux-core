@@ -256,7 +256,7 @@ static const struct flux_msg_handler_spec htab[] = {
 static struct content_files *content_files_create (flux_t *h)
 {
     struct content_files *ctx;
-    const char *backing_path;
+    const char *dbdir;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
@@ -271,33 +271,19 @@ static struct content_files *content_files_create (flux_t *h)
         goto error;
     }
 
-    /* If 'content.backing-path' attribute is already set, then:
-     * - value is the db directory
-     * - if it exists, preserve existing content; else create empty
-     * Otherwise:
-     * - ${rundir}/content.files is the backing path
-     * - set 'content.backing-path' to this name
-     * - ${rundir} is cleaned up recursively by broker atexit(3) handler
+    /* Prefer 'statedir' as the location for the content.files directory,
+     * if set.  Otherwise use 'rundir'.  If the directory exists, the
+     * instance is restarting.
      */
-    backing_path = flux_attr_get (h, "content.backing-path");
-    if (backing_path) {
-        if (!(ctx->dbpath = strdup (backing_path)))
-            goto error;
-        if (mkdir (ctx->dbpath, 0700) < 0 && errno != EEXIST)
-            goto error;
-    }
-    else {
-        const char *rundir = flux_attr_get (h, "rundir");
-        if (!rundir) {
-            flux_log_error (h, "rundir");
-            goto error;
-        }
-        if (asprintf (&ctx->dbpath, "%s/content.files", rundir) < 0)
-            goto error;
-        if (flux_attr_set (h, "content.backing-path", ctx->dbpath) < 0)
-            goto error;
-        if (mkdir (ctx->dbpath, 0700) < 0)
-            goto error;
+    if (!(dbdir = flux_attr_get (h, "statedir")))
+        dbdir = flux_attr_get (h, "rundir");
+    if (!dbdir)
+        flux_log_error (h, "neither statedir nor rundir are set");
+    if (asprintf (&ctx->dbpath, "%s/content.files", dbdir) < 0)
+        goto error;
+    if (mkdir (ctx->dbpath, 0700) < 0 && errno != EEXIST) {
+        flux_log_error (h, "could not create %s", ctx->dbpath);
+        goto error;
     }
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;

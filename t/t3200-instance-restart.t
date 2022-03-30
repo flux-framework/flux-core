@@ -13,22 +13,22 @@ if test -n "$S3_ACCESS_KEY_ID"; then
 fi
 
 test_expect_success 'run a job in persistent instance' '
-	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
+	flux start -o,--setattr=statedir=$(pwd) \
 	           flux mini submit /bin/true >id1.out
 '
 
 test_expect_success 'restart instance and run another job' '
-	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
+	flux start -o,--setattr=statedir=$(pwd) \
 	           flux mini submit /bin/true >id2.out
 '
 
 test_expect_success 'restart instance and run another job' '
-	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
+	flux start -o,--setattr=statedir=$(pwd) \
 	           flux mini submit /bin/true >id3.out
 '
 
 test_expect_success 'restart instance and list inactive jobs' '
-	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
+	flux start -o,--setattr=statedir=$(pwd) \
 	           flux jobs --suppress-header --format={id} \
 		   	--filter=INACTIVE >list.out
 '
@@ -45,7 +45,7 @@ test_expect_success 'job IDs were issued in ascending order' '
 '
 
 test_expect_success 'restart instance and capture startlog' '
-	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
+	flux start -o,--setattr=statedir=$(pwd) \
 	           flux startlog >startlog.out
 '
 test_expect_success 'startlog shows 5 run periods' '
@@ -56,13 +56,13 @@ test_expect_success 'most recent period is still running' '
 '
 
 test_expect_success 'doctor startlog to look like a crash' '
-	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
+	flux start -o,--setattr=statedir=$(pwd) \
 		-o,-Sbroker.rc1_path=$SHARNESS_TEST_SRCDIR/rc/rc1-kvs \
 		-o,-Sbroker.rc3_path=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs \
 		flux startlog --post-start-event
 '
 test_expect_success 'check queue status' '
-	flux start -o,--setattr=content.backing-path=$(pwd)/content.sqlite \
+	flux start -o,--setattr=statedir=$(pwd) \
 		flux queue status >queue_status.out 2>&1
 '
 test_expect_success 'safe mode is entered' '
@@ -72,13 +72,13 @@ test_expect_success 'safe mode is entered' '
 test_expect_success 'run a job in persistent instance (content-files)' '
 	flux start \
 	    -o,-Scontent.backing-module=content-files \
-	    -o,-Scontent.backing-path=$(pwd)/content.files \
+	    -o,-Sstatedir=$(pwd) \
 	    flux mini submit /bin/true >files_id1.out
 '
 test_expect_success 'restart instance and list inactive jobs' '
 	flux start \
 	    -o,-Scontent.backing-module=content-files \
-	    -o,-Scontent.backing-path=$(pwd)/content.files \
+	    -o,-Sstatedir=$(pwd) \
 	    flux jobs --suppress-header --format={id} \
 	        --filter=INACTIVE >files_list.out
 '
