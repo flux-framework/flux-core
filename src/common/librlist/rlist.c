@@ -1595,6 +1595,20 @@ out:
     return rc;
 }
 
+char *rlist_properties_encode (struct rlist *rl)
+{
+    char *result = NULL;
+    json_t *o = NULL;
+
+    if (rlist_json_properties (rl, &o) < 0)
+        return NULL;
+    if (o == NULL)
+        return (strdup ("{}"));
+    result = json_dumps (o, 0);
+    json_decref (o);
+    return result;
+}
+
 json_t *rlist_to_R (struct rlist *rl)
 {
     json_t *R = NULL;
