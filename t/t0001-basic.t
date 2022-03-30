@@ -430,13 +430,16 @@ test_expect_success 'broker broker.pid attribute is readable' '
 	test -n "$BROKERPID" &&
 	test "$BROKERPID" -eq "$BROKERPID"
 '
+
 test_expect_success 'local-uri override works' '
-	newsock=local:///tmp/meep &&
+	sockdir=$(mktemp -d) &&
+	newsock=local://$sockdir/meep &&
 	echo $newsock >uri.exp &&
 	flux start ${ARGS} \
 		-o,-Slocal-uri=$newsock \
 		printenv FLUX_URI >uri.out &&
-	test_cmp uri.exp uri.out
+	test_cmp uri.exp uri.out &&
+	rm -rf $sockdir
 '
 test_expect_success 'broker fails gracefully when local-uri is malformed' '
 	test_must_fail flux start ${ARGS} -o,-Slocal-uri=baduri \

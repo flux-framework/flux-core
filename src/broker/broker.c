@@ -738,6 +738,11 @@ static int checkdir (const char *name, const char *path)
         log_err ("cannot stat %s %s", name, path);
         return -1;
     }
+    if (sb.st_uid != getuid ()) {
+        errno = EPERM;
+        log_err ("%s %s is not owned by instance owner", name, path);
+        return -1;
+    }
     if (!S_ISDIR (sb.st_mode)) {
         errno = ENOTDIR;
         log_err ("%s %s", name, path);
