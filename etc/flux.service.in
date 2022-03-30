@@ -17,7 +17,6 @@ ExecStart=/bin/bash -c '\
   -Slocal-uri=local://@X_RUNSTATEDIR@/flux/local \
   -Slog-stderr-level=6 \
   -Slog-stderr-mode=local \
-  -Scontent.backing-path=${STATE_DIRECTORY:-/var/lib/flux}/content.sqlite \
   -Sbroker.rc2_none \
   -Sbroker.quorum=0 \
   -Sbroker.quorum-timeout=none \
