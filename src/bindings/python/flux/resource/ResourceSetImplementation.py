@@ -38,6 +38,11 @@ class ResourceSetImplementation(ABC):  # pragma: no cover
         raise NotImplementedError
 
     @abstractmethod
+    def get_properties(self):
+        """Return an RFC 20 properties object for this resource set"""
+        raise NotImplementedError
+
+    @abstractmethod
     def nnodes(self):
         """Return the number of nodes in the resource set as an IDset"""
         raise NotImplementedError

@@ -16,6 +16,7 @@ from flux.resource import Rlist
 from flux.resource.ResourceSetImplementation import ResourceSetImplementation
 
 
+# pylint: disable=too-many-public-methods
 class ResourceSet:
     def __init__(self, arg=None, version=1):
         """
@@ -150,6 +151,12 @@ class ResourceSet:
         self.impl.set_property(name, ranks)
         return self
 
+    def get_properties(self):
+        """
+        Return an RFC 20 properties object for this ResourceSet
+        """
+        return self.impl.get_properties()
+
     def remove_ranks(self, ranks):
         """
         Remove the rank or ranks specified from the ResourceSet
@@ -220,3 +227,7 @@ class ResourceSet:
     @property
     def rlist(self):
         return self.impl.dumps()
+
+    @property
+    def properties(self):
+        return ",".join(json.loads(self.get_properties()).keys())
