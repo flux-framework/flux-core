@@ -647,7 +647,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "content_sqlite_create failed");
         return -1;
     }
-    if (content_sqlite_opendb(ctx) < 0)
+    if (content_sqlite_opendb (ctx) < 0)
         goto done;
     if (content_register_backing_store (h, "content-sqlite") < 0)
         goto done;
