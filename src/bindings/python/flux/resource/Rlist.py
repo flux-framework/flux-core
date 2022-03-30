@@ -107,6 +107,9 @@ class Rlist(WrapperPimpl):
         self.pimpl.remove_ranks(ranks)
         return self
 
+    def copy_ranks(self, ranks):
+        return Rlist(handle=self.pimpl.copy_ranks(ranks))
+
     def add_child(self, rank, name, ids):
         self.pimpl.rank_add_child(rank, name, ids)
         return self

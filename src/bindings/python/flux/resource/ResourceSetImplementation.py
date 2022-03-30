@@ -53,6 +53,10 @@ class ResourceSetImplementation(ABC):  # pragma: no cover
         raise NotImplementedError
 
     @abstractmethod
+    def copy_ranks(self, ranks):
+        """Return a copy of resource set with only 'ranks' included"""
+
+    @abstractmethod
     def union(self, rset):
         """Return the union of two resource sets"""
         raise NotImplementedError

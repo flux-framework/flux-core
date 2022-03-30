@@ -160,6 +160,22 @@ class ResourceSet:
         self.impl.remove_ranks(ranks)
         return self
 
+    def copy_ranks(self, ranks):
+        """
+        Copy only the rank or ranks specified from the ResourceSet
+
+        :param ranks: A flux.idset.IDset object, or number or string which
+                      can be converted into an IDset, containing the ranks
+                      to copy
+        """
+        if not isinstance(ranks, IDset):
+            ranks = IDset(str(ranks))
+        rset = ResourceSet(self.impl.copy_ranks(ranks))
+
+        #  Preserve current state
+        rset.state = self.state
+        return rset
+
     @property
     def nodelist(self):
         """
