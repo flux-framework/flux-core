@@ -33,15 +33,23 @@ version
    The version of flux-core that was used to build this broker.
 
 rundir [Updates: C]
-   A temporary directory where UNIX domain sockets and the default
-   content.backing-path are located (see below).  By default, each broker
-   rank creates a unique rundir in $TMPDIR and removes it on exit.  If
-   rundir is set on the command line, beware exceeding the UNIX domain socket
-   path limit described in :linux:man7:`unix`, as low as 92 bytes on
-   some systems.  If rundir is set to a pre-existing directory, the
-   directory is not removed on exit; if the broker has to create the
-   directory, it is removed.  In most cases this attribute should not
-   be set by users.
+   A temporary directory where the broker's UNIX domain sockets are located.
+   In addition, if ``statedir`` is not set, this directory is used by the
+   content backing store (if applicable).  By default, each broker rank creates
+   a unique ``rundir`` in ``$TMPDIR`` and removes it on exit.  If ``rundir`` is
+   set on the command line, beware exceeding the UNIX domain socket path limit
+   described in :linux:man7:`unix`, as low as 92 bytes on some systems.  To
+   support the :man1:`flux-start` ``--test-size`` option where multiple brokers
+   share a ``rundir``, if ``rundir`` is set to a pre-existing directory, the
+   directory is not removed by the broker on exit.  In most cases this
+   attribute should not be set by users.
+
+statedir [Updates: C]
+   A directory in which persistent state is stored by the Flux broker.  For
+   example, content backing store data is stored here to facilitate restarts.
+   If unset, this data goes to ``rundir`` where it is cleaned up on instance
+   shutdown.  If set, this directory must exist and be owned by the instance
+   owner.  Default: unset.
 
 security.owner
    The numeric userid of the owner of this Flux instance.
@@ -238,14 +246,6 @@ content.backing-module (Updates: C)
    The selected backing store module, if any. This attribute is only set
    on rank 0 where the content backing store is active.  Default:
    ``content-sqlite``.
-
-content.backing-path (Updates: C)
-   The path to the content backing store file(s). If this is set on the
-   broker command line, the backing store uses this path instead of
-   a temporary one, and content is preserved on instance exit.
-   If file exists, its content is imported into the instance.
-   If it doesn't exist, it is created.  Default: ``content.sqlite``
-   located within ``rundir``.
 
 content.blob-size-limit (Updates: C, R)
    The maximum size of a blob, the basic unit of content storage.
