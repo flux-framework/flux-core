@@ -1788,6 +1788,22 @@ struct property_test property_tests[] = {
     { 0 }
 };
 
+static void json_compare (const char *x, const char *y, const char *msg)
+{
+    json_t *ox = NULL;
+    json_t *oy = NULL;
+    json_error_t error;
+    if (!(ox = json_loads (x, JSON_DECODE_ANY, &error))
+        || !(oy = json_loads (y, JSON_DECODE_ANY, &error)))
+        BAIL_OUT ("json_loads '%s' or '%s' failed: %s", error.text);
+
+    ok (json_equal (ox, oy),
+        "%s: %s", msg, x);
+
+    json_decref (ox);
+    json_decref (oy);
+}
+
 /*  Note: this test only does some simple sanity checks.
  *   More extensive testing will be contained in flux-R driven tests.
  */
@@ -1806,6 +1822,24 @@ void test_properties (void)
         "rlist_assign_properties (NULL, NULL) fails");
     is (error.text, "Invalid argument",
         "fails with \"Invalid argument\"");
+
+    ok (rlist_properties_encode (NULL) == NULL && errno == EINVAL,
+        "rlist_properties_encode (NULL) returns EINVAL");
+
+    rl = rlist_create ();
+    s = rlist_properties_encode (rl);
+    is (s, "{}",
+        "rlist_properties_encode on empty rlist returns empty object");
+    free (s);
+
+    if (rlist_append_rank_cores (rl, "foo0", 0, "0-3") < 0)
+        BAIL_OUT ("rlist_append_rank_cores failed: %s", strerror (errno));
+
+    s = rlist_properties_encode (rl);
+    is (s, "{}",
+        "rlist_properties_encode with no properties returns empty object");
+    free (s);
+    rlist_destroy (rl);
 
     struct property_test *t = property_tests;
     while (t->desc) {
@@ -1847,6 +1881,13 @@ void test_properties (void)
          */
         rlist_destroy (rl);
         rl = cpy;
+
+        /*  Check that rlist_properties_encode() works
+         */
+        char *p = rlist_properties_encode (rl);
+        json_compare (p, t->properties,
+                      "rlist_properties_encode");
+        free (p);
 
         rlc = rlist_copy_constraint_string (rl, t->constraint, &error);
         ok (rlc != NULL,
