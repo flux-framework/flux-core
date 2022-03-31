@@ -412,6 +412,13 @@ static int transient_service_set_properties (sdprocess_t *sdp,
         return -1;
     }
 
+    /* In sdprocess, we require the systemd unit to exist until the
+     * user cleans it up with sdprocess_systemd_cleanup().  This
+     * ensures consistent behavior in a number of functions.  For
+     * example, a function like sdprocess_wait() can be called
+     * multiple times.  Therefore, we set RemainAfterExit to true
+     * for every process we start.
+     */
     if ((ret = sd_bus_message_append (m,
                                       "(sv)",
                                       "RemainAfterExit",
@@ -1013,16 +1020,15 @@ static int setup_state_watcher (sdprocess_t *sdp, flux_reactor_t *reactor)
 
     /* Setup callback when `sd_bus_process ()` is called on properties
      * changed */
-    if ((ret = sd_bus_match_signal_async (sdp->bus,
-                                          NULL,
-                                          "org.freedesktop.systemd1",
-                                          sdp->service_path,
-                                          "org.freedesktop.DBus.Properties",
-                                          "PropertiesChanged",
-                                          sdbus_properties_changed_cb,
-                                          NULL,
-                                          sdp)) < 0) {
-        set_errno_log (sdp->h, ret, "sd_bus_match_signal_async");
+    if ((ret = sd_bus_match_signal (sdp->bus,
+                                    NULL,
+                                    "org.freedesktop.systemd1",
+                                    sdp->service_path,
+                                    "org.freedesktop.DBus.Properties",
+                                    "PropertiesChanged",
+                                    sdbus_properties_changed_cb,
+                                    sdp)) < 0) {
+        set_errno_log (sdp->h, ret, "sd_bus_match_signal");
         goto cleanup;
     }
 
@@ -1038,7 +1044,7 @@ static int setup_state_watcher (sdprocess_t *sdp, flux_reactor_t *reactor)
          *
          * we don't handle ECONNRESET here, assuming we won't timeout
          * just after setting up callback via
-         * sd_bus_match_signal_async() above.
+         * sd_bus_match_signal() above.
          */
         if (!events || !timeout) {
             while (1) {

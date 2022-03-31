@@ -123,8 +123,14 @@ int sdprocess_wait_status (sdprocess_t *sdp);
 int sdprocess_kill (sdprocess_t *sdp, int signo);
 
 /* Cleanup data cached in systemd
- * - note that this is different than sdprocess_destroy
+ * - note that this is different than sdprocess_destroy()
  * - can return EAGAIN if not yet ready for cleanup
+ *
+ * Once sdprocess_systemd_cleanup() is executed successfully, callers
+ * cannot expect sdprocess functions to behave consistently.  For
+ * example, sdprocess_active() will no longer function correctly after
+ * sdprocess_systemd_cleanup() is called.  Typically, this will be
+ * called right before sdprocess_destroy() is called.
  */
 int sdprocess_systemd_cleanup (sdprocess_t *sdp);
 
