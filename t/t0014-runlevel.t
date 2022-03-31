@@ -40,6 +40,14 @@ test_expect_success 'default initial program is $SHELL' '
 	grep "rc2.0: /bin/sh Exited" shell.log
 '
 
+test_expect_success 'rc2 failure if stdin not a tty' '
+	test_expect_code 1 \
+		flux start -o,-Slog-stderr-level=6 \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+                2>shell-notty.log &&
+	grep "not a tty" shell-notty.log
+'
+
 test_expect_success 'rc3 failure causes instance failure' '
 	test_expect_code 1 flux start \
 		-o,-Sbroker.rc3_path=/bin/false \
