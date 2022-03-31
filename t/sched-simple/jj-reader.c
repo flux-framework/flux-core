@@ -27,8 +27,12 @@ int main (int ac, char *av[])
         log_err_exit ("Failed to read stdin");
     if (libjj_get_counts (s, &jj) < 0)
         log_msg_exit ("%s", jj.error);
-    printf ("nnodes=%d nslots=%d slot_size=%d duration=%.1f\n",
-            jj.nnodes, jj.nslots, jj.slot_size, jj.duration);
+    printf ("nnodes=%d nslots=%d slot_size=%d exclusive=%s duration=%.1f\n",
+            jj.nnodes,
+            jj.nslots,
+            jj.slot_size,
+            jj.exclusive ? "true" : "false",
+            jj.duration);
     log_fini ();
     free (s);
     return 0;

@@ -28,6 +28,19 @@ test_expect_success HAVE_JQ 'flux-mini alloc can set initial-program' '
 	flux mini alloc -n1 --dry-run myapp --foo | \
 	    jq -e ".tasks[0].command == [ \"flux\", \"broker\", \"myapp\", \"--foo\" ]"
 '
+test_expect_success HAVE_JQ 'flux-mini alloc -N2 requests 2 nodes exclusively' '
+	flux mini alloc -N2 --dry-run hostname | \
+		jq -S ".resources[0]" | \
+		jq -e ".type == \"node\" and .exclusive"
+'
+test_expect_success HAVE_JQ 'flux-mini alloc --exclusive works' '
+	flux mini alloc -N1 -n1 --exclusive --dry-run hostname | \
+		jq -S ".resources[0]" | \
+		jq -e ".type == \"node\" and .exclusive"
+'
+test_expect_success 'flux-mini alloc fails if N > n' '
+	test_expect_code 1 flux mini alloc -N2 -n1 --dry-run hostname
+'
 test_expect_success 'flux-mini alloc works' '
 	$runpty -o single.out flux mini alloc -n1 \
 		flux resource list -s up -no {rlist} &&

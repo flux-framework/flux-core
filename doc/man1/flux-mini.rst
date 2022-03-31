@@ -27,8 +27,8 @@ as a parallel job, while **batch** and **alloc** submit a script or launch
 a command as the initial program of a new Flux instance.
 
 If *--ntasks* is unspecified, a value of *N=1* is assumed. Commands that
-take *--nslots* have no default and require that *--nslots* be explicitly
-specified.
+take *--nslots* have no default and require that *--nslots* or *--nodes*
+be specified.
 
 The **submit** and **batch** commands enqueue the job and print its numerical
 Job ID on standard output.
@@ -97,6 +97,13 @@ following additional job parameters:
    evenly across the allocated nodes. It is an error to request more nodes
    than there are tasks. If unspecified, the number of nodes will be chosen
    by the scheduler.
+
+**--exclusive**
+   Indicate to the scheduler that nodes should be exclusively allocated to
+   this job. It is an error to specify this option without also using
+   *-N, --nodes*. If *--nodes* is specified without *--nslots* or *--ntasks*,
+   then this option will be enabled by default and the number of tasks
+   or slots will be set to the number of requested nodes.
 
 **-t, --time-limit=FSD**
    Set a time limit for the job in Flux standard duration (RFC 23).

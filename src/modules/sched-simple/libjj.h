@@ -16,6 +16,7 @@
 #endif
 
 #include <jansson.h>
+#include <stdbool.h>
 
 #define JJ_ERROR_TEXT_LENGTH 256
 
@@ -23,6 +24,8 @@ struct jj_counts {
     int nnodes;    /* total number of nodes requested */
     int nslots;    /* total number of slots requested */
     int slot_size; /* number of cores per slot        */
+
+    bool exclusive;  /* enable node exclusive allocation if available */
 
     double duration; /* attributes.system.duration if set */
 

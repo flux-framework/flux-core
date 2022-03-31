@@ -19,6 +19,7 @@ struct testalloc {
     int nnodes;
     int nslots;
     int slot_size;
+    int exclusive;
 };
 
 struct rlist_test_entry {
@@ -34,97 +35,97 @@ struct rlist_test_entry {
 };
 
 #define RLIST_TEST_END { NULL, NULL, NULL, \
-                         { 0, 0, 0 },      \
+                         { 0, 0, 0, 0 },      \
                          NULL, NULL, NULL, \
                          0, false }
 
 struct rlist_test_entry test_2n_4c[] = {
     { "too large of slot returns EOVERFLOW", NULL, NULL,
-      { 0, 1, 5 },
+      { 0, 1, 5, 0 },
       NULL,
       "",
       "rank[0-1]/core[0-3]",
       EOVERFLOW, false },
     { "too many slots returns error", NULL, NULL,
-      { 0, 9, 1 },
+      { 0, 9, 1, 0 },
       NULL,
       "",
       "rank[0-1]/core[0-3]",
       EOVERFLOW, false },
     { "invalid number of nodes returns error", NULL, NULL,
-      { -1, 1, 1 },
+      { -1, 1, 1, 0 },
       NULL,
       "",
       "rank[0-1]/core[0-3]",
       EINVAL, false },
     { "Too many nodes returns error", NULL, NULL,
-      { 3, 4, 1 },
+      { 3, 4, 1, 0 },
       NULL,
       "",
       "rank[0-1]/core[0-3]",
       EOVERFLOW, false },
     { "nodes > slots returns error", NULL, NULL,
-      { 2, 1, 1 },
+      { 2, 1, 1, 0 },
       NULL,
       "",
       "rank[0-1]/core[0-3]",
       EINVAL, false },
     { "invalid number of slots return error", NULL, NULL,
-      { 0, 0, 1 },
+      { 0, 0, 1, 0 },
       NULL,
       "",
       "rank[0-1]/core[0-3]",
       EINVAL, false },
     { "invalid slot size returns error", NULL, NULL,
-      { 0, 1, -1},
+      { 0, 1, -1, 0 },
       NULL,
       "",
       "rank[0-1]/core[0-3]",
       EINVAL, false },
     { "allocate with all nodes down returns ENOSPC", NULL, "0-1",
-      { 0, 1, 1},
+      { 0, 1, 1, 0 },
       NULL,
       "",
       "",
       ENOSPC, false },
     { "allocating a single core gets expected result", NULL, NULL,
-      { 0, 1, 1 },
+      { 0, 1, 1, 0 },
       "rank0/core0",
       "rank0/core0",
       "rank0/core[1-3] rank1/core[0-3]",
       0, true },
     { "allocating a single core with down rank", NULL, "0",
-      { 0, 1, 1 },
+      { 0, 1, 1, 0 },
       "rank1/core0",
       "rank1/core0",
       "rank1/core[1-3]",
       0, false },
     { "allocating another core (all ranks up)", NULL, NULL,
-      { 0, 1, 1 },
+      { 0, 1, 1, 0 },
       "rank0/core0",
       "rank[0-1]/core0",
       "rank[0-1]/core[1-3]",
       0, false },
     { "allocating another core gets expected result", NULL, NULL,
-      { 0, 1, 1 },
+      { 0, 1, 1, 0 },
       "rank0/core1",
       "rank0/core[0-1] rank1/core0",
       "rank0/core[2-3] rank1/core[1-3]",
       0, false },
     { "allocate 1 slot of size 3 lands on correct node", NULL, NULL,
-      { 0, 1, 3 },
+      { 0, 1, 3, 0 },
       "rank1/core[1-3]",
       "rank0/core[0-1] rank1/core[0-3]",
       "rank0/core[2-3]",
       0, false },
     { "allocate 4 slots of 1 core now returns ENOSPC", NULL, NULL,
-      { 0, 4, 1 },
+      { 0, 4, 1, 0 },
       NULL,
       "rank0/core[0-1] rank1/core[0-3]",
       "rank0/core[2-3]",
       ENOSPC, false },
     { "allocate remaining 2 cores", NULL, NULL,
-      { 0, 1, 2 },
+      { 0, 1, 2, 0 },
       "rank0/core[2-3]",
       "rank[0-1]/core[0-3]",
       "",
@@ -134,31 +135,31 @@ struct rlist_test_entry test_2n_4c[] = {
 
 struct rlist_test_entry test_6n_4c[] = {
     { "best-fit: alloc 1 core", "best-fit", NULL,
-      { 0, 1, 1 },
+      { 0, 1, 1, 0 },
       "rank0/core0",
       "rank0/core0",
       "rank0/core[1-3] rank[1-5]/core[0-3]",
       0, false },
     { "best-fit: alloc 1 slot/size 3 fits on rank0", "best-fit", NULL,
-      { 0, 1, 3 },
+      { 0, 1, 3, 0 },
       "rank0/core[1-3]",
       "rank0/core[0-3]",
       "rank[1-5]/core[0-3]",
       0, false },
     { "best-fit: alloc 2 slots/size 2 fits on rank1","best-fit", NULL,
-      { 0, 2, 2 },
+      { 0, 2, 2, 0 },
       "rank1/core[0-3]",
       "rank[0-1]/core[0-3]",
       "rank[2-5]/core[0-3]",
       0, false },
     { "best-fit: alloc 3 slot of size 1",            "best-fit", NULL,
-      { 0, 3, 1 },
+      { 0, 3, 1, 0 },
       "rank2/core[0-2]",
       "rank[0-1]/core[0-3] rank2/core[0-2]",
       "rank2/core3 rank[3-5]/core[0-3]",
       0, false },
     { "best-fit alloc 3 slots of 1 core",            "best-fit", NULL,
-      { 0, 3, 1 },
+      { 0, 3, 1, 0 },
       "rank2/core3 rank3/core[0-1]",
       "rank[0-2]/core[0-3] rank3/core[0-1]",
       "rank3/core[2-3] rank[4-5]/core[0-3]",
@@ -168,31 +169,96 @@ struct rlist_test_entry test_6n_4c[] = {
 
 struct rlist_test_entry test_1024n_4c[] = {
     { "large: 512 nodes with 2 cores", NULL, NULL,
-      { 512, 512, 2 },
+      { 512, 512, 2, 0 },
       "rank[0-511]/core[0-1]",
       "rank[0-511]/core[0-1]",
       "rank[0-511]/core[2-3] rank[512-1023]/core[0-3]",
       0, false
     },
     { "large: 512 slots of 4 cores", NULL, NULL,
-      { 0, 512, 4 },
+      { 0, 512, 4, 0 },
       "rank[512-1023]/core[0-3]",
       "rank[0-511]/core[0-1] rank[512-1023]/core[0-3]",
       "rank[0-511]/core[2-3]",
       0, true
     },
     { "large: 1 core on 10 nodes", NULL, NULL,
-      { 10, 10, 1 },
+      { 10, 10, 1, 0 },
       "rank[512-521]/core0",
       "rank[0-511]/core[0-1] rank[512-521]/core0",
       "rank[0-511]/core[2-3] rank[512-521]/core[1-3] rank[522-1023]/core[0-3]",
       0, false },
     { "large: alloc 2 cores on 128 nodes with free", NULL, NULL,
-      { 128, 256, 1 },
+      { 128, 256, 1, 0 },
       "rank[522-649]/core[0-1]",
       "rank[0-511,522-649]/core[0-1] rank[512-521]/core0",
       "rank[0-511,522-649]/core[2-3] rank[512-521]/core[1-3] rank[650-1023]/core[0-3]",
       0, true
+    },
+    RLIST_TEST_END,
+};
+
+
+struct rlist_test_entry test_exclusive[] = {
+    { "exclusive: exclusive without nnodes fails",
+      NULL,
+      NULL,
+      { 0, 1, 1, 1 },
+      NULL,
+      "",
+      "rank[0-3]/core[0-3]",
+      EINVAL,
+      false
+    },
+    { "exclusive: allocate one core first",
+      NULL,
+      NULL,
+      { 0, 1, 1, 0 },
+      "rank0/core0",
+      "rank0/core0",
+      "rank0/core[1-3] rank[1-3]/core[0-3]",
+      0,
+      false
+    },
+    { "exclusive: exclusively allocate 2 nodes",
+      NULL,
+      NULL,
+      { 2, 2, 1, 1 },
+      "rank[1-2]/core[0-3]",
+      "rank0/core0 rank[1-2]/core[0-3]",
+      "rank0/core[1-3] rank3/core[0-3]",
+      0,
+      false
+    },
+    { "exclusive: exclusively allocate 2 nodes fails",
+      NULL,
+      NULL,
+      { 2, 2, 1, 1 },
+      NULL,
+      "rank0/core0 rank[1-2]/core[0-3]",
+      "rank0/core[1-3] rank3/core[0-3]",
+      ENOSPC,
+      false
+    },
+    { "exclusive: but 1 node works",
+      NULL,
+      NULL,
+      { 1, 1, 1, 1 },
+      "rank3/core[0-3]",
+      "rank0/core0 rank[1-3]/core[0-3]",
+      "rank0/core[1-3]",
+      0,
+      false
+    },
+    { "exclusive: last 3 cores can be allocated non-exclusively",
+      NULL,
+      NULL,
+      { 0, 3, 1, 0 },
+      "rank0/core[1-3]",
+      "rank[0-3]/core[0-3]",
+      "",
+      0,
+      false,
     },
     RLIST_TEST_END,
 };
@@ -256,13 +322,35 @@ err:
     return NULL;
 }
 
+static struct rlist * rl_alloc (struct rlist *rl,
+                                const char *mode,
+                                int nnodes,
+                                int nslots,
+                                int slot_size,
+                                int exclusive)
+{
+    struct rlist_alloc_info ai = {
+        .mode = mode,
+        .nnodes = nnodes,
+        .nslots = nslots,
+        .slot_size = slot_size,
+        .exclusive = exclusive
+    };
+    flux_error_t error;
+    struct rlist *result = rlist_alloc (rl, &ai, &error);
+    if (!result)
+        diag ("rlist_alloc: %s", error.text);
+    return result;
+}
+
 static struct rlist * rlist_testalloc (struct rlist *rl,
                                        struct rlist_test_entry *e)
 {
-    return rlist_alloc (rl, e->mode,
-                        e->alloc.nnodes,
-                        e->alloc.nslots,
-                        e->alloc.slot_size);
+    return rl_alloc (rl, e->mode,
+                     e->alloc.nnodes,
+                     e->alloc.nslots,
+                     e->alloc.slot_size,
+                     e->alloc.exclusive);
 }
 
 static char * rlist_tostring (struct rlist *rl, bool allocated)
@@ -352,7 +440,9 @@ void run_test_entries (struct rlist_test_entry tests[], int ranks, int cores)
                 rlist_destroy (alloc);
             }
             else {
-                fail ("%s: %s", e->description, strerror (errno));
+                fail ("%s: rlist_testalloc: %s",
+                      e->description,
+                      strerror (errno));
             }
         }
 
@@ -387,7 +477,7 @@ static void test_simple (void)
         "rlist_append_rank_cores 1, 0-3");
     ok (rl->total == 8 && rl->avail == 8,
         "rlist: avail and total == 4");
-    ok ((alloc = rlist_alloc (rl, NULL, 0, 8, 1)) != NULL,
+    ok ((alloc = rl_alloc (rl, NULL, 0, 8, 1, 0)) != NULL,
         "rlist: alloc all cores works");
     ok (alloc->total == 8 && alloc->avail == 8,
         "rlist: alloc: got %d/%d (expected 8/8)",
@@ -486,7 +576,7 @@ static void test_issue2202 (void)
         "issue2202: rlist_dumps works");
     free (result);
 
-    a = rlist_alloc (rl, "best-fit", 1, 1, 1);
+    a = rl_alloc (rl, "best-fit", 1, 1, 1, 0);
     ok (a != NULL,
         "issue2202: rlist_alloc worked");
     if (a) {
@@ -523,7 +613,7 @@ static void test_issue2202 (void)
         "issue2202b: rlist_dumps works");
     free (result);
 
-    a = rlist_alloc (rl, "best-fit", 1, 1, 1);
+    a = rl_alloc (rl, "best-fit", 1, 1, 1, 0);
     ok (a != NULL,
         "issue2202b: rlist_alloc worked");
     if (a) {
@@ -587,7 +677,7 @@ static void test_issue2473 (void)
     free (result);
 
     /* problem: allocated 3 cores on one node */
-    a = rlist_alloc (rl, "worst-fit", 3, 3, 1);
+    a = rl_alloc (rl, "worst-fit", 3, 3, 1, 0);
     ok (a != NULL,
         "issue2473: rlist_alloc nnodes=3 slots=3 slotsz=1 worked");
     if (!a)
@@ -604,7 +694,7 @@ static void test_issue2473 (void)
     rlist_destroy (a);
 
     /* problem: unsatisfiable */
-    a = rlist_alloc (rl, "worst-fit", 3, 8, 1);
+    a = rl_alloc (rl, "worst-fit", 3, 8, 1, 0);
     ok (a != NULL,
         "issue2473: rlist_alloc nnodes=3 slots=8 slotsz=1 worked");
     if (a) {
@@ -618,7 +708,7 @@ static void test_issue2473 (void)
      * - ask for 2 cores spread across 2 nodes
      * - we should get cores on rank[0-1] not rank[1-2]
      */
-    a = rlist_alloc (rl, "worst-fit", 1, 1, 1);
+    a = rl_alloc (rl, "worst-fit", 1, 1, 1, 0);
     ok (a != NULL,
         "issue2473: rlist_alloc nnodes=1 slots=1 slotsz=1 worked");
     if (!a)
@@ -630,7 +720,7 @@ static void test_issue2473 (void)
         "issue2473: one core was allocated from rank0");
     free (result);
 
-    a2 = rlist_alloc (rl, "worst-fit", 2, 2, 1);
+    a2 = rl_alloc (rl, "worst-fit", 2, 2, 1, 0);
     ok (a2 != NULL,
         "issue2473: rlist_alloc nnodes=2 slots=2 slotsz=1 worked");
     result = rlist_dumps (a2);
@@ -709,7 +799,7 @@ static void test_updown ()
     ok (rl->avail == 16,
         "rl avail == 16");
 
-    rl2 = rlist_alloc (rl, NULL, 0, 4, 1);
+    rl2 = rl_alloc (rl, NULL, 0, 4, 1, 0);
     ok (rl2 != NULL,
         "rlist_alloc() works when all nodes up");
 
@@ -732,12 +822,12 @@ static void test_updown ()
     ok (rlist_mark_up (rl, "0-2") == 0,
         "rlist_mark_up all but rank 3 up");
 
-    ok (rlist_alloc (rl, NULL, 4, 4, 1) == NULL && errno == ENOSPC,
+    ok (rl_alloc (rl, NULL, 4, 4, 1, 0) == NULL && errno == ENOSPC,
         "allocation with 4 nodes fails with ENOSPC");
 
     ok (rlist_mark_up (rl, "3") == 0,
         "rlist_mark_up 3");
-    rl2 = rlist_alloc (rl, NULL, 4, 4, 1);
+    rl2 = rl_alloc (rl, NULL, 4, 4, 1, 0);
 
     ok (rl2 != NULL,
         "rlist_alloc() for 4 nodes now succeeds");
@@ -1784,6 +1874,7 @@ int main (int ac, char *av[])
     run_test_entries (test_2n_4c,       2, 4);
     run_test_entries (test_6n_4c,       6, 4);
     run_test_entries (test_1024n_4c, 1024, 4);
+    run_test_entries (test_exclusive,   4, 4);
     test_issue2202 ();
     test_issue2473 ();
     test_updown ();

@@ -103,17 +103,17 @@ done <invalid.txt
 # <jobspec command args> == <expected result>
 #
 cat <<EOF >inputs.txt
-run              ==nnodes=0 nslots=1 slot_size=1 duration=0.0
-run -N1 -n1      ==nnodes=1 nslots=1 slot_size=1 duration=0.0
-run -N1 -n4      ==nnodes=1 nslots=4 slot_size=1 duration=0.0
-run -N1 -n4 -c4  ==nnodes=1 nslots=4 slot_size=4 duration=0.0
-run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 duration=0.0
-run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 duration=0.0
-run -n4 -c1      ==nnodes=0 nslots=4 slot_size=1 duration=0.0
-run -N4 -n4 -c4  ==nnodes=4 nslots=4 slot_size=4 duration=0.0
-run -t 1m -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 duration=60.0
-run -t 5s -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 duration=5.0
-run -t 1h -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 duration=3600.0
+run              ==nnodes=0 nslots=1 slot_size=1 exclusive=false duration=0.0
+run -N1 -n1      ==nnodes=1 nslots=1 slot_size=1 exclusive=false duration=0.0
+run -N1 -n4      ==nnodes=1 nslots=4 slot_size=1 exclusive=false duration=0.0
+run -N1 -n4 -c4  ==nnodes=1 nslots=4 slot_size=4 exclusive=false duration=0.0
+run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 exclusive=false duration=0.0
+run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 exclusive=false duration=0.0
+run -n4 -c1      ==nnodes=0 nslots=4 slot_size=1 exclusive=false duration=0.0
+run -N4 -n4 -c4  ==nnodes=4 nslots=4 slot_size=4 exclusive=false duration=0.0
+run -t 1m -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 exclusive=false duration=60.0
+run -t 5s -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 exclusive=false duration=5.0
+run -t 1h -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 exclusive=false duration=3600.0
 EOF
 
 while read line; do

@@ -124,9 +124,10 @@ class Rlist(WrapperPimpl):
         error = ffi.new("flux_error_t *")
         if not isinstance(constraint, str):
             constraint = json.dumps(constraint)
-        handle = self.pimpl.copy_constraint_string(constraint, error)
-        if not handle:
+        try:
+            handle = self.pimpl.copy_constraint_string(constraint, error)
+        except OSError as exc:
             raise ValueError(
                 "copy_constraint: " + ffi.string(error.text).decode("utf-8")
-            )
+            ) from exc
         return Rlist(handle=handle)

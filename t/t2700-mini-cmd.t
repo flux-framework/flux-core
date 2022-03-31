@@ -41,17 +41,17 @@ test_expect_success HAVE_MULTICORE 'flux mini submit --ntasks=2 --cores-per-task
 	jobid=$(flux mini submit --ntasks=2 --cores-per-task=2 hostname) &&
 	flux job attach $jobid
 '
-test_expect_success 'flux mini run --ntasks=2 --nodes=2 works' '
+test_expect_success 'flux mini submit --ntasks=2 --nodes=2 works' '
 	flux mini run --ntasks=2 --nodes=2 hostname
+'
+test_expect_success 'flux mini run --nodes=2 allocates 2 nodes exclusively' '
+	id=$(flux mini submit --wait-event=start --nodes=2 hostname) &&
+	test $(flux job info ${id} R | flux R decode --count=node) = 2
 '
 test_expect_success 'flux mini run --ntasks=1 --nodes=2 fails' '
 	test_must_fail flux mini run --ntasks=1 --nodes=2 hostname \
 		2>run1n2N.err &&
 	grep -i "node count must not be greater than task count" run1n2N.err
-'
-test_expect_success 'flux mini run (default ntasks) --nodes=2 fails' '
-	test_must_fail flux mini run --nodes=2 hostname 2>run2N.err &&
-	grep -i "node count must not be greater than task count" run2N.err
 '
 test_expect_success 'flux mini submit --urgency=6 works' '
 	jobid=$(flux mini submit --urgency=6 hostname) &&
