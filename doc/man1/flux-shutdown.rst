@@ -23,9 +23,9 @@ Only the rank 0 broker in RUN state may be targeted for shutdown.
 The current broker state may be viewed with :man1:`flux-uptime`.
 
 If the instance is running an initial program, that program is terminated
-with SIGTERM.  Note that the broker exit value normally reflects the
+with SIGHUP.  Note that the broker exit value normally reflects the
 exit code of the initial program, so if it is terminated by this signal,
-the broker exits with 128 + 15 = 143.
+the broker exits with 128 + 1 = 129.
 
 If the broker was launched by systemd, an exit code is used that informs
 systemd not to restart the broker.

@@ -187,6 +187,7 @@ TESTSCRIPTS = \
 	t2805-startlog-cmd.t \
 	t2806-config-cmd.t \
 	t2807-dump-cmd.t \
+	t2808-shutdown-cmd.t \
 	t2900-job-timelimits.t \
 	t3000-mpi-basic.t \
 	t3001-mpi-personalities.t \
