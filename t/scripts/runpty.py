@@ -218,6 +218,13 @@ def main():
     # Avoid asyncio DEBUG log messages (why is this on by default??)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
 
+    sys.stdout = open(
+        sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
+    )
+    sys.stderr = open(
+        sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
+    )
+
     args = parse_args()
     if args.no_output and args.output != "-":
         log.error("Do not specify --no-output and --output")
