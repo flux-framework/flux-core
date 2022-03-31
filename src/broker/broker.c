@@ -661,6 +661,11 @@ static void set_proctitle (uint32_t rank)
 static int create_runat_rc2 (struct runat *r, const char *argz, size_t argz_len)
 {
     if (argz == NULL) { // run interactive shell
+        /*  Check if stdin is a tty and error out if not to avoid
+         *   confusing users with what appears to be a hang.
+         */
+        if (!isatty (STDIN_FILENO))
+            log_msg_exit ("stdin is not a tty - can't run interactive shell");
         if (runat_push_shell (r, "rc2") < 0)
             return -1;
     }
