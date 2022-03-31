@@ -82,7 +82,7 @@ test_expect_success 'job-manager: bad plugins config is detected' '
 	EOF
 	test_must_fail \
 	    flux mini bulksubmit -n1 --watch --log=badconf.{}.log \
-	        flux start -o,-c$(pwd)/badconf/{} ::: a b c &&
+	        flux start -o,-c$(pwd)/badconf/{} /bin/true ::: a b c &&
 	test_debug "echo a:; cat badconf.a.log" &&
 	grep "config must be an array" badconf.a.log &&
 	test_debug "echo b:; cat badconf.b.log" &&
