@@ -210,9 +210,9 @@ void basic (flux_t *h)
     ok (flux_reactor_run (flux_get_reactor (h), 0) >= 0
         && completion_called == 1,
         "completion called once");
-    ok (runat_get_exit_code (r, "test7", &rc) == 0 && rc == 143,
-        "exit code 143 (= signal 15 + 128)");
-    ok (match_list (logs, "Terminated") == 1,
+    ok (runat_get_exit_code (r, "test7", &rc) == 0 && rc == 129,
+        "exit code 129 (= signal 15 + 1)");
+    ok (match_list (logs, "Hangup") == 1,
         "process termination was logged");
     rc = -1;
 

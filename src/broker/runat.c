@@ -59,7 +59,7 @@ struct runat {
 static void runat_command_destroy (struct runat_command *cmd);
 static void start_next_command (struct runat *r, struct runat_entry *entry);
 
-static const int abort_signal = SIGTERM;
+static const int abort_signal = SIGHUP;
 
 static const char *env_blocklist[] = {
     "PMI_FD",
