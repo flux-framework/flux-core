@@ -262,28 +262,4 @@ test_expect_success 'job-archive: db exists after module unloaded' '
         test $count -eq 7
 '
 
-test_expect_success 'job-archive: load module, params override config' '
-        flux module load job-archive dbpath=${ARCHIVEDB}-NEW
-'
-
-test_expect_success 'job-archive: store inactive job info in new db' '
-        jobid=`flux mini submit hostname` &&
-        fj_wait_event $jobid clean &&
-        wait_jobid_state $jobid inactive &&
-        wait_db $jobid ${ARCHIVEDB}-NEW &&
-        db_check_entries $jobid ${ARCHIVEDB}-NEW &&
-        db_check_values_run $jobid ${ARCHIVEDB}-NEW
-'
-
-test_expect_success 'job-archive: unload module' '
-        flux module unload job-archive
-'
-
-test_expect_success 'job-archive: both db exists after module unloaded' '
-        count=`db_count_entries ${ARCHIVEDB}` &&
-        test $count -eq 7 &&
-        count=`db_count_entries ${ARCHIVEDB}-NEW` &&
-        test $count -eq 8
-'
-
 test_done

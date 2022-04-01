@@ -498,13 +498,12 @@ void job_archive_cb (flux_reactor_t *r,
     }
 }
 
-static void process_config (struct job_archive_ctx *ctx, int ac, char **av)
+static void process_config (struct job_archive_ctx *ctx)
 {
     flux_conf_error_t err;
     const char *period = NULL;
     const char *dbpath = NULL;
     const char *busytimeout = NULL;
-    int i;
 
     if (flux_conf_unpack (flux_get_conf (ctx->h),
                           &err,
@@ -517,18 +516,6 @@ static void process_config (struct job_archive_ctx *ctx, int ac, char **av)
                   "error reading archive config: %s",
                   err.errbuf);
         return;
-    }
-
-    /* module params override config file */
-    for (i = 0; i < ac; i++) {
-        if (strncmp (av[i], "period=", 7) == 0)
-            period = (av[i])+7;
-        else if (strncmp (av[i], "dbpath=", 7) == 0)
-            dbpath = (av[i])+7;
-        else if (strncmp (av[i], "busytimeout=", 12) == 0)
-            busytimeout = (av[i])+12;
-        else
-            flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
     }
 
     if (period) {
@@ -556,7 +543,7 @@ int mod_main (flux_t *h, int ac, char **av)
     if (!ctx)
         return -1;
 
-    process_config (ctx, ac, av);
+    process_config (ctx);
 
     /* we do nothing if no dbpath specified */
     if (ctx->dbpath) {
