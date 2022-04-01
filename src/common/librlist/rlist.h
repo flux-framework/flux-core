@@ -275,4 +275,9 @@ int rlist_assign_properties (struct rlist *rl,
                              json_t *properties,
                              flux_error_t *errp);
 
+/*  Encode properties to a JSON string which conforms to RFC 20 properties
+ *   specification. Caller must free.
+ */
+char *rlist_properties_encode (struct rlist *rl);
+
 #endif /* !HAVE_SCHED_RLIST_H */

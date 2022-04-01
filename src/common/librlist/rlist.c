@@ -1539,13 +1539,18 @@ error:
     return NULL;
 }
 
-int rlist_json_properties (struct rlist *rl, json_t **result)
+static int rlist_json_properties (struct rlist *rl, json_t **result)
 {
     int saved_errno;
     int rc = -1;
     zhashx_t *properties = NULL;;
     json_t *o = NULL;
     struct idset *ids;
+
+    if (!rl || !result) {
+        errno = EINVAL;
+        return -1;
+    }
 
     if (!(properties = rlist_properties (rl)))
         return -1;
@@ -1588,6 +1593,20 @@ out:
     json_decref (o);
     errno = saved_errno;
     return rc;
+}
+
+char *rlist_properties_encode (struct rlist *rl)
+{
+    char *result = NULL;
+    json_t *o = NULL;
+
+    if (rlist_json_properties (rl, &o) < 0)
+        return NULL;
+    if (o == NULL)
+        return (strdup ("{}"));
+    result = json_dumps (o, 0);
+    json_decref (o);
+    return result;
 }
 
 json_t *rlist_to_R (struct rlist *rl)

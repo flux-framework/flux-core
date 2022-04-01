@@ -38,6 +38,11 @@ class ResourceSetImplementation(ABC):  # pragma: no cover
         raise NotImplementedError
 
     @abstractmethod
+    def get_properties(self):
+        """Return an RFC 20 properties object for this resource set"""
+        raise NotImplementedError
+
+    @abstractmethod
     def nnodes(self):
         """Return the number of nodes in the resource set as an IDset"""
         raise NotImplementedError
@@ -51,6 +56,10 @@ class ResourceSetImplementation(ABC):  # pragma: no cover
     def copy(self):
         """Return a copy of the resource set"""
         raise NotImplementedError
+
+    @abstractmethod
+    def copy_ranks(self, ranks):
+        """Return a copy of resource set with only 'ranks' included"""
 
     @abstractmethod
     def union(self, rset):

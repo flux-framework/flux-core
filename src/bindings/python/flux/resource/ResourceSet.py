@@ -16,6 +16,7 @@ from flux.resource import Rlist
 from flux.resource.ResourceSetImplementation import ResourceSetImplementation
 
 
+# pylint: disable=too-many-public-methods
 class ResourceSet:
     def __init__(self, arg=None, version=1):
         """
@@ -107,7 +108,9 @@ class ResourceSet:
 
     def copy(self):
         """Return a copy of a ResourceSet"""
-        return ResourceSet(self.impl.copy())
+        rset = ResourceSet(self.impl.copy())
+        rset.state = self.state
+        return rset
 
     def _run_op(self, method, *args):
         result = self.copy()
@@ -116,6 +119,7 @@ class ResourceSet:
                 arg = ResourceSet(arg, version=self.version)
             impl = getattr(result.impl, method)(arg.impl)
             result = ResourceSet(impl)
+        result.state = self.state
         return result
 
     def union(self, *args):
@@ -147,6 +151,12 @@ class ResourceSet:
         self.impl.set_property(name, ranks)
         return self
 
+    def get_properties(self):
+        """
+        Return an RFC 20 properties object for this ResourceSet
+        """
+        return self.impl.get_properties()
+
     def remove_ranks(self, ranks):
         """
         Remove the rank or ranks specified from the ResourceSet
@@ -159,6 +169,22 @@ class ResourceSet:
             ranks = IDset(str(ranks))
         self.impl.remove_ranks(ranks)
         return self
+
+    def copy_ranks(self, ranks):
+        """
+        Copy only the rank or ranks specified from the ResourceSet
+
+        :param ranks: A flux.idset.IDset object, or number or string which
+                      can be converted into an IDset, containing the ranks
+                      to copy
+        """
+        if not isinstance(ranks, IDset):
+            ranks = IDset(str(ranks))
+        rset = ResourceSet(self.impl.copy_ranks(ranks))
+
+        #  Preserve current state
+        rset.state = self.state
+        return rset
 
     @property
     def nodelist(self):
@@ -201,3 +227,7 @@ class ResourceSet:
     @property
     def rlist(self):
         return self.impl.dumps()
+
+    @property
+    def properties(self):
+        return ",".join(json.loads(self.get_properties()).keys())

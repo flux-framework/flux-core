@@ -64,6 +64,12 @@ class Rlist(WrapperPimpl):
     def nodelist(self):
         return Hostlist(handle=self.pimpl.nodelist())
 
+    def get_properties(self):
+        val = lib.rlist_properties_encode(self.handle)
+        result = ffi.string(val).decode("utf-8")
+        lib.free(val)
+        return result
+
     def ranks(self, hosts=None):
         if hosts is None:
             return IDset(handle=self.pimpl.ranks())
@@ -106,6 +112,9 @@ class Rlist(WrapperPimpl):
             ranks = IDset(str(ranks))
         self.pimpl.remove_ranks(ranks)
         return self
+
+    def copy_ranks(self, ranks):
+        return Rlist(handle=self.pimpl.copy_ranks(ranks))
 
     def add_child(self, rank, name, ids):
         self.pimpl.rank_add_child(rank, name, ids)
