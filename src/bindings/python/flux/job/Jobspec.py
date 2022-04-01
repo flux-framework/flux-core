@@ -219,6 +219,7 @@ class Jobspec(object):
             raise ValueError("operator must be one of {}".format(valid_operator_values))
 
     @classmethod
+    # pylint: disable=too-many-branches
     def _validate_resource(cls, res):
         if not isinstance(res, abc.Mapping):
             raise TypeError("resource must be a mapping")
@@ -237,8 +238,13 @@ class Jobspec(object):
             cls._validate_complex_range(count)
         elif not isinstance(count, int):
             raise TypeError("count must be an int or mapping")
-        elif count < 1:
-            raise ValueError("count must be > 0")
+        else:
+            # node, slot, and core must have count > 0, but allow 0 for
+            # any other resource type.
+            if res["type"] in ["node", "slot", "core"] and count < 1:
+                raise ValueError("node or slot count must be > 0")
+            if count < 0:
+                raise ValueError("count must be >= 0")
 
         # validate the string keys
         for key in ["id", "unit", "label"]:
