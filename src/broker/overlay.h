@@ -138,6 +138,11 @@ int overlay_set_monitor_cb (struct overlay *ov,
  */
 int overlay_register_attrs (struct overlay *overlay);
 
+/* Return true if this message was routed locally, i.e. wasn't delivered
+ *  via an overlay parent or child.
+ */
+bool overlay_msg_is_local (const flux_msg_t *msg);
+
 #endif /* !_BROKER_OVERLAY_H */
 
 /*
