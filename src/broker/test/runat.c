@@ -278,16 +278,16 @@ void badinput (flux_t *h)
 
     errno = 0;
     ok (runat_get_exit_code (NULL, "foo", &rc) < 0 && errno == EINVAL,
-        "runat_abort r=NULL fails with EINVAL");
+        "runat_get_exit_code r=NULL fails with EINVAL");
     errno = 0;
     ok (runat_get_exit_code (r, NULL, &rc) < 0 && errno == EINVAL,
-        "runat_abort name=NULL fails with EINVAL");
+        "runat_get_exit_code name=NULL fails with EINVAL");
     errno = 0;
     ok (runat_get_exit_code (r, "foo", NULL) < 0 && errno == EINVAL,
-        "runat_abort rc=NULL fails with EINVAL");
+        "runat_get_exit_code rc=NULL fails with EINVAL");
     errno = 0;
     ok (runat_get_exit_code (r, "noexist", &rc) < 0 && errno == ENOENT,
-        "runat_abort rc=NULL fails with ENOENT");
+        "runat_get_exit_code rc=NULL fails with ENOENT");
 
     errno = 0;
     ok (runat_push_shell (NULL, "foo") < 0 && errno == EINVAL,
