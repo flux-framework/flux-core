@@ -3,6 +3,8 @@
 
 test_description='Verify rc scripts excute with proper semantics
 '
+# Append --logfile option if FLUX_TESTS_LOGFILE is set in environment:
+test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile --debug
 
 . `dirname $0`/sharness.sh
 
@@ -30,10 +32,20 @@ test_expect_success 'rc1 bad path handled same as failure' '
 '
 
 test_expect_success 'default initial program is $SHELL' '
-	SHELL=/bin/sh flux start -o,-Slog-stderr-level=6 \
+	run_timeout --env=SHELL=/bin/sh 15 \
+		flux $SHARNESS_TEST_SRCDIR/scripts/runpty.py -i none \
+		flux start -o,-Slog-stderr-level=6 \
 		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
-		</dev/null 2>shell.log &&
+		>shell.log &&
 	grep "rc2.0: /bin/sh Exited" shell.log
+'
+
+test_expect_success 'rc2 failure if stdin not a tty' '
+	test_expect_code 1 \
+		flux start -o,-Slog-stderr-level=6 \
+		-o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+                2>shell-notty.log &&
+	grep "not a tty" shell-notty.log
 '
 
 test_expect_success 'rc3 failure causes instance failure' '

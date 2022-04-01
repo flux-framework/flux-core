@@ -126,7 +126,8 @@ def parse_args():
     parser.add_argument(
         "-i",
         "--input",
-        help="set an input file in asciicast format",
+        help="set an input file in asciicast format. "
+        + "Use the special value 'none' to close stdin of pty immediately.",
     )
     parser.add_argument("--stderr", help="redirect stderr of process")
     parser.add_argument(
@@ -217,6 +218,13 @@ def main():
     # Avoid asyncio DEBUG log messages (why is this on by default??)
     logging.getLogger("asyncio").setLevel(logging.WARNING)
 
+    sys.stdout = open(
+        sys.stdout.fileno(), "w", encoding="utf8", errors="surrogateescape"
+    )
+    sys.stderr = open(
+        sys.stderr.fileno(), "w", encoding="utf8", errors="surrogateescape"
+    )
+
     args = parse_args()
     if args.no_output and args.output != "-":
         log.error("Do not specify --no-output and --output")
@@ -262,7 +270,23 @@ def main():
 
         loop = asyncio.get_event_loop()
 
-        if args.input:
+        if args.input and args.input == "none":
+
+            def write_eof(fd):
+                os.write(fd, bytes([termios.CEOF]))
+
+            #  Sometimes the shell (if that is the target of runpty)
+            #   does not read EOF if it is sent too soon. Therefore send
+            #   EOF control character now, then 3 extra times to ensure it is
+            #   read eventually.
+            #
+            write_eof(fd)
+            loop.call_later(0.1, write_eof, fd)
+            loop.call_later(0.5, write_eof, fd)
+            loop.call_later(1.0, write_eof, fd)
+            loop.call_later(15, write_eof, fd)
+
+        elif args.input:
 
             def write_tty(s):
                 os.write(fd, s.encode("utf-8"))
