@@ -23,6 +23,7 @@
 
 #include "attr.h"
 #include "exec.h"
+#include "overlay.h"
 
 #define EXEC_TERMINATE_TIMEOUT 5.0
 
@@ -75,6 +76,15 @@ int exec_terminate_subprocesses_by_uuid (flux_t *h, const char *id)
     return 0;
 }
 
+static int reject_nonlocal (const flux_msg_t *msg, void *arg)
+{
+    if (!overlay_msg_is_local (msg)) {
+        errno = EPERM;
+        return -1;
+    }
+    return 0;
+}
+
 int exec_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
 {
     flux_subprocess_server_t *s = NULL;
@@ -84,6 +94,8 @@ int exec_initialize (flux_t *h, uint32_t rank, attr_t *attrs)
         goto cleanup;
     if (!(s = flux_subprocess_server_start (h, "broker", local_uri, rank)))
         goto cleanup;
+    if (rank == 0)
+        flux_subprocess_server_set_auth_cb (s, reject_nonlocal, NULL);
     flux_aux_set (h, "flux::exec", s, exec_finalize);
     return 0;
 cleanup:
