@@ -307,6 +307,9 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
     int on_channel_out, on_stdout, on_stderr;
     char **env = NULL;
 
+    if (s->auth_cb && (*s->auth_cb) (msg, s->arg) < 0)
+        goto error;
+
     if (flux_request_unpack (msg, NULL, "{s:s s:i s:i s:i}",
                              "cmd", &cmd_str,
                              "on_channel_out", &on_channel_out,

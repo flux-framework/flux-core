@@ -126,6 +126,8 @@ struct flux_subprocess_server {
     uint32_t rank;
     zhash_t *subprocesses;
     flux_msg_handler_t **handlers;
+    flux_subprocess_server_auth_f auth_cb;
+    void *arg;
 
     /* for teardown / termination */
     flux_watcher_t *terminate_timer_w;
