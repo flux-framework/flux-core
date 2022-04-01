@@ -14,13 +14,13 @@ be altered by the ``archive`` table which may contain the following keys:
 KEYS
 ====
 
-dbpath
-   (optional) Set the path to the sqlite database file.  The service does
-   nothing if this key is unset.
-
 period
    (optional) Set the archival period (in RFC 23 Flux Standard Duration format).
    The default is 60s.
+
+dbpath
+   (optional) Set the path to the sqlite database file.  The service does
+   nothing if this key is unset.
 
 busytimeout
    (optional) Set the sqlite busy_timeout pragma (in RFC 23 Flux Standard

@@ -164,8 +164,8 @@ test_expect_success 'job-archive: unload module' '
 test_expect_success 'job-archive: setup config file' '
         cat >archive.toml <<EOF &&
 [archive]
-dbpath = "${ARCHIVEDB}"
 period = "0.5s"
+dbpath = "${ARCHIVEDB}"
 busytimeout = "0.1s"
 EOF
 	flux config reload

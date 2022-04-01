@@ -58,8 +58,8 @@ const char *sql_since = "SELECT MAX(t_inactive) FROM jobs;";
 
 struct job_archive_ctx {
     flux_t *h;
-    char *dbpath;
     double period;
+    char *dbpath;
     unsigned int busy_timeout;
     flux_watcher_t *w;
     sqlite3 *db;
@@ -501,8 +501,8 @@ void job_archive_cb (flux_reactor_t *r,
 static void process_config (struct job_archive_ctx *ctx, int ac, char **av)
 {
     flux_conf_error_t err;
-    const char *dbpath = NULL;
     const char *period = NULL;
+    const char *dbpath = NULL;
     const char *busytimeout = NULL;
     int i;
 
@@ -510,8 +510,8 @@ static void process_config (struct job_archive_ctx *ctx, int ac, char **av)
                           &err,
                           "{s?{s?s s?s s?s}}",
                           "archive",
-                            "dbpath", &dbpath,
                             "period", &period,
+                            "dbpath", &dbpath,
                             "busytimeout", &busytimeout) < 0) {
         flux_log (ctx->h, LOG_ERR,
                   "error reading archive config: %s",
@@ -521,23 +521,23 @@ static void process_config (struct job_archive_ctx *ctx, int ac, char **av)
 
     /* module params override config file */
     for (i = 0; i < ac; i++) {
-        if (strncmp (av[i], "dbpath=", 7) == 0)
-            dbpath = (av[i])+7;
-        else if (strncmp (av[i], "period=", 7) == 0)
+        if (strncmp (av[i], "period=", 7) == 0)
             period = (av[i])+7;
+        else if (strncmp (av[i], "dbpath=", 7) == 0)
+            dbpath = (av[i])+7;
         else if (strncmp (av[i], "busytimeout=", 12) == 0)
             busytimeout = (av[i])+12;
         else
             flux_log (ctx->h, LOG_ERR, "Unknown option `%s'", av[i]);
     }
 
-    if (dbpath) {
-        if (!(ctx->dbpath = strdup (dbpath)))
-            flux_log_error (ctx->h, "dbpath not configured");
-    }
     if (period) {
         if (fsd_parse_duration (period, &ctx->period) < 0)
             flux_log_error (ctx->h, "period not configured");
+    }
+    if (dbpath) {
+        if (!(ctx->dbpath = strdup (dbpath)))
+            flux_log_error (ctx->h, "dbpath not configured");
     }
     if (busytimeout) {
         double tmp;
