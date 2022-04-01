@@ -396,7 +396,7 @@ static void process_event (struct state_machine *s, const char *event)
     }
     else {
         flux_log (s->ctx->h,
-                  LOG_INFO,
+                  LOG_DEBUG,
                   "%s: ignored in %s",
                   event,
                   statestr (s->state));
@@ -689,21 +689,25 @@ static void broker_online_cb (flux_future_t *f, void *arg)
         || !(ids = idset_decode (members))) {
         flux_log_error (s->ctx->h, "groups.get failed");
         state_machine_post (s, "quorum-fail");
+        return;
     }
-    else {
-        idset_destroy (s->quorum.have);
-        s->quorum.have = ids;
-        if (is_subset_of (s->quorum.want, s->quorum.have)) {
-            if (s->state != STATE_RUN) {
-                state_machine_post (s, "quorum-full");
-                if (s->quorum.warned) {
-                    flux_log (s->ctx->h, LOG_ERR, "quorum reached");
-                    s->quorum.warned = false;
-                }
+
+    char *hosts = flux_hostmap_lookup (s->ctx->h, members, NULL);
+    flux_log (s->ctx->h, LOG_INFO, "online: %s (ranks %s)", hosts, members);
+    free (hosts);
+
+    idset_destroy (s->quorum.have);
+    s->quorum.have = ids;
+    if (is_subset_of (s->quorum.want, s->quorum.have)) {
+        if (s->state != STATE_RUN) {
+            state_machine_post (s, "quorum-full");
+            if (s->quorum.warned) {
+                flux_log (s->ctx->h, LOG_ERR, "quorum reached");
+                s->quorum.warned = false;
             }
         }
-        flux_future_reset (f);
     }
+    flux_future_reset (f);
 }
 
 static bool wait_respond (flux_t *h,
