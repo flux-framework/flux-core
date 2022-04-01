@@ -41,6 +41,10 @@ test_expect_success 'exec to all except a set of ranks' '
 	EOT
 '
 
+test_expect_success 'exec to rank 0 from another rank is an error' '
+	test_must_fail flux exec -n -r 1 flux exec -n -r 0 /bin/true
+'
+
 test_expect_success 'exec to non-existent rank is an error' '
 	test_must_fail flux exec -n -r $(invalid_rank) /bin/true
 '
