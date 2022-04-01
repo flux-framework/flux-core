@@ -27,7 +27,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fsd.h"
 
-#define PERIOD_DEFAULT       60.0
 #define BUSY_TIMEOUT_DEFAULT 50
 #define BUFSIZE              1024
 
@@ -117,7 +116,7 @@ static struct job_archive_ctx * job_archive_ctx_create (flux_t *h)
     }
 
     ctx->h = h;
-    ctx->period = PERIOD_DEFAULT;
+    ctx->period = 0.0;
     ctx->busy_timeout = BUSY_TIMEOUT_DEFAULT;
 
     return ctx;
@@ -498,7 +497,7 @@ void job_archive_cb (flux_reactor_t *r,
     }
 }
 
-static void process_config (struct job_archive_ctx *ctx)
+static int process_config (struct job_archive_ctx *ctx)
 {
     flux_conf_error_t err;
     const char *period = NULL;
@@ -515,7 +514,7 @@ static void process_config (struct job_archive_ctx *ctx)
         flux_log (ctx->h, LOG_ERR,
                   "error reading archive config: %s",
                   err.errbuf);
-        return;
+        return -1;
     }
 
     if (period) {
@@ -526,6 +525,18 @@ static void process_config (struct job_archive_ctx *ctx)
         if (!(ctx->dbpath = strdup (dbpath)))
             flux_log_error (ctx->h, "dbpath not configured");
     }
+    else {
+        const char *dbdir;
+        if (!(dbdir = flux_attr_get (ctx->h, "statedir"))) {
+            flux_log_error (ctx->h, "statedir not set");
+            return -1;
+        }
+
+        if (asprintf (&ctx->dbpath, "%s/job-archive.sqlite", dbdir) < 0) {
+            flux_log_error (ctx->h, "asprintf");
+            return -1;
+        }
+    }
     if (busytimeout) {
         double tmp;
         if (fsd_parse_duration (busytimeout, &tmp) < 0)
@@ -533,6 +544,13 @@ static void process_config (struct job_archive_ctx *ctx)
         else
             ctx->busy_timeout = (int)(1000 * tmp);
     }
+
+    /* period is required to be set */
+    if (ctx->period == 0.0) {
+        flux_log_error (ctx->h, "period not set");
+        return -1;
+    }
+    return 0;
 }
 
 int mod_main (flux_t *h, int ac, char **av)
@@ -543,24 +561,22 @@ int mod_main (flux_t *h, int ac, char **av)
     if (!ctx)
         return -1;
 
-    process_config (ctx);
+    if (process_config (ctx) < 0)
+        goto done;
 
-    /* we do nothing if no dbpath specified */
-    if (ctx->dbpath) {
-        if (job_archive_init (ctx) < 0)
-            goto done;
+    if (job_archive_init (ctx) < 0)
+        goto done;
 
-        if ((ctx->w = flux_timer_watcher_create (flux_get_reactor (h),
-                                                 ctx->period,
-                                                 0.,
-                                                 job_archive_cb,
-                                                 ctx)) < 0) {
-            flux_log_error (h, "flux_timer_watcher_create");
-            goto done;
-        }
-
-        flux_watcher_start (ctx->w);
+    if ((ctx->w = flux_timer_watcher_create (flux_get_reactor (h),
+                                             ctx->period,
+                                             0.,
+                                             job_archive_cb,
+                                             ctx)) < 0) {
+        flux_log_error (h, "flux_timer_watcher_create");
+        goto done;
     }
+
+    flux_watcher_start (ctx->w);
 
     if ((rc = flux_reactor_run (flux_get_reactor (h), 0)) < 0)
         flux_log_error (h, "flux_reactor_run");
