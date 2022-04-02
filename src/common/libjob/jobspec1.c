@@ -238,6 +238,7 @@ static int slot_vertex_check (json_t *slot, flux_jobspec1_error_t *error)
         goto error;
     }
     json_array_foreach (with, index, value) {
+        int min_count = 0;
         if (json_unpack_ex (value,
                             &json_error,
                             0,
@@ -251,8 +252,10 @@ static int slot_vertex_check (json_t *slot, flux_jobspec1_error_t *error)
             errprintf (error, "slot with type must be core or gpu");
             goto error;
         }
-        if (count < 1) {
-            errprintf (error, "slot %s count must be >= 1", type);
+        if (strcmp (type, "core") == 0)
+            min_count = 1;
+        if (count < min_count) {
+            errprintf (error, "slot %s count must be >= %d", type, min_count);
             goto error;
         }
     }
