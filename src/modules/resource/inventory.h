@@ -18,8 +18,6 @@
 struct inventory *inventory_create (struct resource_ctx *ctx, json_t *R);
 void inventory_destroy (struct inventory *inv);
 
-json_t *inventory_get_xml (struct inventory *inv);
-
 /* Get resource object.
  * Returned resource object shall not be modified or freed by the caller.
  */
@@ -37,8 +35,6 @@ const char *inventory_get_method (struct inventory *inv);
  * 'resource-define' to resource.eventlog.  The KVS commits are asynchronous.
  */
 int inventory_put (struct inventory *inv, json_t *R, const char *method);
-
-int inventory_put_xml (struct inventory *inv, json_t *xml);
 
 /* Return a set of ranks for a string of "targets". The 'targets' argument
  * may be an RFC22 encoded idset or RFC29 hostlist. If an idset, the
