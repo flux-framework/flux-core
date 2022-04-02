@@ -29,7 +29,6 @@ man_pages = [
     ('man1/flux-getattr', 'flux-setattr', 'access broker attributes', [author], 1),
     ('man1/flux-getattr', 'flux-lsattr', 'access broker attributes', [author], 1),
     ('man1/flux-getattr', 'flux-getattr', 'access broker attributes', [author], 1),
-    ('man1/flux-hwloc', 'flux-hwloc', 'Control/query resource-hwloc service', [author], 1),
     ('man1/flux-jobs', 'flux-jobs', 'list jobs submitted to Flux', [author], 1),
     ('man1/flux-pstree', 'flux-pstree', 'display job hierarchies', [author], 1),
     ('man1/flux-jobtap', 'flux-jobtap', 'List, remove, and load job-manager plugins', [author], 1),

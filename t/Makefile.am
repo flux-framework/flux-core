@@ -98,8 +98,6 @@ TESTSCRIPTS = \
 	t1108-local-opt.t \
 	t1200-stats-basic.t \
 	t2004-hydra.t \
-	t2005-hwloc-basic.t \
-	t2006-hwloc-versions.t \
 	t2007-caliper.t \
 	t2008-althash.t \
 	t2009-pmix-bootstrap.t \
