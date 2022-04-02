@@ -152,7 +152,8 @@ test_expect_success 'all expected events and state transitions occurred' '
 	grep "rc2-success: run->cleanup"		states.log &&
 	grep "cleanup-none: cleanup->shutdown"		states.log &&
 	grep "children-none: shutdown->finalize"	states.log &&
-	grep "rc3-none: finalize->exit"			states.log
+	grep "rc3-none: finalize->goodbye"		states.log &&
+	grep "goodbye: goodbye->exit"			states.log
 '
 
 test_expect_success 'capture state transitions from size=2 instance' '
@@ -168,7 +169,8 @@ test_expect_success 'all expected events and state transitions occurred on rank 
 	grep "\[0\]: rc2-success: run->cleanup"			states2.log &&
 	grep "\[0\]: cleanup-none: cleanup->shutdown"		states2.log &&
 	grep "\[0\]: children-complete: shutdown->finalize"	states2.log &&
-	grep "\[0\]: rc3-none: finalize->exit"			states2.log
+	grep "\[0\]: rc3-none: finalize->goodbye"		states2.log &&
+	grep "\[0\]: goodbye: goodbye->exit"			states2.log
 '
 
 test_expect_success 'all expected events and state transitions occurred on rank 1' '
@@ -179,7 +181,8 @@ test_expect_success 'all expected events and state transitions occurred on rank 
 	grep "\[1\]: shutdown-abort: run->cleanup"		states2.log &&
 	grep "\[1\]: cleanup-none: cleanup->shutdown"		states2.log &&
 	grep "\[1\]: children-none: shutdown->finalize"	        states2.log &&
-	grep "\[1\]: rc3-none: finalize->exit"			states2.log
+	grep "\[1\]: rc3-none: finalize->goodbye"		states2.log &&
+	grep "\[1\]: goodbye: goodbye->exit"			states2.log
 '
 
 test_expect_success 'capture state transitions from instance with rc1 failure' '
@@ -195,7 +198,8 @@ test_expect_success 'all expected events and state transitions occurred' '
 	grep "parent-none: join->init"			states_rc1.log &&
 	grep "rc1-fail: init->shutdown"			states_rc1.log &&
 	grep "children-none: shutdown->finalize"	states_rc1.log &&
-	grep "rc3-none: finalize->exit"			states_rc1.log
+	grep "rc3-none: finalize->goodbye"		states_rc1.log &&
+	grep "goodbye: goodbye->exit"			states_rc1.log
 '
 
 test_expect_success 'capture state transitions from instance with rc2 failure' '
@@ -213,7 +217,8 @@ test_expect_success 'all expected events and state transitions occurred' '
 	grep "rc2-fail: run->cleanup"		        states_rc2.log &&
 	grep "cleanup-none: cleanup->shutdown"		states_rc2.log &&
 	grep "children-none: shutdown->finalize"	states_rc2.log &&
-	grep "rc3-none: finalize->exit"			states_rc2.log
+	grep "rc3-none: finalize->goodbye"		states_rc2.log &&
+	grep "goodbye: goodbye->exit"			states_rc2.log
 '
 
 test_expect_success 'capture state transitions from instance with rc3 failure' '
@@ -232,7 +237,8 @@ test_expect_success 'all expected events and state transitions occurred' '
 	grep "rc2-success: run->cleanup"		states_rc3.log &&
 	grep "cleanup-none: cleanup->shutdown"		states_rc3.log &&
 	grep "children-none: shutdown->finalize"	states_rc3.log &&
-	grep "rc3-fail: finalize->exit"			states_rc3.log
+	grep "rc3-fail: finalize->goodbye"		states_rc3.log &&
+	grep "goodbye: goodbye->exit"			states_rc3.log
 '
 
 test_expect_success 'instance rc1 failure exits with norestart code' '

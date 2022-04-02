@@ -1446,16 +1446,14 @@ int flux_match_asprintf (struct flux_match *m, const char *fmt, ...)
 
 bool flux_msg_route_match_first (const flux_msg_t *msg1, const flux_msg_t *msg2)
 {
-    const char *id1;
-    const char *id2;
+    const char *id1 = flux_msg_route_first (msg1);
+    const char *id2 = flux_msg_route_first (msg2);
 
-    if (!(id1 = flux_msg_route_first (msg1)))
-        return false;
-    if (!(id2 = flux_msg_route_first (msg2)))
-        return false;
-    if (strcmp (id1, id2))
-        return false;
-    return true;
+    if (!id1 && !id2)
+        return true;
+    if (id1 && id2 && strcmp (id1, id2) == 0)
+        return true;
+    return false;
 }
 
 /*

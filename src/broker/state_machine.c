@@ -20,6 +20,7 @@
 #include "src/common/libutil/fsd.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libhostlist/hostlist.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "state_machine.h"
 
@@ -28,6 +29,7 @@
 #include "overlay.h"
 #include "attr.h"
 #include "groups.h"
+#include "shutdown.h"
 
 struct quorum {
     struct idset *want;
@@ -110,6 +112,7 @@ static struct state statetab[] = {
     { STATE_CLEANUP,    "cleanup",          action_cleanup },
     { STATE_SHUTDOWN,   "shutdown",         action_shutdown },
     { STATE_FINALIZE,   "finalize",         action_finalize },
+    { STATE_GOODBYE,    "goodbye",          NULL },
     { STATE_EXIT,       "exit",             action_exit },
 };
 
@@ -133,9 +136,10 @@ static struct state_next nexttab[] = {
     { "cleanup-fail",       STATE_CLEANUP,      STATE_SHUTDOWN },
     { "children-complete",  STATE_SHUTDOWN,     STATE_FINALIZE },
     { "children-none",      STATE_SHUTDOWN,     STATE_FINALIZE },
-    { "rc3-success",        STATE_FINALIZE,     STATE_EXIT },
-    { "rc3-none",           STATE_FINALIZE,     STATE_EXIT },
-    { "rc3-fail",           STATE_FINALIZE,     STATE_EXIT },
+    { "rc3-success",        STATE_FINALIZE,     STATE_GOODBYE },
+    { "rc3-none",           STATE_FINALIZE,     STATE_GOODBYE },
+    { "rc3-fail",           STATE_FINALIZE,     STATE_GOODBYE },
+    { "goodbye",            STATE_GOODBYE,      STATE_EXIT },
 };
 
 static const double default_quorum_timeout = 60; // log slow joiners
@@ -331,12 +335,6 @@ static void action_finalize (struct state_machine *s)
 
 static void action_shutdown (struct state_machine *s)
 {
-    if (s->ctx->rank == 0) {
-        flux_future_t *f;
-        if (!(f = flux_event_publish (s->ctx->h, "shutdown", 0, NULL)))
-            flux_log_error (s->ctx->h, "error publishing shutdown event");
-        flux_future_destroy (f);
-    }
     if (overlay_get_child_peer_count (s->ctx->overlay) == 0)
         state_machine_post (s, "children-none");
 }
@@ -441,6 +439,7 @@ void state_machine_kill (struct state_machine *s, int signum)
             break;
         case STATE_NONE:
         case STATE_SHUTDOWN:
+        case STATE_GOODBYE:
         case STATE_EXIT:
             flux_log (h,
                       LOG_INFO,
@@ -449,6 +448,33 @@ void state_machine_kill (struct state_machine *s, int signum)
                       statestr (s->state));
             break;
     }
+}
+
+int state_machine_shutdown (struct state_machine *s, flux_error_t *error)
+{
+    if (s->state != STATE_RUN) {
+        errprintf (error,
+                   "shutdown cannot be initiated in state %s",
+                   statestr (s->state));
+        errno = EINVAL;
+        return -1;
+    }
+    if (s->ctx->rank != 0) {
+        errprintf (error, "shutdown may only be initiated on rank 0");
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (s->exit_norestart > 0)
+        s->ctx->exit_rc = s->exit_norestart;
+
+    if (runat_is_defined (s->ctx->runat, "rc2")) {
+        if (runat_abort (s->ctx->runat, "rc2") < 0)
+            flux_log_error (s->ctx->h, "runat_abort rc2 (shutdown)");
+    }
+    else
+        state_machine_post (s, "rc2-abort");
+    return 0;
 }
 
 static void runat_completion_cb (struct runat *r, const char *name, void *arg)
@@ -472,17 +498,17 @@ static void runat_completion_cb (struct runat *r, const char *name, void *arg)
         state_machine_post (s, rc == 0 ? "rc1-success" : "rc1-fail");
     }
     else if (!strcmp (name, "rc2")) {
-        if (rc != 0)
+        if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "rc2-success" : "rc2-fail");
     }
     else if (!strcmp (name, "cleanup")) {
-        if (rc != 0)
+        if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "cleanup-success" : "cleanup-fail");
     }
     else if (!strcmp (name, "rc3")) {
-        if (rc != 0)
+        if (s->ctx->exit_rc == 0 && rc != 0)
             s->ctx->exit_rc = rc;
         state_machine_post (s, rc == 0 ? "rc3-success" : "rc3-fail");
     }
@@ -546,6 +572,7 @@ static void run_check_parent (struct state_machine *s)
                 state_machine_post (s, "shutdown-abort");
                 break;
             case STATE_FINALIZE:
+            case STATE_GOODBYE:
             case STATE_EXIT:
                 state_machine_post (s, "parent-fail");
                 break;
@@ -573,6 +600,7 @@ static void join_check_parent (struct state_machine *s)
             case STATE_CLEANUP:
             case STATE_SHUTDOWN:
             case STATE_FINALIZE:
+            case STATE_GOODBYE:
             case STATE_EXIT:
                 state_machine_post (s, "parent-fail");
                 break;
@@ -600,6 +628,7 @@ static void quorum_check_parent (struct state_machine *s)
             case STATE_CLEANUP:
             case STATE_SHUTDOWN:
             case STATE_FINALIZE:
+            case STATE_GOODBYE:
             case STATE_EXIT:
                 state_machine_post (s, "quorum-fail");
                 break;
@@ -772,27 +801,47 @@ error:
         flux_log_error (h, "error responding to state-machine.wait request");
 }
 
+static void log_monitor_respond_error (flux_t *h)
+{
+    if (errno != EHOSTUNREACH && errno != ENOSYS)
+        flux_log_error (h, "error responding to state-machine.monitor request");
+}
+
+/* Return true if request should continue to receive updates
+ */
+static bool monitor_update_one (flux_t *h,
+                                const flux_msg_t *msg,
+                                broker_state_t state)
+{
+    broker_state_t final;
+
+    if (flux_msg_unpack (msg, "{s:i}", "final", &final) < 0)
+        final = STATE_EXIT;
+    if (state > final)
+        goto nodata;
+    if (flux_respond_pack (h, msg, "{s:i}", "state", state) < 0)
+        log_monitor_respond_error (h);
+    if (!flux_msg_is_streaming (msg))
+        return false;
+    if (state == final)
+        goto nodata;
+    return true;
+nodata:
+    if (flux_respond_error (h, msg, ENODATA, NULL) < 0)
+        log_monitor_respond_error (h);
+    return false;
+}
+
 static void monitor_update (flux_t *h,
                             struct flux_msglist *requests,
                             broker_state_t state)
 {
     const flux_msg_t *msg;
 
-    /* Skip sending these states to avoid deadlock on disconnecting children
-     * on zeromq-4.1.4 (doesn't seem to be a problem on newer zmq).
-     * State machine doesn't need to know about parent transition to these
-     * states anyway.
-     */
-    if (state == STATE_FINALIZE || state == STATE_EXIT)
-        return;
     msg = flux_msglist_first (requests);
     while (msg) {
-        if (flux_respond_pack (h, msg, "{s:i}", "state", state) < 0) {
-            if (errno != EHOSTUNREACH && errno != ENOSYS) {
-                flux_log_error (h,
-                        "error responding to state-machine.monitor request");
-            }
-        }
+        if (!monitor_update_one (h, msg, state))
+            flux_msglist_delete (requests);
         msg = flux_msglist_next (requests);
     }
 }
@@ -806,20 +855,14 @@ static void state_machine_monitor_cb (flux_t *h,
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
-    if (flux_respond_pack (h, msg, "{s:i}", "state", s->state) < 0) {
-        flux_log_error (h,
-                        "error responding to state-machine.monitor request");
-    }
-    if (flux_msg_is_streaming (msg)) {
+    if (monitor_update_one (h, msg, s->state)) {
         if (flux_msglist_append (s->monitor.requests, msg) < 0)
             goto error;
     }
     return;
 error:
-    if (flux_respond_error (h, msg, errno, NULL) < 0) {
-        flux_log_error (h,
-                        "error responding to state-machine.monitor request");
-    }
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        log_monitor_respond_error (h);
 }
 
 static void monitor_continuation (flux_future_t *f, void *arg)
@@ -829,8 +872,10 @@ static void monitor_continuation (flux_future_t *f, void *arg)
     int state;
 
     if (flux_rpc_get_unpack (f, "{s:i}", "state", &state) < 0) {
-        flux_log_error (h, "state-machine.monitor");
-        s->monitor.parent_error = 1;
+        if (errno != ENODATA) {
+            flux_log_error (h, "state-machine.monitor");
+            s->monitor.parent_error = 1;
+        }
         return;
     }
     s->monitor.parent_state = state;
@@ -844,15 +889,22 @@ static void monitor_continuation (flux_future_t *f, void *arg)
         run_check_parent (s);
 }
 
+/* Set up monitoring of parent state up to and including SHUTDOWN state.
+ * Skip monitoring states beyond that to avoid deadlock on disconnecting
+ * children on zeromq-4.1.4 (doesn't seem to be a problem on newer versions).
+ * State machine doesn't need to know about parent transition to these
+ * states anyway.
+ */
 static flux_future_t *monitor_parent (flux_t *h, void *arg)
 {
     flux_future_t *f;
 
-    if (!(f = flux_rpc (h,
-                        "state-machine.monitor",
-                        NULL,
-                        FLUX_NODEID_UPSTREAM,
-                        FLUX_RPC_STREAMING)))
+    if (!(f = flux_rpc_pack (h,
+                             "state-machine.monitor",
+                             FLUX_NODEID_UPSTREAM,
+                             FLUX_RPC_STREAMING,
+                             "{s:i}",
+                             "final", STATE_SHUTDOWN)))
         return NULL;
     if (flux_future_then (f, -1, monitor_continuation, arg) < 0) {
         flux_future_destroy (f);

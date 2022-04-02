@@ -27,6 +27,7 @@ B		| QUORUM	| wait for quorum of brokers to reach this point
 C		| CLEANUP	| run cleanup (rank 0)
 S		| SHUTDOWN	| wait for children to finalize and exit
 3		| FINALIZE	| run rc3 script
+G		| GOODBYE       | wait for flux-shutdown, if any
 E		| EXIT		| exit broker
 
 ### Normal State Transitions
@@ -79,14 +80,12 @@ The rank 0 broker is the last to exit.
 
 #### variation: no rc2 script (initial program)
 
-A system instance does not define an initial program.  In this case, the
-rank 0 broker transitions through the RUN state like other ranks.  Instead
-of publishing the shutdown message when rc2 completes, rank 0 subscribes
-to the shutdown message and remains in RUN until it transitions out with
-_shutdown-abort_.
-
-The instance runs until it is administratively shut down.  The shutdown
-message is published by the `flux admin shutdown` command.
+A system instance does not define an initial program.  Brokers transition to
+RUN state as above, and remain there until the _shutdown-abort_ event is
+posted.  That may occur if:
+- the broker receives a signal
+- the broker's TBON parent enters SHUTDOWN state
+- (rank 0 only) `flux-shutdown` requests instance shutdown
 
 #### variation: no rc1, rc3, or cleanup scripts
 
@@ -122,4 +121,5 @@ _children-timeout_ | children did not disconnected within timeout period
 _rc3-none_	| no rc3 script is defined on this broker
 _rc3-success_	| rc3 script completed successfully
 _rc3-fail_	| rc3 script completed with errors
+_goodbye_	| any flux-shutdown commands have completed
 

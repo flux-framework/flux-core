@@ -63,7 +63,9 @@ libbroker_la_SOURCES = \
 	publisher.h \
 	publisher.c \
 	groups.h \
-	groups.c
+	groups.c \
+	shutdown.h \
+	shutdown.c
 
 flux_broker_LDADD = \
 	$(builddir)/libbroker.la \

@@ -40,6 +40,7 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-shell.1 \
 	man1/flux-top.1 \
 	man1/flux-jobtap.1 \
+	man1/flux-shutdown.1 \
 	man1/flux-uptime.1 \
 	man1/flux-uri.1 \
 	man1/flux-resource.1
