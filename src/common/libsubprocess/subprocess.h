@@ -124,6 +124,19 @@ flux_subprocess_server_t *flux_subprocess_server_start (flux_t *h,
                                                         const char *local_uri,
                                                         uint32_t rank);
 
+
+typedef int (*flux_subprocess_server_auth_f) (const flux_msg_t *msg,
+                                              void *arg);
+
+/*   Register an authorization function to the subprocess server
+ *
+ *   The registered function should return 0 to allow the request to
+ *    proceed, and -1 with errno set to deny the request.
+ */
+void flux_subprocess_server_set_auth_cb (flux_subprocess_server_t *s,
+                                         flux_subprocess_server_auth_f fn,
+                                         void *arg);
+
 /*  Stop a subprocess server / cleanup flux_subprocess_server_t.  Will
  *  send a SIGKILL to all remaining subprocesses.
  */

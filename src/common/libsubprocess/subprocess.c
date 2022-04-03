@@ -295,6 +295,14 @@ error:
     return NULL;
 }
 
+void flux_subprocess_server_set_auth_cb (flux_subprocess_server_t *s,
+                                         flux_subprocess_server_auth_f fn,
+                                         void *arg)
+{
+    s->auth_cb = fn;
+    s->arg = arg;
+}
+
 void flux_subprocess_server_stop (flux_subprocess_server_t *s)
 {
     if (s && s->magic == SUBPROCESS_SERVER_MAGIC) {
