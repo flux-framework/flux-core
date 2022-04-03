@@ -616,8 +616,10 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
      */
     if (!(dbdir = flux_attr_get (h, "statedir")))
         dbdir = flux_attr_get (h, "rundir");
-    if (!dbdir)
+    if (!dbdir) {
         flux_log_error (h, "neither statedir nor rundir are set");
+        goto error;
+    }
     if (asprintf (&ctx->dbfile, "%s/content.sqlite", dbdir) < 0)
         goto error;
 

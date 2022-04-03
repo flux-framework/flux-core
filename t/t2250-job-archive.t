@@ -153,19 +153,15 @@ db_check_values_no_run() {
         return 0
 }
 
-test_expect_success 'job-archive: load module without specifying dbpath, should work' '
-        flux module load job-archive
-'
-
-test_expect_success 'job-archive: unload module' '
-        flux module unload job-archive
+test_expect_success 'job-archive: load module without specifying period, should fail' '
+        test_must_fail flux module load job-archive
 '
 
 test_expect_success 'job-archive: setup config file' '
         cat >archive.toml <<EOF &&
 [archive]
-dbpath = "${ARCHIVEDB}"
 period = "0.5s"
+dbpath = "${ARCHIVEDB}"
 busytimeout = "0.1s"
 EOF
 	flux config reload
@@ -262,28 +258,60 @@ test_expect_success 'job-archive: db exists after module unloaded' '
         test $count -eq 7
 '
 
-test_expect_success 'job-archive: load module, params override config' '
-        flux module load job-archive dbpath=${ARCHIVEDB}-NEW
+test_expect_success 'job-archive: setup config file without dbpath' '
+        cat >archive.toml <<EOF &&
+[archive]
+period = "0.5s"
+busytimeout = "0.1s"
+EOF
+	flux config reload
 '
 
-test_expect_success 'job-archive: store inactive job info in new db' '
-        jobid=`flux mini submit hostname` &&
-        fj_wait_event $jobid clean &&
-        wait_jobid_state $jobid inactive &&
-        wait_db $jobid ${ARCHIVEDB}-NEW &&
-        db_check_entries $jobid ${ARCHIVEDB}-NEW &&
-        db_check_values_run $jobid ${ARCHIVEDB}-NEW
+test_expect_success 'job-archive: load module failure, statedir not set' '
+        test_must_fail flux module load job-archive
 '
 
-test_expect_success 'job-archive: unload module' '
-        flux module unload job-archive
+test_expect_success 'job-archive: setup config file without period' '
+        cat >archive.toml <<EOF &&
+[archive]
+dbpath = "${ARCHIVEDB}"
+busytimeout = "0.1s"
+EOF
+	flux config reload
 '
 
-test_expect_success 'job-archive: both db exists after module unloaded' '
-        count=`db_count_entries ${ARCHIVEDB}` &&
-        test $count -eq 7 &&
-        count=`db_count_entries ${ARCHIVEDB}-NEW` &&
-        test $count -eq 8
+test_expect_success 'job-archive: load module failure, period not set' '
+        test_must_fail flux module load job-archive
+'
+
+test_expect_success 'job-archive: setup config file with illegal period' '
+        cat >archive.toml <<EOF &&
+[archive]
+period = "-10.5x"
+dbpath = "${ARCHIVEDB}"
+busytimeout = "0.1s"
+EOF
+	flux config reload
+'
+
+test_expect_success 'job-archive: load module failure, period illegal' '
+        test_must_fail flux module load job-archive
+'
+
+test_expect_success 'job-archive: setup config file with only period' '
+        cat >archive.toml <<EOF &&
+[archive]
+period = "0.5s"
+EOF
+	flux config reload
+'
+
+test_expect_success 'job-archive: launch flux with statedir set' '
+        flux start -o,--setattr=statedir=$(pwd) /bin/true
+'
+
+test_expect_success 'job-archive: job-archive setup in statedir' '
+        ls $(pwd)/job-archive.sqlite
 '
 
 test_done

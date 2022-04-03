@@ -30,7 +30,10 @@ modload 0 cron sync=heartbeat.pulse
 modload 0 job-manager
 modload all job-info
 modload 0 job-list
-modload 0 job-archive
+period=`flux config get --default= archive.period`
+if test $RANK -eq 0 -a -n "${period}"; then
+    flux module load job-archive
+fi
 
 if test $RANK -eq 0 && ! flux startlog --check --quiet; then
     flux queue stop

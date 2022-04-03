@@ -277,8 +277,10 @@ static struct content_files *content_files_create (flux_t *h)
      */
     if (!(dbdir = flux_attr_get (h, "statedir")))
         dbdir = flux_attr_get (h, "rundir");
-    if (!dbdir)
+    if (!dbdir) {
         flux_log_error (h, "neither statedir nor rundir are set");
+        goto error;
+    }
     if (asprintf (&ctx->dbpath, "%s/content.files", dbdir) < 0)
         goto error;
     if (mkdir (ctx->dbpath, 0700) < 0 && errno != EEXIST) {
