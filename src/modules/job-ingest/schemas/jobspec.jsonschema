@@ -31,7 +31,7 @@
         "type": { "type": "string" },
         "count": {
           "oneOf": [
-            { "type": "integer", "minimum" : 1 },
+            { "type": "integer", "minimum" : 0 },
             { "$ref": "#/definitions/complex_range" }
           ]
         },
@@ -52,19 +52,42 @@
         { "$ref": "#/definitions/resource_vertex_base" },
         {
           "properties": {
-            "type": { "enum": ["slot"] }
+            "type": { "enum": ["slot"] },
+            "count": {
+               "oneOf": [
+                 { "type": "integer", "minimum" : 1 },
+                 { "$ref": "#/definitions/complex_range" }
+                ]
+             }
           },
           "required": ["label"]
         }
       ]
     },
-    "resource_vertex_other": {
-      "description": "other (non-slot) resource type",
+    "resource_vertex_node_core": {
+      "description": "node or core resource type",
       "allOf": [
         { "$ref": "#/definitions/resource_vertex_base" },
         {
           "properties": {
-            "type": { "not": { "enum": ["slot"] } }
+            "type": { "enum": ["node", "core"] },
+            "count": {
+               "oneOf": [
+                 { "type": "integer", "minimum" : 1 },
+                 { "$ref": "#/definitions/complex_range" }
+                ]
+             }
+          }
+        }
+      ]
+    },
+    "resource_vertex_other": {
+      "description": "other (non slot, node, core) resource type",
+      "allOf": [
+        { "$ref": "#/definitions/resource_vertex_base" },
+        {
+          "properties": {
+            "type": { "not": { "enum": ["slot", "node", "core"] } }
           }
         }
       ]
@@ -72,6 +95,7 @@
     "resource_vertex": {
       "oneOf":[
         { "$ref": "#/definitions/resource_vertex_slot" },
+        { "$ref": "#/definitions/resource_vertex_node_core" },
         { "$ref": "#/definitions/resource_vertex_other" }
       ]
     }

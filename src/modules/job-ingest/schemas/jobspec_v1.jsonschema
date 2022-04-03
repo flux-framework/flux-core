@@ -6,13 +6,24 @@
   "description":         "Flux jobspec version 1",
 
   "definitions": {
-    "intranode_resource_vertex": {
-      "description": "schema for resource vertices within a node, cannot have child vertices",
+    "core_resource_vertex": {
+      "description": "schema for core resource, cannot have child vertices",
       "type": "object",
       "required": ["type", "count"],
       "properties": {
-        "type": { "enum": ["core", "gpu"]},
+        "type": { "enum": ["core"]},
         "count": { "type": "integer", "minimum" : 1 },
+        "unit": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "gpu_resource_vertex": {
+      "description": "schema for gpu resource , cannot have child vertices",
+      "type": "object",
+      "required": ["type", "count"],
+      "properties": {
+        "type": { "enum": ["gpu"]},
+        "count": { "type": "integer", "minimum" : 0 },
         "unit": { "type": "string" }
       },
       "additionalProperties": false
@@ -54,7 +65,8 @@
           "maxItems": 2,
           "items": {
             "oneOf": [
-              {"$ref": "#/definitions/intranode_resource_vertex"}
+              {"$ref": "#/definitions/core_resource_vertex"},
+              {"$ref": "#/definitions/gpu_resource_vertex"}
             ]
           }
         }
