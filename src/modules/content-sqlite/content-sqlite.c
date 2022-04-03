@@ -644,6 +644,7 @@ error:
 int mod_main (flux_t *h, int argc, char **argv)
 {
     struct content_sqlite *ctx;
+    int rc = -1;
 
     if (!(ctx = content_sqlite_create (h))) {
         flux_log_error (h, "content_sqlite_create failed");
@@ -663,10 +664,11 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     if (content_unregister_backing_store (h) < 0)
         goto done;
+    rc = 0;
 done:
     content_sqlite_closedb (ctx);
     content_sqlite_destroy (ctx);
-    return 0;
+    return rc;
 }
 
 MOD_NAME ("content-sqlite");
