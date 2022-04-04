@@ -1,3 +1,89 @@
+flux-core version 0.38.0 - 2022-04-04
+-------------------------------------
+
+This release makes a few improvements that are visible in the flux-mini(1)
+command:
+
+ * The `-N,--nnodes` option may be used without the `-n,--nprocs` option.
+ * The `--exclusive` option requests the allocation of whole nodes.
+ * The `--requires` option requests resources with generic properties.
+
+Additionally, Flux system administrators should be aware of these changes:
+
+ * Named properties may be assigned to resources in the configured R.
+ * flux-shutdown(1) is now the preferred way to stop a Flux system instance.
+ * The default `archive.dbpath` is now `/var/lib/flux/job-archive.sqlite`.
+ * systemd-coredump(8) can now capture a Flux broker core dump.  Consider
+   enabling this on the management nodes of early access systems to help
+   gather information on critical rank 0 broker failures, should they occur.
+ * `flux resource drain` now shows nodes as "draining" if they are still
+   running work.
+ * Flux may be configured to reject jobs that do not run in a Flux sub-instance.
+
+For more information, see the Flux Administrator's Guide:
+
+https://flux-framework.readthedocs.io/en/latest/adminguide.html
+
+## New Features
+
+ * add flux-shutdown command (#4250)
+ * add flux-dump and flux-restore (#4208, #4225)
+ * support for node exclusive allocations (#4245)
+ * add support for resource properties (#4236)
+ * flux-resource: support properties when listing resources (#4249)
+ * job-ingest: add TOML config  (#4238)
+ * flux-dmesg: add --new option, plus logging cleanup (#4237)
+ * add 'require-instance' job validator plugin (#4239)
+ * job-manager: add builtin job duration validator plugin (#4224)
+ * sched-simple: set expiration of jobs with no duration to instance lifetime
+   (#4223)
+ * flux-resource: differentiate drained vs draining ranks (#4205)
+ * librlist: support hwloc discovery of AMD RSMI GPUs (#4203)
+ * broker: reject remote exec requests on rank 0 (#4258)
+ * python: allow resource count of 0 in jobspec v1 (#4259)
+ * job-archive: use statedir path if dbpath is not set (#4260)
+
+## Fixes
+
+ * content-sqlite: ensure that module load fails if initialization fails (#4265)
+ * job-archive: use statedir path if dbpath not set (#4260)
+ * broker: emit error when running interactive shell without tty (#4253)
+ * broker: add statedir attribute, drop content.backing-path (#4248)
+ * broker: prevent systemd restart if rc1 fails (#4246)
+ * flux.service: use StateDirectory for content.sqlite (#4244)
+ * rc3: ensure exit code reflects any errors (#4243)
+ * broker: don't leave shutdown state prematurely (#4241)
+ * libjob: improve `flux_job_statetostr()`, `flux_job_resulttostr()`
+   interface (#4235)
+ * job-list: fix bugs in some error paths (#4233)
+ * broker: fine tune logging and enable core dump on SIGSEGV (#4231)
+ * kvs: always store empty directory object to content store (#4229)
+ * restrict access to content service used as KVS blob layer (#4216)
+ * content-sqlite: check that file has rw permission (#4215)
+ * broker: block SIGPIPE (#4211)
+ * shell: add hostname to a couple key log messages (#4200)
+ * python: add missing methods and improve efficiency of IDset class (#4209)
+ * systemd: set SyslogIdentifier to flux (#4206)
+ * misc minor fixes and cleanup (#4197)
+ * job-exec: fix more potential hangs after early shell failure (#4199)
+ * sched-simple: fix counting bug that can cause scheduler to fail after
+   a restart (#4196)
+ * flux-top: add man page, minor bug fixes (#4194)
+
+## Cleanup
+
+ * broker: clean up shutdown logs (#4257)
+ * libsdprocess: minor fixups (#4252)
+ * job-manager: misc cleanup (#4232)
+
+## Testsuite
+
+ * testsuite: fix a couple intermittent test failures (#4247)
+ * ci: run 32bit build under linux32 personality (#4240)
+ * testsuite: ensure tests can run concurrently with `--root=$FLUX_JOB_TMPDIR`
+   (#4212)
+
+
 flux-core version 0.37.0 - 2022-03-04
 -------------------------------------
 
