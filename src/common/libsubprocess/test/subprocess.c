@@ -150,7 +150,7 @@ void test_basic_errors (flux_reactor_t *r)
     ok ((h = flux_open ("loop://", 0)) != NULL,
         "flux_open on loop works");
 
-    ok (!flux_subprocess_server_start (NULL, NULL, NULL, 0)
+    ok (!flux_subprocess_server_start (NULL, NULL, 0)
         && errno == EINVAL,
         "flux_subprocess_server_start fails with NULL pointer inputs");
     ok (flux_subprocess_server_terminate_by_uuid (NULL, NULL) < 0

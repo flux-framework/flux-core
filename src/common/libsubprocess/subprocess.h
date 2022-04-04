@@ -115,12 +115,9 @@ typedef struct {
  */
 
 /*  Start a subprocess server on the handle `h`. Registers message
- *   handlers, etc for remote execution. "prefix" is the topic prefix
- *   used to listen for this service, e.g. `broker` would listen
- *   for `broker.exec`.
+ *   handlers, etc for remote execution.
  */
 flux_subprocess_server_t *flux_subprocess_server_start (flux_t *h,
-                                                        const char *prefix,
                                                         const char *local_uri,
                                                         uint32_t rank);
 

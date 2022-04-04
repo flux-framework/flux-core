@@ -13,7 +13,7 @@
 
 #include "subprocess.h"
 
-int server_start (flux_subprocess_server_t *s, const char *prefix);
+int server_start (flux_subprocess_server_t *s);
 
 void server_stop (flux_subprocess_server_t *s);
 
