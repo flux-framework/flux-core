@@ -608,45 +608,37 @@ error:
     json_decref (procs);
 }
 
-int server_start (flux_subprocess_server_t *s, const char *prefix)
+int server_start (flux_subprocess_server_t *s)
 {
     /* rexec.processes is primarily for testing */
     struct flux_msg_handler_spec htab[] = {
-        { FLUX_MSGTYPE_REQUEST, "rexec",        server_exec_cb, 0 },
-        { FLUX_MSGTYPE_REQUEST, "rexec.write",  server_write_cb, 0 },
-        { FLUX_MSGTYPE_REQUEST, "rexec.signal", server_signal_cb, 0 },
-        { FLUX_MSGTYPE_REQUEST, "rexec.processes", server_processes_cb, 0 },
+        { FLUX_MSGTYPE_REQUEST,
+          "broker.rexec",
+          server_exec_cb,
+          0
+        },
+        { FLUX_MSGTYPE_REQUEST,
+          "broker.rexec.write",
+          server_write_cb,
+          0
+        },
+        { FLUX_MSGTYPE_REQUEST,
+          "broker.rexec.signal",
+          server_signal_cb,
+          0
+        },
+        { FLUX_MSGTYPE_REQUEST,
+          "broker.rexec.processes",
+          server_processes_cb,
+          0
+        },
         FLUX_MSGHANDLER_TABLE_END,
     };
-    char *topic_globs[4] = {NULL, NULL, NULL, NULL};
-    int rv = -1;
-
-    assert (prefix);
-
-    if (asprintf (&topic_globs[0], "%s.rexec", prefix) < 0)
-        goto cleanup;
-    if (asprintf (&topic_globs[1], "%s.rexec.write", prefix) < 0)
-        goto cleanup;
-    if (asprintf (&topic_globs[2], "%s.rexec.signal", prefix) < 0)
-        goto cleanup;
-    if (asprintf (&topic_globs[3], "%s.rexec.processes", prefix) < 0)
-        goto cleanup;
-
-    htab[0].topic_glob = (const char *)topic_globs[0];
-    htab[1].topic_glob = (const char *)topic_globs[1];
-    htab[2].topic_glob = (const char *)topic_globs[2];
-    htab[3].topic_glob = (const char *)topic_globs[3];
 
     if (flux_msg_handler_addvec (s->h, htab, s, &s->handlers) < 0)
-        goto cleanup;
+        return -1;
 
-    rv = 0;
-cleanup:
-    free (topic_globs[0]);
-    free (topic_globs[1]);
-    free (topic_globs[2]);
-    free (topic_globs[3]);
-    return rv;
+    return 0;
 }
 
 void server_stop (flux_subprocess_server_t *s)

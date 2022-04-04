@@ -268,14 +268,13 @@ int subprocess_status (flux_subprocess_t *p)
  */
 
 flux_subprocess_server_t *flux_subprocess_server_start (flux_t *h,
-                                                        const char *prefix,
                                                         const char *local_uri,
                                                         uint32_t rank)
 {
     flux_subprocess_server_t *s = NULL;
     int save_errno;
 
-    if (!h || !prefix || !local_uri) {
+    if (!h || !local_uri) {
         errno = EINVAL;
         goto error;
     }
@@ -283,7 +282,7 @@ flux_subprocess_server_t *flux_subprocess_server_start (flux_t *h,
     if (!(s = subprocess_server_create (h, local_uri, rank)))
         goto error;
 
-    if (server_start (s, prefix) < 0)
+    if (server_start (s) < 0)
         goto error;
 
     return s;
