@@ -75,7 +75,7 @@ class Hostlist(WrapperPimpl):
                 handle = lib.hostlist_decode(arg.encode("utf-8"))
                 if handle == ffi.NULL:
                     raise ValueError(f"Invalid hostlist: '{arg}'")
-            elif isinstance(arg, collections.Iterable):
+            elif isinstance(arg, collections.abc.Iterable):
                 handle = lib.hostlist_create()
                 for hosts in arg:
                     if not isinstance(hosts, str):
