@@ -104,7 +104,7 @@ static int liblist_append_from_ldconfig (zlist_t *libs, const char *libname)
     rc = 0;
 done:
     if (f)
-        fclose (f);
+        pclose (f);
     return rc;
 }
 
