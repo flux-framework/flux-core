@@ -350,9 +350,9 @@ def status(args):
 
     #  Include reason field only with -vv
     if args.verbose >= 2:
-        fmt = "{state:>10} {nnodes:>6} {ranks:<15} {reason:<25} {nodelist}"
+        fmt = "{state:>10} {nnodes:>6} {reason:<25} {nodelist}"
     else:
-        fmt = "{state:>10} {nnodes:>6} {ranks:<15} {nodelist}"
+        fmt = "{state:>10} {nnodes:>6} {nodelist}"
     if args.format:
         fmt = args.format
 
