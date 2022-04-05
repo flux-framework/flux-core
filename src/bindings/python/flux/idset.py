@@ -77,7 +77,7 @@ class IDset(WrapperPimpl):
             #   reason and conversion to string just works, though it is
             #   slightly less efficient.
             arg = str(arg)
-        elif isinstance(arg, collections.Iterable) and not isinstance(arg, str):
+        elif isinstance(arg, collections.abc.Iterable) and not isinstance(arg, str):
             arg = ",".join(str(i) for i in sorted(arg))
         elif isinstance(arg, int):
             arg = str(arg)
