@@ -51,7 +51,6 @@ flux_SOURCES = \
 	builtin/env.c \
 	builtin/content.c \
 	builtin/version.c \
-	builtin/hwloc.c \
 	builtin/heaptrace.c \
 	builtin/proxy.c \
 	builtin/overlay.c \

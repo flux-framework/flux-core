@@ -15,7 +15,6 @@ man1
    flux-event
    flux-exec
    flux-getattr
-   flux-hwloc
    flux-job
    flux-jobs
    flux-jobtap
