@@ -481,6 +481,16 @@ def list_handler(args):
         print(formatter.format(line))
 
 
+def info(args):
+    """Convenience function that wraps flux-resource list"""
+    if not args.states:
+        args.states = "all"
+    args.no_header = True
+    args.format = "{nnodes} Nodes, {ncores} Cores, {ngpus} GPUs"
+    args.verbose = 0
+    list_handler(args)
+
+
 LOGGER = logging.getLogger("flux-resource")
 
 
@@ -580,6 +590,21 @@ def main():
         "--from-stdin", action="store_true", help=argparse.SUPPRESS
     )
     list_parser.set_defaults(func=list_handler)
+
+    # flux-resource info:
+    info_parser = subparsers.add_parser(
+        "info", formatter_class=flux.util.help_formatter()
+    )
+    info_parser.add_argument(
+        "-s",
+        "--states",
+        metavar="STATE,...",
+        help="Show output only for resources in given states",
+    )
+    info_parser.add_argument(
+        "--from-stdin", action="store_true", help=argparse.SUPPRESS
+    )
+    info_parser.set_defaults(func=info)
 
     reload_parser = subparsers.add_parser(
         "reload", formatter_class=flux.util.help_formatter()

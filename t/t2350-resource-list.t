@@ -11,15 +11,19 @@ test -n "$FLUX_TESTS_LOGFILE" && set -- "$@" --logfile
 FORMAT="{state:>10} {properties:<10} {nnodes:>6} {ncores:>8} {ngpus:>8}"
 
 for input in ${SHARNESS_TEST_SRCDIR}/flux-resource/list/*.json; do
-    name=$(basename ${input%%.json})
-    test_expect_success "flux-resource list input check: $name" '
-        base=${input%%.json} &&
-        expected=${base}.expected &&
-        name=$(basename $base) &&
+    testname=$(basename ${input%%.json}) &&
+    base=${input%%.json} &&
+    name=$(basename $base) &&
+    test_expect_success "flux-resource list input check: $testname" '
         flux resource list -o "$FORMAT" \
             --from-stdin < $input > $name.output 2>&1 &&
         test_debug "cat $name.output" &&
-        test_cmp $expected $name.output
+        test_cmp ${base}.expected $name.output
+    '
+    test_expect_success "flux-resource info input check: $testname" '
+        flux resource info --from-stdin < $input > ${name}-info.output 2>&1 &&
+        test_debug "cat ${name}-info.output" &&
+        test_cmp ${base}-info.expected ${name}-info.output
     '
 done
 
