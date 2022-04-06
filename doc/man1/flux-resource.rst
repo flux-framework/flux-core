@@ -55,6 +55,12 @@ COMMANDS
    as "down" due to its simplified interface with the resource service defined
    by RFC 27.
 
+**info** [-s STATE,...]
+   Show a brief, single line summary of scheduler view of resources.
+   With *-s, --states=STATE,...*, limit the output to specified resource
+   states as with ``flux resource list``. By default, the *STATE* reported
+   by ``flux resource info`` is "all".
+
 **status**  [-v] [-n] [-o FORMAT] [-s STATE,...]
    Show system view of resources.  One or more *-v,--verbose* options
    increase output verbosity.  *-n,--no-header* suppresses header from output.
