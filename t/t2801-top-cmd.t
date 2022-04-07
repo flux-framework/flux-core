@@ -93,12 +93,12 @@ test_expect_success NO_CHAIN_LINT 'flux-top can call itself recursively' '
 	cat <<-EOF >recurse.in &&
 	{ "version": 2 }
 	[0.5, "i", "j"]
-	[0.55, "i", "j"]
-	[0.60, "i", "j"]
-	[0.65, "i", "k"]
-	[0.70, "i", "\n"]
-	[1.00, "i", "q"]
-	[1.10, "i", "q"]
+	[1.0, "i", "j"]
+	[1.5, "i", "j"]
+	[2.0, "i", "k"]
+	[2.5, "i", "\n"]
+	[3.25, "i", "q"]
+	[3.75, "i", "q"]
 	EOF
 	$runpty -o recurse.log --input=recurse.in flux top &&
 	grep -q $(echo $(cat expected.id) | sed "s/ƒ//") recurse.log

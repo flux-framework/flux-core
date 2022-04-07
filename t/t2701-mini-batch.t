@@ -84,7 +84,7 @@ test_expect_success NO_ASAN 'flux-mini batch: submit a series of jobs' '
 	flux jobs &&
 	id4=$(flux mini batch --flags=waitable -N2 -n2 --exclusive batch-script.sh) &&
 	id5=$(flux mini batch --flags=waitable -N2 batch-script.sh) &&
-	run_timeout 60 flux job wait --verbose --all
+	run_timeout 180 flux job wait --verbose --all
 '
 test_expect_success NO_ASAN 'flux-mini batch: job results are expected' '
 	test_debug "grep . flux-*.out" &&
