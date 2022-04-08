@@ -670,6 +670,7 @@ int event_job_update (struct job *job, json_t *event)
         if (job->state != FLUX_JOB_STATE_CLEANUP)
             goto inval;
         job->state = FLUX_JOB_STATE_INACTIVE;
+        job->t_clean = timestamp;
     }
     else if (!strncmp (name, "prolog-", 7)) {
         if (job->start_pending)
