@@ -502,9 +502,8 @@ static int jobspec_parse (struct list_ctx *ctx,
         }
         if (per_slot != 1) {
             flux_log (ctx->h, LOG_ERR,
-                      "%s: job %ju: per_slot count: expected 1 got %d: %s",
-                      __FUNCTION__, (uintmax_t)job->id, per_slot,
-                      error.text);
+                      "%s: job %ju: per_slot count: expected 1 got %d",
+                      __FUNCTION__, (uintmax_t)job->id, per_slot);
             goto nonfatal_error;
         }
         /* For jobspec version 1, expect either:
