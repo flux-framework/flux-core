@@ -492,7 +492,7 @@ static int jobspec_parse (struct list_ctx *ctx,
         int per_slot, slot_count = 0;
         struct res_level res[3];
 
-        if (json_unpack_ex (tasks, NULL, 0,
+        if (json_unpack_ex (tasks, &error, 0,
                             "[{s:{s:i}}]",
                             "count", "per_slot", &per_slot) < 0) {
             flux_log (ctx->h, LOG_ERR,
