@@ -32,6 +32,7 @@
 
 #include "annotate.h"
 #include "prioritize.h"
+#include "conf.h"
 #include "event.h"
 #include "jobtap.h"
 #include "jobtap-internal.h"
@@ -391,10 +392,11 @@ static int jobtap_conf_entry (struct jobtap *jobtap,
     return 0;
 }
 
-static int jobtap_parse_config (struct jobtap *jobtap,
-                                const flux_conf_t *conf,
-                                flux_error_t *errp)
+static int jobtap_parse_config (const flux_conf_t *conf,
+                                flux_error_t *errp,
+                                void *arg)
 {
+    struct jobtap *jobtap = arg;
     json_t *plugins = NULL;
     flux_error_t error;
     json_t *entry;
@@ -425,7 +427,7 @@ static int jobtap_parse_config (struct jobtap *jobtap,
         if (jobtap_conf_entry (jobtap, i, entry, errp) < 0)
             return -1;
     }
-    return 0;
+    return 0; // indicates to conf.c that callback does NOT want updates
 }
 
 static int plugin_byname (const void *item1, const void *item2)
@@ -484,7 +486,10 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
         goto error;
     }
 
-    if (jobtap_parse_config (jobtap, flux_get_conf (ctx->h), &error) < 0) {
+    if (conf_register_callback (ctx->conf,
+                                &error,
+                                jobtap_parse_config,
+                                jobtap) < 0) {
         flux_log (ctx->h, LOG_ERR, "%s", error.text);
         goto error;
     }
@@ -499,6 +504,7 @@ void jobtap_destroy (struct jobtap *jobtap)
 {
     if (jobtap) {
         int saved_errno = errno;
+        conf_unregister_callback (jobtap->ctx->conf, jobtap_parse_config);
         zlistx_destroy (&jobtap->plugins);
         zlistx_destroy (&jobtap->jobstack);
         jobtap->ctx = NULL;
