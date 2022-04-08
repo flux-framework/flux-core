@@ -30,6 +30,8 @@ job_manager_la_SOURCES = \
 libjob_manager_la_SOURCES = \
 	job.c \
 	job.h \
+	conf.c \
+	conf.h \
 	submit.c \
 	submit.h \
 	drain.c \
