@@ -20,7 +20,9 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 
+#include "conf.h"
 #include "journal.h"
 
 #define EVENTS_MAXLEN 1000
@@ -240,11 +242,32 @@ void journal_listeners_disconnect_rpc (flux_t *h,
         flux_log_error (h, "error handling job-manager.disconnect (journal)");
 }
 
+static int journal_parse_config (const flux_conf_t *conf,
+                                 flux_error_t *error,
+                                 void *arg)
+{
+    struct journal *journal = arg;
+    flux_error_t e;
+    int events_maxlen = -1;
+
+    if (flux_conf_unpack (conf,
+                          &e,
+                          "{s?{s?i}}",
+                          "job-manager",
+                            "events_maxlen", &events_maxlen) < 0)
+        return errprintf (error, "job-manager.events_maxlen: %s", e.text);
+    if (events_maxlen > 0)
+        journal->events_maxlen = events_maxlen;
+    return 0; // indicates to conf.c that callback does NOT want updates
+}
+
 void journal_ctx_destroy (struct journal *journal)
 {
     if (journal) {
         int saved_errno = errno;
         flux_t *h = journal->ctx->h;
+
+        conf_unregister_callback (journal->ctx->conf, journal_parse_config);
 
         flux_msg_handler_delvec (journal->handlers);
         if (journal->listeners) {
@@ -285,7 +308,7 @@ static const struct flux_msg_handler_spec htab[] = {
 struct journal *journal_ctx_create (struct job_manager *ctx)
 {
     struct journal *journal;
-    flux_error_t err;
+    flux_error_t error;
 
     if (!(journal = calloc (1, sizeof (*journal))))
         return NULL;
@@ -298,15 +321,15 @@ struct journal *journal_ctx_create (struct job_manager *ctx)
         goto nomem;
     journal->events_maxlen = EVENTS_MAXLEN;
 
-    if (flux_conf_unpack (flux_get_conf (ctx->h),
-                          &err,
-                          "{s?{s?i}}",
-                          "job-manager",
-                            "events_maxlen",
-                            &journal->events_maxlen) < 0) {
-        flux_log (ctx->h, LOG_ERR,
-                  "error reading job-manager config: %s",
-                  err.text);
+    if (conf_register_callback (ctx->conf,
+                                &error,
+                                journal_parse_config,
+                                journal) < 0) {
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "error parsing job-manager config: %s",
+                  error.text);
+        goto error;
     }
 
     return journal;
