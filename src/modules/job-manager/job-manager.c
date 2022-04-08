@@ -29,6 +29,7 @@
 #include "event.h"
 #include "drain.h"
 #include "wait.h"
+#include "purge.h"
 #include "annotate.h"
 #include "journal.h"
 #include "getattr.h"
@@ -160,6 +161,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating conf context");
         goto done;
     }
+    if (!(ctx.purge = purge_create (&ctx))) {
+        flux_log_error (h, "error creating purge context");
+        goto done;
+    }
     if (!(ctx.event = event_ctx_create (&ctx))) {
         flux_log_error (h, "error creating event batcher");
         goto done;
@@ -223,6 +228,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (ctx.handlers);
+    purge_destroy (ctx.purge);
     journal_ctx_destroy (ctx.journal);
     annotate_ctx_destroy (ctx.annotate);
     kill_ctx_destroy (ctx.kill);

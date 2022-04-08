@@ -31,6 +31,7 @@ struct job_manager {
     struct kill *kill;
     struct annotate *annotate;
     struct journal *journal;
+    struct purge *purge;
     struct jobtap *jobtap;
 };
 

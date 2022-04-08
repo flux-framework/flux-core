@@ -237,6 +237,16 @@ int job_priority_comparator (const void *a1, const void *a2)
     return rc;
 }
 
+/* Compare inactive jobs, ordering by the time they became inactive.
+ * N.B. zlistx_comparator_fn signature
+ */
+int job_age_comparator (const void *a1, const void *a2)
+{
+    const struct job *j1 = a1;
+    const struct job *j2 = a2;
+
+    return NUMCMP (j1->t_clean, j2->t_clean);
+}
 
 /*  This structure is stashed in a plugin which has subscribed to
  *   job events. The reference to the plugin itself is required so
