@@ -291,4 +291,20 @@ test_expect_success HAVE_JQ 'job-manager: events-journal request fails if deny n
 	grep "deny should be an object" cc3.err
 '
 
+test_expect_success 'job-manager: journal-size-limit can be reconfigured' '
+	cat >job-manager.toml <<-EOF &&
+	[job-manager]
+	journal-size-limit = 10
+	EOF
+	flux config reload
+'
+
+test_expect_success 'job-manager: journal-size-limit must be an integer' '
+	cat >job-manager.toml <<-EOF &&
+	[job-manager]
+	journal-size-limit = "not-a-number"
+	EOF
+	test_must_fail flux config reload
+'
+
 test_done

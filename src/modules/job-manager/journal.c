@@ -258,9 +258,15 @@ static int journal_parse_config (const flux_conf_t *conf,
         return errprintf (error,
                           "job-manager.journal-size-limit: %s",
                           e.text);
-    if (size_limit > 0)
+    if (size_limit > 0) {
         journal->size_limit = size_limit;
-    return 0; // indicates to conf.c that callback does NOT want updates
+        /* Drop some entries if the journal size is reduced below
+         * what is currently stored.
+         */
+        while (zlist_size (journal->events) > journal->size_limit)
+            zlist_remove (journal->events, zlist_head (journal->events));
+    }
+    return 1; // indicates to conf.c that callback wants updates
 }
 
 void journal_ctx_destroy (struct journal *journal)
