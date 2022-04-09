@@ -322,6 +322,7 @@ static void action_cleanup (struct state_machine *s)
 
 static void action_finalize (struct state_machine *s)
 {
+    overlay_shutdown (s->ctx->overlay);
     if (runat_is_defined (s->ctx->runat, "rc3")) {
         if (runat_start (s->ctx->runat, "rc3", runat_completion_cb, s) < 0) {
             flux_log_error (s->ctx->h, "runat_start rc3");
