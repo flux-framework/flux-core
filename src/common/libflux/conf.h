@@ -36,12 +36,6 @@ const char *flux_conf_builtin_get (const char *name,
 
 typedef struct flux_conf flux_conf_t;
 
-typedef struct {
-    char filename[80];  // if unused, will be set to empty string
-    int lineno;         // if unused, will be set to -1
-    char errbuf[160];
-} flux_conf_error_t;
-
 /* Create/copy/incref/decref config object
  */
 flux_conf_t *flux_conf_create (void);
@@ -56,7 +50,7 @@ int flux_conf_reload_decode (const flux_msg_t *msg, const flux_conf_t **conf);
 
 /* Parse *.toml in 'path' directory.
  */
-flux_conf_t *flux_conf_parse (const char *path, flux_conf_error_t *error);
+flux_conf_t *flux_conf_parse (const char *path, flux_error_t *error);
 
 /* Get/set config object cached in flux_t handle, with destructor.
  * Re-setting the object decrefs the old one.
@@ -68,12 +62,12 @@ int flux_set_conf (flux_t *h, const flux_conf_t *conf);
  * If error is non-NULL, it is filled with error details on failure.
  */
 int flux_conf_vunpack (const flux_conf_t *conf,
-                       flux_conf_error_t *error,
+                       flux_error_t *error,
                        const char *fmt,
                        va_list ap);
 
 int flux_conf_unpack (const flux_conf_t *conf,
-                      flux_conf_error_t *error,
+                      flux_error_t *error,
                       const char *fmt, ...);
 
 #ifdef __cplusplus

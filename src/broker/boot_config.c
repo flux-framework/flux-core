@@ -175,7 +175,7 @@ int boot_config_parse (const flux_conf_t *cf,
                        struct boot_conf *conf,
                        json_t **hostsp)
 {
-    flux_conf_error_t error;
+    flux_error_t error;
     const char *default_bind = NULL;
     const char *default_connect = NULL;
     json_t *hosts = NULL;
@@ -191,7 +191,7 @@ int boot_config_parse (const flux_conf_t *cf,
                             "default_connect", &default_connect,
                             "hosts", &conf->hosts,
                             "enable_ipv6", &conf->enable_ipv6) < 0) {
-        log_msg ("Config file error [bootstrap]: %s", error.errbuf);
+        log_msg ("Config file error [bootstrap]: %s", error.text);
         return -1;
     }
 

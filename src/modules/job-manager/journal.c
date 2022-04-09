@@ -285,7 +285,7 @@ static const struct flux_msg_handler_spec htab[] = {
 struct journal *journal_ctx_create (struct job_manager *ctx)
 {
     struct journal *journal;
-    flux_conf_error_t err;
+    flux_error_t err;
 
     if (!(journal = calloc (1, sizeof (*journal))))
         return NULL;
@@ -306,7 +306,7 @@ struct journal *journal_ctx_create (struct job_manager *ctx)
                             &journal->events_maxlen) < 0) {
         flux_log (ctx->h, LOG_ERR,
                   "error reading job-manager config: %s",
-                  err.errbuf);
+                  err.text);
     }
 
     return journal;

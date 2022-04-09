@@ -98,7 +98,7 @@ void test_basic (void)
     char path2[PATH_MAX + 1];
     char path3[PATH_MAX + 1];
     char invalid[PATH_MAX + 1];
-    flux_conf_error_t error;
+    flux_error_t error;
     flux_conf_t *conf;
     int i, j, k;
     double d;
@@ -220,9 +220,9 @@ void test_basic (void)
     ok (flux_conf_unpack (conf, &error, "{s:s}", "noexist", &s) < 0
         && errno == EINVAL,
         "flux_conf_unpack key=noexist failed with EINVAL");
-    ok (strstr (error.errbuf, "noexist") != NULL,
-        "and errbuf mentions noexist");
-    diag ("%s: %d: %s", error.filename, error.lineno, error.errbuf);
+    ok (strstr (error.text, "noexist") != NULL,
+        "and error.text mentions noexist");
+    diag ("%s", error.text);
 
     /* Bad args fail with EINVAL
      */
@@ -242,23 +242,23 @@ void test_basic (void)
     ok (conf == NULL,
         "flux_conf_parse choked on glob referencing some good and one bad file");
 
-    diag ("%s: %d: %s", error.filename, error.lineno, error.errbuf);
-    like (error.filename, "99.*\\.toml",
-          "Failed file contained in error.filename");
+    diag ("%s", error.text);
+    like (error.text, "99.*\\.toml",
+          "Failed file contained in error.text");
 
     /* Invalid pattern arg
      */
     errno = 0;
     ok (flux_conf_parse (NULL, &error) == NULL && errno == EINVAL,
         "flux_conf_parse path=NULL fails with EINVAL");
-    diag ("%s: %d: %s", error.filename, error.lineno, error.errbuf);
+    diag ("%s", error.text);
 
     /* Directory not found triggers ENOENT error
      */
     errno = 0;
     ok (flux_conf_parse ("/noexist", &error) == NULL && errno == ENOENT,
         "flux_conf_parse pattern=/noexist fails with ENOENT");
-    diag ("%s: %d: %s", error.filename, error.lineno, error.errbuf);
+    diag ("%s", error.text);
 
     if (   (unlink (path1) < 0)
         || (unlink (path2) < 0)
@@ -318,42 +318,34 @@ void test_in_handle (void)
 
 void test_globerr (void)
 {
-    flux_conf_error_t error;
+    flux_error_t error;
 
     errno = 0;
     memset (&error, 0, sizeof (error));
     conf_globerr (&error, "meep", GLOB_NOMATCH);
     ok (errno == ENOENT
-        && !strcmp (error.filename, "meep")
-        && !strcmp (error.errbuf, "No match")
-        && error.lineno == -1,
+        && !strcmp (error.text, "meep: No match"),
         "conf_globerr pat=meep rc=NOMATCH sets errno and error as expected");
 
     errno = 0;
     memset (&error, 0, sizeof (error));
     conf_globerr (&error, "moo", GLOB_NOSPACE);
     ok (errno == ENOMEM
-        && !strcmp (error.filename, "moo")
-        && !strcmp (error.errbuf, "Out of memory")
-        && error.lineno == -1,
+        && !strcmp (error.text, "moo: Out of memory"),
         "conf_globerr pat=moo rc=NOSPACE sets errno and error as expected");
 
     errno = 0;
     memset (&error, 0, sizeof (error));
     conf_globerr (&error, "foo", GLOB_ABORTED);
     ok (errno == EINVAL
-        && !strcmp (error.filename, "foo")
-        && !strcmp (error.errbuf, "Read error")
-        && error.lineno == -1,
+        && !strcmp (error.text, "foo: Read error"),
         "conf_globerr pat=moo rc=ABORTED sets errno and error as expected");
 
     errno = 0;
     memset (&error, 0, sizeof (error));
     conf_globerr (&error, "oops", 666);
     ok (errno == EINVAL
-        && !strcmp (error.filename, "oops")
-        && !strcmp (error.errbuf, "Unknown glob error")
-        && error.lineno == -1,
+        && !strcmp (error.text, "oops: Unknown glob error"),
         "conf_globerr pat=oops rc=666 sets errno and error as expected");
 }
 

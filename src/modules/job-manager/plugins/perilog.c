@@ -452,7 +452,7 @@ fail:
  */
 static int conf_init (flux_t *h, struct perilog_conf *conf)
 {
-    flux_conf_error_t error;
+    flux_error_t error;
     json_t *prolog = NULL;
     json_t *epilog = NULL;
 
@@ -474,7 +474,7 @@ static int conf_init (flux_t *h, struct perilog_conf *conf)
                             "command", &epilog) < 0) {
         flux_log (h, LOG_ERR,
                   "prolog/epilog configuration error: %s",
-                  error.errbuf);
+                  error.text);
         return -1;
     }
     if (prolog &&

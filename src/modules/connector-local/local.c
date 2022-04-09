@@ -207,7 +207,7 @@ int parse_config (struct connector_local *ctx,
                   char *errbuf,
                   int errbufsize)
 {
-    flux_conf_error_t error;
+    flux_error_t error;
     int allow_guest_user = 0;
     int allow_root_owner = 0;
 
@@ -222,7 +222,7 @@ int parse_config (struct connector_local *ctx,
         (void)snprintf (errbuf,
                         errbufsize,
                         "error parsing [access] configuration: %s",
-                        error.errbuf);
+                        error.text);
         return -1;
     }
     ctx->allow_guest_user = allow_guest_user;

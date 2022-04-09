@@ -1796,7 +1796,7 @@ static int overlay_configure_torpid (struct overlay *ov)
     /* Override with config file settings, if any.
      */
     if ((cf = flux_get_conf (ov->h))) {
-        flux_conf_error_t error;
+        flux_error_t error;
         const char *min_fsd = NULL;
         const char *max_fsd = NULL;
 
@@ -1806,7 +1806,7 @@ static int overlay_configure_torpid (struct overlay *ov)
                               "tbon",
                                 "torpid_min", &min_fsd,
                                 "torpid_max", &max_fsd) < 0) {
-            log_msg ("Config file error [tbon]: %s", error.errbuf);
+            log_msg ("Config file error [tbon]: %s", error.text);
             return -1;
         }
         if (min_fsd) {
@@ -1850,14 +1850,14 @@ static int overlay_configure_tcp_user_timeout (struct overlay *ov)
     const char *fsd = NULL;
 
     if ((cf = flux_get_conf (ov->h))) {
-        flux_conf_error_t error;
+        flux_error_t error;
 
         if (flux_conf_unpack (cf,
                               &error,
                               "{s?{s?s}}",
                               "tbon",
                                 "tcp_user_timeout", &fsd) < 0) {
-            log_msg ("Config file error [tbon]: %s", error.errbuf);
+            log_msg ("Config file error [tbon]: %s", error.text);
             return -1;
         }
         if (fsd) {
@@ -1904,14 +1904,14 @@ static int overlay_configure_zmqdebug (struct overlay *ov)
 
     ov->zmqdebug = 0;
     if ((cf = flux_get_conf (ov->h))) {
-        flux_conf_error_t error;
+        flux_error_t error;
 
         if (flux_conf_unpack (cf,
                               &error,
                               "{s?{s?i}}",
                               "tbon",
                                 "zmqdebug", &ov->zmqdebug) < 0) {
-            log_msg ("Config file error [tbon]: %s", error.errbuf);
+            log_msg ("Config file error [tbon]: %s", error.text);
             return -1;
         }
     }

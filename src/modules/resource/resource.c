@@ -51,7 +51,7 @@ static int parse_config (struct resource_ctx *ctx,
                          char *errbuf,
                          int errbufsize)
 {
-    flux_conf_error_t error;
+    flux_error_t error;
     const char *exclude  = NULL;
     const char *path = NULL;
     int noverify = 0;
@@ -67,7 +67,7 @@ static int parse_config (struct resource_ctx *ctx,
         (void)snprintf (errbuf,
                         errbufsize,
                         "error parsing [resource] configuration: %s",
-                        error.errbuf);
+                        error.text);
         return -1;
     }
     if (path) {

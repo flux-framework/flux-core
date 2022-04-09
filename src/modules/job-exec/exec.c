@@ -472,7 +472,7 @@ static void exec_exit (struct jobinfo *job)
  */
 static int exec_config (flux_t *h, int argc, char **argv)
 {
-    flux_conf_error_t err;
+    flux_error_t err;
 
     /*  Set default job shell path from builtin configuration,
      *   allow override via configuration, then cmdline.
@@ -488,7 +488,7 @@ static int exec_config (flux_t *h, int argc, char **argv)
                             "job-shell", &default_job_shell) < 0) {
         flux_log (h, LOG_ERR,
                   "error reading config value exec.job-shell: %s",
-                  err.errbuf);
+                  err.text);
         return -1;
     }
 
@@ -500,7 +500,7 @@ static int exec_config (flux_t *h, int argc, char **argv)
                             "imp", &flux_imp_path) < 0) {
         flux_log (h, LOG_ERR,
                   "error reading config value exec.imp: %s",
-                  err.errbuf);
+                  err.text);
         return -1;
     }
 

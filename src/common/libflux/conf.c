@@ -25,6 +25,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libtomlc99/toml.h"
 #include "src/common/libutil/tomltk.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "conf.h"
 #include "conf_private.h"
@@ -102,28 +103,6 @@ error:
     return NULL;
 }
 
-static void __attribute__ ((format (printf, 4, 5)))
-errprintf (flux_conf_error_t *error,
-           const char *filename,
-           int lineno,
-           const char *fmt,
-           ...)
-{
-    va_list ap;
-    int saved_errno = errno;
-
-    if (error) {
-        memset (error, 0, sizeof (*error));
-        va_start (ap, fmt);
-        (void)vsnprintf (error->errbuf, sizeof (error->errbuf), fmt, ap);
-        va_end (ap);
-        if (filename)
-            strncpy (error->filename, filename, sizeof (error->filename) - 1);
-        error->lineno = lineno;
-    }
-    errno = saved_errno;
-}
-
 void flux_conf_decref (const flux_conf_t *conf_const)
 {
     flux_conf_t *conf = (flux_conf_t *)conf_const;
@@ -173,32 +152,40 @@ flux_conf_t *flux_conf_copy (const flux_conf_t *conf)
 
 static int conf_update (flux_conf_t *conf,
                         const char *filename,
-                        flux_conf_error_t *error)
+                        flux_error_t *error)
 {
     struct tomltk_error toml_error;
     toml_table_t *tab;
     json_t *obj = NULL;
 
     if (!(tab = tomltk_parse_file (filename, &toml_error))) {
-        errprintf (error,
-                   toml_error.filename,
-                   toml_error.lineno,
-                   "%s",
-                   toml_error.errbuf);
+        if (toml_error.lineno == -1) {
+            errprintf (error,
+                       "%s: %s",
+                       toml_error.filename,
+                       toml_error.errbuf);
+        }
+        else {
+            errprintf (error,
+                       "%s:%d: %s",
+                       toml_error.filename,
+                       toml_error.lineno,
+                       toml_error.errbuf);
+        }
         goto error;
     }
     if (!(obj = tomltk_table_to_json (tab))) {
-        errprintf (error, filename, -1, "converting TOML to JSON: %s",
+        errprintf (error,
+                   "%s: converting TOML to JSON: %s",
+                   filename,
                    strerror (errno));
         goto error;
     }
     if (json_object_update (conf->obj, obj) < 0) {
-        errno = ENOMEM;
         errprintf (error,
-                   filename,
-                   -1,
-                   "updating JSON object: %s",
-                   strerror (errno));
+                   "%s: updating JSON object: out of memory",
+                   filename);
+        errno = ENOMEM;
         goto error;
     }
     json_decref (obj);
@@ -225,18 +212,18 @@ struct globerr globerr_tab[] = {
 
 /* Set errno and optionally 'error' based on glob error return code.
  */
-void conf_globerr (flux_conf_error_t *error, const char *pattern, int rc)
+void conf_globerr (flux_error_t *error, const char *pattern, int rc)
 {
     struct globerr *entry;
     for (entry = &globerr_tab[0]; entry->rc != 0; entry++) {
         if (rc == entry->rc)
             break;
     }
-    errprintf (error, pattern, -1, "%s", entry->msg);
+    errprintf (error, "%s: %s", pattern, entry->msg);
     errno = entry->errnum;
 }
 
-flux_conf_t *flux_conf_parse (const char *path, flux_conf_error_t *error)
+flux_conf_t *flux_conf_parse (const char *path, flux_error_t *error)
 {
     flux_conf_t *conf;
     glob_t gl;
@@ -246,21 +233,21 @@ flux_conf_t *flux_conf_parse (const char *path, flux_conf_error_t *error)
 
     if (!path) {
         errno = EINVAL;
-        errprintf (error, path, -1, "%s", strerror (errno));
+        errprintf (error, "%s", strerror (errno));
         return NULL;
     }
     if (access (path, R_OK | X_OK) < 0) {
-        errprintf (error, path, -1, "%s", strerror (errno));
+        errprintf (error, "%s: %s", path, strerror (errno));
         return NULL;
     }
     rc = snprintf (pattern, sizeof (pattern), "%s/*.toml", path);
     if (rc >= sizeof (pattern)) {
         errno = EOVERFLOW;
-        errprintf (error, path, -1, "%s", strerror (errno));
+        errprintf (error, "%s: %s", path, strerror (errno));
         return NULL;
     }
     if (!(conf = flux_conf_create ())) {
-        errprintf (error, path, -1, "%s", strerror (errno));
+        errprintf (error, "%s: %s", path, strerror (errno));
         return NULL;
     }
     rc = glob (pattern, GLOB_ERR, NULL, &gl);
@@ -298,7 +285,7 @@ const flux_conf_t *flux_get_conf (flux_t *h)
 }
 
 int flux_conf_vunpack (const flux_conf_t *conf,
-                       flux_conf_error_t *error,
+                       flux_error_t *error,
                        const char *fmt,
                        va_list ap)
 {
@@ -306,14 +293,14 @@ int flux_conf_vunpack (const flux_conf_t *conf,
 
     if (!conf || !conf->obj || !fmt || *fmt == '\0') {
         errno = EINVAL;
-        errprintf (error, NULL, -1, "%s", strerror (errno));
+        errprintf (error, "%s", strerror (errno));
         return -1;
     }
     if (json_vunpack_ex (conf->obj, &j_error, 0, fmt, ap) < 0) {
         /* N.B. Cannot translate JSON error back to TOML file/line,
          * so only the text[] portion of the JSON error is used here.
          */
-        errprintf (error, NULL, -1, "%s", j_error.text);
+        errprintf (error, "%s", j_error.text);
         errno = EINVAL;
         return -1;
     }
@@ -321,7 +308,7 @@ int flux_conf_vunpack (const flux_conf_t *conf,
 }
 
 int flux_conf_unpack (const flux_conf_t *conf,
-                      flux_conf_error_t *error,
+                      flux_error_t *error,
                       const char *fmt, ...)
 {
     va_list ap;

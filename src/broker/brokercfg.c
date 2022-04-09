@@ -42,25 +42,15 @@ static int brokercfg_parse (flux_t *h,
                             char *errbuf,
                             int errbufsize)
 {
-    flux_conf_error_t error;
+    flux_error_t error;
     flux_conf_t *conf;
 
     if (path) {
         if (!(conf = flux_conf_parse (path, &error))) {
-            if (error.lineno == -1)
-                (void)snprintf (errbuf,
-                                errbufsize,
-                                "Config file error: %s%s%s",
-                                error.filename,
-                                *error.filename ? ": " : "",
-                                error.errbuf);
-            else
-                (void)snprintf (errbuf,
-                                errbufsize,
-                                "Config file error: %s:%d: %s",
-                                error.filename,
-                                error.lineno,
-                                error.errbuf);
+            (void)snprintf (errbuf,
+                            errbufsize,
+                            "Config file error: %s",
+                            error.text);
             return -1;
         }
     }
@@ -219,13 +209,13 @@ static void get_cb (flux_t *h,
                     void *arg)
 {
     const char *errmsg = NULL;
-    flux_conf_error_t error;
+    flux_error_t error;
     json_t *o;
 
     if (flux_request_decode (msg, NULL, NULL) < 0)
         goto error;
     if (flux_conf_unpack (flux_get_conf (h), &error, "o", &o) < 0) {
-        errmsg = error.errbuf;
+        errmsg = error.text;
         goto error;
     }
     if (flux_respond_pack (h, msg, "O", o) < 0)
