@@ -13,7 +13,7 @@ table, which may contain the following keys:
 KEYS
 ====
 
-events_maxlen
+journal-size-limit
    (optional) Integer value that determines the maximum number of job events to
    be retained in the in-memory journal used to answer queries.  The default
    is 1000.
@@ -53,7 +53,7 @@ EXAMPLE
 
    [job-manager]
 
-   events_maxlen = 10000
+   journal-size-limit = 10000
 
    plugins = [
       {

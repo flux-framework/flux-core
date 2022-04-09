@@ -25,7 +25,7 @@
 #include "conf.h"
 #include "journal.h"
 
-#define EVENTS_MAXLEN 1000
+#define DEFAULT_JOURNAL_SIZE_LIMIT 1000
 
 struct journal {
     struct job_manager *ctx;
@@ -33,7 +33,7 @@ struct journal {
     struct flux_msglist *listeners;
     /* holds most recent events for listeners */
     zlist_t *events;
-    int events_maxlen;
+    int size_limit;
 };
 
 struct journal_filter { // stored as aux item in request message
@@ -115,7 +115,7 @@ int journal_process_event (struct journal *journal,
         msg = flux_msglist_next (journal->listeners);
     }
 
-    if (zlist_size (journal->events) > journal->events_maxlen)
+    if (zlist_size (journal->events) > journal->size_limit)
         zlist_remove (journal->events, zlist_head (journal->events));
     if (zlist_append (journal->events, json_incref (wrapped_entry)) < 0)
         goto nomem;
@@ -248,16 +248,18 @@ static int journal_parse_config (const flux_conf_t *conf,
 {
     struct journal *journal = arg;
     flux_error_t e;
-    int events_maxlen = -1;
+    int size_limit = -1;
 
     if (flux_conf_unpack (conf,
                           &e,
                           "{s?{s?i}}",
                           "job-manager",
-                            "events_maxlen", &events_maxlen) < 0)
-        return errprintf (error, "job-manager.events_maxlen: %s", e.text);
-    if (events_maxlen > 0)
-        journal->events_maxlen = events_maxlen;
+                            "journal-size-limit", &size_limit) < 0)
+        return errprintf (error,
+                          "job-manager.journal-size-limit: %s",
+                          e.text);
+    if (size_limit > 0)
+        journal->size_limit = size_limit;
     return 0; // indicates to conf.c that callback does NOT want updates
 }
 
@@ -319,7 +321,7 @@ struct journal *journal_ctx_create (struct job_manager *ctx)
         goto error;
     if (!(journal->events = zlist_new ()))
         goto nomem;
-    journal->events_maxlen = EVENTS_MAXLEN;
+    journal->size_limit = DEFAULT_JOURNAL_SIZE_LIMIT;
 
     if (conf_register_callback (ctx->conf,
                                 &error,

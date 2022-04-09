@@ -6,13 +6,13 @@ test_description='Test flux job manager journal service'
 
 export FLUX_CONF_DIR=$(pwd)
 
-# set events_maxlen to something more sensible in testing,
+# set journal-size-limit to something more sensible in testing,
 # otherwise we'll be parsing 100s of entries regularly.  20 is a good
 # number, since it will always cover the prior two jobs that were
 # executed.
 cat >job-manager.toml <<EOF
 [job-manager]
-events_maxlen = 50
+journal-size-limit = 50
 EOF
 
 test_under_flux 4
