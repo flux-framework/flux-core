@@ -128,8 +128,7 @@ static struct state_next nexttab[] = {
     { "quorum-fail",        STATE_QUORUM,       STATE_SHUTDOWN},
     { "rc2-success",        STATE_RUN,          STATE_CLEANUP },
     { "rc2-fail",           STATE_RUN,          STATE_CLEANUP },
-    { "rc2-abort",          STATE_RUN,          STATE_CLEANUP },
-    { "shutdown-abort",     STATE_RUN,          STATE_CLEANUP },
+    { "shutdown",           STATE_RUN,          STATE_CLEANUP },
     { "rc2-none",           STATE_RUN,          STATE_RUN },
     { "cleanup-success",    STATE_CLEANUP,      STATE_SHUTDOWN },
     { "cleanup-none",       STATE_CLEANUP,      STATE_SHUTDOWN },
@@ -428,7 +427,7 @@ void state_machine_kill (struct state_machine *s, int signum)
                     flux_log_error (h, "runat_abort rc2 (signal %d)", signum);
             }
             else
-                state_machine_post (s, "rc2-abort");
+                state_machine_post (s, "shutdown");
             break;
         case STATE_CLEANUP:
             if (runat_abort (s->ctx->runat, "cleanup") < 0)
@@ -473,7 +472,7 @@ int state_machine_shutdown (struct state_machine *s, flux_error_t *error)
             flux_log_error (s->ctx->h, "runat_abort rc2 (shutdown)");
     }
     else
-        state_machine_post (s, "rc2-abort");
+        state_machine_post (s, "shutdown");
     return 0;
 }
 
@@ -569,7 +568,7 @@ static void run_check_parent (struct state_machine *s)
             case STATE_CLEANUP:
                 break;
             case STATE_SHUTDOWN:
-                state_machine_post (s, "shutdown-abort");
+                state_machine_post (s, "shutdown");
                 break;
             case STATE_FINALIZE:
             case STATE_GOODBYE:
@@ -934,7 +933,7 @@ static void overlay_monitor_cb (struct overlay *overlay,
         case STATE_RUN:
             if (overlay_parent_error (overlay)) {
                 s->ctx->exit_rc = 1;
-                state_machine_post (s, "rc2-abort");
+                state_machine_post (s, "shutdown");
             }
             break;
         /* In SHUTDOWN state, post exit event if children have disconnected.

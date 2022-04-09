@@ -21,7 +21,7 @@ digraph finite_state_machine {
     2 -> 2 [ label = "rc2-none" ];
     2 -> C [ label = "rc2-success" ];
     2 -> C [ label = "rc2-fail" ];
-    2 -> C [ label = "shutdown-abort" ];
+    2 -> C [ label = "shutdown" ];
     2 -> C [ label = "signal-abort" ];
     C -> S [ label = "cleanup-none" ];
     C -> S [ label = "cleanup-success" ];
