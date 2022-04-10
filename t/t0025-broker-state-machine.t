@@ -178,7 +178,7 @@ test_expect_success 'all expected events and state transitions occurred on rank 
 	grep "\[1\]: parent-ready: join->init"			states2.log &&
 	grep "\[1\]: rc1-none: init->quorum"			states2.log &&
 	grep "\[1\]: quorum-full: quorum->run"			states2.log &&
-	grep "\[1\]: shutdown-abort: run->cleanup"		states2.log &&
+	grep "\[1\]: shutdown: run->cleanup"			states2.log &&
 	grep "\[1\]: cleanup-none: cleanup->shutdown"		states2.log &&
 	grep "\[1\]: children-none: shutdown->finalize"	        states2.log &&
 	grep "\[1\]: rc3-none: finalize->goodbye"		states2.log &&

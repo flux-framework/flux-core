@@ -143,6 +143,10 @@ int overlay_register_attrs (struct overlay *overlay);
  */
 bool overlay_msg_is_local (const flux_msg_t *msg);
 
+/* Stop allowing new connections from downstream peers.
+ */
+void overlay_shutdown (struct overlay *overlay);
+
 #endif /* !_BROKER_OVERLAY_H */
 
 /*

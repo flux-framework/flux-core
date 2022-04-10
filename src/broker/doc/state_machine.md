@@ -63,7 +63,7 @@ enters SHUTDOWN state (_cleanup-success_).
 
 The broker ranks > 0 monitor parent state transitions.  The parent
 transitioning to SHUTDOWN causes a transition from RUN to CLEANUP
-(_shutdown-abort_).  They transition through CLEANUP (_cleanup-none_)
+(_shutdown_).  They transition through CLEANUP (_cleanup-none_)
 to SHUTDOWN state.
 
 All brokers with children remain in SHUTDOWN until their children disconnect
@@ -81,7 +81,7 @@ The rank 0 broker is the last to exit.
 #### variation: no rc2 script (initial program)
 
 A system instance does not define an initial program.  Brokers transition to
-RUN state as above, and remain there until the _shutdown-abort_ event is
+RUN state as above, and remain there until the _shutdown_ event is
 posted.  That may occur if:
 - the broker receives a signal
 - the broker's TBON parent enters SHUTDOWN state
@@ -110,7 +110,7 @@ _quorum-timeout_ | configured quorum not reached within timeout period
 _rc2-none_	| no rc2 script (initial program) is defined on this broker
 _rc2-success_	| rc2 script completed successfully
 _rc2-fail_	| rc2 script completed with errors
-_shutdown-abort_ | broker received shutdown event
+_shutdown_      | broker received an external cue to begin shutting down
 _signal-abort_	| broker received terminating signal
 _cleanup-none_	| no cleanup script is defined on this broker
 _cleanup-success_ | cleanup script completed successfully

@@ -1349,6 +1349,15 @@ int overlay_bind (struct overlay *ov, const char *uri)
     return 0;
 }
 
+/* Don't allow downstream peers to reconnect while we are shutting down.
+ */
+void overlay_shutdown (struct overlay *overlay)
+{
+    if (overlay->bind_zsock && overlay->bind_uri)
+        if (zsock_unbind (overlay->bind_zsock, "%s", overlay->bind_uri) < 0)
+            flux_log (overlay->h, LOG_ERR, "zsock_unbind failed");
+}
+
 /* Call after overlay bootstrap (bind/connect),
  * to get concretized 0MQ endpoints.
  */
