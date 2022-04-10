@@ -396,7 +396,7 @@ static int jobtap_parse_config (struct jobtap *jobtap,
                                 flux_error_t *errp)
 {
     json_t *plugins = NULL;
-    flux_conf_error_t error;
+    flux_error_t error;
     json_t *entry;
     int i;
 
@@ -410,7 +410,7 @@ static int jobtap_parse_config (struct jobtap *jobtap,
                             "plugins", &plugins) < 0) {
         return errprintf (errp,
                           "[job-manager.plugins]: unpack error: %s",
-                          error.errbuf);
+                          error.text);
     }
 
     if (!plugins)

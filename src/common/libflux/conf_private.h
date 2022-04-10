@@ -15,7 +15,7 @@
 
 /* Set errno and optionally 'error' based on glob error return code.
  */
-void conf_globerr (flux_conf_error_t *error, const char *pattern, int rc);
+void conf_globerr (flux_error_t *error, const char *pattern, int rc);
 
 #endif /* !_FLUX_CORE_CONF_PRIVATE_H */
 

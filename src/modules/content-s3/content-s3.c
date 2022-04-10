@@ -136,7 +136,7 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
                                        int eb_size)
 {
     struct s3_config *cfg;
-    flux_conf_error_t error;
+    flux_error_t error;
     const char *uri = NULL;
     const char *bucket = NULL;
     const char *cred_file = NULL;
@@ -163,7 +163,7 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
                           &uri,
                           "virtual-host-style",
                           &is_virtual_host) < 0) {
-        snprintf(errbuff, eb_size, "%s", error.errbuf);
+        snprintf(errbuff, eb_size, "%s", error.text);
         goto error;
     }
 

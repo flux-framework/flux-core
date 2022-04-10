@@ -1153,7 +1153,7 @@ static int exec_hello (flux_t *h, const char *service)
  */
 static int job_exec_initialize (flux_t *h, int argc, char **argv)
 {
-    flux_conf_error_t err;
+    flux_error_t err;
     const char *kto = NULL;
 
     if (flux_conf_unpack (flux_get_conf (h),
@@ -1163,7 +1163,7 @@ static int job_exec_initialize (flux_t *h, int argc, char **argv)
                             "kill-timeout", &kto) < 0) {
         flux_log (h, LOG_ERR,
                   "error reading config value exec.kill-timeout: %s",
-                  err.errbuf);
+                  err.text);
         return -1;
     }
     /* Override via commandline */

@@ -499,7 +499,7 @@ void job_archive_cb (flux_reactor_t *r,
 
 static int process_config (struct job_archive_ctx *ctx)
 {
-    flux_conf_error_t err;
+    flux_error_t err;
     const char *period = NULL;
     const char *dbpath = NULL;
     const char *busytimeout = NULL;
@@ -513,7 +513,7 @@ static int process_config (struct job_archive_ctx *ctx)
                             "busytimeout", &busytimeout) < 0) {
         flux_log (ctx->h, LOG_ERR,
                   "error reading archive config: %s",
-                  err.errbuf);
+                  err.text);
         return -1;
     }
 

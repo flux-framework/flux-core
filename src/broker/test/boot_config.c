@@ -313,7 +313,7 @@ void test_toml_mixed_array (const char *dir)
 {
     char path[PATH_MAX + 1];
     flux_conf_t *cf;
-    flux_conf_error_t error;
+    flux_error_t error;
     const char *input = \
 "[bootstrap]\n" \
 "hosts = [\n" \
@@ -324,10 +324,10 @@ void test_toml_mixed_array (const char *dir)
     create_test_file (dir, "boot", path, sizeof (path), input);
 
     cf = flux_conf_parse (dir, &error);
-    ok (cf == NULL && (strstr (error.errbuf, "array type mismatch")
-        || strstr (error.errbuf, "string array can only contain strings")),
+    ok (cf == NULL && (strstr (error.text, "array type mismatch")
+        || strstr (error.text, "string array can only contain strings")),
         "Mixed type hosts array fails with reasonable error");
-    diag ("%s: line %d: %s", error.filename, error.lineno, error.errbuf);
+    diag ("%s", error.text);
 
     if (unlink (path) < 0)
         BAIL_OUT ("could not cleanup test file %s", path);

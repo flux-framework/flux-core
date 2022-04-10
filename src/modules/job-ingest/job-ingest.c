@@ -918,7 +918,7 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
                                  int argc,
                                  char **argv)
 {
-    flux_conf_error_t error;
+    flux_error_t error;
     json_t *plugins = NULL;
     json_t *args = NULL;
     char *validator_plugins = NULL;
@@ -937,7 +937,7 @@ static int job_ingest_configure (struct job_ingest_ctx *ctx,
                             "batch-count", &ctx->batch_count) < 0) {
         flux_log (ctx->h, LOG_ERR,
                   "error reading [ingest] config table: %s",
-                  error.errbuf);
+                  error.text);
         goto out;
     }
 
