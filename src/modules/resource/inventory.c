@@ -65,16 +65,6 @@
  * This event serves as synchronization to indicate that R is now available.
  * acquire.c watches for this event.
  *
- * Hwloc XML
- * ---------
- * The Fluxion scheduler needs hwloc XML to bootstrap if it does not receive
- * sufficient hierarchical resource data under the opaque scheduling key of R.
- * The 'resource.get-xml' RPC provides a mechanism for Fluxion to fetch the
- * XML as a rank-indexed JSON array.  Regardless of whether resources were
- * obtained using case 1, 2, or 3, the XML is always collected and made
- * available.  If its collection is still in progress when it is requested,
- * the response is delayed until it completes.
- *
  * Test Features
  * -------------
  * When the module is reloaded on rank 0, if resource.R is found in the KVS,
@@ -86,13 +76,11 @@
  * Tests that require fake resources may set them with
  * 'flux resource reload PATH', where PATH points to a file containing R.
  * Alternatively, use 'flux resource reload -x DIR' to load <rank>.xml files
- * and use them to generate R.  This method also captures the XML and
- * ensures that 'resource.get-xml' is in sync with R.
+ * and use them to generate R.
  *
  * It's also possible to fake resources by placing them in resource.R and
  * then (re-) loading the resource module.  This is how the sharness 'job'
- * personality fakes resources.  However, if this method is used, the hwloc
- * XML is not synced with R.
+ * personality fakes resources.
  */
 
 #if HAVE_CONFIG_H
@@ -117,9 +105,6 @@ struct inventory {
 
     json_t *R;
     char *method;
-    json_t *xml;
-
-    zlist_t *waiters;
 
     flux_future_t *f;
     flux_msg_handler_t **handlers;
@@ -160,77 +145,6 @@ static void inventory_put_continuation (flux_future_t *f, void *arg)
     (void)inventory_put_finalize (inv);
 }
 
-static int xml_to_fixed_array_map (unsigned int id, json_t *val, void *arg)
-{
-    json_t *array = arg;
-
-    if (id >= json_array_size (array)) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (json_array_set (array, id, val) < 0) {
-        errno = ENOMEM;
-        return -1;
-    }
-    return 0;
-}
-
-/* Convert object with idset keys to fixed size array, which should be easier
- * for end users to handle.  Any unpopulated array slots are set to JSON null.
- */
-static json_t *xml_to_fixed_array (json_t *xml, uint32_t size)
-{
-    json_t *array;
-    int i;
-
-    if (!(array = json_array ()))
-        goto nomem;
-    for (i = 0; i < size; i++) {
-        if (json_array_append (array, json_null ()) < 0)
-            goto nomem;
-    }
-    if (rutil_idkey_map (xml, xml_to_fixed_array_map, array) < 0)
-        goto error;
-    return array;
-nomem:
-    errno = ENOMEM;
-error:
-    ERRNO_SAFE_WRAP (json_decref, array);
-    return NULL;
-};
-
-int inventory_put_xml (struct inventory *inv, json_t *xml)
-{
-    flux_t *h = inv->ctx->h;
-    const flux_msg_t *msg;
-
-    if (inv->ctx->rank != 0 || !xml) {
-        errno = EINVAL;
-        return -1;
-    }
-    if (inv->xml) {
-        errno = EEXIST;
-        return -1;
-    }
-    flux_log (inv->ctx->h, LOG_DEBUG, "xml %d ranks in %zu objects",
-              rutil_idkey_count (xml), json_object_size (xml));
-    inv->xml = json_incref (xml);
-
-    if (zlist_size (inv->waiters) > 0) {
-        json_t *array;
-
-        if (!(array = xml_to_fixed_array (inv->xml, inv->ctx->size)))
-            return -1;
-        while ((msg = zlist_pop (inv->waiters))) {
-            if (flux_respond_pack (h, msg, "{s:O}", "xml", array) < 0)
-                flux_log_error (h, "error responding to resource.get-xml");
-            flux_msg_decref (msg);
-        }
-        json_decref (array);
-    }
-    return 0;
-}
-
 /* (rank 0) Commit resource.R to the KVS, then upon completion,
  * post resource-define event to resource.eventlog.
  */
@@ -267,15 +181,6 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method)
 error:
     flux_kvs_txn_destroy (txn);
     return -1;
-}
-
-json_t *inventory_get_xml (struct inventory *inv)
-{
-    if (!inv->xml) {
-        errno = ENOENT;
-        return NULL;
-    }
-    return inv->xml;
 }
 
 json_t *inventory_get (struct inventory *inv)
@@ -538,82 +443,6 @@ done:
     return rc;
 }
 
-static int check_broker_quorum (flux_t *h, bool *is_subset)
-{
-    const char *quorum;
-    uint32_t size;
-    char buf[32] = "0";
-
-    if (!(quorum = flux_attr_get (h, "broker.quorum"))
-        || flux_get_size (h, &size) < 0)
-        return -1;
-    if (size > 1) {
-        if (snprintf (buf,
-                      sizeof (buf),
-                      "0-%d",
-                      (int)size - 1) >= sizeof (buf)) {
-            errno = EOVERFLOW;
-            return -1;
-        }
-    }
-    if (strcmp (buf, quorum) == 0)
-        *is_subset = false;
-    else
-        *is_subset = true;
-    return 0;
-}
-
-/* If xml collection is still in progress, this function delays responding
- * until it completes.
- */
-static void resource_get_xml (flux_t *h,
-                              flux_msg_handler_t *mh,
-                              const flux_msg_t *msg,
-                              void *arg)
-{
-    struct inventory *inv = arg;
-    const char *errstr = NULL;
-    json_t *array = NULL;
-
-    if (flux_request_decode (msg, NULL, NULL) < 0)
-        goto error;
-    if (inv->ctx->rank != 0) {
-        errno = EPROTO;
-        errstr = "this RPC only works on rank 0";
-        goto error;
-    }
-    /* xml is still being collected.  If broker.quorum is not the entire
-     * instance, then this may never complete, so fail the request in that
-     * case; otherwise save the request in inv->waiters for later response.
-     */
-    if (!inv->xml) {
-        bool is_subset;
-        if (check_broker_quorum (h, &is_subset) < 0)
-            goto error;
-        if (is_subset) {
-            errno = EINVAL;
-            errstr = "Request may block forever. "
-                     "If R is incomplete, there may be a config error.";
-            goto error;
-        }
-        if (zlist_append (inv->waiters, (void *)flux_msg_incref (msg)) < 0) {
-            flux_msg_decref (msg);
-            errno = ENOMEM;
-            goto error;
-        }
-        return; // response deferred
-    }
-    if (!(array = xml_to_fixed_array (inv->xml, inv->ctx->size)))
-        goto error;
-    if (flux_respond_pack (h, msg, "{s:O}", "xml", array) < 0)
-        flux_log_error (h, "error responding to resource.get-xml");
-    json_decref (array);
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to resource.get-xml");
-}
-
 static void resource_get (flux_t *h,
                           flux_msg_handler_t *mh,
                           const flux_msg_t *msg,
@@ -816,14 +645,6 @@ static void resource_reload (flux_t *h,
         errstr = "resources are busy (unload scheduler?)";
         goto error;
     }
-    if (xml) {
-        if (inv->xml) {
-            json_decref (inv->xml);
-            inv->xml = NULL;
-        }
-        if (inventory_put_xml (inv, xml) < 0)
-            goto error;
-    }
     if (inv->R) {
         json_decref (inv->R);
         inv->R = NULL;
@@ -849,7 +670,6 @@ error:
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "resource.reload",  resource_reload, 0 },
     { FLUX_MSGTYPE_REQUEST, "resource.get",  resource_get, 0 },
-    { FLUX_MSGTYPE_REQUEST, "resource.get-xml",  resource_get_xml, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -859,15 +679,8 @@ void inventory_destroy (struct inventory *inv)
         int saved_errno = errno;
         flux_msg_handler_delvec (inv->handlers);
         json_decref (inv->R);
-        json_decref (inv->xml);
         free (inv->method);
         flux_future_destroy (inv->f);
-        if (inv->waiters) {
-            const flux_msg_t *msg;
-            while ((msg = zlist_pop (inv->waiters)))
-                flux_msg_decref (msg);
-            zlist_destroy (&inv->waiters);
-        }
         free (inv);
         errno = saved_errno;
     }
@@ -880,8 +693,6 @@ struct inventory *inventory_create (struct resource_ctx *ctx, json_t *conf_R)
 
     if (!(inv = calloc (1, sizeof (*inv))))
         return NULL;
-    if (!(inv->waiters = zlist_new ()))
-        goto error;
     inv->ctx = ctx;
     if (flux_msg_handler_addvec (ctx->h, htab, inv, &inv->handlers) < 0)
         goto error;

@@ -448,6 +448,7 @@ static void handle_cb (flux_reactor_t *r,
     int rc = -1;
     int type;
     bool match;
+    const char *topic;
 
     if (revents & FLUX_POLLERR)
         goto done;
@@ -460,9 +461,9 @@ static void handle_cb (flux_reactor_t *r,
         rc = 0; /* ignore mangled message */
         goto done;
     }
+    if (flux_msg_get_topic (msg, &topic) < 0)
+        topic = "unknown"; /* used for logging/caliper trace */
 
-    const char *topic;
-    flux_msg_get_topic (msg, &topic);
     /* Add any new handlers here, making handler creation
      * safe to call during handlers list traversal below.
      */
@@ -506,13 +507,16 @@ static void handle_cb (flux_reactor_t *r,
         }
         else {
             switch (type) {
-                case FLUX_MSGTYPE_REQUEST:
-                    if (flux_respond_error (d->h,
-                                            msg,
-                                            ENOSYS,
-                                            "Unknown service method"))
+                case FLUX_MSGTYPE_REQUEST: {
+                    char errmsg[256];
+                    (void)snprintf (errmsg,
+                                    sizeof (errmsg),
+                                    "Unknown service method '%s'",
+                                    topic);
+                    if (flux_respond_error (d->h, msg, ENOSYS, errmsg))
                         goto done;
                     break;
+                }
                 case FLUX_MSGTYPE_EVENT:
                     break;
                 case FLUX_MSGTYPE_RESPONSE:
@@ -520,12 +524,10 @@ static void handle_cb (flux_reactor_t *r,
                     break;
                 default:
                     if (flux_flags_get (d->h) & FLUX_O_TRACE) {
-                        const char *topic = NULL;
-                        (void)flux_msg_get_topic (msg, &topic);
                         fprintf (stderr,
                                  "nomatch: %s '%s'\n",
                                  flux_msg_typestr (type),
-                                 topic ? topic : "");
+                                 topic);
                     }
                     break;
             }

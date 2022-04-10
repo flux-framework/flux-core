@@ -13,9 +13,8 @@
  * If resources are known at module load time, verify the topology against
  * this rank's portion of the resource object (unless noverify is set).
  *
- * Reduce r_local + xml from each rank, leaving the result in
- * topo->reduce->rl and topo->reduce->xml on rank 0.  If resource are not
- * known, then this R is set in inventory.
+ * Reduce r_local + xml from each rank, leaving the result in topo->reduce->rl
+ * on rank 0.  If resources are not known, then this R is set in inventory.
  */
 
 #if HAVE_CONFIG_H
@@ -41,7 +40,6 @@ struct reduction {
     int count;          // number of ranks represented
     int descendants;    // number of TBON descendants
     struct rlist *rl;   // resources: self + descendants
-    json_t *xml;        // xml object: self + descendants
 };
 
 struct topo {
@@ -149,13 +147,6 @@ static int topo_reduce_finalize (struct topo *topo)
                 goto error;
             }
         }
-        if (!inventory_get_xml (topo->ctx->inventory)) {
-            if (inventory_put_xml (topo->ctx->inventory, topo->reduce.xml) < 0){
-                flux_log_error (topo->ctx->h,
-                                "error setting reduced XML object");
-                goto error;
-            }
-        }
     }
     else {
         flux_future_t *f;
@@ -164,13 +155,9 @@ static int topo_reduce_finalize (struct topo *topo)
                                  "resource.topo-reduce",
                                  FLUX_NODEID_UPSTREAM,
                                  FLUX_RPC_NORESPONSE,
-                                 "{s:i s:O s:O}",
-                                 "count",
-                                 topo->reduce.count,
-                                 "resource",
-                                 resobj,
-                                 "xml",
-                                 topo->reduce.xml))) {
+                                 "{s:i s:O}",
+                                 "count", topo->reduce.count,
+                                 "resource", resobj))) {
             flux_log_error (topo->ctx->h,
                             "resource.topo-reduce: error sending request");
             goto error;
@@ -194,18 +181,13 @@ static void topo_reduce_cb (flux_t *h,
     struct topo *topo = arg;
     json_t *resobj;
     struct rlist *rl = NULL;
-    json_t *xml;
     int count;
 
     if (flux_request_unpack (msg,
                              NULL,
-                             "{s:i s:o s:o}",
-                             "count",
-                             &count,
-                             "resource",
-                             &resobj,
-                             "xml",
-                             &xml) < 0
+                             "{s:i s:o}",
+                             "count", &count,
+                             "resource", &resobj) < 0
         || !(rl = rlist_from_json (resobj, NULL))) {
         flux_log (h, LOG_ERR, "error decoding topo-reduce request");
         return;
@@ -216,10 +198,6 @@ static void topo_reduce_cb (flux_t *h,
          */
         goto done;
     }
-    if (rutil_idkey_merge (topo->reduce.xml, xml) < 0) {
-        flux_log (h, LOG_ERR, "error merging topo-reduce XML");
-        goto done;
-    }
     topo->reduce.count += count;
     if (topo->reduce.count == topo->reduce.descendants + 1) {
         if (topo_reduce_finalize (topo) < 0) // logs its own errors
@@ -227,20 +205,6 @@ static void topo_reduce_cb (flux_t *h,
     }
 done:
     rlist_destroy (rl);
-}
-
-static int idkey_insert_id_string (json_t *obj, unsigned int id, const char *s)
-{
-    json_t *o;
-    int rc;
-
-    if (!(o = json_string (s))) {
-        errno = ENOMEM;
-        return -1;
-    }
-    rc = rutil_idkey_insert_id (obj, id, o);
-    ERRNO_SAFE_WRAP (json_decref, o);
-    return rc;
 }
 
 /* Set up for reduction of distributed topo->r_local to inventory.
@@ -261,12 +225,6 @@ static int topo_reduce (struct topo *topo)
         return -1;
 
     topo->reduce.count = 1;
-    if (!(topo->reduce.xml = json_object ()))
-        goto nomem;
-    if (idkey_insert_id_string (topo->reduce.xml,
-                                topo->ctx->rank,
-                                topo->xml) < 0)
-        goto error;
     if (!(topo->reduce.rl = rlist_copy_empty (topo->r_local)))
         goto nomem;
 
@@ -277,7 +235,6 @@ static int topo_reduce (struct topo *topo)
     return 0;
 nomem:
     errno = ENOMEM;
-error:
     return -1;
 }
 
@@ -312,7 +269,6 @@ void topo_destroy (struct topo *topo)
         flux_msg_handler_delvec (topo->handlers);
         free (topo->xml);
         rlist_destroy (topo->reduce.rl);
-        json_decref (topo->reduce.xml);
         rlist_destroy (topo->r_local);
         free (topo);
         errno = saved_errno;

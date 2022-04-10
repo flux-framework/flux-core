@@ -17,10 +17,6 @@ test_under_flux 2 system
 
 startctl="flux python ${SHARNESS_TEST_SRCDIR}/scripts/startctl.py"
 
-get_hwloc () {
-        flux python -c "import flux; print(flux.Flux().rpc(\"resource.get-xml\",nodeid=$1).get_str())"
-}
-
 test_expect_success 'broker.quorum was set to 0 by system test personality' '
 	echo 0 >quorum.exp &&
 	flux getattr broker.quorum >quorum.out &&
@@ -57,12 +53,6 @@ test_expect_success 'single node job can run with only rank 0 up' '
 
 test_expect_success 'two node job is accepted although it cannot run yet' '
 	flux mini submit -N2 -n2 echo Hello >jobid
-'
-
-# bug 3884
-test_expect_success 'resource.get-xml RPC fails with reasonable error' '
-	test_must_fail get_hwloc 0 2>get_hwloc.err &&
-	grep "may block forever" get_hwloc.err
 '
 
 test_expect_success 'start rank 1' '

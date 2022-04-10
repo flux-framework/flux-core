@@ -25,9 +25,6 @@ load_resource () {
 	done
 }
 
-get_hwloc () {
-	flux python -c "import flux; print(flux.Flux().rpc(\"resource.get-xml\",nodeid=$1).get_str())"
-}
 get_topo() {
 	flux python -c "import flux; print(flux.Flux().rpc(\"resource.topo-get\",nodeid=$1).get_str())"
 }
@@ -81,14 +78,6 @@ test_expect_success 'resource.R is populated after resource-define' '
 	flux kvs get resource.R
 '
 
-test_expect_success 'resource.get-xml works on rank 0' '
-	get_hwloc 0 >hwloc.json
-'
-
-test_expect_success 'resource.get-xml fails on rank 1' '
-	test_must_fail get_hwloc 1
-'
-
 test_expect_success 'reload resource module and re-capture eventlog' '
 	flux module remove resource &&
 	flux kvs eventlog get -u resource.eventlog >pre_restart.out &&
@@ -138,23 +127,10 @@ sanitize_hwloc_xml() {
     sed 's/pci_link_speed=".*"//g' $1
 }
 
-test_expect_success HAVE_JQ 'extract hwloc XML from JSON object' '
+test_expect_success HAVE_JQ 'get hwloc XML direct from ranks' '
 	mkdir -p hwloc &&
 	for i in $(seq 0 $(($SIZE-1))); do \
-		jq -r .xml[$i] hwloc.json | sanitize_hwloc_xml >hwloc/$i.xml; \
-	done
-'
-
-test_expect_success HAVE_JQ 'get hwloc XML direct from ranks' '
-	mkdir -p hwloc_direct &&
-	for i in $(seq 0 $(($SIZE-1))); do \
-		get_topo $i | sanitize_hwloc_xml >hwloc_direct/$i.xml || return 1; \
-	done
-'
-
-test_expect_success HAVE_JQ 'hwloc XML from both sources match' '
-	for i in $(seq 0 $(($SIZE-1))); do \
-		test_cmp hwloc_direct/$i.xml hwloc/$i.xml || return 1; \
+		get_topo $i | sanitize_hwloc_xml >hwloc/$i.xml || return 1; \
 	done
 '
 
@@ -214,10 +190,6 @@ test_expect_success HAVE_JQ 'reload resource module' '
 test_expect_success HAVE_JQ 'all ranks were drained' '
 	has_event drain >has_drain2.out &&
 	test $(wc -l <has_drain2.out) -eq $(($SIZE+1))
-'
-
-test_expect_success 'resource.get-xml blocks until all ranks are up' '
-	flux python ${SHARNESS_TEST_SRCDIR}/resource/get-xml-test.py
 '
 
 test_expect_success 'flux resource status works on rank > 0' '
