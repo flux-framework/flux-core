@@ -323,5 +323,49 @@ test_expect_success MAXRT 'tbon.zmqdebug with bad value on command line fails' '
 		/bin/true 2>zbadattr.err &&
 	grep "value must be an integer" zbadattr.err
 '
+test_expect_success MAXRT 'tbon.zmqdebug configured with wrong type fails' '
+	mkdir conf19 &&
+	cat <<-EOT >conf19/tbon.toml &&
+	[tbon]
+	zmqdebug = "notint"
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf19 \
+		/bin/true 2>zbadconf.err &&
+	grep "Expected integer" zbadconf.err
+'
+test_expect_success MAXRT 'tbon.zmqdebug configured with wrong type fails' '
+	mkdir conf20 &&
+	cat <<-EOT >conf20/tbon.toml &&
+	[tbon]
+	zmqdebug = "notint"
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf20 \
+		/bin/true 2>zbadconf.err &&
+	grep "Expected integer" zbadconf.err
+'
+test_expect_success 'tbon.torpid_max, tbon.torpid_min can be configured' '
+	mkdir conf21 &&
+	cat <<-EOT >conf21/tbon.toml &&
+	[tbon]
+	torpid_max = "5s"
+	torpid_min = "2s"
+	EOT
+	flux broker ${ARGS} -c conf21 \
+		flux getattr tbon.torpid_min >torpid_min.out &&
+	flux broker ${ARGS} -c conf21 \
+		flux getattr tbon.torpid_max >torpid_max.out &&
+	grep 2s torpid_min.out &&
+	grep 5s torpid_max.out
+'
+test_expect_success 'tbon.torpid_max configured with wrong type fails' '
+	mkdir conf22 &&
+	cat <<-EOT >conf22/tbon.toml &&
+	[tbon]
+	torpid_max = 5
+	EOT
+	test_must_fail flux broker ${ARGS} -c conf22 \
+		/bin/true 2>badtorpid.err &&
+	grep "Expected string" badtorpid.err
+'
 
 test_done
