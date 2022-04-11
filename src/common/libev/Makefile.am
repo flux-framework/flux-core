@@ -13,4 +13,8 @@ EXTRA_DIST = \
 	ev_poll.c \
 	ev_epoll.c \
 	ev_linuxaio.c \
-	libev.m4
+	ev_port.c \
+	ev_kqueue.c \
+	ev_iouring.c \
+	libev.m4 \
+	LICENSE
