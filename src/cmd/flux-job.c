@@ -1851,6 +1851,18 @@ static void attach_setup_stdin (struct attach_ctx *ctx)
 static void pty_client_exit_cb (struct flux_pty_client *c, void *arg)
 {
     int status = 0;
+    struct attach_ctx *ctx = arg;
+
+    /*  If this client exited before the attach, then it must have been
+     *   due to an RPC error. In that case, perhaps the remote pty has
+     *   gone away, so fallback to attaching to KVS output eventlogs.
+     */
+    if (!flux_pty_client_attached (c)) {
+        attach_setup_stdin (ctx);
+        attach_output_start (ctx);
+        return;
+    }
+
     if (flux_pty_client_exit_status (c, &status) < 0)
         log_err ("Unable to get remote pty exit status");
     flux_pty_client_restore_terminal ();
@@ -1880,11 +1892,11 @@ static void f_logf (void *arg,
     log_msg ("%s:%d: %s: %s", file, line, func, buf);
 }
 
-static int attach_pty (struct attach_ctx *ctx, const char *pty_service)
+static void attach_pty (struct attach_ctx *ctx, const char *pty_service)
 {
     int n;
     char topic [128];
-    int flags = FLUX_PTY_CLIENT_ATTACH_SYNC | FLUX_PTY_CLIENT_NOTIFY_ON_DETACH;
+    int flags = FLUX_PTY_CLIENT_NOTIFY_ON_DETACH;
 
     if (!(ctx->pty_client = flux_pty_client_create ()))
         log_err_exit ("flux_pty_client_create");
@@ -1903,18 +1915,13 @@ static int attach_pty (struct attach_ctx *ctx, const char *pty_service)
     if (flux_pty_client_attach (ctx->pty_client,
                                 ctx->h,
                                 ctx->leader_rank,
-                                topic) < 0) {
-        if (errno != ENOSYS)
-            log_err ("failed to attach to pty");
-        return -1;
-    }
+                                topic) < 0)
+        log_err_exit ("failed attempting to attach to pty");
 
     if (flux_pty_client_notify_exit (ctx->pty_client,
                                      pty_client_exit_cb,
-                                     NULL) < 0)
+                                     ctx) < 0)
         log_err_exit ("flux_pty_client_notify_exit");
-
-    return 0;
 }
 
 void handle_exec_log_msg (struct attach_ctx *ctx, double ts, json_t *context)
@@ -1989,13 +1996,19 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
             log_err_exit ("strdup service from shell.init");
 
         /*  If there is a pty service for this job, try to attach to it.
+         *  The attach is asynchronous, and if it fails, we fall back to
+         *   to kvs stdio handlers in the pty "exit callback".
+         *
          *  If there is not a pty service, or the pty attach fails, continue
          *   to process normal stdio. (This may be because the job is
          *   already complete).
          */
-        if (pty_service && ctx->readonly)
-            log_msg_exit ("Cannot connect to pty in readonly mode");
-        if (!pty_service || attach_pty (ctx, pty_service) < 0) {
+        if (pty_service) {
+            if (ctx->readonly)
+                log_msg_exit ("Cannot connect to pty in readonly mode");
+            attach_pty (ctx, pty_service);
+        }
+        else {
             attach_setup_stdin (ctx);
             attach_output_start (ctx);
         }
