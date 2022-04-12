@@ -1333,6 +1333,7 @@ struct attach_ctx {
     flux_future_t *output_f;
     flux_watcher_t *sigint_w;
     flux_watcher_t *sigtstp_w;
+    struct flux_pty_client *pty_client;
     struct timespec t_sigint;
     flux_watcher_t *stdin_w;
     zlist_t *stdin_rpcs;
@@ -1883,14 +1884,13 @@ static int attach_pty (struct attach_ctx *ctx, const char *pty_service)
 {
     int n;
     char topic [128];
-    struct flux_pty_client *c;
     int flags = FLUX_PTY_CLIENT_ATTACH_SYNC | FLUX_PTY_CLIENT_NOTIFY_ON_DETACH;
 
-    if (!(c = flux_pty_client_create ()))
+    if (!(ctx->pty_client = flux_pty_client_create ()))
         log_err_exit ("flux_pty_client_create");
 
-    flux_pty_client_set_flags (c, flags);
-    flux_pty_client_set_log (c, f_logf, NULL);
+    flux_pty_client_set_flags (ctx->pty_client, flags);
+    flux_pty_client_set_log (ctx->pty_client, f_logf, NULL);
 
     n = snprintf (topic, sizeof (topic), "%s.%s", ctx->service, pty_service);
     if (n >= sizeof (topic))
@@ -1900,17 +1900,18 @@ static int attach_pty (struct attach_ctx *ctx, const char *pty_service)
     /*  Attempt to attach to pty on rank 0 of this job.
      *  The attempt may fail if this job is not currently running.
      */
-    if (flux_pty_client_attach (c,
+    if (flux_pty_client_attach (ctx->pty_client,
                                 ctx->h,
                                 ctx->leader_rank,
                                 topic) < 0) {
         if (errno != ENOSYS)
             log_err ("failed to attach to pty");
-        flux_pty_client_destroy (c);
         return -1;
     }
 
-    if (flux_pty_client_notify_exit (c, pty_client_exit_cb, NULL) < 0)
+    if (flux_pty_client_notify_exit (ctx->pty_client,
+                                     pty_client_exit_cb,
+                                     NULL) < 0)
         log_err_exit ("flux_pty_client_notify_exit");
 
     return 0;
@@ -2221,6 +2222,7 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
     flux_watcher_destroy (ctx.sigint_w);
     flux_watcher_destroy (ctx.sigtstp_w);
     flux_watcher_destroy (ctx.stdin_w);
+    flux_pty_client_destroy (ctx.pty_client);
     flux_close (ctx.h);
     free (ctx.service);
     free (totalview_jobid);
