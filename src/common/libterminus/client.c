@@ -482,6 +482,11 @@ static void keepalive_cb (flux_reactor_t *r,
     }
 }
 
+bool flux_pty_client_attached (struct flux_pty_client *c)
+{
+    return c && c->attached;
+}
+
 int flux_pty_client_attach (struct flux_pty_client *c,
                             flux_t *h,
                             int rank,
