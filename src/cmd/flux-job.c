@@ -2098,6 +2098,17 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                          type,
                          severity,
                          note ? note : "");
+
+        /*  If this job has an interactive pty and the pty is not yet attached,
+         *   destroy the pty to avoid a potential hang attempting to connect
+         *   to job pty that will never exist.
+         */
+        if (severity == 0
+            && ctx->pty_client
+            && !flux_pty_client_attached (ctx->pty_client)) {
+            flux_pty_client_destroy (ctx->pty_client);
+            ctx->pty_client = NULL;
+        }
     }
     else if (!strcmp (name, "submit")) {
         if (!(ctx->exec_eventlog_f = flux_job_event_watch (ctx->h,
