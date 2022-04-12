@@ -548,10 +548,8 @@ int flux_pty_client_attach (struct flux_pty_client *c,
             flux_future_destroy (f);
             return -1;
         }
-        /*  No need to reset future `f` here. The fulfilled future will
-         *   immediately invoke pty_server_cb(), which expects a message
-         *   of type=attach from server
-         */
+        pty_client_attached (c);
+        flux_future_reset (f);
     }
     if (flux_future_then (f, -1, pty_server_cb, c) < 0) {
         flux_future_destroy (f);
