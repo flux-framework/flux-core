@@ -82,15 +82,15 @@ test_expect_success 'load cron module' '
     flux module load cron
 '
 test_expect_success 'flux-cron tab works for set minute' '
-    $set_faketime 2016-06-04 15:30:00 &&
+    $set_faketime today 15:30 &&
     id=$(echo "15 * * * * flux event pub t.cron.complete" | flux_cron tab) &&
-    next=$(date +%s --date="2016-06-04 16:15:00") &&
+    next=$(date +%s --date="today 16:15") &&
     cron_entry_check ${id} type datetime &&
     cron_entry_check ${id} stopped false &&
     cron_entry_check ${id} typedata.next_wakeup ${next} &&
     echo sleeping at $(date) &&
     ${event_trace} t.cron t.cron.complete \
-        $set_faketime 2016-06-04 16:15:00 &&
+        $set_faketime today 16:15 &&
     echo done at $(date) &&
     cron_entry_check ${id} stats.count 1 &&
     flux cron delete ${id}
