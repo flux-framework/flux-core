@@ -45,6 +45,8 @@ static void test_invalid_args ()
         "flux_pty_name() returns EINVAL with NULL arg");
     ok (flux_pty_attach (NULL) < 0 && errno == EINVAL,
         "flux_pty_attach() returns EINVAL with NULL arg");
+    ok (flux_pty_client_attached (NULL) == false,
+        "flux_pty_client_attached() returns false with NULL arg");
     ok (flux_pty_set_flux (NULL, NULL) < 0 && errno == EINVAL,
         "flux_pty_set_flux() returns EINVAL with NULL args");
     ok (flux_pty_set_flux (pty, NULL) < 0 && errno == EINVAL,
@@ -413,8 +415,14 @@ static void test_client()
     ok (flux_pty_client_notify_exit (c, pty_exit_cb, h) == 0,
         "flux_pty_client_notify_exit");
 
+    ok (flux_pty_client_attached (c) == false,
+        "flux_pty_client_attached is false");
+
     ok (flux_pty_client_attach (c, h, 0, "pty") == 0,
         "flux_pty_client_attach");
+
+    ok (flux_pty_client_attached (c),
+        "flux_pty_client_attached is true after synchronous attach");
 
     f = flux_pty_client_write (c, "foo\r", 4);
     ok (f != NULL,

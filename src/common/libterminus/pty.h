@@ -163,6 +163,11 @@ int flux_pty_client_attach (struct flux_pty_client *c,
                             int rank,
                             const char *service);
 
+/*  Return true if the pty has completed an attach, i.e. the attach
+ *   request has gotten its first response.
+ */
+bool flux_pty_client_attached (struct flux_pty_client *pty);
+
 /*  Write data out-of-band to remote pty.
  */
 flux_future_t *flux_pty_client_write (struct flux_pty_client *c,

@@ -52,6 +52,8 @@ struct flux_pty_client {
     flux_watcher_t *sw;   /* signal watcher       */
     flux_watcher_t *kaw;  /* keepalive timer      */
 
+    flux_future_t *rpc_f; /* streaming RPC future */
+
     struct termios term;
 
     zlist_t *exit_waiters;
@@ -71,6 +73,7 @@ void flux_pty_client_destroy (struct flux_pty_client *c)
         flux_watcher_destroy (c->fdw);
         flux_watcher_destroy (c->sw);
         flux_watcher_destroy (c->kaw);
+        flux_future_destroy (c->rpc_f);
         zlist_destroy (&c->exit_waiters);
         free (c->exit_message);
         free (c->service);
@@ -349,7 +352,8 @@ static void pty_server_cb (flux_future_t *f, void *arg)
         else
             code = 0;
         pty_die (c, code, message);
-        flux_future_destroy (f);
+        flux_future_destroy (c->rpc_f);
+        c->rpc_f = NULL;
         return;
     }
     if (strcmp (type, "attach") == 0)
@@ -363,7 +367,9 @@ static void pty_server_cb (flux_future_t *f, void *arg)
     else {
         llog_error (c, "unknown server response type=%s", type);
         pty_die (c, 1, "Protocol error");
-        flux_future_destroy (f);
+        flux_future_destroy (c->rpc_f);
+        c->rpc_f = NULL;
+        return;
     }
     flux_future_reset (f);
 }
@@ -476,6 +482,11 @@ static void keepalive_cb (flux_reactor_t *r,
     }
 }
 
+bool flux_pty_client_attached (struct flux_pty_client *c)
+{
+    return c && c->attached;
+}
+
 int flux_pty_client_attach (struct flux_pty_client *c,
                             flux_t *h,
                             int rank,
@@ -542,15 +553,14 @@ int flux_pty_client_attach (struct flux_pty_client *c,
             flux_future_destroy (f);
             return -1;
         }
-        /*  No need to reset future `f` here. The fulfilled future will
-         *   immediately invoke pty_server_cb(), which expects a message
-         *   of type=attach from server
-         */
+        pty_client_attached (c);
+        flux_future_reset (f);
     }
     if (flux_future_then (f, -1, pty_server_cb, c) < 0) {
         flux_future_destroy (f);
         return -1;
     }
+    c->rpc_f = f;
     return 0;
 }
 
