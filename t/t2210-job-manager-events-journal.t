@@ -6,13 +6,13 @@ test_description='Test flux job manager journal service'
 
 export FLUX_CONF_DIR=$(pwd)
 
-# set events_maxlen to something more sensible in testing,
+# set journal-size-limit to something more sensible in testing,
 # otherwise we'll be parsing 100s of entries regularly.  20 is a good
 # number, since it will always cover the prior two jobs that were
 # executed.
 cat >job-manager.toml <<EOF
 [job-manager]
-events_maxlen = 50
+journal-size-limit = 50
 EOF
 
 test_under_flux 4
@@ -289,6 +289,22 @@ test_expect_success HAVE_JQ 'job-manager: events-journal request fails if deny n
 	$jq -j -c -n "{deny:5}" > cc3.in &&
 	test_must_fail $EVENTS_JOURNAL_STREAM < cc3.in 2> cc3.err &&
 	grep "deny should be an object" cc3.err
+'
+
+test_expect_success 'job-manager: journal-size-limit can be reconfigured' '
+	cat >job-manager.toml <<-EOF &&
+	[job-manager]
+	journal-size-limit = 10
+	EOF
+	flux config reload
+'
+
+test_expect_success 'job-manager: journal-size-limit must be an integer' '
+	cat >job-manager.toml <<-EOF &&
+	[job-manager]
+	journal-size-limit = "not-a-number"
+	EOF
+	test_must_fail flux config reload
 '
 
 test_done

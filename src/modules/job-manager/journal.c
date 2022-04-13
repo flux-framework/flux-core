@@ -20,10 +20,12 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 
+#include "conf.h"
 #include "journal.h"
 
-#define EVENTS_MAXLEN 1000
+#define DEFAULT_JOURNAL_SIZE_LIMIT 1000
 
 struct journal {
     struct job_manager *ctx;
@@ -31,7 +33,7 @@ struct journal {
     struct flux_msglist *listeners;
     /* holds most recent events for listeners */
     zlist_t *events;
-    int events_maxlen;
+    int size_limit;
 };
 
 struct journal_filter { // stored as aux item in request message
@@ -113,7 +115,7 @@ int journal_process_event (struct journal *journal,
         msg = flux_msglist_next (journal->listeners);
     }
 
-    if (zlist_size (journal->events) > journal->events_maxlen)
+    if (zlist_size (journal->events) > journal->size_limit)
         zlist_remove (journal->events, zlist_head (journal->events));
     if (zlist_append (journal->events, json_incref (wrapped_entry)) < 0)
         goto nomem;
@@ -240,11 +242,40 @@ void journal_listeners_disconnect_rpc (flux_t *h,
         flux_log_error (h, "error handling job-manager.disconnect (journal)");
 }
 
+static int journal_parse_config (const flux_conf_t *conf,
+                                 flux_error_t *error,
+                                 void *arg)
+{
+    struct journal *journal = arg;
+    flux_error_t e;
+    int size_limit = -1;
+
+    if (flux_conf_unpack (conf,
+                          &e,
+                          "{s?{s?i}}",
+                          "job-manager",
+                            "journal-size-limit", &size_limit) < 0)
+        return errprintf (error,
+                          "job-manager.journal-size-limit: %s",
+                          e.text);
+    if (size_limit > 0) {
+        journal->size_limit = size_limit;
+        /* Drop some entries if the journal size is reduced below
+         * what is currently stored.
+         */
+        while (zlist_size (journal->events) > journal->size_limit)
+            zlist_remove (journal->events, zlist_head (journal->events));
+    }
+    return 1; // indicates to conf.c that callback wants updates
+}
+
 void journal_ctx_destroy (struct journal *journal)
 {
     if (journal) {
         int saved_errno = errno;
         flux_t *h = journal->ctx->h;
+
+        conf_unregister_callback (journal->ctx->conf, journal_parse_config);
 
         flux_msg_handler_delvec (journal->handlers);
         if (journal->listeners) {
@@ -285,7 +316,7 @@ static const struct flux_msg_handler_spec htab[] = {
 struct journal *journal_ctx_create (struct job_manager *ctx)
 {
     struct journal *journal;
-    flux_error_t err;
+    flux_error_t error;
 
     if (!(journal = calloc (1, sizeof (*journal))))
         return NULL;
@@ -296,17 +327,17 @@ struct journal *journal_ctx_create (struct job_manager *ctx)
         goto error;
     if (!(journal->events = zlist_new ()))
         goto nomem;
-    journal->events_maxlen = EVENTS_MAXLEN;
+    journal->size_limit = DEFAULT_JOURNAL_SIZE_LIMIT;
 
-    if (flux_conf_unpack (flux_get_conf (ctx->h),
-                          &err,
-                          "{s?{s?i}}",
-                          "job-manager",
-                            "events_maxlen",
-                            &journal->events_maxlen) < 0) {
-        flux_log (ctx->h, LOG_ERR,
-                  "error reading job-manager config: %s",
-                  err.text);
+    if (conf_register_callback (ctx->conf,
+                                &error,
+                                journal_parse_config,
+                                journal) < 0) {
+        flux_log (ctx->h,
+                  LOG_ERR,
+                  "error parsing job-manager config: %s",
+                  error.text);
+        goto error;
     }
 
     return journal;

@@ -17,6 +17,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
 #include "job.h"
+#include "conf.h"
 #include "submit.h"
 #include "restart.h"
 #include "raise.h"
@@ -87,28 +88,6 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
-static void config_reload_cb (flux_t *h,
-                              flux_msg_handler_t *mh,
-                              const flux_msg_t *msg,
-                              void *arg)
-{
-    const flux_conf_t *conf;
-    const char *errstr = NULL;
-
-    if (flux_conf_reload_decode (msg, &conf) < 0)
-        goto error;
-    if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
-        errstr = "error updating cached configuration";
-        goto error;
-    }
-    if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to config-reload request");
-    return;
-error:
-    if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to config-reload request");
-}
-
 static const struct flux_msg_handler_spec htab[] = {
     {
         FLUX_MSGTYPE_REQUEST,
@@ -152,12 +131,6 @@ static const struct flux_msg_handler_spec htab[] = {
         stats_cb,
         0
     },
-    {
-        FLUX_MSGTYPE_REQUEST,
-        "job-manager.config-reload",
-        config_reload_cb,
-        0,
-    },
 
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -177,6 +150,10 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     zhashx_set_destructor (ctx.active_jobs, job_destructor);
     zhashx_set_duplicator (ctx.active_jobs, job_duplicator);
+    if (!(ctx.conf = conf_create (&ctx))) {
+        flux_log_error (h, "error creating conf context");
+        goto done;
+    }
     if (!(ctx.event = event_ctx_create (&ctx))) {
         flux_log_error (h, "error creating event batcher");
         goto done;
@@ -251,6 +228,7 @@ done:
     submit_ctx_destroy (ctx.submit);
     event_ctx_destroy (ctx.event);
     jobtap_destroy (ctx.jobtap);
+    conf_destroy (ctx.conf);
     zhashx_destroy (&ctx.active_jobs);
     return rc;
 }
