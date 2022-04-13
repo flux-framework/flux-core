@@ -115,4 +115,9 @@ test_expect_success 'pty: -o pty.interactive and -o pty.capture can be used toge
 test_expect_success 'pty: unsupported -o pty.<opt> generates exception' '
 	test_must_fail flux mini run -o pty.foo hostname
 '
+
+test_expect_success 'pty: no hang when invalid command is run under pty' '
+	test_expect_code 127 run_timeout 15 \
+		flux mini run -o pty.interactive nosuchcommand
+'
 test_done
