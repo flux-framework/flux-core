@@ -86,7 +86,15 @@ int fsd_format_duration_ex (char *buf,
         errno = EINVAL;
         return -1;
     }
-    if (duration < 60.)
+    /*  We'd rather present a result in seconds if possible, since that
+     *  is the base unit of FSD. However, if the duration is very small,
+     *  present in milliseconds since the result will be easier for a
+     *  human to read. E.g. 62.1ms vs 0.0621s, or more importantly
+     *  0.0123ms vs 1.23e-05s.
+     */
+    if (duration < 0.1 && duration != 0.)
+        return snprintf (buf, len, "%.*gms", precision, duration * 1000.);
+    else if (duration < 60.)
         return snprintf (buf, len, "%.*gs", precision, duration);
     else if (duration < 60. * 60.)
         return snprintf (buf, len, "%.*gm", precision, duration / 60.);
