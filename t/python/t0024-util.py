@@ -40,10 +40,16 @@ class TestParseDatetime(unittest.TestCase):
         self.assertEqual(self.parse("+1m"), self.ts + 60)
         self.assertEqual(self.parse("+1.5m"), self.ts + 90)
         self.assertEqual(self.parse("+1h"), self.ts + 3600)
+        self.assertEqual(self.parse("+100ms"), self.ts + 0.1)
+        self.assertEqual(self.parse("+1ms"), self.ts + 0.001)
 
     def test_fsd_invalid(self):
         with self.assertRaises(ValueError):
-            self.parse("+1ms")
+            self.parse("+1ns")
+        with self.assertRaises(ValueError):
+            self.parse("+1x")
+        with self.assertRaises(ValueError):
+            self.parse("+x")
         with self.assertRaises(ValueError):
             self.parse("-")
 
