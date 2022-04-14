@@ -215,12 +215,12 @@ class CLIMain(object):
 
 
 def parse_fsd(fsd_string):
-    match = re.match(r".*([smhd])$", fsd_string)
+    match = re.match(r"(.*?)(s|m|h|d|ms)$", fsd_string)
     try:
-        value = float(fsd_string[:-1] if match else fsd_string)
+        value = float(match.group(1) if match else fsd_string)
     except:
         raise ValueError("invalid Flux standard duration")
-    unit = match.group(1) if match else "s"
+    unit = match.group(2) if match else "s"
 
     if unit == "m":
         seconds = timedelta(minutes=value).total_seconds()
@@ -228,6 +228,8 @@ def parse_fsd(fsd_string):
         seconds = timedelta(hours=value).total_seconds()
     elif unit == "d":
         seconds = timedelta(days=value).total_seconds()
+    elif unit == "ms":
+        seconds = timedelta(milliseconds=value).total_seconds()
     else:
         seconds = value
     if seconds < 0 or math.isnan(seconds) or math.isinf(seconds):
