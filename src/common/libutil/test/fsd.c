@@ -42,6 +42,10 @@ int main(int argc, char** argv)
         "fsd_parse_duration (0) returns success");
     ok (d == 0., "got d == %g", d);
 
+    ok (fsd_parse_duration ("0ms", &d) == 0,
+        "fsd_parse_duration (0ms) returns success");
+    ok (d == 0., "got d == %g", d);
+
     ok (fsd_parse_duration ("0s", &d) == 0,
         "fsd_parse_duration (0s) returns success");
     ok (d == 0., "got d == %g", d);
@@ -57,6 +61,14 @@ int main(int argc, char** argv)
     ok (fsd_parse_duration ("0d", &d) == 0,
         "fsd_parse_duration (0d) returns success");
     ok (d == 0., "got d == %g", d);
+
+    ok (fsd_parse_duration ("500ms", &d) == 0,
+        "fsd_parse_duration (500ms) returns success");
+    ok (d == 0.5, "got d == %g", d);
+
+    ok (fsd_parse_duration ("0.2ms", &d) == 0,
+        "fsd_parse_duration (0.2ms) returns success");
+    ok (d == 0.0002, "got d == %g", d);
 
     ok (fsd_parse_duration ("0.5", &d) == 0,
         "fsd_parse_duration (0.5) returns success");
@@ -95,7 +107,11 @@ int main(int argc, char** argv)
 
     ok (fsd_format_duration (buf, sizeof (buf), .001),
         "fsd_format_duration (.001) works");
-    is (buf, "0.001s", "returns expected string = %s", buf);
+    is (buf, "1ms", "returns expected string = %s", buf);
+
+    ok (fsd_format_duration (buf, sizeof (buf), 0.01),
+        "fsd_format_duration (0.5) works");
+    is (buf, "10ms", "returns expected string = %s", buf);
 
     ok (fsd_format_duration (buf, sizeof (buf), 5.),
         "fsd_format_duration (5.0) works");
