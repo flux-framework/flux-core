@@ -18,6 +18,7 @@
 #include <stdlib.h>
 
 #include "fsd.h"
+#include "src/common/libccan/ccan/str/str.h"
 
 static int is_invalid_duration (double d)
 {
@@ -51,33 +52,22 @@ int fsd_parse_duration (const char *s, double *dp)
     }
     d = strtod (s, &p);
 
-    if (is_invalid_duration (d)) {
+    if (is_invalid_duration (d))
         return -1;
-    }
-
-    if (*p && *(p + 1)) {
-        errno = EINVAL;
-        return -1;
-    }
 
     if (*p != '\0') {
-        unsigned int multiplier = 0;
-        switch (*p) {
-            case 0:
-            case 's':
-                multiplier = 1;
-                break;
-            case 'm':
-                multiplier = 60;
-                break;
-            case 'h':
-                multiplier = 60 * 60;
-                break;
-            case 'd':
-                multiplier = 60 * 60 * 24;
-                break;
-        }
-        if (multiplier == 0) {
+        double multiplier = 0.;
+        if (streq (p, "ms"))
+            multiplier = .001;
+        else if (streq (p, "s"))
+            multiplier = 1;
+        else if (streq (p, "m"))
+            multiplier = 60;
+        else if (streq (p, "h"))
+            multiplier = 60 * 60;
+        else if (streq (p, "d"))
+            multiplier = 60 * 60 * 24;
+        else  {
             errno = EINVAL;
             return -1;
         }
