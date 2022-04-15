@@ -28,6 +28,13 @@ test_under_flux 1 job
 
 flux setattr log-stderr-level 1
 
+# Other tests may refer to $(cat inactivejob) for inactive job id
+test_expect_success 'create one inactive job' '
+	flux mini submit /bin/true >inactivejob &&
+	flux queue drain
+'
+
+# After this, new jobs will remain in SCHED state
 test_expect_success 'unload job-exec,sched-simple modules' '
 	flux module remove job-exec &&
 	flux module remove sched-simple
@@ -205,6 +212,10 @@ test_expect_success 'job-manager: flux job urgency fails on invalid jobid' '
 	test_must_fail flux job urgency 12345 31
 '
 
+test_expect_success 'job-manager: flux job urgency fails on inactive jobid' '
+	test_must_fail flux job urgency $(cat inactivejob) 31
+'
+
 test_expect_success 'flux-job: raise fails with bad FLUX_URI' '
 	(FLUX_URI=/wrong test_must_fail flux job raise ${validjob})
 '
@@ -215,6 +226,10 @@ test_expect_success 'flux-job: raise fails with no args' '
 
 test_expect_success 'flux-job: raise fails with invalid jobid' '
 	test_must_fail flux job raise foo
+'
+
+test_expect_success 'flux-job: raise fails with inactive jobid' '
+	test_must_fail flux job raise $(cat inactivejob)
 '
 
 test_expect_success 'flux-job: raise fails with invalid option' '
@@ -287,6 +302,10 @@ test_expect_success 'flux-job: kill fails on non-running job' '
 	flux-job: kill ${validjob}: job is not running
 	EOF
 	test_cmp kill.expected kill.err
+'
+test_expect_success 'flux-job: kill fails on inactive job' '
+	test_expect_code 1 flux job kill $(cat inactivejob) 2>kill2.err &&
+	grep "job is inactive" kill2.err
 '
 
 test_expect_success 'flux-job: kill fails with invalid signal name' '
