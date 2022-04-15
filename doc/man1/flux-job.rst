@@ -20,6 +20,8 @@ SYNOPSIS
 
 **flux** **job** **raiseall** [*OPTIONS*] *type* [*message...*]
 
+**flux** **job** **purge** [*OPTIONS*]
+
 DESCRIPTION
 ===========
 
@@ -89,6 +91,25 @@ type (positional argument) and accepts the following options:
 
 **-f, --force**
    Confirm the command.
+
+PURGE
+=====
+
+Inactive job data may be purged from the Flux instance with ``flux job purge``.
+The following options may be used to add selection criteria:
+
+**--age-limit=FSD**
+   Purge inactive jobs older than the specified Flux Standard Duration.
+
+**--num-limit=COUNT**
+   Purge the oldest inactive jobs until there are at most COUNT left.
+
+**-f, --force**
+   Confirm the command.
+
+Inactive jobs may also be purged automatically if the job manager is
+configured as described in :man5:`flux-config-job-manager`.
+
 
 RESOURCES
 =========

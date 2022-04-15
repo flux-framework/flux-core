@@ -18,6 +18,16 @@ journal-size-limit
    be retained in the in-memory journal used to answer queries.  The default
    is 1000.
 
+inactive-age-limit
+   (optional) String (in RFC 23 Flux Standard Duration format) that specifies
+   the maximum age of inactive jobs retained in the KVS.  The age is computed
+   since the job became inactive.  Once a job is removed from the KVS, its job
+   data is only available via the job-archive, if configured.  Inactive jobs
+   can also be manually purged with :man1:`flux-job` ``purge``.
+
+inactive-num-limit
+   (optional) Integer maximum number of inactive jobs retained in the KVS.
+
 plugins
    (optional) An array of objects defining a list of jobtap plugin directives.
    Each directive follows the format defined in the :ref:`plugin_directive`
@@ -54,6 +64,9 @@ EXAMPLE
    [job-manager]
 
    journal-size-limit = 10000
+
+   inactive-age-limit = "7d"
+   inactive-num-limit = 10000
 
    plugins = [
       {
