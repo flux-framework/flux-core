@@ -64,6 +64,33 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+static void purge_cb (flux_t *h,
+                      flux_msg_handler_t *mh,
+                      const flux_msg_t *msg,
+                      void *arg)
+{
+    struct list_ctx *ctx = arg;
+    json_t *jobs;
+    size_t index;
+    json_t *entry;
+    int count = 0;
+
+    if (flux_event_unpack (msg, NULL, "{s:o}", "jobs", &jobs) < 0)
+        flux_log_error (h, "job-purge-inactive message");
+    json_array_foreach (jobs, index, entry) {
+        flux_jobid_t id = json_integer_value (entry);
+        struct job *job;
+
+        if ((job = zhashx_lookup (ctx->jsctx->index, &id))) {
+            if (job->list_handle)
+                zlistx_delete (ctx->jsctx->inactive, job->list_handle);
+            zhashx_delete (ctx->jsctx->index, &id);
+            count++;
+        }
+    }
+    flux_log (h, LOG_DEBUG, "purged %d inactive jobs", count);
+}
+
 static const struct flux_msg_handler_spec htab[] = {
     { .typemask     = FLUX_MSGTYPE_REQUEST,
       .topic_glob   = "job-list.list",
@@ -105,6 +132,11 @@ static const struct flux_msg_handler_spec htab[] = {
       .cb           = stats_cb,
       .rolemask     = 0
     },
+    { .typemask     = FLUX_MSGTYPE_EVENT,
+      .topic_glob   = "job-purge-inactive",
+      .cb           = purge_cb,
+      .rolemask     = 0
+    },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
@@ -128,6 +160,8 @@ static struct list_ctx *list_ctx_create (flux_t *h)
     if (!ctx)
         return NULL;
     ctx->h = h;
+    if (flux_event_subscribe (h, "job-purge-inactive") < 0)
+        goto error;
     if (flux_msg_handler_addvec (h, htab, ctx, &ctx->handlers) < 0)
         goto error;
     if (!(ctx->jsctx = job_state_create (ctx)))
