@@ -58,6 +58,20 @@ int purge_enqueue_job (struct purge *purge, struct job *job)
     return 0;
 }
 
+static int purge_publish (struct purge *purge, json_t *jobs)
+{
+    flux_future_t *f;
+
+    if (!(f = flux_event_publish_pack (purge->ctx->h,
+                                       "job-purge-inactive",
+                                       0,
+                                       "{s:O}",
+                                       "jobs", jobs)))
+        return -1;
+    flux_future_destroy (f);
+    return 0;
+}
+
 /* Return true if candidate job is eligible for purging based on
  * provided limits.  A job is purgeable if either limit is exceeded.
  */
@@ -107,12 +121,17 @@ static flux_future_t *purge_inactive_jobs (struct purge *purge,
     double now = flux_reactor_now (flux_get_reactor (purge->ctx->h));
     struct job *job;
     flux_kvs_txn_t *txn;
+    json_t *jobs = NULL;
     char key[64];
     flux_future_t *f = NULL;
     int count = 0;
 
     if (!(txn = flux_kvs_txn_create ()))
         return NULL;
+    if (!(jobs = json_array ())) {
+        errno = ENOMEM;
+        goto error;
+    }
     while ((job = zlistx_first (purge->queue)) && count < max_purge_count) {
         if (!purge_eligible (now - job->t_clean,
                              age_limit,
@@ -122,6 +141,12 @@ static flux_future_t *purge_inactive_jobs (struct purge *purge,
         if (flux_job_kvs_key (key, sizeof (key), job->id, NULL) < 0
             || flux_kvs_txn_unlink (txn, 0, key) < 0)
             goto error;
+        json_t *o = json_integer (job->id);
+        if (!o || json_array_append_new (jobs, o)) {
+            json_decref (o);
+            errno = ENOMEM;
+            goto error;
+        }
         (void)zlistx_delete (purge->queue, job->handle);
         job->handle = NULL;
         zhashx_delete (purge->ctx->inactive_jobs, &job->id);
@@ -132,9 +157,11 @@ static flux_future_t *purge_inactive_jobs (struct purge *purge,
         goto error;
     }
     if (!(f = flux_kvs_commit (purge->ctx->h, NULL, 0, txn))
-        || flux_future_aux_set (f, "count", int2ptr (count), NULL) < 0)
+        || flux_future_aux_set (f, "count", int2ptr (count), NULL) < 0
+        || purge_publish (purge, jobs) < 0)
         goto error;
     flux_kvs_txn_destroy (txn);
+    json_decref (jobs);
     /* N.B. if kvs commit fails, jobs are still removed from the hash/list.
      * It doesn't seem worth the effort to structure the code to avoid this
      * due to high complexity of solution, low probability of error, and
@@ -143,6 +170,7 @@ static flux_future_t *purge_inactive_jobs (struct purge *purge,
     return f;
 error:
     flux_kvs_txn_destroy (txn);
+    json_decref (jobs);
     flux_future_destroy (f);
     return NULL;
 }
