@@ -59,6 +59,25 @@ void job_stats_update (struct job_stats *stats,
     }
 }
 
+/* An inactive job is being purged, so statistics must be updated.
+ */
+void job_stats_purge (struct job_stats *stats, struct job *job)
+{
+    assert (job->state == FLUX_JOB_STATE_INACTIVE);
+
+    stats->state_count[state_index(job->state)]--;
+
+    if (!job->success) {
+        stats->failed--;
+        if (job->exception_occurred) {
+            if (strcmp (job->exception_type, "cancel") == 0)
+                stats->canceled--;
+            else if (strcmp (job->exception_type, "timeout") == 0)
+                stats->timeout--;
+        }
+    }
+}
+
 static int object_set_integer (json_t *o,
                                const char *key,
                                unsigned int n)
