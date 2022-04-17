@@ -36,7 +36,7 @@ def import_plugins(pkg_name, pluginpath=None):
         pkg = importlib.import_module(pkg_name)
         plugins = import_plugins_pkg(pkg)
     except ModuleNotFoundError:
-        return []
+        return {}
 
     if pluginpath is not None:
         #  Undo any added pluginpath elements.

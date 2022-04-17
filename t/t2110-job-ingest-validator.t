@@ -44,6 +44,13 @@ test_expect_success 'flux job-validator --list-plugins works' '
 	grep feasibility list-plugins.output &&
 	grep require-instance list-plugins.output
 '
+test_expect_success 'validator plugin behaves when no plugins are found' '
+	cat <<-EOF >test-importer.py &&
+	from flux.importer import import_plugins
+	type(import_plugins("xxyyzz112233"))
+	EOF
+	flux python ./test-importer.py
+'
 test_expect_success 'flux job-validator --help shows help for selected plugins' '
 	flux job-validator --plugins=jobspec --help >help.jobspec.out 2>&1 &&
 	flux job-validator --plugins=schema --help >help.schema.out 2>&1 &&
