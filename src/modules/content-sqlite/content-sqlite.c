@@ -72,6 +72,8 @@ struct content_sqlite {
     size_t lzo_bufsize;
     void *lzo_buf;
     struct content_stats stats;
+    const char *journal_mode;
+    const char *synchronous;
 };
 
 static void log_sqlite_error (struct content_sqlite *ctx, const char *fmt, ...)
@@ -605,21 +607,24 @@ error:
 static int content_sqlite_opendb (struct content_sqlite *ctx)
 {
     int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
+    char s[128];
 
     if (sqlite3_open_v2 (ctx->dbfile, &ctx->db, flags, NULL) != SQLITE_OK) {
         log_sqlite_error (ctx, "opening %s", ctx->dbfile);
         goto error;
     }
+    snprintf (s, sizeof (s), "PRAGMA journal_mode=%s", ctx->journal_mode);
     if (sqlite3_exec (ctx->db,
-                      "PRAGMA journal_mode=OFF",
+                      s,
                       NULL,
                       NULL,
                       NULL) != SQLITE_OK) {
         log_sqlite_error (ctx, "setting sqlite 'journal_mode' pragma");
         goto error;
     }
+    snprintf (s, sizeof (s), "PRAGMA synchronous=%s", ctx->synchronous);
     if (sqlite3_exec (ctx->db,
-                      "PRAGMA synchronous=OFF",
+                      s,
                       NULL,
                       NULL,
                       NULL) != SQLITE_OK) {
@@ -720,6 +725,8 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
         goto error;
     ctx->lzo_bufsize = lzo_buf_chunksize;
     ctx->h = h;
+    ctx->journal_mode = "WAL";
+    ctx->synchronous = "NORMAL";
 
     /* Some tunables:
      * - the hash function, e.g. sha1, sha256
@@ -732,10 +739,15 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
     }
 
     /* Prefer 'statedir' as the location for content.sqlite file, if set.
-     * Otherwise use 'rundir'.
+     * Otherwise use 'rundir', and enable pragmas that increase performance
+     * but risk database corruption on a crash (since rundir is temporary
+     * and the database is not being preserved after a crash anyway).
      */
-    if (!(dbdir = flux_attr_get (h, "statedir")))
+    if (!(dbdir = flux_attr_get (h, "statedir"))) {
         dbdir = flux_attr_get (h, "rundir");
+        ctx->journal_mode = "OFF";
+        ctx->synchronous = "OFF";
+    }
     if (!dbdir) {
         flux_log_error (h, "neither statedir nor rundir are set");
         goto error;
@@ -761,6 +773,24 @@ error:
     return NULL;
 }
 
+static int process_args (struct content_sqlite *ctx, int argc, char **argv)
+{
+    int i;
+    for (i = 0; i < argc; i++) {
+        if (strncmp ("journal_mode=", argv[i], 13) == 0) {
+            ctx->journal_mode = argv[i] + 13;
+        }
+        else if (strncmp ("synchronous=", argv[i], 12) == 0) {
+            ctx->synchronous = argv[i] + 12;
+        }
+        else {
+            flux_log_error (ctx->h, "Unknown module option: '%s'", argv[i]);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     struct content_sqlite *ctx;
@@ -770,6 +800,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "content_sqlite_create failed");
         return -1;
     }
+    if (process_args (ctx, argc, argv) < 0) // override pragmas set above
+        goto done;
     if (content_sqlite_opendb (ctx) < 0)
         goto done;
     if (content_register_backing_store (h, "content-sqlite") < 0)
