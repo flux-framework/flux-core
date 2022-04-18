@@ -270,7 +270,7 @@ void dmesg_print_human (struct dmesg_ctx *ctx, const char *buf, int len)
     fflush (stdout);
 }
 
-void dmesg_print (const char *buf, int len)
+void dmesg_print (struct dmesg_ctx *ctx, const char *buf, int len)
 {
     struct stdlog_header hdr;
     const char *msg;
@@ -282,12 +282,18 @@ void dmesg_print (const char *buf, int len)
     else {
         nodeid = strtoul (hdr.hostname, NULL, 10);
         severity = STDLOG_SEVERITY (hdr.pri);
-        printf ("%s %s.%s[%" PRIu32 "]: %.*s\n",
-                 hdr.timestamp,
-                 hdr.appname,
-                 stdlog_severity_to_string (severity),
-                 nodeid,
-                 msglen, msg);
+        printf ("%s%s%s %s%s.%s[%" PRIu32 "]%s: %s%.*s%s\n",
+                dmesg_color (ctx, DMESG_COLOR_TIME),
+                hdr.timestamp,
+                dmesg_color_reset (ctx),
+                dmesg_color (ctx, DMESG_COLOR_NAME),
+                hdr.appname,
+                stdlog_severity_to_string (severity),
+                nodeid,
+                dmesg_color_reset (ctx),
+                severity_color (ctx, severity),
+                msglen, msg,
+                dmesg_color_reset (ctx));
     }
     fflush (stdout);
 }
@@ -352,7 +358,7 @@ static int cmd_dmesg (optparse_t *p, int ac, char *av[])
             if (optparse_hasopt (p, "human"))
                 dmesg_print_human (&ctx, buf, strlen (buf));
             else
-                dmesg_print (buf, strlen (buf));
+                dmesg_print (&ctx, buf, strlen (buf));
             flux_future_reset (f);
         }
         if (errno != ENODATA)
