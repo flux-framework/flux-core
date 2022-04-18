@@ -51,6 +51,19 @@ static void shell_eventlogger_unref (struct eventlogger *ev, void *arg)
     flux_shell_remove_completion_ref (shev->shell, "shell_eventlogger");
 }
 
+int shell_eventlogger_reconnect (struct shell_eventlogger *shev)
+{
+    /* during a reconnect, response to event logging may not occur,
+     * thus shell_eventlogger_unref() may not be called.  Clear all
+     * completion references to inflight transactions.
+     */
+
+    while (flux_shell_remove_completion_ref (shev->shell,
+                                             "shell_eventlogger") == 0);
+
+    return 0;
+}
+
 void shell_eventlogger_destroy (struct shell_eventlogger *shev)
 {
     if (shev) {

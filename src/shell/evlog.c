@@ -99,6 +99,23 @@ static void evlog_unref (struct eventlogger *ev, void *arg)
     flux_shell_remove_completion_ref (evlog->shell, "eventlogger.txn");
 }
 
+static int log_eventlog_reconnect (flux_plugin_t *p,
+                                   const char *topic,
+                                   flux_plugin_arg_t *args,
+                                   void *data)
+{
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+
+    /* during a reconnect, response to event logging may not occur,
+     * thus evlog_unref() may not be called.  Clear all completion
+     * references to inflight transactions.
+     */
+
+    while (flux_shell_remove_completion_ref (shell, "eventlogger.txn") == 0);
+
+    return 0;
+}
+
 static void evlog_error (struct eventlogger *ev,
                          void *arg,
                          int errnum,
@@ -221,6 +238,7 @@ err:
 struct shell_builtin builtin_log_eventlog = {
     .name = FLUX_SHELL_PLUGIN_NAME,
     .connect = log_eventlog_start,
+    .reconnect = log_eventlog_reconnect,
 };
 
 /*

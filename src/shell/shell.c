@@ -269,6 +269,9 @@ static int reconnect (flux_t *h, void *arg)
     if (plugstack_call (shell->plugstack, "shell.reconnect", NULL) < 0)
         shell_log_errno ("shell.reconnect");
 
+    if (shell_eventlogger_reconnect (shell->ev) < 0)
+        shell_log_errno ("shell_eventlogger_reconnect");
+
     shell_log ("broker: reconnected");
     return 0;
 }
