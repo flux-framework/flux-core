@@ -328,6 +328,7 @@ static int cmd_dmesg (optparse_t *p, int ac, char *av[])
 
     tzset ();
 
+    log_init ("flux-dmesg");
     if ((n = optparse_option_index (p)) != ac)
         log_msg_exit ("flux-dmesg accepts no free arguments");
 
