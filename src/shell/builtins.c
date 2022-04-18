@@ -74,6 +74,8 @@ static int shell_load_builtin (flux_shell_t *shell,
         || flux_plugin_set_name (p, sb->name) < 0
         || flux_plugin_add_handler (p, "shell.validate", sb->validate, NULL) < 0
         || flux_plugin_add_handler (p, "shell.connect",  sb->connect, NULL) < 0
+        || flux_plugin_add_handler (p, "shell.reconnect",
+                                    sb->reconnect, NULL) < 0
         || flux_plugin_add_handler (p, "shell.init", sb->init, NULL) < 0
         || flux_plugin_add_handler (p, "shell.exit", sb->exit, NULL) < 0
         || flux_plugin_add_handler (p, "task.init",  sb->task_init, NULL) < 0

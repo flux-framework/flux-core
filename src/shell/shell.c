@@ -265,6 +265,10 @@ static int reconnect (flux_t *h, void *arg)
     if (flux_rpc_get (f, NULL) < 0)
         shell_die (1, "flux_service_register: %s", future_strerror (f, errno));
     flux_future_destroy (f);
+
+    if (plugstack_call (shell->plugstack, "shell.reconnect", NULL) < 0)
+        shell_log_errno ("shell.reconnect");
+
     shell_log ("broker: reconnected");
     return 0;
 }
