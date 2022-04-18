@@ -111,5 +111,39 @@ test_expect_success 'logged non-ascii characters handled ok' '
 test_expect_success 'dmesg request with empty payload fails with EPROTO(71)' '
 	${RPC} log.dmesg 71 </dev/null
 '
+test_expect_success 'dmesg -H, --human works' '
+	#
+	#  Note: --human option should format first timestamp of dmesg output
+	#   as [MmmDD HH:MM] and second line should be an offset thereof
+	#   e.g. [  +0.NNNNNN]. The following regexes attempt to verify
+	#   that --human produced this pattern.
+	#
+	flux dmesg --human | sed -n 1p \
+	    | grep "^\[[A-Z][a-z][a-z][0-3][0-9] [0-9][0-9]:[0-9][0-9]\]" &&
+	flux dmesg --human | sed -n 2p \
+	    | grep "^\[ *+[0-9]*\.[0-9]*\]"
+'
+test_expect_success 'dmesg -H, --human --delta works' '
+	flux dmesg --human --delta | sed -n 1p \
+	    | grep "^\[[A-Z][a-z][a-z][0-3][0-9] [0-9][0-9]:[0-9][0-9]\]" &&
+	flux dmesg --human --delta | sed -n 2p \
+	    | grep "^\[ *+[0-9]*\.[0-9]*\]"
+'
+test_expect_success 'dmesg --delta without --human fails' '
+	test_must_fail flux dmesg --delta
+'
+test_expect_success 'dmesg -H, --human --color works' '
+	flux dmesg --human --color | sed -n 1p | grep "^" &&
+	flux dmesg --human --color | sed -n 2p | grep "^"
+'
+test_expect_success 'dmesg colorizes lines by severity' '
+	for s in emerg alert crit err warning notice debug; do
+	    flux logger --severity=$s severity=$s &&
+	    flux dmesg --human --color | grep "[^ ]*severity=$s"
+	done
+'
+test_expect_success 'dmesg with invalid --color option fails' '
+	test_must_fail flux dmesg --color=foo
+'
 
 test_done
