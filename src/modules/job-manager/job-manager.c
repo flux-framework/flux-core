@@ -29,6 +29,7 @@
 #include "event.h"
 #include "drain.h"
 #include "wait.h"
+#include "purge.h"
 #include "annotate.h"
 #include "journal.h"
 #include "getattr.h"
@@ -75,9 +76,12 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager *ctx = arg;
     int journal_listeners = journal_listeners_count (ctx->journal);
-    if (flux_respond_pack (h, msg, "{s:{s:i}}",
+    if (flux_respond_pack (h, msg, "{s:{s:i} s:i s:i}",
                            "journal",
-                             "listeners", journal_listeners) < 0) {
+                             "listeners", journal_listeners,
+                           "active_jobs", zhashx_size (ctx->active_jobs),
+                           "inactive_jobs", zhashx_size (ctx->inactive_jobs)
+                           ) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -144,14 +148,21 @@ int mod_main (flux_t *h, int argc, char **argv)
     memset (&ctx, 0, sizeof (ctx));
     ctx.h = h;
 
-    if (!(ctx.active_jobs = job_hash_create ())) {
-        flux_log_error (h, "error creating active_jobs hash");
+    if (!(ctx.active_jobs = job_hash_create ())
+        || !(ctx.inactive_jobs = job_hash_create ())) {
+        flux_log_error (h, "error creating jobs hash");
         goto done;
     }
     zhashx_set_destructor (ctx.active_jobs, job_destructor);
     zhashx_set_duplicator (ctx.active_jobs, job_duplicator);
+    zhashx_set_destructor (ctx.inactive_jobs, job_destructor);
+    zhashx_set_duplicator (ctx.inactive_jobs, job_duplicator);
     if (!(ctx.conf = conf_create (&ctx))) {
         flux_log_error (h, "error creating conf context");
+        goto done;
+    }
+    if (!(ctx.purge = purge_create (&ctx))) {
+        flux_log_error (h, "error creating purge context");
         goto done;
     }
     if (!(ctx.event = event_ctx_create (&ctx))) {
@@ -217,6 +228,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     rc = 0;
 done:
     flux_msg_handler_delvec (ctx.handlers);
+    purge_destroy (ctx.purge);
     journal_ctx_destroy (ctx.journal);
     annotate_ctx_destroy (ctx.annotate);
     kill_ctx_destroy (ctx.kill);
@@ -230,6 +242,7 @@ done:
     jobtap_destroy (ctx.jobtap);
     conf_destroy (ctx.conf);
     zhashx_destroy (&ctx.active_jobs);
+    zhashx_destroy (&ctx.inactive_jobs);
     return rc;
 }
 

@@ -91,6 +91,7 @@ int cmd_info (optparse_t *p, int argc, char **argv);
 int cmd_stats (optparse_t *p, int argc, char **argv);
 int cmd_wait (optparse_t *p, int argc, char **argv);
 int cmd_memo (optparse_t *p, int argc, char **argv);
+int cmd_purge (optparse_t *p, int argc, char **argv);
 
 int stdin_flags;
 
@@ -333,6 +334,22 @@ static struct optparse_option memo_opts[] = {
     OPTPARSE_TABLE_END
 };
 
+static struct optparse_option purge_opts[] = {
+    { .name = "age-limit", .has_arg = 1, .arginfo = "FSD",
+      .usage = "Purge jobs that became inactive beyond age-limit.",
+    },
+    { .name = "num-limit", .has_arg = 1, .arginfo = "COUNT",
+      .usage = "Purge oldest inactive jobs until COUNT are left.",
+    },
+    { .name = "force", .key = 'f', .has_arg = 0,
+      .usage = "Perform the irreversible purge.",
+    },
+    { .name = "batch", .has_arg = 1, .arginfo = "COUNT",
+      .usage = "Limit number of jobs per request (default 50).",
+    },
+    OPTPARSE_TABLE_END
+};
+
 static struct optparse_subcommand subcommands[] = {
     { "list",
       "[OPTIONS]",
@@ -481,6 +498,13 @@ static struct optparse_subcommand subcommands[] = {
       cmd_memo,
       0,
       memo_opts,
+    },
+    { "purge",
+      "[--age-limit=FSD] [--count-limit=N]",
+      "Purge the oldest inactive jobs",
+      cmd_purge,
+      0,
+      purge_opts,
     },
     OPTPARSE_SUBCMD_END
 };
@@ -3069,6 +3093,62 @@ int cmd_memo (optparse_t *p, int argc, char **argv)
     return (0);
 }
 
+int cmd_purge (optparse_t *p, int argc, char **argv)
+{
+    int optindex = optparse_option_index (p);
+    flux_t *h;
+    int rc = 0;
+    double age_limit = optparse_get_duration (p, "age-limit", -1.);
+    int num_limit = optparse_get_int (p, "num-limit", -1);
+    int batch = optparse_get_int (p, "batch", 50);
+    int force = 0;
+    int count;
+    int total = 0;
+    int inactives;
+    flux_future_t *f;
+
+    if ((argc - optindex) > 0) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (optparse_hasopt (p, "force"))
+        force = 1;
+    if (!(h = flux_open (NULL, 0)))
+        log_err_exit ("flux_open");
+
+    do {
+        if (!(f = flux_rpc_pack (h,
+                                 "job-manager.purge",
+                                 0,
+                                 0,
+                                 "{s:f s:i s:i s:b}",
+                                 "age_limit", age_limit,
+                                 "num_limit", num_limit,
+                                 "batch", batch,
+                                 "force", force))
+            || flux_rpc_get_unpack (f, "{s:i}", "count", &count) < 0)
+            log_msg_exit ("purge: %s", future_strerror (f, errno));
+        total += count;
+        flux_future_destroy (f);
+    } while (force && count == batch);
+
+    if (!(f = flux_rpc (h, "job-manager.stats.get", NULL, 0, 0))
+        || flux_rpc_get_unpack (f, "{s:i}", "inactive_jobs", &inactives) < 0)
+        log_err_exit ("purge: failed to fetch inactive job count");
+    flux_future_destroy (f);
+
+    if (force)
+        printf ("purged %d inactive jobs, %d remaining\n", total, inactives);
+    else {
+        printf ("use --force to purge %d of %d inactive jobs\n",
+                total,
+                inactives);
+    }
+
+    flux_close (h);
+
+    return rc;
+}
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

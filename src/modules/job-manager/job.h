@@ -32,6 +32,7 @@ struct job {
     flux_job_state_t state;
     json_t *end_event;      // event that caused transition to CLEANUP state
     const flux_msg_t *waiter; // flux_job_wait() request
+    double t_clean;
 
     uint8_t depend_posted:1;// depend event already posted
     uint8_t alloc_queued:1; // queued for alloc, but alloc request not sent
@@ -75,11 +76,13 @@ void *job_aux_get (struct job *job, const char *name);
 void job_aux_delete (struct job *job, const void *val);
 
 /* Helpers for maintaining czmq containers of 'struct job'.
- * The comparator sorts by (1) priority, then (2) jobid.
+ * job_priority_comparator sorts by (1) priority, then (2) jobid.
+ * job_age_comparator sorts by the time the job became inactive.
  */
 void job_destructor (void **item);
 void *job_duplicator (const void *item);
-int job_comparator (const void *a1, const void *a2);
+int job_priority_comparator (const void *a1, const void *a2);
+int job_age_comparator (const void *a1, const void *a2);
 
 /*  Add and remove job dependencies
  */

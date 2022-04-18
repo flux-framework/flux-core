@@ -84,7 +84,10 @@ void kill_handle_request (flux_t *h,
         goto error;
     }
     if (!(job = zhashx_lookup (ctx->active_jobs, &id))) {
-        errstr = "unknown job id";
+        if (!(job = zhashx_lookup (ctx->inactive_jobs, &id)))
+            errstr = "unknown job id";
+        else
+            errstr = "job is inactive";
         errno = EINVAL;
         goto error;
     }

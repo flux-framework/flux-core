@@ -649,7 +649,7 @@ int alloc_queue_recalc_pending (struct alloc *alloc)
     while (alloc->alloc_limit
            && head
            && tail) {
-        if (job_comparator (head, tail) < 0) {
+        if (job_priority_comparator (head, tail) < 0) {
             if (alloc_cancel_alloc_request (alloc, tail) < 0) {
                 flux_log_error (alloc->ctx->h, "%s: alloc_cancel_alloc_request",
                                 __FUNCTION__);
@@ -845,13 +845,13 @@ struct alloc *alloc_ctx_create (struct job_manager *ctx)
     if (!(alloc->queue = zlistx_new()))
         goto error;
     zlistx_set_destructor (alloc->queue, job_destructor);
-    zlistx_set_comparator (alloc->queue, job_comparator);
+    zlistx_set_comparator (alloc->queue, job_priority_comparator);
     zlistx_set_duplicator (alloc->queue, job_duplicator);
 
     if (!(alloc->pending_jobs = zlistx_new()))
         goto error;
     zlistx_set_destructor (alloc->pending_jobs, job_destructor);
-    zlistx_set_comparator (alloc->pending_jobs, job_comparator);
+    zlistx_set_comparator (alloc->pending_jobs, job_priority_comparator);
     zlistx_set_duplicator (alloc->pending_jobs, job_duplicator);
 
     if (flux_msg_handler_addvec (ctx->h, htab, ctx, &alloc->handlers) < 0)

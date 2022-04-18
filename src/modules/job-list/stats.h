@@ -28,6 +28,8 @@ void job_stats_update (struct job_stats *stats,
                        struct job *job,
                        flux_job_state_t newstate);
 
+void job_stats_purge (struct job_stats *stats, struct job *job);
+
 json_t * job_stats_encode (struct job_stats *stats);
 
 #endif /* ! _FLUX_JOB_LIST_JOB_STATS_H */

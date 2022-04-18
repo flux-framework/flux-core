@@ -51,6 +51,7 @@
 #include "wait.h"
 #include "prioritize.h"
 #include "annotate.h"
+#include "purge.h"
 #include "jobtap-internal.h"
 
 #include "event.h"
@@ -392,6 +393,12 @@ int event_job_action (struct event *event, struct job *job)
         case FLUX_JOB_STATE_INACTIVE:
             if ((job->flags & FLUX_JOB_WAITABLE))
                 wait_notify_inactive (ctx->wait, job);
+            if (zhashx_insert (ctx->inactive_jobs, &job->id, job) < 0
+                || purge_enqueue_job (ctx->purge, job) < 0) {
+                flux_log_error (event->ctx->h,
+                                "%ju: error preserving inactive job",
+                                (uintmax_t) job->id);
+            }
             zhashx_delete (ctx->active_jobs, &job->id);
             drain_check (ctx->drain);
             break;
@@ -665,6 +672,7 @@ int event_job_update (struct job *job, json_t *event)
         if (job->state != FLUX_JOB_STATE_CLEANUP)
             goto inval;
         job->state = FLUX_JOB_STATE_INACTIVE;
+        job->t_clean = timestamp;
     }
     else if (!strncmp (name, "prolog-", 7)) {
         if (job->start_pending)

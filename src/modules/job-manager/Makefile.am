@@ -52,6 +52,8 @@ libjob_manager_la_SOURCES = \
 	start.c \
 	list.h \
 	list.c \
+	purge.h \
+	purge.c \
 	urgency.h \
 	urgency.c \
 	annotate.h \

@@ -25,6 +25,10 @@ test_expect_success 'memo: error on insufficient arguments' '
 test_expect_success 'memo: error on invalide jobid' '
 	test_expect_code 1 flux job memo f1 foo=bar
 '
+test_expect_success 'memo: create one inactive job' '
+	flux mini submit /bin/true >inactivejob &&
+	flux queue drain
+'
 test_expect_success 'memo: submit a running and pending job' '
 	flux mini bulksubmit --urgency={} sleep 300 ::: 16 16 0 >jobids &&
 	runid=$(head -n 1 jobids) &&
@@ -36,6 +40,9 @@ test_expect_success 'memo: only job owner can add memo' '
 	    runas 9999 flux job memo $pendingid foo=24 2>memo.guest.err &&
 	test_debug "cat memo.guest.err" &&
 	grep "guests can only add a memo to their own jobs" memo.guest.err
+'
+test_expect_success 'memo: memo cannot be added to inactive job' '
+	test_must_fail flux job memo $(cat inactivejob) foo=42
 '
 test_expect_success HAVE_JQ 'memo: add memo to pending job works' '
 	flux job memo $pendingid foo=42 a=b &&
