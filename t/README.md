@@ -241,8 +241,8 @@ object methods `say()` to print diagnostics, and `die()` to
 terminate the tests with failure.
 
 --
-[sharness]: https://github.com/mlafeldt/sharness
-[API]: https://github.com/mlafeldt/sharness/blob/master/API.md
+[sharness]: https://github.com/chriscool/sharness
+[API]: https://github.com/chriscool/sharness/blob/master/API.md
 [TAP]: http://testanything.org
 [prove]: http://linux.die.net/man/1/prove
-[lua-TestMore]: http://fperrad.github.io/lua-TestMore/
+[lua-TestMore]: https://fperrad.frama.io/lua-TestMore/
