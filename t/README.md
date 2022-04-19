@@ -121,13 +121,7 @@ The test files are by convention named
 
     tNNNN-<name>.sh
 
-where N is a decimal digit. For flux-core tests, only the first digit
-has meaning, where so far the only digits used are:
-
- - 0 - basic tests. Verify testsuite and basic command functionality.
- - 1 - kvs tests
- - 2 - TBD
- - 3 - ...
+where N is a decimal digit.
 
 Writing Tests
 -------------
