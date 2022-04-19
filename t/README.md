@@ -48,7 +48,7 @@ Result: PASS
 Test scripts may also be run individually, as in:
 
 ```
-$ ./t0001-basic.t 
+$ ./t0001-basic.t
 ok 1 - TEST_NAME is set
 ok 2 - run_timeout works
 ok 3 - we can find a flux binary
@@ -121,13 +121,7 @@ The test files are by convention named
 
     tNNNN-<name>.sh
 
-where N is a decimal digit. For flux-core tests, only the first digit
-has meaning, where so far the only digits used are:
-
- - 0 - basic tests. Verify testsuite and basic command functionality.
- - 1 - kvs tests
- - 2 - TBD
- - 3 - ...
+where N is a decimal digit.
 
 Writing Tests
 -------------
@@ -182,11 +176,11 @@ The flux-core testsuite extends the sharness [API] with the
 following extra functions:
 
 ```
-  test_under_flux <size> : 
+  test_under_flux <size> :
 	Re-invokes the test library under a flux instance of
 	size <size>. If size is not given a default of 1 is used.
 	This function essentially invokes
-	
+
 	  exec flux start --test-size=N /path/to/test/script args...
 
   run_timeout S COMMAND... :
@@ -241,8 +235,8 @@ object methods `say()` to print diagnostics, and `die()` to
 terminate the tests with failure.
 
 --
-[sharness]: https://github.com/mlafeldt/sharness
-[API]: https://github.com/mlafeldt/sharness/blob/master/API.md
+[sharness]: https://github.com/chriscool/sharness
+[API]: https://github.com/chriscool/sharness/blob/master/API.md
 [TAP]: http://testanything.org
 [prove]: http://linux.die.net/man/1/prove
-[lua-TestMore]: http://fperrad.github.io/lua-TestMore/
+[lua-TestMore]: https://fperrad.frama.io/lua-TestMore/
