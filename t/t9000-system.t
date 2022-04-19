@@ -44,7 +44,7 @@ fi
 #
 expect_success_wrap() {
 	if test $# -eq 3; then
-		test_expect_success "$TEST_LABEL: $1" "$2" "$3"
+		test_expect_success "$1" "$TEST_LABEL: $2" "$3"
 	else
 		test_expect_success "$TEST_LABEL: $1" "$2"
 	fi
