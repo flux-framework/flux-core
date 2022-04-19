@@ -1687,7 +1687,9 @@ static int by_used (const void *item1, const void *item2)
     int n;
     const struct rnode *x = item1;
     const struct rnode *y = item2;
-    if ((n = rnode_avail (y) - rnode_avail (x)) == 0)
+    if (x->up != y->up)
+        n = x->up ? -1 : 1;
+    else if ((n = rnode_avail (y) - rnode_avail (x)) == 0)
         n = by_rank (x, y);
     return n;
 }
@@ -1859,9 +1861,13 @@ static struct rlist *rlist_alloc_nnodes (struct rlist *rl,
         struct rnode *cpy;
         n = zlistx_first (rl->nodes);
         while (n && nleft) {
-            /*  We can abort after we find the first non-idle node.
+            /*
+             *  We can abort after we find the first non-idle or down node:
+             *
+             *  Note: by_used() sorts down nodes to back of list and
+             *   rnode_avail() returns 0 if node is not up
              */
-            if (idset_count (n->cores->avail) < idset_count (n->cores->ids))
+            if (rnode_avail (n) < rnode_count (n))
                 goto unwind;
 
             if (!(cpy = rnode_copy (n))

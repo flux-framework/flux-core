@@ -1906,6 +1906,47 @@ void test_properties (void)
 
 }
 
+static void test_issue4290 (void)
+{
+    char *R;
+    char *s;
+    struct rlist *result;
+    struct rlist *rl;
+    flux_error_t error;
+    struct rlist_alloc_info ai = {
+        .nnodes = 4,
+        .slot_size = 1,
+        .nslots = 4,
+        .exclusive = true,
+    };
+
+    if (!(R = R_create ("0-3",
+                        "0-3",
+                        NULL,
+                        "foo[0-3]",
+                        NULL)))
+        BAIL_OUT ("issue4290: R_create");
+
+    if (!(rl = rlist_from_R (R)))
+        BAIL_OUT ("issue4290: rlist_from_R() failed");
+    if (rlist_mark_down (rl, "2") < 0)
+        BAIL_OUT ("issue4290: error marking rank 2 down");
+    result = rlist_alloc (rl, &ai, &error);
+    ok (!result && errno == ENOSPC,
+        "issue4290: alloc 4/4 nodes with node down fails with ENOSPC");
+    ok (rlist_mark_up (rl, "2") == 0,
+        "issue4290: marking rank 2 up");
+    ok ((result = rlist_alloc (rl, &ai, &error)) != NULL,
+        "issue4290: now allocation succeeds");
+    s = rlist_dumps (result);
+    diag ("%s", s);
+
+    free (s);
+    rlist_destroy (result);
+    rlist_destroy (rl);
+    free (R);
+}
+
 int main (int ac, char *av[])
 {
     plan (NO_PLAN);
@@ -1933,6 +1974,7 @@ int main (int ac, char *av[])
     test_hosts_to_ranks ();
     test_issue4184 ();
     test_properties ();
+    test_issue4290 ();
 
     done_testing ();
 }
