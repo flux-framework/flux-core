@@ -13,8 +13,65 @@
 #endif
 #include "builtin.h"
 #include <inttypes.h>
+#include <unistd.h>
+#include <time.h>
 
 #include "src/common/libutil/stdlog.h"
+#include "ccan/str/str.h"
+
+#define ANSI_COLOR_RED        "\x1b[31m"
+#define ANSI_COLOR_GREEN      "\x1b[32m"
+#define ANSI_COLOR_YELLOW     "\x1b[33m"
+#define ANSI_COLOR_BLUE       "\x1b[34m"
+#define ANSI_COLOR_MAGENTA    "\x1b[35m"
+#define ANSI_COLOR_CYAN       "\x1b[36m"
+#define ANSI_COLOR_GRAY       "\x1b[37m"
+
+#define ANSI_COLOR_RESET      "\x1b[0m"
+#define ANSI_COLOR_BOLD       "\x1b[1m"
+#define ANSI_COLOR_HALFBRIGHT "\x1b[2m"
+#define ANSI_COLOR_REVERSE    "\x1b[7m"
+
+#define ANSI_COLOR_RESET      "\x1b[0m"
+
+struct dmesg_ctx {
+    optparse_t *p;
+    unsigned int color:1;
+    unsigned int delta:1;
+    struct tm last_tm;
+    struct timeval last_tv;
+};
+
+enum {
+    DMESG_COLOR_MODE_AUTO,
+    DMESG_COLOR_MODE_NEVER,
+    DMESG_COLOR_MODE_ALWAYS
+};
+
+enum {
+    DMESG_COLOR_NAME,
+    DMESG_COLOR_TIME,
+    DMESG_COLOR_TIMEBREAK,
+    DMESG_COLOR_ALERT,
+    DMESG_COLOR_EMERG,
+    DMESG_COLOR_CRIT,
+    DMESG_COLOR_ERR,
+    DMESG_COLOR_WARNING,
+    DMESG_COLOR_DEBUG,
+};
+
+static const char *dmesg_colors[] = {
+    [DMESG_COLOR_NAME]          = ANSI_COLOR_YELLOW,
+    [DMESG_COLOR_TIME]          = ANSI_COLOR_GREEN,
+    [DMESG_COLOR_TIMEBREAK]     = ANSI_COLOR_BOLD ANSI_COLOR_GREEN,
+    [DMESG_COLOR_ALERT]         = ANSI_COLOR_REVERSE ANSI_COLOR_RED,
+    [DMESG_COLOR_EMERG]         = ANSI_COLOR_REVERSE ANSI_COLOR_RED,
+    [DMESG_COLOR_CRIT]          = ANSI_COLOR_BOLD ANSI_COLOR_RED,
+    [DMESG_COLOR_ERR]           = ANSI_COLOR_RED,
+    [DMESG_COLOR_WARNING]       = ANSI_COLOR_BOLD,
+    [DMESG_COLOR_DEBUG]         = ANSI_COLOR_BLUE,
+};
+
 
 static struct optparse_option dmesg_opts[] = {
     { .name = "clear",  .key = 'C',  .has_arg = 0,
@@ -25,10 +82,170 @@ static struct optparse_option dmesg_opts[] = {
       .usage = "Track new entries as are logged", },
     { .name = "new",  .key = 'n',  .has_arg = 0,
       .usage = "Show only new log messages", },
+    { .name = "human",  .key = 'H',  .has_arg = 0,
+      .usage = "Human readable output", },
+    { .name = "delta",  .key = 'd',  .has_arg = 0,
+      .usage = "With --human, show timestamp delta between messages", },
+    { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .usage = "Colorize output when supported; WHEN can be 'always' "
+               "(default if omitted), 'never', or 'auto' (default)." },
     OPTPARSE_TABLE_END,
 };
 
-void dmesg_print (const char *buf, int len)
+static const char *dmesg_color (struct dmesg_ctx *ctx, int type)
+{
+    if (ctx->color)
+        return dmesg_colors [type];
+    return "";
+}
+
+static const char *dmesg_color_reset (struct dmesg_ctx *ctx)
+{
+    if (ctx->color)
+        return ANSI_COLOR_RESET;
+    return "";
+}
+
+/*
+ *  GNU libc has timegm(3), but the manual states:
+ *
+ *   These functions [timelocal(), timegm()] are nonstandard GNU extensions
+ *    that are also present on the BSDs.  Avoid their use.
+ *
+ *  This "portable" version was found on sourceware.org, and appears to work:
+ *
+ *   https://patchwork.sourceware.org/project/glibc/patch/20211011115406.11430-2-alx.manpages@gmail.com/
+ *
+ */
+static time_t portable_timegm (struct tm *tm)
+{
+    time_t t;
+
+    tm->tm_isdst = 0;
+    if ((t = mktime (tm)) == (time_t) -1)
+        return t;
+    return t - timezone;
+}
+
+static int parse_timestamp (const char *s,
+                            struct tm *tm,
+                            struct timeval *tv)
+{
+    char *extra;
+    struct tm gm_tm;
+    time_t t;
+
+    memset (tm, 0, sizeof (*tm));
+
+    if (!(extra = strptime (s, "%C%y-%m-%dT%H:%M:%S", &gm_tm)))
+        return -1;
+
+    if ((t = portable_timegm (&gm_tm)) == (time_t) -1)
+        return -1;
+
+    if (!(localtime_r (&t, tm)))
+        return -1;
+    tv->tv_sec = t;
+
+    if (extra[0] == '.') {
+        char *endptr;
+        double d;
+
+        errno = 0;
+        d = strtod (extra, &endptr);
+
+        /*  Note: in this implementation, there should be a "Z" after the
+         *  timestamp to indicate UTC or "Zulu" time.
+         */
+        if (errno != 0 || *endptr != 'Z')
+            return -1;
+        tv->tv_usec = d * 1000000;
+    }
+    return 0;
+}
+
+static double tv_to_double (struct timeval *tv)
+{
+    return (tv->tv_sec + (tv->tv_usec/1e6));
+}
+
+static const char *months[] = {
+    "Jan",
+    "Feb",
+    "Mar",
+    "Apr",
+    "May",
+    "Jun",
+    "Jul",
+    "Aug",
+    "Sep",
+    "Oct",
+    "Nov",
+    "Dec",
+    NULL
+};
+
+void print_human_timestamp (struct dmesg_ctx *ctx, struct stdlog_header hdr)
+{
+    struct tm tm;
+    struct timeval tv;
+    if (parse_timestamp (hdr.timestamp, &tm, &tv) < 0) {
+        printf ("%s[%s]%s ",
+                dmesg_color (ctx, DMESG_COLOR_TIME),
+                hdr.timestamp,
+                dmesg_color_reset (ctx));
+    }
+    if (tm.tm_year == ctx->last_tm.tm_year
+        && tm.tm_mon == ctx->last_tm.tm_mon
+        && tm.tm_mday == ctx->last_tm.tm_mday
+        && tm.tm_hour == ctx->last_tm.tm_hour
+        && tm.tm_min == ctx->last_tm.tm_min) {
+        /*  Within same minute, print offset in sec */
+        double dt = tv_to_double (&tv) - tv_to_double (&ctx->last_tv);
+        printf ("%s[%+11.6f]%s ",
+                dmesg_color (ctx, DMESG_COLOR_TIME),
+                dt,
+                dmesg_color_reset (ctx));
+        if (ctx->delta)
+            ctx->last_tv = tv;
+    }
+    else {
+        /* New minute, print datetime */
+        printf ("%s[%s%02d %02d:%02d]%s ",
+                dmesg_color (ctx, DMESG_COLOR_TIMEBREAK),
+                months [tm.tm_mon],
+                tm.tm_mday,
+                tm.tm_hour,
+                tm.tm_min,
+                dmesg_color_reset (ctx));
+        ctx->last_tv = tv;
+        ctx->last_tm = tm;
+    }
+}
+
+static const char *severity_color (struct dmesg_ctx *ctx, int severity)
+{
+    switch (severity) {
+        case LOG_EMERG:
+            return dmesg_color (ctx, DMESG_COLOR_EMERG);
+        case LOG_ALERT:
+            return dmesg_color (ctx, DMESG_COLOR_ALERT);
+        case LOG_CRIT:
+            return dmesg_color (ctx, DMESG_COLOR_CRIT);
+        case LOG_ERR:
+            return dmesg_color (ctx, DMESG_COLOR_ERR);
+        case LOG_WARNING:
+            return dmesg_color (ctx, DMESG_COLOR_WARNING);
+        case LOG_NOTICE:
+        case LOG_INFO:
+            return "";
+        case LOG_DEBUG:
+            return dmesg_color (ctx, DMESG_COLOR_DEBUG);
+    }
+    return "";
+}
+
+void dmesg_print_human (struct dmesg_ctx *ctx, const char *buf, int len)
 {
     struct stdlog_header hdr;
     const char *msg;
@@ -40,23 +257,88 @@ void dmesg_print (const char *buf, int len)
     else {
         nodeid = strtoul (hdr.hostname, NULL, 10);
         severity = STDLOG_SEVERITY (hdr.pri);
-        printf ("%s %s.%s[%" PRIu32 "]: %.*s\n",
-                 hdr.timestamp,
+        print_human_timestamp (ctx, hdr);
+        printf ("%s%s[%" PRIu32 "]%s: %s%.*s%s\n",
+                 dmesg_color (ctx, DMESG_COLOR_NAME),
                  hdr.appname,
-                 stdlog_severity_to_string (severity),
                  nodeid,
-                 msglen, msg);
+                 dmesg_color_reset (ctx),
+                 severity_color (ctx, severity),
+                 msglen, msg,
+                 dmesg_color_reset (ctx));
     }
     fflush (stdout);
+}
+
+void dmesg_print (struct dmesg_ctx *ctx, const char *buf, int len)
+{
+    struct stdlog_header hdr;
+    const char *msg;
+    int msglen, severity;
+    uint32_t nodeid;
+
+    if (stdlog_decode (buf, len, &hdr, NULL, NULL, &msg, &msglen) < 0)
+        printf ("%.*s\n", len, buf);
+    else {
+        nodeid = strtoul (hdr.hostname, NULL, 10);
+        severity = STDLOG_SEVERITY (hdr.pri);
+        printf ("%s%s%s %s%s.%s[%" PRIu32 "]%s: %s%.*s%s\n",
+                dmesg_color (ctx, DMESG_COLOR_TIME),
+                hdr.timestamp,
+                dmesg_color_reset (ctx),
+                dmesg_color (ctx, DMESG_COLOR_NAME),
+                hdr.appname,
+                stdlog_severity_to_string (severity),
+                nodeid,
+                dmesg_color_reset (ctx),
+                severity_color (ctx, severity),
+                msglen, msg,
+                dmesg_color_reset (ctx));
+    }
+    fflush (stdout);
+}
+
+static void dmesg_colors_init (struct dmesg_ctx *ctx)
+{
+    const char *when;
+
+    if (!(when = optparse_get_str (ctx->p, "color", "auto")))
+        when = "always";
+    if (streq (when, "always"))
+        ctx->color = 1;
+    else if (streq (when, "never"))
+        ctx->color = 0;
+    else if (streq (when, "auto"))
+        ctx->color = isatty (STDOUT_FILENO) ? 1 : 0;
+    else
+        log_msg_exit ("Invalid argument to --color: '%s'", when);
+}
+
+static void dmesg_ctx_init (struct dmesg_ctx *ctx, optparse_t *p)
+{
+    memset (ctx, 0, sizeof (*ctx));
+    ctx->p = p;
+    dmesg_colors_init (ctx);
+    if (optparse_hasopt (p, "delta")) {
+        if (!optparse_hasopt (p, "human"))
+            log_msg_exit ("--delta can only be used with --human");
+        ctx->delta = 1;
+    }
 }
 
 static int cmd_dmesg (optparse_t *p, int ac, char *av[])
 {
     int n;
     flux_t *h;
+    struct dmesg_ctx ctx;
 
+    tzset ();
+
+    log_init ("flux-dmesg");
     if ((n = optparse_option_index (p)) != ac)
         log_msg_exit ("flux-dmesg accepts no free arguments");
+
+    dmesg_ctx_init (&ctx, p);
 
     h = builtin_get_flux_handle (p);
 
@@ -73,7 +355,10 @@ static int cmd_dmesg (optparse_t *p, int ac, char *av[])
                                  "nobacklog", optparse_hasopt (p, "new"))))
             log_err_exit ("error sending log.dmesg request");
         while (flux_rpc_get (f, &buf) == 0) {
-            dmesg_print (buf, strlen (buf));
+            if (optparse_hasopt (p, "human"))
+                dmesg_print_human (&ctx, buf, strlen (buf));
+            else
+                dmesg_print (&ctx, buf, strlen (buf));
             flux_future_reset (f);
         }
         if (errno != ENODATA)
