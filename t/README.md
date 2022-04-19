@@ -48,7 +48,7 @@ Result: PASS
 Test scripts may also be run individually, as in:
 
 ```
-$ ./t0001-basic.t 
+$ ./t0001-basic.t
 ok 1 - TEST_NAME is set
 ok 2 - run_timeout works
 ok 3 - we can find a flux binary
@@ -182,11 +182,11 @@ The flux-core testsuite extends the sharness [API] with the
 following extra functions:
 
 ```
-  test_under_flux <size> : 
+  test_under_flux <size> :
 	Re-invokes the test library under a flux instance of
 	size <size>. If size is not given a default of 1 is used.
 	This function essentially invokes
-	
+
 	  exec flux start --test-size=N /path/to/test/script args...
 
   run_timeout S COMMAND... :
