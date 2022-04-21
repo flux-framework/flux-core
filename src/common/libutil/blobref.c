@@ -205,12 +205,17 @@ inval:
     return -1;
 }
 
-int blobref_validate_hashtype (const char *name)
+ssize_t blobref_validate_hashtype (const char *name)
 {
-    if (name == NULL || !lookup_blobhash (name))
+    struct blobhash *bh;
+
+    if (name == NULL || !(bh = lookup_blobhash (name))) {
+        errno = EINVAL;
         return -1;
-    return 0;
+    }
+    return bh->hashlen;
 }
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

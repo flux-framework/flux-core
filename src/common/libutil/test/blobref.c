@@ -148,9 +148,9 @@ int main(int argc, char** argv)
     }
 
     /* blobref_validate_hashtype */
-    ok (blobref_validate_hashtype ("sha1") == 0,
+    ok (blobref_validate_hashtype ("sha1") == SHA1_DIGEST_SIZE,
         "blobref_validate_hashtype sha1 is valid");
-    ok (blobref_validate_hashtype ("sha256") == 0,
+    ok (blobref_validate_hashtype ("sha256") == SHA256_BLOCK_SIZE,
         "blobref_validate_hashtype sha256 is valid");
     ok (blobref_validate_hashtype ("nerf") == -1,
         "blobref_validate_hashtype nerf is invalid");

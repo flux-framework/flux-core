@@ -43,9 +43,10 @@ int blobref_hash (const char *hashtype,
 int blobref_validate (const char *blobref);
 
 /* Check the validity of hash type (by name)
+ * If valid, the digest size is returned.
+ * If invalid, -1 is returned with errno set.
  */
-int blobref_validate_hashtype (const char *name);
-
+ssize_t blobref_validate_hashtype (const char *name);
 
 #endif /* _UTIL_BLOBREF_H */
 /*
