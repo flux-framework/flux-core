@@ -218,7 +218,7 @@ static int shell_output_redirect_stream (struct shell_output *out,
                                        "stream", stream,
                                        "rank", rankptr,
                                        "path", path))) {
-        shell_log_errno ("eventlog_entry_create");
+        shell_log_errno ("eventlog_entry_pack");
         goto error;
     }
     if (!(entrystr = eventlog_entry_encode (entry))) {
