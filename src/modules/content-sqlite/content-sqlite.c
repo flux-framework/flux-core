@@ -608,6 +608,7 @@ static int content_sqlite_opendb (struct content_sqlite *ctx)
 {
     int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
     char s[128];
+    int count;
 
     if (sqlite3_open_v2 (ctx->dbfile, &ctx->db, flags, NULL) != SQLITE_OK) {
         log_sqlite_error (ctx, "opening %s", ctx->dbfile);
@@ -687,6 +688,21 @@ static int content_sqlite_opendb (struct content_sqlite *ctx)
         log_sqlite_error (ctx, "preparing checkpt_put stmt");
         goto error;
     }
+    if (sqlite3_exec (ctx->db,
+                      sql_objects_count,
+                      set_count,
+                      &count,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "querying objects count");
+        goto error;
+    }
+    flux_log (ctx->h,
+              LOG_DEBUG,
+              "%s (%d objects) journal_mode=%s synchronous=%s",
+              ctx->dbfile,
+              count,
+              ctx->journal_mode,
+              ctx->synchronous);
     return 0;
 error:
     set_errno_from_sqlite_error (ctx);
