@@ -91,7 +91,7 @@ struct content_cache {
     uint32_t purge_target_size;
     uint32_t purge_old_entry;
 
-    uint32_t acct_size;             // total size of all cache entries
+    uint64_t acct_size;             // total size of all cache entries
     uint32_t acct_valid;            // count of valid cache entries
     uint32_t acct_dirty;            // count of dirty cache entries
 };
@@ -705,7 +705,7 @@ static void content_stats_request (flux_t *h, flux_msg_handler_t *mh,
 {
     struct content_cache *cache = arg;
 
-    if (flux_respond_pack (h, msg, "{s:i s:i s:i s:i s:i}",
+    if (flux_respond_pack (h, msg, "{s:i s:i s:i s:I s:i}",
                            "count", zhashx_size (cache->entries),
                            "valid", cache->acct_valid,
                            "dirty", cache->acct_dirty,
