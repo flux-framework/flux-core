@@ -13,6 +13,7 @@
 #endif
 #include <jansson.h>
 #include <flux/core.h>
+#include <assert.h>
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/log.h"
@@ -31,6 +32,7 @@ struct content_s3 {
     struct s3_config *cfg;
     flux_t *h;
     const char *hashfun;
+    int hash_size;
 };
 
 static void s3_config_destroy (struct s3_config *ctx)
@@ -244,30 +246,33 @@ error:
 }
 
 /* Handle a content-backing.load request from the rank 0 broker's
- * content-cache service.  The raw request payload is a blobref string,
- * including NULL terminator.  The raw response payload is the blob content.
- * These payloads are specified in RFC 10.
+ * content-cache service.  The raw request payload is a hash digest,
+ * The raw response payload is the blob content.  These payloads are specified
+ * in RFC 10.
  */
 static void load_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
 {
     struct content_s3 *ctx = arg;
-    const char *blobref;
-    int blobref_size;
+    const void *hash;
+    int hash_size;
+    char blobref[BLOBREF_MAX_STRING_SIZE];
     void *data = NULL;
     size_t size;
     const char *errstr = NULL;
 
-    if (flux_request_decode_raw (msg,
-                                 NULL,
-                                 (const void **)&blobref,
-                                 &blobref_size) < 0)
+    if (flux_request_decode_raw (msg, NULL, &hash, &hash_size) < 0)
         goto error;
-    if (!blobref || blobref[blobref_size - 1] != '\0'
-                 || blobref_validate (blobref) < 0) {
+    if (hash_size != ctx->hash_size) {
         errno = EPROTO;
-        errstr = "invalid blobref";
+        errstr = "incorrect hash size";
         goto error;
     }
+    if (blobref_hashtostr (ctx->hashfun,
+                           hash,
+                           hash_size,
+                           blobref,
+                           sizeof (blobref)) < 0)
+        goto error;
     if (s3_get (ctx->cfg, blobref, &data, &size, &errstr) < 0)
         goto error;
     if (flux_respond_raw (h, msg, data, size) < 0)
@@ -283,7 +288,7 @@ error:
 
 /* Handle a content-backing.store request from the rank 0 broker's
  * content-cache service.  The raw request payload is the blob content.
- * The raw response payload is a blobref string including NULL terminator.
+ * The raw response payload is a hash digest.
  * These payloads are specified in RFC 10.
  */
 void store_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
@@ -292,19 +297,27 @@ void store_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *a
     const void *data;
     int size;
     char blobref[BLOBREF_MAX_STRING_SIZE];
+    uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
+    int hash_size;
     const char *errstr = NULL;
 
     if (flux_request_decode_raw (msg, NULL, &data, &size) < 0)
         goto error;
-    if (blobref_hash (ctx->hashfun,
-                      (uint8_t *)data,
-                      size,
-                      blobref,
-                      sizeof (blobref)) < 0)
+    if ((hash_size = blobref_hash_raw (ctx->hashfun,
+                                       data,
+                                       size,
+                                       hash,
+                                       sizeof (hash))) < 0
+        || blobref_hashtostr (ctx->hashfun,
+                              hash,
+                              hash_size,
+                              blobref,
+                              sizeof (blobref)) < 0)
         goto error;
+    assert (hash_size == ctx->hash_size);
     if (s3_put (ctx->cfg, blobref, data, size, &errstr) < 0)
         goto error;
-    if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
+    if (flux_respond_raw (h, msg, hash, hash_size) < 0)
         flux_log_error (h, "error responding to store request");
     return;
 
@@ -424,7 +437,8 @@ static struct content_s3 *content_s3_create (flux_t *h)
         return NULL;
     ctx->h = h;
 
-    if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))) {
+    if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))
+        || (ctx->hash_size = blobref_validate_hashtype (ctx->hashfun)) < 0) {
         flux_log_error (h, "content.hash");
         goto error;
     }

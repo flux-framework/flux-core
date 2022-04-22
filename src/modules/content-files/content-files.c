@@ -18,10 +18,10 @@
  * There are four main operations (RPC handlers):
  *
  * content-backing.load:
- * Given a blobref, lookup blob and return it or a "not found" error.
+ * Given a hash, lookup blob and return it or a "not found" error.
  *
  * content-backing.store:
- * Given a blob, store it and return its blobref
+ * Given a blob, store it and return its hash
  *
  * kvs-checkpoint.get:
  * Given a string key, lookup string value and return it or a "not found" error.
@@ -66,11 +66,12 @@ struct content_files {
     char *dbpath;
     flux_t *h;
     const char *hashfun;
+    int hash_size;
 };
 
 /* Handle a content-backing.load request from the rank 0 broker's
- * content-cache service.  The raw request payload is a blobref string,
- * including NULL terminator.  The raw response payload is the blob content.
+ * content-cache service.  The raw request payload is a hash digest.
+ * The raw response payload is the blob content.
  * These payloads are specified in RFC 10.
  */
 static void load_cb (flux_t *h,
@@ -79,23 +80,25 @@ static void load_cb (flux_t *h,
                      void *arg)
 {
     struct content_files *ctx = arg;
-    const char *blobref;
-    int blobref_size;
+    const void *hash;
+    int hash_size;
+    char blobref[BLOBREF_MAX_STRING_SIZE];
     void *data = NULL;
     size_t size;
     const char *errstr = NULL;
 
-    if (flux_request_decode_raw (msg,
-                                 NULL,
-                                 (const void **)&blobref,
-                                 &blobref_size) < 0)
+    if (flux_request_decode_raw (msg, NULL, &hash, &hash_size) < 0)
         goto error;
-    if (!blobref || blobref[blobref_size - 1] != '\0'
-                 || blobref_validate (blobref) < 0) {
+    if (hash_size != ctx->hash_size) {
         errno = EPROTO;
-        errstr = "invalid blobref";
         goto error;
     }
+    if (blobref_hashtostr (ctx->hashfun,
+                           hash,
+                           hash_size,
+                           blobref,
+                           sizeof (blobref)) < 0)
+        goto error;
     if (filedb_get (ctx->dbpath, blobref, &data, &size, &errstr) < 0)
         goto error;
     if (flux_respond_raw (h, msg, data, size) < 0)
@@ -110,7 +113,7 @@ error:
 
 /* Handle a content-backing.store request from the rank 0 broker's
  * content-cache service.  The raw request payload is the blob content.
- * The raw response payload is a blobref string including NULL terminator.
+ * The raw response payload is hash digest.
  * These payloads are specified in RFC 10.
  */
 void store_cb (flux_t *h,
@@ -122,19 +125,27 @@ void store_cb (flux_t *h,
     const void *data;
     int size;
     char blobref[BLOBREF_MAX_STRING_SIZE];
+    char hash[BLOBREF_MAX_DIGEST_SIZE];
+    int hash_size;
     const char *errstr = NULL;
 
     if (flux_request_decode_raw (msg, NULL, &data, &size) < 0)
         goto error;
-    if (blobref_hash (ctx->hashfun,
-                      (uint8_t *)data,
-                      size,
-                      blobref,
-                      sizeof (blobref)) < 0)
+    if ((hash_size = blobref_hash_raw (ctx->hashfun,
+                                       data,
+                                       size,
+                                       hash,
+                                       sizeof (hash))) < 0)
+        goto error;
+    if (blobref_hashtostr (ctx->hashfun,
+                           hash,
+                           hash_size,
+                           blobref,
+                           sizeof (blobref)) < 0)
         goto error;
     if (filedb_put (ctx->dbpath, blobref, data, size, &errstr) < 0)
         goto error;
-    if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
+    if (flux_respond_raw (h, msg, hash, hash_size) < 0)
         flux_log_error (h, "error responding to store request");
     return;
 error:
@@ -266,7 +277,8 @@ static struct content_files *content_files_create (flux_t *h)
      * - the hash function, e.g. sha1, sha256
      * - path to sqlite file
      */
-    if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))) {
+    if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))
+        || (ctx->hash_size = blobref_validate_hashtype (ctx->hashfun)) < 0) {
         flux_log_error (h, "content.hash");
         goto error;
     }
