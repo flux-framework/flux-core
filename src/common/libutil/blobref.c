@@ -182,6 +182,23 @@ int blobref_hash (const char *hashtype,
     return hashtostr (bh, hash, bh->hashlen, blobref, blobref_len);
 }
 
+int blobref_hash_raw (const char *hashtype,
+                      const void *data, int len,
+                      void *hash, int hash_len)
+{
+    struct blobhash *bh;
+
+    if (!hashtype
+        || !(bh = lookup_blobhash (hashtype))
+        || hash_len < bh->hashlen
+        || !hash) {
+        errno = EINVAL;
+        return -1;
+    }
+    bh->hashfun (data, len, hash, bh->hashlen);
+    return bh->hashlen;
+}
+
 int blobref_validate (const char *blobref)
 {
     struct blobhash *bh;

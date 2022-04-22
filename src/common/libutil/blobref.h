@@ -38,6 +38,14 @@ int blobref_hash (const char *hashtype,
                   const void *data, int len,
                   void *blobref, int blobref_len);
 
+/* Compute hash over data and store it in 'hash'.
+ * The hash algorithm is selected by 'hashtype', e.g. "sha1".
+ * Returns hash size on success, -1 on error with errno set.
+ */
+int blobref_hash_raw (const char *hashtype,
+                      const void *data, int len,
+                      void *hash, int hash_len);
+
 /* Check validity of blobref string.
  */
 int blobref_validate (const char *blobref);
