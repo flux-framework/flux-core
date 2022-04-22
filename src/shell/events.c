@@ -75,6 +75,7 @@ struct shell_eventlogger *shell_eventlogger_create (flux_shell_t *shell)
         shell_eventlogger_destroy (shev);
         return NULL;
     }
+    shev->shell = shell;
     zhashx_set_destructor (shev->contexts, json_free);
     return shev;
 }
