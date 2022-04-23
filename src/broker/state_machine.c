@@ -721,9 +721,11 @@ static void broker_online_cb (flux_future_t *f, void *arg)
         return;
     }
 
-    char *hosts = flux_hostmap_lookup (s->ctx->h, members, NULL);
-    flux_log (s->ctx->h, LOG_INFO, "online: %s (ranks %s)", hosts, members);
-    free (hosts);
+    if (strlen (members) > 0) {
+        char *hosts = flux_hostmap_lookup (s->ctx->h, members, NULL);
+        flux_log (s->ctx->h, LOG_INFO, "online: %s (ranks %s)", hosts, members);
+        free (hosts);
+    }
 
     idset_destroy (s->quorum.have);
     s->quorum.have = ids;
