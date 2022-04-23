@@ -492,8 +492,8 @@ static int content_load_request_send (struct kvs_ctx *ctx, const char *ref)
     char *refcpy;
     int saved_errno;
 
-    if (!(f = content_load (ctx->h, ref, 0))) {
-        flux_log_error (ctx->h, "%s: content_load", __FUNCTION__);
+    if (!(f = content_load_byblobref (ctx->h, ref, 0))) {
+        flux_log_error (ctx->h, "%s: content_load_byblobref", __FUNCTION__);
         goto error;
     }
     if (!(refcpy = strdup (ref)))
@@ -593,8 +593,8 @@ static void content_store_completion (flux_future_t *f, void *arg)
     cache_blobref = flux_future_aux_get (f, "cache_blobref");
     assert (cache_blobref);
 
-    if (content_store_get (f, &blobref) < 0) {
-        flux_log_error (ctx->h, "%s: content_store_get", __FUNCTION__);
+    if (content_store_get_blobref (f, &blobref) < 0) {
+        flux_log_error (ctx->h, "%s: content_store_get_blobref", __FUNCTION__);
         goto error;
     }
 
@@ -2809,7 +2809,7 @@ static int store_initial_rootdir (struct kvs_ctx *ctx, char *ref, int ref_len)
             goto error_uncache;
         }
         if (!(f = content_store (ctx->h, data, len, 0))
-                || content_store_get (f, &newref) < 0) {
+                || content_store_get_blobref (f, &newref) < 0) {
             flux_log_error (ctx->h, "%s: content_store", __FUNCTION__);
             goto error_uncache;
         }

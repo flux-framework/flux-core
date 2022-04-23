@@ -377,7 +377,7 @@ static int cache_load (struct content_cache *cache, struct cache_entry *e)
         return 0;
     if (cache->rank == 0)
         flags = CONTENT_FLAG_CACHE_BYPASS;
-    if (!(f = content_load (cache->h, e->blobref, flags))
+    if (!(f = content_load_byblobref (cache->h, e->blobref, flags))
         || flux_future_aux_set (f, "entry", e, NULL) < 0
         || flux_future_then (f, -1., cache_load_continuation, cache) < 0) {
         flux_log_error (cache->h, "content load");
@@ -474,7 +474,7 @@ static void cache_store_continuation (flux_future_t *f, void *arg)
     e->store_pending = 0;
     assert (cache->flush_batch_count > 0);
     cache->flush_batch_count--;
-    if (content_store_get (f, &blobref) < 0) {
+    if (content_store_get_blobref (f, &blobref) < 0) {
         if (cache->rank == 0 && errno == ENOSYS)
             flux_log (cache->h, LOG_DEBUG, "content store: %s",
                       "backing store service unavailable");

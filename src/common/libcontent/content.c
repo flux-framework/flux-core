@@ -20,7 +20,9 @@
 
 #include "src/common/libutil/blobref.h"
 
-flux_future_t *content_load (flux_t *h, const char *blobref, int flags)
+flux_future_t *content_load_byblobref (flux_t *h,
+                                       const char *blobref,
+                                       int flags)
 {
     const char *topic = "content.load";
     uint32_t rank = FLUX_NODEID_ANY;
@@ -57,7 +59,7 @@ flux_future_t *content_store (flux_t *h, const void *buf, int len, int flags)
     return flux_rpc_raw (h, topic, buf, len, rank, 0);
 }
 
-int content_store_get (flux_future_t *f, const char **blobref)
+int content_store_get_blobref (flux_future_t *f, const char **blobref)
 {
     int ref_size;
     const char *ref;

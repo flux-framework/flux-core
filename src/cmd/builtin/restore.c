@@ -116,7 +116,7 @@ static json_t *restore_dir (flux_t *h, json_t *dir)
     if (!(s = treeobj_encode (ndir)))
         log_msg_exit ("out of memory");
     if (!(f = content_store (h, s, strlen (s), content_flags))
-        || content_store_get (f, &blobref) < 0)
+        || content_store_get_blobref (f, &blobref) < 0)
         log_msg_exit ("error storing dirref blob: %s",
                       future_strerror (f, errno));
     progress (1, 0);
@@ -214,7 +214,7 @@ static void restore_value (flux_t *h,
         const char *blobref;
 
         if (!(f = content_store (h, buf, size, content_flags))
-            || content_store_get (f, &blobref) < 0)
+            || content_store_get_blobref (f, &blobref) < 0)
             log_msg_exit ("error storing blob for %s: %s",
                           path,
                           future_strerror (f, errno));
