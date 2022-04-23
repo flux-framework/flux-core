@@ -12,6 +12,8 @@ echo "# $0: flux session size will be ${SIZE}"
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 SPAMUTIL="${FLUX_BUILD_DIR}/t/kvs/content-spam"
+rc1_kvs=$SHARNESS_TEST_SRCDIR/rc/rc1-kvs
+rc3_kvs=$SHARNESS_TEST_SRCDIR/rc/rc3-kvs
 
 HASHFUN=`flux getattr content.hash`
 
@@ -192,6 +194,7 @@ test_expect_success HAVE_JQ 'wait for purge to clear cache entries' '
 '
 
 test_expect_success 'remove content-sqlite module on rank 0' '
+	flux content flush &&
 	flux module remove content-sqlite
 '
 
@@ -205,4 +208,68 @@ test_expect_success 'remove read permission from content.sqlite file' '
 	test_must_fail flux module load content-sqlite
 '
 
+# Clean slate for a few more tests
+test_expect_success 'remove content.sqlite file' '
+	rm $(flux getattr rundir)/content.sqlite &&
+	flux module load content-sqlite
+'
+test_expect_success 'content-sqlite and content-cache are empty' '
+	test $(flux module stats \
+	    --type int --parse object_count content-sqlite) -eq 0 &&
+	test $(flux module stats \
+	    --type int --parse count content) -eq 0
+'
+
+test_expect_success 'storing the same object multiple times is just one row' '
+	for i in $(seq 1 10); do \
+	    echo foo | flux content store --bypass-cache >/dev/null; \
+        done &&
+	test $(flux module stats \
+	    --type int --parse store_time.count content-sqlite) -eq 10 &&
+	test $(flux module stats \
+	    --type int --parse object_count content-sqlite) -eq 1
+'
+test_expect_success 'flux module reload content-sqlite' '
+	flux module reload content-sqlite
+'
+test_expect_success 'database survives module reload' '
+	test $(flux module stats \
+	    --type int --parse store_time.count content-sqlite) -eq 0 &&
+	test $(flux module stats \
+	    --type int --parse object_count content-sqlite) -eq 1
+'
+test_expect_success 'reload module with bad option' '
+	flux module remove content-sqlite &&
+	test_must_fail flux module load content-sqlite unknown=42
+'
+test_expect_success 'reload module with journal_mode=WAL synchronous=NORMAL' '
+	flux module remove -f content-sqlite &&
+	flux dmesg --clear &&
+	flux module load content-sqlite journal_mode=WAL synchronous=NORMAL &&
+	flux dmesg >logs &&
+	grep "journal_mode=WAL synchronous=NORMAL" logs
+'
+test_expect_success 'reload module with no options and verify modes' '
+	flux module remove -f content-sqlite &&
+	flux dmesg --clear &&
+	flux module load content-sqlite &&
+	flux dmesg >logs2 &&
+	grep "journal_mode=OFF synchronous=OFF" logs2
+'
+
+
+test_expect_success 'run flux without statedir and verify modes' '
+	flux start -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	    flux dmesg >logs3 &&
+	grep "journal_mode=OFF synchronous=OFF" logs3
+'
+test_expect_success 'run flux with statedir and verify modes' '
+	flux start -o,-Sbroker.rc1_path=$rc1_kvs,-Sbroker.rc3_path=$rc3_kvs \
+	    -o,-Sstatedir=$(pwd) flux dmesg >logs4  &&
+	grep "journal_mode=WAL synchronous=NORMAL" logs4
+'
+
+test_expect_success 'remove content-sqlite module on rank 0' '
+	flux module remove content-sqlite
+'
 test_done
