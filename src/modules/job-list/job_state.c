@@ -371,7 +371,7 @@ static int parse_res_level (struct list_ctx *ctx,
 
 /* Return basename of path if there is a '/' in path.  Otherwise return
  * full path */
-const char *
+static const char *
 parse_job_name (const char *path)
 {
     char *p = strrchr (path, '/');
@@ -492,7 +492,7 @@ static int jobspec_parse (struct list_ctx *ctx,
         int per_slot, slot_count = 0;
         struct res_level res[3];
 
-        if (json_unpack_ex (tasks, NULL, 0,
+        if (json_unpack_ex (tasks, &error, 0,
                             "[{s:{s:i}}]",
                             "count", "per_slot", &per_slot) < 0) {
             flux_log (ctx->h, LOG_ERR,
@@ -502,9 +502,8 @@ static int jobspec_parse (struct list_ctx *ctx,
         }
         if (per_slot != 1) {
             flux_log (ctx->h, LOG_ERR,
-                      "%s: job %ju: per_slot count: expected 1 got %d: %s",
-                      __FUNCTION__, (uintmax_t)job->id, per_slot,
-                      error.text);
+                      "%s: job %ju: per_slot count: expected 1 got %d",
+                      __FUNCTION__, (uintmax_t)job->id, per_slot);
             goto nonfatal_error;
         }
         /* For jobspec version 1, expect either:
