@@ -61,8 +61,7 @@ test_expect_success S3 'Started instance with content.hash=sha256,content-s3' '
 	OUT=$(flux start -o,-Scontent.hash=sha256 \
 	    -o,-Scontent.backing-module=content-s3 \
 	    flux getattr content.hash) &&
-	test "$OUT" = "sha256" &&
-	ls -1 content.files | tail -1 | grep sha256
+	test "$OUT" = "sha256"
 '
 test_expect_success S3 'Content store nil returns correct hash for sha256' '
 	OUT=$(flux start -o,-Scontent.hash=sha256 \
