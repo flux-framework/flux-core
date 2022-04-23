@@ -115,7 +115,7 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned correct timestamp' 
         grep 2.2 timestamp.out
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref to baz' '
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rootref to baz' '
         kvs_checkpoint_put foo baz
 '
 
@@ -151,7 +151,7 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo still returns rootref baz' '
         test_cmp rootref3.exp rootref3.out
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref with longer rootref' '
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rootref with longer rootref' '
         kvs_checkpoint_put foo abcdefghijklmnopqrstuvwxyz
 '
 
@@ -161,7 +161,7 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned rootref with longer
         test_cmp rootref3.exp rootref3.out
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref to shorter rootref' '
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rootref to shorter rootref' '
         kvs_checkpoint_put foo foobar
 '
 

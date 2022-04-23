@@ -145,7 +145,7 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned correct timestamp' 
         grep 2.2 timestamp.out
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref to baz' '
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rootref to baz' '
 	kvs_checkpoint_put foo baz
 '
 
