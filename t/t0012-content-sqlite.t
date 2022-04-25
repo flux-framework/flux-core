@@ -207,11 +207,13 @@ test_expect_success 'remove read permission from content.sqlite file' '
 	chmod u-w $(flux getattr rundir)/content.sqlite &&
 	test_must_fail flux module load content-sqlite
 '
+test_expect_success 'restore read permission on content.sqlite file' '
+	chmod u+w $(flux getattr rundir)/content.sqlite
+'
 
 # Clean slate for a few more tests
-test_expect_success 'remove content.sqlite file' '
-	rm $(flux getattr rundir)/content.sqlite &&
-	flux module load content-sqlite
+test_expect_success 'load content-sqlite with truncate option' '
+	flux module load content-sqlite truncate
 '
 test_expect_success 'content-sqlite and content-cache are empty' '
 	test $(flux module stats \
