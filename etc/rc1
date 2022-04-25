@@ -3,10 +3,6 @@
 # Allow connector-local more time to start listening on socket
 RANK=$(FLUX_LOCAL_CONNECTOR_RETRY_COUNT=30 flux getattr rank)
 
-if ! content_backing=$(flux getattr content.backing-module 2>/dev/null); then
-    content_backing=content-sqlite
-fi
-
 # Usage: modload {all|<rank>} modname [args ...]
 modload() {
     local where=$1; shift
@@ -16,7 +12,34 @@ modload() {
 }
 
 modload all barrier
-modload 0 ${content_backing}
+
+if test $RANK -eq 0; then
+    backingmod=$(flux getattr content.backing-module 2>/dev/null) || :
+    backingmod=${backingmod:-content-sqlite}
+    dumpfile=$(flux getattr content.restore 2>/dev/null) || :
+    if test -n "${dumpfile}"; then
+        if test "${dumpfile}" = "auto"; then
+            statedir=$(flux getattr statedir 2>/dev/null) || :
+            dumplink="${statedir:-.}/dump/RESTORE"
+            if test -h "${dumplink}"; then
+                dumpfile=$(readlink -f ${dumplink}) || :
+            else
+                dumpfile=""
+                dumplink=""
+            fi
+        fi
+    fi
+    if test -n "${dumpfile}"; then
+        flux module load ${backingmod} truncate
+        echo "restoring content from ${dumpfile}"
+        flux restore --quiet --checkpoint ${dumpfile}
+        if test -n "${dumplink}"; then
+            rm -f ${dumplink}
+        fi
+    else
+        flux module load ${backingmod}
+    fi
+fi
 
 modload all kvs
 modload all kvs-watch
