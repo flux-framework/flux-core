@@ -48,12 +48,15 @@ struct cb_data {
     S3Status status;
 };
 
-static S3Status response_props_cb (const S3ResponseProperties *properties, void *data)
+static S3Status response_props_cb (const S3ResponseProperties *properties,
+                                   void *data)
 {
     return S3StatusOK;
 }
 
-static void response_complete_cb (S3Status status, const S3ErrorDetails *error, void *data)
+static void response_complete_cb (S3Status status,
+                                  const S3ErrorDetails *error,
+                                  void *data)
 {
     struct cb_data *ctx = data;
     ctx->status = status;
@@ -65,7 +68,8 @@ static void response_complete_cb (S3Status status, const S3ErrorDetails *error, 
 static int put_object_cb (int buff_size, char *buff, void *data)
 {
     struct cb_data *ctx = data;
-    int size = (buff_size < ctx->size - ctx->count ? buff_size : ctx->size - ctx->count);
+    int size = (buff_size < ctx->size - ctx->count ? buff_size
+                                                   : ctx->size - ctx->count);
 
     memcpy (buff, ctx->data + ctx->count, size);
     ctx->count += size;
@@ -145,17 +149,20 @@ int s3_bucket_create (struct s3_config *cfg, const char **errstr)
         S3_create_bucket (protocol,
                           cfg->access_key,
                           cfg->secret_key,
-                          NULL, // hostName (NULL to use the same hostName passed to S3_initialize())
+                          NULL, // hostName (NULL=use hostName passed
+                                //  to S3_initialize())
                           cfg->bucket,
                           S3CannedAclPrivate,
                           NULL, // locationContstraint
-                          NULL, // requestContext (NULL for synchronous operation)
+                          NULL, // requestContext (NULL for synchronous
+                                //  operation)
                           &resp_hndl,
                           &ctx);
         retries--;
     } while (S3_status_is_retryable (ctx.status) && retries > 0);
 
-    if (ctx.status != S3StatusOK && ctx.status != S3StatusErrorBucketAlreadyOwnedByYou) {
+    if (ctx.status != S3StatusOK
+        && ctx.status != S3StatusErrorBucketAlreadyOwnedByYou) {
         errno = EREMOTEIO;
         if (errstr)
             *errstr = S3_get_status_name (status);
@@ -166,7 +173,11 @@ int s3_bucket_create (struct s3_config *cfg, const char **errstr)
     return 0;
 }
 
-int s3_put (struct s3_config *cfg, const char *key, const void *data, size_t size, const char **errstr)
+int s3_put (struct s3_config *cfg,
+            const char *key,
+            const void *data,
+            size_t size,
+            const char **errstr)
 {
     int retries = cfg->retries;
     S3Status status = S3StatusOK;
@@ -190,7 +201,10 @@ int s3_put (struct s3_config *cfg, const char *key, const void *data, size_t siz
         .putObjectDataCallback = &put_object_cb
     };
 
-    if (strlen (key) == 0 || strchr (key, '/') || !strcmp (key, "..") || !strcmp (key, ".")) {
+    if (strlen (key) == 0
+        || strchr (key, '/')
+        || !strcmp (key, "..")
+        || !strcmp (key, ".")) {
         errno = EINVAL;
         if (errstr)
             *errstr = "invalid key";
@@ -227,7 +241,11 @@ int s3_put (struct s3_config *cfg, const char *key, const void *data, size_t siz
     return 0;
 }
 
-int s3_get (struct s3_config *cfg, const char *key, void **datap, size_t *sizep, const char **errstr)
+int s3_get (struct s3_config *cfg,
+            const char *key,
+            void **datap,
+            size_t *sizep,
+            const char **errstr)
 {
     int retries = cfg->retries;
     size_t size = 0;
@@ -260,7 +278,10 @@ int s3_get (struct s3_config *cfg, const char *key, void **datap, size_t *sizep,
         .status = status
     };
 
-    if (strlen (key) == 0 || strchr (key, '/') || !strcmp (key, "..") || !strcmp (key, ".")) {
+    if (strlen (key) == 0
+        || strchr (key, '/')
+        || !strcmp (key, "..")
+        || !strcmp (key, ".")) {
         errno = EINVAL;
         if (errstr)
             *errstr = "invalid key";
@@ -273,14 +294,15 @@ int s3_get (struct s3_config *cfg, const char *key, void **datap, size_t *sizep,
                        key,
                        NULL, // getConditions (NULL for none)
                        0,    // startByte
-                       0,    // byteCount (0 indicates the entire object should be read)
+                       0,    // byteCount (0 indicates the entire object
+                             //  should be read)
                        NULL, // requestContext (NULL for synchronous operation)
                        &get_obj_hndl, &ctx);
         retries--;
     } while (S3_status_is_retryable (ctx.status) && retries > 0);
 
     if (ctx.status != S3StatusOK) {
-        free(ctx.data);
+        free (ctx.data);
         if (ctx.status == S3StatusErrorNoSuchKey)
             errno = ENOENT;
         else

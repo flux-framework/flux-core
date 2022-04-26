@@ -28,29 +28,29 @@ struct s3_config {
  * and S3StatusOK (0) is returned. On failure, a status
  * > 0 will be returned.
  */
-int s3_init(struct s3_config *cfg, const char **errstr);
+int s3_init (struct s3_config *cfg, const char **errstr);
 
 /* Close down the s3 connection.
  */
-void s3_cleanup(void);
+void s3_cleanup (void);
 
 /* Create a bucket on the s3 connection.
  * On success, a bucket will be created and 0 will be returned.
  * On failure, a -1 will be reuturned and a bucket
  * will not be created.
  */
-int s3_bucket_create(struct s3_config *cfg, const char **errstr);
+int s3_bucket_create (struct s3_config *cfg, const char **errstr);
 
 /* Put an object to the s3 bucket.
  * On success, the data will be put into the bucket
  * and 0 will be returned. On failure, the data will not put
  * to the bucket and -1 will be returned.
  */
-int s3_put(struct s3_config *cfg,
-           const char *key,
-           const void *data,
-           size_t size,
-           const char **errstr);
+int s3_put (struct s3_config *cfg,
+            const char *key,
+            const void *data,
+            size_t size,
+            const char **errstr);
 
 /* Get an object's data from the s3 bucket.
  * On success, the object with key 'key' will be retrieved
@@ -58,11 +58,11 @@ int s3_put(struct s3_config *cfg,
  * and 0 will be returned. On failure, the data will not
  * be retrieved from the bucket and -1 will be returned.
  */
-int s3_get(struct s3_config *cfg,
-           const char *key,
-           void **datap,
-           size_t *sizep,
-           const char **errstr);
+int s3_get (struct s3_config *cfg,
+            const char *key,
+            void **datap,
+            size_t *sizep,
+            const char **errstr);
 
 #endif
 
