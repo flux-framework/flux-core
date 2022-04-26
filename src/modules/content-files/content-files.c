@@ -56,6 +56,7 @@
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/dirwalk.h"
 
 #include "src/common/libcontent/content-util.h"
 
@@ -68,6 +69,43 @@ struct content_files {
     const char *hashfun;
     int hash_size;
 };
+
+static int file_count_cb (dirwalk_t *d, void *arg)
+{
+    int *count = arg;
+
+    if (!dirwalk_isdir (d))
+        (*count)++;
+    return 0;
+}
+
+static int get_object_count (const char *path)
+{
+    int count = 0;
+    if (dirwalk (path, 0, file_count_cb, &count) < 0)
+        return -1;
+    return count;
+}
+
+static void stats_get_cb (flux_t *h,
+                          flux_msg_handler_t *mh,
+                          const flux_msg_t *msg,
+                          void *arg)
+{
+    struct content_files *ctx = arg;
+    int count;
+
+    if ((count = get_object_count (ctx->dbpath)) < 0)
+        goto error;
+
+    if (flux_respond_pack (h, msg, "{s:i}", "object_count", count) < 0)
+        flux_log_error (h, "error responding to stats.get request");
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "error responding to stats.get request");
+}
+
 
 /* Handle a content-backing.load request from the rank 0 broker's
  * content-cache service.  The raw request payload is a hash digest.
@@ -259,6 +297,7 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.get", checkpoint_get_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.put", checkpoint_put_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-files.stats.get", stats_get_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
