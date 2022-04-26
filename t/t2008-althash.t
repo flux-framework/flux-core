@@ -43,12 +43,13 @@ test_expect_success S3 'create creds.toml from env' '
 	CREDS
 '
 
+# N.B. don't reuse the bucket from previous tests
 test_expect_success S3 'create content-s3.toml from env' '
 	cat >content-s3.toml <<-TOML
 	[content-s3]
 	credential-file = "$(pwd)/creds/creds.toml"
 	uri = "http://$S3_HOSTNAME"
-	bucket = "$S3_BUCKET"
+	bucket = "${S3_BUCKET}althash"
 	virtual-host-style = false
 	TOML
 '
@@ -66,14 +67,7 @@ test_expect_success S3 'Content store nil returns correct hash for sha256' '
         test "$OUT" = "$nil256"
 '
 
-test_expect_success S3 'Content store nil returns correct hash for sha1' '
-    OUT=$(flux start -o,-Scontent.hash=sha1 \
-          -o,-Scontent.backing-module=content-s3 \
-          flux content store </dev/null) &&
-        test "$OUT" = "$nil1"
-'
-
-test_expect_success S3 'Attempt to start instance with invalid hash fails hard' '
+test_expect_success 'Attempt to start instance with invalid hash fails hard' '
     test_must_fail flux start -o,-Scontent.hash=wronghash /bin/true
 '
 

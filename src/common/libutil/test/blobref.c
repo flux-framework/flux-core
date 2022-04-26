@@ -55,6 +55,20 @@ int main(int argc, char** argv)
         "blobref_hash fails EINVAL with invalid ref length");
 
     errno = 0;
+    ok (blobref_hash_raw ("nerf", data, sizeof (data),
+                          digest, sizeof (digest)) < 0
+        && errno == EINVAL,
+        "blobref_hash_raw fails EINVAL with unknown hash name");
+    errno = 0;
+    ok (blobref_hash_raw ("sha1", data, sizeof (data), NULL, 0) < 0
+        && errno == EINVAL,
+        "blobref_hash_raw fails EINVAL with NULL hash pointer");
+    errno = 0;
+    ok (blobref_hash_raw ("sha1", data, sizeof (data), digest, 1) < 0
+        && errno == EINVAL,
+        "blobref_hash_raw fails EINVAL with invalid hash length");
+
+    errno = 0;
     ok (blobref_strtohash (badref[0], digest, sizeof (digest)) < 0
         && errno == EINVAL,
         "blobref_strtohash fails EINVAL with unknown hash prefix");
@@ -105,6 +119,15 @@ int main(int argc, char** argv)
         "blobref_hash sha1 works");
     diag ("%s", ref);
 
+    ok (blobref_hash_raw ("sha1",
+                          NULL, 0,
+                          digest, sizeof (digest)) == SHA1_DIGEST_SIZE,
+        "blobref_hash_raw sha1 handles zero length data");
+    ok (blobref_hash_raw ("sha1",
+                          data, sizeof (data),
+                          digest, sizeof (digest)) == SHA1_DIGEST_SIZE,
+        "blobref_hash_raw sha1 works");
+
     ok (blobref_strtohash (ref, digest, sizeof (digest)) == SHA1_DIGEST_SIZE,
         "blobref_strtohash returns expected size hash");
     ok (blobref_hashtostr ("sha1", digest, SHA1_DIGEST_SIZE, ref2,
@@ -121,6 +144,15 @@ int main(int argc, char** argv)
     ok (blobref_hash ("sha256", data, sizeof (data), ref, sizeof (ref)) == 0,
         "blobref_hash sha256 works");
     diag ("%s", ref);
+
+    ok (blobref_hash_raw ("sha256",
+                          NULL, 0,
+                          digest, sizeof (digest)) == SHA256_BLOCK_SIZE,
+        "blobref_hash_raw sha256 handles zero length data");
+    ok (blobref_hash_raw ("sha256",
+                          data, sizeof (data),
+                          digest, sizeof (digest)) == SHA256_BLOCK_SIZE,
+        "blobref_hash_raw sha256 works");
 
     ok (blobref_strtohash (ref, digest, sizeof (digest)) == SHA256_BLOCK_SIZE,
         "blobref_strtohash returns expected size hash");
@@ -148,9 +180,9 @@ int main(int argc, char** argv)
     }
 
     /* blobref_validate_hashtype */
-    ok (blobref_validate_hashtype ("sha1") == 0,
+    ok (blobref_validate_hashtype ("sha1") == SHA1_DIGEST_SIZE,
         "blobref_validate_hashtype sha1 is valid");
-    ok (blobref_validate_hashtype ("sha256") == 0,
+    ok (blobref_validate_hashtype ("sha256") == SHA256_BLOCK_SIZE,
         "blobref_validate_hashtype sha256 is valid");
     ok (blobref_validate_hashtype ("nerf") == -1,
         "blobref_validate_hashtype nerf is invalid");

@@ -22,6 +22,7 @@
 #include <lz4.h>
 #include <flux/core.h>
 #include <jansson.h>
+#include <assert.h>
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/log.h"
@@ -69,6 +70,7 @@ struct content_sqlite {
     sqlite3_stmt *checkpt_put_stmt;
     flux_t *h;
     const char *hashfun;
+    int hash_size;
     size_t lzo_bufsize;
     void *lzo_buf;
     struct content_stats stats;
@@ -145,25 +147,19 @@ static int grow_lzo_buf (struct content_sqlite *ctx, size_t size)
  * which invalidates returned data.
  */
 static int content_sqlite_load (struct content_sqlite *ctx,
-                                const char *blobref,
+                                const void *hash,
+                                int hash_size,
                                 const void **datap,
                                 int *sizep)
 {
-    uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
-    int hash_len;
     const void *data = NULL;
     int size = 0;
     int uncompressed_size;
 
-    if ((hash_len = blobref_strtohash (blobref, hash, sizeof (hash))) < 0) {
-        errno = ENOENT;
-        flux_log_error (ctx->h, "load: unexpected foreign blobref");
-        return -1;
-    }
     if (sqlite3_bind_text (ctx->load_stmt,
                            1,
                            (char *)hash,
-                           hash_len,
+                           hash_size,
                            SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "load: binding key");
         set_errno_from_sqlite_error (ctx);
@@ -216,27 +212,25 @@ error:
 }
 
 /* Store blob to objects table, compressing if necessary.
- * Blobref resulting from hash over 'data' is stored to 'blobref'.
- * Returns 0 on success, -1 on error with errno set.
+ * hash over 'data' is stored to 'hash'.
+ * Returns hash size on success, -1 on error with errno set.
  */
 static int content_sqlite_store (struct content_sqlite *ctx,
                                  const void *data,
                                  int size,
-                                 char *blobref,
-                                 int blobrefsz)
+                                 void *hash,
+                                 int hash_len)
 {
-    uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
-    int hash_len;
     int uncompressed_size = -1;
+    int hash_size;
 
-    if (blobref_hash (ctx->hashfun,
-                      (uint8_t *)data,
-                      size,
-                      blobref,
-                      blobrefsz) < 0)
+    if ((hash_size = blobref_hash_raw (ctx->hashfun,
+                                       data,
+                                       size,
+                                       hash,
+                                       hash_len)) < 0)
         return -1;
-    if ((hash_len = blobref_strtohash (blobref, hash, sizeof (hash))) < 0)
-        return -1;
+    assert (hash_size == ctx->hash_size);
     if (size >= compression_threshold) {
         int r;
         int out_len = LZ4_compressBound(size);
@@ -253,8 +247,8 @@ static int content_sqlite_store (struct content_sqlite *ctx,
     }
     if (sqlite3_bind_text (ctx->store_stmt,
                            1,
-                           (char *)hash,
-                           hash_len,
+                           hash,
+                           hash_size,
                            SQLITE_STATIC) != SQLITE_OK) {
         log_sqlite_error (ctx, "store: binding key");
         set_errno_from_sqlite_error (ctx);
@@ -287,7 +281,7 @@ static int content_sqlite_store (struct content_sqlite *ctx,
         goto error;
     }
     sqlite3_reset (ctx->store_stmt);
-    return 0;
+    return hash_size;
 error:
     ERRNO_SAFE_WRAP (sqlite3_reset, ctx->store_stmt);
     return -1;
@@ -299,26 +293,23 @@ static void load_cb (flux_t *h,
                      void *arg)
 {
     struct content_sqlite *ctx = arg;
-    const char *blobref;
-    int blobref_size;
+    const void *hash;
+    int hash_size;
     const void *data;
     int size;
     struct timespec t0;
 
     if (flux_request_decode_raw (msg,
                                  NULL,
-                                 (const void **)&blobref,
-                                 &blobref_size) < 0) {
-        flux_log_error (h, "load: request decode failed");
+                                 &hash,
+                                 &hash_size) < 0)
         goto error;
-    }
-    if (!blobref || blobref[blobref_size - 1] != '\0') {
+    if (hash_size != ctx->hash_size) {
         errno = EPROTO;
-        flux_log_error (h, "load: malformed blobref");
         goto error;
     }
     monotime (&t0);
-    if (content_sqlite_load (ctx, blobref, &data, &size) < 0)
+    if (content_sqlite_load (ctx, hash, hash_size, &data, &size) < 0)
         goto error;
     tstat_push (&ctx->stats.load, monotime_since (t0));
     if (flux_respond_raw (h, msg, data, size) < 0)
@@ -338,7 +329,8 @@ void store_cb (flux_t *h,
     struct content_sqlite *ctx = arg;
     const void *data;
     int size;
-    char blobref[BLOBREF_MAX_STRING_SIZE];
+    uint8_t hash[BLOBREF_MAX_DIGEST_SIZE];
+    int hash_size;
     struct timespec t0;
 
     if (flux_request_decode_raw (msg, NULL, &data, &size) < 0) {
@@ -346,10 +338,14 @@ void store_cb (flux_t *h,
         goto error;
     }
     monotime (&t0);
-    if (content_sqlite_store (ctx, data, size, blobref, sizeof (blobref)) < 0)
+    if ((hash_size = content_sqlite_store (ctx,
+                                           data,
+                                           size,
+                                           hash,
+                                           sizeof (hash))) < 0)
         goto error;
     tstat_push (&ctx->stats.store, monotime_since (t0));
-    if (flux_respond_raw (h, msg, blobref, strlen (blobref) + 1) < 0)
+    if (flux_respond_raw (h, msg, hash, hash_size) < 0)
         flux_log_error (h, "store: flux_respond_raw");
     return;
 error:
@@ -749,7 +745,8 @@ static struct content_sqlite *content_sqlite_create (flux_t *h)
      * - the maximum blob size
      * - path to sqlite file
      */
-    if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))) {
+    if (!(ctx->hashfun = flux_attr_get (h, "content.hash"))
+        || (ctx->hash_size = blobref_validate_hashtype (ctx->hashfun)) < 0) {
         flux_log_error (h, "content.hash");
         goto error;
     }

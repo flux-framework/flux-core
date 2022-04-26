@@ -17,9 +17,15 @@ enum {
     CONTENT_FLAG_UPSTREAM = 2,    /* make request of upstream TBON peer */
 };
 
-/* Send request to load blob by blobref.
+/* Send request to load blob by hash or blobref.
  */
-flux_future_t *content_load (flux_t *h, const char *blobref, int flags);
+flux_future_t *content_load_byhash (flux_t *h,
+                                    const void *hash,
+                                    int hash_len,
+                                    int flags);
+flux_future_t *content_load_byblobref (flux_t *h,
+                                       const char *blobref,
+                                       int flags);
 
 /* Get result of load request (blob).
  * This blocks until response is received.
@@ -32,11 +38,12 @@ int content_load_get (flux_future_t *f, const void **buf, int *len);
  */
 flux_future_t *content_store (flux_t *h, const void *buf, int len, int flags);
 
-/* Get result of store request (blobref).
- * Storage for 'blobref' belongs to 'f' and is valid until 'f' is destroyed.
+/* Get result of store request (hash or blobref).
+ * Storage belongs to 'f' and is valid until 'f' is destroyed.
  * Returns 0 on success, -1 on failure with errno set.
  */
-int content_store_get (flux_future_t *f, const char **blobref);
+int content_store_get_hash (flux_future_t *f, const void **hash, int *hash_len);
+int content_store_get_blobref (flux_future_t *f, const char **blobref);
 
 #endif /* !_FLUX_CONTENT_H */
 

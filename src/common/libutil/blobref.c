@@ -182,6 +182,23 @@ int blobref_hash (const char *hashtype,
     return hashtostr (bh, hash, bh->hashlen, blobref, blobref_len);
 }
 
+int blobref_hash_raw (const char *hashtype,
+                      const void *data, int len,
+                      void *hash, int hash_len)
+{
+    struct blobhash *bh;
+
+    if (!hashtype
+        || !(bh = lookup_blobhash (hashtype))
+        || hash_len < bh->hashlen
+        || !hash) {
+        errno = EINVAL;
+        return -1;
+    }
+    bh->hashfun (data, len, hash, bh->hashlen);
+    return bh->hashlen;
+}
+
 int blobref_validate (const char *blobref)
 {
     struct blobhash *bh;
@@ -205,12 +222,17 @@ inval:
     return -1;
 }
 
-int blobref_validate_hashtype (const char *name)
+ssize_t blobref_validate_hashtype (const char *name)
 {
-    if (name == NULL || !lookup_blobhash (name))
+    struct blobhash *bh;
+
+    if (name == NULL || !(bh = lookup_blobhash (name))) {
+        errno = EINVAL;
         return -1;
-    return 0;
+    }
+    return bh->hashlen;
 }
+
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

@@ -39,8 +39,8 @@ static int internal_content_load (optparse_t *p, int ac, char *av[])
         log_err_exit ("flux_open");
     if (optparse_hasopt (p, "bypass-cache"))
         flags |= CONTENT_FLAG_CACHE_BYPASS;
-    if (!(f = content_load (h, ref, flags)))
-        log_err_exit ("content_load");
+    if (!(f = content_load_byblobref (h, ref, flags)))
+        log_err_exit ("content_load_byblobref");
     if (content_load_get (f, (const void **)&data, &size) < 0)
         log_err_exit ("content_load_get");
     if (write_all (STDOUT_FILENO, data, size) < 0)
@@ -71,8 +71,8 @@ static int internal_content_store (optparse_t *p, int ac, char *av[])
         log_err_exit ("read");
     if (!(f = content_store (h, data, size, flags)))
         log_err_exit ("content_store");
-    if (content_store_get (f, &blobref) < 0)
-        log_err_exit ("content_store_get");
+    if (content_store_get_blobref (f, &blobref) < 0)
+        log_err_exit ("content_store_get_blobref");
     printf ("%s\n", blobref);
     flux_future_destroy (f);
     flux_close (h);

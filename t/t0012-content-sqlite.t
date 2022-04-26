@@ -145,7 +145,7 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned correct timestamp' 
         grep 2.2 timestamp.out
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref to baz' '
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rootref to baz' '
 	kvs_checkpoint_put foo baz
 '
 
@@ -171,9 +171,9 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get noexist fails with No such...' '
 	grep "No such file or directory" badkey.err
 '
 
-test_expect_success 'content-backing.load invalid blobref fails' '
-	echo -n sha999-000 >bad.blobref &&
-	$RPC content-backing.load 2 <bad.blobref 2>load.err
+test_expect_success 'content-backing.load wrong size hash fails with EPROTO' '
+	echo -n xxx >badhash &&
+	$RPC content-backing.load 71 <badhash 2>load.err
 '
 
 getsize() {

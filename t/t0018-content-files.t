@@ -22,11 +22,11 @@ LARGE_SIZES="8388608 10000000 16777216 33554432 67108864"
 # Functions used by tests
 ##
 
-# Usage: backing_load blobref
+# Usage: backing_load <hash
 backing_load() {
-        echo -n $1 | $RPC content-backing.load
+        $RPC -r content-backing.load
 }
-# Usage: backing_store <blob >blobref
+# Usage: backing_store <blob >hash
 backing_store() {
         $RPC -r content-backing.store
 }
@@ -39,23 +39,24 @@ make_blob() {
 	fi
 }
 # Usage: check_blob size
-# Leaves behind blob.<size> and blobref.<size>
+# Leaves behind blob.<size> and hash.<size>
 check_blob() {
 	make_blob $1 >blob.$1 &&
-	backing_store <blob.$1 >blobref.$1 &&
-	backing_load $(cat blobref.$1) >blob.$1.check &&
+	backing_store <blob.$1 >hash.$1 &&
+	backing_load <hash.$1 >blob.$1.check &&
 	test_cmp blob.$1 blob.$1.check
 }
 # Usage: check_blob size
-# Relies on existence of blob.<size> and blobref.<size>
+# Relies on existence of blob.<size> and hash.<size>
 recheck_blob() {
-	backing_load $(cat blobref.$1) >blob.$1.recheck &&
+	backing_load <hash.$1 >blob.$1.recheck &&
 	test_cmp blob.$1 blob.$1.recheck
 }
 # Usage: recheck_cache_blob size
-# Relies on existence of blob.<size> and blobref.<size>
+# Relies on existence of blob.<size>
 recheck_cache_blob() {
-	flux content load $(cat blobref.$1) >blob.$1.cachecheck &&
+	local blobref=$($BLOBREF sha1 <blob.$1)
+	flux content load $blobref >blob.$1.cachecheck &&
 	test_cmp blob.$1 blob.$1.cachecheck
 }
 # Usage: kvs_checkpoint_put key rootref
@@ -115,7 +116,7 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned correct timestamp' 
         grep 2.2 timestamp.out
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref to baz' '
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rootref to baz' '
         kvs_checkpoint_put foo baz
 '
 
@@ -151,7 +152,7 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo still returns rootref baz' '
         test_cmp rootref3.exp rootref3.out
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref with longer rootref' '
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rootref with longer rootref' '
         kvs_checkpoint_put foo abcdefghijklmnopqrstuvwxyz
 '
 
@@ -161,7 +162,7 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned rootref with longer
         test_cmp rootref3.exp rootref3.out
 '
 
-test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rooref to shorter rootref' '
+test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rootref to shorter rootref' '
         kvs_checkpoint_put foo foobar
 '
 
@@ -171,9 +172,9 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned rootref with shorte
         test_cmp rootref4.exp rootref4.out
 '
 
-test_expect_success 'load with invalid blobref fails' '
-	test_must_fail backing_load notblobref 2>notblobref.err &&
-	grep "invalid blobref" notblobref.err
+test_expect_success 'load with invalid hash size fails with EPROTO' '
+	test_must_fail backing_load </dev/null 2>badhash.err &&
+	grep "Protocol error" badhash.err
 '
 test_expect_success 'kvs-checkpoint.get bad request fails with EPROTO' '
 	test_must_fail $RPC kvs-checkpoint.get </dev/null 2>badget.err &&

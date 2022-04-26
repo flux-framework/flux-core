@@ -30,7 +30,7 @@ static void store_completion (flux_future_t *f, void *arg)
     flux_t *h = arg;
     const char *blobref;
 
-    if (content_store_get (f, &blobref) < 0)
+    if (content_store_get_blobref (f, &blobref) < 0)
         log_err_exit ("store");
     printf ("%s\n", blobref);
     flux_future_destroy (f);
