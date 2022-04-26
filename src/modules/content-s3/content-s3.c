@@ -469,11 +469,31 @@ error:
     return NULL;
 }
 
+static int parse_args (flux_t *h, int argc, char **argv)
+{
+    for (int i = 0; i < argc; i++) {
+        if (!strcmp (argv[i], "truncate")) {
+            flux_log (h,
+                      LOG_ERR,
+                      "truncate is not implemented.  Use S3 console"
+                      " or other external mechanism to empty bucket.");
+            return -1;
+        }
+        else {
+            flux_log (h, LOG_ERR, "%s", argv[i]);
+            return -1;
+        }
+    }
+    return 0;
+}
+
 int mod_main (flux_t *h, int argc, char **argv)
 {
     struct content_s3 *ctx;
     int rc = -1;
 
+    if (parse_args (h, argc, argv) < 0)
+        return -1;
     if (!(ctx = content_s3_create (h))) {
         flux_log_error (h, "content_s3_create failed");
         return -1;

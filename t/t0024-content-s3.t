@@ -78,6 +78,13 @@ kvs_checkpoint_get() {
 # Tests of the module by itself (no content cache)
 ##
 
+test_expect_success 'content-s3 module load fails with unknown option' '
+	test_must_fail flux module load content-s3 notoption
+'
+test_expect_success 'content-s3 module load fails with truncate option' '
+	test_must_fail flux module load content-s3 truncate
+'
+
 test_expect_success 'create creds.toml from env' '
 	mkdir -p creds &&
 	cat >creds/creds.toml <<-CREDS
