@@ -807,7 +807,7 @@ static int process_args (struct content_sqlite *ctx,
             *truncate = true;
         }
         else {
-            flux_log_error (ctx->h, "Unknown module option: '%s'", argv[i]);
+            flux_log (ctx->h, LOG_ERR, "Unknown module option: '%s'", argv[i]);
             return -1;
         }
     }
