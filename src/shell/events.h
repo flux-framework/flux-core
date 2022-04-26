@@ -17,7 +17,6 @@ void shell_eventlogger_destroy (struct shell_eventlogger *shev);
 struct shell_eventlogger *shell_eventlogger_create (flux_shell_t *shell);
 
 int shell_eventlogger_emit_event (struct shell_eventlogger *shev,
-                                  int flags,
                                   const char *event);
 
 int shell_eventlogger_context_vpack (struct shell_eventlogger *shev,

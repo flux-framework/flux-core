@@ -81,7 +81,6 @@ struct shell_eventlogger *shell_eventlogger_create (flux_shell_t *shell)
 }
 
 int shell_eventlogger_emit_event (struct shell_eventlogger *shev,
-                                  int flags,
                                   const char *event)
 {
     int rc;

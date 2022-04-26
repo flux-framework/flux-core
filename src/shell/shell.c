@@ -1342,7 +1342,7 @@ int main (int argc, char *argv[])
      */
     if (shell.info->shell_rank == 0
         && !shell.standalone
-        && shell_eventlogger_emit_event (shell.ev, 0, "shell.init") < 0)
+        && shell_eventlogger_emit_event (shell.ev, "shell.init") < 0)
             shell_die_errno (1, "failed to emit event shell.init");
 
     /* Create tasks
@@ -1408,7 +1408,7 @@ int main (int argc, char *argv[])
      */
     if (shell.info->shell_rank == 0
         && !shell.standalone
-        && shell_eventlogger_emit_event (shell.ev, 0, "shell.start") < 0)
+        && shell_eventlogger_emit_event (shell.ev, "shell.start") < 0)
             shell_die_errno (1, "failed to emit event shell.start");
 
     /* Main reactor loop
