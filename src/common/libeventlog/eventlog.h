@@ -52,6 +52,11 @@ json_t *eventlog_entry_vpack (double timestamp,
 
 char *eventlog_entry_encode (json_t *entry);
 
+/* Convenience function to search eventlog for event with name.
+ * Returns 1 if found, 0 if not, -1 on error.
+ */
+int eventlog_contains_event (const char *s, const char *name);
+
 #ifdef __cplusplus
 }
 #endif

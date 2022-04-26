@@ -369,6 +369,39 @@ char *eventlog_encode (json_t *a)
     return buf;
 }
 
+int eventlog_contains_event (const char *s, const char *name)
+{
+    json_t *a = NULL;
+    size_t index;
+    json_t *value;
+    int rv = -1;
+
+    if (!s || !name) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!(a = eventlog_decode (s)))
+        return -1;
+
+    json_array_foreach (a, index, value) {
+        double t;
+        const char *n;
+        json_t *c;
+        if (eventlog_entry_parse (value, &t, &n, &c) < 0)
+            goto out;
+        if (!strcmp (name, n)) {
+            rv = 1;
+            goto out;
+        }
+    }
+
+    rv = 0;
+out:
+    json_decref (a);
+    return rv;
+}
+
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
  */
