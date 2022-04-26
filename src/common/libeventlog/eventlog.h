@@ -28,7 +28,7 @@ int eventlog_entry_parse (json_t *entry,
 json_t *eventlog_decode (const char *s);
 
 /* encode json array of event objects into an eventlog */
-char *eventlog_encode (json_t *o);
+char *eventlog_encode (json_t *a);
 
 /* decode a single eventlog entry into a json object */
 json_t *eventlog_entry_decode (const char *entry);

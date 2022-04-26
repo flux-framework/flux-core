@@ -341,7 +341,7 @@ char *eventlog_entry_encode (json_t *entry)
     return buf;
 }
 
-char *eventlog_encode (json_t *array)
+char *eventlog_encode (json_t *a)
 {
     json_t *value;
     size_t index;
@@ -349,11 +349,11 @@ char *eventlog_encode (json_t *array)
     int bufsz = 0;
     int used = 0;
 
-    if (!array || !json_is_array (array)) {
+    if (!a || !json_is_array (a)) {
         errno = EINVAL;
         return NULL;
     }
-    json_array_foreach (array, index, value) {
+    json_array_foreach (a, index, value) {
         char *s = json_dumps (value, JSON_COMPACT);
 
         if (!s || (used = append_string_nl (&buf, &bufsz, used, s)) < 0) {
