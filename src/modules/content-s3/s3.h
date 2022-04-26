@@ -23,10 +23,12 @@ struct s3_config {
     char *hostname;     // hostname string
 };
 
+/* All int-returning functions below return 0 on success.  On failure,
+ * they return -1 with errno set.  In addition, if 'errstr' is non-NULL
+ * on failure, it is assigned an S3 status string.
+ */
+
 /* Initialize the s3 connection.
- * On success, an s3 connection to the endpoint is created
- * and S3StatusOK (0) is returned. On failure, a status
- * > 0 will be returned.
  */
 int s3_init (struct s3_config *cfg, const char **errstr);
 
@@ -34,17 +36,11 @@ int s3_init (struct s3_config *cfg, const char **errstr);
  */
 void s3_cleanup (void);
 
-/* Create a bucket on the s3 connection.
- * On success, a bucket will be created and 0 will be returned.
- * On failure, a -1 will be reuturned and a bucket
- * will not be created.
+/* Create a bucket to be used for subsequent put/get operations.
  */
 int s3_bucket_create (struct s3_config *cfg, const char **errstr);
 
-/* Put an object to the s3 bucket.
- * On success, the data will be put into the bucket
- * and 0 will be returned. On failure, the data will not put
- * to the bucket and -1 will be returned.
+/* Write 'data' of length 'size' to object named 'key'.
  */
 int s3_put (struct s3_config *cfg,
             const char *key,
@@ -52,11 +48,7 @@ int s3_put (struct s3_config *cfg,
             size_t size,
             const char **errstr);
 
-/* Get an object's data from the s3 bucket.
- * On success, the object with key 'key' will be retrieved
- * from the bucket and the data written to 'datap'
- * and 0 will be returned. On failure, the data will not
- * be retrieved from the bucket and -1 will be returned.
+/* Read 'datap', 'sizep' from object named 'key'.
  */
 int s3_get (struct s3_config *cfg,
             const char *key,
