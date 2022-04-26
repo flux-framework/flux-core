@@ -68,6 +68,15 @@ static int subcmd (optparse_t *p, int ac, char *av[])
     if (optparse_hasopt (p, "background"))
         flags &= ~FLUX_RPC_STREAMING;
 
+    if (optparse_hasopt (p, "gc") || optparse_hasopt (p, "dump")) {
+        const char *val = optparse_get_str (p, "dump", "auto");
+
+        if (flux_attr_set (h, "content.dump", val) < 0)
+            log_err_exit ("error setting content.dump attribute");
+
+        log_msg ("shutdown will dump KVS (this may take some time)");
+    }
+
     /* N.B. set nodeid=FLUX_NODEID_ANY so we get immediate error from
      * broker if run on rank > 0.
      */
@@ -90,6 +99,12 @@ static int subcmd (optparse_t *p, int ac, char *av[])
 }
 
 static struct optparse_option opts[] = {
+    { .name = "gc", .has_arg = 0,
+      .usage = "Garbage collect KVS (short for --dump=auto)",
+    },
+    { .name = "dump", .has_arg = 1, .arginfo = "PATH",
+      .usage = "Dump KVS content to specified archive file using flux-dump(1)."
+    },
     { .name = "background", .has_arg = 0,
       .usage = "Exit the command immediately after initiating shutdown",
     },
