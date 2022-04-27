@@ -100,6 +100,9 @@ All tests support a standard set of options:
 
 ```
 
+Normally long running tests are not executed.  The environment
+variable `TEST_LONG` may be set to have all long running tests run.
+
 The environment variable `FLUX_TEST_INSTALLED_PATH` may also be set
 to the path to an *installed* version of the `flux(1)` command, for
 running the testsuite against an installed version of flux-core.
