@@ -11,10 +11,6 @@ listRPC="flux python ${SHARNESS_TEST_SRCDIR}/job-list/list-rpc.py"
 PERMISSIVE_SCHEMA=${FLUX_SOURCE_DIR}/t/job-list/jobspec-permissive.jsonschema
 JOB_CONV="flux python ${FLUX_SOURCE_DIR}/t/job-manager/job-conv.py"
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 fj_wait_event() {
   flux job wait-event --timeout=20 "$@"
 }

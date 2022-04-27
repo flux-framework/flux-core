@@ -4,10 +4,6 @@ test_description='Test content-files backing store service'
 
 . `dirname $0`/sharness.sh
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 test_under_flux 1 minimal -o,-Sstatedir=$(pwd)
 
 BLOBREF=${FLUX_BUILD_DIR}/t/kvs/blobref

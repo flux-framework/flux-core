@@ -8,10 +8,6 @@ test_under_flux 4 job
 
 RPC=${FLUX_BUILD_DIR}/t/request/rpc
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 fj_wait_event() {
   flux job wait-event --timeout=20 "$@"
 }
