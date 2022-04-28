@@ -249,6 +249,11 @@ test_expect_success 'job-archive: all jobs stored' '
         test $count -eq 7
 '
 
+# we don't check values in module stats b/c it can be racy w/ polling
+test_expect_success 'job-archive: get module stats' '
+        flux module stats job-archive
+'
+
 test_expect_success 'job-archive: unload module' '
         flux module unload job-archive
 '
