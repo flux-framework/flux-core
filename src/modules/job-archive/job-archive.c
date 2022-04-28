@@ -177,7 +177,7 @@ int job_archive_init (struct job_archive_ctx *ctx)
     }
 
     if (sqlite3_exec (ctx->db,
-                      "PRAGMA journal_mode=OFF",
+                      "PRAGMA journal_mode=WAL",
                       NULL,
                       NULL,
                       NULL) != SQLITE_OK) {
@@ -185,7 +185,7 @@ int job_archive_init (struct job_archive_ctx *ctx)
         goto error;
     }
     if (sqlite3_exec (ctx->db,
-                      "PRAGMA synchronous=OFF",
+                      "PRAGMA synchronous=NORMAL",
                       NULL,
                       NULL,
                       NULL) != SQLITE_OK) {
