@@ -462,6 +462,7 @@ class TestJob(unittest.TestCase):
             "t_cleanup",
             "t_inactive",
             "state",
+            "states_mask",
             "name",
             "ntasks",
             "nnodes",

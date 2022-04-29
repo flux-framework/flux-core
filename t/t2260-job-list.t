@@ -199,6 +199,15 @@ test_expect_success HAVE_JQ 'flux job list no jobs in cleanup state' '
         test $count -eq 0
 '
 
+test_expect_success HAVE_JQ 'flux job list running jobs with correct states_mask' '
+        for count in `seq 1 8`; do \
+            echo "NEW,DEPEND,PRIORITY,SCHED,RUN" >> list_states_mask_R.exp; \
+        done &&
+        flux job list -s run | jq .states_mask \
+            | ${JOB_CONV} statesmasktostr > list_states_mask_R.out &&
+        test_cmp list_states_mask_R.out list_states_mask_R.exp
+'
+
 test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
         flux job list -s inactive | jq .id > list_inactive.out &&
         test_cmp list_inactive.out inactive.ids
@@ -210,6 +219,18 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
         done &&
         flux job list -s inactive | jq .state | ${JOB_CONV} statetostr > list_state_I.out &&
         test_cmp list_state_I.out list_state_I.exp
+'
+
+test_expect_success HAVE_JQ 'flux job list inactive jobs with correct states_mask' '
+        echo "NEW,DEPEND,PRIORITY,SCHED,CLEANUP,INACTIVE" \
+             >> list_states_mask_I.exp &&
+        for count in `seq 1 5`; do \
+            echo "NEW,DEPEND,PRIORITY,SCHED,RUN,CLEANUP,INACTIVE" \
+                 >> list_states_mask_I.exp; \
+        done &&
+        flux job list -s inactive | jq .states_mask \
+            | ${JOB_CONV} statesmasktostr > list_states_mask_I.out &&
+        test_cmp list_states_mask_I.out list_states_mask_I.exp
 '
 
 test_expect_success HAVE_JQ 'flux job list inactive jobs results are correct' '
@@ -314,6 +335,16 @@ test_expect_success HAVE_JQ 'flux job list pending jobs with correct state' '
 test_expect_success HAVE_JQ 'flux job list no jobs in depend state' '
         count=$(flux job list -s depend | wc -l) &&
         test $count -eq 0
+'
+
+test_expect_success HAVE_JQ 'flux job list pending jobs with correct states_mask' '
+        for count in `seq 1 8`; do \
+            echo "NEW,DEPEND,PRIORITY,SCHED" \
+                 >> list_states_mask_S.exp; \
+        done &&
+        flux job list -s sched | jq .states_mask \
+            | ${JOB_CONV} statesmasktostr > list_states_mask_S.out &&
+        test_cmp list_states_mask_S.out list_states_mask_S.exp
 '
 
 # Note: "active" = "pending" | "running", i.e. depend, priority,
