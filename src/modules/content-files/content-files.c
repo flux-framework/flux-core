@@ -57,6 +57,7 @@
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/dirwalk.h"
+#include "src/common/libutil/unlink_recursive.h"
 
 #include "src/common/libcontent/content-util.h"
 
@@ -303,7 +304,7 @@ static const struct flux_msg_handler_spec htab[] = {
 
 /* Create module context and perform some initialization.
  */
-static struct content_files *content_files_create (flux_t *h)
+static struct content_files *content_files_create (flux_t *h, bool truncate)
 {
     struct content_files *ctx;
     const char *dbdir;
@@ -334,6 +335,8 @@ static struct content_files *content_files_create (flux_t *h)
     }
     if (asprintf (&ctx->dbpath, "%s/content.files", dbdir) < 0)
         goto error;
+    if (truncate)
+        (void)unlink_recursive (ctx->dbpath);
     if (mkdir (ctx->dbpath, 0700) < 0 && errno != EEXIST) {
         flux_log_error (h, "could not create %s", ctx->dbpath);
         goto error;
@@ -346,12 +349,18 @@ error:
     return NULL;
 }
 
-static int parse_args (flux_t *h, int argc, char **argv, bool *testing)
+static int parse_args (flux_t *h,
+                       int argc,
+                       char **argv,
+                       bool *testing,
+                       bool *truncate)
 {
     int i;
     for (i = 0; i < argc; i++) {
         if (!strcmp (argv[i], "testing"))
             *testing = true;
+        else if (!strcmp (argv[i], "truncate"))
+            *truncate = true;
         else {
             errno = EINVAL;
             flux_log_error (h, "%s", argv[i]);
@@ -377,11 +386,12 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     struct content_files *ctx;
     bool testing = false;
+    bool truncate = false;
     int rc = -1;
 
-    if (parse_args (h, argc, argv, &testing) < 0)
+    if (parse_args (h, argc, argv, &testing, &truncate) < 0)
         return -1;
-    if (!(ctx = content_files_create (h))) {
+    if (!(ctx = content_files_create (h, truncate))) {
         flux_log_error (h, "content_files_create failed");
         return -1;
     }

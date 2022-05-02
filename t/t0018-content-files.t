@@ -213,6 +213,18 @@ test_expect_success LONGTEST 'reload/verify various size large blobs through cac
 	test $err -eq 0
 '
 
+test_expect_success 'flux module stats reports nonzero object count' '
+	test $(flux module stats \
+	    --type int --parse object_count content-files) -gt 0
+'
+test_expect_success 'reload content-files with truncate option' '
+	flux module reload content-files truncate
+'
+test_expect_success 'flux module stats reports zero object count' '
+	test $(flux module stats \
+	    --type int --parse object_count content-files) -eq 0
+'
+
 test_expect_success 'remove content-files module' '
 	flux module remove content-files
 '
