@@ -73,6 +73,10 @@ kvs_checkpoint_get() {
 # Tests of the module by itself (no content cache)
 ##
 
+test_expect_success 'content-files module load fails with unknown option' '
+	test_must_fail flux module load content-files notoption
+'
+
 test_expect_success 'load content-files module' '
 	flux module load content-files testing
 '
