@@ -362,8 +362,7 @@ static int parse_args (flux_t *h,
         else if (!strcmp (argv[i], "truncate"))
             *truncate = true;
         else {
-            errno = EINVAL;
-            flux_log_error (h, "%s", argv[i]);
+            flux_log (h, LOG_ERR, "Unknown module option: %s", argv[i]);
             return -1;
         }
     }
