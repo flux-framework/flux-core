@@ -26,6 +26,8 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/fsd.h"
+#include "src/common/libutil/tstat.h"
+#include "src/common/libutil/monotime.h"
 
 #define BUSY_TIMEOUT_DEFAULT 50
 #define BUFSIZE              1024
@@ -65,6 +67,7 @@ struct job_archive_ctx {
     sqlite3_stmt *store_stmt;
     double since;
     int kvs_lookup_count;
+    tstat_t sqlstore;
 };
 
 static void log_sqlite_error (struct job_archive_ctx *ctx, const char *fmt, ...)
@@ -174,7 +177,7 @@ int job_archive_init (struct job_archive_ctx *ctx)
     }
 
     if (sqlite3_exec (ctx->db,
-                      "PRAGMA journal_mode=OFF",
+                      "PRAGMA journal_mode=WAL",
                       NULL,
                       NULL,
                       NULL) != SQLITE_OK) {
@@ -182,7 +185,7 @@ int job_archive_init (struct job_archive_ctx *ctx)
         goto error;
     }
     if (sqlite3_exec (ctx->db,
-                      "PRAGMA synchronous=OFF",
+                      "PRAGMA synchronous=NORMAL",
                       NULL,
                       NULL,
                       NULL) != SQLITE_OK) {
@@ -263,6 +266,9 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
     const char *jobspec = NULL;
     const char *R = NULL;
     char idbuf[64];
+    struct timespec t0;
+
+    monotime (&t0);
 
     if (flux_rpc_get_unpack (f, "{s:s s:s s?:s}",
                              "eventlog", &eventlog,
@@ -385,6 +391,8 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
     if (t_inactive > ctx->since)
         ctx->since = t_inactive;
 
+    tstat_push (&ctx->sqlstore, monotime_since (t0));
+
 out:
     sqlite3_reset (ctx->store_stmt);
     flux_future_destroy (f);
@@ -497,6 +505,25 @@ void job_archive_cb (flux_reactor_t *r,
     }
 }
 
+void stats_get_cb (flux_t *h,
+                   flux_msg_handler_t *mh,
+                   const flux_msg_t *msg,
+                   void *arg)
+{
+    struct job_archive_ctx *ctx = arg;
+
+    if (flux_respond_pack (h,
+                           msg,
+                           "{s:i s:f s:f s:f s:f}",
+                           "count", tstat_count (&ctx->sqlstore),
+                           "min", tstat_min (&ctx->sqlstore),
+                           "max", tstat_max (&ctx->sqlstore),
+                           "mean", tstat_mean (&ctx->sqlstore),
+                           "stddev", tstat_stddev (&ctx->sqlstore)) < 0)
+        flux_log_error (h, "error responding to stats.get request");
+    return;
+}
+
 static int process_config (struct job_archive_ctx *ctx)
 {
     flux_error_t err;
@@ -553,9 +580,15 @@ static int process_config (struct job_archive_ctx *ctx)
     return 0;
 }
 
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST, "job-archive.stats.get", stats_get_cb, 0 },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
 int mod_main (flux_t *h, int ac, char **av)
 {
     struct job_archive_ctx *ctx = job_archive_ctx_create (h);
+    flux_msg_handler_t **handlers = NULL;
     int rc = -1;
 
     if (!ctx)
@@ -578,10 +611,16 @@ int mod_main (flux_t *h, int ac, char **av)
 
     flux_watcher_start (ctx->w);
 
+    if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
+        flux_log_error (h, "flux_msg_handler_addvec");
+        goto done;
+    }
+
     if ((rc = flux_reactor_run (flux_get_reactor (h), 0)) < 0)
         flux_log_error (h, "flux_reactor_run");
 
 done:
+    flux_msg_handler_delvec (handlers);
     job_archive_ctx_destroy (ctx);
     return rc;
 }
