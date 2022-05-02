@@ -76,6 +76,7 @@ struct content_sqlite {
     struct content_stats stats;
     const char *journal_mode;
     const char *synchronous;
+    bool truncate;
 };
 
 static void log_sqlite_error (struct content_sqlite *ctx, const char *fmt, ...)
@@ -600,11 +601,14 @@ error:
 
 /* Open the database file ctx->dbfile and set up the database.
  */
-static int content_sqlite_opendb (struct content_sqlite *ctx)
+static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
 {
     int flags = SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE;
     char s[128];
     int count;
+
+    if (truncate)
+        (void)unlink (ctx->dbfile);
 
     if (sqlite3_open_v2 (ctx->dbfile, &ctx->db, flags, NULL) != SQLITE_OK) {
         log_sqlite_error (ctx, "opening %s", ctx->dbfile);
@@ -786,7 +790,10 @@ error:
     return NULL;
 }
 
-static int process_args (struct content_sqlite *ctx, int argc, char **argv)
+static int process_args (struct content_sqlite *ctx,
+                         int argc,
+                         char **argv,
+                         bool *truncate)
 {
     int i;
     for (i = 0; i < argc; i++) {
@@ -796,8 +803,11 @@ static int process_args (struct content_sqlite *ctx, int argc, char **argv)
         else if (strncmp ("synchronous=", argv[i], 12) == 0) {
             ctx->synchronous = argv[i] + 12;
         }
+        else if (strcmp ("truncate", argv[i]) == 0) {
+            *truncate = true;
+        }
         else {
-            flux_log_error (ctx->h, "Unknown module option: '%s'", argv[i]);
+            flux_log (ctx->h, LOG_ERR, "Unknown module option: '%s'", argv[i]);
             return -1;
         }
     }
@@ -807,15 +817,17 @@ static int process_args (struct content_sqlite *ctx, int argc, char **argv)
 int mod_main (flux_t *h, int argc, char **argv)
 {
     struct content_sqlite *ctx;
+    bool truncate = false;
     int rc = -1;
 
     if (!(ctx = content_sqlite_create (h))) {
         flux_log_error (h, "content_sqlite_create failed");
         return -1;
     }
-    if (process_args (ctx, argc, argv) < 0) // override pragmas set above
+    // override pragmas set above
+    if (process_args (ctx, argc, argv, &truncate) < 0)
         goto done;
-    if (content_sqlite_opendb (ctx) < 0)
+    if (content_sqlite_opendb (ctx, truncate) < 0)
         goto done;
     if (content_register_backing_store (h, "content-sqlite") < 0)
         goto done;

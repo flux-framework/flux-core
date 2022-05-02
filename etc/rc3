@@ -45,7 +45,25 @@ modrm all kvs
 
 flux content flush || exit_rc=1
 
-backingmod=$(flux getattr content.backing-module 2>/dev/null)
-modrm 0 ${backingmod:-content-sqlite}
+if test $RANK -eq 0; then
+    backingmod=$(flux getattr content.backing-module 2>/dev/null)
+    backingmod=${backingmod:-content-sqlite}
+    dumpfile=$(flux getattr content.dump 2>/dev/null)
+    if test $exit_rc -eq 0 -a -n "${dumpfile}"; then
+        if test "${dumpfile}" = "auto"; then
+            statedir=$(flux getattr statedir 2>/dev/null)
+            mkdir -p "${statedir:-.}/dump"
+            dumpfile="${statedir:-.}/dump/$(date +%Y%m%d_%H%M%S).tgz"
+            dumplink="${statedir:-.}/dump/RESTORE"
+        fi
+        echo "dumping content to ${dumpfile}"
+        if flux dump --quiet --checkpoint ${dumpfile}; then
+            test -n "$dumplink" && ln -s $(basename ${dumpfile}) ${dumplink}
+        else
+            exit_rc=1
+        fi
+    fi
+    flux module remove ${backingmod} || exit_rc=1
+fi
 
 exit $exit_rc

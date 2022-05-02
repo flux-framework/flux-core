@@ -2,6 +2,10 @@
 systemdsystemunit_DATA = flux.service
 #endif
 
+tmpfilesdir = $(prefix)/lib/tmpfiles.d
+
+tmpfiles_DATA = flux.conf
+
 dist_fluxrc_SCRIPTS = \
         rc1 \
         rc3
@@ -43,6 +47,7 @@ noinst_SCRIPTS = \
 
 EXTRA_DIST = \
 	gen-cmdhelp.py \
+	flux.conf \
 	$(noinst_SCRIPTS)
 
 completions/flux: $(srcdir)/completions/flux.pre

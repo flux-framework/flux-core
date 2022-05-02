@@ -73,6 +73,10 @@ kvs_checkpoint_get() {
 # Tests of the module by itself (no content cache)
 ##
 
+test_expect_success 'content-files module load fails with unknown option' '
+	test_must_fail flux module load content-files notoption
+'
+
 test_expect_success 'load content-files module' '
 	flux module load content-files testing
 '
@@ -211,6 +215,18 @@ test_expect_success LONGTEST 'reload/verify various size large blobs through cac
 		if ! recheck_cache_blob $size; then err=$(($err+1)); fi; \
 	done &&
 	test $err -eq 0
+'
+
+test_expect_success 'flux module stats reports nonzero object count' '
+	test $(flux module stats \
+	    --type int --parse object_count content-files) -gt 0
+'
+test_expect_success 'reload content-files with truncate option' '
+	flux module reload content-files truncate
+'
+test_expect_success 'flux module stats reports zero object count' '
+	test $(flux module stats \
+	    --type int --parse object_count content-files) -eq 0
 '
 
 test_expect_success 'remove content-files module' '

@@ -98,6 +98,7 @@ make_bootstrap_config() {
     local full="0-$(($size-1))"
 
     mkdir $workdir/conf.d
+    mkdir $workdir/state
     flux keygen $workdir/cert
     cat >$workdir/conf.d/bootstrap.toml <<-EOT
 	[bootstrap]
@@ -121,6 +122,7 @@ make_bootstrap_config() {
     echo "--test-start-mode=${TEST_UNDER_FLUX_START_MODE:-all}"
     echo "-o,-Stbon.fanout=${TEST_UNDER_FLUX_FANOUT:-$size}"
     echo "-o,-Stbon.zmqdebug=1"
+    echo "-o,-Sstatedir=$workdir/state"
 }
 
 #

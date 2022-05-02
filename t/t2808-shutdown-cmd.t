@@ -136,4 +136,54 @@ test_expect_success 'flux-shutdown as initial program does not hang' '
 	test_expect_code 129 run_timeout 30 flux start flux shutdown
 '
 
+test_expect_success 'submit batch script and wait for it to start' '
+	rm -f job6-has-started &&
+	cat >batch6.sh <<-EOT &&
+	#!/bin/sh
+	flux mini run /bin/true
+	touch job6-has-started
+	sleep 300
+	EOT
+	chmod +x batch6.sh &&
+	flux mini batch -t30m -n1 batch6.sh >jobid6 &&
+	$waitfile job6-has-started
+'
+
+test_expect_success 'one job has run in the batch job' '
+	(FLUX_URI=$(flux uri --local $(cat jobid6)) \
+	    flux jobs -n -a -o {id}) >job6_list &&
+	test $(wc -l <job6_list) -eq 1
+'
+
+test_expect_success 'shutdown batch script with --dump' '
+	(FLUX_URI=$(flux uri --local $(cat jobid6)) \
+	    flux shutdown --dump=dump.tgz)
+'
+test_expect_success 'dump file was created' '
+	tar tvf dump.tgz
+'
+test_expect_success 'restart batch script from dump and wait for it to start' '
+	rm -f job6-has-started &&
+	flux mini batch -t30m -n1 \
+	    --broker-opts=-Scontent.restore=dump.tgz \
+	    batch6.sh >jobid6_try2 &&
+	$waitfile job6-has-started
+'
+test_expect_success 'two jobs have been run in batch job' '
+	(FLUX_URI=$(flux uri --local $(cat jobid6_try2)) \
+	    flux jobs -n -a -o {id}) >job6_list_try2 &&
+	test $(wc -l <job6_list_try2) -eq 2
+'
+test_expect_success 'job id from before restart is in job listing' '
+	grep $(cat job6_list) job6_list_try2
+'
+
+test_expect_success 'shutdown batch script with --gc' '
+	(FLUX_URI=$(flux uri --local $(cat jobid6_try2)) \
+	    flux shutdown --gc)
+'
+test_expect_success 'dump file was created with RESTORE link' '
+	tar tvf dump/RESTORE
+'
+
 test_done
