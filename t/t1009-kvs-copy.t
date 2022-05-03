@@ -9,10 +9,6 @@ Test flux-kvs copy and flux-kvs move.
 
 . `dirname $0`/sharness.sh
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 SIZE=1
 test_under_flux ${SIZE} kvs
 

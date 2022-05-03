@@ -9,10 +9,6 @@ These are tests for ensuring multiple namespaces work.
 
 . `dirname $0`/sharness.sh
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 # Size the session to one more than the number of cores, minimum of 4
 SIZE=$(test_size_large)
 test_under_flux ${SIZE} kvs

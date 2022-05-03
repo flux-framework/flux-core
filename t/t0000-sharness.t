@@ -378,15 +378,19 @@ test_expect_success COLOR,PERL_AND_TTY 'sub-sharness still has color' "
 	EOF
 "
 
-test_expect_success 'EXPENSIVE prereq not activated by default' "
+# Following test should only run by default when TEST_LONG isn't set
+if test -z "$TEST_LONG";  then
+    test_set_prereq NO_TEST_LONG
+fi
+test_expect_success NO_TEST_LONG 'EXPENSIVE prereq not activated by default' "
 	run_sub_test_lib_test no-long 'long test' <<-\\EOF &&
 	test_expect_success 'passing test' 'true'
-	test_expect_success EXPENSIVE 'passing suposedly long test' 'true'
+	test_expect_success EXPENSIVE 'passing supposedly long test' 'true'
 	test_done
 	EOF
 	check_sub_test_lib_test no-long <<-\\EOF
 	> ok 1 - passing test
-	> ok 2 # skip passing suposedly long test (missing EXPENSIVE)
+	> ok 2 # skip passing supposedly long test (missing EXPENSIVE)
 	> # passed all 2 test(s)
 	> 1..2
 	EOF
@@ -395,12 +399,12 @@ test_expect_success 'EXPENSIVE prereq not activated by default' "
 test_expect_success 'EXPENSIVE prereq is activated by --long' "
 	run_sub_test_lib_test long 'long test' '' '--long' <<-\\EOF &&
 	test_expect_success 'passing test' 'true'
-	test_expect_success EXPENSIVE 'passing suposedly long test' 'true'
+	test_expect_success EXPENSIVE 'passing supposedly long test' 'true'
 	test_done
 	EOF
 	check_sub_test_lib_test long <<-\\EOF
 	> ok 1 - passing test
-	> ok 2 - passing suposedly long test
+	> ok 2 - passing supposedly long test
 	> # passed all 2 test(s)
 	> 1..2
 	EOF

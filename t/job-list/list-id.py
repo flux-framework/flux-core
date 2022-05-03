@@ -26,11 +26,11 @@ attrs = ["state", "name", "t_submit"]
 jobspec = job.JobspecV1.from_command(["sleep", "0"], num_tasks=1, cores_per_task=1)
 
 
-def list_cb(f, arg):
+def list_cb(f):
     print(f.get())
 
 
-def submit_cb(f, arg):
+def submit_cb(f):
     jobid = job.submit_get_id(f)
     h.rpc("job-list.list-id", dict(id=jobid, attrs=attrs)).then(list_cb)
 

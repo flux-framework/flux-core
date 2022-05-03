@@ -9,10 +9,6 @@ if test -z "$S3_HOSTNAME"; then
 	test_done
 fi
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
-
 export FLUX_CONF_DIR=$(pwd)
 
 test_under_flux 1 minimal

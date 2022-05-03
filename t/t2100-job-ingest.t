@@ -4,9 +4,6 @@ test_description='Test flux job ingest service'
 
 . $(dirname $0)/sharness.sh
 
-if test "$TEST_LONG" = "t"; then
-    test_set_prereq LONGTEST
-fi
 if ${FLUX_BUILD_DIR}/t/ingest/submitbench --help 2>&1 | grep -q sign-type; then
     test_set_prereq HAVE_FLUX_SECURITY
     SUBMITBENCH_OPT_R="--reuse-signature"
