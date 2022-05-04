@@ -37,9 +37,15 @@ def _get_broker_child_fallback(broker_pid):
             #  of a TOU-TOC race here, so just ignore all errors
             pass
         else:
-            ppid = int(data.split()[3])
-            if ppid == broker_pid:
-                return pid
+            match = re.match(r"^[0-9]+ \(.*\) \w+ ([0-9]+)", data)
+            #  Attempt to convert match to integer. On regex match failure,
+            #   or integer conversion failure, just skip this entry
+            try:
+                ppid = int(match.group(1))
+                if ppid == broker_pid:
+                    return pid
+            except (IndexError, ValueError):
+                pass
     raise ValueError(f"PID {broker_pid} is a flux-broker and no child found")
 
 
