@@ -500,7 +500,7 @@ static struct optparse_subcommand subcommands[] = {
       memo_opts,
     },
     { "purge",
-      "[--age-limit=FSD] [--count-limit=N]",
+      "[--age-limit=FSD] [--num-limit=N]",
       "Purge the oldest inactive jobs",
       cmd_purge,
       0,
