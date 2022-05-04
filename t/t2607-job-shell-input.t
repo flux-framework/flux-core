@@ -73,7 +73,7 @@ test_expect_success NO_CHAIN_LINT 'flux-shell: attach twice, one with data' '
 '
 
 test_expect_success 'flux-shell: multiple jobs, each want stdin' '
-	flux mini submit --cc=1-4 -n1 -t 15 \
+	flux mini submit --cc=1-4 -n1 -t 30 \
 	    ${TEST_SUBPROCESS_DIR}/test_echo -O -n >pipe5.jobids &&
 	test_debug "cat pipe5.jobids" &&
 	i=1 &&
@@ -151,7 +151,7 @@ test_expect_success 'flux-shell: run 2-task input file as stdin job' '
 '
 
 test_expect_success 'flux-shell: multiple jobs, each want stdin via file' '
-	flux mini submit --cc=1-4 -n1 -t 15 --input=input_stdin_file \
+	flux mini submit --cc=1-4 -n1 -t 30 --input=input_stdin_file \
 	    ${TEST_SUBPROCESS_DIR}/test_echo -O -n >file2.jobids &&
 	test_debug "cat file2.jobids" &&
 	i=1 &&
