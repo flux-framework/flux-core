@@ -829,6 +829,65 @@ test_expect_success HAVE_JQ 'verify nnodes/ranks/nodelist preserved across resta
         echo $obj | jq -e ".nodelist == \"${nodes}\""
 '
 
+# all job attributes
+
+# note that not all attributes may be returned by via the 'all'
+# attribute.  e.g. exception data won't be returned for a job that
+# doesn't have an exception, no annotations if none set, etc.
+#
+# so we check for all the core / expected attributes for the situation
+
+test_expect_success HAVE_JQ 'list request with all attr works (job success)' '
+        id=$(id -u) &&
+        flux mini run hostname &&
+        $jq -j -c -n  "{max_entries:1, userid:${id}, states:0, results:0, attrs:[\"all\"]}" \
+          | $RPC job-list.list | jq ".jobs[0]" > all_success.out &&
+        cat all_success.out | jq -e ".id" &&
+        cat all_success.out | jq -e ".userid" &&
+        cat all_success.out | jq -e ".urgency" &&
+        cat all_success.out | jq -e ".priority" &&
+        cat all_success.out | jq -e ".t_submit" &&
+        cat all_success.out | jq -e ".t_depend" &&
+        cat all_success.out | jq -e ".t_run" &&
+        cat all_success.out | jq -e ".t_cleanup" &&
+        cat all_success.out | jq -e ".t_inactive" &&
+        cat all_success.out | jq -e ".state" &&
+        cat all_success.out | jq -e ".name" &&
+        cat all_success.out | jq -e ".ntasks" &&
+        cat all_success.out | jq -e ".nnodes" &&
+        cat all_success.out | jq -e ".ranks" &&
+        cat all_success.out | jq -e ".nodelist" &&
+        cat all_success.out | jq -e ".success == true" &&
+        cat all_success.out | jq -e ".exception_occurred == false" &&
+        cat all_success.out | jq -e ".result" &&
+        cat all_success.out | jq -e ".waitstatus" &&
+        cat all_success.out | jq -e ".expiration"
+'
+
+test_expect_success HAVE_JQ 'list request with all attr works (job fail)' '
+        id=$(id -u) &&
+        ! flux mini run -N1000 -n1000 hostname &&
+        $jq -j -c -n  "{max_entries:1, userid:${id}, states:0, results:0, attrs:[\"all\"]}" \
+          | $RPC job-list.list | jq ".jobs[0]" > all_fail.out &&
+        cat all_fail.out | jq -e ".id" &&
+        cat all_fail.out | jq -e ".userid" &&
+        cat all_fail.out | jq -e ".urgency" &&
+        cat all_fail.out | jq -e ".priority" &&
+        cat all_fail.out | jq -e ".t_submit" &&
+        cat all_fail.out | jq -e ".t_depend" &&
+        cat all_fail.out | jq -e ".t_cleanup" &&
+        cat all_fail.out | jq -e ".t_inactive" &&
+        cat all_fail.out | jq -e ".state" &&
+        cat all_fail.out | jq -e ".name" &&
+        cat all_fail.out | jq -e ".ntasks" &&
+        cat all_fail.out | jq -e ".success == false" &&
+        cat all_fail.out | jq -e ".exception_occurred == true" &&
+        cat all_fail.out | jq -e ".exception_type" &&
+        cat all_fail.out | jq -e ".exception_severity" &&
+        cat all_fail.out | jq -e ".exception_note" &&
+        cat all_fail.out | jq -e ".result"
+'
+
 #
 # job-list can handle flux-restart events
 #
@@ -880,10 +939,10 @@ test_expect_success 'list count / max_entries works' '
         test $count -eq 5
 '
 
-# List of all attributes (XXX: maybe this should be pulled in from somewhere
+# List of all job attributes (XXX: maybe this should be pulled in from somewhere
 #  else? E.g. documentation?
 
-ALL_ATTRIBUTES="\
+JOB_ATTRIBUTES="\
 userid \
 urgency \
 priority \
@@ -914,7 +973,7 @@ test_expect_success HAVE_JQ 'list request with empty attrs works' '
         id=$(id -u) &&
         $jq -j -c -n  "{max_entries:5, userid:${id}, states:0, results:0, attrs:[]}" \
           | $RPC job-list.list > list_empty_attrs.out &&
-	for attr in $ALL_ATTRIBUTES; do
+	for attr in $JOB_ATTRIBUTES; do
 	    test_must_fail grep $attr list_empty_attrs.out
 	done
 '
@@ -923,9 +982,13 @@ test_expect_success HAVE_JQ 'list request with excessive max_entries works' '
         $jq -j -c -n  "{max_entries:100000, userid:${id}, states:0, results:0, attrs:[]}" \
           | $RPC job-list.list
 '
+
+# list-attrs also lists the special attribute 'all'
+LIST_ATTRIBUTES="${JOB_ATTRIBUTES} all"
+
 test_expect_success HAVE_JQ 'list-attrs works' '
         $RPC job-list.list-attrs < /dev/null > list_attrs.out &&
-	for attr in $ALL_ATTRIBUTES; do
+	for attr in $LIST_ATTRIBUTES; do
 	    grep $attr list_attrs.out
 	done
 '
