@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 # include <config.h>
 #endif
+#include <unistd.h>
 #include <jansson.h>
 #include <flux/core.h>
 
@@ -57,8 +58,9 @@ static struct optparse_option status_opts[] = {
       .usage = "Do not fill in presumed state of nodes that are"
                " inaccessible behind offline/lost overlay parents",
     },
-    { .name = "no-color", .has_arg = 0,
-      .usage = "Do not use color to highlight offline/lost nodes",
+    { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .usage = "Colorize output when supported; WHEN can be 'always' "
+               "(default if omitted), 'never', or 'auto' (default)."
     },
     { .name = "wait", .key = 'w', .has_arg = 1, .arginfo = "STATE",
       .usage = "Wait until subtree enters STATE before reporting"
@@ -77,6 +79,7 @@ static struct optparse_option disconnect_opts[] = {
 struct status {
     flux_t *h;
     int verbose;
+    int color;
     double timeout;
     optparse_t *opt;
     struct timespec start;
@@ -173,7 +176,7 @@ static const char *status_colorize (struct status *ctx,
 {
     static char buf[128];
 
-    if (!optparse_hasopt (ctx->opt, "no-color")) {
+    if (ctx->color) {
         if (streq (status, "lost") && !ghost) {
             snprintf (buf, sizeof (buf), "%s%s%s",
                       ansi_red, status, ansi_default);
@@ -555,6 +558,24 @@ static bool validate_wait (const char *wait)
     return true;
 }
 
+static int status_use_color (optparse_t *p)
+{
+    const char *when;
+    int color;
+
+    if (!(when = optparse_get_str (p, "color", "auto")))
+        when = "always";
+    if (streq (when, "always"))
+        color = 1;
+    else if (streq (when, "never"))
+        color = 0;
+    else if (streq (when, "auto"))
+        color = isatty (STDOUT_FILENO) ? 1 : 0;
+    else
+        log_msg_exit ("Invalid argument to --color: '%s'", when);
+    return color;
+}
+
 static int subcmd_status (optparse_t *p, int ac, char *av[])
 {
     int rank = optparse_get_int (p, "rank", 0);
@@ -563,6 +584,7 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
 
     ctx.h = builtin_get_flux_handle (p);
     ctx.verbose = optparse_get_int (p, "verbose", 0);
+    ctx.color = status_use_color (p);
     ctx.timeout = optparse_get_duration (p, "timeout", default_timeout);
     if (ctx.timeout == 0)
         ctx.timeout = -1.0; // disabled
