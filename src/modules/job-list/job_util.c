@@ -16,9 +16,11 @@
 #include <jansson.h>
 #include <stdarg.h>
 #include <flux/core.h>
+#include <assert.h>
 
 #include "src/common/libutil/errno_safe.h"
 
+#include "job-list.h"
 #include "job_util.h"
 #include "job_state.h"
 
@@ -180,6 +182,21 @@ static int store_attr (struct job *job,
     return 0;
 }
 
+int store_all_attr (struct job *job, json_t *o, job_list_error_t *errp)
+{
+    const char **ptr = job_attrs ();
+
+    assert (ptr);
+
+    while (*ptr) {
+        if (store_attr (job, *ptr, o, errp) < 0)
+            return -1;
+        ptr++;
+    }
+
+    return 0;
+}
+
 /* For a given job, create a JSON object containing the jobid and any
  * additional requested attributes and their values.  Returns JSON
  * object which the caller must free.  On error, return NULL with
@@ -212,8 +229,14 @@ json_t *job_to_json (struct job *job, json_t *attrs, job_list_error_t *errp)
             errno = EINVAL;
             goto error;
         }
-        if (store_attr (job, attr, o, errp) < 0)
-            goto error;
+        if (strcmp (attr, "all") == 0) {
+            if (store_all_attr (job, o, errp) < 0)
+                goto error;
+        }
+        else {
+            if (store_attr (job, attr, o, errp) < 0)
+                goto error;
+        }
     }
     return o;
  error_nomem:

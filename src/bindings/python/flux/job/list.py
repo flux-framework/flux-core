@@ -42,6 +42,7 @@ VALID_ATTRS = [
     "expiration",
     "annotations",
     "dependencies",
+    "all",
 ]
 
 

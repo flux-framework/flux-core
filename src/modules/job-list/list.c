@@ -574,6 +574,9 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
     }
 
+    if (list_attrs_append (a, "all") < 0)
+        goto error;
+
     if (flux_respond_pack (h, msg, "{s:O}", "attrs", a) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
 
