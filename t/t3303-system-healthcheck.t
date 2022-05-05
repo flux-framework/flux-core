@@ -96,6 +96,13 @@ test_expect_success 'flux overlay status --highlight expected failures' '
 	test_must_fail flux overlay status --highlight=fake16
 '
 
+test_expect_success 'flux overlay status --color option works' '
+	test_must_fail flux overlay status --color=foo &&
+	flux overlay status --color=never --highlight=0 | grep "<<0" &&
+	flux overlay status --color=auto --highlight=0 | grep "<<0" &&
+	flux overlay status --color --highlight=0 | grep "\["
+'
+
 test_expect_success 'stop broker 3 with children 7,8' '
 	$startctl kill 3 15
 '
