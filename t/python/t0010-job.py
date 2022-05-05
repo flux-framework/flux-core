@@ -28,7 +28,6 @@ import flux.kvs
 import flux.constants
 from flux import job
 from flux.job import Jobspec, JobspecV1, ffi, JobID, JobInfo
-from flux.job.list import VALID_ATTRS
 from flux.job.stats import JobStats
 from flux.future import Future
 
@@ -453,8 +452,35 @@ class TestJob(unittest.TestCase):
                     self.assertEqual(getattr(jobid, key), test[key])
 
     def test_25_job_list_attrs(self):
+        expected_attrs = [
+            "userid",
+            "urgency",
+            "priority",
+            "t_submit",
+            "t_depend",
+            "t_run",
+            "t_cleanup",
+            "t_inactive",
+            "state",
+            "name",
+            "ntasks",
+            "nnodes",
+            "ranks",
+            "nodelist",
+            "waitstatus",
+            "success",
+            "exception_occurred",
+            "exception_type",
+            "exception_severity",
+            "exception_note",
+            "result",
+            "expiration",
+            "annotations",
+            "dependencies",
+            "all",
+        ]
         valid_attrs = self.fh.rpc("job-list.list-attrs", "{}").get()["attrs"]
-        self.assertEqual(set(valid_attrs), set(VALID_ATTRS))
+        self.assertEqual(set(valid_attrs), set(expected_attrs))
 
     def test_30_job_stats_sync(self):
         stats = JobStats(self.fh)

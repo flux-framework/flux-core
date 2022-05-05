@@ -162,10 +162,9 @@ def load_tree(
     #  This may fail if the instance hasn't loaded the job-list module
     #   or if the current user is not owner
     #
-    attrs = flux.job.list.VALID_ATTRS
     try:
         jobs_rpc = JobList(
-            flux.Flux(uri), ids=jobids, filters=filters, attrs=attrs
+            flux.Flux(uri), ids=jobids, filters=filters, attrs=["all"]
         ).fetch_jobs()
         jobs = jobs_rpc.get_jobs()
     except (OSError, FileNotFoundError):

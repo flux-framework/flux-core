@@ -17,35 +17,6 @@ from flux.job.info import JobInfo
 from flux.rpc import RPC
 
 
-VALID_ATTRS = [
-    "userid",
-    "urgency",
-    "priority",
-    "t_submit",
-    "t_depend",
-    "t_run",
-    "t_cleanup",
-    "t_inactive",
-    "state",
-    "name",
-    "ntasks",
-    "nnodes",
-    "ranks",
-    "nodelist",
-    "waitstatus",
-    "success",
-    "exception_occurred",
-    "exception_type",
-    "exception_severity",
-    "exception_note",
-    "result",
-    "expiration",
-    "annotations",
-    "dependencies",
-    "all",
-]
-
-
 class JobListRPC(RPC):
     def get_jobs(self):
         return self.get()["jobs"]
@@ -178,7 +149,7 @@ class JobList:
     def __init__(
         self,
         flux_handle,
-        attrs=VALID_ATTRS,
+        attrs=["all"],
         filters=[],
         ids=[],
         user=None,
