@@ -623,3 +623,6 @@ xz
 validator
 statedir
 num
+gc
+tgz
+tmpfiles
