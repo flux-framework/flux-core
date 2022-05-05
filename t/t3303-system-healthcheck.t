@@ -69,6 +69,33 @@ test_expect_success 'wait timeout of zero is not an immediate timeout' '
 	flux overlay status --wait=full --summary --timeout=0
 '
 
+test_expect_success 'flux overlay status --highlight option works (color)' '
+	flux overlay status --highlight=14 --color=always > highlight.out &&
+	grep "\[01;34" highlight.out > highlighted.out &&
+	cat <<-EOF >highlighted.expected &&
+	[01;34m0 fake0[0m: full
+	└─ [01;34m2 fake2[0m: full
+	   └─ [01;34m6 fake6[0m: full
+	      └─ [01;34m14 fake14[0m: full
+	EOF
+	test_cmp highlighted.expected highlighted.out
+'
+
+test_expect_success 'flux overlay status --highlight option takes hostlist' '
+	flux overlay status --highlight=fake[2,6] | grep "<<" > hl2.out &&
+	cat <<-EOF >hl2.expected &&
+	<<0 fake0>>: full
+	└─ <<2 fake2>>: full
+	   └─ <<6 fake6>>: full
+	EOF
+	test_cmp hl2.expected hl2.out
+'
+
+test_expect_success 'flux overlay status --highlight expected failures' '
+	test_must_fail flux overlay status --highlight=0-16 &&
+	test_must_fail flux overlay status --highlight=fake16
+'
+
 test_expect_success 'stop broker 3 with children 7,8' '
 	$startctl kill 3 15
 '
