@@ -1,3 +1,55 @@
+flux-core version 0.39.0 - 2022-05-06
+-------------------------------------
+
+## New Features
+
+ * job-list: support new "all" attribute to get all job attributes (#4324)
+ * flux-overlay: replace --no-color with --color=WHEN (#4322)
+ * flux-overlay: add -H, --highlight option (#4322)
+ * flux-shutdown: add --gc garbage collection option (#4303)
+ * content: track RFC 10 protocol changes (#4299)
+ * flux-dmesg: colorize output and add -H, --human option (#4289)
+ * job-manager: add inactive job purge capability (#4286)
+ * libutil: support "ms" suffix for Flux Standard Duration (#4284)
+ * add flux-resource info subcommand (#4272)
+
+## Fixes
+
+ * python: uri: fix intermittent failure of fallback pid resolver (#4320)
+ * flux-job: fix purge usage message (#4318)
+ * use correct type in content-sqlite, misc. content test cleanup (#4315)
+ * job-archive: use safer pragmas (#4307)
+ * select safer content.sqlite consistency pragmas (#4294)
+ * sched-simple: do not allocate down nodes with --exclusive (#4292)
+ * python: fix return from `flux.importer.import_plugins()` when no plugins
+   found (#4288)
+ * fix hang when job with an interactive pty fails early (#4283)
+ * broker: prevent downstream peers from connecting during shutdown (#4277)
+
+## Cleanup
+
+ * flux-shutdown(1): document new options (#4323)
+ * README: add libarchive prerequisite (#4319)
+ * content-s3: cosmetic cleanup (#4314)
+ * job-list: misc cleanups (#4297)
+ * broker: suppress online message with no members (#4298)
+ * job-manager: introduce config callback (#4279)
+ * libev: update to version 4.33 (#4282)
+ * libflux: convert `flux_conf_error_t` to `flux_error_t` (#4278)
+ * resource: stop collecting/reducing hwloc XML  (#4263)
+ * flux-hwloc: remove command (#4262)
+ * flux-resource: remove ranks from default status output (#4271)
+ * libsubprocess: remove prefix on server setup (#4268)
+
+## Testsuite
+
+ * testsuite: increase test timeout (#4321)
+ * teststuite: document and fixup LONGTEST tests (#4305)
+ * testsuite: minor README fixes / updates (#4291)
+ * docker: update default flux-security version to v0.6.0 (#4274)
+ * testsuite: fix failing tests on parallel testsuite runs (#4275)
+ * ci: add build for Fedora 35 (#4270)
+
 flux-core version 0.38.0 - 2022-04-04
 -------------------------------------
 
