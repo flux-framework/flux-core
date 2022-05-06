@@ -69,6 +69,40 @@ test_expect_success 'wait timeout of zero is not an immediate timeout' '
 	flux overlay status --wait=full --summary --timeout=0
 '
 
+test_expect_success 'flux overlay status --highlight option works (color)' '
+	flux overlay status --highlight=14 --color=always > highlight.out &&
+	grep "\[01;34" highlight.out > highlighted.out &&
+	cat <<-EOF >highlighted.expected &&
+	[01;34m0 fake0[0m: full
+	└─ [01;34m2 fake2[0m: full
+	   └─ [01;34m6 fake6[0m: full
+	      └─ [01;34m14 fake14[0m: full
+	EOF
+	test_cmp highlighted.expected highlighted.out
+'
+
+test_expect_success 'flux overlay status --highlight option takes hostlist' '
+	flux overlay status --highlight=fake[2,6] | grep "<<" > hl2.out &&
+	cat <<-EOF >hl2.expected &&
+	<<0 fake0>>: full
+	└─ <<2 fake2>>: full
+	   └─ <<6 fake6>>: full
+	EOF
+	test_cmp hl2.expected hl2.out
+'
+
+test_expect_success 'flux overlay status --highlight expected failures' '
+	test_must_fail flux overlay status --highlight=0-16 &&
+	test_must_fail flux overlay status --highlight=fake16
+'
+
+test_expect_success 'flux overlay status --color option works' '
+	test_must_fail flux overlay status --color=foo &&
+	flux overlay status --color=never --highlight=0 | grep "<<0" &&
+	flux overlay status --color=auto --highlight=0 | grep "<<0" &&
+	flux overlay status --color --highlight=0 | grep "\["
+'
+
 test_expect_success 'stop broker 3 with children 7,8' '
 	$startctl kill 3 15
 '
@@ -91,7 +125,7 @@ test_expect_success 'flux overlay status -vv works' '
 
 test_expect_success 'flux overlay status shows rank 3 offline' '
 	echo "3 fake3: offline" >health.exp &&
-	flux overlay status --timeout=0 --no-pretty --no-color \
+	flux overlay status --timeout=0 --no-pretty \
 		| grep fake3 >health.out &&
 	test_cmp health.exp health.out
 '
@@ -109,14 +143,14 @@ test_expect_success 'flux overlay status -vv' '
 '
 
 test_expect_success 'flux overlay status: 0,1:partial, 3:offline' '
-	flux overlay status --timeout=0 --no-color --no-pretty  >health2.out &&
+	flux overlay status --timeout=0 --no-pretty  >health2.out &&
 	grep "0 fake0: partial" health2.out &&
 	grep "1 fake1: partial" health2.out &&
 	grep "3 fake3: offline" health2.out
 '
 
 test_expect_success 'flux overlay status: 0-1:partial, 3,7-8:offline' '
-	flux overlay status --timeout=0 --no-color --no-pretty >health3.out &&
+	flux overlay status --timeout=0 --no-pretty >health3.out &&
 	grep "0 fake0: partial" health3.out &&
 	grep "1 fake1: partial" health3.out &&
 	grep "3 fake3: offline" health3.out &&
@@ -125,7 +159,7 @@ test_expect_success 'flux overlay status: 0-1:partial, 3,7-8:offline' '
 '
 
 test_expect_success 'flux overlay status: 0,1:partial, 3,7-8:offline, rest:full' '
-	flux overlay status --timeout=0 --no-color --no-pretty >health4.out &&
+	flux overlay status --timeout=0 --no-pretty >health4.out &&
 	grep "0 fake0: partial" health4.out &&
 	grep "1 fake1: partial" health4.out &&
 	grep "3 fake3: offline" health4.out &&
@@ -234,7 +268,7 @@ test_expect_success 'stop broker 12' '
 '
 
 test_expect_success 'flux overlay status prints connection timed out on 12' '
-	flux overlay status --no-pretty --no-color >status.out &&
+	flux overlay status --no-pretty >status.out &&
 	grep "fake12: Connection timed out" status.out
 '
 

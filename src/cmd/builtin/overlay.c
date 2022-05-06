@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 # include <config.h>
 #endif
+#include <unistd.h>
 #include <jansson.h>
 #include <flux/core.h>
 
@@ -28,6 +29,9 @@ static double default_timeout = 0.5;
 static const char *ansi_default = "\033[39m";
 static const char *ansi_red = "\033[31m";
 static const char *ansi_yellow = "\033[33m";
+static const char *ansi_blue = "\033[01;34m";
+static const char *ansi_reset = "\033[0m";
+
 //static const char *ansi_green = "\033[32m";
 static const char *ansi_dark_gray = "\033[90m";
 
@@ -57,8 +61,12 @@ static struct optparse_option status_opts[] = {
       .usage = "Do not fill in presumed state of nodes that are"
                " inaccessible behind offline/lost overlay parents",
     },
-    { .name = "no-color", .has_arg = 0,
-      .usage = "Do not use color to highlight offline/lost nodes",
+    { .name = "color", .key = 'L', .has_arg = 2, .arginfo = "WHEN",
+      .usage = "Colorize output when supported; WHEN can be 'always' "
+               "(default if omitted), 'never', or 'auto' (default)."
+    },
+    { .name = "highlight", .key = 'H', .has_arg = 1, .arginfo = "TARGET",
+      .usage = "Highlight one or more TARGETs and their ancestors."
     },
     { .name = "wait", .key = 'w', .has_arg = 1, .arginfo = "STATE",
       .usage = "Wait until subtree enters STATE before reporting"
@@ -77,10 +85,12 @@ static struct optparse_option disconnect_opts[] = {
 struct status {
     flux_t *h;
     int verbose;
+    int color;
     double timeout;
     optparse_t *opt;
     struct timespec start;
     const char *wait;
+    struct idset *highlight;
     zlistx_t *stack;
 };
 
@@ -94,6 +104,7 @@ enum connector {
 
 struct status_node {
     int rank;
+    struct idset *subtree_ranks;
     const char *status;
     double duration;
     bool ghost;
@@ -173,7 +184,7 @@ static const char *status_colorize (struct status *ctx,
 {
     static char buf[128];
 
-    if (!optparse_hasopt (ctx->opt, "no-color")) {
+    if (ctx->color) {
         if (streq (status, "lost") && !ghost) {
             snprintf (buf, sizeof (buf), "%s%s%s",
                       ansi_red, status, ansi_default);
@@ -239,15 +250,29 @@ static const char *status_indent (struct status *ctx, int n)
 
 /* Return string containing hostname and rank.
  */
-static const char *status_getname (struct status *ctx, int rank)
+static const char *status_getname (struct status *ctx,
+                                   struct status_node *node)
 {
     static char buf[128];
+    const char * highlight_start = "";
+    const char * highlight_end = "";
+
+    /*  Highlight name if colorized output is enabled and this rank's
+     *   subtree (when known) intersects requested highlighted ranks:
+     */
+    if (node->subtree_ranks
+        && idset_has_intersection (ctx->highlight, node->subtree_ranks)) {
+        highlight_start = ctx->color ? ansi_blue : "<<";
+        highlight_end = ctx->color ? ansi_reset : ">>";
+    }
 
     snprintf (buf,
               sizeof (buf),
-              "%d %s",
-              rank,
-              flux_get_hostbyrank (ctx->h, rank));
+              "%s%d %s%s",
+              highlight_start,
+              node->rank,
+              flux_get_hostbyrank (ctx->h, node->rank),
+              highlight_end);
     return buf;
 }
 
@@ -275,7 +300,7 @@ static void status_print (struct status *ctx,
     printf ("%s%s%s: %s%s%s\n",
             status_indent (ctx, level),
             connector_string (connector),
-            status_getname (ctx, node->rank),
+            status_getname (ctx, node),
             status_colorize (ctx, node->status, node->ghost),
             status_duration (ctx, node->duration),
             parent ? status_rpctime (ctx) : "");
@@ -323,6 +348,86 @@ static json_t *topo_lookup (struct status *ctx,
     return topo;
 }
 
+/* Recursive function to walk 'topology', adding all subtree ranks to 'ids'.
+ * Returns 0 on success, -1 on failure (errno is not set).
+ *
+ * Note: Lifted directly from src/broker/groups.c
+ */
+static int add_subtree_ids (struct idset *ids, json_t *topology)
+{
+    int rank;
+    json_t *a;
+    size_t index;
+    json_t *entry;
+
+    if (json_unpack (topology, "{s:i s:o}", "rank", &rank, "children", &a) < 0
+        || idset_set (ids, rank) < 0)
+        return -1;
+    json_array_foreach (a, index, entry) {
+        if (add_subtree_ids (ids, entry) < 0)
+            return -1;
+    }
+    return 0;
+}
+
+/*  Return an idset of ranks included in subtree 'topology'
+ *   (including root rank).
+ */
+static struct idset *topology_subtree_ranks (json_t *topology)
+{
+    struct idset *ids;
+
+    if (!topology)
+        return NULL;
+
+    if (!(ids = idset_create (0, IDSET_FLAG_AUTOGROW))
+        || add_subtree_ids (ids, topology))
+        goto error;
+    return ids;
+error:
+    idset_destroy (ids);
+    return NULL;
+}
+
+/*  Return the subtree topology rooted at 'subtree_rank'.
+ */
+static json_t *get_subtree_topology (json_t *topo, int subtree_rank)
+{
+    int rank;
+    json_t *a;
+    json_t *result;
+    size_t index;
+    json_t *entry;
+
+    if (json_unpack (topo, "{s:i s:o}", "rank", &rank, "children", &a) < 0)
+        return NULL;
+    if (rank == subtree_rank)
+        return topo;
+    json_array_foreach (a, index, entry) {
+        if (json_unpack (entry, "{s:i}", "rank", &rank) < 0)
+            return NULL;
+        if (rank == subtree_rank)
+            return entry;
+        else if ((result = get_subtree_topology (entry, subtree_rank)))
+            return result;
+    }
+    return NULL;
+}
+
+/*  Return an idset of all ranks in the topology subtree rooted at 'rank'.
+ */
+static struct idset *subtree_ranks (flux_t *h, int rank)
+{
+    json_t *topo;
+    json_t *topology = get_topology (h);
+
+    if (!(topo = get_subtree_topology (topology, rank))) {
+        log_err ("get_subtree_topology");
+        return NULL;
+    }
+    return topology_subtree_ranks (topo);
+}
+
 /* Walk a "ghost" subtree from the fixed topology.  Each node is assumed to
  * have the same 'status' as the offline/lost parent at the subtree root.
  * This augments healthwalk() to fill in nodes that would otherwise be missing
@@ -346,6 +451,7 @@ static void status_ghostwalk (struct status *ctx,
         .duration = -1., // invalid - don't print
         .ghost = true,
         .connector = connector,
+        .subtree_ranks = NULL,
     };
 
     if (json_unpack (topo, "{s:o}", "children", &children) < 0)
@@ -362,6 +468,9 @@ static void status_ghostwalk (struct status *ctx,
             status_prefix_push (ctx, PIPE);
             node.connector = TEE;
         }
+        if (!(node.subtree_ranks = topology_subtree_ranks (entry)))
+            log_err_exit ("Unable to get subtree ranks for rank %d",
+                          node.rank);
         if (fun (ctx, &node, false, level + 1))
             status_ghostwalk (ctx,
                               entry,
@@ -370,6 +479,7 @@ static void status_ghostwalk (struct status *ctx,
                               node.connector,
                               fun);
         status_prefix_pop (ctx);
+        idset_destroy (node.subtree_ranks);
     }
 }
 
@@ -422,13 +532,18 @@ static int status_healthwalk (struct status *ctx,
                               enum connector connector,
                               map_f fun)
 {
-    struct status_node node = { .ghost = false, .connector = connector };
+    struct status_node node = {
+        .ghost = false,
+        .connector = connector,
+        .rank = rank
+    };
     flux_future_t *f;
     json_t *children;
     const char *errstr;
     int rc = 0;
 
     monotime (&ctx->start);
+    node.subtree_ranks = NULL;
 
     if (!(f = health_rpc (ctx, rank, ctx->wait, ctx->timeout))
         || flux_rpc_get_unpack (f,
@@ -449,12 +564,13 @@ static int status_healthwalk (struct status *ctx,
         printf ("%s%s%s: %s%s\n",
                 status_indent (ctx, level),
                 connector_string (connector),
-                status_getname (ctx, rank),
+                status_getname (ctx, &node),
                 errstr,
                 status_rpctime (ctx));
         rc = -1;
         goto done;
     }
+    node.subtree_ranks = subtree_ranks (ctx->h, node.rank);
     if (fun (ctx, &node, true, level)) {
         if (children) {
             size_t index;
@@ -471,6 +587,9 @@ static int status_healthwalk (struct status *ctx,
                                  "status", &child.status,
                                  "duration", &child.duration) < 0)
                     log_msg_exit ("error parsing child array entry");
+                if (!(child.subtree_ranks = subtree_ranks (ctx->h, child.rank)))
+                      log_err_exit ("Unable to get subtree idset for rank %d",
+                                    child.rank);
                 if (index == total - 1) {
                     status_prefix_push (ctx, BLANK);
                     connector = child.connector = ELBOW;
@@ -494,10 +613,12 @@ static int status_healthwalk (struct status *ctx,
                     }
                 }
                 status_prefix_pop (ctx);
+                idset_destroy (child.subtree_ranks);
             }
         }
     }
 done:
+    idset_destroy (node.subtree_ranks);
     flux_future_destroy (f);
     return rc;
 }
@@ -555,6 +676,80 @@ static bool validate_wait (const char *wait)
     return true;
 }
 
+static int status_use_color (optparse_t *p)
+{
+    const char *when;
+    int color;
+
+    if (!(when = optparse_get_str (p, "color", "auto")))
+        when = "always";
+    if (streq (when, "always"))
+        color = 1;
+    else if (streq (when, "never"))
+        color = 0;
+    else if (streq (when, "auto"))
+        color = isatty (STDOUT_FILENO) ? 1 : 0;
+    else
+        log_msg_exit ("Invalid argument to --color: '%s'", when);
+    return color;
+}
+
+static struct idset *highlight_ranks (struct status *ctx, optparse_t *p)
+{
+    const char *arg;
+    struct idset *ids;
+    struct idset *diff = NULL;
+    struct idset *allranks = NULL;
+    uint32_t size;
+
+    if (flux_get_size (ctx->h, &size) < 0)
+        log_err_exit ("flux_get_size");
+
+    if (!(allranks = idset_create (0, IDSET_FLAG_AUTOGROW))
+        || idset_range_set (allranks, 0, size - 1) < 0
+        || !(ids = idset_create (0, IDSET_FLAG_AUTOGROW)))
+        log_err_exit ("Failed to create highlight idset");
+
+    optparse_getopt_iterator_reset (p, "highlight");
+    while ((arg = optparse_getopt_next (p, "highlight"))) {
+        flux_error_t error;
+        struct idset *idset;
+        char *result;
+
+        /*  First, attempt to decode as idset. If that fails, assume
+         *   a hostlist was provided and lookup using the hostmap.
+         */
+        if (!(idset = idset_decode (arg))) {
+            if (!(result = flux_hostmap_lookup (ctx->h, arg, &error)))
+                log_msg_exit ("Error decoding %s: %s", arg, error.text);
+            if (!(idset = idset_decode (result)))
+                log_err_exit ("Unable to decode %s", arg);
+            free (result);
+        }
+
+        /*  Accumulate ids in result idset
+         */
+        if (idset_add (ids, idset) < 0)
+            log_err_exit ("Failed to append %s to highlight idset", arg);
+        idset_destroy (idset);
+    }
+
+    /*  Fail with error if any ranks in returned idset will fall outside
+     *   the range 0-size.
+     */
+    if (!(diff = idset_difference (ids, allranks)))
+        log_err_exit ("Failed to determine validity of highlight idset");
+    if (idset_count (diff) > 0)
+        log_msg_exit ("--highlight: rank%s %s not in set %s",
+                      idset_count (diff) > 1 ? "s" : "",
+                      idset_encode (diff, IDSET_FLAG_RANGE),
+                      idset_encode (allranks, IDSET_FLAG_RANGE));
+
+    idset_destroy (diff);
+    idset_destroy (allranks);
+    return ids;
+}
+
 static int subcmd_status (optparse_t *p, int ac, char *av[])
 {
     int rank = optparse_get_int (p, "rank", 0);
@@ -563,6 +758,7 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
 
     ctx.h = builtin_get_flux_handle (p);
     ctx.verbose = optparse_get_int (p, "verbose", 0);
+    ctx.color = status_use_color (p);
     ctx.timeout = optparse_get_duration (p, "timeout", default_timeout);
     if (ctx.timeout == 0)
         ctx.timeout = -1.0; // disabled
@@ -572,6 +768,8 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
         log_msg_exit ("invalid --wait state");
     if (!(ctx.stack = zlistx_new ()))
         log_msg_exit ("failed to create status zlistx");
+    if (!(ctx.highlight = highlight_ranks (&ctx, p)))
+        log_msg_exit ("failed to create highlight idset");
 
     if (optparse_hasopt (p, "summary"))
         fun = show_top;
@@ -583,6 +781,7 @@ static int subcmd_status (optparse_t *p, int ac, char *av[])
     status_healthwalk (&ctx, rank, 0, NIL, fun);
 
     zlistx_destroy (&ctx.stack);
+    idset_destroy (ctx.highlight);
     return 0;
 }
 
