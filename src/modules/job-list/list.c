@@ -15,6 +15,7 @@
 #endif
 #include <jansson.h>
 #include <flux/core.h>
+#include <assert.h>
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
@@ -556,14 +557,7 @@ int list_attrs_append (json_t *a, const char *attr)
 void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
                     const flux_msg_t *msg, void *arg)
 {
-    const char *attrs[] = { "userid", "urgency", "priority", "t_submit",
-                            "t_depend", "t_run", "t_cleanup", "t_inactive",
-                            "state", "name", "ntasks", "nnodes",
-                            "ranks", "nodelist", "success", "exception_occurred",
-                            "exception_type", "exception_severity",
-                            "exception_note", "result", "expiration",
-                            "annotations", "waitstatus", "dependencies",
-                            NULL };
+    const char **attrs;
     json_t *a;
     int i;
 
@@ -572,10 +566,16 @@ void list_attrs_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
+    attrs = job_attrs ();
+    assert (attrs);
+
     for (i = 0; attrs[i] != NULL; i++) {
         if (list_attrs_append (a, attrs[i]) < 0)
             goto error;
     }
+
+    if (list_attrs_append (a, "all") < 0)
+        goto error;
 
     if (flux_respond_pack (h, msg, "{s:O}", "attrs", a) < 0)
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);

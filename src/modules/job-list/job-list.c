@@ -20,6 +20,22 @@
 #include "list.h"
 #include "idsync.h"
 
+static const char *attrs[] = {
+    "userid", "urgency", "priority", "t_submit",
+    "t_depend", "t_run", "t_cleanup", "t_inactive",
+    "state", "name", "ntasks", "nnodes",
+    "ranks", "nodelist", "success", "exception_occurred",
+    "exception_type", "exception_severity",
+    "exception_note", "result", "expiration",
+    "annotations", "waitstatus", "dependencies",
+    NULL
+};
+
+const char **job_attrs (void)
+{
+    return attrs;
+}
+
 static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
                       const flux_msg_t *msg, void *arg)
 {

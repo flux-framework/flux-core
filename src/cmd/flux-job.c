@@ -1092,14 +1092,6 @@ int cmd_cancelall (optparse_t *p, int argc, char **argv)
     return 0;
 }
 
-static const char *list_attrs =
-    "[\"userid\",\"urgency\",\"priority\",\"t_submit\",\"state\"," \
-    "\"name\",\"ntasks\",\"nnodes\",\"ranks\",\"nodelist\",\"expiration\"," \
-    "\"success\",\"exception_occurred\",\"exception_severity\"," \
-    "\"exception_type\",\"exception_note\",\"result\",\"waitstatus\","  \
-    "\"t_depend\",\"t_run\",\"t_cleanup\"," \
-    "\"t_inactive\",\"annotations\",\"dependencies\"]";
-
 int cmd_list (optparse_t *p, int argc, char **argv)
 {
     int optindex = optparse_option_index (p);
@@ -1133,7 +1125,7 @@ int cmd_list (optparse_t *p, int argc, char **argv)
     else
         userid = getuid ();
 
-    if (!(f = flux_job_list (h, max_entries, list_attrs, userid, states)))
+    if (!(f = flux_job_list (h, max_entries, "[\"all\"]", userid, states)))
         log_err_exit ("flux_job_list");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
         log_err_exit ("flux_job_list");
@@ -1169,7 +1161,7 @@ int cmd_list_inactive (optparse_t *p, int argc, char **argv)
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
 
-    if (!(f = flux_job_list_inactive (h, max_entries, since, list_attrs)))
+    if (!(f = flux_job_list_inactive (h, max_entries, since, "[\"all\"]")))
         log_err_exit ("flux_job_list_inactive");
     if (flux_rpc_get_unpack (f, "{s:o}", "jobs", &jobs) < 0)
         log_err_exit ("flux_job_list_inactive");
@@ -1218,7 +1210,7 @@ int cmd_list_ids (optparse_t *p, int argc, char **argv)
     for (i = 0; i < ids_len; i++) {
         flux_jobid_t id = parse_jobid (argv[optindex + i]);
         flux_future_t *f;
-        if (!(f = flux_job_list_id (h, id, list_attrs)))
+        if (!(f = flux_job_list_id (h, id, "[\"all\"]")))
             log_err_exit ("flux_job_list_id");
         if (flux_future_then (f, -1, list_id_continuation, NULL) < 0)
             log_err_exit ("flux_future_then");

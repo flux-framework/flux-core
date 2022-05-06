@@ -25,6 +25,8 @@ struct list_ctx {
     zhashx_t *idsync_waits;
 };
 
+const char **job_attrs (void);
+
 #endif /* _FLUX_JOB_LIST_H */
 
 /*
