@@ -199,6 +199,8 @@ class JobInfo:
         "t_cleanup": 0.0,
         "t_inactive": 0.0,
         "expiration": 0.0,
+        "name": "",
+        "ntasks": "",
         "nnodes": "",
         "priority": "",
         "ranks": "",

@@ -79,40 +79,42 @@ static int store_attr (struct job *job,
         val = json_integer (job->state);
     }
     else if (!strcmp (attr, "name")) {
-        /* potentially NULL if jobspec invalid */
-        if (job->name)
-            val = json_string (job->name);
-        else
-            val = json_string ("");
+        /* job->name potentially NULL if jobspec invalid */
+        if (!job->name)
+            return 0;
+        val = json_string (job->name);
     }
     else if (!strcmp (attr, "ntasks")) {
+        /* job->ntasks potentially < 0 if jobspec invalid */
+        if (job->ntasks < 0)
+            return 0;
         val = json_integer (job->ntasks);
     }
     else if (!strcmp (attr, "nnodes")) {
-        if (!(job->states_mask & FLUX_JOB_STATE_RUN))
+        /* job->nnodes potentially < 0 if R invalid */
+        if (!(job->states_mask & FLUX_JOB_STATE_RUN)
+            || job->nnodes < 0)
             return 0;
         val = json_integer (job->nnodes);
     }
     else if (!strcmp (attr, "ranks")) {
-        if (!(job->states_mask & FLUX_JOB_STATE_RUN))
+        /* job->ranks potentially NULL if R invalid */
+        if (!(job->states_mask & FLUX_JOB_STATE_RUN)
+            || !job->ranks)
             return 0;
-        /* potentially NULL if R invalid */
-        if (job->ranks)
-            val = json_string (job->ranks);
-        else
-            val = json_string ("");
+        val = json_string (job->ranks);
     }
     else if (!strcmp (attr, "nodelist")) {
-        if (!(job->states_mask & FLUX_JOB_STATE_RUN))
+        /* job->nodelist potentially NULL if R invalid */
+        if (!(job->states_mask & FLUX_JOB_STATE_RUN)
+            || !job->nodelist)
             return 0;
-        /* potentially NULL if R invalid */
-        if (job->nodelist)
-            val = json_string (job->nodelist);
-        else
-            val = json_string ("");
+        val = json_string (job->nodelist);
     }
     else if (!strcmp (attr, "expiration")) {
-        if (!(job->states_mask & FLUX_JOB_STATE_RUN))
+        /* job->expiration potentially < 0 if R invalid */
+        if (!(job->states_mask & FLUX_JOB_STATE_RUN)
+            || job->expiration < 0)
             return 0;
         val = json_real (job->expiration);
     }

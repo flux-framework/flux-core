@@ -147,7 +147,10 @@ static struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
     job->id = id;
     job->state = FLUX_JOB_STATE_NEW;
     job->userid = FLUX_USERID_UNKNOWN;
+    job->ntasks = -1;
+    job->nnodes = -1;
     job->urgency = -1;
+    job->expiration = -1.0;
     job->wait_status = -1;
     /* pending jobs that are not yet assigned a priority shall be
      * listed after those who do, so we set the job priority to MIN */

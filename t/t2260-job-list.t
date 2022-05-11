@@ -1162,6 +1162,7 @@ test_expect_success HAVE_JQ 'create illegal jobspec with empty command array' '
         cat hostname.json | $jq ".tasks[0].command = []" > bad_jobspec.json
 '
 
+# note that ntasks will not be set if jobspec invalid
 test_expect_success HAVE_JQ 'flux job list works on job with illegal jobspec' '
         jobid=`flux job submit bad_jobspec.json | flux job id` &&
         fj_wait_event $jobid clean >/dev/null &&
@@ -1174,8 +1175,8 @@ test_expect_success HAVE_JQ 'flux job list works on job with illegal jobspec' '
         done &&
         test "$i" -lt "5" &&
         flux job list --states=inactive | grep $jobid > list_illegal_jobspec.out &&
-        cat list_illegal_jobspec.out | $jq -e ".name == \"\"" &&
-        cat list_illegal_jobspec.out | $jq -e ".ntasks == 0"
+        cat list_illegal_jobspec.out | $jq -e ".name == null" &&
+        cat list_illegal_jobspec.out | $jq -e ".ntasks == null"
 '
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with illegal jobspec' '
@@ -1211,9 +1212,10 @@ test_expect_success HAVE_JQ 'flux job list works on job with illegal R' '
         done &&
         test "$i" -lt "5" &&
         flux job list --states=inactive | grep $jobid > list_illegal_R.out &&
-        cat list_illegal_R.out | $jq -e ".ranks == \"\"" &&
-        cat list_illegal_R.out | $jq -e ".nnodes == 0" &&
-        cat list_illegal_R.out | $jq -e ".nodelist == \"\""
+        cat list_illegal_R.out | $jq -e ".ranks == null" &&
+        cat list_illegal_R.out | $jq -e ".nnodes == null" &&
+        cat list_illegal_R.out | $jq -e ".nodelist == null" &&
+        cat list_illegal_R.out | $jq -e ".expiration == null"
 '
 
 test_expect_success HAVE_JQ,NO_CHAIN_LINT 'flux job list-ids works on job with illegal R' '
