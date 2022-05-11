@@ -412,7 +412,7 @@ int job_info_lookup (struct job_archive_ctx *ctx, json_t *job)
     double t_run = 0.0;
 
     if (json_unpack (job, "{s:I s?:f}", "id", &id, "t_run", &t_run) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: parse t_inactive", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: parse t_run", __FUNCTION__);
         goto error;
     }
 
