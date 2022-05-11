@@ -161,6 +161,9 @@ static struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
         return NULL;
     }
 
+    job->states_mask = FLUX_JOB_STATE_NEW;
+    job->states_events_mask = FLUX_JOB_STATE_NEW;
+
     return job;
 }
 
