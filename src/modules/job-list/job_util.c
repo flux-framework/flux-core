@@ -78,6 +78,9 @@ static int store_attr (struct job *job,
     else if (!strcmp (attr, "state")) {
         val = json_integer (job->state);
     }
+    else if (!strcmp (attr, "states_mask")) {
+        val = json_integer (job->states_mask);
+    }
     else if (!strcmp (attr, "name")) {
         /* potentially NULL if jobspec invalid */
         if (job->name)

@@ -23,7 +23,7 @@
 static const char *attrs[] = {
     "userid", "urgency", "priority", "t_submit",
     "t_depend", "t_run", "t_cleanup", "t_inactive",
-    "state", "name", "ntasks", "nnodes",
+    "state", "states_mask", "name", "ntasks", "nnodes",
     "ranks", "nodelist", "success", "exception_occurred",
     "exception_type", "exception_severity",
     "exception_note", "result", "expiration",
