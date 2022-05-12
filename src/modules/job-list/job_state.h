@@ -59,6 +59,17 @@ struct job_state_ctx {
     flux_future_t *events;
 };
 
+/* timestamp of when we enter the state
+ *
+ * associated eventlog entries when restarting
+ *
+ * t_depend - "submit"
+ * t_priority - "priority" (not saved, can be entered multiple times)
+ * t_sched - "depend" (not saved, can be entered multiple times)
+ * t_run - "alloc"
+ * t_cleanup - "finish" or "exception" w/ severity == 0
+ * t_inactive - "clean"
+ */
 struct job {
     struct list_ctx *ctx;
 
@@ -67,6 +78,11 @@ struct job {
     int urgency;
     int64_t priority;
     double t_submit;
+    // t_depend is identical to t_submit
+    // double t_depend;
+    double t_run;
+    double t_cleanup;
+    double t_inactive;
     flux_job_state_t state;
     const char *name;
     int ntasks;
@@ -77,19 +93,18 @@ struct job {
     int wait_status;
     bool success;
     bool exception_occurred;
-    json_t *exception_context;
     int exception_severity;
     const char *exception_type;
     const char *exception_note;
     flux_job_result_t result;
     json_t *annotations;
     struct grudgeset *dependencies;
-    int eventlog_seq;           /* last event seq read */
 
     /* cache of job information */
     json_t *jobspec_job;
     json_t *jobspec_cmd;
     json_t *R;
+    json_t *exception_context;
 
     /* Track which states we have seen and have completed transition
      * to.  We do not immediately update to the new state and place
@@ -108,22 +123,7 @@ struct job {
     unsigned int states_events_mask;
     void *list_handle;
 
-    /* timestamp of when we enter the state
-     *
-     * associated eventlog entries when restarting
-     *
-     * depend - "submit"
-     * priority - "priority" (not saved, can be entered multiple times)
-     * sched - "depend" (not saved, can be entered multiple times)
-     * run - "alloc"
-     * cleanup - "finish" or "exception" w/ severity == 0
-     * inactive - "clean"
-     */
-    // t_depend is identical to t_submit above, use that
-    // double t_depend;
-    double t_run;
-    double t_cleanup;
-    double t_inactive;
+    int eventlog_seq;           /* last event seq read */
 };
 
 struct job_state_ctx *job_state_create (struct list_ctx *ctx);

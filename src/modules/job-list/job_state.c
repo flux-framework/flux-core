@@ -118,14 +118,14 @@ static void job_destroy (void *data)
 {
     struct job *job = data;
     if (job) {
-        json_decref (job->exception_context);
+        free (job->ranks);
+        free (job->nodelist);
         json_decref (job->annotations);
+        grudgeset_destroy (job->dependencies);
         json_decref (job->jobspec_job);
         json_decref (job->jobspec_cmd);
         json_decref (job->R);
-        grudgeset_destroy (job->dependencies);
-        free (job->ranks);
-        free (job->nodelist);
+        json_decref (job->exception_context);
         zlist_destroy (&job->next_states);
         free (job);
     }
@@ -145,18 +145,17 @@ static struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
         return NULL;
     job->ctx = ctx;
     job->id = id;
-    job->state = FLUX_JOB_STATE_NEW;
     job->userid = FLUX_USERID_UNKNOWN;
-    job->ntasks = -1;
-    job->nnodes = -1;
     job->urgency = -1;
-    job->expiration = -1.0;
-    job->wait_status = -1;
     /* pending jobs that are not yet assigned a priority shall be
      * listed after those who do, so we set the job priority to MIN */
     job->priority = FLUX_JOB_PRIORITY_MIN;
+    job->state = FLUX_JOB_STATE_NEW;
+    job->ntasks = -1;
+    job->nnodes = -1;
+    job->expiration = -1.0;
+    job->wait_status = -1;
     job->result = FLUX_JOB_RESULT_FAILED;
-    job->eventlog_seq = -1;
 
     if (!(job->next_states = zlist_new ())) {
         errno = ENOMEM;
@@ -166,7 +165,7 @@ static struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
 
     job->states_mask = FLUX_JOB_STATE_NEW;
     job->states_events_mask = FLUX_JOB_STATE_NEW;
-
+    job->eventlog_seq = -1;
     return job;
 }
 
