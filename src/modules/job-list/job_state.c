@@ -827,14 +827,16 @@ static void process_next_state (struct list_ctx *ctx, struct job *job)
             if (st->state == FLUX_JOB_STATE_DEPEND) {
                 /* get initial jobspec */
                 if (!(f = state_depend_lookup (jsctx, job))) {
-                    flux_log_error (jsctx->h, "%s: state_depend_lookup", __FUNCTION__);
+                    flux_log_error (jsctx->h, "%s: state_depend_lookup",
+                                    __FUNCTION__);
                     return;
                 }
             }
             else { /* st->state == FLUX_JOB_STATE_RUN */
                 /* get R to get node count, etc. */
                 if (!(f = state_run_lookup (jsctx, job))) {
-                    flux_log_error (jsctx->h, "%s: state_run_lookup", __FUNCTION__);
+                    flux_log_error (jsctx->h, "%s: state_run_lookup",
+                                    __FUNCTION__);
                     return;
                 }
             }
