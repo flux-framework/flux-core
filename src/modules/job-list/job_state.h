@@ -67,7 +67,6 @@ struct job {
     int urgency;
     int64_t priority;
     double t_submit;
-    int flags;
     flux_job_state_t state;
     const char *name;
     int ntasks;

@@ -1236,14 +1236,12 @@ static int submit_context_parse (flux_t *h,
 {
     int urgency;
     int userid;
-    int flags;
 
     if (!context
         || json_unpack (context,
-                        "{ s:i s:i s:i }",
+                        "{ s:i s:i }",
                         "urgency", &urgency,
-                        "userid", &userid,
-                        "flags", &flags) < 0) {
+                        "userid", &userid) < 0) {
         flux_log (h, LOG_ERR, "%s: submit context invalid: %ju",
                   __FUNCTION__, (uintmax_t)job->id);
         errno = EPROTO;
