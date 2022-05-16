@@ -25,7 +25,7 @@
 #include "idsync.h"
 #include "list.h"
 #include "job_util.h"
-#include "job_state.h"
+#include "job_data.h"
 
 json_t *get_job_by_id (struct list_ctx *ctx,
                        job_list_error_t *errp,

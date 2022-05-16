@@ -12,6 +12,7 @@
 #define _FLUX_JOB_LIST_JOB_STATS_H
 
 #include <flux/core.h> /* FLUX_JOB_NR_STATES */
+#include <jansson.h>
 
 struct job_stats {
     unsigned int state_count[FLUX_JOB_NR_STATES];

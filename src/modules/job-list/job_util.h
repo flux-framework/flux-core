@@ -13,7 +13,7 @@
 
 #include <flux/core.h>
 
-#include "job_state.h"
+#include "job_data.h"
 
 typedef struct {
     char text[160];
