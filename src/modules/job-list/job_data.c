@@ -39,10 +39,12 @@ void job_destroy (void *data)
         idset_destroy (job->ranks_idset);
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
+        json_decref (job->dependencies_db);
         json_decref (job->jobspec);
         json_decref (job->R);
         free (job->eventlog);
         json_decref (job->exception_context);
+        json_decref (job->job_dbdata);
         free (job);
         errno = save_errno;
     }
