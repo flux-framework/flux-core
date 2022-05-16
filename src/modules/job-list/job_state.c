@@ -31,6 +31,7 @@
 #include "job-list.h"
 #include "job_state.h"
 #include "job_data.h"
+#include "job_db.h"
 #include "idsync.h"
 #include "job_util.h"
 
@@ -309,11 +310,23 @@ static void process_state_transition_update (struct job_state_ctx *jsctx,
         /* FLUX_JOB_STATE_SCHED */
         /* FLUX_JOB_STATE_CLEANUP */
         /* FLUX_JOB_STATE_INACTIVE */
+        bool inactive = false;
 
-        if (state == FLUX_JOB_STATE_INACTIVE)
+        if (state == FLUX_JOB_STATE_INACTIVE) {
             eventlog_inactive_complete (job);
+            inactive = true;
+        }
 
         update_job_state_and_list (jsctx, job, state, timestamp);
+
+        if (inactive) {
+            assert (job->state == FLUX_JOB_STATE_INACTIVE);
+            if (job->eventlog && jsctx->ctx->dbctx) {
+                if (job_db_store (jsctx->ctx->dbctx, job) < 0)
+                    flux_log_error (jsctx->h, "%s: job_db_store",
+                                    __FUNCTION__);
+            }
+        }
     }
 }
 
@@ -1161,6 +1174,9 @@ error:
 struct job_state_ctx *job_state_create (struct list_ctx *ctx)
 {
     struct job_state_ctx *jsctx = NULL;
+
+    /* dbctx can be NULL */
+    assert (ctx->isctx);
 
     if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
         flux_log_error (ctx->h, "calloc");

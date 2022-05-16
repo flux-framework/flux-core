@@ -23,6 +23,8 @@ libjob_list_la_SOURCES = \
 	job_state.c \
 	job_data.h \
 	job_data.c \
+	job_db.h \
+	job_db.c \
 	list.h \
 	list.c \
 	job_util.h \
@@ -36,7 +38,9 @@ libjob_list_la_SOURCES = \
 	state_match.h \
 	state_match.c \
 	match_util.h \
-	match_util.c
+	match_util.c \
+	util.h \
+	util.c
 
 TESTS = \
 	test_job_data.t \

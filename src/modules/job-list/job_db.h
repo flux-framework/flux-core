@@ -8,33 +8,35 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_JOB_LIST_H
-#define _FLUX_JOB_LIST_H
+#ifndef _FLUX_JOB_DB_H
+#define _FLUX_JOB_DB_H
 
 #include <flux/core.h>
+#include <sqlite3.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "src/common/libutil/tstat.h"
 
-#include "job_state.h"
-#include "job_db.h"
-#include "idsync.h"
-#include "match.h"
+#include "job_data.h"
 
-struct list_ctx {
+struct job_db_ctx {
     flux_t *h;
+    char *dbpath;
+    unsigned int busy_timeout;
+    sqlite3 *db;
+    sqlite3_stmt *store_stmt;
     flux_msg_handler_t **handlers;
-    struct job_state_ctx *jsctx;
-    struct job_db_ctx *dbctx;
-    struct idsync_ctx *isctx;
-    struct flux_msglist *deferred_requests;
-    struct match_ctx *mctx;
+    tstat_t sqlstore;
+    double initial_max_inactive; /* when db initially loaded */
 };
 
-const char **job_attrs (void);
+struct job_db_ctx *job_db_setup (flux_t *h, int ac, char **av);
 
-void requeue_deferred_requests (struct list_ctx *ctx);
+void job_db_ctx_destroy (struct job_db_ctx *ctx);
 
-#endif /* _FLUX_JOB_LIST_H */
+int job_db_store (struct job_db_ctx *ctx, struct job *job);
+
+#endif /* _FLUX_JOB_DB_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

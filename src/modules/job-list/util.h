@@ -8,20 +8,18 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef _FLUX_JOB_LIST_JOB_UTIL_H
-#define _FLUX_JOB_LIST_JOB_UTIL_H
+#ifndef _FLUX_JOB_LIST_UTIL_H
+#define _FLUX_JOB_LIST_UTIL_H
 
-#include <flux/core.h>
+#include <stdarg.h>
 
+#include "job_db.h"
 #include "job_data.h"
 
-json_t *job_to_json (struct job *job, json_t *attrs, flux_error_t *errp);
+void __attribute__((format (printf, 2, 3)))
+log_sqlite_error (struct job_db_ctx *dbctx, const char *fmt, ...);
 
-/* similar to job_to_json(), but all data to be stored in db.
- */
-json_t *job_to_json_dbdata (struct job *job, flux_error_t *errp);
-
-#endif /* ! _FLUX_JOB_LIST_JOB_UTIL_H */
+#endif /* ! _FLUX_JOB_LIST_UTIL_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab

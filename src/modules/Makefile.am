@@ -156,7 +156,8 @@ job_list_la_SOURCES =
 job_list_la_CPPFLAGS = \
 	$(AM_CPPFLAGS) \
 	$(FLUX_SECURITY_CFLAGS) \
-	$(HWLOC_CFLAGS)
+	$(HWLOC_CFLAGS) \
+	$(SQLITE_CFLAGS)
 job_list_la_LIBADD = \
 	$(builddir)/job-list/libjob-list.la \
 	$(top_builddir)/src/common/libjob/libjob.la \
@@ -164,7 +165,8 @@ job_list_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
-	$(JANSSON_LIBS)
+	$(JANSSON_LIBS) \
+	$(SQLITE_LIBS)
 job_list_la_LDFLAGS = $(fluxmod_ldflags) -module
 
 job_ingest_la_SOURCES =

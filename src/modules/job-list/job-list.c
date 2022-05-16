@@ -216,6 +216,8 @@ static void list_ctx_destroy (struct list_ctx *ctx)
         flux_msglist_destroy (ctx->deferred_requests);
         if (ctx->jsctx)
             job_state_destroy (ctx->jsctx);
+        if (ctx->dbctx)
+            job_db_ctx_destroy (ctx->dbctx);
         if (ctx->isctx)
             idsync_ctx_destroy (ctx->isctx);
         if (ctx->mctx)
@@ -225,7 +227,7 @@ static void list_ctx_destroy (struct list_ctx *ctx)
     }
 }
 
-static struct list_ctx *list_ctx_create (flux_t *h)
+static struct list_ctx *list_ctx_create (flux_t *h, int argc, char **argv)
 {
     struct list_ctx *ctx = calloc (1, sizeof (*ctx));
     if (!ctx)
@@ -237,6 +239,12 @@ static struct list_ctx *list_ctx_create (flux_t *h)
         goto error;
     if (!(ctx->isctx = idsync_ctx_create (ctx->h)))
         goto error;
+    /* job_db_setup() performs a job_db_ctx_create() and some
+     * initialization */
+    if (!(ctx->dbctx = job_db_setup (h, argc, argv))) {
+        if (errno != ENOTBLK)
+            goto error;
+    }
     if (!(ctx->jsctx = job_state_create (ctx)))
         goto error;
     if (!(ctx->deferred_requests = flux_msglist_create ()))
@@ -254,7 +262,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     struct list_ctx *ctx;
     int rc = -1;
 
-    if (!(ctx = list_ctx_create (h))) {
+    if (!(ctx = list_ctx_create (h, argc, argv))) {
         flux_log_error (h, "initialization error");
         goto done;
     }
