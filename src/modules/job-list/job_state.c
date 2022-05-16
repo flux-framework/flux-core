@@ -122,8 +122,7 @@ static void job_destroy (void *data)
         free (job->nodelist);
         json_decref (job->annotations);
         grudgeset_destroy (job->dependencies);
-        json_decref (job->jobspec_job);
-        json_decref (job->jobspec_cmd);
+        json_decref (job->jobspec);
         json_decref (job->R);
         json_decref (job->exception_context);
         zlist_destroy (&job->next_states);
@@ -395,19 +394,20 @@ static int jobspec_parse (struct list_ctx *ctx,
                           const char *s)
 {
     json_error_t error;
-    json_t *jobspec = NULL;
-    json_t *tasks, *resources, *command, *jobspec_job = NULL;
+    json_t *jobspec_job = NULL;
+    json_t *command = NULL;
+    json_t *tasks, *resources;
     struct res_level res[3];
     int rc = -1;
 
-    if (!(jobspec = json_loads (s, 0, &error))) {
+    if (!(job->jobspec = json_loads (s, 0, &error))) {
         flux_log (ctx->h, LOG_ERR,
                   "%s: job %ju invalid jobspec: %s",
                   __FUNCTION__, (uintmax_t)job->id, error.text);
         goto error;
     }
 
-    if (json_unpack_ex (jobspec, &error, 0,
+    if (json_unpack_ex (job->jobspec, &error, 0,
                         "{s:{s:{s?:o}}}",
                         "attributes",
                         "system",
@@ -426,10 +426,9 @@ static int jobspec_parse (struct list_ctx *ctx,
                       __FUNCTION__, (uintmax_t)job->id);
             goto nonfatal_error;
         }
-        job->jobspec_job = json_incref (jobspec_job);
     }
 
-    if (json_unpack_ex (jobspec, &error, 0,
+    if (json_unpack_ex (job->jobspec, &error, 0,
                         "{s:o}",
                         "tasks", &tasks) < 0) {
         flux_log (ctx->h, LOG_ERR,
@@ -453,10 +452,8 @@ static int jobspec_parse (struct list_ctx *ctx,
         goto nonfatal_error;
     }
 
-    job->jobspec_cmd = json_incref (command);
-
-    if (job->jobspec_job) {
-        if (json_unpack_ex (job->jobspec_job, &error, 0,
+    if (jobspec_job) {
+        if (json_unpack_ex (jobspec_job, &error, 0,
                             "{s?:s}",
                             "name", &job->name) < 0) {
             flux_log (ctx->h, LOG_ERR,
@@ -469,7 +466,7 @@ static int jobspec_parse (struct list_ctx *ctx,
     /* If user did not specify job.name, we treat arg 0 of the command
      * as the job name */
     if (!job->name) {
-        json_t *arg0 = json_array_get (job->jobspec_cmd, 0);
+        json_t *arg0 = json_array_get (command, 0);
         if (!arg0 || !json_is_string (arg0)) {
             flux_log (ctx->h, LOG_ERR,
                       "%s: job %ju invalid job command",
@@ -480,7 +477,7 @@ static int jobspec_parse (struct list_ctx *ctx,
         assert (job->name);
     }
 
-    if (json_unpack_ex (jobspec, &error, 0,
+    if (json_unpack_ex (job->jobspec, &error, 0,
                         "{s:o}",
                         "resources", &resources) < 0) {
         flux_log (ctx->h, LOG_ERR,
@@ -561,7 +558,6 @@ static int jobspec_parse (struct list_ctx *ctx,
 nonfatal_error:
     rc = 0;
 error:
-    json_decref (jobspec);
     return rc;
 }
 
