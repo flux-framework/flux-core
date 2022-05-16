@@ -30,6 +30,7 @@
 #include "job-list.h"
 #include "job_state.h"
 #include "job_data.h"
+#include "job_db.h"
 #include "idsync.h"
 #include "job_util.h"
 
@@ -496,12 +497,26 @@ static void process_next_state (struct job_state_ctx *jsctx, struct job *job)
             /* FLUX_JOB_STATE_SCHED */
             /* FLUX_JOB_STATE_CLEANUP */
             /* FLUX_JOB_STATE_INACTIVE */
+            bool inactive = false;
 
-            if (st->state == FLUX_JOB_STATE_INACTIVE)
+            if (st->state == FLUX_JOB_STATE_INACTIVE) {
                 eventlog_inactive_complete (job);
+                inactive = true;
+            }
 
             update_job_state_and_list (jsctx, job, st->state, st->timestamp);
             zlist_remove (job->next_states, st);
+
+            if (inactive) {
+                assert (job->state == FLUX_JOB_STATE_INACTIVE);
+
+                /* if no eventlog, assume from restart */
+                if (job->eventlog && jsctx->dbctx) {
+                    if (job_db_store (jsctx->dbctx, job) < 0)
+                        flux_log_error (jsctx->h, "%s: job_db_store",
+                                        __FUNCTION__);
+                }
+            }
         }
     }
 }
@@ -1531,15 +1546,20 @@ error:
     return NULL;
 }
 
-struct job_state_ctx *job_state_create (struct idsync_ctx *isctx)
+struct job_state_ctx *job_state_create (struct job_db_ctx *dbctx,
+                                        struct idsync_ctx *isctx)
 {
     struct job_state_ctx *jsctx = NULL;
+
+    /* dbctx can be NULL */
+    assert (isctx);
 
     if (!(jsctx = calloc (1, sizeof (*jsctx)))) {
         flux_log_error (isctx->h, "calloc");
         return NULL;
     }
     jsctx->h = isctx->h;
+    jsctx->dbctx = dbctx;
     jsctx->isctx = isctx;
 
     /* Index is the primary data structure holding the job data
