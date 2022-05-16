@@ -65,7 +65,11 @@ struct job {
     const char *exception_note;
     flux_job_result_t result;
     json_t *annotations;
+    /* dependencies - built up
+     * dependencies_db - recovered from db
+     */
     struct grudgeset *dependencies;
+    json_t *dependencies_db;
 
     /* cache of job information */
     json_t *jobspec;
@@ -73,6 +77,9 @@ struct job {
     char *eventlog;
     size_t eventlog_len;
     json_t *exception_context;
+
+    /* all job data from db */
+    json_t *job_dbdata;
 
     /* Track which states we have seen and have completed transition
      * to.  States we've processed via the states_mask and states seen
