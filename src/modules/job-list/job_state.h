@@ -16,6 +16,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
+#include "job_db.h"
 #include "idsync.h"
 #include "stats.h"
 
