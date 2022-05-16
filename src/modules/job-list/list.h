@@ -13,8 +13,6 @@
 
 #include <flux/core.h>
 
-#include "job-list.h"
-
 void list_cb (flux_t *h, flux_msg_handler_t *mh,
               const flux_msg_t *msg, void *arg);
 
