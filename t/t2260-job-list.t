@@ -32,13 +32,6 @@ wait_jobid_state() {
         return 0
 }
 
-#
-# job list tests
-#
-# these tests come first, as we do not want job submissions below to
-# interfere with expected results
-#
-
 # submit a whole bunch of jobs for job list testing
 #
 # - the first loop of job submissions are intended to have some jobs run
