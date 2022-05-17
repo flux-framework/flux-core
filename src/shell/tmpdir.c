@@ -61,10 +61,11 @@ static int mkjobtmp_rundir (flux_shell_t *shell, char *buf, size_t size)
     return 0;
 }
 
-static int mkjobtmp_tmpdir (flux_shell_t *shell, char *buf, size_t size)
+static int mkjobtmp_tmpdir (flux_shell_t *shell,
+                            const char *tmpdir,
+                            char *buf,
+                            size_t size)
 {
-    const char *tmpdir = flux_shell_getenv (shell, "TMPDIR");
-
     if (make_job_path (shell, tmpdir ? tmpdir : "/tmp", buf, size) < 0
         || mkdir_exist_ok (buf, false) < 0)
         return -1;
@@ -94,7 +95,7 @@ static int tmpdir_init (flux_plugin_t *p,
      * Fall back to ${TMPDIR:-/tmp} if that fails (e.g. guest user).
      */
     if (mkjobtmp_rundir (shell, jobtmp, sizeof (jobtmp)) < 0
-        && mkjobtmp_tmpdir (shell, jobtmp, sizeof (jobtmp)) < 0)
+        && mkjobtmp_tmpdir (shell, tmpdir, jobtmp, sizeof (jobtmp)) < 0)
         shell_die_errno (1, "error creating FLUX_JOB_TMPDIR");
     cleanup_push_string (cleanup_directory_recursive, jobtmp);
 
