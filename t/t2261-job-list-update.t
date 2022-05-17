@@ -12,23 +12,6 @@ fj_wait_event() {
   flux job wait-event --timeout=20 "$@"
 }
 
-wait_jobid_state() {
-        local jobid=$(flux job id $1)
-        local state=$2
-        local i=0
-        while ! flux job list --states=${state} | grep $jobid > /dev/null \
-               && [ $i -lt 50 ]
-        do
-                sleep 0.1
-                i=$((i + 1))
-        done
-        if [ "$i" -eq "50" ]
-        then
-            return 1
-        fi
-        return 0
-}
-
 # submit a whole bunch of jobs for job list testing
 #
 # - the first loop of job submissions are intended to have some jobs run
