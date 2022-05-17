@@ -279,12 +279,14 @@ test_expect_success 'job-shell: creates missing TMPDIR by default' '
 	TMPDIR=$(pwd)/mytmpdir flux mini run true &&
 	test -d mytmpdir
 '
-
-test_expect_success 'job-shell: job fails if missing TMPDIR cannot be created' '
-	! TMPDIR=/baddir flux mini run true 2>badtmp.err &&
-	grep exception badtmp.err
+test_expect_success 'job-shell: uses /tmp if TMPDIR cannot be created' '
+	TMPDIR=/baddir flux mini run printenv TMPDIR >badtmp.out 2>badtmp.err &&
+	test_debug "cat badtmp.out badtmp.err" &&
+	grep /tmp badtmp.out
 '
-
+test_expect_success 'job-shell: unset TMPDIR stays unset' '
+	flux mini run --env=-TMPDIR sh -c "test -z \$TMPDIR"
+'
 test_expect_success 'job-shell: FLUX_JOB_TMPDIR is set and is a directory' '
 	flux mini run sh -c "test -d \$FLUX_JOB_TMPDIR"
 '
