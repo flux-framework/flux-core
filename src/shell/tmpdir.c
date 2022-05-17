@@ -71,27 +71,24 @@ static int mkjobtmp_tmpdir (flux_shell_t *shell, char *buf, size_t size)
     return 0;
 }
 
-static int mktmpdir (flux_shell_t *shell)
-{
-    const char *tmpdir = flux_shell_getenv (shell, "TMPDIR");
-
-    if (tmpdir && mkdir_exist_ok (tmpdir, false) < 0)
-        return -1;
-    return 0;
-}
-
 static int tmpdir_init (flux_plugin_t *p,
                         const char *topic,
                         flux_plugin_arg_t *args,
                         void *data)
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
+    const char *tmpdir = flux_shell_getenv (shell, "TMPDIR");
     char jobtmp[1024];
 
-    /* Ensure TMPDIR exists if it is set in job environment
+    /*  Attempt to create TMPDIR if set. If this fails, fallback to /tmp.
      */
-    if (mktmpdir (shell) < 0)
-        shell_die_errno (1, "error creating TMPDIR");
+    if (tmpdir && mkdir_exist_ok (tmpdir, true) < 0) {
+        shell_warn ("Unable to create TMPDIR=%s, resetting TMPDIR=/tmp",
+                    tmpdir);
+        tmpdir = "/tmp";
+        if (flux_shell_setenvf (shell, 1, "TMPDIR", "%s", tmpdir) < 0)
+            shell_die_errno (1, "Unable to set TMPDIR=/tmp");
+    }
 
     /* Try to create jobtmp in broker rundir.
      * Fall back to ${TMPDIR:-/tmp} if that fails (e.g. guest user).
