@@ -99,10 +99,8 @@ static int tmpdir_init (flux_plugin_t *p,
     cleanup_push_string (cleanup_directory_recursive, jobtmp);
 
     /* Set/change FLUX_JOB_TMPDIR to jobtmp.
-     * If TMPDIR is unset, set it to $FLUX_JOB_TMPDIR.
      */
-    if (flux_shell_setenvf (shell, 1, "FLUX_JOB_TMPDIR", "%s", jobtmp) < 0
-        || flux_shell_setenvf (shell, 0, "TMPDIR", "%s", jobtmp) < 0)
+    if (flux_shell_setenvf (shell, 1, "FLUX_JOB_TMPDIR", "%s", jobtmp) < 0)
         shell_die_errno (1, "error updating job environment");
 
     return 0;
