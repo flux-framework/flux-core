@@ -290,6 +290,7 @@ dist_check_SCRIPTS = \
 	issues/t4182-resource-rerank.sh \
 	issues/t4184-sched-simple-restart.sh \
 	issues/t4222-kvs-assume-empty-dir.sh \
+	issues/t4331-job-manager-purged-events.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \

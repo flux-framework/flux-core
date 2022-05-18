@@ -185,14 +185,21 @@ static void journal_handle_request (flux_t *h,
     wrapped_entry = zlist_first (journal->events);
     while (wrapped_entry) {
         const char *name;
+        flux_jobid_t id;
 
         if (json_unpack (wrapped_entry,
-                         "{s:{s:s}}",
+                         "{s:I s:{s:s}}",
+                         "id", &id,
                          "entry",
                            "name", &name) < 0) {
             flux_log (h, LOG_ERR, "invalid wrapped entry");
             goto error;
         }
+
+        /* ensure job has not been purged */
+        if (!zhashx_lookup (ctx->active_jobs, &id)
+            && !zhashx_lookup (ctx->inactive_jobs, &id))
+            goto next;
 
         if (allow_deny_check (msg, name)) {
             if (!a) {
@@ -202,6 +209,7 @@ static void journal_handle_request (flux_t *h,
             if (json_array_append (a, wrapped_entry) < 0)
                 goto nomem;
         }
+next:
         wrapped_entry = zlist_next (journal->events);
     }
 
