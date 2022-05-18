@@ -61,21 +61,13 @@ static int mkjobtmp_rundir (flux_shell_t *shell, char *buf, size_t size)
     return 0;
 }
 
-static int mkjobtmp_tmpdir (flux_shell_t *shell, char *buf, size_t size)
+static int mkjobtmp_tmpdir (flux_shell_t *shell,
+                            const char *tmpdir,
+                            char *buf,
+                            size_t size)
 {
-    const char *tmpdir = flux_shell_getenv (shell, "TMPDIR");
-
     if (make_job_path (shell, tmpdir ? tmpdir : "/tmp", buf, size) < 0
         || mkdir_exist_ok (buf, false) < 0)
-        return -1;
-    return 0;
-}
-
-static int mktmpdir (flux_shell_t *shell)
-{
-    const char *tmpdir = flux_shell_getenv (shell, "TMPDIR");
-
-    if (tmpdir && mkdir_exist_ok (tmpdir, false) < 0)
         return -1;
     return 0;
 }
@@ -86,26 +78,30 @@ static int tmpdir_init (flux_plugin_t *p,
                         void *data)
 {
     flux_shell_t *shell = flux_plugin_get_shell (p);
+    const char *tmpdir = flux_shell_getenv (shell, "TMPDIR");
     char jobtmp[1024];
 
-    /* Ensure TMPDIR exists if it is set in job environment
+    /*  Attempt to create TMPDIR if set. If this fails, fallback to /tmp.
      */
-    if (mktmpdir (shell) < 0)
-        shell_die_errno (1, "error creating TMPDIR");
+    if (tmpdir && mkdir_exist_ok (tmpdir, true) < 0) {
+        shell_warn ("Unable to create TMPDIR=%s, resetting TMPDIR=/tmp",
+                    tmpdir);
+        tmpdir = "/tmp";
+        if (flux_shell_setenvf (shell, 1, "TMPDIR", "%s", tmpdir) < 0)
+            shell_die_errno (1, "Unable to set TMPDIR=/tmp");
+    }
 
     /* Try to create jobtmp in broker rundir.
      * Fall back to ${TMPDIR:-/tmp} if that fails (e.g. guest user).
      */
     if (mkjobtmp_rundir (shell, jobtmp, sizeof (jobtmp)) < 0
-        && mkjobtmp_tmpdir (shell, jobtmp, sizeof (jobtmp)) < 0)
+        && mkjobtmp_tmpdir (shell, tmpdir, jobtmp, sizeof (jobtmp)) < 0)
         shell_die_errno (1, "error creating FLUX_JOB_TMPDIR");
     cleanup_push_string (cleanup_directory_recursive, jobtmp);
 
     /* Set/change FLUX_JOB_TMPDIR to jobtmp.
-     * If TMPDIR is unset, set it to $FLUX_JOB_TMPDIR.
      */
-    if (flux_shell_setenvf (shell, 1, "FLUX_JOB_TMPDIR", "%s", jobtmp) < 0
-        || flux_shell_setenvf (shell, 0, "TMPDIR", "%s", jobtmp) < 0)
+    if (flux_shell_setenvf (shell, 1, "FLUX_JOB_TMPDIR", "%s", jobtmp) < 0)
         shell_die_errno (1, "error updating job environment");
 
     return 0;
