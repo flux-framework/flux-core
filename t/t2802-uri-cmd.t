@@ -4,7 +4,7 @@ test_description='Test flux uri command'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 1
+test_under_flux 2
 
 testssh="${SHARNESS_TEST_SRCDIR}/scripts/tssh"
 
@@ -50,6 +50,11 @@ test_expect_success 'flux-uri pid resolver works on flux-broker with fallback' '
 	  export FLUX_FORCE_BROKER_CHILD_FALLBACK=t &&
 	  test "$(flux uri pid:$(flux getattr broker.pid))" =  "$FLUX_URI"
 	)
+'
+test_expect_success 'flux-uri pid resolver fails if broker has no child' '
+	test_must_fail flux uri pid:$(flux exec -r 1 flux getattr broker.pid) \
+		>broker-no-child.out 2>&1 &&
+	grep "is a flux-broker and no child found" broker-no-child.out
 '
 test_expect_success 'flux-uri pid resolver fails for nonexistent pid' '
 	test_expect_code 1 flux uri pid:123456

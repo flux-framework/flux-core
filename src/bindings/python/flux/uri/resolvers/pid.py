@@ -59,7 +59,7 @@ def _get_broker_child(pid):
                     return cpid
         except FileNotFoundError:
             pass
-    raise ValueError(f"PID {broker_pid} is a flux-broker and no child found")
+    raise ValueError(f"PID {pid} is a flux-broker and no child found")
 
 
 def _proc_has_task_children():
