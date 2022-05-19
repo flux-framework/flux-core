@@ -1012,8 +1012,7 @@ test_expect_success HAVE_JQ 'create illegal jobspec with empty command array' '
 '
 
 # to avoid potential racyness, wait up to 5 seconds for job to appear
-# in job list.  note that how a jobspec is illegal can affect what
-# values below are set vs not set.
+# in job list.  note that ntasks will not be set if jobspec invalid
 test_expect_success HAVE_JQ 'flux jobs works on job with illegal jobspec' '
         jobid=`flux job submit bad_jobspec.json` &&
         fj_wait_event $jobid clean &&
@@ -1026,7 +1025,7 @@ test_expect_success HAVE_JQ 'flux jobs works on job with illegal jobspec' '
         done &&
         test "$i" -lt "5" &&
         flux jobs -no "{name},{ntasks}" $jobid > list_illegal_jobspec.out &&
-        echo ",0" > list_illegal_jobspec.exp &&
+        echo "," > list_illegal_jobspec.exp &&
         test_cmp list_illegal_jobspec.out list_illegal_jobspec.exp
 '
 
@@ -1050,8 +1049,9 @@ test_expect_success HAVE_JQ 'flux jobs works on job with illegal R' '
                 i=$((i + 1))
         done &&
         test "$i" -lt "5" &&
-        flux jobs -no "{ranks},{nnodes},{nodelist}" $jobid > list_illegal_R.out &&
-        echo ",0," > list_illegal_R.exp &&
+        flux jobs -no "{ranks},{nnodes},{nodelist},{expiration}" $jobid \
+            > list_illegal_R.out &&
+        echo ",,,0.0" > list_illegal_R.exp &&
         test_cmp list_illegal_R.out list_illegal_R.exp
 '
 
