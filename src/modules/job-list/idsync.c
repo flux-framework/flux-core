@@ -17,11 +17,9 @@
 #include <flux/core.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
-#include "src/common/libutil/errno_safe.h"
 #include "src/common/libjob/job_hash.h"
 
 #include "idsync.h"
-#include "job_state.h"
 
 void idsync_data_destroy (void *data)
 {

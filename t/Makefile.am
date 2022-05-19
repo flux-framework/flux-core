@@ -323,6 +323,7 @@ dist_check_SCRIPTS = \
 	job-exec/imp-fail.sh \
 	job-list/list-id.py \
 	job-list/list-rpc.py \
+	job-list/job-list-helper.sh \
 	job-list/jobspec-permissive.jsonschema \
 	ingest/bad-validate.py
 

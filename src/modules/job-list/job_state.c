@@ -118,14 +118,14 @@ static void job_destroy (void *data)
 {
     struct job *job = data;
     if (job) {
-        json_decref (job->exception_context);
+        free (job->ranks);
+        free (job->nodelist);
         json_decref (job->annotations);
+        grudgeset_destroy (job->dependencies);
         json_decref (job->jobspec_job);
         json_decref (job->jobspec_cmd);
         json_decref (job->R);
-        grudgeset_destroy (job->dependencies);
-        free (job->ranks);
-        free (job->nodelist);
+        json_decref (job->exception_context);
         zlist_destroy (&job->next_states);
         free (job);
     }
@@ -145,18 +145,17 @@ static struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
         return NULL;
     job->ctx = ctx;
     job->id = id;
-    job->state = FLUX_JOB_STATE_NEW;
     job->userid = FLUX_USERID_UNKNOWN;
-    job->ntasks = -1;
-    job->nnodes = -1;
     job->urgency = -1;
-    job->expiration = -1.0;
-    job->wait_status = -1;
     /* pending jobs that are not yet assigned a priority shall be
      * listed after those who do, so we set the job priority to MIN */
     job->priority = FLUX_JOB_PRIORITY_MIN;
+    job->state = FLUX_JOB_STATE_NEW;
+    job->ntasks = -1;
+    job->nnodes = -1;
+    job->expiration = -1.0;
+    job->wait_status = -1;
     job->result = FLUX_JOB_RESULT_FAILED;
-    job->eventlog_seq = -1;
 
     if (!(job->next_states = zlist_new ())) {
         errno = ENOMEM;
@@ -164,6 +163,9 @@ static struct job *job_create (struct list_ctx *ctx, flux_jobid_t id)
         return NULL;
     }
 
+    job->states_mask = FLUX_JOB_STATE_NEW;
+    job->states_events_mask = FLUX_JOB_STATE_NEW;
+    job->eventlog_seq = -1;
     return job;
 }
 
@@ -824,14 +826,16 @@ static void process_next_state (struct list_ctx *ctx, struct job *job)
             if (st->state == FLUX_JOB_STATE_DEPEND) {
                 /* get initial jobspec */
                 if (!(f = state_depend_lookup (jsctx, job))) {
-                    flux_log_error (jsctx->h, "%s: state_depend_lookup", __FUNCTION__);
+                    flux_log_error (jsctx->h, "%s: state_depend_lookup",
+                                    __FUNCTION__);
                     return;
                 }
             }
             else { /* st->state == FLUX_JOB_STATE_RUN */
                 /* get R to get node count, etc. */
                 if (!(f = state_run_lookup (jsctx, job))) {
-                    flux_log_error (jsctx->h, "%s: state_run_lookup", __FUNCTION__);
+                    flux_log_error (jsctx->h, "%s: state_run_lookup",
+                                    __FUNCTION__);
                     return;
                 }
             }
@@ -1231,14 +1235,12 @@ static int submit_context_parse (flux_t *h,
 {
     int urgency;
     int userid;
-    int flags;
 
     if (!context
         || json_unpack (context,
-                        "{ s:i s:i s:i }",
+                        "{ s:i s:i }",
                         "urgency", &urgency,
-                        "userid", &userid,
-                        "flags", &flags) < 0) {
+                        "userid", &userid) < 0) {
         flux_log (h, LOG_ERR, "%s: submit context invalid: %ju",
                   __FUNCTION__, (uintmax_t)job->id);
         errno = EPROTO;
