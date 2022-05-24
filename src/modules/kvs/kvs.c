@@ -88,6 +88,7 @@ static void transaction_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void transaction_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                                   int revents, void *arg);
 static void start_root_remove (struct kvs_ctx *ctx, const char *ns);
+static void kvstxn_apply (kvstxn_t *kt);
 
 /*
  * kvs_ctx functions
@@ -895,6 +896,12 @@ static void work_queue_check_append (struct kvs_ctx *ctx,
         work_queue_append (ctx, root);
 }
 
+static void kvstxn_apply_cb (flux_future_t *f, void *arg)
+{
+    kvstxn_t *kt = arg;
+    kvstxn_apply (kt);
+}
+
 /* Write all the ops for a particular commit/fence request (rank 0
  * only).  The setroot event will cause responses to be sent to the
  * transaction requests and clean up the treq_t state.  This
@@ -997,6 +1004,34 @@ static void kvstxn_apply (kvstxn_t *kt)
         }
 
         assert (wait_get_usecount (wait) > 0);
+        goto stall;
+    }
+    else if (ret == KVSTXN_PROCESS_SYNC_CONTENT_FLUSH) {
+        /* N.B. futre is managed by kvstxn, should not call
+         * flux_future_destroy() on it */
+        flux_future_t *f = kvstxn_sync_content_flush (kt);
+        if (!f) {
+            errnum = errno;
+            goto done;
+        }
+        if (flux_future_then (f, -1., kvstxn_apply_cb, kt) < 0) {
+            errnum = errno;
+            goto done;
+        }
+        goto stall;
+    }
+    else if (ret == KVSTXN_PROCESS_SYNC_CHECKPOINT) {
+        /* N.B. futre is managed by kvstxn, should not call
+         * flux_future_destroy() on it */
+        flux_future_t *f = kvstxn_sync_checkpoint (kt);
+        if (!f) {
+            errnum = errno;
+            goto done;
+        }
+        if (flux_future_then (f, -1., kvstxn_apply_cb, kt) < 0) {
+            errnum = errno;
+            goto done;
+        }
         goto stall;
     }
     /* else ret == KVSTXN_PROCESS_FINISHED */

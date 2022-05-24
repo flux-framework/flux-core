@@ -15,6 +15,14 @@
 
 #define KVS_DEFAULT_CHECKPOINT "kvs-primary"
 
+/* Calls to kvs_checkpoint_commit() can be racy when the KVS module is
+ * loaded, as callers can use the FLUX_KVS_SYNC flag with
+ * flux_kvs_commit().
+ *
+ * In most cases, use the FLUX_KVS_SYNC flag with flux_kvs_commit() to
+ * ensure committed data survives a Flux restart.
+ */
+
 flux_future_t *kvs_checkpoint_commit (flux_t *h,
                                       const char *key,
                                       const char *rootref,
