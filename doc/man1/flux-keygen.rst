@@ -6,7 +6,7 @@ flux-keygen(1)
 SYNOPSIS
 ========
 
-**flux** **keygen** *PATH*
+**flux** **keygen** [*--name=NAME*] *PATH*
 
 
 DESCRIPTION
@@ -26,6 +26,17 @@ certificate.  The certificate is part of the bootstrap configuration.
 Flux instances that bootstrap with PMI do not require a configured certificate.
 In that case, each broker self-generates a unique certificate and the
 public keys are exchanged with PMI.
+
+
+OPTIONS
+=======
+
+``flux-keygen`` accepts the following options:
+
+**-n, --name=NAME**
+   Set the certificate metadata ``name`` field.  The value is logged when
+   :man1:`flux-broker` authenticates a peer that presents this certificate.
+   A cluster name might be appropriate here.  Default: the local hostname.
 
 
 RESOURCES
