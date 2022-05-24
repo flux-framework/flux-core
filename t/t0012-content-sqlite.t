@@ -271,6 +271,39 @@ test_expect_success 'run flux with statedir and verify modes' '
 	grep "journal_mode=WAL synchronous=NORMAL" logs4
 '
 
+# Will create in WAL mode since statedir is set
+recreate_database()
+{
+	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+	    -o,-Sstatedir=$(pwd) bash -c \
+	    "flux module load content-sqlite truncate; \
+	    flux module remove content-sqlite"
+}
+load_module_xfail()
+{
+	flux start -o,-Sbroker.rc1_path=,-Sbroker.rc3_path= \
+	    -o,-Sstatedir=$(pwd) flux module load content-sqlite
+}
+
+# FWIW https://www.sqlite.org/fileformat.html
+test_expect_success 'create database with bad header magic' '
+	recreate_database &&
+	echo "xxxxxxxxxxxxxxxx" | dd obs=1 count=16 seek=0 of=content.sqlite
+'
+test_expect_success 'module load fails with corrupt database' '
+	test_must_fail load_module_xfail
+'
+test_expect_success 'create database with bad schema format number' '
+	recreate_database &&
+	echo "\001\001\001\001" | dd obs=1 count=4 seek=44 of=content.sqlite
+'
+test_expect_success 'module load fails with corrupt database' '
+	test_must_fail load_module_xfail
+'
+test_expect_success 'full instance start fails corrupt database' '
+	test_must_fail flux start -o,-Sstatedir=$(pwd) /bin/true
+'
+
 test_expect_success 'remove content-sqlite module on rank 0' '
 	flux module remove content-sqlite
 '

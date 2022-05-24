@@ -641,6 +641,14 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
         goto error;
     }
     if (sqlite3_exec (ctx->db,
+                      "PRAGMA quick_check",
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "setting sqlite 'quick_check' pragma");
+        goto error;
+    }
+    if (sqlite3_exec (ctx->db,
                       sql_create_table,
                       NULL,
                       NULL,
@@ -832,16 +840,16 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (content_register_backing_store (h, "content-sqlite") < 0)
         goto done;
     if (content_register_service (h, "content-backing") < 0)
-        goto done;
+        goto done_unreg;
     if (content_register_service (h, "kvs-checkpoint") < 0)
-        goto done;
+        goto done_unreg;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        goto done;
+        goto done_unreg;
     }
-    if (content_unregister_backing_store (h) < 0)
-        goto done;
     rc = 0;
+done_unreg:
+    (void)content_unregister_backing_store (h);
 done:
     content_sqlite_closedb (ctx);
     content_sqlite_destroy (ctx);
