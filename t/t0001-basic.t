@@ -37,6 +37,14 @@ test_expect_success 'flux-keygen works' '
 	flux keygen cert &&
 	test -f cert
 '
+test_expect_success 'flux-keygen --name=test works' '
+	flux keygen --name=testcert cert2 &&
+	test -f cert2 &&
+	grep testcert cert2
+'
+test_expect_success 'flux-keygen fails with extra positional argument' '
+	test_must_fail flux keygen cert xyz
+'
 test_expect_success 'flux-keygen generated cert with u=rw access' '
 	echo '-rw-------' >cert-access.exp &&
 	stat --format=%A cert >cert-access.out &&
