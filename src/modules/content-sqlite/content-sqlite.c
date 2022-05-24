@@ -641,6 +641,14 @@ static int content_sqlite_opendb (struct content_sqlite *ctx, bool truncate)
         goto error;
     }
     if (sqlite3_exec (ctx->db,
+                      "PRAGMA quick_check",
+                      NULL,
+                      NULL,
+                      NULL) != SQLITE_OK) {
+        log_sqlite_error (ctx, "setting sqlite 'quick_check' pragma");
+        goto error;
+    }
+    if (sqlite3_exec (ctx->db,
                       sql_create_table,
                       NULL,
                       NULL,
