@@ -127,7 +127,11 @@ static void zap_cb (flux_reactor_t *r,
         }
         if (!name)
             name = "unknown";
-        logger (zap, log_level, "overlay auth %s %s", name, status_text);
+        logger (zap,
+                log_level,
+                "overlay auth cert-name=%s %s",
+                name,
+                status_text);
 
         if (!(rep = zmsg_new ()))
             goto done;
