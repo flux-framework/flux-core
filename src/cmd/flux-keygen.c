@@ -13,18 +13,14 @@
 #endif
 #include <unistd.h>
 #include <flux/core.h>
+#include <flux/optparse.h>
 #include <czmq.h>
 
 #include "src/common/libutil/log.h"
 
-
-void usage (void)
-{
-    fprintf (stderr,
-"Usage: flux-keygen PATH\n"
-);
-    exit (1);
-}
+static struct optparse_option opts[] = {
+    OPTPARSE_TABLE_END,
+};
 
 static char * ctime_iso8601_now (char *buf, size_t sz)
 {
@@ -42,18 +38,28 @@ static char * ctime_iso8601_now (char *buf, size_t sz)
 
 int main (int argc, char *argv[])
 {
+    const char *usage_msg = "[OPTIONS] [PATH]";
+    optparse_t *p;
+    int optindex;
     zcert_t *cert;
     char buf[64];
     char *path = NULL;
 
     log_init ("flux-keygen");
-
-    if (argc == 1)
+    if (!(p = optparse_create ("flux-keygen"))
+        || optparse_add_option_table (p, opts) != OPTPARSE_SUCCESS
+        || optparse_set (p, OPTPARSE_USAGE, usage_msg) != OPTPARSE_SUCCESS)
+        log_err_exit ("error setting up otpion parsing");
+    if ((optindex = optparse_parse_args (p, argc, argv)) < 0)
+        exit (1);
+    if (optindex < argc)
+        path = argv[optindex++];
+    if (optindex < argc) {
+        optparse_print_usage (p);
+        exit (1);
+    }
+    if (!path)
         log_msg ("WARNING: add PATH argument to save generated certificate");
-    else if (argc == 2 && *argv[1] != '-')
-        path = argv[1];
-    else
-        usage ();
 
     if (!(cert = zcert_new ()))
         log_msg_exit ("zcert_new: %s", zmq_strerror (errno));
@@ -70,6 +76,7 @@ int main (int argc, char *argv[])
 
     zcert_destroy (&cert);
 
+    optparse_destroy (p);
     log_fini ();
 
     return 0;
