@@ -19,6 +19,8 @@
 #include "src/common/libutil/log.h"
 
 static struct optparse_option opts[] = {
+    { .name = "name", .key = 'n', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Set certificate name (default: hostname)", },
     OPTPARSE_TABLE_END,
 };
 
@@ -67,7 +69,8 @@ int main (int argc, char *argv[])
     if (gethostname (buf, sizeof (buf)) < 0)
         log_err_exit ("gethostname");
     zcert_set_meta (cert, "hostname", "%s", buf);
-    zcert_set_meta (cert, "name", "%s", buf); // used in overlay logging
+    // name is used in overlay logging
+    zcert_set_meta (cert, "name", "%s", optparse_get_str (p, "name", buf));
     zcert_set_meta (cert, "time", "%s", ctime_iso8601_now (buf, sizeof (buf)));
     zcert_set_meta (cert, "userid", "%d", getuid ());
 
