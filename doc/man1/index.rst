@@ -26,6 +26,7 @@ man1
    flux-ping
    flux-proxy
    flux-pstree
+   flux-queue
    flux-resource
    flux-restore
    flux-start
