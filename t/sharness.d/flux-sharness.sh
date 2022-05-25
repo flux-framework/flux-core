@@ -99,7 +99,7 @@ make_bootstrap_config() {
 
     mkdir $workdir/conf.d
     mkdir $workdir/state
-    flux keygen $workdir/cert
+    flux keygen --name testcert $workdir/cert
     cat >$workdir/conf.d/bootstrap.toml <<-EOT
 	[bootstrap]
 	    curve_cert = "$workdir/cert"

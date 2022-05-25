@@ -123,11 +123,15 @@ static void zap_cb (flux_reactor_t *r,
             status_text = "OK";
             user_id = pubkey;
             name = zcert_meta (cert, "name");
-            log_level = LOG_INFO;
+            log_level = LOG_DEBUG;
         }
         if (!name)
             name = "unknown";
-        logger (zap, log_level, "overlay auth %s %s", name, status_text);
+        logger (zap,
+                log_level,
+                "overlay auth cert-name=%s %s",
+                name,
+                status_text);
 
         if (!(rep = zmsg_new ()))
             goto done;
