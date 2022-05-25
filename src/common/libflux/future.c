@@ -481,11 +481,17 @@ int flux_future_wait_for (flux_future_t *f, double timeout)
         f->now->running = false;
     }
     if (!future_is_ready (f)) {
-        /* Typically this error should be "impossible", but can occur
-         * if the future does not get initialized properly to use the
-         * now reactor.
+        /* This block of code is reached b/c flux_reactor_run() on the
+         * "now" reactor returned >= 0 AND the future was
+         * not fulfilled, e.g.
+         * - no init callback was registered when future was created
+         * - the init callback didn't register any watchers
+         * - the registered watchers stopped themselves or called
+         *   flux_reactor_stop() without fulfilling the future.
+         * Return EDEADLOCK indicating that the future cannot be
+         * fulfilled.
          */
-        errno = EINVAL;
+        errno = EDEADLOCK;
         return -1;
     }
     return 0;
