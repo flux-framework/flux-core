@@ -50,13 +50,13 @@ void errors (void)
 
     errno = 0;
     ok (kvs_checkpoint_lookup_get_rootref (f, &rootref) < 0
-        && errno == EINVAL,
+        && errno == EDEADLOCK,
         "kvs_checkpoint_lookup_get_rootref fails on unfulfilled future");
 
     errno = 0;
     double timestamp;
     ok (kvs_checkpoint_lookup_get_timestamp (f, &timestamp) < 0
-        && errno == EINVAL,
+        && errno == EDEADLOCK,
         "kvs_checkpoint_lookup_get_timestamp fails on unfulfilled future");
 
     flux_future_destroy (f);

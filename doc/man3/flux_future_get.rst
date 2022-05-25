@@ -129,6 +129,9 @@ ETIMEDOUT
    A timeout passed to ``flux_future_wait_for()`` expired before the future
    was fulfilled.
 
+EDEADLOCK
+   ``flux_future_wait_for()`` would likely deadlock due to an
+   improperly initialized future.
 
 RESOURCES
 =========
