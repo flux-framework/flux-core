@@ -30,10 +30,16 @@ job_exec_la_SOURCES = \
 	job-exec.c \
 	checkpoint.h \
 	checkpoint.c \
+	exec_config.h \
+	exec_config.c \
 	rset.c \
 	rset.h \
 	testexec.c \
 	exec.c
+
+if HAVE_LIBSYSTEMD
+job_exec_la_SOURCES += sdexec.c
+endif
 
 job_exec_la_LDFLAGS = \
 	$(fluxmod_ldflags) \
@@ -45,6 +51,10 @@ job_exec_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(JANSSON_LIBS) \
 	libbulk-exec.la
+
+if HAVE_LIBSYSTEMD
+job_exec_la_LIBADD += $(top_builddir)/src/common/libsdprocess/libsdprocess.la
+endif
 
 bulk_exec_SOURCES = \
 	test/bulk-exec.c

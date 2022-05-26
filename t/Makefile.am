@@ -153,6 +153,7 @@ TESTSCRIPTS = \
 	t2402-job-exec-dummy.t \
 	t2403-job-exec-conf.t \
 	t2404-job-exec-multiuser.t \
+	t2405-job-exec-sdexec.t \
 	t2410-exec-systemd.t \
 	t2500-job-attach.t \
 	t2501-job-status.t \
@@ -269,6 +270,8 @@ EXTRA_DIST= \
 dist_check_SCRIPTS = \
 	$(TESTSCRIPTS) \
 	system/0001-basic.t \
+	system/0002-job-exec-sdexec-basic.t \
+	system/0003-instance-restart.t \
 	issues/t0441-kvs-put-get.sh \
 	issues/t0505-msg-handler-reg.lua \
 	issues/t0821-kvs-segfault.sh \
