@@ -59,7 +59,6 @@ int event_batch_respond (struct event *event, const flux_msg_t *msg);
 /* Post event 'name' and optionally 'context' to 'job'.
  * Internally, calls event_job_update(), then event_job_action(), then commits
  * the event to job KVS eventlog.  The KVS commit completes asynchronously.
- * The future passed in as an argument should not be destroyed.
  * Returns 0 on success, -1 on failure with errno set.
  */
 int event_job_post_pack (struct event *event,
