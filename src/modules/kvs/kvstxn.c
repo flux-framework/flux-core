@@ -71,22 +71,22 @@ struct kvstxn {
      * APPLY_OPS - apply changes to KVS
      *           - if needed, report missing refs to caller and stall
      * STORE - generate dirty entries for caller to store
-     * PRE_FINISHED - stall until stores complete
-     *              - generate keys modified in txn
+     * GENERATE_KEYS - stall until stores complete
+     *               - generate keys modified in txn
      * FINISHED - end state
      *
      * INIT -> LOAD_ROOT
      * LOAD_ROOT -> APPLY_OPS
      * APPLY_OPS -> STORE
-     * STORE -> PRE_FINISHED
-     * PRE_FINISHED -> FINISHED
+     * STORE -> GENERATE_KEYS
+     * GENERATE_KEYS -> FINISHED
      */
     enum {
         KVSTXN_STATE_INIT = 1,
         KVSTXN_STATE_LOAD_ROOT = 2,
         KVSTXN_STATE_APPLY_OPS = 3,
         KVSTXN_STATE_STORE = 4,
-        KVSTXN_STATE_PRE_FINISHED = 5,
+        KVSTXN_STATE_GENERATE_KEYS = 5,
         KVSTXN_STATE_FINISHED = 6,
     } state;
 };
@@ -230,7 +230,7 @@ json_t *kvstxn_get_keys (kvstxn_t *kt)
 void kvstxn_cleanup_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry)
 {
     if (kt->state == KVSTXN_STATE_STORE
-        || kt->state == KVSTXN_STATE_PRE_FINISHED) {
+        || kt->state == KVSTXN_STATE_GENERATE_KEYS) {
         char ref[BLOBREF_MAX_STRING_SIZE];
         const void *data;
         int len;
@@ -982,7 +982,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
         /* cache now has ownership of rootcpy, we don't need our
          * rootcpy anymore.  But we may still need to stall user.
          */
-        kt->state = KVSTXN_STATE_PRE_FINISHED;
+        kt->state = KVSTXN_STATE_GENERATE_KEYS;
         json_decref (kt->rootcpy);
         kt->rootcpy = NULL;
 
@@ -999,7 +999,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
 
         /* fallthrough */
     }
-    case KVSTXN_STATE_PRE_FINISHED:
+    case KVSTXN_STATE_GENERATE_KEYS:
         /* If we did not fall through to here, caller didn't call
          * kvstxn_iter_dirty_cache_entries()
          */
@@ -1062,7 +1062,7 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
 {
     struct cache_entry *entry;
 
-    if (kt->state != KVSTXN_STATE_PRE_FINISHED) {
+    if (kt->state != KVSTXN_STATE_GENERATE_KEYS) {
         errno = EINVAL;
         return -1;
     }
