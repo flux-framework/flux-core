@@ -833,193 +833,186 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
         return KVSTXN_PROCESS_ERROR;
     }
 
-    switch (kt->state) {
-    case KVSTXN_STATE_INIT:
-    case KVSTXN_STATE_LOAD_ROOT:
-    {
-        /* Make a copy of the root directory.
-         */
-        struct cache_entry *entry;
+    while (1) {
+        if (kt->state == KVSTXN_STATE_INIT
+            || kt->state == KVSTXN_STATE_LOAD_ROOT) {
+            /* Make a copy of the root directory.
+             */
+            struct cache_entry *entry;
 
-        /* Caller didn't call kvstxn_iter_missing_refs() */
-        if (zlist_first (kt->missing_refs_list))
-            goto stall_load;
+            /* Caller didn't call kvstxn_iter_missing_refs() */
+            if (zlist_first (kt->missing_refs_list))
+                goto stall_load;
 
-        kt->state = KVSTXN_STATE_LOAD_ROOT;
+            kt->state = KVSTXN_STATE_LOAD_ROOT;
 
-        if (!(entry = cache_lookup (kt->ktm->cache, rootdir_ref))
-            || !cache_entry_get_valid (entry)) {
+            if (!(entry = cache_lookup (kt->ktm->cache, rootdir_ref))
+                || !cache_entry_get_valid (entry)) {
 
-            if (add_missing_ref (kt, rootdir_ref) < 0) {
-                kt->errnum = errno;
-                return KVSTXN_PROCESS_ERROR;
-            }
-            goto stall_load;
-        }
-
-        if (!(kt->rootdir = cache_entry_get_treeobj (entry))) {
-            kt->errnum = ENOTRECOVERABLE;
-            return KVSTXN_PROCESS_ERROR;
-        }
-
-        /* take reference because we're storing rootdir */
-        cache_entry_incref (entry);
-        kt->entry = entry;
-
-        if (!(kt->rootcpy = treeobj_deep_copy (kt->rootdir))) {
-            kt->errnum = errno;
-            return KVSTXN_PROCESS_ERROR;
-        }
-
-        kt->state = KVSTXN_STATE_APPLY_OPS;
-        /* fallthrough */
-    }
-    case KVSTXN_STATE_APPLY_OPS:
-    {
-        /* Apply each op (e.g. key = val) in sequence to the root
-         * copy.  A side effect of walking key paths is to convert
-         * dirref objects to dir objects in the copy.  This allows
-         * the transaction to be self-contained in the rootcpy
-         * until it is unrolled later on.
-         *
-         * Note that it is possible for multiple identical missing
-         * references to be added to the missing_refs_list list.
-         * Callers must deal with this appropriately.
-         */
-        json_t *op, *dirent;
-        const char *missing_ref = NULL;
-        int i, len = json_array_size (kt->ops);
-        const char *key;
-        int flags;
-        bool append = false;
-
-        /* Caller didn't call kvstxn_iter_missing_refs() */
-        if (zlist_first (kt->missing_refs_list))
-            goto stall_load;
-
-        for (i = 0; i < len; i++) {
-            missing_ref = NULL;
-            op = json_array_get (kt->ops, i);
-            assert (op != NULL);
-            if (txn_decode_op (op, &key, &flags, &dirent) < 0) {
-                kt->errnum = errno;
-                break;
-            }
-            if (kvstxn_link_dirent (kt,
-                                    kt->rootcpy,
-                                    key,
-                                    dirent,
-                                    flags,
-                                    &missing_ref,
-                                    &append) < 0) {
-                kt->errnum = errno;
-                break;
-            }
-            if (missing_ref) {
-                if (add_missing_ref (kt, missing_ref) < 0) {
-                    kt->errnum = errno;
-                    break;
-                }
-            }
-        }
-
-        if (kt->errnum != 0) {
-            /* empty missing_refs_list to prevent mistakes later */
-            zlist_purge (kt->missing_refs_list);
-            return KVSTXN_PROCESS_ERROR;
-        }
-
-        if (zlist_first (kt->missing_refs_list)) {
-            /* if we are stalling and an append has been done on the
-             * rootcpy, we cannot re-apply the operations on the
-             * replay of this transaction.  It would result in
-             * duplicate appends on a key.  We'll start over with a
-             * fresh rootcpy on the replay. */
-            if (append) {
-                json_decref (kt->rootcpy);
-                if (!(kt->rootcpy = treeobj_deep_copy (kt->rootdir))) {
+                if (add_missing_ref (kt, rootdir_ref) < 0) {
                     kt->errnum = errno;
                     return KVSTXN_PROCESS_ERROR;
                 }
+                goto stall_load;
             }
-            goto stall_load;
-        }
 
-        kt->state = KVSTXN_STATE_STORE;
-        /* fallthrough */
-    }
-    case KVSTXN_STATE_STORE:
-    {
-        /* Unroll the root copy.
-         * When a dir is found, store an object and replace it
-         * with a dirref.  Finally, store the unrolled root copy
-         * as an object and keep its reference in kt->newroot.
-         * Flushes to content cache are asynchronous but we don't
-         * proceed until they are completed.
-         */
-        struct cache_entry *entry;
-        int sret;
+            if (!(kt->rootdir = cache_entry_get_treeobj (entry))) {
+                kt->errnum = ENOTRECOVERABLE;
+                return KVSTXN_PROCESS_ERROR;
+            }
 
-        if (kvstxn_unroll (kt, kt->rootcpy) < 0)
-            kt->errnum = errno;
-        else if ((sret = store_cache (kt,
-                                      kt->rootcpy,
-                                      false,
-                                      kt->newroot,
-                                      sizeof (kt->newroot),
-                                      &entry)) < 0)
-            kt->errnum = errno;
-        else if (sret) {
-            if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
+            /* take reference because we're storing rootdir */
+            cache_entry_incref (entry);
+            kt->entry = entry;
+
+            if (!(kt->rootcpy = treeobj_deep_copy (kt->rootdir))) {
                 kt->errnum = errno;
-        }
+                return KVSTXN_PROCESS_ERROR;
+            }
 
-        if (kt->errnum) {
-            cleanup_dirty_cache_list (kt);
+            kt->state = KVSTXN_STATE_APPLY_OPS;
+        }
+        else if (kt->state == KVSTXN_STATE_APPLY_OPS) {
+            /* Apply each op (e.g. key = val) in sequence to the root
+             * copy.  A side effect of walking key paths is to convert
+             * dirref objects to dir objects in the copy.  This allows
+             * the transaction to be self-contained in the rootcpy
+             * until it is unrolled later on.
+             *
+             * Note that it is possible for multiple identical missing
+             * references to be added to the missing_refs_list list.
+             * Callers must deal with this appropriately.
+             */
+            json_t *op, *dirent;
+            const char *missing_ref = NULL;
+            int i, len = json_array_size (kt->ops);
+            const char *key;
+            int flags;
+            bool append = false;
+
+            /* Caller didn't call kvstxn_iter_missing_refs() */
+            if (zlist_first (kt->missing_refs_list))
+                goto stall_load;
+
+            for (i = 0; i < len; i++) {
+                missing_ref = NULL;
+                op = json_array_get (kt->ops, i);
+                assert (op != NULL);
+                if (txn_decode_op (op, &key, &flags, &dirent) < 0) {
+                    kt->errnum = errno;
+                    break;
+                }
+                if (kvstxn_link_dirent (kt,
+                                        kt->rootcpy,
+                                        key,
+                                        dirent,
+                                        flags,
+                                        &missing_ref,
+                                        &append) < 0) {
+                    kt->errnum = errno;
+                    break;
+                }
+                if (missing_ref) {
+                    if (add_missing_ref (kt, missing_ref) < 0) {
+                        kt->errnum = errno;
+                        break;
+                    }
+                }
+            }
+
+            if (kt->errnum != 0) {
+                /* empty missing_refs_list to prevent mistakes later */
+                zlist_purge (kt->missing_refs_list);
+                return KVSTXN_PROCESS_ERROR;
+            }
+
+            if (zlist_first (kt->missing_refs_list)) {
+                /* if we are stalling and an append has been done on the
+                 * rootcpy, we cannot re-apply the operations on the
+                 * replay of this transaction.  It would result in
+                 * duplicate appends on a key.  We'll start over with a
+                 * fresh rootcpy on the replay. */
+                if (append) {
+                    json_decref (kt->rootcpy);
+                    if (!(kt->rootcpy = treeobj_deep_copy (kt->rootdir))) {
+                        kt->errnum = errno;
+                        return KVSTXN_PROCESS_ERROR;
+                    }
+                }
+                goto stall_load;
+            }
+
+            kt->state = KVSTXN_STATE_STORE;
+        }
+        else if (kt->state == KVSTXN_STATE_STORE) {
+            /* Unroll the root copy.
+             * When a dir is found, store an object and replace it
+             * with a dirref.  Finally, store the unrolled root copy
+             * as an object and keep its reference in kt->newroot.
+             * Flushes to content cache are asynchronous but we don't
+             * proceed until they are completed.
+             */
+            struct cache_entry *entry;
+            int sret;
+
+            if (kvstxn_unroll (kt, kt->rootcpy) < 0)
+                kt->errnum = errno;
+            else if ((sret = store_cache (kt,
+                                          kt->rootcpy,
+                                          false,
+                                          kt->newroot,
+                                          sizeof (kt->newroot),
+                                          &entry)) < 0)
+                kt->errnum = errno;
+            else if (sret) {
+                if (kvstxn_add_dirty_cache_entry (kt, entry) < 0)
+                    kt->errnum = errno;
+            }
+
+            if (kt->errnum) {
+                cleanup_dirty_cache_list (kt);
+                return KVSTXN_PROCESS_ERROR;
+            }
+
+            /* cache now has ownership of rootcpy, we don't need our
+             * rootcpy anymore.  But we may still need to stall user.
+             */
+            kt->state = KVSTXN_STATE_GENERATE_KEYS;
+            json_decref (kt->rootcpy);
+            kt->rootcpy = NULL;
+
+            /* the cache entry for the new root has the chance to expire
+             * in between the processing of dirty cache entries and the
+             * user being done with the transaction.  Therefore a call
+             * later to kvstxn_get_newroot_ref() could result in a
+             * reference that no longer has its cache entry valid.  We'll
+             * take an additional reference on the cache entry to ensure
+             * it can't expire until the transaction is completed.
+             */
+            kt->newroot_entry = entry;
+            cache_entry_incref (kt->newroot_entry);
+        }
+        else if (kt->state == KVSTXN_STATE_GENERATE_KEYS) {
+            /* Caller didn't call kvstxn_iter_dirty_cache_entries() */
+            if (zlist_first (kt->dirty_cache_entries_list))
+                goto stall_store;
+
+            /* now generate keys for setroot */
+            if (!(kt->keys = keys_from_ops (kt->ops))) {
+                kt->errnum = ENOMEM;
+                return KVSTXN_PROCESS_ERROR;
+            }
+
+            kt->state = KVSTXN_STATE_FINISHED;
+        }
+        else if (kt->state == KVSTXN_STATE_FINISHED) {
+            break;
+        }
+        else {
+            flux_log (kt->ktm->h, LOG_ERR, "invalid kvstxn state: %d", kt->state);
+            kt->errnum = ENOTRECOVERABLE;
             return KVSTXN_PROCESS_ERROR;
         }
-
-        /* cache now has ownership of rootcpy, we don't need our
-         * rootcpy anymore.  But we may still need to stall user.
-         */
-        kt->state = KVSTXN_STATE_GENERATE_KEYS;
-        json_decref (kt->rootcpy);
-        kt->rootcpy = NULL;
-
-        /* the cache entry for the new root has the chance to expire
-         * in between the processing of dirty cache entries and the
-         * user being done with the transaction.  Therefore a call
-         * later to kvstxn_get_newroot_ref() could result in a
-         * reference that no longer has its cache entry valid.  We'll
-         * take an additional reference on the cache entry to ensure
-         * it can't expire until the transaction is completed.
-         */
-        kt->newroot_entry = entry;
-        cache_entry_incref (kt->newroot_entry);
-
-        /* fallthrough */
-    }
-    case KVSTXN_STATE_GENERATE_KEYS:
-        /* If we did not fall through to here, caller didn't call
-         * kvstxn_iter_dirty_cache_entries()
-         */
-        if (zlist_first (kt->dirty_cache_entries_list))
-            goto stall_store;
-
-        /* now generate keys for setroot */
-        if (!(kt->keys = keys_from_ops (kt->ops))) {
-            kt->errnum = ENOMEM;
-            return KVSTXN_PROCESS_ERROR;
-        }
-
-        kt->state = KVSTXN_STATE_FINISHED;
-        /* fallthrough */
-    case KVSTXN_STATE_FINISHED:
-        break;
-    default:
-        flux_log (kt->ktm->h, LOG_ERR, "invalid kvstxn state: %d", kt->state);
-        kt->errnum = ENOTRECOVERABLE;
-        return KVSTXN_PROCESS_ERROR;
     }
 
     return KVSTXN_PROCESS_FINISHED;
