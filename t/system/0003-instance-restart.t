@@ -60,3 +60,31 @@ test_expect_success 'job-exec: verify jobs listed and in new expected state' '
 test_expect_success 'job-exec: cancel jobs' '
         flux job cancel $(cat jobid2)
 '
+# fill up job queue with around 1 minute worth of "sleep 1" jobs,
+# restart flux every 5 seconds for around 30 seconds worth of sleeping
+test_expect_success LONGTEST 'job-exec: stress reconnect against many jobs' '
+        ncores=`flux resource list -no {ncores}` &&
+        count=$((ncores*60)) &&
+        flux mini submit --cc=1-${count} sleep 1 > reconnect_stress.ids &&
+        sleep 5 &&
+        sudo systemctl restart flux &&
+        sleep 5 &&
+        sudo systemctl restart flux &&
+        sleep 5 &&
+        sudo systemctl restart flux &&
+        sleep 5 &&
+        sudo systemctl restart flux &&
+        sleep 5 &&
+        sudo systemctl restart flux &&
+        sleep 5 &&
+        sudo systemctl restart flux
+'
+test_expect_success LONGTEST 'job-exec: wait for flux to finish setting up' '
+        jobid=$(cat reconnect_stress.ids | head -n 1)
+        until flux jobs -a | grep ${jobid} 2>/dev/null; do
+              sleep 1
+        done
+'
+test_expect_success LONGTEST 'job-exec: wait for all jobs to finish' '
+        flux job status $(cat reconnect_stress.ids)
+'

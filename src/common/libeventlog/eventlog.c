@@ -341,7 +341,7 @@ char *eventlog_entry_encode (json_t *entry)
     return buf;
 }
 
-char *eventlog_encode (json_t *array)
+char *eventlog_encode (json_t *a)
 {
     json_t *value;
     size_t index;
@@ -349,11 +349,11 @@ char *eventlog_encode (json_t *array)
     int bufsz = 0;
     int used = 0;
 
-    if (!array || !json_is_array (array)) {
+    if (!a || !json_is_array (a)) {
         errno = EINVAL;
         return NULL;
     }
-    json_array_foreach (array, index, value) {
+    json_array_foreach (a, index, value) {
         char *s = json_dumps (value, JSON_COMPACT);
 
         if (!s || (used = append_string_nl (&buf, &bufsz, used, s)) < 0) {
@@ -367,6 +367,39 @@ char *eventlog_encode (json_t *array)
     if (!buf) // empty JSON array returns empty string (tests expect it)
         buf = calloc (1, 1);
     return buf;
+}
+
+int eventlog_contains_event (const char *s, const char *name)
+{
+    json_t *a = NULL;
+    size_t index;
+    json_t *value;
+    int rv = -1;
+
+    if (!s || !name) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!(a = eventlog_decode (s)))
+        return -1;
+
+    json_array_foreach (a, index, value) {
+        double t;
+        const char *n;
+        json_t *c;
+        if (eventlog_entry_parse (value, &t, &n, &c) < 0)
+            goto out;
+        if (!strcmp (name, n)) {
+            rv = 1;
+            goto out;
+        }
+    }
+
+    rv = 0;
+out:
+    json_decref (a);
+    return rv;
 }
 
 /*

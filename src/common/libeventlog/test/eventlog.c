@@ -479,6 +479,34 @@ void eventlog_entry_encoding_errors (void)
         "eventlog_entry_vpack context=\"[\"foo\"]\" fails with EINVAL");
 }
 
+void eventlog_contains_event_test (void)
+{
+    char *goodlog =
+        "{\"timestamp\":42.0,\"name\":\"foo\"}\n"
+        "{\"timestamp\":43.0,\"name\":\"bar\",\"context\":{\"bar\":16}}\n";
+    char *badlog = "fdsafdsafsdafd";
+
+    errno = 0;
+    ok (eventlog_contains_event (NULL, NULL) < 0
+        && errno == EINVAL,
+        "eventlog_contains_event returns EINVAL on bad input");
+
+    errno = 0;
+    ok (eventlog_contains_event (badlog, "foo") < 0
+        && errno == EINVAL,
+        "eventlog_contains_event returns EINVAL on bad log");
+
+    ok (eventlog_contains_event ("", "foo") == 0,
+        "eventlog_contains_event returns 0, no events in eventlog");
+
+    ok (eventlog_contains_event (goodlog, "foo") == 1,
+        "eventlog_contains_event returns 1, found foo event in eventlog");
+    ok (eventlog_contains_event (goodlog, "bar") == 1,
+        "eventlog_contains_event returns 1, found bar event in eventlog");
+    ok (eventlog_contains_event (goodlog, "foobar") == 0,
+        "eventlog_contains_event returns 0, no foobar event in eventlog");
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -490,6 +518,7 @@ int main (int argc, char *argv[])
     eventlog_entry_decoding_errors ();
     eventlog_entry_encoding ();
     /* eventlog_entry_encoding_errors (); */
+    eventlog_contains_event_test ();
 
     done_testing ();
 }

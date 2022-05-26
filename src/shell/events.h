@@ -17,7 +17,6 @@ void shell_eventlogger_destroy (struct shell_eventlogger *shev);
 struct shell_eventlogger *shell_eventlogger_create (flux_shell_t *shell);
 
 int shell_eventlogger_emit_event (struct shell_eventlogger *shev,
-                                  int flags,
                                   const char *event);
 
 int shell_eventlogger_context_vpack (struct shell_eventlogger *shev,
@@ -25,6 +24,9 @@ int shell_eventlogger_context_vpack (struct shell_eventlogger *shev,
                                      int flags,
                                      const char *fmt,
                                      va_list ap);
+
+int shell_eventlogger_reconnect (struct shell_eventlogger *shev);
+
 #endif /* !_SHELL_EVENTS_H */
 
 /* vi: ts=4 sw=4 expandtab

@@ -218,7 +218,7 @@ static int shell_output_redirect_stream (struct shell_output *out,
                                        "stream", stream,
                                        "rank", rankptr,
                                        "path", path))) {
-        shell_log_errno ("eventlog_entry_create");
+        shell_log_errno ("eventlog_entry_pack");
         goto error;
     }
     if (!(entrystr = eventlog_entry_encode (entry))) {
@@ -1051,6 +1051,22 @@ static void output_unref (struct eventlogger *ev, void *arg)
     flux_shell_remove_completion_ref (out->shell, "output.txn");
 }
 
+static int output_eventlogger_reconnect (flux_plugin_t *p,
+                                         const char *topic,
+                                         flux_plugin_arg_t *args,
+                                         void *data)
+{
+    flux_shell_t *shell = flux_plugin_get_shell (p);
+
+    /* during a reconnect, response to event logging may not occur,
+     * thus output_unref() may not be called.  Clear all completion
+     * references to inflight transactions.
+     */
+
+    while (flux_shell_remove_completion_ref (shell, "output.txn") == 0);
+    return 0;
+}
+
 static int output_eventlogger_start (struct shell_output *out)
 {
     flux_t *h = flux_shell_get_flux (out->shell);
@@ -1336,6 +1352,7 @@ static int shell_output_init (flux_plugin_t *p,
 
 struct shell_builtin builtin_output = {
     .name = FLUX_SHELL_PLUGIN_NAME,
+    .reconnect = output_eventlogger_reconnect,
     .init = shell_output_init,
     .task_init = shell_output_task_init,
     .task_exit = shell_output_task_exit,

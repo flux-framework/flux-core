@@ -265,6 +265,13 @@ static int reconnect (flux_t *h, void *arg)
     if (flux_rpc_get (f, NULL) < 0)
         shell_die (1, "flux_service_register: %s", future_strerror (f, errno));
     flux_future_destroy (f);
+
+    if (plugstack_call (shell->plugstack, "shell.reconnect", NULL) < 0)
+        shell_log_errno ("shell.reconnect");
+
+    if (shell_eventlogger_reconnect (shell->ev) < 0)
+        shell_log_errno ("shell_eventlogger_reconnect");
+
     shell_log ("broker: reconnected");
     return 0;
 }
@@ -1342,7 +1349,7 @@ int main (int argc, char *argv[])
      */
     if (shell.info->shell_rank == 0
         && !shell.standalone
-        && shell_eventlogger_emit_event (shell.ev, 0, "shell.init") < 0)
+        && shell_eventlogger_emit_event (shell.ev, "shell.init") < 0)
             shell_die_errno (1, "failed to emit event shell.init");
 
     /* Create tasks
@@ -1408,7 +1415,7 @@ int main (int argc, char *argv[])
      */
     if (shell.info->shell_rank == 0
         && !shell.standalone
-        && shell_eventlogger_emit_event (shell.ev, 0, "shell.start") < 0)
+        && shell_eventlogger_emit_event (shell.ev, "shell.start") < 0)
             shell_die_errno (1, "failed to emit event shell.start");
 
     /* Main reactor loop

@@ -28,7 +28,7 @@ int eventlog_entry_parse (json_t *entry,
 json_t *eventlog_decode (const char *s);
 
 /* encode json array of event objects into an eventlog */
-char *eventlog_encode (json_t *o);
+char *eventlog_encode (json_t *a);
 
 /* decode a single eventlog entry into a json object */
 json_t *eventlog_entry_decode (const char *entry);
@@ -51,6 +51,11 @@ json_t *eventlog_entry_vpack (double timestamp,
                               va_list ap);
 
 char *eventlog_entry_encode (json_t *entry);
+
+/* Convenience function to search eventlog for event with name.
+ * Returns 1 if found, 0 if not, -1 on error.
+ */
+int eventlog_contains_event (const char *s, const char *name);
 
 #ifdef __cplusplus
 }
