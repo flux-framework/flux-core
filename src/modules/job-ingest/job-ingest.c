@@ -232,7 +232,8 @@ static void batch_response_destroy (struct batch_response *bresp)
 static void *jobid_duplicator (const void *item)
 {
     flux_jobid_t *id = calloc (1, sizeof (flux_jobid_t));
-    *id = *((flux_jobid_t *)item);
+    if (id)
+        *id = *((flux_jobid_t *)item);
     return id;
 }
 
