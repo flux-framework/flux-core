@@ -91,12 +91,8 @@ int submit_hash_jobs (zhashx_t *active_jobs,
     struct job * job = zlistx_first (newjobs);
     while (job) {
         if (zhashx_insert (active_jobs, &job->id, job) < 0) {
-            /* zhashx_insert() fails if hash item already exists.
-             * This is not an error - there is a window for restart_from_kvs()
-             * to pick up a job that also has a submit request in flight.
-             */
-            if (zlistx_delete (newjobs, zlistx_cursor (newjobs)) < 0)
-                return -1;
+            errno = EEXIST;
+            return -1;
         }
         job = zlistx_next (newjobs);
     }
@@ -194,13 +190,11 @@ static int submit_validate_jobs (struct job_manager *ctx,
             /*  The job has been accepted and will progress past the NEW
              *   state after it has been added to the active jobs hash.
              *
-             *   Immediately notify any plugins of a new job here (unless
-             *   the job is already hashed, an allowed condition) so that
+             *   Immediately notify any plugins of a new job here so that
              *   any internal plugin state (e.g. user job count) can be
              *   updated before the next job is validated.
              */
-            if (!zhashx_lookup (ctx->active_jobs, &job->id))
-                (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
+            (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
         }
         job = zlistx_next (newjobs);
     }
