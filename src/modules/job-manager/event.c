@@ -771,7 +771,6 @@ int event_job_process_entry (struct event *event,
                              int flags,
                              json_t *entry)
 {
-    int rc;
     flux_job_state_t old_state = job->state;
     int eventlog_seq = job->eventlog_seq;
     const char *name;
@@ -825,29 +824,13 @@ int event_job_process_entry (struct event *event,
              && (old_state & FLUX_JOB_STATE_RUNNING))
         event->ctx->running_jobs--;
 
-    /*  N.B. Job may recursively call this function from event_jobtap_call()
-     *   which may end up destroying the job before returning from the
-     *   function. Until the recursive nature of these functions is
-     *   fixed via a true event queue, we must take a reference on the
-     *   job and release after event_job_action() to avoid the potential
-     *   for use-after-free.
-     */
-    job_incref (job);
-
-    /*  Ensure jobtap call happens after the current state is published,
-     *   in case any plugin callback causes a transition to a new state,
-     *   but the call needs to occur before event_job_action() which may
-     *   itself cause the job to recursively enter a new state.
-     *
-     *  Note: Failure from the jobtap call is currently ignored, but will
+    /*  Note: Failure from the jobtap call is currently ignored, but will
      *   be logged in jobtap_call(). The goal is to do something with the
      *   errors at some point (perhaps raise a job exception).
      */
     (void) event_jobtap_call (event, job, name, entry, old_state);
 
-    rc = event_job_action (event, job);
-    job_decref (job);
-    return rc;
+    return event_job_action (event, job);
 }
 
 static int event_job_post_deferred (struct event *event, struct job *job)
