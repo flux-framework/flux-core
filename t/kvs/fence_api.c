@@ -40,10 +40,19 @@ typedef struct {
 static int count = -1;
 static char *prefix = NULL;
 static char *fence_name;
+static bool syncflag = false;
+static const char *namespace = NULL;
+
+#define OPTIONS "n:S"
+static const struct option longopts[] = {
+    {"namespace", required_argument, 0, 'n'},
+    {"sync",      no_argument,       0, 'S'},
+    {0, 0, 0, 0},
+};
 
 static void usage (void)
 {
-    fprintf (stderr, "Usage: fence_api count prefix\n");
+    fprintf (stderr, "Usage: fence_api [--sync] [--namespace] count prefix\n");
     exit (1);
 }
 
@@ -57,6 +66,7 @@ void *thread (void *arg)
     const char *treeobj;
     const char *rootref;
     int sequence;
+    int flags = 0;
 
     if (!(t->h = flux_open (NULL, 0))) {
         log_err ("%d: flux_open", t->n);
@@ -78,7 +88,10 @@ void *thread (void *arg)
     if (flux_kvs_txn_pack (txn, 0, key, "i", 42) < 0)
         log_err_exit ("%s", key);
 
-    if (!(f = flux_kvs_fence (t->h, NULL, 0, fence_name,
+    if (syncflag)
+        flags |= FLUX_KVS_SYNC;
+
+    if (!(f = flux_kvs_fence (t->h, namespace, flags, fence_name,
                               count, txn))
         || flux_future_get (f, NULL) < 0)
         log_err_exit ("flux_kvs_fence");
@@ -110,17 +123,29 @@ done:
 int main (int argc, char *argv[])
 {
     thd_t *thd;
-    int i, num, rc;
+    int i, ch, num, rc;
 
     log_init (basename (argv[0]));
 
-    if (argc != 3)
+    while ((ch = getopt_long (argc, argv, OPTIONS, longopts, NULL)) != -1) {
+        switch (ch) {
+        case 'S':
+            syncflag = true;
+            break;
+        case 'n':
+            namespace = optarg;
+            break;
+        default:
+            usage ();
+        }
+    }
+    if ((argc - optind) != 2)
         usage ();
 
-    count = strtoul (argv[1], NULL, 10);
+    count = strtoul (argv[optind], NULL, 10);
     if (count <= 1)
         log_msg_exit ("commit count must be > 1");
-    prefix = argv[2];
+    prefix = argv[optind+1];
 
     /* create a fence name for this test that is random-ish */
     srand (time (NULL));

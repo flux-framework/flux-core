@@ -89,6 +89,7 @@ TESTSCRIPTS = \
 	t1007-kvs-lookup-watch.t \
 	t1008-kvs-eventlog.t \
 	t1009-kvs-copy.t \
+	t1010-kvs-commit-sync.t \
 	t1101-barrier-basic.t \
 	t1102-cmddriver.t \
 	t1103-apidisconnect.t \
