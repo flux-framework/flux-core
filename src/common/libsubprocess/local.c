@@ -527,6 +527,10 @@ static int local_child (flux_subprocess_t *p)
         fprintf (stderr, "out of memory\n");
         _exit (1);
     }
+    if (argv[0] == NULL) {
+        fprintf (stderr, "command argv array is empty\n");
+        _exit (1);
+    }
 #if CODE_COVERAGE_ENABLED
     __gcov_flush ();
 #endif
