@@ -11,6 +11,7 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
+#include <time.h>
 #include <unistd.h>
 #include <jansson.h>
 #include <flux/core.h>
@@ -24,7 +25,6 @@
 #include "src/common/libutil/jpath.h"
 #include "src/common/libjob/sign_none.h"
 #include "src/common/libjob/job_hash.h"
-#include "src/common/libeventlog/eventlog.h"
 
 #include "validate.h"
 
@@ -232,7 +232,8 @@ static void batch_response_destroy (struct batch_response *bresp)
 static void *jobid_duplicator (const void *item)
 {
     flux_jobid_t *id = calloc (1, sizeof (flux_jobid_t));
-    *id = *((flux_jobid_t *)item);
+    if (id)
+        *id = *((flux_jobid_t *)item);
     return id;
 }
 
@@ -502,6 +503,17 @@ static int make_key (char *buf, int bufsz, struct job *job, const char *name)
     return 0;
 }
 
+static double get_timestamp_now (void)
+{
+    struct timespec ts;
+    double now;
+
+    (void)clock_gettime (CLOCK_REALTIME, &ts);
+    now = ts.tv_sec;
+    now += (1E-9 * ts.tv_nsec);
+    return now;
+}
+
 /* Add 'job' to 'batch'.
  * On error, ensure that no remnants of job made into KVS transaction.
  */
@@ -510,9 +522,6 @@ static int batch_add_job (struct batch *batch, struct job *job)
     char key[64];
     int saved_errno;
     json_t *jobentry;
-    json_t *entry = NULL;
-    char *entrystr = NULL;
-    double t;
 
     if (zlist_append (batch->jobs, job) < 0) {
         errno = ENOMEM;
@@ -527,22 +536,6 @@ static int batch_add_job (struct batch *batch, struct job *job)
     if (flux_kvs_txn_put_raw (batch->txn, 0, key,
                               job->jobspec, job->jobspecsz) < 0)
         goto error;
-    entry = eventlog_entry_pack (0., "submit",
-                                 "{ s:i s:i s:i }",
-                                 "userid", job->cred.userid,
-                                 "urgency", job->urgency,
-                                 "flags", job->flags);
-    if (!entry)
-        goto error;
-    if (!(entrystr = eventlog_entry_encode (entry)))
-        goto error;
-    if (make_key (key, sizeof (key), job, "eventlog") < 0)
-        goto error;
-    if (flux_kvs_txn_put (batch->txn, FLUX_KVS_APPEND, key, entrystr) < 0)
-        goto error;
-    /* get created timestamp in eventlog entry for job */
-    if (eventlog_entry_parse (entry, &t, NULL, NULL) < 0)
-        goto error;
     /* Redact bulky environment portion of jobspec in object prior to
      * including it in job-manager.submit request.
      * The full jobspec is commited to the KVS for use by other subsystems.
@@ -552,7 +545,7 @@ static int batch_add_job (struct batch *batch, struct job *job)
                                 "id", job->id,
                                 "userid", job->cred.userid,
                                 "urgency", job->urgency,
-                                "t_submit", t,
+                                "t_submit", get_timestamp_now (),
                                 "flags", job->flags,
                                 "jobspec", job->jobspec_obj)))
         goto nomem;
@@ -560,16 +553,12 @@ static int batch_add_job (struct batch *batch, struct job *job)
         json_decref (jobentry);
         goto nomem;
     }
-    free (entrystr);
-    json_decref (entry);
     job_clean (job); // batch->txn now holds this info
     return 0;
 nomem:
     errno = ENOMEM;
 error:
     saved_errno = errno;
-    free (entrystr);
-    json_decref (entry);
     zlist_remove (batch->jobs, job);
     if (make_key (key, sizeof (key), job, NULL) == 0)
         (void)flux_kvs_txn_unlink (batch->txn, 0, key);

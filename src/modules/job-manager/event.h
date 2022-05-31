@@ -27,12 +27,6 @@ enum job_manager_event_flags {
      *   the eventlog in the KVS.
      */
     EVENT_NO_COMMIT = 1,
-
-    /*  With EVENT_NO_COMMIT, force the event to get a journal sequence
-     *   numnber. This is useful for events that may already be in the
-     *   job eventlog, such as the "submit" event.
-     */
-    EVENT_FORCE_SEQUENCE = 2,
 };
 
 /* Take any action for 'job' currently needed based on its internal state.
@@ -59,7 +53,6 @@ int event_batch_respond (struct event *event, const flux_msg_t *msg);
 /* Post event 'name' and optionally 'context' to 'job'.
  * Internally, calls event_job_update(), then event_job_action(), then commits
  * the event to job KVS eventlog.  The KVS commit completes asynchronously.
- * The future passed in as an argument should not be destroyed.
  * Returns 0 on success, -1 on failure with errno set.
  */
 int event_job_post_pack (struct event *event,

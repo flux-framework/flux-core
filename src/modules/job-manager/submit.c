@@ -18,6 +18,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libutil/errno_safe.h"
 
 #include "job.h"
 #include "alloc.h"
@@ -90,12 +91,8 @@ int submit_hash_jobs (zhashx_t *active_jobs,
     struct job * job = zlistx_first (newjobs);
     while (job) {
         if (zhashx_insert (active_jobs, &job->id, job) < 0) {
-            /* zhashx_insert() fails if hash item already exists.
-             * This is not an error - there is a window for restart_from_kvs()
-             * to pick up a job that also has a submit request in flight.
-             */
-            if (zlistx_delete (newjobs, zlistx_cursor (newjobs)) < 0)
-                return -1;
+            errno = EEXIST;
+            return -1;
         }
         job = zlistx_next (newjobs);
     }
@@ -119,18 +116,14 @@ void submit_add_jobs_cleanup (zhashx_t *active_jobs, zlistx_t *newjobs)
     }
 }
 
-/* Submit event requires special handling.  It cannot go through
- * event_job_post_pack() because job-ingest already logged it.
- * However, we want to let the state machine choose the next state and action,
- * We instead re-create the event and run it directly through
- * event_job_update() and event_job_action().
+/* Submit event requires special handling to use job->t_submit (from
+ * job-ingest) as the event timestamp.
  */
 static int submit_post_event (struct job_manager *ctx, struct job *job)
 {
     json_t *entry = NULL;
     int rv = -1;
 
-    /*  Encode entry by hand to get correct t_submit */
     entry = eventlog_entry_pack (job->t_submit,
                                  "submit",
                                  "{ s:i s:i s:i }",
@@ -140,12 +133,8 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
     if (!entry)
         return -1;
 
-    rv = event_job_post_entry (ctx->event,
-                               job,
-                               "submit",
-                               EVENT_NO_COMMIT | EVENT_FORCE_SEQUENCE,
-                               entry);
-    json_decref (entry);
+    rv = event_job_post_entry (ctx->event, job, "submit", 0, entry);
+    ERRNO_SAFE_WRAP (json_decref, entry);
     return rv;
 }
 
@@ -201,13 +190,11 @@ static int submit_validate_jobs (struct job_manager *ctx,
             /*  The job has been accepted and will progress past the NEW
              *   state after it has been added to the active jobs hash.
              *
-             *   Immediately notify any plugins of a new job here (unless
-             *   the job is already hashed, an allowed condition) so that
+             *   Immediately notify any plugins of a new job here so that
              *   any internal plugin state (e.g. user job count) can be
              *   updated before the next job is validated.
              */
-            if (!zhashx_lookup (ctx->active_jobs, &job->id))
-                (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
+            (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
         }
         job = zlistx_next (newjobs);
     }
@@ -229,8 +216,9 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     struct job_manager *ctx = arg;
     json_t *jobs;
     json_t *errors = NULL;
-    zlistx_t *newjobs;
+    zlistx_t *newjobs = NULL;
     struct job *job;
+    flux_msg_t *response = NULL;
     const char *errmsg = NULL;
 
     if (flux_request_unpack (msg, NULL, "{s:o}", "jobs", &jobs) < 0) {
@@ -254,19 +242,16 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         flux_log_error (h, "%s: error enqueuing batch", __FUNCTION__);
         goto error;
     }
-    if (flux_respond_pack (h, msg, "{s:o}", "errors", errors) < 0)
-        flux_log_error (h, "%s: flux_respond", __FUNCTION__);
-
-    /* Submitting user is being responded to with jobid's.
-     * Now walk the list of new jobs and advance their state.
-     * Side effect: update ctx->max_jobid.
+    /* Walk the list of new jobs and post submit event.
+     * Side effects: update ctx->max_jobid and maintain count of waitables.
      */
     job = zlistx_first (newjobs);
     while (job) {
-        if (submit_post_event (ctx, job) < 0)
-            flux_log_error (h, "%s: submit_post_event id=%ju",
-                            __FUNCTION__, (uintmax_t)job->id);
-
+        if (submit_post_event (ctx, job) < 0) {
+            flux_log_error (h, "error posting submit event for id=%ju",
+                            (uintmax_t)job->id);
+            goto error;
+        }
         if ((job->flags & FLUX_JOB_WAITABLE))
             wait_notify_active (ctx->wait, job);
         if (ctx->max_jobid < job->id)
@@ -274,11 +259,25 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
 
         job = zlistx_next (newjobs);
     }
+    /* Attach response to commit batch, to maintain the invariant that the
+     * job ID is only returned to the user after the submit event is committed.
+     */
+    if (!(response = flux_response_derive (msg, 0))
+        || flux_msg_pack (response, "{s:O}", "errors", errors) < 0
+        || event_batch_respond (ctx->event, response) < 0) {
+        flux_log_error (h, "error enqueuing response to submit request");
+        goto error;
+    }
+    flux_msg_decref (response);
+    json_decref (errors);
     zlistx_destroy (&newjobs);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
+    flux_msg_decref (response);
+    json_decref (errors);
+    zlistx_destroy (&newjobs);
 }
 
 static void submit_admin_cb (flux_t *h, flux_msg_handler_t *mh,

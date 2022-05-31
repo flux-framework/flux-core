@@ -92,14 +92,6 @@ test_expect_success 'job-ingest: job announced to job manager' '
 	grep -q "\"userid\":$(id -u)" jobman.out
 '
 
-test_expect_success 'job-ingest: submit event logged with userid, urgency' '
-	jobid=$(flux job submit --urgency=11 basic.json) &&
-	kvspath=`flux job id --to=kvs ${jobid}` &&
-	flux kvs eventlog get ${kvspath}.eventlog |grep submit >eventlog.out &&
-	grep -q "\"urgency\":11" eventlog.out &&
-	grep -q "\"userid\":$(id -u)" eventlog.out
-'
-
 test_expect_success 'job-ingest: instance owner can submit urgency=31' '
 	flux job submit --urgency=31 basic.json
 '

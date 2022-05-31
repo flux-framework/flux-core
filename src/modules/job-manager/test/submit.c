@@ -69,12 +69,11 @@ void single_job_check (zhashx_t *active_jobs)
     newjobs_saved = zlistx_dup (newjobs);
 
     /* resubmit orig job */
-    ok (submit_hash_jobs (active_jobs, newjobs) == 0,
-        "submit_hash_jobs with duplicates works");
+    errno = 0;
+    ok (submit_hash_jobs (active_jobs, newjobs) < 0 && errno == EEXIST,
+        "submit_hash_jobs with duplicate fails");
     ok (zhashx_size (active_jobs) == 1,
-        "but hash contains one job");
-    ok (zlistx_size (newjobs) == 0,
-        "and newjobs now has zero jobs");
+        "the hash still contains one job");
 
     /* clean up (batch submit error path) */
     submit_add_jobs_cleanup (active_jobs, newjobs_saved); // destroys newjobs
