@@ -42,6 +42,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 
@@ -765,10 +766,10 @@ static int event_job_cache (struct event *event,
     return job_event_id_set (job, id);
 }
 
-int event_job_post_entry (struct event *event,
-                          struct job *job,
-                          int flags,
-                          json_t *entry)
+int event_job_process_entry (struct event *event,
+                             struct job *job,
+                             int flags,
+                             json_t *entry)
 {
     int rc;
     flux_job_state_t old_state = job->state;
@@ -847,6 +848,40 @@ int event_job_post_entry (struct event *event,
     rc = event_job_action (event, job);
     job_decref (job);
     return rc;
+}
+
+static int event_job_post_deferred (struct event *event, struct job *job)
+{
+    int flags;
+    json_t *entry;
+
+    while (job_event_peek (job, &flags, &entry) == 0) {
+        if (event_job_process_entry (event, job, flags, entry) < 0) {
+            int saved_errno = errno;
+            while (job_event_dequeue (job, NULL, NULL) == 0)
+                ;
+            errno = saved_errno;
+            return -1;
+        }
+        job_event_dequeue (job, NULL, NULL);
+    }
+    return 0;
+}
+
+/* Since event_job_process_entry() might call event_job_post_*() to post
+ * new events, use job->event_queue to ensure events are processed in order
+ * and unnecessary recursion is avoided.
+ */
+int event_job_post_entry (struct event *event,
+                          struct job *job,
+                          int flags,
+                          json_t *entry)
+{
+    if (job_event_enqueue (job, flags, entry) < 0)
+        return -1;
+    if (json_array_size (job->event_queue) > 1)
+        return 0; // break recursion
+    return event_job_post_deferred (event, job);
 }
 
 int event_job_post_vpack (struct event *event,
