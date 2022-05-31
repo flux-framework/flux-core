@@ -859,10 +859,6 @@ int event_job_post_vpack (struct event *event,
     int saved_errno;
     int rc;
 
-    if (job->state == FLUX_JOB_STATE_NEW) {
-        errno = EAGAIN;
-        return -1;
-    }
     if (!(entry = eventlog_entry_vpack (0., name, context_fmt, ap)))
         return -1;
     rc = event_job_post_entry (event, job, name, flags, entry);
