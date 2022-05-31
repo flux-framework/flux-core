@@ -15,6 +15,7 @@
 #include <flux/core.h>
 
 #include "src/common/libtap/tap.h"
+#include "src/common/libeventlog/eventlog.h"
 #include "src/modules/job-manager/job.h"
 
 void test_create (void)
@@ -364,6 +365,119 @@ static void test_event_id_cache (void)
     job_decref (job);
 }
 
+static void test_event_queue (void)
+{
+    struct job *job = job_create ();
+    int flags;
+    json_t *entry;
+    const char *name;
+    json_t *context;
+    int i;
+    char dbuf[128];
+
+    if (!job)
+        BAIL_OUT ("job_create failed");
+
+    if (json_array_append (job->event_queue, json_null ()) < 0)
+        BAIL_OUT ("could not enqueue bad event entry");
+    errno = 0;
+    ok (job_event_peek (job, &flags, &entry) < 0 && errno == EPROTO,
+        "job_event_peek fails with EPROTO on badly wrapped eventlog entry");
+    errno = 0;
+    ok (job_event_dequeue (job, &flags, &entry) < 0 && errno == EPROTO,
+        "job_event_dequeue fails with EPROTO on badly wrapped eventlog entry");
+    json_array_remove (job->event_queue, 0);
+
+    errno = 0;
+    ok (job_event_peek (job, &flags, &entry) < 0 && errno == ENOENT,
+        "job_event_peek fails with ENOENT when there are no events");
+    ok (job_event_is_queued (job, "foo") == false,
+        "job_event_is_queued foo returns false");
+    /* Post two test events
+     */
+    entry = eventlog_entry_pack (0.,
+                                 "foo",
+                                 "{s:i}",
+                                 "bar", 42);
+    if (!entry)
+        BAIL_OUT ("eventlog_entry_pack failed");
+    ok (job_event_enqueue (job, 42, entry) == 0,
+        "job_event_enqueue works");
+    json_decref (entry);
+    diag ("queue: %s", job_event_queue_print (job, dbuf, sizeof (dbuf)));
+    ok (json_array_size (job->event_queue) == 1,
+        "queue size is 1");
+    ok (job_event_is_queued (job, "foo") == true,
+        "job_event_is_queued foo returns true");
+    entry = eventlog_entry_pack (0.,
+                                 "bar",
+                                 "{s:i}",
+                                 "baz", 43);
+    if (!entry)
+        BAIL_OUT ("eventlog_entry_pack failed");
+    ok (job_event_enqueue (job, 43, entry) == 0,
+        "job_event_enqueue works");
+    json_decref (entry);
+    diag ("queue: %s", job_event_queue_print (job, dbuf, sizeof (dbuf)));
+    ok (json_array_size (job->event_queue) == 2,
+        "queue size is 2");
+    ok (job_event_is_queued (job, "bar") == true,
+        "job_event_is_queued bar returns true");
+    /* Check the first event
+     */
+    flags = 0;
+    entry = NULL;
+    ok (job_event_peek (job, &flags, &entry) == 0,
+        "job_event_peek works");
+    ok (eventlog_entry_parse (entry, NULL, &name, &context) == 0
+        && !strcmp (name, "foo")
+        && json_unpack (context, "{s:i}", "bar", &i) == 0
+        && i == 42,
+        "eventlog entry is correct");
+    ok (flags == 42,
+        "flags are correct");
+    ok (json_array_size (job->event_queue) == 2,
+        "queue size is still 2");
+    flags = 0;
+    entry = NULL;
+    ok (job_event_dequeue (job, &flags, &entry) == 0,
+        "job_event_dequeue with NULL args works");
+    diag ("queue: %s", job_event_queue_print (job, dbuf, sizeof (dbuf)));
+    ok (json_array_size (job->event_queue) == 1,
+        "queue size is now 1");
+    ok (eventlog_entry_parse (entry, NULL, &name, &context) == 0
+        && !strcmp (name, "foo")
+        && json_unpack (context, "{s:i}", "bar", &i) == 0
+        && i == 42,
+        "eventlog entry is correct");
+    ok (flags == 42,
+        "flags are correct");
+    json_decref (entry);
+    ok (json_array_size (job->event_queue) == 1,
+        "queue size is now 1");
+    /* Check the second event
+     */
+    flags = 0;
+    entry = NULL;
+    ok (job_event_peek (job, &flags, &entry) == 0,
+        "job_event_peek works");
+    ok (eventlog_entry_parse (entry, NULL, &name, &context) == 0
+        && !strcmp (name, "bar")
+        && json_unpack (context, "{s:i}", "baz", &i) == 0
+        && i == 43,
+        "eventlog entry is correct");
+    ok (flags == 43,
+        "flags are correct");
+    ok (json_array_size (job->event_queue) == 1,
+        "queue size is still 1");
+    ok (job_event_dequeue (job, NULL, NULL) == 0,
+        "job_event_dequeue with NULL args works");
+    ok (json_array_size (job->event_queue) == 0,
+        "queue size is now 0");
+
+    job_decref (job);
+}
+
 int main (int argc, char *argv[])
 {
     plan (NO_PLAN);
@@ -373,6 +487,7 @@ int main (int argc, char *argv[])
     test_create_from_json ();
     test_subscribe ();
     test_event_id_cache ();
+    test_event_queue ();
 
     done_testing ();
 }

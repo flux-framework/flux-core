@@ -42,6 +42,7 @@ void job_decref (struct job *job)
         subscribers_destroy (job);
         free (job->events);
         aux_destroy (&job->aux);
+        json_decref (job->event_queue);
         free (job);
         errno = saved_errno;
     }
@@ -61,16 +62,21 @@ struct job *job_create (void)
 
     if (!(job = calloc (1, sizeof (*job))))
         return NULL;
-    if (!(job->events = bitmap_alloc0 (EVENTS_BITMAP_SIZE))) {
-        job_decref (job);
-        return NULL;
-    }
+    if (!(job->events = bitmap_alloc0 (EVENTS_BITMAP_SIZE)))
+        goto error;
     job->refcount = 1;
     job->userid = FLUX_USERID_UNKNOWN;
     job->urgency = FLUX_JOB_URGENCY_DEFAULT;
     job->priority = -1;
     job->state = FLUX_JOB_STATE_NEW;
+    if (!(job->event_queue = json_array ())) {
+        errno = ENOMEM;
+        goto error;
+    }
     return job;
+error:
+    job_decref (job);
+    return NULL;
 }
 
 int job_dependency_count (struct job *job)
@@ -424,6 +430,102 @@ int job_event_id_test (struct job *job, int id)
     if (bitmap_test_bit (job->events, id))
         return 1;
     return 0;
+}
+
+int job_event_enqueue (struct job *job, int flags, json_t *entry)
+{
+    json_t *wrap;
+
+    if (!(wrap = json_pack ("{s:i s:O}",
+                            "flags", flags,
+                            "entry", entry))
+        || json_array_append_new (job->event_queue, wrap) < 0) {
+        json_decref (wrap);
+        errno = ENOMEM;
+        return -1;
+    }
+    return 0;
+}
+
+int job_event_peek (struct job *job, int *flagsp, json_t **entryp)
+{
+    json_t *wrap;
+    json_t *entry;
+    int flags;
+
+    if (!(wrap = json_array_get (job->event_queue, 0))) {
+        errno = ENOENT;
+        return -1; // queue empty
+    }
+    if (json_unpack (wrap,
+                     "{s:i s:o}",
+                     "flags", &flags,
+                     "entry", &entry) < 0) {
+        errno = EPROTO;
+        return -1;
+    }
+    if (entryp)
+        *entryp = entry;
+    if (flagsp)
+        *flagsp = flags;
+    return 0;
+}
+
+int job_event_dequeue (struct job *job, int *flagsp, json_t **entryp)
+{
+    json_t *entry;
+    int flags;
+
+    if (job_event_peek (job, &flags, &entry) < 0)
+        return -1;
+    if (entryp)
+        *entryp = json_incref (entry);
+    if (flagsp)
+        *flagsp = flags;
+    json_array_remove (job->event_queue, 0);
+    return 0;
+}
+
+bool job_event_is_queued (struct job *job, const char *name)
+{
+    size_t index;
+    json_t *wrap;
+    json_t *entry;
+    const char *entry_name;
+
+    json_array_foreach (job->event_queue, index, wrap) {
+        if (json_unpack (wrap, "{s:o}", "entry", &entry) == 0
+            && eventlog_entry_parse (entry, NULL, &entry_name, NULL) == 0
+            && streq (entry_name, name))
+            return true;
+    }
+    return false;
+}
+
+const char *job_event_queue_print (struct job *job, char *buf, int size)
+{
+    size_t index;
+    json_t *wrap;
+    json_t *entry;
+    const char *name;
+    size_t used = 0;
+    size_t n;
+
+    buf[0] = '\0';
+    json_array_foreach (job->event_queue, index, wrap) {
+        if (json_unpack (wrap, "{s:o}", "entry", &entry) < 0
+            || eventlog_entry_parse (entry, NULL, &name, NULL) < 0)
+            name = "unknown";
+        n = snprintf (buf + used,
+                      size - used,
+                      "%s%s",
+                      index > 0 ? "/" : "",
+                      name);
+        if (n >= size - used)
+            break;
+        used += n;
+    }
+    return buf;
 }
 
 /*
