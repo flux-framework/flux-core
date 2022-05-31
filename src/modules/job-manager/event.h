@@ -71,7 +71,6 @@ int event_job_post_vpack (struct event *event,
 
 int event_job_post_entry (struct event *event,
                           struct job *job,
-                          const char *name,
                           int flags,
                           json_t *entry);
 

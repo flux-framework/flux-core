@@ -133,7 +133,7 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
     if (!entry)
         return -1;
 
-    rv = event_job_post_entry (ctx->event, job, "submit", 0, entry);
+    rv = event_job_post_entry (ctx->event, job, 0, entry);
     ERRNO_SAFE_WRAP (json_decref, entry);
     return rv;
 }
