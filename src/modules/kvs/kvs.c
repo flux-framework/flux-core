@@ -113,6 +113,7 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
+    ctx->h = h;
     if (!(ctx->hash_name = flux_attr_get (h, "content.hash"))) {
         flux_log_error (h, "getattr content.hash");
         goto error;
@@ -121,8 +122,7 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
         goto error;
     if (!(ctx->krm = kvsroot_mgr_create (ctx->h, ctx)))
         goto error;
-    ctx->h = h;
-    if (flux_get_rank (h, &ctx->rank) < 0)
+    if (flux_get_rank (ctx->h, &ctx->rank) < 0)
         goto error;
     if (ctx->rank == 0) {
         ctx->prep_w = flux_prepare_watcher_create (r, transaction_prep_cb, ctx);
