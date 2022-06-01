@@ -620,6 +620,12 @@ static flux_subprocess_t * flux_exec_wrap (flux_t *h, flux_reactor_t *r, int fla
         return NULL;
     }
 
+    /* user required to set some args */
+    if (!flux_cmd_argc (cmd)) {
+        errno = EINVAL;
+        goto error;
+    }
+
     if (!(p = subprocess_create (h, r, flags, cmd, ops, hooks, -1, true)))
         goto error;
 

@@ -178,6 +178,9 @@ void test_basic_errors (flux_reactor_t *r)
 
     ok ((cmd = flux_cmd_create (0, avbad, NULL)) != NULL,
         "flux_cmd_create with 0 args works");
+    ok (flux_local_exec (r, 0, cmd, NULL, NULL) == NULL
+        && errno == EINVAL,
+        "flux_local_exec fails with cmd with zero args");
     ok (flux_rexec (h, 0, 0, cmd, NULL) == NULL
         && errno == EINVAL,
         "flux_rexec fails with cmd with zero args");
