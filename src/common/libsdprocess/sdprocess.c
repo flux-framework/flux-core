@@ -324,9 +324,10 @@ error:
     return -1;
 }
 
-static int set_property_CPUAffinity (sdprocess_t *sdp,
-                                     sd_bus_message *m,
-                                     const char *value)
+static int set_property_cpuset (sdprocess_t *sdp,
+                                sd_bus_message *m,
+                                const char *property,
+                                const char *value)
 {
     uint8_t *bitmask = NULL;
     size_t bitmask_len;
@@ -340,7 +341,7 @@ static int set_property_CPUAffinity (sdprocess_t *sdp,
 
     if ((ret = sd_bus_message_append_basic (m,
                                             SD_BUS_TYPE_STRING,
-                                            "CPUAffinity")) < 0)
+                                            property)) < 0)
         goto error;
 
     if ((ret = sd_bus_message_open_container (m, 'v', "ay")) < 0)
@@ -359,7 +360,7 @@ static int set_property_CPUAffinity (sdprocess_t *sdp,
     return 0;
 
 error:
-    set_errno_log (sdp->h, ret, "error setting CPUAffinity property");
+    set_errno_log (sdp->h, ret, "error setting cpuset property");
     free (bitmask);
     return -1;
 }
@@ -396,7 +397,11 @@ static int transient_service_parse_user_property (sdprocess_t *sdp,
 
     /* N.B. for consistency to systemd, properties are case sensitive */
     if (!strcmp (property, "CPUAffinity")) {
-        if (set_property_CPUAffinity (sdp, m, value) < 0)
+        if (set_property_cpuset (sdp, m, property, value) < 0)
+            goto error;
+    }
+    else if (!strcmp (property, "AllowedCPUs")) {
+        if (set_property_cpuset (sdp, m, property, value) < 0)
             goto error;
     }
     else {
