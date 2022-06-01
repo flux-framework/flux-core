@@ -64,6 +64,7 @@ typedef int (*sdprocess_list_f) (flux_t *h,
  *
  * Current properties supported:
  * - CPUAffinity=<flux idset> (N.B. input different than systemd)
+ * - AllowedCPUs=<flux idset> (N.B. input different than systemd)
  *
  * Properties not allowed due to internal use:
  * - RemainAfterExit
