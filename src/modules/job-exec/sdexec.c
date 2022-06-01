@@ -30,6 +30,11 @@
  * Based on the cores listed in R, set CPU affinity in the launched
  * process via the systemd CPUAffinity property.
  *
+ * cpu_set_allowed = true
+ *
+ * Based on the cores listed in R, set allowed CPUs in the launched
+ * process via the systemd CPUAffinity property.
+ *
  * The following configurations are supported under
  * attributes.system.exec.sd in the jobspec.
  *
@@ -226,7 +231,8 @@ static int rank_in_idset (const char *idset_str,
     return 0;
 }
 
-static char *hwloc_cpuset_2_systemd_property (hwloc_cpuset_t set)
+static char *hwloc_cpuset_2_systemd_property (hwloc_cpuset_t set,
+                                              const char *property)
 {
     char *str = NULL;
     size_t str_index = 0;
@@ -248,8 +254,9 @@ static char *hwloc_cpuset_2_systemd_property (hwloc_cpuset_t set)
         }
         len = snprintf (str + str_index,
                         str_len - str_index,
-                        "%s%d",
-                        str_index ? "," : "CPUAffinity=",
+                        "%s%s%d",
+                        str_index ? "," : property,
+                        str_index ? "" : "=",
                         i);
         assert (len < (str_len - str_index));
         str_index += len;
@@ -263,8 +270,9 @@ error:
     return NULL;
 }
 
-static char *CPUAffinity_list (struct jobinfo *job,
-                               const char *cores)
+static char *cpuset_list (struct jobinfo *job,
+                          const char *property,
+                          const char *cores)
 {
     hwloc_topology_t topo = NULL;
     hwloc_cpuset_t coreset = NULL;
@@ -315,7 +323,7 @@ static char *CPUAffinity_list (struct jobinfo *job,
         i = hwloc_bitmap_next (coreset, i);
     }
 
-    rv = hwloc_cpuset_2_systemd_property (puset);
+    rv = hwloc_cpuset_2_systemd_property (puset, property);
 error:
     if (topo)
         hwloc_topology_destroy (topo);
@@ -326,7 +334,7 @@ error:
     return rv;
 }
 
-static char *sdexec_CPUAffinity (struct jobinfo *job)
+static char *sdexec_cpuset (struct jobinfo *job, const char *property)
 {
     const json_t *R_lite;
     json_t *entry;
@@ -367,25 +375,28 @@ static char *sdexec_CPUAffinity (struct jobinfo *job)
         flux_log (job->h, LOG_ERR, "cores for rank %u not found in R", myrank);
         return NULL;
     }
-    return CPUAffinity_list (job, cores);
+    return cpuset_list (job, property, cores);
 }
 
 static int sdexec_setup_properties (struct sdexec *se, struct jobinfo *job)
 {
     /* currently supported properties
      * - CPUAffinity
+     * - AllowedCPUs
      */
     char **properties = NULL;
     flux_error_t err;
     int cpu_set_affinity = 0;
+    int cpu_set_allowed = 0;
     int properties_len = 0;
     int index = 0;
 
     if (flux_conf_unpack (flux_get_conf (se->h),
                           &err,
-                          "{s?:{s?:{s?b}}}",
+                          "{s?:{s?:{s?b s?b}}}",
                           "exec", "systemd",
-                            "cpu_set_affinity", &cpu_set_affinity) < 0) {
+                            "cpu_set_affinity", &cpu_set_affinity,
+                            "cpu_set_allowed", &cpu_set_allowed) < 0) {
         flux_log (se->h, LOG_ERR,
                   "error reading systemd config: %s",
                   err.text);
@@ -393,6 +404,8 @@ static int sdexec_setup_properties (struct sdexec *se, struct jobinfo *job)
     }
 
     if (cpu_set_affinity)
+        properties_len++;
+    if (cpu_set_allowed)
         properties_len++;
 
     if (!properties_len) {
@@ -407,7 +420,11 @@ static int sdexec_setup_properties (struct sdexec *se, struct jobinfo *job)
         return -1;
 
     if (cpu_set_affinity) {
-        if (!(properties[index++] = sdexec_CPUAffinity (job)))
+        if (!(properties[index++] = sdexec_cpuset (job, "CPUAffinity")))
+            goto error;
+    }
+    if (cpu_set_allowed) {
+        if (!(properties[index++] = sdexec_cpuset (job, "AllowedCPUs")))
             goto error;
     }
 
