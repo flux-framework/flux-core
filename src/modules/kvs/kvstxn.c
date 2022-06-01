@@ -833,6 +833,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
         return KVSTXN_PROCESS_ERROR;
     }
 
+    /* Only exit the loop by returning from the function */
     while (1) {
         if (kt->state == KVSTXN_STATE_INIT
             || kt->state == KVSTXN_STATE_LOAD_ROOT) {
@@ -841,8 +842,10 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
             struct cache_entry *entry;
 
             /* Caller didn't call kvstxn_iter_missing_refs() */
-            if (zlist_first (kt->missing_refs_list))
-                goto stall_load;
+            if (zlist_first (kt->missing_refs_list)) {
+                kt->blocked = 1;
+                return KVSTXN_PROCESS_LOAD_MISSING_REFS;
+            }
 
             kt->state = KVSTXN_STATE_LOAD_ROOT;
 
@@ -853,7 +856,8 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
                     kt->errnum = errno;
                     return KVSTXN_PROCESS_ERROR;
                 }
-                goto stall_load;
+                kt->blocked = 1;
+                return KVSTXN_PROCESS_LOAD_MISSING_REFS;
             }
 
             if (!(kt->rootdir = cache_entry_get_treeobj (entry))) {
@@ -891,8 +895,10 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
             bool append = false;
 
             /* Caller didn't call kvstxn_iter_missing_refs() */
-            if (zlist_first (kt->missing_refs_list))
-                goto stall_load;
+            if (zlist_first (kt->missing_refs_list)) {
+                kt->blocked = 1;
+                return KVSTXN_PROCESS_LOAD_MISSING_REFS;
+            }
 
             for (i = 0; i < len; i++) {
                 missing_ref = NULL;
@@ -939,7 +945,8 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
                         return KVSTXN_PROCESS_ERROR;
                     }
                 }
-                goto stall_load;
+                kt->blocked = 1;
+                return KVSTXN_PROCESS_LOAD_MISSING_REFS;
             }
 
             kt->state = KVSTXN_STATE_STORE;
@@ -994,8 +1001,10 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
         }
         else if (kt->state == KVSTXN_STATE_GENERATE_KEYS) {
             /* Caller didn't call kvstxn_iter_dirty_cache_entries() */
-            if (zlist_first (kt->dirty_cache_entries_list))
-                goto stall_store;
+            if (zlist_first (kt->dirty_cache_entries_list)) {
+                kt->blocked = 1;
+                return KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES;
+            }
 
             /* now generate keys for setroot */
             if (!(kt->keys = keys_from_ops (kt->ops))) {
@@ -1006,7 +1015,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
             kt->state = KVSTXN_STATE_FINISHED;
         }
         else if (kt->state == KVSTXN_STATE_FINISHED) {
-            break;
+            return KVSTXN_PROCESS_FINISHED;
         }
         else {
             flux_log (kt->ktm->h, LOG_ERR, "invalid kvstxn state: %d", kt->state);
@@ -1015,15 +1024,8 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
         }
     }
 
-    return KVSTXN_PROCESS_FINISHED;
-
- stall_load:
-    kt->blocked = 1;
-    return KVSTXN_PROCESS_LOAD_MISSING_REFS;
-
- stall_store:
-    kt->blocked = 1;
-    return KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES;
+    /* UNREACHABLE */
+    return KVSTXN_PROCESS_ERROR;
 }
 
 int kvstxn_iter_missing_refs (kvstxn_t *kt, kvstxn_ref_f cb, void *data)
