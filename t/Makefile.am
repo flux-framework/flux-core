@@ -374,6 +374,7 @@ dist_check_SCRIPTS = \
 	job-exec/dummy.sh \
 	job-exec/imp.sh \
 	job-exec/imp-fail.sh \
+	job-exec/idset2bitmask.py \
 	job-list/list-id.py \
 	job-list/list-rpc.py \
 	job-list/job-list-helper.sh \
