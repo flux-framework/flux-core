@@ -457,6 +457,29 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+
+static bool alloc_work_available (struct job_manager *ctx)
+{
+    struct job *job;
+
+    if (ctx->alloc->disable) // 'flux queue stop' disabled scheduling
+        return false;
+    if (!ctx->alloc->ready) // scheduler protocol is not ready for alloc
+        return false;
+    if (!(job = zlistx_first (ctx->alloc->queue))) // queue is empty
+        return false;
+    if (ctx->alloc->alloc_limit > 0 // alloc limit reached
+        && ctx->alloc->alloc_pending_count >= ctx->alloc->alloc_limit)
+        return false;
+    /* The alloc->queue is sorted from highest to lowest priority, so if the
+     * first job has priority=MIN (held), all other jobs must have the same
+     * priority, and no alloc requests can be sent.
+     */
+    if (job->priority == FLUX_JOB_PRIORITY_MIN)
+        return false;
+    return true;
+}
+
 /* prep:
  * Runs right before reactor calls poll(2).
  * If a job can be scheduled, start idle watcher.
@@ -465,21 +488,9 @@ static void prep_cb (flux_reactor_t *r, flux_watcher_t *w,
                      int revents, void *arg)
 {
     struct job_manager *ctx = arg;
-    struct alloc *alloc = ctx->alloc;
-    struct job *job;
 
-    if (!alloc->ready || alloc->disable)
-        return;
-    if (alloc->alloc_limit
-        && alloc->alloc_pending_count >= alloc->alloc_limit)
-        return;
-   /* The queue is sorted from highest to lowest priority, so if the
-    * first job has priority=MIN, all other jobs must have the same priority,
-    * and no alloc requests can be sent.
-    */
-    if ((job = zlistx_first (alloc->queue))
-        && job->priority != FLUX_JOB_PRIORITY_MIN)
-        flux_watcher_start (alloc->idle);
+    if (alloc_work_available (ctx))
+        flux_watcher_start (ctx->alloc->idle);
 }
 
 /* check:
@@ -494,37 +505,36 @@ static void check_cb (flux_reactor_t *r, flux_watcher_t *w,
     struct job *job;
 
     flux_watcher_stop (alloc->idle);
-    if (!alloc->ready || alloc->disable)
-        return;
-    if (alloc->alloc_limit
-        && alloc->alloc_pending_count >= alloc->alloc_limit)
-        return;
-   /* The queue is sorted from highest to lowest priority, so if the
-    * first job has priority=MIN, all other jobs must have the same priority,
-    * and no alloc requests can be sent.
-    */
-    if ((job = zlistx_first (alloc->queue))
-        && job->priority != FLUX_JOB_PRIORITY_MIN) {
-        bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
-        if (alloc_request (alloc, job) < 0) {
-            flux_log_error (ctx->h, "alloc_request fatal error");
-            flux_reactor_stop_error (flux_get_reactor (ctx->h));
-            return;
-        }
-        zlistx_delete (alloc->queue, job->handle);
-        job->handle = NULL;
-        job->alloc_pending = 1;
-        job->alloc_queued = 0;
-        alloc->alloc_pending_count++;
-        if (alloc->alloc_limit) {
-            if (!(job->handle = zlistx_insert (alloc->pending_jobs, job, fwd)))
-                flux_log (ctx->h, LOG_ERR, "failed to enqueue pending job");
-        }
-        if ((job->flags & FLUX_JOB_DEBUG))
-            (void)event_job_post_pack (ctx->event, job,
-                                       "debug.alloc-request", 0, NULL);
 
+    if (!alloc_work_available (ctx))
+        return;
+
+    job = zlistx_first (alloc->queue);
+
+    if (alloc_request (alloc, job) < 0) {
+        flux_log_error (ctx->h, "alloc_request fatal error");
+        flux_reactor_stop_error (flux_get_reactor (ctx->h));
+        return;
     }
+    zlistx_delete (alloc->queue, job->handle);
+    job->handle = NULL;
+    job->alloc_pending = 1;
+    job->alloc_queued = 0;
+    alloc->alloc_pending_count++;
+    /* Add job to alloc->pending_jobs if there is an alloc limit, so
+     * that those requests can be canceled if the queue is reprioritized
+     * and higher priority requests need to preempt lower priority ones.
+     */
+    if (alloc->alloc_limit) {
+        bool fwd = job->priority > (FLUX_JOB_PRIORITY_MAX / 2);
+        if (!(job->handle = zlistx_insert (alloc->pending_jobs, job, fwd)))
+            flux_log (ctx->h, LOG_ERR, "failed to enqueue pending job");
+    }
+    /* Post event for debugging if job was submitted FLUX_JOB_DEBUG flag.
+     */
+    if ((job->flags & FLUX_JOB_DEBUG))
+        (void)event_job_post_pack (ctx->event, job,
+                                   "debug.alloc-request", 0, NULL);
 }
 
 /* called from event_job_action() FLUX_JOB_STATE_CLEANUP */
