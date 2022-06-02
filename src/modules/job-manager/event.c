@@ -769,13 +769,16 @@ static int event_job_cache (struct event *event,
 
 int event_job_post_entry (struct event *event,
                           struct job *job,
-                          const char *name,
                           int flags,
                           json_t *entry)
 {
     int rc;
     flux_job_state_t old_state = job->state;
     int eventlog_seq = job->eventlog_seq;
+    const char *name;
+
+    if (eventlog_entry_parse (entry, NULL, &name, NULL) < 0)
+        return -1;
 
     /*  Journal event sequence should match actual sequence of events
      *   in the job eventlog, so set eventlog_seq to -1 with
@@ -859,13 +862,9 @@ int event_job_post_vpack (struct event *event,
     int saved_errno;
     int rc;
 
-    if (job->state == FLUX_JOB_STATE_NEW) {
-        errno = EAGAIN;
-        return -1;
-    }
     if (!(entry = eventlog_entry_vpack (0., name, context_fmt, ap)))
         return -1;
-    rc = event_job_post_entry (event, job, name, flags, entry);
+    rc = event_job_post_entry (event, job, flags, entry);
 
     saved_errno = errno;
     json_decref (entry);
