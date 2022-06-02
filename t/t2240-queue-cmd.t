@@ -106,8 +106,8 @@ test_expect_success 'flux-queue: status reports reason for stop' '
 	test_cmp status.exp status.out
 '
 
-test_expect_success 'flux-queue: submit 3 jobs' '
-	for i in $(seq 1 3); do flux mini submit /bin/true; done
+test_expect_success 'flux-queue: submit some jobs' '
+	flux mini submit --cc 1-3 --wait-event=priority /bin/true
 '
 
 test_expect_success 'flux-queue: start scheduling' '
