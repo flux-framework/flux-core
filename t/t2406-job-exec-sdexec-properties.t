@@ -35,6 +35,18 @@ fi
 
 corecount=`hwloc-bind --get | hwloc-calc --number-of core | tail -n 1`
 test ${corecount} = 1 || test_set_prereq MULTICORE
+if mount | grep cgroup2
+then
+    test_set_prereq CGROUP2
+fi
+
+delegations=`systemctl show ${userservice} | grep DelegateControllers`
+if echo ${delegations} | grep cpuset
+then
+    test_set_prereq CPUSET
+fi
+
+IDSET2BITMASK="flux python ${FLUX_SOURCE_DIR}/t/job-exec/idset2bitmask.py"
 
 # arg1 jobid
 jobid2unitname() {
@@ -53,20 +65,31 @@ get_cpuaffinity() {
     echo "0x${cpuaffinity}"
 }
 
-# arg1 - cpubind info
-# arg2 - expected number of processor units with affinity
-validate_affinity() {
-    cpubind=$1
+# arg1 - jobid
+get_cpusallowed() {
+    jobid=$1
+    unitname=`jobid2unitname ${jobid}`
+    cgroupsuffix=`systemctl show --property ControlGroup --user --value ${unitname}`
+    cgrouppath="/sys/fs/cgroup/${cgroupsuffix}"
+    cpuset=`cat ${cgrouppath}/cpuset.cpus`
+    cpusallowed=`${IDSET2BITMASK} ${cpuset}`
+    echo ${cpusallowed}
+}
+
+# arg1 - cpu bitmask
+# arg2 - expected number of processor units with bitmask
+validate_cpuset() {
+    cpubitmask=$1
     expected=$2
 
-    pu_count=`echo ${cpubind} | hwloc-calc --number-of pu | tail -n 1`
+    pu_count=`echo ${cpubitmask} | hwloc-calc --number-of pu | tail -n 1`
     if [ "${pu_count}" = "${expected}" ]
     then
         return 0
     fi
     # Possible pu_count > expected b/c of hyperthreading and similar
     # effects so check core count
-    core_count=`echo ${cpubind} | hwloc-calc --number-of core | tail -n 1`
+    core_count=`echo ${cpubitmask} | hwloc-calc --number-of core | tail -n 1`
     if [ ${pu_count} > ${core_count} ] \
         && [ "${core_count}" = "${expected}" ]
     then
@@ -75,6 +98,9 @@ validate_affinity() {
     return 1
 }
 
+#
+# CPUAffinity
+#
 test_expect_success 'job-exec: config sdexec and cpu_set_affinity' '
         cat >exec.toml <<EOF &&
 [exec]
@@ -104,7 +130,7 @@ test_expect_success 'job-exec: cpu_set_affinity (1 core)' '
         cpubind=`get_cpuaffinity ${jobid}` &&
         flux job cancel ${jobid} &&
         flux job wait-event -t 30 $jobid clean &&
-        validate_affinity ${cpubind} 1
+        validate_cpuset ${cpubind} 1
 '
 test_expect_success MULTICORE 'job-exec: cpu_set_affinity (2 core)' '
         jobid=$(flux mini submit -n2 \
@@ -114,7 +140,37 @@ test_expect_success MULTICORE 'job-exec: cpu_set_affinity (2 core)' '
         cpubind=`get_cpuaffinity ${jobid}` &&
         flux job cancel ${jobid} &&
         flux job wait-event -t 30 $jobid clean &&
-        validate_affinity ${cpubind} 2
+        validate_cpuset ${cpubind} 2
+'
+#
+# AllowedCPUs
+#
+test_expect_success CGROUP2,CPUSET 'job-exec: config sdexec and cpu_set_allowed' '
+        cat >exec.toml <<EOF &&
+[exec]
+method = "systemd"
+
+[exec.systemd]
+cpu_set_allowed = true
+EOF
+        flux config reload &&
+        flux module reload job-exec
+'
+test_expect_success CGROUP2,CPUSET 'job-exec: cpu_set_allowed (1 core)' '
+        jobid=$(flux mini submit -n1 sleep 60) &&
+        flux job wait-event -t 30 $jobid start &&
+        cpusallowed=`get_cpusallowed ${jobid}` &&
+        flux job cancel ${jobid} &&
+        flux job wait-event -t 30 $jobid clean &&
+        validate_cpuset ${cpusallowed} 1
+'
+test_expect_success MULTICORE,CGROUP2,CPUSET 'job-exec: cpu_set_allowed (2 core)' '
+        jobid=$(flux mini submit -n2 sleep 60) &&
+        flux job wait-event -t 30 $jobid start &&
+        cpusallowed=`get_cpusallowed ${jobid}` &&
+        flux job cancel ${jobid} &&
+        flux job wait-event -t 30 $jobid clean &&
+        validate_cpuset ${cpusallowed} 2
 '
 
 test_done
