@@ -697,7 +697,7 @@ static void cancel_all_pending (struct alloc *alloc)
 }
 
 /* Control resource allocation (query/start/stop).
- * If 'query_only' is true, report allocaction status without altering it.
+ * If 'query_only' is true, report allocation status without altering it.
  * Otherwise update the alloc->disable flag, and for disable only,
  * optionally set alloc->disable_reason.
  *
