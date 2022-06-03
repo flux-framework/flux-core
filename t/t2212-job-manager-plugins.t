@@ -367,7 +367,7 @@ test_expect_success 'job-manager: plugin can reject some jobs in a batch' '
 	grep "Job had reject_id" validate-plugin.out &&
 	test 4 -eq $(grep -c foo validate-plugin.out)
 '
-test_expect_success 'job-manager: plugin can manage depedencies' '
+test_expect_success 'job-manager: plugin can manage dependencies' '
 	cat <<-EOF >dep-remove.py &&
 	import flux
 	from flux.job import JobID
