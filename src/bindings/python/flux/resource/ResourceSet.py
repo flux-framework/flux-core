@@ -18,25 +18,26 @@ from flux.resource.ResourceSetImplementation import ResourceSetImplementation
 
 # pylint: disable=too-many-public-methods
 class ResourceSet:
+    """
+    ResourceSet object constructor.
+
+    :param arg: Argument from which to construct a ResourceSet. `arg`
+                may be a serialized R string, a decoded Mapping of
+                an R string, or a valid ResourceSet implementation
+                (an instance of ResourceSetImplementation)
+
+    :param version: R specification version
+
+    :raises TypeError: A ResourceSet cannot be instantiated from arg
+    :raises ValueError: Invalid R version, or invalid R encoding
+    :raises KeyError: arg was a dict without a 'version' key
+    :raises json.decoder.JSONDecodeError: `arg` is an Invalid JSON string
+
+    All parameters are optional. ResourceSet() will initialize an
+    empty, version 1 ResourceSet object.
+    """
+
     def __init__(self, arg=None, version=1):
-        """
-        ResourceSet object constructor.
-
-        :param arg: Argument from which to construct a ResourceSet. `arg`
-                    may be a serialized R string, a decoded Mapping of
-                    an R string, or a valid ResourceSet implementation
-                    (an instance of ResourceSetImplementation)
-
-        :param version: R specification version
-
-        :raises TypeError: A ResourceSet cannot be instantiated from arg
-        :raises ValueError: Invalid R version, or invalid R encoding
-        :raises KeyError: arg was a dict without a 'version' key
-        :raises json.decoder.JSONDecodeError: `arg` is an Invalid JSON string
-
-        All parameters are optional. ResourceSet() will initialize an
-        empty, version 1 ResourceSet object.
-        """
         self._state = None
 
         if isinstance(arg, ResourceSetImplementation):
@@ -71,15 +72,12 @@ class ResourceSet:
         return self.dumps()
 
     def __and__(self, arg):
-        """Return the set intersection of two ResourceSets"""
         return self.intersect(arg)
 
     def __sub__(self, arg):
-        """Return the difference of two ResourceSets"""
         return self.diff(arg)
 
     def __or__(self, arg):
-        """Return the union of two ResourceSets"""
         return self.union(arg)
 
     def dumps(self):
@@ -123,12 +121,27 @@ class ResourceSet:
         return result
 
     def union(self, *args):
+        """
+        Return a new ResourceSet with elements from this set and all others.
+
+        Equivalent to ``set | other | ...``.
+        """
         return self._run_op("union", *args)
 
     def diff(self, *args):
+        """
+        Return a new ResourceSet with elements in this set that are not in the others.
+
+        Equivalent to ``set - other - ...``.
+        """
         return self._run_op("diff", *args)
 
     def intersect(self, *args):
+        """
+        Return a new ResourceSet with elements common to this set and all others.
+
+        Equivalent to ``set & other & ...``.
+        """
         return self._run_op("intersect", *args)
 
     def copy_constraint(self, constraint):
