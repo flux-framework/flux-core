@@ -17,13 +17,16 @@ class SchedResourceList:
     """
     Encapsulate response from sched.resource-status query.
     The response will contain 3 Rv1 resource sets:
-        "all"       - all resources known to scheduler
-        "down"      - resources currently unavailable (drained or down)
-        "allocated" - resources currently allocated to jobs
+
+    :ivar all:         all resources known to scheduler
+    :ivar down:        resources currently unavailable (drained or down)
+    :ivar allocated:   resources currently allocated to jobs
 
     From these sets, the "up" and "free" resource sets are
     computed on-demand.
 
+    There is generally no need to instantiate this class directly. Instead,
+    instances are returned by fetching the result of a ``resource_list()`` call.
     """
 
     def __init__(self, resp):
@@ -47,12 +50,14 @@ class SchedResourceList:
     @memoized_property
     # pylint: disable=invalid-name
     def up(self):
+        """All resources which are not down."""
         res = self.all - self.down
         res.state = "up"
         return res
 
     @memoized_property
     def free(self):
+        """All resources which are neither down nor allocated."""
         res = self.up - self.allocated
         res.state = "free"
         return res
@@ -63,8 +68,19 @@ class ResourceListRPC(RPC):
         super().__init__(*args, **kwargs)
 
     def get(self):
+        """Return a SchedResourceList corresponding to the request.
+
+        Blocks until the request is fulfilled."""
         return SchedResourceList(super().get())
 
 
 def resource_list(flux_handle):
+    """Send a request for a SchedResourceList object.
+
+    Args:
+        flux_handle (flux.Flux): a Flux handle
+
+    Returns:
+        ResourceListRPC: a future representing the request.
+    """
     return ResourceListRPC(flux_handle, "sched.resource-status")
