@@ -342,4 +342,18 @@ test_expect_success 'job-shell: fails if FLUX_EXEC_PROTOCOL_FD incorrect' '
 		-n2 -N2 hostname 2>protocol_fd_invalid.err &&
 	grep FLUX_EXEC_PROTOCOL_FD protocol_fd_invalid.err
 '
+
+#  Note: in below tests, os.exit(True) returns with nonzero exit code,
+#   so the sense of the tests is reversed so the tasks exit with zero exit
+#   code for success.
+#
+test_expect_success 'job-shell: runs tasks in process group by default' '
+	flux mini run -n2 \
+	    flux python -c "import os,sys; sys.exit(os.getpid() != os.getpgrp())"
+'
+
+test_expect_success 'job-shell: -o nosetpgrp works' '
+	flux mini run -n2 -o nosetpgrp \
+	    flux python -c "import os,sys; sys.exit(os.getpid() == os.getpgrp())"
+'
 test_done
