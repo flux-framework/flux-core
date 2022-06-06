@@ -204,6 +204,11 @@ Options supported by ``flux-shell`` proper include:
   verbosity, though setting this value larger than 2 currently has no
   effect.
 
+**nosetpgrp**\ =\ *INT*
+  If nonzero, disables the use of :linux:man2:`setpgrp` to launch each
+  job task in its own process group. This will cause signals to be
+  delivered only to direct children of the shell.
+
 **initrc**\ =\ *FILE*
   Load flux-shell initrc.lua file from *FILE* instead of the default
   initrc path. For details of the job shell initrc.lua file format,
