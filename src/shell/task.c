@@ -193,7 +193,7 @@ int shell_task_start (struct shell_task *task,
                       shell_task_completion_f cb,
                       void *arg)
 {
-    int flags = 0;
+    int flags = FLUX_SUBPROCESS_FLAGS_SETPGRP;
     flux_subprocess_hooks_t hooks = {
         .pre_exec = subproc_preexec_hook,
         .pre_exec_arg = task,
