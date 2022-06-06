@@ -343,7 +343,10 @@ int event_job_action (struct event *event, struct job *job)
              * In the event we have re-entered this state from the
              * SCHED state, dequeue the job first.
              */
-            alloc_dequeue_alloc_request (ctx->alloc, job);
+            if (job->alloc_pending)
+                alloc_cancel_alloc_request (ctx->alloc, job);
+            if (job->alloc_queued)
+                alloc_dequeue_alloc_request (ctx->alloc, job);
             break;
         case FLUX_JOB_STATE_SCHED:
             if (alloc_enqueue_alloc_request (ctx->alloc, job) < 0)
@@ -617,8 +620,16 @@ int event_job_update (struct job *job, json_t *event)
         job->state = FLUX_JOB_STATE_SCHED;
     }
     else if (streq (name, "urgency")) {
+        /* Update urgency value.  If in SCHED state, transition back to
+         * PRIORITY state to trigger jobtap plugin to recompute priority.
+         * N.B. event_job_action() takes the job out of the alloc queue,
+         * if applicable.  The job will be requeued when it transitions back
+         * to SCHED with a new priority value.
+         */
         if (event_urgency_context_decode (context, &job->urgency) < 0)
             goto error;
+        if (job->state == FLUX_JOB_STATE_SCHED)
+            job->state = FLUX_JOB_STATE_PRIORITY;
     }
     else if (streq (name, "exception")) {
         int severity;
@@ -737,22 +748,6 @@ static int event_jobtap_call (struct event *event,
                             "{s:O s:i}",
                             "entry", entry,
                             "prev_state", old_state);
-    }
-    else if (streq (name, "urgency")) {
-        /*
-         *  An urgency update ocurred. Get new priority value from plugin
-         *   and reprioritize job if there was a change.
-         *   (Note: reprioritize_job() is a noop if job is not in PRIORITY
-         *    or SCHED state)
-         */
-        int64_t priority = -1;
-        if (jobtap_get_priority (event->ctx->jobtap, job, &priority) < 0
-            || reprioritize_job (event->ctx, job, priority) < 0) {
-            flux_log_error (event->ctx->h,
-                            "jobtap: urgency: %ju: priority update failed",
-                            (uintmax_t) job->id);
-            return -1;
-        }
     }
     return 0;
 }
