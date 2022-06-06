@@ -33,6 +33,7 @@ typedef struct {
     int n;
     flux_t *h;
     char *treeobj;
+    char *rootref;
     int sequence;
 } thd_t;
 
@@ -54,6 +55,7 @@ void *thread (void *arg)
     flux_future_t *f;
     flux_kvs_txn_t *txn;
     const char *treeobj;
+    const char *rootref;
     int sequence;
 
     if (!(t->h = flux_open (NULL, 0))) {
@@ -85,10 +87,13 @@ void *thread (void *arg)
 
     if (flux_kvs_commit_get_treeobj (f, &treeobj) < 0)
         log_err_exit ("flux_kvs_commit_get_treeobj");
+    if (flux_kvs_commit_get_rootref (f, &rootref) < 0)
+        log_err_exit ("flux_kvs_commit_get_rootref");
     if (flux_kvs_commit_get_sequence (f, &sequence) < 0)
         log_err_exit ("flux_kvs_commit_get_sequence");
 
     t->treeobj = xstrdup (treeobj);
+    t->rootref = xstrdup (rootref);
     t->sequence = sequence;
 
     flux_future_destroy (f);
@@ -144,13 +149,18 @@ int main (int argc, char *argv[])
         if (strcmp (thd[0].treeobj, thd[i].treeobj))
             log_msg_exit ("treeobj mismatch: %s != %s\n",
                           thd[0].treeobj, thd[i].treeobj);
+        if (strcmp (thd[0].rootref, thd[i].rootref))
+            log_msg_exit ("rootref mismatch: %s != %s\n",
+                          thd[0].rootref, thd[i].rootref);
         if (thd[0].sequence != thd[i].sequence)
             log_msg_exit ("sequence mismatch: %d != %d\n",
                           thd[0].sequence, thd[i].sequence);
     }
 
-    for (i = 0; i < count; i++)
+    for (i = 0; i < count; i++) {
         free (thd[i].treeobj);
+        free (thd[i].rootref);
+    }
     free (thd);
 
     log_fini ();

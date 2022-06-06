@@ -163,6 +163,15 @@ static int decode_response (flux_future_t *f, const char **rootrefp,
     return 0;
 }
 
+int flux_kvs_commit_get_rootref (flux_future_t *f, const char **rootref)
+{
+    if (!f || !rootref) {
+        errno = EINVAL;
+        return -1;
+    }
+    return decode_response (f, rootref, NULL);
+}
+
 int flux_kvs_commit_get_sequence (flux_future_t *f, int *rootseq)
 {
     if (!f || !rootseq) {

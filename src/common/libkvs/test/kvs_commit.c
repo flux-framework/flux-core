@@ -54,6 +54,11 @@ void errors (void)
         "flux_kvs_commit_get_treeobj fails on bad input");
 
     errno = 0;
+    ok (flux_kvs_commit_get_rootref (NULL, NULL) < 0
+        && errno == EINVAL,
+        "flux_kvs_commit_get_rootref fails on bad input");
+
+    errno = 0;
     ok (flux_kvs_commit_get_sequence (NULL, NULL) < 0
         && errno == EINVAL,
         "flux_kvs_commit_get_sequence fails on bad input");
