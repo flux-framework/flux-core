@@ -1322,6 +1322,12 @@ int main (int argc, char *argv[])
     if (flux_shell_getopt_unpack (&shell, "verbose", "i", &shell.verbose) < 0)
         shell_die (1, "failed to parse attributes.system.shell.verbose");
 
+    /* Set no_process_group if nosetpgrp option is set */
+    if (flux_shell_getopt_unpack (&shell,
+                                  "nosetpgrp", "i",
+                                  &shell.nosetpgrp) < 0)
+        shell_die (1, "failed to parse attributes.system.shell.nosetpgrp");
+
     /* Reinitialize log facility with new verbosity/shell.info */
     if (shell_log_reinit (&shell) < 0)
         shell_die_errno (1, "shell_log_reinit");
@@ -1371,7 +1377,7 @@ int main (int argc, char *argv[])
         if (shell_task_init (&shell) < 0)
             shell_die (1, "failed to initialize taskid=%d", i);
 
-        if (shell_task_start (task, shell.r, task_completion_cb, &shell) < 0) {
+        if (shell_task_start (&shell, task, task_completion_cb, &shell) < 0) {
             int ec = 1;
             /* bash standard, 126 for permission/access denied, 127
              * for command not found.  Note that shell only launches

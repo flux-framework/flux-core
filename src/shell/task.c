@@ -44,6 +44,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
+#include "internal.h"
 #include "task.h"
 #include "info.h"
 
@@ -188,16 +189,20 @@ static void subproc_preexec_hook (flux_subprocess_t *p, void *arg)
         (*task->pre_exec_cb) (task, task->pre_exec_arg);
 }
 
-int shell_task_start (struct shell_task *task,
-                      flux_reactor_t *r,
+int shell_task_start (struct flux_shell *shell,
+                      struct shell_task *task,
                       shell_task_completion_f cb,
                       void *arg)
 {
-    int flags = 0;
+    int flags = FLUX_SUBPROCESS_FLAGS_SETPGRP;
+    flux_reactor_t *r = shell->r;
     flux_subprocess_hooks_t hooks = {
         .pre_exec = subproc_preexec_hook,
         .pre_exec_arg = task,
     };
+
+    if (shell->nosetpgrp)
+        flags &= ~FLUX_SUBPROCESS_FLAGS_SETPGRP;
 
     task->proc = flux_local_exec (r, flags, task->cmd, &subproc_ops, &hooks);
     if (!task->proc)

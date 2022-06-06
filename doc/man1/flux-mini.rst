@@ -592,6 +592,13 @@ overridden in some cases:
 **verbose**
    Increase verbosity of the job shell log.
 
+**nosetpgrp**
+   Normally the job shell runs each task in its own process group to
+   facilitate delivering signals to tasks which may call :linux:man2:`fork`.
+   With this option, the shell avoids calling :linux:man2:`setpgrp`, and
+   each task will run in the process group of the shell. This will cause
+   signals to be delivered only to direct children of the shell.
+
 **pmi.kvs=native**
    Use the native Flux KVS instead of the PMI plugin's built-in key exchange
    algorithm.
