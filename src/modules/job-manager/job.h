@@ -92,18 +92,6 @@ int job_dependency_add (struct job *job, const char *description);
 int job_dependency_remove (struct job *job, const char *description);
 int job_dependency_count (struct job *job);
 
-/*  Test if dependency event 'event' (dependency-add or dependency-remove)
- *    is valid for this job.
- *  Returns false if:
- *   - EEXIST - when adding a dependency if dependency has already been used
- *   - ENOENT - when removing a dependency that does not exist
- *   - EINVAL - event name is not dependency-add or -remove
- */
-bool job_dependency_event_valid (struct job *job,
-                                 const char *event,
-                                 const char *description);
-
-
 /*  Set a limited set of flags by name on job
  */
 int job_flag_set (struct job *job, const char *flag);

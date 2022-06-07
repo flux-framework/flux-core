@@ -167,19 +167,6 @@ test_expect_success 'dependency add/remove in callback does not incorrectly rele
 	flux python dep-remove.py ${id} foo &&
 	flux job wait-event -vt 15 ${id} clean
 '
-test_expect_success 'invalid dependency-remove is ignored' '
-	jobid=$(flux mini submit \
-		--dependency=test:bar \
-		hostname) &&
-	flux job wait-event -t 15 -m description=bar ${jobid} dependency-add &&
-	test_must_fail flux python dep-remove.py ${jobid} foo  &&
-	flux job eventlog ${jobid} &&
-	flux jobs -o {id}:{dependencies} ${jobid} &&
-	test "$(flux jobs -no {dependencies} ${jobid})" = "bar" &&
-	flux python dep-remove.py ${jobid} bar &&
-	flux job wait-event -vt 15 ${jobid} clean &&
-	test "$(flux jobs -no {dependencies:h} ${jobid})" = "-"
-'
 test_expect_success 'restart: start job with 2 dependencies to test restart' '
 	jobid=$(flux mini submit \
 		--dependency=test:foo \

@@ -1535,13 +1535,6 @@ static int jobtap_emit_dependency_event (struct jobtap *jobtap,
         errno = EINVAL;
         return -1;
     }
-    if (!job_dependency_event_valid (job, event, description)) {
-        /*  Ignore duplicate dependency-add/remove events
-         */
-        if (errno == EEXIST)
-            return 0;
-        return -1;
-    }
     return event_job_post_pack (jobtap->ctx->event,
                                 job,
                                 event,

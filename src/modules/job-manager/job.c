@@ -99,29 +99,6 @@ int job_dependency_remove (struct job *job, const char *description)
     return grudgeset_remove (job->dependencies, description);
 }
 
-bool job_dependency_event_valid (struct job *job,
-                                 const char *event,
-                                 const char *description)
-{
-    if (streq (event, "dependency-add")) {
-        if (grudgeset_used (job->dependencies, description)) {
-            errno = EEXIST;
-            return false;
-        }
-    }
-    else if (streq (event, "dependency-remove")) {
-        if (!grudgeset_contains (job->dependencies, description)) {
-            errno = ENOENT;
-            return false;
-        }
-    }
-    else {
-        errno = EINVAL;
-        return false;
-    }
-    return true;
-}
-
 static int job_flag_set_internal (struct job *job,
                                   const char *flag,
                                   bool dry_run)
