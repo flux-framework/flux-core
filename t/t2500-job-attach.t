@@ -15,10 +15,14 @@ test_expect_success 'attach: submit one job' '
 test_expect_success 'attach: job ran successfully' '
 	run_timeout 5 flux job attach $(cat jobid1)
 '
-
-test_expect_success 'attach: --show-events shows clean event' '
+test_expect_success 'attach: --show-events shows finish event' '
 	run_timeout 5 flux job attach \
 		--show-event $(cat jobid1) 2>jobid1.events &&
+	grep finish jobid1.events
+'
+test_expect_success 'attach: --show-events -w clean shows clean event' '
+	run_timeout 5 flux job attach \
+		--show-event -w clean $(cat jobid1) 2>jobid1.events &&
 	grep clean jobid1.events
 '
 test_expect_success 'attach: --show-events shows done event' '
