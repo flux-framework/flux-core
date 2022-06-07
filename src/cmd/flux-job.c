@@ -229,6 +229,10 @@ static struct optparse_option attach_opts[] =  {
     { .name = "show-exec", .key = 'X', .has_arg = 0,
       .usage = "Show exec events on stderr",
     },
+    { .name = "wait-event", .key = 'w', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Wait for event NAME before detaching from eventlog "
+               "(default=finish)"
+    },
     { .name = "label-io", .key = 'l', .has_arg = 0,
       .usage = "Label output by rank",
     },
@@ -1345,6 +1349,7 @@ struct attach_ctx {
     flux_jobid_t id;
     bool readonly;
     const char *jobid;
+    const char *wait_event;
     flux_future_t *eventlog_f;
     flux_future_t *exec_eventlog_f;
     flux_future_t *output_f;
@@ -2167,6 +2172,11 @@ void attach_event_continuation (flux_future_t *f, void *arg)
                               context);
     }
 
+    if (streq (name, ctx->wait_event)) {
+        flux_job_event_watch_cancel (f);
+        goto done;
+    }
+
     json_decref (o);
     flux_future_reset (f);
     return;
@@ -2199,6 +2209,15 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     if (!(r = flux_get_reactor (ctx.h)))
         log_err_exit ("flux_get_reactor");
+
+    /*  Check for the event name that attach should wait for in the
+     *   main job eventlog. The default is the "clean" event.
+     *   If the event never appears in the eventlog, flux-job attach
+     *   will still exit after the 'clean' event, since the job-info
+     *   module reponds with ENODATA after the final event, which by
+     *   definition is "clean".
+     */
+    ctx.wait_event = optparse_get_str (p, "wait-event", "clean");
 
     if (optparse_hasopt (ctx.p, "debug")
         || optparse_hasopt (ctx.p, "debug-emulate")) {
