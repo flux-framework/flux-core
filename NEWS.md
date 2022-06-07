@@ -1,3 +1,35 @@
+flux-core version 0.40.0 - 2022-06-07
+-------------------------------------
+
+## New Features
+
+ * content-sqlite: verify database integrity during module load (#4340)
+ * job-exec: support new sdexec job launch plugin  (#4070)
+ * job-manager: post submit event, instead of job-ingest (#4346)
+ * shell: execute job tasks in their own process group (#4355)
+
+## Fixes
+
+ * shell: improve handling of TMPDIR (#4330)
+ * job-manager: do not send purged events (#4334)
+ * job-list: consistently return job attributes (#4327)
+ * python: fix confusing error message from pid URI resolver (#4335)
+ * improve logging of overlay peer authentication (#4342)
+ * libflux: return better errno in future wait path (#4345)
+ * shell: fix reconnect hang (#4293)
+ * libsubprocess: avoid segfault on empty argv (#4350)
+ * docs: add python resource_list docstrings (#4353)
+
+## Cleanup
+
+ * job-list: misc cleanup (#4332)
+ * job-manager: misc cleanup (#4352)
+
+## Testsuite
+
+ * docker: update default version of flux-security to v0.7.0 (#4356)
+
+
 flux-core version 0.39.0 - 2022-05-06
 -------------------------------------
 
