@@ -353,7 +353,7 @@ int event_job_action (struct event *event, struct job *job)
             break;
         case FLUX_JOB_STATE_RUN:
             /*
-             *  If job->request_refcount is nonzero then a prolog action
+             *  If job->perilog_active is nonzero then a prolog action
              *   is still in progress so do not send start request.
              */
             if (!job->perilog_active
