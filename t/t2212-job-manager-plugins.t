@@ -394,14 +394,20 @@ test_expect_success 'job-manager: job.state.depend is called on plugin load' '
 	flux python dep-remove.py ${jobid} &&
 	flux job wait-event -vt 15 ${jobid} clean
 '
+lineno() {
+	local nline
+	nline=$(grep -n $1 $2) || return 1
+	echo $nline | cut -d: -f1
+}
 test_expect_success 'job-manager: job prolog/epilog events work' '
 	flux jobtap load --remove=all ${PLUGINPATH}/perilog-test.so &&
 	jobid=$(flux mini submit hostname) &&
-	flux job attach -vE $jobid 2>&1 | tee perilog-test.out &&
-	n_prolog=$(grep -n job.prolog-finish perilog-test.out | cut -d: -f1) &&
-	n_start=$(grep -n job.start perilog-test.out | cut -d: -f1) &&
-	n_epilog=$(grep -n job.epilog-finish perilog-test.out | cut -d: -f1) &&
-	n_free=$(grep -n job.free perilog-test.out | cut -d: -f1) &&
+	flux job attach --wait-event clean -vE $jobid 2>&1 \
+	    | tee perilog-test.out &&
+	n_prolog=$(lineno job.prolog-finish perilog-test.out) &&
+	n_start=$(lineno job.start perilog-test.out) &&
+	n_epilog=$(lineno job.epilog-finish perilog-test.out) &&
+	n_free=$(lineno job.free perilog-test.out) &&
 	test_debug "echo Checking that prolog-finish=$n_prolog event occurs before start=$n_start event" &&
 	test_debug "echo Checking that epilog-finish=$n_epilog event occurs before free=$n_free event" &&
 	test $n_prolog -lt $n_start -a $n_epilog -lt $n_free
