@@ -29,6 +29,7 @@
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/str/str.h"
 
 #include "annotate.h"
 #include "prioritize.h"
@@ -330,14 +331,14 @@ static int jobtap_remove (struct jobtap *jobtap,
 {
     int count = 0;
     bool isglob = isa_glob (arg);
-    bool all = strcmp (arg, "all") == 0;
+    bool all = streq (arg, "all");
 
     flux_plugin_t *p = zlistx_first (jobtap->plugins);
     while (p) {
         const char *name = jobtap_plugin_name (p);
         if ((all && name[0] != '.')
             || (isglob && fnmatch (arg, name, FNM_PERIOD) == 0)
-            || strcmp (arg, name) == 0) {
+            || streq (arg, name)) {
             zlistx_detach_cur (jobtap->plugins);
             flux_plugin_destroy (p);
             count++;
@@ -979,7 +980,7 @@ int jobtap_call (struct jobtap *jobtap,
          *   job state event may confuse consumers (i.e. job-info).
          */
         int rc;
-        if (strcmp (topic, "job.new") == 0)
+        if (streq (topic, "job.new"))
             rc = annotations_update (job, ".", note);
         else
             rc = annotations_update_and_publish (jobtap->ctx, job, note);
@@ -1013,7 +1014,7 @@ static int jobtap_load_builtin (flux_plugin_t *p,
     struct jobtap_builtin *builtin = jobtap_builtins;
 
     while (builtin && builtin->name) {
-        if (strcmp (name, builtin->name) == 0) {
+        if (streq (name, builtin->name)) {
             if (flux_plugin_set_name (p, builtin->name) < 0)
                 return -1;
             return (*builtin->init) (p);
@@ -1812,13 +1813,13 @@ int flux_jobtap_get_job_result (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
-    if (strcmp (name, "finish") == 0 && waitstatus == 0)
+    if (streq (name, "finish") && waitstatus == 0)
         result = FLUX_JOB_RESULT_COMPLETED;
-    else if (strcmp (name, "exception") == 0) {
+    else if (streq (name, "exception")) {
         if (exception_type != NULL) {
-            if (strcmp (exception_type, "cancel") == 0)
+            if (streq (exception_type, "cancel"))
                 result = FLUX_JOB_RESULT_CANCELED;
-            else if (strcmp (exception_type, "timeout") == 0)
+            else if (streq (exception_type, "timeout"))
                 result = FLUX_JOB_RESULT_TIMEOUT;
         }
     }

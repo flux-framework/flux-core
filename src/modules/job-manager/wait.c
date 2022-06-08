@@ -56,6 +56,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libjob/job_hash.h"
+#include "ccan/str/str.h"
 
 #include "drain.h"
 #include "submit.h"
@@ -85,7 +86,7 @@ static int decode_job_result (struct job *job,
 
     /* Exception - set errbuf=description, set success=false
      */
-    if (!strcmp (name, "exception")) {
+    if (streq (name, "exception")) {
         const char *type;
         const char *note = NULL;
 
@@ -106,7 +107,7 @@ static int decode_job_result (struct job *job,
     /* Shells exited - set errbuf=decoded status byte,
      * set success=true if all shells exited with 0, otherwise false.
      */
-    else if (!strcmp (name, "finish")) {
+    else if (streq (name, "finish")) {
         int status;
 
         if (json_unpack (context, "{s:i}", "status", &status) < 0)

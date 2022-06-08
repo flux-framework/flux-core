@@ -50,6 +50,7 @@
 
 #include "src/common/libjob/job_hash.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 extern char **environ;
 
@@ -234,7 +235,7 @@ static void io_cb (flux_subprocess_t *sp, const char *stream)
     }
     if (len) {
         int level = LOG_INFO;
-        if (strcmp (stream, "stderr") == 0)
+        if (streq (stream, "stderr"))
             level = LOG_ERR;
         flux_log (h,
                   level,

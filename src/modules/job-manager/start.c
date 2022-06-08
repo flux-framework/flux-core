@@ -86,6 +86,7 @@
 #include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "job.h"
 #include "event.h"
@@ -183,7 +184,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
 
     if (flux_response_decode (msg, &topic, NULL) < 0)
         goto teardown; // e.g. ENOSYS
-    if (!start->topic || strcmp (start->topic, topic) != 0) {
+    if (!start->topic || !streq (start->topic, topic)) {
         flux_log_error (h, "start: topic=%s not registered", topic);
         goto error;
     }
@@ -199,7 +200,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
         errno = EINVAL;
         goto error;
     }
-    if (!strcmp (type, "start")) {
+    if (streq (type, "start")) {
         if (job->reattach)
             flux_log (h,
                       LOG_ERR,
@@ -210,7 +211,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
                 goto error_post;
         }
     }
-    else if (!strcmp (type, "reattached")) {
+    else if (streq (type, "reattached")) {
         if ((job->flags & FLUX_JOB_DEBUG)) {
             if (event_job_post_pack (ctx->event,
                                      job,
@@ -220,7 +221,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
                 goto error_post;
         }
     }
-    else if (!strcmp (type, "release")) {
+    else if (streq (type, "release")) {
         const char *idset;
         int final;
         if (json_unpack (data, "{s:s s:b}", "ranks", &idset,
@@ -237,7 +238,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "final", final) < 0)
             goto error_post;
     }
-    else if (!strcmp (type, "exception")) {
+    else if (streq (type, "exception")) {
         int xseverity;
         const char *xtype;
         const char *xnote = NULL;
@@ -256,7 +257,7 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                  "note", xnote ? xnote : "")  < 0)
             goto error_post;
     }
-    else if (!strcmp (type, "finish")) {
+    else if (streq (type, "finish")) {
         int status;
         if (json_unpack (data, "{s:i}", "status", &status) < 0) {
             errno = EPROTO;

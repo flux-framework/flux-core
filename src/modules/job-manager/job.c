@@ -21,6 +21,7 @@
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/aux.h"
+#include "ccan/str/str.h"
 
 #include "job.h"
 #include "event.h"
@@ -95,13 +96,13 @@ bool job_dependency_event_valid (struct job *job,
                                  const char *event,
                                  const char *description)
 {
-    if (strcmp (event, "dependency-add") == 0) {
+    if (streq (event, "dependency-add")) {
         if (grudgeset_used (job->dependencies, description)) {
             errno = EEXIST;
             return false;
         }
     }
-    else if (strcmp (event, "dependency-remove") == 0) {
+    else if (streq (event, "dependency-remove")) {
         if (!grudgeset_contains (job->dependencies, description)) {
             errno = ENOENT;
             return false;
@@ -118,11 +119,11 @@ static int job_flag_set_internal (struct job *job,
                                   const char *flag,
                                   bool dry_run)
 {
-   if (strcmp (flag, "alloc-bypass") == 0) {
+   if (streq (flag, "alloc-bypass")) {
         if (!dry_run)
             job->alloc_bypass = 1;
     }
-    else if (strcmp (flag, "debug") == 0) {
+    else if (streq (flag, "debug")) {
         if (!dry_run)
             job->flags |= FLUX_JOB_DEBUG;
     }
