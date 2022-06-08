@@ -18,14 +18,17 @@ libsdprocess_la_SOURCES = \
 	sdprocess.h \
 	sdprocess_private.h \
 	strv.c \
-	strv.h
+	strv.h \
+	parse.c \
+	parse.h
 
 libsdprocess_la_LIBADD = \
 	$(LIBSYSTEMD_LIBS)
 
 TESTS = \
 	test_sdprocess.t \
-	test_strv.t
+	test_strv.t \
+	test_parse.t
 
 check_PROGRAMS = \
 	$(TESTS) \
@@ -56,6 +59,11 @@ test_strv_t_SOURCES = test/strv.c
 test_strv_t_CPPFLAGS = $(test_cppflags)
 test_strv_t_LDADD = $(test_ldadd)
 test_strv_t_LDFLAGS = $(test_ldflags)
+
+test_parse_t_SOURCES = test/parse.c
+test_parse_t_CPPFLAGS = $(test_cppflags)
+test_parse_t_LDADD = $(test_ldadd)
+test_parse_t_LDFLAGS = $(test_ldflags)
 
 test_sdprocess_t_SOURCES = test/sdprocess.c
 test_sdprocess_t_CPPFLAGS = \

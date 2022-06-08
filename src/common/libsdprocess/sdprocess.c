@@ -47,6 +47,7 @@
 #include "src/common/libidset/idset.h"
 
 #include "sdprocess.h"
+#include "parse.h"
 #include "strv.h"
 
 struct sdprocess {
@@ -365,6 +366,51 @@ error:
     return -1;
 }
 
+static int set_property_memory (sdprocess_t *sdp,
+                                sd_bus_message *m,
+                                const char *property,
+                                const char *value)
+{
+    double percent;
+    uint64_t bytes;
+    int ret;
+
+    if (parse_percent (value, &percent) == 0) {
+        char *prop;
+        uint32_t val;
+
+        /* Percentages go to the "<propertyname>Scale" property.  It
+         * takes a value in the range 0-UINT32_MAX, which reflects the
+         * percentage.
+         */
+
+        if (asprintf (&prop, "%sScale", property) < 0)
+            return -1;
+
+        val = (double)UINT32_MAX * percent;
+
+        if ((ret = sd_bus_message_append (m, "(sv)", prop, "u", val)) < 0) {
+            free (prop);
+            goto sdbus_error;
+        }
+
+        free (prop);
+        return 0;
+    }
+
+    if (parse_unsigned (value, &bytes) < 0)
+        return -1;
+
+    if ((ret = sd_bus_message_append (m, "(sv)", property, "t", bytes)) < 0)
+        goto sdbus_error;
+
+    return 0;
+
+sdbus_error:
+    set_errno_log (sdp->h, ret, "error setting memory property");
+    return -1;
+}
+
 static int transient_service_parse_user_property (sdprocess_t *sdp,
                                                   sd_bus_message *m,
                                                   const char *str)
@@ -402,6 +448,14 @@ static int transient_service_parse_user_property (sdprocess_t *sdp,
     }
     else if (!strcmp (property, "AllowedCPUs")) {
         if (set_property_cpuset (sdp, m, property, value) < 0)
+            goto error;
+    }
+    else if (!strcmp (property, "MemoryHigh")) {
+        if (set_property_memory (sdp, m, property, value) < 0)
+            goto error;
+    }
+    else if (!strcmp (property, "MemoryMax")) {
+        if (set_property_memory (sdp, m, property, value) < 0)
             goto error;
     }
     else {
