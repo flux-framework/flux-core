@@ -356,11 +356,10 @@ int event_job_action (struct event *event, struct job *job)
                 return -1;
             break;
         case FLUX_JOB_STATE_RUN:
-            /*
-             *  If job->perilog_active is nonzero then a prolog action
-             *   is still in progress so do not send start request.
+            /* Send the start request only if prolog is not running/pending.
              */
             if (!job->perilog_active
+                && !job_event_is_queued (job, "prolog-start")
                 && start_send_request (ctx->start, job) < 0)
                 return -1;
             break;
