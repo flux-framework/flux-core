@@ -65,6 +65,12 @@ typedef int (*sdprocess_list_f) (flux_t *h,
  * Current properties supported:
  * - CPUAffinity=<flux idset> (N.B. input different than systemd)
  * - AllowedCPUs=<flux idset> (N.B. input different than systemd)
+ * - MemoryHigh=<bytes> (k, m, g, t suffix allowed)
+ *   OR MemoryHigh=<percent> (double + '%')
+ *   OR MemoryHigh=infinity (same as 100%)
+ * - MemoryMax=<bytes> (k, m, g, t suffix allowed)
+ *   OR MemoryMax=<percent> (double + '%')
+ *   OR MemoryMax=infinity (same as 100%)
  *
  * Properties not allowed due to internal use:
  * - RemainAfterExit
