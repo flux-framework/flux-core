@@ -25,6 +25,7 @@
 #include <assert.h>
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "job.h"
 #include "alloc.h"
@@ -410,14 +411,14 @@ static void ready_cb (flux_t *h, flux_msg_handler_t *mh,
                                         "mode", &mode,
                                         "limit", &limit) < 0)
         goto error;
-    if (!strcmp (mode, "limited")) {
+    if (streq (mode, "limited")) {
         if (limit <= 0) {
             errno = EPROTO;
             goto error;
         }
         ctx->alloc->alloc_limit = limit;
     }
-    else if (!strcmp (mode, "unlimited"))
+    else if (streq (mode, "unlimited"))
         ctx->alloc->alloc_limit = 0;
     else {
         errno = EPROTO;
@@ -793,7 +794,7 @@ void alloc_disconnect_rpc (flux_t *h,
     if (alloc->sched_sender) {
         const char *sender;
         if ((sender = flux_msg_route_first (msg))
-            && !strcmp (sender, alloc->sched_sender))
+            && streq (sender, alloc->sched_sender))
             interface_teardown (ctx->alloc, "disconnect", 0);
     }
 }

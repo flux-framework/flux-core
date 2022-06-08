@@ -27,6 +27,7 @@
 
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 #include "job.h"
 #include "job-manager.h"
@@ -51,7 +52,7 @@ static json_t *make_dict (struct job *job,
             errno = EPROTO;
             goto error;
         }
-        if (!strcmp (key, "jobspec")) {
+        if (streq (key, "jobspec")) {
             if (!job->jobspec_redacted) {
                 snprintf (errstr, errstrsz, "jobspec is NULL");
                 errno = ENOENT;

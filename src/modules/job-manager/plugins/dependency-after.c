@@ -21,6 +21,7 @@
 
 #include "src/common/libutil/iterators.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
+#include "ccan/str/str.h"
 
 /* Types of "after*" dependencies:
  */
@@ -62,13 +63,13 @@ static const char * after_typestr (enum after_type type)
 
 static int after_type_parse (const char *s, enum after_type *tp)
 {
-    if (strcmp (s, "after") == 0)
+    if (streq (s, "after"))
         *tp = AFTER_START;
-    else if (strcmp (s, "afterany") == 0)
+    else if (streq (s, "afterany"))
         *tp = AFTER_FINISH;
-    else if (strcmp (s, "afterok") == 0)
+    else if (streq (s, "afterok"))
         *tp = AFTER_SUCCESS;
-    else if (strcmp (s, "afternotok") == 0)
+    else if (streq (s, "afternotok"))
         *tp = AFTER_FAILURE;
     else
         return -1;
