@@ -1385,6 +1385,11 @@ class RunCmd(SubmitBaseCmd):
     def __init__(self):
         super().__init__()
         self.parser.add_argument(
+            "--wait-event",
+            metavar="NAME",
+            help="Pass --wait-event=NAME to flux-job attach",
+        )
+        self.parser.add_argument(
             "command", nargs=argparse.REMAINDER, help="Job command and arguments"
         )
 
@@ -1408,6 +1413,8 @@ class RunCmd(SubmitBaseCmd):
             attach_args.append("--show-exec")
         if args.debug_emulate:
             attach_args.append("--debug-emulate")
+        if args.wait_event:
+            attach_args.append(f"--wait-event={args.wait_event}")
         attach_args.append(jobid.f58.encode("utf-8", errors="surrogateescape"))
 
         # Exec flux-job attach, searching for it in FLUX_EXEC_PATH.

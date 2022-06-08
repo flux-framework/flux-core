@@ -46,6 +46,7 @@
 #include "src/shell/mpir/proctable.h"
 #include "src/common/libdebugged/debugged.h"
 #include "src/common/libterminus/pty.h"
+#include "ccan/str/str.h"
 
 #ifndef VOLATILE
 # if defined(__STDC__) || defined(__cplusplus)
@@ -227,6 +228,10 @@ static struct optparse_option attach_opts[] =  {
     },
     { .name = "show-exec", .key = 'X', .has_arg = 0,
       .usage = "Show exec events on stderr",
+    },
+    { .name = "wait-event", .key = 'w', .has_arg = 1, .arginfo = "NAME",
+      .usage = "Wait for event NAME before detaching from eventlog "
+               "(default=finish)"
     },
     { .name = "label-io", .key = 'l', .has_arg = 0,
       .usage = "Label output by rank",
@@ -655,7 +660,7 @@ uint32_t parse_arg_userid (optparse_t *p, const char *optname)
     char *endptr;
 
     assert (s != NULL);
-    if (!strcmp (s, "all"))
+    if (streq (s, "all"))
         return FLUX_USERID_UNKNOWN;
     if ((pw = getpwnam (s)))
         return pw->pw_uid;
@@ -913,8 +918,8 @@ static int str2signum (const char *sigstr)
     }
     i = 1;
     while (sigmap[i] != NULL) {
-        if (strcmp (sigstr, sigmap[i]) == 0 ||
-            strcmp (sigstr, sigmap[i]+3) == 0)
+        if (streq (sigstr, sigmap[i]) ||
+            streq (sigstr, sigmap[i]+3))
             return i;
         i++;
     }
@@ -1232,7 +1237,7 @@ size_t read_jobspec (const char *name, void **bufp)
     ssize_t size;
     void *buf;
 
-    if (!strcmp (name, "-"))
+    if (streq (name, "-"))
         fd = STDIN_FILENO;
     else {
         if ((fd = open (name, O_RDONLY)) < 0)
@@ -1282,13 +1287,13 @@ int cmd_submit (optparse_t *p, int argc, char **argv)
     if (optparse_hasopt (p, "flags")) {
         const char *name;
         while ((name = optparse_getopt_next (p, "flags"))) {
-            if (!strcmp (name, "debug"))
+            if (streq (name, "debug"))
                 flags |= FLUX_JOB_DEBUG;
-            else if (!strcmp (name, "waitable"))
+            else if (streq (name, "waitable"))
                 flags |= FLUX_JOB_WAITABLE;
-            else if (!strcmp (name, "signed"))
+            else if (streq (name, "signed"))
                 flags |= FLUX_JOB_PRE_SIGNED;
-            else if (!strcmp (name, "novalidate"))
+            else if (streq (name, "novalidate"))
                 flags |= FLUX_JOB_NOVALIDATE;
             else
                 log_msg_exit ("unknown flag: %s", name);
@@ -1344,6 +1349,7 @@ struct attach_ctx {
     flux_jobid_t id;
     bool readonly;
     const char *jobid;
+    const char *wait_event;
     flux_future_t *eventlog_f;
     flux_future_t *exec_eventlog_f;
     flux_future_t *output_f;
@@ -1417,7 +1423,7 @@ static void handle_output_data (struct attach_ctx *ctx, json_t *context)
         log_msg_exit ("stream data read before header");
     if (iodecode (context, &stream, &rank, &data, &len, NULL) < 0)
         log_msg_exit ("malformed event context");
-    if (!strcmp (stream, "stdout"))
+    if (streq (stream, "stdout"))
         fp = stdout;
     else
         fp = stderr;
@@ -1532,17 +1538,17 @@ void attach_output_continuation (flux_future_t *f, void *arg)
     if (eventlog_entry_parse (o, &ts, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
 
-    if (!strcmp (name, "header")) {
+    if (streq (name, "header")) {
         /* Future: per-stream encoding */
         ctx->output_header_parsed = true;
     }
-    else if (!strcmp (name, "data")) {
+    else if (streq (name, "data")) {
         handle_output_data (ctx, context);
     }
-    else if (!strcmp (name, "redirect")) {
+    else if (streq (name, "redirect")) {
         handle_output_redirect (ctx, context);
     }
-    else if (!strcmp (name, "log")) {
+    else if (streq (name, "log")) {
         handle_output_log (ctx, ts, context);
     }
 
@@ -1997,7 +2003,7 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
     if (eventlog_entry_parse (o, &timestamp, &name, &context) < 0)
         log_err_exit ("eventlog_entry_parse");
 
-    if (!strcmp (name, "shell.init")) {
+    if (streq (name, "shell.init")) {
         const char *pty_service = NULL;
         if (json_unpack (context,
                          "{s:i s:s s?s}",
@@ -2028,14 +2034,14 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
             attach_setup_stdin (ctx);
             attach_output_start (ctx);
         }
-    } else if (!strcmp (name, "shell.start")) {
+    } else if (streq (name, "shell.start")) {
         if (MPIR_being_debugged)
             setup_mpir_interface (ctx, context);
-    } else if (!strcmp (name, "complete")) {
+    } else if (streq (name, "complete")) {
         if (MPIR_being_debugged)
             finish_mpir_interface ();
     }
-    else if (!strcmp (name, "log")) {
+    else if (streq (name, "log")) {
         handle_exec_log_msg (ctx, timestamp, context);
     }
 
@@ -2043,11 +2049,11 @@ void attach_exec_event_continuation (flux_future_t *f, void *arg)
      *   output eventlog, then start now in case shell.init event
      *   was never emitted (failure in iniitialization)
      */
-    if (!strcmp (name, "complete") && !ctx->output_f)
+    if (streq (name, "complete") && !ctx->output_f)
         attach_output_start (ctx);
 
     if (optparse_hasopt (ctx->p, "show-exec")
-        && strcmp (name, "log") != 0) {
+        && !streq (name, "log")) {
         print_eventlog_entry (stderr,
                               "exec",
                               timestamp - ctx->timestamp_zero,
@@ -2099,7 +2105,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     if (ctx->timestamp_zero == 0.)
         ctx->timestamp_zero = timestamp;
 
-    if (!strcmp (name, "exception")) {
+    if (streq (name, "exception")) {
         const char *type;
         int severity;
         const char *note = NULL;
@@ -2126,7 +2132,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
             ctx->pty_client = NULL;
         }
     }
-    else if (!strcmp (name, "submit")) {
+    else if (streq (name, "submit")) {
         if (!(ctx->exec_eventlog_f = flux_job_event_watch (ctx->h,
                                                            ctx->id,
                                                          "guest.exec.eventlog",
@@ -2141,7 +2147,7 @@ void attach_event_continuation (flux_future_t *f, void *arg)
         ctx->eventlog_watch_count++;
     }
     else {
-        if (!strcmp (name, "finish")) {
+        if (streq (name, "finish")) {
             if (json_unpack (context, "{s:i}", "status", &status) < 0)
                 log_err_exit ("error decoding finish context");
             if (WIFSIGNALED (status)) {
@@ -2158,12 +2164,17 @@ void attach_event_continuation (flux_future_t *f, void *arg)
     }
 
     if (optparse_hasopt (ctx->p, "show-events")
-                                    && strcmp (name, "exception") != 0) {
+        && !streq (name, "exception")) {
         print_eventlog_entry (stderr,
                               "job",
                               timestamp - ctx->timestamp_zero,
                               name,
                               context);
+    }
+
+    if (streq (name, ctx->wait_event)) {
+        flux_job_event_watch_cancel (f);
+        goto done;
     }
 
     json_decref (o);
@@ -2198,6 +2209,15 @@ int cmd_attach (optparse_t *p, int argc, char **argv)
         log_err_exit ("flux_open");
     if (!(r = flux_get_reactor (ctx.h)))
         log_err_exit ("flux_get_reactor");
+
+    /*  Check for the event name that attach should wait for in the
+     *   main job eventlog. The default is the "finish" event.
+     *   If the event never appears in the eventlog, flux-job attach
+     *   will still exit after the 'clean' event, since the job-info
+     *   module reponds with ENODATA after the final event, which by
+     *   definition is "clean".
+     */
+    ctx.wait_event = optparse_get_str (p, "wait-event", "finish");
 
     if (optparse_hasopt (ctx.p, "debug")
         || optparse_hasopt (ctx.p, "debug-emulate")) {
@@ -2581,7 +2601,7 @@ void eventlog_continuation (flux_future_t *f, void *arg)
     if (flux_rpc_get_unpack (f, "{s:s}", ctx->path, &s) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
-            if (!strcmp (ctx->path, "eventlog"))
+            if (streq (ctx->path, "eventlog"))
                 log_msg_exit ("job %s not found", ctx->jobid);
             else
                 log_msg_exit ("eventlog path %s not found", ctx->path);
@@ -2662,9 +2682,9 @@ bool wait_event_test_context (struct wait_event_ctx *ctx, json_t *context)
     while (iter && !match) {
         const char *key = json_object_iter_key (iter);
         json_t *value = json_object_iter_value (iter);
-        if (!strcmp (key, ctx->context_key)) {
+        if (streq (key, ctx->context_key)) {
             char *str = json_dumps (value, JSON_ENCODE_ANY|JSON_COMPACT);
-            if (!strcmp (str, ctx->context_value))
+            if (streq (str, ctx->context_value))
                 match = true;
             free (str);
         }
@@ -2673,7 +2693,7 @@ bool wait_event_test_context (struct wait_event_ctx *ctx, json_t *context)
          * string value with quotes */
         if (!match && json_is_string (value)) {
             const char *str = json_string_value (value);
-            if (!strcmp (str, ctx->context_value))
+            if (streq (str, ctx->context_value))
                 match = true;
         }
         iter = json_object_iter_next (context, iter);
@@ -2694,7 +2714,7 @@ bool wait_event_test (struct wait_event_ctx *ctx, json_t *event)
     if (ctx->e.initial == 0.)
         ctx->e.initial = timestamp;
 
-    if (!strcmp (name, ctx->wait_event)) {
+    if (streq (name, ctx->wait_event)) {
         if (ctx->context_key) {
             if (context)
                 match = wait_event_test_context (ctx, context);
@@ -2717,7 +2737,7 @@ void wait_event_continuation (flux_future_t *f, void *arg)
     if (flux_rpc_get (f, NULL) < 0) {
         if (errno == ENOENT) {
             flux_future_destroy (f);
-            if (!strcmp (ctx->path, "eventlog"))
+            if (streq (ctx->path, "eventlog"))
                 log_msg_exit ("job %s not found", ctx->jobid);
             else
                 log_msg_exit ("eventlog path %s not found", ctx->path);
@@ -3047,7 +3067,7 @@ int cmd_memo (optparse_t *p, int argc, char **argv)
             log_msg_exit ("memo: no value for key=%s", key);
         *value++ = '\0';
 
-        if (!strcmp (value, "-")) {
+        if (streq (value, "-")) {
             ssize_t size;
             if ((size = read_all (STDIN_FILENO, &valbuf)) < 0)
                 log_err_exit ("read_all");

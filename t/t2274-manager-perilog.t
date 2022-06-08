@@ -111,7 +111,7 @@ test_expect_success 'perilog: load perilog.so plugin' '
 test_expect_success 'perilog: configured prolog/epilog works for jobs' '
 	undrain_all &&
 	jobid=$(flux mini submit --job-name=works hostname) &&
-	flux job attach -vE $jobid > submit1.log 2>&1 &&
+	flux job attach -vE -w clean $jobid > submit1.log 2>&1 &&
 	test_debug "cat submit1.log" &&
 	grep prolog-start submit1.log &&
 	grep prolog-finish submit1.log &&

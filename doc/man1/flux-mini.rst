@@ -431,10 +431,12 @@ OTHER OPTIONS
    This is equivalent to ``--wait-event=clean``.
 
 **--wait-event=NAME**
-   *(submit,bulksubmit)* Wait until all jobs have received event ``NAME``
+   *(run,submit,bulksubmit)* Wait until job or jobs have received event ``NAME``
    before exiting. E.g. to submit a job and block until the job begins
-   running, use ``--wait-event=start``. If ``NAME`` begins with ``exec.``,
-   then wait for an event in the exec eventlog, e.g. ``exec.shell.init``.
+   running, use ``--wait-event=start``. *(submit,bulksubmit only)* If ``NAME``
+   begins with ``exec.``, then wait for an event in the exec eventlog, e.g.
+   ``exec.shell.init``. For ``flux mini run`` the argument to this option
+   when used is passed directly to ``flux job attach``.
 
 **--watch**
    *(submit,bulksubmit)* Display output from all jobs. Implies ``--wait``.
