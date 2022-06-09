@@ -240,6 +240,35 @@ void test_create_from_eventlog (void)
 
 }
 
+void test_create_from_json (void)
+{
+    json_t *o;
+    struct job *job;
+
+    errno = 0;
+    ok ((job = job_create_from_json (json_null ())) == NULL && errno == EPROTO,
+        "job_create_from_json on malformed object fails with EPROTO");
+
+    if (!(o = json_pack ("{s:I s:i s:i s:f s:i s:{}}",
+                         "id", 1LL,
+                         "urgency", 10,
+                         "userid", 42,
+                         "t_submit", 1.0,
+                         "flags", 0,
+                         "jobspec")))
+        BAIL_OUT ("json_pack failed");
+    ok ((job = job_create_from_json (o)) != NULL,
+        "job_create_from_json works");
+    ok (job->id == 1
+        && job->urgency == 10
+        && job->userid == 42
+        && job->t_submit == 1.0
+        && job->flags == 0,
+        "job json object was properly decoded");
+    json_decref (o);
+    job_decref (job);
+}
+
 static void test_subscribe (void)
 {
     flux_plugin_t *p = flux_plugin_create ();
@@ -333,6 +362,7 @@ int main (int argc, char *argv[])
 
     test_create ();
     test_create_from_eventlog ();
+    test_create_from_json ();
     test_subscribe ();
     test_event_id_cache ();
 

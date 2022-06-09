@@ -35,26 +35,6 @@ struct submit {
     flux_msg_handler_t **handlers;
 };
 
-static struct job *submit_unpack_job (json_t *o)
-{
-    struct job *job;
-
-    if (!(job = job_create ()))
-        return NULL;
-    if (json_unpack (o, "{s:I s:i s:i s:f s:i s:O}",
-                        "id", &job->id,
-                        "urgency", &job->urgency,
-                        "userid", &job->userid,
-                        "t_submit", &job->t_submit,
-                        "flags", &job->flags,
-                        "jobspec", &job->jobspec_redacted) < 0) {
-        errno = EPROTO;
-        job_decref (job);
-        job = NULL;
-    }
-    return job;
-}
-
 zlistx_t *submit_jobs_to_list (json_t *jobs)
 {
     int saved_errno;
@@ -69,7 +49,7 @@ zlistx_t *submit_jobs_to_list (json_t *jobs)
     }
     zlistx_set_destructor (newjobs, job_destructor);
     json_array_foreach (jobs, index, el) {
-        if (!(job = submit_unpack_job (el)))
+        if (!(job = job_create_from_json (el)))
             goto error;
         if (zlistx_add_end (newjobs, job) < 0) {
             job_decref (job);
