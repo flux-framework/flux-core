@@ -19,7 +19,7 @@ noinst_LTLIBRARIES = \
 	libjob-manager.la
 
 jobtap_plugin_LTLIBRARIES = \
-	plugins/priority-hold.la \
+	plugins/submit-hold.la \
 	plugins/alloc-bypass.la \
 	plugins/perilog.la
 
@@ -89,9 +89,9 @@ job_manager_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-optparse.la \
 	$(JANSSON_LIBS)
 
-plugins_priority_hold_la_SOURCES = \
-	plugins/priority-hold.c
-plugins_priority_hold_la_LDFLAGS = \
+plugins_submit_hold_la_SOURCES = \
+	plugins/submit-hold.c
+plugins_submit_hold_la_LDFLAGS = \
 	$(fluxplugin_ldflags) \
 	-module
 

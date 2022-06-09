@@ -116,7 +116,7 @@ test_expect_success 'job-manager: default works with sched.prioritize' '
 	flux queue drain
 '
 test_expect_success HAVE_JQ 'job-manager: hold plugin holds jobs' '
-	flux jobtap load --remove=all priority-hold.so &&
+	flux jobtap load submit-hold.so &&
 	flux mini bulksubmit --job-name=cc-{0} hostname ::: $(seq 1 4) \
 	    >hold.jobids &&
 	flux job wait-event -v $(cat hold.jobids | tail -1) priority &&
@@ -140,33 +140,15 @@ test_expect_success 'job-manager: cancel of held job works' '
 	flux job cancel $jobid &&
 	flux job wait-event -v -t 5 $jobid clean
 '
-test_expect_success 'job-manager: add administrative hold to one job' '
-	jobid=$(id_byname cc-3) &&
-	flux job urgency $jobid 0 &&
-	state=$(flux jobs -no {state} $jobid) &&
-	test_debug "echo state is ${state}" &&
-	test "$state" = "SCHED"
+test_expect_success 'job-manager: release held jobs' '
+	for name in cc-3 cc-4; do
+	    jobid=$(id_byname $name) &&
+	    flux job urgency $jobid 1 &&
+	    flux job wait-event -t 5 -v $jobid clean
+	done
 '
-test_expect_success 'job-manager: held jobs get a priority on plugin load' '
-	flux jobtap remove priority-hold.so &&
-	flux jobtap load --remove=.priority-default .priority-default &&
-	jobid=$(id_byname cc-4) &&
-	flux job wait-event -v -t 5 $jobid clean
-'
-test_expect_success 'job-manager: but adminstratively held job is still held' '
-	jobid=$(id_byname cc-3) &&
-	state=$(flux jobs -no {state} $jobid) &&
-	priority=$(flux jobs -no {priority} $jobid) &&
-	urgency=$(flux jobs -no {urgency} $jobid) &&
-	test_debug "echo state=${state} pri=${priority} urgency=${urgency}" &&
-	test "$state" = "SCHED" &&
-	test $priority = 0 &&
-	test $urgency  = 0
-'
-test_expect_success 'job-manager: release final held job' '
-	jobid=$(id_byname cc-3) &&
-	flux job urgency $jobid 1 &&
-	flux job wait-event -v $jobid clean
+test_expect_success 'job-manager: unload hold plugin' '
+	flux jobtap remove submit-hold.so
 '
 test_expect_success 'job-manager: test with random priority plugin' '
 	flux module reload sched-simple mode=unlimited &&
