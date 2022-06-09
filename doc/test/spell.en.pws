@@ -706,3 +706,5 @@ libc
 unbuffered
 statex
 pmix
+MemoryHigh
+MemoryMax
