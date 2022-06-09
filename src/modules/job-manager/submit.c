@@ -35,67 +35,6 @@ struct submit {
     flux_msg_handler_t **handlers;
 };
 
-zlistx_t *submit_jobs_to_list (json_t *jobs)
-{
-    int saved_errno;
-    size_t index;
-    json_t *el;
-    zlistx_t *newjobs;
-    struct job * job;
-
-    if (!(newjobs = zlistx_new ())) {
-        errno = ENOMEM;
-        return NULL;
-    }
-    zlistx_set_destructor (newjobs, job_destructor);
-    json_array_foreach (jobs, index, el) {
-        if (!(job = job_create_from_json (el)))
-            goto error;
-        if (zlistx_add_end (newjobs, job) < 0) {
-            job_decref (job);
-            errno = ENOMEM;
-            goto error;
-        }
-    }
-    return newjobs;
-error:
-    saved_errno = errno;
-    zlistx_destroy (&newjobs);
-    errno = saved_errno;
-    return NULL;
-}
-
-int submit_hash_jobs (zhashx_t *active_jobs,
-                      zlistx_t *newjobs)
-{
-    struct job * job = zlistx_first (newjobs);
-    while (job) {
-        if (zhashx_insert (active_jobs, &job->id, job) < 0) {
-            errno = EEXIST;
-            return -1;
-        }
-        job = zlistx_next (newjobs);
-    }
-    return 0;
-}
-
-/* The submit request has failed.  Dequeue jobs recorded in 'newjobs',
- * then destroy the newjobs list.
- */
-void submit_add_jobs_cleanup (zhashx_t *active_jobs, zlistx_t *newjobs)
-{
-    if (newjobs) {
-        int saved_errno = errno;
-        struct job *job = zlistx_first (newjobs);
-        while (job) {
-            zhashx_delete (active_jobs, &job->id);
-            job = zlistx_next (newjobs);
-        }
-        zlistx_destroy (&newjobs);
-        errno = saved_errno;
-    }
-}
-
 /* Submit event requires special handling to use job->t_submit (from
  * job-ingest) as the event timestamp.
  */
@@ -118,72 +57,63 @@ static int submit_post_event (struct job_manager *ctx, struct job *job)
     return rv;
 }
 
-/*  Call the jobtap job.validate hook for all jobs in newjobs.
- *  If a plugin returns < 0 for a job, remove that job from the newjobs
- *   list and append the error to the errp array.
- */
-static int submit_validate_jobs (struct job_manager *ctx,
-                                 zlistx_t *newjobs,
-                                 json_t **errp)
+static void set_errorf (json_t *errors,
+                        flux_jobid_t id,
+                        const char *fmt, ...)
 {
-    struct job * job;
-    json_t *array;
+    va_list ap;
+    char buf[256];
+    json_t *o;
 
-    if (!(array = json_array ())) {
-        errno = ENOMEM;
+    va_start (ap, fmt);
+    vsnprintf (buf, sizeof (buf), fmt, ap);
+    va_end (ap);
+    if (!(o = json_pack ("[Is]", id, buf))
+        || json_array_append_new (errors, o)) {
+        json_decref (o);
+        return;
+    }
+}
+
+static int submit_job (struct job_manager *ctx,
+                       struct job *job,
+                       json_t *errors)
+{
+    char *error = NULL;
+
+    if (zhashx_insert (ctx->active_jobs, &job->id, job) < 0) {
+        set_errorf (errors, job->id, "hash insert failed");
         return -1;
     }
-    job = zlistx_first (newjobs);
-    while (job) {
-        char *errmsg = NULL;
-        json_t *entry = NULL;
-
-        if (jobtap_validate (ctx->jobtap, job, &errmsg) < 0
-            || jobtap_check_dependencies (ctx->jobtap,
-                                          job,
-                                          false,
-                                          &errmsg) < 0) {
-            /*
-             *  This job is rejected: append error to error payload and
-             *   delete the job from newjobs list
-             */
-            if (errmsg) {
-                entry = json_pack ("[Is]", job->id, errmsg);
-                free (errmsg);
-            }
-            else
-                entry = json_pack ("[Is]", job->id, "rejected by plugin");
-
-            /*  Append error to errors array and remove the job from
-             *   the newjobs list since it failed validation.
-             */
-            if (entry == NULL
-                || json_array_append_new (array, entry) < 0
-                || zlistx_delete (newjobs, zlistx_cursor (newjobs)) < 0) {
-                flux_log (ctx->h, LOG_ERR,
-                          "submit_validate_jobs: failed to invalidate job");
-                json_decref (entry);
-                goto error;
-            }
-        }
-        else {
-            /*  The job has been accepted and will progress past the NEW
-             *   state after it has been added to the active jobs hash.
-             *
-             *   Immediately notify any plugins of a new job here so that
-             *   any internal plugin state (e.g. user job count) can be
-             *   updated before the next job is validated.
-             */
-            (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
-        }
-        job = zlistx_next (newjobs);
+    /* Call job.validate callback.
+     */
+    if (jobtap_validate (ctx->jobtap, job, &error) < 0
+        || jobtap_check_dependencies (ctx->jobtap, job, false, &error) < 0) {
+        set_errorf (errors, job->id, error ? error : "rejected by plugin");
+        free (error);
+        goto error;
     }
-    *errp = array;
+    /* Call job.new callback now that job is accepted, so plugins
+     * may account for this job.
+     */
+    (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
+
+    /* Post the submit event.
+     */
+    if (submit_post_event (ctx, job) < 0) {
+        set_errorf (errors, job->id, "error posting submit event");
+        goto error;
+    }
+    if ((job->flags & FLUX_JOB_WAITABLE))
+        wait_notify_active (ctx->wait, job);
+    if (ctx->max_jobid < job->id)
+        ctx->max_jobid = job->id;
     return 0;
 error:
-    json_decref (array);
+    zhashx_delete (ctx->active_jobs, &job->id);
     return -1;
 }
+
 
 /* handle submit request (from job-ingest module)
  * This is a batched request for one or more jobs already validated
@@ -195,9 +125,9 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager *ctx = arg;
     json_t *jobs;
+    size_t index;
+    json_t *o;
     json_t *errors = NULL;
-    zlistx_t *newjobs = NULL;
-    struct job *job;
     flux_msg_t *response = NULL;
     const char *errmsg = NULL;
 
@@ -210,34 +140,19 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         errmsg = ctx->submit->disable_errmsg;
         goto error;
     }
-    if (!(newjobs = submit_jobs_to_list (jobs))) {
-        flux_log_error (h, "%s: error creating newjobs list", __FUNCTION__);
+    if (!(errors = json_array ())) {
+        errno = ENOMEM;
         goto error;
     }
-    if (submit_validate_jobs (ctx, newjobs, &errors) < 0) {
-        flux_log_error (h, "%s: error validating batch", __FUNCTION__);
-        goto error;
-    }
-    if (submit_hash_jobs (ctx->active_jobs, newjobs) < 0) {
-        flux_log_error (h, "%s: error enqueuing batch", __FUNCTION__);
-        goto error;
-    }
-    /* Walk the list of new jobs and post submit event.
-     * Side effects: update ctx->max_jobid and maintain count of waitables.
+    /* Process each job sequentially, noting any failures (such as rejection
+     * by a validator plugin) in 'errors' which becomes the response payload.
      */
-    job = zlistx_first (newjobs);
-    while (job) {
-        if (submit_post_event (ctx, job) < 0) {
-            flux_log_error (h, "error posting submit event for id=%ju",
-                            (uintmax_t)job->id);
-            goto error;
-        }
-        if ((job->flags & FLUX_JOB_WAITABLE))
-            wait_notify_active (ctx->wait, job);
-        if (ctx->max_jobid < job->id)
-            ctx->max_jobid = job->id;
-
-        job = zlistx_next (newjobs);
+    json_array_foreach (jobs, index, o) {
+        struct job *job;
+        if (!(job = job_create_from_json (o)))
+            goto error; // fail all on unlikely EPROTO/ENOMEM
+        submit_job (ctx, job, errors);
+        job_decref (job);
     }
     /* Attach response to commit batch, to maintain the invariant that the
      * job ID is only returned to the user after the submit event is committed.
@@ -250,14 +165,12 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     }
     flux_msg_decref (response);
     json_decref (errors);
-    zlistx_destroy (&newjobs);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errmsg) < 0)
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
     flux_msg_decref (response);
     json_decref (errors);
-    zlistx_destroy (&newjobs);
 }
 
 static void submit_admin_cb (flux_t *h, flux_msg_handler_t *mh,

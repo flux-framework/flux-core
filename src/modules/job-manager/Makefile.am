@@ -121,7 +121,6 @@ TESTS = \
 	test_raise.t \
 	test_kill.t \
 	test_restart.t \
-	test_submit.t \
 	test_annotate.t
 
 test_ldadd = \
@@ -181,13 +180,6 @@ test_restart_t_LDADD = \
         $(top_builddir)/src/modules/job-manager/restart.o \
         $(test_ldadd)
 test_restart_t_LDFLAGS = \
-        $(test_ldflags)
-
-test_submit_t_SOURCES = test/submit.c
-test_submit_t_CPPFLAGS = $(test_cppflags)
-test_submit_t_LDADD = \
-        $(test_ldadd)
-test_submit_t_LDFLAGS = \
         $(test_ldflags)
 
 test_annotate_t_SOURCES = test/annotate.c
