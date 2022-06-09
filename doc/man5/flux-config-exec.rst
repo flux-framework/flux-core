@@ -8,13 +8,15 @@ DESCRIPTION
 
 The Flux system instance **job-exec** service requires additional
 configuration via the ``exec`` table, for example to enlist the services
-of a setuid helper to launch jobs as guests.
+of a setuid helper to launch jobs as guests.  Additional configuration
+options may exist under the ``exec.<method>`` depending on the setting
+of ``method`` below.
+
+
+EXEC KEYS
+=========
 
 The ``exec`` table may contain the following keys:
-
-
-KEYS
-====
 
 imp
    (optional) Set the path to the IMP (Independent Minister of Privilege)
@@ -34,6 +36,21 @@ method
 
 job-shell
    (optional) Override the compiled-in default job shell path.
+
+
+EXEC.SYSTEMD KEYS
+=================
+
+The ``exec.systemd`` table may contain the following keys.  These are only valid
+if ``method`` is set to ``systemd``.
+
+cpu_set_affinity
+
+   (optional) Set to true to set CPU affinity to only allocated cores.
+
+cpu_set_allowed
+
+   (optional) Set to true to set limit execution to only allocated cores.
 
 
 EXAMPLE
