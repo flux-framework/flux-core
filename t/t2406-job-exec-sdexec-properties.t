@@ -45,6 +45,10 @@ if echo ${delegations} | grep cpuset
 then
     test_set_prereq CPUSET
 fi
+if echo ${delegations} | grep memory
+then
+    test_set_prereq MEMORY
+fi
 
 IDSET2BITMASK="flux python ${FLUX_SOURCE_DIR}/t/job-exec/idset2bitmask.py"
 
@@ -54,6 +58,15 @@ jobid2unitname() {
     jobiddec=`flux job id --to=dec $jobid`
     rank=`flux getattr rank`
     echo "flux-sdexec-${rank}-${jobiddec}"
+}
+
+# arg1 - jobid
+get_cgrouppath() {
+    jobid=$1
+    unitname=`jobid2unitname ${jobid}`
+    cgroupsuffix=`systemctl show --property ControlGroup --user --value ${unitname}`
+    cgrouppath="/sys/fs/cgroup/${cgroupsuffix}"
+    echo $cgrouppath
 }
 
 # arg1 - jobid
@@ -68,12 +81,32 @@ get_cpuaffinity() {
 # arg1 - jobid
 get_cpusallowed() {
     jobid=$1
-    unitname=`jobid2unitname ${jobid}`
-    cgroupsuffix=`systemctl show --property ControlGroup --user --value ${unitname}`
-    cgrouppath="/sys/fs/cgroup/${cgroupsuffix}"
+    cgrouppath=`get_cgrouppath ${jobid}`
     cpuset=`cat ${cgrouppath}/cpuset.cpus`
     cpusallowed=`${IDSET2BITMASK} ${cpuset}`
     echo ${cpusallowed}
+}
+
+# arg1 - jobid
+get_memoryhigh() {
+    jobid=$1
+    cgrouppath=`get_cgrouppath ${jobid}`
+    memory=`cat ${cgrouppath}/memory.high`
+    echo ${memory}
+}
+
+# arg1 - jobid
+get_memorymax() {
+    jobid=$1
+    cgrouppath=`get_cgrouppath ${jobid}`
+    memory=`cat ${cgrouppath}/memory.max`
+    echo ${memory}
+}
+
+get_system_mem_bytes() {
+    memkb=`cat /proc/meminfo | head -n 1 | awk '{print $2}'`
+    membytes=$((memkb * 1024))
+    echo $membytes
 }
 
 # arg1 - cpu bitmask
@@ -96,6 +129,46 @@ validate_cpuset() {
         return 0
     fi
     return 1
+}
+
+# arg1 - memory read
+# arg2 - expected memory
+validate_memory() {
+    # there can be rounding errors, so we just try to make sure the
+    # memory is within 1 percent of what is expected
+    memory=$1
+    expected=$2
+    if [ "${expected}" = "infinity" ]
+    then
+        expected=`get_system_mem_bytes`
+    fi
+    expected_low=`echo "${expected} * 0.99" | bc`
+    expected_high=`echo "${expected} * 1.01" | bc`
+    if [ ${memory} -gt ${expected_low%.*} ] && [ ${memory} -lt ${expected_high%.*} ]
+    then
+        return 0
+    fi
+    return 1
+}
+
+# arg1 - memory read
+# arg2 - percent
+validate_memory_percent() {
+    memory=$1
+    percent=$2
+    membytes=`get_system_mem_bytes`
+    expected=`echo "${membytes} * ${percent}" | bc`
+    validate_memory ${memory} ${expected%.*}
+    return $?
+}
+
+# arg1 - memory read
+# arg2 - memory expected
+validate_memory_bytes() {
+    memory=$1
+    expected=$2
+    validate_memory ${memory} ${expected}
+    return $?
 }
 
 #
@@ -171,6 +244,98 @@ test_expect_success MULTICORE,CGROUP2,CPUSET 'job-exec: cpu_set_allowed (2 core)
         flux job cancel ${jobid} &&
         flux job wait-event -t 30 $jobid clean &&
         validate_cpuset ${cpusallowed} 2
+'
+#
+# MemoryHigh
+# MemoryMax
+#
+test_expect_success CGROUP2,MEMORY 'job-exec: config sdexec with memory settings (bytes)' '
+        cat >exec.toml <<EOF &&
+[exec]
+method = "systemd"
+
+[exec.systemd]
+MemoryHigh = "1048576"
+MemoryMax = "2097152"
+EOF
+        flux config reload &&
+        flux module reload job-exec
+'
+test_expect_success CGROUP2,MEMORY 'job-exec: sdexec memory settings work (bytes)' '
+        jobid=$(flux mini submit -n1 sleep 60) &&
+        flux job wait-event -t 30 $jobid start &&
+        memhigh=`get_memoryhigh ${jobid}` &&
+        memmax=`get_memorymax ${jobid}` &&
+        flux job cancel ${jobid} &&
+        flux job wait-event -t 30 $jobid clean &&
+        validate_memory_bytes ${memhigh} 1048576 &&
+        validate_memory_bytes ${memmax} 2097152
+'
+test_expect_success CGROUP2,MEMORY 'job-exec: config sdexec with memory settings (suffix)' '
+        cat >exec.toml <<EOF &&
+[exec]
+method = "systemd"
+
+[exec.systemd]
+MemoryHigh = "1024k"
+MemoryMax = "2m"
+EOF
+        flux config reload &&
+        flux module reload job-exec
+'
+test_expect_success CGROUP2,MEMORY 'job-exec: sdexec memory settings work (suffix)' '
+        jobid=$(flux mini submit -n1 sleep 60) &&
+        flux job wait-event -t 30 $jobid start &&
+        memhigh=`get_memoryhigh ${jobid}` &&
+        memmax=`get_memorymax ${jobid}` &&
+        flux job cancel ${jobid} &&
+        flux job wait-event -t 30 $jobid clean &&
+        validate_memory_bytes ${memhigh} 1048576 &&
+        validate_memory_bytes ${memmax} 2097152
+'
+test_expect_success CGROUP2,MEMORY 'job-exec: config sdexec with memory settings (percent)' '
+        cat >exec.toml <<EOF &&
+[exec]
+method = "systemd"
+
+[exec.systemd]
+MemoryHigh = "80%"
+MemoryMax = "90%"
+EOF
+        flux config reload &&
+        flux module reload job-exec
+'
+test_expect_success CGROUP2,MEMORY 'job-exec: sdexec memory settings work (percent)' '
+        jobid=$(flux mini submit -n1 sleep 60) &&
+        flux job wait-event -t 30 $jobid start &&
+        memhigh=`get_memoryhigh ${jobid}` &&
+        memmax=`get_memorymax ${jobid}` &&
+        flux job cancel ${jobid} &&
+        flux job wait-event -t 30 $jobid clean &&
+        validate_memory_percent ${memhigh} 0.80 &&
+        validate_memory_percent ${memmax} 0.90
+'
+test_expect_success CGROUP2,MEMORY 'job-exec: config sdexec with memory settings (infinity)' '
+        cat >exec.toml <<EOF &&
+[exec]
+method = "systemd"
+
+[exec.systemd]
+MemoryHigh = "infinity"
+MemoryMax = "infinity"
+EOF
+        flux config reload &&
+        flux module reload job-exec
+'
+test_expect_success CGROUP2,MEMORY 'job-exec: sdexec memory settings work (infinity)' '
+        jobid=$(flux mini submit -n1 sleep 60) &&
+        flux job wait-event -t 30 $jobid start &&
+        memhigh=`get_memoryhigh ${jobid}` &&
+        memmax=`get_memorymax ${jobid}` &&
+        flux job cancel ${jobid} &&
+        flux job wait-event -t 30 $jobid clean &&
+        validate_memory_bytes ${memhigh} "infinity" &&
+        validate_memory_bytes ${memmax} "infinity"
 '
 
 test_done
