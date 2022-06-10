@@ -52,6 +52,31 @@ cpu_set_allowed
 
    (optional) Set to true to set limit execution to only allocated cores.
 
+MemoryHigh
+
+   (optional) Set to number of bytes memory high limit should be.
+   Memory usage can go above this limit but can be throttled.  The
+   suffixes k, m, g, and t can be used for kilobytes, megabytes,
+   gigabytes, and terabytes respectively.
+
+   Optionally, a percentage of memory can also be configured via a
+   number between 0 and 100 followed by a '%' sign.
+
+   The special value "infinity" can also be specified to indicate
+   100%.
+
+MemoryMax
+
+   (optional) Set to number of bytes memory max should be.  Memory
+   cannot go above this value, otherwise an out-of-memory failure will
+   occur.  The suffixes k, m, g, and t can be used for kilobytes,
+   megabytes, gigabytes, and terabytes respectively.
+
+   Optionally, a percentage of memory can also be configured via a
+   number between 0 and 100 followed by a '%' sign.
+
+   The special value "infinity" can also be specified to indicate
+   100%.
 
 EXAMPLE
 =======

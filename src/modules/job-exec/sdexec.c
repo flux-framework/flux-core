@@ -35,6 +35,21 @@
  * Based on the cores listed in R, set allowed CPUs in the launched
  * process via the systemd CPUAffinity property.
  *
+ * MemoryHigh = "<bytes>" (suffix k, m, g, t, allowed)
+ * Or
+ * MemoryHigh = "<percent>%"
+ *
+ * Configure high limit of memory usage.  Memory can go above this
+ * limit but can be throttled.
+ *
+ * MemoryMax = "<bytes>" (suffix k, m, g, t, allowed)
+ * Or
+ * MemoryMax = "<percent>%"
+ *
+ * Configure max memory usage.  Memory usage above this is not allowed
+ * and attempts to go above this configure will lead to a
+ * out-of-memory failure.
+ *
  * The following configurations are supported under
  * attributes.system.exec.sd in the jobspec.
  *
@@ -389,15 +404,19 @@ static int sdexec_setup_properties (struct sdexec *se, struct jobinfo *job)
     flux_error_t err;
     int cpu_set_affinity = 0;
     int cpu_set_allowed = 0;
+    const char *MemoryHigh = NULL;
+    const char *MemoryMax = NULL;
     int properties_len = 0;
     int index = 0;
 
     if (flux_conf_unpack (flux_get_conf (se->h),
                           &err,
-                          "{s?:{s?:{s?b s?b}}}",
+                          "{s?:{s?:{s?b s?b s?s s?s}}}",
                           "exec", "systemd",
                             "cpu_set_affinity", &cpu_set_affinity,
-                            "cpu_set_allowed", &cpu_set_allowed) < 0) {
+                            "cpu_set_allowed", &cpu_set_allowed,
+                            "MemoryHigh", &MemoryHigh,
+                            "MemoryMax", &MemoryMax) < 0) {
         flux_log (se->h, LOG_ERR,
                   "error reading systemd config: %s",
                   err.text);
@@ -407,6 +426,10 @@ static int sdexec_setup_properties (struct sdexec *se, struct jobinfo *job)
     if (cpu_set_affinity)
         properties_len++;
     if (cpu_set_allowed)
+        properties_len++;
+    if (MemoryHigh)
+        properties_len++;
+    if (MemoryMax)
         properties_len++;
 
     if (!properties_len) {
@@ -426,6 +449,14 @@ static int sdexec_setup_properties (struct sdexec *se, struct jobinfo *job)
     }
     if (cpu_set_allowed) {
         if (!(properties[index++] = sdexec_cpuset (job, "AllowedCPUs")))
+            goto error;
+    }
+    if (MemoryHigh) {
+        if (asprintf (&properties[index++], "MemoryHigh=%s", MemoryHigh) < 0)
+            goto error;
+    }
+    if (MemoryMax) {
+        if (asprintf (&properties[index++], "MemoryMax=%s", MemoryMax) < 0)
             goto error;
     }
 

@@ -629,3 +629,5 @@ tmpfiles
 EDEADLOCK
 setpgrp
 nosetpgrp
+MemoryHigh
+MemoryMax
