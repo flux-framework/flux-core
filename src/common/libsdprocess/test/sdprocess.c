@@ -1874,6 +1874,15 @@ static void test_property_CPUAffinity_cpu_count2 (flux_t *h,
     free (affinitystr);
 }
 
+/* N.B. We only test CPUAffinity property and not any other
+ * properties, predominantly b/c this is the only "easy" one to test
+ * in C code due to the ability to use sched_getaffinity().  Remaining
+ * properties would involve digging into, reading, and parsing various
+ * files in /sys/fs/cgroup.
+ *
+ * Sharness tests should handle testing other properaties.
+ */
+
 static void test_property_CPUAffinity (flux_t *h)
 {
     cpu_set_t cpuset_avail;
