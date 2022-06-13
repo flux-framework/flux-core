@@ -85,6 +85,12 @@ static int submit_job (struct job_manager *ctx,
         set_errorf (errors, job->id, "hash insert failed");
         return -1;
     }
+    /* Post the submit event.
+     */
+    if (submit_post_event (ctx, job) < 0) {
+        set_errorf (errors, job->id, "error posting submit event");
+        goto error;
+    }
     /* Call job.validate callback.
      */
     if (jobtap_validate (ctx->jobtap, job, &error) < 0
@@ -98,12 +104,6 @@ static int submit_job (struct job_manager *ctx,
      */
     (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
 
-    /* Post the submit event.
-     */
-    if (submit_post_event (ctx, job) < 0) {
-        set_errorf (errors, job->id, "error posting submit event");
-        goto error;
-    }
     /* Post the validate event.
      */
     if (event_job_post_pack (ctx->event, job, "validate", 0, NULL) < 0) {
