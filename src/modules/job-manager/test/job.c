@@ -58,17 +58,21 @@ void test_create (void)
 const char *test_input[] = {
     /* 0 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n",
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.3,\"name\":\"validate\"}\n",
+
 
     /* 1 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"urgency\","
      "\"context\":{\"userid\":42,\"urgency\":1}}\n",
 
     /* 2 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
      "\"context\":{\"priority\":1}}\n",
@@ -76,18 +80,21 @@ const char *test_input[] = {
     /* 3 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"exception\","
      "\"context\":{\"type\":\"cancel\",\"severity\":0,\"userid\":42}}\n",
 
     /* 4 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"exception\","
      "\"context\":{\"type\":\"meep\",\"severity\":1,\"userid\":42}}\n",
 
     /* 5 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
      "\"context\":{\"priority\":100}}\n"
@@ -99,6 +106,7 @@ const char *test_input[] = {
     /* 7 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
      "\"context\":{\"priority\":100}}\n"

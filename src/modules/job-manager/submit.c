@@ -91,7 +91,7 @@ static int submit_job (struct job_manager *ctx,
         || jobtap_check_dependencies (ctx->jobtap, job, false, &error) < 0) {
         set_errorf (errors, job->id, error ? error : "rejected by plugin");
         free (error);
-        goto error;
+        goto error_post_invalid;
     }
     /* Call job.new callback now that job is accepted, so plugins
      * may account for this job.
@@ -104,11 +104,26 @@ static int submit_job (struct job_manager *ctx,
         set_errorf (errors, job->id, "error posting submit event");
         goto error;
     }
+    /* Post the validate event.
+     */
+    if (event_job_post_pack (ctx->event, job, "validate", 0, NULL) < 0) {
+        set_errorf (errors, job->id, "error posting validate event");
+        goto error_post_invalid;
+    }
     if ((job->flags & FLUX_JOB_WAITABLE))
         wait_notify_active (ctx->wait, job);
     if (ctx->max_jobid < job->id)
         ctx->max_jobid = job->id;
     return 0;
+error_post_invalid:
+    /* Let journal consumers know this job did not pass validation and
+     * all data concerning it should be expunged.
+     */
+    (void)event_job_post_pack (ctx->event,
+                               job,
+                               "invalidate",
+                               EVENT_NO_COMMIT,
+                               NULL);
 error:
     zhashx_delete (ctx->active_jobs, &job->id);
     return -1;

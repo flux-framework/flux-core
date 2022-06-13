@@ -590,6 +590,8 @@ int event_job_update (struct job *job, json_t *event)
                                          &job->userid,
                                          &job->flags) < 0)
             goto error;
+    }
+    else if (streq (name, "validate")) {
         job->state = FLUX_JOB_STATE_DEPEND;
     }
     else if (!strncmp (name, "dependency-", 11)) {
