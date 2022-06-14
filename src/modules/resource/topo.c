@@ -257,7 +257,7 @@ error:
 
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "resource.topo-reduce",  topo_reduce_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "resource.topo-get", topo_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "resource.topo-get", topo_get_cb, FLUX_ROLE_USER },
     FLUX_MSGHANDLER_TABLE_END,
 };
 
