@@ -216,25 +216,6 @@ static int test_event_post_pack (flux_plugin_t *p,
                                      errno,
                                      ENOENT);
 
-    if (strcmp (topic, "job.validate") == 0
-        || strcmp (topic, "job.new") == 0) {
-        /* Events may not be emitted before DEPEND state */
-        if (flux_jobtap_event_post_pack (p,
-                                         FLUX_JOBTAP_CURRENT_JOB,
-                                         "foo",
-                                         NULL) == 0
-            || errno != EAGAIN)
-            flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
-                                         "test", 0,
-                                         "%s: %s (%s): errno=%d != %d",
-                                         topic,
-                                         "flux_jobtap_event_post_pack",
-                                         " (topic=%S)",
-                                         errno,
-                                         EINVAL);
-        return 0;
-    }
-
     const char *state;
     if (strncmp (topic, "job.state.", 10) == 0)
         state = topic+10;
@@ -298,14 +279,6 @@ static int test_job_flags (flux_plugin_t *p,
                            flux_plugin_arg_t *args)
 {
     const char *flag = NULL;
-
-    if (strcmp (topic, "job.validate") == 0
-        || strcmp (topic, "job.new") == 0) {
-        /*  Flag cannot be set before job.state.depend (errno EAGAIN) */
-        set_flag_expect_error (topic, p, FLUX_JOBTAP_CURRENT_JOB, "foo",
-                               "p, CURRENT, foo", EAGAIN);
-        return 0;
-    }
 
     set_flag_expect_error (topic, NULL, 0, NULL,    "NULL, 0, NULL", EINVAL);
     set_flag_expect_error (topic, p,    0, NULL,    "p, 0, NULL",    EINVAL);

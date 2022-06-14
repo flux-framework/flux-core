@@ -222,12 +222,7 @@ check_event_post() {
 	flux job wait-event -t 20 $id clean >/dev/null
 }
 
-for state in validate new; do
-    test_expect_failure "job-manager: jobtap job.$state can emit events" "
-        check_event_post ${state}
-    "
-done
-for state in depend priority run cleanup; do
+for state in validate new depend priority run cleanup; do
     test_expect_success "job-manager: jobtap job.$state can emit events" "
         check_event_post ${state}
     "
