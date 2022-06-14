@@ -759,9 +759,24 @@ int event_job_process_entry (struct event *event,
     flux_job_state_t old_state = job->state;
     int eventlog_seq = job->eventlog_seq;
     const char *name;
+    json_t *context;
 
-    if (eventlog_entry_parse (entry, NULL, &name, NULL) < 0)
+    if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
         return -1;
+
+    /*  Forbid fatal exceptions in NEW state.
+     */
+    if (job->state == FLUX_JOB_STATE_NEW && streq (name, "exception")) {
+        int severity;
+        if (event_exception_context_decode (context, &severity))
+            return -1;
+        if (severity == 0) {
+            flux_log (event->ctx->h,
+                      LOG_ERR,
+                      "fatal job exception was posted in NEW state");
+            return -1;
+        }
+    }
 
     /*  Journal event sequence should match actual sequence of events
      *   in the job eventlog, so set eventlog_seq to -1 with
