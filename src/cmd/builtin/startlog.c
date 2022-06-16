@@ -33,35 +33,6 @@ enum post_flags {
     POST_FLAG_FLUSH,
 };
 
-static void content_flush (flux_t *h)
-{
-    flux_future_t *f;
-
-    if (!(f = flux_rpc (h, "content.flush", NULL, 0, 0))
-        || flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("Error flushing content cache: %s",
-                      future_strerror (f, errno));
-    flux_future_destroy (f);
-}
-
-static void kvs_checkpoint_put (flux_t *h, const char *treeobj)
-{
-    json_t *o;
-    const char *rootref;
-    flux_future_t *f;
-
-    if (!(o = treeobj_decode (treeobj))
-        || !(rootref = treeobj_get_blobref (o, 0)))
-        log_err_exit ("Error decoding treeobj from eventlog commit");
-
-    if (!(f = kvs_checkpoint_commit (h, NULL, rootref, 0))
-        || flux_rpc_get (f, NULL) < 0)
-        log_msg_exit ("Error writing kvs checkpoint: %s",
-                      future_strerror (f, errno));
-    flux_future_destroy (f);
-    json_decref (o);
-}
-
 static void post_startlog_event (flux_t *h,
                                  enum post_flags flags,
                                  const char *name,
@@ -72,8 +43,8 @@ static void post_startlog_event (flux_t *h,
     char *event;
     flux_kvs_txn_t *txn;
     flux_future_t *f;
-    const char *treeobj;
     uint32_t rank;
+    int commit_flags = 0;
 
     if (flux_get_rank (h, &rank) < 0)
         log_err_exit ("Error fetching rank");
@@ -92,16 +63,15 @@ static void post_startlog_event (flux_t *h,
                              startlog_key,
                              event) < 0)
         log_err_exit ("Error creating %s event", name);
-    if (!(f = flux_kvs_commit (h, NULL, 0, txn))
-        || flux_kvs_commit_get_treeobj (f, &treeobj) < 0)
+
+    if (flags == POST_FLAG_FLUSH)
+        commit_flags |= FLUX_KVS_SYNC;
+
+    if (!(f = flux_kvs_commit (h, NULL, commit_flags, txn))
+        || flux_rpc_get (f, NULL) < 0)
         log_msg_exit ("Error commiting %s event: %s",
                       name,
                       future_strerror (f, errno));
-
-    if (flags == POST_FLAG_FLUSH) {
-        content_flush (h);
-        kvs_checkpoint_put (h, treeobj);
-    }
 
     flux_future_destroy (f);
     flux_kvs_txn_destroy (txn);
