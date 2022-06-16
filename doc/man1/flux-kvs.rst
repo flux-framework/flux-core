@@ -80,7 +80,7 @@ COMMANDS
    directory. The *-f* option can be specified to monitor for many of
    these special situations.
 
-**put** [-N ns] [-O|-b|-s] [-r|-t] [-n] [-A] *key=value* [*key=value* ...]
+**put** [-N ns] [-O|-b|-s] [-r|-t] [-n] [-A] [-S] *key=value* [*key=value* ...]
    Store *value* under *key* and commit it. Specify an alternate
    namespace to commit value(s) via *-N*. If it already has a value,
    overwrite it. If no options, value is stored directly. If *-r* or
@@ -89,9 +89,12 @@ COMMANDS
    If *-t*, value is stored as a RFC 11 object. *-n* prevents the commit
    from being merged with with other contemporaneous commits. *-A*
    appends the value to a key instead of overwriting the value. Append
-   is incompatible with the -j option. After a successful put, *-O*,
-   *-b*, or *-s* can be specified to output the RFC 11 treeobj, root
-   blobref, or root sequence number of the root containing the put(s).
+   is incompatible with the -j option. *-S* flushes and checkpoints
+   the primary KVS namespace after the put.  This can be used to
+   ensure critical data has been stored to non-volatile storage.
+   After a successful put, *-O*, *-b*, or *-s* can be specified to
+   output the RFC 11 treeobj, root blobref, or root sequence number of
+   the root containing the put(s).
 
 **ls** [-N ns] [-R] [-d] [-F] [-w COLS] [-1] [*key* ...]
    Display directory referred to by *key*, or "." (root) if unspecified.

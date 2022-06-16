@@ -128,6 +128,9 @@ static struct optparse_option put_opts[] =  {
     { .name = "append", .key = 'A', .has_arg = 0,
       .usage = "Append value(s) to key instead of overwriting",
     },
+    { .name = "sync", .key = 'S', .has_arg = 0,
+      .usage = "Flushes content and checkpoints after completing put",
+    },
     OPTPARSE_TABLE_END
 };
 
@@ -286,7 +289,7 @@ static struct optparse_subcommand subcommands[] = {
       get_opts
     },
     { "put",
-      "[-N ns] [-O|-b|-s] [-r|-t] [-n] [-A] key=value [key=value...]",
+      "[-N ns] [-O|-b|-s] [-r|-t] [-n] [-A] [-S] key=value [key=value...]",
       "Store value under key",
       cmd_put,
       0,
@@ -842,6 +845,9 @@ int cmd_put (optparse_t *p, int argc, char **argv)
 
     if (optparse_hasopt (p, "no-merge"))
         commit_flags |= FLUX_KVS_NO_MERGE;
+
+    if (optparse_hasopt (p, "sync"))
+        commit_flags |= FLUX_KVS_SYNC;
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");
