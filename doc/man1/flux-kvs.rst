@@ -80,7 +80,7 @@ COMMANDS
    directory. The *-f* option can be specified to monitor for many of
    these special situations.
 
-**put** [-N ns] [-O|-s] [-r|-t] [-n] [-A] *key=value* [*key=value* ...]
+**put** [-N ns] [-O|-b|-s] [-r|-t] [-n] [-A] *key=value* [*key=value* ...]
    Store *value* under *key* and commit it. Specify an alternate
    namespace to commit value(s) via *-N*. If it already has a value,
    overwrite it. If no options, value is stored directly. If *-r* or
@@ -89,9 +89,9 @@ COMMANDS
    If *-t*, value is stored as a RFC 11 object. *-n* prevents the commit
    from being merged with with other contemporaneous commits. *-A*
    appends the value to a key instead of overwriting the value. Append
-   is incompatible with the -j option. After a successful put, *-O* or
-   *-s* can be specified to output the RFC 11 treeobj or root sequence
-   number of the root containing the put(s).
+   is incompatible with the -j option. After a successful put, *-O*,
+   *-b*, or *-s* can be specified to output the RFC 11 treeobj, root
+   blobref, or root sequence number of the root containing the put(s).
 
 **ls** [-N ns] [-R] [-d] [-F] [-w COLS] [-1] [*key* ...]
    Display directory referred to by *key*, or "." (root) if unspecified.
@@ -113,21 +113,22 @@ COMMANDS
    treeobj* causes the lookup to be relative to an RFC 11 snapshot
    reference.
 
-**unlink** [-N ns] [-O|-s] [-R] [-f] *key* [*key* ...]
+**unlink** [-N ns] [-O|-b|-s] [-R] [-f] *key* [*key* ...]
    Remove *key* from the KVS and commit the change. Specify an alternate
    namespace to commit to via *-N*. If *key* represents a directory,
    specify *-R* to remove all keys underneath it. If *-f* is specified,
-   ignore nonexistent files. After a successful unlink, *-O* or *-s* can
-   be specified to output the RFC 11 treeobj or root sequence number of
-   the root containing the unlink(s).
+   ignore nonexistent files. After a successful unlink, *-O*, *-b*, or
+   *-s* can be specified to output the RFC 11 treeobj, root blobref,
+   or root sequence number of the root containing the unlink(s).
 
-**link** [-N ns] [-T ns] [-O|-s] *target* *linkname*
+**link** [-N ns] [-T ns] [-O|-b|-s] *target* *linkname*
    Create a new name for *target*, similar to a symbolic link, and commit
    the change. *target* does not have to exist. If *linkname* exists,
    it is overwritten. Specify an alternate namespace to commit linkname
    to via *-N*. Specify the target's namespace via *-T*. After a
-   successfully created link, *-O* or *-s* can be specified to output the
-   RFC 11 treeobj or root sequence number of the root containing the link.
+   successfully created link, *-O*, *-b*, or *-s* can be specified to
+   output the RFC 11 treeobj, root blobref, or root sequence number of
+   the root containing the link.
 
 **readlink** [-N ns] [-a treeobj] [ -o \| -k ] *key* [*key* ...]
    Retrieve the key a link refers to rather than its value, as would be
@@ -138,12 +139,12 @@ COMMANDS
    can be used to only output namespaces and the *-k* can be used to only
    output keys.
 
-**mkdir** [-N ns] [-O|-s] *key* [*key* ...]
+**mkdir** [-N ns] [-O|-b|-s] *key* [*key* ...]
    Create an empty directory and commit the change. If *key* exists,
    it is overwritten. Specify an alternate namespace to commit to via
-   *-N*. After a successful mkdir, *-O* or *-s* can be specified to
-   output the RFC 11 treeobj or root sequence number of the root
-   containing the new directory.
+   *-N*. After a successful mkdir, *-O*, *-b*, or *-s* can be
+   specified to output the RFC 11 treeobj, root blobref, or root
+   sequence number of the root containing the new directory.
 
 **copy** [-S src-ns] [-D dst-ns] *source* *destination*
    Copy *source* key to *destination* key. Optionally, specify a source

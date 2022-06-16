@@ -110,6 +110,9 @@ static struct optparse_option put_opts[] =  {
     { .name = "treeobj-root", .key = 'O', .has_arg = 0,
       .usage = "Output resulting RFC11 root containing puts",
     },
+    { .name = "blobref", .key = 'b', .has_arg = 0,
+      .usage = "Output blobref of root containing puts",
+    },
     { .name = "sequence", .key = 's', .has_arg = 0,
       .usage = "Output root sequence of root containing puts",
     },
@@ -183,6 +186,9 @@ static struct optparse_option unlink_opts[] =  {
     { .name = "treeobj-root", .key = 'O', .has_arg = 0,
       .usage = "Output resulting RFC11 root containing unlinks",
     },
+    { .name = "blobref", .key = 'b', .has_arg = 0,
+      .usage = "Output blobref of root containing unlinks",
+    },
     { .name = "sequence", .key = 's', .has_arg = 0,
       .usage = "Output root sequence of root containing unlinks",
     },
@@ -231,6 +237,9 @@ static struct optparse_option link_opts[] =  {
     { .name = "treeobj-root", .key = 'O', .has_arg = 0,
       .usage = "Output resulting RFC11 root containing link",
     },
+    { .name = "blobref", .key = 'b', .has_arg = 0,
+      .usage = "Output blobref of root containing link",
+    },
     { .name = "sequence", .key = 's', .has_arg = 0,
       .usage = "Output root sequence of root containing link",
     },
@@ -243,6 +252,9 @@ static struct optparse_option mkdir_opts[] =  {
     },
     { .name = "treeobj-root", .key = 'O', .has_arg = 0,
       .usage = "Output resulting RFC11 root containing new directory",
+    },
+    { .name = "blobref", .key = 'b', .has_arg = 0,
+      .usage = "Output blobref of root containing new directory",
     },
     { .name = "sequence", .key = 's', .has_arg = 0,
       .usage = "Output root sequence of root containing new directory",
@@ -274,7 +286,7 @@ static struct optparse_subcommand subcommands[] = {
       get_opts
     },
     { "put",
-      "[-N ns] [-O|-s] [-r|-t] [-n] [-A] key=value [key=value...]",
+      "[-N ns] [-O|-b|-s] [-r|-t] [-n] [-A] key=value [key=value...]",
       "Store value under key",
       cmd_put,
       0,
@@ -295,14 +307,14 @@ static struct optparse_subcommand subcommands[] = {
       ls_opts
     },
     { "unlink",
-      "[-N ns] [-O|-s] [-R] [-f] key [key...]",
+      "[-N ns] [-O|-b|-s] [-R] [-f] key [key...]",
       "Remove key",
       cmd_unlink,
       0,
       unlink_opts
     },
     { "link",
-      "[-N ns] [-T ns] [-O|-s] target linkname",
+      "[-N ns] [-T ns] [-O|-b|-s] target linkname",
       "Create a new name for target",
       cmd_link,
       0,
@@ -316,7 +328,7 @@ static struct optparse_subcommand subcommands[] = {
       readlink_opts
     },
     { "mkdir",
-      "[-N ns] [-O|-s] key [key...]",
+      "[-N ns] [-O|-b|-s] key [key...]",
       "Create a directory",
       cmd_mkdir,
       0,
@@ -792,6 +804,12 @@ void commit_finish (flux_future_t *f, optparse_t *p)
         if (flux_kvs_commit_get_treeobj (f, &treeobj) < 0)
             log_err_exit ("flux_kvs_commit_get_treeobj");
         printf ("%s\n", treeobj);
+    }
+    else if (optparse_hasopt (p, "blobref")) {
+        const char *blobref = NULL;
+        if (flux_kvs_commit_get_rootref (f, &blobref) < 0)
+            log_err_exit ("flux_kvs_commit_get_rootref");
+        printf ("%s\n", blobref);
     }
     else if (optparse_hasopt (p, "sequence")) {
         int sequence;

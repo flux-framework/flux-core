@@ -1114,7 +1114,7 @@ test_expect_success 'kvs: get --at: fails bad on dirent' '
 '
 
 #
-# -O, -s options in write commands
+# -O, -b, -s options in write commands
 #
 
 test_expect_success 'kvs: --treeobj-root on write ops works' '
@@ -1127,6 +1127,22 @@ test_expect_success 'kvs: --treeobj-root on write ops works' '
         grep "dirref" output &&
         flux kvs link -O $DIR.a $DIR.b > output &&
         grep "dirref" output
+'
+
+test_expect_success 'kvs: --blobref on write ops works' '
+	flux kvs unlink -Rf $DIR &&
+        flux kvs put -b $DIR.a=1 > output &&
+        flux kvs getroot -b > expected &&
+        test_cmp output expected &&
+        flux kvs unlink -b $DIR.a > output &&
+        flux kvs getroot -b > expected &&
+        test_cmp output expected &&
+        flux kvs mkdir -b $DIR.a > output &&
+        flux kvs getroot -b > expected &&
+        test_cmp output expected &&
+        flux kvs link -b $DIR.a $DIR.b > output &&
+        flux kvs getroot -b > expected &&
+        test_cmp output expected
 '
 
 test_expect_success 'kvs: --sequence on write ops works' '
