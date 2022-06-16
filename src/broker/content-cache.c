@@ -703,6 +703,16 @@ static void content_unregister_backing_request (flux_t *h,
         flux_log_error (h, "error responding to unregister-backing request");
     if (cache->acct_dirty > 0)
         flux_log (h, LOG_ERR, "%d unflushables", cache->acct_dirty);
+    /* If backing store is unloaded with pending flush requests, ensure that
+     * they receive an error response.
+     */
+    if (cache->flush_requests) {
+        request_list_respond_error (&cache->flush_requests,
+                                    cache->h,
+                                    ENOSYS,
+                                    NULL,
+                                    "flush");
+    }
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
@@ -785,6 +795,10 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
 {
     struct content_cache *cache = arg;
 
+    if (cache->rank == 0 && !cache->backing) {
+        errno = ENOSYS;
+        goto error;
+    }
     if (cache->acct_dirty > 0) {
         if (cache_flush (cache) < 0)
             goto error;
