@@ -63,6 +63,24 @@ struct kvstxn {
     zlist_t *dirty_cache_entries_list;
     int internal_flags;
     kvstxn_mgr_t *ktm;
+    /* State transitions
+     *
+     * INIT - perform initializations / checks
+     * LOAD_ROOT - load KVS root
+     *           - if needed, report missing refs to caller and stall
+     * APPLY_OPS - apply changes to KVS
+     *           - if needed, report missing refs to caller and stall
+     * STORE - generate dirty entries for caller to store
+     * PRE_FINISHED - stall until stores complete
+     *              - generate keys modified in txn
+     * FINISHED - end state
+     *
+     * INIT -> LOAD_ROOT
+     * LOAD_ROOT -> APPLY_OPS
+     * APPLY_OPS -> STORE
+     * STORE -> PRE_FINISHED
+     * PRE_FINISHED -> FINISHED
+     */
     enum {
         KVSTXN_STATE_INIT = 1,
         KVSTXN_STATE_LOAD_ROOT = 2,
