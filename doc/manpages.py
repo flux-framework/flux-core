@@ -208,6 +208,7 @@ man_pages = [
     ('man3/flux_shell_current_task', 'flux_shell_task_next', 'Get and iterate over shell tasks', [author], 3),
     ('man3/flux_shell_current_task', 'flux_shell_current_task', 'Get and iterate over shell tasks', [author], 3),
     ('man3/flux_shell_get_flux', 'flux_shell_get_flux', 'Get a flux_t\* object from flux shell handle', [author], 3),
+    ('man3/flux_shell_get_hwloc_xml', 'flux_shell_get_hwloc_xml', 'Access the shell cached copy of local hwloc xml', [author], 3),
     ('man3/flux_shell_get_info', 'flux_shell_info_unpack', 'Manage shell info and rank info', [author], 3),
     ('man3/flux_shell_get_info', 'flux_shell_get_rank_info', 'Manage shell info and rank info', [author], 3),
     ('man3/flux_shell_get_info', 'flux_shell_get_rank_info', 'Manage shell info and rank info', [author], 3),

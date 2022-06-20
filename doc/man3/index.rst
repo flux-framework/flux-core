@@ -54,6 +54,7 @@ man3
    flux_shell_aux_set
    flux_shell_current_task
    flux_shell_get_flux
+   flux_shell_get_hwloc_xml
    flux_shell_get_info
    flux_shell_get_jobspec_info
    flux_shell_getenv

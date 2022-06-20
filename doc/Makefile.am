@@ -61,6 +61,7 @@ MAN3_FILES_PRIMARY = \
 	man3/flux_shell_aux_set.3 \
 	man3/flux_shell_current_task.3 \
 	man3/flux_shell_get_flux.3 \
+	man3/flux_shell_get_hwloc_xml.3 \
 	man3/flux_shell_get_info.3 \
 	man3/flux_shell_get_jobspec_info.3 \
 	man3/flux_shell_getenv.3 \
