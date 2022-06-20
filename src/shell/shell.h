@@ -93,6 +93,9 @@ int flux_shell_setenvf (flux_shell_t *shell, int overwrite,
  */
 int flux_shell_unsetenv (flux_shell_t *shell, const char *name);
 
+/*  Return the job shell's cached copy of hwloc XML.
+ */
+int flux_shell_get_hwloc_xml (flux_shell_t *shell, const char **xmlp);
 
 /*  Return shell info as a JSON string.
  *  {
