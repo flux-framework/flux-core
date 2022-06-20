@@ -611,7 +611,6 @@ static int cache_flush (struct content_cache *cache)
 {
     struct cache_entry *e;
     int last_errno = 0;
-    int count = 0;
     int rc = 0;
 
     while (cache->flush_batch_count < cache->flush_batch_limit) {
@@ -621,7 +620,6 @@ static int cache_flush (struct content_cache *cache)
             last_errno = errno;           //   and continuation will decr
             rc = -1;
         }
-        count++;
     }
     if (rc < 0)
         errno = last_errno;
