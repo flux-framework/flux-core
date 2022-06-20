@@ -87,6 +87,11 @@ static int shell_cb (flux_plugin_t *p,
     ok (flux_shell_get_environ (shell, NULL) < 0 && errno == EINVAL,
         "flux_shell_get_environ with NULL json_str returns EINVAL");
 
+    ok (flux_shell_get_hwloc_xml (NULL, NULL) < 0 && errno == EINVAL,
+        "flux_shell_get_hwloc_xml with NULL args returns EINVAL");
+    ok (flux_shell_get_hwloc_xml (shell, NULL) < 0 && errno == EINVAL,
+        "flux_shell_get_hwloc_xml with NULL xml pointer returns EINVAL");
+
     ok (flux_shell_get_info (NULL, NULL) < 0 && errno == EINVAL,
         "flux_shell_get_info with NUll arg returns EINVAL");
     ok (flux_shell_get_info (shell, NULL) < 0 && errno == EINVAL,

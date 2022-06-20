@@ -22,6 +22,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/read_all.h"
+#include "src/common/librlist/rhwloc.h"
 
 #include "internal.h"
 #include "info.h"
@@ -138,18 +139,52 @@ static int shell_init_jobinfo (flux_shell_t *shell,
                                const char *R)
 {
     int rc = -1;
-    flux_future_t *f = NULL;
+    flux_future_t *f_info = NULL;
+    flux_future_t *f_hwloc = NULL;
+    const char *xml;
     json_error_t error;
+
+    /*  If shell is not running standlone, fetch hwloc topology
+     *   from resource module to avoid having to load from scratch
+     *   here. The topology XML is then cached for future shell plugin
+     *   use.
+     */
+    if (!shell->standalone
+        && !(f_hwloc = flux_rpc (shell->h,
+                                 "resource.topo-get",
+                                 NULL,
+                                 FLUX_NODEID_ANY,
+                                 0)))
+        goto out;
 
     if (!R || !jobspec) {
         /* Fetch missing jobinfo from broker job-info service */
         if (shell->standalone) {
             shell_log_error ("Invalid arguments: standalone and R/jobspec are unset");
-            return -1;
-        }
-        if (!(f = lookup_job_info (shell->h, shell->jobid, jobspec, R))
-                || lookup_job_info_get (f, &jobspec, &R) < 0)
             goto out;
+        }
+        if (!(f_info = lookup_job_info (shell->h, shell->jobid, jobspec, R)))
+            goto out;
+    }
+
+    if (f_hwloc) {
+        if (flux_rpc_get (f_hwloc, &xml) < 0
+            || !(info->hwloc_xml = strdup (xml))) {
+            shell_log_error ("error fetching local hwloc xml");
+            goto out;
+        }
+    }
+    else {
+        /*  We couldn't fetch hwloc, load a copy manually */
+        if (!(info->hwloc_xml = rhwloc_local_topology_xml ())) {
+            shell_log_error ("error loading local hwloc xml");
+            goto out;
+        }
+    }
+
+    if (f_info && lookup_job_info_get (f_info, &jobspec, &R) < 0) {
+        shell_log_error ("error fetching jobspec,R");
+        goto out;
     }
     if (!(info->jobspec = jobspec_parse (jobspec, &error))) {
         shell_log_error ("error parsing jobspec: %s", error.text);
@@ -165,7 +200,8 @@ static int shell_init_jobinfo (flux_shell_t *shell,
     }
     rc = 0;
 out:
-    flux_future_destroy (f);
+    flux_future_destroy (f_hwloc);
+    flux_future_destroy (f_info);
     return rc;
 }
 
@@ -255,6 +291,7 @@ void shell_info_destroy (struct shell_info *info)
         json_decref (info->R);
         jobspec_destroy (info->jobspec);
         rcalc_destroy (info->rcalc);
+        free (info->hwloc_xml);
         free (info);
         errno = saved_errno;
     }

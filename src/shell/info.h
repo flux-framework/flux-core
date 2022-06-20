@@ -30,6 +30,7 @@ struct shell_info {
     struct jobspec *jobspec;
     rcalc_t *rcalc;
     struct rcalc_rankinfo rankinfo;
+    char *hwloc_xml;
 };
 
 /* Create shell_info.

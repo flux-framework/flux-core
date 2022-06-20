@@ -421,6 +421,16 @@ int flux_shell_unsetenv (flux_shell_t *shell, const char *name)
     return json_object_del (shell->info->jobspec->environment, name);
 }
 
+int flux_shell_get_hwloc_xml (flux_shell_t *shell, const char **xmlp)
+{
+    if (!shell || !shell->info || !xmlp) {
+        errno = EINVAL;
+        return -1;
+    }
+    *xmlp = shell->info->hwloc_xml;
+    return 0;
+}
+
 static json_t *flux_shell_get_info_object (flux_shell_t *shell)
 {
     json_error_t err;

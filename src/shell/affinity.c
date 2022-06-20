@@ -158,10 +158,30 @@ static void shell_affinity_destroy (void *arg)
 
 /*  Initialize topology object for affinity processing.
  */
-static int shell_affinity_topology_init (struct shell_affinity *sa)
+static int shell_affinity_topology_init (flux_shell_t *shell,
+                                         struct shell_affinity *sa)
 {
+    const char *xml;
+
+    /*  Fetch hwloc XML cached in job shell to avoid heavyweight
+     *   hwloc topology load (Issue #4365)
+     */
+    if (flux_shell_get_hwloc_xml (shell, &xml) < 0)
+        return shell_log_errno ("failed to unpack hwloc object");
+
     if (hwloc_topology_init (&sa->topo) < 0)
         return shell_log_errno ("hwloc_topology_init");
+
+    if (hwloc_topology_set_xmlbuffer (sa->topo, xml, strlen (xml)) < 0)
+        return shell_log_errno ("hwloc_topology_set_xmlbuffer");
+
+    /*  Tell hwloc that our XML loaded topology is from this system,
+     *   O/w hwloc CPU binding will not work.
+     */
+    if (hwloc_topology_set_flags (sa->topo,
+                                  HWLOC_TOPOLOGY_FLAG_IS_THISSYSTEM) < 0)
+        return shell_log_errno ("hwloc_topology_set_flags");
+
     if (hwloc_topology_load (sa->topo) < 0)
         return shell_log_errno ("hwloc_topology_load");
     if (topology_restrict_current (sa->topo) < 0)
@@ -178,7 +198,7 @@ static struct shell_affinity * shell_affinity_create (flux_shell_t *shell)
     struct shell_affinity *sa = calloc (1, sizeof (*sa));
     if (!sa)
         return NULL;
-    if (shell_affinity_topology_init (sa) < 0)
+    if (shell_affinity_topology_init (shell, sa) < 0)
         goto err;
     if (flux_shell_rank_info_unpack (shell,
                                      -1,
