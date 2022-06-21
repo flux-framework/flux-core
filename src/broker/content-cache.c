@@ -774,6 +774,8 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
     struct content_cache *cache = arg;
 
     if (cache->acct_dirty > 0) {
+        if (cache_flush (cache) < 0)
+            goto error;
         if (msgstack_push (&cache->flush_requests, msg) < 0)
             goto error;
         return;
