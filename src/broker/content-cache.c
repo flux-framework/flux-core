@@ -591,6 +591,12 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
                 return;
             }
         }
+        /* On rank 0, save to flush list in event backing module
+         * loaded later.  Note that dirty entries are not removed
+         * during purge or dropcache, so this does not alter
+         * behavior */
+        if (cache->rank == 0 && !cache->backing)
+            list_add_tail (&cache->flush, &e->list);
     }
     if (flux_respond_raw (h, msg, hash, hash_size) < 0)
         flux_log_error (h, "content store: flux_respond_raw");
