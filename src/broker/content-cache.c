@@ -614,12 +614,18 @@ static int cache_flush (struct content_cache *cache)
     int rc = 0;
 
     while (cache->flush_batch_count < cache->flush_batch_limit) {
-        if (!(e = list_pop (&cache->flush, struct cache_entry, list)))
+        if (!(e = list_top (&cache->flush, struct cache_entry, list)))
             break;
         if (cache_store (cache, e) < 0) { // incr flush_batch_count
             last_errno = errno;           //   and continuation will decr
             rc = -1;
+            /* A few errors we will consider "unrecoverable", so break
+             * out */
+            if (errno == ENOSYS
+                || errno == ENOMEM)
+                break;
         }
+        (void)list_pop (&cache->flush, struct cache_entry, list);
     }
     if (rc < 0)
         errno = last_errno;
