@@ -1530,8 +1530,6 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* namespace must exist given we are on rank 0 */
     if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm, ns))) {
-        flux_log (h, LOG_ERR, "%s: namespace %s not available",
-                  __FUNCTION__, ns);
         errno = ENOTSUP;
         goto error;
     }
@@ -1673,8 +1671,6 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
 
     /* namespace must exist given we are on rank 0 */
     if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm, ns))) {
-        flux_log (h, LOG_ERR, "%s: namespace %s not available",
-                  __FUNCTION__, ns);
         errno = ENOTSUP;
         goto error;
     }
@@ -1919,7 +1915,6 @@ static void getroot_request_cb (flux_t *h, flux_msg_handler_t *mh,
     if (ctx->rank == 0) {
         /* namespace must exist given we are on rank 0 */
         if (!(root = kvsroot_mgr_lookup_root_safe (ctx->krm, ns))) {
-            flux_log (h, LOG_DEBUG, "namespace %s not available", ns);
             errno = ENOTSUP;
             goto error;
         }
