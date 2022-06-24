@@ -44,12 +44,13 @@
 #include "kvsroot.h"
 #include "kvssync.h"
 
-/* sync_cb() is called periodically to manage cached content and namespaces.
- * Synchronize with the system heartbeat if possible, but keep the time between
- * checks bounded by 'sync_min' and 'sync_max' seconds.
+/* heartbeat_sync_cb() is called periodically to manage cached content
+ * and namespaces.  Synchronize with the system heartbeat if possible,
+ * but keep the time between checks bounded by 'heartbeat_sync_min'
+ * and 'heartbeat_sync_max' seconds.
  */
-const double sync_min = 1.;
-const double sync_max = 30.;
+const double heartbeat_sync_min = 1.;
+const double heartbeat_sync_max = 30.;
 
 /* Expire cache_entry after 'max_lastuse_age' seconds.
  */
@@ -1222,7 +1223,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     return 0;
 }
 
-static void sync_cb (flux_future_t *f, void *arg)
+static void heartbeat_sync_cb (flux_future_t *f, void *arg)
 {
     struct kvs_ctx *ctx = arg;
 
@@ -2874,7 +2875,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     struct kvs_ctx *ctx;
     flux_msg_handler_t **handlers = NULL;
-    flux_future_t *f_sync = NULL;
+    flux_future_t *f_heartbeat_sync = NULL;
     int rc = -1;
 
     if (!(ctx = kvs_ctx_create (h))) {
@@ -2929,8 +2930,11 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_msg_handler_addvec");
         goto done;
     }
-    if (!(f_sync = flux_sync_create (h, sync_min))
-            || flux_future_then (f_sync, sync_max, sync_cb, ctx) < 0) {
+    if (!(f_heartbeat_sync = flux_sync_create (h, heartbeat_sync_min))
+            || flux_future_then (f_heartbeat_sync,
+                                 heartbeat_sync_max,
+                                 heartbeat_sync_cb,
+                                 ctx) < 0) {
         flux_log_error (h, "error starting heartbeat synchronization");
         goto done;
     }
@@ -2958,7 +2962,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     rc = 0;
 done:
-    flux_future_destroy (f_sync);
+    flux_future_destroy (f_heartbeat_sync);
     flux_msg_handler_delvec (handlers);
     kvs_ctx_destroy (ctx);
     return rc;
