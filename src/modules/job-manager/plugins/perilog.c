@@ -314,11 +314,6 @@ static int run_command (flux_plugin_t *p,
         return -1;
     }
 
-    if (prolog) {
-        if (flux_jobtap_job_subscribe (p, FLUX_JOBTAP_CURRENT_JOB) < 0)
-            flux_log_error (h, "prolog: flux_jobtap_job_subscribe");
-    }
-
     return 0;
 }
 
@@ -327,6 +322,24 @@ static int run_cb (flux_plugin_t *p,
                    flux_plugin_arg_t *args,
                    void *arg)
 {
+
+    /*
+     *  Subscribe to job events if an epilog or prolog command is
+     *   registered. This is needed to allow this plugin to subscribe
+     *   to the finish event for the epilog, and any exception events
+     *   for the prolog (so it can be canceled).
+     */
+    if (perilog_config.epilog_cmd || perilog_config.prolog_cmd) {
+        if (flux_jobtap_job_subscribe (p, FLUX_JOBTAP_CURRENT_JOB) < 0) {
+            flux_jobtap_raise_exception (p,
+                                         FLUX_JOBTAP_CURRENT_JOB,
+                                         "prolog",
+                                         0,
+                                         "failed to subscribe to job events");
+            return -1;
+        }
+    }
+
     if (perilog_config.prolog_cmd == NULL)
         return 0;
 
