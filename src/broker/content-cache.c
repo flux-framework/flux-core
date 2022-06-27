@@ -591,6 +591,12 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
                 return;
             }
         }
+        /* On rank 0, save to flush list in event backing module
+         * loaded later.  Note that dirty entries are not removed
+         * during purge or dropcache, so this does not alter
+         * behavior */
+        if (cache->rank == 0 && !cache->backing)
+            list_add_tail (&cache->flush, &e->list);
     }
     if (flux_respond_raw (h, msg, hash, hash_size) < 0)
         flux_log_error (h, "content store: flux_respond_raw");
@@ -611,17 +617,21 @@ static int cache_flush (struct content_cache *cache)
 {
     struct cache_entry *e;
     int last_errno = 0;
-    int count = 0;
     int rc = 0;
 
     while (cache->flush_batch_count < cache->flush_batch_limit) {
-        if (!(e = list_pop (&cache->flush, struct cache_entry, list)))
+        if (!(e = list_top (&cache->flush, struct cache_entry, list)))
             break;
         if (cache_store (cache, e) < 0) { // incr flush_batch_count
             last_errno = errno;           //   and continuation will decr
             rc = -1;
+            /* A few errors we will consider "unrecoverable", so break
+             * out */
+            if (errno == ENOSYS
+                || errno == ENOMEM)
+                break;
         }
-        count++;
+        (void)list_pop (&cache->flush, struct cache_entry, list);
     }
     if (rc < 0)
         errno = last_errno;
@@ -776,6 +786,8 @@ static void content_flush_request (flux_t *h, flux_msg_handler_t *mh,
     struct content_cache *cache = arg;
 
     if (cache->acct_dirty > 0) {
+        if (cache_flush (cache) < 0)
+            goto error;
         if (msgstack_push (&cache->flush_requests, msg) < 0)
             goto error;
         return;
