@@ -455,7 +455,7 @@ void kvstxn_mgr_merge_tests (void)
 
     clear_ready_kvstxns (ktm);
 
-    /* test unsuccessful merge */
+    /* test unsuccessful merge (FLUX_KVS_NO_MERGE) */
 
     create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, FLUX_KVS_NO_MERGE);
     create_ready_kvstxn (ktm, "transaction2", "key2", "2", 0, 0);
@@ -477,10 +477,54 @@ void kvstxn_mgr_merge_tests (void)
 
     clear_ready_kvstxns (ktm);
 
-    /* test unsuccessful merge */
+    /* test unsuccessful merge (FLUX_KVS_NO_MERGE) */
 
     create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0);
     create_ready_kvstxn (ktm, "transaction2", "key2", "2", 0, FLUX_KVS_NO_MERGE);
+
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
+
+    names = json_array ();
+    json_array_append_new (names, json_string ("transaction1"));
+
+    ops = json_array ();
+    ops_append (ops, "key1", "1", 0);
+
+    verify_ready_kvstxn (ktm, names, ops, 0, "unmerged transaction");
+
+    json_decref (names);
+    json_decref (ops);
+    ops = NULL;
+
+    clear_ready_kvstxns (ktm);
+
+    /* test unsuccessful merge (FLUX_KVS_SYNC) */
+
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, FLUX_KVS_SYNC);
+    create_ready_kvstxn (ktm, "transaction2", "key2", "2", 0, 0);
+
+    ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
+        "kvstxn_mgr_merge_ready_transactions success");
+
+    names = json_array ();
+    json_array_append_new (names, json_string ("transaction1"));
+
+    ops = json_array ();
+    ops_append (ops, "key1", "1", 0);
+
+    verify_ready_kvstxn (ktm, names, ops, FLUX_KVS_SYNC, "unmerged transaction");
+
+    json_decref (names);
+    json_decref (ops);
+    ops = NULL;
+
+    clear_ready_kvstxns (ktm);
+
+    /* test unsuccessful merge (FLUX_KVS_SYNC) */
+
+    create_ready_kvstxn (ktm, "transaction1", "key1", "1", 0, 0);
+    create_ready_kvstxn (ktm, "transaction2", "key2", "2", 0, FLUX_KVS_SYNC);
 
     ok (kvstxn_mgr_merge_ready_transactions (ktm) == 0,
         "kvstxn_mgr_merge_ready_transactions success");
@@ -602,6 +646,44 @@ void kvstxn_basic_tests (void)
 
     ok (kvstxn_iter_dirty_cache_entries (kt, cache_noop_cb, NULL) < 0,
         "kvstxn_iter_dirty_cache_entries returns < 0 for call on invalid state");
+
+    ok (kvstxn_sync_content_flush (kt) == NULL,
+        "kvstxn_sync_content_flush returns NULL for call on invalid state");
+
+    ok (kvstxn_sync_checkpoint (kt) == NULL,
+        "kvstxn_sync_checkpoint returns NULL for call on invalid state");
+
+    kvstxn_mgr_destroy (ktm);
+    cache_destroy (cache);
+}
+
+void kvstxn_corner_case_tests (void)
+{
+    struct cache *cache;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
+    char rootref[BLOBREF_MAX_STRING_SIZE];
+
+    cache = create_cache_with_empty_rootdir (rootref, sizeof (rootref));
+
+    /* Test non-default namespace doesn't work with FLUX_KVS_SYNC */
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  "foobar",
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
+
+    create_ready_kvstxn (ktm, "transactionA", "keyA", "A", 0, FLUX_KVS_SYNC);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_ERROR
+        && kvstxn_get_errnum (kt) == EINVAL,
+        "kvstxn_sync_checkpoint returns EINVAL on FLUX_KVS_SYNC "
+        "with non-default namespace");
 
     kvstxn_mgr_destroy (ktm);
     cache_destroy (cache);
@@ -3287,6 +3369,7 @@ int main (int argc, char *argv[])
     kvstxn_mgr_basic_tests ();
     kvstxn_mgr_merge_tests ();
     kvstxn_basic_tests ();
+    kvstxn_corner_case_tests ();
     kvstxn_basic_kvstxn_process_test ();
     kvstxn_basic_kvstxn_process_test_normalization ();
     kvstxn_basic_kvstxn_process_test_multiple_transactions ();

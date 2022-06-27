@@ -22,7 +22,9 @@ typedef enum {
     KVSTXN_PROCESS_ERROR = 1,
     KVSTXN_PROCESS_LOAD_MISSING_REFS = 2,
     KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES = 3,
-    KVSTXN_PROCESS_FINISHED = 4,
+    KVSTXN_PROCESS_SYNC_CONTENT_FLUSH = 4,
+    KVSTXN_PROCESS_SYNC_CHECKPOINT = 5,
+    KVSTXN_PROCESS_FINISHED = 6,
 } kvstxn_process_t;
 
 /*
@@ -82,6 +84,8 @@ json_t *kvstxn_get_keys (kvstxn_t *kt);
  * KVSTXN_PROCESS_LOAD_MISSING_REFS stall & load,
  * KVSTXN_PROCESS_DIRTY_CACHE_ENTRIES stall & process dirty cache
  * entries,
+ * KVSTXN_PROCESS_SYNC_CONTENT_FLUSH stall & wait for future to fulfill
+ * KVSTXN_PROCESS_SYNC_CHECKPOINT stall & wait for future to fulfill
  * KVSTXN_PROCESS_FINISHED all done
  *
  * on error, call kvstxn_get_errnum() to get error number
@@ -90,6 +94,10 @@ json_t *kvstxn_get_keys (kvstxn_t *kt);
  *
  * on stall & process dirty cache entries, call
  * kvstxn_iter_dirty_cache_entries() to process entries.
+ *
+ * on stall & content-flush, call kvstxn_sync_content_flush() to get future.
+ *
+ * on stall & checkpoint, call kvstxn_sync_checkpoint() to get future.
  *
  * on completion, call kvstxn_get_newroot_ref() to get reference to
  * new root to be stored.
@@ -118,6 +126,12 @@ int kvstxn_iter_dirty_cache_entries (kvstxn_t *kt,
  * kvstxn_iter_dirty_cache_entries().
  */
 void kvstxn_cleanup_dirty_cache_entry (kvstxn_t *kt, struct cache_entry *entry);
+
+/* on stall, get confent.flush future to wait for fulfillment on */
+flux_future_t *kvstxn_sync_content_flush (kvstxn_t *kt);
+
+/* on stall, get checkpoint future to wait for fulfillment on */
+flux_future_t *kvstxn_sync_checkpoint (kvstxn_t *kt);
 
 /*
  * kvstxn_mgr_t API

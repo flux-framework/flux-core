@@ -44,12 +44,13 @@
 #include "kvsroot.h"
 #include "kvssync.h"
 
-/* sync_cb() is called periodically to manage cached content and namespaces.
- * Synchronize with the system heartbeat if possible, but keep the time between
- * checks bounded by 'sync_min' and 'sync_max' seconds.
+/* heartbeat_sync_cb() is called periodically to manage cached content
+ * and namespaces.  Synchronize with the system heartbeat if possible,
+ * but keep the time between checks bounded by 'heartbeat_sync_min'
+ * and 'heartbeat_sync_max' seconds.
  */
-const double sync_min = 1.;
-const double sync_max = 30.;
+const double heartbeat_sync_min = 1.;
+const double heartbeat_sync_max = 30.;
 
 /* Expire cache_entry after 'max_lastuse_age' seconds.
  */
@@ -88,6 +89,7 @@ static void transaction_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void transaction_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                                   int revents, void *arg);
 static void start_root_remove (struct kvs_ctx *ctx, const char *ns);
+static void kvstxn_apply (kvstxn_t *kt);
 
 /*
  * kvs_ctx functions
@@ -113,6 +115,7 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
+    ctx->h = h;
     if (!(ctx->hash_name = flux_attr_get (h, "content.hash"))) {
         flux_log_error (h, "getattr content.hash");
         goto error;
@@ -121,8 +124,7 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
         goto error;
     if (!(ctx->krm = kvsroot_mgr_create (ctx->h, ctx)))
         goto error;
-    ctx->h = h;
-    if (flux_get_rank (h, &ctx->rank) < 0)
+    if (flux_get_rank (ctx->h, &ctx->rank) < 0)
         goto error;
     if (ctx->rank == 0) {
         ctx->prep_w = flux_prepare_watcher_create (r, transaction_prep_cb, ctx);
@@ -895,6 +897,12 @@ static void work_queue_check_append (struct kvs_ctx *ctx,
         work_queue_append (ctx, root);
 }
 
+static void kvstxn_apply_cb (flux_future_t *f, void *arg)
+{
+    kvstxn_t *kt = arg;
+    kvstxn_apply (kt);
+}
+
 /* Write all the ops for a particular commit/fence request (rank 0
  * only).  The setroot event will cause responses to be sent to the
  * transaction requests and clean up the treq_t state.  This
@@ -997,6 +1005,34 @@ static void kvstxn_apply (kvstxn_t *kt)
         }
 
         assert (wait_get_usecount (wait) > 0);
+        goto stall;
+    }
+    else if (ret == KVSTXN_PROCESS_SYNC_CONTENT_FLUSH) {
+        /* N.B. futre is managed by kvstxn, should not call
+         * flux_future_destroy() on it */
+        flux_future_t *f = kvstxn_sync_content_flush (kt);
+        if (!f) {
+            errnum = errno;
+            goto done;
+        }
+        if (flux_future_then (f, -1., kvstxn_apply_cb, kt) < 0) {
+            errnum = errno;
+            goto done;
+        }
+        goto stall;
+    }
+    else if (ret == KVSTXN_PROCESS_SYNC_CHECKPOINT) {
+        /* N.B. futre is managed by kvstxn, should not call
+         * flux_future_destroy() on it */
+        flux_future_t *f = kvstxn_sync_checkpoint (kt);
+        if (!f) {
+            errnum = errno;
+            goto done;
+        }
+        if (flux_future_then (f, -1., kvstxn_apply_cb, kt) < 0) {
+            errnum = errno;
+            goto done;
+        }
         goto stall;
     }
     /* else ret == KVSTXN_PROCESS_FINISHED */
@@ -1187,7 +1223,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     return 0;
 }
 
-static void sync_cb (flux_future_t *f, void *arg)
+static void heartbeat_sync_cb (flux_future_t *f, void *arg)
 {
     struct kvs_ctx *ctx = arg;
 
@@ -2839,7 +2875,7 @@ int mod_main (flux_t *h, int argc, char **argv)
 {
     struct kvs_ctx *ctx;
     flux_msg_handler_t **handlers = NULL;
-    flux_future_t *f_sync = NULL;
+    flux_future_t *f_heartbeat_sync = NULL;
     int rc = -1;
 
     if (!(ctx = kvs_ctx_create (h))) {
@@ -2894,8 +2930,11 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_msg_handler_addvec");
         goto done;
     }
-    if (!(f_sync = flux_sync_create (h, sync_min))
-            || flux_future_then (f_sync, sync_max, sync_cb, ctx) < 0) {
+    if (!(f_heartbeat_sync = flux_sync_create (h, heartbeat_sync_min))
+            || flux_future_then (f_heartbeat_sync,
+                                 heartbeat_sync_max,
+                                 heartbeat_sync_cb,
+                                 ctx) < 0) {
         flux_log_error (h, "error starting heartbeat synchronization");
         goto done;
     }
@@ -2923,7 +2962,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     }
     rc = 0;
 done:
-    flux_future_destroy (f_sync);
+    flux_future_destroy (f_heartbeat_sync);
     flux_msg_handler_delvec (handlers);
     kvs_ctx_destroy (ctx);
     return rc;
