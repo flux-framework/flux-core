@@ -216,4 +216,17 @@ test_expect_success 'perilog: prolog is killed even if it ignores SIGTERM' '
 	test_must_fail flux job attach -vEX $jobid
 '
 
+test_expect_success 'perilog: epilog can be specified without a prolog' '
+	cat <<-EOF >config/perilog.toml &&
+	[job-manager.epilog]
+	command = [ "/bin/true" ]
+	EOF
+	flux config reload &&
+	flux jobtap load --remove=*.so perilog.so &&
+	jobid=$(flux mini submit hostname) &&
+	test_must_fail flux job wait-event -t 15 $jobid prolog-start &&
+	flux job wait-event -t 15 $jobid epilog-start &&
+	flux job wait-event -t 15 $jobid epilog-finish
+'
+
 test_done
