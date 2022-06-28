@@ -23,17 +23,21 @@ static int validate (flux_plugin_t *p,
                      void *arg)
 {
     int i;
+    flux_jobid_t jobid;
     /* Failure to unpack not an error, just let jobs without
      *  validate-test-id through
      */
     if (flux_plugin_arg_unpack (args, FLUX_PLUGIN_ARG_IN,
-                                "{s:{s:{s:{s:{s:i}}}}}",
+                                "{s:I s:{s:{s:{s:{s:i}}}}}",
+				"id", &jobid,
                                 "jobspec",
                                  "attributes", "system", "jobtap",
                                   "validate-test-id", &i) < 0)
         return 0;
     if (i == reject_id)
-        return flux_jobtap_reject_job (p, args, "Job had reject_id == %d", i);
+        return flux_jobtap_reject_job (p, args,
+			               "Job had reject_id == %d jobid=%ju",
+			               i, jobid);
     return 0;
 }
 

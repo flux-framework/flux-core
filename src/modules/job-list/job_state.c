@@ -1616,6 +1616,12 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
             job->list_handle = NULL;
         }
         zhashx_delete (jsctx->index, &job->id);
+        /* N.B. since invalid job ids are not released to the submitter, there
+         * should be no pending ctx->idsync_lookups requests to clean up here.
+         * A test in t2212-job-manager-plugins.t does query invalid ids, but
+         * it is careful to ensure that it does so only _after_ the invalidate
+         * event has been processed here.
+         */
         return 0;
     }
 
