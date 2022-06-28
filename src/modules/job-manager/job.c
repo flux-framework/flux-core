@@ -203,6 +203,26 @@ error:
     return NULL;
 }
 
+struct job *job_create_from_json (json_t *o)
+{
+    struct job *job;
+
+    if (!(job = job_create ()))
+        return NULL;
+    if (json_unpack (o, "{s:I s:i s:i s:f s:i s:O}",
+                        "id", &job->id,
+                        "urgency", &job->urgency,
+                        "userid", &job->userid,
+                        "t_submit", &job->t_submit,
+                        "flags", &job->flags,
+                        "jobspec", &job->jobspec_redacted) < 0) {
+        errno = EPROTO;
+        job_decref (job);
+        return NULL;
+    }
+    return job;
+}
+
 #define NUMCMP(a,b) ((a)==(b)?0:((a)<(b)?-1:1))
 
 /* Decref a job.

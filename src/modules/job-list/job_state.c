@@ -932,6 +932,8 @@ static struct job *eventlog_restart_parse (struct list_ctx *ctx,
         if (!strcmp (name, "submit")) {
             if (submit_context_parse (ctx->h, job, context) < 0)
                 goto error;
+        }
+        else if (!strcmp (name, "validate")) {
             update_job_state (ctx, job, FLUX_JOB_STATE_DEPEND, timestamp);
         }
         else if (!strcmp (name, "depend")) {
@@ -1283,12 +1285,7 @@ static int journal_submit_event (struct job_state_ctx *jsctx,
     if (submit_context_parse (jsctx->h, job, context) < 0)
         return -1;
 
-    return job_transition_state (jsctx,
-                                 job,
-                                 FLUX_JOB_STATE_DEPEND,
-                                 timestamp,
-                                 0,
-                                 0);
+    return 0;
 }
 
 static int priority_context_parse (flux_t *h,
@@ -1608,6 +1605,26 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
              && strcmp (name, "memo") != 0))
             return 0;
 
+    /* The "submit" event is now posted before the job transitions out of NEW
+     * on the "validate" event.  If "invalidate" is posted instead, job
+     * submission failed and the job is removed from the KVS.  Drop the
+     * nascent job info.
+     */
+    if (job && !strcmp (name, "invalidate")) {
+        if (job->list_handle) {
+            zlistx_detach (jsctx->processing, job->list_handle);
+            job->list_handle = NULL;
+        }
+        zhashx_delete (jsctx->index, &job->id);
+        /* N.B. since invalid job ids are not released to the submitter, there
+         * should be no pending ctx->idsync_lookups requests to clean up here.
+         * A test in t2212-job-manager-plugins.t does query invalid ids, but
+         * it is careful to ensure that it does so only _after_ the invalidate
+         * event has been processed here.
+         */
+        return 0;
+    }
+
     /*  Job not found is non-fatal, do not return an error.
      *  No need to proceed unless this is the first event (submit),
      *   but log an error since this is an unexpected condition.
@@ -1628,6 +1645,13 @@ static int journal_process_event (struct job_state_ctx *jsctx, json_t *event)
                                   eventlog_seq,
                                   timestamp,
                                   context) < 0)
+            return -1;
+    }
+    else if (!strcmp (name, "validate")) {
+        if (journal_advance_job (jsctx,
+                                 job,
+                                 FLUX_JOB_STATE_DEPEND,
+                                 timestamp) < 0)
             return -1;
     }
     else if (!strcmp (name, "depend")) {

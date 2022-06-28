@@ -349,6 +349,47 @@ test_expect_success 'job-manager: plugin can reject some jobs in a batch' '
 	grep "Job had reject_id" validate-plugin.out &&
 	test 4 -eq $(grep -c foo validate-plugin.out)
 '
+
+# Ensure that the valid jobs submitted above have reached INACTIVE in the
+# (eventually consistent) job-list module, then ask job-list about the invalid
+# jobs.  The assumption is that the "invalidate" journal events must have have
+# been processed by job-list if the "clean" event for last job in the batch,
+# which is valid, has been processed.  If the "invalidate" event is not
+# received, the job-list query for the invalid jobs will hang.
+
+test_expect_success 'job-manager: get job IDs of invalid jobs' '
+	grep reject_id validate-plugin.out \
+	    | sed -e "s/.*jobid=//" >invalid_ids &&
+	test_debug "cat invalid_ids" &&
+	test 2 -eq $(wc -l <invalid_ids)
+'
+test_expect_success 'job-manager: get job IDs of valid jobs' '
+	grep -v reject_id validate-plugin.out | grep -v foo \
+	    | sed -e "s/.*jobid=//" >valid_ids &&
+	test_debug "cat valid_ids" &&
+	test 4 -eq $(wc -l <valid_ids)
+'
+
+# Return true if all specified jobs are shown as inactive by job-list
+test_inactive() {
+	flux jobs -n -o {state} $@ >test_jobs.out 2>test_jobs.err
+	test $(wc -l <test_jobs.err) -eq 0 \
+		-a $(grep -v INACTIVE test_jobs.out | wc -l) -eq 0
+}
+# Return true if all specified jobs are unknown to job-list
+test_unknown() {
+	run_timeout 10 \
+	    flux jobs -n -o {state} $@ >test_jobs.out 2>test_jobs.err && \
+	test $(wc -l <test_jobs.out) -eq 0
+}
+
+test_expect_success 'job-manager: wait for valid jobs to appear inactive' '
+	while ! test_inactive $(cat valid_ids); do echo retry; sleep 0.1; done
+'
+test_expect_success 'job-manager: flux jobs does not list invalid jobs' '
+	test_unknown $(cat invalid_ids)
+'
+
 test_expect_success 'job-manager: plugin can manage dependencies' '
 	cat <<-EOF >dep-remove.py &&
 	import flux

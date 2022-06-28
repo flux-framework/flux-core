@@ -58,17 +58,21 @@ void test_create (void)
 const char *test_input[] = {
     /* 0 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n",
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.3,\"name\":\"validate\"}\n",
+
 
     /* 1 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"urgency\","
      "\"context\":{\"userid\":42,\"urgency\":1}}\n",
 
     /* 2 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
      "\"context\":{\"priority\":1}}\n",
@@ -76,18 +80,21 @@ const char *test_input[] = {
     /* 3 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"exception\","
      "\"context\":{\"type\":\"cancel\",\"severity\":0,\"userid\":42}}\n",
 
     /* 4 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"exception\","
      "\"context\":{\"type\":\"meep\",\"severity\":1,\"userid\":42}}\n",
 
     /* 5 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
      "\"context\":{\"priority\":100}}\n"
@@ -99,6 +106,7 @@ const char *test_input[] = {
     /* 7 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
      "\"context\":{\"priority\":100}}\n"
@@ -240,6 +248,35 @@ void test_create_from_eventlog (void)
 
 }
 
+void test_create_from_json (void)
+{
+    json_t *o;
+    struct job *job;
+
+    errno = 0;
+    ok ((job = job_create_from_json (json_null ())) == NULL && errno == EPROTO,
+        "job_create_from_json on malformed object fails with EPROTO");
+
+    if (!(o = json_pack ("{s:I s:i s:i s:f s:i s:{}}",
+                         "id", 1LL,
+                         "urgency", 10,
+                         "userid", 42,
+                         "t_submit", 1.0,
+                         "flags", 0,
+                         "jobspec")))
+        BAIL_OUT ("json_pack failed");
+    ok ((job = job_create_from_json (o)) != NULL,
+        "job_create_from_json works");
+    ok (job->id == 1
+        && job->urgency == 10
+        && job->userid == 42
+        && job->t_submit == 1.0
+        && job->flags == 0,
+        "job json object was properly decoded");
+    json_decref (o);
+    job_decref (job);
+}
+
 static void test_subscribe (void)
 {
     flux_plugin_t *p = flux_plugin_create ();
@@ -333,6 +370,7 @@ int main (int argc, char *argv[])
 
     test_create ();
     test_create_from_eventlog ();
+    test_create_from_json ();
     test_subscribe ();
     test_event_id_cache ();
 
