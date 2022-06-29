@@ -46,6 +46,10 @@ int jobtap_validate (struct jobtap *jobtap,
                      struct job *job,
                      char **errp);
 
+int jobtap_call_create (struct jobtap *jobtap,
+                        struct job *job,
+                        char **errp);
+
 /*  Jobtap call to iterate attributes.system.dependencies dictionary
  *   and call job.dependency.<schema> for each entry.
  *

@@ -170,7 +170,7 @@ test_expect_success 'job-manager: run args test plugin' '
 	flux mini run hostname &&
 	flux dmesg | grep args-check > args-check.log &&
 	test_debug "cat args-check.log" &&
-	test $(grep -c OK args-check.log) = 18
+	test $(grep -c OK args-check.log) = 20
 '
 test_expect_success 'job-manager: run subscribe test plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/subscribe.so &&

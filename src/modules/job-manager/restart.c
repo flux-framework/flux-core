@@ -234,16 +234,19 @@ int restart_from_kvs (struct job_manager *ctx)
             free (errmsg);
         }
         /*
-         *  On restart, call 'job.new' plugin callbacks since this is
-         *   the first time this instance of the job-manager has seen
-         *   this job. Be sure to call this before posting any other
-         *   events below, since job.new should always be the first
-         *   callback for a job.
+         *  On restart, call 'job.create' and 'job.new' plugin callbacks
+         *   since this is the first time this instance of the job-manager
+         *   has seen this job. Be sure to call these before posting any
+         *   other events below, since these should always be the first
+         *   callbacks for a job.
          *
          *  Jobs in SCHED state may also immediately transition back to
          *   PRIORITY, potentially generating two other plugin callbacks
          *   after this one. (job.priority, job.sched...)
          */
+        if (jobtap_call (ctx->jobtap, job, "job.create", NULL) < 0)
+            flux_log_error (ctx->h, "jobtap_call (id=%ju, create)",
+                                (uintmax_t) job->id);
         if (jobtap_call (ctx->jobtap, job, "job.new", NULL) < 0)
             flux_log_error (ctx->h, "jobtap_call (id=%ju, new)",
                                 (uintmax_t) job->id);
