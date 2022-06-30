@@ -42,6 +42,7 @@
 #define FLUX_JOBTAP_PRIORITY_UNAVAIL INT64_C(-2)
 
 extern int priority_default_plugin_init (flux_plugin_t *p);
+extern int jobspec_default_plugin_init (flux_plugin_t *p);
 extern int after_plugin_init (flux_plugin_t *p);
 extern int begin_time_plugin_init (flux_plugin_t *p);
 extern int validate_duration_plugin_init (flux_plugin_t *p);
@@ -53,6 +54,7 @@ struct jobtap_builtin {
 
 static struct jobtap_builtin jobtap_builtins [] = {
     { ".priority-default", priority_default_plugin_init },
+    { ".jobspec-default", jobspec_default_plugin_init },
     { ".dependency-after", after_plugin_init },
     { ".begin-time", &begin_time_plugin_init },
     { ".validate-duration", &validate_duration_plugin_init },
