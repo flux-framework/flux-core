@@ -115,16 +115,40 @@ CALLBACK TOPICS
 The following callback "topic strings" are currently provided by the
 *jobtap* interface:
 
+job.create
+  The ``job.create`` topic notifies a jobtap plugin about a newly introduced
+  job. This call may be made in three different situations:
+
+    1. on job submission
+    2. when the job manager is restarted and has reloaded a job from the KVS
+    3. when a new jobtap plugin is loaded
+
+  In case 1 above, the job state will always be ``FLUX_JOB_STATE_NEW``, while
+  jobs in cases 2 and 3 can be in any state except ``FLUX_JOB_STATE_INACTIVE``.
+
+  In case 1, the job is not yet validated.  If necessary, ``job.create`` may
+  reject the job in the same manner as ``job.validate`` using
+  :man3:`flux_jobtap_reject_job` and a negative return code from the callback.
+
+  In cases 2 and 3, fatal errors may be handled by raising a fatal job
+  exception, as usual.
+
+  It is safe to post events from a ``job.create`` handler in all cases.
+
+job.destroy
+  The ``job.destroy`` topic is called after a job is rejected or becomes
+  inactive.
+
 job.validate
   The ``job.validate`` topic allows a plugin to reject a job before
   it is introduced to the job manager. A rejected job will result in
   a job submission error in the submitting client, and any job data in
-  the KVS will be purged. No further callbacks will be made for rejected
-  jobs. Note: If a job is not rejected, then the ``job.new`` callback will
-  be invoked immediately after ``job.validate``. This allows limits or
-  other validation to be implemented in the ``job.validate`` callback,
-  but accounting for those limits should be confined to the ``job.new``
-  callback, since ``job.new`` may also be called during job-manager
+  the KVS will be purged. No further callbacks except ``job.destroy``
+  will be made for rejected jobs. Note: If a job is not rejected, then
+  the ``job.new`` callback will be invoked immediately after ``job.validate``.
+  This allows limits or other checks to be implemented in the ``job.validate``
+  callback, but accounting for those limits should be confined to the
+  ``job.new`` callback, since ``job.new`` may also be called during job-manager
   restart or plugin reload.
 
 job.dependency.*
@@ -139,20 +163,12 @@ job.dependency.*
   with a corresponding call to ``flux_jobtap_dependency_remove(3)``. See
   ``job.state.depend`` below for more information about dependencies.
   If there is an error in the dependency specification, the job may be
-  rejected with :man3:`flux_jobtap_reject_job` and a negative return code 
+  rejected with :man3:`flux_jobtap_reject_job` and a negative return code
   from the callback.
 
 job.new
-  The ``job.new`` topic is used by the job manager to notify a jobtap plugin
-  about a newly introduced job. This call may be made in three different
-  situations:
-
-    1. on job job submission
-    2. when the job manager is restarted and has reloaded a job from the KVS
-    3. when a new jobtap plugin is loaded
-
-  In case 1 above, the job state will always be ``FLUX_JOB_STATE_NEW``, while
-  jobs in cases 2 and 3 can be in any state except ``FLUX_JOB_STATE_INACTIVE``.
+  The ``job.new`` topic announces a new valid job.  It may be called in the
+  same three situations listed for ``job.create``,
 
 job.state.*
   The ``job.state.*`` callbacks are made just after a job state transition.
