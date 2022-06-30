@@ -256,7 +256,7 @@ int restart_from_kvs (struct job_manager *ctx)
              * This is confusing. In order to update priority on transition
              *  back to PRIORITY state, the priority must be reset to "-1",
              *  even though the last priority value was reconstructed from
-             *  the eventlog. This is becuase the transitioning "priority"
+             *  the eventlog. This is because the transitioning "priority"
              *  event is only posted when the priority changes.
              */
             job->priority = -1;
