@@ -852,6 +852,9 @@ void kvstxn_basic_kvstxn_process_test_empty_ops (void)
     ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
         "kvstxn_get_newroot_ref returns != NULL when processing complete");
 
+    ok (strcmp (newroot, rootref) == 0,
+        "root stays identical when no ops in transaction");
+
     verify_keys_and_ops_standard (kt);
 
     kvstxn_mgr_remove_transaction (ktm, kt, false);

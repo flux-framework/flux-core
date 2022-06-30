@@ -83,6 +83,7 @@ struct kvstxn {
      *
      * INIT -> LOAD_ROOT
      * LOAD_ROOT -> APPLY_OPS
+     * LOAD_ROOT -> GENERATE_KEYS (if no ops)
      * APPLY_OPS -> STORE
      * STORE -> GENERATE_KEYS
      * GENERATE_KEYS -> FINISHED
@@ -886,16 +887,29 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
                 return KVSTXN_PROCESS_ERROR;
             }
 
-            /* take reference because we're storing rootdir */
-            cache_entry_incref (entry);
-            kt->entry = entry;
+            /* Special optimization, continue to APPLY_OPS state only
+             * if there are operations to process, otherwise we can
+             * skip to the GENERATE_KEYS state.  Sometimes operations
+             * can be zero length when using FLUX_KVS_SYNC or other
+             * flags.
+             */
+            if (json_array_size (kt->ops)) {
+                /* take reference because we're storing rootdir */
+                cache_entry_incref (entry);
+                kt->entry = entry;
 
-            if (!(kt->rootcpy = treeobj_deep_copy (kt->rootdir))) {
-                kt->errnum = errno;
-                return KVSTXN_PROCESS_ERROR;
+                if (!(kt->rootcpy = treeobj_deep_copy (kt->rootdir))) {
+                    kt->errnum = errno;
+                    return KVSTXN_PROCESS_ERROR;
+                }
+
+                kt->state = KVSTXN_STATE_APPLY_OPS;
             }
-
-            kt->state = KVSTXN_STATE_APPLY_OPS;
+            else {
+                /* place current rootref into newroot, it won't change */
+                strcpy (kt->newroot, rootdir_ref);
+                kt->state = KVSTXN_STATE_GENERATE_KEYS;
+            }
         }
         else if (kt->state == KVSTXN_STATE_APPLY_OPS) {
             /* Apply each op (e.g. key = val) in sequence to the root
