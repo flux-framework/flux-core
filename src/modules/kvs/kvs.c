@@ -1206,7 +1206,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     }
     else if (ctx->rank != 0
              && !root->remove
-             && strcasecmp (root->ns_name, KVS_PRIMARY_NAMESPACE)
+             && !root->is_primary
              && (now - root->last_update_time) > max_namespace_age
              && !zlist_size (root->synclist)
              && !treq_mgr_transactions_count (root->trm)

@@ -47,6 +47,9 @@ void basic_api_tests (void)
                                          0)) != NULL,
          "kvsroot_mgr_create_root works");
 
+    ok (root->is_primary == true,
+        "root is primary namespace");
+
     ok (kvsroot_mgr_root_count (krm) == 1,
         "kvsroot_mgr_root_count returns correct count of roots");
 
@@ -126,6 +129,33 @@ void basic_api_tests (void)
 
     /* destroy works with NULL */
     kvsroot_mgr_destroy (NULL);
+
+    cache_destroy (cache);
+}
+
+void basic_api_tests_non_primary (void)
+{
+    kvsroot_mgr_t *krm;
+    struct cache *cache;
+    struct kvsroot *root;
+
+    cache = cache_create (NULL);
+
+    ok ((krm = kvsroot_mgr_create (NULL, &global)) != NULL,
+        "kvsroot_mgr_create works");
+
+    ok ((root = kvsroot_mgr_create_root (krm,
+                                         cache,
+                                         "sha1",
+                                         "foobar",
+                                         1234,
+                                         0)) != NULL,
+         "kvsroot_mgr_create_root works");
+
+    ok (root->is_primary == false,
+        "root is not primary namespace");
+
+    kvsroot_mgr_destroy (krm);
 
     cache_destroy (cache);
 }
@@ -268,6 +298,7 @@ int main (int argc, char *argv[])
     plan (NO_PLAN);
 
     basic_api_tests ();
+    basic_api_tests_non_primary ();
     basic_iter_tests ();
     basic_kvstxn_mgr_tests ();
 

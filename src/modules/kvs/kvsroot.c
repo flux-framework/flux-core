@@ -122,6 +122,9 @@ struct kvsroot *kvsroot_mgr_create_root (kvsroot_mgr_t *krm,
         goto error;
     }
 
+    if (!strcmp (root->ns_name, KVS_PRIMARY_NAMESPACE))
+        root->is_primary = true;
+
     if (!(root->ktm = kvstxn_mgr_create (cache,
                                          root->ns_name,
                                          hash_name,
