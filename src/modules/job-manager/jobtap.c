@@ -1437,10 +1437,20 @@ int flux_jobtap_reject_job (flux_plugin_t *p,
     return -1;
 }
 
-static struct job *lookup_job (struct job_manager *ctx, flux_jobid_t id)
+static struct job *lookup_active_job (struct job_manager *ctx,
+                                      flux_jobid_t id)
 {
     struct job *job = zhashx_lookup (ctx->active_jobs, &id);
     if (!job)
+        errno = ENOENT;
+    return job;
+}
+
+static struct job *lookup_job (struct job_manager *ctx, flux_jobid_t id)
+{
+    struct job *job;
+    if (!(job = lookup_active_job (ctx, id))
+        && !(job = zhashx_lookup (ctx->inactive_jobs, &id)))
         errno = ENOENT;
     return job;
 }
@@ -1479,7 +1489,7 @@ static int emit_dependency_event (flux_plugin_t *p,
     }
     job = current_job (jobtap);
     if (!job || id != job->id) {
-        if (!(job = lookup_job (jobtap->ctx, id)))
+        if (!(job = lookup_active_job (jobtap->ctx, id)))
             return -1;
     }
     return jobtap_emit_dependency_event (jobtap, job, add, description);
@@ -1514,6 +1524,17 @@ static struct job * jobtap_lookup_jobid (flux_plugin_t *p, flux_jobid_t id)
         return job;
     }
     return lookup_job (jobtap->ctx, id);
+}
+
+static struct job * jobtap_lookup_active_jobid (flux_plugin_t *p,
+                                                flux_jobid_t id)
+{
+    struct job * job = jobtap_lookup_jobid (p, id);
+    if (!job || job->state == FLUX_JOB_STATE_INACTIVE) {
+        errno = ENOENT;
+        return NULL;
+    }
+    return job;
 }
 
 int flux_jobtap_job_aux_set (flux_plugin_t *p,
@@ -1559,7 +1580,7 @@ int flux_jobtap_job_set_flag (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
-    if (!(job = jobtap_lookup_jobid (p, id))) {
+    if (!(job = jobtap_lookup_active_jobid (p, id))) {
         errno = ENOENT;
         return -1;
     }
@@ -1623,7 +1644,7 @@ int flux_jobtap_raise_exception (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
-    if (!(job = jobtap_lookup_jobid (p, id)))
+    if (!(job = jobtap_lookup_active_jobid (p, id)))
         return -1;
     va_start (ap, fmt);
     rc = jobtap_job_vraise (jobtap, job, type, severity, fmt, ap);
@@ -1713,7 +1734,7 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
-    if (!(job = jobtap_lookup_jobid (p, id)))
+    if (!(job = jobtap_lookup_active_jobid (p, id)))
         return -1;
     va_start (ap, fmt);
     rc = event_job_post_vpack (jobtap->ctx->event, job, name, 0, fmt, ap);
@@ -1724,7 +1745,7 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
 int flux_jobtap_job_subscribe (flux_plugin_t *p, flux_jobid_t id)
 {
     struct job *job;
-    if (!(job = jobtap_lookup_jobid (p, id)))
+    if (!(job = jobtap_lookup_active_jobid (p, id)))
         return -1;
     return job_events_subscribe (job, p);
 }
@@ -1732,7 +1753,7 @@ int flux_jobtap_job_subscribe (flux_plugin_t *p, flux_jobid_t id)
 void flux_jobtap_job_unsubscribe (flux_plugin_t *p, flux_jobid_t id)
 {
     struct job *job;
-    if ((job = jobtap_lookup_jobid (p, id)))
+    if ((job = jobtap_lookup_active_jobid (p, id)))
         job_events_unsubscribe (job, p);
 }
 
@@ -1829,7 +1850,7 @@ int flux_jobtap_prolog_finish (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
-    if (!(job = jobtap_lookup_jobid (p, id)))
+    if (!(job = jobtap_lookup_active_jobid (p, id)))
         return -1;
     return jobtap_emit_perilog_event (jobtap,
                                       job,
@@ -1865,7 +1886,7 @@ int flux_jobtap_epilog_finish (flux_plugin_t *p,
         errno = EINVAL;
         return -1;
     }
-    if (!(job = jobtap_lookup_jobid (p, id)))
+    if (!(job = jobtap_lookup_active_jobid (p, id)))
         return -1;
     return jobtap_emit_perilog_event (jobtap,
                                       job,
