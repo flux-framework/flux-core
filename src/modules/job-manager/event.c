@@ -42,6 +42,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
+#include "src/common/libutil/errno_safe.h"
 #include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 
@@ -355,11 +356,10 @@ int event_job_action (struct event *event, struct job *job)
                 return -1;
             break;
         case FLUX_JOB_STATE_RUN:
-            /*
-             *  If job->perilog_active is nonzero then a prolog action
-             *   is still in progress so do not send start request.
+            /* Send the start request only if prolog is not running/pending.
              */
             if (!job->perilog_active
+                && !job_event_is_queued (job, "prolog-start")
                 && start_send_request (ctx->start, job) < 0)
                 return -1;
             break;
@@ -581,7 +581,7 @@ int event_job_update (struct job *job, json_t *event)
     if (eventlog_entry_parse (event, &timestamp, &name, &context) < 0)
         goto error;
 
-    if (streq (name, "submit")) {
+    if (streq (name, "submit")) { // invariant: submit is always first event
         if (job->state != FLUX_JOB_STATE_NEW)
             goto inval;
         job->t_submit = timestamp;
@@ -595,10 +595,11 @@ int event_job_update (struct job *job, json_t *event)
         job->state = FLUX_JOB_STATE_DEPEND;
     }
     else if (!strncmp (name, "dependency-", 11)) {
-        if (job->state != FLUX_JOB_STATE_DEPEND)
-            goto inval;
-        if (event_handle_dependency (job, name+11, context) < 0)
-            goto error;
+        if (job->state == FLUX_JOB_STATE_DEPEND
+            || job->state == FLUX_JOB_STATE_NEW) {
+            if (event_handle_dependency (job, name+11, context) < 0)
+                goto error;
+        }
     }
     else if (streq (name, "set-flags")) {
         if (event_handle_set_flags (job, context) < 0)
@@ -609,17 +610,17 @@ int event_job_update (struct job *job, json_t *event)
             goto error;
     }
     else if (streq (name, "depend")) {
-        if (job->state != FLUX_JOB_STATE_DEPEND)
-            goto inval;
-        job->state = FLUX_JOB_STATE_PRIORITY;
+        if (job->state == FLUX_JOB_STATE_DEPEND)
+            job->state = FLUX_JOB_STATE_PRIORITY;
     }
     else if (streq (name, "priority")) {
-        if (job->state != FLUX_JOB_STATE_PRIORITY
-            && job->state != FLUX_JOB_STATE_SCHED)
-            goto inval;
-        if (event_priority_context_decode (context, &job->priority) < 0)
-            goto error;
-        job->state = FLUX_JOB_STATE_SCHED;
+        if (job->state == FLUX_JOB_STATE_PRIORITY
+            || job->state == FLUX_JOB_STATE_SCHED) {
+            if (event_priority_context_decode (context, &job->priority) < 0)
+                goto error;
+        }
+        if (job->state == FLUX_JOB_STATE_PRIORITY)
+            job->state = FLUX_JOB_STATE_SCHED;
     }
     else if (streq (name, "urgency")) {
         /* Update urgency value.  If in SCHED state, transition back to
@@ -635,70 +636,54 @@ int event_job_update (struct job *job, json_t *event)
     }
     else if (streq (name, "exception")) {
         int severity;
-        if (job->state == FLUX_JOB_STATE_NEW
-            || job->state == FLUX_JOB_STATE_INACTIVE)
-            goto inval;
-        if (event_exception_context_decode (context, &severity) < 0)
-            goto error;
-        if (severity == 0) {
-            if (!job->end_event)
-                job->end_event = json_incref (event);
-
-            job->state = FLUX_JOB_STATE_CLEANUP;
+        if (job->state != FLUX_JOB_STATE_INACTIVE
+            && job->state != FLUX_JOB_STATE_NEW) {
+            if (event_exception_context_decode (context, &severity) < 0)
+                goto error;
+            if (severity == 0) {
+                if (!job->end_event)
+                    job->end_event = json_incref (event);
+                job->state = FLUX_JOB_STATE_CLEANUP;
+            }
         }
     }
     else if (streq (name, "alloc")) {
-        if (job->state != FLUX_JOB_STATE_SCHED
-            && job->state != FLUX_JOB_STATE_CLEANUP)
-            goto inval;
         job->has_resources = 1;
         if (job->state == FLUX_JOB_STATE_SCHED)
             job->state = FLUX_JOB_STATE_RUN;
     }
     else if (streq (name, "free")) {
-        if (job->state != FLUX_JOB_STATE_CLEANUP
-            || !job->has_resources)
-            goto inval;
         job->has_resources = 0;
     }
     else if (streq (name, "finish")) {
-        if (job->state != FLUX_JOB_STATE_RUN
-            && job->state != FLUX_JOB_STATE_CLEANUP)
-            goto inval;
         if (job->state == FLUX_JOB_STATE_RUN) {
             if (!job->end_event)
                 job->end_event = json_incref (event);
-
             job->state = FLUX_JOB_STATE_CLEANUP;
         }
     }
     else if (streq (name, "release")) {
         int final;
-        if (job->state != FLUX_JOB_STATE_RUN
-            && job->state != FLUX_JOB_STATE_CLEANUP)
-            goto inval;
         if (event_release_context_decode (context, &final) < 0)
             goto error;
-        if (final && job->state == FLUX_JOB_STATE_RUN)
-            goto inval;
     }
     else if (streq (name, "clean")) {
-        if (job->state != FLUX_JOB_STATE_CLEANUP)
-            goto inval;
-        job->state = FLUX_JOB_STATE_INACTIVE;
-        job->t_clean = timestamp;
+        if (job->state == FLUX_JOB_STATE_CLEANUP) {
+            job->state = FLUX_JOB_STATE_INACTIVE;
+            job->t_clean = timestamp;
+        }
     }
     else if (!strncmp (name, "prolog-", 7)) {
-        if (job->start_pending)
-            goto inval;
-        if (event_handle_perilog (job, name+7, context) < 0)
-            goto error;
+        if (!job->start_pending) {
+            if (event_handle_perilog (job, name+7, context) < 0)
+                goto error;
+        }
     }
     else if (!strncmp (name, "epilog-", 7)) {
-        if (job->state != FLUX_JOB_STATE_CLEANUP)
-            goto inval;
-        if (event_handle_perilog (job, name+7, context) < 0)
-            goto error;
+        if (job->state == FLUX_JOB_STATE_CLEANUP) {
+            if (event_handle_perilog (job, name+7, context) < 0)
+                goto error;
+        }
     }
     else if (streq (name, "flux-restart")) {
         /* The flux-restart event is currently only posted to jobs in
@@ -765,18 +750,32 @@ static int event_job_cache (struct event *event,
     return job_event_id_set (job, id);
 }
 
-int event_job_post_entry (struct event *event,
-                          struct job *job,
-                          int flags,
-                          json_t *entry)
+int event_job_process_entry (struct event *event,
+                             struct job *job,
+                             int flags,
+                             json_t *entry)
 {
-    int rc;
     flux_job_state_t old_state = job->state;
     int eventlog_seq = job->eventlog_seq;
     const char *name;
+    json_t *context;
 
-    if (eventlog_entry_parse (entry, NULL, &name, NULL) < 0)
+    if (eventlog_entry_parse (entry, NULL, &name, &context) < 0)
         return -1;
+
+    /*  Forbid fatal exceptions in NEW state.
+     */
+    if (job->state == FLUX_JOB_STATE_NEW && streq (name, "exception")) {
+        int severity;
+        if (event_exception_context_decode (context, &severity))
+            return -1;
+        if (severity == 0) {
+            flux_log (event->ctx->h,
+                      LOG_ERR,
+                      "fatal job exception was posted in NEW state");
+            return -1;
+        }
+    }
 
     /*  Journal event sequence should match actual sequence of events
      *   in the job eventlog, so set eventlog_seq to -1 with
@@ -824,29 +823,47 @@ int event_job_post_entry (struct event *event,
              && (old_state & FLUX_JOB_STATE_RUNNING))
         event->ctx->running_jobs--;
 
-    /*  N.B. Job may recursively call this function from event_jobtap_call()
-     *   which may end up destroying the job before returning from the
-     *   function. Until the recursive nature of these functions is
-     *   fixed via a true event queue, we must take a reference on the
-     *   job and release after event_job_action() to avoid the potential
-     *   for use-after-free.
-     */
-    job_incref (job);
-
-    /*  Ensure jobtap call happens after the current state is published,
-     *   in case any plugin callback causes a transition to a new state,
-     *   but the call needs to occur before event_job_action() which may
-     *   itself cause the job to recursively enter a new state.
-     *
-     *  Note: Failure from the jobtap call is currently ignored, but will
+    /*  Note: Failure from the jobtap call is currently ignored, but will
      *   be logged in jobtap_call(). The goal is to do something with the
      *   errors at some point (perhaps raise a job exception).
      */
     (void) event_jobtap_call (event, job, name, entry, old_state);
 
-    rc = event_job_action (event, job);
-    job_decref (job);
-    return rc;
+    return event_job_action (event, job);
+}
+
+static int event_job_post_deferred (struct event *event, struct job *job)
+{
+    int flags;
+    json_t *entry;
+
+    while (job_event_peek (job, &flags, &entry) == 0) {
+        if (event_job_process_entry (event, job, flags, entry) < 0) {
+            int saved_errno = errno;
+            while (job_event_dequeue (job, NULL, NULL) == 0)
+                ;
+            errno = saved_errno;
+            return -1;
+        }
+        job_event_dequeue (job, NULL, NULL);
+    }
+    return 0;
+}
+
+/* Since event_job_process_entry() might call event_job_post_*() to post
+ * new events, use job->event_queue to ensure events are processed in order
+ * and unnecessary recursion is avoided.
+ */
+int event_job_post_entry (struct event *event,
+                          struct job *job,
+                          int flags,
+                          json_t *entry)
+{
+    if (job_event_enqueue (job, flags, entry) < 0)
+        return -1;
+    if (json_array_size (job->event_queue) > 1)
+        return 0; // break recursion
+    return event_job_post_deferred (event, job);
 }
 
 int event_job_post_vpack (struct event *event,

@@ -30,6 +30,7 @@ struct job {
     json_t *jobspec_redacted;
     int eventlog_seq;           // eventlog count / sequence number
     flux_job_state_t state;
+    json_t *event_queue;
     json_t *end_event;      // event that caused transition to CLEANUP state
     const flux_msg_t *waiter; // flux_job_wait() request
     double t_clean;
@@ -91,18 +92,6 @@ int job_dependency_add (struct job *job, const char *description);
 int job_dependency_remove (struct job *job, const char *description);
 int job_dependency_count (struct job *job);
 
-/*  Test if dependency event 'event' (dependency-add or dependency-remove)
- *    is valid for this job.
- *  Returns false if:
- *   - EEXIST - when adding a dependency if dependency has already been used
- *   - ENOENT - when removing a dependency that does not exist
- *   - EINVAL - event name is not dependency-add or -remove
- */
-bool job_dependency_event_valid (struct job *job,
-                                 const char *event,
-                                 const char *description);
-
-
 /*  Set a limited set of flags by name on job
  */
 int job_flag_set (struct job *job, const char *flag);
@@ -122,6 +111,14 @@ void job_events_unsubscribe (struct job *job, flux_plugin_t *p);
  */
 int job_event_id_set (struct job *job, int id);
 int job_event_id_test (struct job *job, int id);
+
+/*  Enqeue/dequeue event from job's event queue.
+ */
+int job_event_enqueue (struct job *job, int flags, json_t *entry);
+int job_event_dequeue (struct job *job, int *flagsp, json_t **entryp);
+int job_event_peek (struct job *job, int *flagsp, json_t **entryp);
+bool job_event_is_queued (struct job *job, const char *name);
+const char *job_event_queue_print (struct job *job, char *buf, int size);
 
 #endif /* _FLUX_JOB_MANAGER_JOB_H */
 

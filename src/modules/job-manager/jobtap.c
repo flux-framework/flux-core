@@ -77,9 +77,6 @@ static int jobtap_job_raise (struct jobtap *jobtap,
                              int severity,
                              const char *fmt, ...);
 
-static int job_emit_pending_dependencies (struct jobtap *jobtap,
-                                          struct job *job);
-
 static int dependencies_unpack (struct jobtap * jobtap,
                                 struct job * job,
                                 char **errp,
@@ -92,30 +89,6 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
                                     int index,
                                     json_t *entry,
                                     char **errp);
-
-static struct dependency * dependency_create (bool add,
-                                              const char *description)
-{
-    struct dependency *dp = calloc (1, sizeof (*dp));
-    if (!dp || !(dp->description = strdup (description))) {
-        free (dp);
-        return NULL;
-    }
-    dp->add = add;
-    return dp;
-}
-
-static void dependency_destroy (void **item)
-{
-    if (*item) {
-        struct dependency *dp = *item;
-        int saved_errno = errno;
-        free (dp->description);
-        free (dp);
-        *item = NULL;
-        errno = saved_errno;
-    }
-}
 
 /*  zlistx_t plugin destructor */
 static void plugin_destroy (void **item)
@@ -924,15 +897,6 @@ int jobtap_call (struct jobtap *jobtap,
     int64_t priority = FLUX_JOBTAP_PRIORITY_UNAVAIL;
     va_list ap;
 
-    if (job->state == FLUX_JOB_STATE_DEPEND) {
-        /*  Ensure any pending dependencies are emitted before calling
-         *   into job.state.depend callback to prevent the depend event
-         *   itself when not all dependencies are resolved.
-         */
-        if (job_emit_pending_dependencies (jobtap, job) < 0)
-            return -1;
-    }
-
     if (jobtap_topic_match_count (jobtap, topic) == 0)
         return 0;
 
@@ -1481,39 +1445,6 @@ static struct job *lookup_job (struct job_manager *ctx, flux_jobid_t id)
     return job;
 }
 
-static void zlist_free (void *arg)
-{
-    if (arg)
-        zlistx_destroy ((zlistx_t **) &arg);
-}
-
-static int add_pending_dependency (struct job *job,
-                                   bool add,
-                                   const char *description)
-{
-    struct dependency *dp = NULL;
-    zlistx_t *l = job_aux_get (job, "pending-dependencies");
-    if (!l) {
-        if (!(l = zlistx_new ())) {
-            errno = ENOMEM;
-            return -1;
-        }
-        zlistx_set_destructor (l, dependency_destroy);
-        if (job_aux_set (job, "pending-dependencies", l, zlist_free) < 0) {
-            zlistx_destroy (&l);
-            errno = ENOMEM;
-            return -1;
-        }
-    }
-    if (!(dp = dependency_create (add, description))
-        || !zlistx_add_end (l, dp)) {
-        dependency_destroy ((void **) &dp);
-        errno = ENOMEM;
-        return -1;
-    }
-    return 0;
-}
-
 static int jobtap_emit_dependency_event (struct jobtap *jobtap,
                                          struct job *job,
                                          bool add,
@@ -1522,24 +1453,9 @@ static int jobtap_emit_dependency_event (struct jobtap *jobtap,
     int flags = 0;
     const char *event = add ? "dependency-add" : "dependency-remove";
 
-    if (job->state == FLUX_JOB_STATE_NEW) {
-        /*  Dependencies cannot be emitted before DEPEND state, but it
-         *   is useful for plugins to generate them in job.validate or
-         *   job.new. In this case, stash these dependencies as pending
-         *   within the job itself. These will later be emitted as the job
-         *   enters DEPEND state.
-         */
-        return add_pending_dependency (job, add, description);
-    }
-    if (job->state != FLUX_JOB_STATE_DEPEND) {
+    if (job->state != FLUX_JOB_STATE_DEPEND
+        && job->state != FLUX_JOB_STATE_NEW) {
         errno = EINVAL;
-        return -1;
-    }
-    if (!job_dependency_event_valid (job, event, description)) {
-        /*  Ignore duplicate dependency-add/remove events
-         */
-        if (errno == EEXIST)
-            return 0;
         return -1;
     }
     return event_job_post_pack (jobtap->ctx->event,
@@ -1581,52 +1497,6 @@ int flux_jobtap_dependency_remove (flux_plugin_t *p,
                                    const char *description)
 {
     return emit_dependency_event (p, id, false, description);
-}
-
-static void emit_pending_dependencies_type (struct jobtap *jobtap,
-                                            struct job *job,
-                                            zlistx_t *l,
-                                            bool add)
-{
-    struct dependency *dp;
-    FOREACH_ZLISTX (l, dp) {
-        if (dp->add != add)
-            continue;
-        if (jobtap_emit_dependency_event (jobtap,
-                                          job,
-                                          dp->add,
-                                          dp->description) < 0) {
-            if (jobtap_job_raise (jobtap, job,
-                                  "dependency",
-                                  0,
-                                  "failed to %s dependency %s",
-                                  dp->add ? "add" : "remove",
-                                  dp->description) < 0) {
-                flux_log_error (jobtap->ctx->h,
-                                "%s: jobtap_job_raise: id=%ju",
-                                __FUNCTION__, (uintmax_t) job->id);
-            }
-            /*  Proceed no further, job has exception and will proceed
-             *   to INACTIVE state
-             */
-            return;
-        }
-        /*  Shorten list for next iteration.
-         */
-        (void) zlistx_delete (l, zlistx_cursor (l));
-    }
-}
-
-static int job_emit_pending_dependencies (struct jobtap *jobtap,
-                                          struct job *job)
-{
-    zlistx_t *l = job_aux_get (job, "pending-dependencies");
-    if (l) {
-        emit_pending_dependencies_type (jobtap, job, l, true);
-        emit_pending_dependencies_type (jobtap, job, l, false);
-        job_aux_delete (job, l);
-    }
-    return 0;
 }
 
 static struct job * jobtap_lookup_jobid (flux_plugin_t *p, flux_jobid_t id)
