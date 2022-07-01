@@ -86,7 +86,8 @@ int job_dependency_count (struct job *job)
 
 int job_dependency_add (struct job *job, const char *description)
 {
-    assert (job->state == FLUX_JOB_STATE_DEPEND);
+    assert (job->state == FLUX_JOB_STATE_NEW
+            || job->state == FLUX_JOB_STATE_DEPEND);
     if (grudgeset_add (&job->dependencies, description) < 0
         && errno != EEXIST)
         return -1;

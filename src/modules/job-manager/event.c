@@ -582,7 +582,7 @@ int event_job_update (struct job *job, json_t *event)
     if (eventlog_entry_parse (event, &timestamp, &name, &context) < 0)
         goto error;
 
-    if (streq (name, "submit")) {
+    if (streq (name, "submit")) { // invariant: submit is always first event
         if (job->state != FLUX_JOB_STATE_NEW)
             goto inval;
         job->t_submit = timestamp;
@@ -596,10 +596,11 @@ int event_job_update (struct job *job, json_t *event)
         job->state = FLUX_JOB_STATE_DEPEND;
     }
     else if (!strncmp (name, "dependency-", 11)) {
-        if (job->state != FLUX_JOB_STATE_DEPEND)
-            goto inval;
-        if (event_handle_dependency (job, name+11, context) < 0)
-            goto error;
+        if (job->state == FLUX_JOB_STATE_DEPEND
+            || job->state == FLUX_JOB_STATE_NEW) {
+            if (event_handle_dependency (job, name+11, context) < 0)
+                goto error;
+        }
     }
     else if (streq (name, "set-flags")) {
         if (event_handle_set_flags (job, context) < 0)
@@ -610,17 +611,17 @@ int event_job_update (struct job *job, json_t *event)
             goto error;
     }
     else if (streq (name, "depend")) {
-        if (job->state != FLUX_JOB_STATE_DEPEND)
-            goto inval;
-        job->state = FLUX_JOB_STATE_PRIORITY;
+        if (job->state == FLUX_JOB_STATE_DEPEND)
+            job->state = FLUX_JOB_STATE_PRIORITY;
     }
     else if (streq (name, "priority")) {
-        if (job->state != FLUX_JOB_STATE_PRIORITY
-            && job->state != FLUX_JOB_STATE_SCHED)
-            goto inval;
-        if (event_priority_context_decode (context, &job->priority) < 0)
-            goto error;
-        job->state = FLUX_JOB_STATE_SCHED;
+        if (job->state == FLUX_JOB_STATE_PRIORITY
+            || job->state == FLUX_JOB_STATE_SCHED) {
+            if (event_priority_context_decode (context, &job->priority) < 0)
+                goto error;
+        }
+        if (job->state == FLUX_JOB_STATE_PRIORITY)
+            job->state = FLUX_JOB_STATE_SCHED;
     }
     else if (streq (name, "urgency")) {
         /* Update urgency value.  If in SCHED state, transition back to
@@ -636,70 +637,54 @@ int event_job_update (struct job *job, json_t *event)
     }
     else if (streq (name, "exception")) {
         int severity;
-        if (job->state == FLUX_JOB_STATE_NEW
-            || job->state == FLUX_JOB_STATE_INACTIVE)
-            goto inval;
-        if (event_exception_context_decode (context, &severity) < 0)
-            goto error;
-        if (severity == 0) {
-            if (!job->end_event)
-                job->end_event = json_incref (event);
-
-            job->state = FLUX_JOB_STATE_CLEANUP;
+        if (job->state != FLUX_JOB_STATE_INACTIVE
+            && job->state != FLUX_JOB_STATE_NEW) {
+            if (event_exception_context_decode (context, &severity) < 0)
+                goto error;
+            if (severity == 0) {
+                if (!job->end_event)
+                    job->end_event = json_incref (event);
+                job->state = FLUX_JOB_STATE_CLEANUP;
+            }
         }
     }
     else if (streq (name, "alloc")) {
-        if (job->state != FLUX_JOB_STATE_SCHED
-            && job->state != FLUX_JOB_STATE_CLEANUP)
-            goto inval;
         job->has_resources = 1;
         if (job->state == FLUX_JOB_STATE_SCHED)
             job->state = FLUX_JOB_STATE_RUN;
     }
     else if (streq (name, "free")) {
-        if (job->state != FLUX_JOB_STATE_CLEANUP
-            || !job->has_resources)
-            goto inval;
         job->has_resources = 0;
     }
     else if (streq (name, "finish")) {
-        if (job->state != FLUX_JOB_STATE_RUN
-            && job->state != FLUX_JOB_STATE_CLEANUP)
-            goto inval;
         if (job->state == FLUX_JOB_STATE_RUN) {
             if (!job->end_event)
                 job->end_event = json_incref (event);
-
             job->state = FLUX_JOB_STATE_CLEANUP;
         }
     }
     else if (streq (name, "release")) {
         int final;
-        if (job->state != FLUX_JOB_STATE_RUN
-            && job->state != FLUX_JOB_STATE_CLEANUP)
-            goto inval;
         if (event_release_context_decode (context, &final) < 0)
             goto error;
-        if (final && job->state == FLUX_JOB_STATE_RUN)
-            goto inval;
     }
     else if (streq (name, "clean")) {
-        if (job->state != FLUX_JOB_STATE_CLEANUP)
-            goto inval;
-        job->state = FLUX_JOB_STATE_INACTIVE;
-        job->t_clean = timestamp;
+        if (job->state == FLUX_JOB_STATE_CLEANUP) {
+            job->state = FLUX_JOB_STATE_INACTIVE;
+            job->t_clean = timestamp;
+        }
     }
     else if (!strncmp (name, "prolog-", 7)) {
-        if (job->start_pending)
-            goto inval;
-        if (event_handle_perilog (job, name+7, context) < 0)
-            goto error;
+        if (!job->start_pending) {
+            if (event_handle_perilog (job, name+7, context) < 0)
+                goto error;
+        }
     }
     else if (!strncmp (name, "epilog-", 7)) {
-        if (job->state != FLUX_JOB_STATE_CLEANUP)
-            goto inval;
-        if (event_handle_perilog (job, name+7, context) < 0)
-            goto error;
+        if (job->state == FLUX_JOB_STATE_CLEANUP) {
+            if (event_handle_perilog (job, name+7, context) < 0)
+                goto error;
+        }
     }
     else if (streq (name, "flux-restart")) {
         /* The flux-restart event is currently only posted to jobs in
