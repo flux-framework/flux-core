@@ -629,3 +629,4 @@ tmpfiles
 EDEADLOCK
 setpgrp
 nosetpgrp
+checkpointed

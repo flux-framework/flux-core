@@ -77,4 +77,4 @@ SEE ALSO
 :man1:`flux-broker`, :man5:`flux-config-access`, :man5:`flux-config-bootstrap`,
 :man5:`flux-config-tbon`, :man5:`flux-config-exec`, :man5:`flux-config-ingest`,
 :man5:`flux-config-resource`, :man5:`flux-config-archive`,
-:man5:`flux-config-job-manager`
+:man5:`flux-config-job-manager`, :man5:`flux-config-kvs`
