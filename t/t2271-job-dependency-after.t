@@ -186,6 +186,40 @@ test_expect_success 'dependency=afternotok works' '
 	flux job wait-event -vt 15 \
 		-m type=dependency $ok1 exception
 '
+test_expect_success 'dependency=after works for INACTIVE jobs' '
+	run_timeout 15 \
+		flux mini bulksubmit --wait --watch \
+		--job-name=after:{} \
+		--dependency=after:{} \
+		echo after:{} ::: ${job1} ${job2} ${job3}
+'
+test_expect_success 'dependency=afterany works for INACTIVE jobs' '
+	run_timeout 15 \
+		flux mini bulksubmit --wait --watch \
+		--job-name=afterany:{} \
+		--dependency=afterany:{} \
+		echo afterany:{} ::: ${job1} ${job2} ${job3}
+'
+test_expect_success 'dependency=afterok works for INACTIVE job' '
+	run_timeout 15 \
+		flux mini run --dependency=afterok:${job1} \
+		echo afterok:${job1} &&
+	test_must_fail flux mini run --dependency=afterok:${job2} hostname &&
+	test_must_fail flux mini run --dependency=afterok:${job3} hostname 
+'
+test_expect_success 'dependency=afternotok works for INACTIVE job' '
+	run_timeout 15 \
+		flux mini bulksubmit --wait --watch \
+		--job-name=afternotok:{} \
+		--dependency=afternotok:{} \
+		echo afterany:{} ::: ${job2} ${job3} &&
+	test_must_fail flux mini run --dependency=afternotok:${job1} hostname
+'
+test_expect_success 'dependency=after fails for INACTIVE canceled job' '
+	job4=$(flux mini submit --urgency=hold hostname) &&
+	flux job cancel ${job4} &&
+	test_must_fail flux mini run --dependency=after:${job4} hostname
+'
 test_expect_success 'jobs with dependencies can be safely canceled' '
 	jobid=$(flux mini submit --urgency=hold hostname) &&
 	depid=$(flux mini submit --dependency=after:$jobid hostname) &&
