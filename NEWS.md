@@ -1,3 +1,33 @@
+flux-core version 0.41.0 - 2022-07-04
+-------------------------------------
+
+## New Features
+
+ * job-manager: transition NEW to DEPEND on "validate" event (#4366)
+ * kvs: support FLUX_KVS_SYNC (#4348)
+ * shell: obtain hwloc XML from enclosing instance (#4373)
+ * libkvs: add `flux_kvs_commit_get_rootref()`  (#4374)
+
+## Fixes
+
+ * job-manager: fix case where a job manager epilog can't be configured
+   without a prolog (#4382)
+ * broker: return error in content.flush if no backing store exists  (#4376)
+ * broker: content cache corner case corrections (#4380)
+ * job-manager: transition back to PRIORITY state on urgency update (#4364)
+ * wait for 'finish' instead of 'clean' event in flux-mini run and flux-job
+   attach (#4361)
+
+## Cleanup
+
+ * kvs: remove excess logging of ENOTSUP (#4381)
+ * job-manager: misc cleanup (#4362)
+
+## Testsuite
+
+ * testsuite: fix perilog sanity test (#4363)
+ * t2201-job-cmd.t: fix bug in UTF-8 test (#4360)
+
 flux-core version 0.40.0 - 2022-06-07
 -------------------------------------
 
