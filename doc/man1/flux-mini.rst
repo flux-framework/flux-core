@@ -182,9 +182,10 @@ The following dependency schemes are built-in:
 
 .. note::
    The ``after*`` dependency schemes listed below all require that the
-   target JOBID be currently active. If the target JOBID has become
-   inactive by the time the dependent job is submitted, then the submission
-   will be rejected with an error that the dependency job cannot be found.
+   target JOBID be currently active or in the job manager's inactive job
+   cache. If a target JOBID has been purged by the time the dependent job
+   has been submitted, then the submission will be rejected with an error
+   that the target job cannot be found.
 
 after:JOBID
    This dependency is satisfied after JOBID starts.

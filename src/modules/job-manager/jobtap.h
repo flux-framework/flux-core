@@ -159,12 +159,13 @@ int flux_jobtap_event_post_pack (flux_plugin_t *p,
                                  const char *fmt,
                                  ...);
 
-/*  Return a flux_plugin_arg_t object for any active job.
+/*  Return a flux_plugin_arg_t object for a job.
  *
  *  The result can then be unpacked with flux_plugin_arg_unpack(3) to get
  *   active job information such as userid, state, etc.
  *
- *  If `id` is not an active job then NULL is returned with ENOENT set.
+ *  If `id` is not an active job or is not found in the job manager's
+ *   inactive job cache then NULL is returned with ENOENT set.
  *
  *  Caller must free with flux_plugin_arg_destroy(3).
  */

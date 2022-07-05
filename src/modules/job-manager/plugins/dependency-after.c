@@ -223,6 +223,54 @@ static int lookup_job_uid_state (flux_plugin_t *p,
     return rc;
 }
 
+/*  Handle a job in INACTIVE state.
+ *
+ *  Get the job result and check for various error states (e.g. afterok
+ *   and job already completed with failure, after and job had an exception
+ *   before it was started, etc.)
+ */
+static int dependency_handle_inactive (flux_plugin_t *p,
+                                       flux_plugin_arg_t *args,
+                                       struct after_info *after,
+                                       flux_jobid_t afterid,
+                                       const char *jobid)
+{
+    int rc = -1;
+    flux_job_result_t result;
+    enum after_type type = after->type;
+
+    if (flux_jobtap_get_job_result (p, afterid, &result) < 0)
+        return flux_jobtap_reject_job (p, args,
+                                       "dependency: failed to get %ss result",
+                                       jobid);
+
+    if (type == AFTER_START
+        && !flux_jobtap_job_event_posted (p, afterid, "start"))
+        return flux_jobtap_reject_job (p,
+                                       args,
+                                       "dependency: after: %s never started",
+                                       jobid);
+    if (type == AFTER_SUCCESS
+        && result != FLUX_JOB_RESULT_COMPLETED)
+        return flux_jobtap_reject_job (p,
+                                       args,
+                                       "dependency: afterok: "
+                                       "job %s failed or was canceled",
+                                       jobid);
+    if (type == AFTER_FAILURE
+        && result == FLUX_JOB_RESULT_COMPLETED)
+        return flux_jobtap_reject_job (p,
+                                       args,
+                                       "dependency: afternotok:"
+                                       " job %s succeeded",
+                                        jobid);
+    rc = flux_jobtap_dependency_remove (p, after->depid, after->description);
+    if (rc < 0)
+        flux_log_error (flux_jobtap_get_flux (p),
+                        "flux_jobtap_dependency_remove");
+    return rc;
+}
+
 /*  Handler for job.dependency.after*
  *
  */
@@ -305,6 +353,16 @@ static int dependency_after_cb (flux_plugin_t *p,
     if (flux_jobtap_dependency_add (p, id, after->description) < 0) {
         after_info_destroy (after);
         return flux_jobtap_reject_job (p, args, "Unable to add job dependency");
+    }
+
+    /*  If the job is already INACTIVE, then the dependency can be resolved
+     *   immediately, or if the dependency cannot be resolved then the job
+     *   is rejected.
+     */
+    if (target_state == FLUX_JOB_STATE_INACTIVE) {
+        int rc = dependency_handle_inactive (p, args, after, afterid, jobid);
+        after_info_destroy (after);
+        return rc;
     }
 
     /*  Corner case, requisite job may have already started. Check for that
