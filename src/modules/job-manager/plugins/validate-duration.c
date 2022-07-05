@@ -117,3 +117,4 @@ int validate_duration_plugin_init (flux_plugin_t *p)
                                     NULL);
 }
 
+// vi:ts=4 sw=4 expandtab

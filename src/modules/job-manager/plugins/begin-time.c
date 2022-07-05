@@ -181,3 +181,5 @@ int begin_time_plugin_init (flux_plugin_t *p)
                                     depend_cb,
                                     NULL);
 }
+
+// vi:ts=4 sw=4 expandtab
