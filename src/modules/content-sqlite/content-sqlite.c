@@ -582,7 +582,7 @@ void stats_get_cb (flux_t *h,
         goto error;
     if (flux_respond_pack (h,
                            msg,
-                           "{s:i s:I s:I s:o s:o}",
+                           "{s:i s:I s:I s:O s:O}",
                            "object_count", count,
                            "dbfile_size", get_file_size (ctx->dbfile),
                            "dbfile_free", get_fs_free (ctx->dbfile),
