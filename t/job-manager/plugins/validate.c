@@ -46,3 +46,5 @@ int flux_plugin_init (flux_plugin_t *p)
     flux_plugin_set_name (p, "test-validate");
     return flux_plugin_add_handler (p, "job.validate", validate, NULL);
 }
+
+// vi:ts=4 sw=4 expandtab

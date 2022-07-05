@@ -145,3 +145,5 @@ int flux_plugin_init (flux_plugin_t *p)
     }
     return flux_plugin_add_handler (p, "job.*", cb, NULL);
 }
+
+// vi:ts=4 sw=4 expandtab
