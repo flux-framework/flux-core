@@ -18,6 +18,8 @@ libsubprocess_la_SOURCES = \
 	command.h \
 	local.c \
 	local.h \
+	fork.c \
+	fork.h \
 	remote.c \
 	remote.h \
 	server.c \
