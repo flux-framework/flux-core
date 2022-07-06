@@ -732,12 +732,6 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
         goto error;
     }
 
-    /* user required to set cwd */
-    if (!flux_cmd_getcwd (cmd)) {
-        errno = EINVAL;
-        goto error;
-    }
-
     /* make sure user didn't set local only cmd options */
     if (check_local_only_cmd_options (cmd)) {
         errno = EINVAL;

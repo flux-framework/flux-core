@@ -332,11 +332,6 @@ static void server_exec_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!flux_cmd_getcwd (cmd)) {
-        errno = EPROTO;
-        goto error;
-    }
-
     if (!(env = flux_cmd_env_expand (cmd)))
         goto error;
 
