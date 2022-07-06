@@ -357,10 +357,6 @@ static int sigmask_unblock_all (void)
 static void close_fds (flux_subprocess_t *p, bool parent)
 {
     struct subprocess_channel *c;
-    int f = parent ? 0 : 1;
-
-    close (p->sync_fds[f]);
-    p->sync_fds[f] = -1;
 
     /* note, it is safe to iterate via zhash, child & parent will have
      * different copies of zhash */
@@ -592,42 +588,6 @@ static void child_watch_cb (flux_reactor_t *r, flux_watcher_t *w,
         subprocess_check_completed (p);
 }
 
-static int local_fork (flux_subprocess_t *p)
-{
-    if ((p->pid = fork ()) < 0)
-        return -1;
-
-    if (p->pid == 0)
-        local_child (p); /* No return */
-
-    p->pid_set = true;
-
-    close_child_fds (p);
-
-    /* no-op if reactor is !FLUX_REACTOR_SIGCHLD */
-    if (!(p->child_w = flux_child_watcher_create (p->reactor,
-                                                  p->pid,
-                                                  true,
-                                                  child_watch_cb,
-                                                  p))) {
-        flux_log (p->h, LOG_DEBUG, "flux_child_watcher_create");
-        return -1;
-    }
-
-    flux_watcher_start (p->child_w);
-
-    if (subprocess_parent_wait_on_child (p) < 0)
-        return -1;
-
-    if (p->hooks.post_fork) {
-        p->in_hook = true;
-        (*p->hooks.post_fork) (p, p->hooks.post_fork_arg);
-        p->in_hook = false;
-    }
-
-    return (0);
-}
-
 /*  Signal child to proceed with exec(2) and read any error from exec
  *   back on sync_fds.  Return < 0 on failure to signal, or > 0 errnum if
  *   an exec error was returned from child.
@@ -674,14 +634,44 @@ static int local_exec (flux_subprocess_t *p)
         errno = p->exec_failed_errno;
         return -1;
     }
-    p->state = FLUX_SUBPROCESS_RUNNING;
-
     return 0;
 }
+
+static int create_process (flux_subprocess_t *p)
+{
+    if ((p->pid = fork ()) < 0)
+        return -1;
+
+    if (p->pid == 0)
+        local_child (p); /* No return */
+
+    p->pid_set = true;
+
+    /*  close child end of the sync_fd */
+    close (p->sync_fds[1]);
+    p->sync_fds[1] = -1;
+
+    if (subprocess_parent_wait_on_child (p) < 0)
+        return -1;
+
+    return local_exec (p);
+}
+
 
 static int start_local_watchers (flux_subprocess_t *p)
 {
     struct subprocess_channel *c;
+
+    /* no-op if reactor is !FLUX_REACTOR_SIGCHLD */
+    if (!(p->child_w = flux_child_watcher_create (p->reactor,
+                                                  p->pid,
+                                                  true,
+                                                  child_watch_cb,
+                                                  p))) {
+        flux_log (p->h, LOG_DEBUG, "flux_child_watcher_create");
+        return -1;
+    }
+    flux_watcher_start (p->child_w);
 
     c = zhash_first (p->channels);
     while (c) {
@@ -707,10 +697,18 @@ int subprocess_local_setup (flux_subprocess_t *p)
         return -1;
     if (local_setup_channels (p) < 0)
         return -1;
-    if (local_fork (p) < 0)
+    if (create_process (p) < 0)
         return -1;
-    if (local_exec (p) < 0)
-        return -1;
+
+    p->state = FLUX_SUBPROCESS_RUNNING;
+    close_child_fds (p);
+
+    if (p->hooks.post_fork) {
+        p->in_hook = true;
+        (*p->hooks.post_fork) (p, p->hooks.post_fork_arg);
+        p->in_hook = false;
+    }
+
     if (start_local_watchers (p) < 0)
         return -1;
     return 0;
