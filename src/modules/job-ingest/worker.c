@@ -41,7 +41,6 @@
 #if HAVE_CONFIG_H
 #include "config.h"
 #endif
-#include <limits.h>
 #include <unistd.h>
 #include <jansson.h>
 #include <flux/core.h>
@@ -391,16 +390,10 @@ void worker_destroy (struct worker *w)
 
 int worker_set_cmdline (struct worker *w, int argc, char **argv)
 {
-    char path[PATH_MAX + 1];
-
     flux_cmd_destroy (w->cmd);
 
     if (!(w->cmd = flux_cmd_create (argc, argv, environ))) {
         flux_log_error (w->h, "flux_cmd_create");
-        return -1;
-    }
-    if (flux_cmd_setcwd (w->cmd, getcwd (path, sizeof (path))) < 0) {
-        flux_log_error (w->h, "flux_cmd_setcwd");
         return -1;
     }
     return 0;
