@@ -25,6 +25,7 @@ typedef struct kvsroot_mgr kvsroot_mgr_t;
 
 struct kvsroot {
     char *ns_name;
+    bool is_primary;
     uint32_t owner;
     int seq;
     char ref[BLOBREF_MAX_STRING_SIZE];

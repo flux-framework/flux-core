@@ -286,7 +286,9 @@ void create_ready_kvstxn (kvstxn_mgr_t *ktm,
     json_t *ops = NULL;
 
     ops = json_array ();
-    ops_append (ops, key, val, op_flags);
+    /* val can be NULL for a deletion */
+    if (key)
+        ops_append (ops, key, val, op_flags);
 
     ok (kvstxn_mgr_add_transaction (ktm,
                                     name,
@@ -805,6 +807,55 @@ void kvstxn_basic_kvstxn_process_test (void)
     verify_keys_and_ops_standard (kt);
 
     verify_value (cache, krm, KVS_PRIMARY_NAMESPACE, newroot, "key1", "1");
+
+    kvstxn_mgr_remove_transaction (ktm, kt, false);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) == NULL,
+        "kvstxn_mgr_get_ready_transaction returns NULL, no more kvstxns");
+
+    kvstxn_mgr_destroy (ktm);
+    kvsroot_mgr_destroy (krm);
+    cache_destroy (cache);
+}
+
+void kvstxn_basic_kvstxn_process_test_empty_ops (void)
+{
+    struct cache *cache;
+    kvsroot_mgr_t *krm;
+    kvstxn_mgr_t *ktm;
+    kvstxn_t *kt;
+    char rootref[BLOBREF_MAX_STRING_SIZE];
+    const char *newroot;
+
+    cache = create_cache_with_empty_rootdir (rootref, sizeof (rootref));
+
+    ok ((krm = kvsroot_mgr_create (NULL, NULL)) != NULL,
+        "kvsroot_mgr_create works");
+
+    setup_kvsroot (krm, KVS_PRIMARY_NAMESPACE, cache, ref_dummy);
+
+    ok ((ktm = kvstxn_mgr_create (cache,
+                                  KVS_PRIMARY_NAMESPACE,
+                                  "sha1",
+                                  NULL,
+                                  &test_global)) != NULL,
+        "kvstxn_mgr_create works");
+
+    create_ready_kvstxn (ktm, "transaction1", NULL, NULL, 0, 0);
+
+    ok ((kt = kvstxn_mgr_get_ready_transaction (ktm)) != NULL,
+        "kvstxn_mgr_get_ready_transaction returns ready kvstxn");
+
+    ok (kvstxn_process (kt, rootref) == KVSTXN_PROCESS_FINISHED,
+        "kvstxn_process returns KVSTXN_PROCESS_FINISHED");
+
+    ok ((newroot = kvstxn_get_newroot_ref (kt)) != NULL,
+        "kvstxn_get_newroot_ref returns != NULL when processing complete");
+
+    ok (strcmp (newroot, rootref) == 0,
+        "root stays identical when no ops in transaction");
+
+    verify_keys_and_ops_standard (kt);
 
     kvstxn_mgr_remove_transaction (ktm, kt, false);
 
@@ -3371,6 +3422,7 @@ int main (int argc, char *argv[])
     kvstxn_basic_tests ();
     kvstxn_corner_case_tests ();
     kvstxn_basic_kvstxn_process_test ();
+    kvstxn_basic_kvstxn_process_test_empty_ops ();
     kvstxn_basic_kvstxn_process_test_normalization ();
     kvstxn_basic_kvstxn_process_test_multiple_transactions ();
     kvstxn_basic_kvstxn_process_test_multiple_transactions_merge ();

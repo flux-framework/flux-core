@@ -56,7 +56,6 @@
 #include "src/common/libsdprocess/sdprocess.h"
 #include "src/common/libsubprocess/subprocess.h"
 #include "src/common/libsubprocess/command.h"
-#include "src/common/libutil/fsd.h"
 #include "job-exec.h"
 #include "exec_config.h"
 
