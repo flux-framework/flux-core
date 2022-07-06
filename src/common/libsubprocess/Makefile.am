@@ -20,6 +20,8 @@ libsubprocess_la_SOURCES = \
 	local.h \
 	fork.c \
 	fork.h \
+	posix_spawn.c \
+	posix_spawn.h \
 	remote.c \
 	remote.h \
 	server.c \

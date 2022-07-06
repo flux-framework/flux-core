@@ -30,6 +30,7 @@
 #include "command.h"
 #include "local.h"
 #include "fork.h"
+#include "posix_spawn.h"
 #include "util.h"
 
 static void local_channel_flush (struct subprocess_channel *c)
@@ -395,6 +396,8 @@ static void child_watch_cb (flux_reactor_t *r, flux_watcher_t *w,
 
 static int create_process (flux_subprocess_t *p)
 {
+    if (!p->hooks.pre_exec && !flux_cmd_getcwd (p->cmd))
+        return create_process_spawn (p);
     return create_process_fork (p);
 }
 
