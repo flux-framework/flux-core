@@ -628,7 +628,6 @@ flux_future_t *bulk_exec_imp_kill (struct bulk_exec *exec,
             flux_cmd_t *cmd = flux_cmd_create (0, NULL, environ);
 
             if (!cmd
-                || flux_cmd_setcwd (cmd, "/tmp") < 0
                 || flux_cmd_argv_append (cmd, imp_path) < 0
                 || flux_cmd_argv_append (cmd, "kill") < 0
                 || flux_cmd_argv_appendf (cmd, "%d", signum) < 0
