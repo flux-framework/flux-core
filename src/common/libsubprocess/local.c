@@ -386,18 +386,9 @@ static void close_child_fds (flux_subprocess_t *p)
 
 static void closefd_child (void *arg, int fd)
 {
-    flux_subprocess_t *p = arg;
-    struct subprocess_channel *c;
-    if (fd < 3 || fd == p->sync_fds[1])
+    struct idset *ids = arg;
+    if (idset_test (ids, fd))
         return;
-    c = zhash_first (p->channels);
-    while (c) {
-        if (c->child_fd == fd) {
-            (void) fd_unset_cloexec (fd);
-            return;
-        }
-        c = zhash_next (p->channels);
-    }
     close (fd);
 }
 
@@ -445,6 +436,7 @@ static int local_child (flux_subprocess_t *p)
     int errnum;
     char **argv;
     const char *cwd;
+    struct idset *ids;
 
     /* Throughout this function use _exit() instead of exit(), to
      * avoid calling any atexit() routines of parent.
@@ -499,10 +491,12 @@ static int local_child (flux_subprocess_t *p)
         _exit (1);
 
     // Close fds
-    if (fdwalk (closefd_child, (void *) p) < 0) {
+    if (!(ids = subprocess_childfds (p))
+        || fdwalk (closefd_child, (void *) ids) < 0) {
         fprintf (stderr, "Failed closing all fds: %s", strerror (errno));
         _exit (1);
     }
+    idset_destroy (ids);
 
     if (p->hooks.pre_exec) {
         p->in_hook = true;

@@ -11,6 +11,8 @@
 #ifndef _SUBPROCESS_PRIVATE_H
 #define _SUBPROCESS_PRIVATE_H
 
+#include <flux/idset.h>
+
 #include "subprocess.h"
 
 #define SUBPROCESS_MAGIC           0xbeefcafe
@@ -146,5 +148,7 @@ struct subprocess_channel *channel_create (flux_subprocess_t *p,
                                            flux_subprocess_output_f output_f,
                                            const char *name,
                                            int flags);
+
+struct idset * subprocess_childfds (flux_subprocess_t *p);
 
 #endif /* !_SUBPROCESS_PRIVATE_H */
