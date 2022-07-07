@@ -3,6 +3,12 @@
 #include <flux/core.h>
 #include <flux/jobtap.h>
 
+static void my_cleanup (void *arg)
+{
+    flux_t *h = arg;
+
+    flux_log (h, LOG_INFO, "job_aux test destructor invoked");
+}
 
 static int depend_cb (flux_plugin_t *p,
                       const char *topic,
@@ -12,6 +18,7 @@ static int depend_cb (flux_plugin_t *p,
     int rc;
     void *val;
     flux_jobid_t id;
+    flux_t *h = flux_jobtap_get_flux (p);
 
     /*  Test job_aux by jobid here since the current job will be active */
 
@@ -52,6 +59,10 @@ static int depend_cb (flux_plugin_t *p,
                                             "test", 0,
                                             "flux_jobtap_aux_get: %s",
                                             "unexpected success");
+
+    /* Leave an entry for cleanup later */
+    (void)flux_jobtap_job_aux_set (p, id, "foo", h, my_cleanup);
+
 
     return 0;
 }

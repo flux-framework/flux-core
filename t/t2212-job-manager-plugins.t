@@ -180,8 +180,23 @@ test_expect_success 'job-manager: run subscribe test plugin' '
 	test $(grep -c OK subscribe-check.log) = 6
 '
 test_expect_success 'job-manager: run job_aux test plugin' '
+	flux dmesg --clear &&
 	flux jobtap load --remove=all ${PLUGINPATH}/job_aux.so &&
 	flux mini run hostname
+'
+test_expect_success 'job-manager: job aux cleared on transition to inactive' '
+	flux dmesg >aux-dmesg.out &&
+	grep "test destructor invoked" aux-dmesg.out
+'
+test_expect_success 'job-manager: start another job and remove plugin' '
+	flux dmesg --clear &&
+	jobid=$(flux mini submit --wait-event=alloc sleep 60) &&
+	flux jobtap remove job_aux.so &&
+	flux job cancel $jobid
+'
+test_expect_success 'job-manager: job aux cleared when plugin removed' '
+	flux dmesg >aux-dmesg2.out &&
+	grep "test destructor invoked" aux-dmesg2.out
 '
 test_expect_success 'job-manager: load jobtap_api test plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/jobtap_api.so &&
