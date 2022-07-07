@@ -19,6 +19,7 @@
 #include <fnmatch.h>
 #include <dlfcn.h>
 #include <stdarg.h>
+#include <uuid.h>
 #include <jansson.h>
 #include <assert.h>
 #include <flux/core.h>
@@ -27,6 +28,11 @@
 #include "src/common/libutil/aux.h"
 
 #include "plugin.h"
+
+#ifndef UUID_STR_LEN
+#define UUID_STR_LEN 37     // defined in later libuuid headers
+#endif
+
 
 struct flux_plugin {
     char *path;
@@ -38,6 +44,8 @@ struct flux_plugin {
     zlistx_t *handlers;
     int flags;
     char last_error [128];
+    uuid_t uuid;
+    char uuid_str[UUID_STR_LEN];
 };
 
 struct flux_plugin_arg {
@@ -154,6 +162,8 @@ flux_plugin_t *flux_plugin_create (void)
         return NULL;
     }
     p->flags = FLUX_PLUGIN_RTLD_LAZY;
+    uuid_generate (p->uuid);
+    uuid_unparse (p->uuid, p->uuid_str);
     zlistx_set_destructor (p->handlers, handler_free);
     return p;
 }
@@ -207,6 +217,16 @@ const char * flux_plugin_get_name (flux_plugin_t *p)
         return NULL;
     }
     return p->name;
+}
+
+const char * flux_plugin_get_uuid (flux_plugin_t *p)
+{
+    plugin_error_clear (p);
+    if (!p) {
+        errno = EINVAL;
+        return NULL;
+    }
+    return p->uuid_str;
 }
 
 int flux_plugin_aux_set (flux_plugin_t *p, const char *key,
