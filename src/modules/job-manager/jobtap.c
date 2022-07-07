@@ -62,6 +62,7 @@ struct jobtap {
     struct job_manager *ctx;
     char *searchpath;
     zlistx_t *plugins;
+    zhashx_t *plugins_byuuid;
     zlistx_t *jobstack;
     char last_error [128];
 };
@@ -315,6 +316,7 @@ static int jobtap_remove (struct jobtap *jobtap,
         if ((all && name[0] != '.')
             || (isglob && fnmatch (arg, name, FNM_PERIOD) == 0)
             || streq (arg, name)) {
+            zhashx_delete (jobtap->plugins_byuuid, flux_plugin_get_uuid (p));
             zlistx_detach_cur (jobtap->plugins);
             flux_plugin_destroy (p);
             count++;
@@ -449,12 +451,15 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
         && !(jobtap->searchpath = strdup (path)))
         goto error;
     if (!(jobtap->plugins = zlistx_new ())
+        || !(jobtap->plugins_byuuid = zhashx_new ())
         || !(jobtap->jobstack = zlistx_new ())) {
         errno = ENOMEM;
         goto error;
     }
     zlistx_set_destructor (jobtap->plugins, plugin_destroy);
     zlistx_set_comparator (jobtap->plugins, plugin_byname);
+    zhashx_set_key_duplicator (jobtap->plugins_byuuid, NULL);
+    zhashx_set_key_destructor (jobtap->plugins_byuuid, NULL);
     zlistx_set_destructor (jobtap->jobstack, job_destructor);
     zlistx_set_duplicator (jobtap->jobstack, job_duplicator);
 
@@ -483,6 +488,7 @@ void jobtap_destroy (struct jobtap *jobtap)
         int saved_errno = errno;
         conf_unregister_callback (jobtap->ctx->conf, jobtap_parse_config);
         zlistx_destroy (&jobtap->plugins);
+        zhashx_destroy (&jobtap->plugins_byuuid);
         zlistx_destroy (&jobtap->jobstack);
         jobtap->ctx = NULL;
         free (jobtap->searchpath);
@@ -1186,7 +1192,10 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
         if (jobtap_plugin_load_first (jobtap, p, path, errp) < 0)
             goto error;
     }
-    if (!zlistx_add_end (jobtap->plugins, p)) {
+    char *uuid = (char *)flux_plugin_get_uuid (p);
+    if (zhashx_insert (jobtap->plugins_byuuid, uuid, p) < 0
+        || !zlistx_add_end (jobtap->plugins, p)) {
+        zhashx_delete (jobtap->plugins_byuuid, uuid);
         errprintf (errp, "Out of memory adding plugin to list");
         errno = ENOMEM;
         goto error;
