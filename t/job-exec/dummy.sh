@@ -93,6 +93,11 @@ get_duration() {
     if test "$DURATION" = "null"; then DURATION=0.01; fi
 }
 
+get_cwd() {
+    CWD=$(json_get "$JOBSPEC" .attributes.system.cwd)
+    if test "$CWD" = "null"; then CWD=.; fi
+}
+
 get_command() {
     COMMAND=($(json_get "$JOBSPEC" '.tasks[0].command[]' | tr '\n' ' '))
 }
@@ -160,6 +165,9 @@ barrier
 get_duration
 get_command
 get_traps
+get_cwd
+
+cd $CWD
 
 test_mock_failure
 barrier
