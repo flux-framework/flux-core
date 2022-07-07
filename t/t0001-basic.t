@@ -122,7 +122,12 @@ test_expect_success 'flux-start exec fails on bad broker shell script' "
 	test_must_fail bash -c 'FLUX_EXEC_PATH_PREPEND=. flux start /bin/true'
 "
 test_expect_success 'flux-start test exec fails on bad broker shell script' "
-	test_must_fail bash -c 'FLUX_EXEC_PATH_PREPEND=. flux start -s1 /bin/true'
+	#
+	# We can't use test_must_fail here because on some OSes this command
+	# might fail with exit code 127, which test_must_fail does not
+	# acccept, so we use ! here since any failure is acceptable here
+	#
+	! bash -c 'FLUX_EXEC_PATH_PREPEND=. flux start -s1 /bin/true'
 "
 test_expect_success 'flux-start -s1 works' "
 	flux start ${ARGS} -s1 /bin/true
