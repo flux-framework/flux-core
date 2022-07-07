@@ -405,6 +405,7 @@ int event_job_action (struct event *event, struct job *job)
                                 (uintmax_t) job->id);
             }
             (void) jobtap_call (ctx->jobtap, job, "job.destroy", NULL);
+            job_aux_destroy (job);
             zhashx_delete (ctx->active_jobs, &job->id);
             drain_check (ctx->drain);
             break;
