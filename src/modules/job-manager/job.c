@@ -158,6 +158,7 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
     json_t *a = NULL;
     size_t index;
     json_t *event;
+    int version = -1; // invalid
 
     if (!(job = job_create ()))
         return NULL;
@@ -176,16 +177,41 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
 
     json_array_foreach (a, index, event) {
         const char *name = "unknown";
-        (void)eventlog_entry_parse (event, NULL, &name, NULL);
+        json_t *context;
 
-        if (index == 0 && !streq (name, "submit")) {
-            errprintf (error, "first event is %s not submit", name);
-            goto inval;
+        if (index == 0) {
+            if (eventlog_entry_parse (event, NULL, &name, &context) < 0) {
+                errprintf (error, "eventlog parse error on line %zu", index);
+                goto error;
+            }
+            if (!streq (name, "submit")) {
+                errprintf (error, "first event is %s not submit", name);
+                goto inval;
+            }
+            /* For now, support flux-core versions prior to 0.41.1 that don't
+             * have a submit version attr, as is now required by RFC 21.
+             * Allow version=-1 to pass through for work around below.
+             */
+            (void)json_unpack (context, "{s?i}", "version", &version);
+            if (version != -1 && version != 1) {
+                errprintf (error, "eventlog v%d is unsupported", version);
+                goto inval;
+            }
         }
+
         if (event_job_update (job, event) < 0) {
             errprintf (error, "could not apply %s", name);
             goto error;
         }
+
+        /* Work around flux-framework/flux-core#4398.
+         * "submit" used to transition NEW->DEPEND in unversioned eventlog,
+         * but as of version 1, "validate" is required to transition.  Allow
+         * old jobs to be ingested from the KVS by flux-core 0.41.1+.
+         */
+        if (index == 0 && version == -1)
+            job->state = FLUX_JOB_STATE_DEPEND;
+
         job->eventlog_seq++;
     }
 

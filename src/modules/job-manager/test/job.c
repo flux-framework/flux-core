@@ -59,20 +59,20 @@ void test_create (void)
 const char *test_input[] = {
     /* 0 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42,\"version\":1}}\n"
     "{\"timestamp\":42.3,\"name\":\"validate\"}\n",
 
 
     /* 1 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42,\"version\":1}}\n"
     "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"urgency\","
      "\"context\":{\"userid\":42,\"urgency\":1}}\n",
 
     /* 2 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42,\"version\":1}}\n"
     "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
@@ -80,21 +80,21 @@ const char *test_input[] = {
 
     /* 3 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42,\"version\":1}}\n"
     "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"exception\","
      "\"context\":{\"type\":\"cancel\",\"severity\":0,\"userid\":42}}\n",
 
     /* 4 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42,\"version\":1}}\n"
     "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"exception\","
      "\"context\":{\"type\":\"meep\",\"severity\":1,\"userid\":42}}\n",
 
     /* 5 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42,\"version\":1}}\n"
     "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
@@ -106,7 +106,7 @@ const char *test_input[] = {
 
     /* 7 */
     "{\"timestamp\":42.2,\"name\":\"submit\","
-     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42,\"version\":1}}\n"
     "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n"
     "{\"timestamp\":42.4,\"name\":\"priority\","
@@ -115,6 +115,11 @@ const char *test_input[] = {
     "{\"timestamp\":42.5,\"name\":\"exception\","
      "\"context\":{\"type\":\"gasp\",\"severity\":0,\"userid\":42}}\n"
     "{\"timestamp\":42.6,\"name\":\"free\"}\n",
+
+    /* 8 - no version attribute */
+    "{\"timestamp\":42.2,\"name\":\"submit\","
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
+    "{\"timestamp\":42.3,\"name\":\"depend\"}\n",
 };
 
 void test_create_from_eventlog (void)
@@ -265,6 +270,13 @@ void test_create_from_eventlog (void)
         "job_create_from_eventlog log=(submit+depend+priority+alloc+ex0+free) set state=CLEANUP");
     job_decref (job);
 
+    /* 8 - no version (has no validate event) */
+    job = job_create_from_eventlog (3, test_input[8], "{}", &error);
+    ok (job != NULL,
+        "job_create_from_eventlog version log=(submit.v0+depend) works");
+    ok (job->state == FLUX_JOB_STATE_PRIORITY,
+        "job_create_from_eventlog version log=(submit.v0+depend) state=PRIORITY");
+    job_decref (job);
 }
 
 void test_create_from_json (void)
