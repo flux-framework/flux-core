@@ -21,6 +21,7 @@
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/aux.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 #include "job.h"
@@ -150,7 +151,8 @@ void job_aux_delete (struct job *job, const void *val)
 
 struct job *job_create_from_eventlog (flux_jobid_t id,
                                       const char *eventlog,
-                                      const char *jobspec)
+                                      const char *jobspec,
+                                      flux_error_t *error)
 {
     struct job *job;
     json_t *a = NULL;
@@ -161,21 +163,38 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
         return NULL;
     job->id = id;
 
-    if (!(job->jobspec_redacted = json_loads (jobspec, 0, NULL)))
+    if (!(job->jobspec_redacted = json_loads (jobspec, 0, NULL))) {
+        errprintf (error, "failed to decode jobspec");
         goto inval;
+    }
     jpath_del (job->jobspec_redacted, "attributes.system.environment");
 
-    if (!(a = eventlog_decode (eventlog)))
+    if (!(a = eventlog_decode (eventlog))) {
+        errprintf (error, "failed to decode eventlog");
         goto error;
+    }
 
     json_array_foreach (a, index, event) {
-        if (event_job_update (job, event) < 0)
+        const char *name = "unknown";
+        (void)eventlog_entry_parse (event, NULL, &name, NULL);
+
+        if (index == 0 && !streq (name, "submit")) {
+            errprintf (error, "first event is %s not submit", name);
+            goto inval;
+        }
+        if (event_job_update (job, event) < 0) {
+            errprintf (error, "could not apply %s", name);
             goto error;
+        }
         job->eventlog_seq++;
     }
 
-    if (job->state == FLUX_JOB_STATE_NEW)
+    if (job->state == FLUX_JOB_STATE_NEW) {
+        errprintf (error,
+                   "job state (%s) is invalid after replay",
+                   flux_job_statetostr (job->state, "L"));
         goto inval;
+    }
 
     json_decref (a);
     return job;

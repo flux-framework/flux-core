@@ -120,11 +120,14 @@ const char *test_input[] = {
 void test_create_from_eventlog (void)
 {
     struct job *job;
+    flux_error_t error;
 
     /* 0 - submit only */
-    job = job_create_from_eventlog (2, test_input[0], "{}");
-    if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit) failed");
+    job = job_create_from_eventlog (2, test_input[0], "{}", &error);
+    if (job == NULL) {
+        BAIL_OUT ("job_create_from_eventlog log=(submit) failed: %s",
+                  error.text);
+    }
     ok (job->refcount == 1,
         "job_create_from_eventlog log=(submit) set refcount to 1");
     ok (job->id == 2,
@@ -146,9 +149,11 @@ void test_create_from_eventlog (void)
     job_decref (job);
 
     /* 1 - submit + urgency */
-    job = job_create_from_eventlog (3, test_input[1], "{}");
-    if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+urgency) failed");
+    job = job_create_from_eventlog (3, test_input[1], "{}", &error);
+    if (job == NULL) {
+        BAIL_OUT ("job_create_from_eventlog log=(submit+urgency) failed: %s",
+                  error.text);
+    }
     ok (job->id == 3,
         "job_create_from_eventlog log=(submit+urgency) set id from param");
     ok (job->userid == 66,
@@ -166,9 +171,11 @@ void test_create_from_eventlog (void)
     job_decref (job);
 
     /* 2 - submit + depend + priority */
-    job = job_create_from_eventlog (3, test_input[2], "{}");
-    if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+depend+priority) failed");
+    job = job_create_from_eventlog (3, test_input[2], "{}", &error);
+    if (job == NULL) {
+        BAIL_OUT ("job_create_from_eventlog log=(submit+depend+priority) failed: %s",
+                  error.text);
+    }
     ok (job->id == 3,
         "job_create_from_eventlog log=(submit+depend+priority) set id from param");
     ok (job->userid == 66,
@@ -188,9 +195,11 @@ void test_create_from_eventlog (void)
     job_decref (job);
 
     /* 3 - submit + exception severity 0 */
-    job = job_create_from_eventlog (3, test_input[3], "{}");
-    if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+ex0) failed");
+    job = job_create_from_eventlog (3, test_input[3], "{}", &error);
+    if (job == NULL) {
+        BAIL_OUT ("job_create_from_eventlog log=(submit+ex0) failed: %s",
+                  error.text);
+    }
     ok (job->userid == 66,
         "job_create_from_eventlog log=(submit+ex0) set userid from submit");
     ok (job->urgency == 16,
@@ -206,9 +215,11 @@ void test_create_from_eventlog (void)
     job_decref (job);
 
     /* 4 - submit + exception severity 1 */
-    job = job_create_from_eventlog (3, test_input[4], "{}");
-    if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+ex1) failed");
+    job = job_create_from_eventlog (3, test_input[4], "{}", &error);
+    if (job == NULL) {
+        BAIL_OUT ("job_create_from_eventlog log=(submit+ex1) failed: %s",
+                  error.text);
+    }
     ok (job->state == FLUX_JOB_STATE_DEPEND,
         "job_create_from_eventlog log=(submit+ex1) set state=DEPEND");
     ok (!job->alloc_pending
@@ -218,9 +229,11 @@ void test_create_from_eventlog (void)
     job_decref (job);
 
     /* 5 - submit + depend + priority + alloc */
-    job = job_create_from_eventlog (3, test_input[5], "{}");
-    if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+depend+priority+alloc) failed");
+    job = job_create_from_eventlog (3, test_input[5], "{}", &error);
+    if (job == NULL) {
+        BAIL_OUT ("job_create_from_eventlog log=(submit+depend+priority+alloc) failed: %s",
+                  error.text);
+    }
     ok (!job->alloc_pending
         && !job->free_pending
         && job->has_resources,
@@ -231,14 +244,19 @@ void test_create_from_eventlog (void)
 
     /* 6 - missing submit */
     errno = 0;
-    job = job_create_from_eventlog (3, test_input[6], "{}");
+    error.text[0] = '\0';
+    job = job_create_from_eventlog (3, test_input[6], "{}", &error);
     ok (job == NULL && errno == EINVAL,
         "job_create_from_eventlog log=(alloc) fails with EINVAL");
+    ok (strlen (error.text) > 0,
+        "and error.text is set");
 
     /* 7 - submit + depend + priority + alloc + ex0 + free */
-    job = job_create_from_eventlog (3, test_input[7], "{}");
-    if (job == NULL)
-        BAIL_OUT ("job_create_from_eventlog log=(submit+depend+priority+alloc+ex0+free) failed");
+    job = job_create_from_eventlog (3, test_input[7], "{}", &error);
+    if (job == NULL) {
+        BAIL_OUT ("job_create_from_eventlog log=(submit+depend+priority+alloc+ex0+free) failed: %s",
+                  error.text);
+    }
     ok (!job->alloc_pending
         && !job->free_pending
         && !job->has_resources,

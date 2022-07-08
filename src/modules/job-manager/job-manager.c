@@ -213,10 +213,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_msghandler_add");
         goto done;
     }
-    if (restart_from_kvs (&ctx) < 0) {
-        flux_log_error (h, "restart_from_kvs");
+    if (restart_from_kvs (&ctx) < 0) // logs its own error messages
         goto done;
-    }
     if (flux_reactor_run (r, 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;
