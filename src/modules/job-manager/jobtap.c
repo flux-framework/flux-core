@@ -237,7 +237,7 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
     if (!(p = jobtap_load (jobtap, path, conf, errp)))
         goto error;
 
-    /*  Make plugin aware of all active jobs via job.new callback
+    /*  Make plugin aware of all active jobs.
      */
     if (!(jobs = zhashx_values (ctx->active_jobs))) {
         errprintf (errp, "zhashx_values() failed");
@@ -254,7 +254,10 @@ static flux_plugin_t * jobtap_load_plugin (struct jobtap *jobtap,
             goto error;
         }
 
-        /*  Notify this plugin of all jobs via `job.new` callback. */
+        /*  Notify this plugin of all jobs via `job.create` and `job.new`
+         *   callbacks.
+         */
+        (void) flux_plugin_call (p, "job.create", args);
         (void) flux_plugin_call (p, "job.new", args);
 
         /*  If job is in DEPEND state then there may be pending dependencies.
@@ -625,15 +628,19 @@ static void error_asprintf (struct jobtap *jobtap,
     va_end (ap);
 }
 
-int jobtap_validate (struct jobtap *jobtap,
-                     struct job *job,
-                     char **errp)
+/* Common function for job.create and job.validate.
+ * Both can reject a job with textual error for the submit RPC.
+ */
+static int jobtap_call_early (struct jobtap *jobtap,
+                              struct job *job,
+                              const char *topic,
+                              char **errp)
 {
     int rc;
     flux_plugin_arg_t *args;
     const char *errmsg = NULL;
 
-    if (jobtap_topic_match_count (jobtap, "job.validate") == 0)
+    if (jobtap_topic_match_count (jobtap, topic) == 0)
         return 0;
     if (!(args = jobtap_args_create (jobtap, job)))
         return -1;
@@ -641,7 +648,7 @@ int jobtap_validate (struct jobtap *jobtap,
     rc = jobtap_stack_call (jobtap,
                             jobtap->plugins,
                             job,
-                            "job.validate",
+                            topic,
                             args);
 
     if (rc < 0) {
@@ -660,6 +667,16 @@ int jobtap_validate (struct jobtap *jobtap,
     }
     flux_plugin_arg_destroy (args);
     return rc;
+}
+
+int jobtap_validate (struct jobtap *jobtap, struct job *job, char **errp)
+{
+    return jobtap_call_early (jobtap, job, "job.validate", errp);
+}
+
+int jobtap_call_create (struct jobtap *jobtap, struct job *job, char **errp)
+{
+    return jobtap_call_early (jobtap, job, "job.create", errp);
 }
 
 static int make_dependency_topic (struct jobtap *jobtap,

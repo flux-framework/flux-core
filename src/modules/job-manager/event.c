@@ -395,6 +395,7 @@ int event_job_action (struct event *event, struct job *job)
             }
             break;
         case FLUX_JOB_STATE_INACTIVE:
+            job->eventlog_readonly = 1;
             if ((job->flags & FLUX_JOB_WAITABLE))
                 wait_notify_inactive (ctx->wait, job);
             if (zhashx_insert (ctx->inactive_jobs, &job->id, job) < 0
@@ -403,6 +404,7 @@ int event_job_action (struct event *event, struct job *job)
                                 "%ju: error preserving inactive job",
                                 (uintmax_t) job->id);
             }
+            (void) jobtap_call (ctx->jobtap, job, "job.destroy", NULL);
             zhashx_delete (ctx->active_jobs, &job->id);
             drain_check (ctx->drain);
             break;
@@ -590,6 +592,9 @@ int event_job_update (struct job *job, json_t *event)
                                          &job->userid,
                                          &job->flags) < 0)
             goto error;
+    }
+    else if (streq (name, "invalidate")) {
+        job->eventlog_readonly = 1;
     }
     else if (streq (name, "validate")) {
         job->state = FLUX_JOB_STATE_DEPEND;
@@ -837,16 +842,20 @@ static int event_job_post_deferred (struct event *event, struct job *job)
     int flags;
     json_t *entry;
 
-    while (job_event_peek (job, &flags, &entry) == 0) {
+    job_incref (job); // in case event_job_process_entry() decrefs job
+    while (job_event_peek (job, &flags, &entry) == 0
+        && !job->eventlog_readonly) {
         if (event_job_process_entry (event, job, flags, entry) < 0) {
             int saved_errno = errno;
             while (job_event_dequeue (job, NULL, NULL) == 0)
                 ;
             errno = saved_errno;
+            job_decref (job);
             return -1;
         }
         job_event_dequeue (job, NULL, NULL);
     }
+    job_decref (job);
     return 0;
 }
 

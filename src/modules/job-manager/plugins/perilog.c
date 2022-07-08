@@ -530,3 +530,5 @@ int flux_plugin_init (flux_plugin_t *p)
     }
     return flux_plugin_register (p, "perilog", tab);
 }
+
+// vi:ts=4 sw=4 expandtab

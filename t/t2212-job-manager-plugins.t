@@ -170,7 +170,7 @@ test_expect_success 'job-manager: run args test plugin' '
 	flux mini run hostname &&
 	flux dmesg | grep args-check > args-check.log &&
 	test_debug "cat args-check.log" &&
-	test $(grep -c OK args-check.log) = 18
+	test $(grep -c OK args-check.log) = 20
 '
 test_expect_success 'job-manager: run subscribe test plugin' '
 	flux jobtap load --remove=all ${PLUGINPATH}/subscribe.so &&
@@ -430,4 +430,20 @@ test_expect_success 'job-manager: job prolog/epilog events work' '
 	test_debug "echo Checking that epilog-finish=$n_epilog event occurs before free=$n_free event" &&
 	test $n_prolog -lt $n_start -a $n_epilog -lt $n_free
 '
+
+test_expect_success 'job-manager: job.create posts events before validation' '
+	flux jobtap load --remove=all ${PLUGINPATH}/create-event.so &&
+	jobid=$(flux mini submit hostname) &&
+	flux job wait-event -v $jobid validate >create-event.out &&
+	n_test=$(lineno test-event create-event.out) &&
+	n_create=$(lineno validate create-event.out) &&
+	test $n_test -lt $n_create
+'
+
+test_expect_success 'job-manager: job.create can reject a job' '
+	flux jobtap load --remove=all ${PLUGINPATH}/create-reject.so &&
+	test_must_fail flux mini submit hostname 2>submit.err &&
+	grep nope submit.err
+'
+
 test_done

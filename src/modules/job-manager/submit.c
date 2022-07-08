@@ -91,9 +91,14 @@ static int submit_job (struct job_manager *ctx,
         set_errorf (errors, job->id, "error posting submit event");
         goto error;
     }
+    /* Post the job.create callback.  Since the plugin might post events,
+     * it is called _after_ the submit event is posted, since submit SHALL
+     * be the first event per RFC 21.
+     */
     /* Call job.validate callback.
      */
-    if (jobtap_validate (ctx->jobtap, job, &error) < 0
+    if (jobtap_call_create (ctx->jobtap, job, &error) < 0
+        || jobtap_validate (ctx->jobtap, job, &error) < 0
         || jobtap_check_dependencies (ctx->jobtap, job, false, &error) < 0) {
         set_errorf (errors, job->id, error ? error : "rejected by plugin");
         free (error);
@@ -124,6 +129,7 @@ error_post_invalid:
                                "invalidate",
                                EVENT_NO_COMMIT,
                                NULL);
+    (void) jobtap_call (ctx->jobtap, job, "job.destroy", NULL);
 error:
     zhashx_delete (ctx->active_jobs, &job->id);
     return -1;

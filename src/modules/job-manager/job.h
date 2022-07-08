@@ -43,6 +43,7 @@ struct job {
     uint8_t has_resources:1;
     uint8_t start_pending:1;// start request sent to job-exec
     uint8_t reattach:1;
+    uint8_t eventlog_readonly:1;// job is inactive or invalid
 
     uint8_t perilog_active; // if nonzero, prolog/epilog active
 
