@@ -25,4 +25,9 @@ for dump in ${DUMPS}/valid/*.tar.bz2; do
     test_expect_success 'successfully started from '$testname "restart_flux $dump"
 done
 
+for dump in ${DUMPS}/invalid/*.tar.bz2; do
+    testname=$(basename $dump)
+    test_expect_success 'failed on '$testname "test_must_fail restart_flux $dump"
+done
+
 test_done
