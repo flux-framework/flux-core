@@ -120,12 +120,43 @@ const char *test_input[] = {
     "{\"timestamp\":42.2,\"name\":\"submit\","
      "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42}}\n"
     "{\"timestamp\":42.3,\"name\":\"depend\"}\n",
+
+    /* 9 - version=0 (invalid) */
+    "{\"timestamp\":42.2,\"name\":\"submit\","
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42,\"version\":0}}\n",
+
+    /* 10 - submit+validate+submit should cause event_job_update to fail */
+    "{\"timestamp\":42.2,\"name\":\"submit\","
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42,\"version\":1}}\n"
+    "{\"timestamp\":42.25,\"name\":\"validate\"}\n"
+    "{\"timestamp\":42.2,\"name\":\"submit\","
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42,\"version\":1}}\n",
+
+    /* 11 - submit leaves state NEW which is invalid */
+    "{\"timestamp\":42.2,\"name\":\"submit\","
+     "\"context\":{\"userid\":66,\"urgency\":16,\"flags\":42,\"version\":1}}\n",
 };
 
 void test_create_from_eventlog (void)
 {
     struct job *job;
     flux_error_t error;
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok (job_create_from_eventlog (2, "xyz", "{}", &error) == NULL
+        && errno == EINVAL,
+        "job_create_from_eventlog on bad eventlog fails with EINVAL");
+    like (error.text, "failed to decode eventlog",
+          "and error.text is set");
+
+    errno = 0;
+    error.text[0] = '\0';
+    ok (job_create_from_eventlog (2, test_input[0], "}badjson}", &error) == NULL
+        && errno == EINVAL,
+        "job_create_from_eventlog on bad jobspec fails with EINVAL");
+    like (error.text, "failed to decode jobspec",
+          "and error.text is set");
 
     /* 0 - submit only */
     job = job_create_from_eventlog (2, test_input[0], "{}", &error);
@@ -277,6 +308,33 @@ void test_create_from_eventlog (void)
     ok (job->state == FLUX_JOB_STATE_PRIORITY,
         "job_create_from_eventlog version log=(submit.v0+depend) state=PRIORITY");
     job_decref (job);
+
+    /* 9 - invalid version */
+    errno = 0;
+    error.text[0] = '\0';
+    job = job_create_from_eventlog (3, test_input[9], "{}", &error);
+    ok (job == NULL && errno == EINVAL,
+        "job_create_from_eventlog log=(submit.v0) fails with EINVAL");
+    like (error.text, "eventlog v.* is unsupported",
+          "and error.text is set");
+
+    /* 10 - two submits */
+    errno = 0;
+    error.text[0] = '\0';
+    job = job_create_from_eventlog (3, test_input[10], "{}", &error);
+    ok (job == NULL && errno == EINVAL,
+        "job_create_from_eventlog log=(submit,validate,submit) fails with EINVAL");
+    like (error.text, "could not apply",
+          "and error.text is set");
+
+    /* 11 - one submit */
+    errno = 0;
+    error.text[0] = '\0';
+    job = job_create_from_eventlog (3, test_input[11], "{}", &error);
+    ok (job == NULL && errno == EINVAL,
+        "job_create_from_eventlog log=(submit) fails with EINVAL");
+    like (error.text, "job state .* is invalid after replay",
+          "and error.text is set");
 }
 
 void test_create_from_json (void)
