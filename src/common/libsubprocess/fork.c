@@ -192,6 +192,9 @@ static int local_child (flux_subprocess_t *p)
     close (STDOUT_FILENO);
     local_child_report_exec_failed_errno (p, errnum);
     close (STDERR_FILENO);
+#if CODE_COVERAGE_ENABLED
+    __gcov_flush ();
+#endif
     /* exit code doesn't matter, can't be returned to user */
     _exit (1);
 }
