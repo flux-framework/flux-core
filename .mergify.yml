@@ -4,6 +4,7 @@ queue_rules:
       - base=master
       - status-success="validate commits"
       - status-success="flux-sched check"
+      - status-success="flux-accounting check"
       - status-success="python format"
       - status-success="python lint"
       - status-success="mypy"
