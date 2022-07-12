@@ -21,6 +21,7 @@
 #include "src/common/libutil/grudgeset.h"
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/aux.h"
+#include "src/common/libutil/errprintf.h"
 #include "ccan/str/str.h"
 
 #include "job.h"
@@ -150,32 +151,76 @@ void job_aux_delete (struct job *job, const void *val)
 
 struct job *job_create_from_eventlog (flux_jobid_t id,
                                       const char *eventlog,
-                                      const char *jobspec)
+                                      const char *jobspec,
+                                      flux_error_t *error)
 {
     struct job *job;
     json_t *a = NULL;
     size_t index;
     json_t *event;
+    int version = -1; // invalid
 
     if (!(job = job_create ()))
         return NULL;
     job->id = id;
 
-    if (!(job->jobspec_redacted = json_loads (jobspec, 0, NULL)))
+    if (!(job->jobspec_redacted = json_loads (jobspec, 0, NULL))) {
+        errprintf (error, "failed to decode jobspec");
         goto inval;
+    }
     jpath_del (job->jobspec_redacted, "attributes.system.environment");
 
-    if (!(a = eventlog_decode (eventlog)))
+    if (!(a = eventlog_decode (eventlog))) {
+        errprintf (error, "failed to decode eventlog");
         goto error;
+    }
 
     json_array_foreach (a, index, event) {
-        if (event_job_update (job, event) < 0)
+        const char *name = "unknown";
+        json_t *context;
+
+        if (index == 0) {
+            if (eventlog_entry_parse (event, NULL, &name, &context) < 0) {
+                errprintf (error, "eventlog parse error on line %zu", index);
+                goto error;
+            }
+            if (!streq (name, "submit")) {
+                errprintf (error, "first event is %s not submit", name);
+                goto inval;
+            }
+            /* For now, support flux-core versions prior to 0.41.1 that don't
+             * have a submit version attr, as is now required by RFC 21.
+             * Allow version=-1 to pass through for work around below.
+             */
+            (void)json_unpack (context, "{s?i}", "version", &version);
+            if (version != -1 && version != 1) {
+                errprintf (error, "eventlog v%d is unsupported", version);
+                goto inval;
+            }
+        }
+
+        if (event_job_update (job, event) < 0) {
+            errprintf (error, "could not apply %s", name);
             goto error;
+        }
+
+        /* Work around flux-framework/flux-core#4398.
+         * "submit" used to transition NEW->DEPEND in unversioned eventlog,
+         * but as of version 1, "validate" is required to transition.  Allow
+         * old jobs to be ingested from the KVS by flux-core 0.41.1+.
+         */
+        if (index == 0 && version == -1)
+            job->state = FLUX_JOB_STATE_DEPEND;
+
         job->eventlog_seq++;
     }
 
-    if (job->state == FLUX_JOB_STATE_NEW)
+    if (job->state == FLUX_JOB_STATE_NEW) {
+        errprintf (error,
+                   "job state (%s) is invalid after replay",
+                   flux_job_statetostr (job->state, "L"));
         goto inval;
+    }
 
     json_decref (a);
     return job;

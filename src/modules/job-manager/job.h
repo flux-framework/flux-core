@@ -68,7 +68,8 @@ struct job *job_create (void);
 
 struct job *job_create_from_eventlog (flux_jobid_t id,
                                       const char *eventlog,
-                                      const char *jobspec);
+                                      const char *jobspec,
+                                      flux_error_t *error);
 struct job *job_create_from_json (json_t *o);
 
 int job_aux_set (struct job *job,
