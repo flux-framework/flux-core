@@ -80,6 +80,24 @@ jobs:
         cd flux-sched &&
         src/test/docker/docker-run-checks.sh -j 4 -i bionic
 
+  check-accounting:
+    needs: [ python-format, python-lint, mypy ]
+    name: flux-accounting check
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v3
+      with:
+        ref: ${{ github.event.pull_request.head.sha }}
+        fetch-depth: 0
+    - run: >
+        src/test/docker/docker-run-checks.sh --image=el8 --install-only
+        --tag=fluxrm/flux-core:el8
+    - run: >
+        cd .. &&
+        git clone https://github.com/flux-framework/flux-accounting &&
+        cd flux-accounting &&
+        src/test/docker/docker-run-checks.sh -j 4 
+
   generate-matrix:
     # https://stackoverflow.com/questions/59977364
     name: Generate build matrix

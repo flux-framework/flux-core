@@ -333,6 +333,7 @@ int event_job_action (struct event *event, struct job *job)
              *   transition the job to the PRIORITY state.
              */
             if (job_dependency_count (job) == 0
+                && !job_event_is_queued (job, "dependency-add")
                 && !job->depend_posted) {
                 if (event_job_post_pack (event, job, "depend", 0, NULL) < 0)
                     return -1;
