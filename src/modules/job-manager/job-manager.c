@@ -237,6 +237,11 @@ done:
     alloc_ctx_destroy (ctx.alloc);
     submit_ctx_destroy (ctx.submit);
     event_ctx_destroy (ctx.event);
+    /* job aux containers may call destructors in jobtap plugins, so destroy
+     * jobs before unloading plugins; but don't destroy job hashes until after.
+     */
+    zhashx_purge (ctx.active_jobs);
+    zhashx_purge (ctx.inactive_jobs);
     jobtap_destroy (ctx.jobtap);
     conf_destroy (ctx.conf);
     zhashx_destroy (&ctx.active_jobs);

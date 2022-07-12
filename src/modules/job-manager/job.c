@@ -149,6 +149,11 @@ void job_aux_delete (struct job *job, const void *val)
     aux_delete (&job->aux, val);
 }
 
+void job_aux_destroy (struct job *job)
+{
+    aux_destroy (&job->aux);
+}
+
 struct job *job_create_from_eventlog (flux_jobid_t id,
                                       const char *eventlog,
                                       const char *jobspec,

@@ -72,12 +72,15 @@ struct job *job_create_from_eventlog (flux_jobid_t id,
                                       flux_error_t *error);
 struct job *job_create_from_json (json_t *o);
 
+/* N.B. aux items are destroyed when job transitions to inactive.
+ */
 int job_aux_set (struct job *job,
                  const char *name,
                  void *val,
                  flux_free_f destroy);
 void *job_aux_get (struct job *job, const char *name);
 void job_aux_delete (struct job *job, const void *val);
+void job_aux_destroy (struct job *job);
 
 /* Helpers for maintaining czmq containers of 'struct job'.
  * job_priority_comparator sorts by (1) priority, then (2) jobid.

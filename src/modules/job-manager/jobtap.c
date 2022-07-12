@@ -29,6 +29,7 @@
 #include "src/common/libutil/iterators.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/aux.h"
 #include "ccan/str/str.h"
 
 #include "annotate.h"
@@ -62,6 +63,7 @@ struct jobtap {
     struct job_manager *ctx;
     char *searchpath;
     zlistx_t *plugins;
+    zhashx_t *plugins_byuuid;
     zlistx_t *jobstack;
     char last_error [128];
 };
@@ -89,6 +91,10 @@ static int jobtap_check_dependency (struct jobtap *jobtap,
                                     int index,
                                     json_t *entry,
                                     char **errp);
+
+static struct aux_wrap *aux_wrap_get (flux_plugin_t *p,
+                                      struct job *job,
+                                      bool create);
 
 /*  zlistx_t plugin destructor */
 static void plugin_destroy (void **item)
@@ -301,6 +307,26 @@ static bool isa_glob (const char *s)
     return false;
 }
 
+static void jobtap_finalize (struct jobtap *jobtap, flux_plugin_t *p)
+{
+    zlistx_t *jobs;
+
+    if ((jobs = zhashx_values (jobtap->ctx->active_jobs))) {
+        struct job *job;
+
+        job = zlistx_first (jobs);
+        while (job) {
+            struct aux_wrap *wrap;
+
+            if ((wrap = aux_wrap_get (p, job, false)))
+                job_aux_delete (job, wrap);
+
+            job = zlistx_next (jobs);
+        }
+        zlistx_destroy (&jobs);
+    }
+}
+
 static int jobtap_remove (struct jobtap *jobtap,
                           const char *arg,
                           flux_error_t *errp)
@@ -315,6 +341,8 @@ static int jobtap_remove (struct jobtap *jobtap,
         if ((all && name[0] != '.')
             || (isglob && fnmatch (arg, name, FNM_PERIOD) == 0)
             || streq (arg, name)) {
+            jobtap_finalize (jobtap, p);
+            zhashx_delete (jobtap->plugins_byuuid, flux_plugin_get_uuid (p));
             zlistx_detach_cur (jobtap->plugins);
             flux_plugin_destroy (p);
             count++;
@@ -449,12 +477,15 @@ struct jobtap *jobtap_create (struct job_manager *ctx)
         && !(jobtap->searchpath = strdup (path)))
         goto error;
     if (!(jobtap->plugins = zlistx_new ())
+        || !(jobtap->plugins_byuuid = zhashx_new ())
         || !(jobtap->jobstack = zlistx_new ())) {
         errno = ENOMEM;
         goto error;
     }
     zlistx_set_destructor (jobtap->plugins, plugin_destroy);
     zlistx_set_comparator (jobtap->plugins, plugin_byname);
+    zhashx_set_key_duplicator (jobtap->plugins_byuuid, NULL);
+    zhashx_set_key_destructor (jobtap->plugins_byuuid, NULL);
     zlistx_set_destructor (jobtap->jobstack, job_destructor);
     zlistx_set_duplicator (jobtap->jobstack, job_duplicator);
 
@@ -483,6 +514,7 @@ void jobtap_destroy (struct jobtap *jobtap)
         int saved_errno = errno;
         conf_unregister_callback (jobtap->ctx->conf, jobtap_parse_config);
         zlistx_destroy (&jobtap->plugins);
+        zhashx_destroy (&jobtap->plugins_byuuid);
         zlistx_destroy (&jobtap->jobstack);
         jobtap->ctx = NULL;
         free (jobtap->searchpath);
@@ -1186,7 +1218,10 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
         if (jobtap_plugin_load_first (jobtap, p, path, errp) < 0)
             goto error;
     }
-    if (!zlistx_add_end (jobtap->plugins, p)) {
+    char *uuid = (char *)flux_plugin_get_uuid (p);
+    if (zhashx_insert (jobtap->plugins_byuuid, uuid, p) < 0
+        || !zlistx_add_end (jobtap->plugins, p)) {
+        zhashx_delete (jobtap->plugins_byuuid, uuid);
         errprintf (errp, "Out of memory adding plugin to list");
         errno = ENOMEM;
         goto error;
@@ -1554,6 +1589,74 @@ static struct job * jobtap_lookup_active_jobid (flux_plugin_t *p,
     return job;
 }
 
+/* Job aux items are not stored in the job aux container directly, to avoid
+ * segfaults that might result from registering a destructor resident in a
+ * plugin that could be unloaded before the item is destroyed.
+ *
+ * Instead, each plugin stores one item named "jobtap::<uuid>" which contains
+ * an aux container, and the actual items are stored in the inner container.
+ * As plugin is being unloaded, the outer container is destroyed before
+ * the plugin is destroyed, causing the inner container and its items to be
+ * destroyed also.
+ */
+
+struct aux_wrap {
+    struct aux_item *aux;
+    struct jobtap *jobtap;
+    char *uuid;
+};
+
+static struct aux_wrap *aux_wrap_create (flux_plugin_t *p)
+{
+    const char *uuid = flux_plugin_get_uuid (p);
+    struct aux_wrap *wrap;
+
+    if (!(wrap = calloc (1, sizeof (*wrap) + strlen (uuid) + 1)))
+        return NULL;
+    wrap->jobtap = flux_plugin_aux_get (p, "flux::jobtap");
+    wrap->uuid = (char *)(wrap + 1);
+    strcpy (wrap->uuid, uuid);
+    return wrap;
+}
+
+// flux_free_f signature
+static void aux_wrap_destructor (void *item)
+{
+    struct aux_wrap *wrap = item;
+    if (wrap) {
+        int saved_errno = errno;
+        if (zhashx_lookup (wrap->jobtap->plugins_byuuid, wrap->uuid))
+            aux_destroy (&wrap->aux);
+        else {
+            flux_log (wrap->jobtap->ctx->h,
+                      LOG_ERR,
+                      "leaking job aux item(s) abandoned by unloaded plugin");
+        }
+        free (wrap);
+        errno = saved_errno;
+    }
+}
+
+static struct aux_wrap *aux_wrap_get (flux_plugin_t *p,
+                                      struct job *job,
+                                      bool create)
+{
+    char wname[64];
+    struct aux_wrap *wrap;
+
+    snprintf (wname, sizeof (wname), "jobtap::%s", flux_plugin_get_uuid (p));
+    if (!(wrap = job_aux_get (job, wname))) {
+        if (!create)
+            return NULL;
+        if (!(wrap = aux_wrap_create (p))
+            || job_aux_set (job, wname, wrap, aux_wrap_destructor) < 0) {
+            aux_wrap_destructor (wrap);
+            return NULL;
+        }
+    }
+    return wrap;
+}
+
 int flux_jobtap_job_aux_set (flux_plugin_t *p,
                              flux_jobid_t id,
                              const char *name,
@@ -1561,9 +1664,12 @@ int flux_jobtap_job_aux_set (flux_plugin_t *p,
                              flux_free_f free_fn)
 {
     struct job *job;
-    if (!(job = jobtap_lookup_jobid (p, id)))
+    struct aux_wrap *wrap;
+
+    if (!(job = jobtap_lookup_jobid (p, id))
+        || !(wrap = aux_wrap_get (p, job, true)))
         return -1;
-    return job_aux_set (job, name, val, free_fn);
+    return aux_set (&wrap->aux, name, val, free_fn);
 }
 
 void * flux_jobtap_job_aux_get (flux_plugin_t *p,
@@ -1571,9 +1677,12 @@ void * flux_jobtap_job_aux_get (flux_plugin_t *p,
                                 const char *name)
 {
     struct job *job;
-    if (!(job = jobtap_lookup_jobid (p, id)))
+    struct aux_wrap *wrap;
+
+    if (!(job = jobtap_lookup_jobid (p, id))
+        || !(wrap = aux_wrap_get (p, job, false)))
         return NULL;
-    return job_aux_get (job, name);
+    return aux_get (wrap->aux, name);
 }
 
 int flux_jobtap_job_aux_delete (flux_plugin_t *p,
@@ -1581,9 +1690,12 @@ int flux_jobtap_job_aux_delete (flux_plugin_t *p,
                                 void *val)
 {
     struct job *job;
+    struct aux_wrap *wrap;
+
     if (!(job = jobtap_lookup_jobid (p, id)))
         return -1;
-    job_aux_delete (job, val);
+    if ((wrap = aux_wrap_get (p, job, false)))
+        aux_delete (&wrap->aux, val);
     return 0;
 }
 

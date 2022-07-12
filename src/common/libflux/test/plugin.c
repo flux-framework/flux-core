@@ -69,6 +69,10 @@ void test_invalid_args ()
     ok (flux_plugin_get_name (NULL) == NULL && errno == EINVAL,
         "flux_plugin_get_name (NULL) returns EINVAL");
 
+    errno = 0;
+    ok (flux_plugin_get_uuid (NULL) == NULL && errno == EINVAL,
+        "flux_plugin_get_uuid (NULL) returns EINVAL");
+
     ok (flux_plugin_get_flags (NULL) == 0,
         "flux_plugin_get_flags (NULL) returns 0");
     ok (flux_plugin_set_flags (NULL, 0) < 0 && errno == EINVAL,
@@ -469,6 +473,31 @@ void test_load_rtld_now ()
     flux_plugin_destroy (p);
 }
 
+void test_uuid (void)
+{
+    flux_plugin_t *p;
+    const char *uuid;
+    char *ouuid;
+
+    if (!(p = flux_plugin_create ()))
+        BAIL_OUT ("flux_plugin_create failed");
+    uuid = flux_plugin_get_uuid (p);
+    ok (uuid != NULL,
+        "flux_plugin_get_uuid works");
+    if (!(ouuid = strdup (uuid)))
+        BAIL_OUT ("strdup failed");
+    flux_plugin_destroy (p);
+
+    if (!(p = flux_plugin_create ()))
+        BAIL_OUT ("flux_plugin_create failed");
+    uuid = flux_plugin_get_uuid (p);
+
+    ok (uuid != NULL && strcmp (ouuid, uuid) != 0,
+        "second plugin instance has different uuid");
+    flux_plugin_destroy (p);
+    free (ouuid);
+}
+
 
 int main (int argc, char *argv[])
 {
@@ -479,6 +508,7 @@ int main (int argc, char *argv[])
     test_register ();
     test_load ();
     test_load_rtld_now ();
+    test_uuid ();
     done_testing();
     return (0);
 }
