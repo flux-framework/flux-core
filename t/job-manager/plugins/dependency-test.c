@@ -74,10 +74,10 @@ error:
     flux_respond_error (h, msg, errno, NULL);
 }
 
-static int depend_cb (flux_plugin_t *p,
-                      const char *topic,
-                      flux_plugin_arg_t *args,
-                      void *arg)
+static int dependency_test_cb (flux_plugin_t *p,
+                               const char *topic,
+                               flux_plugin_arg_t *args,
+                               void *arg)
 {
     flux_jobid_t id;
     const char *name = NULL;
@@ -122,8 +122,43 @@ static int depend_cb (flux_plugin_t *p,
     return 0;
 }
 
+static int depend_cb (flux_plugin_t *p,
+                      const char *topic,
+                      flux_plugin_arg_t *args,
+                      void *data)
+{
+    const char *description = NULL;
+    flux_jobid_t id;
+
+    if (flux_plugin_arg_unpack (args,
+                                FLUX_PLUGIN_ARG_IN,
+                                "{s:I s:{s:{s:{s?s}}}}",
+                                "id", &id,
+                                "jobspec",
+                                "attributes",
+                                "system",
+                                "dependency-test", &description) < 0) {
+        flux_jobtap_raise_exception (p, FLUX_JOBTAP_CURRENT_JOB,
+                                     "dependency-test", 0,
+                                     "failed to unpack dependency-test args");
+        return -1;
+    }
+    if (description) {
+        if (flux_jobtap_dependency_add (p, id, description) < 0) {
+            flux_jobtap_raise_exception (p,
+                                         FLUX_JOBTAP_CURRENT_JOB,
+                                         "dependency-test", 0,
+                                         "dependency_add: %s",
+                                         strerror (errno));
+            return -1;
+        }
+    }
+    return 0;
+}
+
 static const struct flux_plugin_handler tab[] = {
-    { "job.dependency.test", depend_cb, NULL },
+    { "job.dependency.test", dependency_test_cb, NULL },
+    { "job.state.depend",    depend_cb,          NULL },
     { 0 },
 };
 

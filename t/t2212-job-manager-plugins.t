@@ -408,7 +408,7 @@ test_expect_success 'job-manager: plugin can manage dependencies' '
 
 	jobid = flux.job.JobID(sys.argv[1])
 	topic = "job-manager.dependency-test.remove"
-	payload = {"id": jobid, "description": "dependency-test"}
+	payload = {"id": jobid, "description": sys.argv[2]}
 	print(flux.Flux().rpc(topic, payload).get())
 	EOF
 	flux module reload job-ingest &&
@@ -416,7 +416,15 @@ test_expect_success 'job-manager: plugin can manage dependencies' '
 	jobid=$(flux mini submit --dependency=test:dependency-test hostname) &&
 	flux job wait-event -vt 15 ${jobid} dependency-add &&
 	test $(flux jobs -no {state} ${jobid}) = DEPEND &&
-	flux python dep-remove.py ${jobid} &&
+	flux python dep-remove.py ${jobid} dependency-test &&
+	flux job wait-event -vt 15 ${jobid} clean
+'
+test_expect_success 'job-manager: dependency-add works from job.state.depend' '
+	jobid=$(flux mini submit --setattr=system.dependency-test=foo true) &&
+        flux job wait-event -vt 15 ${jobid} dependency-add &&
+	test_debug "flux jobs -no {state} ${jobid}" &&
+        test $(flux jobs -no {state} ${jobid}) = DEPEND &&
+        flux python dep-remove.py ${jobid} foo &&
 	flux job wait-event -vt 15 ${jobid} clean
 '
 test_expect_success 'job-manager: job.state.depend is called on plugin load' '
@@ -424,7 +432,7 @@ test_expect_success 'job-manager: job.state.depend is called on plugin load' '
 	flux job wait-event -vt 15 ${jobid} dependency-add &&
 	flux jobtap load --remove=all ${PLUGINPATH}/dependency-test.so &&
 	test $(flux jobs -no {state} ${jobid}) = DEPEND &&
-	flux python dep-remove.py ${jobid} &&
+	flux python dep-remove.py ${jobid} dependency-test &&
 	flux job wait-event -vt 15 ${jobid} clean
 '
 lineno() {
