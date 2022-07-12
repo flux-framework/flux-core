@@ -662,7 +662,7 @@ flux_cmd_t * flux_cmd_fromjson (const char *json_str, json_error_t *errp)
     json_t *jargv = NULL;
     json_t *jopts = NULL;
     json_t *jchans = NULL;
-    const char *cwd;
+    const char *cwd = NULL;
     flux_cmd_t *cmd = NULL;;
 
     if (!(o = json_loads (json_str, 0, errp))) {
@@ -673,7 +673,7 @@ flux_cmd_t * flux_cmd_fromjson (const char *json_str, json_error_t *errp)
         errnum = ENOMEM;
         goto fail;
     }
-    if (json_unpack_ex (o, errp, 0, "{s:s, s:o, s:o, s:o, s:o}",
+    if (json_unpack_ex (o, errp, 0, "{s?s, s:o, s:o, s:o, s:o}",
                 "cwd", &cwd,
                 "cmdline", &jargv,
                 "env", &jenv,
@@ -682,7 +682,7 @@ flux_cmd_t * flux_cmd_fromjson (const char *json_str, json_error_t *errp)
         errnum = EPROTO;
         goto fail;
     }
-    if (!(cmd->cwd = strdup (cwd))
+    if ((cwd && !(cmd->cwd = strdup (cwd)))
         || (argz_fromjson (jargv, &cmd->argz, &cmd->argz_len) < 0)
         || (envz_fromjson (jenv, &cmd->envz, &cmd->envz_len) < 0)
         || !(cmd->opts = zhash_fromjson (jopts))

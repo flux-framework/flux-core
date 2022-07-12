@@ -66,7 +66,7 @@ void completion_cb (flux_subprocess_t *p)
     ok (flux_subprocess_status (p) != -1,
         "subprocess status is valid");
     ok (flux_subprocess_exit_code (p) == 0,
-        "subprocess exit code is 0");
+        "subprocess exit code is 0, got %d", flux_subprocess_exit_code (p));
     completion_cb_count++;
 }
 
@@ -191,13 +191,6 @@ void test_basic_errors (flux_reactor_t *r)
     ok (flux_rexec (h, -10, 0, cmd, NULL) == NULL
         && errno == EINVAL,
         "flux_rexec fails with cmd with invalid rank");
-    flux_cmd_destroy (cmd);
-
-    ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
-        "flux_cmd_create with 0 args works");
-    ok (flux_rexec (h, 0, 0, cmd, NULL) == NULL
-        && errno == EINVAL,
-        "flux_rexec fails with cmd with no cwd");
     flux_cmd_destroy (cmd);
 
     ok ((cmd = flux_cmd_create (1, avgood, NULL)) != NULL,
@@ -1457,12 +1450,17 @@ void test_state_strings (void)
 
 void test_exec_fail (flux_reactor_t *r)
 {
+    char path [4096];
     char *av_eacces[]  = { "/", NULL };
     char *av_enoent[]  = { "/usr/bin/foobarbaz", NULL };
     flux_cmd_t *cmd = NULL;
     flux_subprocess_t *p = NULL;
 
     ok ((cmd = flux_cmd_create (1, av_eacces, NULL)) != NULL, "flux_cmd_create");
+
+    /*  Set cwd to force use of fork/exec */
+    ok (flux_cmd_setcwd (cmd, getcwd (path, sizeof (path))) == 0,
+        "flux_cmd_setcwd");
 
     p = flux_local_exec (r, 0, cmd, NULL, NULL);
     ok (p == NULL
@@ -1472,6 +1470,10 @@ void test_exec_fail (flux_reactor_t *r)
     flux_cmd_destroy (cmd);
 
     ok ((cmd = flux_cmd_create (1, av_enoent, NULL)) != NULL, "flux_cmd_create");
+
+    /*  Set cwd to force use of fork/exec */
+    ok (flux_cmd_setcwd (cmd, getcwd (path, sizeof (path))) == 0,
+        "flux_cmd_setcwd");
 
     p = flux_local_exec (r, 0, cmd, NULL, NULL);
     ok (p == NULL

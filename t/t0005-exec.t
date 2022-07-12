@@ -93,6 +93,10 @@ test_expect_success 'flux exec -d option works' '
 	flux exec -n -d ${TMPDIR} sh -c "test \`pwd\` = \"${TMPDIR}\""
 '
 
+test_expect_success 'flux exec -d none works' '
+	(cd /tmp && flux exec -n -d none sh -c "test \$(pwd) != /tmp")
+'
+
 # Run a script on ranks 0-3 simultaneously with each rank writing the
 #  rank id to a file. After successful completion, the contents of the files
 #  are verfied to ensure each rank connected to the right broker.

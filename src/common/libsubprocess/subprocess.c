@@ -117,6 +117,29 @@ error:
     return NULL;
 }
 
+/*  Return the set of valid child file descriptors as an idset
+ */
+struct idset *subprocess_childfds (flux_subprocess_t *p)
+{
+    struct subprocess_channel *c;
+    struct idset *ids;
+
+    /*  fds 0,1,2 always remain open in the child (stdin,out,err)
+     */
+    if (!(ids = idset_decode ("0-2")))
+        return NULL;
+
+    if (p->sync_fds[1] > 0)
+        idset_set (ids, p->sync_fds[1]);
+
+    c = zhash_first (p->channels);
+    while (c) {
+        idset_set (ids, c->child_fd);
+        c = zhash_next (p->channels);
+    }
+    return ids;
+}
+
 static void subprocess_free (flux_subprocess_t *p)
 {
     if (p && p->magic == SUBPROCESS_MAGIC) {
@@ -705,12 +728,6 @@ flux_subprocess_t *flux_rexec (flux_t *h, int rank, int flags,
 
     /* user required to set some args */
     if (!flux_cmd_argc (cmd)) {
-        errno = EINVAL;
-        goto error;
-    }
-
-    /* user required to set cwd */
-    if (!flux_cmd_getcwd (cmd)) {
         errno = EINVAL;
         goto error;
     }

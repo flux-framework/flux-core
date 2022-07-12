@@ -308,10 +308,6 @@ static int exec_init (struct jobinfo *job)
         flux_log_error (job->h, "exec_init: flux_cmd_argv_append");
         goto err;
     }
-    if (flux_cmd_setcwd (cmd, config_get_cwd (job)) < 0) {
-        flux_log_error (job->h, "exec_init: flux_cmd_setcwd");
-        goto err;
-    }
 
     /*  If more than one shell is involved in this job, set up a channel
      *   for exec system based barrier:

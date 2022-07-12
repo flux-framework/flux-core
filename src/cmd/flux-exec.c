@@ -346,8 +346,10 @@ int main (int argc, char *argv[])
             log_err_exit ("get_current_dir_name");
     }
 
-    if (flux_cmd_setcwd (cmd, cwd) < 0)
-        log_err_exit ("flux_cmd_setcwd");
+    if (strcmp (cwd, "none") != 0) {
+        if (flux_cmd_setcwd (cmd, cwd) < 0)
+            log_err_exit ("flux_cmd_setcwd");
+    }
 
     if (!(h = flux_open (NULL, 0)))
         log_err_exit ("flux_open");

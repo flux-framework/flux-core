@@ -1174,11 +1174,6 @@ static int shell_init (flux_shell_t *shell)
             default_rcfile = result;
     }
 
-    /*  Load initrc file if necessary
-     */
-    if (load_initrc (shell, default_rcfile) < 0)
-        return -1;
-
     /* Change current working directory once before all tasks are
      * created, so that each task does not need to chdir().
      */
@@ -1195,6 +1190,11 @@ static int shell_init (flux_shell_t *shell)
             }
         }
     }
+
+    /*  Load initrc file if necessary
+     */
+    if (load_initrc (shell, default_rcfile) < 0)
+        return -1;
 
     return plugstack_call (shell->plugstack, "shell.init", NULL);
 }
