@@ -449,12 +449,12 @@ static struct content_s3 *content_s3_create (flux_t *h)
     }
 
     if (s3_init (ctx->cfg, &errstr) < 0) {
-        flux_log_error (h, "content-s3 init");
+        flux_log (h, LOG_ERR, "content-s3 init: %s", errstr);
         goto error;
     }
 
     if (s3_bucket_create (ctx->cfg, &errstr) < 0) {
-        flux_log_error (h, "content-s3 create bucket");
+        flux_log (h, LOG_ERR, "content-s3 create bucket: %s", errstr);
         goto error;
     }
 
