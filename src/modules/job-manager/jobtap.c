@@ -66,6 +66,7 @@ struct jobtap {
     zhashx_t *plugins_byuuid;
     zlistx_t *jobstack;
     char last_error [128];
+    bool configured;
 };
 
 struct dependency {
@@ -410,29 +411,31 @@ static int jobtap_parse_config (const flux_conf_t *conf,
     if (!conf)
         return errprintf (errp, "conf object can't be NULL");
 
-    if (flux_conf_unpack (conf,
-                          &error,
-                          "{s?:{s?:o}}",
-                          "job-manager",
-                            "plugins", &plugins) < 0) {
-        return errprintf (errp,
-                          "[job-manager.plugins]: unpack error: %s",
-                          error.text);
+    /* Changes to [job-manager.plugins] are currently ignored.
+     */
+    if (!jobtap->configured) {
+        if (flux_conf_unpack (conf,
+                              &error,
+                              "{s?:{s?:o}}",
+                              "job-manager",
+                                "plugins", &plugins) < 0) {
+            return errprintf (errp,
+                              "[job-manager.plugins]: unpack error: %s",
+                              error.text);
+        }
+        if (plugins) {
+            if (!json_is_array (plugins)) {
+                return errprintf (errp,
+                             "[job-manager.plugins] config must be an array");
+            }
+            json_array_foreach (plugins, i, entry) {
+                if (jobtap_conf_entry (jobtap, i, entry, errp) < 0)
+                    return -1;
+            }
+        }
+        jobtap->configured = true;
     }
-
-    if (!plugins)
-        return 0;
-
-    if (!json_is_array (plugins)) {
-        return errprintf (errp,
-                         "[job-manager.plugins] config must be an array");
-    }
-
-    json_array_foreach (plugins, i, entry) {
-        if (jobtap_conf_entry (jobtap, i, entry, errp) < 0)
-            return -1;
-    }
-    return 0; // indicates to conf.c that callback does NOT want updates
+    return 1; // indicates to conf.c that callback wants updates
 }
 
 static int plugin_byname (const void *item1, const void *item2)
