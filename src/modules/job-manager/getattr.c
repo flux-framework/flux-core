@@ -26,6 +26,7 @@
 #include <flux/core.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "ccan/str/str.h"
 
@@ -36,8 +37,7 @@
 
 static json_t *make_dict (struct job *job,
                           json_t *attrs,
-                          char *errstr,
-                          int errstrsz)
+                          flux_error_t *errp)
 {
     size_t index;
     json_t *val;
@@ -48,13 +48,13 @@ static json_t *make_dict (struct job *job,
     json_array_foreach (attrs, index, val) {
         const char *key = json_string_value (val);
         if (!key) {
-            snprintf (errstr, errstrsz, "attribute list contains non-string");
+            errprintf (errp, "attribute list contains non-string");
             errno = EPROTO;
             goto error;
         }
         if (streq (key, "jobspec")) {
             if (!job->jobspec_redacted) {
-                snprintf (errstr, errstrsz, "jobspec is NULL");
+                errprintf (errp, "jobspec is NULL");
                 errno = ENOENT;
                 goto error;
             }
@@ -62,14 +62,14 @@ static json_t *make_dict (struct job *job,
                 goto nomem;
         }
         else {
-            snprintf (errstr, errstrsz, "unknown attr %s", key);
+            errprintf (errp, "unknown attr %s", key);
             errno = ENOENT;
             goto error;
         }
     }
     return dict;
 nomem:
-    snprintf (errstr, errstrsz, "out of memory");
+    errprintf (errp, "out of memory");
     errno = ENOMEM;
 error:
     ERRNO_SAFE_WRAP (json_decref, dict);
@@ -87,7 +87,7 @@ void getattr_handle_request (flux_t *h,
     struct job *job;
     json_t *attrs;
     const char *errstr = NULL;
-    char errbuf[128];
+    flux_error_t error;
     json_t *dict = NULL;
 
     if (flux_request_unpack (msg,
@@ -109,8 +109,8 @@ void getattr_handle_request (flux_t *h,
         errstr = "guests can only reprioritize their own jobs";
         goto error;
     }
-    if (!(dict = make_dict (job, attrs, errbuf, sizeof (errbuf)))) {
-        errstr = errbuf;
+    if (!(dict = make_dict (job, attrs, &error))) {
+        errstr = error.text;
         goto error;
     }
     if (flux_respond_pack (h, msg, "O", dict) < 0)
