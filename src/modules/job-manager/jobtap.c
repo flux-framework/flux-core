@@ -398,6 +398,58 @@ static int jobtap_conf_entry (struct jobtap *jobtap,
     return 0;
 }
 
+static int jobtap_call_conf_update (flux_plugin_t *p,
+                                    const flux_conf_t *conf,
+                                    flux_error_t *errp)
+{
+    const char *name = flux_plugin_get_name (p);
+    flux_plugin_arg_t *args;
+    json_t *o;
+
+    if (flux_conf_unpack (conf, errp, "o", &o) < 0)
+        return -1;
+    if (!(args = flux_plugin_arg_create ())
+        || flux_plugin_arg_pack (args,
+                                 FLUX_PLUGIN_ARG_IN,
+                                 "{s:O}",
+                                 "conf", o) < 0) {
+        errprintf (errp, "error preparing args for %s jobtap plugin", name);
+        goto error;
+    }
+    if (flux_plugin_call (p, "conf.update", args) < 0) {
+        const char *errmsg;
+        if (flux_plugin_arg_unpack (args,
+                                    FLUX_PLUGIN_ARG_OUT,
+                                    "{s:s}",
+                                    "errmsg", &errmsg) < 0)
+            errprintf (errp, "config rejected by %s jobtap plugin", name);
+        else
+            errprintf (errp, "%s", errmsg);
+        errno = EINVAL;
+        goto error;
+    }
+    flux_plugin_arg_destroy (args);
+    return 0;
+error:
+    flux_plugin_arg_destroy (args);
+    return -1;
+}
+
+static int jobtap_stack_call_conf_update (struct jobtap *jobtap,
+                                          const flux_conf_t *conf,
+                                          flux_error_t *errp)
+{
+    flux_plugin_t *p;
+
+    p = zlistx_first (jobtap->plugins);
+    while (p) {
+        if (jobtap_call_conf_update (p, conf, errp) < 0)
+            return -1;
+        p = zlistx_next (jobtap->plugins);
+    }
+    return 0;
+}
+
 static int jobtap_parse_config (const flux_conf_t *conf,
                                 flux_error_t *errp,
                                 void *arg)
@@ -435,6 +487,14 @@ static int jobtap_parse_config (const flux_conf_t *conf,
         }
         jobtap->configured = true;
     }
+
+    /* Process plugins that want 'conf.update' notifications.
+     * In this case the 'conf' object is the entire instance config
+     * rather than [job-manager.plugins.<name>.conf].
+     */
+    if (jobtap_stack_call_conf_update (jobtap, conf, errp) < 0)
+        return -1;
+
     return 1; // indicates to conf.c that callback wants updates
 }
 
@@ -1228,6 +1288,13 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
         if (jobtap_plugin_load_first (jobtap, p, path, errp) < 0)
             goto error;
     }
+    /* Call conf.update here for two reasons
+     * - fail the plugin load if config is invalid
+     * - make sure plugin has config before job.* callbacks begin
+     */
+    if (jobtap_call_conf_update (p, flux_get_conf (jobtap->ctx->h), errp) < 0)
+        goto error;
+
     char *uuid = (char *)flux_plugin_get_uuid (p);
     if (zhashx_insert (jobtap->plugins_byuuid, uuid, p) < 0
         || !zlistx_add_end (jobtap->plugins, p)) {
