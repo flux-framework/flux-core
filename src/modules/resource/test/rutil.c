@@ -181,18 +181,18 @@ static char *create_tmp_file (const char *content)
 
 void test_read_file (void)
 {
-    char ebuf[128];
+    flux_error_t error;
     char *s;
     char *tmp = create_tmp_file ("XXX");
 
     errno = 0;
-    ebuf[0] = '\0';
-    s = rutil_read_file ("/noexist", ebuf, sizeof (ebuf));
-    ok (s == NULL && errno == ENOENT && strlen (ebuf) > 0,
+    error.text[0] = '\0';
+    s = rutil_read_file ("/noexist", &error);
+    ok (s == NULL && errno == ENOENT && strlen (error.text) > 0,
          "rutil_read_file path=/noexist fails with ENOENT and human error");
-    diag ("%s", ebuf);
+    diag ("%s", error.text);
 
-    s = rutil_read_file (tmp, ebuf, sizeof (ebuf));
+    s = rutil_read_file (tmp, &error);
     ok (s != NULL && !strcmp (s, "XXX"),
         "rutil_read_file works");
     free (s);
@@ -202,26 +202,26 @@ void test_read_file (void)
 
 void test_load_file (void)
 {
-    char ebuf[128];
+    flux_error_t error;
     json_t *o;
     char *good = create_tmp_file ("{\"foo\":42}");
     char *bad = create_tmp_file ("XXX");
 
     errno = 0;
-    ebuf[0] = '\0';
-    o = rutil_load_file ("/noexist", ebuf, sizeof (ebuf));
-    ok (o == NULL && errno == ENOENT && strlen (ebuf) > 0,
+    error.text[0] = '\0';
+    o = rutil_load_file ("/noexist", &error);
+    ok (o == NULL && errno == ENOENT && strlen (error.text) > 0,
          "rutil_load_file path=/noexist fails with ENOENT and human error");
-    diag ("%s", ebuf);
+    diag ("%s", error.text);
 
     errno = 0;
-    ebuf[0] = '\0';
-    o = rutil_load_file (bad, ebuf, sizeof (ebuf));
-    ok (o == NULL && errno != 0 && strlen (ebuf) > 0,
+    error.text[0] = '\0';
+    o = rutil_load_file (bad, &error);
+    ok (o == NULL && errno != 0 && strlen (error.text) > 0,
          "rutil_load_file with errno and human error on bad JSON");
-    diag ("%s", ebuf);
+    diag ("%s", error.text);
 
-    o = rutil_load_file (good, ebuf, sizeof (ebuf));
+    o = rutil_load_file (good, &error);
     ok (o != NULL && json_object_get (o, "foo"),
          "rutil_load_file with good JSON works");
     json_decref (o);
@@ -264,17 +264,17 @@ void test_load_xml_dir (void)
 {
     const int count = 8;
     char *path = create_tmp_xml_dir (count);
-    char ebuf[128];
+    flux_error_t error;
     json_t *o;
 
     errno = 0;
-    ebuf[0] = '\0';
-    o = rutil_load_xml_dir ("/noexist", ebuf, sizeof (ebuf));
-    ok (o == NULL && errno == ENOENT && strlen (ebuf) > 0,
+    error.text[0] = '\0';
+    o = rutil_load_xml_dir ("/noexist", &error);
+    ok (o == NULL && errno == ENOENT && strlen (error.text) > 0,
          "rutil_load_xml_dir path=/noexist fails with ENOENT and human error");
-    diag ("%s", ebuf);
+    diag ("%s", error.text);
 
-    o = rutil_load_xml_dir (path, ebuf, sizeof (ebuf));
+    o = rutil_load_xml_dir (path, &error);
     ok (o != NULL,
         "rutil_load_xml_dir works");
     if (o) {

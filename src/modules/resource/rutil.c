@@ -24,6 +24,7 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/dirwalk.h"
 #include "src/common/libutil/read_all.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "rutil.h"
 
@@ -109,13 +110,13 @@ bool rutil_idset_decode_test (const char *idset, unsigned long id)
     return result;
 }
 
-char *rutil_read_file (const char *path, char *errbuf, int errbufsize)
+char *rutil_read_file (const char *path, flux_error_t *errp)
 {
     int fd;
     char *buf;
 
     if ((fd = open (path, O_RDONLY)) < 0 || read_all (fd, (void **)&buf) < 0) {
-        snprintf (errbuf, errbufsize, "%s: %s", path, strerror (errno));
+        errprintf (errp, "%s: %s", path, strerror (errno));
         if (fd >= 0)
             ERRNO_SAFE_WRAP (close, fd);
         return NULL;
@@ -124,13 +125,13 @@ char *rutil_read_file (const char *path, char *errbuf, int errbufsize)
     return buf;
 }
 
-json_t *rutil_load_file (const char *path, char *errbuf, int errbufsize)
+json_t *rutil_load_file (const char *path, flux_error_t *errp)
 {
     json_t *o;
     json_error_t e;
 
     if (!(o = json_load_file (path, 0, &e))) {
-        snprintf (errbuf, errbufsize, "%s:%d %s", e.source, e.line, e.text);
+        errprintf (errp, "%s:%d %s", e.source, e.line, e.text);
         errno = EPROTO;
         if (access (path, R_OK) < 0)
             errno = ENOENT;
@@ -183,7 +184,7 @@ static int load_xml_file (dirwalk_t *d, void *arg)
     int rank;
     char *s;
     char key[32];
-    char errbuf[256];
+    flux_error_t error;
 
     /* Only pay attention to files ending in "<rank<.xml"
      */
@@ -197,9 +198,9 @@ static int load_xml_file (dirwalk_t *d, void *arg)
     /* Read the file and encode as JSON string, storing under rank key.
      * On error, store human readable error string in object and stop iteration.
      */
-    if (!(s = rutil_read_file (dirwalk_path (d), errbuf, sizeof (errbuf)))) {
+    if (!(s = rutil_read_file (dirwalk_path (d), &error))) {
         dirwalk_stop (d, errno);
-        set_error (o, errbuf);
+        set_error (o, error.text);
         return 0;
     }
     snprintf (key, sizeof (key), "%d", rank);
@@ -212,7 +213,7 @@ static int load_xml_file (dirwalk_t *d, void *arg)
     return 0;
 }
 
-json_t *rutil_load_xml_dir (const char *path, char *errbuf, int errbufsize)
+json_t *rutil_load_xml_dir (const char *path, flux_error_t *errp)
 {
     json_t *o;
 
@@ -222,19 +223,17 @@ json_t *rutil_load_xml_dir (const char *path, char *errbuf, int errbufsize)
     }
     if (dirwalk (path, 0, load_xml_file, o) < 0) {
         const char *errstr = get_error (o);
-        snprintf (errbuf,
-                  errbufsize,
-                  "%s: %s",
-                  path,
-                  errstr ? errstr : strerror (errno));
+        errprintf (errp,
+                   "%s: %s",
+                   path,
+                   errstr ? errstr : strerror (errno));
         ERRNO_SAFE_WRAP (json_decref, o);
         return NULL;
     }
     if (json_object_size (o) == 0) {
-        snprintf (errbuf,
-                  errbufsize,
-                  "%s: invalid directory: no XML input files found",
-                  path);
+        errprintf (errp,
+                   "%s: invalid directory: no XML input files found",
+                   path);
         json_decref (o);
         errno = EINVAL;
         return NULL;

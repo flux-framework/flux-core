@@ -16,8 +16,7 @@ void exclude_destroy (struct exclude *exclude);
 
 int exclude_update (struct exclude *exclude,
                     const char *idset,
-                    char *errbuf,
-                    int errbufsize);
+                    flux_error_t *errp);
 
 const struct idset *exclude_get (struct exclude *exclude);
 
