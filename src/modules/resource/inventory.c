@@ -92,6 +92,7 @@
 #include <src/common/librlist/rlist.h>
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "rutil.h"
 #include "resource.h"
@@ -203,8 +204,7 @@ const char *inventory_get_method (struct inventory *inv)
 
 struct idset *inventory_targets_to_ranks (struct inventory *inv,
                                           const char *targets,
-                                          char *errbuf,
-                                          int errsize)
+                                          flux_error_t *errp)
 {
     struct idset *ids;
 
@@ -220,9 +220,7 @@ struct idset *inventory_targets_to_ranks (struct inventory *inv,
         ids = rlist_hosts_to_ranks (rl, targets, &err);
         rlist_destroy (rl);
         if (!ids) {
-            (void) snprintf (errbuf, errsize,
-                             "invalid targets: %s",
-                             err.text);
+            errprintf (errp, "invalid targets: %s", err.text);
             errno = EINVAL;
             return NULL;
         }
@@ -578,7 +576,7 @@ static void resource_reload (flux_t *h,
                              void *arg)
 {
     struct inventory *inv = arg;
-    char errbuf[256];
+    flux_error_t error;
     const char *errstr = NULL;
     const char *path;
     int xml_flag;
@@ -602,23 +600,22 @@ static void resource_reload (flux_t *h,
         goto error;
     }
     if (xml_flag) {
-        if (!(xml = rutil_load_xml_dir (path, errbuf, sizeof (errbuf)))) {
-            errstr = errbuf;
+        if (!(xml = rutil_load_xml_dir (path, &error))) {
+            errstr = error.text;
             goto error;
         }
 
         if (!(resobj = resobj_from_xml (xml))) {
-            snprintf (errbuf,
-                      sizeof (errbuf),
-                      "error buiding R from hwloc XML: %s",
-                      strerror (errno));
-            errstr = errbuf;
+            errprintf (&error,
+                       "error buiding R from hwloc XML: %s",
+                       strerror (errno));
+            errstr = error.text;
             goto error;
         }
     }
     else {
-        if (!(resobj = rutil_load_file (path, errbuf, sizeof (errbuf)))) {
-            errstr = errbuf;
+        if (!(resobj = rutil_load_file (path, &error))) {
+            errstr = error.text;
             goto error;
         }
     }
@@ -630,12 +627,11 @@ static void resource_reload (flux_t *h,
                       (int)inv->ctx->size);
         }
         else {
-            snprintf (errbuf,
-                      sizeof (errbuf),
-                      "resource object contains ranks execeeding size=%d %s",
-                      (int)inv->ctx->size,
-                      "(override with -f))");
-            errstr = errbuf;
+            errprintf (&error,
+                       "resource object contains ranks execeeding size=%d %s",
+                       (int)inv->ctx->size,
+                       "(override with -f))");
+            errstr = error.text;
             errno = EINVAL;
             goto error;
         }

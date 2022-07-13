@@ -38,9 +38,9 @@ int rutil_set_json_idset (json_t *o,
  *   a JSON object with ranks as keys and XML strings as values.
  * On error put human readable error in errbuf and return NULL
  */
-char *rutil_read_file (const char *path, char *errbuf, int errbufsize);
-json_t *rutil_load_file (const char *path, char *errbuf, int errbufsize);
-json_t *rutil_load_xml_dir (const char *path, char *errbuf, int errbufsize);
+char *rutil_read_file (const char *path, flux_error_t *errp);
+json_t *rutil_load_file (const char *path, flux_error_t *errp);
+json_t *rutil_load_xml_dir (const char *path, flux_error_t *errp);
 
 /* Build object with idset keys.
  * Start with empty json_t object, then insert objects by id.

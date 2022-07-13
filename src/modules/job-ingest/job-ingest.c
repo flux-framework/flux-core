@@ -23,6 +23,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/fluid.h"
 #include "src/common/libutil/jpath.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libjob/sign_none.h"
 #include "src/common/libjob/job_hash.h"
 
@@ -635,7 +636,7 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     struct job_ingest_ctx *ctx = arg;
     struct job *job = NULL;
     const char *errmsg = NULL;
-    char errbuf[256];
+    flux_error_t error;
     int64_t userid_signer;
     const char *mech_type;
     flux_future_t *f = NULL;
@@ -657,9 +658,10 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
         && (job->flags & FLUX_JOB_NOVALIDATE)) {
-        snprintf (errbuf, sizeof (errbuf),
-                "only the instance owner can submit with FLUX_JOB_NOVALIDATE");
-        errmsg = errbuf;
+        errprintf (&error,
+                   "only the instance owner can submit "
+                   "with FLUX_JOB_NOVALIDATE");
+        errmsg = error.text;
         errno = EPERM;
         goto error;
     }
@@ -667,18 +669,18 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
      */
     if (job->urgency < FLUX_JOB_URGENCY_MIN
             || job->urgency > FLUX_JOB_URGENCY_MAX) {
-        snprintf (errbuf, sizeof (errbuf), "urgency range is [%d:%d]",
-                  FLUX_JOB_URGENCY_MIN, FLUX_JOB_URGENCY_MAX);
-        errmsg = errbuf;
+        errprintf (&error, "urgency range is [%d:%d]",
+                   FLUX_JOB_URGENCY_MIN, FLUX_JOB_URGENCY_MAX);
+        errmsg = error.text;
         errno = EINVAL;
         goto error;
     }
     if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
            && job->urgency > FLUX_JOB_URGENCY_DEFAULT) {
-        snprintf (errbuf, sizeof (errbuf),
-                  "only the instance owner can submit with urgency >%d",
-                  FLUX_JOB_URGENCY_DEFAULT);
-        errmsg = errbuf;
+        errprintf (&error,
+                   "only the instance owner can submit with urgency >%d",
+                   FLUX_JOB_URGENCY_DEFAULT);
+        errmsg = error.text;
         errno = EINVAL;
         goto error;
     }
@@ -686,10 +688,9 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
      */
     if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
             && (job->flags & FLUX_JOB_WAITABLE)) {
-        snprintf (errbuf,
-                  sizeof (errbuf),
-                  "only the instance onwer can submit with FLUX_JOB_WAITABLE");
-        errmsg = errbuf;
+        errprintf (&error,
+                   "only the instance onwer can submit with FLUX_JOB_WAITABLE");
+        errmsg = error.text;
         errno = EINVAL;
         goto error;
     }
@@ -724,19 +725,19 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
     userid_signer = userid_signer_u32;
 #endif
     if (userid_signer != job->cred.userid) {
-        snprintf (errbuf, sizeof (errbuf),
+        errprintf (&error,
                   "signer=%lu != requestor=%lu",
                   (unsigned long)userid_signer,
                   (unsigned long)job->cred.userid);
-        errmsg = errbuf;
+        errmsg = error.text;
         errno = EPERM;
         goto error;
     }
     if (!(job->cred.rolemask & FLUX_ROLE_OWNER)
                                 && !strcmp (mech_type, "none")) {
-        snprintf (errbuf, sizeof (errbuf),
+        errprintf (&error,
                   "only instance owner can use sign-type=none");
-        errmsg = errbuf;
+        errmsg = error.text;
         errno = EPERM;
         goto error;
     }
@@ -747,8 +748,8 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
                                          job->jobspecsz,
                                          0,
                                          &e))) {
-        snprintf (errbuf, sizeof (errbuf), "jobspec: invalid JSON: %s", e.text);
-        errmsg = errbuf;
+        errprintf (&error, "jobspec: invalid JSON: %s", e.text);
+        errmsg = error.text;
         errno = EINVAL;
         goto error;
     }
@@ -763,8 +764,8 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
                                 "rolemask", job->cred.rolemask,
                                 "urgency", job->urgency,
                                 "flags", job->flags))) {
-            snprintf (errbuf, sizeof (errbuf), "Internal error: %s", e.text);
-            errmsg = errbuf;
+            errprintf (&error, "Internal error: %s", e.text);
+            errmsg = error.text;
             goto error;
         }
         if (!(f = validate_job (ctx->validate, o)))

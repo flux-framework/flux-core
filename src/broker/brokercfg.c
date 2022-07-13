@@ -19,6 +19,7 @@
 #include <assert.h>
 
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "attr.h"
 #include "module.h"
@@ -39,29 +40,27 @@ struct brokercfg {
  */
 static int brokercfg_parse (flux_t *h,
                             const char *path,
-                            char *errbuf,
-                            int errbufsize)
+                            flux_error_t *errp)
 {
     flux_error_t error;
     flux_conf_t *conf;
 
     if (path) {
         if (!(conf = flux_conf_parse (path, &error))) {
-            (void)snprintf (errbuf,
-                            errbufsize,
-                            "Config file error: %s",
-                            error.text);
+            errprintf (errp,
+                       "Config file error: %s",
+                       error.text);
             return -1;
         }
     }
     else {
         if (!(conf = flux_conf_create ())) {
-            (void)snprintf (errbuf, errbufsize, "Error creating config object");
+            errprintf (errp, "Error creating config object");
             return -1;
         }
     }
     if (flux_set_conf (h, conf) < 0) {
-        (void)snprintf (errbuf, errbufsize, "Error caching config object");
+        errprintf (errp, "Error caching config object");
         flux_conf_decref (conf);
         return -1;
     }
@@ -170,7 +169,7 @@ static void reload_cb (flux_t *h,
                        void *arg)
 {
     struct brokercfg *cfg = arg;
-    char errbuf[1024];
+    flux_error_t error;
     const char *errmsg = NULL;
     flux_future_t *f;
 
@@ -179,8 +178,8 @@ static void reload_cb (flux_t *h,
         errno = EBUSY;
         goto error;
     }
-    if (brokercfg_parse (h, cfg->path, errbuf, sizeof (errbuf)) < 0) {
-        errmsg = errbuf;
+    if (brokercfg_parse (h, cfg->path, &error) < 0) {
+        errmsg = error.text;
         goto error;
     }
     if (!(f = reload_module_configs (h, cfg)))
@@ -250,7 +249,7 @@ struct brokercfg *brokercfg_create (flux_t *h,
                                     modhash_t *modhash)
 {
     struct brokercfg *cfg;
-    char errbuf[1024];
+    flux_error_t error;
 
     if (!(cfg = calloc (1, sizeof (*cfg))))
         return NULL;
@@ -262,8 +261,8 @@ struct brokercfg *brokercfg_create (flux_t *h,
         if (!(cfg->path = strdup (path)))
             goto error;
     }
-    if (brokercfg_parse (h, path, errbuf, sizeof (errbuf)) < 0) {
-        log_msg ("%s", errbuf);
+    if (brokercfg_parse (h, path, &error) < 0) {
+        log_msg ("%s", error.text);
         goto error;
     }
     if (flux_msg_handler_addvec (h, htab, cfg, &cfg->handlers) < 0)

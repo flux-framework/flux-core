@@ -45,8 +45,7 @@ int inventory_put (struct inventory *inv, json_t *R, const char *method);
  */
 struct idset *inventory_targets_to_ranks (struct inventory *inv,
                                           const char *targets,
-                                          char *errbuf,
-                                          int errsize);
+                                          flux_error_t *errp);
 
 #endif /* !_FLUX_RESOURCE_INVENTORY_H */
 

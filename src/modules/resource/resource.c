@@ -19,6 +19,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 
@@ -48,8 +49,7 @@ static int parse_config (struct resource_ctx *ctx,
                          const char **excludep,
                          json_t **R,
                          bool *noverifyp,
-                         char *errbuf,
-                         int errbufsize)
+                         flux_error_t *errp)
 {
     flux_error_t error;
     const char *exclude  = NULL;
@@ -64,10 +64,9 @@ static int parse_config (struct resource_ctx *ctx,
                             "path", &path,
                             "exclude", &exclude,
                             "noverify", &noverify) < 0) {
-        (void)snprintf (errbuf,
-                        errbufsize,
-                        "error parsing [resource] configuration: %s",
-                        error.text);
+        errprintf (errp,
+                   "error parsing [resource] configuration: %s",
+                   error.text);
         return -1;
     }
     if (path) {
@@ -75,22 +74,20 @@ static int parse_config (struct resource_ctx *ctx,
         json_error_t e;
 
         if (!(f = fopen (path, "r"))) {
-            (void)snprintf (errbuf,
-                            errbufsize,
-                            "%s: %s",
-                            path,
-                            strerror (errno));
+            errprintf (errp,
+                       "%s: %s",
+                       path,
+                       strerror (errno));
             return -1;
         }
         o = json_loadf (f, 0, &e);
         fclose (f);
         if (!o) {
-            (void)snprintf (errbuf,
-                            errbufsize,
-                            "%s: %s on line %d",
-                            e.source,
-                            e.text,
-                            e.line);
+            errprintf (errp,
+                       "%s: %s on line %d",
+                       e.source,
+                       e.text,
+                       e.line);
             return -1;
         }
         if (!R)
@@ -119,7 +116,7 @@ static void config_reload_cb (flux_t *h,
     struct resource_ctx *ctx = arg;
     const flux_conf_t *conf;
     const char *exclude;
-    char errbuf[256];
+    flux_error_t error;
     const char *errstr = NULL;
 
     if (flux_conf_reload_decode (msg, &conf) < 0)
@@ -129,17 +126,15 @@ static void config_reload_cb (flux_t *h,
                       &exclude,
                       NULL,
                       NULL,
-                      errbuf,
-                      sizeof (errbuf)) < 0) {
-        errstr = errbuf;
+                      &error) < 0) {
+        errstr = error.text;
         goto error;
     }
     if (ctx->rank == 0) {
         if (exclude_update (ctx->exclude,
                             exclude,
-                            errbuf,
-                            sizeof (errbuf)) < 0) {
-            errstr = errbuf;
+                            &error) < 0) {
+            errstr = error.text;
             goto error;
         }
         if (reslog_sync (ctx->reslog) < 0) {
@@ -397,7 +392,7 @@ int parse_args (flux_t *h,
 int mod_main (flux_t *h, int argc, char **argv)
 {
     struct resource_ctx *ctx;
-    char errbuf[256];
+    flux_error_t error;
     const char *exclude_idset;
     json_t *eventlog = NULL;
     bool monitor_force_up = false;
@@ -415,9 +410,8 @@ int mod_main (flux_t *h, int argc, char **argv)
                       &exclude_idset,
                       &R_from_config,
                       &noverify,
-                      errbuf,
-                      sizeof (errbuf)) < 0) {
-        flux_log (h, LOG_ERR, "%s", errbuf);
+                      &error) < 0) {
+        flux_log (h, LOG_ERR, "%s", error.text);
         goto error;
     }
     if (parse_args (h, argc, argv, &monitor_force_up, &noverify) < 0)

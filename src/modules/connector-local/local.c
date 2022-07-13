@@ -30,6 +30,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/cleanup.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/librouter/usock.h"
 #include "src/common/librouter/router.h"
 
@@ -204,8 +205,7 @@ error:
  */
 int parse_config (struct connector_local *ctx,
                   const flux_conf_t *conf,
-                  char *errbuf,
-                  int errbufsize)
+                  flux_error_t *errp)
 {
     flux_error_t error;
     int allow_guest_user = 0;
@@ -219,10 +219,9 @@ int parse_config (struct connector_local *ctx,
                             &allow_guest_user,
                             "allow-root-owner",
                             &allow_root_owner) < 0) {
-        (void)snprintf (errbuf,
-                        errbufsize,
-                        "error parsing [access] configuration: %s",
-                        error.text);
+        errprintf (errp,
+                   "error parsing [access] configuration: %s",
+                   error.text);
         return -1;
     }
     ctx->allow_guest_user = allow_guest_user;
@@ -245,13 +244,13 @@ static void reload_cb (flux_t *h,
 {
     struct connector_local *ctx = arg;
     const flux_conf_t *conf;
-    char errbuf[256];
+    flux_error_t error;
     const char *errstr = NULL;
 
     if (flux_conf_reload_decode (msg, &conf) < 0)
         goto error;
-    if (parse_config (ctx, conf, errbuf, sizeof (errbuf)) < 0) {
-        errstr = errbuf;
+    if (parse_config (ctx, conf, &error) < 0) {
+        errstr = error.text;
         goto error;
     }
     if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
@@ -277,7 +276,7 @@ int mod_main (flux_t *h, int argc, char **argv)
     const char *local_uri = NULL;
     char *tmpdir;
     const char *sockpath;
-    char errbuf[256];
+    flux_error_t error;
     int rc = -1;
 
     memset (&ctx, 0, sizeof (ctx));
@@ -286,8 +285,8 @@ int mod_main (flux_t *h, int argc, char **argv)
 
     /* Parse configuration
      */
-    if (parse_config (&ctx, flux_get_conf (h), errbuf, sizeof (errbuf)) < 0) {
-        flux_log (h, LOG_ERR, "%s", errbuf);
+    if (parse_config (&ctx, flux_get_conf (h), &error) < 0) {
+        flux_log (h, LOG_ERR, "%s", error.text);
         goto done;
     }
 

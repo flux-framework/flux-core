@@ -24,6 +24,7 @@
 #include <jansson.h>
 
 #include "src/common/libidset/idset.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "resource.h"
 #include "reslog.h"
@@ -45,8 +46,7 @@ const struct idset *exclude_get (struct exclude *exclude)
  */
 int exclude_update (struct exclude *exclude,
                     const char *s,
-                    char *errbuf,
-                    int errbufsize)
+                    flux_error_t *errp)
 {
     flux_t *h = exclude->ctx->h;
     struct idset *idset = NULL;
@@ -56,18 +56,17 @@ int exclude_update (struct exclude *exclude,
     if (s) {
         if (!(idset = inventory_targets_to_ranks (exclude->ctx->inventory,
                                                   s,
-                                                  errbuf,
-                                                  errbufsize)))
+                                                  errp)))
             return -1;
         if (idset_last (idset) >= exclude->ctx->size) {
-            snprintf (errbuf, errbufsize, "exclusion idset is out of range");
+            errprintf (errp, "exclusion idset is out of range");
             idset_destroy (idset);
             errno = EINVAL;
             return -1;
         }
     }
     if (rutil_idset_diff (exclude->idset, idset, &add, &del) < 0) {
-        snprintf (errbuf, errbufsize, "error analyzing exclusion set update");
+        errprintf (errp, "error analyzing exclusion set update");
         idset_destroy (idset);
         return -1;
     }
@@ -123,15 +122,14 @@ struct exclude *exclude_create (struct resource_ctx *ctx,
         return NULL;
     exclude->ctx = ctx;
     if (exclude_idset) {
-        char errbuf [128];
+        flux_error_t error;
         if (!(exclude->idset = inventory_targets_to_ranks (ctx->inventory,
                                                            exclude_idset,
-                                                           errbuf,
-                                                           sizeof (errbuf)))) {
+                                                           &error))) {
             flux_log_error (ctx->h,
                             "error decoding exclude set %s: %s",
                             exclude_idset,
-                            errbuf);
+                            error.text);
             goto error;
         }
         if (idset_last (exclude->idset) >= exclude->ctx->size) {

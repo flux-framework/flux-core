@@ -38,6 +38,7 @@
 #include <jansson.h>
 
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libeventlog/eventlog.h"
 
@@ -133,8 +134,7 @@ static int update_draininfo_idset (struct drain *drain,
  */
 static int check_draininfo_idset (struct drain *drain,
                                   struct idset *idset,
-                                  char *errstr,
-                                  size_t errlen)
+                                  flux_error_t *errp)
 {
     int rc = 0;
     unsigned int rank;
@@ -143,7 +143,7 @@ static int check_draininfo_idset (struct drain *drain,
     if (!errids)
         return -1;
 
-    errstr[0] = '\0';
+    errp->text[0] = '\0';
 
     rank = idset_first (idset);
     while (rank != IDSET_INVALID_ID) {
@@ -164,11 +164,10 @@ static int check_draininfo_idset (struct drain *drain,
             flux_log_error (drain->ctx->h,
                             "check_draininfo_idset: idset_encode");
 
-        snprintf (errstr,
-                  errlen,
-                  "rank%s %s already drained",
-                  n > 1 ? "s" : "",
-                  s ? s : "(unknown)");
+        errprintf (errp,
+                   "rank%s %s already drained",
+                   n > 1 ? "s" : "",
+                   s ? s : "(unknown)");
         free (s);
         errno = EEXIST;
     }
@@ -299,21 +298,20 @@ struct idset *drain_get (struct drain *drain)
  */
 static struct idset *drain_idset_decode (struct drain *drain,
                                          const char *ranks,
-                                         char *errbuf,
-                                         int errbufsize)
+                                         flux_error_t *errp)
 {
     struct idset *idset;
 
     if (!(idset = inventory_targets_to_ranks (drain->ctx->inventory,
-                                              ranks, errbuf, errbufsize)))
+                                              ranks, errp)))
         return NULL;
     if (idset_count (idset) == 0) {
-        (void)snprintf (errbuf, errbufsize, "idset is empty");
+        errprintf (errp, "idset is empty");
         errno = EINVAL;
         goto error;
     }
     if (idset_last (idset) >= drain->ctx->size) {
-        (void)snprintf (errbuf, errbufsize, "idset is out of range");
+        errprintf (errp, "idset is out of range");
         errno = EINVAL;
         goto error;
     }
@@ -338,7 +336,7 @@ static void drain_cb (flux_t *h,
     struct idset *idset = NULL;
     const char *errstr = NULL;
     char *idstr = NULL;
-    char errbuf[256];
+    flux_error_t error;
     double timestamp;
     int overwrite = 0;
     int update_only = 0;
@@ -350,8 +348,8 @@ static void drain_cb (flux_t *h,
                              "reason", &reason,
                              "mode", &mode) < 0)
         goto error;
-    if (!(idset = drain_idset_decode (drain, s, errbuf, sizeof (errbuf)))) {
-        errstr = errbuf;
+    if (!(idset = drain_idset_decode (drain, s, &error))) {
+        errstr = error.text;
         goto error;
     }
     if (get_timestamp_now (&timestamp) < 0)
@@ -374,8 +372,8 @@ static void drain_cb (flux_t *h,
      */
     if (!overwrite &&
         !update_only &&
-        check_draininfo_idset (drain, idset, errbuf, sizeof (errbuf)) < 0) {
-        errstr = errbuf;
+        check_draininfo_idset (drain, idset, &error) < 0) {
+        errstr = error.text;
         goto error;
     }
     if (update_draininfo_idset (drain,
@@ -463,7 +461,7 @@ static void undrain_cb (flux_t *h,
     unsigned int id;
     char *idstr = NULL;
     const char *errstr = NULL;
-    char errbuf[256];
+    flux_error_t error;
 
     if (flux_request_unpack (msg,
                              NULL,
@@ -471,16 +469,16 @@ static void undrain_cb (flux_t *h,
                              "targets",
                              &s) < 0)
         goto error;
-    if (!(idset = drain_idset_decode (drain, s, errbuf, sizeof (errbuf)))) {
-        errstr = errbuf;
+    if (!(idset = drain_idset_decode (drain, s, &error))) {
+        errstr = error.text;
         goto error;
     }
     id = idset_first (idset);
     while (id != IDSET_INVALID_ID) {
         if (!drain->info[id].drained) {
-            (void)snprintf (errbuf, sizeof (errbuf), "rank %u not drained", id);
+            errprintf (&error, "rank %u not drained", id);
             errno = EINVAL;
-            errstr = errbuf;
+            errstr = error.text;
             goto error;
         }
         id = idset_next (idset, id);

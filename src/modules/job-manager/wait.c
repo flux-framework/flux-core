@@ -54,6 +54,7 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libjob/job_hash.h"
 #include "ccan/str/str.h"
@@ -73,8 +74,7 @@ struct waitjob {
 
 static int decode_job_result (struct job *job,
                               bool *success,
-                              char *errbuf,
-                              int errbufsz)
+                              flux_error_t *errp)
 {
     const char *name;
     json_t *context;
@@ -97,11 +97,10 @@ static int decode_job_result (struct job *job,
                          "note",
                          &note) < 0)
             return -1;
-        (void)snprintf (errbuf,
-                        errbufsz,
-                        "Fatal exception type=%s %s",
-                        type,
-                        note ? note : "");
+        errprintf (errp,
+                   "Fatal exception type=%s %s",
+                   type,
+                   note ? note : "");
         *success = false;
     }
     /* Shells exited - set errbuf=decoded status byte,
@@ -113,24 +112,21 @@ static int decode_job_result (struct job *job,
         if (json_unpack (context, "{s:i}", "status", &status) < 0)
             return -1;
         if (WIFSIGNALED (status)) {
-            (void)snprintf (errbuf,
-                            errbufsz,
-                            "task(s) %s",
-                            strsignal (WTERMSIG (status)));
+            errprintf (errp,
+                       "task(s) %s",
+                       strsignal (WTERMSIG (status)));
             *success = false;
         }
         else if (WIFEXITED (status)) {
-            (void)snprintf (errbuf,
-                            errbufsz,
-                            "task(s) exited with exit code %d",
-                            WEXITSTATUS (status));
+            errprintf (errp,
+                       "task(s) exited with exit code %d",
+                       WEXITSTATUS (status));
             *success = WEXITSTATUS (status) == 0 ? true : false;
         }
         else {
-            (void)snprintf (errbuf,
-                            errbufsz,
-                            "unexpected wait(2) status %d",
-                            status);
+            errprintf (errp,
+                       "unexpected wait(2) status %d",
+                       status);
             *success = false;
         }
     }
@@ -146,10 +142,10 @@ static void wait_respond (struct waitjob *wait,
                           struct job *job)
 {
     flux_t *h = wait->ctx->h;
-    char errbuf[1024];
+    flux_error_t error;
     bool success;
 
-    if (decode_job_result (job, &success, errbuf, sizeof (errbuf)) < 0) {
+    if (decode_job_result (job, &success, &error) < 0) {
         flux_log (h,
                   LOG_ERR,
                   "wait_respond id=%ju: result decode failure",
@@ -164,7 +160,7 @@ static void wait_respond (struct waitjob *wait,
                            "success",
                            success ? 1 : 0,
                            "errstr",
-                           errbuf) < 0)
+                           error.text) < 0)
         flux_log_error (h, "wait_respond id=%ju", (uintmax_t)job->id);
     return;
 error:
