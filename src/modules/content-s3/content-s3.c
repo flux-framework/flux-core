@@ -17,6 +17,7 @@
 
 #include "src/common/libutil/blobref.h"
 #include "src/common/libutil/log.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "src/common/libcontent/content-util.h"
 
@@ -65,8 +66,7 @@ static void content_s3_destroy (struct content_s3 *ctx)
 
 static int parse_credentials (struct s3_config *cfg,
                               const char *cred_file,
-                              char *errbuff,
-                              int eb_size)
+                              flux_error_t *errp)
 {
     struct tomltk_error toml_error;
     toml_table_t *tbl;
@@ -77,33 +77,33 @@ static int parse_credentials (struct s3_config *cfg,
 
     if (!(tbl = tomltk_parse_file (cred_file, &toml_error))) {
         errno = EINVAL;
-        snprintf (errbuff, eb_size, "toml parse failed: %s", toml_error.errbuf);
+        errprintf (errp, "toml parse failed: %s", toml_error.errbuf);
         goto error;
     }
 
     if (!(raw = toml_raw_in (tbl, "secret-access-key"))) {
         errno = EINVAL;
-        snprintf (errbuff, eb_size, "failed to parse secret key");
+        errprintf (errp, "failed to parse secret key");
         goto error;
     }
 
     if (toml_rtos (raw, &secret_key)) {
         errno = EINVAL;
-        snprintf (errbuff, eb_size, "failed to parse secret key");
+        errprintf (errp, "failed to parse secret key");
         goto error;
     }
 
     if (!(raw = toml_raw_in (tbl, "access-key-id"))) {
         free (secret_key);
         errno = EINVAL;
-        snprintf (errbuff, eb_size, "failed to parse access key");
+        errprintf (errp, "failed to parse access key");
         goto error;
     }
 
     if (toml_rtos (raw, &access_key)) {
         free (secret_key);
         errno = EINVAL;
-        snprintf (errbuff, eb_size, "failed to parse access key");
+        errprintf (errp, "failed to parse access key");
         goto error;
     }
 
@@ -134,8 +134,7 @@ static char *hostport (const char *host, int port)
 }
 
 static struct s3_config *parse_config (const flux_conf_t *conf,
-                                       char *errbuff,
-                                       int eb_size)
+                                       flux_error_t *errp)
 {
     struct s3_config *cfg;
     flux_error_t error;
@@ -165,7 +164,7 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
                           &uri,
                           "virtual-host-style",
                           &is_virtual_host) < 0) {
-        snprintf (errbuff, eb_size, "%s", error.text);
+        errprintf (errp, "%s", error.text);
         goto error;
     }
 
@@ -173,13 +172,13 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
         goto error;
 
     if (yuarel_parse (&yuri, cpy) < 0) {
-        snprintf (errbuff, eb_size, "failed to parse uri");
+        errprintf (errp, "failed to parse uri");
         errno = EINVAL;
         goto error;
     }
 
     if (!(cfg->hostname = hostport (yuri.host, yuri.port))) {
-        snprintf (errbuff, eb_size, "failed to form hostname");
+        errprintf (errp, "failed to form hostname");
         errno = ENOMEM;
         goto error;
     }
@@ -192,7 +191,7 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
 
     cfg->is_virtual_host = is_virtual_host;
 
-    if (parse_credentials (cfg, cred_file, errbuff, eb_size))
+    if (parse_credentials (cfg, cred_file, errp))
         goto error;
 
     free (cpy);
@@ -219,13 +218,13 @@ static void config_reload_cb (flux_t *h,
 {
     struct s3_config *cfg;
     const flux_conf_t *conf;
-    char errbuf[256];
+    flux_error_t error;
     const char *errstr = NULL;
 
     if (flux_conf_reload_decode (msg, &conf) < 0)
         goto error;
-    if (!(cfg = parse_config (conf, errbuf, sizeof (errbuf))) ){
-        errstr = errbuf;
+    if (!(cfg = parse_config (conf, &error)) ){
+        errstr = error.text;
         goto error;
     }
     free (cfg);
@@ -430,7 +429,7 @@ static const struct flux_msg_handler_spec htab[] = {
 static struct content_s3 *content_s3_create (flux_t *h)
 {
     const char *errstr = NULL;
-    char errbuff[256];
+    flux_error_t error;
     struct content_s3 *ctx;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
@@ -443,8 +442,8 @@ static struct content_s3 *content_s3_create (flux_t *h)
         goto error;
     }
 
-    if (!(ctx->cfg = parse_config (flux_get_conf (h), errbuff, sizeof (errbuff)))) {
-        errstr = errbuff;
+    if (!(ctx->cfg = parse_config (flux_get_conf (h), &error))) {
+        errstr = error.text;
         flux_log (h, LOG_ERR, "content-s3 parsing config file: %s", errstr);
         goto error;
     }
