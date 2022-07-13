@@ -165,7 +165,7 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
                           &uri,
                           "virtual-host-style",
                           &is_virtual_host) < 0) {
-        snprintf(errbuff, eb_size, "%s", error.text);
+        snprintf (errbuff, eb_size, "%s", error.text);
         goto error;
     }
 
@@ -173,13 +173,13 @@ static struct s3_config *parse_config (const flux_conf_t *conf,
         goto error;
 
     if (yuarel_parse (&yuri, cpy) < 0) {
-        snprintf(errbuff, eb_size, "failed to parse uri");
+        snprintf (errbuff, eb_size, "failed to parse uri");
         errno = EINVAL;
         goto error;
     }
 
     if (!(cfg->hostname = hostport (yuri.host, yuri.port))) {
-        snprintf(errbuff, eb_size, "failed to form hostname");
+        snprintf (errbuff, eb_size, "failed to form hostname");
         errno = ENOMEM;
         goto error;
     }
