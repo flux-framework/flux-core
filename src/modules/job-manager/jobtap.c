@@ -450,6 +450,7 @@ static int plugin_byname (const void *item1, const void *item2)
 static int load_builtins (struct jobtap *jobtap)
 {
     struct jobtap_builtin *builtin = jobtap_builtins;
+    flux_error_t error;
 
     while (builtin && builtin->name) {
         /*  Yes, this will require re-scanning the builtin plugin list
@@ -461,8 +462,14 @@ static int load_builtins (struct jobtap *jobtap)
          *  If the size of the builtins list gets large this should be
          *   revisited.
          */
-        if (!jobtap_load (jobtap, builtin->name, NULL, NULL))
+        if (!jobtap_load (jobtap, builtin->name, NULL, &error)) {
+            flux_log (jobtap->ctx->h,
+                      LOG_ERR,
+                      "jobtap: %s: %s",
+                      builtin->name,
+                      error.text);
             return -1;
+        }
         builtin++;
     }
     return 0;
