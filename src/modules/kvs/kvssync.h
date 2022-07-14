@@ -34,7 +34,7 @@ int kvssync_remove_msg (struct kvsroot *root,
                         kvssync_test_msg_f cmp,
                         void *arg);
 
-#endif /* !_FLUX_KVS_KVSROOT_H */
+#endif /* !_FLUX_KVS_KVSSYNC_H */
 
 /*
  * vi:tabstop=4 shiftwidth=4 expandtab
