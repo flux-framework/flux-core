@@ -18,22 +18,28 @@
 
 #include "errprintf.h"
 
-int errprintf (flux_error_t *errp, const char *fmt, ...)
+int verrprintf (flux_error_t *errp, const char *fmt, va_list ap)
 {
     if (errp) {
         int saved_errno = errno;
         memset (errp->text, 0, sizeof (errp->text));
         if (fmt) {
-            va_list ap;
             int n;
-            va_start (ap, fmt);
             n = vsnprintf (errp->text, sizeof (errp->text), fmt, ap);
             if (n > sizeof (errp->text))
                 errp->text[sizeof (errp->text) - 2] = '+';
-            va_end (ap);
         }
         errno = saved_errno;
     }
+    return -1;
+}
+
+int errprintf (flux_error_t *errp, const char *fmt, ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    verrprintf (errp, fmt, ap);
+    va_end (ap);
     return -1;
 }
 
