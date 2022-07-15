@@ -1275,7 +1275,7 @@ static int jobtap_handle_load_req (struct job_manager *ctx,
         if (flux_respond_error (ctx->h,
                                 msg,
                                 errno ? errno : EINVAL,
-                                error.text) < 0)
+                                error.text[0] ? error.text : NULL) < 0)
             flux_log_error (ctx->h, "jobtap_handler: flux_respond_error");
         return -1;
     }
