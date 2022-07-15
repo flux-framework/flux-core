@@ -240,7 +240,7 @@ void kvstxn_mgr_basic_tests (void)
     ok (kvstxn_mgr_get_ready_transaction (ktm) == NULL,
         "kvstxn_mgr_get_ready_transaction initially returns NULL for no ready transactions");
 
-    ok (kvstxn_mgr_add_transaction (ktm, NULL, NULL, 0) < 0
+    ok (kvstxn_mgr_add_transaction (ktm, NULL, NULL, 0, 0) < 0
         && errno == EINVAL,
         "kvstxn_mgr_add_transaction fails with EINVAL on bad input");
 
@@ -250,6 +250,7 @@ void kvstxn_mgr_basic_tests (void)
     ok (kvstxn_mgr_add_transaction (ktm,
                                     "transaction1",
                                     ops,
+                                    0,
                                     0) == 0,
         "kvstxn_mgr_add_transaction works");
 
@@ -293,7 +294,8 @@ void create_ready_kvstxn (kvstxn_mgr_t *ktm,
     ok (kvstxn_mgr_add_transaction (ktm,
                                     name,
                                     ops,
-                                    transaction_flags) == 0,
+                                    transaction_flags,
+                                    0) == 0,
         "kvstxn_mgr_add_transaction works");
 
     json_decref (ops);
@@ -379,6 +381,7 @@ void verify_ready_kvstxn (kvstxn_mgr_t *ktm,
                           json_t *names,
                           json_t *ops,
                           int flags,
+                          int internal_flags,
                           const char *extramsg)
 {
     json_t *o;
@@ -401,6 +404,9 @@ void verify_ready_kvstxn (kvstxn_mgr_t *ktm,
 
     ok (kvstxn_get_flags (kt) == flags,
         "flags do not match");
+
+    ok (kvstxn_get_internal_flags (kt) == internal_flags,
+        "internal_flags do not match");
 
     ok (kvstxn_get_newroot_ref (kt) == NULL,
         "kvstxn_get_newroot returns NULL on non-processed transaction");
@@ -449,7 +455,7 @@ void kvstxn_mgr_merge_tests (void)
     ops_append (ops, "key1", "1", 0);
     ops_append (ops, "key2", "2", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, 0, "merged transaction");
+    verify_ready_kvstxn (ktm, names, ops, 0, 0, "merged transaction");
 
     json_decref (names);
     json_decref (ops);
@@ -471,7 +477,12 @@ void kvstxn_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, FLUX_KVS_NO_MERGE, "unmerged transaction");
+    verify_ready_kvstxn (ktm,
+                         names,
+                         ops,
+                         FLUX_KVS_NO_MERGE,
+                         0,
+                         "unmerged transaction");
 
     json_decref (names);
     json_decref (ops);
@@ -493,7 +504,7 @@ void kvstxn_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, 0, "unmerged transaction");
+    verify_ready_kvstxn (ktm, names, ops, 0, 0, "unmerged transaction");
 
     json_decref (names);
     json_decref (ops);
@@ -515,7 +526,12 @@ void kvstxn_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, FLUX_KVS_SYNC, "unmerged transaction");
+    verify_ready_kvstxn (ktm,
+                         names,
+                         ops,
+                         FLUX_KVS_SYNC,
+                         0,
+                         "unmerged transaction");
 
     json_decref (names);
     json_decref (ops);
@@ -537,7 +553,7 @@ void kvstxn_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, 0, "unmerged transaction");
+    verify_ready_kvstxn (ktm, names, ops, 0, 0, "unmerged transaction");
 
     json_decref (names);
     json_decref (ops);
@@ -559,7 +575,7 @@ void kvstxn_mgr_merge_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, 0, "unmerged fence");
+    verify_ready_kvstxn (ktm, names, ops, 0, 0, "unmerged fence");
 
     json_decref (names);
     json_decref (ops);
@@ -607,7 +623,7 @@ void kvstxn_basic_tests (void)
     ops = json_array ();
     ops_append (ops, "key1", "1", 0);
 
-    verify_ready_kvstxn (ktm, names, ops, 0x44, "basic test");
+    verify_ready_kvstxn (ktm, names, ops, 0x44, 0, "basic test");
 
     json_decref (names);
     json_decref (ops);
@@ -1504,6 +1520,7 @@ void kvstxn_process_multiple_missing_ref (void)
     ok (kvstxn_mgr_add_transaction (ktm,
                                     "transaction1",
                                     ops,
+                                    0,
                                     0) == 0,
         "kvstxn_mgr_add_transaction works");
 
@@ -1627,6 +1644,7 @@ void kvstxn_process_multiple_identical_missing_ref (void)
     ok (kvstxn_mgr_add_transaction (ktm,
                                     "transaction1",
                                     ops,
+                                    0,
                                     0) == 0,
         "kvstxn_mgr_add_transaction works");
 
@@ -1739,6 +1757,7 @@ void kvstxn_process_missing_ref_removed (void)
     ok (kvstxn_mgr_add_transaction (ktm,
                                     "transaction1",
                                     ops,
+                                    0,
                                     0) == 0,
         "kvstxn_mgr_add_transaction works");
 
@@ -2050,6 +2069,7 @@ void kvstxn_process_malformed_operation (void)
     ok (kvstxn_mgr_add_transaction (ktm,
                                     "malformed",
                                     ops,
+                                    0,
                                     0) == 0,
         "kvstxn_mgr_add_transaction works");
 
@@ -3199,6 +3219,7 @@ void kvstxn_process_append_no_duplicate (void)
     ok (kvstxn_mgr_add_transaction (ktm,
                                     "transaction1",
                                     ops,
+                                    0,
                                     0) == 0,
         "kvstxn_mgr_add_transaction works");
 

@@ -1570,7 +1570,7 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (kvstxn_mgr_add_transaction (root->ktm, name, ops, flags) < 0) {
+    if (kvstxn_mgr_add_transaction (root->ktm, name, ops, flags, 0) < 0) {
         flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                         __FUNCTION__);
         goto error;
@@ -1651,7 +1651,8 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (kvstxn_mgr_add_transaction (root->ktm,
                                         treq_get_name (tr),
                                         ops,
-                                        flags) < 0) {
+                                        flags,
+                                        0) < 0) {
             flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                             __FUNCTION__);
             goto error;
@@ -1749,7 +1750,8 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (kvstxn_mgr_add_transaction (root->ktm,
                                         treq_get_name (tr),
                                         treq_get_ops (tr),
-                                        treq_get_flags (tr)) < 0) {
+                                        treq_get_flags (tr),
+                                        0) < 0) {
             flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                             __FUNCTION__);
             goto error;
@@ -1856,7 +1858,8 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
             if (kvstxn_mgr_add_transaction (root->ktm,
                                             treq_get_name (tr),
                                             treq_get_ops (tr),
-                                            treq_get_flags (tr)) < 0) {
+                                            treq_get_flags (tr),
+                                            0) < 0) {
                 flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                                 __FUNCTION__);
                 goto error;

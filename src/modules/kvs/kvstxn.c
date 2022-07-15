@@ -51,7 +51,8 @@ struct kvstxn {
     json_t *ops;
     json_t *keys;
     json_t *names;
-    int flags;
+    int flags;                  /* kvs flags from request caller */
+    int internal_flags;         /* special kvstxn api internal flags */
     json_t *rootcpy;   /* working copy of root dir */
     const json_t *rootdir;      /* source of rootcpy above */
     struct cache_entry *entry;  /* for reference counting rootdir above */
@@ -123,7 +124,8 @@ static void kvstxn_destroy (kvstxn_t *kt)
 static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
                                 const char *name,
                                 json_t *ops,
-                                int flags)
+                                int flags,
+                                int internal_flags)
 {
     kvstxn_t *kt;
 
@@ -149,6 +151,7 @@ static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
         }
     }
     kt->flags = flags;
+    kt->internal_flags = internal_flags;
     if (!(kt->missing_refs_list = zlist_new ()))
         goto error_enomem;
     zlist_autofree (kt->missing_refs_list);
@@ -199,6 +202,11 @@ json_t *kvstxn_get_names (kvstxn_t *kt)
 int kvstxn_get_flags (kvstxn_t *kt)
 {
     return kt->flags;
+}
+
+int kvstxn_get_internal_flags (kvstxn_t *kt)
+{
+    return kt->internal_flags;
 }
 
 const char *kvstxn_get_namespace (kvstxn_t *kt)
@@ -1241,11 +1249,16 @@ void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm)
 int kvstxn_mgr_add_transaction (kvstxn_mgr_t *ktm,
                                 const char *name,
                                 json_t *ops,
-                                int flags)
+                                int flags,
+                                int internal_flags)
 {
     kvstxn_t *kt;
+    /* N.B. No internal_flags supported at the moment */
+    int valid_internal_flags = 0;
 
-    if (!name || !ops) {
+    if (!name
+        || !ops
+        || (internal_flags & ~valid_internal_flags)) {
         errno = EINVAL;
         return -1;
     }
@@ -1253,7 +1266,8 @@ int kvstxn_mgr_add_transaction (kvstxn_mgr_t *ktm,
     if (!(kt = kvstxn_create (ktm,
                               name,
                               ops,
-                              flags)))
+                              flags,
+                              internal_flags)))
         return -1;
 
     if (zlist_append (ktm->ready, kt) < 0) {
@@ -1412,10 +1426,15 @@ int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
     second = zlist_next (ktm->ready);
     if (!second
         || kvstxn_no_merge (second)
-        || (first->flags != second->flags))
+        || (first->flags != second->flags)
+        || (first->internal_flags != second->internal_flags))
         return 0;
 
-    if (!(new = kvstxn_create (ktm, NULL, NULL, first->flags)))
+    if (!(new = kvstxn_create (ktm,
+                               NULL,
+                               NULL,
+                               first->flags,
+                               first->internal_flags)))
         return -1;
     new->merged = true;
 

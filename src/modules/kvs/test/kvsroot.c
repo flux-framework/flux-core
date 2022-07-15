@@ -275,6 +275,7 @@ void basic_kvstxn_mgr_tests (void)
     ok (kvstxn_mgr_add_transaction (root->ktm,
                                     "foo",
                                     ops,
+                                    0,
                                     0) == 0,
         "kvstxn_mgr_add_transaction works");
 
