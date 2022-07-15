@@ -127,7 +127,8 @@ int flux_kvs_wait_version (flux_t *h, const char *ns, int version)
         if (!(ns = kvs_get_namespace ()))
             return -1;
     }
-    if (!(f = flux_rpc_pack (h, "kvs.sync", FLUX_NODEID_ANY, 0, "{ s:i s:s }",
+    if (!(f = flux_rpc_pack (h, "kvs.wait-version", FLUX_NODEID_ANY, 0,
+                             "{ s:i s:s }",
                              "rootseq", version,
                              "namespace", ns)))
         goto done;

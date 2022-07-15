@@ -22,9 +22,9 @@
 
 #include "src/common/libczmqcontainers/czmq_containers.h"
 
-#include "kvssync.h"
+#include "kvs_wait_version.h"
 
-struct kvssync {
+struct kvs_wait_version {
     flux_msg_handler_f cb;
     flux_t *h;
     flux_msg_handler_t *mh;
@@ -33,10 +33,10 @@ struct kvssync {
     int seq;
 };
 
-static int kvssync_cmp (void *item1, void *item2)
+static int kvs_wait_version_cmp (void *item1, void *item2)
 {
-    struct kvssync *ks1 = item1;
-    struct kvssync *ks2 = item2;
+    struct kvs_wait_version *ks1 = item1;
+    struct kvs_wait_version *ks2 = item2;
 
     if (ks1->seq < ks2->seq)
         return -1;
@@ -45,75 +45,75 @@ static int kvssync_cmp (void *item1, void *item2)
     return 0;
 }
 
-static void kvssync_destroy (void *data)
+static void kvs_wait_version_destroy (void *data)
 {
-    struct kvssync *ks = data;
+    struct kvs_wait_version *ks = data;
     if (ks) {
         flux_msg_decref (ks->msg);
         free (ks);
     }
 }
 
-int kvssync_add (struct kvsroot *root, flux_msg_handler_f cb, flux_t *h,
-                 flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg,
-                 int seq)
+int kvs_wait_version_add (struct kvsroot *root, flux_msg_handler_f cb,
+                          flux_t *h, flux_msg_handler_t *mh,
+                          const flux_msg_t *msg, void *arg, int seq)
 {
-    struct kvssync *ks = NULL;
+    struct kvs_wait_version *kwv = NULL;
 
     if (!root || !msg || root->seq >= seq) {
         errno = EINVAL;
         goto error;
     }
 
-    if (!(ks = calloc (1, sizeof (*ks))))
+    if (!(kwv = calloc (1, sizeof (*kwv))))
         goto error;
 
-    ks->msg = flux_msg_incref (msg);
-    ks->cb = cb;
-    ks->h = h;
-    ks->mh = mh;
-    ks->arg = arg;
-    ks->seq = seq;
+    kwv->msg = flux_msg_incref (msg);
+    kwv->cb = cb;
+    kwv->h = h;
+    kwv->mh = mh;
+    kwv->arg = arg;
+    kwv->seq = seq;
 
-    if (zlist_push (root->synclist, ks) < 0) {
+    if (zlist_push (root->wait_version_list, kwv) < 0) {
         errno = ENOMEM;
         goto error;
     }
-    zlist_freefn (root->synclist, ks, kvssync_destroy, false);
+    zlist_freefn (root->wait_version_list, kwv, kvs_wait_version_destroy, false);
 
-    zlist_sort (root->synclist, kvssync_cmp);
+    zlist_sort (root->wait_version_list, kvs_wait_version_cmp);
 
     return 0;
 
-error:
-    kvssync_destroy (ks);
+ error:
+    kvs_wait_version_destroy (kwv);
     return -1;
 }
 
-void kvssync_process (struct kvsroot *root, bool all)
+void kvs_wait_version_process (struct kvsroot *root, bool all)
 {
-    struct kvssync *ks;
+    struct kvs_wait_version *kwv;
 
     if (!root)
         return;
 
     /* notify sync waiters that version has been reached */
 
-    ks = zlist_first (root->synclist);
-    while (ks && (all || root->seq >= ks->seq)) {
-        ks = zlist_pop (root->synclist);
-        ks->cb (ks->h, ks->mh, ks->msg, ks->arg);
-        kvssync_destroy (ks);
-        ks = zlist_first (root->synclist);
+    kwv = zlist_first (root->wait_version_list);
+    while (kwv && (all || root->seq >= kwv->seq)) {
+        kwv = zlist_pop (root->wait_version_list);
+        kwv->cb (kwv->h, kwv->mh, kwv->msg, kwv->arg);
+        kvs_wait_version_destroy (kwv);
+        kwv = zlist_first (root->wait_version_list);
     }
 }
 
-int kvssync_remove_msg (struct kvsroot *root,
-                        kvssync_test_msg_f cmp,
-                        void *arg)
+int kvs_wait_version_remove_msg (struct kvsroot *root,
+                                 kvs_wait_version_test_msg_f cmp,
+                                 void *arg)
 {
     zlist_t *tmp = NULL;
-    struct kvssync *ks;
+    struct kvs_wait_version *kwv;
     int rc = -1;
     int saved_errno;
 
@@ -122,26 +122,26 @@ int kvssync_remove_msg (struct kvsroot *root,
         goto error;
     }
 
-    ks = zlist_first (root->synclist);
-    while (ks) {
-        if (cmp (ks->msg, arg)) {
+    kwv = zlist_first (root->wait_version_list);
+    while (kwv) {
+        if (cmp (kwv->msg, arg)) {
             if (!tmp && !(tmp = zlist_new ())) {
                 saved_errno = ENOMEM;
                 goto error;
             }
-            if (zlist_append (tmp, ks) < 0) {
+            if (zlist_append (tmp, kwv) < 0) {
                 saved_errno = ENOMEM;
                 goto error;
             }
         }
-        ks = zlist_next (root->synclist);
+        kwv = zlist_next (root->wait_version_list);
     }
     if (tmp) {
-        while ((ks = zlist_pop (tmp)))
-            zlist_remove (root->synclist, ks);
+        while ((kwv = zlist_pop (tmp)))
+            zlist_remove (root->wait_version_list, kwv);
     }
     rc = 0;
-error:
+ error:
     /* if an error occurs above in zlist_new() or zlist_append(),
      * simply destroy the tmp list.  Nothing has been removed off of
      * the original queue yet.  Allow user to handle error as they see

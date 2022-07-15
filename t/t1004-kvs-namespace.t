@@ -73,10 +73,10 @@ wait_fencecount_nonzero() {
         return $(loophandlereturn $i)
 }
 
-wait_syncers_nonzero() {
+wait_versionwaiters_nonzero() {
         i=0
-        while (! flux module stats --parse namespace.$1.#syncers kvs > /dev/null 2>&1 \
-               || [ "$(flux module stats --parse namespace.$1.#syncers kvs 2> /dev/null)" = "0" ]) \
+        while (! flux module stats --parse namespace.$1.#versionwaiters kvs > /dev/null 2>&1 \
+               || [ "$(flux module stats --parse namespace.$1.#versionwaiters kvs 2> /dev/null)" = "0" ]) \
               && [ $i -lt ${KVS_WAIT_ITERS} ]
         do
                 sleep 0.1
@@ -456,7 +456,7 @@ test_expect_success NO_CHAIN_LINT 'kvs: wait recognizes removed namespace' '
         VERS=$((VERS + 1)) &&
         flux kvs wait --namespace=$NAMESPACETMP-REMOVE-WAIT $VERS > wait_out 2>&1 &
         waitpid=$! &&
-        wait_syncers_nonzero $NAMESPACETMP-REMOVE-WAIT &&
+        wait_versionwaiters_nonzero $NAMESPACETMP-REMOVE-WAIT &&
         flux kvs namespace remove $NAMESPACETMP-REMOVE-WAIT &&
         ! wait $waitpid &&
         grep "flux_kvs_wait_version: Operation not supported" wait_out

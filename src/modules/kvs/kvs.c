@@ -42,7 +42,7 @@
 #include "treq.h"
 #include "kvstxn.h"
 #include "kvsroot.h"
-#include "kvssync.h"
+#include "kvs_wait_version.h"
 
 /* heartbeat_sync_cb() is called periodically to manage cached content
  * and namespaces.  Synchronize with the system heartbeat if possible,
@@ -268,7 +268,7 @@ static void setroot (struct kvs_ctx *ctx, struct kvsroot *root,
 {
     if (rootseq == 0 || rootseq > root->seq) {
         kvsroot_setroot (ctx->krm, root, rootref, rootseq);
-        kvssync_process (root, false);
+        kvs_wait_version_process (root, false);
         root->last_update_time = flux_reactor_now (flux_get_reactor (ctx->h));
     }
 }
@@ -1191,7 +1191,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
     double now = flux_reactor_now (flux_get_reactor (ctx->h));
 
     if (root->remove) {
-        if (!zlist_size (root->synclist)
+        if (!zlist_size (root->wait_version_list)
             && !treq_mgr_transactions_count (root->trm)
             && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
 
@@ -1208,7 +1208,7 @@ static int heartbeat_root_cb (struct kvsroot *root, void *arg)
              && !root->remove
              && !root->is_primary
              && (now - root->last_update_time) > max_namespace_age
-             && !zlist_size (root->synclist)
+             && !zlist_size (root->wait_version_list)
              && !treq_mgr_transactions_count (root->trm)
              && !kvstxn_mgr_ready_transaction_count (root->ktm)) {
         /* remove a root if it not the primary one, has timed out
@@ -1890,10 +1890,8 @@ stall:
     return;
 }
 
-/* For wait_version().
- */
-static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
-                             const flux_msg_t *msg, void *arg)
+static void wait_version_request_cb (flux_t *h, flux_msg_handler_t *mh,
+                                     const flux_msg_t *msg, void *arg)
 {
     struct kvs_ctx *ctx = arg;
     const char *ns;
@@ -1908,7 +1906,7 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (!(root = getroot (ctx, ns, mh, msg, NULL, sync_request_cb,
+    if (!(root = getroot (ctx, ns, mh, msg, NULL, wait_version_request_cb,
                           &stall))) {
         if (stall)
             return;
@@ -1916,8 +1914,14 @@ static void sync_request_cb (flux_t *h, flux_msg_handler_t *mh,
     }
 
     if (root->seq < rootseq) {
-        if (kvssync_add (root, sync_request_cb, h, mh, msg, ctx, rootseq) < 0) {
-            flux_log_error (h, "%s: kvssync_add", __FUNCTION__);
+        if (kvs_wait_version_add (root,
+                                  wait_version_request_cb,
+                                  h,
+                                  mh,
+                                  msg,
+                                  ctx,
+                                  rootseq) < 0) {
+            flux_log_error (h, "%s: kvs_wait_version_add", __FUNCTION__);
             goto error;
         }
         return; /* stall */
@@ -2104,8 +2108,12 @@ static int disconnect_request_root_cb (struct kvsroot *root, void *arg)
 
     /* Log error, but don't return -1, can continue to iterate
      * remaining roots */
-    if (kvssync_remove_msg (root, disconnect_cmp, (void *)cbd->msg) < 0)
-        flux_log_error (cbd->ctx->h, "%s: kvssync_remove_msg", __FUNCTION__);
+    if (kvs_wait_version_remove_msg (root,
+                                     disconnect_cmp,
+                                     (void *)cbd->msg) < 0)
+        flux_log_error (cbd->ctx->h,
+                        "%s: kvs_wait_version_remove_msg",
+                        __FUNCTION__);
 
     return 0;
 }
@@ -2131,8 +2139,8 @@ static int stats_get_root_cb (struct kvsroot *root, void *arg)
     json_t *s;
 
     if (!(s = json_pack ("{ s:i s:i s:i s:i s:i }",
-                         "#syncers",
-                         zlist_size (root->synclist),
+                         "#versionwaiters",
+                         zlist_size (root->wait_version_list),
                          "#no-op stores",
                          kvstxn_mgr_get_noop_stores (root->ktm),
                          "#transactions",
@@ -2403,11 +2411,12 @@ static void start_root_remove (struct kvs_ctx *ctx, const char *ns)
 
         work_queue_remove (root);
 
-        /* Now that root has been marked for removal from roothash, run through
-         * the whole synclist.  requests will notice root removed, return
-         * ENOTSUP to all those trying to sync.
+        /* Now that root has been marked for removal from roothash,
+         * run through the whole wait_version_list.  requests will
+         * notice root removed, return ENOTSUP to all those trying to
+         * sync.
          */
-        kvssync_process (root, true);
+        kvs_wait_version_process (root, true);
 
         /* Ready transactions will be processed and errors returned to
          * callers via the code path in kvstxn_apply().  But not ready
@@ -2702,8 +2711,8 @@ static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "kvs.dropcache",  dropcache_request_cb, 0 },
     { FLUX_MSGTYPE_EVENT,   "kvs.dropcache",  dropcache_event_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "kvs.disconnect", disconnect_request_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs.sync",
-                            sync_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.wait-version",
+                            wait_version_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.lookup",
                             lookup_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.lookup-plus",
