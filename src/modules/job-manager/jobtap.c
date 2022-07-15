@@ -66,6 +66,7 @@ struct jobtap {
     zhashx_t *plugins_byuuid;
     zlistx_t *jobstack;
     char last_error [128];
+    bool configured;
 };
 
 struct dependency {
@@ -397,6 +398,58 @@ static int jobtap_conf_entry (struct jobtap *jobtap,
     return 0;
 }
 
+static int jobtap_call_conf_update (flux_plugin_t *p,
+                                    const flux_conf_t *conf,
+                                    flux_error_t *errp)
+{
+    const char *name = flux_plugin_get_name (p);
+    flux_plugin_arg_t *args;
+    json_t *o;
+
+    if (flux_conf_unpack (conf, errp, "o", &o) < 0)
+        return -1;
+    if (!(args = flux_plugin_arg_create ())
+        || flux_plugin_arg_pack (args,
+                                 FLUX_PLUGIN_ARG_IN,
+                                 "{s:O}",
+                                 "conf", o) < 0) {
+        errprintf (errp, "error preparing args for %s jobtap plugin", name);
+        goto error;
+    }
+    if (flux_plugin_call (p, "conf.update", args) < 0) {
+        const char *errmsg;
+        if (flux_plugin_arg_unpack (args,
+                                    FLUX_PLUGIN_ARG_OUT,
+                                    "{s:s}",
+                                    "errmsg", &errmsg) < 0)
+            errprintf (errp, "config rejected by %s jobtap plugin", name);
+        else
+            errprintf (errp, "%s", errmsg);
+        errno = EINVAL;
+        goto error;
+    }
+    flux_plugin_arg_destroy (args);
+    return 0;
+error:
+    flux_plugin_arg_destroy (args);
+    return -1;
+}
+
+static int jobtap_stack_call_conf_update (struct jobtap *jobtap,
+                                          const flux_conf_t *conf,
+                                          flux_error_t *errp)
+{
+    flux_plugin_t *p;
+
+    p = zlistx_first (jobtap->plugins);
+    while (p) {
+        if (jobtap_call_conf_update (p, conf, errp) < 0)
+            return -1;
+        p = zlistx_next (jobtap->plugins);
+    }
+    return 0;
+}
+
 static int jobtap_parse_config (const flux_conf_t *conf,
                                 flux_error_t *errp,
                                 void *arg)
@@ -410,29 +463,39 @@ static int jobtap_parse_config (const flux_conf_t *conf,
     if (!conf)
         return errprintf (errp, "conf object can't be NULL");
 
-    if (flux_conf_unpack (conf,
-                          &error,
-                          "{s?:{s?:o}}",
-                          "job-manager",
-                            "plugins", &plugins) < 0) {
-        return errprintf (errp,
-                          "[job-manager.plugins]: unpack error: %s",
-                          error.text);
+    /* Changes to [job-manager.plugins] are currently ignored.
+     */
+    if (!jobtap->configured) {
+        if (flux_conf_unpack (conf,
+                              &error,
+                              "{s?:{s?:o}}",
+                              "job-manager",
+                                "plugins", &plugins) < 0) {
+            return errprintf (errp,
+                              "[job-manager.plugins]: unpack error: %s",
+                              error.text);
+        }
+        if (plugins) {
+            if (!json_is_array (plugins)) {
+                return errprintf (errp,
+                             "[job-manager.plugins] config must be an array");
+            }
+            json_array_foreach (plugins, i, entry) {
+                if (jobtap_conf_entry (jobtap, i, entry, errp) < 0)
+                    return -1;
+            }
+        }
+        jobtap->configured = true;
     }
 
-    if (!plugins)
-        return 0;
+    /* Process plugins that want 'conf.update' notifications.
+     * In this case the 'conf' object is the entire instance config
+     * rather than [job-manager.plugins.<name>.conf].
+     */
+    if (jobtap_stack_call_conf_update (jobtap, conf, errp) < 0)
+        return -1;
 
-    if (!json_is_array (plugins)) {
-        return errprintf (errp,
-                         "[job-manager.plugins] config must be an array");
-    }
-
-    json_array_foreach (plugins, i, entry) {
-        if (jobtap_conf_entry (jobtap, i, entry, errp) < 0)
-            return -1;
-    }
-    return 0; // indicates to conf.c that callback does NOT want updates
+    return 1; // indicates to conf.c that callback wants updates
 }
 
 static int plugin_byname (const void *item1, const void *item2)
@@ -447,6 +510,7 @@ static int plugin_byname (const void *item1, const void *item2)
 static int load_builtins (struct jobtap *jobtap)
 {
     struct jobtap_builtin *builtin = jobtap_builtins;
+    flux_error_t error;
 
     while (builtin && builtin->name) {
         /*  Yes, this will require re-scanning the builtin plugin list
@@ -458,8 +522,14 @@ static int load_builtins (struct jobtap *jobtap)
          *  If the size of the builtins list gets large this should be
          *   revisited.
          */
-        if (jobtap_load (jobtap, builtin->name, NULL, NULL) < 0)
+        if (!jobtap_load (jobtap, builtin->name, NULL, &error)) {
+            flux_log (jobtap->ctx->h,
+                      LOG_ERR,
+                      "jobtap: %s: %s",
+                      builtin->name,
+                      error.text);
             return -1;
+        }
         builtin++;
     }
     return 0;
@@ -1218,6 +1288,13 @@ flux_plugin_t * jobtap_load (struct jobtap *jobtap,
         if (jobtap_plugin_load_first (jobtap, p, path, errp) < 0)
             goto error;
     }
+    /* Call conf.update here for two reasons
+     * - fail the plugin load if config is invalid
+     * - make sure plugin has config before job.* callbacks begin
+     */
+    if (jobtap_call_conf_update (p, flux_get_conf (jobtap->ctx->h), errp) < 0)
+        goto error;
+
     char *uuid = (char *)flux_plugin_get_uuid (p);
     if (zhashx_insert (jobtap->plugins_byuuid, uuid, p) < 0
         || !zlistx_add_end (jobtap->plugins, p)) {
@@ -1265,7 +1342,7 @@ static int jobtap_handle_load_req (struct job_manager *ctx,
         if (flux_respond_error (ctx->h,
                                 msg,
                                 errno ? errno : EINVAL,
-                                error.text) < 0)
+                                error.text[0] ? error.text : NULL) < 0)
             flux_log_error (ctx->h, "jobtap_handler: flux_respond_error");
         return -1;
     }
@@ -1453,38 +1530,55 @@ int flux_jobtap_priority_unavail (flux_plugin_t *p, flux_plugin_arg_t *args)
                                  "priority", FLUX_JOBTAP_PRIORITY_UNAVAIL);
 }
 
+static void jobtap_verror (flux_plugin_t *p,
+                           flux_plugin_arg_t *args,
+                           const char *fmt,
+                           va_list ap)
+{
+    flux_error_t error;
+
+    verrprintf (&error, fmt, ap);
+
+    if (error.text[0] != '\0') {
+        if (flux_plugin_arg_pack (args,
+                                  FLUX_PLUGIN_ARG_OUT,
+                                  "{s:s}",
+                                  "errmsg", error.text) < 0) {
+            flux_log_error (flux_jobtap_get_flux (p),
+                            "flux_jobtap_reject_job: failed to pack error");
+        }
+    }
+}
+
+int flux_jobtap_error (flux_plugin_t *p,
+                       flux_plugin_arg_t *args,
+                       const char *fmt,
+                       ...)
+{
+    va_list ap;
+    va_start (ap, fmt);
+    jobtap_verror (p, args, fmt, ap);
+    va_end (ap);
+    return -1;
+}
+
+
 int flux_jobtap_reject_job (flux_plugin_t *p,
                             flux_plugin_arg_t *args,
                             const char *fmt,
                             ...)
 {
-    char errmsg [1024];
-    int len = sizeof (errmsg);
-    int n;
-
     if (fmt) {
         va_list ap;
         va_start (ap, fmt);
-        n = vsnprintf (errmsg, sizeof (errmsg), fmt, ap);
+        jobtap_verror (p, args, fmt, ap);
         va_end (ap);
     }
     else {
-        n = snprintf (errmsg,
-                      sizeof (errmsg),
-                      "rejected by job-manager plugin '%s'",
-                      jobtap_plugin_name (p));
-    }
-    if (n >= len) {
-        errmsg[len - 1] = '\0';
-        errmsg[len - 2] = '+';
-    }
-    if (flux_plugin_arg_pack (args,
-                              FLUX_PLUGIN_ARG_OUT,
-                              "{s:s}",
-                              "errmsg", errmsg) < 0) {
-        flux_t *h = flux_jobtap_get_flux (p);
-        if (h)
-            flux_log_error (h, "flux_jobtap_reject_job: failed to pack error");
+        flux_jobtap_error (p,
+                           args,
+                           "rejected by job-manager plugin '%s'",
+                           jobtap_plugin_name (p));
     }
     return -1;
 }

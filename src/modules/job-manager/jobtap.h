@@ -56,11 +56,19 @@ int flux_jobtap_reprioritize_job (flux_plugin_t *p,
 int flux_jobtap_priority_unavail (flux_plugin_t *p,
                                   flux_plugin_arg_t *args);
 
-/*  Convenience function to be used in job.validate callback to reject a
- *   job with error message formatted by the fmt string.
- *   returns -1 to allow an idiom like:
+/*  Convenience function to set 'errstr' in return args to formatted message.
+ *   returns -1 to allow an idiom like
  *
- *   return flux_jobtap_reject_job (p, args, "failed validation");
+ *   return flux_jobtap_error (p, args, "error message");
+ */
+int flux_jobtap_error (flux_plugin_t *p,
+                       flux_plugin_arg_t *args,
+                       const char *fmt, ...)
+                       __attribute__ ((format (printf, 3, 4)));
+
+/*  Convenience function to be used in job.validate callback to reject a job.
+ *   Identical to flux_jobtap_error () except if 'fmt' is NULL, a default
+ *   message of the form "rejected by job-manager plugin <name>" is substituted.
  */
 int flux_jobtap_reject_job (flux_plugin_t *p,
                             flux_plugin_arg_t *args,

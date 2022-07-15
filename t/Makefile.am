@@ -429,6 +429,7 @@ check_LTLIBRARIES = \
 	job-manager/plugins/create-event.la \
 	job-manager/plugins/create-reject.la \
 	job-manager/plugins/perilog-test.la \
+	job-manager/plugins/config.la \
 	stats/stats-basic.la \
 	stats/stats-immediate.la
 
@@ -910,6 +911,14 @@ job_manager_plugins_create_reject_la_LDFLAGS = \
 job_manager_plugins_create_reject_la_LIBADD = \
 	$(top_builddir)/src/common/libflux-core.la
 
+job_manager_plugins_config_la_SOURCES = \
+	job-manager/plugins/config.c
+job_manager_plugins_config_la_CPPFLAGS = \
+	$(test_cppflags)
+job_manager_plugins_config_la_LDFLAGS = \
+	$(fluxplugin_ldflags) -module -rpath /nowhere
+job_manager_plugins_config_la_LIBADD = \
+	$(top_builddir)/src/common/libflux-core.la
 
 job_manager_plugins_perilog_test_la_SOURCES = \
 	job-manager/plugins/perilog-test.c

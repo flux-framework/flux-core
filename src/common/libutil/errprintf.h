@@ -11,6 +11,8 @@
 #ifndef _UTIL_ERRPRINTF_H
 #define _UTIL_ERRPRINTF_H
 
+#include <stdarg.h>
+
 #include "src/common/libflux/types.h" /* flux_error_t */
 
 /*
@@ -23,6 +25,9 @@
  */
 int errprintf (flux_error_t *errp, const char *fmt, ...)
      __attribute__ ((format (printf, 2, 3)));
+
+int verrprintf (flux_error_t *errp, const char *fmt, va_list ap);
+
 
 #endif /* !_UTIL_ERRPRINTF_H */
 

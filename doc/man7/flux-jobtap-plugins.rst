@@ -109,10 +109,10 @@ annotations by returning a value for the ``annotations`` key::
 
 .. _callback_topics:
 
-CALLBACK TOPICS
-===============
+JOB CALLBACK TOPICS
+===================
 
-The following callback "topic strings" are currently provided by the
+The following job callback "topic strings" are currently provided by the
 *jobtap* interface:
 
 job.create
@@ -219,6 +219,23 @@ job.priority.get
   all jobs by calling ``flux_jobtap_reprioritize_all()``. See the
   :ref:`priority` section for more information about plugin management
   of job priority.
+
+CONFIGURATION CALLBACK TOPIC
+============================
+
+Jobtap plugins may register a ``conf.update`` callback.  The current/proposed
+configuration object is present in the input arguments under the ``conf`` key.
+The callback is invoked in the following circumstances:
+
+  - When the plugin is first loaded.  If the callback returns failure,
+    the plugin load fails.
+
+  - Each time the configuration changes.  If the callback returns failure,
+    ``flux config reload`` fails.
+
+The callback should return 0 on success, and -1 on failure.  On failure,
+it may optionally set a human readable error string in the ``errstr`` output
+argument.  The ``flux_jobtap_error()`` convenience function may be useful here.
 
 .. _priority:
 
