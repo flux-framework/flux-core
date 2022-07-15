@@ -1044,6 +1044,7 @@ static void kvstxn_apply (kvstxn_t *kt)
 done:
     if (errnum == 0) {
         json_t *names = kvstxn_get_names (kt);
+        int internal_flags = kvstxn_get_internal_flags (kt);
         int count;
         if ((count = json_array_size (names)) > 1) {
             int opcount = 0;
@@ -1051,8 +1052,10 @@ done:
             flux_log (ctx->h, LOG_DEBUG, "aggregated %d transactions (%d ops)",
                       count, opcount);
         }
-        setroot (ctx, root, kvstxn_get_newroot_ref (kt), root->seq + 1);
-        setroot_event_send (ctx, root, names, kvstxn_get_keys (kt));
+        if (!(internal_flags & KVSTXN_INTERNAL_FLAG_NO_PUBLISH)) {
+            setroot (ctx, root, kvstxn_get_newroot_ref (kt), root->seq + 1);
+            setroot_event_send (ctx, root, names, kvstxn_get_keys (kt));
+        }
     } else {
         fallback = kvstxn_fallback_mergeable (kt);
 

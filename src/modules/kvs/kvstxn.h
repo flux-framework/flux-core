@@ -27,6 +27,16 @@ typedef enum {
     KVSTXN_PROCESS_FINISHED = 6,
 } kvstxn_process_t;
 
+/* api flags, to be used with kvstxn_mgr_add_transaction()
+ *
+ * KVSTXN_INTERNAL_FLAG_NO_PUBLISH - Indicate that this transaction
+ * should not publish its change after the transaction completes.
+ * Note that kvstxn does not use this flag internally, users can check
+ * that it has been set via kvstxn_get_internal_flags().
+ */
+
+#define KVSTXN_INTERNAL_FLAG_NO_PUBLISH 0x01
+
 /*
  * kvstxn_t API
  */

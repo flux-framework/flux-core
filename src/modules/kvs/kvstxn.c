@@ -1253,8 +1253,7 @@ int kvstxn_mgr_add_transaction (kvstxn_mgr_t *ktm,
                                 int internal_flags)
 {
     kvstxn_t *kt;
-    /* N.B. No internal_flags supported at the moment */
-    int valid_internal_flags = 0;
+    int valid_internal_flags = KVSTXN_INTERNAL_FLAG_NO_PUBLISH;
 
     if (!name
         || !ops
