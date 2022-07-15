@@ -461,7 +461,7 @@ static int load_builtins (struct jobtap *jobtap)
          *  If the size of the builtins list gets large this should be
          *   revisited.
          */
-        if (jobtap_load (jobtap, builtin->name, NULL, NULL) < 0)
+        if (!jobtap_load (jobtap, builtin->name, NULL, NULL))
             return -1;
         builtin++;
     }
