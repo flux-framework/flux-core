@@ -6,7 +6,9 @@ test_description='Test job manager jobtap plugin interface'
 
 . $(dirname $0)/sharness.sh
 
-test_under_flux 4 job
+mkdir -p config
+
+test_under_flux 4 job -o,--config-path=$(pwd)/config
 
 flux setattr log-stderr-level 1
 
@@ -467,6 +469,34 @@ test_expect_success 'job-manager: job.create can reject a job' '
 	flux jobtap load --remove=all ${PLUGINPATH}/create-reject.so &&
 	test_must_fail flux mini submit hostname 2>submit.err &&
 	grep nope submit.err
+'
+
+test_expect_success 'job-manager: plugin fails to load on config.update error' '
+	flux jobtap remove all &&
+	test_must_fail flux jobtap load ${PLUGINPATH}/config.so 2>config.err
+'
+test_expect_success 'job-manager: and produces reasonable error for humans' '
+	grep "Error parsing" config.err
+'
+test_expect_success 'set up valid test configuration' '
+	cat >config/test.toml <<-EOT &&
+	[testconfig]
+	testkey = "a string"
+	EOT
+	flux config reload
+'
+test_expect_success 'and now plugin expecting that config can load' '
+	flux jobtap load ${PLUGINPATH}/config.so
+'
+test_expect_success 'reloading invalid configuration fails' '
+	cat >config/test.toml <<-EOT &&
+	[testconfig]
+	testkey = 42
+	EOT
+	test_must_fail flux config reload 2>reload.err
+'
+test_expect_success 'job-manager: and produces reasonable error for humans' '
+	grep "Error parsing" reload.err
 '
 
 test_done
