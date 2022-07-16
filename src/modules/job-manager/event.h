@@ -50,6 +50,10 @@ int event_batch_pub_state (struct event *event, struct job *job,
  */
 int event_batch_respond (struct event *event, const flux_msg_t *msg);
 
+/* Add job to batch, job event handling will be paused until batch completion.
+ */
+int event_batch_add_job (struct event *event, struct job *job);
+
 /* Post event 'name' and optionally 'context' to 'job'.
  * Internally, calls event_job_update(), then event_job_action(), then commits
  * the event to job KVS eventlog.  The KVS commit completes asynchronously.

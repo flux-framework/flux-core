@@ -76,10 +76,12 @@ struct event_batch {
     flux_future_t *f;
     json_t *state_trans;
     zlist_t *responses; // responses deferred until batch complete
+    zlist_t *jobs;      // jobs held until batch complete
 };
 
 static struct event_batch *event_batch_create (struct event *event);
 static void event_batch_destroy (struct event_batch *batch);
+static int event_job_post_deferred (struct event *event, struct job *job);
 
 /* Batch commit has completed.
  * If there was a commit error, log it and stop the reactor.
@@ -204,6 +206,17 @@ static void event_batch_destroy (struct event_batch *batch)
                                batch->state_trans);
             json_decref (batch->state_trans);
         }
+        if (batch->jobs) {
+            struct job *job;
+            while ((job = zlist_pop (batch->jobs))) {
+                job->hold_events = 0;
+                if (event_job_post_deferred (batch->event, job) < 0)
+                    flux_log_error (batch->event->ctx->h,
+                                    "%ju: error posting deferred events",
+                                    (uintmax_t) job->id);
+            }
+            zlist_destroy (&batch->jobs);
+        }
         if (batch->responses) {
             flux_msg_t *msg;
             flux_t *h = batch->event->ctx->h;
@@ -294,6 +307,23 @@ int event_batch_pub_state (struct event *event, struct job *job,
 nomem:
     errno = ENOMEM;
 error:
+    return -1;
+}
+
+int event_batch_add_job (struct event *event, struct job *job)
+{
+    if (event_batch_start (event) < 0)
+        return -1;
+    if (!(event->batch->jobs)) {
+        if (!(event->batch->jobs = zlist_new ()))
+            goto nomem;
+    }
+    if (zlist_append (event->batch->jobs, job) < 0)
+        goto nomem;
+    job->hold_events = 1;
+    return 0;
+nomem:
+    errno = ENOMEM;
     return -1;
 }
 
@@ -895,7 +925,7 @@ int event_job_post_entry (struct event *event,
 {
     if (job_event_enqueue (job, flags, entry) < 0)
         return -1;
-    if (json_array_size (job->event_queue) > 1)
+    if (json_array_size (job->event_queue) > 1 || job->hold_events)
         return 0; // break recursion
     return event_job_post_deferred (event, job);
 }

@@ -110,6 +110,15 @@ static int submit_job (struct job_manager *ctx,
      */
     (void) jobtap_call (ctx->jobtap, job, "job.new", NULL);
 
+    /* Add this job to current commit batch. This pauses event processing
+     *  for the job until the current batch is committed to the KVS. This
+     *  ensures that the job eventlog is available in the KVS before further
+     *  state transitions for the job are made (i.e. before the job is
+     *  allocated resources and is started by the job exec system.)
+     */
+    if (event_batch_add_job (ctx->event, job) < 0)
+        goto error;
+
     /* Post the validate event.
      */
     if (event_job_post_pack (ctx->event, job, "validate", 0, NULL) < 0) {
