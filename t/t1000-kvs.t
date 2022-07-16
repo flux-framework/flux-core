@@ -1243,8 +1243,8 @@ test_expect_success 'kvs: get --label works' '
 test_expect_success 'getroot request with empty payload fails with EPROTO(71)' '
 	${RPC} kvs.getroot 71 </dev/null
 '
-test_expect_success 'sync request with empty payload fails with EPROTO(71)' '
-	${RPC} kvs.sync 71 </dev/null
+test_expect_success 'wait-version request with empty payload fails with EPROTO(71)' '
+	${RPC} kvs.wait-version 71 </dev/null
 '
 test_expect_success 'lookup request with empty payload fails with EPROTO(71)' '
 	${RPC} kvs.lookup 71 </dev/null
