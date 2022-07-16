@@ -59,10 +59,10 @@
 
 #include "event.h"
 
-const double batch_timeout = 0.01;
-
 struct event {
     struct job_manager *ctx;
+    flux_msg_handler_t **handlers;
+    double batch_timeout;
     struct event_batch *batch;
     flux_watcher_t *timer;
     zlist_t *pending;
@@ -238,7 +238,7 @@ static int event_batch_start (struct event *event)
     if (!event->batch) {
         if (!(event->batch = event_batch_create (event)))
             return -1;
-        flux_timer_watcher_reset (event->timer, batch_timeout, 0.);
+        flux_timer_watcher_reset (event->timer, event->batch_timeout, 0.);
         flux_watcher_start (event->timer);
     }
     return 0;
@@ -944,6 +944,7 @@ void event_ctx_destroy (struct event *event)
     if (event) {
         int saved_errno = errno;
         flux_watcher_destroy (event->timer);
+        flux_msg_handler_delvec (event->handlers);
         event_batch_commit (event);
         if (event->pending) {
             struct event_batch *batch;
@@ -967,6 +968,35 @@ void event_ctx_destroy (struct event *event)
     }
 }
 
+static void set_timeout_cb (flux_t *h,
+                            flux_msg_handler_t *mh,
+                            const flux_msg_t *msg,
+                            void *arg)
+{
+    struct event *event = arg;
+
+    if (flux_request_unpack (msg,
+                             NULL,
+                             "{s:F}",
+                             "timeout", &event->batch_timeout) < 0)
+        goto error;
+    if (flux_respond (h, msg, NULL) < 0)
+        goto error;
+    return;
+error:
+    if (flux_respond_error (h, msg, errno, NULL) < 0)
+        flux_log_error (h, "flux_msg_respond_error");
+}
+
+static const struct flux_msg_handler_spec htab[] = {
+    { FLUX_MSGTYPE_REQUEST,
+      "job-manager.set-batch-timeout",
+      set_timeout_cb,
+      0
+    },
+    FLUX_MSGHANDLER_TABLE_END,
+};
+
 struct event *event_ctx_create (struct job_manager *ctx)
 {
     struct event *event;
@@ -974,6 +1004,7 @@ struct event *event_ctx_create (struct job_manager *ctx)
     if (!(event = calloc (1, sizeof (*event))))
         return NULL;
     event->ctx = ctx;
+    event->batch_timeout = 0.01;
     if (!(event->timer = flux_timer_watcher_create (flux_get_reactor (ctx->h),
                                                     0.,
                                                     0.,
@@ -986,6 +1017,8 @@ struct event *event_ctx_create (struct job_manager *ctx)
         goto nomem;
     if (!(event->evindex = zhashx_new ()))
         goto nomem;
+    if (flux_msg_handler_addvec (ctx->h, htab, event, &event->handlers) < 0)
+        goto error;
 
     return event;
 nomem:
