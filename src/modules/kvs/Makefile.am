@@ -29,7 +29,9 @@ kvs_la_SOURCES = \
 	kvsroot.h \
 	kvsroot.c \
 	kvs_wait_version.h \
-	kvs_wait_version.c
+	kvs_wait_version.c \
+	kvs_checkpoint.h \
+	kvs_checkpoint.c
 
 kvs_la_LDFLAGS = $(fluxmod_ldflags) -module
 kvs_la_LIBADD = $(top_builddir)/src/common/libkvs/libkvs.la \
