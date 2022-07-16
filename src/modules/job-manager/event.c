@@ -43,6 +43,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libeventlog/eventlog.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/jpath.h"
 #include "ccan/ptrint/ptrint.h"
 #include "ccan/str/str.h"
 
@@ -496,6 +497,24 @@ static int event_handle_dependency (struct job *job,
     return 0;
 }
 
+/* Apply updates to the jobspec copy held in memory by the job manager.  The
+ * context object is a dictionary where the keys are period-delimited paths.
+ * For example, "attributes.system.duration":3600.
+ */
+static int event_handle_jobspec_update (struct job *job, json_t *context)
+{
+    const char *path;
+    json_t *val;
+
+    if (!job->jobspec_redacted)
+        return -1;
+    json_object_foreach (context, path, val) {
+        if (jpath_set (job->jobspec_redacted, path, val) < 0)
+            return -1;
+    }
+    return 0;
+}
+
 static int event_handle_set_flags (struct job *job,
                                    json_t *context)
 {
@@ -600,6 +619,10 @@ int event_job_update (struct job *job, json_t *event)
     }
     else if (streq (name, "validate")) {
         job->state = FLUX_JOB_STATE_DEPEND;
+    }
+    else if (!strcmp (name, "jobspec-update")) {
+        if (event_handle_jobspec_update (job, context) < 0)
+            goto inval;
     }
     else if (!strncmp (name, "dependency-", 11)) {
         if (job->state == FLUX_JOB_STATE_DEPEND

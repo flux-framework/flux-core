@@ -125,6 +125,7 @@ TESTSCRIPTS = \
 	t2217-job-manager-priority-order-limited.t \
 	t2218-job-manager-priority-order-unlimited.t \
 	t2219-job-manager-restart.t \
+	t2220-job-manager-jobspec-default.t \
 	t2230-job-info-lookup.t \
 	t2231-job-info-eventlog-watch.t \
 	t2232-job-info-security.t \
