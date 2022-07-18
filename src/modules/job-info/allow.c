@@ -36,10 +36,14 @@ static int eventlog_get_userid (struct info_ctx *ctx, const char *s,
 
     if (!(a = eventlog_decode (s))) {
         flux_log_error (ctx->h, "%s: eventlog_decode", __FUNCTION__);
+        /* if eventlog improperly formatted, we'll consider this a
+         * protocol error */
+        if (errno == EINVAL)
+            errno = EPROTO;
         goto error;
     }
     if (!(entry = json_array_get (a, 0))) {
-        errno = EINVAL;
+        errno = EPROTO;
         goto error;
     }
     if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
@@ -48,7 +52,7 @@ static int eventlog_get_userid (struct info_ctx *ctx, const char *s,
     }
     if (strcmp (name, "submit") != 0 || !context) {
         flux_log (ctx->h, LOG_ERR, "%s: invalid event: %s", __FUNCTION__, name);
-        errno = EINVAL;
+        errno = EPROTO;
         goto error;
     }
     if (json_unpack (context, "{ s:i }", "userid", &userid) < 0) {
