@@ -94,6 +94,11 @@ int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg,
         return -1;
     if (!(cred.rolemask & FLUX_ROLE_OWNER)) {
         uint32_t userid;
+        /* RFC18: empty eventlog not allowed */
+        if (!s) {
+            errno = EPROTO;
+            return -1;
+        }
         if (eventlog_get_userid (ctx, s, &userid) < 0)
             return -1;
         store_lru (ctx, id, userid);
