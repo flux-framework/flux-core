@@ -14,13 +14,6 @@ AM_CPPFLAGS = \
 fluxmod_LTLIBRARIES = \
 	sched-simple.la
 
-noinst_LTLIBRARIES = \
-	libjj.la
-
-libjj_la_SOURCES = \
-	libjj.h \
-	libjj.c
-
 sched_simple_la_SOURCES = \
 	sched.c
 
@@ -29,9 +22,9 @@ sched_simple_la_LDFLAGS = \
 	-module
 
 sched_simple_la_LIBADD = \
-	libjj.la \
 	$(top_builddir)/src/common/librlist/librlist.la \
 	$(top_builddir)/src/common/libschedutil/libschedutil.la \
+	$(top_builddir)/src/common/libjob/libjob.la \
 	$(top_builddir)/src/common/libflux-internal.la \
 	$(top_builddir)/src/common/libflux-core.la \
 	$(top_builddir)/src/common/libflux-optparse.la \

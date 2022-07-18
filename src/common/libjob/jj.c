@@ -16,7 +16,7 @@
 #include <string.h>
 #include <jansson.h>
 
-#include "libjj.h"
+#include "jj.h"
 
 static int jj_read_level (json_t *o, int level, struct jj_counts *jj);
 
@@ -82,7 +82,7 @@ static int jj_read_level (json_t *o, int level, struct jj_counts *jj)
     return 0;
 }
 
-int libjj_get_counts (const char *spec, struct jj_counts *jj)
+int jj_get_counts (const char *spec, struct jj_counts *jj)
 {
     json_t *o = NULL;
     json_error_t error;
@@ -95,12 +95,12 @@ int libjj_get_counts (const char *spec, struct jj_counts *jj)
         return -1;
     }
 
-    rc = libjj_get_counts_json (o, jj);
+    rc = jj_get_counts_json (o, jj);
     json_decref (o);
     return rc;
 }
 
-int libjj_get_counts_json (json_t *jobspec, struct jj_counts *jj)
+int jj_get_counts_json (json_t *jobspec, struct jj_counts *jj)
 {
     int version;
     json_t *resources = NULL;

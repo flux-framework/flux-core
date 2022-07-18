@@ -735,7 +735,7 @@ disconnect_watcher_la_LIBADD = $(test_ldadd)
 sched_simple_jj_reader_SOURCES = sched-simple/jj-reader.c
 sched_simple_jj_reader_CPPFLAGS = $(test_cppflags)
 sched_simple_jj_reader_LDADD = \
-	$(top_builddir)/src/modules/sched-simple/libjj.la \
+	$(top_builddir)/src/common/libjob/libjob.la \
 	$(test_ldadd)
 sched_simple_jj_reader_LDFLAGS = $(test_ldflags)
 

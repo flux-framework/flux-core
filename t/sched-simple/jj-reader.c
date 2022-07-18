@@ -16,7 +16,7 @@
 
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/read_all.h"
-#include "src/modules/sched-simple/libjj.h"
+#include "src/common/libjob/jj.h"
 
 int main (int ac, char *av[])
 {
@@ -25,7 +25,7 @@ int main (int ac, char *av[])
     log_init ("jj-reader");
     if (read_all (STDIN_FILENO, (void **) &s) < 0)
         log_err_exit ("Failed to read stdin");
-    if (libjj_get_counts (s, &jj) < 0)
+    if (jj_get_counts (s, &jj) < 0)
         log_msg_exit ("%s", jj.error);
     printf ("nnodes=%d nslots=%d slot_size=%d exclusive=%s duration=%.1f\n",
             jj.nnodes,
