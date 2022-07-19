@@ -27,10 +27,11 @@ int main (int ac, char *av[])
         log_err_exit ("Failed to read stdin");
     if (jj_get_counts (s, &jj) < 0)
         log_msg_exit ("%s", jj.error);
-    printf ("nnodes=%d nslots=%d slot_size=%d exclusive=%s duration=%.1f\n",
+    printf ("nnodes=%d nslots=%d slot_size=%d slot_gpus=%d exclusive=%s duration=%.1f\n",
             jj.nnodes,
             jj.nslots,
             jj.slot_size,
+            jj.slot_gpus,
             jj.exclusive ? "true" : "false",
             jj.duration);
     log_fini ();

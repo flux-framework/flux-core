@@ -24,6 +24,7 @@ struct jj_counts {
     int nnodes;    /* total number of nodes requested */
     int nslots;    /* total number of slots requested */
     int slot_size; /* number of cores per slot        */
+    int slot_gpus; /* number of gpus per slot        */
 
     bool exclusive;  /* enable node exclusive allocation if available */
 
