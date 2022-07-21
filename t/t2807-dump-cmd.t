@@ -43,7 +43,9 @@ test_expect_success 'load kvs and create some kvs content' '
 	flux kvs put --no-merge a.b.c=testkey &&
 	flux kvs link linkedthing y &&
 	flux kvs put --no-merge x=$(cat x.val) &&
-	flux kvs link --target-namespace=smurf otherthing z
+	flux kvs link --target-namespace=smurf otherthing z &&
+	flux kvs put --no-merge w= &&
+	flux kvs put --no-merge --append w=foo
 '
 test_expect_success 'unload kvs' '
 	flux module remove kvs
@@ -73,10 +75,12 @@ test_expect_success 'unload content-sqlite' '
 # (1) rootdir 3rd version (y is contained in root)
 # (2) rootdir 4th version + 'x'
 # (1) rootdir 5th version (z is contained in root)
-# Total: 8 blobs
+# (1) rootdir 6th version (w probably contained in root)
+# (3) rootdir 7th version ('w' empty blobref + append to 'w')
+# Total: 12 blobs
 #
-test_expect_success 'count blobs representing those four keys' '
-	echo 8 >blobcount.exp &&
+test_expect_success 'count blobs representing those five keys' '
+	echo 12 >blobcount.exp &&
 	countblobs >blobcount.out &&
 	test_cmp blobcount.exp blobcount.out
 '
@@ -120,7 +124,8 @@ test_expect_success 'verify that exact KVS content was restored' '
 	test $(flux kvs get a.b.c) = "testkey" &&
 	test $(flux kvs get x) = $(cat x.val) &&
 	test $(flux kvs readlink y) = "linkedthing" &&
-	test $(flux kvs readlink z) = "smurf::otherthing"
+	test $(flux kvs readlink z) = "smurf::otherthing" &&
+	test $(flux kvs get w) = "foo"
 '
 test_expect_success 'now restore to key and verify content' '
 	flux restore -v --key zz foo.tar &&
