@@ -138,7 +138,7 @@ static void dump_valref (struct archive *ar,
                                           treeobj_get_blobref (treeobj, i),
                                           content_flags))
             || flux_future_get (f, (const void **)&msg) < 0
-            || flux_msg_get_payload (msg, &data, &len) < 0) {
+            || flux_response_decode_raw (msg, NULL, &data, &len) < 0) {
             log_msg_exit ("%s: missing blobref %d: %s",
                           path,
                           i,
@@ -162,9 +162,10 @@ static void dump_valref (struct archive *ar,
     if (archive_write_header (ar, entry) != ARCHIVE_OK)
         log_msg_exit ("%s", archive_error_string (ar));
     while ((msg = flux_msglist_pop (l))) {
-        if (flux_msg_get_payload (msg, &data, &len) < 0)
-            log_msg_exit ("error processing stashed valref responses");
-        dump_write_data (ar, data, len);
+        if (flux_response_decode_raw (msg, NULL, &data, &len) < 0)
+            log_err_exit ("error processing stashed valref responses");
+        if (len > 0)
+            dump_write_data (ar, data, len);
         flux_msg_decref (msg);
     }
     archive_entry_free (entry);
