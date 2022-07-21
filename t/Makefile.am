@@ -128,6 +128,7 @@ TESTSCRIPTS = \
 	t2219-job-manager-restart.t \
 	t2220-job-manager-jobspec-default.t \
 	t2221-job-manager-limit-duration.t \
+	t2222-job-manager-limit-job-size.t \
 	t2230-job-info-lookup.t \
 	t2231-job-info-eventlog-watch.t \
 	t2232-job-info-security.t \
