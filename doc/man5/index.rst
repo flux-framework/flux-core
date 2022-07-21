@@ -14,3 +14,4 @@ man5
    flux-config-resource
    flux-config-archive
    flux-config-job-manager
+   flux-config-policy

@@ -630,3 +630,5 @@ EDEADLOCK
 setpgrp
 nosetpgrp
 checkpointed
+pbatch
+pdebug
