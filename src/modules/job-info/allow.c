@@ -47,7 +47,7 @@ static int eventlog_get_userid (struct info_ctx *ctx, const char *s,
         goto error;
     }
     if (strcmp (name, "submit") != 0 || !context) {
-        flux_log (ctx->h, LOG_ERR, "%s: invalid event", __FUNCTION__);
+        flux_log (ctx->h, LOG_ERR, "%s: invalid event: %s", __FUNCTION__, name);
         errno = EINVAL;
         goto error;
     }
