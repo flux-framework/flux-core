@@ -204,6 +204,12 @@ static void info_lookup_continuation (flux_future_t *fall, void *arg)
             goto error;
         }
 
+        /* treat empty value as invalid */
+        if (!s) {
+            errno = EPROTO;
+            goto error;
+        }
+
         if (!(str = json_string (s)))
             goto enomem;
 

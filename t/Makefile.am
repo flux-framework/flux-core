@@ -301,6 +301,7 @@ dist_check_SCRIPTS = \
 	issues/t4375-content-flush-hang.sh \
 	issues/t4378-content-flush-force.sh \
 	issues/t4379-dirty-cache-entries-flush.sh \
+	issues/t4413-empty-eventlog.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \

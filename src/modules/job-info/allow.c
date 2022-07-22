@@ -36,10 +36,14 @@ static int eventlog_get_userid (struct info_ctx *ctx, const char *s,
 
     if (!(a = eventlog_decode (s))) {
         flux_log_error (ctx->h, "%s: eventlog_decode", __FUNCTION__);
+        /* if eventlog improperly formatted, we'll consider this a
+         * protocol error */
+        if (errno == EINVAL)
+            errno = EPROTO;
         goto error;
     }
     if (!(entry = json_array_get (a, 0))) {
-        errno = EINVAL;
+        errno = EPROTO;
         goto error;
     }
     if (eventlog_entry_parse (entry, NULL, &name, &context) < 0) {
@@ -47,8 +51,8 @@ static int eventlog_get_userid (struct info_ctx *ctx, const char *s,
         goto error;
     }
     if (strcmp (name, "submit") != 0 || !context) {
-        flux_log_error (ctx->h, "%s: invalid event", __FUNCTION__);
-        errno = EINVAL;
+        flux_log (ctx->h, LOG_ERR, "%s: invalid event: %s", __FUNCTION__, name);
+        errno = EPROTO;
         goto error;
     }
     if (json_unpack (context, "{ s:i }", "userid", &userid) < 0) {
@@ -94,6 +98,11 @@ int eventlog_allow (struct info_ctx *ctx, const flux_msg_t *msg,
         return -1;
     if (!(cred.rolemask & FLUX_ROLE_OWNER)) {
         uint32_t userid;
+        /* RFC18: empty eventlog not allowed */
+        if (!s) {
+            errno = EPROTO;
+            return -1;
+        }
         if (eventlog_get_userid (ctx, s, &userid) < 0)
             return -1;
         store_lru (ctx, id, userid);
