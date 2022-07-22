@@ -4,9 +4,13 @@ test_description='Test flux uri command'
 
 . $(dirname $0)/sharness.sh
 
+# Required to be able to test LSF resolver
+export LSB_JOBID=12345
+
 test_under_flux 2
 
 testssh="${SHARNESS_TEST_SRCDIR}/scripts/tssh"
+
 
 test_expect_success 'flux-uri -h prints list of resolvers' '
 	flux uri --help >help.out >help.out 2>&1 &&
@@ -144,6 +148,22 @@ test_expect_success 'flux-uri mock testing of slurm resolver works' '
 	test "$result" = "$FLUX_URI" &&
 	( export PATH=$(pwd):$PATH REMOTE=t SRUN_FAIL=t &&
 	  test_expect_code 1 flux uri slurm:1234 )
+'
+test_expect_success 'setup fake csm_allocation_query for mock lsf testing' '
+	cat <<-EOF >csm_allocation_query &&
+	#!/bin/sh
+	test -n "\$LSF_FAIL" && exit 4
+	echo "compute_nodes:"
+	echo " - lassen9"
+	echo " - lassen10"
+	EOF
+	chmod +x csm_allocation_query &&
+	export CSM_ALLOCATION_QUERY=$(pwd)/csm_allocation_query &&
+	export FLUX_SSH=${SHARNESS_TEST_SRCDIR}/scripts/tssh
+'
+test_expect_success 'flux-uri mock testing of lsf resolver works' '
+	result=$(flux uri --local lsf:12345) &&
+	test "$result" = "$FLUX_URI"
 '
 test_expect_success 'cleanup jobs' '
 	flux job cancelall -f &&
