@@ -40,6 +40,9 @@ test_expect_success 'scheduler rejects jobs with invalid constraints' '
 	test_must_fail flux mini submit --setattr=system.constraints.and={} \
 		 hostname
 '
+test_expect_success 'scheduler rejects jobs with unsatisfiable constraints' '
+	test_must_fail flux mini submit -N4 --requires=yy hostname
+'
 test_expect_success 'flux-mini: --requires works with scheduler' '
 	flux mini bulksubmit --wait --log=job.{}.id -n1 --requires={} \
 		flux getattr rank \
@@ -59,5 +62,23 @@ test_expect_success 'flux-mini: --requires works with scheduler' '
 	result=$(flux job attach $(cat "job.^xx.id")) &&
 	test_debug "echo ^xx: $result" &&
 	test $result -eq 0 -o $result -eq 1
+'
+test_expect_success 'scheduler does not schedule down nodes with constraints' '
+	flux resource drain 2 &&
+	id=$(flux mini submit -N1 --requires xx,yy flux getattr rank) &&
+	flux job wait-event $id priority &&
+	flux jobs &&
+	test $(flux jobs -no {state} $id) = "SCHED" &&
+	flux resource undrain 2 &&
+	flux job wait-event -vt 5 $id clean
+'
+test_expect_success 'scheduler does not schedule down nodes with constraints' '
+	flux resource drain 0 &&
+	id=$(flux mini submit -N3 --requires yy flux getattr rank) &&
+	flux job wait-event $id priority &&
+	flux jobs &&
+	test $(flux jobs -no {state} $id) = "SCHED" &&
+	flux resource undrain 0 &&
+	flux job wait-event -vt 5 $id clean
 '
 test_done
