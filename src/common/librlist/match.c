@@ -189,7 +189,12 @@ int rnode_match_validate (json_t *constraint, flux_error_t *errp)
 struct rnode *rnode_copy_match (const struct rnode *orig,
                                 json_t *constraint)
 {
-    return rnode_match (orig, constraint) ? rnode_copy (orig) : NULL;
+    struct rnode *n = NULL;
+    if (rnode_match (orig, constraint)) {
+        if ((n = rnode_copy (orig)))
+            n->up = orig->up;
+    }
+    return n;
 }
 
 /* vi: ts=4 sw=4 expandtab
