@@ -24,7 +24,7 @@ test_expect_success 'reload scheduler with properties set' '
 	flux kvs put resource.R="$(flux kvs get resource.R | \
 		flux R set-property xx:2-3 yy:0-2)" &&
 	flux module unload sched-simple &&
-	flux module reload resource &&
+	flux module reload resource noverify &&
 	flux module load sched-simple
 '
 test_expect_success 'reload ingest with feasibility validator' '
