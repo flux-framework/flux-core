@@ -267,6 +267,7 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
     const char *R = NULL;
     char idbuf[64];
     struct timespec t0;
+    json_error_t error;
 
     monotime (&t0);
 
@@ -283,15 +284,22 @@ void job_info_lookup_continuation (flux_future_t *f, void *arg)
         goto out;
     }
 
-    if (json_unpack (job, "{s:I s:i s?:s s:f s?:f s?:f s:f}",
-                     "id", &id,
-                     "userid", &userid,
-                     "ranks", &ranks,
-                     "t_submit", &t_submit,
-                     "t_run", &t_run,
-                     "t_cleanup", &t_cleanup,
-                     "t_inactive", &t_inactive) < 0) {
-        flux_log (ctx->h, LOG_ERR, "%s: parse job", __FUNCTION__);
+    if (json_unpack_ex (job, &error, 0, "{s:I}", "id", &id) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: can't parse job id: %s",
+                  __FUNCTION__, error.text);
+        goto out;
+    }
+
+    if (json_unpack_ex (job, &error, 0,
+                        "{s:i s?:s s:f s?:f s?:f s:f}",
+                        "userid", &userid,
+                        "ranks", &ranks,
+                        "t_submit", &t_submit,
+                        "t_run", &t_run,
+                        "t_cleanup", &t_cleanup,
+                        "t_inactive", &t_inactive) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s: parse job %ju error: %s",
+                  __FUNCTION__, (uintmax_t)id, error.text);
         goto out;
     }
 
