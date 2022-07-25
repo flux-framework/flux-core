@@ -315,8 +315,10 @@ int flux_respond_error (flux_t *h, const flux_msg_t *request,
 {
     flux_msg_t *msg = NULL;
 
-    if (!h || !request || errnum == 0)
+    if (!h || !request)
         goto inval;
+    if (errnum == 0)
+        errnum = EINVAL;
     if (flux_msg_is_noresponse (request))
         return 0;
     msg = flux_response_derive (request, errnum);

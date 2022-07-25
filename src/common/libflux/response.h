@@ -86,7 +86,8 @@ int flux_respond_raw (flux_t *h, const flux_msg_t *request,
                       const void *data, int len);
 
 /* Create an error response to the provided request message with optional
- * error string payload (if errstr is non-NULL).
+ * error string payload (if errstr is non-NULL).  If errnum is zero, EINVAL
+ * is substituted.
  */
 int flux_respond_error (flux_t *h, const flux_msg_t *request,
                         int errnum, const char *errstr);
