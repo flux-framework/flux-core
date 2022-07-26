@@ -20,6 +20,7 @@
 #include "waitqueue.h"
 #include "src/common/libutil/blobref.h"
 #include "src/common/libccan/ccan/list/list.h"
+#include "src/common/libczmqcontainers/czmq_containers.h"
 
 typedef struct kvsroot_mgr kvsroot_mgr_t;
 

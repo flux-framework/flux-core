@@ -34,10 +34,6 @@
 
 #include "kvstxn.h"
 
-#define KVSTXN_PROCESSING      0x01
-#define KVSTXN_MERGED          0x02 /* kvstxn is a merger of transactions */
-#define KVSTXN_MERGE_COMPONENT 0x04 /* kvstxn is member of a merger */
-
 struct kvstxn_mgr {
     struct cache *cache;
     const char *ns_name;
@@ -55,7 +51,8 @@ struct kvstxn {
     json_t *ops;
     json_t *keys;
     json_t *names;
-    int flags;
+    int flags;                  /* kvs flags from request caller */
+    int internal_flags;         /* special kvstxn api internal flags */
     json_t *rootcpy;   /* working copy of root dir */
     const json_t *rootdir;      /* source of rootcpy above */
     struct cache_entry *entry;  /* for reference counting rootdir above */
@@ -65,7 +62,9 @@ struct kvstxn {
     zlist_t *dirty_cache_entries_list;
     flux_future_t *f_sync_content_flush;
     flux_future_t *f_sync_checkpoint;
-    int internal_flags;
+    bool processing;            /* kvstxn is being processed */
+    bool merged;                /* kvstxn is a merger of transactions */
+    bool merge_component;       /* kvstxn is member of a merger */
     kvstxn_mgr_t *ktm;
     /* State transitions
      *
@@ -125,7 +124,8 @@ static void kvstxn_destroy (kvstxn_t *kt)
 static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
                                 const char *name,
                                 json_t *ops,
-                                int flags)
+                                int flags,
+                                int internal_flags)
 {
     kvstxn_t *kt;
 
@@ -151,6 +151,7 @@ static kvstxn_t *kvstxn_create (kvstxn_mgr_t *ktm,
         }
     }
     kt->flags = flags;
+    kt->internal_flags = internal_flags;
     if (!(kt->missing_refs_list = zlist_new ()))
         goto error_enomem;
     zlist_autofree (kt->missing_refs_list);
@@ -183,7 +184,7 @@ int kvstxn_set_aux_errnum (kvstxn_t *kt, int errnum)
 
 bool kvstxn_fallback_mergeable (kvstxn_t *kt)
 {
-    if (kt->internal_flags & KVSTXN_MERGED)
+    if (kt->merged)
         return true;
     return false;
 }
@@ -201,6 +202,11 @@ json_t *kvstxn_get_names (kvstxn_t *kt)
 int kvstxn_get_flags (kvstxn_t *kt)
 {
     return kt->flags;
+}
+
+int kvstxn_get_internal_flags (kvstxn_t *kt)
+{
+    return kt->internal_flags;
 }
 
 const char *kvstxn_get_namespace (kvstxn_t *kt)
@@ -842,7 +848,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
     if (kt->errnum)
         return KVSTXN_PROCESS_ERROR;
 
-    if (!(kt->internal_flags & KVSTXN_PROCESSING)) {
+    if (!kt->processing) {
         kt->errnum = EINVAL;
         return KVSTXN_PROCESS_ERROR;
     }
@@ -1243,11 +1249,15 @@ void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm)
 int kvstxn_mgr_add_transaction (kvstxn_mgr_t *ktm,
                                 const char *name,
                                 json_t *ops,
-                                int flags)
+                                int flags,
+                                int internal_flags)
 {
     kvstxn_t *kt;
+    int valid_internal_flags = KVSTXN_INTERNAL_FLAG_NO_PUBLISH;
 
-    if (!name || !ops) {
+    if (!name
+        || !ops
+        || (internal_flags & ~valid_internal_flags)) {
         errno = EINVAL;
         return -1;
     }
@@ -1255,7 +1265,8 @@ int kvstxn_mgr_add_transaction (kvstxn_mgr_t *ktm,
     if (!(kt = kvstxn_create (ktm,
                               name,
                               ops,
-                              flags)))
+                              flags,
+                              internal_flags)))
         return -1;
 
     if (zlist_append (ktm->ready, kt) < 0) {
@@ -1281,7 +1292,7 @@ kvstxn_t *kvstxn_mgr_get_ready_transaction (kvstxn_mgr_t *ktm)
 {
     if (kvstxn_mgr_transaction_ready (ktm)) {
         kvstxn_t *kt = zlist_first (ktm->ready);
-        kt->internal_flags |= KVSTXN_PROCESSING;
+        kt->processing = true;
         return kt;
     }
     return NULL;
@@ -1290,19 +1301,19 @@ kvstxn_t *kvstxn_mgr_get_ready_transaction (kvstxn_mgr_t *ktm)
 void kvstxn_mgr_remove_transaction (kvstxn_mgr_t *ktm, kvstxn_t *kt,
                                     bool fallback)
 {
-    if (kt->internal_flags & KVSTXN_PROCESSING) {
+    if (kt->processing) {
         bool kvstxn_is_merged = false;
 
-        if (kt->internal_flags & KVSTXN_MERGED)
+        if (kt->merged)
             kvstxn_is_merged = true;
 
         zlist_remove (ktm->ready, kt);
 
         if (kvstxn_is_merged) {
             kvstxn_t *kt_tmp = zlist_first (ktm->ready);
-            while (kt_tmp && (kt_tmp->internal_flags & KVSTXN_MERGE_COMPONENT)) {
+            while (kt_tmp && kt_tmp->merge_component) {
                 if (fallback) {
-                    kt_tmp->internal_flags &= ~KVSTXN_MERGE_COMPONENT;
+                    kt_tmp->merge_component = false;
                     kt_tmp->flags |= FLUX_KVS_NO_MERGE;
                 }
                 else
@@ -1408,18 +1419,23 @@ int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
         || first->aux_errnum != 0
         || first->state > KVSTXN_STATE_APPLY_OPS
         || kvstxn_no_merge (first)
-        || first->internal_flags & KVSTXN_MERGED)
+        || first->merged)
         return 0;
 
     second = zlist_next (ktm->ready);
     if (!second
         || kvstxn_no_merge (second)
-        || (first->flags != second->flags))
+        || (first->flags != second->flags)
+        || (first->internal_flags != second->internal_flags))
         return 0;
 
-    if (!(new = kvstxn_create (ktm, NULL, NULL, first->flags)))
+    if (!(new = kvstxn_create (ktm,
+                               NULL,
+                               NULL,
+                               first->flags,
+                               first->internal_flags)))
         return -1;
-    new->internal_flags |= KVSTXN_MERGED;
+    new->merged = true;
 
     nextkt = zlist_first (ktm->ready);
     do {
@@ -1451,11 +1467,10 @@ int kvstxn_mgr_merge_ready_transactions (kvstxn_mgr_t *ktm)
     nextkt = zlist_first (ktm->ready);
     nextkt = zlist_next (ktm->ready);
     do {
-        /* Wipe out KVSTXN_PROCESSING flag if user previously got
-         * the kvstxn_t
+        /* reset processing flag if user previously got the kvstxn_t
          */
-        nextkt->internal_flags &= ~KVSTXN_PROCESSING;
-        nextkt->internal_flags |= KVSTXN_MERGE_COMPONENT;
+        nextkt->processing = false;
+        nextkt->merge_component = true;
     } while (--count && (nextkt = zlist_next (ktm->ready)));
 
     return 0;

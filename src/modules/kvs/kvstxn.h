@@ -27,6 +27,16 @@ typedef enum {
     KVSTXN_PROCESS_FINISHED = 6,
 } kvstxn_process_t;
 
+/* api flags, to be used with kvstxn_mgr_add_transaction()
+ *
+ * KVSTXN_INTERNAL_FLAG_NO_PUBLISH - Indicate that this transaction
+ * should not publish its change after the transaction completes.
+ * Note that kvstxn does not use this flag internally, users can check
+ * that it has been set via kvstxn_get_internal_flags().
+ */
+
+#define KVSTXN_INTERNAL_FLAG_NO_PUBLISH 0x01
+
 /*
  * kvstxn_t API
  */
@@ -60,6 +70,7 @@ bool kvstxn_fallback_mergeable (kvstxn_t *kt);
 json_t *kvstxn_get_ops (kvstxn_t *kt);
 json_t *kvstxn_get_names (kvstxn_t *kt);
 int kvstxn_get_flags (kvstxn_t *kt);
+int kvstxn_get_internal_flags (kvstxn_t *kt);
 
 /* returns namespace passed into kvstxn_mgr_create() */
 const char *kvstxn_get_namespace (kvstxn_t *kt);
@@ -155,7 +166,8 @@ void kvstxn_mgr_destroy (kvstxn_mgr_t *ktm);
 int kvstxn_mgr_add_transaction (kvstxn_mgr_t *ktm,
                                 const char *name,
                                 json_t *ops,
-                                int flags);
+                                int flags,
+                                int internal_flags);
 
 /* returns true if there is a transaction ready for processing and is
  * not blocked, false if not.

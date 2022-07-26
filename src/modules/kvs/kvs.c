@@ -29,11 +29,13 @@
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/tstat.h"
 #include "src/common/libutil/timestamp.h"
+#include "src/common/libutil/errprintf.h"
 #include "src/common/libkvs/treeobj.h"
 #include "src/common/libkvs/kvs_checkpoint.h"
 #include "src/common/libkvs/kvs_txn_private.h"
 #include "src/common/libkvs/kvs_util_private.h"
 #include "src/common/libcontent/content.h"
+#include "src/common/libutil/fsd.h"
 
 #include "waitqueue.h"
 #include "cache.h"
@@ -43,6 +45,7 @@
 #include "kvstxn.h"
 #include "kvsroot.h"
 #include "kvs_wait_version.h"
+#include "kvs_checkpoint.h"
 
 /* heartbeat_sync_cb() is called periodically to manage cached content
  * and namespaces.  Synchronize with the system heartbeat if possible,
@@ -73,6 +76,7 @@ struct kvs_ctx {
     bool events_init;            /* flag */
     const char *hash_name;
     unsigned int seq;           /* for commit transactions */
+    kvs_checkpoint_t *kcp;
     struct list_head work_queue;
 };
 
@@ -89,6 +93,8 @@ static void transaction_prep_cb (flux_reactor_t *r, flux_watcher_t *w,
 static void transaction_check_cb (flux_reactor_t *r, flux_watcher_t *w,
                                   int revents, void *arg);
 static void start_root_remove (struct kvs_ctx *ctx, const char *ns);
+static void work_queue_check_append (struct kvs_ctx *ctx,
+                                     struct kvsroot *root);
 static void kvstxn_apply (kvstxn_t *kt);
 
 /*
@@ -103,9 +109,17 @@ static void kvs_ctx_destroy (struct kvs_ctx *ctx)
         flux_watcher_destroy (ctx->prep_w);
         flux_watcher_destroy (ctx->check_w);
         flux_watcher_destroy (ctx->idle_w);
+        kvs_checkpoint_destroy (ctx->kcp);
         free (ctx);
         errno = saved_errno;
     }
+}
+
+static void work_queue_check_append_wrapper (struct kvsroot *root,
+                                             void *arg)
+{
+    struct kvs_ctx *ctx = arg;
+    work_queue_check_append (ctx, root);
 }
 
 static struct kvs_ctx *kvs_ctx_create (flux_t *h)
@@ -138,6 +152,13 @@ static struct kvs_ctx *kvs_ctx_create (flux_t *h)
             goto error;
         flux_watcher_start (ctx->prep_w);
         flux_watcher_start (ctx->check_w);
+        ctx->kcp = kvs_checkpoint_create (h,
+                                          NULL, /* set later */
+                                          0.0,  /* default 0.0, set later */
+                                          work_queue_check_append_wrapper,
+                                          ctx);
+        if (!ctx->kcp)
+            goto error;
     }
     ctx->transaction_merge = 1;
     list_head_init (&ctx->work_queue);
@@ -1044,6 +1065,7 @@ static void kvstxn_apply (kvstxn_t *kt)
 done:
     if (errnum == 0) {
         json_t *names = kvstxn_get_names (kt);
+        int internal_flags = kvstxn_get_internal_flags (kt);
         int count;
         if ((count = json_array_size (names)) > 1) {
             int opcount = 0;
@@ -1051,8 +1073,10 @@ done:
             flux_log (ctx->h, LOG_DEBUG, "aggregated %d transactions (%d ops)",
                       count, opcount);
         }
-        setroot (ctx, root, kvstxn_get_newroot_ref (kt), root->seq + 1);
-        setroot_event_send (ctx, root, names, kvstxn_get_keys (kt));
+        if (!(internal_flags & KVSTXN_INTERNAL_FLAG_NO_PUBLISH)) {
+            setroot (ctx, root, kvstxn_get_newroot_ref (kt), root->seq + 1);
+            setroot_event_send (ctx, root, names, kvstxn_get_keys (kt));
+        }
     } else {
         fallback = kvstxn_fallback_mergeable (kt);
 
@@ -1570,7 +1594,7 @@ static void relaycommit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         goto error;
     }
 
-    if (kvstxn_mgr_add_transaction (root->ktm, name, ops, flags) < 0) {
+    if (kvstxn_mgr_add_transaction (root->ktm, name, ops, flags, 0) < 0) {
         flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                         __FUNCTION__);
         goto error;
@@ -1651,7 +1675,8 @@ static void commit_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (kvstxn_mgr_add_transaction (root->ktm,
                                         treq_get_name (tr),
                                         ops,
-                                        flags) < 0) {
+                                        flags,
+                                        0) < 0) {
             flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                             __FUNCTION__);
             goto error;
@@ -1749,7 +1774,8 @@ static void relayfence_request_cb (flux_t *h, flux_msg_handler_t *mh,
         if (kvstxn_mgr_add_transaction (root->ktm,
                                         treq_get_name (tr),
                                         treq_get_ops (tr),
-                                        treq_get_flags (tr)) < 0) {
+                                        treq_get_flags (tr),
+                                        0) < 0) {
             flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                             __FUNCTION__);
             goto error;
@@ -1856,7 +1882,8 @@ static void fence_request_cb (flux_t *h, flux_msg_handler_t *mh,
             if (kvstxn_mgr_add_transaction (root->ktm,
                                             treq_get_name (tr),
                                             treq_get_ops (tr),
-                                            treq_get_flags (tr)) < 0) {
+                                            treq_get_flags (tr),
+                                            0) < 0) {
                 flux_log_error (h, "%s: kvstxn_mgr_add_transaction",
                                 __FUNCTION__);
                 goto error;
@@ -2698,6 +2725,30 @@ error:
         flux_log_error (h, "%s: flux_respond_error", __FUNCTION__);
 }
 
+static void config_reload_cb (flux_t *h,
+                              flux_msg_handler_t *mh,
+                              const flux_msg_t *msg,
+                              void *arg)
+{
+    struct kvs_ctx *ctx = arg;
+    const flux_conf_t *conf;
+    const char *errstr = NULL;
+    flux_error_t error;
+
+    if (flux_conf_reload_decode (msg, &conf) < 0)
+        goto error;
+    if (kvs_checkpoint_reload (ctx->kcp, conf, &error) < 0) {
+        errstr = error.text;
+        goto error;
+    }
+    if (flux_respond (h, msg, NULL) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+    return;
+ error:
+    if (flux_respond_error (h, msg, errno, errstr) < 0)
+        flux_log_error (h, "error responding to config-reload request");
+}
+
 /* see comments above in event_subscribe() regarding event
  * subscriptions to kvs.namespace */
 static const struct flux_msg_handler_spec htab[] = {
@@ -2735,8 +2786,21 @@ static const struct flux_msg_handler_spec htab[] = {
                             setroot_pause_request_cb, FLUX_ROLE_USER },
     { FLUX_MSGTYPE_REQUEST, "kvs.setroot-unpause",
                             setroot_unpause_request_cb, FLUX_ROLE_USER },
+    { FLUX_MSGTYPE_REQUEST, "kvs.config-reload", config_reload_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
+
+static int process_config (struct kvs_ctx *ctx)
+{
+    flux_error_t error;
+    if (kvs_checkpoint_config_parse (ctx->kcp,
+                                     flux_get_conf (ctx->h),
+                                     &error) < 0) {
+        flux_log (ctx->h, LOG_ERR, "%s", error.text);
+        return -1;
+    }
+    return 0;
+}
 
 static void process_args (struct kvs_ctx *ctx, int ac, char **av)
 {
@@ -2891,6 +2955,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error creating KVS context");
         goto done;
     }
+    if (process_config (ctx) < 0)
+        goto done;
     process_args (ctx, argc, argv);
     if (ctx->rank == 0) {
         struct kvsroot *root;
@@ -2934,6 +3000,8 @@ int mod_main (flux_t *h, int argc, char **argv)
             flux_log_error (h, "event_subscribe");
             goto done;
         }
+
+        kvs_checkpoint_update_root_primary (ctx->kcp, root);
     }
     if (flux_msg_handler_addvec (h, htab, ctx, &handlers) < 0) {
         flux_log_error (h, "flux_msg_handler_addvec");
@@ -2947,6 +3015,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "error starting heartbeat synchronization");
         goto done;
     }
+    kvs_checkpoint_start (ctx->kcp);
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done;
