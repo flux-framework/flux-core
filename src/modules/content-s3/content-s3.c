@@ -228,7 +228,8 @@ static void config_reload_cb (flux_t *h,
         goto error;
     }
     free (cfg);
-    flux_log (h, LOG_WARNING, "config-reload: changes will not take effect until next flux restart");
+    flux_log (h, LOG_WARNING, "config-reload: changes will not take effect "
+                              "until next flux restart");
 
     if (flux_set_conf (h, flux_conf_incref (conf)) < 0) {
         errstr = "error updating cached configuration";
@@ -290,7 +291,10 @@ error:
  * The raw response payload is a hash digest.
  * These payloads are specified in RFC 10.
  */
-void store_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void store_cb (flux_t *h,
+               flux_msg_handler_t *mh,
+               const flux_msg_t *msg,
+               void *arg)
 {
     struct content_s3 *ctx = arg;
     const void *data;
@@ -332,7 +336,10 @@ error:
  * is padded with an extra NULL not included in the returned length,
  * so it is safe to use the result as a string argument in flux_respond_pack().
  */
-void checkpoint_get_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void checkpoint_get_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
 {
     const char *errstr = NULL;
     struct content_s3 *ctx = arg;
@@ -361,7 +368,8 @@ void checkpoint_get_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg
                            "value",
                            o) < 0) {
         errno = EIO;
-        flux_log_error (h, "error responding to kvs-checkpoint.get request (pack)");
+        flux_log_error (h,
+                        "error responding to kvs-checkpoint.get request (pack)");
     }
     free (data);
     json_decref (o);
@@ -377,7 +385,10 @@ error:
 /* Handle a kvs-checkpoint.put request from the rank 0 kvs module.
  * The KVS stores its last root reference here for restart purposes.
  */
-void checkpoint_put_cb (flux_t *h, flux_msg_handler_t *mh, const flux_msg_t *msg, void *arg)
+void checkpoint_put_cb (flux_t *h,
+                        flux_msg_handler_t *mh,
+                        const flux_msg_t *msg,
+                        void *arg)
 {
     struct content_s3 *ctx = arg;
     const char *key;
