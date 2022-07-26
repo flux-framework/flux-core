@@ -51,7 +51,7 @@ building the payload using variable arguments with a format string in
 the style of jansson's ``json_pack()`` (used internally).
 
 ``flux_respond_error()`` returns an error response to the sender.
-*errnum* must be non-zero. If *errmsg* is non-NULL, an error string
+If *errnum* is zero, EINVAL is used.  If *errmsg* is non-NULL, an error string
 payload is included in the response. The error string may be used to
 provide a more detailed error message than can be conveyed via *errnum*.
 
