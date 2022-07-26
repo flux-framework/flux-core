@@ -255,7 +255,7 @@ static json_t *generate_update (json_t *defaults, json_t *jobspec)
          */
         if (val != NULL
             && streq (key, "duration")
-            && json_real_value (val) == 0)
+            && json_number_value (val) == 0)
             val = NULL;
 
         if (val == NULL) {
