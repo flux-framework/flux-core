@@ -185,7 +185,7 @@ void joblist_pane_enter (struct joblist_pane *joblist)
     /*  Lazily attempt to run top on jobid, but for now simply return to the
      *   original top window on failure.
      */
-    if ((top = top_create (uri, title)))
+    if ((top = top_create (uri, title, NULL)))
         top_run (top, 0);
     top_destroy (top);
     return;
