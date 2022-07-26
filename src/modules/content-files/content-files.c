@@ -23,21 +23,22 @@
  * content-backing.store:
  * Given a blob, store it and return its hash
  *
- * kvs-checkpoint.get:
+ * content-backing.checkpoint-get:
  * Given a string key, lookup string value and return it or a "not found" error.
  *
- * kvs-checkpoint.put:
+ * content-backing.checkpoint-put:
  * Given a string key and string value, store it and return.
  * If the key exists, overwrite.
  *
  * The content operations are per RFC 10 and are the main storage behind
  * the Flux KVS.
  *
- * The kvs-checkpoint operations allow the current KVS root reference to
- * be saved/restored along with the content so it can persist across a Flux
- * instance restart.  Multiple KVS namespaces (each with an independent root)
- * are technically supported, although currently only the main KVS namespace
- * is saved/restored by the KVS module.
+ * The content-backing.checkpoint operations allow the current KVS
+ * root reference to be saved/restored along with the content so it
+ * can persist across a Flux instance restart.  Multiple KVS
+ * namespaces (each with an independent root) are technically
+ * supported, although currently only the main KVS namespace is
+ * saved/restored by the KVS module.
  *
  * The main client of this module is the rank 0 content-cache.  The content
  * cache is hierarchical:  each broker resolves missing content-cache entries
@@ -192,7 +193,7 @@ error:
         flux_log_error (h, "error responding to store request");
 }
 
-/* Handle a kvs-checkpoint.get request from the rank 0 kvs module.
+/* Handle a content-backing.checkpoint-get request from the rank 0 kvs module.
  * The KVS stores its last root reference here for restart purposes.
  *
  * N.B. filedb_get() calls read_all() which ensures that the returned buffer
@@ -227,18 +228,18 @@ void checkpoint_get_cb (flux_t *h,
                            "{s:O}",
                            "value",
                            o) < 0)
-        flux_log_error (h, "error responding to kvs-checkpoint.get request");
+        flux_log_error (h, "error responding to checkpoint-get request");
     free (data);
     json_decref (o);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to kvs-checkpoint.get request");
+        flux_log_error (h, "error responding to checkpoint-get request");
     free (data);
     json_decref (o);
 }
 
-/* Handle a kvs-checkpoint.put request from the rank 0 kvs module.
+/* Handle a content-backing.checkpoint-put request from the rank 0 kvs module.
  * The KVS stores its last root reference here for restart purposes.
  */
 void checkpoint_put_cb (flux_t *h,
@@ -268,12 +269,12 @@ void checkpoint_put_cb (flux_t *h,
     if (filedb_put (ctx->dbpath, key, value, strlen (value), &errstr) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to kvs-checkpoint.put request");
+        flux_log_error (h, "error responding to checkpoint-put request");
     free (value);
     return;
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to kvs-checkpoint.put request");
+        flux_log_error (h, "error responding to checkpoint-put request");
     free (value);
 }
 
@@ -296,8 +297,8 @@ static void content_files_destroy (struct content_files *ctx)
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "content-backing.load",    load_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.get", checkpoint_get_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.put", checkpoint_put_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-get", checkpoint_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-put", checkpoint_put_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-files.stats.get", stats_get_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -395,8 +396,6 @@ int mod_main (flux_t *h, int argc, char **argv)
         return -1;
     }
     if (content_register_service (h, "content-backing") < 0)
-        goto done;
-    if (content_register_service (h, "kvs-checkpoint") < 0)
         goto done;
     if (!testing) {
         if (content_register_backing_store (h, "content-files") < 0)

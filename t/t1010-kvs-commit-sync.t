@@ -16,8 +16,8 @@ test_under_flux ${SIZE} minimal
 
 TESTNAMESPACE="testnamespace"
 
-kvs_checkpoint_get() {
-        jq -j -c -n  "{key:\"$1\"}" | $RPC kvs-checkpoint.get
+checkpoint_get() {
+        jq -j -c -n  "{key:\"$1\"}" | $RPC content-backing.checkpoint-get
 }
 
 test_expect_success 'load content-sqlite and kvs and add some data' '
@@ -28,7 +28,7 @@ test_expect_success 'load content-sqlite and kvs and add some data' '
 '
 
 test_expect_success 'kvs: no checkpoint of kvs-primary should exist yet' '
-        test_must_fail kvs_checkpoint_get kvs-primary
+        test_must_fail checkpoint_get kvs-primary
 '
 
 test_expect_success 'kvs: put some data to kvs and sync it' '
@@ -36,11 +36,11 @@ test_expect_success 'kvs: put some data to kvs and sync it' '
 '
 
 test_expect_success 'kvs: checkpoint of kvs-primary should exist now' '
-        kvs_checkpoint_get kvs-primary
+        checkpoint_get kvs-primary
 '
 
 test_expect_success 'kvs: checkpoint of kvs-primary should match rootref' '
-        kvs_checkpoint_get kvs-primary | jq -r .value.rootref > checkpoint.out &&
+        checkpoint_get kvs-primary | jq -r .value.rootref > checkpoint.out &&
         test_cmp syncblob.out checkpoint.out
 '
 
@@ -50,7 +50,7 @@ test_expect_success 'kvs: fence some data to kvs and sync it' '
 
 test_expect_success 'kvs: rootref of kvs-primary should match rootref' '
         flux kvs getroot -b > fenceroot.exp &&
-        kvs_checkpoint_get kvs-primary | jq -r .value.rootref > fenceroot.out &&
+        checkpoint_get kvs-primary | jq -r .value.rootref > fenceroot.out &&
         test_cmp fenceroot.exp fenceroot.out
 '
 

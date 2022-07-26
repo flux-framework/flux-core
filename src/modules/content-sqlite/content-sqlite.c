@@ -732,8 +732,10 @@ static void content_sqlite_destroy (struct content_sqlite *ctx)
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "content-backing.load",    load_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.get", checkpoint_get_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.put", checkpoint_put_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-get",
+                            checkpoint_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-put",
+                            checkpoint_put_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-sqlite.stats.get", stats_get_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -838,8 +840,6 @@ int mod_main (flux_t *h, int argc, char **argv)
     if (content_sqlite_opendb (ctx, truncate) < 0)
         goto done;
     if (content_register_service (h, "content-backing") < 0)
-        goto done;
-    if (content_register_service (h, "kvs-checkpoint") < 0)
         goto done;
     if (content_register_backing_store (h, "content-sqlite") < 0)
         goto done;

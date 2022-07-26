@@ -37,7 +37,7 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
         timestamp = flux_reactor_now (flux_get_reactor (h));
 
     if (!(f = flux_rpc_pack (h,
-                             "kvs-checkpoint.put",
+                             "content-backing.checkpoint-put",
                              0,
                              0,
                              "{s:s s:{s:i s:s s:f}}",
@@ -62,7 +62,7 @@ flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key)
         key = KVS_DEFAULT_CHECKPOINT;
 
     return flux_rpc_pack (h,
-                          "kvs-checkpoint.get",
+                          "content-backing.checkpoint-get",
                           0,
                           0,
                           "{s:s}",

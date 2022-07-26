@@ -329,7 +329,7 @@ error:
         flux_log_error (h, "error responding to store request");
 }
 
-/* Handle a kvs-checkpoint.get request from the rank 0 kvs module.
+/* Handle a content-backing.checkpoint-get request from the rank 0 kvs module.
  * The KVS stores its last root reference here for restart purposes.
  *
  * N.B. filedb_get() calls read_all() which ensures that the returned buffer
@@ -368,8 +368,7 @@ void checkpoint_get_cb (flux_t *h,
                            "value",
                            o) < 0) {
         errno = EIO;
-        flux_log_error (h,
-                        "error responding to kvs-checkpoint.get request (pack)");
+        flux_log_error (h, "error responding to checkpoint-get request (pack)");
     }
     free (data);
     json_decref (o);
@@ -377,12 +376,12 @@ void checkpoint_get_cb (flux_t *h,
 
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to kvs-checkpoint.get request");
+        flux_log_error (h, "error responding to checkpoint-get request");
     free (data);
     json_decref (o);
 }
 
-/* Handle a kvs-checkpoint.put request from the rank 0 kvs module.
+/* Handle a content-backing.checkpoint-put request from the rank 0 kvs module.
  * The KVS stores its last root reference here for restart purposes.
  */
 void checkpoint_put_cb (flux_t *h,
@@ -412,13 +411,13 @@ void checkpoint_put_cb (flux_t *h,
     if (s3_put (ctx->cfg, key, value, strlen (value), &errstr) < 0)
         goto error;
     if (flux_respond (h, msg, NULL) < 0)
-        flux_log_error (h, "error responding to kvs-checkpoint.put request (pack)");
+        flux_log_error (h, "error responding to checkpoint-put request (pack)");
     free (value);
     return;
 
 error:
     if (flux_respond_error (h, msg, errno, errstr) < 0)
-        flux_log_error (h, "error responding to kvs-checkpoint.put request");
+        flux_log_error (h, "error responding to checkpoint-put request");
     free (value);
 }
 
@@ -428,8 +427,10 @@ error:
 static const struct flux_msg_handler_spec htab[] = {
     { FLUX_MSGTYPE_REQUEST, "content-backing.load",    load_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-backing.store",   store_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.get", checkpoint_get_cb, 0 },
-    { FLUX_MSGTYPE_REQUEST, "kvs-checkpoint.put", checkpoint_put_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-get",
+                            checkpoint_get_cb, 0 },
+    { FLUX_MSGTYPE_REQUEST, "content-backing.checkpoint-put",
+                            checkpoint_put_cb, 0 },
     { FLUX_MSGTYPE_REQUEST, "content-s3.config-reload", config_reload_cb, 0 },
     FLUX_MSGHANDLER_TABLE_END,
 };
@@ -509,8 +510,6 @@ int mod_main (flux_t *h, int argc, char **argv)
         return -1;
     }
     if (content_register_service (h, "content-backing") < 0)
-        goto done;
-    if (content_register_service (h, "kvs-checkpoint") < 0)
         goto done;
     if (content_register_backing_store (h, "content-s3") < 0)
         goto done;

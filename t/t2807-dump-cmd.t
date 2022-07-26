@@ -23,7 +23,7 @@ test_expect_success 'flux-restore with no args prints Usage message' '
 '
 test_expect_success 'flux-dump with no backing store fails' '
 	test_must_fail flux dump --checkpoint foo.tar 2>nostore.err &&
-	grep "No service matching kvs-checkpoint.get" nostore.err
+	grep "No service matching content-backing.checkpoint-get" nostore.err
 '
 test_expect_success 'flux-dump with bad archive file fails' '
 	test_must_fail flux dump /badfile.tar 2>badfile.err &&

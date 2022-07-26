@@ -15,21 +15,21 @@ export FLUX_CONF_DIR=$(pwd)
 SIZE=4
 test_under_flux ${SIZE} minimal
 
-kvs_checkpoint_get() {
+checkpoint_get() {
 	jq -j -c -n  "{key:\"$1\"}" \
-	    | $RPC kvs-checkpoint.get \
+	    | $RPC content-backing.checkpoint-get \
 	    | jq -r .value.rootref
 }
 
 # arg1 - old ref
 # arg2 - timeout (seconds)
-kvs_checkpoint_changed() {
+checkpoint_changed() {
 	old_ref=$1
 	local i=0
 	local iters=$(($2 * 10))
 	while [ $i -lt ${iters} ]
 	do
-	    ref=$(kvs_checkpoint_get kvs-primary)
+	    ref=$(checkpoint_get kvs-primary)
 	    if [ "${old_ref}" != "${ref}" ]
 	    then
 		return 0
@@ -65,8 +65,8 @@ test_expect_success 'kvs: put some more data to kvs (1)' '
 '
 
 test_expect_success 'kvs: checkpoint of kvs-primary should change in time (1)' '
-	kvs_checkpoint_changed $(cat blob1.out) 5 &&
-	kvs_checkpoint_get kvs-primary > checkpoint2.out &&
+	checkpoint_changed $(cat blob1.out) 5 &&
+	checkpoint_get kvs-primary > checkpoint2.out &&
 	test_cmp checkpoint2.out blob2.out
 '
 
@@ -75,8 +75,8 @@ test_expect_success 'kvs: put some more data to kvs (2)' '
 '
 
 test_expect_success 'kvs: checkpoint of kvs-primary should change in time (2)' '
-	kvs_checkpoint_changed $(cat blob2.out) 5 &&
-	kvs_checkpoint_get kvs-primary > checkpoint3.out &&
+	checkpoint_changed $(cat blob2.out) 5 &&
+	checkpoint_get kvs-primary > checkpoint3.out &&
 	test_cmp checkpoint3.out blob3.out
 '
 
@@ -86,7 +86,7 @@ test_expect_success 'kvs: put some data to non-primary namespace' '
 '
 
 test_expect_success 'kvs: checkpoint of kvs-primary should not change (1)' '
-	test_must_fail kvs_checkpoint_changed $(cat blob3.out) 2
+	test_must_fail checkpoint_changed $(cat blob3.out) 2
 '
 
 test_expect_success 'configure bad checkpoint-period timer in kvs on reload' '
@@ -110,7 +110,7 @@ test_expect_success 'kvs: put some more data to kvs (3)' '
 '
 
 test_expect_success 'kvs: checkpoint of kvs-primary should not change (2)' '
-	test_must_fail kvs_checkpoint_changed $(cat blob3.out) 2
+	test_must_fail checkpoint_changed $(cat blob3.out) 2
 '
 
 test_expect_success 're-config checkpoint-period timer, set small period' '
@@ -122,8 +122,8 @@ test_expect_success 're-config checkpoint-period timer, set small period' '
 '
 
 test_expect_success 'kvs: checkpoint of kvs-primary should change in time (3)' '
-	kvs_checkpoint_changed $(cat blob3.out) 5 &&
-	kvs_checkpoint_get kvs-primary > checkpoint4.out &&
+	checkpoint_changed $(cat blob3.out) 5 &&
+	checkpoint_get kvs-primary > checkpoint4.out &&
 	test_cmp checkpoint4.out blob4.out
 '
 
@@ -140,7 +140,7 @@ test_expect_success 'kvs: put some more data to kvs (4)' '
 '
 
 test_expect_success 'kvs: checkpoint of kvs-primary should not change (3)' '
-	test_must_fail kvs_checkpoint_changed $(cat blob4.out) 2
+	test_must_fail checkpoint_changed $(cat blob4.out) 2
 '
 
 test_expect_success 're-config checkpoint-period timer in kvs, re-enable it' '
@@ -152,8 +152,8 @@ test_expect_success 're-config checkpoint-period timer in kvs, re-enable it' '
 '
 
 test_expect_success 'kvs: checkpoint of kvs-primary should change in time (4)' '
-	kvs_checkpoint_changed $(cat blob4.out) 5 &&
-	kvs_checkpoint_get kvs-primary > checkpoint5.out &&
+	checkpoint_changed $(cat blob4.out) 5 &&
+	checkpoint_get kvs-primary > checkpoint5.out &&
 	test_cmp checkpoint5.out blob5.out
 '
 
