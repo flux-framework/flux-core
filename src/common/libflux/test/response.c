@@ -19,11 +19,13 @@ int main (int argc, char *argv[])
 {
     flux_t *h;
     flux_msg_t *msg;
+    flux_msg_t *msg2;
     const char *topic, *s;
     const char *json_str = "{\"a\":42}";
     const void *d;
     const char data[] = "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb";
     int l, len = strlen (data);
+    int errnum;
 
     plan (NO_PLAN);
 
@@ -166,6 +168,22 @@ int main (int argc, char *argv[])
     errno = 0;
     ok (flux_respond_error (h, NULL, ENODATA, NULL) < 0 && errno == EINVAL,
         "flux_respond_error msg=NULL fails with EINVAL");
+    flux_close (h);
+
+    /* errnum=0 */
+    h = loopback_create (0);
+    if (!h)
+        BAIL_OUT ("loopback_create");
+    msg = flux_request_encode ("foo", NULL);
+    if (!msg)
+        BAIL_OUT ("flux_request_encode failed");
+    ok (flux_respond_error (h, msg, 0, NULL) == 0,
+        "flux_respond_error errno=0 works");
+    msg2 = flux_recv (h, FLUX_MATCH_ANY, 0);
+    ok (flux_msg_get_errnum (msg2, &errnum) == 0 && errnum == EINVAL,
+        "and send a response message with errnum=EINVAL");
+    flux_msg_destroy (msg2);
+    flux_msg_destroy (msg);
     flux_close (h);
 
     done_testing();
