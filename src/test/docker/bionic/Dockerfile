@@ -90,6 +90,7 @@ RUN apt-get update \
         libs3-dev \
         libevent-dev \
         libarchive-dev \
+        libpam-dev \
  && rm -rf /var/lib/apt/lists/*
 
 # Testing utils and libs

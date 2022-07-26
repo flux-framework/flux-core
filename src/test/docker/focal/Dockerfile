@@ -89,6 +89,7 @@ RUN apt-get update \
         libopenmpi-dev \
         libs3-dev \
         libarchive-dev \
+        libpam-dev \
  && rm -rf /var/lib/apt/lists/*
 
 # Testing utils and libs

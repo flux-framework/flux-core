@@ -61,6 +61,7 @@ RUN yum -y update \
 	libs3-devel \
 	systemd-devel \
 	libarchive-devel \
+	pam-devel \
 #  Other deps
 	perl-Time-HiRes \
 	lua-posix \
