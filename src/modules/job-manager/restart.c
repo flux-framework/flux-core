@@ -197,6 +197,8 @@ static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
                    (uintmax_t)job->id);
         return -1;
     }
+    if (ctx->max_jobid < job->id)
+        ctx->max_jobid = job->id;
     if ((job->flags & FLUX_JOB_WAITABLE))
         wait_notify_active (ctx->wait, job);
     if (event_job_action (ctx->event, job) < 0) {
@@ -237,16 +239,18 @@ done:
 static int restart_restore_state (struct job_manager *ctx)
 {
     flux_future_t *f;
+    flux_jobid_t id;
 
     if (!(f = flux_kvs_lookup (ctx->h, NULL, 0, checkpoint_key)))
         return -1;
     if (flux_kvs_lookup_get_unpack (f,
                                     "{s:I}",
-                                    "max_jobid",
-                                    &ctx->max_jobid) < 0) {
+                                    "max_jobid", &id) < 0) {
         flux_future_destroy (f);
         return -1;
     }
+    if (ctx->max_jobid < id)
+        ctx->max_jobid = id;
     flux_future_destroy (f);
     return 0;
 }
