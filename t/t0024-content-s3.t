@@ -63,11 +63,11 @@ recheck_cache_blob() {
 # Usage: checkpoint_put key rootref
 checkpoint_put() {
         o="{key:\"$1\",value:{version:1,rootref:\"$2\",timestamp:2.2}}"
-        jq -j -c -n  ${o} | $RPC content-backing.checkpoint-put
+        jq -j -c -n  ${o} | $RPC content.checkpoint-put
 }
 # Usage: checkpoint_get key >value
 checkpoint_get() {
-        jq -j -c -n  "{key:\"$1\"}" | $RPC content-backing.checkpoint-get
+        jq -j -c -n  "{key:\"$1\"}" | $RPC content.checkpoint-get
 }
 
 ##

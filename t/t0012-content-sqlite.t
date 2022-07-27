@@ -123,10 +123,10 @@ test_expect_success 'fill the cache with more data for later purging' '
 
 checkpoint_put() {
 	o="{key:\"$1\",value:{version:1,rootref:\"$2\",timestamp:2.2}}"
-	jq -j -c -n  ${o} | $RPC content-backing.checkpoint-put
+	jq -j -c -n  ${o} | $RPC content.checkpoint-put
 }
 checkpoint_get() {
-	jq -j -c -n  "{key:\"$1\"}" | $RPC content-backing.checkpoint-get
+	jq -j -c -n  "{key:\"$1\"}" | $RPC content.checkpoint-get
 }
 
 test_expect_success HAVE_JQ 'checkpoint-put foo w/ rootref bar' '

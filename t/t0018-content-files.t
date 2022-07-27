@@ -58,11 +58,11 @@ recheck_cache_blob() {
 # Usage: checkpoint_put key rootref
 checkpoint_put() {
         o="{key:\"$1\",value:{version:1,rootref:\"$2\",timestamp:2.2}}"
-        jq -j -c -n  ${o} | $RPC content-backing.checkpoint-put
+        jq -j -c -n  ${o} | $RPC content.checkpoint-put
 }
 # Usage: checkpoint_get key >value
 checkpoint_get() {
-        jq -j -c -n  "{key:\"$1\"}" | $RPC content-backing.checkpoint-get
+        jq -j -c -n  "{key:\"$1\"}" | $RPC content.checkpoint-get
 }
 
 ##
@@ -100,32 +100,6 @@ test_expect_success LONGTEST 'store/load/verify various size large blobs' '
 	test $err -eq 0
 '
 
-test_expect_success HAVE_JQ 'checkpoint-put foo w/ rootref bar' '
-	checkpoint_put foo bar
-'
-
-test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref bar' '
-        echo bar >rootref.exp &&
-        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref.out &&
-        test_cmp rootref.exp rootref.out
-'
-
-# use grep instead of compare, incase of floating point rounding
-test_expect_success HAVE_JQ 'checkpoint-get foo returned correct timestamp' '
-        checkpoint_get foo | jq -r .value | jq -r .timestamp >timestamp.out &&
-        grep 2.2 timestamp.out
-'
-
-test_expect_success HAVE_JQ 'checkpoint-put updates foo rootref to baz' '
-        checkpoint_put foo baz
-'
-
-test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref baz' '
-        echo baz >rootref2.exp &&
-        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref2.out &&
-        test_cmp rootref2.exp rootref2.out
-'
-
 test_expect_success 'reload content-files module' '
 	flux module reload content-files testing
 '
@@ -146,43 +120,9 @@ test_expect_success LONGTEST 'reload/verify various size large blobs' '
 	test $err -eq 0
 '
 
-test_expect_success HAVE_JQ 'checkpoint-get foo still returns rootref baz' '
-        echo baz >rootref3.exp &&
-        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref3.out &&
-        test_cmp rootref3.exp rootref3.out
-'
-
-test_expect_success HAVE_JQ 'checkpoint-put updates foo rootref with longer rootref' '
-        checkpoint_put foo abcdefghijklmnopqrstuvwxyz
-'
-
-test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref with longer rootref' '
-        echo abcdefghijklmnopqrstuvwxyz >rootref4.exp &&
-        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref4.out &&
-        test_cmp rootref4.exp rootref4.out
-'
-
-test_expect_success HAVE_JQ 'checkpoint-put updates foo rootref to shorter rootref' '
-        checkpoint_put foo foobar
-'
-
-test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref with shorter rootref' '
-        echo foobar >rootref5.exp &&
-        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref5.out &&
-        test_cmp rootref5.exp rootref5.out
-'
-
 test_expect_success 'load with invalid hash size fails with EPROTO' '
 	test_must_fail backing_load </dev/null 2>badhash.err &&
 	grep "Protocol error" badhash.err
-'
-test_expect_success 'checkpoint-get bad request fails with EPROTO' '
-	test_must_fail $RPC content-backing.checkpoint-get </dev/null 2>badget.err &&
-	grep "Protocol error" badget.err
-'
-test_expect_success 'checkpoint-put bad request fails with EPROTO' '
-	test_must_fail $RPC content-backing.checkpoint-put </dev/null 2>badput.err &&
-	grep "Protocol error" badput.err
 '
 
 ##
@@ -223,6 +163,71 @@ test_expect_success 'reload content-files with truncate option' '
 test_expect_success 'flux module stats reports zero object count' '
 	test $(flux module stats \
 	    --type int --parse object_count content-files) -eq 0
+'
+
+test_expect_success HAVE_JQ 'checkpoint-put foo w/ rootref bar' '
+	checkpoint_put foo bar
+'
+
+test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref bar' '
+        echo bar >rootref.exp &&
+        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref.out &&
+        test_cmp rootref.exp rootref.out
+'
+
+# use grep instead of compare, incase of floating point rounding
+test_expect_success HAVE_JQ 'checkpoint-get foo returned correct timestamp' '
+        checkpoint_get foo | jq -r .value | jq -r .timestamp >timestamp.out &&
+        grep 2.2 timestamp.out
+'
+
+test_expect_success HAVE_JQ 'checkpoint-put updates foo rootref to baz' '
+        checkpoint_put foo baz
+'
+
+test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref baz' '
+        echo baz >rootref2.exp &&
+        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref2.out &&
+        test_cmp rootref2.exp rootref2.out
+'
+
+test_expect_success 'reload content-files module' '
+	flux module reload content-files
+'
+
+test_expect_success HAVE_JQ 'checkpoint-get foo still returns rootref baz' '
+        echo baz >rootref3.exp &&
+        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref3.out &&
+        test_cmp rootref3.exp rootref3.out
+'
+
+test_expect_success HAVE_JQ 'checkpoint-put updates foo rootref with longer rootref' '
+        checkpoint_put foo abcdefghijklmnopqrstuvwxyz
+'
+
+test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref with longer rootref' '
+        echo abcdefghijklmnopqrstuvwxyz >rootref4.exp &&
+        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref4.out &&
+        test_cmp rootref4.exp rootref4.out
+'
+
+test_expect_success HAVE_JQ 'checkpoint-put updates foo rootref to shorter rootref' '
+        checkpoint_put foo foobar
+'
+
+test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref with shorter rootref' '
+        echo foobar >rootref5.exp &&
+        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref5.out &&
+        test_cmp rootref5.exp rootref5.out
+'
+
+test_expect_success 'checkpoint-get bad request fails with EPROTO' '
+	test_must_fail $RPC content.checkpoint-get </dev/null 2>badget.err &&
+	grep "Protocol error" badget.err
+'
+test_expect_success 'checkpoint-put bad request fails with EPROTO' '
+	test_must_fail $RPC content.checkpoint-put </dev/null 2>badput.err &&
+	grep "Protocol error" badput.err
 '
 
 test_expect_success 'remove content-files module' '

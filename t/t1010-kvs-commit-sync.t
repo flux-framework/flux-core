@@ -17,7 +17,7 @@ test_under_flux ${SIZE} minimal
 TESTNAMESPACE="testnamespace"
 
 checkpoint_get() {
-        jq -j -c -n  "{key:\"$1\"}" | $RPC content-backing.checkpoint-get
+        jq -j -c -n  "{key:\"$1\"}" | $RPC content.checkpoint-get
 }
 
 test_expect_success 'load content-sqlite and kvs and add some data' '
