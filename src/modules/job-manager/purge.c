@@ -26,6 +26,7 @@
 #include "job.h"
 #include "purge.h"
 #include "conf.h"
+#include "restart.h"
 
 #define INACTIVE_NUM_UNLIMITED  (-1)
 #define INACTIVE_AGE_UNLIMITED  (-1.)
@@ -141,6 +142,16 @@ static flux_future_t *purge_inactive_jobs (struct purge *purge,
         if (flux_job_kvs_key (key, sizeof (key), job->id, NULL) < 0
             || flux_kvs_txn_unlink (txn, 0, key) < 0)
             goto error;
+
+        /* Update max_jobid kvs entry if we are purging it.
+         * See also flux-framework/flux-core#4300.
+         */
+        if (job->id == purge->ctx->max_jobid) {
+            if (restart_save_state_to_txn (purge->ctx, txn) < 0)
+                flux_log_error (purge->ctx->h,
+                    "Error adding job-manager state to purge transaction");
+        }
+
         json_t *o = json_integer (job->id);
         if (!o || json_array_append_new (jobs, o)) {
             json_decref (o);

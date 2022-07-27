@@ -210,24 +210,28 @@ static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
     return 0;
 }
 
-int restart_save_state (struct job_manager *ctx)
+int restart_save_state_to_txn (struct job_manager *ctx, flux_kvs_txn_t *txn)
 {
-    flux_future_t *f = NULL;
-    flux_kvs_txn_t *txn;
-    int rc = -1;
-
-    if (!(txn = flux_kvs_txn_create ()))
-        return -1;
     if (flux_kvs_txn_pack (txn,
                            0,
                            checkpoint_key,
                            "{s:I}",
                            "max_jobid",
                            ctx->max_jobid) < 0)
-        goto done;
-    if (!(f = flux_kvs_commit (ctx->h, NULL, 0, txn)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
+        return -1;
+    return 0;
+}
+
+int restart_save_state (struct job_manager *ctx)
+{
+    flux_future_t *f = NULL;
+    flux_kvs_txn_t *txn;
+    int rc = -1;
+
+    if (!(txn = flux_kvs_txn_create ())
+        || restart_save_state_to_txn (ctx, txn) < 0
+        || !(f = flux_kvs_commit (ctx->h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
