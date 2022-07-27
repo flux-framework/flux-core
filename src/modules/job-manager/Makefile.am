@@ -69,6 +69,8 @@ libjob_manager_la_SOURCES = \
 	jobtap.c \
 	plugins/priority-default.c \
 	plugins/jobspec-default.c \
+	plugins/limit-job-size.c \
+	plugins/limit-duration.c \
 	plugins/dependency-after.c \
 	plugins/begin-time.c \
 	plugins/validate-duration.c

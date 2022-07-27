@@ -282,6 +282,7 @@ man_pages = [
     ('man5/flux-config-ingest', 'flux-config-ingest', 'configure Flux job ingest service', [author], 5),
     ('man5/flux-config-resource', 'flux-config-resource', 'configure Flux resource service', [author], 5),
     ('man5/flux-config-archive', 'flux-config-archive', 'configure Flux job archival service', [author], 5),
+    ('man5/flux-config-policy', 'flux-config-policy', 'configure Flux job policy', [author], 5),
     ('man5/flux-config-job-manager', 'flux-config-job-manager', 'configure Flux job manager service', [author], 5),
     ('man5/flux-config-kvs', 'flux-config-kvs', 'configure Flux kvs service', [author], 5),
     ('man7/flux-broker-attributes', 'flux-broker-attributes', 'overview Flux broker attributes', [author], 7),

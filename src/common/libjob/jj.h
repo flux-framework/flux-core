@@ -8,8 +8,8 @@
  * SPDX-License-Identifier: LGPL-3.0
 \************************************************************/
 
-#ifndef HAVE_SCHED_LIBJJ_H
-#define HAVE_SCHED_LIBJJ_H 1
+#ifndef HAVE_JJ_H
+#define HAVE_JJ_H 1
 
 #if HAVE_CONFIG_H
 #include "config.h"
@@ -24,6 +24,7 @@ struct jj_counts {
     int nnodes;    /* total number of nodes requested */
     int nslots;    /* total number of slots requested */
     int slot_size; /* number of cores per slot        */
+    int slot_gpus; /* number of gpus per slot        */
 
     bool exclusive;  /* enable node exclusive allocation if available */
 
@@ -38,9 +39,9 @@ struct jj_counts {
  *   with an error message string.
  */
 
-int libjj_get_counts (const char *spec, struct jj_counts *counts);
+int jj_get_counts (const char *spec, struct jj_counts *counts);
 
-/*  Identical to libjj_get_counts, but take json_t  */
-int libjj_get_counts_json (json_t *jobspec, struct jj_counts *counts);
+/*  Identical to jj_get_counts, but take json_t  */
+int jj_get_counts_json (json_t *jobspec, struct jj_counts *counts);
 
-#endif /* !HAVE_SCHED_LIBJJ_H */
+#endif /* !HAVE_JJ_H */

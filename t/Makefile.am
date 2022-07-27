@@ -127,6 +127,8 @@ TESTSCRIPTS = \
 	t2218-job-manager-priority-order-unlimited.t \
 	t2219-job-manager-restart.t \
 	t2220-job-manager-jobspec-default.t \
+	t2221-job-manager-limit-duration.t \
+	t2222-job-manager-limit-job-size.t \
 	t2230-job-info-lookup.t \
 	t2231-job-info-eventlog-watch.t \
 	t2232-job-info-security.t \
@@ -735,7 +737,7 @@ disconnect_watcher_la_LIBADD = $(test_ldadd)
 sched_simple_jj_reader_SOURCES = sched-simple/jj-reader.c
 sched_simple_jj_reader_CPPFLAGS = $(test_cppflags)
 sched_simple_jj_reader_LDADD = \
-	$(top_builddir)/src/modules/sched-simple/libjj.la \
+	$(top_builddir)/src/common/libjob/libjob.la \
 	$(test_ldadd)
 sched_simple_jj_reader_LDFLAGS = $(test_ldflags)
 

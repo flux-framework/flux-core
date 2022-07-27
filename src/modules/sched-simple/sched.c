@@ -18,8 +18,8 @@
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/errprintf.h"
 #include "src/common/libjob/job.h"
+#include "src/common/libjob/jj.h"
 #include "src/common/librlist/rlist.h"
-#include "libjj.h"
 
 // e.g. flux module debug --setbit 0x1 sched-simple
 // e.g. flux module debug --clearbit 0x1 sched-simple
@@ -115,8 +115,15 @@ jobreq_create (const flux_msg_t *msg)
                          "jobspec", &jobspec) < 0)
         goto err;
     job->msg = flux_msg_incref (msg);
-    if (libjj_get_counts_json (jobspec, &job->jj) < 0)
+    if (jj_get_counts_json (jobspec, &job->jj) < 0)
         job->errnum = errno;
+    else if (job->jj.slot_gpus > 0) {
+        snprintf (job->jj.error,
+                  sizeof (job->jj.error),
+                  "Unsupported resource type 'gpu'");
+        errno = EINVAL;
+        job->errnum = errno;
+    }
     if (json_unpack (jobspec,
                      "{s?{s?{s?O}}}",
                      "attributes",
@@ -606,8 +613,13 @@ static void feasibility_cb (flux_t *h,
                      "constraints", &constraints) < 0)
         goto err;
 
-    if (libjj_get_counts_json (jobspec, &jj) < 0) {
+    if (jj_get_counts_json (jobspec, &jj) < 0) {
         errmsg = jj.error;
+        goto err;
+    }
+    if (jj.slot_gpus > 0) {
+        errno = EINVAL;
+        errmsg = "Unsupported resource type 'gpu'";
         goto err;
     }
 

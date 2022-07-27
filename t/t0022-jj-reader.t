@@ -103,17 +103,19 @@ done <invalid.txt
 # <jobspec command args> == <expected result>
 #
 cat <<EOF >inputs.txt
-run              ==nnodes=0 nslots=1 slot_size=1 exclusive=false duration=0.0
-run -N1 -n1      ==nnodes=1 nslots=1 slot_size=1 exclusive=false duration=0.0
-run -N1 -n4      ==nnodes=1 nslots=4 slot_size=1 exclusive=false duration=0.0
-run -N1 -n4 -c4  ==nnodes=1 nslots=4 slot_size=4 exclusive=false duration=0.0
-run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 exclusive=false duration=0.0
-run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 exclusive=false duration=0.0
-run -n4 -c1      ==nnodes=0 nslots=4 slot_size=1 exclusive=false duration=0.0
-run -N4 -n4 -c4  ==nnodes=4 nslots=4 slot_size=4 exclusive=false duration=0.0
-run -t 1m -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 exclusive=false duration=60.0
-run -t 5s -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 exclusive=false duration=5.0
-run -t 1h -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 exclusive=false duration=3600.0
+run              ==nnodes=0 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
+run -N1 -n1      ==nnodes=1 nslots=1 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
+run -N1 -n4      ==nnodes=1 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
+run -N1 -n4 -c4  ==nnodes=1 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
+run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
+run -n4 -c4      ==nnodes=0 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
+run -n4 -c1      ==nnodes=0 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=0.0
+run -N4 -n4 -c4  ==nnodes=4 nslots=4 slot_size=4 slot_gpus=0 exclusive=false duration=0.0
+run -t 1m -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=60.0
+run -t 5s -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=5.0
+run -t 1h -N4 -n4 ==nnodes=4 nslots=4 slot_size=1 slot_gpus=0 exclusive=false duration=3600.0
+run -g1           ==nnodes=0 nslots=1 slot_size=1 slot_gpus=1 exclusive=false duration=0.0
+run -N1 -n2 -c2 -g1 ==nnodes=1 nslots=2 slot_size=2 slot_gpus=1 exclusive=false duration=0.0
 EOF
 
 while read line; do
@@ -127,27 +129,6 @@ while read line; do
 		test_cmp expected.$test_count output.$test_count
 	'
 done < inputs.txt
-
-
-# Invalid inputs:
-# <mini command args> == <expected result>
-#
-cat <<EOF >mini-invalid.txt
-run -g1             ==jj-reader: Unsupported resource type 'gpu'
-run -N1 -n2 -c2 -g1 ==jj-reader: Unsupported resource type 'gpu'
-EOF
-
-while read line; do
-	args=$(echo $line | awk -F== '{print $1}' | sed 's/  *$//')
-	expected=$(echo $line | awk -F== '{print $2}')
-
-	test_expect_success "jj-reader: flux mini $args gets expected error" '
-		echo $expected >expected.$test_count &&
-		flux mini $args --dry-run hostname >$test_count.json &&
-		test_expect_code 1 $jj<$test_count.json > out.$test_count 2>&1 &&
-		test_cmp expected.$test_count out.$test_count
-	'
-done <mini-invalid.txt
 
 
 test_done
