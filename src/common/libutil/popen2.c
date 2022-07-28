@@ -28,7 +28,9 @@
 #include "fdutils.h"
 
 struct popen2_child {
+    int flags;
     int fd[2];
+    int efd[2];
     int ctl[2];
     pid_t pid;
 };
@@ -47,6 +49,15 @@ int popen2_get_fd (struct popen2_child *p)
     return p->fd[SP_PARENT];
 }
 
+int popen2_get_stderr_fd (struct popen2_child *p)
+{
+    if (!p) {
+        errno = EINVAL;
+        return -1;
+    }
+    return p->efd[SP_PARENT];
+}
+
 static void popen2_child_close_fd (void *arg, int fd)
 {
     struct popen2_child *p = arg;
@@ -60,13 +71,16 @@ static void popen2_child_close_fd (void *arg, int fd)
 static void child (struct popen2_child *p, const char *path, char *const argv[])
 {
     int saved_errno;
+    int efd = p->efd[SP_CHILD];
 
     if (dup2 (p->fd[SP_CHILD], STDIN_FILENO) < 0
-        || dup2 (p->fd[SP_CHILD], STDOUT_FILENO) < 0) {
+        || dup2 (p->fd[SP_CHILD], STDOUT_FILENO) < 0
+        || (efd >= 0 && dup2 (efd, STDERR_FILENO) < 0)) {
         saved_errno = errno;
         goto error;
     }
     (void)close (p->fd[SP_CHILD]);
+    (void)close (p->efd[SP_CHILD]);
 
     if (fdwalk (popen2_child_close_fd, p)) {
         saved_errno = errno;
@@ -81,17 +95,28 @@ error:
     exit (0);
 }
 
-struct popen2_child *popen2 (const char *path, char *const argv[])
+struct popen2_child *popen2 (const char *path,
+                             char *const argv[],
+                             int flags)
 {
     struct popen2_child *p = NULL;
     int n, saved_errno;
+    const int valid_flags = POPEN2_CAPTURE_STDERR;
+
+    if ((flags & valid_flags) != flags) {
+        errno = EINVAL;
+        return NULL;
+    }
 
     if (!(p = calloc (1, sizeof (*p)))) {
         saved_errno = ENOMEM;
         goto error;
     }
+    p->flags = flags;
     p->fd[SP_CHILD] = -1;
     p->fd[SP_PARENT] = -1;
+    p->efd[SP_CHILD] = -1;
+    p->efd[SP_PARENT] = -1;
     p->ctl[SP_CHILD] = -1;
     p->ctl[SP_PARENT] = -1;
     if (socketpair (PF_LOCAL, SOCK_STREAM, 0, p->fd) < 0) {
@@ -103,6 +128,11 @@ struct popen2_child *popen2 (const char *path, char *const argv[])
         goto error;
     }
     if (pipe2 (p->ctl, O_CLOEXEC) < 0) {
+        saved_errno = errno;
+        goto error;
+    }
+    if ((p->flags & POPEN2_CAPTURE_STDERR)
+        && pipe2 (p->efd, O_CLOEXEC) < 0) {
         saved_errno = errno;
         goto error;
     }
@@ -118,8 +148,10 @@ struct popen2_child *popen2 (const char *path, char *const argv[])
             break;
     }
     (void)close (p->fd[SP_CHILD]);
+    (void)close (p->efd[SP_CHILD]);
     (void)close (p->ctl[SP_CHILD]);
     p->fd[SP_CHILD] = -1;
+    p->efd[SP_CHILD] = -1;
     p->ctl[SP_CHILD] = -1;
 
     /* Handshake on ctl pipe to make sure exec worked.
@@ -172,6 +204,8 @@ int pclose2 (struct popen2_child *p)
         }
         if ((p->fd[SP_PARENT] >= 0 && close (p->fd[SP_PARENT]) < 0)
             || (p->fd[SP_CHILD] >= 0 && close (p->fd[SP_CHILD]) < 0)
+            || (p->efd[SP_PARENT] >= 0 && close (p->efd[SP_PARENT]) < 0)
+            || (p->efd[SP_CHILD] >= 0 && close (p->efd[SP_CHILD]) < 0)
             || (p->ctl[SP_PARENT] >= 0 && close (p->ctl[SP_PARENT]) < 0)
             || (p->ctl[SP_CHILD] >= 0 && close (p->ctl[SP_CHILD]) < 0)) {
             saved_errno = errno;

@@ -27,13 +27,13 @@ int main(int argc, char** argv)
     plan (NO_PLAN);
 
     /* open/close */
-    ok ((p = popen2 ("cat", av)) != NULL,
+    ok ((p = popen2 ("cat", av, 0)) != NULL,
         "popen2 cat worked");
     ok (pclose2 (p) == 0,
         "immediate pclose2 OK");
 
     /* open/write/close */
-    ok ((p = popen2 ("cat", av)) != NULL,
+    ok ((p = popen2 ("cat", av, 0)) != NULL,
         "popen2 cat worked");
     fd = popen2_get_fd (p);
     ok (fd >= 0,
@@ -44,7 +44,7 @@ int main(int argc, char** argv)
         "pclose2 with read data pending OK");
 
     /* open/write/read/close */
-    ok ((p = popen2 ("cat", av)) != NULL,
+    ok ((p = popen2 ("cat", av, 0)) != NULL,
         "popen2 cat worked");
     fd = popen2_get_fd (p);
     ok (fd >= 0,
@@ -59,12 +59,12 @@ int main(int argc, char** argv)
 
     /* open failure */
     errno = 0;
-    p = popen2 ("/noexist", av);
+    p = popen2 ("/noexist", av, 0);
     ok (p == NULL && errno == ENOENT,
         "popen2 /noexist failed with ENOENT");
 
     /* open/close (child exit error) */
-    ok ((p = popen2 ("/bin/false", av)) != NULL,
+    ok ((p = popen2 ("/bin/false", av, 0)) != NULL,
         "popen2 /bin/false OK");
     ok (pclose2 (p) == 0x100,
         "pclose2 returns child exit code 1");

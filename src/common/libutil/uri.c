@@ -60,12 +60,12 @@ char *uri_resolve (const char *uri)
     }
     free (cpy);
 
-    if (!(child = popen2 ("flux", argv))
+    if (!(child = popen2 ("flux", argv, 0))
         || (read_all (popen2_get_fd (child), (void **)&result) < 0))
         goto out;
     nullify_newline (result);
 out:
-    if (pclose2 (child) < 0) {
+    if (pclose2 (child) != 0) {
         /* flux-uri returned error */
         free (result);
         result = NULL;

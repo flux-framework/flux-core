@@ -232,7 +232,7 @@ flux_t *connector_init (const char *path, int flags)
 
     /* Start the ssh command
      */
-    if (!(ctx->p = popen2 (ssh_cmd, argv))) {
+    if (!(ctx->p = popen2 (ssh_cmd, argv, 0))) {
         /* If popen fails because ssh cannot be found, flux_open()
          * will just fail with errno = ENOENT, which is not all that helpful.
          * Emit a hint on stderr even though this is perhaps not ideal.
