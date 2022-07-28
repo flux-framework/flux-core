@@ -197,6 +197,8 @@ static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
                    (uintmax_t)job->id);
         return -1;
     }
+    if (ctx->max_jobid < job->id)
+        ctx->max_jobid = job->id;
     if ((job->flags & FLUX_JOB_WAITABLE))
         wait_notify_active (ctx->wait, job);
     if (event_job_action (ctx->event, job) < 0) {
@@ -208,24 +210,28 @@ static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
     return 0;
 }
 
-static int checkpoint_save (struct job_manager *ctx)
+int restart_save_state_to_txn (struct job_manager *ctx, flux_kvs_txn_t *txn)
 {
-    flux_future_t *f = NULL;
-    flux_kvs_txn_t *txn;
-    int rc = -1;
-
-    if (!(txn = flux_kvs_txn_create ()))
-        return -1;
     if (flux_kvs_txn_pack (txn,
                            0,
                            checkpoint_key,
                            "{s:I}",
                            "max_jobid",
                            ctx->max_jobid) < 0)
-        goto done;
-    if (!(f = flux_kvs_commit (ctx->h, NULL, 0, txn)))
-        goto done;
-    if (flux_future_get (f, NULL) < 0)
+        return -1;
+    return 0;
+}
+
+int restart_save_state (struct job_manager *ctx)
+{
+    flux_future_t *f = NULL;
+    flux_kvs_txn_t *txn;
+    int rc = -1;
+
+    if (!(txn = flux_kvs_txn_create ())
+        || restart_save_state_to_txn (ctx, txn) < 0
+        || !(f = flux_kvs_commit (ctx->h, NULL, 0, txn))
+        || flux_future_get (f, NULL) < 0)
         goto done;
     rc = 0;
 done:
@@ -234,19 +240,21 @@ done:
     return rc;
 }
 
-static int checkpoint_restore (struct job_manager *ctx)
+static int restart_restore_state (struct job_manager *ctx)
 {
     flux_future_t *f;
+    flux_jobid_t id;
 
     if (!(f = flux_kvs_lookup (ctx->h, NULL, 0, checkpoint_key)))
         return -1;
     if (flux_kvs_lookup_get_unpack (f,
                                     "{s:I}",
-                                    "max_jobid",
-                                    &ctx->max_jobid) < 0) {
+                                    "max_jobid", &id) < 0) {
         flux_future_destroy (f);
         return -1;
     }
+    if (ctx->max_jobid < id)
+        ctx->max_jobid = id;
     flux_future_destroy (f);
     return 0;
 }
@@ -348,26 +356,17 @@ int restart_from_kvs (struct job_manager *ctx)
 
     /* Restore misc state.
      */
-    if (checkpoint_restore (ctx) < 0) {
+    if (restart_restore_state (ctx) < 0) {
         if (errno != ENOENT) {
             flux_log_error (ctx->h, "restart: %s", checkpoint_key);
             return -1;
         }
-        flux_log (ctx->h, LOG_INFO, "restart: no checkpoint object");
+        flux_log (ctx->h, LOG_INFO, "restart: %s not found", checkpoint_key);
     }
     flux_log (ctx->h,
               LOG_DEBUG,
               "restart: max_jobid=%ju",
               (uintmax_t)ctx->max_jobid);
-    return 0;
-}
-
-int checkpoint_to_kvs (struct job_manager *ctx)
-{
-    if (checkpoint_save (ctx) < 0) {
-        flux_log_error (ctx->h, "checkpoint");
-        return -1;
-    }
     return 0;
 }
 

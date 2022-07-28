@@ -76,12 +76,12 @@ static void stats_cb (flux_t *h, flux_msg_handler_t *mh,
 {
     struct job_manager *ctx = arg;
     int journal_listeners = journal_listeners_count (ctx->journal);
-    if (flux_respond_pack (h, msg, "{s:{s:i} s:i s:i}",
+    if (flux_respond_pack (h, msg, "{s:{s:i} s:i s:i s:I}",
                            "journal",
                              "listeners", journal_listeners,
                            "active_jobs", zhashx_size (ctx->active_jobs),
-                           "inactive_jobs", zhashx_size (ctx->inactive_jobs)
-                           ) < 0) {
+                           "inactive_jobs", zhashx_size (ctx->inactive_jobs),
+                           "max_jobid", ctx->max_jobid) < 0) {
         flux_log_error (h, "%s: flux_respond_pack", __FUNCTION__);
         goto error;
     }
@@ -219,8 +219,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_reactor_run");
         goto done;
     }
-    if (checkpoint_to_kvs (&ctx) < 0) {
-        flux_log_error (h, "checkpoint_to_kvs");
+    if (restart_save_state (&ctx) < 0) {
+        flux_log_error (h, "error saving job manager state to KVS");
         goto done;
     }
     rc = 0;
