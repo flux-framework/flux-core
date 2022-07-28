@@ -21,17 +21,13 @@
 #include <stdlib.h>
 #include <errno.h>
 #include <string.h>
-#include <assert.h>
 #include <stdio.h>
 
 #include "popen2.h"
 #include "fdwalk.h"
 #include "fdutils.h"
 
-#define PXOPEN_CHILD_MAGIC 0xc00ceeee
-
 struct popen2_child {
-    int magic;
     int fd[2];
     int ctl[2];
     pid_t pid;
@@ -44,7 +40,7 @@ enum {
 
 int popen2_get_fd (struct popen2_child *p)
 {
-    if (!p || p->magic != PXOPEN_CHILD_MAGIC) {
+    if (!p) {
         errno = EINVAL;
         return -1;
     }
@@ -92,7 +88,6 @@ struct popen2_child *popen2 (const char *path, char *const argv[])
         saved_errno = ENOMEM;
         goto error;
     }
-    p->magic = PXOPEN_CHILD_MAGIC;
     p->fd[SP_CHILD] = -1;
     p->fd[SP_PARENT] = -1;
     p->ctl[SP_CHILD] = -1;
@@ -156,11 +151,6 @@ int pclose2 (struct popen2_child *p)
     int rc = 0;
 
     if (p) {
-        if (p->magic != PXOPEN_CHILD_MAGIC) {
-            saved_errno = EINVAL;
-            rc = -1;
-            goto done;
-        }
         if (p->fd[SP_PARENT] && shutdown (p->fd[SP_PARENT], SHUT_WR) < 0) {
             saved_errno = errno;
             rc = -1;
@@ -183,10 +173,8 @@ int pclose2 (struct popen2_child *p)
             saved_errno = errno;
             rc = -1;
         }
-        p->magic = ~PXOPEN_CHILD_MAGIC;
         free (p);
     }
-done:
     if (rc == -1)
         errno = saved_errno;
     return rc;
