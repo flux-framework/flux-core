@@ -50,8 +50,10 @@ int popen2_get_fd (struct popen2_child *p)
 static void popen2_child_close_fd (void *arg, int fd)
 {
     struct popen2_child *p = arg;
-    if (fd != STDIN_FILENO && fd != STDOUT_FILENO && fd != STDERR_FILENO
-                                                  && fd != p->ctl[SP_CHILD])
+    if (fd != STDIN_FILENO
+        && fd != STDOUT_FILENO
+        && fd != STDERR_FILENO
+        && fd != p->ctl[SP_CHILD])
         (void)close (fd);
 }
 
@@ -167,9 +169,9 @@ int pclose2 (struct popen2_child *p)
             }
         }
         if ((p->fd[SP_PARENT] >= 0 && close (p->fd[SP_PARENT]) < 0)
-         || (p->fd[SP_CHILD] >= 0 && close (p->fd[SP_CHILD]) < 0)
-         || (p->ctl[SP_PARENT] >= 0 && close (p->ctl[SP_PARENT]) < 0)
-         || (p->ctl[SP_CHILD] >= 0 && close (p->ctl[SP_CHILD]) < 0)) {
+            || (p->fd[SP_CHILD] >= 0 && close (p->fd[SP_CHILD]) < 0)
+            || (p->ctl[SP_PARENT] >= 0 && close (p->ctl[SP_PARENT]) < 0)
+            || (p->ctl[SP_CHILD] >= 0 && close (p->ctl[SP_CHILD]) < 0)) {
             saved_errno = errno;
             rc = -1;
         }
