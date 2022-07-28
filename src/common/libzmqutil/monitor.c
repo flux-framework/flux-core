@@ -15,6 +15,8 @@
 #include <zmq.h>
 #include <uuid.h>
 
+#include "ccan/array_size/array_size.h"
+
 #include "reactor.h"
 #include "monitor.h"
 
@@ -109,7 +111,7 @@ static struct {
 static const char *eventstr (struct monitor_event *mevent)
 {
     int i;
-    for (i = 0; i < sizeof (nametab) / sizeof (nametab[0]); i++) {
+    for (i = 0; i < ARRAY_SIZE (nametab); i++) {
         if (mevent->event == nametab[i].event)
             return nametab[i].desc;
     }
@@ -123,7 +125,7 @@ static const char *valuestr (struct monitor_event *mevent)
     static char buf[128];
 
     /* look up valtype for event */
-    for (i = 0; i < sizeof (nametab) / sizeof (nametab[0]); i++) {
+    for (i = 0; i < ARRAY_SIZE (nametab); i++) {
         if (mevent->event == nametab[i].event)
             valtype = nametab[i].valtype;
     }
@@ -135,7 +137,7 @@ static const char *valuestr (struct monitor_event *mevent)
         return buf;
     }
     if (valtype == VAL_PROTO) {
-        for (i = 0; i < sizeof (prototab) / sizeof (prototab[0]); i++) {
+        for (i = 0; i < ARRAY_SIZE (prototab); i++) {
             if (mevent->value == prototab[i].value)
                 return prototab[i].desc;
         }

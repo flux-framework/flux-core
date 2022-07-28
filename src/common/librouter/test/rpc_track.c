@@ -20,6 +20,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/librouter/msg_hash.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/array_size/array_size.h"
 
 #ifndef UUID_STR_LEN
 #define UUID_STR_LEN 37     // defined in later libuuid headers
@@ -104,7 +105,7 @@ void test_purge (void)
     ok (count == 0,
         "rpc_track_purge does nothing on empty hash");
 
-    for (i = 0; i < sizeof (msg) / sizeof (msg[0]); i++)
+    for (i = 0; i < ARRAY_SIZE (msg); i++)
         rpc_track_update (rt, msg[i]);
     ok (rpc_track_count (rt) == 2,
         "rpc_track_update tracks 2 messages");
@@ -118,7 +119,7 @@ void test_purge (void)
 
     rpc_track_destroy (rt);
 
-    for (i = 0; i < sizeof (msg) / sizeof (msg[0]); i++)
+    for (i = 0; i < ARRAY_SIZE (msg); i++)
         flux_msg_decref (msg[i]);
 }
 
@@ -148,21 +149,21 @@ void test_basic (void)
     ok (rpc_track_count (rt) == 0,
         "rpc_track_count returns 0 on empty hash");
 
-    for (i = 0; i < sizeof (req) / sizeof (req[0]); i++)
+    for (i = 0; i < ARRAY_SIZE (req); i++)
         rpc_track_update (rt, req[i]);
     ok (rpc_track_count (rt) == 3,
         "rpc_track_update works (3 of 4 requests tracked)");
 
-    for (i = 0; i < sizeof (rep) / sizeof (rep[0]); i++)
+    for (i = 0; i < ARRAY_SIZE (rep); i++)
         rpc_track_update (rt, rep[i]);
     ok (rpc_track_count (rt) == 1,
         "rpc_track_update works (2 requests terminated)");
 
     rpc_track_destroy (rt);
 
-    for (i = 0; i < sizeof (req) / sizeof (req[0]); i++)
+    for (i = 0; i < ARRAY_SIZE (req); i++)
         flux_msg_decref (req[i]);
-    for (i = 0; i < sizeof (rep) / sizeof (rep[0]); i++)
+    for (i = 0; i < ARRAY_SIZE (rep); i++)
         flux_msg_decref (rep[i]);
 }
 
@@ -186,7 +187,7 @@ void test_disconnect (void)
     if (!(rt = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG)))
         BAIL_OUT ("rpc_track_create failed");
 
-    for (i = 0; i < sizeof (req) / sizeof (req[0]); i++)
+    for (i = 0; i < ARRAY_SIZE (req); i++)
         rpc_track_update (rt, req[i]);
     ok (rpc_track_count (rt) == 3,
         "rpc_track_update works (3 of 4 requests tracked)");
@@ -197,7 +198,7 @@ void test_disconnect (void)
 
     rpc_track_destroy (rt);
 
-    for (i = 0; i < sizeof (req) / sizeof (req[0]); i++)
+    for (i = 0; i < ARRAY_SIZE (req); i++)
         flux_msg_decref (req[i]);
     flux_msg_decref (dis);
 }

@@ -15,6 +15,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/liboptparse/optparse.h"
+#include "ccan/array_size/array_size.h"
 
 static void *myfatal_h = NULL;
 
@@ -298,7 +299,7 @@ void test_option_cb (void)
     optparse_err_t e;
     optparse_t *p = optparse_create ("test-help");
     char *av[] = { "test-help", "-h", NULL };
-    int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int ac = ARRAY_SIZE (av) - 1;
     int optindex;
 
     ok (p != NULL, "optparse_create");
@@ -371,7 +372,7 @@ void test_convenience_accessors (void)
 
     char *av[] = { "test", "--foo", "--baz=hello", "--mnf=7", "--neg=-4",
                    "--dub=5.7", "--ndb=-3.2", "--dur=1.5m", NULL };
-    int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int ac = ARRAY_SIZE (av) - 1;
     int rc, optindex;
 
     optparse_t *p = optparse_create ("test");
@@ -544,7 +545,7 @@ void test_multiret (void)
                    "-r", "one", "-mone", "-m", "two",
                    "-o", "-rtwo", "--multi-ret=a,b,c",
                    NULL };
-    int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int ac = ARRAY_SIZE (av) - 1;
     int optindex;
 
     ok (p != NULL, "optparse_create");
@@ -615,7 +616,7 @@ void test_long_only (void)
     char *av[] = { "long-only-test",
                    "-b", "one", "--again-long-only",
                    NULL };
-    int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int ac = ARRAY_SIZE (av) - 1;
     int optindex;
 
     ok (p != NULL, "optparse_create");
@@ -637,7 +638,7 @@ void test_long_only (void)
 
     char *av2[] = { "long-only-test", "--again-long-only", "-bxxx",
                     "--long-only=foo", NULL };
-    ac = sizeof (av2) / sizeof(av2[0]) - 1;
+    ac = ARRAY_SIZE (av2) - 1;
 
     optindex = optparse_parse_args (p, ac, av2);
     ok (optindex == ac, "parse options, verify optindex");
@@ -673,7 +674,7 @@ void test_optional_argument (void)
     char *av[] = { "optarg",
                    "--optional-arg", "extra-args",
                    NULL };
-    int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int ac = ARRAY_SIZE (av) - 1;
     int optindex;
 
     e = optparse_add_option_table (p, opts);
@@ -692,7 +693,7 @@ void test_optional_argument (void)
     char *av2[] = { "optarg",
                    "--optional-arg=foo", "extra-args",
                    NULL };
-    ac = sizeof (av2) / sizeof (av2[0]) - 1;
+    ac = ARRAY_SIZE (av2) - 1;
 
     optindex = optparse_parse_args (p, ac, av2);
     ok (optindex == (ac - 1), "parse options, verify optindex");
@@ -866,7 +867,7 @@ Usage: test two [OPTIONS]...\n\
         "Usage output as expected with subcommands");
 
     char *av[] = { "test", "one", NULL };
-    int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int ac = ARRAY_SIZE (av) - 1;
 
     n = optparse_parse_args (a, ac, av);
     ok (n == 1, "optparse_parse_args");
@@ -875,7 +876,7 @@ Usage: test two [OPTIONS]...\n\
     ok (called == 1, "optparse_run_subcommand: called subcmd_one()");
 
     char *av2[] = { "test", "two", NULL };
-    ac = sizeof (av2) / sizeof (av2[0]) - 1;
+    ac = ARRAY_SIZE (av2) - 1;
 
     n = optparse_parse_args (a, ac, av2);
     ok (n == 1, "optparse_parse_args");
@@ -884,7 +885,7 @@ Usage: test two [OPTIONS]...\n\
     ok (called == 2, "optparse_run_subcommand: called subcmd_two()");
 
     char *av3[] = { "test", "two", "--test-opt", "3", NULL };
-    ac = sizeof (av3) / sizeof (av3[0]) - 1;
+    ac = ARRAY_SIZE (av3) - 1;
 
     // Run subcommand before parse also runs subcommand:
     //
@@ -894,7 +895,7 @@ Usage: test two [OPTIONS]...\n\
 
     // Test unknown option prints expected error:
     char *av4[] = { "test", "two", "--unknown", NULL };
-    ac = sizeof (av4) / sizeof (av4[0]) - 1;
+    ac = ARRAY_SIZE (av4) - 1;
 
     e = optparse_set (b, OPTPARSE_FATALERR_FN, do_nothing);
 
@@ -908,7 +909,7 @@ Try `test two --help' for more information.\n",
 
     // Test unknown short option prints expected error
     char *av41[] = { "test", "two", "-X", NULL };
-    ac = sizeof (av41) / sizeof (av41[0]) - 1;
+    ac = ARRAY_SIZE (av41) - 1;
 
     diag ("parsing test two -X");
     n = optparse_run_subcommand (a, ac, av41);
@@ -921,7 +922,7 @@ Try `test two --help' for more information.\n",
 
     // Test unknown short option with good option prints expected error
     char *av42[] = { "test", "two", "-Zt", "foo", NULL};
-    ac = sizeof (av42) / sizeof (av42[0]) - 1;
+    ac = ARRAY_SIZE (av42) - 1;
 
     diag ("parsing test two -Zt foo");
     n = optparse_run_subcommand (a, ac, av42);
@@ -935,7 +936,7 @@ Try `test two --help' for more information.\n",
 
     // Test no subcommand (and subcommand required) prints error
     char *av5[] = { "test", NULL };
-    ac = sizeof (av5) / sizeof (av5[0]) - 1;
+    ac = ARRAY_SIZE (av5) - 1;
 
     // Set OPTPARSE_PRINT_SUBCMDS true:
     e = optparse_set (a, OPTPARSE_PRINT_SUBCMDS, 1);
@@ -1002,7 +1003,7 @@ Usage: test one [OPTIONS]\n\
     optparse_set_data (d, "argc", &value);
 
     char *av6[] = { "test", "three", "--help", NULL };
-    ac = sizeof (av6) / sizeof (av6[0]) - 1;
+    ac = ARRAY_SIZE (av6) - 1;
 
     n = optparse_run_subcommand (a, ac, av6);
     ok (n == 0, "optparse_run_subcommand with OPTPARSE_SUBCMD_NOOPTS");
@@ -1017,7 +1018,7 @@ void test_corner_case (void)
     optparse_err_t e;
     optparse_t *p = optparse_create ("optarg");
     char *av[] = { "cornercase", NULL };
-    int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int ac = ARRAY_SIZE (av) - 1;
     int optindex;
 
     ok (p != NULL, "optparse_create");
@@ -1068,7 +1069,7 @@ void test_reset (void)
     ok (optparse_option_index (q) == -1, "subcmd: option index is -1");
 
     char *av[] = { "test", "-t", "2", "one", "--test-opt=5", NULL };
-    int ac = sizeof (av) / sizeof (av[0]) - 1;
+    int ac = ARRAY_SIZE (av) - 1;
 
     n = optparse_parse_args (p, ac, av);
     ok (n == 3, "optparse_parse_args() expected 3 got %d", n);
@@ -1118,7 +1119,7 @@ void test_non_option_arguments (void)
     };
     optparse_t *p = optparse_create ("non-option-arg");
     char *av[] = { "non-option-arg", "--test=foo", "--", "baz", NULL };
-    int ac = sizeof (av) / sizeof (*av) - 1;
+    int ac = ARRAY_SIZE (av) - 1;
     int optindex;
 
     ok (p != NULL, "optparse_create");
@@ -1132,7 +1133,7 @@ void test_non_option_arguments (void)
 
     optparse_reset (p);
     char *av2[] = { "non-option-arg", "foo", "bar", NULL };
-    ac = sizeof (av2) / sizeof (*av2) - 1;
+    ac = ARRAY_SIZE (av2) - 1;
     ok (optparse_parse_args (p, ac, av2) != -1, "optparse_parse_args");
     optindex = optparse_option_index (p);
     ok (optindex == 1, "argv with no options, optindex is 1");
@@ -1145,7 +1146,7 @@ void test_non_option_arguments (void)
     //
     optparse_reset (p);
     char *av3[] = { "non-option-arg", "-1234", NULL };
-    ac = sizeof (av3) / sizeof (*av3) - 1;
+    ac = ARRAY_SIZE (av3) - 1;
     ok (optparse_parse_args (p, ac, av3) != -1, "optparse_parse_args");
     optindex = optparse_option_index (p);
     ok (optindex == 1,
@@ -1154,7 +1155,7 @@ void test_non_option_arguments (void)
 
     optparse_reset (p);
     char *av4[] = { "non-option-arg", "1234", "--test=foo", NULL };
-    ac = sizeof (av4) / sizeof (*av4) - 1;
+    ac = ARRAY_SIZE (av4) - 1;
     ok (optparse_parse_args (p, ac, av4) != -1, "optparse_parse_args");
     optindex = optparse_option_index (p);
     ok (optindex == 1,
@@ -1273,13 +1274,13 @@ static void test_optparse_get ()
 static void test_optional_args ()
 {
     char *av1[] = { "test-optional-args", "-xx", "-y2", NULL };
-    int ac1 =  sizeof (av1) / sizeof (av1[0]) - 1;
+    int ac1 =  ARRAY_SIZE (av1) - 1;
 
     char *av2[] = { "test-optional-args", "--testx=2", "--testy=2", NULL };
-    int ac2 =  sizeof (av2) / sizeof (av2[0]) - 1;
+    int ac2 =  ARRAY_SIZE (av2) - 1;
 
     char *av3[] = { "test-optional-args", "--testx", "--testy", NULL };
-    int ac3 =  sizeof (av3) / sizeof (av3[0]) - 1;
+    int ac3 =  ARRAY_SIZE (av3) - 1;
 
     struct optparse_option opts [] = {
         { .name = "testx",

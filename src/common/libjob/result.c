@@ -13,6 +13,8 @@
 #endif
 #include <flux/core.h>
 
+#include "ccan/array_size/array_size.h"
+
 #include "job.h"
 #include "strtab.h"
 
@@ -24,19 +26,18 @@ static struct strtab results[] = {
     { FLUX_JOB_RESULT_CANCELED,  "CANCELED",  "canceled",  "CA", "ca" },
     { FLUX_JOB_RESULT_TIMEOUT,   "TIMEOUT",   "timeout",   "TO", "to" },
 };
-static const size_t results_count = sizeof (results) / sizeof (results[0]);
 
 
 const char *flux_job_resulttostr (flux_job_result_t result, const char *fmt)
 {
-    return strtab_numtostr (result, fmt, results, results_count);
+    return strtab_numtostr (result, fmt, results, ARRAY_SIZE (results));
 }
 
 int flux_job_strtoresult (const char *s, flux_job_result_t *result)
 {
     int num;
 
-    if ((num = strtab_strtonum (s, results, results_count)) < 0)
+    if ((num = strtab_strtonum (s, results, ARRAY_SIZE (results))) < 0)
         return -1;
     if (result)
         *result = num;

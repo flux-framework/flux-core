@@ -13,6 +13,7 @@
 
 #include "src/common/libtap/tap.h"
 #include "src/common/libsubprocess/command.h"
+#include "ccan/array_size/array_size.h"
 
 /*
  *  Check basic flux_cmd_create () with args
@@ -26,7 +27,7 @@ void check_basic_create ()
         "bar",
         NULL
     };
-    int argc = (sizeof (argv)/sizeof (argv[0])) - 1;
+    int argc = ARRAY_SIZE (argv) - 1;
     char * env[] = {
         "FOO=bar",
         "PATH=/bin",
@@ -204,7 +205,7 @@ void test_stringify (void)
         "bar",
         NULL
     };
-    int argc = (sizeof (argv)/sizeof (argv[0])) - 1;
+    int argc = ARRAY_SIZE (argv) - 1;
     char * env[] = {
         "FOO=bar",
         "PATH=/bin",
@@ -248,7 +249,7 @@ void test_arg_insert_delete (void)
         "bar",
         NULL
     };
-    int argc = (sizeof (argv)/sizeof (argv[0])) - 1;
+    int argc = ARRAY_SIZE (argv) - 1;
     char * env[] = {
         "FOO=bar",
         "PATH=/bin",

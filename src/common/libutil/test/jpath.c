@@ -17,6 +17,7 @@
 #include <stdio.h>
 #include <string.h>
 
+#include "ccan/array_size/array_size.h"
 #include "src/common/libtap/tap.h"
 #include "jpath.h"
 
@@ -141,7 +142,7 @@ void basic (void)
     ok (jpath_del (o, "a.c.d") == 0,
         "jpath_del on nonexistent path does not fail");
 
-    for (i = 0; i < sizeof (val)/sizeof (val[0]); i++)
+    for (i = 0; i < ARRAY_SIZE (val); i++)
         json_decref (val[i]);
     json_decref (o);
 }

@@ -19,13 +19,14 @@
 
 #include "src/common/libjob/jobspec1.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/array_size/array_size.h"
 
 extern char **environ;
 
 void check_stdio_cwd (void)
 {
     char *argv[] = {"this", "is", "a", "test"};
-    int argc = sizeof (argv) / sizeof (argv[0]);
+    int argc = ARRAY_SIZE (argv);
     flux_jobspec1_t *jobspec;
     char *path;
 
@@ -115,7 +116,7 @@ void check_stdio_cwd (void)
 void check_env (void)
 {
     char *argv[] = {"this", "is", "a", "test"};
-    int argc = sizeof (argv) / sizeof (argv[0]);
+    int argc = ARRAY_SIZE (argv);
     flux_jobspec1_t *jobspec;
     char *val;
 
@@ -201,7 +202,7 @@ void check_env (void)
 void check_attr (void)
 {
     char *argv[] = {"this", "is", "a", "test"};
-    int argc = sizeof (argv) / sizeof (argv[0]);
+    int argc = ARRAY_SIZE (argv);
     flux_jobspec1_t *jobspec;
     json_t *json_ptr;
     int int_val;
@@ -260,7 +261,7 @@ void check_attr (void)
 void check_jobspec (void)
 {
     char *argv[] = {"this", "is", "a", "test"};
-    int argc = sizeof (argv) / sizeof (argv[0]);
+    int argc = ARRAY_SIZE (argv);
     flux_jobspec1_t *jobspec;
     flux_jobspec1_error_t error;
     char *str;
@@ -340,7 +341,7 @@ void check_jobspec (void)
 void check_encoding (void)
 {
     char *argv[] = {"this", "is", "a", "test"};
-    int argc = sizeof (argv) / sizeof (argv[0]);
+    int argc = ARRAY_SIZE (argv);
     flux_jobspec1_t *jobspec;
     char *encoded;
     flux_jobspec1_t *dup;
@@ -395,7 +396,7 @@ void check_encoding (void)
 void check_bad_args (void)
 {
     char *argv[] = {"this", "is", "a", "test"};
-    int argc = sizeof (argv) / sizeof (argv[0]);
+    int argc = ARRAY_SIZE (argv);
 
     ok (flux_jobspec1_from_command (-1, argv, NULL, 1, 1, 1, 0, 5.0) == NULL
             && errno == EINVAL,
