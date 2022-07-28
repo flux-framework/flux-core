@@ -26,4 +26,5 @@ libccan_la_SOURCES = \
 	ccan/compiler/compiler.h \
 	ccan/ptrint/ptrint.h \
 	ccan/build_assert/build_assert.h \
-	ccan/container_of/container_of.h
+	ccan/container_of/container_of.h \
+	ccan/array_size/array_size.h
