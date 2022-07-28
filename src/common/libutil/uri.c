@@ -16,9 +16,12 @@
 #include <string.h>
 
 #include "src/common/libyuarel/yuarel.h"
+#include "errprintf.h"
 #include "popen2.h"
 #include "read_all.h"
 #include "log.h"
+#include "strstrip.h"
+#include "uri.h"
 
 static void nullify_newline (char *str)
 {
@@ -37,12 +40,14 @@ static char *uri_to_local (struct yuarel *yuri)
     return uri;
 }
 
-char *uri_resolve (const char *uri)
+char *uri_resolve (const char *uri, flux_error_t *errp)
 {
     struct popen2_child *child = NULL;
     struct yuarel yuri;
     char *result = NULL;
+    char *errors = NULL;
     char *argv[] = { "flux", "uri", (char *) uri, NULL };
+    int flags = errp != NULL ? POPEN2_CAPTURE_STDERR : 0;
 
     char *cpy = strdup (uri);
     if (!cpy)
@@ -60,10 +65,18 @@ char *uri_resolve (const char *uri)
     }
     free (cpy);
 
-    if (!(child = popen2 ("flux", argv, 0))
+    if (!(child = popen2 ("flux", argv, flags))
         || (read_all (popen2_get_fd (child), (void **)&result) < 0))
         goto out;
     nullify_newline (result);
+
+    if (errp) {
+        /* stderr capture requested */
+        if (read_all (popen2_get_stderr_fd (child), (void **)&errors) > 0) {
+            errprintf (errp, "%s", strstrip (errors));
+            free (errors);
+        }
+    }
 out:
     if (pclose2 (child) != 0) {
         /* flux-uri returned error */

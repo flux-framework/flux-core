@@ -361,7 +361,7 @@ static int cmd_proxy (optparse_t *p, int ac, char *av[])
         optparse_fatal_usage (p, 1, "URI argument is required\n");
 
     target = av[optindex++];
-    if (!(uri = uri_resolve (target)))
+    if (!(uri = uri_resolve (target, NULL)))
         log_msg_exit ("Unable to resolve %s to a URI", target);
 
     if (optparse_hasopt (p, "reconnect"))

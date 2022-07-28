@@ -53,7 +53,7 @@ static int subcmd (optparse_t *p, int ac, char *av[])
     }
 
     if (target) {
-        char *uri = uri_resolve (target);
+        char *uri = uri_resolve (target, NULL);
         if (!uri)
             log_msg_exit ("failed to resolve target %s to a Flux URI", target);
         if (!(h = flux_open (uri, 0)))

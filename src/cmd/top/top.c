@@ -110,7 +110,7 @@ static flux_t *open_flux_instance (const char *target)
     flux_future_t *f = NULL;
     char *uri = NULL;
 
-    if (target && !(uri = uri_resolve (target)))
+    if (target && !(uri = uri_resolve (target, NULL)))
         fatal (0, "failed to resolve target %s to a Flux URI", target);
     if (!(h = flux_open (uri, 0)))
         fatal (errno, "error connecting to Flux");
