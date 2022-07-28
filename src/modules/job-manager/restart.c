@@ -208,7 +208,7 @@ static int restart_map_cb (struct job *job, void *arg, flux_error_t *error)
     return 0;
 }
 
-static int checkpoint_save (struct job_manager *ctx)
+int restart_save_state (struct job_manager *ctx)
 {
     flux_future_t *f = NULL;
     flux_kvs_txn_t *txn;
@@ -234,7 +234,7 @@ done:
     return rc;
 }
 
-static int checkpoint_restore (struct job_manager *ctx)
+static int restart_restore_state (struct job_manager *ctx)
 {
     flux_future_t *f;
 
@@ -348,26 +348,17 @@ int restart_from_kvs (struct job_manager *ctx)
 
     /* Restore misc state.
      */
-    if (checkpoint_restore (ctx) < 0) {
+    if (restart_restore_state (ctx) < 0) {
         if (errno != ENOENT) {
             flux_log_error (ctx->h, "restart: %s", checkpoint_key);
             return -1;
         }
-        flux_log (ctx->h, LOG_INFO, "restart: no checkpoint object");
+        flux_log (ctx->h, LOG_INFO, "restart: %s not found", checkpoint_key);
     }
     flux_log (ctx->h,
               LOG_DEBUG,
               "restart: max_jobid=%ju",
               (uintmax_t)ctx->max_jobid);
-    return 0;
-}
-
-int checkpoint_to_kvs (struct job_manager *ctx)
-{
-    if (checkpoint_save (ctx) < 0) {
-        flux_log_error (ctx->h, "checkpoint");
-        return -1;
-    }
     return 0;
 }
 

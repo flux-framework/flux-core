@@ -20,7 +20,7 @@ int restart_from_kvs (struct job_manager *ctx);
 /* exposed for unit testing only */
 int restart_count_char (const char *s, char c);
 
-int checkpoint_to_kvs (struct job_manager *ctx);
+int restart_save_state (struct job_manager *ctx);
 
 #endif /* _FLUX_JOB_MANAGER_RESTART_H */
 

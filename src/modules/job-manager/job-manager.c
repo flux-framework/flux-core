@@ -219,8 +219,8 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "flux_reactor_run");
         goto done;
     }
-    if (checkpoint_to_kvs (&ctx) < 0) {
-        flux_log_error (h, "checkpoint_to_kvs");
+    if (restart_save_state (&ctx) < 0) {
+        flux_log_error (h, "error saving job manager state to KVS");
         goto done;
     }
     rc = 0;
