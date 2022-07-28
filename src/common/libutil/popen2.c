@@ -63,10 +63,8 @@ static void child (struct popen2_child *p, const char *path, char *const argv[])
 {
     int saved_errno;
 
-    (void)close (STDIN_FILENO);
-    (void)close (STDOUT_FILENO);
-    if (    dup2 (p->fd[SP_CHILD], STDIN_FILENO) < 0
-         || dup2 (p->fd[SP_CHILD], STDOUT_FILENO) < 0) {
+    if (dup2 (p->fd[SP_CHILD], STDIN_FILENO) < 0
+        || dup2 (p->fd[SP_CHILD], STDOUT_FILENO) < 0) {
         saved_errno = errno;
         goto error;
     }
