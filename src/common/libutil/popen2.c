@@ -88,11 +88,10 @@ struct popen2_child *popen2 (const char *path, char *const argv[])
     struct popen2_child *p = NULL;
     int n, saved_errno;
 
-    if (!(p = malloc (sizeof (*p)))) {
+    if (!(p = calloc (1, sizeof (*p)))) {
         saved_errno = ENOMEM;
         goto error;
     }
-    memset (p, 0, sizeof (*p));
     p->magic = PXOPEN_CHILD_MAGIC;
     p->fd[SP_CHILD] = -1;
     p->fd[SP_PARENT] = -1;
