@@ -10,11 +10,33 @@ The system instance requires that the overlay network configuration be
 statically configured.  The ``bootstrap`` TOML table defines these details
 for a given cluster.
 
-WARNING:  Although ``flux config reload`` works on a live system, these
-settings do not take effect until the next broker restart.  As such, they
-must only be changed in conjunction with a full system instance restart in
-order to avoid brokers becoming desynchronized if they are independently
-restarted before the next instance restart.
+.. warning::
+   Although ``flux config reload`` works on a live system, bootstrap
+   settings do not take effect until the next broker restart.  As such, they
+   must only be changed in conjunction with a full system instance restart in
+   order to avoid brokers becoming desynchronized if they are independently
+   restarted before the next instance restart.
+
+Flux brokers are interconnected in a tree topology.  A broker has zero or one
+upstream peer (towards the root, rank 0) and zero or more downstream peers
+(towards the leaves).  A broker passively accepts connections from its
+downstream peers on its ZeroMQ `bind` endpoint , and actively connects to its
+upstream peer on that broker's ZeroMQ `connect` endpoint, which is the
+remote version of the peer's `bind` endpoint.  A broker calculates the ranks
+of its peers based on the broker's rank, the tree fanout, and the size of the
+instance.
+
+A broker determines its own rank by looking for its hostname in the ``hosts``
+array.  The index of the first matching entry is the broker's rank.  The
+information in the ``hosts`` array also provides
+ - the `bind` endpoint that the broker configures to accept connections
+   from downstream peers
+ - the `connect` endpoint it uses to connect to its parent
+
+Each point to point connection between brokers is authenticated and encrypted
+using ZeroMQ native CURVE cryptography.  This requires a shared certificate
+to bootstrap.  This certificate is stored on disk and must be protected from
+access by users other than the Flux instance owner.
 
 The ``bootstrap`` table contains the following keys:
 
@@ -51,25 +73,39 @@ default_connect
    for the current host entry.
 
 hosts
-   (optional) A rank-ordered array of host entries. Each host entry is
-   a TOML table containing at minimum the ``host`` key. The broker determines
-   its rank by matching its hostname in the hosts array and taking the array
-   index. An empty or missing hosts array implies a standalone (single
-   broker) instance. The entry for a broker with downstream peers must
-   either assign the ``bind`` key to a ZeroMQ endpoint URI, or the ``default_bind``
-   URI described above is used. The entry for a broker with downstream peers
-   must also either assign the ``connect`` key to a ZeroMQ endpoint URI, or
-   the ``default_connect`` URI described above is used. The same ``%h`` and ``%p``
-   substitutions work here as well.
+   (optional) A rank-ordered array of host entries. Each entry is a TOML
+   table containing, at minimum, a ``host`` key and optionally, ``connect``
+   and ``bind`` keys.  These keys are described in detail below. The array
+   is required to be defined for instance sizes > 1.
 
+HOSTS ENTRY
+===========
+
+Each ``hosts`` array entry contains the following keys:
+
+host
+   (required) The name of the host that corresponds to this entry.  The value
+   must exactly match the output of the :linux:man1:`hostname` command.
+
+connect
+   (optional) The ZeroMQ endpoint that downstream peers use to connect to this
+   broker.  The value may contain ``%h`` and ``%p`` tokens as described under
+   ``default_connect`` above.  If the key is omitted, ``default_connect``
+   is used.
+
+bind
+   (optional) The ZeroMQ endpoint that this broker uses to accept connections
+   from downstream peers.  The value may contain ``%h`` and ``%p`` tokens as
+   described under ``default_bind`` above.  If the key is omitted,
+   ``default_bind`` is used.
 
 ZEROMQ ENDPOINTS
 ================
 
-In this context, ZeroMQ endpoint URIs normally use the :linux:man7:`zmq_tcp`
-transport, consisting of the transport name ``tcp://`` followed by an address.
+Brokers use the :linux:man7:`zmq_tcp` transport, consisting of the transport
+name ``tcp://`` followed by an address.
 
-Bind addresses specify interface followed by a colon and the TCP port.
+`Bind` addresses specify interface followed by a colon and the TCP port.
 The interface may be one of:
 
 - the wild-card ``*`` meaning all available interfaces
@@ -80,7 +116,7 @@ The interface may be one of:
 
 The port should be an explicit numerical port number.
 
-Connect addresses specify a peer address followed by a colon and the TCP port.
+`Connect` addresses specify a peer address followed by a colon and the TCP port.
 The peer address may be one of:
 
 - the DNS name of the peer
