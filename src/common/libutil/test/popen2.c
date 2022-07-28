@@ -66,9 +66,8 @@ int main(int argc, char** argv)
     /* open/close (child exit error) */
     ok ((p = popen2 ("/bin/false", av)) != NULL,
         "popen2 /bin/false OK");
-    errno = 0;
-    ok (pclose2 (p) < 0 && errno == EIO,
-        "pclose2 failed with EIO");
+    ok (pclose2 (p) == 0x100,
+        "pclose2 returns child exit code 1");
 
     done_testing();
 }

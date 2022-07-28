@@ -162,10 +162,12 @@ int pclose2 (struct popen2_child *p)
                 saved_errno = errno;
                 rc = -1;
             } else {
-                if (!WIFEXITED (status) || WEXITSTATUS (status) != 0) {
+                if (!WIFEXITED (status)) {
                     saved_errno = EIO;
                     rc = -1;
                 }
+                else
+                    rc = status;
             }
         }
         if ((p->fd[SP_PARENT] >= 0 && close (p->fd[SP_PARENT]) < 0)
