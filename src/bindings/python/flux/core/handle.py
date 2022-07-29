@@ -61,10 +61,15 @@ class Flux(Wrapper):
             self.tls.exception = None
 
         if handle is None:
+            error = ffi.new("flux_error_t[1]")
             try:
-                self.handle = raw.flux_open(url, flags)
-            except EnvironmentError as err:
-                raise EnvironmentError(err.errno, "Unable to connect to Flux")
+                self.handle = raw.flux_open_ex(url, flags, error)
+            except OSError as err:
+                msg = "Unable to connect to Flux"
+                errmsg = ffi.string(error[0].text).decode("utf-8")
+                if errmsg:
+                    msg += f": {errmsg}"
+                raise OSError(err.errno, msg)
 
         self.aux_txn = None
         self._active_watchers = set()
