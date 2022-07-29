@@ -92,7 +92,9 @@ libutil_la_SOURCES = \
 	uri.c \
 	uri.h \
 	errprintf.c \
-	errprintf.h
+	errprintf.h \
+	strstrip.c \
+	strstrip.h
 
 EXTRA_DIST = veb_mach.c
 
