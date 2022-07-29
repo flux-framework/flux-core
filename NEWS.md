@@ -1,3 +1,51 @@
+flux-core version 0.42.0 - 2022-08-02
+-------------------------------------
+
+## New Features
+
+ * add flux_open_ex(3) (#4450)
+ * flux-top: support split of inactive jobs into completed and failed (#4449)
+ * job-manager: add limits plugins for duration and job size (#4415)
+ * kvs: add defensive checkpoint and kvs.checkpoint-period TOML config (#4383)
+ * python: add LSF URI resolver plugin (#4385)
+ * allow configurable defaults for jobspec system attributes (#4386)
+ * jobtap: add conf.update callback (#4411)
+ * Add a posix_spawn() implementation to libsubprocess and use it to launch
+   job shells (#4395)
+ * jobtap: add job.create, job.destroy callbacks (#4392)
+ * job-manager: allow dependencies on inactive jobs (#4388)
+
+## Fixes
+
+ * content-sqlite,files,s3: register with cache after setup complete (#4458)
+ * flux-overlay: add man page, open to guest users (#4459)
+ * flux-relay: initialize log prefix to hostname when possible (#4454)
+ * flux-top: avoid premature exit on recursive top error (#4452)
+ * job-manager: improve robustness of max job id recovery on restart (#4443)
+ * flux-config-bootstrap(5): improve hosts description (#4444)
+ * libflux: handle flux_respond_error (errnum=0) (#4427)
+ * flux-queue(1): add man page (#4426)
+ * sched-simple: fix allocation of down nodes when using constraints (#4425)
+ * job-archive: improve logging on parse job error (#4422)
+ * job-info: handle invalid eventlog entry errors more carefully (#4416)
+ * flux-dump: fix handling of empty blobref value (#4418)
+ * job-manager: fix race in job eventlog commit and job shell start (#4412)
+ * job-manager: fix dependency-add from job.state.depend callback (#4406)
+ * job-manager: ensure job aux items are destroyed safely (#4397)
+ * job-manager: fix restart code to handle jobs from earlier releases (#4399)
+
+## Cleanup
+
+ * use ccan ARRAY_SIZE() macro (#4445)
+ * kvs: rename kvs.sync target to kvs.wait-version (#4410)
+ * Use flux_error_t and errprintf() over char buf and snprintf() (#4407)
+ * content-sqlite: fix double free (#4391)
+ * kvs: misc cleanups (#4389)
+
+## Testsuite
+
+ * ci: create kvs dumpfile from previous tag for testing (#4402)
+
 flux-core version 0.41.0 - 2022-07-04
 -------------------------------------
 
