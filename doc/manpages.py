@@ -159,6 +159,7 @@ man_pages = [
     ('man3/flux_open', 'flux_clone', 'open/close connection to Flux Message Broker', [author], 3),
     ('man3/flux_open', 'flux_close', 'open/close connection to Flux Message Broker', [author], 3),
     ('man3/flux_open', 'flux_open', 'open/close connection to Flux Message Broker', [author], 3),
+    ('man3/flux_open', 'flux_open_ex', 'open/close connection to Flux Message Broker', [author], 3),
     ('man3/flux_open', 'flux_reconnect', 'open/close connection to Flux Message Broker', [author], 3),
     ('man3/flux_periodic_watcher_create', 'flux_periodic_watcher_reset', 'set/reset a timer', [author], 3),
     ('man3/flux_periodic_watcher_create', 'flux_periodic_watcher_create', 'set/reset a timer', [author], 3),
