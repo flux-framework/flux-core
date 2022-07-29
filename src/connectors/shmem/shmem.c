@@ -102,7 +102,7 @@ static void op_fini (void *impl)
     free (ctx);
 }
 
-flux_t *connector_init (const char *path, int flags)
+flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
 {
 #if HAVE_CALIPER
     cali_id_t uuid   = cali_create_attribute ("flux.uuid",

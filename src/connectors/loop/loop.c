@@ -95,7 +95,7 @@ static void op_fini (void *impl)
     free (c);
 }
 
-flux_t *connector_init (const char *path, int flags)
+flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
 {
     loop_ctx_t *c = malloc (sizeof (*c));
     if (!c) {

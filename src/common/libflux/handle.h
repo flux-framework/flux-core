@@ -76,6 +76,13 @@ enum {
  * in the environment variable FLUX_URI.
  */
 flux_t *flux_open (const char *uri, int flags);
+
+/* Like flux_open(), but if optional flux_error_t parameter is non-NULL,
+ * then any errors normally emitted to stderr will instead be returned
+ * in error->text.
+ */
+flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *error);
+
 void flux_close (flux_t *h);
 
 /* Increment internal reference count on 'h'.

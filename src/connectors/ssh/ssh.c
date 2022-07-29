@@ -18,6 +18,9 @@
 
 #include "src/common/libutil/popen2.h"
 #include "src/common/libutil/errno_safe.h"
+#include "src/common/libutil/errprintf.h"
+#include "src/common/libutil/read_all.h"
+#include "src/common/libutil/strstrip.h"
 #include "src/common/libyuarel/yuarel.h"
 #include "src/common/librouter/usock.h"
 
@@ -186,7 +189,7 @@ error:
     return -1;
 }
 
-flux_t *connector_init (const char *path, int flags)
+flux_t *connector_init (const char *path, int flags, flux_error_t *errp)
 {
     struct ssh_connector *ctx;
     char buf[PATH_MAX + 1];
@@ -195,6 +198,7 @@ flux_t *connector_init (const char *path, int flags)
     const char *ld_lib_path;
     char *argbuf = NULL;
     char **argv = NULL;
+    int popen_flags = 0;
 
     if (!(ctx = calloc (1, sizeof (*ctx))))
         return NULL;
@@ -232,11 +236,22 @@ flux_t *connector_init (const char *path, int flags)
 
     /* Start the ssh command
      */
-    if (!(ctx->p = popen2 (ssh_cmd, argv, 0))) {
+    if (errp)
+        popen_flags = POPEN2_CAPTURE_STDERR;
+    if (!(ctx->p = popen2 (ssh_cmd, argv, popen_flags))) {
         /* If popen fails because ssh cannot be found, flux_open()
          * will just fail with errno = ENOENT, which is not all that helpful.
          * Emit a hint on stderr even though this is perhaps not ideal.
+         * (if errp is non-NULL then use that instead)
          */
+        if (errp) {
+            errprintf (errp,
+                       "ssh-connector: %s: %s\n"
+                       "Hint: set FLUX_SSH in environment to override",
+                       ssh_cmd,
+                       strerror (errno));
+            goto error;
+        }
         fprintf (stderr, "ssh-connector: %s: %s\n", ssh_cmd, strerror (errno));
         fprintf (stderr, "Hint: set FLUX_SSH in environment to override\n");
         goto error;
@@ -247,8 +262,13 @@ flux_t *connector_init (const char *path, int flags)
      * but performing this handshake forces some errors to be handled here
      * inside flux_open() rather than in some less obvious context later.
      */
-    if (!(ctx->uclient = usock_client_create (popen2_get_fd (ctx->p))))
+    if (!(ctx->uclient = usock_client_create (popen2_get_fd (ctx->p)))) {
+        char *buf = NULL;
+        if (read_all (popen2_get_stderr_fd (ctx->p), (void **) &buf) > 0)
+            errprintf (errp, "%s", strstrip (buf));
+        free (buf);
         goto error;
+    }
     if (!(ctx->h = flux_handle_create (ctx, &handle_ops, flags)))
         goto error;
     free (argbuf);

@@ -32,6 +32,7 @@
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libutil/monotime.h"
+#include "src/common/libutil/errprintf.h"
 
 #include "handle.h"
 #include "reactor.h"
@@ -218,7 +219,9 @@ static char *find_file (const char *name, const char *searchpath)
     return path;
 }
 
-static connector_init_f *find_connector (const char *scheme, void **dsop)
+static connector_init_f *find_connector (const char *scheme,
+                                         void **dsop,
+                                         flux_error_t *errp)
 {
     char name[PATH_MAX];
     const char *searchpath = getenv ("FLUX_CONNECTOR_PATH");
@@ -229,18 +232,22 @@ static connector_init_f *find_connector (const char *scheme, void **dsop)
     if (!searchpath)
         searchpath = flux_conf_builtin_get ("connector_path", FLUX_CONF_AUTO);
     if (snprintf (name, sizeof (name), "%s.so", scheme) >= sizeof (name)) {
+        errprintf (errp, "Connector path too long");
         errno = ENAMETOOLONG;
         return NULL;
     }
     if (!(path = find_file (name, searchpath))) {
+        errprintf (errp, "Unable to find connector name '%s'", scheme);
         errno = ENOENT;
         goto error;
     }
     if (!(dso = dlopen (path, RTLD_LAZY | RTLD_LOCAL | FLUX_DEEPBIND))) {
+        errprintf (errp, "dlopen: %s: %s", path, dlerror ());
         errno = EINVAL;
         goto error;
     }
     if (!(connector_init = dlsym (dso, "connector_init"))) {
+        errprintf (errp, "%s: missing connector_init symbol", path);
         errno = EINVAL;
         goto error_dlopen;
     }
@@ -262,7 +269,7 @@ static char *strtrim (char *s, const char *trim)
     return *s ? s : NULL;
 }
 
-flux_t *flux_open (const char *uri, int flags)
+flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *errp)
 {
     char *default_uri = NULL;
     char *path = NULL;
@@ -278,8 +285,12 @@ flux_t *flux_open (const char *uri, int flags)
                           | FLUX_O_TEST_NOSUB
                           | FLUX_O_RPCTRACK;
 
-    if (validate_flags (flags, valid_flags) < 0)
+    err_init (errp);
+
+    if (validate_flags (flags, valid_flags) < 0) {
+        errprintf (errp, "invalid flags specified");
         return NULL;
+    }
 
     /* Try to get URI from (in descending precedence):
      *   argument > environment > builtin
@@ -300,13 +311,13 @@ flux_t *flux_open (const char *uri, int flags)
         *path = '\0';
         path = strtrim (path + 3, " \t");
     }
-    if (!(connector_init = find_connector (scheme, &dso)))
+    if (!(connector_init = find_connector (scheme, &dso, errp)))
         goto error;
     if (getenv ("FLUX_HANDLE_TRACE"))
         flags |= FLUX_O_TRACE;
     if (getenv ("FLUX_HANDLE_MATCHDEBUG"))
         flags |= FLUX_O_MATCHDEBUG;
-    if (!(h = connector_init (path, flags))) {
+    if (!(h = connector_init (path, flags, errp))) {
         ERRNO_SAFE_WRAP (dlclose, dso);
         goto error;
     }
@@ -334,7 +345,18 @@ error_handle:
 error:
     ERRNO_SAFE_WRAP (free, scheme);
     ERRNO_SAFE_WRAP (free, default_uri);
+    /*
+     *  Fill errp->text with strerror only when a more specific error has not
+     *   already been set.
+     */
+    if (errp && !strlen (errp->text))
+        errprintf (errp, "%s", strerror (errno));
     return NULL;
+}
+
+flux_t *flux_open (const char *uri, int flags)
+{
+    return flux_open_ex (uri, flags, NULL);
 }
 
 void flux_close (flux_t *h)
