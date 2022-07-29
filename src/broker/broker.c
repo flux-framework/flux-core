@@ -42,6 +42,7 @@
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/array_size/array_size.h"
 
 #include "module.h"
 #include "brokercfg.h"
@@ -1113,7 +1114,7 @@ static int broker_handle_signals (broker_ctx_t *ctx)
     int blocked[] = { SIGPIPE };
     flux_watcher_t *w;
 
-    for (i = 0; i < sizeof (sigs) / sizeof (sigs[0]); i++) {
+    for (i = 0; i < ARRAY_SIZE (sigs); i++) {
         w = flux_signal_watcher_create (ctx->reactor, sigs[i], signal_cb, ctx);
         if (!w) {
             log_err ("flux_signal_watcher_create");
@@ -1128,7 +1129,7 @@ static int broker_handle_signals (broker_ctx_t *ctx)
     }
 
     /*  Block the list of signals in the blocked array */
-    for (i = 0; i < sizeof (blocked) / sizeof (blocked[0]); i++)
+    for (i = 0; i < ARRAY_SIZE (blocked); i++)
         signal(blocked[i], SIG_IGN);
     return 0;
 }
@@ -1631,7 +1632,7 @@ static bool allow_early_request (const flux_msg_t *msg)
         { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "state-machine.get" },
         { FLUX_MSGTYPE_REQUEST, FLUX_MATCHTAG_NONE, "attr.get" },
     };
-    for (int i = 0; i < sizeof (match) / sizeof (match[0]); i++)
+    for (int i = 0; i < ARRAY_SIZE (match); i++)
         if (flux_msg_cmp (msg, match[i]))
             return true;
     return false;

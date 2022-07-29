@@ -15,6 +15,7 @@
 
 #include "src/common/libutil/jpath.h"
 #include "src/common/libutil/fsd.h"
+#include "ccan/array_size/array_size.h"
 
 #include "builtin.h"
 
@@ -48,7 +49,7 @@ static int parse_json_type (const char *s,
                             json_type *type,
                             fsd_subtype_t *fsd_subtype)
 {
-    for (int i = 0; i < sizeof (typemap) / sizeof (typemap[0]); i++) {
+    for (int i = 0; i < ARRAY_SIZE (typemap); i++) {
         if (!strcasecmp (s, typemap[i].s)) {
             *type = typemap[i].type;
             *fsd_subtype = typemap[i].fsd_subtype;

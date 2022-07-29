@@ -19,6 +19,7 @@
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libidset/idset_private.h"
+#include "ccan/array_size/array_size.h"
 
 struct inout {
     const char *in;
@@ -603,7 +604,7 @@ static void tryop (const char *s1,
 
 void test_ops (void)
 {
-    for (int i = 0; i < sizeof (optab) / sizeof (optab[0]); i++) {
+    for (int i = 0; i < ARRAY_SIZE (optab); i++) {
         tryop (optab[i].a,
                optab[i].op,
                optab[i].b,

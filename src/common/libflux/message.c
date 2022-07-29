@@ -39,6 +39,7 @@
 
 #include "src/common/libutil/aux.h"
 #include "src/common/libutil/errno_safe.h"
+#include "ccan/array_size/array_size.h"
 
 #include "message.h"
 
@@ -1191,13 +1192,12 @@ static struct typemap typemap[] = {
     { "event", "e", FLUX_MSGTYPE_EVENT},
     { "control", "c", FLUX_MSGTYPE_CONTROL},
 };
-static const int typemap_len = sizeof (typemap) / sizeof (typemap[0]);
 
 const char *flux_msg_typestr (int type)
 {
     int i;
 
-    for (i = 0; i < typemap_len; i++)
+    for (i = 0; i < ARRAY_SIZE (typemap); i++)
         if ((type & typemap[i].type))
             return typemap[i].name;
     return "unknown";
@@ -1207,7 +1207,7 @@ static const char *type2prefix (int type)
 {
     int i;
 
-    for (i = 0; i < typemap_len; i++)
+    for (i = 0; i < ARRAY_SIZE (typemap); i++)
         if ((type & typemap[i].type))
             return typemap[i].sname;
     return "?";
@@ -1227,13 +1227,12 @@ static struct flagmap flagmap[] = {
     { "private", FLUX_MSGFLAG_PRIVATE},
     { "streaming", FLUX_MSGFLAG_STREAMING},
 };
-static const int flagmap_len = sizeof (flagmap) / sizeof (flagmap[0]);
 
 static void flags2str (uint8_t flags, char *buf, int buflen)
 {
     int i, len = 0;
     buf[0] = '\0';
-    for (i = 0; i < flagmap_len; i++) {
+    for (i = 0; i < ARRAY_SIZE (flagmap); i++) {
         if ((flags & flagmap[i].flag)) {
             if (len) {
                 assert (len < (buflen - 1));

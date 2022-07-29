@@ -19,6 +19,7 @@
 #include "src/common/libutil/xzmalloc.h"
 #include "src/common/libutil/fdutils.h"
 #include "src/common/libtap/tap.h"
+#include "ccan/array_size/array_size.h"
 
 static const size_t fdwriter_bufsize = 10*1024*1024;
 
@@ -924,7 +925,7 @@ static void test_timer (flux_reactor_t *reactor)
     oneshot_errno = 0;
     ok ((w = flux_timer_watcher_create (reactor, 0, 0, oneshot, NULL)) != NULL,
         "timer: creating timer watcher works");
-    for (i = 0; i < sizeof (t) / sizeof (t[0]); i++) {
+    for (i = 0; i < ARRAY_SIZE (t); i++) {
         flux_timer_watcher_reset (w, t[i], 0);
         flux_watcher_start (w);
         t0 = flux_reactor_now (reactor);

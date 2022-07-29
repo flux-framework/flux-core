@@ -23,6 +23,7 @@
 #include "src/common/libutil/oom.h"
 #include "src/common/libutil/monotime.h"
 #include "src/common/libutil/xzmalloc.h"
+#include "ccan/array_size/array_size.h"
 
 void test_null (flux_t *h, uint32_t nodeid);
 void test_echo (flux_t *h, uint32_t nodeid);
@@ -60,7 +61,7 @@ static test_t tests[] = {
 test_t *test_lookup (const char *name)
 {
     int i;
-    for (i = 0; i < sizeof (tests) / sizeof (tests[0]); i++)
+    for (i = 0; i < ARRAY_SIZE (tests); i++)
         if (!strcmp (tests[i].name, name))
             return &tests[i];
     return NULL;

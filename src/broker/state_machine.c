@@ -21,6 +21,7 @@
 #include "src/common/libidset/idset.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/libutil/errprintf.h"
+#include "ccan/array_size/array_size.h"
 
 #include "state_machine.h"
 
@@ -143,12 +144,10 @@ static struct state_next nexttab[] = {
 
 static const double default_quorum_timeout = 60; // log slow joiners
 
-#define TABLE_LENGTH(t) (sizeof(t) / sizeof((t)[0]))
-
 static void state_action (struct state_machine *s, broker_state_t state)
 {
     int i;
-    for (i = 0; i < TABLE_LENGTH (statetab); i++) {
+    for (i = 0; i < ARRAY_SIZE (statetab); i++) {
         if (statetab[i].state == state) {
             if (statetab[i].action)
                 statetab[i].action (s);
@@ -160,7 +159,7 @@ static void state_action (struct state_machine *s, broker_state_t state)
 static const char *statestr (broker_state_t state)
 {
     int i;
-    for (i = 0; i < TABLE_LENGTH (statetab); i++) {
+    for (i = 0; i < ARRAY_SIZE (statetab); i++) {
         if (statetab[i].state == state)
             return statetab[i].name;
     }
@@ -170,7 +169,7 @@ static const char *statestr (broker_state_t state)
 static broker_state_t state_next (broker_state_t current, const char *event)
 {
     int i;
-    for (i = 0; i < TABLE_LENGTH (nexttab); i++) {
+    for (i = 0; i < ARRAY_SIZE (nexttab); i++) {
         if (nexttab[i].current == current && !strcmp (event, nexttab[i].event))
             return nexttab[i].next;
     }

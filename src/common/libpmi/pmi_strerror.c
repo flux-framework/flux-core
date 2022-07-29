@@ -15,6 +15,8 @@
 #include <errno.h>
 #include <string.h>
 
+#include "ccan/array_size/array_size.h"
+
 #include "pmi.h"
 #include "pmi_strerror.h"
 
@@ -41,14 +43,13 @@ static etab_t pmi_errors[] = {
     { PMI_ERR_INVALID_KEYVALP,  "invalid keyvalp argument" },
     { PMI_ERR_INVALID_SIZE,     "invalid size argument" },
 };
-static const int pmi_errors_len = sizeof (pmi_errors) / sizeof (pmi_errors[0]);
 
 const char *pmi_strerror (int rc)
 {
     static char unknown[] = "pmi error XXXXXXXXX";
     int i;
 
-    for (i = 0; i < pmi_errors_len; i++) {
+    for (i = 0; i < ARRAY_SIZE (pmi_errors); i++) {
         if (pmi_errors[i].errnum == rc)
             return pmi_errors[i].errstr;
     }

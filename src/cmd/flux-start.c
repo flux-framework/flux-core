@@ -39,6 +39,7 @@
 #include "src/common/libpmi/dgetline.h"
 #include "src/common/libhostlist/hostlist.h"
 #include "src/common/librouter/usock_service.h"
+#include "ccan/array_size/array_size.h"
 
 #define DEFAULT_EXIT_TIMEOUT 20.0
 
@@ -216,7 +217,7 @@ int main (int argc, char *argv[])
 
     if (!optparse_hasopt (ctx.opts, "test-size")) {
         int i;
-        for (i = 0; i < sizeof (opts) / sizeof (opts[0]); i++) {
+        for (i = 0; i < ARRAY_SIZE (opts); i++) {
             if (opts[i].name
                 && !strncmp (opts[i].name, "test-", 5)
                 && optparse_hasopt (ctx.opts, opts[i].name))
