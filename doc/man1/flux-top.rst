@@ -34,6 +34,9 @@ j, down-arrow
 k, up-arrow
    Move cursor up in the job listing.
 
+d
+   Toggle display of inactive job details (failed vs successful jobs).
+
 enter
    Open the job at the current cursor position.  Only Flux instances (colored
    blue in the job listing) owned by the user running ``flux-top`` may be
@@ -70,7 +73,10 @@ The summary pane shows the following information:
 
 - The gpus bargraph, with the same layout as the nodes bargraph.
 
-- The number of pending, running, and inactive jobs.
+- The number of pending, running, and inactive jobs. When executed as the
+  instance owner, inactive jobs are split into completed (successful) and
+  failed (unsuccessful and canceled) jobs. This display can be toggled with
+  the ``d`` key.
 
 - A heart icon that appears each time the instance heartbeat event is
   published.
