@@ -123,7 +123,8 @@ TESTS = test_sha1.t \
 	test_grudgeset.t \
 	test_digest.t \
 	test_jpath.t \
-	test_errprintf.t
+	test_errprintf.t \
+	test_strstrip.t
 
 test_ldadd = \
 	$(top_builddir)/src/common/libutil/libutil.la \
@@ -254,3 +255,7 @@ test_jpath_t_LDADD = $(test_ldadd)
 test_errprintf_t_SOURCES = test/errprintf.c
 test_errprintf_t_CPPFLAGS = $(test_cppflags)
 test_errprintf_t_LDADD = $(test_ldadd)
+
+test_strstrip_t_SOURCES = test/strstrip.c
+test_strstrip_t_CPPFLAGS = $(test_cppflags)
+test_strstrip_t_LDADD = $(test_ldadd)
