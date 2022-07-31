@@ -69,6 +69,24 @@ void test_handle_invalid_args (flux_t *h)
     flux_msg_destroy (msg);
 }
 
+static void test_flux_open_ex ()
+{
+    flux_error_t error;
+
+    ok (flux_open_ex ("foo://foo", 0, &error) == NULL,
+        "flux_open_ex with invalid connector name fails");
+    is ("Unable to find connector name 'foo'", error.text,
+        "flux_open_ex returns expected error in error.text");
+
+    ok (flux_open_ex (NULL, 0x1000000, &error) == NULL,
+        "flux_open_ex with invalid flags fails");
+    is ("invalid flags specified", error.text,
+        "flux_open_ex returns expected error in error.text");
+
+    lives_ok ({flux_open_ex ("foo://foo", 0, NULL);},
+        "flux_open_ex doesn't crash if error parameter is NULL");
+}
+
 int main (int argc, char *argv[])
 {
     flux_t *h;
@@ -229,6 +247,10 @@ int main (int argc, char *argv[])
         "flux_reconnect with null reconnect method fails with ENOSYS");
 
     flux_close (h);
+
+    /* flux_open_ex() */
+    test_flux_open_ex ();
+
     done_testing();
     return (0);
 }
