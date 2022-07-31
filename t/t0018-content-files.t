@@ -157,9 +157,9 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rootref with longer 
 '
 
 test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned rootref with longer rootref' '
-        echo abcdefghijklmnopqrstuvwxyz >rootref3.exp &&
-        kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref3.out &&
-        test_cmp rootref3.exp rootref3.out
+        echo abcdefghijklmnopqrstuvwxyz >rootref4.exp &&
+        kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref4.out &&
+        test_cmp rootref4.exp rootref4.out
 '
 
 test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rootref to shorter rootref' '
@@ -167,9 +167,9 @@ test_expect_success HAVE_JQ 'kvs-checkpoint.put updates foo rootref to shorter r
 '
 
 test_expect_success HAVE_JQ 'kvs-checkpoint.get foo returned rootref with shorter rootref' '
-        echo foobar >rootref4.exp &&
-        kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref4.out &&
-        test_cmp rootref4.exp rootref4.out
+        echo foobar >rootref5.exp &&
+        kvs_checkpoint_get foo | jq -r .value | jq -r .rootref >rootref5.out &&
+        test_cmp rootref5.exp rootref5.out
 '
 
 test_expect_success 'load with invalid hash size fails with EPROTO' '
