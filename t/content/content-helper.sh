@@ -30,3 +30,17 @@ checkpoint_get() {
 	o=$(checkpoint_get_msg $1)
 	jq -j -c -n ${o} | $RPC content.checkpoint-get
 }
+
+# Identical to checkpoint_put(), but go directly to backing store
+# Usage: checkpoint_put key rootref
+checkpoint_backing_put() {
+	o=$(checkpoint_put_msg $1 $2)
+	jq -j -c -n ${o} | $RPC content-backing.checkpoint-put
+}
+
+# Identical to checkpoint_get(), but go directly to backing store
+# Usage: checkpoint_get key
+checkpoint_backing_get() {
+	o=$(checkpoint_get_msg $1)
+	jq -j -c -n ${o} | $RPC content-backing.checkpoint-get
+}

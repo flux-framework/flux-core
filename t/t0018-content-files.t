@@ -214,6 +214,28 @@ test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref with shorter ro
         test_cmp rootref5.exp rootref5.out
 '
 
+test_expect_success HAVE_JQ 'checkpoint-put updates foo rootref to boof' '
+        checkpoint_put foo boof
+'
+
+test_expect_success HAVE_JQ 'checkpoint-backing-get foo returns rootref boof' '
+        echo boof >rootref_backing.exp &&
+        checkpoint_backing_get foo \
+            | jq -r .value \
+            | jq -r .rootref >rootref_backing.out &&
+        test_cmp rootref_backing.exp rootref_backing.out
+'
+
+test_expect_success HAVE_JQ 'checkpoint-backing-put foo w/ rootref poof' '
+        checkpoint_backing_put foo poof
+'
+
+test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref boof' '
+        echo poof >rootref6.exp &&
+        checkpoint_get foo | jq -r .value | jq -r .rootref >rootref6.out &&
+        test_cmp rootref6.exp rootref6.out
+'
+
 test_expect_success 'checkpoint-get bad request fails with EPROTO' '
 	test_must_fail $RPC content.checkpoint-get </dev/null 2>badget.err &&
 	grep "Protocol error" badget.err
@@ -227,5 +249,47 @@ test_expect_success 'remove content-files module' '
 	flux module remove content-files
 '
 
+test_expect_success HAVE_JQ 'checkpoint-put foo w/ rootref spoon' '
+       checkpoint_put foo spoon
+'
+
+test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref spoon' '
+       echo spoon >rootref7.exp &&
+       checkpoint_get foo | jq -r .value | jq -r .rootref >rootref7.out &&
+       test_cmp rootref7.exp rootref7.out
+'
+
+test_expect_success 'load content-files module on rank 0' '
+       flux module load content-files
+'
+
+# arg1 - expected reference
+wait_checkpoint_flush() {
+        local expected=$1
+        local i=0
+        while checkpoint_backing_get foo \
+                | jq -r .value \
+                | jq -r .rootref > checkpointflush.out \
+              && [ $i -lt 50 ]
+        do
+            checkpoint=$(cat checkpointflush.out)
+            if [ "${checkpoint}" = "${expected}" ]
+            then
+                return 0
+            fi
+            sleep 0.1
+            i=$((i + 1))
+        done
+        return 1
+}
+
+test_expect_success HAVE_JQ 'checkpoint-backing-get foo returns spoon' '
+       wait_checkpoint_flush spoon
+'
+
+test_expect_success 'remove content-files module on rank 0' '
+       flux content flush &&
+       flux module remove content-files
+'
 
 test_done

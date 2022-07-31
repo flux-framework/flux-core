@@ -169,6 +169,24 @@ test_expect_success HAVE_JQ 'checkpoint-get foo still returns rootref baz' '
         test_cmp rootref3.exp rootref3.out
 '
 
+test_expect_success HAVE_JQ 'checkpoint-backing-get foo returns rootref baz' '
+	echo baz >rootref_backing.exp &&
+	checkpoint_backing_get foo \
+	    | jq -r .value \
+	    | jq -r .rootref >rootref_backing.out &&
+	test_cmp rootref_backing.exp rootref_backing.out
+'
+
+test_expect_success HAVE_JQ 'checkpoint-backing-put foo w/ rootref boof' '
+	checkpoint_backing_put foo boof
+'
+
+test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref boof' '
+	echo boof >rootref4.exp &&
+	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref4.out &&
+	test_cmp rootref4.exp rootref4.out
+'
+
 test_expect_success 'config: reload config does not take effect immediately' '
 	flux config reload 2>/dev/null &&
 	flux dmesg | grep content-s3 | tail -1 >reload.log &&
@@ -198,6 +216,51 @@ test_expect_success 'config: reload with bad credential path fails' '
 	sed -i -e "s/credential-file =.*$/credential-file = \"nocreds\"/" \
 		content-s3.toml &&
 	test_must_fail flux config reload
+'
+
+test_expect_success 'config: unload module' '
+	flux module remove content-s3
+'
+
+test_expect_success HAVE_JQ 'checkpoint-put foo w/ rootref spoon' '
+	checkpoint_put foo spoon
+'
+
+test_expect_success HAVE_JQ 'checkpoint-get foo returned rootref spoon' '
+	echo spoon >rootref5.exp &&
+	checkpoint_get foo | jq -r .value | jq -r .rootref >rootref5.out &&
+	test_cmp rootref5.exp rootref5.out
+'
+
+test_expect_success 'load content-s3 module on rank 0' '
+	cp content-s3.save content-s3.toml &&
+	cp creds/creds.save creds/creds.toml &&
+	flux config reload &&
+	flux module load content-s3
+'
+
+# arg1 - expected reference
+wait_checkpoint_flush() {
+	local expected=$1
+	local i=0
+	while checkpoint_backing_get foo \
+		| jq -r .value \
+		| jq -r .rootref > checkpointflush.out \
+	      && [ $i -lt 50 ]
+	do
+	    checkpoint=$(cat checkpointflush.out)
+	    if [ "${checkpoint}" = "${expected}" ]
+	    then
+		return 0
+	    fi
+	    sleep 0.1
+	    i=$((i + 1))
+	done
+	return 1
+}
+
+test_expect_success HAVE_JQ 'checkpoint-backing-get foo returns spoon' '
+	wait_checkpoint_flush spoon
 '
 
 test_expect_success 'config: unload module' '
