@@ -19,7 +19,9 @@ extern "C" {
  ** Only handle implementation stuff below.
  ** Flux_t handle users should not use these interfaces.
  */
-typedef flux_t *(connector_init_f)(const char *uri, int flags);
+typedef flux_t *(connector_init_f)(const char *uri,
+                                   int flags,
+                                   flux_error_t *errp);
 
 struct flux_handle_ops {
     int         (*setopt)(void *impl, const char *option,

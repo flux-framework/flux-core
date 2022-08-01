@@ -12,6 +12,7 @@
 #define _UTIL_ERRPRINTF_H
 
 #include <stdarg.h>
+#include <string.h>
 
 #include "src/common/libflux/types.h" /* flux_error_t */
 
@@ -28,6 +29,12 @@ int errprintf (flux_error_t *errp, const char *fmt, ...)
 
 int verrprintf (flux_error_t *errp, const char *fmt, va_list ap);
 
+
+static inline void err_init (flux_error_t *errp)
+{
+    if (errp)
+        memset (errp->text, 0, sizeof (errp->text));
+}
 
 #endif /* !_UTIL_ERRPRINTF_H */
 

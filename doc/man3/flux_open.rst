@@ -12,6 +12,8 @@ SYNOPSIS
 
    flux_t *flux_open (const char *uri, int flags);
 
+   flux_t *flux_open_ex (const char *uri, int flags, flux_error_t *error);
+
    void flux_close (flux_t *h);
 
    flux_t *flux_clone (flux_t *h);
@@ -22,8 +24,10 @@ SYNOPSIS
 DESCRIPTION
 ===========
 
-``flux_open()`` creates a ``flux_t`` handle, used to communicate with the
-Flux message broker.
+``flux_open()`` and ``flux_open_ex()`` create a ``flux_t`` handle, used
+to communicate with the Flux message broker. ``flux_open_ex()`` takes an
+optional pointer to a ``flux_error_t`` structure which, when non-NULL, will
+be used to store any errors which may have otherwise gone to ``stderr``.
 
 The *uri* scheme (before "://") specifies the "connector" that will be used
 to establish the connection. The *uri* path (after "://") is parsed by the

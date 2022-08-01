@@ -23,6 +23,9 @@ int main(int argc, char** argv)
     flux_error_t error;
     char longstring[256];
 
+    lives_ok ({err_init (NULL);},
+              "err_init with NULL args doesn't crash");
+
     lives_ok ({errprintf (NULL, NULL);},
               "errprintf with no args doesn't crash");
     lives_ok ({errprintf (&error, NULL);},
@@ -33,6 +36,10 @@ int main(int argc, char** argv)
     errprintf (&error, "foo");
     is (error.text, "foo",
         "errprintf with static format works");
+
+    err_init (&error);
+    is (error.text, "",
+        "err_init zeros error.text buffer");
 
     errno = 64;
     errprintf (&error, "foo");

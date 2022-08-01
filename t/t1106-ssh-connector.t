@@ -104,6 +104,32 @@ test_expect_success 'ssh:// with missing path component fails in flux_open()' '
 	grep -q "flux_open:" nopath.out
 '
 
+test_expect_success 'create test ssh that emits errors on stderr' '
+	cat <<-EOF >ssh.sh &&
+	printf "error from ssh\n" >&2
+	exit 1
+	EOF
+	chmod +x ssh.sh
+'
+
+test_expect_success 'ssh:// stderr is redirected with Python flux.Flux()' '
+	cat <<-EOF >open_ex.py &&
+	import os
+	import flux
+	try:
+	    flux.Flux()
+	except OSError as err:
+	    print (f"Exception: errno={err.errno} msg={err.strerror}")
+	EOF
+	cat <<-EOF2 >open_ex.expected &&
+	Exception: errno=104 msg=Unable to connect to Flux: error from ssh
+	EOF2
+	FLUX_URI=ssh://localhost/foo/bar FLUX_SSH=$(pwd)/ssh.sh \
+	  flux python open_ex.py >open_ex.out 2>open_ex.err &&
+	test_must_be_empty open_ex.err &&
+	test_cmp open_ex.expected open_ex.out
+'
+
 test_expect_success 'remove heartbeat module' '
         flux module remove heartbeat
 '
