@@ -32,7 +32,7 @@ fi
 
 flux content flush
 
-# Issue 4378 - this dirty count would stay at 1
+# Issue 4379 - this dirty count would stay at 1
 count=`flux module stats --parse dirty content`
 if [ ${count} -ne 0 ]
 then
