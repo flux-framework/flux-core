@@ -399,19 +399,17 @@ int mod_main (flux_t *h, int argc, char **argv)
             goto done;
     }
     if (content_register_service (h, "content-backing") < 0)
-        goto done;
+        goto done_unreg;
     if (content_register_service (h, "kvs-checkpoint") < 0)
-        goto done;
+        goto done_unreg;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
-        goto done;
+        goto done_unreg;
     }
-    if (!testing) {
-        if (content_unregister_backing_store (h) < 0)
-            goto done;
-    }
-
     rc = 0;
+done_unreg:
+    if (!testing)
+        (void)content_unregister_backing_store (h);
 done:
     content_files_destroy (ctx);
     return rc;
