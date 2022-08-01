@@ -497,12 +497,12 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "content_s3_create failed");
         return -1;
     }
+    if (content_register_service (h, "content-backing") < 0)
+        goto done;
+    if (content_register_service (h, "kvs-checkpoint") < 0)
+        goto done;
     if (content_register_backing_store (h, "content-s3") < 0)
         goto done;
-    if (content_register_service (h, "content-backing") < 0)
-        goto done_unreg;
-    if (content_register_service (h, "kvs-checkpoint") < 0)
-        goto done_unreg;
     if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
         flux_log_error (h, "flux_reactor_run");
         goto done_unreg;
