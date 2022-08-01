@@ -16,6 +16,7 @@
 #include <locale.h>
 
 #include "src/common/libutil/uri.h"
+#include "src/common/libutil/errprintf.h"
 #include "top.h"
 
 static const double job_activity_rate_limit = 2;
@@ -104,16 +105,25 @@ void refresh_cb (flux_reactor_t *r,
  * If id = FLUX_JOBID_ANY, merely call flux_open().
  * Otherwise, fetch remote-uri from job and open that.
  */
-static flux_t *open_flux_instance (const char *target)
+static flux_t *open_flux_instance (const char *target, flux_error_t *errp)
 {
     flux_t *h;
+    flux_error_t error;
     flux_future_t *f = NULL;
     char *uri = NULL;
 
-    if (target && !(uri = uri_resolve (target)))
-        fatal (0, "failed to resolve target %s to a Flux URI", target);
-    if (!(h = flux_open (uri, 0)))
-        fatal (errno, "error connecting to Flux");
+    if (target && !(uri = uri_resolve (target, &error))) {
+        errprintf (errp,
+                   "%s\n%s",
+                   "failed to resolve target to a Flux URI",
+                   error.text);
+        return NULL;
+    }
+    if (!(h = flux_open_ex (uri, 0, &error)))
+        errprintf (errp,
+                   "error connecting to Flux: %s\n%s",
+                   strerror (errno),
+                   error.text);
     free (uri);
     flux_future_destroy (f);
     return h;
@@ -204,11 +214,13 @@ static char * build_title (struct top *top, const char *title)
     return strdup (title);
 }
 
-struct top *top_create (const char *uri, const char *title)
+struct top *top_create (const char *uri,
+                        const char *title,
+                        flux_error_t *errp)
 {
     struct top *top = calloc (1, sizeof (*top));
 
-    if (!top || !(top->h = open_flux_instance (uri)))
+    if (!top || !(top->h = open_flux_instance (uri, errp)))
         goto fail;
 
     top->id = get_jobid (top->h);
@@ -259,6 +271,7 @@ int main (int argc, char *argv[])
     int reactor_flags = 0;
     const char *target = NULL;
     optparse_t *opts;
+    flux_error_t error;
 
     setlocale (LC_ALL, "");
 
@@ -281,8 +294,8 @@ int main (int argc, char *argv[])
         fatal (0, "stdin is not a terminal");
     initialize_curses ();
 
-    if (!(top = top_create (target, NULL)))
-        fatal (errno, "failed to initialize top");
+    if (!(top = top_create (target, NULL, &error)))
+        fatal (0, "%s", error.text);
     if (optparse_hasopt (opts, "test-exit"))
         reactor_flags |= FLUX_REACTOR_ONCE;
     if (top_run (top, reactor_flags) < 0)

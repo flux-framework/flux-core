@@ -47,7 +47,9 @@ struct dimension {
     int y_length;
 };
 
-struct top *top_create (const char *uri, const char *prefix);
+struct top *top_create (const char *uri,
+                        const char *prefix,
+                        flux_error_t *errp);
 void top_destroy (struct top *top);
 int top_run (struct top *top, int reactor_flags);
 

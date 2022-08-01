@@ -154,6 +154,47 @@ static void joblist_continuation (flux_future_t *f, void *arg)
     flux_future_destroy (f);
 }
 
+
+/* Attempt to create a popup box over the joblist pane to
+ *  display one or more errors. The box will stay open until
+ *  the user presses a key.
+ */
+static void error_popup (struct joblist_pane *joblist,
+                         const char *msg)
+{
+    WINDOW *popup = newwin (6, 78, 15, 2);
+    WINDOW *errors = NULL;
+    if (!popup)
+        goto out;
+    box (popup, 0, 0);
+    touchwin (popup);
+    overwrite (popup, joblist->win);
+
+    if (!(errors = derwin (popup, 3, 75, 2, 2)))
+        goto out;
+
+    mvwprintw (errors, 0, 0, "%s", msg);
+
+    /*  Refresh windows
+     */
+    wrefresh (popup);
+    wrefresh (errors);
+
+    /*  Display error for up to 4s. Any key exits prematurely */
+    halfdelay (40);
+    getch ();
+
+    /* Leave halfdelay mode */
+    nocbreak ();
+    cbreak ();
+
+out:
+    if (popup)
+        delwin (popup);
+    if (errors)
+        delwin (errors);
+}
+
 void joblist_pane_enter (struct joblist_pane *joblist)
 {
     struct top *top;
@@ -161,6 +202,7 @@ void joblist_pane_enter (struct joblist_pane *joblist)
     char *uri = NULL;
     char title [1024];
     char jobid [24];
+    flux_error_t error;
 
     json_t *job = get_current_job (joblist);
     if (!job)
@@ -185,8 +227,10 @@ void joblist_pane_enter (struct joblist_pane *joblist)
     /*  Lazily attempt to run top on jobid, but for now simply return to the
      *   original top window on failure.
      */
-    if ((top = top_create (uri, title)))
+    if ((top = top_create (uri, title, &error)))
         top_run (top, 0);
+    else
+        error_popup (joblist, error.text);
     top_destroy (top);
     return;
 }
