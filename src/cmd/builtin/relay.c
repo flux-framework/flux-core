@@ -131,8 +131,18 @@ static int cmd_relay (optparse_t *p, int ac, char *av[])
     flux_t *h;
     int optindex;
     char *uri;
+    char hostname [HOST_NAME_MAX + 1];
 
-    log_init ("flux-relay");
+    /*  If possible, initalize logging prefix as local hostname. (In the
+     *  unlikely event gethostname(3) fails, use "uknown-host".)
+     *
+     *  This will be more helpful than a literal "flux-relay" logging prefix
+     *  for end users that may be uknowningly using flux-relay as part of
+     *  the ssh connector.
+     */
+    log_init ("uknown-host");
+    if (gethostname (hostname, sizeof (hostname)) == 0)
+        log_init (hostname);
 
     optindex = optparse_option_index (p);
     if (optindex == ac)
