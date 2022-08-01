@@ -103,5 +103,29 @@ test_expect_success NO_CHAIN_LINT 'flux-top can call itself recursively' '
 	$runpty -o recurse.log --input=recurse.in flux top &&
 	grep -q $(echo $(cat expected.id) | sed "s/ƒ//") recurse.log
 '
-
+test_expect_success NO_CHAIN_LINT 'flux-top does not exit on recursive failure' '
+	cat <<-EOF1 >ssh-fail &&
+	#!/bin/sh
+	printf "ssh failure\n" >&2
+	EOF1
+	chmod +x ssh-fail &&
+	SHELL=/bin/sh &&
+	flux jobs &&
+	flux proxy $(cat jobid2) flux jobs -c1 -no {id} >expected.id &&
+	cat <<-EOF >recurse-fail.in &&
+	{ "version": 2 }
+	[0.5, "i", "j"]
+	[1.0, "i", "j"]
+	[1.5, "i", "j"]
+	[2.0, "i", "k"]
+	[2.5, "i", "\n"]
+	[3.25, "i", "x"]
+	[3.75, "i", "q"]
+	EOF
+	unset FLUX_URI_RESOLVE_LOCAL &&
+	FLUX_SSH=$(pwd)/ssh-fail \
+	    $runpty -f asciicast -o recurse-fail.log \
+	        --input=recurse-fail.in flux top &&
+	grep -qi "error connecting to Flux" recurse-fail.log
+'
 test_done
