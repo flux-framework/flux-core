@@ -18,7 +18,8 @@ extern "C" {
 #endif
 
 /* Return true if disconnect request msg1 came from same sender as
- * msg2 and has appropraite authorization */
+ * msg2 and has appropriate authorization
+ */
 bool flux_disconnect_match (const flux_msg_t *msg1, const flux_msg_t *msg2);
 
 /* Remove all messages in 'l' with the same sender as 'msg'.
