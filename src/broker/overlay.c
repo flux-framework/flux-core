@@ -1984,7 +1984,7 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "overlay.disconnect",
+        "overlay.disconnect", // clean up after 'flux overlay status --wait'
         disconnect_cb,
         FLUX_ROLE_USER,
     },
@@ -1996,7 +1996,7 @@ static const struct flux_msg_handler_spec htab[] = {
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "overlay.disconnect-subtree",
+        "overlay.disconnect-subtree",   // handle 'flux overlay disconnect'
         overlay_disconnect_subtree_cb,
         0
     },
