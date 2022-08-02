@@ -893,11 +893,15 @@ static int subcmd_disconnect (optparse_t *p, int ac, char *av[])
     if (parent == -1)
         parent = lookup_parentof (h, rank); // might return -1 (unlikely)
 
+    char *host = strdup (flux_get_hostbyrank (h, rank));
+    if (!host)
+        log_msg_exit ("out of memory");
     log_msg ("asking %s (rank %d) to disconnect child %s (rank %d)",
              flux_get_hostbyrank (h, parent),
              parent,
-             flux_get_hostbyrank (h, rank),
+             host,
              rank);
+    free (host);
 
     if (!(f = flux_rpc_pack (h,
                              "overlay.disconnect-subtree",
