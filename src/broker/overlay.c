@@ -1974,29 +1974,29 @@ static const struct flux_msg_handler_spec htab[] = {
         FLUX_MSGTYPE_REQUEST,
         "overlay.stats.get",
         overlay_stats_get_cb,
-        0
+        FLUX_ROLE_USER,
     },
     {
         FLUX_MSGTYPE_REQUEST,
         "overlay.health",
         overlay_health_cb,
-        0
+        FLUX_ROLE_USER,
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "overlay.disconnect",
+        "overlay.disconnect", // clean up after 'flux overlay status --wait'
         disconnect_cb,
-        0
+        FLUX_ROLE_USER,
     },
     {
         FLUX_MSGTYPE_REQUEST,
         "overlay.topology",
         overlay_topology_cb,
-        0
+        FLUX_ROLE_USER,
     },
     {
         FLUX_MSGTYPE_REQUEST,
-        "overlay.disconnect-subtree",
+        "overlay.disconnect-subtree",   // handle 'flux overlay disconnect'
         overlay_disconnect_subtree_cb,
         0
     },

@@ -23,6 +23,7 @@ man1
    flux-logger
    flux-mini
    flux-module
+   flux-overlay
    flux-ping
    flux-proxy
    flux-pstree
