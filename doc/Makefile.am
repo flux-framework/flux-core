@@ -16,6 +16,7 @@ MAN1_FILES_PRIMARY = \
 	man1/flux-kvs.1 \
 	man1/flux-keygen.1 \
 	man1/flux-logger.1 \
+	man1/flux-overlay.1 \
 	man1/flux-ping.1 \
 	man1/flux-start.1 \
 	man1/flux-startlog.1 \
