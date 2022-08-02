@@ -394,24 +394,22 @@ int mod_main (flux_t *h, int argc, char **argv)
         flux_log_error (h, "content_files_create failed");
         return -1;
     }
-    if (!testing) {
-        if (content_register_backing_store (h, "content-files") < 0)
-            goto done;
-    }
     if (content_register_service (h, "content-backing") < 0)
         goto done;
     if (content_register_service (h, "kvs-checkpoint") < 0)
         goto done;
-    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
-        flux_log_error (h, "flux_reactor_run");
-        goto done;
-    }
     if (!testing) {
-        if (content_unregister_backing_store (h) < 0)
+        if (content_register_backing_store (h, "content-files") < 0)
             goto done;
     }
-
+    if (flux_reactor_run (flux_get_reactor (h), 0) < 0) {
+        flux_log_error (h, "flux_reactor_run");
+        goto done_unreg;
+    }
     rc = 0;
+done_unreg:
+    if (!testing)
+        (void)content_unregister_backing_store (h);
 done:
     content_files_destroy (ctx);
     return rc;

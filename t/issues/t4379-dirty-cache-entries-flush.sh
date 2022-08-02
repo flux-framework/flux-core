@@ -23,19 +23,18 @@ fi
 
 flux module load content-sqlite
 
+# Issue 4379 - this dirty count would stay at 1
+# Check count in a loop, although highly improbable, technically could
+# be racy
 count=`flux module stats --parse dirty content`
-if [ ${count} -ne 1 ]
-then
-    echo "dirty entries still 1 after module reload"
-    return 1
-fi
-
-flux content flush
-
-# Issue 4378 - this dirty count would stay at 1
-count=`flux module stats --parse dirty content`
+i=0
+while [ ${count} -ne 0 ] && [ $i -lt 50 ]
+do
+    sleep 0.1
+    i=$((i + 1))
+done
 if [ ${count} -ne 0 ]
 then
-    echo "dirty entries not 0 after final flush"
+    echo "dirty entries not 0"
     return 1
 fi
