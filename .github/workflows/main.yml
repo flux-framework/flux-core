@@ -168,6 +168,7 @@ jobs:
         docker run -d -p 9000:9000 minio/minio server /data; \
 
     - name: generate dumpfile from most recent flux-core tag
+      if:  (matrix.create_release != true)
       run: |
         git tag -l ; \
         src/test/create-kvs-dumpfile.sh -d /tmp/dumpfile; \
