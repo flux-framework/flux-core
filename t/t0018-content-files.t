@@ -180,7 +180,7 @@ test_expect_success 'kvs-checkpoint.get bad request fails with EPROTO' '
 	test_must_fail $RPC kvs-checkpoint.get </dev/null 2>badget.err &&
 	grep "Protocol error" badget.err
 '
-test_expect_success 'kvs-checkpoint.get bad request fails with EPROTO' '
+test_expect_success 'kvs-checkpoint.put bad request fails with EPROTO' '
 	test_must_fail $RPC kvs-checkpoint.put </dev/null 2>badput.err &&
 	grep "Protocol error" badput.err
 '
