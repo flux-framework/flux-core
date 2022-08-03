@@ -170,9 +170,10 @@ jobs:
     - name: generate dumpfile from most recent flux-core tag
       if:  (matrix.create_release != true)
       run: |
-        git tag -l ; \
-        src/test/create-kvs-dumpfile.sh -d /tmp/dumpfile; \
-        cp /tmp/dumpfile/*.tar.bz2 $(pwd)/t/job-manager/dumps/valid
+        src/test/create-kvs-dumpfile.sh -d /tmp/dumpfile &&
+        if test -f /tmp/dumpfile/*.bz2; then
+            cp /tmp/dumpfile/*.tar.bz2 $(pwd)/t/job-manager/dumps/valid
+        fi
 
     - name: docker buildx
       uses: docker/setup-buildx-action@v1
