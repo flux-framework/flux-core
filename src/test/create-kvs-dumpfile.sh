@@ -60,6 +60,12 @@ while true; do
     esac
 done
 
+if test "${TAG}" = "$(git describe)"; then
+    printf "Doing nothing by default since this commit is a tag\n"
+    printf "To force: use --tag=TAG option\n"
+    exit 0
+fi
+
 mkdir "${OUTPUTDIR}" || die "Failed to create $OUTPUTDIR"
 if test -n "$WORKLOAD_PATH"; then
     cp $WORKLOAD_PATH ${OUTPUTDIR}/workload.sh
