@@ -37,7 +37,6 @@
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libidset/idset.h"
 #include "src/common/libutil/ipaddr.h"
-#include "src/common/libutil/kary.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
 #include "src/common/libutil/fsd.h"
