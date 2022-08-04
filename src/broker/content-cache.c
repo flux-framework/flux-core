@@ -340,13 +340,12 @@ static void cache_entry_remove (struct content_cache *cache,
 {
     assert (e->load_requests == NULL);
     assert (e->store_requests == NULL);
+    assert (!e->dirty);
     list_del (&e->list);
     if (e->valid) {
         cache->acct_size -= e->len;
         cache->acct_valid--;
     }
-    if (e->dirty)
-        cache->acct_dirty--;
     zhashx_delete (cache->entries, e->hash);
 }
 
