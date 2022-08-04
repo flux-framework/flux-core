@@ -1146,6 +1146,22 @@ done:
     return rc;
 }
 
+/* Call zlistx_sort() on the list, then reacquire the list handles since
+ * they are no longer valid after sorting (flux-framework/flux-core#4465).
+ */
+static void sort_job_list (zlistx_t *list)
+{
+    struct job *job;
+
+    zlistx_sort (list);
+
+    job = zlistx_first (list);
+    while (job) {
+        job->list_handle = zlistx_cursor (list);
+        job = zlistx_next (list);
+    }
+}
+
 /* Read jobs present in the KVS at startup. */
 int job_state_init_from_kvs (struct list_ctx *ctx)
 {
@@ -1158,8 +1174,8 @@ int job_state_init_from_kvs (struct list_ctx *ctx)
         return -1;
     flux_log (ctx->h, LOG_DEBUG, "%s: read %d jobs", __FUNCTION__, count);
 
-    zlistx_sort (ctx->jsctx->running);
-    zlistx_sort (ctx->jsctx->inactive);
+    sort_job_list (ctx->jsctx->running);
+    sort_job_list (ctx->jsctx->inactive);
     return 0;
 }
 
