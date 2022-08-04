@@ -1,0 +1,42 @@
+FROM ghcr.io/rse-ops/cuda:ubuntu-22.04-cuda-11.3.1
+
+# From flux-core root
+# docker build -f etc/docker/Dockerfile.base -t ghcr.io/flux-framework/flux-core-base .
+
+RUN apt-get update && \
+    apt-get install -y unzip gfortran python3-dev && \
+    spack compiler find && \
+    apt-get install -y libcurl4-openssl-dev libssl-dev && \
+    # py-jsonschema will fail without it
+    pip3 install tomli
+
+# /code is the working directory for code
+WORKDIR /code
+COPY . /code
+
+# This is for a spack environment/view to install from there
+RUN mkdir -p /opt/flux-env \
+&&  (echo "spack:" \
+&&   echo "  view:" \
+&&   echo "    mfem:" \
+&&   echo "      root: /opt/flux-view" \
+&&   echo "      link_type: copy" \
+&&   echo "  packages:" \
+&&   echo "    all:" \
+&&   echo "      target:" \
+&&   echo "      - x86_64_v3" \
+&&   echo "  config:" \
+&&   echo "    concretizer: clingo" \
+&&   echo "    compiler:" \
+&&   echo "      target:" \
+&&   echo "      - x86_64_v3" \
+&&   echo "    install_missing_compilers: true" \
+&&   echo "  concretization: together") > /opt/flux-env/spack.yaml
+
+RUN cd /opt/flux-env && \
+    . /opt/spack/share/spack/setup-env.sh && \
+    spack env activate . && \
+    spack develop --path /code flux-core@master && \
+    spack add flux-core@master && \
+    spack external find && \
+    spack install --only dependencies
