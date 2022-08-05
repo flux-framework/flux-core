@@ -15,6 +15,7 @@
 #include <stdint.h>
 
 #include "attr.h"
+#include "topology.h"
 
 typedef enum {
     OVERLAY_ANY = 0,
@@ -44,9 +45,9 @@ void overlay_destroy (struct overlay *ov);
  */
 int overlay_control_start (struct overlay *ov);
 
-/* Set the overlay network size and rank of this broker.
+/* Set the overlay topology.
  */
-int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank);
+int overlay_set_topology (struct overlay *ov, struct topology *topo);
 
 /* Send a message on the overlay network.
  * 'where' determines whether the message is routed upstream or downstream.

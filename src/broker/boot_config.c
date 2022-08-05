@@ -22,12 +22,12 @@
 #include <flux/hostlist.h>
 
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/kary.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libpmi/clique.h"
 
 #include "attr.h"
 #include "overlay.h"
+#include "topology.h"
 #include "boot_config.h"
 
 
@@ -458,6 +458,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
     uint32_t size;
     int fanout = overlay_get_fanout (overlay);
     json_t *hosts = NULL;
+    struct topology *topo = NULL;
 
     /* Ingest the [bootstrap] stanza.
      */
@@ -492,7 +493,10 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
     /* Tell overlay network this broker's rank and size.
      * If a curve certificate was provided, load it.
      */
-    if (overlay_set_geometry (overlay, size, rank) < 0)
+    if (!(topo = topology_create (size))
+        || topology_set_kary (topo, fanout) < 0
+        || topology_set_rank (topo, rank) < 0
+        || overlay_set_topology (overlay, topo) < 0)
         goto error;
     if (conf.curve_cert) {
         if (overlay_cert_load (overlay, conf.curve_cert) < 0)
@@ -509,7 +513,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
      * attribute to the URI peers will connect to.  If broker has no
      * downstream peers, set tbon.endpoint to NULL.
      */
-    if (kary_childof (fanout, size, rank, 0) != KARY_NONE) {
+    if (topology_get_child_ranks (topo, NULL, 0) > 0) {
         char bind_uri[MAX_URI + 1];
         char my_uri[MAX_URI + 1];
 
@@ -559,7 +563,7 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
         char parent_uri[MAX_URI + 1];
         if (boot_config_geturibyrank (hosts,
                                       &conf,
-                                      kary_parentof (fanout, rank),
+                                      topology_get_parent (topo),
                                       parent_uri,
                                       sizeof (parent_uri)) < 0)
             goto error;
@@ -584,9 +588,11 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
         goto error;
     }
     json_decref (hosts);
+    topology_decref (topo);
     return 0;
 error:
     ERRNO_SAFE_WRAP (json_decref, hosts);
+    ERRNO_SAFE_WRAP (topology_decref, topo);
     return -1;
 }
 
