@@ -306,6 +306,7 @@ dist_check_SCRIPTS = \
 	issues/t4378-content-flush-force.sh \
 	issues/t4379-dirty-cache-entries-flush.sh \
 	issues/t4413-empty-eventlog.sh \
+	issues/t4465-job-list-use-after-free.sh \
 	python/__init__.py \
 	python/subflux.py \
 	python/tap \
