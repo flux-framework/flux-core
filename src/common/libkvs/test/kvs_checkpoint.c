@@ -26,7 +26,7 @@ void errors (void)
     const char *rootref;
 
     errno = 0;
-    ok (kvs_checkpoint_commit (NULL, NULL, NULL, 0) == NULL
+    ok (kvs_checkpoint_commit (NULL, NULL, NULL, 0, 0) == NULL
         && errno == EINVAL,
         "kvs_checkpoint_commit fails on bad input");
 
@@ -45,6 +45,11 @@ void errors (void)
         && errno == EINVAL,
         "kvs_checkpoint_lookup_get_timestamp fails on bad input");
 
+    errno = 0;
+    ok (kvs_checkpoint_lookup_get_sequence (NULL, NULL) < 0
+        && errno == EINVAL,
+        "kvs_checkpoint_lookup_get_sequence fails on bad input");
+
     if (!(f = flux_future_create (NULL, NULL)))
         BAIL_OUT ("flux_future_create failed");
 
@@ -58,6 +63,12 @@ void errors (void)
     ok (kvs_checkpoint_lookup_get_timestamp (f, &timestamp) < 0
         && errno == EDEADLOCK,
         "kvs_checkpoint_lookup_get_timestamp fails on unfulfilled future");
+
+    errno = 0;
+    int sequence;
+    ok (kvs_checkpoint_lookup_get_sequence (f, &sequence) < 0
+        && errno == EDEADLOCK,
+        "kvs_checkpoint_lookup_get_sequence fails on unfulfilled future");
 
     flux_future_destroy (f);
 }

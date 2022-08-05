@@ -2820,7 +2820,7 @@ static void process_args (struct kvs_ctx *ctx, int ac, char **av)
  * Copy rootref buf with '\0' termination.
  * Return 0 on success, -1 on failure,
  */
-static int checkpoint_get (flux_t *h, char *buf, size_t len)
+static int checkpoint_get (flux_t *h, char *buf, size_t len, int *seq)
 {
     flux_future_t *f = NULL;
     const char *rootref;
@@ -2840,6 +2840,8 @@ static int checkpoint_get (flux_t *h, char *buf, size_t len)
     }
     strcpy (buf, rootref);
 
+    (void)kvs_checkpoint_lookup_get_sequence (f, seq);
+
     (void)kvs_checkpoint_lookup_get_timestamp (f, &timestamp);
     if (timestamp > 0)
         timestamp_tostr (timestamp, datestr, sizeof (datestr));
@@ -2856,12 +2858,12 @@ error:
 /* Synchronously store checkpoint to checkpoint service.
  * Returns 0 on success, -1 on failure.
  */
-static int checkpoint_put (flux_t *h, const char *rootref)
+static int checkpoint_put (flux_t *h, const char *rootref, int rootseq)
 {
     flux_future_t *f = NULL;
     int rv = -1;
 
-    if (!(f = kvs_checkpoint_commit (h, NULL, rootref, 0))
+    if (!(f = kvs_checkpoint_commit (h, NULL, rootref, rootseq, 0))
         || flux_rpc_get (f, NULL) < 0)
         goto error;
     rv = 0;
@@ -2964,6 +2966,7 @@ int mod_main (flux_t *h, int argc, char **argv)
         struct kvsroot *root;
         char empty_dir_rootref[BLOBREF_MAX_STRING_SIZE];
         char rootref[BLOBREF_MAX_STRING_SIZE];
+        int seq = 0;
         uint32_t owner = getuid ();
 
         if (store_initial_rootdir (ctx,
@@ -2974,9 +2977,10 @@ int mod_main (flux_t *h, int argc, char **argv)
         }
 
         /* Look for a checkpoint and use it if found.
-         * Otherwise start the primary root namespace with an empty directory.
+         * Otherwise start the primary root namespace with an empty directory
+         * and seq = 0.
          */
-        if (checkpoint_get (h, rootref, sizeof (rootref)) < 0)
+        if (checkpoint_get (h, rootref, sizeof (rootref), &seq) < 0)
             memcpy (rootref, empty_dir_rootref, sizeof (empty_dir_rootref));
 
         /* primary namespace must always be there and not marked
@@ -2996,7 +3000,7 @@ int mod_main (flux_t *h, int argc, char **argv)
             }
         }
 
-        setroot (ctx, root, rootref, 0);
+        setroot (ctx, root, rootref, seq);
 
         if (event_subscribe (ctx, KVS_PRIMARY_NAMESPACE) < 0) {
             flux_log_error (h, "event_subscribe");
@@ -3033,7 +3037,7 @@ int mod_main (flux_t *h, int argc, char **argv)
             flux_log_error (h, "error looking up primary root");
             goto done;
         }
-        if (checkpoint_put (ctx->h, root->ref) < 0) {
+        if (checkpoint_put (ctx->h, root->ref, root->seq) < 0) {
             if (errno != ENOSYS) { // service not loaded is not an error
                 flux_log_error (h, "error saving primary KVS checkpoint");
                 goto done;

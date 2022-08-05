@@ -23,11 +23,12 @@
 flux_future_t *kvs_checkpoint_commit (flux_t *h,
                                       const char *key,
                                       const char *rootref,
+                                      int sequence,
                                       double timestamp)
 {
     flux_future_t *f = NULL;
 
-    if (!h || !rootref) {
+    if (!h || !rootref || sequence < 0) {
         errno = EINVAL;
         return NULL;
     }
@@ -40,12 +41,13 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
                              "content.checkpoint-put",
                              0,
                              0,
-                             "{s:s s:{s:i s:s s:f}}",
+                             "{s:s s:{s:i s:s s:i s:f}}",
                              "key",
                              key,
                              "value",
                              "version", 1,
                              "rootref", rootref,
+                             "sequence", sequence,
                              "timestamp", timestamp)))
         return NULL;
 
@@ -114,6 +116,28 @@ int kvs_checkpoint_lookup_get_timestamp (flux_future_t *f, double *timestamp)
         return -1;
     }
     *timestamp = ts;
+    return 0;
+}
+
+int kvs_checkpoint_lookup_get_sequence (flux_future_t *f, int *sequence)
+{
+    int version;
+    int seq = 0;
+
+    if (!f || !sequence) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (flux_rpc_get_unpack (f, "{s:{s:i s?i}}",
+                                "value",
+                                "version", &version,
+                                "sequence", &seq) < 0)
+        return -1;
+    if (version != 0 && version != 1) {
+        errno = EINVAL;
+        return -1;
+    }
+    *sequence = seq;
     return 0;
 }
 

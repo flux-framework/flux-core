@@ -26,6 +26,7 @@
 flux_future_t *kvs_checkpoint_commit (flux_t *h,
                                       const char *key,
                                       const char *rootref,
+                                      int sequence,
                                       double timestamp);
 
 flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key);
@@ -35,6 +36,10 @@ int kvs_checkpoint_lookup_get_rootref (flux_future_t *f, const char **rootref);
 /* sets timestamp to 0 if unavailable
  */
 int kvs_checkpoint_lookup_get_timestamp (flux_future_t *f, double *timestamp);
+
+/* sets sequence to 0 if unavailable
+ */
+int kvs_checkpoint_lookup_get_sequence (flux_future_t *f, int *sequence);
 
 #endif /* !_KVS_CHECKPOINT_H */
 

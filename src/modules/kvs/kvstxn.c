@@ -1091,9 +1091,18 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
         else if (kt->state == KVSTXN_STATE_SYNC_CHECKPOINT) {
 
             if (!(kt->f_sync_checkpoint)) {
+                int newseq = root_seq;
+
+                /* if we're publishing, seq will be the seq after
+                 * the current one.
+                 */
+                if (!(kt->internal_flags & KVSTXN_INTERNAL_FLAG_NO_PUBLISH))
+                    newseq++;
+
                 kt->f_sync_checkpoint = kvs_checkpoint_commit (kt->ktm->h,
                                                                NULL,
                                                                kt->newroot,
+                                                               newseq,
                                                                0);
                 if (!kt->f_sync_checkpoint) {
                     kt->errnum = errno;
