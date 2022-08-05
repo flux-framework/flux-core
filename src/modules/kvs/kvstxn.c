@@ -842,7 +842,9 @@ error:
     return NULL;
 }
 
-kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *root_ref)
+kvstxn_process_t kvstxn_process (kvstxn_t *kt,
+                                 const char *root_ref,
+                                 int root_seq)
 {
     /* Incase user calls kvstxn_process() again */
     if (kt->errnum)

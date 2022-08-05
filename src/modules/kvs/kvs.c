@@ -963,7 +963,9 @@ static void kvstxn_apply (kvstxn_t *kt)
     if ((errnum = kvstxn_get_aux_errnum (kt)))
         goto done;
 
-    if ((ret = kvstxn_process (kt, root->ref)) == KVSTXN_PROCESS_ERROR) {
+    if ((ret = kvstxn_process (kt,
+                               root->ref,
+                               root->seq)) == KVSTXN_PROCESS_ERROR) {
         errnum = kvstxn_get_errnum (kt);
         goto done;
     }
