@@ -170,9 +170,10 @@ jobs:
     - name: generate dumpfile from most recent flux-core tag
       if:  (matrix.create_release != true)
       run: |
-        git tag -l ; \
-        src/test/create-kvs-dumpfile.sh -d /tmp/dumpfile; \
-        cp /tmp/dumpfile/*.tar.bz2 $(pwd)/t/job-manager/dumps/valid
+        src/test/create-kvs-dumpfile.sh -d /tmp/dumpfile &&
+        if test -f /tmp/dumpfile/*.bz2; then
+            cp /tmp/dumpfile/*.tar.bz2 $(pwd)/t/job-manager/dumps/valid
+        fi
 
     - name: docker buildx
       uses: docker/setup-buildx-action@v1
@@ -209,22 +210,16 @@ jobs:
 
     - name: create release
       id: create_release
-      if: success() && matrix.create_release
+      if: |
+        success()
+        && matrix.create_release
+        && github.repository == 'flux-framework/flux-core'
       env: ${{matrix.env}}
-      uses: actions/create-release@v1
+      uses: softprops/action-gh-release@v1
       with:
         tag_name: ${{ matrix.tag }}
         release_name: flux-core ${{ matrix.tag }}
         prerelease: true
+        files: flux-core*.tar.gz
         body: |
           View [Release Notes](https://github.com/${{ github.repository }}/blob/${{ matrix.tag }}/NEWS.md) for flux-core ${{ matrix.tag }}
-
-    - name: upload tarball
-      id: upload-tarball
-      if: success() && matrix.create_release
-      uses: actions/upload-release-asset@v1
-      with:
-        upload_url: ${{ steps.create_release.outputs.upload_url }}
-        asset_path: ${{ steps.prep_release.outputs.tarball }}
-        asset_name: ${{ steps.prep_release.outputs.tarball }}
-        asset_content_type: "application/gzip"
