@@ -59,7 +59,7 @@ flux_future_t *flux_kvs_namespace_remove (flux_t *h, const char *ns);
  * Process B waits for the store version to be >= V, then reads data.
  */
 int flux_kvs_get_version (flux_t *h, const char *ns, int *versionp);
-int flux_kvs_wait_version (flux_t *h,const char *ns, int version);
+int flux_kvs_wait_version (flux_t *h, const char *ns, int version);
 
 /* Garbage collect the cache.  On the root node, drop all data that
  * doesn't have a reference in the namespace.  On other nodes, the entire
