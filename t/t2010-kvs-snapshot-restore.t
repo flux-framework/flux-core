@@ -51,7 +51,7 @@ test_expect_success 're-run instance, get rootref (sqlite)' '
 	           flux kvs getroot -b > getrootsqlite.out
 '
 
-test_expect_success 'write rootref to checkpoint path, emulating original checkpoint (sqlite)' '
+test_expect_success 'write rootref to checkpoint path, emulating checkpoint version=0 (sqlite)' '
         rootref=$(cat getrootsqlite.out) &&
         ${CHANGECHECKPOINT} $(pwd)/content.sqlite "kvs-primary" ${rootref}
 '
