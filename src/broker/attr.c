@@ -242,13 +242,14 @@ static int set_int (const char *name, const char *val, void *arg)
         errno = EINVAL;
         return -1;
     }
+    errno = 0;
     n = strtol (val, &endptr, 0);
-    if (n <= INT_MIN || n >= INT_MAX) {
-        errno = ERANGE;
+    if (errno != 0 || *endptr != '\0') {
+        errno = EINVAL;
         return -1;
     }
-    if (*endptr != '\0') {
-        errno = EINVAL;
+    if (n <= INT_MIN || n >= INT_MAX) {
+        errno = ERANGE;
         return -1;
     }
     *i = (int)n;
@@ -288,10 +289,9 @@ static int set_uint32 (const char *name, const char *val, void *arg)
     char *endptr;
     unsigned long n;
 
+    errno = 0;
     n = strtoul (val, &endptr, 0);
-    if (n == ULONG_MAX) /* ERANGE set by strtol */
-        return -1;
-    if (endptr == val || *endptr != '\0') {
+    if (errno != 0 || *endptr != '\0') {
         errno = EINVAL;
         return -1;
     }
