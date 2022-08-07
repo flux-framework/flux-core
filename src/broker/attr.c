@@ -314,6 +314,25 @@ int attr_add_active_uint32 (attr_t *attrs, const char *name, uint32_t *val,
     return attr_add_active (attrs, name, flags, get_uint32, set_uint32, val);
 }
 
+int attr_get_uint32 (attr_t *attrs, const char *name, uint32_t *value)
+{
+    const char *s;
+    uint32_t i;
+    char *endptr;
+
+    if (attr_get (attrs, name, &s, NULL) < 0)
+        return -1;
+
+    errno = 0;
+    i = strtoul (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0') {
+        errno = EINVAL;
+        return -1;
+    }
+    *value = i;
+    return 0;
+}
+
 const char *attr_first (attr_t *attrs)
 {
     struct entry *e = zhash_first (attrs->hash);

@@ -75,6 +75,10 @@ int attr_add_active_int (attr_t *attrs, const char *name, int *val,
 int attr_add_active_uint32 (attr_t *attrs, const char *name, uint32_t *val,
                             int flags);
 
+/* Get an attribute and parse it as an integer value.
+ */
+int attr_get_uint32 (attr_t *attrs, const char *name, uint32_t *value);
+
 /* Iterate over attribute names with internal cursor.
  */
 const char *attr_first (attr_t *attrs);
