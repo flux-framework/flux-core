@@ -406,7 +406,7 @@ static void update_torpid_children (struct overlay *ov)
     }
 }
 
-/* N.B. overlay_child_status_update() ensures child_lookup() only
+/* N.B. overlay_child_status_update() ensures child_lookup_online() only
  * succeeds for online peers.
  */
 static struct child *child_lookup_online (struct overlay *ov, const char *id)
