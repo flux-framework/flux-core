@@ -24,11 +24,13 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
                                       const char *key,
                                       const char *rootref,
                                       int sequence,
-                                      double timestamp)
+                                      double timestamp,
+                                      int flags)
 {
     flux_future_t *f = NULL;
 
-    if (!h || !rootref || sequence < 0) {
+    /* no flags supported at the moment */
+    if (!h || !rootref || flags) {
         errno = EINVAL;
         return NULL;
     }
@@ -54,9 +56,10 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
     return f;
 }
 
-flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key)
+flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key, int flags)
 {
-    if (!h) {
+    /* no flags supported at the moment */
+    if (!h || flags) {
         errno = EINVAL;
         return NULL;
     }

@@ -372,7 +372,12 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
                      blobref);
         }
         /* restoring, therefore we restart sequence number at 0 */
-        if (!(f = kvs_checkpoint_commit (h, NULL, blobref, 0, restore_timestamp))
+        if (!(f = kvs_checkpoint_commit (h,
+                                         NULL,
+                                         blobref,
+                                         0,
+                                         restore_timestamp,
+                                         0))
             || flux_rpc_get (f, NULL) < 0) {
             log_msg_exit ("error updating checkpoint: %s",
                           future_strerror (f, errno));

@@ -371,7 +371,7 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
         const char *blobref;
         double timestamp;
 
-        if (!(f = kvs_checkpoint_lookup (h, NULL))
+        if (!(f = kvs_checkpoint_lookup (h, NULL, 0))
             || kvs_checkpoint_lookup_get_rootref (f, &blobref) < 0
             || kvs_checkpoint_lookup_get_timestamp (f, &timestamp) < 0)
             log_msg_exit ("error fetching checkpoint: %s",
