@@ -617,13 +617,13 @@ static void checkpoint_get_continuation (flux_future_t *f, void *arg)
         goto error;
 
     if (flux_respond (cache->h, msg, s) < 0)
-        flux_log_error (cache->h, "%s: flux_respond", __FUNCTION__);
+        flux_log_error (cache->h, "error responding to checkpoint-get");
     flux_future_destroy (f);
     return;
 
 error:
     if (flux_respond_error (cache->h, msg, errno, NULL) < 0)
-        flux_log_error (cache->h, "flux_respond_error");
+        flux_log_error (cache->h, "error responding to checkpoint-get");
     flux_future_destroy (f);
 }
 
@@ -676,13 +676,13 @@ static void checkpoint_put_continuation (flux_future_t *f, void *arg)
         goto error;
 
     if (flux_respond (cache->h, msg, s) < 0)
-        flux_log_error (cache->h, "%s: flux_respond", __FUNCTION__);
+        flux_log_error (cache->h, "error responding to checkpoint-put");
     flux_future_destroy (f);
     return;
 
 error:
     if (flux_respond_error (cache->h, msg, errno, NULL) < 0)
-        flux_log_error (cache->h, "flux_respond_error");
+        flux_log_error (cache->h, "error responding to checkpoint-put");
     flux_future_destroy (f);
 }
 
