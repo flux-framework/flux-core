@@ -13,6 +13,11 @@
 
 #include <flux/core.h>
 
+/* flags */
+enum {
+    KVS_CHECKPOINT_FLAG_CACHE_BYPASS = 1,/* request direct to backing store */
+};
+
 #define KVS_DEFAULT_CHECKPOINT "kvs-primary"
 
 /* Calls to kvs_checkpoint_commit() can be racy when the KVS module is
