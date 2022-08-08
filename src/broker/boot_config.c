@@ -30,6 +30,8 @@
 #include "topology.h"
 #include "boot_config.h"
 
+#define DEFAULT_FANOUT 2
+
 
 /* Copy 'fmt' into 'buf', substituting the following tokens:
  * - %h  host
@@ -456,9 +458,21 @@ int boot_config (flux_t *h, struct overlay *overlay, attr_t *attrs)
     struct boot_conf conf;
     uint32_t rank;
     uint32_t size;
-    int fanout = overlay_get_fanout (overlay);
+    uint32_t fanout;
     json_t *hosts = NULL;
     struct topology *topo = NULL;
+
+    /* Fetch the tbon.fanout attribute and supply a default value if unset.
+     */
+    if (attr_get_uint32 (attrs, "tbon.fanout", &fanout) < 0)
+        fanout = DEFAULT_FANOUT;
+    else
+        (void)attr_delete (attrs, "tbon.fanout", true);
+    if (attr_add_uint32 (attrs,
+                         "tbon.fanout",
+                         fanout,
+                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
 
     /* Ingest the [bootstrap] stanza.
      */

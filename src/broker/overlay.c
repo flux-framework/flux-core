@@ -41,8 +41,6 @@
 
 #define FLUX_ZAP_DOMAIN "flux"
 
-#define DEFAULT_FANOUT 2
-
 /* Overlay control messages
  */
 enum control_type {
@@ -132,7 +130,6 @@ struct overlay {
     struct topology *topo;
     uint32_t size;
     uint32_t rank;
-    int fanout;
     char uuid[UUID_STR_LEN];
     int version;
     int zmqdebug;
@@ -294,11 +291,6 @@ int overlay_set_topology (struct overlay *ov, struct topology *topo)
 error:
     free (child_ranks);
     return -1;
-}
-
-int overlay_get_fanout (struct overlay *ov)
-{
-    return ov->fanout;
 }
 
 uint32_t overlay_get_rank (struct overlay *ov)
@@ -1996,16 +1988,6 @@ struct overlay *overlay_create (flux_t *h,
     uuid_unparse (uuid, ov->uuid);
     if (!(ov->monitor_callbacks = zlist_new ()))
         goto nomem;
-    if (overlay_configure_attr_int (ov->attrs,
-                                    "tbon.fanout",
-                                    DEFAULT_FANOUT,
-                                    &ov->fanout) < 0)
-        goto error;
-    if (ov->fanout < 1) {
-        log_msg ("tbon.fanout must be >= 1");
-        errno = EINVAL;
-        goto error;
-    }
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
         goto error;
     if (overlay_configure_torpid (ov) < 0)

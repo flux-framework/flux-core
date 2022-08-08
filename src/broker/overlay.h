@@ -75,7 +75,6 @@ int overlay_set_parent_pubkey (struct overlay *ov, const char *pubkey);
 
 /* Misc. accessors
  */
-int overlay_get_fanout (struct overlay *ov);
 uint32_t overlay_get_rank (struct overlay *ov);
 void overlay_set_rank (struct overlay *ov, uint32_t rank); // test only
 uint32_t overlay_get_size (struct overlay *ov);

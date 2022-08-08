@@ -497,8 +497,8 @@ test_expect_success 'broker -Stbon.fanout=4 option works' '
 		flux getattr tbon.fanout >fanout.out &&
 	test_cmp fanout.exp fanout.out
 '
-test_expect_success 'broker -Stbon.fanout=0 fails' '
-	test_must_fail flux start ${ARGS} -o,-Stbon.fanout=0 /bin/true
+test_expect_success 'broker -Stbon.fanout=0 works' '
+	flux start ${ARGS} -o,-Stbon.fanout=0 /bin/true
 '
 test_expect_success 'broker fails on unknown option' '
 	test_must_fail flux start ${ARGS} -o,--not-an-option /bin/true

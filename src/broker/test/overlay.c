@@ -138,7 +138,6 @@ void single (flux_t *h)
     check_attr (ctx, "tbon.parent-endpoint", NULL);
     check_attr (ctx, "rank", "0");
     check_attr (ctx, "size", "1");
-    check_attr (ctx, "tbon.fanout", "2");
     check_attr (ctx, "tbon.level", "0");
     check_attr (ctx, "tbon.maxlevel", "0");
     check_attr (ctx, "tbon.descendants", "0");
