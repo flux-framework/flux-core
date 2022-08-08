@@ -30,7 +30,7 @@
 #include "topology.h"
 #include "boot_config.h"
 
-#define DEFAULT_FANOUT 2
+#define DEFAULT_FANOUT 0
 
 
 /* Copy 'fmt' into 'buf', substituting the following tokens:
