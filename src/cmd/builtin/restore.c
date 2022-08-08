@@ -336,6 +336,7 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
     flux_t *h;
     struct archive *ar;
     const char *infile;
+    int kvs_checkpoint_flags = 0;
 
     log_init ("flux-restore");
 
@@ -348,8 +349,10 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
         verbose = true;
     if (optparse_hasopt (p, "quiet"))
         quiet = true;
-    if (optparse_hasopt (p, "no-cache"))
+    if (optparse_hasopt (p, "no-cache")) {
         content_flags |= CONTENT_FLAG_CACHE_BYPASS;
+        kvs_checkpoint_flags |= KVS_CHECKPOINT_FLAG_CACHE_BYPASS;
+    }
 
     h = builtin_get_flux_handle (p);
     ar = restore_create (infile);
@@ -377,7 +380,7 @@ static int cmd_restore (optparse_t *p, int ac, char *av[])
                                          blobref,
                                          0,
                                          restore_timestamp,
-                                         0))
+                                         kvs_checkpoint_flags))
             || flux_rpc_get (f, NULL) < 0) {
             log_msg_exit ("error updating checkpoint: %s",
                           future_strerror (f, errno));
