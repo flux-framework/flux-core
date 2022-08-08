@@ -326,7 +326,7 @@ static void flush_content (flux_t *h, uint32_t rank)
 
     if (!(f = flux_rpc (h, "content.flush", NULL, rank, 0))
         || flux_rpc_get (f, NULL) < 0)
-    log_msg ("error flushing content cache: %s", future_strerror (f, errno));
+        log_msg ("error flushing content cache: %s", future_strerror (f, errno));
     flux_future_destroy (f);
 }
 
