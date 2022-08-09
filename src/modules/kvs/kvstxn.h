@@ -113,7 +113,9 @@ json_t *kvstxn_get_keys (kvstxn_t *kt);
  * on completion, call kvstxn_get_newroot_ref() to get reference to
  * new root to be stored.
  */
-kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref);
+kvstxn_process_t kvstxn_process (kvstxn_t *kt,
+                                 const char *root_ref,
+                                 int root_seq);
 
 /* on stall, iterate through all missing refs that the caller should
  * load into the cache

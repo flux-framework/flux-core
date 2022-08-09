@@ -17,7 +17,7 @@ CHANGECHECKPOINT=${FLUX_SOURCE_DIR}/t/kvs/change-checkpoint.py
 
 test_expect_success 'run instance with statedir set (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux kvs put testkey=42
+		   flux kvs put --sequence testkey=42 > start_sequence.out
 '
 
 test_expect_success 'content.sqlite file exists after instance exited' '
@@ -33,6 +33,32 @@ test_expect_success 're-run instance with statedir set (sqlite)' '
 test_expect_success 'content from previous instance survived (sqlite)' '
 	echo 42 >getsqlite.exp &&
 	test_cmp getsqlite.exp getsqlite.out
+'
+
+# due to other KVS activity that testing can't control, we simply want
+# to ensure the sequence number does not restart at 0, it must
+# increase over several restarts
+
+test_expect_success 're-run instance, get sequence number 1 (sqlite)' '
+	flux start -o,--setattr=statedir=$(pwd) \
+	           flux kvs version > restart_version1.out
+'
+
+test_expect_success 'restart sequence number increasing 1 (sqlite)' '
+	seq1=$(cat start_sequence.out) &&
+	seq2=$(cat restart_version1.out) &&
+	test $seq1 -lt $seq2
+'
+
+test_expect_success 're-run instance, get sequence number 2 (sqlite)' '
+	flux start -o,--setattr=statedir=$(pwd) \
+	           flux kvs version > restart_version2.out
+'
+
+test_expect_success 'restart sequence number increasing 2 (sqlite)' '
+	seq1=$(cat restart_version1.out) &&
+	seq2=$(cat restart_version2.out) &&
+	test $seq1 -lt $seq2
 '
 
 test_expect_success 're-run instance, verify checkpoint date saved (sqlite)' '
@@ -51,7 +77,7 @@ test_expect_success 're-run instance, get rootref (sqlite)' '
 	           flux kvs getroot -b > getrootsqlite.out
 '
 
-test_expect_success 'write rootref to checkpoint path, emulating original checkpoint (sqlite)' '
+test_expect_success 'write rootref to checkpoint path, emulating checkpoint version=0 (sqlite)' '
         rootref=$(cat getrootsqlite.out) &&
         ${CHANGECHECKPOINT} $(pwd)/content.sqlite "kvs-primary" ${rootref}
 '

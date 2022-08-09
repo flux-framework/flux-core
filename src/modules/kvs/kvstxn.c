@@ -842,7 +842,9 @@ error:
     return NULL;
 }
 
-kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
+kvstxn_process_t kvstxn_process (kvstxn_t *kt,
+                                 const char *root_ref,
+                                 int root_seq)
 {
     /* Incase user calls kvstxn_process() again */
     if (kt->errnum)
@@ -877,10 +879,10 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
 
             kt->state = KVSTXN_STATE_LOAD_ROOT;
 
-            if (!(entry = cache_lookup (kt->ktm->cache, rootdir_ref))
+            if (!(entry = cache_lookup (kt->ktm->cache, root_ref))
                 || !cache_entry_get_valid (entry)) {
 
-                if (add_missing_ref (kt, rootdir_ref) < 0) {
+                if (add_missing_ref (kt, root_ref) < 0) {
                     kt->errnum = errno;
                     return KVSTXN_PROCESS_ERROR;
                 }
@@ -913,7 +915,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
             }
             else {
                 /* place current rootref into newroot, it won't change */
-                strcpy (kt->newroot, rootdir_ref);
+                strcpy (kt->newroot, root_ref);
                 kt->state = KVSTXN_STATE_GENERATE_KEYS;
             }
         }
@@ -1089,9 +1091,18 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt, const char *rootdir_ref)
         else if (kt->state == KVSTXN_STATE_SYNC_CHECKPOINT) {
 
             if (!(kt->f_sync_checkpoint)) {
+                int newseq = root_seq;
+
+                /* if we're publishing, seq will be the seq after
+                 * the current one.
+                 */
+                if (!(kt->internal_flags & KVSTXN_INTERNAL_FLAG_NO_PUBLISH))
+                    newseq++;
+
                 kt->f_sync_checkpoint = kvs_checkpoint_commit (kt->ktm->h,
                                                                NULL,
                                                                kt->newroot,
+                                                               newseq,
                                                                0);
                 if (!kt->f_sync_checkpoint) {
                     kt->errnum = errno;

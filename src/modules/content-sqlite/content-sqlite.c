@@ -390,9 +390,10 @@ void checkpoint_get_cb (flux_t *h,
         }
         /* assume "version 0" if value is a bare blobref and return it
          * in a json envelope */
-        if (!(o = json_pack ("{s:i s:s s:f}",
+        if (!(o = json_pack ("{s:i s:s s:i s:f}",
                              "version", 0,
                              "rootref", s,
+                             "sequence", 0,
                              "timestamp", 0.))) {
             errstr = "failed to encode blobref in json envelope";
             errno = EINVAL;
