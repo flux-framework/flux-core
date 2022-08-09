@@ -65,7 +65,9 @@ libbroker_la_SOURCES = \
 	groups.h \
 	groups.c \
 	shutdown.h \
-	shutdown.c
+	shutdown.c \
+	topology.h \
+	topology.c
 
 flux_broker_LDADD = \
 	$(builddir)/libbroker.la \
@@ -88,7 +90,8 @@ TESTS = test_attr.t \
 	test_pmiutil.t \
 	test_boot_config.t \
 	test_runat.t \
-	test_overlay.t
+	test_overlay.t \
+	test_topology.t
 
 test_ldadd = \
 	$(builddir)/libbroker.la \
@@ -150,3 +153,8 @@ test_overlay_t_SOURCES = test/overlay.c
 test_overlay_t_CPPFLAGS = $(test_cppflags)
 test_overlay_t_LDADD = $(test_ldadd)
 test_overlay_t_LDFLAGS = $(test_ldflags)
+
+test_topology_t_SOURCES = test/topology.c
+test_topology_t_CPPFLAGS = $(test_cppflags)
+test_topology_t_LDADD = $(test_ldadd)
+test_topology_t_LDFLAGS = $(test_ldflags)

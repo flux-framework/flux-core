@@ -146,7 +146,9 @@ TREE BASED OVERLAY NETWORK
 ==========================
 
 tbon.fanout [Updates: C]
-   Branching factor of the tree based overlay network.  Default: ``2``.
+   Branching factor of the tree based overlay network.  A value of ``0``
+   means the topology is "flat" (rank 0 is the parent of all other ranks).
+   Default: ``2``.
 
 tbon.descendants
    Number of descendants "below" this node of the tree based

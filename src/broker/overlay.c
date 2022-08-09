@@ -25,7 +25,6 @@
 #include "src/common/libzmqutil/monitor.h"
 #include "src/common/libczmqcontainers/czmq_containers.h"
 #include "src/common/libutil/log.h"
-#include "src/common/libutil/kary.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/fsd.h"
 #include "src/common/libutil/errno_safe.h"
@@ -41,8 +40,6 @@
 #endif
 
 #define FLUX_ZAP_DOMAIN "flux"
-
-#define DEFAULT_FANOUT 2
 
 /* Overlay control messages
  */
@@ -130,9 +127,9 @@ struct overlay {
     flux_msg_handler_t **handlers;
     flux_future_t *f_sync;
 
+    struct topology *topo;
     uint32_t size;
     uint32_t rank;
-    int fanout;
     char uuid[UUID_STR_LEN];
     int version;
     int zmqdebug;
@@ -244,19 +241,22 @@ static void overlay_monitor_notify (struct overlay *ov, uint32_t rank)
     }
 }
 
-static int child_count (uint32_t rank, uint32_t size, int k)
+int overlay_set_topology (struct overlay *ov, struct topology *topo)
 {
-    int count;
-    for (count = 0; kary_childof (k, size, rank, count) != KARY_NONE; count++)
-        ;
-    return count;
-}
+    int *child_ranks = NULL;
+    ssize_t child_count;
 
-int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank)
-{
-    ov->size = size;
-    ov->rank = rank;
-    ov->child_count = child_count (rank, size, ov->fanout);
+    ov->topo = topology_incref (topo);
+    /* Determine which ranks, if any are direct children of this one.
+     */
+    if ((child_count = topology_get_child_ranks (topo, NULL, 0)) < 0
+        || !(child_ranks = calloc (child_count, sizeof (child_ranks[0])))
+        || topology_get_child_ranks (topo, child_ranks, child_count) < 0)
+        goto error;
+
+    ov->size = topology_get_size (topo);
+    ov->rank = topology_get_rank (topo);
+    ov->child_count = child_count;
     if (ov->child_count > 0) {
         int i;
 
@@ -268,11 +268,13 @@ int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank)
         zhashx_set_key_destructor (ov->child_hash, NULL);
         for (i = 0; i < ov->child_count; i++) {
             struct child *child = &ov->children[i];
-            child->rank = kary_childof (ov->fanout, size, rank, i);
+            child->rank = child_ranks[i];
             child->status = SUBTREE_STATUS_OFFLINE;
             monotime (&child->status_timestamp);
             child->tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG);
             if (!child->tracker)
+                return -1;
+            if (topology_aux_set (topo, child->rank, "child", child, NULL) < 0)
                 return -1;
         }
         ov->status = SUBTREE_STATUS_PARTIAL;
@@ -280,17 +282,15 @@ int overlay_set_geometry (struct overlay *ov, uint32_t size, uint32_t rank)
     else
         ov->status = SUBTREE_STATUS_FULL;
     monotime (&ov->status_timestamp);
-    if (rank > 0) {
-        ov->parent.rank = kary_parentof (ov->fanout, rank);
+    if (ov->rank > 0) {
+        ov->parent.rank = topology_get_parent (topo);
         ov->parent.tracker = rpc_track_create (MSG_HASH_TYPE_UUID_MATCHTAG);
     }
-
+    free (child_ranks);
     return 0;
-}
-
-int overlay_get_fanout (struct overlay *ov)
-{
-    return ov->fanout;
+error:
+    free (child_ranks);
+    return -1;
 }
 
 uint32_t overlay_get_rank (struct overlay *ov)
@@ -406,7 +406,7 @@ static void update_torpid_children (struct overlay *ov)
     }
 }
 
-/* N.B. overlay_child_status_update() ensures child_lookup() only
+/* N.B. overlay_child_status_update() ensures child_lookup_online() only
  * succeeds for online peers.
  */
 static struct child *child_lookup_online (struct overlay *ov, const char *id)
@@ -435,31 +435,22 @@ bool overlay_msg_is_local (const flux_msg_t *msg)
     return (msg && flux_msg_aux_get (msg, "overlay::remote") == NULL);
 }
 
-/* Given a rank, find a (direct) child peer.
- * Since child ranks are numerically contiguous, perform a range check
- * and index into the child array directly.
+/* Lookup (direct) child peer by rank.
  * Returns NULL on lookup failure.
  */
 static struct child *child_lookup_byrank (struct overlay *ov, uint32_t rank)
 {
-    uint32_t first;
-    int i;
-
-    if ((first = kary_childof (ov->fanout, ov->size, ov->rank, 0)) == KARY_NONE
-        || (i = rank - first) < 0
-        || i >= ov->child_count)
-        return NULL;
-    return &ov->children[i];
+    return topology_aux_get (ov->topo, rank, "child");
 }
 
 /* Look up child that provides route to 'rank' (NULL if none).
  */
 static struct child *child_lookup_route (struct overlay *ov, uint32_t rank)
 {
-    uint32_t child_rank;
+    int child_rank;
 
-    child_rank = kary_child_route (ov->fanout, ov->size, ov->rank, rank);
-    if (child_rank == KARY_NONE)
+    child_rank = topology_get_child_route (ov->topo, rank);
+    if (child_rank < 0)
         return NULL;
     return child_lookup_byrank (ov, child_rank);
 }
@@ -1379,19 +1370,17 @@ int overlay_register_attrs (struct overlay *overlay)
         return -1;
     if (attr_add_int (overlay->attrs,
                       "tbon.level",
-                      kary_levelof (overlay->fanout, overlay->rank),
+                      topology_get_level (overlay->topo),
                       FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
     if (attr_add_int (overlay->attrs,
                       "tbon.maxlevel",
-                      kary_levelof (overlay->fanout, overlay->size - 1),
+                      topology_get_maxlevel (overlay->topo),
                       FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
     if (attr_add_int (overlay->attrs,
                       "tbon.descendants",
-                      kary_sum_descendants (overlay->fanout,
-                                            overlay->size,
-                                            overlay->rank),
+                      topology_get_descendant_count (overlay->topo),
                       FLUX_ATTRFLAG_IMMUTABLE) < 0)
         return -1;
 
@@ -1556,38 +1545,11 @@ const char *overlay_get_subtree_status (struct overlay *ov, int rank)
  */
 json_t *overlay_get_subtree_topo (struct overlay *ov, int rank)
 {
-    json_t *o;
-    json_t *children;
-    json_t *child;
-    int i, r;
-    int size;
-
-    if (!(children = json_array()))
-        goto nomem;
-    for (i = 0; i < ov->fanout; i++) {
-        r = kary_childof (ov->fanout, ov->size, rank, i);
-        if (r == KARY_NONE)
-            break;
-        if (!(child = overlay_get_subtree_topo (ov, r)))
-            goto error;
-        if (json_array_append_new (children, child) < 0) {
-            json_decref (child);
-            goto nomem;
-        }
+    if (!ov) {
+        errno = EINVAL;
+        return NULL;
     }
-    size = kary_sum_descendants (ov->fanout, ov->size, rank) + 1;
-    if (!(o = json_pack ("{s:i s:i s:O}",
-                         "rank", rank,
-                         "size", size,
-                         "children", children)))
-        goto nomem;
-    json_decref (children);
-    return o;
-nomem:
-    errno = ENOMEM;
-error:
-    ERRNO_SAFE_WRAP (json_decref, children);
-    return NULL;
+    return topology_get_json_subtree_at (ov->topo, rank);
 }
 
 /* Get the topology of the subtree rooted here.
@@ -1964,6 +1926,7 @@ void overlay_destroy (struct overlay *ov)
                 free (mon);
             zlist_destroy (&ov->monitor_callbacks);
         }
+        topology_decref (ov->topo);
         free (ov);
         errno = saved_errno;
     }
@@ -2025,16 +1988,6 @@ struct overlay *overlay_create (flux_t *h,
     uuid_unparse (uuid, ov->uuid);
     if (!(ov->monitor_callbacks = zlist_new ()))
         goto nomem;
-    if (overlay_configure_attr_int (ov->attrs,
-                                    "tbon.fanout",
-                                    DEFAULT_FANOUT,
-                                    &ov->fanout) < 0)
-        goto error;
-    if (ov->fanout < 1) {
-        log_msg ("tbon.fanout must be >= 1");
-        errno = EINVAL;
-        goto error;
-    }
     if (overlay_configure_attr_int (ov->attrs, "tbon.prefertcp", 0, NULL) < 0)
         goto error;
     if (overlay_configure_torpid (ov) < 0)

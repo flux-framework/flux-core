@@ -242,13 +242,14 @@ static int set_int (const char *name, const char *val, void *arg)
         errno = EINVAL;
         return -1;
     }
+    errno = 0;
     n = strtol (val, &endptr, 0);
-    if (n <= INT_MIN || n >= INT_MAX) {
-        errno = ERANGE;
+    if (errno != 0 || *endptr != '\0') {
+        errno = EINVAL;
         return -1;
     }
-    if (*endptr != '\0') {
-        errno = EINVAL;
+    if (n <= INT_MIN || n >= INT_MAX) {
+        errno = ERANGE;
         return -1;
     }
     *i = (int)n;
@@ -288,10 +289,9 @@ static int set_uint32 (const char *name, const char *val, void *arg)
     char *endptr;
     unsigned long n;
 
+    errno = 0;
     n = strtoul (val, &endptr, 0);
-    if (n == ULONG_MAX) /* ERANGE set by strtol */
-        return -1;
-    if (endptr == val || *endptr != '\0') {
+    if (errno != 0 || *endptr != '\0') {
         errno = EINVAL;
         return -1;
     }
@@ -312,6 +312,25 @@ int attr_add_active_uint32 (attr_t *attrs, const char *name, uint32_t *val,
                             int flags)
 {
     return attr_add_active (attrs, name, flags, get_uint32, set_uint32, val);
+}
+
+int attr_get_uint32 (attr_t *attrs, const char *name, uint32_t *value)
+{
+    const char *s;
+    uint32_t i;
+    char *endptr;
+
+    if (attr_get (attrs, name, &s, NULL) < 0)
+        return -1;
+
+    errno = 0;
+    i = strtoul (s, &endptr, 10);
+    if (errno != 0 || *endptr != '\0') {
+        errno = EINVAL;
+        return -1;
+    }
+    *value = i;
+    return 0;
 }
 
 const char *attr_first (attr_t *attrs)

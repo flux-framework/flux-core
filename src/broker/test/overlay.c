@@ -26,6 +26,7 @@
 
 #include "src/broker/overlay.h"
 #include "src/broker/attr.h"
+#include "src/broker/topology.h"
 
 static zlist_t *logs;
 
@@ -36,6 +37,7 @@ struct context {
     char name[32];
     int rank;
     int size;
+    struct topology *topo;
     const char *uuid;
     const flux_msg_t *msg;
 };
@@ -76,6 +78,7 @@ void ctx_destroy (struct context *ctx)
     attr_destroy (ctx->attrs);
     overlay_destroy (ctx->ov);
     flux_msg_decref (ctx->msg);
+    topology_decref (ctx->topo);
     free (ctx);
 }
 
@@ -99,6 +102,10 @@ struct context *ctx_create (flux_t *h,
         if (attr_add_int (ctx->attrs, "tbon.fanout", fanout, 0) < 0)
             BAIL_OUT ("could not add tbon.fanout attribute");
     }
+    if (!(ctx->topo = topology_create (size))
+        || topology_set_kary (ctx->topo, fanout) < 0
+        || topology_set_rank (ctx->topo, rank) < 0)
+        BAIL_OUT ("cannot create topology");
     ctx->h = h;
     ctx->size = size;
     ctx->rank = rank;
@@ -118,8 +125,8 @@ void single (flux_t *h)
     struct context *ctx = ctx_create (h, "single", 1, 0, 2, NULL);
     flux_msg_t *msg;
 
-    ok (overlay_set_geometry (ctx->ov, 1, 0) == 0,
-        "%s: overlay_set_geometry size=1 rank=0 works", ctx->name);
+    ok (overlay_set_topology (ctx->ov, ctx->topo) == 0,
+        "%s: overlay_set_topology size=1 rank=0 works", ctx->name);
 
     ok (overlay_get_size (ctx->ov) == 1,
         "%s: overlay_get_size returns 1", ctx->name);
@@ -131,7 +138,6 @@ void single (flux_t *h)
     check_attr (ctx, "tbon.parent-endpoint", NULL);
     check_attr (ctx, "rank", "0");
     check_attr (ctx, "size", "1");
-    check_attr (ctx, "tbon.fanout", "2");
     check_attr (ctx, "tbon.level", "0");
     check_attr (ctx, "tbon.maxlevel", "0");
     check_attr (ctx, "tbon.descendants", "0");
@@ -268,8 +274,8 @@ void trio (flux_t *h)
 
     ctx[0] = ctx_create (h, "trio", size, 0, 2, recv_cb);
 
-    ok (overlay_set_geometry (ctx[0]->ov, size, 0) == 0,
-        "%s: overlay_set_geometry works", ctx[0]->name);
+    ok (overlay_set_topology (ctx[0]->ov, ctx[0]->topo) == 0,
+        "%s: overlay_set_topology works", ctx[0]->name);
 
     ok ((server_pubkey = overlay_cert_pubkey (ctx[0]->ov)) != NULL,
         "%s: overlay_cert_pubkey works", ctx[0]->name);
@@ -280,8 +286,8 @@ void trio (flux_t *h)
 
     ctx[1] = ctx_create (h, "trio", size, 1, 2, recv_cb);
 
-    ok (overlay_set_geometry (ctx[1]->ov, size, 1) == 0,
-        "%s: overlay_init works", ctx[1]->name);
+    ok (overlay_set_topology (ctx[1]->ov, ctx[1]->topo) == 0,
+        "%s: overlay_set_topology works", ctx[1]->name);
 
     ok ((client_pubkey = overlay_cert_pubkey (ctx[1]->ov)) != NULL,
         "%s: overlay_cert_pubkey works", ctx[1]->name);
@@ -493,8 +499,8 @@ void test_create (flux_t *h,
 
     for (rank = 0; rank < size; rank++) {
         ctx[rank] = ctx_create (h, name, size, rank, fanout, recv_cb);
-        if (overlay_set_geometry (ctx[rank]->ov, size, rank) < 0)
-            BAIL_OUT ("%s: overlay_set_geometry failed", ctx[rank]->name);
+        if (overlay_set_topology (ctx[rank]->ov, ctx[rank]->topo) < 0)
+            BAIL_OUT ("%s: overlay_set_topology failed", ctx[rank]->name);
         if (rank == 0) {
             snprintf (uri, sizeof (uri), "ipc://@%s", ctx[0]->name);
             /* Call overlay_bind() before overlay_authorize() is called

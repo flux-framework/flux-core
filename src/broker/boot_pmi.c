@@ -20,7 +20,6 @@
 #include "src/common/libutil/log.h"
 #include "src/common/libutil/cleanup.h"
 #include "src/common/libutil/ipaddr.h"
-#include "src/common/libutil/kary.h"
 #include "src/common/libutil/errno_safe.h"
 #include "src/common/libpmi/pmi.h"
 #include "src/common/libpmi/pmi_strerror.h"
@@ -28,8 +27,11 @@
 
 #include "attr.h"
 #include "overlay.h"
+#include "topology.h"
 #include "boot_pmi.h"
 #include "pmiutil.h"
+
+#define DEFAULT_FANOUT 2
 
 
 /*  If the broker is launched via flux-shell, then the shell may opt
@@ -178,8 +180,7 @@ static int set_hostlist_attr (attr_t *attrs, struct hostlist *hl)
 
 int boot_pmi (struct overlay *overlay, attr_t *attrs)
 {
-    int fanout = overlay_get_fanout (overlay);
-    int rank;
+    uint32_t fanout;
     char key[64];
     char val[1024];
     char hostname[MAXHOSTNAMELEN + 1];
@@ -188,9 +189,25 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     json_t *o;
     struct pmi_handle *pmi;
     struct pmi_params pmi_params;
+    struct topology *topo = NULL;
+    int child_count;
+    int *child_ranks = NULL;
     int result;
     const char *uri;
     int i;
+
+    /* Fetch the tbon.fanout attribute and supply a default value if unset.
+     */
+    if (attr_get_uint32 (attrs, "tbon.fanout", &fanout) < 0)
+        fanout = DEFAULT_FANOUT;
+    else
+        (void)attr_delete (attrs, "tbon.fanout", true);
+    if (attr_add_uint32 (attrs,
+                         "tbon.fanout",
+                         fanout,
+                         FLUX_ATTRFLAG_IMMUTABLE) < 0)
+        return -1;
+
 
     memset (&pmi_params, 0, sizeof (pmi_params));
     if (!(pmi = broker_pmi_create ())) {
@@ -215,9 +232,10 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
         log_err ("error setting broker.mapping attribute");
         goto error;
     }
-    if (overlay_set_geometry (overlay,
-                              pmi_params.size,
-                              pmi_params.rank) < 0)
+    if (!(topo = topology_create (pmi_params.size))
+        || topology_set_kary (topo, fanout) < 0
+        || topology_set_rank (topo, pmi_params.rank) < 0
+        || overlay_set_topology (overlay, topo) < 0)
         goto error;
     if (gethostname (hostname, sizeof (hostname)) < 0) {
         log_err ("gethostname");
@@ -242,15 +260,17 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
      */
     overlay_set_ipv6 (overlay, 1);
 
+    child_count = topology_get_child_ranks (topo, NULL, 0);
+    if (child_count > 0) {
+        if (!(child_ranks = calloc (child_count, sizeof (child_ranks[0])))
+            || topology_get_child_ranks (topo, child_ranks, child_count) < 0)
+            goto error;
+    }
+
     /* If there are to be downstream peers, then bind to socket and extract
      * the concretized URI for sharing with other ranks.
-     * N.B. there are no downstream peers if the 0th child of this rank
-     * in k-ary tree does not exist.
      */
-    if (kary_childof (fanout,
-                      pmi_params.size,
-                      pmi_params.rank,
-                      0) != KARY_NONE) {
+    if (child_count > 0) {
         char buf[1024];
 
         if (format_bind_uri (buf, sizeof (buf), attrs, pmi_params.rank) < 0)
@@ -306,8 +326,8 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
     if (pmi_params.rank > 0) {
         const char *peer_pubkey;
         const char *peer_uri;
+        int rank = topology_get_parent (topo);
 
-        rank = kary_parentof (fanout, pmi_params.rank);
         if (snprintf (key, sizeof (key), "%d", rank) >= sizeof (key)) {
             log_msg ("pmi key string overflow");
             goto error;
@@ -343,12 +363,10 @@ int boot_pmi (struct overlay *overlay, attr_t *attrs)
 
     /* Fetch the business card of children and inform overlay of public keys.
      */
-    for (i = 0; i < fanout; i++) {
+    for (i = 0; i < child_count; i++) {
         const char *peer_pubkey;
+        int rank = child_ranks[i];
 
-        rank = kary_childof (fanout, pmi_params.size, pmi_params.rank, i);
-        if (rank == KARY_NONE)
-            break;
         if (snprintf (key, sizeof (key), "%d", rank) >= sizeof (key)) {
             log_msg ("pmi key string overflow");
             goto error;
@@ -427,11 +445,15 @@ done:
     free (bizcard);
     broker_pmi_destroy (pmi);
     hostlist_destroy (hl);
+    free (child_ranks);
+    topology_decref (topo);
     return 0;
 error:
     free (bizcard);
     broker_pmi_destroy (pmi);
     hostlist_destroy (hl);
+    free (child_ranks);
+    topology_decref (topo);
     return -1;
 }
 
