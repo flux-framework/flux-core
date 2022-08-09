@@ -1,7 +1,14 @@
 #!/bin/sh -e
 
+prog=$(basename $0)
+
+if test -z "$FLUX_ENABLE_VALGRIND_TEST"; then
+    echo "skipping ${prog}: FLUX_ENABLE_VALGRIND_TEST is not set" >&2
+    exit 0
+fi
 VALGRIND=`which valgrind`
 if test -z "${VALGRIND}"; then
+    echo "skipping ${prog}: valgrind executable not found" >&2
     exit 0
 fi
 VALGRIND_SUPPRESSIONS=${SHARNESS_TEST_SRCDIR}/valgrind/valgrind.supp
