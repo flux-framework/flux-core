@@ -137,9 +137,7 @@ static void draw_stats (struct summary_pane *sum)
                sum->stats.run + sum->stats.cleanup);
 
     if (sum->show_details) {
-        int failed = sum->stats.failed +
-                     sum->stats.canceled +
-                     sum->stats.timeout;
+        int failed = sum->stats.failed;
         int complete = sum->stats.inactive - failed;
 
         if (complete)
