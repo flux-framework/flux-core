@@ -153,14 +153,6 @@ test_expect_success HAVE_JQ 'flux mini submit --setattr=^ATTR=VAL works' '
 	    jq -S .attributes.user.foo > attrout.json &&
 	test_cmp attr.json attrout.json
 '
-test_expect_success 'flux mini submit --setattr fails without value' '
-	test_expect_code 1 \
-		flux mini submit --dry-run \
-		--setattr foo \
-		hostname >attr_fail.out 2>&1 &&
-	test_debug "cat attr_fail.out" &&
-	grep "Missing value for attr foo" attr_fail.out
-'
 test_expect_success HAVE_JQ 'flux mini submit --setattr=^ detects bad JSON' '
 	cat <<-EOF > bad.json &&
 	[ { "foo":"value",
