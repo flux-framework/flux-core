@@ -24,11 +24,14 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
                                       const char *key,
                                       const char *rootref,
                                       int sequence,
-                                      double timestamp)
+                                      double timestamp,
+                                      int flags)
 {
     flux_future_t *f = NULL;
+    const char *topic = "content.checkpoint-put";
+    int valid_flags = KVS_CHECKPOINT_FLAG_CACHE_BYPASS;
 
-    if (!h || !rootref || sequence < 0) {
+    if (!h || !rootref || (flags & ~valid_flags)) {
         errno = EINVAL;
         return NULL;
     }
@@ -36,9 +39,11 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
         key = KVS_DEFAULT_CHECKPOINT;
     if (timestamp == 0)
         timestamp = flux_reactor_now (flux_get_reactor (h));
+    if (flags & KVS_CHECKPOINT_FLAG_CACHE_BYPASS)
+        topic = "content-backing.checkpoint-put";
 
     if (!(f = flux_rpc_pack (h,
-                             "content.checkpoint-put",
+                             topic,
                              0,
                              0,
                              "{s:s s:{s:i s:s s:i s:f}}",
@@ -54,17 +59,22 @@ flux_future_t *kvs_checkpoint_commit (flux_t *h,
     return f;
 }
 
-flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key)
+flux_future_t *kvs_checkpoint_lookup (flux_t *h, const char *key, int flags)
 {
-    if (!h) {
+    const char *topic = "content.checkpoint-get";
+    int valid_flags = KVS_CHECKPOINT_FLAG_CACHE_BYPASS;
+
+    if (!h || (flags & ~valid_flags)) {
         errno = EINVAL;
         return NULL;
     }
     if (!key)
         key = KVS_DEFAULT_CHECKPOINT;
+    if (flags & KVS_CHECKPOINT_FLAG_CACHE_BYPASS)
+        topic = "content-backing.checkpoint-get";
 
     return flux_rpc_pack (h,
-                          "content.checkpoint-get",
+                          topic,
                           0,
                           0,
                           "{s:s}",

@@ -345,6 +345,7 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
     flux_t *h;
     struct archive *ar;
     const char *outfile;
+    int kvs_checkpoint_flags = 0;
 
     log_init ("flux-dump");
 
@@ -357,8 +358,10 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
         verbose = true;
     if (optparse_hasopt (p, "quiet"))
         quiet = true;
-    if (optparse_hasopt (p, "no-cache"))
+    if (optparse_hasopt (p, "no-cache")) {
         content_flags |= CONTENT_FLAG_CACHE_BYPASS;
+        kvs_checkpoint_flags |= KVS_CHECKPOINT_FLAG_CACHE_BYPASS;
+    }
 
     dump_time = time (NULL);
     dump_uid = getuid ();
@@ -371,7 +374,7 @@ static int cmd_dump (optparse_t *p, int ac, char *av[])
         const char *blobref;
         double timestamp;
 
-        if (!(f = kvs_checkpoint_lookup (h, NULL))
+        if (!(f = kvs_checkpoint_lookup (h, NULL, kvs_checkpoint_flags))
             || kvs_checkpoint_lookup_get_rootref (f, &blobref) < 0
             || kvs_checkpoint_lookup_get_timestamp (f, &timestamp) < 0)
             log_msg_exit ("error fetching checkpoint: %s",

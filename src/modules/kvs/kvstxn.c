@@ -1103,6 +1103,7 @@ kvstxn_process_t kvstxn_process (kvstxn_t *kt,
                                                                NULL,
                                                                kt->newroot,
                                                                newseq,
+                                                               0,
                                                                0);
                 if (!kt->f_sync_checkpoint) {
                     kt->errnum = errno;
