@@ -640,7 +640,19 @@ class MiniCmd:
         if args.setattr is not None:
             for keyval in args.setattr:
                 key, val = parse_jobspec_keyval("--setattr", keyval)
-                jobspec.setattr(key, val)
+
+                #  If key does not explicitly start with ".", "system."
+                #   or "user.", then "system." is implied. This is a
+                #   meant to be a usability enhancement since almost all
+                #   uses of --setattr will target attributes.system.
+                #
+                if not key.startswith((".", "user.", "system.")):
+                    key = "system." + key
+
+                #  Allow key to begin with "." which simply forces the key
+                #   to start at the top level (since .system is not applied
+                #   due to above conditional)
+                jobspec.setattr(key.lstrip("."), val)
 
         return jobspec
 
