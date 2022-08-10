@@ -160,7 +160,7 @@ test_expect_success 'job-ingest: load multiple validators' '
 	ingest_module reload validator-plugins=feasibility,jobspec
 '
 test_expect_success 'job-ingest: jobs that fail either validator are rejected' '
-	test_must_fail flux mini submit --setattr=foo=bar hostname &&
+	test_must_fail flux mini submit --setattr=.foo=bar hostname &&
 	test_must_fail flux mini submit -n 4568 hostname
 '
 test_expect_success 'job-ingest: validator unexpected exit is handled' '

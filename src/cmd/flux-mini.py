@@ -410,6 +410,30 @@ class Xcmd:
         return " ".join(result)
 
 
+def parse_jobspec_keyval(label, keyval):
+    """Parse a key[=value] option as used with --setopt and --setattr
+
+    Supports ^key=filename to load JSON object from a file
+    """
+    # Split into key, val with a default of 1 if no val given:
+    key, val = (keyval.split("=", 1) + [1])[:2]
+
+    # Support key prefix of ^ to load value from a file
+    if key.startswith("^"):
+        key = key.lstrip("^")
+        with open(val) as filep:
+            try:
+                val = json.load(filep)
+            except (json.JSONDecodeError, TypeError) as exc:
+                raise ValueError(f"{label}: {val}: {exc}") from exc
+    else:
+        try:
+            val = json.loads(val)
+        except (json.JSONDecodeError, TypeError):
+            pass
+    return key, val
+
+
 class MiniCmd:
     """
     MiniCmd is the base class for all flux-mini subcommands
@@ -457,10 +481,11 @@ class MiniCmd:
         parser.add_argument(
             "--setattr",
             action="append",
-            help="Set job attribute ATTR to VAL (multiple use OK). "
-            + "If ATTR starts with ^, then VAL is a file containing valid "
-            + "JSON which will be used as the value of the attribute.",
-            metavar="ATTR=VAL",
+            help="Set job attribute ATTR. An optional value is supported "
+            + " with ATTR=VAL (default VAL=1). If ATTR starts with ^, "
+            + "then VAL is a file containing valid JSON which will be used "
+            + "as the value of the attribute. (multiple use OK)",
+            metavar="ATTR",
         )
         parser.add_argument(
             "--dependency",
@@ -603,12 +628,7 @@ class MiniCmd:
 
         if args.setopt is not None:
             for keyval in args.setopt:
-                # Split into key, val with a default for 1 if no val given:
-                key, val = (keyval.split("=", 1) + [1])[:2]
-                try:
-                    val = json.loads(val)
-                except (json.JSONDecodeError, TypeError):
-                    pass
+                key, val = parse_jobspec_keyval("--setopt", keyval)
                 jobspec.setattr_shell_option(key, val)
 
         if args.debug_emulate:
@@ -620,23 +640,20 @@ class MiniCmd:
 
         if args.setattr is not None:
             for keyval in args.setattr:
-                tmp = keyval.split("=", 1)
-                if len(tmp) != 2:
-                    raise ValueError("--setattr: Missing value for attr " + keyval)
-                key = tmp[0]
-                if key.startswith("^"):
-                    key = key.strip("^")
-                    with open(tmp[1]) as filep:
-                        try:
-                            val = json.load(filep)
-                        except (json.JSONDecodeError, TypeError) as exc:
-                            raise ValueError(f"--setattr: {tmp[1]}: {exc}")
-                else:
-                    try:
-                        val = json.loads(tmp[1])
-                    except (json.JSONDecodeError, TypeError):
-                        val = tmp[1]
-                jobspec.setattr(key, val)
+                key, val = parse_jobspec_keyval("--setattr", keyval)
+
+                #  If key does not explicitly start with ".", "system."
+                #   or "user.", then "system." is implied. This is a
+                #   meant to be a usability enhancement since almost all
+                #   uses of --setattr will target attributes.system.
+                #
+                if not key.startswith((".", "user.", "system.")):
+                    key = "system." + key
+
+                #  Allow key to begin with "." which simply forces the key
+                #   to start at the top level (since .system is not applied
+                #   due to above conditional)
+                jobspec.setattr(key.lstrip("."), val)
 
         return jobspec
 
