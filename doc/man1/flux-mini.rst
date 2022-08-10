@@ -365,12 +365,14 @@ OTHER OPTIONS
    otherwise VAL is interpreted as a string. If VAL is not set, then the
    default value is 1. See SHELL OPTIONS below.
 
-**--setattr=KEY=VAL**
+**--setattr=KEY[=VAL]**
    Set jobspec attribute. Keys may include periods to denote hierarchy.
-   VAL may be valid JSON (bare values, objects, or arrays), otherwise VAL
-   is interpreted as a string. If KEY starts with a ``^`` character, then
-   VAL is interpreted as a file, which must be valid JSON, to use as the
-   attribute value.
+   If KEY does not begin with ``system.``, ``user.``, or ``.``, then
+   ``system.`` is assumed.  VAL is optional and may be valid JSON (bare
+   values, objects, or arrays), otherwise VAL is interpreted as a string. If
+   VAL is not set, then the default value is 1.  If KEY starts with a ``^``
+   character, then VAL is interpreted as a file, which must be valid JSON,
+   to use as the attribute value.
 
 **--begin-time=DATETIME**
    Convenience option for setting a ``begin-time`` dependency for a job.
