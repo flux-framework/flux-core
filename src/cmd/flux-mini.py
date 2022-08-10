@@ -481,10 +481,11 @@ class MiniCmd:
         parser.add_argument(
             "--setattr",
             action="append",
-            help="Set job attribute ATTR to VAL (multiple use OK). "
-            + "If ATTR starts with ^, then VAL is a file containing valid "
-            + "JSON which will be used as the value of the attribute.",
-            metavar="ATTR=VAL",
+            help="Set job attribute ATTR. An optional value is supported "
+            + " with ATTR=VAL (default VAL=1). If ATTR starts with ^, "
+            + "then VAL is a file containing valid JSON which will be used "
+            + "as the value of the attribute. (multiple use OK)",
+            metavar="ATTR",
         )
         parser.add_argument(
             "--dependency",
