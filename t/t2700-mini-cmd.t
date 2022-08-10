@@ -126,16 +126,23 @@ test_expect_success 'flux mini submit --time-limit=4-00:30:00 fails' '
 '
 
 test_expect_success HAVE_JQ 'flux mini submit --setattr works' '
-	flux mini submit --dry-run \
+	flux mini submit --env=-* --dry-run \
 		--setattr user.meep=false \
 		--setattr user.foo=\"xxx\" \
 		--setattr user.foo2=yyy \
+		--setattr foo \
+		--setattr .test=a \
+		--setattr test2=b \
 		--setattr system.bar=42 hostname >attr.out &&
-	test $(jq ".attributes.user.meep" attr.out) = "false" &&
-	test $(jq ".attributes.user.foo" attr.out) = "\"xxx\"" &&
-	test $(jq ".attributes.user.foo2" attr.out) = "\"yyy\"" &&
-	test $(jq ".attributes.system.bar" attr.out) = "42"
+	jq -e ".attributes.user.meep == false" attr.out &&
+	jq -e ".attributes.user.foo == \"xxx\"" attr.out &&
+	jq -e ".attributes.user.foo2 == \"yyy\"" attr.out &&
+	jq -e ".attributes.system.foo == 1" attr.out &&
+	jq -e ".attributes.test == \"a\"" attr.out &&
+	jq -e ".attributes.system.test2 == \"b\"" attr.out &&
+	jq -e ".attributes.system.bar == 42" attr.out
 '
+
 test_expect_success HAVE_JQ 'flux mini submit --setattr=^ATTR=VAL works' '
 	cat | jq -S . >attr.json <<-EOF &&
 	[
