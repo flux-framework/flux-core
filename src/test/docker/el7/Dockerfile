@@ -64,6 +64,7 @@ RUN yum -y update \
       jq \
       libs3-devel \
       libarchive-devel \
+      pam-devel \
  && yum clean all
 
 # Sphinx packages for docs
