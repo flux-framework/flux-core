@@ -542,9 +542,9 @@ static int batch_add_job (struct batch *batch, struct job *job)
      * The full jobspec is commited to the KVS for use by other subsystems.
      */
     jpath_del (job->jobspec_obj, "attributes.system.environment");
-    if (!(jobentry = json_pack ("{s:I s:i s:i s:f s:i, s:O}",
+    if (!(jobentry = json_pack ("{s:I s:I s:i s:f s:i, s:O}",
                                 "id", job->id,
-                                "userid", job->cred.userid,
+                                "userid", (json_int_t) job->cred.userid,
                                 "urgency", job->urgency,
                                 "t_submit", get_timestamp_now (),
                                 "flags", job->flags,
@@ -758,9 +758,9 @@ static void submit_cb (flux_t *h, flux_msg_handler_t *mh,
          * Continue submission process in validate_continuation().
          */
         if (!(o = json_pack_ex (&e, 0,
-                                "{s:O s:i s:i s:i s:i}",
+                                "{s:O s:I s:i s:i s:i}",
                                 "jobspec", job->jobspec_obj,
-                                "userid", job->cred.userid,
+                                "userid", (json_int_t) job->cred.userid,
                                 "rolemask", job->cred.rolemask,
                                 "urgency", job->urgency,
                                 "flags", job->flags))) {

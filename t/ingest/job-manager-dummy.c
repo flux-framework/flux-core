@@ -59,10 +59,10 @@ static char *create_eventlog_entry (json_t *job)
                                                "urgency", &urgency,
                                                "t_submit", &t_submit) < 0)
         goto error_inval;
-    if (!(entry = eventlog_entry_pack (0., "submit", "{ s:I s:i s:i s:f }",
+    if (!(entry = eventlog_entry_pack (0., "submit", "{ s:I s:i s:I s:f }",
                                        "id", id,
                                        "urgency", urgency,
-                                       "userid", userid,
+                                       "userid", (json_int_t) userid,
                                        "t_submit", t_submit)))
         goto error;
     if (!(entrystr = eventlog_entry_encode (entry)))

@@ -97,8 +97,8 @@ void urgency_handle_request (flux_t *h,
     orig_urgency = job->urgency;
     if (event_job_post_pack (ctx->event, job,
                              "urgency", 0,
-                             "{ s:i s:i }",
-                             "userid", cred.userid,
+                             "{ s:I s:i }",
+                             "userid", (json_int_t) cred.userid,
                              "urgency", urgency) < 0)
         goto error;
     if (flux_respond_pack (h, msg, "{s:i}", "old_urgency", orig_urgency) < 0) {

@@ -250,10 +250,10 @@ static void start_response_cb (flux_t *h, flux_msg_handler_t *mh,
             goto error;
         }
         if (event_job_post_pack (ctx->event, job, "exception", 0,
-                                 "{ s:s s:i s:i s:s }",
+                                 "{ s:s s:i s:I s:s }",
                                  "type", xtype,
                                  "severity", xseverity,
-                                 "userid", FLUX_USERID_UNKNOWN,
+                                 "userid", (json_int_t) FLUX_USERID_UNKNOWN,
                                  "note", xnote ? xnote : "")  < 0)
             goto error_post;
     }
@@ -295,7 +295,7 @@ int start_send_request (struct start *start, struct job *job)
             return -1;
         if (flux_msg_pack (msg, "{s:I s:i s:O s:b}",
                                 "id", job->id,
-                                "userid", job->userid,
+                                "userid", (json_int_t) job->userid,
                                 "jobspec", job->jobspec_redacted,
                                 "reattach", job->reattach) < 0)
             goto error;
