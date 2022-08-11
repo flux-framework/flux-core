@@ -524,6 +524,18 @@ error:
     cache_resume_flush (cache);
 }
 
+/* Issue #4482, there is a small chance a dirty entry could be added
+ * to the flush list twice which can lead to list corruption.  As an
+ * extra measure, perform a delete from the list first.  If the node
+ * is not on the list, the delete is a no-op.
+ */
+static void flush_list_append (struct content_cache *cache,
+                               struct cache_entry *e)
+{
+    list_del (&e->list);
+    list_add_tail (&cache->flush, &e->list);
+}
+
 static int cache_store (struct content_cache *cache, struct cache_entry *e)
 {
     flux_future_t *f;
@@ -535,7 +547,7 @@ static int cache_store (struct content_cache *cache, struct cache_entry *e)
         return 0;
     if (cache->rank == 0) {
         if (cache->flush_batch_count >= cache->flush_batch_limit) {
-            list_add_tail (&cache->flush, &e->list);
+            flush_list_append (cache, e);
             return 0;
         }
         flags = CONTENT_FLAG_CACHE_BYPASS;
@@ -595,7 +607,7 @@ static void content_store_request (flux_t *h, flux_msg_handler_t *mh,
          * during purge or dropcache, so this does not alter
          * behavior */
         if (cache->rank == 0 && !cache->backing)
-            list_add_tail (&cache->flush, &e->list);
+            flush_list_append (cache, e);
     }
     if (flux_respond_raw (h, msg, hash, hash_size) < 0)
         flux_log_error (h, "content store: flux_respond_raw");
