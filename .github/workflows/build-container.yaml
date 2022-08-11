@@ -28,7 +28,7 @@ jobs:
       matrix:
 
         # Dockerfiles to build, a matrix supports future expanded builds
-        container: [["config/docker/Dockerfile.base", "ghcr.io/flux-framework/flux-core-base"]]
+        container: [["etc/docker/Dockerfile.base", "ghcr.io/flux-framework/flux-core-base"]]
                     # This will be enabled after the first container builds.
                     #["config/docker/Dockerfile", "ghcr.io/flux-framework/flux-core-ubuntu"]]
 
