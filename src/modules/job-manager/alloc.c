@@ -282,10 +282,10 @@ static void alloc_response_cb (flux_t *h, flux_msg_handler_t *mh,
                                 __FUNCTION__, (uintmax_t)id);
         }
         if (event_job_post_pack (ctx->event, job, "exception", 0,
-                                 "{ s:s s:i s:i s:s }",
+                                 "{ s:s s:i s:I s:s }",
                                  "type", "alloc",
                                  "severity", 0,
-                                 "userid", FLUX_USERID_UNKNOWN,
+                                 "userid", (json_int_t) FLUX_USERID_UNKNOWN,
                                  "note", note ? note : "") < 0)
             goto teardown;
         break;
@@ -336,10 +336,10 @@ int alloc_request (struct alloc *alloc, struct job *job)
 
     if (!(msg = flux_request_encode ("sched.alloc", NULL)))
         return -1;
-    if (flux_msg_pack (msg, "{s:I s:I s:i s:f s:O}",
+    if (flux_msg_pack (msg, "{s:I s:I s:I s:f s:O}",
                             "id", job->id,
                             "priority", (json_int_t)job->priority,
-                            "userid", job->userid,
+                            "userid", (json_int_t) job->userid,
                             "t_submit", job->t_submit,
                             "jobspec", job->jobspec_redacted) < 0)
         goto error;
@@ -375,10 +375,10 @@ static void hello_cb (flux_t *h, flux_msg_handler_t *mh,
     while (job) {
         if (job->has_resources) {
             if (flux_respond_pack (h, msg,
-                                   "{s:I s:I s:i s:f}",
+                                   "{s:I s:I s:I s:f}",
                                    "id", job->id,
                                    "priority", job->priority,
-                                   "userid", job->userid,
+                                   "userid", (json_int_t) job->userid,
                                    "t_submit", job->t_submit) < 0)
                 goto error;
         }

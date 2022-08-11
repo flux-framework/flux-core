@@ -42,11 +42,11 @@ int list_append_job (json_t *jobs, struct job *job)
 
     /* We pack priority with I instead of i to avoid issue of
      * signed vs unsigned int */
-    if (!(o = json_pack ("{s:I s:i s:i s:I s:f s:i}",
+    if (!(o = json_pack ("{s:I s:I s:i s:I s:f s:i}",
                          "id",
                          job->id,
                          "userid",
-                         job->userid,
+                         (json_int_t) job->userid,
                          "urgency",
                          job->urgency,
                          "priority",
