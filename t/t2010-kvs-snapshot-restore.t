@@ -27,7 +27,7 @@ test_expect_success 'content.sqlite file exists after instance exited' '
 
 test_expect_success 're-run instance with statedir set (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux kvs get testkey >getsqlite.out
+		   flux kvs get testkey >getsqlite.out
 '
 
 test_expect_success 'content from previous instance survived (sqlite)' '
@@ -41,7 +41,7 @@ test_expect_success 'content from previous instance survived (sqlite)' '
 
 test_expect_success 're-run instance, get sequence number 1 (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux kvs version > restart_version1.out
+		   flux kvs version > restart_version1.out
 '
 
 test_expect_success 'restart sequence number increasing 1 (sqlite)' '
@@ -52,7 +52,7 @@ test_expect_success 'restart sequence number increasing 1 (sqlite)' '
 
 test_expect_success 're-run instance, get sequence number 2 (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux kvs version > restart_version2.out
+		   flux kvs version > restart_version2.out
 '
 
 test_expect_success 'restart sequence number increasing 2 (sqlite)' '
@@ -63,7 +63,7 @@ test_expect_success 'restart sequence number increasing 2 (sqlite)' '
 
 test_expect_success 're-run instance, verify checkpoint date saved (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux dmesg >dmesgsqlite1.out
+		   flux dmesg >dmesgsqlite1.out
 '
 
 # just check for todays date, not time for obvious reasons
@@ -74,17 +74,17 @@ test_expect_success 'verify date in flux logs (sqlite)' '
 
 test_expect_success 're-run instance, get rootref (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux kvs getroot -b > getrootsqlite.out
+		   flux kvs getroot -b > getrootsqlite.out
 '
 
 test_expect_success 'write rootref to checkpoint path, emulating checkpoint version=0 (sqlite)' '
-        rootref=$(cat getrootsqlite.out) &&
-        ${CHANGECHECKPOINT} $(pwd)/content.sqlite "kvs-primary" ${rootref}
+	rootref=$(cat getrootsqlite.out) &&
+	${CHANGECHECKPOINT} $(pwd)/content.sqlite "kvs-primary" ${rootref}
 '
 
 test_expect_success 're-run instance, verify checkpoint correctly loaded (sqlite)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-	           flux dmesg >dmesgsqlite2.out
+		   flux dmesg >dmesgsqlite2.out
 '
 
 test_expect_success 'verify checkpoint loaded with no date (sqlite)' '
@@ -106,15 +106,15 @@ EOF
 flux module remove kvs
 flux module remove content-files
 EOF
-        chmod +x rc1-content-files &&
-        chmod +x rc3-content-files
+	chmod +x rc1-content-files &&
+	chmod +x rc3-content-files
 '
 
 test_expect_success 'run instance with statedir set (files)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-                   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
-                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
-	           flux kvs put testkey=43
+		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+		   flux kvs put testkey=43
 '
 
 test_expect_success 'content.files dir and kvs-primary exist after instance exit' '
@@ -124,9 +124,9 @@ test_expect_success 'content.files dir and kvs-primary exist after instance exit
 
 test_expect_success 're-run instance with statedir set (files)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-                   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
-                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
-	           flux kvs get testkey >getfiles.out
+		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+		   flux kvs get testkey >getfiles.out
 '
 
 test_expect_success 'content from previous instance survived (files)' '
@@ -136,9 +136,9 @@ test_expect_success 'content from previous instance survived (files)' '
 
 test_expect_success 're-run instance, verify checkpoint date saved (files)' '
 	flux start -o,--setattr=statedir=$(pwd) \
-                   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
-                   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
-	           flux dmesg >dmesgfiles.out
+		   -o,--setattr=broker.rc1_path=$(pwd)/rc1-content-files \
+		   -o,--setattr=broker.rc3_path=$(pwd)/rc3-content-files \
+		   flux dmesg >dmesgfiles.out
 '
 
 # just check for todays date, not time for obvious reasons
