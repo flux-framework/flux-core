@@ -988,6 +988,11 @@ static void sync_cb (flux_future_t *f, void *arg)
     flux_future_reset (f);
 }
 
+bool content_cache_backing_loaded (struct content_cache *cache)
+{
+    return cache->backing;
+}
+
 /* Initialization
  */
 

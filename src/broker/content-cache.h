@@ -13,6 +13,7 @@
 
 struct content_cache *content_cache_create (flux_t *h, attr_t *attr);
 void content_cache_destroy (struct content_cache *cache);
+bool content_cache_backing_loaded (struct content_cache *cache);
 
 #endif /* !HAVE_BROKER_CONTENT_CACHE_H */
 
