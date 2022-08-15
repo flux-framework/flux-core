@@ -80,4 +80,8 @@ test_expect_success 'unload kvs' '
         flux module remove kvs
 '
 
+test_expect_success 'content.backing-module input of none works' '
+        flux start -o,-Scontent.backing-module=none /bin/true
+'
+
 test_done
