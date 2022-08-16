@@ -466,12 +466,12 @@ test_expect_success 'flux-jobs --format={ranks},{ranks:h} works' '
 	flux jobs --filter=running -no "{ranks},{ranks:h}" > ranksR.out &&
 	test_debug "cat ranksR.out" &&
 	test "$(sort -n ranksR.out | head -1)" = "0,0" &&
-	flux jobs -no "{ranks},{ranks:h}" $(state_ids completed) > ranksI.out &&
-	test_debug "cat ranksI.out" &&
-	test "$(sort -n ranksI.out | head -1)" = "0,0" &&
-	flux jobs -no "{ranks},{ranks:h}" $(state_ids canceled) > ranksC.out &&
-	test_debug "cat ranksC.out" &&
-	test "$(sort -n ranksC.out | head -1)" = ",-"
+	flux jobs -no "{ranks},{ranks:h}" $(state_ids completed) > ranksCD.out &&
+	test_debug "cat ranksCD.out" &&
+	test "$(sort -n ranksCD.out | head -1)" = "0,0" &&
+	flux jobs -no "{ranks},{ranks:h}" $(state_ids canceled) > ranksCA.out &&
+	test_debug "cat ranksCA.out" &&
+	test "$(sort -n ranksCA.out | head -1)" = ",-"
 '
 
 test_expect_success 'flux-jobs --format={nodelist},{nodelist:h} works' '
@@ -487,17 +487,17 @@ test_expect_success 'flux-jobs --format={nodelist},{nodelist:h} works' '
 	done &&
 	test_debug "cat nodelistR.out" &&
 	test_cmp nodelistR.out nodelistR.exp &&
-	flux jobs -no "{nodelist},{nodelist:h}" $(state_ids completed) > nodelistI.out &&
+	flux jobs -no "{nodelist},{nodelist:h}" $(state_ids completed) > nodelistCD.out &&
 	for id in $(state_ids completed); do
 		nodes=`flux job info ${id} R | flux R decode --nodelist`
-		echo "${nodes},${nodes}" >> nodelistI.exp
+		echo "${nodes},${nodes}" >> nodelistCD.exp
 	done &&
-	test_debug "cat nodelistI.out" &&
-	test_cmp nodelistI.out nodelistI.exp &&
-	flux jobs -no "{nodelist},{nodelist:h}" $(state_ids canceled) > nodelistC.out &&
-	test_debug "cat nodelistC.out" &&
-	echo ",-" > nodelistC.exp &&
-	test_cmp nodelistC.out nodelistC.exp
+	test_debug "cat nodelistCD.out" &&
+	test_cmp nodelistCD.out nodelistCD.exp &&
+	flux jobs -no "{nodelist},{nodelist:h}" $(state_ids canceled) > nodelistCA.out &&
+	test_debug "cat nodelistCA.out" &&
+	echo ",-" > nodelistCA.exp &&
+	test_cmp nodelistCA.out nodelistCA.exp
 '
 
 # test just make sure numbers are zero or non-zero given state of job
