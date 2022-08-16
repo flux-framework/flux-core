@@ -538,7 +538,7 @@ test_expect_success 'flux jobs --format={t_cleanup/{in}active} works' '
 	count=`cut -d, -f4 t_cleanupPR.out | grep "^-$" | wc -l` &&
 	test $count -eq $(state_count sched run) &&
 	count=`cut -d, -f2 t_cleanupI.out | grep -v "^0.0$" | wc -l` &&
-	test $count -eq 6
+	test $count -eq $(state_count inactive)
 '
 
 test_expect_success 'flux-jobs --format={runtime},{runtime!F},{runtime!F:h},{runtime!H},{runtime!H:h} works' '

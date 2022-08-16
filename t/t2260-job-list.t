@@ -159,7 +159,7 @@ test_expect_success HAVE_JQ 'flux job list inactive jobs in completed order' '
 '
 
 test_expect_success HAVE_JQ 'flux job list inactive jobs with correct state' '
-        for count in `seq 1 6`; do \
+        for count in `seq 1 $(job_list_state_count inactive)`; do \
             echo "INACTIVE" >> list_state_I.exp; \
         done &&
         flux job list -s inactive | jq .state | ${JOB_CONV} statetostr > list_state_I.out &&
